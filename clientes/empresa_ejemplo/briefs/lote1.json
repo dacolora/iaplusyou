@@ -1,0 +1,11 @@
+[
+  {
+    "id": "empresa_ejemplo_01",
+    "image_url": "https://pub-xxxxxxxx.r2.dev/clientes/empresa_ejemplo/personajes/modelo_1.jpg",
+    "prompt": "El personaje camina por una pasarela iluminada, cámara fija con leve zoom in",
+    "model": "kling-2.1-pro",
+    "title": "Lanzamiento colección",
+    "caption": "Nueva colección de empresa_ejemplo ✨",
+    "platforms": ["youtube", "facebook", "instagram", "tiktok"]
+  }
+]

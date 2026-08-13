@@ -1,0 +1,21 @@
+.env
+client_secret_youtube.json
+token_youtube.json
+token_tiktok.json
+salidas/
+registro_generaciones.csv
+estado_videos.json
+venv/
+__pycache__/
+*.pyc
+
+# Multi-cliente: credenciales y tokens por empresa nunca se versionan
+clientes/*/.env
+clientes/*/token_youtube.json
+clientes/*/token_tiktok.json
+clientes/*/estado_videos.json
+
+# Las imágenes de personajes de cada cliente ya quedan respaldadas en R2;
+# no hace falta duplicarlas (ni son código) en el repo.
+clientes/*/personajes/*
+!clientes/*/personajes/.gitkeep
