@@ -11,7 +11,7 @@ Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 import os
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash
+from flask import Flask, render_template, redirect, url_for, flash, request
 from datetime import datetime
 
 import estado as estado_mod
@@ -100,22 +100,66 @@ def index():
     return render_template("index.html", clientes=clientes)
 
 
-def _prompts_pendientes(cliente):
-    prompts_dict = prompts_mod.cargar(cliente)
-    resultado = []
-    for pid, item in prompts_dict.items():
-        if item.get("estado") != "pendiente":
-            continue
-        entry = {"id": pid, **item}
+def _ideas_pendientes(cliente):
+    """Ideas con al menos un prompt pendiente, cada prompt con su costo estimado."""
+    data = prompts_mod.cargar(cliente)
+    ideas = []
+    for idea_id, idea in data.items():
+        prompts_pendientes = []
+        for pid, item in idea.get("prompts", {}).items():
+            if item.get("estado") != "pendiente":
+                continue
+            entry = {"id": pid, **item}
+            try:
+                est = estimate_video(
+                    item["image_url"],
+                    item["prompt"],
+                    item.get("model", "kling-2.1-pro"),
+                    extra_params=_extra_params(item),
+                )
+                entry["credits"] = est["credits"]
+                entry["usd"] = est["usd"]
+            except Exception:
+                entry["credits"] = None
+                entry["usd"] = None
+            prompts_pendientes.append(entry)
+
+        if prompts_pendientes:
+            prompts_pendientes.sort(key=lambda e: e.get("creado_en", ""))
+            ideas.append({
+                "id": idea_id,
+                "idea": idea.get("idea"),
+                "creado_en": idea.get("creado_en"),
+                "prompts": prompts_pendientes,
+            })
+
+    return sorted(ideas, key=lambda i: i.get("creado_en", ""), reverse=True)
+
+
+def _extra_params(item):
+    """Solo kling-2.1-pro acepta duration/cfg_scale; dop-standard no los declara."""
+    if item.get("model") != "kling-2.1-pro":
+        return None
+    return {"duration": int(item.get("duration", 5)), "cfg_scale": float(item.get("cfg_scale", 0.5))}
+
+
+def _aplicar_edicion(item, form):
+    """Aplica los campos editables del formulario (si vinieron) sobre el prompt."""
+    if "prompt" in form and form["prompt"].strip():
+        item["prompt"] = form["prompt"].strip()
+    if "model" in form and form["model"] in prompts_mod.MODELOS_VALIDOS:
+        item["model"] = form["model"]
+    if "duration" in form:
         try:
-            est = estimate_video(item["image_url"], item["prompt"], item.get("model", "kling-2.1-pro"))
-            entry["credits"] = est["credits"]
-            entry["usd"] = est["usd"]
-        except Exception:
-            entry["credits"] = None
-            entry["usd"] = None
-        resultado.append(entry)
-    return sorted(resultado, key=lambda e: e.get("creado_en", ""), reverse=True)
+            item["duration"] = int(form["duration"])
+        except ValueError:
+            pass
+    if "cfg_scale" in form:
+        try:
+            item["cfg_scale"] = float(form["cfg_scale"])
+        except ValueError:
+            pass
+    return item
 
 
 @app.route("/cliente/<cliente>")
@@ -137,21 +181,39 @@ def ver_cliente(cliente):
         "cliente.html",
         cliente=cliente,
         personajes=_personajes(cliente),
-        prompts_pendientes=_prompts_pendientes(cliente),
+        ideas=_ideas_pendientes(cliente),
+        modelos=prompts_mod.MODELOS_VALIDOS,
         videos=videos,
         log=log,
     )
+
+
+@app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])
+def guardar_prompt(cliente, prompt_id):
+    data = prompts_mod.cargar(cliente)
+    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
+    if not item:
+        flash(f"No encontré el prompt {prompt_id}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    _aplicar_edicion(item, request.form)
+    prompts_mod.guardar(cliente, data)
+    flash(f"Cambios guardados en {prompt_id}.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
 def aprobar_prompt(cliente, prompt_id):
     """Genera el video real a partir de un prompt ya aprobado (aquí sí se gastan créditos)."""
     _cargar_entorno_cliente(cliente)
-    pendientes = prompts_mod.cargar(cliente)
-    item = pendientes.get(prompt_id)
+    data = prompts_mod.cargar(cliente)
+    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
         flash(f"No encontré el prompt {prompt_id}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
+
+    _aplicar_edicion(item, request.form)
+    prompts_mod.guardar(cliente, data)
 
     out_dir = os.path.join(BASE_DIR, "salidas", cliente)
     os.makedirs(out_dir, exist_ok=True)
@@ -159,7 +221,10 @@ def aprobar_prompt(cliente, prompt_id):
 
     try:
         launch = generate_video(
-            image_url=item["image_url"], prompt=item["prompt"], model=item.get("model", "kling-2.1-pro")
+            image_url=item["image_url"],
+            prompt=item["prompt"],
+            model=item.get("model", "kling-2.1-pro"),
+            extra_params=_extra_params(item),
         )
         result = poll_until_done(launch["status_url"])
         higgsfield_url = extract_video_url(result)
@@ -192,8 +257,8 @@ def aprobar_prompt(cliente, prompt_id):
     }
     estado_mod.guardar(cliente, estado)
 
-    del pendientes[prompt_id]
-    prompts_mod.guardar(cliente, pendientes)
+    del data[idea_id]["prompts"][prompt_id]
+    prompts_mod.guardar(cliente, data)
 
     flash(f"Video generado para {prompt_id} — queda pendiente de revisión más abajo.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
@@ -201,10 +266,11 @@ def aprobar_prompt(cliente, prompt_id):
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/rechazar", methods=["POST"])
 def rechazar_prompt(cliente, prompt_id):
-    pendientes = prompts_mod.cargar(cliente)
-    if prompt_id in pendientes:
-        del pendientes[prompt_id]
-        prompts_mod.guardar(cliente, pendientes)
+    data = prompts_mod.cargar(cliente)
+    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
+    if item:
+        del data[idea_id]["prompts"][prompt_id]
+        prompts_mod.guardar(cliente, data)
         flash(f"Prompt {prompt_id} descartado, no se generó video (no gastó créditos).", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 

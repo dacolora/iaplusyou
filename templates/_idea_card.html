@@ -1,0 +1,11 @@
+<div class="idea-block">
+  <div class="idea-header">
+    <span class="idea-label">Idea</span>
+    <span class="idea-texto">{{ idea.idea }}</span>
+  </div>
+  <div class="videos-grid">
+    {% for p in idea.prompts %}
+    {% include "_prompt_card.html" %}
+    {% endfor %}
+  </div>
+</div>

@@ -3,6 +3,15 @@
 {% block content %}
 <h1>{{ cliente }}</h1>
 
+<h2>Ideas ({{ ideas | length }})</h2>
+{% if ideas %}
+  {% for idea in ideas %}
+  {% include "_idea_card.html" %}
+  {% endfor %}
+{% else %}
+<p class="vacio">No hay ideas esperando aprobación. Dale una idea a Claude en el chat para que proponga prompts nuevos.</p>
+{% endif %}
+
 <h2>Personajes</h2>
 {% if personajes %}
 <div class="personajes-row">
@@ -17,22 +26,11 @@
 <p class="vacio">Sin imágenes en clientes/{{ cliente }}/personajes/. Súbelas con: python subir_personaje.py --cliente {{ cliente }} ruta/a/foto.jpg</p>
 {% endif %}
 
-<h2>Prompts por aprobar ({{ prompts_pendientes | length }})</h2>
-{% if prompts_pendientes %}
-<div class="videos-grid">
-  {% for p in prompts_pendientes %}
-  {% include "_prompt_card.html" %}
-  {% endfor %}
-</div>
-{% else %}
-<p class="vacio">No hay prompts esperando aprobación. Dale una idea a Claude en el chat para que proponga prompts nuevos.</p>
-{% endif %}
-
 {% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
 {% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
 {% set rechazados = videos | selectattr('estado', 'equalto', 'rechazado') | list %}
 
-<h2>Pendientes de revisión ({{ pendientes | length }})</h2>
+<h2>Videos pendientes de revisión ({{ pendientes | length }})</h2>
 {% if pendientes %}
 <div class="videos-grid">
   {% for v in pendientes %}

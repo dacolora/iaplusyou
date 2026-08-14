@@ -141,6 +141,52 @@ h2 { font-size: 1.15rem; margin: 2rem 0 1rem; color: var(--muted); text-transfor
 .card-video .plataforma-chip.ok { color: var(--ok); border-color: rgba(62,207,142,.3); }
 .card-video .plataforma-chip.error { color: var(--error); border-color: rgba(242,97,97,.3); }
 
+.idea-block {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+.idea-header { margin-bottom: 1rem; }
+.idea-label {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--accent);
+  font-weight: 700;
+  margin-right: .6rem;
+}
+.idea-texto { font-size: 1rem; font-weight: 500; }
+
+.campo-label {
+  display: block;
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--muted);
+  margin: .6rem 0 .25rem;
+}
+textarea, select, input[type="number"] {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: .5rem .6rem;
+  font: inherit;
+  font-size: .85rem;
+}
+textarea { resize: vertical; }
+.fila-campos {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: .6rem;
+}
+.form-descartar { padding: 0 1rem 1rem; margin-top: -.5rem; }
+.btn-guardar { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+.btn-guardar:hover { border-color: var(--accent); }
+
 .prompt-ref {
   width: 100%;
   height: 220px;
