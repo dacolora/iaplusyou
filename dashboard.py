@@ -15,8 +15,17 @@ from flask import Flask, render_template, redirect, url_for, flash
 from datetime import datetime
 
 import estado as estado_mod
+import prompts as prompts_mod
 import bitacora
 from publicador import publicar_brief
+from higgsfield_client import (
+    generate_video,
+    poll_until_done,
+    download_result,
+    extract_video_url,
+    estimate_video,
+)
+from storage import r2_uploader
 
 BASE_DIR = os.path.dirname(__file__)
 ALL_PLATFORMS = ["youtube", "facebook", "instagram", "tiktok"]
@@ -91,6 +100,24 @@ def index():
     return render_template("index.html", clientes=clientes)
 
 
+def _prompts_pendientes(cliente):
+    prompts_dict = prompts_mod.cargar(cliente)
+    resultado = []
+    for pid, item in prompts_dict.items():
+        if item.get("estado") != "pendiente":
+            continue
+        entry = {"id": pid, **item}
+        try:
+            est = estimate_video(item["image_url"], item["prompt"], item.get("model", "kling-2.1-pro"))
+            entry["credits"] = est["credits"]
+            entry["usd"] = est["usd"]
+        except Exception:
+            entry["credits"] = None
+            entry["usd"] = None
+        resultado.append(entry)
+    return sorted(resultado, key=lambda e: e.get("creado_en", ""), reverse=True)
+
+
 @app.route("/cliente/<cliente>")
 def ver_cliente(cliente):
     videos_dict = estado_mod.cargar(cliente)
@@ -110,9 +137,76 @@ def ver_cliente(cliente):
         "cliente.html",
         cliente=cliente,
         personajes=_personajes(cliente),
+        prompts_pendientes=_prompts_pendientes(cliente),
         videos=videos,
         log=log,
     )
+
+
+@app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
+def aprobar_prompt(cliente, prompt_id):
+    """Genera el video real a partir de un prompt ya aprobado (aquí sí se gastan créditos)."""
+    _cargar_entorno_cliente(cliente)
+    pendientes = prompts_mod.cargar(cliente)
+    item = pendientes.get(prompt_id)
+    if not item:
+        flash(f"No encontré el prompt {prompt_id}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    out_dir = os.path.join(BASE_DIR, "salidas", cliente)
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"{prompt_id}.mp4")
+
+    try:
+        launch = generate_video(
+            image_url=item["image_url"], prompt=item["prompt"], model=item.get("model", "kling-2.1-pro")
+        )
+        result = poll_until_done(launch["status_url"])
+        higgsfield_url = extract_video_url(result)
+        download_result(result, out_path)
+        bitacora.registrar(cliente, prompt_id, "generacion", "ok", out_path)
+    except Exception as e:
+        bitacora.registrar(cliente, prompt_id, "generacion", "error", str(e))
+        flash(f"Error generando {prompt_id}: {e}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    try:
+        video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{prompt_id}.mp4")
+        bitacora.registrar(cliente, prompt_id, "storage", "ok", video_url)
+    except Exception as e:
+        video_url = higgsfield_url
+        bitacora.registrar(cliente, prompt_id, "storage", "error", str(e))
+
+    estado = estado_mod.cargar(cliente)
+    estado[prompt_id] = {
+        "prompt": item["prompt"],
+        "image_url": item["image_url"],
+        "title": item.get("title", prompt_id),
+        "caption": item.get("caption", item["prompt"]),
+        "platforms": item.get("platforms", []),
+        "video_local": out_path,
+        "video_url": video_url,
+        "estado": "pendiente",
+        "generado_en": datetime.now().isoformat(),
+        "publicado_en": None,
+    }
+    estado_mod.guardar(cliente, estado)
+
+    del pendientes[prompt_id]
+    prompts_mod.guardar(cliente, pendientes)
+
+    flash(f"Video generado para {prompt_id} — queda pendiente de revisión más abajo.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/prompt/<prompt_id>/rechazar", methods=["POST"])
+def rechazar_prompt(cliente, prompt_id):
+    pendientes = prompts_mod.cargar(cliente)
+    if prompt_id in pendientes:
+        del pendientes[prompt_id]
+        prompts_mod.guardar(cliente, pendientes)
+        flash(f"Prompt {prompt_id} descartado, no se generó video (no gastó créditos).", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/aprobar/<brief_id>", methods=["POST"])

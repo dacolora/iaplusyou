@@ -1,0 +1,25 @@
+<div class="card-video card-prompt">
+  <img class="prompt-ref" src="{{ p.image_url }}" alt="referencia">
+  <div class="body">
+    <div class="titulo">{{ p.title }}</div>
+    <div class="idea">Idea: {{ p.idea }}</div>
+    <div class="prompt">{{ p.prompt }}</div>
+
+    <div class="costo">
+      {% if p.credits is not none %}
+        ~{{ "%.2f"|format(p.credits) }} créditos (${{ "%.2f"|format(p.usd) }})
+      {% else %}
+        No se pudo estimar el costo
+      {% endif %}
+    </div>
+
+    <div class="acciones">
+      <form method="post" action="{{ url_for('aprobar_prompt', cliente=cliente, prompt_id=p.id) }}" onsubmit="return confirm('¿Generar el video para este prompt? Esto gasta créditos de Higgsfield.');">
+        <button class="btn-aprobar" type="submit">Aprobar y generar video</button>
+      </form>
+      <form method="post" action="{{ url_for('rechazar_prompt', cliente=cliente, prompt_id=p.id) }}" onsubmit="return confirm('¿Descartar este prompt? No se genera video.');">
+        <button class="btn-rechazar" type="submit">Descartar</button>
+      </form>
+    </div>
+  </div>
+</div>

@@ -17,6 +17,17 @@
 <p class="vacio">Sin imágenes en clientes/{{ cliente }}/personajes/. Súbelas con: python subir_personaje.py --cliente {{ cliente }} ruta/a/foto.jpg</p>
 {% endif %}
 
+<h2>Prompts por aprobar ({{ prompts_pendientes | length }})</h2>
+{% if prompts_pendientes %}
+<div class="videos-grid">
+  {% for p in prompts_pendientes %}
+  {% include "_prompt_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">No hay prompts esperando aprobación. Dale una idea a Claude en el chat para que proponga prompts nuevos.</p>
+{% endif %}
+
 {% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
 {% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
 {% set rechazados = videos | selectattr('estado', 'equalto', 'rechazado') | list %}
