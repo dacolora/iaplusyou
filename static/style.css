@@ -141,6 +141,36 @@ h2 { font-size: 1.15rem; margin: 2rem 0 1rem; color: var(--muted); text-transfor
 .card-video .plataforma-chip.ok { color: var(--ok); border-color: rgba(62,207,142,.3); }
 .card-video .plataforma-chip.error { color: var(--error); border-color: rgba(242,97,97,.3); }
 
+.form-nueva-idea {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+  max-width: 640px;
+}
+.fila-campos-idea {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 1rem;
+  margin: .6rem 0;
+}
+.checks-plataformas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  padding-top: .3rem;
+  font-size: .85rem;
+}
+.checks-plataformas label { display: flex; align-items: center; gap: .3rem; text-transform: capitalize; }
+.checks-plataformas input { width: auto; }
+.btn-generar {
+  background: var(--accent);
+  color: #0b1220;
+  margin-top: .5rem;
+}
+.btn-generar:hover { opacity: .9; }
+
 .idea-block {
   background: var(--panel-2);
   border: 1px solid var(--border);

@@ -3,6 +3,37 @@
 {% block content %}
 <h1>{{ cliente }}</h1>
 
+<h2>Nueva idea</h2>
+{% if personajes %}
+<form method="post" action="{{ url_for('nueva_idea', cliente=cliente) }}" class="form-nueva-idea">
+  <label class="campo-label">Describe la idea del video</label>
+  <textarea name="idea" rows="2" placeholder="Ej: el guerrero encuentra un mapa antiguo en la biblioteca del castillo" required></textarea>
+
+  <div class="fila-campos-idea">
+    <div>
+      <label class="campo-label">Personaje</label>
+      <select name="image_url" required>
+        {% for p in personajes %}
+        <option value="{{ p.url }}">{{ p.nombre }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="campo-label">Plataformas</label>
+      <div class="checks-plataformas">
+        {% for pl in ['youtube', 'facebook', 'instagram', 'tiktok'] %}
+        <label><input type="checkbox" name="platforms" value="{{ pl }}"> {{ pl }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <button class="btn-generar" type="submit">Generar 5 prompts</button>
+</form>
+{% else %}
+<p class="vacio">Sube al menos una imagen de personaje antes de crear ideas: python subir_personaje.py --cliente {{ cliente }} ruta/a/foto.jpg</p>
+{% endif %}
+
 <h2>Ideas ({{ ideas | length }})</h2>
 {% if ideas %}
   {% for idea in ideas %}

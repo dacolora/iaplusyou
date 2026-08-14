@@ -17,6 +17,7 @@ from datetime import datetime
 import estado as estado_mod
 import prompts as prompts_mod
 import bitacora
+import generador_prompts
 from publicador import publicar_brief
 from higgsfield_client import (
     generate_video,
@@ -186,6 +187,31 @@ def ver_cliente(cliente):
         videos=videos,
         log=log,
     )
+
+
+@app.route("/cliente/<cliente>/idea/nueva", methods=["POST"])
+def nueva_idea(cliente):
+    """Recibe una idea del formulario, genera 5 prompts con Claude, y los deja
+    listos para revisar/editar/aprobar (no gasta créditos de Higgsfield todavía)."""
+    idea_texto = request.form.get("idea", "").strip()
+    image_url = request.form.get("image_url", "").strip()
+    platforms = request.form.getlist("platforms")
+
+    if not idea_texto or not image_url:
+        flash("Escribe la idea y elige un personaje.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    try:
+        textos = generador_prompts.generar_prompts(idea_texto, n=5)
+    except Exception as e:
+        flash(f"No pude generar los prompts: {e}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    items = [{"prompt": t, "image_url": image_url, "platforms": platforms} for t in textos]
+    prompts_mod.agregar_idea(cliente, idea_texto, items)
+
+    flash(f"Generé {len(items)} prompts para la idea. Revísalos y apruébalos abajo.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])
