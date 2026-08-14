@@ -1,0 +1,27 @@
+<div class="card-video">
+  <video controls preload="metadata" src="{{ v.video_url }}"></video>
+  <div class="body">
+    <div class="titulo">{{ v.title }}</div>
+    <div class="prompt">{{ v.prompt }}</div>
+
+    <div class="plataformas">
+      {% for p in v.platforms %}
+        {% set pest = v.plataformas_estado.get(p) if v.plataformas_estado else None %}
+        <span class="plataforma-chip {{ pest or '' }}">{{ p }}{% if pest %} · {{ pest }}{% endif %}</span>
+      {% else %}
+        <span class="plataforma-chip">sin plataformas asignadas</span>
+      {% endfor %}
+    </div>
+
+    {% if v.estado == 'pendiente' %}
+    <div class="acciones">
+      <form method="post" action="{{ url_for('aprobar', cliente=cliente, brief_id=v.id) }}" onsubmit="return confirm('¿Publicar {{ v.id }} en: {{ v.platforms | join(', ') }}?');">
+        <button class="btn-aprobar" type="submit">Aprobar y publicar</button>
+      </form>
+      <form method="post" action="{{ url_for('rechazar', cliente=cliente, brief_id=v.id) }}" onsubmit="return confirm('¿Rechazar {{ v.id }}? No se publicará.');">
+        <button class="btn-rechazar" type="submit">Rechazar</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>

@@ -1,11 +1,11 @@
 [
   {
-    "id": "empresa_ejemplo_01",
-    "image_url": "https://pub-xxxxxxxx.r2.dev/clientes/empresa_ejemplo/personajes/modelo_1.jpg",
-    "prompt": "El personaje camina por una pasarela iluminada, cámara fija con leve zoom in",
+    "id": "forja_prueba_01",
+    "image_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/forja/personajes/guerrero_1.jpg",
+    "prompt": "El niño guerrero mira alrededor del salón del castillo con curiosidad, sostiene el pergamino y la cámara hace un leve acercamiento a su rostro, la luz de las antorchas titila",
     "model": "kling-2.1-pro",
-    "title": "Lanzamiento colección",
-    "caption": "Nueva colección de empresa_ejemplo ✨",
-    "platforms": ["youtube", "facebook", "instagram", "tiktok"]
+    "title": "Video de prueba - Forja",
+    "caption": "Primer video de prueba del personaje de Forja",
+    "platforms": []
   }
 ]

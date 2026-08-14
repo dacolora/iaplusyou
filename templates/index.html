@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Clientes{% endblock %}
+{% block content %}
+<h1>Clientes</h1>
+
+{% if clientes %}
+<div class="grid-clientes">
+  {% for c in clientes %}
+  <a class="card-cliente" href="{{ url_for('ver_cliente', cliente=c.nombre) }}">
+    <div class="nombre">{{ c.nombre }}</div>
+    <div class="badges">
+      <span class="badge pendiente">{{ c.pendiente }} pendiente{{ 's' if c.pendiente != 1 }}</span>
+      <span class="badge publicado">{{ c.publicado }} publicado{{ 's' if c.publicado != 1 }}</span>
+      <span class="badge rechazado">{{ c.rechazado }} rechazado{{ 's' if c.rechazado != 1 }}</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Todavía no hay clientes en clientes/. Crea una carpeta ahí (o usa subir_personaje.py --cliente &lt;nombre&gt;) para que aparezca aquí.</p>
+{% endif %}
+{% endblock %}

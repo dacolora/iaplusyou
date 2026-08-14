@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}{{ cliente }}{% endblock %}
+{% block content %}
+<h1>{{ cliente }}</h1>
+
+<h2>Personajes</h2>
+{% if personajes %}
+<div class="personajes-row">
+  {% for p in personajes %}
+  <div class="personaje-thumb">
+    <a href="{{ p.url }}" target="_blank"><img src="{{ p.url }}" alt="{{ p.nombre }}"></a>
+    <div class="nombre">{{ p.nombre }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Sin imágenes en clientes/{{ cliente }}/personajes/. Súbelas con: python subir_personaje.py --cliente {{ cliente }} ruta/a/foto.jpg</p>
+{% endif %}
+
+{% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
+{% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
+{% set rechazados = videos | selectattr('estado', 'equalto', 'rechazado') | list %}
+
+<h2>Pendientes de revisión ({{ pendientes | length }})</h2>
+{% if pendientes %}
+<div class="videos-grid">
+  {% for v in pendientes %}
+  {% include "_video_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">No hay videos esperando aprobación.</p>
+{% endif %}
+
+<h2>Publicados ({{ publicados | length }})</h2>
+{% if publicados %}
+<div class="videos-grid">
+  {% for v in publicados %}
+  {% include "_video_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Todavía no se ha publicado nada.</p>
+{% endif %}
+
+{% if rechazados %}
+<h2>Rechazados ({{ rechazados | length }})</h2>
+<div class="videos-grid">
+  {% for v in rechazados %}
+  {% include "_video_card.html" %}
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Bitácora reciente</h2>
+{% if log %}
+<table>
+  <thead>
+    <tr><th>Fecha</th><th>Video</th><th>Etapa</th><th>Estado</th><th>Detalle</th></tr>
+  </thead>
+  <tbody>
+    {% for fila in log %}
+    <tr>
+      <td>{{ fila.fecha[:19] }}</td>
+      <td>{{ fila.id }}</td>
+      <td>{{ fila.etapa }}</td>
+      <td class="estado-{{ fila.estado }}">{{ fila.estado }}</td>
+      <td>{{ fila.detalle[:80] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="vacio">Sin actividad registrada todavía.</p>
+{% endif %}
+{% endblock %}

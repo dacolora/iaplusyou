@@ -50,6 +50,23 @@ def generate_video(image_url, prompt, model="kling-2.1-pro", extra_params=None):
     return resp.json()
 
 
+def estimate_video(image_url, prompt, model="kling-2.1-pro", extra_params=None):
+    """Consulta cuántos créditos (y USD) costaría esta generación, sin lanzarla ni gastar
+    créditos. Devuelve un dict {"credits": float, "usd": float}.
+    """
+    if model not in ENDPOINTS:
+        raise ValueError(f"Modelo desconocido: {model}. Opciones: {list(ENDPOINTS)}")
+    url = BASE_URL + "/estimate" + ENDPOINTS[model]
+    payload = {"image_url": image_url, "prompt": prompt}
+    if extra_params:
+        payload.update(extra_params)
+    headers = {**_auth_header(), "Content-Type": "application/json"}
+    resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    return {"credits": float(data["credits"]), "usd": float(data["usd"])}
+
+
 def poll_until_done(status_url, interval_seconds=5, timeout_seconds=600):
     """Consulta status_url cada `interval_seconds` hasta que el video esté listo.
 
@@ -84,7 +101,7 @@ def extract_video_url(result_json):
     Instagram, que exige una URL pública en vez de un archivo local.
     """
     candidates = []
-    for key in ("output", "video_url", "result", "url", "output_url"):
+    for key in ("video", "output", "video_url", "result", "url", "output_url"):
         val = result_json.get(key)
         if isinstance(val, str):
             candidates.append(val)

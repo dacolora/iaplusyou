@@ -29,3 +29,14 @@ def guardar(cliente, estado):
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(estado, f, indent=2, ensure_ascii=False)
+
+
+def listar_clientes():
+    """Nombres de carpeta bajo clientes/, ordenados alfabéticamente."""
+    clientes_dir = os.path.join(BASE_DIR, "clientes")
+    if not os.path.isdir(clientes_dir):
+        return []
+    return sorted(
+        d for d in os.listdir(clientes_dir)
+        if os.path.isdir(os.path.join(clientes_dir, d)) and not d.startswith(".")
+    )

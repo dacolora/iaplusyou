@@ -6,6 +6,11 @@ PENDIENTES DE REVISIÓN — no publica nada en ninguna red todavía.
 Uso:
     python run_batch.py briefs_example.json
     python run_batch.py clientes/empresa_a/briefs/lote1.json --cliente empresa_a
+    python run_batch.py clientes/empresa_a/briefs/lote1.json --cliente empresa_a --creditos-disponibles 70
+
+Antes de generar nada, consulta el costo real en créditos de cada brief (endpoint
+/estimate de Higgsfield, no gasta créditos) y muestra el total. Si pasas
+--creditos-disponibles y el lote lo supera, pide confirmación antes de seguir.
 
 Cuando quieras revisar lo que salió y publicar lo que apruebes:
     python revisar.py --cliente empresa_a
@@ -35,7 +40,13 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from higgsfield_client import generate_video, poll_until_done, download_result, extract_video_url
+from higgsfield_client import (
+    generate_video,
+    poll_until_done,
+    download_result,
+    extract_video_url,
+    estimate_video,
+)
 from storage import r2_uploader
 from bitacora import registrar
 import estado as estado_mod
@@ -53,7 +64,47 @@ def _enabled_platforms():
     return enabled
 
 
-def main(briefs_path, cliente=None):
+def _estimar_lote(briefs, creditos_disponibles):
+    """Consulta el costo en créditos de cada brief (sin gastar nada) y muestra el total.
+
+    Si se pasó creditos_disponibles y el total lo supera, pide confirmación antes de
+    seguir. Devuelve False si el usuario decide no continuar.
+    """
+    print("\n=== Estimando costo del lote (no gasta créditos) ===")
+    total_creditos = 0.0
+    total_usd = 0.0
+    algun_error = False
+    for brief in briefs:
+        brief_id = brief.get("id", "sin_id")
+        try:
+            est = estimate_video(
+                image_url=brief["image_url"],
+                prompt=brief["prompt"],
+                model=brief.get("model", "kling-2.1-pro"),
+            )
+            total_creditos += est["credits"]
+            total_usd += est["usd"]
+            print(f"  {brief_id}: {est['credits']:.2f} créditos (${est['usd']:.2f})")
+        except Exception as e:
+            algun_error = True
+            print(f"  {brief_id}: no se pudo estimar ({e})")
+
+    print(f"Total estimado: {total_creditos:.2f} créditos (${total_usd:.2f})"
+          + (" — hubo briefs sin estimar, el total real puede ser mayor" if algun_error else ""))
+
+    if creditos_disponibles is not None:
+        print(f"Créditos disponibles indicados: {creditos_disponibles:.2f}")
+        if total_creditos > creditos_disponibles:
+            respuesta = input(
+                "El costo estimado supera tus créditos disponibles. ¿Continuar de todas formas? [s/N]: "
+            ).strip().lower()
+            if respuesta != "s":
+                print("Cancelado, no se generó nada.")
+                return False
+    return True
+
+
+def main(briefs_path, cliente=None, creditos_disponibles=None):
     load_dotenv(os.path.join(BASE_DIR, ".env"))
 
     if cliente:
@@ -69,6 +120,9 @@ def main(briefs_path, cliente=None):
 
     with open(briefs_path, "r", encoding="utf-8") as f:
         briefs = json.load(f)
+
+    if not _estimar_lote(briefs, creditos_disponibles):
+        return
 
     os.makedirs(out_dir, exist_ok=True)
     default_platforms = _enabled_platforms()
@@ -131,5 +185,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("briefs", nargs="?", default="briefs_example.json")
     parser.add_argument("--cliente", help="Nombre de carpeta bajo clientes/, si aplica")
+    parser.add_argument(
+        "--creditos-disponibles",
+        type=float,
+        default=None,
+        help="Créditos que tienes disponibles en Higgsfield ahora mismo; si el lote los supera, pide confirmación",
+    )
     args = parser.parse_args()
-    main(args.briefs, cliente=args.cliente)
+    main(args.briefs, cliente=args.cliente, creditos_disponibles=args.creditos_disponibles)
