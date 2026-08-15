@@ -1,6 +1,6 @@
 """
 Ideas y sus prompts candidatos, esperando aprobación ANTES de gastar créditos
-generando el video. Un archivo prompts_pendientes.json por cliente.
+generando nada. Un archivo prompts_pendientes.json por cliente.
 
 Estructura: cada "idea" es un contenedor con varios prompts variantes debajo.
 
@@ -11,25 +11,34 @@ Estructura: cada "idea" es un contenedor con varios prompts variantes debajo.
     "prompts": {
       "idea_20260814_130501_p1": {
         "prompt": "...",
-        "image_url": "...",
+        "image_url": "...",           # foto del personaje, referencia de identidad
         "model": "kling-2.1-pro",
         "duration": 5,
         "cfg_scale": 0.5,
+        "aspect_ratio": "9:16",
         "title": "...",
         "caption": "...",
         "platforms": [...],
-        "estado": "pendiente",
+        "estado": "pendiente",        # pendiente -> imagen_pendiente -> (se va a estado_videos.json)
+        "imagen_url": null,           # se llena al generar la imagen candidata
+        "imagen_local": null,
         "creado_en": "..."
       }
     }
   }
 }
 
-Flujo: alguien (Claude, en el chat) crea aquí una idea con varias variantes de
-prompt. El admin las revisa en el dashboard (con costo estimado en créditos),
-puede editar prompt/modelo/duración/cfg_scale, y aprueba o descarta cada una.
-Aprobar dispara la generación real del video con los valores (editados o no)
-en ese momento.
+Flujo en 3 pasos, cada uno con su propia aprobación:
+  1. "pendiente": Claude (en el chat, o el formulario "Nueva idea" del dashboard)
+     propuso el prompt. Al aprobarlo se genera una IMAGEN candidata (barata,
+     ~1.5 créditos) con el modelo soul/reference — mantiene la identidad del
+     personaje pero puede variar fondo/pose/estilo/aspect_ratio según el prompt.
+  2. "imagen_pendiente": esa imagen queda para aprobar o descartar. Al aprobarla
+     se genera el VIDEO real (caro, ~8 créditos) usando esa imagen ya aprobada
+     como referencia — así nunca se gasta en video algo que no gustó primero.
+  3. Al generarse el video, el prompt sale de este archivo y entra a
+     estado_videos.json con estado "pendiente" (la revisión final de siempre,
+     la que dispara la publicación en redes al aprobar).
 """
 import json
 import os
@@ -38,6 +47,7 @@ from datetime import datetime
 BASE_DIR = os.path.dirname(__file__)
 
 MODELOS_VALIDOS = ("kling-2.1-pro", "dop-standard")
+ASPECT_RATIOS_VALIDOS = ("9:16", "16:9", "4:3", "3:4", "1:1", "2:3", "3:2")
 
 
 def _path(cliente):
@@ -91,10 +101,13 @@ def agregar_idea(cliente, idea_texto, items):
             "model": item.get("model", "kling-2.1-pro"),
             "duration": item.get("duration", 5),
             "cfg_scale": item.get("cfg_scale", 0.5),
+            "aspect_ratio": item.get("aspect_ratio", "9:16"),
             "title": item.get("title", pid),
             "caption": item.get("caption", item["prompt"]),
             "platforms": item.get("platforms", []),
             "estado": "pendiente",
+            "imagen_url": None,
+            "imagen_local": None,
             "creado_en": ahora,
         }
 

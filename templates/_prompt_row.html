@@ -9,13 +9,13 @@
         <option value="{{ m }}" {% if m == p.model %}selected{% endif %}>{{ m }}</option>
         {% endfor %}
       </select>
-      <select name="duration" class="mini-select">
-        <option value="5" {% if p.duration == 5 %}selected{% endif %}>5s</option>
-        <option value="10" {% if p.duration == 10 %}selected{% endif %}>10s</option>
+      <select name="aspect_ratio" class="mini-select" title="Proporción de la imagen/video">
+        {% for ar in aspect_ratios %}
+        <option value="{{ ar }}" {% if ar == p.aspect_ratio %}selected{% endif %}>{{ ar }}</option>
+        {% endfor %}
       </select>
-      <input type="number" name="cfg_scale" min="0" max="1" step="0.01" value="{{ p.cfg_scale }}" class="mini-input" title="cfg_scale">
       <span class="costo-mini">
-        {% if p.credits is not none %}~{{ "%.2f"|format(p.credits) }} cr (${{ "%.2f"|format(p.usd) }}){% else %}costo desconocido{% endif %}
+        {% if p.credits is not none %}~{{ "%.2f"|format(p.credits) }} cr imagen (${{ "%.2f"|format(p.usd) }}){% else %}costo desconocido{% endif %}
       </span>
       {% for pl in p.platforms %}
       <span class="plataforma-chip">{{ pl }}</span>
@@ -30,14 +30,14 @@
         class="btn-aprobar btn-sm"
         type="submit"
         formaction="{{ url_for('aprobar_prompt', cliente=cliente, prompt_id=p.id) }}"
-        onclick="return confirm('¿Generar el video con estos valores? Esto gasta créditos de Higgsfield.');"
-      >Aprobar y generar</button>
+        onclick="return confirm('¿Generar una imagen de referencia con estos valores? Esto gasta créditos de Higgsfield (barato, ~1.5cr).');"
+      >Aprobar y generar imagen</button>
     </div>
   </form>
   <form
     method="post"
     action="{{ url_for('rechazar_prompt', cliente=cliente, prompt_id=p.id) }}"
-    onsubmit="return confirm('¿Descartar este prompt? No se genera video.');"
+    onsubmit="return confirm('¿Descartar este prompt? No se genera nada.');"
     class="prompt-row-descartar"
   >
     <button class="btn-rechazar btn-sm" type="submit" title="Descartar">✕</button>

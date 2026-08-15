@@ -9,6 +9,7 @@ Uso:
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import os
+import subprocess
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request
@@ -22,16 +23,22 @@ import generador_prompts
 from publicador import publicar_brief
 from higgsfield_client import (
     generate_video,
+    generate_image,
     poll_until_done,
     download_result,
+    download_image_result,
     extract_video_url,
+    extract_image_url,
     estimate_video,
+    estimate_image,
 )
 from storage import r2_uploader
 
 BASE_DIR = os.path.dirname(__file__)
 ALL_PLATFORMS = ["youtube", "facebook", "instagram", "tiktok"]
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
+VIDEO_EXTS = (".mp4", ".mov", ".webm")
+FRAME_SUFFIX = ".frame.jpg"
 
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
@@ -60,32 +67,59 @@ def _token_paths(cliente):
 
 
 def _personajes(cliente):
+    """Personajes disponibles: imágenes tal cual, y videos representados por un
+    fotograma extraído (eso es lo que realmente se usa como referencia en Higgsfield)."""
     personajes_dir = os.path.join(_client_dir(cliente), "personajes")
     public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
     if not os.path.isdir(personajes_dir):
         return []
-    archivos = sorted(
-        f for f in os.listdir(personajes_dir)
-        if f.lower().endswith(IMAGE_EXTS)
+
+    archivos = sorted(os.listdir(personajes_dir))
+    resultado = []
+    for f in archivos:
+        low = f.lower()
+        if low.endswith(FRAME_SUFFIX):
+            continue  # es un fotograma derivado, no un personaje por sí mismo
+        if low.endswith(IMAGE_EXTS):
+            resultado.append({
+                "nombre": f,
+                "url": f"{public_base}/clientes/{cliente}/personajes/{f}",
+                "tipo": "imagen",
+            })
+        elif low.endswith(VIDEO_EXTS):
+            frame_name = f + FRAME_SUFFIX
+            tiene_frame = frame_name in archivos
+            resultado.append({
+                "nombre": f,
+                "url": f"{public_base}/clientes/{cliente}/personajes/{frame_name}" if tiene_frame else None,
+                "video_url": f"{public_base}/clientes/{cliente}/personajes/{f}",
+                "tipo": "video",
+            })
+    return resultado
+
+
+def _extraer_frame(video_path, frame_path, segundo=1.0):
+    subprocess.run(
+        ["ffmpeg", "-y", "-ss", str(segundo), "-i", video_path, "-frames:v", "1", "-q:v", "2", frame_path],
+        check=True, capture_output=True,
     )
-    return [
-        {"nombre": f, "url": f"{public_base}/clientes/{cliente}/personajes/{f}"}
-        for f in archivos
-    ]
 
 
 @app.route("/cliente/<cliente>/personaje/subir", methods=["POST"])
 def subir_personaje(cliente):
-    """Sube una imagen de personaje desde el navegador: se guarda local y en R2
-    (nunca en el repositorio de git — los binarios no van ahí)."""
+    """Sube una imagen O UN VIDEO de personaje desde el navegador: se guarda local
+    y en R2 (nunca en el repositorio de git — los binarios no van ahí). Si es un
+    video, además le saca un fotograma con ffmpeg — eso es lo que se usa como
+    referencia de imagen al generar (Higgsfield no acepta video como referencia)."""
     archivo = request.files.get("imagen")
     if not archivo or not archivo.filename:
-        flash("No elegiste ninguna imagen.", "error")
+        flash("No elegiste ningún archivo.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     nombre = secure_filename(archivo.filename)
-    if not nombre.lower().endswith(IMAGE_EXTS):
-        flash("Formato no soportado. Usa jpg, jpeg, png o webp.", "error")
+    ext = os.path.splitext(nombre)[1].lower()
+    if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
+        flash("Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     personajes_dir = os.path.join(_client_dir(cliente), "personajes")
@@ -93,11 +127,31 @@ def subir_personaje(cliente):
     local_path = os.path.join(personajes_dir, nombre)
     archivo.save(local_path)
 
-    try:
-        url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/personajes/{nombre}")
-        flash(f"Personaje subido: {nombre}", "ok")
-    except Exception as e:
-        flash(f"Se guardó localmente pero falló la subida a R2: {e}", "error")
+    if ext in VIDEO_EXTS:
+        try:
+            r2_uploader.upload_video(local_path, f"clientes/{cliente}/personajes/{nombre}")
+        except Exception as e:
+            flash(f"Se guardó localmente pero falló la subida del video a R2: {e}", "error")
+            return redirect(url_for("ver_cliente", cliente=cliente))
+
+        frame_name = nombre + FRAME_SUFFIX
+        frame_path = os.path.join(personajes_dir, frame_name)
+        try:
+            _extraer_frame(local_path, frame_path)
+            r2_uploader.upload_image(frame_path, f"clientes/{cliente}/personajes/{frame_name}")
+            flash(f"Video subido y fotograma de referencia extraído: {nombre}", "ok")
+        except Exception as e:
+            flash(
+                f"El video {nombre} se subió, pero no pude extraer su fotograma de referencia "
+                f"(no se puede usar como personaje hasta resolver esto): {e}",
+                "error",
+            )
+    else:
+        try:
+            r2_uploader.upload_image(local_path, f"clientes/{cliente}/personajes/{nombre}")
+            flash(f"Personaje subido: {nombre}", "ok")
+        except Exception as e:
+            flash(f"Se guardó localmente pero falló la subida a R2: {e}", "error")
 
     return redirect(url_for("ver_cliente", cliente=cliente))
 
@@ -131,48 +185,60 @@ def index():
 
 
 def _ideas_pendientes(cliente):
-    """Ideas con al menos un prompt pendiente, cada prompt con su costo estimado."""
+    """Ideas con al menos un prompt en curso (pendiente o imagen_pendiente),
+    cada una con su costo estimado según en qué etapa está."""
     data = prompts_mod.cargar(cliente)
     ideas = []
     for idea_id, idea in data.items():
-        prompts_pendientes = []
+        prompts_en_curso = []
         for pid, item in idea.get("prompts", {}).items():
-            if item.get("estado") != "pendiente":
+            if item.get("estado") not in ("pendiente", "imagen_pendiente"):
                 continue
             entry = {"id": pid, **item}
             try:
-                est = estimate_video(
-                    item["image_url"],
-                    item["prompt"],
-                    item.get("model", "kling-2.1-pro"),
-                    extra_params=_extra_params(item),
-                )
+                if item.get("estado") == "imagen_pendiente":
+                    est = estimate_video(
+                        item["imagen_url"],
+                        item["prompt"],
+                        item.get("model", "kling-2.1-pro"),
+                        extra_params=_extra_params_video(item),
+                    )
+                else:
+                    est = estimate_image(
+                        item["image_url"],
+                        item["prompt"],
+                        extra_params=_extra_params_image(item),
+                    )
                 entry["credits"] = est["credits"]
                 entry["usd"] = est["usd"]
             except Exception:
                 entry["credits"] = None
                 entry["usd"] = None
-            prompts_pendientes.append(entry)
+            prompts_en_curso.append(entry)
 
-        if prompts_pendientes:
-            prompts_pendientes.sort(key=lambda e: e.get("creado_en", ""))
-            for i, entry in enumerate(prompts_pendientes, start=1):
+        if prompts_en_curso:
+            prompts_en_curso.sort(key=lambda e: e.get("creado_en", ""))
+            for i, entry in enumerate(prompts_en_curso, start=1):
                 entry["numero"] = i
             ideas.append({
                 "id": idea_id,
                 "idea": idea.get("idea"),
                 "creado_en": idea.get("creado_en"),
-                "prompts": prompts_pendientes,
+                "prompts": prompts_en_curso,
             })
 
     return sorted(ideas, key=lambda i: i.get("creado_en", ""), reverse=True)
 
 
-def _extra_params(item):
+def _extra_params_video(item):
     """Solo kling-2.1-pro acepta duration/cfg_scale; dop-standard no los declara."""
     if item.get("model") != "kling-2.1-pro":
         return None
     return {"duration": int(item.get("duration", 5)), "cfg_scale": float(item.get("cfg_scale", 0.5))}
+
+
+def _extra_params_image(item):
+    return {"aspect_ratio": item.get("aspect_ratio", "9:16")}
 
 
 def _aplicar_edicion(item, form):
@@ -181,6 +247,8 @@ def _aplicar_edicion(item, form):
         item["prompt"] = form["prompt"].strip()
     if "model" in form and form["model"] in prompts_mod.MODELOS_VALIDOS:
         item["model"] = form["model"]
+    if "aspect_ratio" in form and form["aspect_ratio"] in prompts_mod.ASPECT_RATIOS_VALIDOS:
+        item["aspect_ratio"] = form["aspect_ratio"]
     if "duration" in form:
         try:
             item["duration"] = int(form["duration"])
@@ -215,6 +283,7 @@ def ver_cliente(cliente):
         personajes=_personajes(cliente),
         ideas=_ideas_pendientes(cliente),
         modelos=prompts_mod.MODELOS_VALIDOS,
+        aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         videos=videos,
         log=log,
     )
@@ -259,14 +328,90 @@ def guardar_prompt(cliente, prompt_id):
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
+def _generar_imagen_candidata(cliente, prompt_id, item):
+    """Genera (o regenera) la imagen candidata para un prompt vía soul/reference,
+    la sube a R2 y actualiza el propio dict `item` en el sitio. Devuelve (ok, error)."""
+    imagenes_dir = os.path.join(BASE_DIR, "salidas", cliente, "imagenes")
+    os.makedirs(imagenes_dir, exist_ok=True)
+    local_path = os.path.join(imagenes_dir, f"{prompt_id}.png")
+
+    try:
+        launch = generate_image(
+            image_reference_url=item["image_url"],
+            prompt=item["prompt"],
+            extra_params=_extra_params_image(item),
+        )
+        result = poll_until_done(launch["status_url"])
+        download_image_result(result, local_path)
+        bitacora.registrar(cliente, prompt_id, "imagen", "ok", local_path)
+    except Exception as e:
+        bitacora.registrar(cliente, prompt_id, "imagen", "error", str(e))
+        return False, str(e)
+
+    try:
+        imagen_url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/imagenes/{prompt_id}.png")
+    except Exception as e:
+        imagen_url = extract_image_url(result)
+        bitacora.registrar(cliente, prompt_id, "imagen_storage", "error", str(e))
+
+    item["imagen_url"] = imagen_url
+    item["imagen_local"] = local_path
+    item["estado"] = "imagen_pendiente"
+    return True, None
+
+
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
 def aprobar_prompt(cliente, prompt_id):
-    """Genera el video real a partir de un prompt ya aprobado (aquí sí se gastan créditos)."""
+    """Aprueba el texto del prompt y genera una imagen de referencia candidata
+    (barata, ~1.5cr) — todavía NO genera el video."""
     _cargar_entorno_cliente(cliente)
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
         flash(f"No encontré el prompt {prompt_id}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    _aplicar_edicion(item, request.form)
+    ok, error = _generar_imagen_candidata(cliente, prompt_id, item)
+    prompts_mod.guardar(cliente, data)
+
+    if ok:
+        flash(f"Imagen candidata generada para {prompt_id} — apruébala para generar el video.", "ok")
+    else:
+        flash(f"Error generando la imagen de {prompt_id}: {error}", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/prompt/<prompt_id>/regenerar_imagen", methods=["POST"])
+def regenerar_imagen(cliente, prompt_id):
+    """La imagen candidata no gustó: genera otra (gasta créditos de nuevo)."""
+    _cargar_entorno_cliente(cliente)
+    data = prompts_mod.cargar(cliente)
+    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
+    if not item:
+        flash(f"No encontré el prompt {prompt_id}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    _aplicar_edicion(item, request.form)
+    ok, error = _generar_imagen_candidata(cliente, prompt_id, item)
+    prompts_mod.guardar(cliente, data)
+
+    if ok:
+        flash(f"Nueva imagen candidata generada para {prompt_id}.", "ok")
+    else:
+        flash(f"Error regenerando la imagen de {prompt_id}: {error}", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar_imagen", methods=["POST"])
+def aprobar_imagen(cliente, prompt_id):
+    """La imagen candidata sí gustó: genera el video real a partir de ella
+    (aquí sí se gasta el crédito grande, ~8cr)."""
+    _cargar_entorno_cliente(cliente)
+    data = prompts_mod.cargar(cliente)
+    idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
+    if not item or not item.get("imagen_url"):
+        flash(f"No encontré una imagen candidata para {prompt_id}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
@@ -278,10 +423,10 @@ def aprobar_prompt(cliente, prompt_id):
 
     try:
         launch = generate_video(
-            image_url=item["image_url"],
+            image_url=item["imagen_url"],
             prompt=item["prompt"],
             model=item.get("model", "kling-2.1-pro"),
-            extra_params=_extra_params(item),
+            extra_params=_extra_params_video(item),
         )
         result = poll_until_done(launch["status_url"])
         higgsfield_url = extract_video_url(result)
@@ -289,7 +434,7 @@ def aprobar_prompt(cliente, prompt_id):
         bitacora.registrar(cliente, prompt_id, "generacion", "ok", out_path)
     except Exception as e:
         bitacora.registrar(cliente, prompt_id, "generacion", "error", str(e))
-        flash(f"Error generando {prompt_id}: {e}", "error")
+        flash(f"Error generando el video de {prompt_id}: {e}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     try:
@@ -302,7 +447,7 @@ def aprobar_prompt(cliente, prompt_id):
     estado = estado_mod.cargar(cliente)
     estado[prompt_id] = {
         "prompt": item["prompt"],
-        "image_url": item["image_url"],
+        "image_url": item["imagen_url"],
         "title": item.get("title", prompt_id),
         "caption": item.get("caption", item["prompt"]),
         "platforms": item.get("platforms", []),

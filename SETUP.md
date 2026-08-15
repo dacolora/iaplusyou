@@ -1,30 +1,44 @@
 # Guía de configuración — desde cero
 
-Este pipeline tiene tres pasos, siempre en este orden:
-1. **Generar**: `run_batch.py` crea los videos con Higgsfield a partir de tus briefs
-   (imagen + prompt), los descarga y los sube a tu storage propio (R2). Nada se publica
-   todavía.
-2. **Revisar**: `revisar.py` te muestra cada video pendiente (lo abre en el navegador)
-   y esperas tu decisión — la del cliente, o la tuya en su nombre.
-3. **Publicar**: apenas apruebas un video en el paso anterior, se publica al instante en
-   todas las redes que traía su brief. Lo que rechazas nunca se publica en ninguna red.
+**La forma normal de usar esto es el dashboard web** (`python dashboard.py`, abre
+`http://127.0.0.1:5050`) — ahí se hace todo: escribir ideas, revisar/editar prompts,
+aprobar imágenes candidatas, aprobar videos, publicar, subir personajes (imagen o video).
+`run_batch.py` / `revisar.py` siguen existiendo como alternativa por terminal para lotes
+grandes de briefs ya armados, pero no hace falta usarlos.
 
-La generación de video ya funciona (`higgsfield_client.py`). Lo que necesitas configurar
-ahora, plataforma por plataforma, son las credenciales para poder publicar cuando llegue
-el momento. Es la parte que toma más tiempo la primera vez porque cada red exige registrar
-una "app" — después de eso, todo corre con solo dos comandos por lote.
+Pipeline en 4 pasos, cada uno con su propia aprobación — nunca se gasta crédito sin que
+tú lo confirmes primero:
+1. **Idea → prompts**: escribes una idea en el dashboard, Claude (vía API de Anthropic)
+   propone 5 variantes de prompt. Gratis, no toca Higgsfield.
+2. **Prompt → imagen candidata**: apruebas un prompt → se genera una imagen de escena
+   nueva (modelo `soul/reference`, ~1.5 créditos) que mantiene la identidad del personaje
+   pero puede cambiar fondo/pose/aspect ratio. Barato, para previsualizar antes de gastar
+   en video.
+3. **Imagen → video**: apruebas esa imagen (o la regeneras si no te gustó) → se genera el
+   video real (`kling-2.1-pro`, ~8 créditos) usando esa imagen ya aprobada como referencia.
+4. **Video → publicar**: apruebas el video final → se publica al instante en las redes que
+   traía el prompt. Lo que rechazas en cualquier paso nunca gasta el siguiente crédito.
+
+Lo que necesitas configurar, plataforma por plataforma, son las credenciales para poder
+generar y publicar. Es la parte que toma más tiempo la primera vez porque cada servicio
+exige registrar una "app" — después de eso, todo corre desde el dashboard.
 
 ## 0. Instalar dependencias
 
 ```bash
-cd ~/Downloads/higgsfield_pipeline
+cd ~/Documents/GitHub/iaplusyou
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Rellena `HF_API_KEY_ID` / `HF_API_KEY_SECRET` en `.env` con tus llaves de Higgsfield.
+Rellena `HF_API_KEY_ID` / `HF_API_KEY_SECRET` en `.env` con tus llaves de Higgsfield, y
+`ANTHROPIC_API_KEY` con una API key de [console.anthropic.com](https://console.anthropic.com/)
+(Settings → API Keys) — la necesita el dashboard para generar los 5 prompts por idea.
+
+El paso de "video como personaje" (extraer un fotograma de referencia) necesita `ffmpeg`
+instalado en el sistema: `brew install ffmpeg`.
 
 ---
 

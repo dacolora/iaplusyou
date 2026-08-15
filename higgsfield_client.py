@@ -19,6 +19,13 @@ ENDPOINTS = {
     "kling-2.1-pro": "/kling-video/v2.1/pro/image-to-video",
 }
 
+# Genera una imagen nueva a partir de una imagen de referencia (mantiene identidad
+# del personaje, cambia fondo/pose/escena según el prompt). Mucho más barato que
+# generar el video directamente, así que sirve de "vista previa" aprobable.
+IMAGE_ENDPOINTS = {
+    "soul-reference": "/higgsfield-ai/soul/reference",
+}
+
 
 def _auth_header():
     key_id = os.environ.get("HF_API_KEY_ID")
@@ -58,6 +65,40 @@ def estimate_video(image_url, prompt, model="kling-2.1-pro", extra_params=None):
         raise ValueError(f"Modelo desconocido: {model}. Opciones: {list(ENDPOINTS)}")
     url = BASE_URL + "/estimate" + ENDPOINTS[model]
     payload = {"image_url": image_url, "prompt": prompt}
+    if extra_params:
+        payload.update(extra_params)
+    headers = {**_auth_header(), "Content-Type": "application/json"}
+    resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+    return {"credits": float(data["credits"]), "usd": float(data["usd"])}
+
+
+def generate_image(image_reference_url, prompt, model="soul-reference", extra_params=None):
+    """Lanza la generación de una imagen de referencia/escena nueva, a partir de una
+    imagen de personaje ya existente + un prompt (fondo, pose, estilo, etc).
+
+    Devuelve el JSON de respuesta (request_id, status_url, cancel_url), igual que
+    generate_video — se espera con poll_until_done().
+    """
+    if model not in IMAGE_ENDPOINTS:
+        raise ValueError(f"Modelo de imagen desconocido: {model}. Opciones: {list(IMAGE_ENDPOINTS)}")
+    url = BASE_URL + IMAGE_ENDPOINTS[model]
+    payload = {"image_reference_url": image_reference_url, "prompt": prompt}
+    if extra_params:
+        payload.update(extra_params)
+    headers = {**_auth_header(), "Content-Type": "application/json"}
+    resp = requests.post(url, json=payload, headers=headers, timeout=30)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def estimate_image(image_reference_url, prompt, model="soul-reference", extra_params=None):
+    """Costo en créditos/USD de generar la imagen de referencia, sin gastar nada."""
+    if model not in IMAGE_ENDPOINTS:
+        raise ValueError(f"Modelo de imagen desconocido: {model}. Opciones: {list(IMAGE_ENDPOINTS)}")
+    url = BASE_URL + "/estimate" + IMAGE_ENDPOINTS[model]
+    payload = {"image_reference_url": image_reference_url, "prompt": prompt}
     if extra_params:
         payload.update(extra_params)
     headers = {**_auth_header(), "Content-Type": "application/json"}
@@ -120,11 +161,29 @@ def extract_video_url(result_json):
     return candidates[0]
 
 
-def download_result(result_json, out_path):
-    """Descarga a out_path el video referenciado en la respuesta final."""
-    video_url = extract_video_url(result_json)
-    r = requests.get(video_url, timeout=120)
+def extract_image_url(result_json):
+    """Busca la URL pública de la imagen generada (respuesta de soul/reference:
+    {"images": [{"url": "..."}]}, con hasta 4 si se pidió batch_size=4 — usamos la primera)."""
+    images = result_json.get("images")
+    if isinstance(images, list) and images:
+        first = images[0]
+        return first if isinstance(first, str) else first.get("url")
+    raise RuntimeError(f"No encontré una URL de imagen en la respuesta. JSON crudo: {result_json}")
+
+
+def _download(url, out_path):
+    r = requests.get(url, timeout=120)
     r.raise_for_status()
     with open(out_path, "wb") as f:
         f.write(r.content)
     return out_path
+
+
+def download_result(result_json, out_path):
+    """Descarga a out_path el video referenciado en la respuesta final."""
+    return _download(extract_video_url(result_json), out_path)
+
+
+def download_image_result(result_json, out_path):
+    """Descarga a out_path la imagen referenciada en la respuesta final."""
+    return _download(extract_image_url(result_json), out_path)

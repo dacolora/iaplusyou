@@ -3,18 +3,20 @@
 {% block content %}
 <h1>{{ cliente }}</h1>
 
+{% set personajes_utilizables = personajes | selectattr('url') | list %}
+
 <h2>Nueva idea</h2>
-{% if personajes %}
+{% if personajes_utilizables %}
 <form method="post" action="{{ url_for('nueva_idea', cliente=cliente) }}" class="form-nueva-idea">
   <label class="campo-label">Describe la idea del video</label>
   <textarea name="idea" rows="2" placeholder="Ej: el guerrero encuentra un mapa antiguo en la biblioteca del castillo" required></textarea>
 
   <div class="fila-campos-idea">
     <div>
-      <label class="campo-label">Personaje</label>
+      <label class="campo-label">A partir de qué personaje</label>
       <select name="image_url" required>
-        {% for p in personajes %}
-        <option value="{{ p.url }}">{{ p.nombre }}</option>
+        {% for p in personajes_utilizables %}
+        <option value="{{ p.url }}">{{ p.nombre }}{% if p.tipo == 'video' %} (fotograma del video){% endif %}</option>
         {% endfor %}
       </select>
     </div>
@@ -31,7 +33,7 @@
   <button class="btn-generar" type="submit">Generar 5 prompts</button>
 </form>
 {% else %}
-<p class="vacio">Sube al menos una imagen de personaje más abajo (sección Personajes) antes de crear ideas.</p>
+<p class="vacio">Sube al menos un personaje (imagen o video) más abajo antes de crear ideas.</p>
 {% endif %}
 
 <h2>Ideas ({{ ideas | length }})</h2>
@@ -48,18 +50,27 @@
 <div class="personajes-row">
   {% for p in personajes %}
   <div class="personaje-thumb">
-    <a href="{{ p.url }}" target="_blank"><img src="{{ p.url }}" alt="{{ p.nombre }}"></a>
+    {% if p.url %}
+    <a href="{{ p.video_url or p.url }}" target="_blank">
+      <img src="{{ p.url }}" alt="{{ p.nombre }}">
+      {% if p.tipo == 'video' %}<span class="badge-video">VIDEO</span>{% endif %}
+    </a>
+    {% else %}
+    <a href="{{ p.video_url }}" target="_blank" class="personaje-sin-frame">
+      <span>Video sin fotograma —<br>no se puede usar aún</span>
+    </a>
+    {% endif %}
     <div class="nombre">{{ p.nombre }}</div>
   </div>
   {% endfor %}
 </div>
 {% else %}
-<p class="vacio">Todavía no hay imágenes de personaje para este cliente.</p>
+<p class="vacio">Todavía no hay personajes para este cliente.</p>
 {% endif %}
 
 <form method="post" action="{{ url_for('subir_personaje', cliente=cliente) }}" enctype="multipart/form-data" class="form-subir-personaje">
-  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" required>
-  <button class="btn-generar btn-sm" type="submit">Subir personaje</button>
+  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+  <button class="btn-generar btn-sm" type="submit">Subir personaje (imagen o video)</button>
 </form>
 
 {% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}

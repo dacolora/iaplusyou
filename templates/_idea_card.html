@@ -10,7 +10,11 @@
   </div>
   <div class="prompts-lista">
     {% for p in idea.prompts %}
-    {% include "_prompt_row.html" %}
+      {% if p.estado == "imagen_pendiente" %}
+      {% include "_imagen_row.html" %}
+      {% else %}
+      {% include "_prompt_row.html" %}
+      {% endif %}
     {% endfor %}
   </div>
 </div>
