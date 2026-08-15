@@ -12,6 +12,7 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request
+from werkzeug.utils import secure_filename
 from datetime import datetime
 
 import estado as estado_mod
@@ -73,6 +74,34 @@ def _personajes(cliente):
     ]
 
 
+@app.route("/cliente/<cliente>/personaje/subir", methods=["POST"])
+def subir_personaje(cliente):
+    """Sube una imagen de personaje desde el navegador: se guarda local y en R2
+    (nunca en el repositorio de git — los binarios no van ahí)."""
+    archivo = request.files.get("imagen")
+    if not archivo or not archivo.filename:
+        flash("No elegiste ninguna imagen.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    nombre = secure_filename(archivo.filename)
+    if not nombre.lower().endswith(IMAGE_EXTS):
+        flash("Formato no soportado. Usa jpg, jpeg, png o webp.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    personajes_dir = os.path.join(_client_dir(cliente), "personajes")
+    os.makedirs(personajes_dir, exist_ok=True)
+    local_path = os.path.join(personajes_dir, nombre)
+    archivo.save(local_path)
+
+    try:
+        url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/personajes/{nombre}")
+        flash(f"Personaje subido: {nombre}", "ok")
+    except Exception as e:
+        flash(f"Se guardó localmente pero falló la subida a R2: {e}", "error")
+
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
 def _estado_plataformas(cliente, brief_id):
     """Última tentativa registrada por plataforma para este video (ok/error/None)."""
     filas = bitacora.leer(cliente=cliente, brief_id=brief_id, limit=1000)
@@ -127,6 +156,8 @@ def _ideas_pendientes(cliente):
 
         if prompts_pendientes:
             prompts_pendientes.sort(key=lambda e: e.get("creado_en", ""))
+            for i, entry in enumerate(prompts_pendientes, start=1):
+                entry["numero"] = i
             ideas.append({
                 "id": idea_id,
                 "idea": idea.get("idea"),

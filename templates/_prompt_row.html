@@ -1,0 +1,45 @@
+<div class="prompt-row">
+  <div class="prompt-row-num">{{ p.numero }}</div>
+  <form method="post" action="{{ url_for('guardar_prompt', cliente=cliente, prompt_id=p.id) }}" class="prompt-row-form">
+    <textarea name="prompt" rows="2">{{ p.prompt }}</textarea>
+
+    <div class="prompt-row-controls">
+      <select name="model" class="mini-select">
+        {% for m in modelos %}
+        <option value="{{ m }}" {% if m == p.model %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+      <select name="duration" class="mini-select">
+        <option value="5" {% if p.duration == 5 %}selected{% endif %}>5s</option>
+        <option value="10" {% if p.duration == 10 %}selected{% endif %}>10s</option>
+      </select>
+      <input type="number" name="cfg_scale" min="0" max="1" step="0.01" value="{{ p.cfg_scale }}" class="mini-input" title="cfg_scale">
+      <span class="costo-mini">
+        {% if p.credits is not none %}~{{ "%.2f"|format(p.credits) }} cr (${{ "%.2f"|format(p.usd) }}){% else %}costo desconocido{% endif %}
+      </span>
+      {% for pl in p.platforms %}
+      <span class="plataforma-chip">{{ pl }}</span>
+      {% else %}
+      <span class="plataforma-chip">sin plataformas</span>
+      {% endfor %}
+    </div>
+
+    <div class="prompt-row-acciones">
+      <button class="btn-guardar btn-sm" type="submit">Guardar</button>
+      <button
+        class="btn-aprobar btn-sm"
+        type="submit"
+        formaction="{{ url_for('aprobar_prompt', cliente=cliente, prompt_id=p.id) }}"
+        onclick="return confirm('¿Generar el video con estos valores? Esto gasta créditos de Higgsfield.');"
+      >Aprobar y generar</button>
+    </div>
+  </form>
+  <form
+    method="post"
+    action="{{ url_for('rechazar_prompt', cliente=cliente, prompt_id=p.id) }}"
+    onsubmit="return confirm('¿Descartar este prompt? No se genera video.');"
+    class="prompt-row-descartar"
+  >
+    <button class="btn-rechazar btn-sm" type="submit" title="Descartar">✕</button>
+  </form>
+</div>

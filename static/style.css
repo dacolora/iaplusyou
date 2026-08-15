@@ -178,16 +178,79 @@ h2 { font-size: 1.15rem; margin: 2rem 0 1rem; color: var(--muted); text-transfor
   padding: 1.25rem;
   margin-bottom: 1.5rem;
 }
-.idea-header { margin-bottom: 1rem; }
+.idea-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.idea-ref {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
 .idea-label {
   font-size: .7rem;
   text-transform: uppercase;
   letter-spacing: .05em;
   color: var(--accent);
   font-weight: 700;
-  margin-right: .6rem;
+  display: block;
+  margin-bottom: .15rem;
 }
 .idea-texto { font-size: 1rem; font-weight: 500; }
+
+.prompts-lista {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+}
+.prompt-row {
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: .75rem .85rem;
+}
+.prompt-row-num {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: .15rem;
+}
+.prompt-row-form { flex: 1 1 auto; min-width: 0; }
+.prompt-row-form textarea { min-height: 2.6rem; }
+.prompt-row-controls {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin: .5rem 0;
+}
+.mini-select, .mini-input {
+  width: auto;
+  padding: .3rem .45rem;
+  font-size: .78rem;
+}
+.mini-input { width: 4.5rem; }
+.costo-mini { font-size: .78rem; color: var(--warn); font-weight: 600; }
+.prompt-row-acciones { display: flex; gap: .5rem; }
+.btn-sm { padding: .35rem .7rem; font-size: .78rem; }
+.prompt-row-descartar { flex: 0 0 auto; margin-top: .15rem; }
+.prompt-row-descartar .btn-sm { padding: .35rem .55rem; }
 
 .campo-label {
   display: block;
@@ -217,16 +280,6 @@ textarea { resize: vertical; }
 .btn-guardar { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
 .btn-guardar:hover { border-color: var(--accent); }
 
-.prompt-ref {
-  width: 100%;
-  height: 220px;
-  object-fit: cover;
-  display: block;
-  background: #000;
-}
-.card-prompt .idea { color: var(--accent); font-size: .78rem; margin-bottom: .4rem; }
-.card-prompt .costo { font-size: .8rem; color: var(--warn); font-weight: 600; margin-bottom: .6rem; }
-
 .acciones { display: flex; gap: .5rem; margin-top: .75rem; }
 button {
   font: inherit;
@@ -249,3 +302,15 @@ td.estado-ok { color: var(--ok); }
 td.estado-error { color: var(--error); }
 
 .vacio { color: var(--muted); font-size: .9rem; padding: 1rem 0; }
+
+.form-subir-personaje {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-top: .75rem;
+}
+.form-subir-personaje input[type="file"] {
+  width: auto;
+  color: var(--muted);
+  font-size: .8rem;
+}

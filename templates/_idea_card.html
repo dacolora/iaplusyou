@@ -1,11 +1,16 @@
 <div class="idea-block">
   <div class="idea-header">
-    <span class="idea-label">Idea</span>
-    <span class="idea-texto">{{ idea.idea }}</span>
+    {% if idea.prompts %}
+    <img class="idea-ref" src="{{ idea.prompts[0].image_url }}" alt="referencia">
+    {% endif %}
+    <div>
+      <span class="idea-label">Idea</span>
+      <div class="idea-texto">{{ idea.idea }}</div>
+    </div>
   </div>
-  <div class="videos-grid">
+  <div class="prompts-lista">
     {% for p in idea.prompts %}
-    {% include "_prompt_card.html" %}
+    {% include "_prompt_row.html" %}
     {% endfor %}
   </div>
 </div>

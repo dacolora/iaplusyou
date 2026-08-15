@@ -31,7 +31,7 @@
   <button class="btn-generar" type="submit">Generar 5 prompts</button>
 </form>
 {% else %}
-<p class="vacio">Sube al menos una imagen de personaje antes de crear ideas: python subir_personaje.py --cliente {{ cliente }} ruta/a/foto.jpg</p>
+<p class="vacio">Sube al menos una imagen de personaje más abajo (sección Personajes) antes de crear ideas.</p>
 {% endif %}
 
 <h2>Ideas ({{ ideas | length }})</h2>
@@ -54,8 +54,13 @@
   {% endfor %}
 </div>
 {% else %}
-<p class="vacio">Sin imágenes en clientes/{{ cliente }}/personajes/. Súbelas con: python subir_personaje.py --cliente {{ cliente }} ruta/a/foto.jpg</p>
+<p class="vacio">Todavía no hay imágenes de personaje para este cliente.</p>
 {% endif %}
+
+<form method="post" action="{{ url_for('subir_personaje', cliente=cliente) }}" enctype="multipart/form-data" class="form-subir-personaje">
+  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" required>
+  <button class="btn-generar btn-sm" type="submit">Subir personaje</button>
+</form>
 
 {% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
 {% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
