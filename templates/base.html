@@ -18,5 +18,49 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+  <script>
+    // Anti doble-clic global: apenas se envía un formulario, deshabilita sus
+    // botones de submit (no cancela el envío en curso, solo evita reenvíos).
+    document.addEventListener('submit', function (e) {
+      e.target.querySelectorAll('button[type="submit"]').forEach(function (btn) {
+        btn.disabled = true;
+        if (!btn.dataset.textoOriginal) btn.dataset.textoOriginal = btn.textContent;
+        btn.textContent = 'Procesando…';
+      });
+    });
+
+    // Consulta el estado de un trabajo en segundo plano (generar imagen/video,
+    // o publicar) cada poco tiempo, y actualiza su barra de progreso hasta que
+    // termine — ahí recarga la página para mostrar el resultado.
+    function iniciarPolling(jobId, contenedorId) {
+      var el = document.getElementById(contenedorId);
+      if (!el) return;
+      var barra = el.querySelector('.barra-progreso-fill');
+      var texto = el.querySelector('.progreso-texto');
+
+      function tick() {
+        fetch('/trabajo/' + encodeURIComponent(jobId) + '/estado')
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || data.estado === 'desconocido') {
+              location.reload();
+              return;
+            }
+            if (barra) barra.style.width = data.progreso + '%';
+            if (texto) texto.textContent = data.progreso + '% · ' + data.elapsed + 's';
+            if (data.estado === 'en_progreso') {
+              setTimeout(tick, 1500);
+            } else if (data.estado === 'error') {
+              alert('Error: ' + data.mensaje);
+              location.reload();
+            } else {
+              location.reload();
+            }
+          })
+          .catch(function () { setTimeout(tick, 3000); });
+      }
+      tick();
+    }
+  </script>
 </body>
 </html>

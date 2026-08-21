@@ -13,7 +13,13 @@
       {% endfor %}
     </div>
 
-    {% if v.estado == 'pendiente' %}
+    {% if v.trabajo %}
+    <div class="barra-progreso" id="trabajo-{{ v.trabajo.job_id }}">
+      <div class="barra-progreso-fill" style="width:0%"></div>
+    </div>
+    <div class="progreso-texto">Publicando… 0% · 0s</div>
+    <script>iniciarPolling({{ v.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ v.trabajo.job_id) | tojson }});</script>
+    {% elif v.estado == 'pendiente' %}
     <div class="acciones">
       <form method="post" action="{{ url_for('aprobar', cliente=cliente, brief_id=v.id) }}" onsubmit="return confirm('¿Publicar {{ v.id }} en: {{ v.platforms | join(', ') }}?');">
         <button class="btn-aprobar" type="submit">Aprobar y publicar</button>

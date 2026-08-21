@@ -10,15 +10,17 @@ Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import os
 import subprocess
+import threading
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
 import estado as estado_mod
 import prompts as prompts_mod
 import bitacora
+import trabajos
 import generador_prompts
 from publicador import publicar_brief
 from higgsfield_client import (
@@ -44,6 +46,23 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
 app.secret_key = "solo-local-no-hace-falta-secreto-real"
+
+# Cargar el .env de un cliente muta os.environ (variables globales del proceso).
+# Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
+# distintos podrían solaparse y pisarse las credenciales una a la otra — este
+# lock serializa esa sección crítica (cargar credenciales + usarlas) para que
+# eso no pase.
+_ENV_LOCK = threading.Lock()
+
+
+@app.route("/trabajo/<path:job_id>/estado")
+def estado_trabajo(job_id):
+    """El navegador consulta esto cada poco tiempo para actualizar la barra de
+    progreso de una generación en curso (imagen, video, o publicación)."""
+    info = trabajos.consultar(job_id)
+    if info is None:
+        return jsonify({"estado": "desconocido", "progreso": 0, "elapsed": 0, "mensaje": None})
+    return jsonify(info)
 
 
 def _client_dir(cliente):
@@ -184,6 +203,31 @@ def index():
     return render_template("index.html", clientes=clientes)
 
 
+def _job_id_imagen(cliente, prompt_id):
+    return f"{cliente}__{prompt_id}__imagen"
+
+
+def _job_id_video(cliente, prompt_id):
+    return f"{cliente}__{prompt_id}__video"
+
+
+def _job_id_publicar(cliente, brief_id):
+    return f"{cliente}__{brief_id}__publicar"
+
+
+def _trabajo_de_prompt(cliente, prompt_id, item):
+    """Si hay una generación en curso para este prompt (imagen o video según su
+    etapa), devuelve {"job_id": ...} para que la plantilla muestre la barra de
+    progreso en vez de los botones normales."""
+    if item.get("estado") == "pendiente":
+        job_id = _job_id_imagen(cliente, prompt_id)
+    elif item.get("estado") == "imagen_pendiente":
+        job_id = _job_id_video(cliente, prompt_id)
+    else:
+        return None
+    return {"job_id": job_id} if trabajos.en_curso(job_id) else None
+
+
 def _ideas_pendientes(cliente):
     """Ideas con al menos un prompt en curso (pendiente o imagen_pendiente),
     cada una con su costo estimado según en qué etapa está."""
@@ -195,25 +239,30 @@ def _ideas_pendientes(cliente):
             if item.get("estado") not in ("pendiente", "imagen_pendiente"):
                 continue
             entry = {"id": pid, **item}
-            try:
-                if item.get("estado") == "imagen_pendiente":
-                    est = estimate_video(
-                        item["imagen_url"],
-                        item["prompt"],
-                        item.get("model", "kling-2.1-pro"),
-                        extra_params=_extra_params_video(item),
-                    )
-                else:
-                    est = estimate_image(
-                        item["image_url"],
-                        item["prompt"],
-                        extra_params=_extra_params_image(item),
-                    )
-                entry["credits"] = est["credits"]
-                entry["usd"] = est["usd"]
-            except Exception:
+            entry["trabajo"] = _trabajo_de_prompt(cliente, pid, item)
+            if entry["trabajo"]:
                 entry["credits"] = None
                 entry["usd"] = None
+            else:
+                try:
+                    if item.get("estado") == "imagen_pendiente":
+                        est = estimate_video(
+                            item["imagen_url"],
+                            item["prompt"],
+                            item.get("model", "kling-2.1-pro"),
+                            extra_params=_extra_params_video(item),
+                        )
+                    else:
+                        est = estimate_image(
+                            item["image_url"],
+                            item["prompt"],
+                            extra_params=_extra_params_image(item),
+                        )
+                    entry["credits"] = est["credits"]
+                    entry["usd"] = est["usd"]
+                except Exception:
+                    entry["credits"] = None
+                    entry["usd"] = None
             prompts_en_curso.append(entry)
 
         if prompts_en_curso:
@@ -269,10 +318,12 @@ def ver_cliente(cliente):
     for brief_id, entry in sorted(
         videos_dict.items(), key=lambda kv: kv[1].get("generado_en", ""), reverse=True
     ):
+        job_id = _job_id_publicar(cliente, brief_id)
         videos.append({
             "id": brief_id,
             **entry,
             "plataformas_estado": _estado_plataformas(cliente, brief_id) if entry.get("estado") == "publicado" else {},
+            "trabajo": {"job_id": job_id} if entry.get("estado") == "pendiente" and trabajos.en_curso(job_id) else None,
         })
 
     log = bitacora.leer(cliente=cliente, limit=100)
@@ -360,11 +411,30 @@ def _generar_imagen_candidata(cliente, prompt_id, item):
     return True, None
 
 
+def _lanzar_generacion_imagen(cliente, prompt_id):
+    """Lanza en segundo plano la generación de la imagen candidata para un
+    prompt ya editado/guardado. No hace nada (y avisa) si ya hay una corriendo
+    para ese mismo prompt — así un doble clic no dispara dos llamadas."""
+    job_id = _job_id_imagen(cliente, prompt_id)
+
+    def trabajo():
+        data = prompts_mod.cargar(cliente)
+        _, item = prompts_mod.encontrar_prompt(data, prompt_id)
+        if not item:
+            raise RuntimeError("El prompt ya no existe (¿se descartó mientras generaba?).")
+        ok, error = _generar_imagen_candidata(cliente, prompt_id, item)
+        prompts_mod.guardar(cliente, data)
+        if not ok:
+            raise RuntimeError(error)
+        return "Imagen candidata lista."
+
+    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45)
+
+
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
 def aprobar_prompt(cliente, prompt_id):
-    """Aprueba el texto del prompt y genera una imagen de referencia candidata
-    (barata, ~1.5cr) — todavía NO genera el video."""
-    _cargar_entorno_cliente(cliente)
+    """Aprueba el texto del prompt y lanza en segundo plano la generación de una
+    imagen de referencia candidata (barata, ~1.5cr) — todavía NO genera el video."""
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
@@ -372,20 +442,18 @@ def aprobar_prompt(cliente, prompt_id):
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
-    ok, error = _generar_imagen_candidata(cliente, prompt_id, item)
     prompts_mod.guardar(cliente, data)
 
-    if ok:
-        flash(f"Imagen candidata generada para {prompt_id} — apruébala para generar el video.", "ok")
+    if _lanzar_generacion_imagen(cliente, prompt_id):
+        flash(f"Generando imagen candidata para {prompt_id}…", "ok")
     else:
-        flash(f"Error generando la imagen de {prompt_id}: {error}", "error")
+        flash(f"Ya se está generando la imagen de {prompt_id} — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/regenerar_imagen", methods=["POST"])
 def regenerar_imagen(cliente, prompt_id):
-    """La imagen candidata no gustó: genera otra (gasta créditos de nuevo)."""
-    _cargar_entorno_cliente(cliente)
+    """La imagen candidata no gustó: lanza otra en segundo plano (gasta créditos de nuevo)."""
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item:
@@ -393,21 +461,19 @@ def regenerar_imagen(cliente, prompt_id):
         return redirect(url_for("ver_cliente", cliente=cliente))
 
     _aplicar_edicion(item, request.form)
-    ok, error = _generar_imagen_candidata(cliente, prompt_id, item)
     prompts_mod.guardar(cliente, data)
 
-    if ok:
-        flash(f"Nueva imagen candidata generada para {prompt_id}.", "ok")
+    if _lanzar_generacion_imagen(cliente, prompt_id):
+        flash(f"Regenerando imagen candidata para {prompt_id}…", "ok")
     else:
-        flash(f"Error regenerando la imagen de {prompt_id}: {error}", "error")
+        flash(f"Ya se está generando una imagen para {prompt_id} — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar_imagen", methods=["POST"])
 def aprobar_imagen(cliente, prompt_id):
-    """La imagen candidata sí gustó: genera el video real a partir de ella
-    (aquí sí se gasta el crédito grande, ~8cr)."""
-    _cargar_entorno_cliente(cliente)
+    """La imagen candidata sí gustó: lanza en segundo plano el video real a
+    partir de ella (aquí sí se gasta el crédito grande, ~8cr)."""
     data = prompts_mod.cargar(cliente)
     idea_id, item = prompts_mod.encontrar_prompt(data, prompt_id)
     if not item or not item.get("imagen_url"):
@@ -417,52 +483,63 @@ def aprobar_imagen(cliente, prompt_id):
     _aplicar_edicion(item, request.form)
     prompts_mod.guardar(cliente, data)
 
-    out_dir = os.path.join(BASE_DIR, "salidas", cliente)
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, f"{prompt_id}.mp4")
+    job_id = _job_id_video(cliente, prompt_id)
 
-    try:
+    def trabajo():
+        data2 = prompts_mod.cargar(cliente)
+        idea_id2, item2 = prompts_mod.encontrar_prompt(data2, prompt_id)
+        if not item2:
+            raise RuntimeError("El prompt ya no existe (¿se descartó mientras generaba?).")
+
+        out_dir = os.path.join(BASE_DIR, "salidas", cliente)
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"{prompt_id}.mp4")
+
         launch = generate_video(
-            image_url=item["imagen_url"],
-            prompt=item["prompt"],
-            model=item.get("model", "kling-2.1-pro"),
-            extra_params=_extra_params_video(item),
+            image_url=item2["imagen_url"],
+            prompt=item2["prompt"],
+            model=item2.get("model", "kling-2.1-pro"),
+            extra_params=_extra_params_video(item2),
         )
         result = poll_until_done(launch["status_url"])
         higgsfield_url = extract_video_url(result)
-        download_result(result, out_path)
-        bitacora.registrar(cliente, prompt_id, "generacion", "ok", out_path)
-    except Exception as e:
-        bitacora.registrar(cliente, prompt_id, "generacion", "error", str(e))
-        flash(f"Error generando el video de {prompt_id}: {e}", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
+        try:
+            download_result(result, out_path)
+            bitacora.registrar(cliente, prompt_id, "generacion", "ok", out_path)
+        except Exception as e:
+            bitacora.registrar(cliente, prompt_id, "generacion", "error", str(e))
+            raise
 
-    try:
-        video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{prompt_id}.mp4")
-        bitacora.registrar(cliente, prompt_id, "storage", "ok", video_url)
-    except Exception as e:
-        video_url = higgsfield_url
-        bitacora.registrar(cliente, prompt_id, "storage", "error", str(e))
+        try:
+            video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{prompt_id}.mp4")
+            bitacora.registrar(cliente, prompt_id, "storage", "ok", video_url)
+        except Exception as e:
+            video_url = higgsfield_url
+            bitacora.registrar(cliente, prompt_id, "storage", "error", str(e))
 
-    estado = estado_mod.cargar(cliente)
-    estado[prompt_id] = {
-        "prompt": item["prompt"],
-        "image_url": item["imagen_url"],
-        "title": item.get("title", prompt_id),
-        "caption": item.get("caption", item["prompt"]),
-        "platforms": item.get("platforms", []),
-        "video_local": out_path,
-        "video_url": video_url,
-        "estado": "pendiente",
-        "generado_en": datetime.now().isoformat(),
-        "publicado_en": None,
-    }
-    estado_mod.guardar(cliente, estado)
+        estado = estado_mod.cargar(cliente)
+        estado[prompt_id] = {
+            "prompt": item2["prompt"],
+            "image_url": item2["imagen_url"],
+            "title": item2.get("title", prompt_id),
+            "caption": item2.get("caption", item2["prompt"]),
+            "platforms": item2.get("platforms", []),
+            "video_local": out_path,
+            "video_url": video_url,
+            "estado": "pendiente",
+            "generado_en": datetime.now().isoformat(),
+            "publicado_en": None,
+        }
+        estado_mod.guardar(cliente, estado)
 
-    del data[idea_id]["prompts"][prompt_id]
-    prompts_mod.guardar(cliente, data)
+        del data2[idea_id2]["prompts"][prompt_id]
+        prompts_mod.guardar(cliente, data2)
+        return "Video listo, pendiente de revisión."
 
-    flash(f"Video generado para {prompt_id} — queda pendiente de revisión más abajo.", "ok")
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130):
+        flash(f"Generando el video de {prompt_id}…", "ok")
+    else:
+        flash(f"Ya se está generando el video de {prompt_id} — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -485,16 +562,29 @@ def aprobar(cliente, brief_id):
         flash(f"No encontré {brief_id}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
-    _cargar_entorno_cliente(cliente)
-    ok = publicar_brief(brief_id, entry, cliente, _token_paths(cliente))
-    entry["estado"] = "publicado"
-    entry["publicado_en"] = datetime.now().isoformat()
-    estado_mod.guardar(cliente, estado)
+    job_id = _job_id_publicar(cliente, brief_id)
 
-    flash(
-        f"{brief_id} publicado." if ok else f"{brief_id} publicado con errores en alguna plataforma — revisa la bitácora.",
-        "ok" if ok else "warn",
-    )
+    def trabajo():
+        # Serializado: cargar el .env del cliente muta variables globales del
+        # proceso, así que dos publicaciones de clientes distintos no pueden
+        # hacer esa parte al mismo tiempo sin arriesgarse a mezclar credenciales.
+        with _ENV_LOCK:
+            _cargar_entorno_cliente(cliente)
+            ok = publicar_brief(brief_id, entry, cliente, _token_paths(cliente))
+
+        estado2 = estado_mod.cargar(cliente)
+        estado2[brief_id]["estado"] = "publicado"
+        estado2[brief_id]["publicado_en"] = datetime.now().isoformat()
+        estado_mod.guardar(cliente, estado2)
+
+        if not ok:
+            raise RuntimeError("Se publicó, pero alguna plataforma falló — revisa la bitácora.")
+        return "Publicado en todas las plataformas."
+
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=90):
+        flash(f"Publicando {brief_id}…", "ok")
+    else:
+        flash(f"Ya se está publicando {brief_id} — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -513,4 +603,7 @@ def rechazar(cliente, brief_id):
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5050, debug=True)
+    # use_reloader=False a propósito: ahora hay generaciones corriendo en hilos
+    # de fondo, y el auto-reload de Flask mata el proceso completo (y con él,
+    # cualquier generación en curso) apenas detecta un cambio de archivo.
+    app.run(host="127.0.0.1", port=5050, debug=True, use_reloader=False)

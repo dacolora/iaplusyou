@@ -1,0 +1,9 @@
+<div class="prompt-row progreso-row" id="trabajo-{{ p.trabajo.job_id }}">
+  <div class="prompt-row-num">{{ p.numero }}</div>
+  <div class="progreso-contenido">
+    <div class="prompt-solo-lectura">{{ p.prompt }}</div>
+    <div class="barra-progreso"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    <div class="progreso-texto">Generando… 0% · 0s</div>
+  </div>
+</div>
+<script>iniciarPolling({{ p.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ p.trabajo.job_id) | tojson }});</script>
