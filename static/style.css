@@ -329,7 +329,7 @@ h2 { font-size: 1.15rem; margin: 2rem 0 1rem; color: var(--muted); text-transfor
   color: var(--muted);
   margin: .6rem 0 .25rem;
 }
-textarea, select, input[type="number"] {
+textarea, select, input[type="number"], input[type="text"] {
   width: 100%;
   background: var(--panel-2);
   border: 1px solid var(--border);

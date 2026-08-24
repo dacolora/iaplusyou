@@ -19,6 +19,7 @@ from datetime import datetime
 
 import estado as estado_mod
 import prompts as prompts_mod
+import marca as marca_mod
 import bitacora
 import trabajos
 import generador_prompts
@@ -85,24 +86,25 @@ def _token_paths(cliente):
     }
 
 
-def _personajes(cliente):
-    """Personajes disponibles: imágenes tal cual, y videos representados por un
-    fotograma extraído (eso es lo que realmente se usa como referencia en Higgsfield)."""
-    personajes_dir = os.path.join(_client_dir(cliente), "personajes")
+def _listar_assets(cliente, subcarpeta):
+    """Imágenes tal cual, y videos representados por un fotograma extraído (eso es
+    lo que realmente se usa como referencia en Higgsfield). Sirve tanto para
+    personajes/ como para marca/."""
+    carpeta = os.path.join(_client_dir(cliente), subcarpeta)
     public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
-    if not os.path.isdir(personajes_dir):
+    if not os.path.isdir(carpeta):
         return []
 
-    archivos = sorted(os.listdir(personajes_dir))
+    archivos = sorted(os.listdir(carpeta))
     resultado = []
     for f in archivos:
         low = f.lower()
         if low.endswith(FRAME_SUFFIX):
-            continue  # es un fotograma derivado, no un personaje por sí mismo
+            continue  # es un fotograma derivado, no un asset por sí mismo
         if low.endswith(IMAGE_EXTS):
             resultado.append({
                 "nombre": f,
-                "url": f"{public_base}/clientes/{cliente}/personajes/{f}",
+                "url": f"{public_base}/clientes/{cliente}/{subcarpeta}/{f}",
                 "tipo": "imagen",
             })
         elif low.endswith(VIDEO_EXTS):
@@ -110,11 +112,19 @@ def _personajes(cliente):
             tiene_frame = frame_name in archivos
             resultado.append({
                 "nombre": f,
-                "url": f"{public_base}/clientes/{cliente}/personajes/{frame_name}" if tiene_frame else None,
-                "video_url": f"{public_base}/clientes/{cliente}/personajes/{f}",
+                "url": f"{public_base}/clientes/{cliente}/{subcarpeta}/{frame_name}" if tiene_frame else None,
+                "video_url": f"{public_base}/clientes/{cliente}/{subcarpeta}/{f}",
                 "tipo": "video",
             })
     return resultado
+
+
+def _personajes(cliente):
+    return _listar_assets(cliente, "personajes")
+
+
+def _marca_referencias(cliente):
+    return _listar_assets(cliente, "marca")
 
 
 def _extraer_frame(video_path, frame_path, segundo=1.0):
@@ -124,55 +134,117 @@ def _extraer_frame(video_path, frame_path, segundo=1.0):
     )
 
 
-@app.route("/cliente/<cliente>/personaje/subir", methods=["POST"])
-def subir_personaje(cliente):
-    """Sube una imagen O UN VIDEO de personaje desde el navegador: se guarda local
-    y en R2 (nunca en el repositorio de git — los binarios no van ahí). Si es un
-    video, además le saca un fotograma con ffmpeg — eso es lo que se usa como
-    referencia de imagen al generar (Higgsfield no acepta video como referencia)."""
-    archivo = request.files.get("imagen")
+def _subir_asset(cliente, subcarpeta, archivo):
+    """Sube una imagen O UN VIDEO a clientes/<cliente>/<subcarpeta>/: se guarda
+    local y en R2 (nunca en el repositorio de git). Si es video, además le saca
+    un fotograma con ffmpeg (Higgsfield no acepta video como referencia).
+    Devuelve (ok, mensaje)."""
     if not archivo or not archivo.filename:
-        flash("No elegiste ningún archivo.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
+        return False, "No elegiste ningún archivo."
 
     nombre = secure_filename(archivo.filename)
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
-        flash("Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente))
+        return False, "Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm."
 
-    personajes_dir = os.path.join(_client_dir(cliente), "personajes")
-    os.makedirs(personajes_dir, exist_ok=True)
-    local_path = os.path.join(personajes_dir, nombre)
+    carpeta = os.path.join(_client_dir(cliente), subcarpeta)
+    os.makedirs(carpeta, exist_ok=True)
+    local_path = os.path.join(carpeta, nombre)
     archivo.save(local_path)
 
     if ext in VIDEO_EXTS:
         try:
-            r2_uploader.upload_video(local_path, f"clientes/{cliente}/personajes/{nombre}")
+            r2_uploader.upload_video(local_path, f"clientes/{cliente}/{subcarpeta}/{nombre}")
         except Exception as e:
-            flash(f"Se guardó localmente pero falló la subida del video a R2: {e}", "error")
-            return redirect(url_for("ver_cliente", cliente=cliente))
+            return False, f"Se guardó localmente pero falló la subida del video a R2: {e}"
 
         frame_name = nombre + FRAME_SUFFIX
-        frame_path = os.path.join(personajes_dir, frame_name)
+        frame_path = os.path.join(carpeta, frame_name)
         try:
             _extraer_frame(local_path, frame_path)
-            r2_uploader.upload_image(frame_path, f"clientes/{cliente}/personajes/{frame_name}")
-            flash(f"Video subido y fotograma de referencia extraído: {nombre}", "ok")
+            r2_uploader.upload_image(frame_path, f"clientes/{cliente}/{subcarpeta}/{frame_name}")
+            return True, f"Video subido y fotograma de referencia extraído: {nombre}"
         except Exception as e:
-            flash(
+            return False, (
                 f"El video {nombre} se subió, pero no pude extraer su fotograma de referencia "
-                f"(no se puede usar como personaje hasta resolver esto): {e}",
-                "error",
+                f"(no se puede usar hasta resolver esto): {e}"
             )
     else:
         try:
-            r2_uploader.upload_image(local_path, f"clientes/{cliente}/personajes/{nombre}")
-            flash(f"Personaje subido: {nombre}", "ok")
+            r2_uploader.upload_image(local_path, f"clientes/{cliente}/{subcarpeta}/{nombre}")
+            return True, f"Subido: {nombre}"
         except Exception as e:
-            flash(f"Se guardó localmente pero falló la subida a R2: {e}", "error")
+            return False, f"Se guardó localmente pero falló la subida a R2: {e}"
 
+
+@app.route("/cliente/<cliente>/personaje/subir", methods=["POST"])
+def subir_personaje(cliente):
+    ok, mensaje = _subir_asset(cliente, "personajes", request.files.get("imagen"))
+    flash(mensaje, "ok" if ok else "error")
     return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/marca/subir", methods=["POST"])
+def subir_marca(cliente):
+    ok, mensaje = _subir_asset(cliente, "marca", request.files.get("imagen"))
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+def _job_id_marca(cliente):
+    return f"{cliente}__marca__analizar"
+
+
+@app.route("/cliente/<cliente>/marca/analizar", methods=["POST"])
+def analizar_marca(cliente):
+    """Le pide a Claude que mire las referencias de marca subidas y escriba una
+    guía de estilo — se usa automáticamente en cada generación de prompts."""
+    urls = [r["url"] for r in _marca_referencias(cliente) if r.get("url")]
+    if not urls:
+        flash("Sube al menos una referencia de marca (imagen o video) primero.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    job_id = _job_id_marca(cliente)
+
+    def trabajo():
+        guia = generador_prompts.analizar_marca(urls)
+        data = marca_mod.cargar(cliente)
+        data["guia_estilo"] = guia
+        marca_mod.guardar(cliente, data)
+        return "Guía de estilo generada."
+
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=15):
+        flash("Analizando referencias de marca…", "ok")
+    else:
+        flash("Ya se está analizando — espera a que termine.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/marca/guardar", methods=["POST"])
+def guardar_marca(cliente):
+    """Guarda la guía de estilo (editada a mano o generada) y, si aplica, un
+    style_id de Higgsfield ya creado por el cliente en su propio panel."""
+    data = marca_mod.cargar(cliente)
+    data["guia_estilo"] = request.form.get("guia_estilo", "").strip()
+    style_id = request.form.get("style_id", "").strip()
+    data["style_id"] = style_id or None
+    try:
+        data["style_strength"] = float(request.form.get("style_strength", 0.5))
+    except ValueError:
+        pass
+    marca_mod.guardar(cliente, data)
+    flash("Identidad de marca guardada.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+def _marca_contexto(cliente):
+    data = marca_mod.cargar(cliente)
+    job_id = _job_id_marca(cliente)
+    return {
+        **data,
+        "referencias": _marca_referencias(cliente),
+        "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
+    }
 
 
 def _estado_plataformas(cliente, brief_id):
@@ -256,7 +328,7 @@ def _ideas_pendientes(cliente):
                         est = estimate_image(
                             item["image_url"],
                             item["prompt"],
-                            extra_params=_extra_params_image(item),
+                            extra_params=_extra_params_image(item, cliente),
                         )
                     entry["credits"] = est["credits"]
                     entry["usd"] = est["usd"]
@@ -286,8 +358,14 @@ def _extra_params_video(item):
     return {"duration": int(item.get("duration", 5)), "cfg_scale": float(item.get("cfg_scale", 0.5))}
 
 
-def _extra_params_image(item):
-    return {"aspect_ratio": item.get("aspect_ratio", "9:16")}
+def _extra_params_image(item, cliente=None):
+    params = {"aspect_ratio": item.get("aspect_ratio", "9:16")}
+    if cliente:
+        marca = marca_mod.cargar(cliente)
+        if marca.get("style_id"):
+            params["style_id"] = marca["style_id"]
+            params["style_strength"] = float(marca.get("style_strength", 0.5))
+    return params
 
 
 def _aplicar_edicion(item, form):
@@ -332,6 +410,7 @@ def ver_cliente(cliente):
         "cliente.html",
         cliente=cliente,
         personajes=_personajes(cliente),
+        marca=_marca_contexto(cliente),
         ideas=_ideas_pendientes(cliente),
         modelos=prompts_mod.MODELOS_VALIDOS,
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
@@ -352,8 +431,9 @@ def nueva_idea(cliente):
         flash("Escribe la idea y elige un personaje.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
+    guia_estilo = marca_mod.cargar(cliente).get("guia_estilo")
     try:
-        textos = generador_prompts.generar_prompts(idea_texto, n=5)
+        textos = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo)
     except Exception as e:
         flash(f"No pude generar los prompts: {e}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
@@ -390,7 +470,7 @@ def _generar_imagen_candidata(cliente, prompt_id, item):
         launch = generate_image(
             image_reference_url=item["image_url"],
             prompt=item["prompt"],
-            extra_params=_extra_params_image(item),
+            extra_params=_extra_params_image(item, cliente),
         )
         result = poll_until_done(launch["status_url"])
         download_image_result(result, local_path)

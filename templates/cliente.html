@@ -73,6 +73,67 @@
   <button class="btn-generar btn-sm" type="submit">Subir personaje (imagen o video)</button>
 </form>
 
+<h2>Identidad de marca</h2>
+<p class="vacio" style="padding-top:0;">
+  Referencias visuales (imágenes o videos) que definen el look de este cliente — paleta,
+  tono, iluminación, ambientación. La guía de estilo se aplica automáticamente cada vez
+  que se generan prompts nuevos, para que el contenido no pierda identidad.
+</p>
+
+{% if marca.referencias %}
+<div class="personajes-row">
+  {% for r in marca.referencias %}
+  <div class="personaje-thumb">
+    {% if r.url %}
+    <a href="{{ r.video_url or r.url }}" target="_blank">
+      <img src="{{ r.url }}" alt="{{ r.nombre }}">
+      {% if r.tipo == 'video' %}<span class="badge-video">VIDEO</span>{% endif %}
+    </a>
+    {% else %}
+    <a href="{{ r.video_url }}" target="_blank" class="personaje-sin-frame">
+      <span>Video sin fotograma —<br>no se puede usar aún</span>
+    </a>
+    {% endif %}
+    <div class="nombre">{{ r.nombre }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Sin referencias de marca todavía.</p>
+{% endif %}
+
+<form method="post" action="{{ url_for('subir_marca', cliente=cliente) }}" enctype="multipart/form-data" class="form-subir-personaje">
+  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+  <button class="btn-generar btn-sm" type="submit">Subir referencia de marca</button>
+</form>
+
+{% if marca.trabajo %}
+<div class="barra-progreso" id="trabajo-{{ marca.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+<div class="progreso-texto">Analizando referencias… 0% · 0s</div>
+<script>iniciarPolling({{ marca.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ marca.trabajo.job_id) | tojson }});</script>
+{% elif marca.referencias %}
+<form method="post" action="{{ url_for('analizar_marca', cliente=cliente) }}" class="form-analizar-marca">
+  <button class="btn-generar btn-sm" type="submit">Analizar referencias y generar guía de estilo</button>
+</form>
+{% endif %}
+
+<form method="post" action="{{ url_for('guardar_marca', cliente=cliente) }}" class="form-guia-estilo">
+  <label class="campo-label">Guía de estilo (editable a mano, se usa en cada generación de prompts)</label>
+  <textarea name="guia_estilo" rows="4" placeholder="Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos...">{{ marca.guia_estilo or '' }}</textarea>
+
+  <div class="fila-campos-idea">
+    <div>
+      <label class="campo-label">style_id de Higgsfield (opcional, avanzado)</label>
+      <input type="text" name="style_id" value="{{ marca.style_id or '' }}" placeholder="uuid, solo si ya lo creaste en el panel de Higgsfield">
+    </div>
+    <div>
+      <label class="campo-label">Fuerza del estilo (0-1)</label>
+      <input type="number" name="style_strength" min="0" max="1" step="0.05" value="{{ marca.style_strength if marca.style_strength is not none else 0.5 }}">
+    </div>
+  </div>
+  <button class="btn-generar btn-sm" type="submit">Guardar identidad de marca</button>
+</form>
+
 {% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
 {% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
 {% set rechazados = videos | selectattr('estado', 'equalto', 'rechazado') | list %}
