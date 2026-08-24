@@ -3,12 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Pipeline{% endblock %} · Dashboard</title>
+  <title>{% block title %}Pipeline{% endblock %} · Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <div class="fondo-ambiente" aria-hidden="true"></div>
   <header>
-    <a href="{{ url_for('index') }}">Pipeline Higgsfield</a>
+    <a class="marca-header" href="{{ url_for('index') }}">
+      <span class="marca-mark"></span>
+      <span class="marca-texto">Studio<span class="marca-punto">.</span></span>
+    </a>
+    {% if request.view_args and request.view_args.cliente %}
+    <nav class="header-nav">
+      <a href="{{ url_for('index') }}">Proyectos</a>
+      <span class="header-sep">/</span>
+      <span class="header-actual">{{ request.view_args.cliente }}</span>
+    </nav>
+    {% endif %}
   </header>
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -61,6 +75,13 @@
       }
       tick();
     }
+
+    // Entrada suave de las secciones al cargar la página.
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.aparece').forEach(function (el, i) {
+        setTimeout(function () { el.classList.add('aparece-visible'); }, i * 40);
+      });
+    });
   </script>
 </body>
 </html>

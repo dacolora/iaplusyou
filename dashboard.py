@@ -266,13 +266,27 @@ def _resumen_cliente(cliente):
     return conteo
 
 
+def _portada(cliente):
+    """Una imagen representativa del cliente (su primer personaje utilizable), para
+    que la lista de clientes se vea con contenido real en vez de solo texto."""
+    for p in _personajes(cliente):
+        if p.get("url"):
+            return p["url"]
+    return None
+
+
 @app.route("/")
 def index():
     clientes = [
-        {"nombre": c, **_resumen_cliente(c)}
+        {"nombre": c, "portada": _portada(c), **_resumen_cliente(c)}
         for c in estado_mod.listar_clientes()
     ]
-    return render_template("index.html", clientes=clientes)
+    totales = {
+        "clientes": len(clientes),
+        "pendiente": sum(c["pendiente"] for c in clientes),
+        "publicado": sum(c["publicado"] for c in clientes),
+    }
+    return render_template("index.html", clientes=clientes, totales=totales)
 
 
 def _job_id_imagen(cliente, prompt_id):

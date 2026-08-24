@@ -1,22 +1,54 @@
 {% extends "base.html" %}
-{% block title %}Clientes{% endblock %}
+{% block title %}Proyectos{% endblock %}
 {% block content %}
-<h1>Clientes</h1>
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">Pipeline de contenido</span>
+    <h1>De una idea a video publicado.</h1>
+    <p class="hero-sub">Personaje, guion, escena candidata, video final — cada paso se aprueba antes de gastar crédito en el siguiente.</p>
+  </div>
+  {% if totales.clientes %}
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-num">{{ totales.clientes }}</span>
+      <span class="stat-label">proyecto{{ 's' if totales.clientes != 1 }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ totales.pendiente }}</span>
+      <span class="stat-label">por revisar</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ totales.publicado }}</span>
+      <span class="stat-label">publicados</span>
+    </div>
+  </div>
+  {% endif %}
+</section>
 
 {% if clientes %}
-<div class="grid-clientes">
+<div class="grid-clientes aparece">
   {% for c in clientes %}
-  <a class="card-cliente" href="{{ url_for('ver_cliente', cliente=c.nombre) }}">
-    <div class="nombre">{{ c.nombre }}</div>
-    <div class="badges">
-      <span class="badge pendiente">{{ c.pendiente }} pendiente{{ 's' if c.pendiente != 1 }}</span>
-      <span class="badge publicado">{{ c.publicado }} publicado{{ 's' if c.publicado != 1 }}</span>
-      <span class="badge rechazado">{{ c.rechazado }} rechazado{{ 's' if c.rechazado != 1 }}</span>
+  <a class="card-cliente" href="{{ url_for('ver_cliente', cliente=c.nombre) }}" style="--i:{{ loop.index0 }}">
+    <div class="card-cliente-portada">
+      {% if c.portada %}
+      <img src="{{ c.portada }}" alt="" loading="lazy">
+      {% else %}
+      <div class="card-cliente-sin-portada"><span>{{ c.nombre[0] | upper }}</span></div>
+      {% endif %}
+      <div class="card-cliente-degradado"></div>
+    </div>
+    <div class="card-cliente-body">
+      <div class="nombre">{{ c.nombre }}</div>
+      <div class="badges">
+        {% if c.pendiente %}<span class="badge pendiente">{{ c.pendiente }} por revisar</span>{% endif %}
+        <span class="badge publicado">{{ c.publicado }} publicado{{ 's' if c.publicado != 1 }}</span>
+        {% if c.rechazado %}<span class="badge rechazado">{{ c.rechazado }} rechazado{{ 's' if c.rechazado != 1 }}</span>{% endif %}
+      </div>
     </div>
   </a>
   {% endfor %}
 </div>
 {% else %}
-<p class="vacio">Todavía no hay clientes en clientes/. Crea una carpeta ahí (o usa subir_personaje.py --cliente &lt;nombre&gt;) para que aparezca aquí.</p>
+<p class="vacio">Todavía no hay proyectos. Crea una carpeta en clientes/ para que aparezca aquí.</p>
 {% endif %}
 {% endblock %}
