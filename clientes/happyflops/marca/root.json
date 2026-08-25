@@ -1,0 +1,735 @@
+{
+  "id": "happyflops.root",
+  "type": "root_matrix",
+  "version": "0.10.1",
+  "updated": "2026-08-20",
+  "owner": "Laura Vanegas",
+  "note": "Root matrix for Happy Flops. Sub-worlds (submundos) inherit from this and may override free_variables only. Invariants are immutable at every layer.",
+  "brand": {
+    "name": "Happy Flops",
+    "url": "https://www.happyflops.com",
+    "sells": "moments, not sandals",
+    "definition": "A brand built around comfort, simplicity and everyday happiness, that makes ordinary moments feel better.",
+    "founder": "Santiago Talavera",
+    "origin_story": "Standing for hours settling his daughter to sleep, his feet genuinely hurt. A different sandal removed the pain entirely. 'Why doesn't everyone feel this?' became the brand.",
+    "promise": "Comfort is not a luxury. Happiness shouldn't be complicated.",
+    "values": [
+      "Happiness",
+      "Comfort",
+      "Simplicity",
+      "Accessibility",
+      "Playfulness"
+    ],
+    "pillars": [
+      "Human Connection",
+      "Multigenerational Living",
+      "Everyday Joy",
+      "Comfort as Freedom",
+      "Playful Spirit",
+      "Effortless Aesthetic"
+    ],
+    "we_are": [
+      "Simple",
+      "Warm",
+      "Playful",
+      "Calm",
+      "Optimistic"
+    ],
+    "we_are_not": [
+      "Complicated",
+      "Corporate",
+      "Aggressive",
+      "Exclusive",
+      "Overdesigned"
+    ],
+    "price_range_eur": [
+      29.99,
+      59.95
+    ],
+    "primary_market": "Europe",
+    "store_languages": 20,
+    "asset_language": "English",
+    "differentiate_from": [
+      "generic cloud-slide brands (product floating on flat white, no brand world)",
+      "orthopaedic and clinical brands (arch diagrams, pharmacy aesthetic)",
+      "sneaker and hype brands (hard backdrops, aggressive studio light)",
+      "low-cost pool-slide brands (stacked product, garish colour on flat ground)"
+    ],
+    "visual_references": [
+      "Scandinavian home and lifestyle brands",
+      "established comfort footwear",
+      "wellness and personal-care brands",
+      "UGG",
+      "Pammys (NOTE: direct competitor, same category and market — use knowingly)"
+    ],
+    "positioning_evolution": {
+      "declared": "2026-08-20",
+      "from": "Brand Book V1: 'Happy Flops lives in real life - always.'",
+      "to": "A brand that lives between life and imagination.",
+      "why_it_matters": "The original line made every non-photographic world an awkward exception. This makes flat colour backgrounds, creative photoshoots, 3D and the character universe legitimate territory rather than concessions. The Brand Book calls itself a living document; this is recorded as a declared evolution, not a violation.",
+      "consequence": "The 'real life always' principle governs the Exterior and Casa worlds. It does not govern Creative Photoshoot, Characters or the 3D track."
+    }
+  },
+  "technology": {
+    "smiletech": {
+      "name": "SmileTech",
+      "what_it_is": "The flex. Happy Flops bend with the foot instead of staying rigid like most slides on the market.",
+      "why_the_name": "The smile in the logo, the curve the sole makes when it bends, and the name are the same shape. The Brand Book already describes the logo's smile as a 'flexible curve' reflecting the softness of the sandals.",
+      "replaces": "any mention of EVA foam or material engineering in customer-facing communication",
+      "internal_material_fact": "EVA foam (do not say this publicly)",
+      "how_to_talk_about_it": [
+        "Say what it does, never how it works",
+        "Show the bend, don't diagram it",
+        "Feeling first: 'it moves with you', not 'flexible polymer construction'"
+      ],
+      "never_say": [
+        "EVA",
+        "polymer",
+        "engineered",
+        "ergonomic",
+        "advanced",
+        "technology stack",
+        "orthopaedic"
+      ],
+      "visual_signature": "the bend — the sole curving as the foot rolls, held in hand, flexed between two fingers, mid-step",
+      "status": "new — does not yet exist in any brand asset"
+    }
+  },
+  "voice": {
+    "core_rule": "Speak simply, clearly, positively. Don't over-explain. Don't try too hard. Let the feeling speak.",
+    "adjectives": [
+      "light",
+      "human",
+      "effortless"
+    ],
+    "max_words_on_image": 6,
+    "hero_tagline": "STEP INTO HAPPINESS",
+    "canonical_examples": [
+      "Soft enough to forget the day",
+      "Feels like walking on clouds",
+      "Not for everyone—but for you",
+      "Step in, feel the difference",
+      "Running, jumping, splashing",
+      "Cold outside, warm on your feet"
+    ],
+    "banned_vocabulary": [
+      "ergonomic",
+      "engineered",
+      "advanced",
+      "orthopaedic",
+      "clinically",
+      "performance",
+      "premium",
+      "luxury",
+      "revolutionary",
+      "EVA"
+    ],
+    "claims_policy": {
+      "allowed": "comfort, cushioning, softness, relief from tiredness, ease",
+      "forbidden": "medical conditions, treatment, therapeutic effect",
+      "legal_review": "pending — European counsel"
+    },
+    "devices": {
+      "happy_not_happy": {
+        "description": "Binary contrast device. Happy = this, Not Happy = the rigid slide you've always worn.",
+        "scope": [
+          "ads",
+          "comparatives"
+        ],
+        "not_for": [
+          "general social content",
+          "product pages",
+          "editorial",
+          "internal document framing"
+        ],
+        "note": "Scoped deliberately. Used everywhere it stops being a device and becomes a tic."
+      }
+    }
+  },
+  "invariants": [
+    {
+      "id": 1,
+      "name": "light",
+      "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change."
+    },
+    {
+      "id": 2,
+      "name": "colour_richness",
+      "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR."
+    },
+    {
+      "id": 3,
+      "name": "colour_structure_environment",
+      "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read."
+    },
+    {
+      "id": 4,
+      "name": "feet",
+      "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong."
+    },
+    {
+      "id": 5,
+      "name": "no_generated_text",
+      "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them."
+    },
+    {
+      "id": 6,
+      "name": "product_fidelity",
+      "rule": "The product matches the approved reference pack. Never described-and-hoped."
+    },
+    {
+      "id": 7,
+      "name": "casting",
+      "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule."
+    },
+    {
+      "id": 8,
+      "name": "forbidden_scenes",
+      "rule": "No gym, workplace, clinical settings, cold or stressful situations."
+    },
+    {
+      "id": 9,
+      "name": "no_third_party_ip",
+      "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world."
+    },
+    {
+      "id": 10,
+      "name": "typography",
+      "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body."
+    },
+    {
+      "id": 11,
+      "name": "hands",
+      "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot."
+    }
+  ],
+  "free_variables": {
+    "moment": {
+      "type": "string",
+      "description": "What is actually happening — a real thing people do"
+    },
+    "scenario": {
+      "type": "enum",
+      "values": [
+        "home",
+        "street",
+        "nature",
+        "friends_and_family"
+      ]
+    },
+    "season": {
+      "type": "enum",
+      "values": [
+        "spring",
+        "summer",
+        "autumn",
+        "winter_outdoor",
+        "winter_indoor"
+      ]
+    },
+    "palette": {
+      "type": "object",
+      "shape": {
+        "dominant": "string",
+        "accent": "string"
+      }
+    },
+    "saturation": {
+      "type": "string",
+      "default": "rich but credible, +10-15%"
+    },
+    "format": {
+      "type": "string",
+      "description": "Any aspect ratio, decided per project"
+    },
+    "composition": {
+      "type": "string",
+      "description": "Free — leave clean negative space for type"
+    },
+    "camera": {
+      "type": "string",
+      "description": "Lens, angle, distance, depth — all free"
+    },
+    "energy": {
+      "type": "string",
+      "description": "From quiet warmth to full movement"
+    },
+    "styling": {
+      "type": "string",
+      "description": "Any, provided it never competes with the product"
+    },
+    "hero_angle": {
+      "type": "string",
+      "description": "Free per product"
+    }
+  },
+  "seasons": {
+    "spring": "High clear fresh light. Neutral daylight warmed in the highlights. Sun through new leaves, morning to mid-morning. Greens allowed to be vivid.",
+    "summer": "Classic golden hour. Low warm sun, long shadows, honeyed glow.",
+    "autumn": "Low amber sun lasting all afternoon. Hazy backlight, rim light through leaves, rust and ochre ground tones.",
+    "winter_outdoor": "Crisp low winter sun, pale gold, long shadows. Cool air, warm highlights. Never flat grey.",
+    "winter_indoor": "Warm lamplight and low window light at dusk. The world of HappyCozy, Fluffs and Comfy."
+  },
+  "colour_system": {
+    "elastic": true,
+    "held_together_by": "invariant 3 — one dominant, one accent, graded warm",
+    "yellow_gradient": {
+      "from": "#fdb716",
+      "to": "#fecd0a",
+      "role": "emotional core — optimism and lightness"
+    },
+    "blue_gradient": {
+      "from": "#4797c9",
+      "to": "#6bacd5",
+      "role": "balance — space and versatility"
+    },
+    "neutrals": [
+      "beige",
+      "cream",
+      "sand",
+      "off-white"
+    ],
+    "forbidden": [
+      "desaturated",
+      "grey",
+      "dull",
+      "heavy filter",
+      "fake HDR",
+      "white blown-out sky",
+      "cold cast"
+    ]
+  },
+  "contexts": {
+    "branding": {
+      "split": "100/0",
+      "channels": [
+        "Instagram",
+        "TikTok"
+      ],
+      "intent": "Emotion carries the frame. The product is present and worn, but not the hero."
+    },
+    "brand_to_sell": {
+      "split": "50/50",
+      "channels": [
+        "Shopify",
+        "PDP",
+        "homepage"
+      ],
+      "intent": "The product is the hero, held inside a real emotional moment. Both must read in one second.",
+      "priority": "highest per Brand Book"
+    },
+    "product_sell": {
+      "split": "0/100",
+      "channels": [
+        "Meta Ads",
+        "Google Ads"
+      ],
+      "intent": "The product is the absolute hero. Clear, direct, fast. No ambiguity, no storytelling."
+    }
+  },
+  "catalog": {
+    "sizes": {
+      "kids": "20/21 - 26/27",
+      "adult": "28 - 47"
+    },
+    "families": {
+      "flops": "thick-platform slide, single wide upper band with fine vertical ribbing, tall cushioned midsole with herringbone-textured sidewall, contoured footbed with shallow heel cup",
+      "clogs": "closed-toe clog silhouette on the same cushioned platform",
+      "sandals": "multi-strap sandal on a cushioned footbed, the top tier, most editorial of the range",
+      "indoor": "soft-upper, warm-textile world"
+    },
+    "products": [
+      {
+        "name": "HappyFlops Original",
+        "family": "flops",
+        "price_eur": 34.95,
+        "tagline": "Soft enough to forget the day"
+      },
+      {
+        "name": "HappyFlops Original Drop 002",
+        "family": "flops",
+        "price_eur": 34.95,
+        "tagline": "Feels like walking on clouds"
+      },
+      {
+        "name": "HappyFlops Limited Editions",
+        "family": "flops",
+        "price_eur": 34.99,
+        "tagline": "Not for everyone—but for you"
+      },
+      {
+        "name": "HappyFlops Botanics",
+        "family": "flops",
+        "price_eur": 39.95,
+        "tagline": "Nature at your feet"
+      },
+      {
+        "name": "HappyFlops Nordics",
+        "family": "flops",
+        "price_eur": 34.95,
+        "tagline": "For the days when nothing should be too much"
+      },
+      {
+        "name": "HappyFlops Bohemian",
+        "family": "flops",
+        "price_eur": null,
+        "tagline": null
+      },
+      {
+        "name": "HappyFlops Polkadots",
+        "family": "flops",
+        "price_eur": null,
+        "tagline": null
+      },
+      {
+        "name": "HappyFlops Kingsday Collection",
+        "family": "flops",
+        "price_eur": null,
+        "tagline": null
+      },
+      {
+        "name": "HappyFlops Kids",
+        "family": "flops",
+        "price_eur": 29.99,
+        "tagline": "Running, jumping, splashing"
+      },
+      {
+        "name": "HappyMini",
+        "family": "flops",
+        "price_eur": 29.99,
+        "tagline": "Small, soft, unbeatable"
+      },
+      {
+        "name": "HappyCushers",
+        "family": "flops",
+        "price_eur": 39.99,
+        "tagline": "Softness you can stand on"
+      },
+      {
+        "name": "HappyClogs Original",
+        "family": "clogs",
+        "price_eur": 44.95,
+        "tagline": "Step in, feel the difference"
+      },
+      {
+        "name": "HappyClogs Strapless",
+        "family": "clogs",
+        "price_eur": 39.95,
+        "tagline": "On in a second, on all day"
+      },
+      {
+        "name": "HappySandals Helsinki",
+        "family": "sandals",
+        "price_eur": 59.95,
+        "tagline": "Made for movement"
+      },
+      {
+        "name": "HappySandals Oslo",
+        "family": "sandals",
+        "price_eur": 59.95,
+        "tagline": "Goes wherever you go"
+      },
+      {
+        "name": "HappySandals Stockholm",
+        "family": "sandals",
+        "price_eur": 59.95,
+        "tagline": "Beach, city, at home everywhere"
+      },
+      {
+        "name": "HappyComfy",
+        "family": "indoor",
+        "price_eur": 49.99,
+        "tagline": "Comfort finally has a name"
+      },
+      {
+        "name": "HappyFluffs",
+        "family": "indoor",
+        "price_eur": 49.99,
+        "tagline": "Feels like walking on clouds"
+      },
+      {
+        "name": "HappyCozy",
+        "family": "indoor",
+        "price_eur": 39.95,
+        "tagline": "Cold outside, warm on your feet"
+      }
+    ],
+    "colourways": [
+      "Beige",
+      "Black",
+      "Dark Blue",
+      "Light Blue",
+      "Dark Green",
+      "Pink",
+      "Purple",
+      "Yellow",
+      "Coffee Brown",
+      "Gray",
+      "White",
+      "Orange",
+      "Red",
+      "Green",
+      "Mint Green",
+      "Bright Pink",
+      "Deep Red",
+      "Bordeaux Red",
+      "Salmon Pink",
+      "Electric Blue",
+      "Jungle Green",
+      "Lime Green",
+      "Sky Blue",
+      "Sand Beige",
+      "Forest Green",
+      "Brownish-gray",
+      "Chocolate"
+    ],
+    "patterns": [
+      "Leopard",
+      "Pink Leopard",
+      "Pineapple",
+      "Blossom",
+      "Avocado",
+      "Military",
+      "White Marble",
+      "Pizza"
+    ],
+    "botanics_designs": [
+      "Amber Bloom",
+      "Wild Bloom",
+      "Peach Blossom",
+      "Blue Petal",
+      "Night Bloom",
+      "Golden Seed"
+    ]
+  },
+  "prompt_blocks": {
+    "invariant_block": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour is rich but credible: about 10-15% more saturated than reality, still possible as a photograph. The frame resolves to ONE dominant tone and ONE accent, graded warm. People are real, unposed, caught mid-movement — multigenerational and diverse. Styling is simple and comfortable and never competes with the product. Feet are clean and well-groomed, natural skin, toes relaxed and close together, soft natural position, bare neutral nails. Feet stay secondary — the product is where the eye lands. Hands, where visible, are anatomically correct and unremarkable — five fingers, natural relaxed pose, short clean bare nails, no jewellery. The product matches the reference image exactly. Feeling over perfection: warm, alive, slightly imperfect.",
+    "negative_prompt": "extra toes, missing toes, six toes, fused toes, merged toes, splayed toes, curled toes, gripping toes, tense toes, deformed feet, malformed foot anatomy, extreme toe close-up, dirty feet, cracked skin, dry skin, calluses, long toenails, coloured nail polish, veiny feet, text, lettering, words, logo, watermark, signage, captions, gym, fitness equipment, office, desk, workplace, hospital, clinical setting, cold atmosphere, stress, white sky, blown-out sky, grey, desaturated, dull, cold colour cast, heavy filter, HDR, oversaturated, harsh flash, direct flash, flat overhead lighting, hard shadows, no visible light direction, professional model, catalog pose, stiff posing, plastic skin, over-retouched, airbrushed, cluttered background, messy room, empty studio void, third-party characters, licensed characters, competitor branding, extra fingers, missing fingers, six fingers, fused fingers, deformed hands, malformed hand anatomy, twisted wrist, claw hand, nail polish on hands, rings, bracelets, watch, long fingernails"
+  },
+  "submundo_precedence": [
+    "project",
+    "collection",
+    "season"
+  ],
+  "submundo_rule": "A submundo may override free_variables only. It may never add to, weaken or contradict an invariant.",
+  "tooling": {
+    "higgsfield": "lifestyle scenes with people and movement — branding and brand_to_sell",
+    "nano_banana": "Gemini 2.5 Flash Image — product accuracy, colourway swaps, repairing product drift. Reference conditioning is far stronger.",
+    "critical_rule": "Never describe the product and hope. Always attach the reference image."
+  },
+  "approval": {
+    "approver": "Laura Vanegas",
+    "scope": "everything",
+    "method": "20-second gate",
+    "ai_disclosure": {
+      "visible_labelling": false,
+      "legal_review": "pending — European counsel"
+    }
+  },
+  "open_items": [
+    {
+      "id": "reference_pack",
+      "status": "blocked",
+      "note": "Incoming ZIP. Until it exists, invariant 6 cannot be enforced."
+    },
+    {
+      "id": "colourway_hex",
+      "status": "needed",
+      "note": "Hex or Pantone per colourway. 'Bordeaux Red' is not an instruction — ask ten people for red and you get ten reds, and the AI is those ten people every time. Colour error is the one failure on this list that costs money directly: a customer who receives a different burgundy than the photo returns it."
+    },
+    {
+      "id": "naming_convention",
+      "status": "proposed",
+      "value": "HF_{context}_{product}_{colourway}_{season}_{ratio}_{version}"
+    },
+    {
+      "id": "happyflopsuniverse_com",
+      "status": "404",
+      "note": "Site named in the brief is not live."
+    },
+    {
+      "id": "figma_urls",
+      "status": "needed",
+      "note": "Connector opens files by URL; cannot browse the account."
+    },
+    {
+      "id": "instagram",
+      "status": "needed",
+      "note": "Chrome extension not connected."
+    }
+  ],
+  "review_cadence": {
+    "frequency": "quarterly",
+    "next_review": "2026-11-20",
+    "why": "A living document nobody opens is a dead document with a nicer name. The date is the only thing that keeps it alive.",
+    "what_to_check": [
+      "Matrix Feedback rows still marked Pending",
+      "Catalogue against the live site — products, prices, colourways",
+      "Which worlds gained references since last time",
+      "Any invariant that has been worked around more than once"
+    ]
+  },
+  "styling_doctrine": {
+    "rule_unchanged": "Styling is simple, comfortable, effortless and never competes with the product. This rule is NOT changed.",
+    "clarification": "'Never competes' does not mean 'never noticeable'. Competes = the eye lands on the clothes first, or cannot decide. Noticeable = the clothes are good, styled and current, and the product is still the first thing you see. A stylist's job is to choose the look that makes the product read BETTER — good styling makes a product pop, it does not hide it.",
+    "practice": {
+      "colour": "The outfit sits in a register that lets the product's colourway separate from it. Beige product against beige trousers disappears — a styling failure, not a photography one.",
+      "pattern": "Never near the product. Pattern above the waist is fine; pattern on trousers, socks or floor is not.",
+      "silhouette": "Hems reveal the foot cleanly. Long trousers that swallow the product defeat the shot.",
+      "ads": "Product hero, outfit as frame. Should catch the eye and look good while the product stays unmistakably the subject."
+    },
+    "test": "Cover the product with your thumb. If the image is still just as good, the product was never the hero.",
+    "note": "Raised as a possible root conflict by the Outfits world and resolved inside the free variables without a Matrix Feedback row — which is what the protocol says to check first."
+  },
+  "schema_version": "submundo.schema.json v0.7 — three categories, subcategory level added",
+  "dna": {
+    "note": "Corrected 20 Aug 2026. Light, colour and feeling are ROOT — brand DNA. They are not collectible variables and no world or collection chooses them.",
+    "the_sequence": "The ROOT SAYS what the light, the colour and the feeling are. The TRUNK SHOWS what that looks like. The WORLD says where it happens.",
+    "light": "Invariant 1. Always soft, always directional, always warm-graded relative to its own scene. Winter, Christmas, summer — the light is always THAT light. Only colour temperature follows the scene.",
+    "colour": "Invariants 2 and 3. Rich but credible; environment resolves to one dominant and one accent.",
+    "feeling": "The brand thesis — we sell moments, not sandals. Everyday Joy is a pillar, not a collection.",
+    "consequence": "A trunk collection is EVIDENCE, not choice. A light reference with hard flat light is not another kind of light in the library — it is a REJECTED reference, because it breaks invariant 1. Every trunk reference names the invariant it illustrates and carries a verdict: exemplar or rejected."
+  },
+  "tree": {
+    "note": "From Laura's drawing (20 Aug) and the three-category simplification that followed. Six levels.",
+    "levels": [
+      {
+        "n": 1,
+        "name": "RAIZ — la matriz",
+        "is": "The 100 questions and the 11 invariants. Brand DNA.",
+        "changeable": "rarely, deliberately"
+      },
+      {
+        "n": 2,
+        "name": "TRONCO — referencias de la matriz",
+        "is": "Evidence of the DNA: luz, felicidad, poses, modelos, imperfecciones, material.",
+        "changeable": "yes — that is the point"
+      },
+      {
+        "n": 3,
+        "name": "CATEGORIA",
+        "is": "lifestyle · photoshoot · render_3d",
+        "changeable": "rarely — these are the positioning itself"
+      },
+      {
+        "n": 4,
+        "name": "SUBCATEGORIA",
+        "is": "The variation inside a category, including season.",
+        "changeable": "yes, freely"
+      },
+      {
+        "n": 5,
+        "name": "TIPO DE CONTENIDO",
+        "is": "ads · fotografia · video · social",
+        "changeable": "yes"
+      },
+      {
+        "n": 6,
+        "name": "HOJA",
+        "is": "The finished piece.",
+        "changeable": "n/a"
+      }
+    ],
+    "sap_flows_both_ways": {
+      "up": "Root → trunk → category → content type → leaf. This is the normal direction and it is strong.",
+      "down": "The trunk can move the ROOT a little. When references consistently show something the matrix hasn't captured, the DNA can sharpen — never contradict itself, only get more precise. Weighted, not symmetric: a lot flows up, a little flows down.",
+      "governance": "Downward flow still goes through Matrix Feedback and Laura decides. The can_nudge_root flag marks it; it does not authorise it."
+    },
+    "what_this_replaced": {
+      "campaign_layer": "Removed. What was called a campaign is a TIPO DE CONTENIDO. campana.producto becomes tipo.fotografia_producto.",
+      "3d_sibling_root": "Removed. 3D Render is a CATEGORY. This eliminates the two-roots-drifting risk that the sibling-root design carried.",
+      "word_world": "Now CATEGORIA."
+    }
+  },
+  "categories": {
+    "note": "Three. They are not an arbitrary grouping — they ARE the positioning. Lifestyle is life. Render_3D is imagination. Photoshoot is the bridge between them. 'A brand that lives between life and imagination' stops being a slogan and becomes the index of the system.",
+    "lifestyle": {
+      "is": "Real life, real people, real places.",
+      "subcategories": {
+        "exterior": {
+          "seasons": true,
+          "note": "Street, city, nature, beach. Absorbs what was previously the separate Naturaleza category."
+        },
+        "interior": {
+          "seasons": true,
+          "note": "Home. Winter interior is where HappyCozy, Fluffs and Comfy live."
+        }
+      },
+      "references": "Each subcategory carries its own season references."
+    },
+    "photoshoot": {
+      "is": "Controlled shooting. Flat colour or gradient, studio light. Product-led and content-led.",
+      "subcategories_examples": [
+        "producto",
+        "navidad",
+        "pelicula",
+        "colaboraciones"
+      ],
+      "note": "Subcategories here are occasions and themes rather than places. The only calendar-independent category, which is why it can produce all year.",
+      "references": "Its own — more product, more content."
+    },
+    "render_3d": {
+      "is": "Happy Universe. The characters.",
+      "subcategories_examples": [
+        "happy_universe"
+      ],
+      "note": "The 3D characters LIVE WITH REALITY — this is not a separate visual universe sealed off from the brand. Characters and real environments coexist in frame.",
+      "references": "3D references, including how rendered and real sit together."
+    },
+    "naturaleza_resolved": "Folded into lifestyle/exterior."
+  },
+  "version_note": "Bumps to 1.0.0 when the first real references land. Tying 1.0 to evidence rather than to how settled the structure feels.",
+  "trunk_change": "No structural change. Imperfecciones simply gets its own reference collection like the others.",
+  "content_types": {
+    "note": "A content type is an ASSIGNMENT, not a place. It runs under a category — the same content type can run under more than one.",
+    "registry": [
+      {
+        "id": "tipo.outfits",
+        "name": "Outfits",
+        "runs_under": [
+          "cat.photoshoot",
+          "cat.lifestyle"
+        ],
+        "note": "Model looks for social. Resolved 20 Aug: outfits are shot INSIDE photoshoot or INSIDE lifestyle, so it is an assignment rather than a location. Its styling doctrine already exists and carries over unchanged."
+      },
+      {
+        "id": "tipo.fotografia_producto",
+        "name": "Fotografía de producto",
+        "runs_under": [
+          "cat.photoshoot",
+          "cat.lifestyle"
+        ],
+        "note": "Was modelled as campana.producto. The store: product pages, catalogue grids, shop-the-look."
+      },
+      {
+        "id": "tipo.ads",
+        "name": "Ads",
+        "runs_under": [
+          "cat.photoshoot",
+          "cat.lifestyle",
+          "cat.render_3d"
+        ],
+        "note": "Kit already written; lives in the ads chat."
+      },
+      {
+        "id": "tipo.video",
+        "name": "Video",
+        "runs_under": [
+          "cat.photoshoot",
+          "cat.render_3d"
+        ],
+        "note": "Not started."
+      },
+      {
+        "id": "tipo.social",
+        "name": "Social",
+        "runs_under": [
+          "cat.lifestyle",
+          "cat.photoshoot",
+          "cat.render_3d"
+        ],
+        "note": "Not started."
+      }
+    ]
+  }
+}

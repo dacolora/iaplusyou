@@ -23,3 +23,7 @@ clientes/*/personajes/*
 !clientes/*/personajes/.gitkeep
 clientes/*/marca/*
 !clientes/*/marca/.gitkeep
+# Excepción: el sistema de marca formal SÍ se versiona a propósito — es la fuente
+# de verdad del cliente (ej. Happyflops), tiene que vivir en git para nunca desalinearse.
+!clientes/*/marca/root.json
+!clientes/*/marca/schema.json

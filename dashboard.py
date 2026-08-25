@@ -240,10 +240,22 @@ def guardar_marca(cliente):
 def _marca_contexto(cliente):
     data = marca_mod.cargar(cliente)
     job_id = _job_id_marca(cliente)
+    root = marca_mod.cargar_root(cliente)
+    root_resumen = None
+    if root:
+        root_resumen = {
+            "nombre": root.get("brand", {}).get("name"),
+            "version": root.get("version"),
+            "actualizado": root.get("updated"),
+            "n_invariantes": len(root.get("invariants", [])),
+            "invariant_block": root.get("prompt_blocks", {}).get("invariant_block", ""),
+            "negative_prompt": root.get("prompt_blocks", {}).get("negative_prompt", ""),
+        }
     return {
         **data,
         "referencias": _marca_referencias(cliente),
         "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
+        "root": root_resumen,
     }
 
 
@@ -336,7 +348,7 @@ def _ideas_pendientes(cliente):
                             item["imagen_url"],
                             item["prompt"],
                             item.get("model", "kling-2.1-pro"),
-                            extra_params=_extra_params_video(item),
+                            extra_params=_extra_params_video(item, cliente),
                         )
                     else:
                         est = estimate_image(
@@ -365,11 +377,18 @@ def _ideas_pendientes(cliente):
     return sorted(ideas, key=lambda i: i.get("creado_en", ""), reverse=True)
 
 
-def _extra_params_video(item):
-    """Solo kling-2.1-pro acepta duration/cfg_scale; dop-standard no los declara."""
+def _extra_params_video(item, cliente=None):
+    """Solo kling-2.1-pro acepta duration/cfg_scale/negative_prompt; dop-standard no
+    los declara. Si el cliente trae un root.json propio (ej. Happyflops), su
+    negative_prompt real se adjunta tal cual."""
     if item.get("model") != "kling-2.1-pro":
         return None
-    return {"duration": int(item.get("duration", 5)), "cfg_scale": float(item.get("cfg_scale", 0.5))}
+    params = {"duration": int(item.get("duration", 5)), "cfg_scale": float(item.get("cfg_scale", 0.5))}
+    if cliente:
+        neg = marca_mod.negative_prompt_efectivo(cliente)
+        if neg:
+            params["negative_prompt"] = neg
+    return params
 
 
 def _extra_params_image(item, cliente=None):
@@ -445,7 +464,7 @@ def nueva_idea(cliente):
         flash("Escribe la idea y elige un personaje.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
-    guia_estilo = marca_mod.cargar(cliente).get("guia_estilo")
+    guia_estilo = marca_mod.guia_efectiva(cliente)
     try:
         textos = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo)
     except Exception as e:
@@ -593,7 +612,7 @@ def aprobar_imagen(cliente, prompt_id):
             image_url=item2["imagen_url"],
             prompt=item2["prompt"],
             model=item2.get("model", "kling-2.1-pro"),
-            extra_params=_extra_params_video(item2),
+            extra_params=_extra_params_video(item2, cliente),
         )
         result = poll_until_done(launch["status_url"])
         higgsfield_url = extract_video_url(result)

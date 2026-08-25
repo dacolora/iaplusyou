@@ -74,6 +74,31 @@
 </form>
 
 <h2>Identidad de marca</h2>
+
+{% if marca.root %}
+<div class="idea-block" style="border-left:3px solid transparent;border-image:var(--accent-grad) 1;">
+  <div class="idea-header">
+    <div>
+      <span class="idea-label">Sistema de marca real</span>
+      <div class="idea-texto">{{ marca.root.nombre }} — v{{ marca.root.version }} · {{ marca.root.n_invariantes }} invariantes · actualizado {{ marca.root.actualizado }}</div>
+    </div>
+  </div>
+  <p class="vacio" style="padding-top:0;">
+    Este proyecto trae su propio <code>root.json</code> versionado (no un texto generado por IA) —
+    <code>clientes/{{ cliente }}/marca/root.json</code>. Su <strong>invariant_block</strong> y
+    <strong>negative_prompt</strong> reales se inyectan tal cual en cada prompt e imagen/video
+    que se genera aquí. Para editarlo, edita el archivo directamente (o pídele a Claude Code
+    que lo actualice) — no se reescribe desde el dashboard, para que nunca se desalinee de la
+    fuente de verdad.
+  </p>
+  <details>
+    <summary style="cursor:pointer;color:var(--muted);font-size:.82rem;">Ver invariant_block / negative_prompt aplicados</summary>
+    <p class="prompt-solo-lectura" style="margin-top:.6rem;">{{ marca.root.invariant_block }}</p>
+    <p class="prompt-solo-lectura" style="margin-top:.5rem;color:var(--muted);">{{ marca.root.negative_prompt }}</p>
+  </details>
+</div>
+{% endif %}
+
 <p class="vacio" style="padding-top:0;">
   Referencias visuales (imágenes o videos) que definen el look de este proyecto — paleta,
   tono, iluminación, ambientación. La guía de estilo se aplica automáticamente cada vez
@@ -107,6 +132,7 @@
   <button class="btn-generar btn-sm" type="submit">Subir referencia de marca</button>
 </form>
 
+{% if not marca.root %}
 {% if marca.trabajo %}
 <div class="barra-progreso" id="trabajo-{{ marca.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
 <div class="progreso-texto">Analizando referencias… 0% · 0s</div>
@@ -133,6 +159,7 @@
   </div>
   <button class="btn-generar btn-sm" type="submit">Guardar identidad de marca</button>
 </form>
+{% endif %}
 
 {% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
 {% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
