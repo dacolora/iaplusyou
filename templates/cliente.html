@@ -3,218 +3,51 @@
 {% block content %}
 <h1>{{ cliente }}</h1>
 
-{% set personajes_utilizables = personajes | selectattr('url') | list %}
-
-<h2>Nueva idea</h2>
-{% if personajes_utilizables %}
-<form method="post" action="{{ url_for('nueva_idea', cliente=cliente) }}" class="form-nueva-idea">
-  <label class="campo-label">Describe la idea del video</label>
-  <textarea name="idea" rows="2" placeholder="Ej: el guerrero encuentra un mapa antiguo en la biblioteca del castillo" required></textarea>
-
-  <div class="fila-campos-idea">
-    <div>
-      <label class="campo-label">A partir de qué personaje</label>
-      <select name="image_url" required>
-        {% for p in personajes_utilizables %}
-        <option value="{{ p.url }}">{{ p.nombre }}{% if p.tipo == 'video' %} (fotograma del video){% endif %}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div>
-      <label class="campo-label">Plataformas</label>
-      <div class="checks-plataformas">
-        {% for pl in ['youtube', 'facebook', 'instagram', 'tiktok'] %}
-        <label><input type="checkbox" name="platforms" value="{{ pl }}"> {{ pl }}</label>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-
-  <button class="btn-generar" type="submit">Generar 5 prompts</button>
-</form>
-{% else %}
-<p class="vacio">Sube al menos un personaje (imagen o video) más abajo antes de crear ideas.</p>
-{% endif %}
-
-<h2>Ideas ({{ ideas | length }})</h2>
-{% if ideas %}
-  {% for idea in ideas %}
-  {% include "_idea_card.html" %}
-  {% endfor %}
-{% else %}
-<p class="vacio">No hay ideas esperando aprobación. Dale una idea a Claude en el chat para que proponga prompts nuevos.</p>
-{% endif %}
-
-<h2>Personajes</h2>
-{% if personajes %}
-<div class="personajes-row">
-  {% for p in personajes %}
-  <div class="personaje-thumb">
-    {% if p.url %}
-    <a href="{{ p.video_url or p.url }}" target="_blank">
-      <img src="{{ p.url }}" alt="{{ p.nombre }}">
-      {% if p.tipo == 'video' %}<span class="badge-video">VIDEO</span>{% endif %}
-    </a>
-    {% else %}
-    <a href="{{ p.video_url }}" target="_blank" class="personaje-sin-frame">
-      <span>Video sin fotograma —<br>no se puede usar aún</span>
-    </a>
-    {% endif %}
-    <div class="nombre">{{ p.nombre }}</div>
-  </div>
-  {% endfor %}
+<div class="tabs-nav" role="tablist">
+  <button type="button" class="tab-btn" data-tab="calzado" role="tab">Cambiar calzado</button>
+  <button type="button" class="tab-btn" data-tab="idea" role="tab">Nueva idea</button>
+  <button type="button" class="tab-btn" data-tab="settings" role="tab">Settings</button>
 </div>
-{% else %}
-<p class="vacio">Todavía no hay personajes para este proyecto.</p>
-{% endif %}
 
-<form method="post" action="{{ url_for('subir_personaje', cliente=cliente) }}" enctype="multipart/form-data" class="form-subir-personaje">
-  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
-  <button class="btn-generar btn-sm" type="submit">Subir personaje (imagen o video)</button>
-</form>
+<section id="tab-calzado" class="tab-panel" role="tabpanel">
+  {% include "_tab_cambiar_calzado.html" %}
+</section>
 
-<h2>Identidad de marca</h2>
+<section id="tab-idea" class="tab-panel" role="tabpanel">
+  {% include "_tab_nueva_idea.html" %}
+</section>
 
-{% if marca.root %}
-<div class="idea-block" style="border-left:3px solid transparent;border-image:var(--accent-grad) 1;">
-  <div class="idea-header">
-    <div>
-      <span class="idea-label">Sistema de marca real</span>
-      <div class="idea-texto">{{ marca.root.nombre }} — v{{ marca.root.version }} · {{ marca.root.n_invariantes }} invariantes · actualizado {{ marca.root.actualizado }}</div>
-    </div>
-  </div>
-  <p class="vacio" style="padding-top:0;">
-    Este proyecto trae su propio <code>root.json</code> versionado (no un texto generado por IA) —
-    <code>clientes/{{ cliente }}/marca/root.json</code>. Su <strong>invariant_block</strong> y
-    <strong>negative_prompt</strong> reales se inyectan tal cual en cada prompt e imagen/video
-    que se genera aquí. Para editarlo, edita el archivo directamente (o pídele a Claude Code
-    que lo actualice) — no se reescribe desde el dashboard, para que nunca se desalinee de la
-    fuente de verdad.
-  </p>
-  <details>
-    <summary style="cursor:pointer;color:var(--muted);font-size:.82rem;">Ver invariant_block / negative_prompt aplicados</summary>
-    <p class="prompt-solo-lectura" style="margin-top:.6rem;">{{ marca.root.invariant_block }}</p>
-    <p class="prompt-solo-lectura" style="margin-top:.5rem;color:var(--muted);">{{ marca.root.negative_prompt }}</p>
-  </details>
-</div>
-{% endif %}
+<section id="tab-settings" class="tab-panel" role="tabpanel">
+  {% include "_tab_settings.html" %}
+</section>
 
-<p class="vacio" style="padding-top:0;">
-  Referencias visuales (imágenes o videos) que definen el look de este proyecto — paleta,
-  tono, iluminación, ambientación. La guía de estilo se aplica automáticamente cada vez
-  que se generan prompts nuevos, para que el contenido no pierda identidad.
-</p>
+<script>
+  (function () {
+    var botones = document.querySelectorAll('.tab-btn');
+    var paneles = {
+      calzado: document.getElementById('tab-calzado'),
+      idea: document.getElementById('tab-idea'),
+      settings: document.getElementById('tab-settings')
+    };
+    var STORAGE_KEY = 'tab-activa-{{ cliente }}';
 
-{% if marca.referencias %}
-<div class="personajes-row">
-  {% for r in marca.referencias %}
-  <div class="personaje-thumb">
-    {% if r.url %}
-    <a href="{{ r.video_url or r.url }}" target="_blank">
-      <img src="{{ r.url }}" alt="{{ r.nombre }}">
-      {% if r.tipo == 'video' %}<span class="badge-video">VIDEO</span>{% endif %}
-    </a>
-    {% else %}
-    <a href="{{ r.video_url }}" target="_blank" class="personaje-sin-frame">
-      <span>Video sin fotograma —<br>no se puede usar aún</span>
-    </a>
-    {% endif %}
-    <div class="nombre">{{ r.nombre }}</div>
-  </div>
-  {% endfor %}
-</div>
-{% else %}
-<p class="vacio">Sin referencias de marca todavía.</p>
-{% endif %}
+    function activar(tab) {
+      botones.forEach(function (b) { b.classList.toggle('activo', b.dataset.tab === tab); });
+      Object.keys(paneles).forEach(function (t) { paneles[t].classList.toggle('activo', t === tab); });
+      try { localStorage.setItem(STORAGE_KEY, tab); } catch (e) {}
+    }
 
-<form method="post" action="{{ url_for('subir_marca', cliente=cliente) }}" enctype="multipart/form-data" class="form-subir-personaje">
-  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
-  <button class="btn-generar btn-sm" type="submit">Subir referencia de marca</button>
-</form>
+    botones.forEach(function (b) {
+      b.addEventListener('click', function () {
+        activar(b.dataset.tab);
+        history.replaceState(null, '', '#' + b.dataset.tab);
+      });
+    });
 
-{% if not marca.root %}
-{% if marca.trabajo %}
-<div class="barra-progreso" id="trabajo-{{ marca.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-<div class="progreso-texto">Analizando referencias… 0% · 0s</div>
-<script>iniciarPolling({{ marca.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ marca.trabajo.job_id) | tojson }});</script>
-{% elif marca.referencias %}
-<form method="post" action="{{ url_for('analizar_marca', cliente=cliente) }}" class="form-analizar-marca">
-  <button class="btn-generar btn-sm" type="submit">Analizar referencias y generar guía de estilo</button>
-</form>
-{% endif %}
-
-<form method="post" action="{{ url_for('guardar_marca', cliente=cliente) }}" class="form-guia-estilo">
-  <label class="campo-label">Guía de estilo (editable a mano, se usa en cada generación de prompts)</label>
-  <textarea name="guia_estilo" rows="4" placeholder="Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos...">{{ marca.guia_estilo or '' }}</textarea>
-
-  <div class="fila-campos-idea">
-    <div>
-      <label class="campo-label">style_id de Higgsfield (opcional, avanzado)</label>
-      <input type="text" name="style_id" value="{{ marca.style_id or '' }}" placeholder="uuid, solo si ya lo creaste en el panel de Higgsfield">
-    </div>
-    <div>
-      <label class="campo-label">Fuerza del estilo (0-1)</label>
-      <input type="number" name="style_strength" min="0" max="1" step="0.05" value="{{ marca.style_strength if marca.style_strength is not none else 0.5 }}">
-    </div>
-  </div>
-  <button class="btn-generar btn-sm" type="submit">Guardar identidad de marca</button>
-</form>
-{% endif %}
-
-{% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
-{% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
-{% set rechazados = videos | selectattr('estado', 'equalto', 'rechazado') | list %}
-
-<h2>Videos pendientes de revisión ({{ pendientes | length }})</h2>
-{% if pendientes %}
-<div class="videos-grid">
-  {% for v in pendientes %}
-  {% include "_video_card.html" %}
-  {% endfor %}
-</div>
-{% else %}
-<p class="vacio">No hay videos esperando aprobación.</p>
-{% endif %}
-
-<h2>Publicados ({{ publicados | length }})</h2>
-{% if publicados %}
-<div class="videos-grid">
-  {% for v in publicados %}
-  {% include "_video_card.html" %}
-  {% endfor %}
-</div>
-{% else %}
-<p class="vacio">Todavía no se ha publicado nada.</p>
-{% endif %}
-
-{% if rechazados %}
-<h2>Rechazados ({{ rechazados | length }})</h2>
-<div class="videos-grid">
-  {% for v in rechazados %}
-  {% include "_video_card.html" %}
-  {% endfor %}
-</div>
-{% endif %}
-
-<h2>Bitácora reciente</h2>
-{% if log %}
-<table>
-  <thead>
-    <tr><th>Fecha</th><th>Video</th><th>Etapa</th><th>Estado</th><th>Detalle</th></tr>
-  </thead>
-  <tbody>
-    {% for fila in log %}
-    <tr>
-      <td>{{ fila.fecha[:19] }}</td>
-      <td>{{ fila.id }}</td>
-      <td>{{ fila.etapa }}</td>
-      <td class="estado-{{ fila.estado }}">{{ fila.estado }}</td>
-      <td>{{ fila.detalle[:80] }}</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
-{% else %}
-<p class="vacio">Sin actividad registrada todavía.</p>
-{% endif %}
+    var desdeHash = location.hash.replace('#', '');
+    var desdeStorage = null;
+    try { desdeStorage = localStorage.getItem(STORAGE_KEY); } catch (e) {}
+    activar(paneles[desdeHash] ? desdeHash : (paneles[desdeStorage] ? desdeStorage : 'calzado'));
+  })();
+</script>
 {% endblock %}

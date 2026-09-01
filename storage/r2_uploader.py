@@ -14,6 +14,8 @@ Requiere en el .env:
 Ver SETUP.md para cómo crear el bucket, el token de API y activar el acceso público.
 """
 import os
+from urllib.parse import quote
+
 import boto3
 
 
@@ -53,7 +55,11 @@ def upload_file(local_path, key, content_type):
             ContentType=content_type,
         )
 
-    return f"{public_base.rstrip('/')}/{key}"
+    # El nombre de archivo puede traer espacios u otros caracteres que una URL
+    # cruda no tolera (algunos modelos de fal.ai validan estrictamente que sea
+    # una HTTPS URL válida y rechazan espacios sin codificar) — la Key de S3/R2
+    # se sube tal cual, pero la URL pública sí se codifica.
+    return f"{public_base.rstrip('/')}/{quote(key, safe='/')}"
 
 
 def upload_video(local_path, key):
@@ -85,3 +91,11 @@ def upload_image(local_path, key):
     public_url = upload_file(local_path, key, content_type=content_type)
     print(f"  Imagen guardada en storage propio (R2): {public_url}")
     return public_url
+
+
+def delete_file(key):
+    """Borra `key` del bucket. No falla si ya no existe (delete_object es idempotente)."""
+    bucket = os.environ.get("R2_BUCKET_NAME")
+    if not bucket:
+        raise RuntimeError("Falta R2_BUCKET_NAME en tu .env. Ver SETUP.md.")
+    _client().delete_object(Bucket=bucket, Key=key)

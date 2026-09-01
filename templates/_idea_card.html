@@ -1,5 +1,6 @@
-<div class="idea-block">
-  <div class="idea-header">
+<details class="idea-block">
+  <summary class="idea-header">
+    <span class="idea-chevron">▸</span>
     {% if idea.prompts %}
     <img class="idea-ref" src="{{ idea.prompts[0].image_url }}" alt="referencia">
     {% endif %}
@@ -7,7 +8,16 @@
       <span class="idea-label">Idea</span>
       <div class="idea-texto">{{ idea.idea }}</div>
     </div>
-  </div>
+    <form
+      method="post"
+      action="{{ url_for('eliminar_idea', cliente=cliente, idea_id=idea.id) }}"
+      onsubmit="return confirm('¿Eliminar esta idea completa y sus {{ idea.prompts | length }} prompts? No se puede deshacer.');"
+      onclick="event.stopPropagation();"
+      class="idea-eliminar"
+    >
+      <button type="submit" class="btn-rechazar btn-sm" title="Eliminar idea completa">Eliminar idea</button>
+    </form>
+  </summary>
   <div class="prompts-lista">
     {% for p in idea.prompts %}
       {% if p.trabajo %}
@@ -19,4 +29,4 @@
       {% endif %}
     {% endfor %}
   </div>
-</div>
+</details>

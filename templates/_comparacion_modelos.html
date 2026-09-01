@@ -1,0 +1,107 @@
+<details class="comparacion-modelos">
+  <summary class="btn-guardar btn-sm">Ver por qué usamos estos modelos (comparación completa) →</summary>
+  <div class="comparacion-contenido">
+    <p class="vacio" style="padding-top:0;">
+      Antes de dejar seleccionable un modelo, lo probamos con la misma foto/video
+      real y verificamos su esquema de API contra la documentación oficial del
+      proveedor (no blogs de terceros). El criterio para entrar a la lista de
+      arriba es uno solo: tiene que poder VER la foto de referencia del producto
+      (no solo una descripción en texto) para clonar tu foto/video original y
+      cambiar únicamente el calzado.
+    </p>
+
+    <h3>Modelos de imagen (foto)</h3>
+    <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Modelo</th><th>Precio</th><th>¿Ve la foto del producto?</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Nano Banana <span class="comparacion-nota">(Gemini 2.5 Flash Image)</span></td>
+          <td>$0.039 / imagen</td>
+          <td>Sí</td>
+          <td><span class="tag-estado tag-en-uso">En uso — recomendado</span></td>
+        </tr>
+        <tr>
+          <td>Nano Banana <span class="comparacion-nota">(vía fal.ai)</span></td>
+          <td>$0.039 / imagen</td>
+          <td>Sí</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span></td>
+        </tr>
+        <tr>
+          <td>Qwen Image Edit Plus</td>
+          <td>$0.03 / imagen</td>
+          <td>Sí</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span></td>
+        </tr>
+        <tr>
+          <td>Flux Kontext Pro</td>
+          <td>$0.04 / imagen</td>
+          <td>No — solo recibe 1 imagen de entrada</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — el producto solo se le puede describir en texto, no mostrárselo</td>
+        </tr>
+        <tr>
+          <td>Higgsfield (Soul)</td>
+          <td>~$0.07 / imagen</td>
+          <td>No — es generativo, no editor</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — regenera la escena completa; en pruebas reales cambió a la persona</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h3>Modelos de video</h3>
+    <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr><th>Modelo</th><th>Precio</th><th>¿Ve la foto del producto?</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Kling O1 <span class="comparacion-nota">(video-to-video edit)</span></td>
+          <td>$0.168 / seg</td>
+          <td>Sí — hasta 4 imágenes citables (@Image1, @Image2…)</td>
+          <td><span class="tag-estado tag-en-uso">En uso — recomendado</span></td>
+        </tr>
+        <tr>
+          <td>Luma Ray3 Modify</td>
+          <td>$0.35 / seg</td>
+          <td>Sí — 1 imagen</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span></td>
+        </tr>
+        <tr>
+          <td>Wan-2.2 Animate Replace</td>
+          <td>desde $0.04 / seg <span class="comparacion-nota">(480p; $0.08/seg en 720p)</span></td>
+          <td>Sí — 1 imagen</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span> — hecho específicamente para reemplazar un elemento en un video real, sin ni siquiera necesitar prompt</td>
+        </tr>
+        <tr>
+          <td>Gemini Omni Flash Edit</td>
+          <td>No publicado</td>
+          <td>No — solo texto</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — mismo problema que Flux Kontext</td>
+        </tr>
+        <tr>
+          <td>Seedance <span class="comparacion-nota">(reference-to-video)</span></td>
+          <td>No publicado</td>
+          <td>Sí — hasta 9 imágenes y 3 videos de referencia</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — su esquema no tiene un campo "video a editar": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base</td>
+        </tr>
+        <tr>
+          <td>Wan 3.0 <span class="comparacion-nota">(generación base: texto/imagen a video)</span></td>
+          <td>—</td>
+          <td>—</td>
+          <td><span class="tag-estado tag-descartado">Descartado antes de probar</span> — solo genera video nuevo, no tiene endpoint de edición de un video existente (distinto de Wan-2.2 Animate Replace, que sí)</td>
+        </tr>
+        <tr>
+          <td>Runway Aleph 2.0</td>
+          <td>—</td>
+          <td>—</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — no está disponible en fal.ai (confirmado con llamadas reales, 404); su propia API pasó a ser solo Enterprise</td>
+        </tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+</details>

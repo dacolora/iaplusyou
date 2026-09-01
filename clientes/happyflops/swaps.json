@@ -1,0 +1,1235 @@
+{
+  "swap_20260829_202218_997972": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260829_202218_996716_85c7703e8b2bb12e36b16a9dc4b39733.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "higgsfield",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260829_202218_997972.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260829_202218_997972.png",
+    "credits": 1.5,
+    "usd": 0.094,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 20,
+        "motivo": "Luz dura de mediodía, sombras marcadas, no direccional suave sino contraste tipo flash/sol duro."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 45,
+        "motivo": "Colores saturados pero se sienten artificiales (azul, rojo, amarillo del juego), rozando el look HDR falso más que rico y creíble."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 10,
+        "motivo": "El entorno tiene múltiples colores dominantes (azul, rojo, amarillo, verde) sin un tono unificador ni acento cálido, lo opuesto a la regla."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 100,
+        "motivo": "No hay producto tipo calzado sandalia visible; pies calzados con zapatillas, no aplica distracción de producto."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No se observa texto, logos ni marcas generadas en la imagen."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 0,
+        "motivo": "No hay producto de la marca (sandalias) presente en la imagen; no cumple con mostrar el producto de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 60,
+        "motivo": "Niño real y natural, pero no hay diversidad ni multigeneracional visible; entorno no claramente escandinavo."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 30,
+        "motivo": "Escenario de parque infantil no es gimnasio ni clínico, pero la acción física intensa roza tono de esfuerzo/estrés no deseado."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No se detectan personajes de terceros ni IP ajena."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay texto tipográfico en la imagen, por lo que no aplica infracción visible."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 30,
+        "motivo": "Las manos están agarrando las barras con tensión evidente, mostrando esfuerzo y agarre forzado, contrario a manos relajadas."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-29T20:22:18.997994"
+  },
+  "swap_20260829_204853_151892": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260829_204853_149620_Captura_de_pantalla_2026-08-25_a_las_8.47.46_p.m..png",
+    "producto_id": "ho_rose",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "('Connection aborted.', timeout('The write operation timed out'))",
+    "creado_en": "2026-08-29T20:48:53.151910"
+  },
+  "swap_20260829_210705_666930": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260829_210705_666192_58f7a138fc204b225a21aa4b548621df.jpg",
+    "producto_id": "ho_rose",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "('Connection aborted.', timeout('The write operation timed out'))",
+    "creado_en": "2026-08-29T21:07:05.666941"
+  },
+  "swap_20260829_212012_170549": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260829_212012_168616_Captura_de_pantalla_2026-08-25_a_las_8.47.46_p.m..png",
+    "producto_id": "ho_rose",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260829_212012_170549.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260829_212012_170549.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 82,
+        "motivo": "Luz suave y difusa, direccional sutil desde arriba, sin flash ni dureza."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 68,
+        "motivo": "El rosa es agradable pero se ve bastante uniforme y algo plano, no claramente más rico que la realidad."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 65,
+        "motivo": "El fondo azul es un tono dominante coherente, pero falta un acento claro y cálido que complemente la escena."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 100,
+        "motivo": "No hay pies en la imagen, por lo que la regla no se viola."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 40,
+        "motivo": "Se aprecia una marca o logotipo tenue en la suela de una de las sandalias, lo que viola la regla de no texto generado."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 65,
+        "motivo": "El diseño del producto parece plausible pero no se puede confirmar fidelidad exacta al pack de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 70,
+        "motivo": "Las manos parecen reales y naturales, aunque no se puede evaluar diversidad ya que solo se ven manos."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 100,
+        "motivo": "Escena neutra sin ambientes prohibidos como gimnasio o clínica."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No se observan personajes ni IP de terceros."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay texto tipográfico visible que evaluar, cumple por ausencia."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 68,
+        "motivo": "Las manos se ven mayormente naturales, pero su superposición y cercanía generan cierta ambigüedad anatómica."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-29T21:20:12.170565"
+  },
+  "swap_20260829_212813_701612": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260829_212813_699663_Captura_de_pantalla_2026-08-25_a_las_8.47.46_p.m..png",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260829_212813_701612.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260829_212813_701612.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": null,
+    "error": null,
+    "creado_en": "2026-08-29T21:28:13.701626"
+  },
+  "swap_20260829_213358_915695": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260829_213358_914788_8d6ddbc2712db7a4f4b22ca54dc3cfee.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260829_213358_915695.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260829_213358_915695.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": null,
+    "error": null,
+    "creado_en": "2026-08-29T21:33:58.915702"
+  },
+  "swap_20260830_004300_520400": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260830_004300_519628_20260829_213358_914788_8d6ddbc2712db7a4f4b22ca54dc3cfee.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260830_004300_520400.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260830_004300_520400.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 25,
+        "motivo": "Luz con fuerte flare y contraluz muy brillante, más dramática/artística que suave y direccional legible."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 60,
+        "motivo": "Colores cálidos y vívidos pero el flare y sobreexposición generan zonas lavadas, afectando credibilidad."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 30,
+        "motivo": "El entorno tiene múltiples tonos (verde césped, amarillo/azul/rojo del juego, dorado del flare) sin un tono dominante claro."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 70,
+        "motivo": "Pies visibles con sandalias, no distraen excesivamente aunque uno está algo torcido en la postura de escalada."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No hay texto, logos ni marcas visibles."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 50,
+        "motivo": "Las sandalias azules son simples y genéricas, sin detalle claro que confirme fidelidad al producto de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 60,
+        "motivo": "Aparece una niña real y natural, pero no hay diversidad ni multigeneracional visible; entorno no claramente europeo/escandinavo."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 90,
+        "motivo": "Escena de juego al aire libre, cálida y feliz, sin ambientes prohibidos."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No se observan personajes ni IP de terceros."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 50,
+        "motivo": "No hay tipografía visible en la imagen para evaluar cumplimiento."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 75,
+        "motivo": "Manos visibles agarrando la estructura, anatómicamente correctas y no protagonistas de la imagen."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-30T00:43:00.520412"
+  },
+  "swap_20260830_010439_585317": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260830_010439_583622_58f7a138fc204b225a21aa4b548621df.jpg",
+    "producto_id": "ho_rose",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260830_010439_585317.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260830_010439_585317.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 78,
+        "motivo": "Luz suave y direccional de golden hour, fuente legible, pero algo dura en highlights de piel."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 72,
+        "motivo": "Color creíble pero algo apagado en tonos verdes de fondo, no destaca especial saturación."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 65,
+        "motivo": "El entorno verde/tierra tiene variación tonal, no resuelve claramente a un dominante y un acento cálido único."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 90,
+        "motivo": "Pies limpios, naturales, no son el foco, sandalias visibles sin distraer."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No hay texto, logos ni marcas visibles."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 85,
+        "motivo": "Sandalia rosa parece coherente con el producto de referencia, aunque ángulo limita verificación total."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 60,
+        "motivo": "Solo aparece una niña, no se muestra diversidad multigeneracional, aunque no es obligatorio con una sola persona."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 95,
+        "motivo": "Escena natural, alegre, sin ambientes prohibidos."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No hay personajes ni IP de terceros."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay tipografía en la imagen, cumple por ausencia."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 55,
+        "motivo": "Manos levantadas con dedos algo rígidos y postura poco natural, se vuelven protagonistas de la composición."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-30T01:04:39.585328"
+  },
+  "swap_20260830_013120_285212": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260830_013120_284573_20260829_213358_914788_8d6ddbc2712db7a4f4b22ca54dc3cfee.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260830_013120_285212.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260830_013120_285212.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 60,
+        "motivo": "Hay luz solar direccional pero con flare fuerte y sobreexposición que raya en dura en algunas zonas."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 65,
+        "motivo": "Colores verdes vibrantes pero con tonos algo lavados por el flare, resta credibilidad y riqueza."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 40,
+        "motivo": "El fondo verde/amarillo domina pero no hay un tono dominante cálido claro ni acento definido, se ve caótico y sobreexpuesto."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 70,
+        "motivo": "Los pies están relativamente ocultos por la sandalia, no son el foco, aunque uno queda parcialmente cortado."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No hay texto, logos ni marcas visibles en la imagen."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 55,
+        "motivo": "La sandalia es visible pero pequeña y parcialmente oscurecida, difícil confirmar fidelidad exacta al producto de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 70,
+        "motivo": "Aparece una niña real y natural, aunque no hay diversidad generacional visible; el entorno no es claramente europeo/escandinavo."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 30,
+        "motivo": "Un parque infantil con estructura metálica tipo gimnasio/trepador puede interpretarse como escena de tipo 'gym' o riesgo, no ideal."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No se observan personajes ni IP de terceros."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay tipografía visible en la imagen para evaluar."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 75,
+        "motivo": "La mano se ve natural sujetando la barra, sin joyería ni esmalte, aunque algo tensa por el agarre."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-30T01:31:20.285227"
+  },
+  "swap_20260830_013640_586857": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260830_013640_585356_abuenieto.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260830_013640_586857.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260830_013640_586857.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 88,
+        "motivo": "Luz cálida de golden hour, suave y direccional, fuente claramente legible por el contraluz."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 82,
+        "motivo": "Colores cálidos y agradables, saturación creíble sin caer en HDR falso."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 55,
+        "motivo": "El entorno es cálido y dorado, pero la camiseta negra del hombre introduce un tono frío/neutro que rompe la paleta dominante única."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 88,
+        "motivo": "Los pies del niño están relajados, juntos y no distraen del producto."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 10,
+        "motivo": "Logo de Under Armour claramente visible en la camiseta, texto/marca generado dentro de la imagen."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 70,
+        "motivo": "La sandalia se ve simple y coherente con el estilo slide, aunque no se puede confirmar fidelidad exacta al pack de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 90,
+        "motivo": "Casting multigeneracional, natural y no posado, encaja con el espíritu de la marca."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 95,
+        "motivo": "Escena exterior relajada, sin ambientes clínicos, laborales o fríos."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 8,
+        "motivo": "El logo de Under Armour es una IP de terceros claramente visible, violación directa de la regla."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 95,
+        "motivo": "No hay tipografía generada en la imagen que evaluar, por lo que no hay incumplimiento."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 85,
+        "motivo": "Manos anatómicamente correctas, con pose natural y sin protagonismo excesivo."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-30T01:36:40.586878"
+  },
+  "swap_20260830_014023_118349": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260830_014023_117036_20260829_213358_914788_8d6ddbc2712db7a4f4b22ca54dc3cfee.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260830_014023_118349.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260830_014023_118349.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 82,
+        "motivo": "Luz cálida y direccional de golpe de sol de tarde, suave y con fuente legible (flare), coherente con la estación."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 78,
+        "motivo": "Colores saturados y vívidos (verdes, dorados) pero aún creíbles, sin verse gris ni HDR falso."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 40,
+        "motivo": "El entorno mezcla varios tonos fuertes (amarillo, azul, rojo del juego) sin resolverse a un tono dominante más un acento cálido."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 75,
+        "motivo": "Pies calzados, postura natural sobre el peldaño, no son el foco de la imagen."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No hay texto, logotipos ni marcas visibles en la imagen."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 65,
+        "motivo": "La sandalia azul parece coherente con la línea de producto, pero no se puede verificar fidelidad exacta al pack de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 45,
+        "motivo": "Aparece una sola niña, sin diversidad ni multigeneracionalidad, y el entorno no comunica claramente lo nórdico/europeo."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 100,
+        "motivo": "Escena de patio de juegos, cálida y despreocupada, sin entornos clínicos, laborales o fríos."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No se observan personajes ni IP de terceros."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay texto en la imagen, por lo que no aplica ni viola la regla tipográfica."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 72,
+        "motivo": "La mano que sujeta la escalera se ve anatómicamente correcta y natural, sin ser el foco principal."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-30T01:40:23.118361"
+  },
+  "swap_20260830_014719_320246": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260830_014719_319445_20260829_213358_914788_8d6ddbc2712db7a4f4b22ca54dc3cfee.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260830_014719_320246.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260830_014719_320246.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 60,
+        "motivo": "La luz es cálida y direccional con backlight, pero el fuerte flare y contraluz resultan algo duros, no completamente suave."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 55,
+        "motivo": "Colores algo sobresaturados y con efecto HDR/glow artificial que roza lo poco creíble."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 20,
+        "motivo": "El entorno (verde, amarillo, azul, rojo del juego) tiene múltiples colores dominantes, no un tono dominante más un acento cálido."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 70,
+        "motivo": "Pies visibles pero parcialmente ocultos por el escalón, no son el foco pero uno lleva calcetín, algo inusual."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No hay texto, logos ni marcas visibles."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 50,
+        "motivo": "El producto (sandalia azul) es visible pero parcialmente cubierto y no se aprecia bien el detalle para verificar fidelidad total."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 60,
+        "motivo": "Aparece una niña real y natural, pero no hay diversidad multigeneracional visible al ser una sola persona."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 80,
+        "motivo": "Escena de juego infantil al aire libre, no cae en entornos prohibidos, aunque el estructura tipo gimnasio infantil roza lo 'gym-like'."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No hay personajes ni IP de terceros presentes."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay tipografía visible en la imagen para evaluar infracción."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 65,
+        "motivo": "La mano se ve natural sujetando la estructura, aunque algo tensa por el agarre, sin joyería ni esmalte visible."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-30T01:47:19.320257"
+  },
+  "swap_20260831_181603_498268": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260831_181603_493859_d410503b1f2ba1b62dec256a0e8cf2c0.jpg",
+    "producto_id": "ho_rose",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana_fal",
+    "tipo": "foto",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "fal.ai (fal-ai/nano-banana/edit) respondió 403: {\"detail\":\"User is locked. Reason: TOP_UP.\"}",
+    "creado_en": "2026-08-31T18:16:03.498283"
+  },
+  "swap_20260831_182718_425179": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260831_182718_423915_c0cb7208a1fd6594114f0958bc5f3f6d.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana_fal",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260831_182718_425179.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260831_182718_425179.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 55,
+        "motivo": "Luz de mediodía dura y algo plana con sombras duras en las hojas, aunque la dirección es legible."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 60,
+        "motivo": "Colores naturales pero algo apagados en verdes, no se percibe un boost de saturación notable."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 30,
+        "motivo": "El entorno (follaje verde intenso) no resuelve a un tono dominante cálido con acento; domina el verde frío, no cálido."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 70,
+        "motivo": "Solo un pie con sandalia visible, dedos relajados, no distrae, aunque el pie descalzo de la otra niña no es foco tampoco."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No hay texto, logos ni marcas visibles en la imagen."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 60,
+        "motivo": "Sandalia visible parcialmente pero no se puede verificar fidelidad total al pack de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 75,
+        "motivo": "Niñas reales, naturales y espontáneas, pero falta diversidad generacional y étnica en la escena."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 100,
+        "motivo": "Escena de jardín/naturaleza, sin ambientes prohibidos."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No se observan personajes de terceros ni IP ajena."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 50,
+        "motivo": "No hay texto visible para evaluar tipografía, por lo que no aplica evaluación directa."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 65,
+        "motivo": "Manos visibles agarrando la rama, dedos algo forzados/tensos por el esfuerzo de sostenerse, no del todo relajadas."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-31T18:27:18.425189"
+  },
+  "swap_20260831_230659_522101": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260831_230659_521063_322a48111703a78b2638cda520092f4a.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "400 Client Error: Bad Request for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=[REDACTED]",
+    "creado_en": "2026-08-31T23:06:59.522111"
+  },
+  "swap_20260831_231027_868408": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260831_231027_867027_322a48111703a78b2638cda520092f4a.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana_fal",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260831_231027_868408.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260831_231027_868408.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 75,
+        "motivo": "Luz de playa brillante y algo difusa por neblina, direccional pero cercana a plana por el cielo nublado."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 60,
+        "motivo": "Colores naturales pero un poco apagados por la luz brumosa; no se percibe el realce de +10-15% de saturación."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 35,
+        "motivo": "El entorno (mar y cielo) es frío y grisáceo, no resuelve a un tono dominante cálido con acento, contradiciendo la regla de grading cálido."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 78,
+        "motivo": "Pies limpios y naturales, dedos relajados, no son el punto focal de la imagen."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 88,
+        "motivo": "No hay texto ni logotipos generados; solo una ilustración de zorro en la camiseta que no constituye tipografía."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 65,
+        "motivo": "Las sandalias azules parecen genéricas; no se puede confirmar fidelidad exacta al pack de referencia."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 55,
+        "motivo": "Los niños se ven reales y espontáneos, pero falta diversidad generacional (solo aparecen menores) y el entorno no transmite claramente lo nórdico."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 95,
+        "motivo": "Escena de playa relajada, sin ambientes clínicos, laborales o estresantes."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 90,
+        "motivo": "No hay personajes ni IP de terceros reconocibles, solo un dibujo genérico de zorro."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay tipografía visible en la imagen, por lo que no se viola la regla."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 78,
+        "motivo": "Manos infantiles anatómicamente correctas, sin joyas ni esmalte, aunque algo cerradas en puños por el movimiento."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-08-31T23:10:27.868422"
+  },
+  "swap_20260901_095956_965412": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_095956_964121_85c7703e8b2bb12e36b16a9dc4b39733.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "400 Client Error: Bad Request for url: https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=[REDACTED]",
+    "creado_en": "2026-09-01T09:59:56.965426"
+  },
+  "swap_20260901_100420_231358": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_100420_229414_85c7703e8b2bb12e36b16a9dc4b39733.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "9:16",
+    "proveedor": "nano_banana_fal",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260901_100420_231358.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260901_100420_231358.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": null,
+    "error": null,
+    "creado_en": "2026-09-01T10:04:20.231373"
+  },
+  "swap_20260901_101930_169486": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_101930_162816_Grabacion_de_pantalla_2026-09-01_a_las_10.12.18_a.m..mov",
+    "producto_id": "horiginal",
+    "aspect_ratio": "9:16",
+    "proveedor": "kling_o1",
+    "tipo": "video",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "422 Client Error: Unprocessable Entity for url: https://fal.run/fal-ai/kling-video/o1/standard/video-to-video/edit",
+    "creado_en": "2026-09-01T10:19:30.169517"
+  },
+  "swap_20260901_102035_958018": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_102035_950135_20260901_095956_964121_85c7703e8b2bb12e36b16a9dc4b39733.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "2:3",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "Nano Banana respondió 400 después de 3 intentos: {\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Invalid JSON payload received. Unknown name \\\"mimeType\\\" at 'generation_config.image_config': Cannot find field.\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.BadRequest\",\n        \"fieldViolations\": [\n          {\n            \"field\": \"generation_config.image_config\",\n            \"description\": \"Invalid JSON payload received. Unknown name \\\"mimeType\\\" at 'generation_config.image_config'",
+    "creado_en": "2026-09-01T10:20:35.958031"
+  },
+  "swap_20260901_102143_409551": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_102143_399465_20260901_095956_964121_85c7703e8b2bb12e36b16a9dc4b39733.jpg",
+    "producto_id": "ho_sky",
+    "aspect_ratio": "2:3",
+    "proveedor": "nano_banana",
+    "tipo": "foto",
+    "estado": "listo",
+    "resultado_url": "https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps/swap_20260901_102143_409551.png",
+    "resultado_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps/swap_20260901_102143_409551.png",
+    "credits": null,
+    "usd": 0.039,
+    "evaluacion": [
+      {
+        "id": 1,
+        "name": "light",
+        "rule": "Light is soft and directional — never flat, never harsh, never flash. The source is always readable. Colour temperature follows the scene and season; softness and direction never change.",
+        "puntaje": 30,
+        "motivo": "Luz plana de día nublado, sin dirección clara ni fuente legible, aspecto documental/snapshot."
+      },
+      {
+        "id": 2,
+        "name": "colour_richness",
+        "rule": "Colour is rich but credible — clearly more beautiful than reality, but still believable. A working target is roughly +10-15% saturation, but this is a heuristic judged by eye, NOT a measured specification. Do not treat the number as gospel. Never grey, dull, desaturated or fake-HDR.",
+        "puntaje": 35,
+        "motivo": "Colores saturados de forma artificial en primario rojo/azul/amarillo, se ve más como foto de stock que grading cinematográfico creíble."
+      },
+      {
+        "id": 3,
+        "name": "colour_structure_environment",
+        "rule": "The ENVIRONMENT resolves to ONE dominant tone and ONE accent, graded warm. This governs the room, the background and the styling — NOT the product. The product may carry any number of colours: Leopard, Pineapple, Pizza, White Marble and the six Botanics designs are multicolour by design. A quiet environment is precisely what makes a loud product read.",
+        "puntaje": 10,
+        "motivo": "El entorno es multicolor caótico (rojo, azul, amarillo, verde) sin un tono dominante ni acento único, viola la regla completamente."
+      },
+      {
+        "id": 4,
+        "name": "feet",
+        "rule": "Feet must never distract from the product. Clean, natural, minimal, toes relaxed and close together. If the toes become the focal point, the image is wrong.",
+        "puntaje": 60,
+        "motivo": "Pies no son el foco pero los dedos están algo visibles y las sandalias comparten protagonismo con la escena de juego."
+      },
+      {
+        "id": 5,
+        "name": "no_generated_text",
+        "rule": "No lettering, logos, watermarks or signage inside the image, ever. Type is set afterwards. The store publishes in 20 languages — one clean image serves all of them.",
+        "puntaje": 100,
+        "motivo": "No hay texto, logos ni watermarks visibles en la imagen."
+      },
+      {
+        "id": 6,
+        "name": "product_fidelity",
+        "rule": "The product matches the approved reference pack. Never described-and-hoped.",
+        "puntaje": 40,
+        "motivo": "El producto (sandalias azules) no coincide claramente con un pack de referencia identificable ni tiene un diseño destacado tipo Happy Flops."
+      },
+      {
+        "id": 7,
+        "name": "casting",
+        "rule": "WHEN PEOPLE APPEAR they are real, unposed, multigenerational and diverse. Scandinavian and European environments; the Nordic idea lives in place, architecture and light, not in people. Images with no people in them are not a violation of this rule.",
+        "puntaje": 55,
+        "motivo": "Aparece un niño real y no posado, pero no hay diversidad ni multigeneracionalidad visible, entorno no claramente nórdico."
+      },
+      {
+        "id": 8,
+        "name": "forbidden_scenes",
+        "rule": "No gym, workplace, clinical settings, cold or stressful situations.",
+        "puntaje": 20,
+        "motivo": "El parque infantil con estructura tipo gimnasio (monkey bars) roza la escena de tipo 'gym/playground' que puede considerarse conflictiva por su similitud a equipo de ejercicio."
+      },
+      {
+        "id": 9,
+        "name": "no_third_party_ip",
+        "rule": "No third-party or licensed characters, mascots or IP. Happy Flops' OWN characters (Happy Universe Characters) are permitted and have their own world.",
+        "puntaje": 100,
+        "motivo": "No se observan personajes ni IP de terceros."
+      },
+      {
+        "id": 10,
+        "name": "typography",
+        "rule": "Sniglet and Helvetica only. Sniglet Extra Bold uppercase for H1, Sniglet Regular lowercase for H2, Helvetica Regular sentence case for body.",
+        "puntaje": 100,
+        "motivo": "No hay tipografía visible en la imagen, por lo que no aplica violación."
+      },
+      {
+        "id": 11,
+        "name": "hands",
+        "rule": "Hands are anatomically correct and unremarkable: five fingers, natural pose, short clean nails, no polish, no jewellery, no strain. Hands never become the subject. This matters as much as the feet rule — hands are the second most common anatomical failure in image models, and the signature SmileTech shot (the sole flexed between two fingers) is a hands shot.",
+        "puntaje": 50,
+        "motivo": "Manos visibles agarrando la barra, se ven anatómicamente correctas pero son protagonistas de la acción, acercándose al límite de la regla."
+      }
+    ],
+    "error": null,
+    "creado_en": "2026-09-01T10:21:43.409561"
+  },
+  "swap_20260901_103625_608591": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_103619_414638_20260901_101930_162816_Grabacion_de_pantalla_2026-09-01_a_las_10.12.18_a.m..mov",
+    "producto_id": "horiginal",
+    "aspect_ratio": null,
+    "proveedor": "kling_o1",
+    "tipo": "video",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "fal.ai (fal-ai/kling-video/o1/standard/video-to-video/edit) respondió 422: {\"detail\":[{\"loc\":[\"body\",\"video_url\"],\"msg\":\"Video dimensions are too small. Minimum width is 720 pixels. Found 592 pixels width.\",\"type\":\"video_too_small\",\"url\":\"https://docs.fal.ai/errors#video_too_small\",\"ctx\":{\"min_height\":null,\"min_width\":720,\"min_area\":null,\"height\":null,\"width\":592,\"area\":null},\"input\":\"https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps_subidas/20260901_103619_414638_20260901_101930_162816_Grabacion_de_pantalla_2026-09-01_a_las_10.12.18_a.m..mo",
+    "creado_en": "2026-09-01T10:36:25.608711"
+  },
+  "swap_20260901_103800_158422": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_103800_091305_Grabacion_de_pantalla_2026-09-01_a_las_10.36.32_a.m..mov",
+    "producto_id": "ho_sky",
+    "aspect_ratio": null,
+    "proveedor": "kling_o1",
+    "tipo": "video",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "fal.ai (fal-ai/kling-video/o1/standard/video-to-video/edit) respondió 422: {\"detail\":[{\"loc\":[\"body\",\"video_url\"],\"msg\":\"Video duration exceeds the maximum allowed. Maximum is 10.05 seconds.\",\"type\":\"video_duration_too_long\",\"url\":\"https://docs.fal.ai/errors#video_duration_too_long\",\"ctx\":{\"max_duration\":10.05},\"input\":\"https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps_subidas/20260901_103800_091305_Grabacion_de_pantalla_2026-09-01_a_las_10.36.32_a.m..mov\"}]}",
+    "creado_en": "2026-09-01T10:38:00.158436"
+  },
+  "swap_20260901_103804_886373": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_103804_850246_20260901_101930_162816_Grabacion_de_pantalla_2026-09-01_a_las_10.12.18_a.m..mov",
+    "producto_id": "horiginal",
+    "aspect_ratio": null,
+    "proveedor": "kling_o1",
+    "tipo": "video",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "fal.ai (fal-ai/kling-video/o1/standard/video-to-video/edit) respondió 422: {\"detail\":[{\"loc\":[\"body\",\"video_url\"],\"msg\":\"Video dimensions are too small. Minimum width is 720 pixels. Found 592 pixels width.\",\"type\":\"video_too_small\",\"url\":\"https://docs.fal.ai/errors#video_too_small\",\"ctx\":{\"min_height\":null,\"min_width\":720,\"min_area\":null,\"height\":null,\"width\":592,\"area\":null},\"input\":\"https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps_subidas/20260901_103804_850246_20260901_101930_162816_Grabacion_de_pantalla_2026-09-01_a_las_10.12.18_a.m..mo",
+    "creado_en": "2026-09-01T10:38:04.886420"
+  },
+  "swap_20260901_103901_371957": {
+    "foto_original_local": "/Users/colorado/Documents/GitHub/iaplusyou/salidas/happyflops/swaps_subidas/20260901_103901_309467_20260901_101930_162816_Grabacion_de_pantalla_2026-09-01_a_las_10.12.18_a.m..mov",
+    "producto_id": "horiginal",
+    "aspect_ratio": null,
+    "proveedor": "kling_o1",
+    "tipo": "video",
+    "estado": "error",
+    "resultado_url": null,
+    "resultado_local": null,
+    "credits": null,
+    "usd": null,
+    "evaluacion": null,
+    "error": "fal.ai (fal-ai/kling-video/o1/standard/video-to-video/edit) respondió 422: {\"detail\":[{\"loc\":[\"body\",\"video_url\"],\"msg\":\"Video dimensions are too small. Minimum width is 720 pixels. Found 592 pixels width.\",\"type\":\"video_too_small\",\"url\":\"https://docs.fal.ai/errors#video_too_small\",\"ctx\":{\"min_height\":null,\"min_width\":720,\"min_area\":null,\"height\":null,\"width\":592,\"area\":null},\"input\":\"https://pub-6cfed71e83304ff2ae7d0a887b82042a.r2.dev/clientes/happyflops/swaps_subidas/20260901_103901_309467_20260901_101930_162816_Grabacion_de_pantalla_2026-09-01_a_las_10.12.18_a.m..mo",
+    "creado_en": "2026-09-01T10:39:01.371972"
+  }
+}

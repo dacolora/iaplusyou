@@ -1,0 +1,159 @@
+<p class="vacio" style="padding-top:0;">
+  Sube una foto o un video real (3-10s). Elige el producto y el modelo. El
+  resultado es lo mismo que subiste — misma pose, mismo rostro, mismo fondo,
+  mismo movimiento si es video — con el calzado reemplazado por el que
+  elegiste. Nada más cambia.
+</p>
+
+<form method="post" action="{{ url_for('generar_swap', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
+  <label class="campo-label">Foto o video original</label>
+  <input type="file" name="foto" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+
+  <label class="campo-label" style="margin-top:1rem;display:block;">Producto</label>
+  {% if productos %}
+  <div class="catalogo-productos">
+    {% for p in productos %}
+    <label class="producto-opcion">
+      <input type="radio" name="producto_id" value="{{ p.id }}" required>
+      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
+      <span>{{ p.nombre }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay productos en el catálogo todavía — agrega carpetas en <code>clientes/{{ cliente }}/productos/</code>.</p>
+  {% endif %}
+
+  <div class="fila-campos-idea" style="margin-top:1rem;">
+    <div>
+      <label class="campo-label">Modelo para FOTO</label>
+      <div class="checks-plataformas">
+        <label><input type="radio" name="proveedor_foto" value="nano_banana" checked> Nano Banana — recomendado (~$0.04)</label>
+        <label><input type="radio" name="proveedor_foto" value="nano_banana_fal"> Nano Banana vía fal (~$0.04)</label>
+        <label><input type="radio" name="proveedor_foto" value="qwen_edit"> Qwen Image Edit Plus (~$0.03)</label>
+      </div>
+    </div>
+    <div>
+      <label class="campo-label">Modelo para VIDEO</label>
+      <div class="checks-plataformas">
+        <label><input type="radio" name="proveedor_video" value="kling_o1" checked> Kling O1 — recomendado, edita el video real (~$0.168/seg)</label>
+        <label><input type="radio" name="proveedor_video" value="luma_modify"> Luma Ray3 Modify (~$0.35/seg)</label>
+        <label><input type="radio" name="proveedor_video" value="wan_animate_replace"> Wan-2.2 Animate Replace (~$0.04/seg)</label>
+      </div>
+    </div>
+  </div>
+  <p class="vacio" style="padding-top:.4rem;font-size:.76rem;">
+    Solo modelos que ven la foto de referencia del producto y clonan tu foto/video
+    original — nada que solo reciba una descripción en texto. Según el archivo
+    que subas se usa el modelo de FOTO o el de VIDEO — solo aplica uno de los dos.
+  </p>
+
+  {% include "_comparacion_modelos.html" %}
+
+  <button class="btn-generar" type="submit" {% if not productos %}disabled{% endif %}>Generar</button>
+</form>
+
+<h2 style="margin-top:2.5rem;">Resultados ({{ swaps | length }})</h2>
+{% if swaps %}
+<div class="swaps-lista">
+  {% for s in swaps %}
+  <details class="swap-card">
+    <summary class="swap-card-resumen">
+      <span class="idea-chevron">▸</span>
+      <span class="swap-thumb">
+        {% if s.tipo == "video" %}
+        <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" muted></video>
+        {% else %}
+        <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original">
+        {% endif %}
+      </span>
+      <span class="swap-thumb">
+        {% if s.resultado_url %}
+          {% if s.tipo == "video" %}
+          <video src="{{ s.resultado_url }}" muted></video>
+          {% else %}
+          <img src="{{ s.resultado_url }}" alt="resultado">
+          {% endif %}
+        {% else %}
+        <span class="swap-thumb-vacio">{% if s.trabajo %}…{% elif s.estado == "error" %}✕{% endif %}</span>
+        {% endif %}
+      </span>
+      <span class="swap-resumen-texto">
+        <strong>{{ s.producto_nombre }}</strong>
+        <span class="swap-resumen-meta">
+          {{ s.proveedor_nombre }}
+          {% if s.evaluacion %}
+          {% set promedio = (s.evaluacion | sum(attribute="puntaje")) / (s.evaluacion | length) %}
+          · <span class="{% if promedio >= 80 %}puntaje-alto{% elif promedio >= 50 %}puntaje-medio{% else %}puntaje-bajo{% endif %}">{{ promedio | round | int }}%</span>
+          {% elif s.estado == "error" %}
+          · <span class="puntaje-bajo">error</span>
+          {% elif s.trabajo %}
+          · generando…
+          {% endif %}
+        </span>
+      </span>
+    </summary>
+
+    <div class="swap-lados">
+      <div class="swap-lado">
+        <div class="proveedor-label">Original</div>
+        {% if s.tipo == "video" %}
+        <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" controls muted></video>
+        {% else %}
+        <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original">
+        {% endif %}
+      </div>
+      <div class="swap-lado">
+        <div class="proveedor-label">
+          {{ s.producto_nombre }} ·
+          {{ s.proveedor_nombre }}
+        </div>
+        {% if s.trabajo %}
+        <div class="barra-progreso" id="trabajo-{{ s.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+        <div class="progreso-texto">Generando… 0% · 0s</div>
+        <script>iniciarPolling({{ s.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ s.trabajo.job_id) | tojson }});</script>
+        {% elif s.estado == "error" %}
+        <p class="vacio" style="color:var(--error);">{{ s.error }}</p>
+        {% elif s.resultado_url %}
+          {% if s.tipo == "video" %}
+          <video src="{{ s.resultado_url }}" controls muted></video>
+          {% else %}
+          <a href="{{ s.resultado_url }}" target="_blank"><img src="{{ s.resultado_url }}" alt="resultado"></a>
+          {% endif %}
+        <div class="costo-mini">
+          {% if s.credits %}~{{ "%.2f"|format(s.credits) }} cr (${{ "%.2f"|format(s.usd or 0) }}){% elif s.usd %}${{ "%.3f"|format(s.usd) }}{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    {% if s.evaluacion %}
+    {% set promedio = (s.evaluacion | sum(attribute="puntaje")) / (s.evaluacion | length) %}
+    <details class="evaluacion-matriz">
+      <summary>
+        Cumplimiento de marca:
+        <strong class="{% if promedio >= 80 %}puntaje-alto{% elif promedio >= 50 %}puntaje-medio{% else %}puntaje-bajo{% endif %}">{{ promedio | round | int }}%</strong>
+        promedio sobre {{ s.evaluacion | length }} invariantes
+      </summary>
+      <ul class="lista-evaluacion">
+        {% for inv in s.evaluacion %}
+        <li>
+          <span class="puntaje-chip {% if inv.puntaje >= 80 %}puntaje-alto{% elif inv.puntaje >= 50 %}puntaje-medio{% else %}puntaje-bajo{% endif %}">{{ inv.puntaje }}%</span>
+          <strong>{{ inv.name.replace('_', ' ') }}</strong> — {{ inv.motivo }}
+        </li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% elif s.estado == "listo" %}
+    <p class="vacio" style="font-size:.78rem;">Evaluando cumplimiento de marca…</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('eliminar_swap', cliente=cliente, swap_id=s.id) }}" onsubmit="return confirm('¿Eliminar este resultado?');">
+      <button type="submit" class="btn-rechazar btn-sm">Eliminar</button>
+    </form>
+  </details>
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Todavía no has generado ningún swap.</p>
+{% endif %}

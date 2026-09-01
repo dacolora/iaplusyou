@@ -1,0 +1,86 @@
+<details class="idea-block">
+  <summary class="idea-header">
+    <span class="idea-chevron">▸</span>
+    <div>
+      <span class="idea-label">Idea</span>
+      <div class="idea-texto">{{ idea.idea }}</div>
+    </div>
+    <form
+      method="post"
+      action="{{ url_for('eliminar_idea_visual', cliente=cliente, idea_id=idea.id) }}"
+      onsubmit="return confirm('¿Eliminar esta idea completa, con todas sus escenas e imágenes? No se puede deshacer.');"
+      onclick="event.stopPropagation();"
+      class="idea-eliminar"
+    >
+      <button type="submit" class="btn-rechazar btn-sm" title="Eliminar idea completa">Eliminar idea</button>
+    </form>
+  </summary>
+
+  {% for concepto in idea.conceptos %}
+  <div class="concepto-card">
+    <div class="concepto-texto">{{ concepto.texto }}</div>
+    <div class="concepto-imagenes">
+      {% for proveedor, img in concepto.imagenes.items() %}
+      <div class="concepto-imagen">
+        <div class="proveedor-label">{{ "Nano Banana" if proveedor == "nano_banana" else "Higgsfield" }}</div>
+
+        {% if img.trabajo %}
+        <div class="barra-progreso" id="trabajo-{{ img.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+        <div class="progreso-texto">Generando… 0% · 0s</div>
+        <script>iniciarPolling({{ img.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ img.trabajo.job_id) | tojson }});</script>
+
+        {% elif img.estado == "error" %}
+        <p class="vacio" style="color:var(--error);padding:.5rem 0;">{{ img.error }}</p>
+
+        {% elif img.estado == "descartado" %}
+        <p class="vacio" style="padding:.5rem 0;">Descartada.</p>
+
+        {% elif img.url %}
+        <a href="{{ img.url }}" target="_blank">
+          <img src="{{ img.url }}" class="concepto-img-preview" alt="{{ concepto.texto }}">
+        </a>
+        <div class="costo-mini">
+          {% if img.credits %}~{{ "%.2f"|format(img.credits) }} cr (${{ "%.2f"|format(img.usd or 0) }}){% else %}${{ "%.3f"|format(img.usd or 0) }}{% endif %}
+        </div>
+
+        {% if img.estado == "listo" %}
+        <div class="concepto-acciones">
+          <form method="post" action="{{ url_for('aprobar_concepto_imagen', cliente=cliente, idea_id=idea.id, concepto_id=concepto.id, proveedor=proveedor) }}">
+            <button class="btn-aprobar btn-sm" type="submit">Aprobar</button>
+          </form>
+          <form method="post" action="{{ url_for('descartar_concepto_imagen', cliente=cliente, idea_id=idea.id, concepto_id=concepto.id, proveedor=proveedor) }}">
+            <button class="btn-rechazar btn-sm" type="submit">Descartar</button>
+          </form>
+        </div>
+
+        {% elif img.estado == "aprobado" %}
+        <div class="plataforma-chip ok" style="margin-top:.4rem;">aprobada</div>
+        {% if img.animaciones_pendientes %}
+        <div class="animaciones-lista">
+          {% for anim in img.animaciones_pendientes %}
+            {% if anim.trabajo %}
+            <div class="barra-progreso" id="trabajo-{{ anim.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+            <div class="progreso-texto">Generando video… 0% · 0s</div>
+            <script>iniciarPolling({{ anim.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ anim.trabajo.job_id) | tojson }});</script>
+            {% else %}
+            <form
+              method="post"
+              action="{{ url_for('generar_video_animacion', cliente=cliente, idea_id=idea.id, concepto_id=concepto.id, proveedor=proveedor, anim_id=anim.id) }}"
+              class="animacion-row"
+              onsubmit="return confirm('¿Generar el video con esta animación? Esto gasta el crédito de video de Higgsfield (~8cr).');"
+            >
+              <textarea name="prompt" rows="2">{{ anim.prompt }}</textarea>
+              <button class="btn-aprobar btn-sm" type="submit">Generar video</button>
+            </form>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</details>

@@ -12,17 +12,25 @@ import os
 import subprocess
 import threading
 
+import requests
+
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
 import estado as estado_mod
 import prompts as prompts_mod
 import marca as marca_mod
+import conceptos_imagen
+import catalogo_productos
+import swaps as swaps_mod
 import bitacora
 import trabajos
 import generador_prompts
+from providers import image_provider
+from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos
+from providers import aspect_ratio as aspect_ratio_mod
 from publicador import publicar_brief
 from higgsfield_client import (
     generate_video,
@@ -177,10 +185,32 @@ def _subir_asset(cliente, subcarpeta, archivo):
             return False, f"Se guardó localmente pero falló la subida a R2: {e}"
 
 
+def _eliminar_asset(cliente, subcarpeta, nombre):
+    """Borra un archivo ya subido (imagen o video, más su .frame.jpg si aplica)
+    local y de R2. No falla si alguna de las dos copias ya no existía."""
+    carpeta = os.path.join(_client_dir(cliente), subcarpeta)
+    nombres = [nombre, nombre + FRAME_SUFFIX]
+    for n in nombres:
+        local_path = os.path.join(carpeta, n)
+        if os.path.exists(local_path):
+            os.remove(local_path)
+        try:
+            r2_uploader.delete_file(f"clientes/{cliente}/{subcarpeta}/{n}")
+        except Exception:
+            pass  # si R2 no está configurado o el objeto ya no existe, seguimos
+
+
 @app.route("/cliente/<cliente>/personaje/subir", methods=["POST"])
 def subir_personaje(cliente):
     ok, mensaje = _subir_asset(cliente, "personajes", request.files.get("imagen"))
     flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/personaje/<nombre>/eliminar", methods=["POST"])
+def eliminar_personaje(cliente, nombre):
+    _eliminar_asset(cliente, "personajes", secure_filename(nombre))
+    flash(f"Eliminado: {nombre}", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -250,6 +280,8 @@ def _marca_contexto(cliente):
             "n_invariantes": len(root.get("invariants", [])),
             "invariant_block": root.get("prompt_blocks", {}).get("invariant_block", ""),
             "negative_prompt": root.get("prompt_blocks", {}).get("negative_prompt", ""),
+            "invariantes": root.get("invariants", []),
+            "open_items": root.get("open_items", []),
         }
     return {
         **data,
@@ -278,27 +310,11 @@ def _resumen_cliente(cliente):
     return conteo
 
 
-def _portada(cliente):
-    """Una imagen representativa del cliente (su primer personaje utilizable), para
-    que la lista de clientes se vea con contenido real en vez de solo texto."""
-    for p in _personajes(cliente):
-        if p.get("url"):
-            return p["url"]
-    return None
-
-
 @app.route("/")
 def index():
-    clientes = [
-        {"nombre": c, "portada": _portada(c), **_resumen_cliente(c)}
-        for c in estado_mod.listar_clientes()
-    ]
-    totales = {
-        "clientes": len(clientes),
-        "pendiente": sum(c["pendiente"] for c in clientes),
-        "publicado": sum(c["publicado"] for c in clientes),
-    }
-    return render_template("index.html", clientes=clientes, totales=totales)
+    # Enfoque temporal en un solo proyecto: Happy Flops. El resto de clientes
+    # sigue intacto en disco, solo no se muestra en la portada por ahora.
+    return redirect(url_for("ver_cliente", cliente="happyflops"))
 
 
 def _job_id_imagen(cliente, prompt_id):
@@ -445,11 +461,27 @@ def ver_cliente(cliente):
         personajes=_personajes(cliente),
         marca=_marca_contexto(cliente),
         ideas=_ideas_pendientes(cliente),
-        modelos=prompts_mod.MODELOS_VALIDOS,
-        aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
+        ideas_visuales=_conceptos_pendientes(cliente),
         videos=videos,
         log=log,
+        productos=catalogo_productos.listar(cliente),
+        aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
+        swaps=_swap_items(cliente),
     )
+
+
+PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
+
+
+def _aspect_ratio_para_plataformas(platforms):
+    """El formato ya no lo elige la persona: si hay alguna plataforma vertical
+    marcada (Instagram/Tiktok) manda esa; si no, 9:16 por defecto salvo que sea
+    solo Youtube, que es horizontal."""
+    if any(p in PLATAFORMAS_VERTICALES for p in platforms):
+        return "9:16"
+    if platforms == ["youtube"]:
+        return "16:9"
+    return "9:16"
 
 
 @app.route("/cliente/<cliente>/idea/nueva", methods=["POST"])
@@ -471,11 +503,488 @@ def nueva_idea(cliente):
         flash(f"No pude generar los prompts: {e}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
 
-    items = [{"prompt": t, "image_url": image_url, "platforms": platforms} for t in textos]
+    aspect_ratio = _aspect_ratio_para_plataformas(platforms)
+    items = [
+        {"prompt": t, "image_url": image_url, "platforms": platforms, "aspect_ratio": aspect_ratio}
+        for t in textos
+    ]
     prompts_mod.agregar_idea(cliente, idea_texto, items)
 
     flash(f"Generé {len(items)} prompts para la idea. Revísalos y apruébalos abajo.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+# ---------- flujo imagen-primero (Happy Flops): idea -> N escenas -> cada escena se
+# genera con AMBOS proveedores sin pedir aprobación de texto -> se eligen las imágenes
+# que sirvan -> cada una recibe sus propias propuestas de animación -> video ----------
+
+def _job_id_concepto(cliente, idea_id, concepto_id, proveedor):
+    return f"{cliente}__{idea_id}__{concepto_id}__{proveedor}__imagen"
+
+
+def _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
+    return f"{cliente}__{idea_id}__{concepto_id}__{proveedor}__{anim_id}__video"
+
+
+def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt, referencia_url):
+    job_id = _job_id_concepto(cliente, idea_id, concepto_id, proveedor)
+
+    def trabajo():
+        imagenes_dir = os.path.join(BASE_DIR, "salidas", cliente, "imagenes")
+        os.makedirs(imagenes_dir, exist_ok=True)
+        nombre = f"{idea_id}_{concepto_id}_{proveedor}.png"
+        local_path = os.path.join(imagenes_dir, nombre)
+        negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
+        extra_params = _extra_params_image({"aspect_ratio": "9:16"}, cliente)
+        video_id = f"{idea_id}_{concepto_id}_{proveedor}"
+
+        try:
+            est = image_provider.generar_imagen(
+                proveedor, referencia_url, prompt, local_path,
+                negative_prompt=negative_prompt, extra_params=extra_params,
+            )
+            try:
+                url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/imagenes/{nombre}")
+            except Exception:
+                url = None
+            campos = {"estado": "listo", "url": url, "local": local_path, "usd": est.get("usd")}
+            if proveedor == "higgsfield":
+                campos["credits"] = est.get("credits")
+            conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, **campos)
+            bitacora.registrar(cliente, video_id, "imagen", "ok", local_path)
+            return "Imagen lista."
+        except Exception as e:
+            conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="error", error=str(e))
+            bitacora.registrar(cliente, video_id, "imagen", "error", str(e))
+            raise
+
+    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45 if proveedor == "higgsfield" else 20)
+
+
+@app.route("/cliente/<cliente>/idea/nueva_visual", methods=["POST"])
+def nueva_idea_visual(cliente):
+    """De una idea + referencia, genera 5 escenas y lanza cada una con AMBOS
+    proveedores (Nano Banana e Higgsfield) — 10 imágenes en total, sin pedir
+    aprobación de texto antes. El costo no se pregunta: se generan todas."""
+    idea_texto = request.form.get("idea", "").strip()
+    image_url = request.form.get("image_url", "").strip()
+    platforms = request.form.getlist("platforms")
+
+    if not idea_texto or not image_url:
+        flash("Escribe la idea y elige un personaje.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    guia_estilo = marca_mod.guia_efectiva(cliente)
+    try:
+        escenas = generador_prompts.generar_conceptos_imagen(idea_texto, n=5, guia_estilo=guia_estilo)
+    except Exception as e:
+        flash(f"No pude generar las escenas: {e}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    idea_id = conceptos_imagen.crear_idea(cliente, idea_texto, escenas)
+
+    data = conceptos_imagen.cargar(cliente)
+    data[idea_id]["platforms"] = platforms
+    conceptos_imagen.guardar(cliente, data)
+
+    for concepto_id, concepto in data[idea_id]["conceptos"].items():
+        for proveedor in conceptos_imagen.PROVEEDORES:
+            _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, concepto["texto"], image_url)
+
+    flash(f"Generando {len(escenas)} escenas x 2 proveedores (10 imágenes)…", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/aprobar", methods=["POST"])
+def aprobar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
+    """Esta imagen sí sirve: genera 5 propuestas de animación (texto, gratis) para
+    ella específicamente. Se puede aprobar más de una imagen por idea."""
+    data = conceptos_imagen.cargar(cliente)
+    concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
+    if not concepto or proveedor not in concepto or not concepto[proveedor].get("url"):
+        flash("No encontré esa imagen para aprobar.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    guia_estilo = marca_mod.guia_efectiva(cliente)
+    idea_texto = data[idea_id]["idea"]
+    try:
+        animaciones = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo)
+    except Exception as e:
+        flash(f"No pude generar las propuestas de animación: {e}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="aprobado")
+    conceptos_imagen.agregar_animaciones(cliente, idea_id, concepto_id, proveedor, animaciones)
+
+    flash("Imagen aprobada — elige cómo animarla abajo.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/descartar", methods=["POST"])
+def descartar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
+    conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, estado="descartado")
+    flash("Imagen descartada.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route(
+    "/cliente/<cliente>/idea/<idea_id>/concepto/<concepto_id>/<proveedor>/animacion/<anim_id>/generar_video",
+    methods=["POST"],
+)
+def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
+    """La imagen ya quedó fija en la ronda anterior — esto solo anima. Genera el
+    video directo, sin paso intermedio de imagen candidata."""
+    data = conceptos_imagen.cargar(cliente)
+    animacion = conceptos_imagen.encontrar_animacion(data, idea_id, concepto_id, proveedor, anim_id)
+    concepto = conceptos_imagen.encontrar_concepto(data, idea_id, concepto_id)
+    if not animacion or not concepto or not concepto[proveedor].get("url"):
+        flash("No encontré esa animación.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+
+    imagen_url = concepto[proveedor]["url"]
+    prompt_texto = (request.form.get("prompt") or animacion["prompt"]).strip() or animacion["prompt"]
+    # Higgsfield/Kling es el default: con precio real verificado, sale ~4.7x más
+    # barato que Seedance vía fal.ai ($0.49 vs ~$2.31 por 5s) — ver ROADMAP.md.
+    proveedor_video = request.form.get("proveedor_video", "higgsfield")
+    if proveedor_video not in video_provider.PROVEEDORES_VALIDOS:
+        proveedor_video = "higgsfield"
+    platforms = data[idea_id].get("platforms", [])
+    aspect_ratio = _aspect_ratio_para_plataformas(platforms)
+    video_id = f"{idea_id}_{concepto_id}_{proveedor}_{anim_id}"
+    job_id = _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id)
+
+    def trabajo():
+        out_dir = os.path.join(BASE_DIR, "salidas", cliente)
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"{video_id}.mp4")
+        negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
+        item2 = {"aspect_ratio": aspect_ratio, "model": "kling-2.1-pro"}
+
+        try:
+            est = video_provider.generar_video(
+                proveedor_video, imagen_url, prompt_texto, out_path,
+                aspect_ratio=aspect_ratio, negative_prompt=negative_prompt,
+                extra_params=_extra_params_video(item2, cliente),
+            )
+            bitacora.registrar(cliente, video_id, "generacion", "ok", out_path)
+        except Exception as e:
+            bitacora.registrar(cliente, video_id, "generacion", "error", str(e))
+            raise
+
+        try:
+            video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{video_id}.mp4")
+            bitacora.registrar(cliente, video_id, "storage", "ok", video_url)
+        except Exception as e:
+            video_url = None
+            bitacora.registrar(cliente, video_id, "storage", "error", str(e))
+
+        estado = estado_mod.cargar(cliente)
+        estado[video_id] = {
+            "prompt": prompt_texto,
+            "image_url": imagen_url,
+            "title": video_id,
+            "caption": prompt_texto,
+            "platforms": platforms,
+            "video_local": out_path,
+            "video_url": video_url,
+            "estado": "pendiente",
+            "generado_en": datetime.now().isoformat(),
+            "publicado_en": None,
+        }
+        estado_mod.guardar(cliente, estado)
+
+        data2 = conceptos_imagen.cargar(cliente)
+        animacion2 = conceptos_imagen.encontrar_animacion(data2, idea_id, concepto_id, proveedor, anim_id)
+        if animacion2:
+            animacion2["estado"] = "video_generado"
+            conceptos_imagen.guardar(cliente, data2)
+        return "Video listo, pendiente de revisión."
+
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130):
+        flash("Generando video…", "ok")
+    else:
+        flash("Ya se está generando ese video — espera a que termine.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+def _conceptos_pendientes(cliente):
+    """Estado del flujo imagen-primero, listo para el template: por idea, sus
+    escenas, y por escena sus dos imágenes (con trabajo en curso si aplica) y las
+    animaciones pendientes de cada imagen ya aprobada."""
+    data = conceptos_imagen.cargar(cliente)
+    ideas = []
+    for idea_id, idea in data.items():
+        conceptos = []
+        for concepto_id, concepto in idea.get("conceptos", {}).items():
+            imagenes = {}
+            for proveedor in conceptos_imagen.PROVEEDORES:
+                img = dict(concepto[proveedor])
+                job_id = _job_id_concepto(cliente, idea_id, concepto_id, proveedor)
+                img["trabajo"] = {"job_id": job_id} if trabajos.en_curso(job_id) else None
+                animaciones = []
+                for anim_id, anim in img.get("animaciones", {}).items():
+                    if anim.get("estado") not in ("pendiente",):
+                        continue
+                    a = {"id": anim_id, **anim}
+                    a_job_id = _job_id_animacion(cliente, idea_id, concepto_id, proveedor, anim_id)
+                    a["trabajo"] = {"job_id": a_job_id} if trabajos.en_curso(a_job_id) else None
+                    animaciones.append(a)
+                img["animaciones_pendientes"] = animaciones
+                imagenes[proveedor] = img
+            conceptos.append({"id": concepto_id, "texto": concepto["texto"], "imagenes": imagenes})
+        if conceptos:
+            ideas.append({
+                "id": idea_id,
+                "idea": idea.get("idea"),
+                "creado_en": idea.get("creado_en"),
+                "conceptos": conceptos,
+            })
+    return sorted(ideas, key=lambda i: i.get("creado_en", ""), reverse=True)
+
+
+@app.route("/cliente/<cliente>/idea/<idea_id>/eliminar_visual", methods=["POST"])
+def eliminar_idea_visual(cliente, idea_id):
+    data = conceptos_imagen.cargar(cliente)
+    if idea_id in data:
+        del data[idea_id]
+        conceptos_imagen.guardar(cliente, data)
+        flash("Idea eliminada.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+# ---------- flujo "cambiar calzado": una foto real + un producto del catálogo ->
+# la misma foto, con el calzado reemplazado. Nada más cambia. ----------
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/imagen")
+def imagen_producto(cliente, producto_id):
+    """Sirve la foto representativa de un producto del catálogo directo del disco
+    (son fijas, no hace falta subirlas a R2)."""
+    producto = catalogo_productos.encontrar(cliente, producto_id)
+    if not producto:
+        flash(f"No encontré el producto {producto_id}", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente))
+    return send_file(producto["representativa"])
+
+
+def _swap_items(cliente):
+    swaps_dict = swaps_mod.cargar(cliente)
+    items = []
+    for swap_id, entry in sorted(
+        swaps_dict.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
+    ):
+        job_id = f"{cliente}__{swap_id}__swap"
+        producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
+        items.append({
+            "id": swap_id,
+            **entry,
+            "producto_nombre": producto["nombre"] if producto else entry.get("producto_id"),
+            "proveedor_nombre": NOMBRES_PROVEEDOR_SWAP.get(entry.get("proveedor"), entry.get("proveedor")),
+            "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
+        })
+    return items
+
+
+@app.route("/cliente/<cliente>/swap")
+def ver_swap(cliente):
+    """Ruta vieja de cuando 'cambiar calzado' era una página aparte — ahora es
+    la primera pestaña de ver_cliente. Se mantiene solo por si algún link viejo
+    apunta acá."""
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+# Solo modelos que ven la foto de referencia del producto y clonan la foto/video
+# original — nada que solo reciba una descripción en texto del calzado (eso
+# perdía fidelidad de color/diseño y no garantizaba preservar la foto).
+PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit")
+PROVEEDORES_SWAP_VIDEO = ("kling_o1", "luma_modify", "wan_animate_replace")
+
+NOMBRES_PROVEEDOR_SWAP = {
+    "nano_banana": "Nano Banana",
+    "nano_banana_fal": "Nano Banana (vía fal)",
+    "qwen_edit": "Qwen Image Edit Plus",
+    "kling_o1": "Kling O1",
+    "luma_modify": "Luma Ray3 Modify",
+    "wan_animate_replace": "Wan-2.2 Animate Replace",
+    # ya no seleccionables, pero se mantienen para mostrar el nombre en swaps viejos:
+    "flux_kontext": "Flux Kontext Pro",
+    "higgsfield": "Higgsfield",
+    "gemini_omni_edit": "Gemini Omni Flash Edit",
+}
+
+
+def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
+    """Corre la evaluación de marca sobre una imagen (foto final, o un fotograma
+    extraído de un video final) y guarda el resultado. No falla el swap si esto
+    falla — es un plus, no el resultado principal."""
+    try:
+        root = marca_mod.cargar_root(cliente)
+        invariantes = root.get("invariants", []) if root else []
+        if invariantes:
+            evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
+            swaps_mod.actualizar(cliente, swap_id, evaluacion=evaluacion)
+            bitacora.registrar(cliente, swap_id, "evaluacion", "ok", "")
+    except Exception as e:
+        bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
+
+
+@app.route("/cliente/<cliente>/swap/generar", methods=["POST"])
+def generar_swap(cliente):
+    """Sube la foto o video del usuario, y lanza en segundo plano el reemplazo de
+    calzado con el modelo elegido — uno para foto (PROVEEDORES_SWAP_IMAGEN) y otro
+    para video (PROVEEDORES_SWAP_VIDEO), cada tipo con su propia lista de
+    candidatos porque no todos los modelos hacen ambos."""
+    archivo = request.files.get("foto")
+    producto_id = request.form.get("producto_id", "").strip()
+    proveedor_foto = request.form.get("proveedor_foto", "nano_banana").strip()
+    proveedor_video = request.form.get("proveedor_video", "kling_o1").strip()
+    if proveedor_foto not in PROVEEDORES_SWAP_IMAGEN:
+        proveedor_foto = "nano_banana"
+    if proveedor_video not in PROVEEDORES_SWAP_VIDEO:
+        proveedor_video = "kling_o1"
+
+    if not archivo or not archivo.filename:
+        flash("Sube una foto o video primero.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+    producto = catalogo_productos.encontrar(cliente, producto_id)
+    if not producto:
+        flash("Elige un producto del catálogo.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+    nombre = secure_filename(archivo.filename)
+    ext = os.path.splitext(nombre)[1].lower()
+    es_video = ext in VIDEO_EXTS
+    tipo = "video" if es_video else "foto"
+    proveedor = proveedor_video if es_video else proveedor_foto
+
+    subidas_dir = os.path.join(BASE_DIR, "salidas", cliente, "swaps_subidas")
+    os.makedirs(subidas_dir, exist_ok=True)
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    foto_local = os.path.join(subidas_dir, f"{ts}_{nombre}")
+    archivo.save(foto_local)
+
+    # El encuadre ya no lo elige la persona — se detecta de la foto/video real
+    # que subió, para que el resultado mantenga esas mismas proporciones.
+    aspect_ratio_detectado = aspect_ratio_mod.detectar_gemini(foto_local) if not es_video else None
+    swap_id = swaps_mod.crear(cliente, foto_local, producto_id, aspect_ratio_detectado, proveedor, tipo=tipo)
+    job_id = f"{cliente}__{swap_id}__swap"
+
+    def trabajo():
+        resultados_dir = os.path.join(BASE_DIR, "salidas", cliente, "swaps")
+        os.makedirs(resultados_dir, exist_ok=True)
+        negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
+
+        try:
+            if tipo == "video":
+                local_path = os.path.join(resultados_dir, f"{swap_id}.mp4")
+                video_url = r2_uploader.upload_video(foto_local, f"clientes/{cliente}/swaps_subidas/{ts}_{nombre}")
+                referencias_urls = []
+                for i, ref_local in enumerate(producto["referencias"][:4]):
+                    key = f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref_local)}"
+                    referencias_urls.append(r2_uploader.upload_image(ref_local, key))
+
+                if proveedor == "kling_o1":
+                    citas = " ".join(f"@Image{i + 1}" for i in range(len(referencias_urls)))
+                    prompt = (
+                        f"Reemplaza el calzado que lleva puesta la persona por el que se "
+                        f"muestra en {citas} — mismo color, diseño y textura exactos. No "
+                        f"cambies nada más del video: mismo movimiento, misma persona, "
+                        f"mismo fondo, misma iluminación."
+                    )
+                    resultado_url = kling_o1_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
+                    costo = kling_o1_client.estimate_video()
+                else:
+                    referencia = referencias_urls[0] if referencias_urls else None
+                    resultado_url = comparador_modelos.editar_video(
+                        proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
+                    )
+                    costo = comparador_modelos.estimate_video(proveedor)
+
+                resp = requests.get(resultado_url, timeout=180)
+                resp.raise_for_status()
+                with open(local_path, "wb") as f:
+                    f.write(resp.content)
+                try:
+                    url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/swaps/{swap_id}.mp4")
+                except Exception:
+                    url = resultado_url
+            else:
+                local_path = os.path.join(resultados_dir, f"{swap_id}.png")
+                if proveedor == "nano_banana":
+                    img_bytes = nano_banana_client.swap_producto(
+                        foto_local, producto["referencias"], negative_prompt=negative_prompt,
+                    )
+                    with open(local_path, "wb") as f:
+                        f.write(img_bytes)
+                    costo = nano_banana_client.estimate_image()
+                else:  # nano_banana_fal, qwen_edit
+                    foto_url = r2_uploader.upload_image(foto_local, f"clientes/{cliente}/swaps_subidas/{ts}_{nombre}")
+                    referencias_urls = [
+                        r2_uploader.upload_image(ref, f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref)}")
+                        for ref in producto["referencias"][:2]
+                    ]
+                    resultado_url = comparador_modelos.editar_imagen(
+                        proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
+                        foto_local_path=foto_local,
+                    )
+                    resp = requests.get(resultado_url, timeout=120)
+                    resp.raise_for_status()
+                    with open(local_path, "wb") as f:
+                        f.write(resp.content)
+                    costo = comparador_modelos.estimate_image(proveedor)
+
+                try:
+                    url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/swaps/{swap_id}.png")
+                except Exception:
+                    url = None
+
+            swaps_mod.actualizar(
+                cliente, swap_id, estado="listo", resultado_url=url, resultado_local=local_path,
+                credits=costo.get("credits"), usd=costo.get("usd"),
+            )
+            bitacora.registrar(cliente, swap_id, "swap", "ok", local_path)
+
+            if url:
+                if tipo == "video":
+                    frame_path = os.path.join(resultados_dir, f"{swap_id}.frame.jpg")
+                    try:
+                        _extraer_frame(local_path, frame_path)
+                        frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/swaps/{swap_id}.frame.jpg")
+                        _evaluar_swap_contra_matriz(cliente, swap_id, frame_url)
+                    except Exception as e:
+                        bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
+                else:
+                    _evaluar_swap_contra_matriz(cliente, swap_id, url)
+
+            return "Swap listo."
+        except Exception as e:
+            swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e))
+            bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
+            raise
+
+    duracion_estimada = 20 if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit") else 90
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada):
+        flash("Generando el swap…", "ok")
+    else:
+        flash("Ya se está generando ese swap — espera a que termine.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
+@app.route("/cliente/<cliente>/swap/<swap_id>/original")
+def imagen_swap_original(cliente, swap_id):
+    data = swaps_mod.cargar(cliente)
+    entry = data.get(swap_id)
+    if not entry or not os.path.exists(entry["foto_original_local"]):
+        flash("No encontré la foto original.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return send_file(entry["foto_original_local"])
+
+
+@app.route("/cliente/<cliente>/swap/<swap_id>/eliminar", methods=["POST"])
+def eliminar_swap(cliente, swap_id):
+    swaps_mod.eliminar(cliente, swap_id)
+    flash("Eliminado.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])
@@ -664,6 +1173,16 @@ def rechazar_prompt(cliente, prompt_id):
         del data[idea_id]["prompts"][prompt_id]
         prompts_mod.guardar(cliente, data)
         flash(f"Prompt {prompt_id} descartado, no se generó video (no gastó créditos).", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/idea/<idea_id>/eliminar", methods=["POST"])
+def eliminar_idea(cliente, idea_id):
+    data = prompts_mod.cargar(cliente)
+    if idea_id in data:
+        del data[idea_id]
+        prompts_mod.guardar(cliente, data)
+        flash("Idea eliminada junto con sus prompts.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 

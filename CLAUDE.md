@@ -115,3 +115,17 @@ Higgsfield). `generar_prompts()` writes the 5 candidate prompts and folds in a
 client's `marca.json` guía de estilo when present, so brand consistency doesn't have
 to be repeated per idea. `analizar_marca()` uses Claude's vision input on uploaded
 brand reference images to auto-write that guía de estilo.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked in this repo's GitHub Issues (`gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default label vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.

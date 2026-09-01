@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "iaplusyou",
+      "runtimeExecutable": "/Users/colorado/Documents/GitHub/iaplusyou/venv/bin/python",
+      "runtimeArgs": ["/Users/colorado/Documents/GitHub/iaplusyou/dashboard.py"],
+      "port": 5050
+    },
+    {
+      "name": "happyflops-brand-matrix",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8000", "--directory", "/Users/colorado/Documents/GitHub/happyflops-brand-matrix"],
+      "port": 8000
+    }
+  ]
+}
