@@ -1349,15 +1349,46 @@ def cf_generar_prompt(cliente):
     productos = [productos_por_id[i] for i in productos_sel if i in productos_por_id]
     escenas = [escenas_por_nombre[n] for n in escenas_sel if n in escenas_por_nombre]
 
+    # Lista canónica de referencias, resuelta UNA sola vez acá: personaje ->
+    # producto -> escena, descartando cualquier entrada sin URL pública
+    # resolvible (ej. video sin .frame.jpg extraído todavía), truncada a 10
+    # (límite real de Wan 3.0). generar_prompt_creative_flow() recibe SOLO
+    # las entradas que sobrevivieron el filtro, para que su numerado interno
+    # de @Imagen N coincida exactamente con esta lista — y cf_generar_video
+    # reusa esta misma lista tal cual, sin volver a resolverla.
+    combinados = (
+        [("personaje", p) for p in personajes] +
+        [("producto", p) for p in productos] +
+        [("escena", e) for e in escenas]
+    )
+
+    def _url_de(tipo, item):
+        return item.get("representativa_url") if tipo == "producto" else item.get("url")
+
+    combinados_validos = [(t, item) for t, item in combinados if _url_de(t, item)][:10]
+    personajes_validos = [item for t, item in combinados_validos if t == "personaje"]
+    productos_validos = [item for t, item in combinados_validos if t == "producto"]
+    escenas_validas = [item for t, item in combinados_validos if t == "escena"]
+    referencias_urls = [_url_de(t, item) for t, item in combinados_validos]
+
     cf_id = creative_flow.crear(
         cliente, personajes_sel, productos_sel, escenas_sel,
         accion_central, duracion_objetivo, tono, modo,
+        referencias_urls=referencias_urls,
     )
+
+    if not referencias_urls:
+        creative_flow.actualizar(
+            cliente, cf_id, estado="error",
+            error="Ninguna de las referencias elegidas tiene una URL pública válida — revisa que las imágenes estén subidas a R2.",
+        )
+        flash("Ninguna de las referencias elegidas tiene una URL pública válida — revisa que las imágenes estén subidas a R2.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     try:
         guia_estilo = marca_mod.guia_efectiva(cliente)
         prompt_relleno = generador_prompts.generar_prompt_creative_flow(
-            personajes, productos, escenas, accion_central, duracion_objetivo,
+            personajes_validos, productos_validos, escenas_validas, accion_central, duracion_objetivo,
             tono, modo, guia_estilo=guia_estilo,
         )
         creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt_relleno)
@@ -1425,15 +1456,13 @@ def cf_generar_video(cliente, cf_id):
         flash("No encontré un prompt listo para esa sesión.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
-    personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
-    productos_por_id = {p["id"]: p for p in catalogo_productos.listar(cliente)}
-    escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
-    referencias = (
-        [personajes_por_nombre[n]["url"] for n in entry["personajes_ids"] if n in personajes_por_nombre] +
-        [productos_por_id[i]["representativa_url"] for i in entry["productos_ids"] if i in productos_por_id and productos_por_id[i].get("representativa_url")] +
-        [escenas_por_nombre[n]["url"] for n in entry["escenas_ids"] if n in escenas_por_nombre]
-    )
-    referencias = [r for r in referencias if r]
+    # Reusa TAL CUAL la lista canónica que ya se resolvió y filtró en
+    # cf_generar_prompt (guardada como entry["referencias_urls"]) — nunca la
+    # vuelve a resolver acá, porque un segundo cómputo podría dar un
+    # resultado distinto (ej. una escena subida/borrada entre medio) y
+    # desincronizar el índice @Imagen N que Claude ya usó al escribir el
+    # prompt del índice real que recibe Wan 3.0.
+    referencias = entry.get("referencias_urls") or []
     if not referencias:
         flash("No hay URLs públicas de referencia disponibles todavía.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))

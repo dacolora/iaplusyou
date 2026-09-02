@@ -26,7 +26,7 @@ def guardar(cliente, data):
 
 
 def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
-          duracion_objetivo, tono, modo):
+          duracion_objetivo, tono, modo, referencias_urls=None):
     if modo not in MODOS_VALIDOS:
         raise ValueError(f"Modo inválido: {modo}. Opciones: {MODOS_VALIDOS}")
     data = cargar(cliente)
@@ -41,6 +41,11 @@ def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
         "modo": modo,
         "estado": "prompt_pendiente",
         "prompt_relleno": None,
+        # URLs canónicas de referencia (personajes -> productos -> escenas,
+        # ya filtradas por URL válida y truncadas a 10) tal como las vio
+        # Claude al numerar @Imagen N — cf_generar_video las reusa tal cual
+        # para que el índice que recibe Wan 3.0 nunca se desincronice.
+        "referencias_urls": referencias_urls,
         "video_url": None,
         "video_local": None,
         "credits": None,
