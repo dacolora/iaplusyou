@@ -14,6 +14,7 @@ Un archivo marca.json por cliente:
 Las referencias en sí (imágenes/videos subidos) NO se listan aquí — se leen
 directo de la carpeta clientes/<cliente>/marca/, igual que personajes/.
 """
+import json
 import os
 from datetime import datetime
 
