@@ -137,6 +137,14 @@ def _escenas(cliente):
     return _listar_assets(cliente, "escenas")
 
 
+def _productos_referencia(cliente):
+    """Imagen de referencia suelta de un producto para CreativeFlowPlus — NO es
+    el catálogo de "Cambiar calzado" (catalogo_productos.py, que exige varias
+    fotos por producto + nombre/descripción a mano en el código). Acá alcanza
+    con una imagen, igual que personajes/escenas."""
+    return _listar_assets(cliente, "productos_referencia")
+
+
 def _marca_referencias(cliente):
     return _listar_assets(cliente, "marca")
 
@@ -230,6 +238,20 @@ def subir_escena(cliente):
 @app.route("/cliente/<cliente>/escena/<nombre>/eliminar", methods=["POST"])
 def eliminar_escena(cliente, nombre):
     _eliminar_asset(cliente, "escenas", secure_filename(nombre))
+    flash(f"Eliminado: {nombre}", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/producto_referencia/subir", methods=["POST"])
+def subir_producto_referencia(cliente):
+    ok, mensaje = _subir_asset(cliente, "productos_referencia", request.files.get("imagen"))
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/producto_referencia/<nombre>/eliminar", methods=["POST"])
+def eliminar_producto_referencia(cliente, nombre):
+    _eliminar_asset(cliente, "productos_referencia", secure_filename(nombre))
     flash(f"Eliminado: {nombre}", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
@@ -484,6 +506,7 @@ def ver_cliente(cliente):
         cliente=cliente,
         personajes=_personajes(cliente),
         escenas=_escenas(cliente),
+        productos_referencia=_productos_referencia(cliente),
         marca=_marca_contexto(cliente),
         ideas=_ideas_pendientes(cliente),
         ideas_visuales=_conceptos_pendientes(cliente),
@@ -848,7 +871,7 @@ def ver_swap(cliente):
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit")
 PROVEEDORES_SWAP_VIDEO = (
     "kling_o1", "luma_modify", "wan_animate_replace", "wan27_edit",
-    "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit", "wan3_reference",
+    "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit",
 )
 
 NOMBRES_PROVEEDOR_SWAP = {
@@ -862,11 +885,11 @@ NOMBRES_PROVEEDOR_SWAP = {
     "seedance25_edit": "Seedance 2.5 Video Edit",
     "kling_o3_pro_edit": "Kling Omni O3 Pro Video Edit",
     "luma_ray32_edit": "Luma Ray 3.2 Video Edit",
-    "wan3_reference": "Wan 3.0 (referencia, no edición)",
     # ya no seleccionables, pero se mantienen para mostrar el nombre en swaps viejos:
     "flux_kontext": "Flux Kontext Pro",
     "higgsfield": "Higgsfield",
     "gemini_omni_edit": "Gemini Omni Flash Edit",
+    "wan3_reference": "Wan 3.0 (referencia, no edición)",
 }
 
 
@@ -973,16 +996,6 @@ def generar_swap(cliente):
                         proveedor, video_url, prompt, referencias_urls=referencias_urls,
                     )
                     costo = wavespeed_video_edit.estimate_video(proveedor)
-                elif proveedor == "wan3_reference":
-                    # No es edición: genera un video nuevo guiado solo por
-                    # imágenes de referencia (el cliente actual no acepta un
-                    # video de referencia) — sin garantía de clonar el original.
-                    prompt = (
-                        f"Video de una persona con {producto['descripcion']}, "
-                        f"mismo movimiento, escena y encuadre que el video original."
-                    )
-                    resultado_url = wan3_client.generar_video(prompt, referencias_urls)
-                    costo = wan3_client.estimate_video()
                 else:
                     referencia = referencias_urls[0] if referencias_urls else None
                     resultado_url = comparador_modelos.editar_video(
@@ -1352,11 +1365,11 @@ def cf_generar_prompt(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
-    productos_por_id = {p["id"]: p for p in catalogo_productos.listar(cliente)}
+    productos_por_nombre = {p["nombre"]: p for p in _productos_referencia(cliente)}
     escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
 
     personajes = [personajes_por_nombre[n] for n in personajes_sel if n in personajes_por_nombre]
-    productos = [productos_por_id[i] for i in productos_sel if i in productos_por_id]
+    productos = [productos_por_nombre[n] for n in productos_sel if n in productos_por_nombre]
     escenas = [escenas_por_nombre[n] for n in escenas_sel if n in escenas_por_nombre]
 
     # Lista canónica de referencias, resuelta UNA sola vez acá: personaje ->
@@ -1373,7 +1386,7 @@ def cf_generar_prompt(cliente):
     )
 
     def _url_de(tipo, item):
-        return item.get("representativa_url") if tipo == "producto" else item.get("url")
+        return item.get("url")
 
     combinados_validos = [(t, item) for t, item in combinados if _url_de(t, item)][:10]
     personajes_validos = [item for t, item in combinados_validos if t == "personaje"]
@@ -1419,10 +1432,10 @@ def cf_regenerar_prompt(cliente, cf_id):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
-    productos_por_id = {p["id"]: p for p in catalogo_productos.listar(cliente)}
+    productos_por_nombre = {p["nombre"]: p for p in _productos_referencia(cliente)}
     escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
     personajes = [personajes_por_nombre[n] for n in entry["personajes_ids"] if n in personajes_por_nombre]
-    productos = [productos_por_id[i] for i in entry["productos_ids"] if i in productos_por_id]
+    productos = [productos_por_nombre[n] for n in entry["productos_ids"] if n in productos_por_nombre]
     escenas = [escenas_por_nombre[n] for n in entry["escenas_ids"] if n in escenas_por_nombre]
 
     try:

@@ -26,6 +26,8 @@ clientes/*/personajes/*
 !clientes/*/personajes/.gitkeep
 clientes/*/escenas/*
 !clientes/*/escenas/.gitkeep
+clientes/*/productos_referencia/*
+!clientes/*/productos_referencia/.gitkeep
 clientes/*/marca/*
 !clientes/*/marca/.gitkeep
 # Excepción: el sistema de marca formal SÍ se versiona a propósito — es la fuente

@@ -5,13 +5,25 @@
   generar el video real con Wan 3.0.
 </p>
 
-<form method="post" action="{{ url_for('subir_escena', cliente=cliente) }}" enctype="multipart/form-data" style="margin-bottom:1rem;">
-  <label class="campo-label">Agregar escena de referencia</label>
-  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
-  <button type="submit">Subir escena</button>
-</form>
+<div class="fila-campos-idea">
+  <form method="post" action="{{ url_for('subir_personaje', cliente=cliente) }}" enctype="multipart/form-data">
+    <label class="campo-label">Agregar personaje</label>
+    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+    <button type="submit">Subir</button>
+  </form>
+  <form method="post" action="{{ url_for('subir_producto_referencia', cliente=cliente) }}" enctype="multipart/form-data">
+    <label class="campo-label">Agregar producto</label>
+    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+    <button type="submit">Subir</button>
+  </form>
+  <form method="post" action="{{ url_for('subir_escena', cliente=cliente) }}" enctype="multipart/form-data">
+    <label class="campo-label">Agregar escena</label>
+    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+    <button type="submit">Subir</button>
+  </form>
+</div>
 
-<form method="post" action="{{ url_for('cf_generar_prompt', cliente=cliente) }}" class="form-nueva-idea">
+<form method="post" action="{{ url_for('cf_generar_prompt', cliente=cliente) }}" class="form-nueva-idea" style="margin-top:1rem;">
   <label class="campo-label">Personajes</label>
   {% if personajes %}
   <div class="catalogo-productos">
@@ -24,22 +36,22 @@
     {% endfor %}
   </div>
   {% else %}
-  <p class="vacio">No hay personajes subidos todavía.</p>
+  <p class="vacio">No hay personajes subidos todavía — usa el formulario de arriba.</p>
   {% endif %}
 
   <label class="campo-label" style="margin-top:1rem;display:block;">Productos</label>
-  {% if productos %}
+  {% if productos_referencia %}
   <div class="catalogo-productos">
-    {% for p in productos %}
+    {% for p in productos_referencia %}
     <label class="producto-opcion">
-      <input type="checkbox" name="productos" value="{{ p.id }}">
-      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
+      <input type="checkbox" name="productos" value="{{ p.nombre }}">
+      <img src="{{ p.url }}" alt="{{ p.nombre }}">
       <span>{{ p.nombre }}</span>
     </label>
     {% endfor %}
   </div>
   {% else %}
-  <p class="vacio">No hay productos en el catálogo.</p>
+  <p class="vacio">No hay productos de referencia subidos todavía — usa el formulario de arriba. (Distinto del catálogo de "Cambiar calzado".)</p>
   {% endif %}
 
   <label class="campo-label" style="margin-top:1rem;display:block;">Escenas</label>
