@@ -1328,6 +1328,7 @@ def cf_generar_prompt(cliente):
     accion_central = (request.form.get("accion_central") or "").strip()
     tono = (request.form.get("tono") or "").strip()
     modo = request.form.get("modo", "A")
+    platforms = request.form.getlist("platforms")
     try:
         duracion_objetivo = int(request.form.get("duracion_objetivo", 13))
     except ValueError:
@@ -1374,7 +1375,7 @@ def cf_generar_prompt(cliente):
     cf_id = creative_flow.crear(
         cliente, personajes_sel, productos_sel, escenas_sel,
         accion_central, duracion_objetivo, tono, modo,
-        referencias_urls=referencias_urls,
+        referencias_urls=referencias_urls, platforms=platforms,
     )
 
     if not referencias_urls:
@@ -1478,6 +1479,8 @@ def cf_generar_video(cliente, cf_id):
 
     duracion = entry["duracion_objetivo"]
     prompt_texto = entry["prompt_relleno"]
+    platforms = entry.get("platforms", [])
+    aspect_ratio = _aspect_ratio_para_plataformas(platforms)
     job_id = _job_id_creative_flow(cliente, cf_id)
 
     def trabajo():
@@ -1488,6 +1491,7 @@ def cf_generar_video(cliente, cf_id):
         try:
             video_url_wan = wan3_client.generar_video(
                 prompt_texto, referencias, duration=duracion, resolution="720p",
+                aspect_ratio=aspect_ratio,
             )
             costo = wan3_client.estimate_video(duration=duracion, resolution="720p")
             resp = requests.get(video_url_wan, timeout=180)
@@ -1516,7 +1520,7 @@ def cf_generar_video(cliente, cf_id):
             "image_url": referencias[0],
             "title": cf_id,
             "caption": entry["accion_central"],
-            "platforms": [],
+            "platforms": platforms,
             "video_local": out_path,
             "video_url": video_url,
             "estado": "pendiente",

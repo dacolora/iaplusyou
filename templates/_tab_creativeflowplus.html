@@ -80,6 +80,14 @@
         <label><input type="radio" name="modo" value="B"> Modo B — narrativa lineal</label>
       </div>
     </div>
+    <div>
+      <label class="campo-label">Plataformas</label>
+      <div class="checks-plataformas">
+        {% for pl in ['youtube', 'facebook', 'instagram', 'tiktok'] %}
+        <label><input type="checkbox" name="platforms" value="{{ pl }}"> {{ pl }}</label>
+        {% endfor %}
+      </div>
+    </div>
   </div>
 
   <button type="submit" style="margin-top:1rem;">Generar prompt (gratis)</button>

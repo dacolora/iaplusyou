@@ -26,7 +26,7 @@ def guardar(cliente, data):
 
 
 def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
-          duracion_objetivo, tono, modo, referencias_urls=None):
+          duracion_objetivo, tono, modo, referencias_urls=None, platforms=None):
     if modo not in MODOS_VALIDOS:
         raise ValueError(f"Modo inválido: {modo}. Opciones: {MODOS_VALIDOS}")
     data = cargar(cliente)
@@ -39,6 +39,7 @@ def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
         "duracion_objetivo": duracion_objetivo,
         "tono": tono,
         "modo": modo,
+        "platforms": platforms or [],
         "estado": "prompt_pendiente",
         "prompt_relleno": None,
         # URLs canónicas de referencia (personajes -> productos -> escenas,
