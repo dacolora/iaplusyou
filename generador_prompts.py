@@ -210,3 +210,98 @@ def analizar_marca(image_urls):
         messages=[{"role": "user", "content": content}],
     )
     return "".join(block.text for block in resp.content if block.type == "text").strip()
+
+
+PLANTILLA_MAESTRA_CREATIVE_FLOW = """# Plantilla Maestra — Prompts de video Happy Flops
+
+Esqueleto reutilizable extraído del prompt "bullet-time / slipper de otoño" que dio buenos resultados. La idea no es repetir siempre la misma escena de colisión, sino reutilizar la **lógica que hace que ese prompt funcione**: referencias bloqueadas, props con "dueño" y continuidad física, guion por tiempos, reglas de cámara explícitas y prioridad de identidad. Eso es lo que se traduce en consistencia entre tomas y en que el producto se vea reconocible.
+
+## 🔒 No negociables (aplican a TODO video hecho con esta plantilla)
+
+1. Duración máxima: 12-15 segundos. Nunca generar guiones que excedan ese rango total, aunque el concepto "diera" para más.
+2. El video nunca termina con el logo de la marca en pantalla. El cierre es sobre una acción, un objeto o un gesto — no sobre un lockup de marca. (El nombre de marca puede aparecer *dentro* de la escena, como el caller ID del teléfono en el prompt original, pero no como plano final de cierre tipo anuncio.)
+3. El video nunca termina con transición a negro / fade to black. El corte final es un hard cut sobre la última imagen (objeto en el piso, gesto, expresión), no un fundido.
+
+## Modo A — Bullet-time / colisión + inspección de producto
+
+Un evento físico dispara una suspensión del tiempo, la cámara recorre los objetos congelados en el aire, el tiempo vuelve y todo cae. Ideal para mostrar construcción y materiales del producto en detalle (macro).
+
+Tabla de tiempos (D = duración total):
+| Bloque | % de D | Qué pasa |
+|---|---|---|
+| 1. Reveal de personaje | 0–15% | Plano que presenta al protagonista y el producto puesto, cámara en movimiento continuo |
+| 2. Desarrollo / caminata | 15–30% | Contexto, aparece el detonante potencial (segundo personaje, obstáculo) |
+| 3. Evento detonante | 30–38% | Colisión/tropiezo/acción que libera los objetos |
+| 4. Establecer tableau congelado | 38–45% | Plano medio-amplio del momento congelado completo, antes de acercarse a nada |
+| 5. Inspección del hero object | 45–60% | Cámara se acerca al producto, orbital corto, detalle de materiales — el plano más importante del video |
+| 6. Inspección secundaria (opcional) | 60–75% | Otro prop relevante a la historia, si aporta |
+| 7. Reconstrucción del tableau | 75–85% | Vuelve el plano completo, todo sigue en su lugar |
+| 8. El tiempo regresa / payoff físico | 85–100% | Gravedad resume, los objetos caen a posiciones distintas, hard cut sobre la imagen final — nunca logo, nunca fundido |
+
+## Modo B — Narrativa lineal (gancho → desarrollo → resolución)
+
+Sin freeze-time. Estructura tipo mini-historia: gancho (gira la atención en los primeros 2s) → desarrollo/conflicto breve → resolución con el producto puesto/a la vista.
+
+Tabla de tiempos (D = duración total):
+| Bloque | % de D | Qué pasa |
+|---|---|---|
+| 1. Gancho | 0–15% | Texto/situación que capta atención en los primeros segundos |
+| 2. Desarrollo / mini-conflicto | 15–65% | Se plantea la situación, la comedia o ternura se desarrolla |
+| 3. Resolución con producto | 65–90% | El producto puesto resuelve o acompaña la escena, momento cálido |
+| 4. Cierre | 90–100% | Última imagen — gesto, sonrisa, objeto — hard cut, nunca logo ni fundido |
+
+## Estructura del prompt final que debes producir (11 secciones, en este orden)
+
+1. REFERENCE MAP — un bloque `@[Imagen N] = REFERENCIA...` por CADA imagen de referencia recibida (personajes primero, luego productos, luego escenas, numeradas en ese orden). Personajes: identidad exacta, preservar el mismo personaje todo el video, no copiar su fondo original. Productos (hero object): forma, proporciones, materiales, colores, debe permanecer reconocible en cada plano. Escenas: solo lenguaje visual/atmósfera/luz, NO reproducir su composición exacta ni encuadre original, crear un espacio cinematográfico nuevo inspirado en ella.
+2. MASTER VISUAL CONCEPT — duración exacta (12-15s), formato, estilo (fotorrealista o animación 3D), concepto central en 1-2 frases, y si es Modo A la descripción de la física del bullet-time.
+3. EXACT OBJECT COUNT — cuenta exacta de cada personaje/prop, ningún duplicado.
+4. PERSISTENT PROP RULES — un bloque por cada objeto que la cámara vaya a inspeccionar de cerca (el producto siempre): bloquear su apariencia física durante toda la secuencia, el mismo objeto visto desde distintas distancias de cámara.
+5. OWNERSHIP LOCK — qué mano/pie sostiene qué objeto antes del evento central, cómo se libera, qué queda vacío después, nada lo reemplaza.
+6. GUION POR TIEMPOS — la tabla del modo elegido (arriba), rellena con la descripción visual concreta de cada bloque, tiempos exactos en segundos, y diálogo/texto en pantalla si aplica. La suma debe ser exactamente la duración objetivo. El último bloque NUNCA es logo ni fundido.
+7. CAMERA RULES — si Modo A: los objetos permanecen fijos, la cámara se mueve, ruta de cámara tableau->dolly->hold->orbital->regreso. Si Modo B: movimiento continuo motivado por la historia, evitar cortes duros salvo el final.
+8. PHYSICAL CAUSALITY RULE — todo cambio visible requiere causa física explícita, los objetos se agrandan en cuadro porque la cámara se acerca, nunca porque el objeto crece.
+9. IDENTITY PRIORITY — lista priorizada: identidad facial estable, ojos correctos, cabello estable, proporciones estables, vestuario estable, geometría exacta del hero object, continuidad de manos/pies/objetos, trayectorias creíbles.
+10. ESTILO FOTOGRÁFICO/VISUAL — fotorrealista tipo campaña premium (ARRI Alexa 35, profundidad de campo realista, grano 35mm) o animación 3D estilizada tipo Pixar (subsurface-scattering, iluminación de estudio) — elige el que mejor calce el tono pedido.
+11. REGLAS DE CIERRE (copiar tal cual, sin editar) — "El video NO termina con el logo ni el lockup de marca en pantalla. El video NO termina con una transición a negro ni fundido de ningún tipo. El cierre es un HARD CUT sobre la última imagen de la acción/objeto/gesto descrita en el último bloque del guion. El nombre de marca puede aparecer integrado dentro de la escena en cualquier punto del video EXCEPTO como plano de cierre tipo anuncio. Duración total del video: no exceder la duración objetivo."
+
+Responde ÚNICAMENTE con las 11 secciones completas, en español, en ese orden, cada una con su título en mayúsculas. No agregues explicaciones antes ni después, no agregues markdown de bloques de código."""
+
+
+def generar_prompt_creative_flow(personajes, productos, escenas, accion_central,
+                                  duracion_objetivo, tono, modo, guia_estilo=None):
+    """personajes/productos/escenas: listas de dicts con al menos {'nombre', 'url'}
+    (mismo shape que devuelve _listar_assets en dashboard.py / catalogo_productos.listar).
+    modo: 'A' (bullet-time) o 'B' (narrativa lineal). Devuelve el prompt final
+    completo (las 11 secciones), listo para editar y aprobar."""
+    client = anthropic.Anthropic(api_key=_api_key())
+
+    referencias_texto = []
+    for i, p in enumerate(personajes, start=1):
+        referencias_texto.append(f"@Imagen {len(referencias_texto) + 1} = persona{i}, personaje protagonista.")
+    for i, p in enumerate(productos, start=1):
+        referencias_texto.append(f"@Imagen {len(referencias_texto) + 1} = objeto{i}, hero object (producto).")
+    for i, e in enumerate(escenas, start=1):
+        referencias_texto.append(f"@Imagen {len(referencias_texto) + 1} = escena{i}, referencia de ambiente.")
+
+    mensaje = (
+        f"Variables para este video:\n"
+        f"- Personajes/productos/escenas disponibles, en orden:\n" + "\n".join(referencias_texto) +
+        f"\n- Acción central / detonante: {accion_central}\n"
+        f"- Duración objetivo: {duracion_objetivo}s\n"
+        f"- Tono: {tono}\n"
+        f"- Modo: {'A (bullet-time)' if modo == 'A' else 'B (narrativa lineal)'}\n"
+    )
+    if guia_estilo and guia_estilo.strip():
+        mensaje += f"\nGuía de estilo de la marca (respétala en el prompt):\n{guia_estilo.strip()}\n"
+
+    resp = client.messages.create(
+        model=MODEL,
+        # 3000 truncaba de forma reproducible (stop_reason=max_tokens) porque MODEL
+        # (claude-sonnet-5) razona con "thinking" adaptativo por defecto, que consume
+        # del mismo presupuesto de output_tokens antes del texto visible. 8000 deja
+        # margen sobre los ~3800 output_tokens observados en pruebas reales.
+        max_tokens=8000,
+        system=PLANTILLA_MAESTRA_CREATIVE_FLOW,
+        messages=[{"role": "user", "content": mensaje}],
+    )
+    return "".join(block.text for block in resp.content if block.type == "text").strip()
