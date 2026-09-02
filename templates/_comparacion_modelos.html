@@ -11,6 +11,15 @@
     </p>
 
     <h3>Modelos de imagen (foto)</h3>
+    <p class="vacio" style="padding-top:0;">
+      <strong>Límite real confirmado (2 sep 2026, foto real de 3 personas — una
+      descalza, dos con calzado puesto):</strong> ninguno de los 3 modelos de
+      foto disponibles hoy cambia de forma confiable el calzado de TODAS las
+      personas de una foto en una sola pasada — el prompt ya se corrigió para
+      pedirlo explícitamente (antes decía "la persona" en singular, ahora pide
+      contar personas y editar a todas), pero el límite real es del modelo, no
+      del wording. Detalle por modelo abajo.
+    </p>
     <div style="overflow-x:auto;">
     <table>
       <thead>
@@ -21,19 +30,19 @@
           <td>Nano Banana <span class="comparacion-nota">(Gemini 2.5 Flash Image)</span></td>
           <td>$0.039 / imagen</td>
           <td>Sí</td>
-          <td><span class="tag-estado tag-en-uso">En uso — recomendado</span></td>
+          <td><span class="tag-estado tag-en-uso">En uso — recomendado</span> — con 3 personas en cuadro (2 con calzado puesto), edita bien a la más prominente pero deja a la segunda con su calzado original, incluso pidiéndole explícitamente contar y editar a todas. El mejor de los 3 disponibles hoy, no perfecto</td>
         </tr>
         <tr>
           <td>Nano Banana <span class="comparacion-nota">(vía fal.ai)</span></td>
           <td>$0.039 / imagen</td>
           <td>Sí</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span></td>
+          <td><span class="tag-estado tag-en-uso">En uso</span> — con la misma foto de 3 personas, resultado peor que la versión directa: le puso calzado a la persona que iba DESCALZA y dejó a las dos con calzado puesto sin cambiar. No usar como alternativa cuando falle la versión directa</td>
         </tr>
         <tr>
           <td>Qwen Image Edit Plus</td>
           <td>$0.03 / imagen</td>
           <td>Sí</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span></td>
+          <td><span class="tag-estado tag-en-uso">En uso</span> — con la misma foto de 3 personas, no cambió el calzado de nadie</td>
         </tr>
         <tr>
           <td>Flux Kontext Pro</td>
@@ -83,28 +92,88 @@
           <td><span class="tag-estado tag-en-uso">En uso</span> — editor real: preserva movimiento y escena, el más barato de los que sí editan de verdad</td>
         </tr>
         <tr>
+          <td>Seedance 2.5 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>$0.11–$1.10 / seg según resolución (480p a 4k)</td>
+          <td>Sí — hasta 4 imágenes de referencia</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span> — el más caro y de mejor calidad de los que editan de verdad, hasta 4k</td>
+        </tr>
+        <tr>
+          <td>Kling Omni O3 Pro Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>$0.168 / seg</td>
+          <td>Sí — hasta 4 imágenes de referencia</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span> — versión más nueva que Kling O1, mismo precio por segundo</td>
+        </tr>
+        <tr>
+          <td>Luma Ray 3.2 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>desde $0.144 / seg (540p/5s)</td>
+          <td>Sí — 1 imagen (start_image)</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span> — sucesor de Luma Ray3 Modify, más barato por segundo</td>
+        </tr>
+        <tr>
           <td>Gemini Omni Flash Edit</td>
           <td>No publicado</td>
           <td>No — solo texto</td>
           <td><span class="tag-estado tag-descartado">Descartado</span> — mismo problema que Flux Kontext</td>
         </tr>
         <tr>
+          <td>Google Gemini Omni 1.1 Flash Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>No verificado</td>
+          <td>No — solo texto (misma familia que Gemini Omni Flash Edit)</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — mismo problema: sin soporte de imagen de referencia del producto</td>
+        </tr>
+        <tr>
           <td>Seedance <span class="comparacion-nota">(reference-to-video, vía fal.ai)</span></td>
           <td>No publicado</td>
           <td>Sí — hasta 9 imágenes y 3 videos de referencia</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — su esquema no tiene un campo "video a editar": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base. (Higgsfield sí ofrece un modo "video_edit" con edición por región para Seedance 2.5 que evitaría este problema — pendiente de acceso a esa cuenta)</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — su esquema no tiene un campo "video a editar": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base. WaveSpeed sí resolvió esto con un endpoint <code>video-edit</code> real, que es el que usamos arriba en vez de este</td>
         </tr>
         <tr>
-          <td>Wan 3.0 <span class="comparacion-nota">(generación base: texto/imagen/referencia a video, vía WaveSpeed y fal.ai)</span></td>
+          <td>Seedance 2.0 / 2.0 Fast / 2.0 Mini Video Edit <span class="comparacion-nota">(y sus variantes Turbo, vía WaveSpeed AI)</span></td>
+          <td>Más barato que 2.5</td>
+          <td>Sí — editores reales, misma familia</td>
+          <td><span class="tag-estado tag-descartado">Redundante</span> — versiones anteriores/más baratas de Seedance 2.5 Video Edit, que ya usamos (mejor calidad, mismo enfoque)</td>
+        </tr>
+        <tr>
+          <td>Kling Omni O1 / O1 Std Video Edit (Fast) <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>Variable</td>
+          <td>Sí — editores reales, misma familia</td>
+          <td><span class="tag-estado tag-descartado">Redundante</span> — ya usamos Kling O1 (vía fal.ai) y Kling O3 Pro (más nuevo, vía WaveSpeed); no suma nada nuevo probar las versiones intermedias</td>
+        </tr>
+        <tr>
+          <td>Wan 2.2 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>$0.04–$0.08 / seg</td>
+          <td>Solo texto, sin imagen de referencia</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — versión anterior a Wan 2.7 Video Edit (que sí usamos) y sin soporte de imagen de referencia del producto</td>
+        </tr>
+        <tr>
+          <td>Alibaba Happy Horse 1.0 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>No verificado</td>
+          <td>No verificado</td>
+          <td><span class="tag-estado tag-descartado">No evaluado a fondo</span> — modelo de nicho, sin evidencia de que su calidad supere a los editores ya en uso</td>
+        </tr>
+        <tr>
+          <td>Grok Imagine Video Edit <span class="comparacion-nota">(xAI, vía WaveSpeed AI)</span></td>
+          <td>No verificado</td>
+          <td>No verificado</td>
+          <td><span class="tag-estado tag-descartado">No evaluado a fondo</span> — muy nuevo en el catálogo, sin datos de calidad/fidelidad todavía</td>
+        </tr>
+        <tr>
+          <td>LTX-2 Retake, InfiniteTalk (Fast), Video Outpainter <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
           <td>—</td>
           <td>—</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — verificado en WaveSpeed (1 sep 2026): solo tiene image-to-video, text-to-video y reference-to-video, ningún modo de edición que preserve el video original (distinto de Wan-2.2 Animate Replace y Wan 2.7 Video Edit, que sí editan)</td>
+          <td><span class="tag-estado tag-descartado">No aplica</span> — herramientas para otra cosa (retakes de un plano, lip-sync/diálogo, extender el encuadre), no para reemplazar un objeto en el video</td>
+        </tr>
+        <tr>
+          <td>Wan 3.0 <span class="comparacion-nota">(reference-to-video: genera desde cero, no edita)</span></td>
+          <td>$0.05–$0.20 / seg según resolución</td>
+          <td>Sí — hasta 10 imágenes de referencia</td>
+          <td><span class="tag-estado tag-advertencia">Usado en otra parte</span> — no tiene modo de edición (verificado en WaveSpeed, 1 sep 2026), así que no entra a "cambiar calzado"; se usa en la pestaña CreativeFlowPlus para generación nueva, donde eso sí es lo que se busca</td>
         </tr>
         <tr>
           <td>Runway Aleph 2.0</td>
           <td>—</td>
           <td>—</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — no está disponible en fal.ai (confirmado con llamadas reales, 404); su propia API pasó a ser solo Enterprise</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — no está disponible en fal.ai (confirmado con llamadas reales, 404); tampoco encontrado en WaveSpeed. Su propia API pasó a ser solo Enterprise</td>
         </tr>
       </tbody>
     </table>

@@ -36,14 +36,15 @@
     <div>
       <label class="campo-label">Modelo para VIDEO</label>
       <div class="checks-plataformas" id="modelos-video">
-        <label data-min-ancho="720" data-max-seg="10"><input type="radio" name="proveedor_video" value="kling_o1" checked> Kling O1 — recomendado, edita el video real (~$0.168/seg)</label>
-        <label><input type="radio" name="proveedor_video" value="luma_modify"> Luma Ray3 Modify (~$0.35/seg)</label>
-        <label><input type="radio" name="proveedor_video" value="wan_animate_replace"> Wan-2.2 Animate Replace (~$0.04/seg)</label>
-        <label><input type="radio" name="proveedor_video" value="wan27_edit"> Wan 2.7 Video Edit (~$0.10/seg, hasta 3 referencias)</label>
-        <label><input type="radio" name="proveedor_video" value="seedance25_edit"> Seedance 2.5 Video Edit — el más caro/potente (~$0.22/seg, 4k)</label>
-        <label><input type="radio" name="proveedor_video" value="kling_o3_pro_edit"> Kling Omni O3 Pro Video Edit (~$0.168/seg)</label>
-        <label><input type="radio" name="proveedor_video" value="luma_ray32_edit"> Luma Ray 3.2 Video Edit (~$0.144/seg)</label>
+        <label data-min-ancho="720" data-max-seg="10" data-usd-seg="0.168"><input type="radio" name="proveedor_video" value="kling_o1" checked> Kling O1 — recomendado, edita el video real (~$0.168/seg)</label>
+        <label data-usd-seg="0.35"><input type="radio" name="proveedor_video" value="luma_modify"> Luma Ray3 Modify (~$0.35/seg)</label>
+        <label data-usd-seg="0.04"><input type="radio" name="proveedor_video" value="wan_animate_replace"> Wan-2.2 Animate Replace (~$0.04/seg)</label>
+        <label data-usd-seg="0.10"><input type="radio" name="proveedor_video" value="wan27_edit"> Wan 2.7 Video Edit (~$0.10/seg, hasta 3 referencias)</label>
+        <label data-usd-seg="0.22"><input type="radio" name="proveedor_video" value="seedance25_edit"> Seedance 2.5 Video Edit — el más caro/potente (~$0.22/seg, 4k)</label>
+        <label data-usd-seg="0.168"><input type="radio" name="proveedor_video" value="kling_o3_pro_edit"> Kling Omni O3 Pro Video Edit (~$0.168/seg)</label>
+        <label data-usd-seg="0.144"><input type="radio" name="proveedor_video" value="luma_ray32_edit"> Luma Ray 3.2 Video Edit (~$0.144/seg)</label>
       </div>
+      <p class="vacio" id="costo-estimado-video" style="padding-top:.4rem;font-size:.8rem;display:none;font-weight:600;"></p>
     </div>
   </div>
   <p class="vacio" id="nota-restriccion" style="padding-top:.4rem;font-size:.76rem;display:none;"></p>
@@ -61,6 +62,24 @@
       var gruposFoto = Array.prototype.slice.call(document.querySelectorAll('#modelos-foto label'));
       var gruposVideo = Array.prototype.slice.call(document.querySelectorAll('#modelos-video label'));
       var nota = document.getElementById('nota-restriccion');
+      var costoEstimado = document.getElementById('costo-estimado-video');
+      var duracionActual = null;
+
+      // Costo total estimado = tarifa por segundo del modelo elegido × duración
+      // real del video subido — antes de esto solo se veía el precio "por
+      // segundo" en la etiqueta, sin saber cuánto iba a salir el video completo.
+      function mostrarCosto() {
+        if (duracionActual == null) { costoEstimado.style.display = 'none'; return; }
+        var elegido = gruposVideo.find(function (l) { return l.querySelector('input').checked; });
+        if (!elegido || !elegido.dataset.usdSeg) { costoEstimado.style.display = 'none'; return; }
+        var total = parseFloat(elegido.dataset.usdSeg) * duracionActual;
+        costoEstimado.textContent = 'Costo total estimado: ~$' + total.toFixed(2) +
+          ' (' + duracionActual.toFixed(1) + 's × $' + elegido.dataset.usdSeg + '/seg)';
+        costoEstimado.style.display = 'block';
+      }
+      gruposVideo.forEach(function (label) {
+        label.querySelector('input').addEventListener('change', mostrarCosto);
+      });
 
       function nombreModelo(label) {
         return label.textContent.trim().split(' — ')[0].split(' (')[0];
@@ -103,6 +122,8 @@
         resetear(gruposFoto);
         resetear(gruposVideo);
         nota.style.display = 'none';
+        duracionActual = null;
+        costoEstimado.style.display = 'none';
 
         var archivo = inputArchivo.files[0];
         if (!archivo) return;
@@ -120,6 +141,8 @@
                 's — ' + descartados.join(', ') + ' no lo acepta(n) para estas dimensiones/duración, así que quedó(aron) deshabilitado(s).';
               nota.style.display = 'block';
             }
+            duracionActual = duracion;
+            mostrarCosto();
           };
           video.src = URL.createObjectURL(archivo);
         }
