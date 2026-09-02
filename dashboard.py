@@ -1456,6 +1456,15 @@ def cf_generar_video(cliente, cf_id):
         flash("No encontré un prompt listo para esa sesión.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
+    # Guardia anti-reenvío: sin esto, un segundo POST (back del navegador +
+    # reenviar, una pestaña vieja) después de que el video ya se generó
+    # dispara una SEGUNDA generación paga, sobreescribe el .mp4 y resetea la
+    # entrada en estado_videos.json aunque ya esté aprobada/publicada.
+    # Permite reintentar tras un error, pero no tras video_generando/listo.
+    if entry.get("estado") not in ("prompt_listo", "error"):
+        flash("Este video ya se generó o se está generando — no se puede volver a disparar.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
     # Reusa TAL CUAL la lista canónica que ya se resolvió y filtró en
     # cf_generar_prompt (guardada como entry["referencias_urls"]) — nunca la
     # vuelve a resolver acá, porque un segundo cómputo podría dar un
@@ -1517,10 +1526,17 @@ def cf_generar_video(cliente, cf_id):
         estado_mod.guardar(cliente, estado)
         return "Video de CreativeFlowPlus listo, pendiente de revisión."
 
+    # Escribe estado="video_generando" ANTES de lanzar el job (no después):
+    # si trabajo() falla instantáneo (ej. falta WAVESPEED_API_KEY), el hilo
+    # puede escribir estado="error" antes de que el hilo principal alcance a
+    # escribir "video_generando", pisando el error y dejando la sesión
+    # atascada en "generando" para siempre. Mismo patrón que swaps.crear().
+    creative_flow.actualizar(cliente, cf_id, estado="video_generando")
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=180):
-        creative_flow.actualizar(cliente, cf_id, estado="video_generando")
         flash("Generando el video con Wan 3.0…", "ok")
     else:
+        # Ya había un job corriendo — no hace falta revertir el estado, ya
+        # estaba en "video_generando" legítimamente.
         flash("Ya se está generando ese video — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
