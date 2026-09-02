@@ -35,6 +35,7 @@ def listar(cliente):
     if not os.path.isdir(carpeta):
         return []
     productos = []
+    public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
     for nombre_carpeta in sorted(os.listdir(carpeta)):
         subcarpeta = os.path.join(carpeta, nombre_carpeta)
         if not os.path.isdir(subcarpeta):
@@ -42,7 +43,6 @@ def listar(cliente):
         archivos = sorted(f for f in os.listdir(subcarpeta) if f.lower().endswith(IMAGE_EXTS))
         if not archivos:
             continue
-        public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
         productos.append({
             "id": nombre_carpeta,
             "nombre": NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),

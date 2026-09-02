@@ -25,12 +25,6 @@ $0.10/seg (720p), $0.20/seg (1080p). Factura solo la salida (a diferencia de
 wan-2.7/video-edit, que factura entrada+salida — esto es generación nueva, no
 hay "entrada" que facturar).
 
-OJO: el nombre de campo exacto (`reference_images`) y la forma del payload
-vienen de una lectura de la página de documentación, no de una llamada real
-todavía — si la primera llamada real falla con un 400 de validación, revisar
-el mensaje de error (WaveSpeed normalmente indica el campo exacto que
-rechazó) y corregir aquí antes de asumir que el resto del cliente está mal.
-
 NOTA (2 sep 2026): esquema confirmado con una llamada real contra la API en
 vivo (2s, 480p, una imagen de referencia real de `happyflops`) — devolvió un
 video generado exitosamente (`.../predictions/09053c080b1844b9b7b3d095cf4e41af/1.mp4`).
