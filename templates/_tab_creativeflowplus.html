@@ -112,7 +112,7 @@
       <button type="submit">Regenerar (gratis)</button>
     </form>
     <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-      <button type="submit">Generar video con Wan 3.0 (~${{ (item.duracion_objetivo * 0.10) | round(2) }} a 720p)</button>
+      <button type="submit">Generar video con Wan 3.0{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }} a 720p){% endif %}</button>
     </form>
     {% elif item.estado == "video_generando" %}
     <p>Generando video…</p>

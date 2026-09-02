@@ -817,11 +817,20 @@ def _creative_flow_items(cliente):
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
     ):
         job_id = _job_id_creative_flow(cliente, cf_id)
-        items.append({
+        item = {
             "id": cf_id,
             **entry,
             "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
-        })
+        }
+        # Estimado real vía wan3_client.estimate_video() en vez de un número
+        # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
+        # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
+        # así el botón nunca muestra un costo distinto al que se cobra.
+        if entry.get("estado") == "prompt_listo":
+            item["costo_estimado"] = wan3_client.estimate_video(
+                duration=entry["duracion_objetivo"], resolution="720p",
+            )
+        items.append(item)
     return items
 
 
