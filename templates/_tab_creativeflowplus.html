@@ -29,7 +29,7 @@
   <div class="catalogo-productos">
     {% for p in personajes %}
     <label class="producto-opcion">
-      <input type="checkbox" name="personajes" value="{{ p.nombre }}">
+      <input type="checkbox" name="personajes" value="{{ p.nombre }}" checked>
       <img src="{{ p.url }}" alt="{{ p.nombre }}">
       <span>{{ p.nombre }}</span>
     </label>
@@ -44,7 +44,7 @@
   <div class="catalogo-productos">
     {% for p in productos_referencia %}
     <label class="producto-opcion">
-      <input type="checkbox" name="productos" value="{{ p.nombre }}">
+      <input type="checkbox" name="productos" value="{{ p.nombre }}" checked>
       <img src="{{ p.url }}" alt="{{ p.nombre }}">
       <span>{{ p.nombre }}</span>
     </label>
@@ -59,7 +59,7 @@
   <div class="catalogo-productos">
     {% for e in escenas %}
     <label class="producto-opcion">
-      <input type="checkbox" name="escenas" value="{{ e.nombre }}">
+      <input type="checkbox" name="escenas" value="{{ e.nombre }}" checked>
       <img src="{{ e.url }}" alt="{{ e.nombre }}">
       <span>{{ e.nombre }}</span>
     </label>
