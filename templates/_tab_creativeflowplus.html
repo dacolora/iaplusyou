@@ -8,18 +8,18 @@
 <div class="fila-campos-idea">
   <form method="post" action="{{ url_for('subir_personaje', cliente=cliente) }}" enctype="multipart/form-data">
     <label class="campo-label">Agregar personaje</label>
-    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
-    <button type="submit">Subir</button>
+    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required onchange="this.form.submit()">
+    <noscript><button type="submit">Subir</button></noscript>
   </form>
   <form method="post" action="{{ url_for('subir_producto_referencia', cliente=cliente) }}" enctype="multipart/form-data">
     <label class="campo-label">Agregar producto</label>
-    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
-    <button type="submit">Subir</button>
+    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required onchange="this.form.submit()">
+    <noscript><button type="submit">Subir</button></noscript>
   </form>
   <form method="post" action="{{ url_for('subir_escena', cliente=cliente) }}" enctype="multipart/form-data">
     <label class="campo-label">Agregar escena</label>
-    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
-    <button type="submit">Subir</button>
+    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required onchange="this.form.submit()">
+    <noscript><button type="submit">Subir</button></noscript>
   </form>
 </div>
 
@@ -28,11 +28,16 @@
   {% if personajes %}
   <div class="catalogo-productos">
     {% for p in personajes %}
-    <label class="producto-opcion">
-      <input type="checkbox" name="personajes" value="{{ p.nombre }}" checked>
-      <img src="{{ p.url }}" alt="{{ p.nombre }}">
-      <span>{{ p.nombre }}</span>
-    </label>
+    <div style="position:relative;">
+      <label class="producto-opcion">
+        <input type="checkbox" name="personajes" value="{{ p.nombre }}" checked>
+        <img src="{{ p.url }}" alt="{{ p.nombre }}">
+        <span>{{ p.nombre }}</span>
+      </label>
+      <div class="personaje-eliminar">
+        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_personaje', cliente=cliente, nombre=p.nombre) }}" formmethod="post" onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
+      </div>
+    </div>
     {% endfor %}
   </div>
   {% else %}
@@ -43,11 +48,16 @@
   {% if productos_referencia %}
   <div class="catalogo-productos">
     {% for p in productos_referencia %}
-    <label class="producto-opcion">
-      <input type="checkbox" name="productos" value="{{ p.nombre }}" checked>
-      <img src="{{ p.url }}" alt="{{ p.nombre }}">
-      <span>{{ p.nombre }}</span>
-    </label>
+    <div style="position:relative;">
+      <label class="producto-opcion">
+        <input type="checkbox" name="productos" value="{{ p.nombre }}" checked>
+        <img src="{{ p.url }}" alt="{{ p.nombre }}">
+        <span>{{ p.nombre }}</span>
+      </label>
+      <div class="personaje-eliminar">
+        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_producto_referencia', cliente=cliente, nombre=p.nombre) }}" formmethod="post" onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
+      </div>
+    </div>
     {% endfor %}
   </div>
   {% else %}
@@ -58,11 +68,16 @@
   {% if escenas %}
   <div class="catalogo-productos">
     {% for e in escenas %}
-    <label class="producto-opcion">
-      <input type="checkbox" name="escenas" value="{{ e.nombre }}" checked>
-      <img src="{{ e.url }}" alt="{{ e.nombre }}">
-      <span>{{ e.nombre }}</span>
-    </label>
+    <div style="position:relative;">
+      <label class="producto-opcion">
+        <input type="checkbox" name="escenas" value="{{ e.nombre }}" checked>
+        <img src="{{ e.url }}" alt="{{ e.nombre }}">
+        <span>{{ e.nombre }}</span>
+      </label>
+      <div class="personaje-eliminar">
+        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_escena', cliente=cliente, nombre=e.nombre) }}" formmethod="post" onclick="return confirm('¿Eliminar {{ e.nombre }}?');">✕</button>
+      </div>
+    </div>
     {% endfor %}
   </div>
   {% else %}
