@@ -15,12 +15,16 @@ clientes/*/token_youtube.json
 clientes/*/token_tiktok.json
 clientes/*/estado_videos.json
 clientes/*/prompts_pendientes.json
+clientes/*/conceptos_pendientes.json
+clientes/*/swaps.json
 clientes/*/marca.json
 
 # Las imágenes/videos de cada cliente ya quedan respaldadas en R2;
 # no hace falta duplicarlas (ni son código) en el repo.
 clientes/*/personajes/*
 !clientes/*/personajes/.gitkeep
+clientes/*/escenas/*
+!clientes/*/escenas/.gitkeep
 clientes/*/marca/*
 !clientes/*/marca/.gitkeep
 # Excepción: el sistema de marca formal SÍ se versiona a propósito — es la fuente

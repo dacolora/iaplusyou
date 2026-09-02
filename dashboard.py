@@ -29,7 +29,7 @@ import bitacora
 import trabajos
 import generador_prompts
 from providers import image_provider
-from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos
+from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
 from providers import aspect_ratio as aspect_ratio_mod
 from publicador import publicar_brief
 from higgsfield_client import (
@@ -131,6 +131,10 @@ def _personajes(cliente):
     return _listar_assets(cliente, "personajes")
 
 
+def _escenas(cliente):
+    return _listar_assets(cliente, "escenas")
+
+
 def _marca_referencias(cliente):
     return _listar_assets(cliente, "marca")
 
@@ -210,6 +214,20 @@ def subir_personaje(cliente):
 @app.route("/cliente/<cliente>/personaje/<nombre>/eliminar", methods=["POST"])
 def eliminar_personaje(cliente, nombre):
     _eliminar_asset(cliente, "personajes", secure_filename(nombre))
+    flash(f"Eliminado: {nombre}", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/escena/subir", methods=["POST"])
+def subir_escena(cliente):
+    ok, mensaje = _subir_asset(cliente, "escenas", request.files.get("imagen"))
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/escena/<nombre>/eliminar", methods=["POST"])
+def eliminar_escena(cliente, nombre):
+    _eliminar_asset(cliente, "escenas", secure_filename(nombre))
     flash(f"Eliminado: {nombre}", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
@@ -459,6 +477,7 @@ def ver_cliente(cliente):
         "cliente.html",
         cliente=cliente,
         personajes=_personajes(cliente),
+        escenas=_escenas(cliente),
         marca=_marca_contexto(cliente),
         ideas=_ideas_pendientes(cliente),
         ideas_visuales=_conceptos_pendientes(cliente),
@@ -796,7 +815,7 @@ def ver_swap(cliente):
 # original — nada que solo reciba una descripción en texto del calzado (eso
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit")
-PROVEEDORES_SWAP_VIDEO = ("kling_o1", "luma_modify", "wan_animate_replace")
+PROVEEDORES_SWAP_VIDEO = ("kling_o1", "luma_modify", "wan_animate_replace", "wan27_edit")
 
 NOMBRES_PROVEEDOR_SWAP = {
     "nano_banana": "Nano Banana",
@@ -805,6 +824,7 @@ NOMBRES_PROVEEDOR_SWAP = {
     "kling_o1": "Kling O1",
     "luma_modify": "Luma Ray3 Modify",
     "wan_animate_replace": "Wan-2.2 Animate Replace",
+    "wan27_edit": "Wan 2.7 Video Edit",
     # ya no seleccionables, pero se mantienen para mostrar el nombre en swaps viejos:
     "flux_kontext": "Flux Kontext Pro",
     "higgsfield": "Higgsfield",
@@ -878,8 +898,10 @@ def generar_swap(cliente):
             if tipo == "video":
                 local_path = os.path.join(resultados_dir, f"{swap_id}.mp4")
                 video_url = r2_uploader.upload_video(foto_local, f"clientes/{cliente}/swaps_subidas/{ts}_{nombre}")
+                # Se suben hasta 9 (el máximo que acepta Wan 2.7 Video Edit) — cada
+                # cliente recorta a su propio límite (Kling O1 usa las primeras 4).
                 referencias_urls = []
-                for i, ref_local in enumerate(producto["referencias"][:4]):
+                for i, ref_local in enumerate(producto["referencias"][:9]):
                     key = f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref_local)}"
                     referencias_urls.append(r2_uploader.upload_image(ref_local, key))
 
@@ -893,6 +915,15 @@ def generar_swap(cliente):
                     )
                     resultado_url = kling_o1_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
                     costo = kling_o1_client.estimate_video()
+                elif proveedor == "wan27_edit":
+                    prompt = (
+                        f"Reemplaza el calzado que lleva puesta la persona por el que se "
+                        f"muestra en las imágenes de referencia — mismo color, diseño y "
+                        f"textura exactos. No cambies nada más del video: mismo movimiento, "
+                        f"misma persona, mismo fondo, misma iluminación."
+                    )
+                    resultado_url = wavespeed_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
+                    costo = wavespeed_client.estimate_video()
                 else:
                     referencia = referencias_urls[0] if referencias_urls else None
                     resultado_url = comparador_modelos.editar_video(
@@ -962,7 +993,12 @@ def generar_swap(cliente):
             bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
             raise
 
-    duracion_estimada = 20 if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit") else 90
+    if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit"):
+        duracion_estimada = 20
+    elif proveedor == "wan27_edit":
+        duracion_estimada = 380  # media reportada por WaveSpeed para Wan 2.7 Video Edit
+    else:
+        duracion_estimada = 90
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada):
         flash("Generando el swap…", "ok")
     else:
