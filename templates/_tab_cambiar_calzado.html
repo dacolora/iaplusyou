@@ -43,7 +43,6 @@
         <label><input type="radio" name="proveedor_video" value="seedance25_edit"> Seedance 2.5 Video Edit — el más caro/potente (~$0.22/seg, 4k)</label>
         <label><input type="radio" name="proveedor_video" value="kling_o3_pro_edit"> Kling Omni O3 Pro Video Edit (~$0.168/seg)</label>
         <label><input type="radio" name="proveedor_video" value="luma_ray32_edit"> Luma Ray 3.2 Video Edit (~$0.144/seg)</label>
-        <label><input type="radio" name="proveedor_video" value="wan3_reference"> Wan 3.0 (referencia, NO edición — puede cambiar todo lo demás)</label>
       </div>
     </div>
   </div>
@@ -143,17 +142,17 @@
       <span class="idea-chevron">▸</span>
       <span class="swap-thumb">
         {% if s.tipo == "video" %}
-        <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" muted></video>
+        <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" muted preload="none"></video>
         {% else %}
-        <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original">
+        <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original" loading="lazy">
         {% endif %}
       </span>
       <span class="swap-thumb">
         {% if s.resultado_url %}
           {% if s.tipo == "video" %}
-          <video src="{{ s.resultado_url }}" muted></video>
+          <video src="{{ s.resultado_url }}" muted preload="none"></video>
           {% else %}
-          <img src="{{ s.resultado_url }}" alt="resultado">
+          <img src="{{ s.resultado_url }}" alt="resultado" loading="lazy">
           {% endif %}
         {% else %}
         <span class="swap-thumb-vacio">{% if s.trabajo %}…{% elif s.estado == "error" %}✕{% endif %}</span>
@@ -179,9 +178,9 @@
       <div class="swap-lado">
         <div class="proveedor-label">Original</div>
         {% if s.tipo == "video" %}
-        <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" controls muted></video>
+        <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" controls muted preload="none"></video>
         {% else %}
-        <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original">
+        <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original" loading="lazy">
         {% endif %}
       </div>
       <div class="swap-lado">
@@ -197,9 +196,9 @@
         <p class="vacio" style="color:var(--error);">{{ s.error }}</p>
         {% elif s.resultado_url %}
           {% if s.tipo == "video" %}
-          <video src="{{ s.resultado_url }}" controls muted></video>
+          <video src="{{ s.resultado_url }}" controls muted preload="none"></video>
           {% else %}
-          <a href="{{ s.resultado_url }}" target="_blank"><img src="{{ s.resultado_url }}" alt="resultado"></a>
+          <a href="{{ s.resultado_url }}" target="_blank"><img src="{{ s.resultado_url }}" alt="resultado" loading="lazy"></a>
           {% endif %}
         <div class="costo-mini">
           {% if s.credits %}~{{ "%.2f"|format(s.credits) }} cr (${{ "%.2f"|format(s.usd or 0) }}){% elif s.usd %}${{ "%.3f"|format(s.usd) }}{% endif %}
