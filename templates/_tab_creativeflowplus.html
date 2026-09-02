@@ -1,0 +1,123 @@
+<p class="vacio" style="padding-top:0;">
+  Elige personajes, productos y escenas (fuentes separadas, nunca mezcladas) +
+  la acción central del video. Claude arma el prompt cinematográfico completo
+  siguiendo la plantilla maestra de Happy Flops; lo revisas y editas antes de
+  generar el video real con Wan 3.0.
+</p>
+
+<form method="post" action="{{ url_for('subir_escena', cliente=cliente) }}" enctype="multipart/form-data" style="margin-bottom:1rem;">
+  <label class="campo-label">Agregar escena de referencia</label>
+  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+  <button type="submit">Subir escena</button>
+</form>
+
+<form method="post" action="{{ url_for('cf_generar_prompt', cliente=cliente) }}" class="form-nueva-idea">
+  <label class="campo-label">Personajes</label>
+  {% if personajes %}
+  <div class="catalogo-productos">
+    {% for p in personajes %}
+    <label class="producto-opcion">
+      <input type="checkbox" name="personajes" value="{{ p.nombre }}">
+      <img src="{{ p.url }}" alt="{{ p.nombre }}">
+      <span>{{ p.nombre }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay personajes subidos todavía.</p>
+  {% endif %}
+
+  <label class="campo-label" style="margin-top:1rem;display:block;">Productos</label>
+  {% if productos %}
+  <div class="catalogo-productos">
+    {% for p in productos %}
+    <label class="producto-opcion">
+      <input type="checkbox" name="productos" value="{{ p.id }}">
+      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
+      <span>{{ p.nombre }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay productos en el catálogo.</p>
+  {% endif %}
+
+  <label class="campo-label" style="margin-top:1rem;display:block;">Escenas</label>
+  {% if escenas %}
+  <div class="catalogo-productos">
+    {% for e in escenas %}
+    <label class="producto-opcion">
+      <input type="checkbox" name="escenas" value="{{ e.nombre }}">
+      <img src="{{ e.url }}" alt="{{ e.nombre }}">
+      <span>{{ e.nombre }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay escenas subidas todavía — usa el formulario de arriba.</p>
+  {% endif %}
+
+  <div class="fila-campos-idea" style="margin-top:1rem;">
+    <div>
+      <label class="campo-label">Acción central / detonante</label>
+      <textarea name="accion_central" rows="2" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría" required></textarea>
+    </div>
+    <div>
+      <label class="campo-label">Tono</label>
+      <input type="text" name="tono" placeholder="ej. comedia tierna, lifestyle aspiracional...">
+    </div>
+  </div>
+
+  <div class="fila-campos-idea" style="margin-top:1rem;">
+    <div>
+      <label class="campo-label">Duración objetivo (12-15s)</label>
+      <input type="number" name="duracion_objetivo" min="12" max="15" value="13">
+    </div>
+    <div>
+      <label class="campo-label">Modo</label>
+      <div class="checks-plataformas">
+        <label><input type="radio" name="modo" value="A" checked> Modo A — bullet-time / inspección de producto</label>
+        <label><input type="radio" name="modo" value="B"> Modo B — narrativa lineal</label>
+      </div>
+    </div>
+  </div>
+
+  <button type="submit" style="margin-top:1rem;">Generar prompt (gratis)</button>
+</form>
+
+<div id="creativeflowplus-resultados" style="margin-top:2rem;">
+  <h3>Sesiones</h3>
+  {% if not creative_flow_items %}
+  <p class="vacio">Todavía no hay ninguna sesión de CreativeFlowPlus.</p>
+  {% endif %}
+  {% for item in creative_flow_items %}
+  <div class="idea-card">
+    <p><strong>{{ item.accion_central }}</strong> — {{ item.tono }} · Modo {{ item.modo }} · {{ item.duracion_objetivo }}s</p>
+    <p>Estado: <span class="tag-estado">{{ item.estado }}</span></p>
+
+    {% if item.estado == "prompt_listo" %}
+    <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}">
+      <textarea name="prompt_relleno" rows="16" style="width:100%;">{{ item.prompt_relleno }}</textarea>
+      <button type="submit">Guardar edición</button>
+    </form>
+    <form method="post" action="{{ url_for('cf_regenerar_prompt', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+      <button type="submit">Regenerar (gratis)</button>
+    </form>
+    <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+      <button type="submit">Generar video con Wan 3.0 (~${{ (item.duracion_objetivo * 0.10) | round(2) }} a 720p)</button>
+    </form>
+    {% elif item.estado == "video_generando" %}
+    <p>Generando video…</p>
+    {% elif item.estado == "video_listo" %}
+    <video src="{{ item.video_url }}" controls muted style="max-width:320px;"></video>
+    <p>Costo: ${{ item.usd }}</p>
+    {% elif item.estado == "error" %}
+    <p class="tag-error">{{ item.error }}</p>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar esta sesión?');" style="display:inline;">
+      <button type="submit">Descartar</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>

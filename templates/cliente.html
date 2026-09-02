@@ -6,6 +6,7 @@
 <div class="tabs-nav" role="tablist">
   <button type="button" class="tab-btn" data-tab="calzado" role="tab">Cambiar calzado</button>
   <button type="button" class="tab-btn" data-tab="idea" role="tab">Nueva idea</button>
+  <button type="button" class="tab-btn" data-tab="creativeflowplus" role="tab">CreativeFlowPlus</button>
   <button type="button" class="tab-btn" data-tab="settings" role="tab">Settings</button>
 </div>
 
@@ -15,6 +16,10 @@
 
 <section id="tab-idea" class="tab-panel" role="tabpanel">
   {% include "_tab_nueva_idea.html" %}
+</section>
+
+<section id="tab-creativeflowplus" class="tab-panel" role="tabpanel">
+  {% include "_tab_creativeflowplus.html" %}
 </section>
 
 <section id="tab-settings" class="tab-panel" role="tabpanel">
@@ -27,6 +32,7 @@
     var paneles = {
       calzado: document.getElementById('tab-calzado'),
       idea: document.getElementById('tab-idea'),
+      creativeflowplus: document.getElementById('tab-creativeflowplus'),
       settings: document.getElementById('tab-settings')
     };
     var STORAGE_KEY = 'tab-activa-{{ cliente }}';
