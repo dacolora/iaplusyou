@@ -969,28 +969,31 @@ def generar_swap(cliente):
                 if proveedor == "kling_o1":
                     citas = " ".join(f"@Image{i + 1}" for i in range(len(referencias_urls)))
                     prompt = (
-                        f"Reemplaza el calzado que lleva puesta la persona por el que se "
-                        f"muestra en {citas} — mismo color, diseño y textura exactos. No "
-                        f"cambies nada más del video: mismo movimiento, misma persona, "
-                        f"mismo fondo, misma iluminación."
+                        f"Reemplaza el calzado que lleva puesta CADA persona del video "
+                        f"(si hay varias, el de TODAS, ninguna se queda con el original) "
+                        f"por el que se muestra en {citas} — mismo color, diseño y "
+                        f"textura exactos. No cambies nada más del video: mismo "
+                        f"movimiento, mismas personas, mismo fondo, misma iluminación."
                     )
                     resultado_url = kling_o1_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
                     costo = kling_o1_client.estimate_video()
                 elif proveedor == "wan27_edit":
                     prompt = (
-                        f"Reemplaza el calzado que lleva puesta la persona por el que se "
-                        f"muestra en las imágenes de referencia — mismo color, diseño y "
-                        f"textura exactos. No cambies nada más del video: mismo movimiento, "
-                        f"misma persona, mismo fondo, misma iluminación."
+                        f"Reemplaza el calzado que lleva puesta CADA persona del video "
+                        f"(si hay varias, el de TODAS, ninguna se queda con el original) "
+                        f"por el que se muestra en las imágenes de referencia — mismo "
+                        f"color, diseño y textura exactos. No cambies nada más del video: "
+                        f"mismo movimiento, mismas personas, mismo fondo, misma iluminación."
                     )
                     resultado_url = wavespeed_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
                     costo = wavespeed_client.estimate_video()
                 elif proveedor in wavespeed_video_edit.MODELOS:
                     prompt = (
-                        f"Reemplaza el calzado que lleva puesta la persona por el que se "
-                        f"muestra en las imágenes de referencia — mismo color, diseño y "
-                        f"textura exactos. No cambies nada más del video: mismo movimiento, "
-                        f"misma persona, mismo fondo, misma iluminación."
+                        f"Reemplaza el calzado que lleva puesta CADA persona del video "
+                        f"(si hay varias, el de TODAS, ninguna se queda con el original) "
+                        f"por el que se muestra en las imágenes de referencia — mismo "
+                        f"color, diseño y textura exactos. No cambies nada más del video: "
+                        f"mismo movimiento, mismas personas, mismo fondo, misma iluminación."
                     )
                     resultado_url = wavespeed_video_edit.editar_video(
                         proveedor, video_url, prompt, referencias_urls=referencias_urls,

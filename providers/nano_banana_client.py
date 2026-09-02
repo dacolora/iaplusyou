@@ -155,12 +155,21 @@ existe, píxel por píxel, y edítala.
 Imagen 1 (OBLIGATORIO usar esta base, no otra): la foto a editar.
 {referencias_lista}
 
+PASO 0 — antes de editar nada: contá cuántas personas aparecen en la Imagen 1 \
+y cuántas de ellas tienen calzado puesto (no cuenta quien esté descalzo o \
+sosteniendo su calzado en la mano). Vas a editar ese número exacto de pares de \
+calzado — ni uno menos. Es un error grave dejar a alguna persona con su \
+calzado original puesto.
+
 La ÚNICA edición permitida: en la Imagen 1, localiza el calzado que lleva puesta \
-la persona y BÓRRALO POR COMPLETO — incluyendo cualquier media, calcetín o parte \
-del calzado original que quede asomada — antes de dibujar el producto nuevo. No \
-debe quedar ningún resto visible del calzado o media original debajo, detrás o \
-alrededor del calzado nuevo. El pie debe quedar tal como se vería puesto \
-directamente el producto de referencia, sin nada del original debajo.
+CADA persona que aparezca en la foto — si hay varias personas, se edita el \
+calzado de TODAS, ninguna se queda con su calzado original — y BÓRRALO POR \
+COMPLETO en cada una — incluyendo cualquier media, calcetín o parte del calzado \
+original que quede asomada — antes de dibujar el producto nuevo. No debe quedar \
+ningún resto visible del calzado o media original debajo, detrás o alrededor del \
+calzado nuevo, en ninguna de las personas. Cada pie debe quedar tal como se \
+vería puesto directamente el producto de referencia, sin nada del original \
+debajo.
 
 Reemplázalo por el producto mostrado en las imágenes de referencia (mismo color \
 exacto, mismo diseño, misma textura).
@@ -171,19 +180,20 @@ NO significa que el producto sea grande. Ignora por completo qué tan grande se 
 ve el producto en sus propias fotos de referencia; eso es solo zoom de cámara, \
 no su tamaño real.
 
-El calzado nuevo tiene que medir, en la Imagen 1, EXACTAMENTE lo mismo que medía \
-el calzado original que tenía puesto esa persona — mismo largo de punta a talón, \
-mismo ancho, ni un milímetro más. Compáralo con el tamaño del propio pie/tobillo \
-de la persona en la Imagen 1 como referencia real: el calzado nunca debe \
-sobresalir del contorno natural del pie. Si el resultado se ve más grande, ancho, \
-inflado o "exagerado" que un calzado normal puesto en ese pie, está mal — \
-corrígelo a un tamaño realista y discreto.
+El calzado nuevo tiene que medir, en cada persona de la Imagen 1, EXACTAMENTE lo \
+mismo que medía su calzado original — mismo largo de punta a talón, mismo \
+ancho, ni un milímetro más. Compáralo con el tamaño del propio pie/tobillo de \
+cada persona en la Imagen 1 como referencia real: el calzado nunca debe \
+sobresalir del contorno natural del pie de nadie. Si el resultado se ve más \
+grande, ancho, inflado o "exagerado" que un calzado normal puesto en ese pie, \
+está mal — corrígelo a un tamaño realista y discreto.
 
-Esta es la misma persona de la Imagen 1 — mismo rostro exacto, mismo color y \
-peinado de pelo, misma edad, misma piel, mismo cuerpo, misma ropa, misma pose \
-exacta, mismo fondo exacto, misma luz exacta, mismo encuadre exacto. No es una \
-persona nueva ni una foto nueva: es la Imagen 1, con el calzado cambiado y nada \
-más. Si dudas si cambiar algo que no sea el calzado, no lo cambies."""
+Son las mismas personas de la Imagen 1 — mismos rostros exactos, mismo color y \
+peinado de pelo de cada una, misma edad, misma piel, mismo cuerpo, misma ropa, \
+misma pose exacta, mismo fondo exacto, misma luz exacta, mismo encuadre exacto. \
+No son personas nuevas ni una foto nueva: es la Imagen 1, con el calzado de \
+todas cambiado y nada más. Si dudas si cambiar algo que no sea el calzado, no \
+lo cambies."""
 
 
 def swap_producto(foto_original_path, referencias_producto_paths, negative_prompt=None):

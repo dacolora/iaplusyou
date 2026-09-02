@@ -65,18 +65,20 @@ MODELOS_VIDEO = {
 PROMPT_EDICION_IMAGEN = """Esto es una EDICIÓN de foto, no la creación de una foto nueva. \
 Parte de la primera imagen tal cual existe, píxel por píxel, y edítala.
 
-La ÚNICA edición permitida: localiza el calzado que lleva puesta la persona y \
-reemplázalo por {descripcion_producto} (mostrado en la(s) imagen(es) de \
-referencia siguientes). Bórralo por completo, incluyendo cualquier media o \
-parte del calzado original que quede asomada — no debe quedar ningún resto \
-visible debajo o alrededor del calzado nuevo.
+La ÚNICA edición permitida: localiza el calzado que lleva puesta CADA persona \
+que aparezca en la foto — si hay varias, se reemplaza el de TODAS, ninguna se \
+queda con el original — y reemplázalo por {descripcion_producto} (mostrado en \
+la(s) imagen(es) de referencia siguientes). Bórralo por completo en cada una, \
+incluyendo cualquier media o parte del calzado original que quede asomada — no \
+debe quedar ningún resto visible debajo o alrededor del calzado nuevo en \
+ninguna persona.
 
-El calzado nuevo debe medir exactamente lo mismo que medía el original en esa \
-foto — ni más grande, ni más ancho — nunca debe sobresalir del contorno natural \
-del pie de la persona.
+El calzado nuevo debe medir exactamente lo mismo que medía el original de cada \
+persona en esa foto — ni más grande, ni más ancho — nunca debe sobresalir del \
+contorno natural de ningún pie.
 
-No cambies nada más: misma persona, mismo rostro, mismo cuerpo, misma ropa, \
-misma pose, mismo fondo, misma luz, mismo encuadre exactos."""
+No cambies nada más: mismas personas, mismos rostros, mismos cuerpos, misma \
+ropa, misma pose, mismo fondo, misma luz, mismo encuadre exactos."""
 
 
 def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls, foto_local_path=None):
@@ -115,9 +117,11 @@ def editar_video(modelo_id, video_url, descripcion_producto, referencia_imagen_u
         payload = {"video_url": video_url, "image_url": referencia_imagen_url}
     else:
         prompt = (
-            f"Reemplaza el calzado que lleva puesta la persona por {descripcion_producto} "
-            f"(mostrado en la imagen de referencia). No cambies nada más: mismo "
-            f"movimiento, misma persona, mismo fondo, misma iluminación, mismo encuadre."
+            f"Reemplaza el calzado que lleva puesta CADA persona del video (si hay "
+            f"varias, el de TODAS, ninguna se queda con el original) por "
+            f"{descripcion_producto} (mostrado en la imagen de referencia). No cambies "
+            f"nada más: mismo movimiento, mismas personas, mismo fondo, misma "
+            f"iluminación, mismo encuadre."
         )
         payload = {"video_url": video_url, "prompt": prompt, "mode": "adhere_2", "image_url": referencia_imagen_url}
 
