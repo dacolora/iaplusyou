@@ -917,11 +917,11 @@ def generar_swap(cliente):
     archivo = request.files.get("foto")
     producto_id = request.form.get("producto_id", "").strip()
     proveedor_foto = request.form.get("proveedor_foto", "nano_banana").strip()
-    proveedor_video = request.form.get("proveedor_video", "kling_o1").strip()
+    proveedor_video = request.form.get("proveedor_video", "seedance25_edit").strip()
     if proveedor_foto not in PROVEEDORES_SWAP_IMAGEN:
         proveedor_foto = "nano_banana"
     if proveedor_video not in PROVEEDORES_SWAP_VIDEO:
-        proveedor_video = "kling_o1"
+        proveedor_video = "seedance25_edit"
 
     if not archivo or not archivo.filename:
         flash("Sube una foto o video primero.", "error")
