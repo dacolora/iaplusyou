@@ -519,6 +519,7 @@ summary.idea-header::-webkit-details-marker { display: none; }
 }
 .tag-en-uso { color: var(--ok); background: rgba(47, 158, 110, .1); }
 .tag-descartado { color: var(--error); background: rgba(196, 63, 90, .1); }
+.tag-advertencia { color: var(--warn); background: rgba(181, 129, 8, .1); }
 .idea-ref {
   width: 60px; height: 60px; object-fit: cover;
   border-radius: var(--radius-sm); border: 1px solid var(--border); flex: 0 0 auto;

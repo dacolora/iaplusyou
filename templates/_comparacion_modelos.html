@@ -77,22 +77,28 @@
           <td><span class="tag-estado tag-en-uso">En uso</span> — hecho específicamente para reemplazar un elemento en un video real, sin ni siquiera necesitar prompt</td>
         </tr>
         <tr>
+          <td>Wan 2.7 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>$0.10 / seg en 720p, $0.15 / seg en 1080p</td>
+          <td>Sí — hasta 3 imágenes de referencia</td>
+          <td><span class="tag-estado tag-en-uso">En uso</span> — editor real: preserva movimiento y escena, el más barato de los que sí editan de verdad</td>
+        </tr>
+        <tr>
           <td>Gemini Omni Flash Edit</td>
           <td>No publicado</td>
           <td>No — solo texto</td>
           <td><span class="tag-estado tag-descartado">Descartado</span> — mismo problema que Flux Kontext</td>
         </tr>
         <tr>
-          <td>Seedance <span class="comparacion-nota">(reference-to-video)</span></td>
+          <td>Seedance <span class="comparacion-nota">(reference-to-video, vía fal.ai)</span></td>
           <td>No publicado</td>
           <td>Sí — hasta 9 imágenes y 3 videos de referencia</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — su esquema no tiene un campo "video a editar": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — su esquema no tiene un campo "video a editar": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base. (Higgsfield sí ofrece un modo "video_edit" con edición por región para Seedance 2.5 que evitaría este problema — pendiente de acceso a esa cuenta)</td>
         </tr>
         <tr>
-          <td>Wan 3.0 <span class="comparacion-nota">(generación base: texto/imagen a video)</span></td>
+          <td>Wan 3.0 <span class="comparacion-nota">(generación base: texto/imagen/referencia a video, vía WaveSpeed y fal.ai)</span></td>
           <td>—</td>
           <td>—</td>
-          <td><span class="tag-estado tag-descartado">Descartado antes de probar</span> — solo genera video nuevo, no tiene endpoint de edición de un video existente (distinto de Wan-2.2 Animate Replace, que sí)</td>
+          <td><span class="tag-estado tag-descartado">Descartado</span> — verificado en WaveSpeed (1 sep 2026): solo tiene image-to-video, text-to-video y reference-to-video, ningún modo de edición que preserve el video original (distinto de Wan-2.2 Animate Replace y Wan 2.7 Video Edit, que sí editan)</td>
         </tr>
         <tr>
           <td>Runway Aleph 2.0</td>
