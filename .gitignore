@@ -17,6 +17,7 @@ clientes/*/estado_videos.json
 clientes/*/prompts_pendientes.json
 clientes/*/conceptos_pendientes.json
 clientes/*/swaps.json
+clientes/*/creative_flow_pendientes.json
 clientes/*/marca.json
 
 # Las imágenes/videos de cada cliente ya quedan respaldadas en R2;
