@@ -30,7 +30,9 @@ import trabajos
 import generador_prompts
 from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
+from providers import wavespeed_video_edit, wan3_client
 from providers import aspect_ratio as aspect_ratio_mod
+import creative_flow
 from publicador import publicar_brief
 from higgsfield_client import (
     generate_video,
@@ -347,6 +349,10 @@ def _job_id_publicar(cliente, brief_id):
     return f"{cliente}__{brief_id}__publicar"
 
 
+def _job_id_creative_flow(cliente, cf_id):
+    return f"{cliente}__{cf_id}__creative_flow"
+
+
 def _trabajo_de_prompt(cliente, prompt_id, item):
     """Si hay una generación en curso para este prompt (imagen o video según su
     etapa), devuelve {"job_id": ...} para que la plantilla muestre la barra de
@@ -486,6 +492,7 @@ def ver_cliente(cliente):
         productos=catalogo_productos.listar(cliente),
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
+        creative_flow_items=_creative_flow_items(cliente),
     )
 
 
@@ -803,6 +810,21 @@ def _swap_items(cliente):
     return items
 
 
+def _creative_flow_items(cliente):
+    data = creative_flow.cargar(cliente)
+    items = []
+    for cf_id, entry in sorted(
+        data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
+    ):
+        job_id = _job_id_creative_flow(cliente, cf_id)
+        items.append({
+            "id": cf_id,
+            **entry,
+            "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
+        })
+    return items
+
+
 @app.route("/cliente/<cliente>/swap")
 def ver_swap(cliente):
     """Ruta vieja de cuando 'cambiar calzado' era una página aparte — ahora es
@@ -815,7 +837,10 @@ def ver_swap(cliente):
 # original — nada que solo reciba una descripción en texto del calzado (eso
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit")
-PROVEEDORES_SWAP_VIDEO = ("kling_o1", "luma_modify", "wan_animate_replace", "wan27_edit")
+PROVEEDORES_SWAP_VIDEO = (
+    "kling_o1", "luma_modify", "wan_animate_replace", "wan27_edit",
+    "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit", "wan3_reference",
+)
 
 NOMBRES_PROVEEDOR_SWAP = {
     "nano_banana": "Nano Banana",
@@ -825,6 +850,10 @@ NOMBRES_PROVEEDOR_SWAP = {
     "luma_modify": "Luma Ray3 Modify",
     "wan_animate_replace": "Wan-2.2 Animate Replace",
     "wan27_edit": "Wan 2.7 Video Edit",
+    "seedance25_edit": "Seedance 2.5 Video Edit",
+    "kling_o3_pro_edit": "Kling Omni O3 Pro Video Edit",
+    "luma_ray32_edit": "Luma Ray 3.2 Video Edit",
+    "wan3_reference": "Wan 3.0 (referencia, no edición)",
     # ya no seleccionables, pero se mantienen para mostrar el nombre en swaps viejos:
     "flux_kontext": "Flux Kontext Pro",
     "higgsfield": "Higgsfield",
@@ -924,6 +953,27 @@ def generar_swap(cliente):
                     )
                     resultado_url = wavespeed_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
                     costo = wavespeed_client.estimate_video()
+                elif proveedor in wavespeed_video_edit.MODELOS:
+                    prompt = (
+                        f"Reemplaza el calzado que lleva puesta la persona por el que se "
+                        f"muestra en las imágenes de referencia — mismo color, diseño y "
+                        f"textura exactos. No cambies nada más del video: mismo movimiento, "
+                        f"misma persona, mismo fondo, misma iluminación."
+                    )
+                    resultado_url = wavespeed_video_edit.editar_video(
+                        proveedor, video_url, prompt, referencias_urls=referencias_urls,
+                    )
+                    costo = wavespeed_video_edit.estimate_video(proveedor)
+                elif proveedor == "wan3_reference":
+                    # No es edición: genera un video nuevo guiado solo por
+                    # imágenes de referencia (el cliente actual no acepta un
+                    # video de referencia) — sin garantía de clonar el original.
+                    prompt = (
+                        f"Video de una persona con {producto['descripcion']}, "
+                        f"mismo movimiento, escena y encuadre que el video original."
+                    )
+                    resultado_url = wan3_client.generar_video(prompt, referencias_urls)
+                    costo = wan3_client.estimate_video()
                 else:
                     referencia = referencias_urls[0] if referencias_urls else None
                     resultado_url = comparador_modelos.editar_video(
@@ -995,8 +1045,8 @@ def generar_swap(cliente):
 
     if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit"):
         duracion_estimada = 20
-    elif proveedor == "wan27_edit":
-        duracion_estimada = 380  # media reportada por WaveSpeed para Wan 2.7 Video Edit
+    elif proveedor in ("wan27_edit", "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit"):
+        duracion_estimada = 380  # media reportada por WaveSpeed para estos modelos
     else:
         duracion_estimada = 90
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada):
@@ -1268,6 +1318,182 @@ def rechazar(cliente, brief_id):
     estado_mod.guardar(cliente, estado)
     flash(f"{brief_id} rechazado, no se publica.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/creative_flow/generar_prompt", methods=["POST"])
+def cf_generar_prompt(cliente):
+    personajes_sel = request.form.getlist("personajes")
+    productos_sel = request.form.getlist("productos")
+    escenas_sel = request.form.getlist("escenas")
+    accion_central = (request.form.get("accion_central") or "").strip()
+    tono = (request.form.get("tono") or "").strip()
+    modo = request.form.get("modo", "A")
+    try:
+        duracion_objetivo = int(request.form.get("duracion_objetivo", 13))
+    except ValueError:
+        duracion_objetivo = 13
+    duracion_objetivo = max(12, min(15, duracion_objetivo))
+
+    if not personajes_sel:
+        flash("Elige al menos un personaje — la plantilla necesita @Imagen 1.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if not accion_central:
+        flash("Describe la acción central del video.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+    personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
+    productos_por_id = {p["id"]: p for p in catalogo_productos.listar(cliente)}
+    escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
+
+    personajes = [personajes_por_nombre[n] for n in personajes_sel if n in personajes_por_nombre]
+    productos = [productos_por_id[i] for i in productos_sel if i in productos_por_id]
+    escenas = [escenas_por_nombre[n] for n in escenas_sel if n in escenas_por_nombre]
+
+    cf_id = creative_flow.crear(
+        cliente, personajes_sel, productos_sel, escenas_sel,
+        accion_central, duracion_objetivo, tono, modo,
+    )
+
+    try:
+        guia_estilo = marca_mod.guia_efectiva(cliente)
+        prompt_relleno = generador_prompts.generar_prompt_creative_flow(
+            personajes, productos, escenas, accion_central, duracion_objetivo,
+            tono, modo, guia_estilo=guia_estilo,
+        )
+        creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt_relleno)
+        flash("Prompt generado — revísalo antes de generar el video.", "ok")
+    except Exception as e:
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+        flash(f"No pude generar el prompt: {e}", "error")
+
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/regenerar_prompt", methods=["POST"])
+def cf_regenerar_prompt(cliente, cf_id):
+    data = creative_flow.cargar(cliente)
+    entry = data.get(cf_id)
+    if not entry:
+        flash("No encontré esa sesión de CreativeFlowPlus.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+    personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
+    productos_por_id = {p["id"]: p for p in catalogo_productos.listar(cliente)}
+    escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
+    personajes = [personajes_por_nombre[n] for n in entry["personajes_ids"] if n in personajes_por_nombre]
+    productos = [productos_por_id[i] for i in entry["productos_ids"] if i in productos_por_id]
+    escenas = [escenas_por_nombre[n] for n in entry["escenas_ids"] if n in escenas_por_nombre]
+
+    try:
+        guia_estilo = marca_mod.guia_efectiva(cliente)
+        prompt_relleno = generador_prompts.generar_prompt_creative_flow(
+            personajes, productos, escenas, entry["accion_central"], entry["duracion_objetivo"],
+            entry["tono"], entry["modo"], guia_estilo=guia_estilo,
+        )
+        creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt_relleno, error=None)
+        flash("Prompt regenerado.", "ok")
+    except Exception as e:
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+        flash(f"No pude regenerar el prompt: {e}", "error")
+
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/guardar_prompt", methods=["POST"])
+def cf_guardar_prompt(cliente, cf_id):
+    prompt_editado = (request.form.get("prompt_relleno") or "").strip()
+    if not prompt_editado:
+        flash("El prompt no puede quedar vacío.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_editado)
+    flash("Prompt guardado.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])
+def cf_descartar(cliente, cf_id):
+    creative_flow.eliminar(cliente, cf_id)
+    flash("Sesión de CreativeFlowPlus descartada.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar_video", methods=["POST"])
+def cf_generar_video(cliente, cf_id):
+    data = creative_flow.cargar(cliente)
+    entry = data.get(cf_id)
+    if not entry or not entry.get("prompt_relleno"):
+        flash("No encontré un prompt listo para esa sesión.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+    personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
+    productos_por_id = {p["id"]: p for p in catalogo_productos.listar(cliente)}
+    escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
+    referencias = (
+        [personajes_por_nombre[n]["url"] for n in entry["personajes_ids"] if n in personajes_por_nombre] +
+        [productos_por_id[i]["representativa_url"] for i in entry["productos_ids"] if i in productos_por_id and productos_por_id[i].get("representativa_url")] +
+        [escenas_por_nombre[n]["url"] for n in entry["escenas_ids"] if n in escenas_por_nombre]
+    )
+    referencias = [r for r in referencias if r]
+    if not referencias:
+        flash("No hay URLs públicas de referencia disponibles todavía.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+    duracion = entry["duracion_objetivo"]
+    prompt_texto = entry["prompt_relleno"]
+    job_id = _job_id_creative_flow(cliente, cf_id)
+
+    def trabajo():
+        out_dir = os.path.join(BASE_DIR, "salidas", cliente)
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"{cf_id}.mp4")
+
+        try:
+            video_url_wan = wan3_client.generar_video(
+                prompt_texto, referencias, duration=duracion, resolution="720p",
+            )
+            costo = wan3_client.estimate_video(duration=duracion, resolution="720p")
+            resp = requests.get(video_url_wan, timeout=180)
+            resp.raise_for_status()
+            with open(out_path, "wb") as f:
+                f.write(resp.content)
+            bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
+        except Exception as e:
+            bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
+            creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+            raise
+
+        try:
+            video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{cf_id}.mp4")
+        except Exception:
+            video_url = video_url_wan
+
+        creative_flow.actualizar(
+            cliente, cf_id, estado="video_listo", video_url=video_url, video_local=out_path,
+            credits=costo.get("credits"), usd=costo.get("usd"),
+        )
+
+        estado = estado_mod.cargar(cliente)
+        estado[cf_id] = {
+            "prompt": prompt_texto,
+            "image_url": referencias[0],
+            "title": cf_id,
+            "caption": entry["accion_central"],
+            "platforms": [],
+            "video_local": out_path,
+            "video_url": video_url,
+            "estado": "pendiente",
+            "generado_en": datetime.now().isoformat(),
+            "publicado_en": None,
+        }
+        estado_mod.guardar(cliente, estado)
+        return "Video de CreativeFlowPlus listo, pendiente de revisión."
+
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=180):
+        creative_flow.actualizar(cliente, cf_id, estado="video_generando")
+        flash("Generando el video con Wan 3.0…", "ok")
+    else:
+        flash("Ya se está generando ese video — espera a que termine.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 if __name__ == "__main__":
