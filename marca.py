@@ -14,9 +14,10 @@ Un archivo marca.json por cliente:
 Las referencias en sí (imágenes/videos subidos) NO se listan aquí — se leen
 directo de la carpeta clientes/<cliente>/marca/, igual que personajes/.
 """
-import json
 import os
 from datetime import datetime
+
+import _json_store
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -28,19 +29,15 @@ def _path(cliente):
 
 
 def cargar(cliente):
-    path = _path(cliente)
-    if not os.path.exists(path):
-        return {"guia_estilo": "", "style_id": None, "style_strength": 0.5, "actualizado_en": None}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return _json_store.cargar(
+        _path(cliente),
+        default={"guia_estilo": "", "style_id": None, "style_strength": 0.5, "actualizado_en": None},
+    )
 
 
 def guardar(cliente, data):
-    path = _path(cliente)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     data["actualizado_en"] = datetime.now().isoformat()
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _json_store.guardar(_path(cliente), data)
 
 
 def _root_path(cliente):

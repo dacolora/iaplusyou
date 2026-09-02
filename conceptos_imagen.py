@@ -26,9 +26,10 @@ Un archivo conceptos_pendientes.json por cliente:
 Cada entrada de "animaciones" tiene la misma forma que un prompt de video de
 prompts.py, para poder reusar la lógica de generación de video sin reescribirla.
 """
-import json
 import os
 from datetime import datetime
+
+import _json_store
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -40,18 +41,11 @@ def _path(cliente):
 
 
 def cargar(cliente):
-    path = _path(cliente)
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return _json_store.cargar(_path(cliente))
 
 
 def guardar(cliente, data):
-    path = _path(cliente)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _json_store.guardar(_path(cliente), data)
 
 
 def _slug(texto, max_len=30):

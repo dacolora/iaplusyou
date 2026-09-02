@@ -3,9 +3,10 @@ Estado del flujo "cambiar calzado": el usuario sube una foto, elige un producto 
 catálogo, y se genera una versión de esa foto con el calzado reemplazado — nada más
 cambia. Un archivo swaps.json por cliente.
 """
-import json
 import os
 from datetime import datetime
+
+import _json_store
 
 BASE_DIR = os.path.dirname(__file__)
 
@@ -15,18 +16,11 @@ def _path(cliente):
 
 
 def cargar(cliente):
-    path = _path(cliente)
-    if not os.path.exists(path):
-        return {}
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    return _json_store.cargar(_path(cliente))
 
 
 def guardar(cliente, data):
-    path = _path(cliente)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+    _json_store.guardar(_path(cliente), data)
 
 
 def crear(cliente, foto_original_local, producto_id, aspect_ratio, proveedor="nano_banana", tipo="foto"):
