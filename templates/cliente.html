@@ -5,6 +5,7 @@
 
 <div class="tabs-nav" role="tablist">
   <button type="button" class="tab-btn" data-tab="calzado" role="tab">FlowClone</button>
+  <button type="button" class="tab-btn" data-tab="ads" role="tab">Publicidad</button>
   <button type="button" class="tab-btn" data-tab="creativeflowplus" role="tab">FlowPlus</button>
   <button type="button" class="tab-btn" data-tab="catalogo" role="tab">FlowCatálogo</button>
   <button type="button" class="tab-btn" data-tab="settings" role="tab">FlowSettings</button>
@@ -12,6 +13,10 @@
 
 <section id="tab-calzado" class="tab-panel" role="tabpanel">
   {% include "_tab_cambiar_calzado.html" %}
+</section>
+
+<section id="tab-ads" class="tab-panel" role="tabpanel">
+  {% include "_tab_ads.html" %}
 </section>
 
 <section id="tab-creativeflowplus" class="tab-panel" role="tabpanel">
@@ -34,6 +39,7 @@
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
       calzado: document.getElementById('tab-calzado'),
+      ads: document.getElementById('tab-ads'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
       catalogo: document.getElementById('tab-catalogo'),
       settings: document.getElementById('tab-settings')
