@@ -1536,6 +1536,21 @@ def eliminar_swap(cliente, swap_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
 
 
+@app.route("/cliente/<cliente>/swap/<swap_id>/enviar_a_publicidad", methods=["POST"])
+def enviar_swap_a_publicidad(cliente, swap_id):
+    data = swaps_mod.cargar(cliente)
+    entry = data.get(swap_id)
+    if not entry or not entry.get("resultado_url"):
+        flash("Ese swap todavía no tiene un resultado listo.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+    producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
+    nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
+    ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
+    flash("Enviado a Publicidad — revísalo en esa pestaña.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
 # ---------- Publicidad (Meta Ads) — publicar, actualizar resultados, pausar/activar,
 # eliminar de la lista local. Nunca borra una campaña real de Meta: eso queda para
 # Meta Ads Manager a propósito (ver eliminar_ad más abajo). ----------

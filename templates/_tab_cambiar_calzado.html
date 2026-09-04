@@ -468,6 +468,12 @@
     <p class="vacio" style="font-size:.78rem;">Evaluando cumplimiento de marca…</p>
     {% endif %}
 
+    {% if s.resultado_url %}
+    <form method="post" action="{{ url_for('enviar_swap_a_publicidad', cliente=cliente, swap_id=s.id) }}" style="display:inline;">
+      <button type="submit" class="btn-guardar btn-sm">Enviar a Publicidad</button>
+    </form>
+    {% endif %}
+
     <form method="post" action="{{ url_for('eliminar_swap', cliente=cliente, swap_id=s.id) }}" onsubmit="return confirm('¿Eliminar este resultado?');">
       <button type="submit" class="btn-rechazar btn-sm">Eliminar</button>
     </form>
