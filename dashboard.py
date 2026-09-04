@@ -35,7 +35,7 @@ import trabajos
 import generador_prompts
 from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
-from providers import wavespeed_video_edit, wan3_client
+from providers import wavespeed_video_edit, wan3_client, wavespeed_imagen
 from providers import aspect_ratio as aspect_ratio_mod
 import creative_flow
 from publicador import publicar_brief

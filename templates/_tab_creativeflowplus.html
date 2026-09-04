@@ -54,7 +54,7 @@
         <span>{{ p.nombre }}</span>
       </label>
       <div class="personaje-eliminar">
-        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_personaje', cliente=cliente, nombre=p.nombre) }}" formmethod="post" onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
+        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_personaje', cliente=cliente, nombre=p.nombre) }}" formmethod="post" formnovalidate onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
       </div>
     </div>
     {% endfor %}
@@ -74,7 +74,7 @@
         <span>{{ p.nombre }}</span>
       </label>
       <div class="personaje-eliminar">
-        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_producto_referencia', cliente=cliente, nombre=p.nombre) }}" formmethod="post" onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
+        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_producto_referencia', cliente=cliente, nombre=p.nombre) }}" formmethod="post" formnovalidate onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
       </div>
     </div>
     {% endfor %}
@@ -94,7 +94,7 @@
         <span>{{ e.nombre }}</span>
       </label>
       <div class="personaje-eliminar">
-        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_escena', cliente=cliente, nombre=e.nombre) }}" formmethod="post" onclick="return confirm('¿Eliminar {{ e.nombre }}?');">✕</button>
+        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_escena', cliente=cliente, nombre=e.nombre) }}" formmethod="post" formnovalidate onclick="return confirm('¿Eliminar {{ e.nombre }}?');">✕</button>
       </div>
     </div>
     {% endfor %}
