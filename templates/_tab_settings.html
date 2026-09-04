@@ -1,3 +1,17 @@
+<h2>Nombre del proyecto</h2>
+<form method="post" action="{{ url_for('guardar_nombre_proyecto', cliente=cliente) }}" class="form-nueva-idea">
+  <input type="text" name="nombre" value="{{ nombre_proyecto }}" placeholder="Nombre visible del proyecto">
+  <p class="vacio" style="font-size:.76rem;padding-top:.3rem;">
+    Solo cambia lo que se ve. El identificador interno sigue siendo
+    <code>{{ cliente }}</code>: es la clave de las rutas de almacenamiento, del
+    historial ya generado y de los tokens de publicación, y renombrarlo los
+    rompería.
+  </p>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar nombre</button>
+</form>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
 {# FlowSettings agrupa lo que no es crear: la identidad de marca que alimenta
    todos los prompts, la revisión y publicación de lo generado, la bitácora, el
    informe de operación y la comparación de modelos. Antes estaba repartido

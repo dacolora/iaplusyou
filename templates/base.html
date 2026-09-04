@@ -265,7 +265,7 @@
     <nav class="header-nav">
       <a href="{{ url_for('index') }}">Proyectos</a>
       <span class="header-sep">/</span>
-      <span class="header-actual">{{ request.view_args.cliente }}</span>
+      <span class="header-actual">{{ nombre_proyecto or request.view_args.cliente }}</span>
     </nav>
     {% endif %}
   </header>

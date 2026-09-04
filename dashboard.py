@@ -31,6 +31,7 @@ import bitacora
 import informe
 import mapa_corporal
 import prompt_swap
+import proyectos
 import trabajos
 import generador_prompts
 from providers import image_provider
@@ -540,6 +541,7 @@ def ver_cliente(cliente):
         presets_cuerpo=mapa_corporal.PRESETS,
         etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS,
         banco_prompts=banco_prompts.listar(),
+        nombre_proyecto=proyectos.nombre_visible(cliente),
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
@@ -894,6 +896,15 @@ def _productos_con_uso(cliente):
     for p in productos:
         p["usos"] = usos.get(p["id"], 0)
     return productos
+
+
+@app.route("/cliente/<cliente>/nombre", methods=["POST"])
+def guardar_nombre_proyecto(cliente):
+    """Cambia SOLO el nombre visible. La carpeta (el id) no se toca: es la clave
+    de las rutas de R2, del historial y de los tokens de publicación."""
+    proyectos.guardar_nombre(cliente, request.form.get("nombre"))
+    flash("Nombre del proyecto actualizado.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
