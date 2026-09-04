@@ -17,8 +17,13 @@ clientes/*/estado_videos.json
 clientes/*/prompts_pendientes.json
 clientes/*/conceptos_pendientes.json
 clientes/*/swaps.json
+clientes/*/ads.json
 clientes/*/creative_flow_pendientes.json
 clientes/*/marca.json
+
+# Scratch de subagent-driven-development (ledgers, briefs, reports) — nunca
+# es código, y guarda texto libre de subagentes que no debe versionarse.
+.superpowers/sdd/
 
 # Las imágenes/videos de cada cliente ya quedan respaldadas en R2;
 # no hace falta duplicarlas (ni son código) en el repo.
