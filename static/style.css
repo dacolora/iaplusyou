@@ -875,3 +875,11 @@ td.estado-error { color: var(--error); }
   color: var(--muted);
   line-height: 1.35;
 }
+
+/* Generación probada por la bitácora pero reconstruida: se marca distinto para
+   que nunca se confunda con una registrada en vivo (su costo no se conoce). */
+.badge.reconstruido {
+  background: rgba(71, 151, 201, .14);
+  color: var(--accent-2);
+  border: 1px solid rgba(71, 151, 201, .3);
+}

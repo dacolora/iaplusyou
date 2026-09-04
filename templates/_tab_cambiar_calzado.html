@@ -322,7 +322,11 @@
     <summary class="swap-card-resumen">
       <span class="idea-chevron">▸</span>
       <span class="swap-thumb">
-        {% if s.tipo == "video" %}
+        {# Reconstruida desde la bitácora: existe el registro de que se generó,
+           pero no la foto de entrada. Pedirla daría un error. #}
+        {% if not s.foto_original_local %}
+        <span class="swap-thumb-vacio" title="Sin foto original: entrada reconstruida desde la bitácora">◷</span>
+        {% elif s.tipo == "video" %}
         <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" muted preload="none"></video>
         {% else %}
         <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original" loading="lazy">
@@ -347,7 +351,9 @@
       <span class="swap-resumen-texto">
         <strong>{{ s.producto_nombre }}</strong>
         <span class="swap-resumen-meta">
-          {{ s.proveedor_nombre }}
+          {% if s.origen == "reconstruido_desde_bitacora" %}
+          <span class="badge reconstruido" title="Generación probada por la bitácora, reconstruida tras haberse eliminado. Su costo no quedó registrado.">reconstruida</span>
+          {% else %}{{ s.proveedor_nombre }}{% endif %}
           {% if s.evaluacion %}
           {% set promedio = (s.evaluacion | sum(attribute="puntaje")) / (s.evaluacion | length) %}
           · <span class="{% if promedio >= 80 %}puntaje-alto{% elif promedio >= 50 %}puntaje-medio{% else %}puntaje-bajo{% endif %}">{{ promedio | round | int }}%</span>
@@ -363,7 +369,9 @@
     <div class="swap-lados">
       <div class="swap-lado">
         <div class="proveedor-label">Original</div>
-        {% if s.tipo == "video" %}
+        {% if not s.foto_original_local %}
+        <p class="vacio" style="font-size:.78rem;">No se conserva la foto original de esta generación.</p>
+        {% elif s.tipo == "video" %}
         <video src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" controls muted preload="none"></video>
         {% else %}
         <img src="{{ url_for('imagen_swap_original', cliente=cliente, swap_id=s.id) }}" alt="original" loading="lazy">

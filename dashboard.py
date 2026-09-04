@@ -1473,7 +1473,10 @@ def generar_swap(cliente):
 def imagen_swap_original(cliente, swap_id):
     data = swaps_mod.cargar(cliente)
     entry = data.get(swap_id)
-    if not entry or not os.path.exists(entry["foto_original_local"]):
+    # Las entradas reconstruidas desde la bitácora no tienen foto original: la
+    # bitácora guarda el resultado, no la entrada. Sin este guardia,
+    # os.path.exists(None) revienta con TypeError y devuelve un 500.
+    if not entry or not entry.get("foto_original_local") or not os.path.exists(entry["foto_original_local"]):
         flash("No encontré la foto original.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
     return send_file(entry["foto_original_local"])
