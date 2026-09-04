@@ -1,0 +1,139 @@
+<p class="vacio" style="padding-top:0;">
+  Contenido ya aprobado en otras pestañas llega acá con el botón "Enviar a
+  Publicidad". Desde acá se publica como anuncio pagado real en Meta —
+  siempre pausado al crearse, nunca gasta presupuesto hasta que lo actives
+  a mano.
+</p>
+
+{% set en_cola = ads.values() | selectattr("estado", "equalto", "en_cola") | list %}
+{% set publicados = ads.values() | rejectattr("estado", "equalto", "en_cola") | list %}
+
+<h2>Listos para publicar ({{ en_cola | length }})</h2>
+{% if en_cola %}
+<div class="swaps-lista">
+  {% for item in ads.items() %}
+  {% if item[1].estado == "en_cola" %}
+  {% set ad_id = item[0] %}
+  {% set entry = item[1] %}
+  <details class="swap-card">
+    <summary class="swap-card-resumen">
+      <span class="idea-chevron">▸</span>
+      <span class="swap-thumb">
+        {% if entry.contenido_tipo == "video" %}
+        <video src="{{ entry.contenido_url }}" muted></video>
+        {% else %}
+        <img src="{{ entry.contenido_url }}" alt="{{ entry.nombre }}">
+        {% endif %}
+      </span>
+      <span class="swap-resumen-texto">
+        <strong>{{ entry.nombre }}</strong>
+        <span class="swap-resumen-meta">{{ entry.fuente }} · en cola</span>
+      </span>
+    </summary>
+
+    <form method="post" action="{{ url_for('publicar_ad', cliente=cliente) }}" class="form-nueva-idea">
+      <input type="hidden" name="ad_id" value="{{ ad_id }}">
+      <div class="fila-campos-idea">
+        <div>
+          <label class="campo-label">Objetivo</label>
+          <select name="objetivo" required>
+            <option value="OUTCOME_TRAFFIC">Tráfico</option>
+            <option value="OUTCOME_ENGAGEMENT">Interacción</option>
+            <option value="OUTCOME_SALES">Ventas</option>
+            <option value="OUTCOME_LEADS">Clientes potenciales</option>
+          </select>
+        </div>
+        <div>
+          <label class="campo-label">Presupuesto diario (USD)</label>
+          <input type="number" name="presupuesto_diario_usd" min="1" step="0.5" value="10" required>
+        </div>
+      </div>
+      <div class="fila-campos-idea">
+        <div>
+          <label class="campo-label">Días</label>
+          <input type="number" name="dias" min="1" step="1" value="3" required>
+        </div>
+        <div>
+          <label class="campo-label">País (código ISO, ej. CO)</label>
+          <input type="text" name="pais" maxlength="2" value="CO" required>
+        </div>
+      </div>
+      <div class="fila-campos-idea">
+        <div>
+          <label class="campo-label">Edad mínima</label>
+          <input type="number" name="edad_min" min="13" max="65" value="18" required>
+        </div>
+        <div>
+          <label class="campo-label">Edad máxima</label>
+          <input type="number" name="edad_max" min="13" max="65" value="55" required>
+        </div>
+      </div>
+      <button class="btn-generar" type="submit">Publicar como anuncio</button>
+    </form>
+  </details>
+  {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Nada en cola todavía — usa "Enviar a Publicidad" en un resultado aprobado.</p>
+{% endif %}
+
+<h2 style="margin-top:2.5rem;">Publicados ({{ publicados | length }})</h2>
+{% if publicados %}
+<div class="swaps-lista">
+  {% for item in ads.items() %}
+  {% if item[1].estado != "en_cola" %}
+  {% set ad_id = item[0] %}
+  {% set entry = item[1] %}
+  <details class="swap-card">
+    <summary class="swap-card-resumen">
+      <span class="idea-chevron">▸</span>
+      <span class="swap-thumb">
+        {% if entry.contenido_tipo == "video" %}
+        <video src="{{ entry.contenido_url }}" muted></video>
+        {% else %}
+        <img src="{{ entry.contenido_url }}" alt="{{ entry.nombre }}">
+        {% endif %}
+      </span>
+      <span class="swap-resumen-texto">
+        <strong>{{ entry.nombre }}</strong>
+        <span class="swap-resumen-meta">
+          {{ entry.estado }}
+          {% if entry.metricas and entry.metricas.impresiones %}
+          · {{ entry.metricas.impresiones }} impr. · {{ entry.metricas.clics }} clics · ${{ "%.2f"|format(entry.metricas.gasto_usd) }}
+          {% endif %}
+        </span>
+      </span>
+    </summary>
+
+    {% if entry.error %}
+    <p class="vacio" style="color:var(--error);">{{ entry.error }}</p>
+    {% endif %}
+
+    {% if entry.meta_ids and entry.meta_ids.ad_id %}
+    <form method="post" action="{{ url_for('actualizar_resultados_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
+      <button type="submit" class="btn-guardar btn-sm">Actualizar resultados</button>
+    </form>
+    {% if entry.estado == "activo" %}
+    <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
+      <input type="hidden" name="estado" value="PAUSED">
+      <button type="submit" class="btn-guardar btn-sm">Pausar</button>
+    </form>
+    {% elif entry.estado == "pausado" %}
+    <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
+      <input type="hidden" name="estado" value="ACTIVE">
+      <button type="submit" class="btn-generar btn-sm">Activar (empieza a gastar presupuesto real)</button>
+    </form>
+    {% endif %}
+    {% endif %}
+
+    <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" onsubmit="return confirm('¿Quitar de la lista? Esto NO borra la campaña en Meta si ya se publicó.');" style="display:inline;">
+      <button type="submit" class="btn-rechazar btn-sm">Quitar de la lista</button>
+    </form>
+  </details>
+  {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Todavía no has publicado ningún anuncio.</p>
+{% endif %}
