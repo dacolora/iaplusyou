@@ -1,0 +1,21 @@
+<h2>Bitácora reciente</h2>
+{% if log %}
+<table>
+  <thead>
+    <tr><th>Fecha</th><th>Video</th><th>Etapa</th><th>Estado</th><th>Detalle</th></tr>
+  </thead>
+  <tbody>
+    {% for fila in log %}
+    <tr>
+      <td>{{ fila.fecha[:19] }}</td>
+      <td>{{ fila.id }}</td>
+      <td>{{ fila.etapa }}</td>
+      <td class="estado-{{ fila.estado }}">{{ fila.estado }}</td>
+      <td>{{ fila.detalle[:80] }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="vacio">Sin actividad registrada todavía.</p>
+{% endif %}

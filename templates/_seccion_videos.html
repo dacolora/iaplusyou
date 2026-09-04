@@ -1,0 +1,36 @@
+
+{% set pendientes = videos | selectattr('estado', 'equalto', 'pendiente') | list %}
+{% set publicados = videos | selectattr('estado', 'equalto', 'publicado') | list %}
+{% set rechazados = videos | selectattr('estado', 'equalto', 'rechazado') | list %}
+
+<h2>Videos pendientes de revisión ({{ pendientes | length }})</h2>
+{% if pendientes %}
+<div class="videos-grid">
+  {% for v in pendientes %}
+  {% include "_video_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">No hay videos esperando aprobación.</p>
+{% endif %}
+
+<h2>Publicados ({{ publicados | length }})</h2>
+{% if publicados %}
+<div class="videos-grid">
+  {% for v in publicados %}
+  {% include "_video_card.html" %}
+  {% endfor %}
+</div>
+{% else %}
+<p class="vacio">Todavía no se ha publicado nada.</p>
+{% endif %}
+
+{% if rechazados %}
+<h2>Rechazados ({{ rechazados | length }})</h2>
+<div class="videos-grid">
+  {% for v in rechazados %}
+  {% include "_video_card.html" %}
+  {% endfor %}
+</div>
+{% endif %}
+
