@@ -141,7 +141,7 @@ def descripcion_por_defecto(tipo):
     return f"{t['articulo']} {t['sustantivo']} mostrado en la referencia"
 
 
-def prompt_imagen(tipo, referencias_lista=""):
+def prompt_imagen(tipo, referencias_lista="", mapa=None):
     """Prompt de edición de FOTO. referencias_lista: las líneas que enumeran las
     imágenes de referencia del producto ("Imagen 2: ...", "Imagen 3: ..."), que
     cada proveedor arma según cuántas imágenes le quepan."""
@@ -179,10 +179,10 @@ Son las mismas personas y la misma escena de la Imagen 1 — mismos rostros \
 exactos, mismo pelo, misma edad, misma piel, mismo cuerpo, misma ropa, misma \
 pose exacta, mismo fondo exacto, misma luz exacta, mismo encuadre exacto. No es \
 una foto nueva: es la Imagen 1 con {art} {sus} cambiado y nada más. Si dudas si \
-cambiar algo que no sea {art} {sus}, no lo cambies."""
+cambiar algo que no sea {art} {sus}, no lo cambies.""" + (f"\n\n{mapa}" if mapa else "")
 
 
-def prompt_video(tipo, descripcion_producto=None, citas=""):
+def prompt_video(tipo, descripcion_producto=None, citas="", mapa=None):
     """Prompt de edición de VIDEO. citas: las referencias citables que acepte el
     modelo (ej. "@Image1 @Image2" en Kling O1); vacío si el modelo recibe las
     imágenes sin citarlas. descripcion_producto: solo para los modelos que NO
@@ -199,4 +199,5 @@ def prompt_video(tipo, descripcion_producto=None, citas=""):
         f"{t['ajuste']} "
         f"No cambies nada más del video: mismo movimiento, mismas personas, mismo "
         f"fondo, misma iluminación, mismo encuadre."
+        + (f" {mapa}" if mapa else "")
     )

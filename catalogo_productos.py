@@ -10,6 +10,7 @@ import re
 import unicodedata
 
 import _json_store
+import mapa_corporal
 import prompt_swap
 
 BASE_DIR = os.path.dirname(__file__)
@@ -84,6 +85,12 @@ def listar(cliente):
             # los pies, una cobija se drapea). Los productos que ya existían son
             # todos calzado, así que ese es el default y no hay que migrar nada.
             "tipo": prompt_swap.tipo_valido(propio.get("tipo")),
+            # Zonas del cuerpo que ocupa el producto (mapa corporal). Vacío =
+            # no va sobre una persona (una cobija, un objeto de escena).
+            "zonas": mapa_corporal.normalizar(propio.get("zonas")),
+            "mapa_texto": mapa_corporal.describir(propio.get("zonas")),
+            "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
+                mapa_corporal.preset_de(propio.get("zonas"))),
             "referencias": [os.path.join(subcarpeta, f) for f in archivos],
             # Nombres de archivo sueltos: la UI de gestión necesita poder
             # referirse a una imagen concreta (para borrarla o mostrarla) sin
@@ -112,7 +119,7 @@ def carpeta_de(cliente, producto_id):
     return destino
 
 
-def crear(cliente, nombre, descripcion="", tipo=None):
+def crear(cliente, nombre, descripcion="", tipo=None, zonas=None):
     """Crea la carpeta del producto y guarda su metadata. Devuelve el id nuevo.
     OJO: hasta que no tenga al menos una imagen no aparece en listar(), porque
     un producto sin fotos de referencia no sirve para generar nada."""
@@ -126,12 +133,13 @@ def crear(cliente, nombre, descripcion="", tipo=None):
         "nombre": nombre.strip(),
         "descripcion": (descripcion or "").strip(),
         "tipo": prompt_swap.tipo_valido(tipo),
+        "zonas": mapa_corporal.normalizar(zonas),
     }
     guardar_meta(cliente, meta)
     return producto_id
 
 
-def actualizar(cliente, producto_id, nombre=None, descripcion=None, tipo=None):
+def actualizar(cliente, producto_id, nombre=None, descripcion=None, tipo=None, zonas=None):
     """Cambia nombre/descripción SIN tocar la carpeta ni su id. El id se queda
     como está a propósito: es lo que guardan los swaps ya generados
     (swaps.json -> producto_id), y renombrar la carpeta los dejaría huérfanos."""
@@ -144,6 +152,8 @@ def actualizar(cliente, producto_id, nombre=None, descripcion=None, tipo=None):
         actual["descripcion"] = descripcion.strip()
     if tipo is not None:
         actual["tipo"] = prompt_swap.tipo_valido(tipo)
+    if zonas is not None:
+        actual["zonas"] = mapa_corporal.normalizar(zonas)
     meta[producto_id] = actual
     guardar_meta(cliente, meta)
 

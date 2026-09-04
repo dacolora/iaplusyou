@@ -4,10 +4,11 @@
 <h1>{{ cliente }}</h1>
 
 <div class="tabs-nav" role="tablist">
-  <button type="button" class="tab-btn" data-tab="calzado" role="tab">Cambiar calzado</button>
+  <button type="button" class="tab-btn" data-tab="calzado" role="tab">FlowClone</button>
   <button type="button" class="tab-btn" data-tab="idea" role="tab">Nueva idea</button>
-  <button type="button" class="tab-btn" data-tab="creativeflowplus" role="tab">CreativeFlowPlus</button>
-  <button type="button" class="tab-btn" data-tab="settings" role="tab">Settings</button>
+  <button type="button" class="tab-btn" data-tab="creativeflowplus" role="tab">FlowPlus</button>
+  <button type="button" class="tab-btn" data-tab="catalogo" role="tab">FlowCatálogo</button>
+  <button type="button" class="tab-btn" data-tab="settings" role="tab">FlowSettings</button>
 </div>
 
 <section id="tab-calzado" class="tab-panel" role="tabpanel">
@@ -22,6 +23,10 @@
   {% include "_tab_creativeflowplus.html" %}
 </section>
 
+<section id="tab-catalogo" class="tab-panel" role="tabpanel">
+  {% include "_tab_catalogo.html" %}
+</section>
+
 <section id="tab-settings" class="tab-panel" role="tabpanel">
   {% include "_tab_settings.html" %}
 </section>
@@ -29,10 +34,14 @@
 <script>
   (function () {
     var botones = document.querySelectorAll('.tab-btn');
+    // Las claves siguen siendo las viejas ('calzado', 'idea', ...) a propósito:
+    // son las que usan los redirect(_anchor=...) de dashboard.py y las que ya
+    // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
       calzado: document.getElementById('tab-calzado'),
       idea: document.getElementById('tab-idea'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
+      catalogo: document.getElementById('tab-catalogo'),
       settings: document.getElementById('tab-settings')
     };
     var STORAGE_KEY = 'tab-activa-{{ cliente }}';

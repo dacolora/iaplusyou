@@ -82,7 +82,7 @@ def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls,
         f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
         for i in range(len(referencias_urls[:2]))
     )
-    prompt = prompt_swap.prompt_imagen(tipo, referencias_lista)
+    prompt = prompt_swap.prompt_imagen(tipo, referencias_lista, mapa=mapa)
     payload = {"prompt": prompt, "image_urls": [foto_url] + referencias_urls[:2]}
 
     if foto_local_path:
@@ -110,7 +110,7 @@ def editar_video(modelo_id, video_url, descripcion_producto, referencia_imagen_u
         # Sin campo de prompt en este modelo — solo video a editar + referencia.
         payload = {"video_url": video_url, "image_url": referencia_imagen_url}
     else:
-        prompt = prompt_swap.prompt_video(tipo, descripcion_producto=descripcion_producto)
+        prompt = prompt_swap.prompt_video(tipo, descripcion_producto=descripcion_producto, mapa=mapa)
         payload = {"video_url": video_url, "prompt": prompt, "mode": "adhere_2", "image_url": referencia_imagen_url}
 
     data = fal_client.llamar(info["path"], payload, on_progreso=on_progreso)

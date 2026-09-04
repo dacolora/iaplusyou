@@ -3,5 +3,29 @@
     "nombre": "HappyBlanket - White",
     "descripcion": "cobija HappyBlanket, tejido suave color blanco liso, sin estampado",
     "tipo": "textil_hogar"
+  },
+  "horiginal": {
+    "nombre": "HOriginal — Beige",
+    "descripcion": "chanclas tipo slide HappyFlops, de goma acanalada, color beige claro uniforme",
+    "tipo": "calzado",
+    "zonas": [
+      "pies"
+    ]
+  },
+  "ho_sky": {
+    "nombre": "HOriginal — Sky Blue",
+    "descripcion": "chanclas tipo slide HappyFlops, de goma acanalada, color celeste (sky blue) uniforme",
+    "tipo": "calzado",
+    "zonas": [
+      "pies"
+    ]
+  },
+  "ho_rose": {
+    "nombre": "HOriginal — Rose",
+    "descripcion": "chanclas tipo slide HappyFlops, de goma acanalada, color rosa (rose) uniforme",
+    "tipo": "calzado",
+    "zonas": [
+      "pies"
+    ]
   }
 }

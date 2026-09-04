@@ -28,6 +28,7 @@ import catalogo_productos
 import swaps as swaps_mod
 import bitacora
 import informe
+import mapa_corporal
 import prompt_swap
 import trabajos
 import generador_prompts
@@ -534,6 +535,9 @@ def ver_cliente(cliente):
         informe=informe.completo(cliente),
         productos=_productos_con_uso(cliente),
         tipos_producto=prompt_swap.TIPOS,
+        zonas_cuerpo=mapa_corporal.ZONAS,
+        presets_cuerpo=mapa_corporal.PRESETS,
+        etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS,
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
@@ -903,7 +907,8 @@ def crear_producto(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
     try:
         producto_id = catalogo_productos.crear(
-            cliente, nombre, descripcion, tipo=request.form.get("tipo"))
+            cliente, nombre, descripcion, tipo=request.form.get("tipo"),
+            zonas=request.form.getlist("zonas"))
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
@@ -943,6 +948,7 @@ def actualizar_producto(cliente, producto_id):
             nombre=request.form.get("nombre"),
             descripcion=request.form.get("descripcion"),
             tipo=request.form.get("tipo"),
+            zonas=request.form.getlist("zonas"),
         )
     except ValueError as e:
         flash(str(e), "error")
@@ -1269,6 +1275,9 @@ def generar_swap(cliente):
             # los pies y no puede sobresalir del contorno del pie; una cobija se
             # drapea sobre la persona o el mueble y sigue sus pliegues.
             tipo_producto = producto.get("tipo")
+            # Instrucción de ubicación y proporción derivada del mapa corporal.
+            # None si el producto no va sobre una persona (cobija, objeto).
+            mapa_producto = producto.get("mapa_texto")
             # Si la subida a R2 falla, el resultado SÍ existe en disco. Se guarda
             # el motivo para que la plantilla pueda decir la verdad ("se generó
             # pero no se pudo subir, está acá") en vez de dar por muerta una
@@ -1298,19 +1307,19 @@ def generar_swap(cliente):
                 trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                 if proveedor == "kling_o1":
                     citas = " ".join(f"@Image{i + 1}" for i in range(len(referencias_urls)))
-                    prompt = prompt_swap.prompt_video(tipo_producto, citas=citas)
+                    prompt = prompt_swap.prompt_video(tipo_producto, citas=citas, mapa=mapa_producto)
                     resultado_url = kling_o1_client.editar_video(
                         video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
                     )
                     costo = kling_o1_client.estimate_video()
                 elif proveedor == "wan27_edit":
-                    prompt = prompt_swap.prompt_video(tipo_producto)
+                    prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
                     resultado_url = wavespeed_client.editar_video(
                         video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
                     )
                     costo = wavespeed_client.estimate_video()
                 elif proveedor in wavespeed_video_edit.MODELOS:
-                    prompt = prompt_swap.prompt_video(tipo_producto)
+                    prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
                     resultado_url = wavespeed_video_edit.editar_video(
                         proveedor, video_url, prompt, referencias_urls=referencias_urls,
                         on_progreso=avisar_fase,
@@ -1320,7 +1329,7 @@ def generar_swap(cliente):
                     referencia = referencias_urls[0] if referencias_urls else None
                     resultado_url = comparador_modelos.editar_video(
                         proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
-                        on_progreso=avisar_fase, tipo=tipo_producto,
+                        on_progreso=avisar_fase, tipo=tipo_producto, mapa=mapa_producto,
                     )
                     costo = comparador_modelos.estimate_video(proveedor)
 
@@ -1345,7 +1354,7 @@ def generar_swap(cliente):
                     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                     img_bytes = nano_banana_client.swap_producto(
                         foto_local, producto["referencias"], negative_prompt=negative_prompt,
-                        tipo=tipo_producto,
+                        tipo=tipo_producto, mapa=mapa_producto,
                     )
                     with open(local_path, "wb") as f:
                         f.write(img_bytes)
@@ -1367,7 +1376,7 @@ def generar_swap(cliente):
                             for i in range(len(referencias_urls))
                         )
                         resultado_url = wavespeed_imagen.editar_imagen(
-                            foto_url, prompt_swap.prompt_imagen(tipo_producto, referencias_lista),
+                            foto_url, prompt_swap.prompt_imagen(tipo_producto, referencias_lista, mapa=mapa_producto),
                             referencias_urls=referencias_urls,
                             aspect_ratio=aspect_ratio_mod.detectar_wavespeed_nano_banana_pro(foto_local),
                             on_progreso=avisar_fase,
@@ -1376,7 +1385,7 @@ def generar_swap(cliente):
                     else:
                         resultado_url = comparador_modelos.editar_imagen(
                             proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
-                            foto_local_path=foto_local, on_progreso=avisar_fase, tipo=tipo_producto,
+                            foto_local_path=foto_local, on_progreso=avisar_fase, tipo=tipo_producto, mapa=mapa_producto,
                         )
                         costo = comparador_modelos.estimate_image(proveedor)
                     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)

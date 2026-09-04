@@ -3,33 +3,34 @@
    ============================================================ */
 
 :root {
-  --bg: #fdf8ef;
-  --panel: #ffffff;
-  --panel-2: #f4ead9;
-  --panel-hover: #f4ead9;
-  --border: #e9dcc3;
-  --border-soft: rgba(43, 33, 21, 0.08);
-  --text: #2b2115;
-  --muted: #8c7d63;
-  --muted-2: #6b5d47;
+  /* Tema oscuro. La herramienta ya no lleva la marca de un cliente: antes el
+     amarillo y el azul salían de la matriz de HappyFlops, que es UNO de los
+     proyectos que administra este dashboard. */
+  --bg: #0f1115;
+  --panel: #1a1d24;
+  --panel-2: #232733;
+  --panel-hover: #2a2f3c;
+  --border: #2c313c;
+  --border-soft: rgba(255, 255, 255, 0.08);
+  --text: #f2f3f5;
+  --muted: #9aa3b2;
+  --muted-2: #6b7383;
 
-  /* amarillo -> núcleo emocional; azul -> balance. Invariante 3 de la marca. */
-  --accent: #fdb716;
-  --accent-2: #4797c9;
-  --accent-grad: linear-gradient(135deg, #fdb716, #fecd0a);
+  --accent: #4d8dff;
+  --accent-2: #7c5cff;
+  --accent-grad: linear-gradient(135deg, #4d8dff, #7c5cff);
 
-  --ok: #2f9e6e;
-  --warn: #b58108;
-  --error: #c43f5a;
+  --ok: #3ecf8e;
+  --warn: #e8b339;
+  --error: #ff5f7a;
 
   --radius-sm: 8px;
   --radius: 14px;
   --radius-lg: 20px;
-  --shadow: 0 12px 32px rgba(43, 33, 21, 0.14);
-  --shadow-soft: 0 4px 16px rgba(43, 33, 21, 0.09);
-  --shadow-glow: 0 0 0 1px rgba(253, 183, 22, 0.3), 0 8px 24px rgba(253, 183, 22, 0.18);
+  --shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.3);
+  --shadow-glow: 0 0 0 1px rgba(77, 141, 255, 0.35), 0 8px 24px rgba(77, 141, 255, 0.2);
 
-  /* Invariante 10 de la marca: Sniglet y Helvetica, nada más. */
   --font-display: "Sniglet", "Helvetica Neue", sans-serif;
   --font-body: "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
@@ -58,9 +59,9 @@ body {
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(600px 400px at 8% -5%, rgba(253, 183, 22, 0.12), transparent 60%),
-    radial-gradient(700px 500px at 95% 10%, rgba(71, 151, 201, 0.10), transparent 60%),
-    radial-gradient(900px 600px at 50% 110%, rgba(71, 151, 201, 0.06), transparent 60%);
+    radial-gradient(600px 400px at 8% -5%, rgba(77, 141, 255, 0.14), transparent 60%),
+    radial-gradient(700px 500px at 95% 10%, rgba(124, 92, 255, 0.12), transparent 60%),
+    radial-gradient(900px 600px at 50% 110%, rgba(77, 141, 255, 0.07), transparent 60%);
 }
 
 /* ---------- header ---------- */
@@ -89,7 +90,7 @@ header {
   height: 26px;
   border-radius: 8px;
   background: var(--accent-grad);
-  box-shadow: 0 0 16px rgba(253, 183, 22, 0.35);
+  box-shadow: 0 0 16px rgba(77, 141, 255, 0.4);
   flex: 0 0 auto;
 }
 .marca-texto {
@@ -260,7 +261,7 @@ h2::before {
   animation-delay: calc(var(--i, 0) * 60ms);
 }
 @keyframes aparece-card { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
-.card-cliente:hover { transform: translateY(-6px); box-shadow: var(--shadow); border-color: rgba(253, 183, 22, .35); }
+.card-cliente:hover { transform: translateY(-6px); box-shadow: var(--shadow); border-color: rgba(77, 141, 255, .4); }
 
 .card-cliente-portada { position: relative; aspect-ratio: 16 / 11; overflow: hidden; background: var(--panel-2); }
 .card-cliente-portada img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .5s ease; }
@@ -883,3 +884,66 @@ td.estado-error { color: var(--error); }
   color: var(--accent-2);
   border: 1px solid rgba(71, 151, 201, .3);
 }
+
+/* ---------- maniquí para marcar dónde va el producto ---------- */
+
+.maniqui-wrap {
+  display: flex;
+  gap: 1.2rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  margin: .8rem 0;
+}
+
+.maniqui {
+  width: 150px;
+  height: auto;
+  flex: 0 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: .4rem;
+}
+
+/* Las divisiones del canon de 8 cabezas: es lo que hace visible la PROPORCIÓN
+   que se está marcando, no solo la ubicación. */
+.maniqui-guias line { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+.maniqui-guias text { font-size: 9px; fill: var(--muted); font-family: var(--font-body); }
+
+.maniqui-zonas path {
+  fill: var(--panel-2);
+  stroke: var(--muted);
+  stroke-width: 1;
+  cursor: pointer;
+  transition: fill .12s;
+}
+.maniqui-zonas path:hover { fill: var(--panel-hover); }
+.maniqui-zonas path.activa { fill: var(--accent); stroke: var(--accent); }
+
+.maniqui-lateral { flex: 1 1 220px; min-width: 200px; }
+
+.maniqui-presets { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .4rem; }
+
+.maniqui-preset {
+  font: inherit;
+  font-size: .72rem;
+  padding: .28rem .6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+}
+.maniqui-preset:hover { color: var(--text); border-color: var(--accent); }
+
+.maniqui-resumen {
+  margin-top: .7rem;
+  font-size: .76rem;
+  color: var(--muted);
+  line-height: 1.45;
+  min-height: 2.4em;
+}
+
+/* Los checkboxes son la fuente de verdad del formulario, pero no aportan
+   visualmente al lado del maniquí: se ocultan salvo que no haya JS. */
+.maniqui-checks { display: none; }

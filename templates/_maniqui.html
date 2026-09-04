@@ -1,0 +1,56 @@
+{# Maniquí de 8 cabezas para marcar dónde va un producto. Las zonas son <path>
+   con data-zona; el JS las pinta al tocarlas y sincroniza los checkboxes
+   ocultos, que son los que viajan en el formulario. Las líneas horizontales son
+   las divisiones del canon — sirven para que la persona vea la proporción que
+   está marcando, que es justo lo que se le manda al modelo. #}
+<div class="maniqui-wrap">
+  <svg class="maniqui" viewBox="0 0 200 640" role="img" aria-label="Maniquí para marcar zonas del cuerpo">
+    <g class="maniqui-guias">
+      {% for i in range(1, 8) %}
+      <line x1="14" y1="{{ i * 80 }}" x2="186" y2="{{ i * 80 }}"></line>
+      <text x="4" y="{{ i * 80 + 4 }}">{{ i }}</text>
+      {% endfor %}
+    </g>
+
+    <g class="maniqui-zonas">
+      <!-- cabeza: corona y franja de los ojos -->
+      <path data-zona="cabeza_corona" d="M100 8 c22 0 34 16 34 34 c0 6 -1 12 -3 18 h-62 c-2 -6 -3 -12 -3 -18 c0 -18 12 -34 34 -34 z"></path>
+      <path data-zona="cabeza_ojos" d="M69 60 h62 c-3 12 -13 22 -31 22 c-18 0 -28 -10 -31 -22 z"></path>
+      <path data-zona="cuello" d="M88 82 h24 v14 h-24 z"></path>
+
+      <!-- torso -->
+      <path data-zona="torso_alto" d="M70 96 h60 c6 0 10 4 10 10 v54 h-80 v-54 c0 -6 4 -10 10 -10 z"></path>
+      <path data-zona="torso_bajo" d="M60 160 h80 v80 h-80 z"></path>
+
+      <!-- brazos (los dos lados forman una sola zona) -->
+      <path data-zona="brazo" d="M46 106 h14 v86 h-14 z M140 106 h14 v86 h-14 z"></path>
+      <path data-zona="antebrazo" d="M46 192 h14 v80 h-14 z M140 192 h14 v80 h-14 z"></path>
+      <path data-zona="manos" d="M45 272 h16 v24 h-16 z M139 272 h16 v24 h-16 z"></path>
+
+      <!-- piernas -->
+      <path data-zona="cadera" d="M60 240 h80 v80 h-80 z"></path>
+      <path data-zona="muslo" d="M62 320 h34 v120 h-34 z M104 320 h34 v120 h-34 z"></path>
+      <path data-zona="pantorrilla" d="M66 440 h30 v144 h-30 z M104 440 h30 v144 h-30 z"></path>
+      <path data-zona="pies" d="M60 584 h36 v32 h-36 z M104 584 h36 v32 h-36 z"></path>
+    </g>
+  </svg>
+
+  <div class="maniqui-lateral">
+    <p class="campo-label">Toca dónde va el producto</p>
+    <div class="maniqui-presets">
+      {% for pid, etiqueta in etiquetas_presets.items() %}
+      <button type="button" class="maniqui-preset" data-preset="{{ presets[pid] | join(',') }}">{{ etiqueta }}</button>
+      {% endfor %}
+      <button type="button" class="maniqui-preset maniqui-limpiar">Ninguna (objeto)</button>
+    </div>
+    <p class="maniqui-resumen"></p>
+  </div>
+</div>
+
+{# Los checkboxes son la fuente de verdad del formulario; el SVG solo los
+   maneja. Así funciona igual si el JS falla. #}
+<div class="maniqui-checks">
+  {% for zid, z in zonas.items() %}
+  <label><input type="checkbox" name="zonas" value="{{ zid }}" {% if zid in (seleccionadas or []) %}checked{% endif %}> {{ z[0] }}</label>
+  {% endfor %}
+</div>

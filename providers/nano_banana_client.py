@@ -155,7 +155,7 @@ def generate_image(image_reference_url, prompt, negative_prompt=None, extra_para
 # editar cinco textos casi iguales.
 
 
-def swap_producto(foto_original_path, referencias_producto_paths, negative_prompt=None, tipo=None):
+def swap_producto(foto_original_path, referencias_producto_paths, negative_prompt=None, tipo=None, mapa=None):
     """Reemplaza SOLO el calzado de foto_original_path por el producto mostrado en
     referencias_producto_paths (hasta 6), manteniendo todo lo demás idéntico —
     incluido el encuadre: se detecta el aspect ratio real de la foto original y
@@ -168,7 +168,7 @@ def swap_producto(foto_original_path, referencias_producto_paths, negative_promp
     # El prompt lo arma prompt_swap según el TIPO de producto: un calzado y una
     # cobija no se editan con las mismas reglas (dónde va, cómo se cuenta, qué
     # significa que quede bien puesto).
-    texto = prompt_swap.prompt_imagen(tipo, referencias_lista)
+    texto = prompt_swap.prompt_imagen(tipo, referencias_lista, mapa=mapa)
     if negative_prompt:
         texto += f"\n\nEvita explícitamente: {negative_prompt}"
 
