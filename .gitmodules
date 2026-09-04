@@ -1,3 +1,6 @@
 [submodule "clientes/happyflops/marca"]
 	path = clientes/happyflops/marca
 	url = https://github.com/dacolora/happyflops-brand-matrix.git
+[submodule "meta_ads"]
+	path = meta_ads
+	url = https://github.com/dacolora/CreaTvMetaAds.git
