@@ -1054,7 +1054,7 @@ def ver_swap(cliente):
 # Solo modelos que ven la foto de referencia del producto y clonan la foto/video
 # original — nada que solo reciba una descripción en texto del calzado (eso
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
-PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra")
+PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
     "kling_o1", "luma_modify", "wan_animate_replace", "wan27_edit",
     "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit",
@@ -1065,6 +1065,7 @@ NOMBRES_PROVEEDOR_SWAP = {
     "nano_banana_fal": "Nano Banana (vía fal)",
     "qwen_edit": "Qwen Image Edit Plus",
     "nano_banana_pro_ultra": "Nano Banana Pro Ultra (4k)",
+    "seedream_v5_pro": "Seedream V5.0 Pro Edit (2k)",
     "kling_o1": "Kling O1",
     "luma_modify": "Luma Ray3 Modify",
     "wan_animate_replace": "Wan-2.2 Animate Replace",
@@ -1364,7 +1365,12 @@ def generar_swap(cliente):
                     # Nano Banana Pro Ultra acepta hasta 14 imágenes (13 de
                     # referencia + la foto); los de fal solo 2. Se sube lo que
                     # cada uno puede aprovechar, ni una más.
-                    tope_refs = 13 if proveedor == "nano_banana_pro_ultra" else 2
+                    if proveedor == "nano_banana_pro_ultra":
+                        tope_refs = 13
+                    elif proveedor == "seedream_v5_pro":
+                        tope_refs = 9   # acepta 10 en total, una la ocupa la foto
+                    else:
+                        tope_refs = 2
                     referencias_urls = [
                         r2_uploader.upload_image(ref, f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref)}")
                         for ref in producto["referencias"][:tope_refs]
@@ -1382,6 +1388,17 @@ def generar_swap(cliente):
                             on_progreso=avisar_fase,
                         )
                         costo = wavespeed_imagen.estimate_image()
+                    elif proveedor == "seedream_v5_pro":
+                        referencias_lista = "\n".join(
+                            f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
+                            for i in range(len(referencias_urls))
+                        )
+                        resultado_url = wavespeed_imagen.editar_imagen_seedream(
+                            foto_url,
+                            prompt_swap.prompt_imagen(tipo_producto, referencias_lista, mapa=mapa_producto),
+                            referencias_urls=referencias_urls, on_progreso=avisar_fase,
+                        )
+                        costo = wavespeed_imagen.estimate_seedream(n_imagenes=len(referencias_urls) + 1)
                     else:
                         resultado_url = comparador_modelos.editar_imagen(
                             proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
@@ -1459,7 +1476,7 @@ def generar_swap(cliente):
 
     if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit"):
         duracion_estimada = 20
-    elif proveedor == "nano_banana_pro_ultra":
+    elif proveedor in ("nano_banana_pro_ultra", "seedream_v5_pro"):
         duracion_estimada = 60  # sale en 4k: tarda bastante más que los de 1k
     elif proveedor in ("wan27_edit", "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit"):
         duracion_estimada = 380  # media reportada por WaveSpeed para estos modelos

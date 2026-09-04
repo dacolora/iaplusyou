@@ -24,11 +24,18 @@ import requests
 from providers import wavespeed_common
 
 MODELO_EDICION = "google/nano-banana-pro/edit-ultra"
+MODELO_SEEDREAM = "bytedance/seedream-v5.0-pro/edit"
 MODELO_UPSCALE = "bria/increase-resolution"
 
 # Precios oficiales por corrida (wavespeed.ai, 4 sep 2026).
 COSTO_USD_EDICION = {"4k": 0.15, "8k": 0.18}
 COSTO_USD_UPSCALE = 0.04
+
+# Seedream: base por resolución + $0.003 por cada imagen de entrada extra
+# (la primera va incluida). Tope 2k — no aporta resolución frente a Ultra.
+COSTO_USD_SEEDREAM = {"1k": 0.045, "1.5k": 0.045, "2k": 0.090}
+COSTO_USD_SEEDREAM_IMAGEN_EXTRA = 0.003
+MAX_IMAGENES_SEEDREAM = 10
 
 # Límite duro documentado del upscaler: el ÁREA total de salida no puede pasar
 # de 8192x8192. Con factor 4 eso deja la entrada en ~2048x2048; una foto de
@@ -118,3 +125,41 @@ def estimate_image(resolution="4k", con_mejora=False):
 
 def estimate_mejora():
     return {"credits": None, "usd": COSTO_USD_UPSCALE}
+
+
+def editar_imagen_seedream(foto_url, prompt, referencias_urls=None, resolution="2k",
+                           on_progreso=None):
+    """Seedream V5.0 Pro Edit. Es el único del catálogo cuya doc oficial habla de
+    "photographic realism", y el más barato de los de alta calidad.
+
+    Dos diferencias con Ultra que importan:
+      - `aspect_ratio` se omite a propósito: la doc dice que sin ese campo usa
+        automáticamente el ratio soportado más cercano al de la PRIMERA imagen de
+        entrada, que es exactamente lo que se quiere (conservar el encuadre) y
+        evita el mapeo manual que hubo que escribir para los otros proveedores.
+      - ADVERTENCIA: `prompt_optimization_mode` hace que el modelo REESCRIBA el
+        prompt antes de generar, y no hay valor documentado para desactivarlo.
+        Nuestro prompt depende de instrucciones muy específicas (el mapa corporal,
+        "no toca las rodillas"), así que acá se pide el modo 'standard' —el menos
+        agresivo de los dos documentados— y se asume el riesgo consciente."""
+    referencias_urls = referencias_urls or []
+    imagenes = [foto_url] + list(referencias_urls[:MAX_IMAGENES_SEEDREAM - 1])
+    payload = {
+        "prompt": prompt,
+        "images": imagenes,
+        "resolution": resolution,
+        "prompt_optimization_mode": "standard",
+    }
+    prediction_id = _lanzar(MODELO_SEEDREAM, payload)
+    data = wavespeed_common.poll_hasta_listo(
+        prediction_id, "Seedream V5.0 Pro Edit", on_progreso=on_progreso,
+    )
+    return _primera_salida(data, "Seedream V5.0 Pro Edit")
+
+
+def estimate_seedream(resolution="2k", n_imagenes=1, con_mejora=False):
+    total = COSTO_USD_SEEDREAM.get(resolution, COSTO_USD_SEEDREAM["2k"])
+    total += max(0, n_imagenes - 1) * COSTO_USD_SEEDREAM_IMAGEN_EXTRA
+    if con_mejora:
+        total += COSTO_USD_UPSCALE
+    return {"credits": None, "usd": round(total, 3)}
