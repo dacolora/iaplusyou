@@ -27,6 +27,7 @@ import conceptos_imagen
 import catalogo_productos
 import swaps as swaps_mod
 import bitacora
+import informe
 import prompt_swap
 import trabajos
 import generador_prompts
@@ -530,6 +531,7 @@ def ver_cliente(cliente):
         ideas_visuales=_conceptos_pendientes(cliente),
         videos=videos,
         log=log,
+        informe=informe.completo(cliente),
         productos=_productos_con_uso(cliente),
         tipos_producto=prompt_swap.TIPOS,
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,

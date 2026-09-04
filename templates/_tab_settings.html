@@ -114,3 +114,99 @@
 
 <h3>Modelos que usamos</h3>
 {% include "_comparacion_modelos.html" %}
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid rgba(255,255,255,.12);">
+
+{# Informe para sustentar la cuenta de cobro. TODO lo que se muestra acá sale de
+   una fuente verificable: la bitácora (CSV append-only), el estado en disco o el
+   historial de git. Nada estimado se presenta como medido. #}
+<h3>Informe de operación y desarrollo</h3>
+<p class="vacio" style="padding-top:0;">
+  Todo lo de abajo es verificable: sale de la bitácora, del estado en disco y del
+  historial de git de este repositorio. No hay nada estimado presentado como medido.
+</p>
+
+<div class="informe-tarjetas">
+  <div class="informe-tarjeta">
+    <span class="informe-num">${{ "%.2f"|format(informe.operacion.total_usd) }}</span>
+    <span class="informe-label">Gasto real en APIs de IA</span>
+  </div>
+  <div class="informe-tarjeta">
+    <span class="informe-num">{{ informe.operacion.facturadas }}</span>
+    <span class="informe-label">Generaciones completadas y cobradas</span>
+  </div>
+  <div class="informe-tarjeta">
+    <span class="informe-num">{{ informe.operacion.eventos_bitacora }}</span>
+    <span class="informe-label">Eventos en bitácora{% if informe.operacion.primer_evento %}<br>{{ informe.operacion.primer_evento }} → {{ informe.operacion.ultimo_evento }}{% endif %}</span>
+  </div>
+  <div class="informe-tarjeta">
+    <span class="informe-num">{{ informe.desarrollo.tiempo.horas }} h</span>
+    <span class="informe-label">Horas de desarrollo medidas</span>
+  </div>
+</div>
+
+<h4 style="margin-top:1.5rem;">Gasto por modelo</h4>
+<div style="overflow-x:auto;">
+<table>
+  <thead><tr><th>Modelo</th><th>Generaciones</th><th>Costo</th></tr></thead>
+  <tbody>
+    {% for modelo, d in informe.operacion.por_modelo.items() %}
+    <tr><td>{{ modelo }}</td><td>{{ d.n }}</td><td>${{ "%.3f"|format(d.usd) }}</td></tr>
+    {% endfor %}
+    <tr><td><strong>Total</strong></td>
+        <td><strong>{{ informe.operacion.facturadas }}</strong></td>
+        <td><strong>${{ "%.3f"|format(informe.operacion.total_usd) }}</strong></td></tr>
+  </tbody>
+</table>
+</div>
+
+{% if informe.operacion.fallidas or informe.operacion.borradas_pero_registradas %}
+<p class="vacio" style="font-size:.78rem;">
+  Nota de transparencia:
+  {% if informe.operacion.fallidas %}
+  hay {{ informe.operacion.fallidas }} generaciones fallidas sin costo registrado — la
+  mayoría fueron rechazos del proveedor (error 400 o falta de créditos), donde el modelo
+  no llegó a ejecutarse y por tanto no se facturaron.
+  {% endif %}
+  {% if informe.operacion.borradas_pero_registradas %}
+  Además, la bitácora conserva {{ informe.operacion.borradas_pero_registradas }} generaciones
+  exitosas que se eliminaron desde la interfaz: se ejecutaron y se pagaron, pero su costo
+  individual ya no es recuperable.
+  {% endif %}
+</p>
+{% endif %}
+
+<h4 style="margin-top:1.5rem;">Lo que tomó construirlo</h4>
+<div style="overflow-x:auto;">
+<table>
+  <tbody>
+    <tr><td>Período de desarrollo</td><td>{{ informe.desarrollo.desde }} → {{ informe.desarrollo.hasta }}</td></tr>
+    <tr><td>Commits</td><td>{{ informe.desarrollo.commits }}</td></tr>
+    <tr><td>Código entregado</td><td>{{ "{:,}".format(informe.desarrollo.lineas) }} líneas en {{ informe.desarrollo.archivos }} archivos</td></tr>
+    <tr><td>Integraciones con modelos de IA</td><td>{{ informe.desarrollo.proveedores | length }} ({{ informe.desarrollo.proveedores | join(", ") }})</td></tr>
+    <tr><td>Publicación automática</td><td>{{ informe.desarrollo.plataformas | join(", ") }}</td></tr>
+    <tr><td>Jornadas de trabajo</td><td>{{ informe.desarrollo.tiempo.dias }} días</td></tr>
+    <tr><td><strong>Horas medidas</strong></td><td><strong>{{ informe.desarrollo.tiempo.horas }} h</strong></td></tr>
+  </tbody>
+</table>
+</div>
+
+<details style="margin-top:.8rem;">
+  <summary class="btn-guardar btn-sm">Ver el detalle día por día →</summary>
+  <div style="overflow-x:auto;margin-top:.8rem;">
+  <table>
+    <thead><tr><th>Fecha</th><th>Commits</th><th>Desde</th><th>Hasta</th><th>Horas</th></tr></thead>
+    <tbody>
+      {% for d in informe.desarrollo.tiempo.detalle %}
+      <tr><td>{{ d.fecha }}</td><td>{{ d.commits }}</td><td>{{ d.desde }}</td><td>{{ d.hasta }}</td><td>{{ d.horas }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="vacio" style="font-size:.76rem;">
+    Cómo se mide: el tiempo entre el primer y el último commit de cada día. Es un
+    <strong>piso, no un estimado</strong> — no cuenta el trabajo previo al primer commit
+    del día, las sesiones que terminaron sin commit, ni los días de un solo commit (que
+    aparecen en 0 h). El tiempo real invertido es mayor que esta cifra.
+  </p>
+</details>
