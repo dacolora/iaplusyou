@@ -947,3 +947,6 @@ td.estado-error { color: var(--error); }
 /* Los checkboxes son la fuente de verdad del formulario, pero no aportan
    visualmente al lado del maniquí: se ocultan salvo que no haya JS. */
 .maniqui-checks { display: none; }
+
+/* Banco de recetas de FlowPlus: chips que rellenan la acción central. */
+.banco-prompts { display: flex; flex-wrap: wrap; gap: .3rem; margin: .3rem 0 .5rem; }

@@ -26,6 +26,7 @@ import marca as marca_mod
 import conceptos_imagen
 import catalogo_productos
 import swaps as swaps_mod
+import banco_prompts
 import bitacora
 import informe
 import mapa_corporal
@@ -538,6 +539,7 @@ def ver_cliente(cliente):
         zonas_cuerpo=mapa_corporal.ZONAS,
         presets_cuerpo=mapa_corporal.PRESETS,
         etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS,
+        banco_prompts=banco_prompts.listar(),
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
@@ -1816,6 +1818,25 @@ def cf_generar_prompt(cliente):
     personajes = [personajes_por_nombre[n] for n in personajes_sel if n in personajes_por_nombre]
     productos = [productos_por_nombre[n] for n in productos_sel if n in productos_por_nombre]
     escenas = [escenas_por_nombre[n] for n in escenas_sel if n in escenas_por_nombre]
+
+    # Unificación con el catálogo: FlowPlus ya no depende de subir el producto
+    # aparte en productos_referencia — usa los mismos productos de FlowCatálogo,
+    # con sus fotos, su tipo y su mapa corporal. Se sube la foto representativa a
+    # R2 en el momento, porque Wan 3.0 necesita una URL pública y el catálogo
+    # vive solo en disco hasta que algo la necesita.
+    for pid in request.form.getlist("productos_catalogo"):
+        prod = catalogo_productos.encontrar(cliente, pid)
+        if not prod:
+            continue
+        try:
+            url = r2_uploader.upload_image(
+                prod["representativa"],
+                f"clientes/{cliente}/productos/{pid}/{os.path.basename(prod['representativa'])}")
+        except Exception as e:
+            bitacora.registrar(cliente, pid, "creative_flow_producto", "error", str(e))
+            continue
+        productos.append({"nombre": prod["nombre"], "url": url})
+        productos_sel.append(prod["nombre"])
 
     # Lista canónica de referencias, resuelta UNA sola vez acá: personaje ->
     # producto -> escena, descartando cualquier entrada sin URL pública

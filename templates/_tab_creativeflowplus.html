@@ -26,7 +26,24 @@
 </div>
 
 <form method="post" action="{{ url_for('cf_generar_prompt', cliente=cliente) }}" class="form-nueva-idea" style="margin-top:1rem;">
-  <label class="campo-label">Personajes</label>
+  {# Unificación con FlowCatálogo: los productos ya no se suben aparte, se
+     eligen del catálogo — con su tipo, su descripción y su mapa corporal. #}
+  <label class="campo-label">Productos del catálogo</label>
+  {% if productos %}
+  <div class="catalogo-productos">
+    {% for p in productos %}
+    <label class="producto-opcion">
+      <input type="checkbox" name="productos_catalogo" value="{{ p.id }}">
+      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
+      <span>{{ p.nombre }}</span>
+    </label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay productos en el catálogo — créalos en FlowCatálogo.</p>
+  {% endif %}
+
+  <label class="campo-label" style="margin-top:1rem;display:block;">Personajes</label>
   {% if personajes %}
   <div class="catalogo-productos">
     {% for p in personajes %}
@@ -89,6 +106,11 @@
   <div class="fila-campos-idea" style="margin-top:1rem;">
     <div>
       <label class="campo-label">Acción central / detonante</label>
+      <div class="banco-prompts">
+        {% for b in banco_prompts %}
+        <button type="button" class="maniqui-preset" data-prompt="{{ b.texto }}">{{ b.etiqueta }}</button>
+        {% endfor %}
+      </div>
       <textarea name="accion_central" rows="2" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría" required></textarea>
     </div>
     <div>
@@ -171,3 +193,17 @@
   </div>
   {% endfor %}
 </div>
+
+<script>
+  // Banco de prompts: rellena la acción central con una receta base para que no
+  // haya que escribirla desde cero cada vez. Es un punto de partida editable, no
+  // un prompt fijo — el banco vive en banco_prompts.py y se edita ahí.
+  (function () {
+    document.querySelectorAll('.banco-prompts .maniqui-preset').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var ta = document.querySelector('textarea[name="accion_central"]');
+        if (ta) { ta.value = b.dataset.prompt; ta.focus(); }
+      });
+    });
+  })();
+</script>
