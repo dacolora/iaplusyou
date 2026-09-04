@@ -10,6 +10,7 @@ import re
 import unicodedata
 
 import _json_store
+import prompt_swap
 
 BASE_DIR = os.path.dirname(__file__)
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
@@ -79,6 +80,10 @@ def listar(cliente):
             "id": nombre_carpeta,
             "nombre": propio.get("nombre") or NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
             "descripcion": propio.get("descripcion") or DESCRIPCIONES.get(nombre_carpeta, ""),
+            # El tipo decide QUÉ prompt se le manda al modelo (un calzado va en
+            # los pies, una cobija se drapea). Los productos que ya existían son
+            # todos calzado, así que ese es el default y no hay que migrar nada.
+            "tipo": prompt_swap.tipo_valido(propio.get("tipo")),
             "referencias": [os.path.join(subcarpeta, f) for f in archivos],
             # Nombres de archivo sueltos: la UI de gestión necesita poder
             # referirse a una imagen concreta (para borrarla o mostrarla) sin
@@ -107,7 +112,7 @@ def carpeta_de(cliente, producto_id):
     return destino
 
 
-def crear(cliente, nombre, descripcion=""):
+def crear(cliente, nombre, descripcion="", tipo=None):
     """Crea la carpeta del producto y guarda su metadata. Devuelve el id nuevo.
     OJO: hasta que no tenga al menos una imagen no aparece en listar(), porque
     un producto sin fotos de referencia no sirve para generar nada."""
@@ -117,12 +122,16 @@ def crear(cliente, nombre, descripcion=""):
         raise ValueError(f"Ya existe un producto con ese nombre ({producto_id}).")
     os.makedirs(carpeta, exist_ok=True)
     meta = cargar_meta(cliente)
-    meta[producto_id] = {"nombre": nombre.strip(), "descripcion": (descripcion or "").strip()}
+    meta[producto_id] = {
+        "nombre": nombre.strip(),
+        "descripcion": (descripcion or "").strip(),
+        "tipo": prompt_swap.tipo_valido(tipo),
+    }
     guardar_meta(cliente, meta)
     return producto_id
 
 
-def actualizar(cliente, producto_id, nombre=None, descripcion=None):
+def actualizar(cliente, producto_id, nombre=None, descripcion=None, tipo=None):
     """Cambia nombre/descripción SIN tocar la carpeta ni su id. El id se queda
     como está a propósito: es lo que guardan los swaps ya generados
     (swaps.json -> producto_id), y renombrar la carpeta los dejaría huérfanos."""
@@ -133,6 +142,8 @@ def actualizar(cliente, producto_id, nombre=None, descripcion=None):
         actual["nombre"] = nombre.strip()
     if descripcion is not None:
         actual["descripcion"] = descripcion.strip()
+    if tipo is not None:
+        actual["tipo"] = prompt_swap.tipo_valido(tipo)
     meta[producto_id] = actual
     guardar_meta(cliente, meta)
 

@@ -166,6 +166,12 @@
     <form method="post" action="{{ url_for('crear_producto', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
       <label class="campo-label">Nuevo producto</label>
       <input type="text" name="nombre" placeholder="Nombre visible, ej. HOriginal — Verde" required>
+      <label class="campo-label" style="margin-top:.6rem;display:block;">Tipo de producto</label>
+      <select name="tipo">
+        {% for tid, t in tipos_producto.items() %}
+        <option value="{{ tid }}">{{ t.etiqueta }}</option>
+        {% endfor %}
+      </select>
       <textarea name="descripcion" rows="2" placeholder="Descripción para los modelos que no ven la foto (Higgsfield): ej. chanclas tipo slide de goma acanalada, color verde uniforme"></textarea>
       <label class="campo-label" style="margin-top:.6rem;display:block;">Fotos de referencia (puedes elegir varias)</label>
       <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple required>
@@ -187,6 +193,11 @@
 
       <form method="post" action="{{ url_for('actualizar_producto', cliente=cliente, producto_id=p.id) }}" class="form-nueva-idea">
         <input type="text" name="nombre" value="{{ p.nombre }}" required>
+        <select name="tipo" title="Decide qué se le pide al modelo: dónde va el producto y cómo debe quedar">
+          {% for tid, t in tipos_producto.items() %}
+          <option value="{{ tid }}" {% if p.tipo == tid %}selected{% endif %}>{{ t.etiqueta }}</option>
+          {% endfor %}
+        </select>
         <textarea name="descripcion" rows="2" placeholder="Descripción para Higgsfield (que no ve la foto)">{{ p.descripcion }}</textarea>
         <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar cambios</button>
       </form>

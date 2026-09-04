@@ -12,6 +12,7 @@ import os
 import requests
 from PIL import Image
 
+import prompt_swap
 from providers import aspect_ratio
 
 BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
@@ -148,55 +149,13 @@ def generate_image(image_reference_url, prompt, negative_prompt=None, extra_para
     return _llamar(parts, aspect_ratio=aspect_ratio)
 
 
-SWAP_PROMPT = """Esto es una EDICIÓN de foto, no la creación de una foto nueva. No \
-generes una escena nueva ni una persona nueva — parte de la imagen 1 tal cual \
-existe, píxel por píxel, y edítala.
-
-Imagen 1 (OBLIGATORIO usar esta base, no otra): la foto a editar.
-{referencias_lista}
-
-PASO 0 — antes de editar nada: contá cuántas personas aparecen en la Imagen 1 \
-y cuántas de ellas tienen calzado puesto (no cuenta quien esté descalzo o \
-sosteniendo su calzado en la mano). Vas a editar ese número exacto de pares de \
-calzado — ni uno menos. Es un error grave dejar a alguna persona con su \
-calzado original puesto.
-
-La ÚNICA edición permitida: en la Imagen 1, localiza el calzado que lleva puesta \
-CADA persona que aparezca en la foto — si hay varias personas, se edita el \
-calzado de TODAS, ninguna se queda con su calzado original — y BÓRRALO POR \
-COMPLETO en cada una — incluyendo cualquier media, calcetín o parte del calzado \
-original que quede asomada — antes de dibujar el producto nuevo. No debe quedar \
-ningún resto visible del calzado o media original debajo, detrás o alrededor del \
-calzado nuevo, en ninguna de las personas. Cada pie debe quedar tal como se \
-vería puesto directamente el producto de referencia, sin nada del original \
-debajo.
-
-Reemplázalo por el producto mostrado en las imágenes de referencia (mismo color \
-exacto, mismo diseño, misma textura).
-
-ADVERTENCIA sobre el tamaño: las imágenes de referencia del producto son \
-ACERCAMIENTOS de estudio — el producto llena casi todo el cuadro ahí, pero eso \
-NO significa que el producto sea grande. Ignora por completo qué tan grande se \
-ve el producto en sus propias fotos de referencia; eso es solo zoom de cámara, \
-no su tamaño real.
-
-El calzado nuevo tiene que medir, en cada persona de la Imagen 1, EXACTAMENTE lo \
-mismo que medía su calzado original — mismo largo de punta a talón, mismo \
-ancho, ni un milímetro más. Compáralo con el tamaño del propio pie/tobillo de \
-cada persona en la Imagen 1 como referencia real: el calzado nunca debe \
-sobresalir del contorno natural del pie de nadie. Si el resultado se ve más \
-grande, ancho, inflado o "exagerado" que un calzado normal puesto en ese pie, \
-está mal — corrígelo a un tamaño realista y discreto.
-
-Son las mismas personas de la Imagen 1 — mismos rostros exactos, mismo color y \
-peinado de pelo de cada una, misma edad, misma piel, mismo cuerpo, misma ropa, \
-misma pose exacta, mismo fondo exacto, misma luz exacta, mismo encuadre exacto. \
-No son personas nuevas ni una foto nueva: es la Imagen 1, con el calzado de \
-todas cambiado y nada más. Si dudas si cambiar algo que no sea el calzado, no \
-lo cambies."""
+# El prompt de swap se mudó a prompt_swap.py: estaba duplicado acá, en
+# providers/comparador_modelos.py y en tres ramas de dashboard.py, todos con
+# la palabra "calzado" incrustada — por eso agregar una cobija obligaba a
+# editar cinco textos casi iguales.
 
 
-def swap_producto(foto_original_path, referencias_producto_paths, negative_prompt=None):
+def swap_producto(foto_original_path, referencias_producto_paths, negative_prompt=None, tipo=None):
     """Reemplaza SOLO el calzado de foto_original_path por el producto mostrado en
     referencias_producto_paths (hasta 6), manteniendo todo lo demás idéntico —
     incluido el encuadre: se detecta el aspect ratio real de la foto original y
@@ -206,7 +165,10 @@ def swap_producto(foto_original_path, referencias_producto_paths, negative_promp
     referencias_lista = "\n".join(
         f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)." for i in range(len(referencias))
     )
-    texto = SWAP_PROMPT.format(referencias_lista=referencias_lista)
+    # El prompt lo arma prompt_swap según el TIPO de producto: un calzado y una
+    # cobija no se editan con las mismas reglas (dónde va, cómo se cuenta, qué
+    # significa que quede bien puesto).
+    texto = prompt_swap.prompt_imagen(tipo, referencias_lista)
     if negative_prompt:
         texto += f"\n\nEvita explícitamente: {negative_prompt}"
 

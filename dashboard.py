@@ -27,6 +27,7 @@ import conceptos_imagen
 import catalogo_productos
 import swaps as swaps_mod
 import bitacora
+import prompt_swap
 import trabajos
 import generador_prompts
 from providers import image_provider
@@ -530,6 +531,7 @@ def ver_cliente(cliente):
         videos=videos,
         log=log,
         productos=_productos_con_uso(cliente),
+        tipos_producto=prompt_swap.TIPOS,
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
@@ -898,7 +900,8 @@ def crear_producto(cliente):
         flash("Sube al menos una foto del producto.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
     try:
-        producto_id = catalogo_productos.crear(cliente, nombre, descripcion)
+        producto_id = catalogo_productos.crear(
+            cliente, nombre, descripcion, tipo=request.form.get("tipo"))
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
@@ -937,6 +940,7 @@ def actualizar_producto(cliente, producto_id):
             cliente, producto_id,
             nombre=request.form.get("nombre"),
             descripcion=request.form.get("descripcion"),
+            tipo=request.form.get("tipo"),
         )
     except ValueError as e:
         flash(str(e), "error")
@@ -1246,6 +1250,10 @@ def generar_swap(cliente):
             resultados_dir = os.path.join(BASE_DIR, "salidas", cliente, "swaps")
             os.makedirs(resultados_dir, exist_ok=True)
             negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
+            # El TIPO del producto decide qué prompt se arma: un calzado va en
+            # los pies y no puede sobresalir del contorno del pie; una cobija se
+            # drapea sobre la persona o el mueble y sigue sus pliegues.
+            tipo_producto = producto.get("tipo")
             # Si la subida a R2 falla, el resultado SÍ existe en disco. Se guarda
             # el motivo para que la plantilla pueda decir la verdad ("se generó
             # pero no se pudo subir, está acá") en vez de dar por muerta una
@@ -1275,37 +1283,19 @@ def generar_swap(cliente):
                 trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                 if proveedor == "kling_o1":
                     citas = " ".join(f"@Image{i + 1}" for i in range(len(referencias_urls)))
-                    prompt = (
-                        f"Reemplaza el calzado que lleva puesta CADA persona del video "
-                        f"(si hay varias, el de TODAS, ninguna se queda con el original) "
-                        f"por el que se muestra en {citas} — mismo color, diseño y "
-                        f"textura exactos. No cambies nada más del video: mismo "
-                        f"movimiento, mismas personas, mismo fondo, misma iluminación."
-                    )
+                    prompt = prompt_swap.prompt_video(tipo_producto, citas=citas)
                     resultado_url = kling_o1_client.editar_video(
                         video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
                     )
                     costo = kling_o1_client.estimate_video()
                 elif proveedor == "wan27_edit":
-                    prompt = (
-                        f"Reemplaza el calzado que lleva puesta CADA persona del video "
-                        f"(si hay varias, el de TODAS, ninguna se queda con el original) "
-                        f"por el que se muestra en las imágenes de referencia — mismo "
-                        f"color, diseño y textura exactos. No cambies nada más del video: "
-                        f"mismo movimiento, mismas personas, mismo fondo, misma iluminación."
-                    )
+                    prompt = prompt_swap.prompt_video(tipo_producto)
                     resultado_url = wavespeed_client.editar_video(
                         video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
                     )
                     costo = wavespeed_client.estimate_video()
                 elif proveedor in wavespeed_video_edit.MODELOS:
-                    prompt = (
-                        f"Reemplaza el calzado que lleva puesta CADA persona del video "
-                        f"(si hay varias, el de TODAS, ninguna se queda con el original) "
-                        f"por el que se muestra en las imágenes de referencia — mismo "
-                        f"color, diseño y textura exactos. No cambies nada más del video: "
-                        f"mismo movimiento, mismas personas, mismo fondo, misma iluminación."
-                    )
+                    prompt = prompt_swap.prompt_video(tipo_producto)
                     resultado_url = wavespeed_video_edit.editar_video(
                         proveedor, video_url, prompt, referencias_urls=referencias_urls,
                         on_progreso=avisar_fase,
@@ -1315,7 +1305,7 @@ def generar_swap(cliente):
                     referencia = referencias_urls[0] if referencias_urls else None
                     resultado_url = comparador_modelos.editar_video(
                         proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
-                        on_progreso=avisar_fase,
+                        on_progreso=avisar_fase, tipo=tipo_producto,
                     )
                     costo = comparador_modelos.estimate_video(proveedor)
 
@@ -1340,6 +1330,7 @@ def generar_swap(cliente):
                     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                     img_bytes = nano_banana_client.swap_producto(
                         foto_local, producto["referencias"], negative_prompt=negative_prompt,
+                        tipo=tipo_producto,
                     )
                     with open(local_path, "wb") as f:
                         f.write(img_bytes)
@@ -1353,7 +1344,7 @@ def generar_swap(cliente):
                     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                     resultado_url = comparador_modelos.editar_imagen(
                         proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
-                        foto_local_path=foto_local, on_progreso=avisar_fase,
+                        foto_local_path=foto_local, on_progreso=avisar_fase, tipo=tipo_producto,
                     )
                     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
                     resp = requests.get(resultado_url, timeout=120)
