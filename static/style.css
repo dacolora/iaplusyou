@@ -810,6 +810,12 @@ td.estado-error { color: var(--error); }
   padding: 1rem;
 }
 
+/* El `display: flex` de arriba GANA sobre el atributo `hidden`: `hidden` solo
+   aplica `display: none` desde la hoja de estilos del navegador, y cualquier
+   regla del autor la pisa. Sin esta línea el modal de eliminar se ve abierto
+   siempre, apenas carga la página. */
+.modal-fondo[hidden] { display: none; }
+
 .modal-caja {
   background: var(--panel);
   border: 1px solid var(--border);
