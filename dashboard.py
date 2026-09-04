@@ -16,7 +16,7 @@ import threading
 import requests
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -529,7 +529,7 @@ def ver_cliente(cliente):
         ideas_visuales=_conceptos_pendientes(cliente),
         videos=videos,
         log=log,
-        productos=catalogo_productos.listar(cliente),
+        productos=_productos_con_uso(cliente),
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
@@ -854,6 +854,139 @@ def imagen_producto(cliente, producto_id):
         flash(f"No encontré el producto {producto_id}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
     return send_file(producto["representativa"])
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/imagen/<nombre>")
+def imagen_producto_archivo(cliente, producto_id, nombre):
+    """Sirve UNA foto concreta del producto — la pantalla de gestión muestra
+    todas las referencias, no solo la representativa."""
+    try:
+        carpeta = catalogo_productos.carpeta_de(cliente, producto_id)
+    except ValueError:
+        abort(404)
+    ruta = os.path.join(carpeta, secure_filename(nombre))
+    if not os.path.isfile(ruta):
+        abort(404)
+    return send_file(ruta)
+
+
+def _productos_con_uso(cliente):
+    """El catálogo + cuántos swaps ya generados usa cada producto. Ese número se
+    le muestra al usuario en el modal ANTES de borrar: esas tarjetas no se
+    rompen (siguen mostrando el id crudo), pero pierden el nombre y la foto.
+    Se cuenta de una sola pasada sobre swaps.json, no una por producto."""
+    usos = {}
+    for entry in swaps_mod.cargar(cliente).values():
+        pid = entry.get("producto_id")
+        if pid:
+            usos[pid] = usos.get(pid, 0) + 1
+    productos = catalogo_productos.listar(cliente)
+    for p in productos:
+        p["usos"] = usos.get(p["id"], 0)
+    return productos
+
+
+@app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
+def crear_producto(cliente):
+    nombre = (request.form.get("nombre") or "").strip()
+    descripcion = (request.form.get("descripcion") or "").strip()
+    archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
+    if not nombre:
+        flash("Ponle un nombre al producto.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    if not archivos:
+        flash("Sube al menos una foto del producto.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    try:
+        producto_id = catalogo_productos.crear(cliente, nombre, descripcion)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos)
+    if not guardadas:
+        # Sin ninguna foto válida el producto no aparecería en el catálogo:
+        # mejor deshacer que dejar una carpeta fantasma.
+        catalogo_productos.eliminar(cliente, producto_id)
+        flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
+    else:
+        flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
+def _guardar_fotos_producto(cliente, producto_id, archivos):
+    """Guarda las fotos en la carpeta del producto y devuelve cuántas entraron.
+    Quedan SOLO en disco a propósito: catalogo_productos las lee de ahí y el
+    swap las sube a R2 recién cuando se va a generar."""
+    carpeta = catalogo_productos.carpeta_de(cliente, producto_id)
+    os.makedirs(carpeta, exist_ok=True)
+    guardadas = 0
+    for archivo in archivos:
+        nombre = secure_filename(archivo.filename)
+        if not nombre.lower().endswith(catalogo_productos.IMAGE_EXTS):
+            continue
+        archivo.save(os.path.join(carpeta, nombre))
+        guardadas += 1
+    return guardadas
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/actualizar", methods=["POST"])
+def actualizar_producto(cliente, producto_id):
+    try:
+        catalogo_productos.actualizar(
+            cliente, producto_id,
+            nombre=request.form.get("nombre"),
+            descripcion=request.form.get("descripcion"),
+        )
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    flash("Producto actualizado.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/subir", methods=["POST"])
+def subir_imagen_producto(cliente, producto_id):
+    archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
+    if not archivos:
+        flash("No elegiste ninguna foto.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    try:
+        guardadas = _guardar_fotos_producto(cliente, producto_id, archivos)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    if guardadas:
+        flash(f"{guardadas} foto(s) agregada(s).", "ok")
+    else:
+        flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/<nombre>/eliminar", methods=["POST"])
+def eliminar_imagen_producto(cliente, producto_id, nombre):
+    try:
+        ok, mensaje = catalogo_productos.eliminar_imagen(cliente, producto_id, nombre)
+    except ValueError as e:
+        ok, mensaje = False, str(e)
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
+@app.route("/cliente/<cliente>/productos/<producto_id>/eliminar", methods=["POST"])
+def eliminar_producto(cliente, producto_id):
+    """Borra el producto y TODAS sus fotos del disco. Irreversible — por eso la
+    plantilla lo pide con un modal que nombra el producto y avisa cuántos swaps
+    ya generados lo referencian."""
+    producto = catalogo_productos.encontrar(cliente, producto_id)
+    nombre = producto["nombre"] if producto else producto_id
+    try:
+        catalogo_productos.eliminar(cliente, producto_id)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    flash(f"Producto eliminado: {nombre}", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
 
 
 def _swap_items(cliente):

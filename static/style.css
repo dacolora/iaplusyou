@@ -664,7 +664,7 @@ summary.idea-header::-webkit-details-marker { display: none; }
   max-width: min(90vw, 640px);
   padding: .7rem 1rem;
   border-radius: 12px;
-  background: var(--card);
+  background: var(--panel);
   border: 1px solid var(--accent);
   box-shadow: 0 10px 30px rgba(0, 0, 0, .18);
   font-size: .82rem;
@@ -714,3 +714,122 @@ td.estado-ok { color: var(--ok); }
 td.estado-error { color: var(--error); }
 
 .vacio { color: var(--muted); font-size: .89rem; padding: 1rem 0; line-height: 1.5; }
+
+/* ---------- gestión del catálogo de productos ---------- */
+
+.producto-gestion {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  margin-top: 1rem;
+  background: var(--panel);
+}
+
+.producto-gestion-fotos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-bottom: .8rem;
+}
+
+.producto-gestion-foto { position: relative; }
+
+.producto-gestion-foto img {
+  width: 92px;
+  height: 92px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  display: block;
+}
+
+/* La ✕ de cada foto va encima de la miniatura: con una fila de botones aparte
+   no se sabía cuál borraba cuál. */
+.producto-gestion-foto form {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  margin: 0;
+}
+
+.producto-gestion-foto button {
+  width: 22px;
+  height: 22px;
+  line-height: 1;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: .7rem;
+}
+
+.producto-gestion-foto button:hover {
+  color: var(--error);
+  border-color: rgba(196, 63, 90, .4);
+  background: rgba(196, 63, 90, .1);
+}
+
+.producto-gestion-acciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .8rem;
+  flex-wrap: wrap;
+  margin-top: .8rem;
+  padding-top: .8rem;
+  border-top: 1px solid var(--border);
+}
+
+.btn-peligro,
+.btn-eliminar-producto {
+  border: 1px solid rgba(196, 63, 90, .4);
+  background: rgba(196, 63, 90, .1);
+  color: var(--error);
+  border-radius: 10px;
+  padding: .4rem .8rem;
+  font: inherit;
+  font-size: .78rem;
+  cursor: pointer;
+}
+
+.btn-peligro:hover,
+.btn-eliminar-producto:hover { background: rgba(196, 63, 90, .2); }
+
+/* ---------- modal de confirmación ---------- */
+
+.modal-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, .45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal-caja {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.4rem;
+  max-width: 460px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+}
+
+.modal-caja h3 { margin: 0 0 .6rem; font-size: 1rem; }
+.modal-caja p { font-size: .84rem; color: var(--muted); margin: 0 0 .6rem; }
+.modal-advertencia { color: var(--error) !important; font-weight: 600; }
+
+.modal-acciones {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .6rem;
+  margin-top: 1rem;
+}
+
+.modal-acciones form { margin: 0; }

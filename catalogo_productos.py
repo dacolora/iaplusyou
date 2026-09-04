@@ -6,10 +6,17 @@ la mejor fidelidad posible al generar. Al usuario solo se le muestra UNA foto
 representativa por producto — las demás son material interno.
 """
 import os
+import re
+import unicodedata
+
+import _json_store
 
 BASE_DIR = os.path.dirname(__file__)
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 
+# Defaults históricos de happyflops, de cuando el catálogo era código. Se
+# conservan como CAPA BASE para no renombrarle los productos a nadie: lo que el
+# usuario edite desde el dashboard vive en productos.json y pisa esto.
 NOMBRES = {
     "horiginal": "HOriginal — Beige",
     "ho_sky": "HOriginal — Sky Blue",
@@ -30,10 +37,34 @@ def _carpeta(cliente):
     return os.path.join(BASE_DIR, "clientes", cliente, "productos")
 
 
+def _meta_path(cliente):
+    return os.path.join(BASE_DIR, "clientes", cliente, "productos.json")
+
+
+def cargar_meta(cliente):
+    """{id: {"nombre":..., "descripcion":...}} — lo que el usuario editó desde el
+    dashboard. Es una capa ENCIMA de NOMBRES/DESCRIPCIONES, no un reemplazo."""
+    return _json_store.cargar(_meta_path(cliente), {})
+
+
+def guardar_meta(cliente, meta):
+    _json_store.guardar(_meta_path(cliente), meta)
+
+
+def id_desde_nombre(nombre):
+    """El id es también el nombre de la carpeta en disco, así que tiene que ser
+    seguro: sin acentos, sin espacios, sin nada que pueda escaparse del
+    directorio de productos."""
+    limpio = unicodedata.normalize("NFKD", nombre).encode("ascii", "ignore").decode("ascii")
+    limpio = re.sub(r"[^a-zA-Z0-9]+", "_", limpio).strip("_").lower()
+    return limpio or "producto"
+
+
 def listar(cliente):
     carpeta = _carpeta(cliente)
     if not os.path.isdir(carpeta):
         return []
+    meta = cargar_meta(cliente)
     productos = []
     public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
     for nombre_carpeta in sorted(os.listdir(carpeta)):
@@ -43,11 +74,16 @@ def listar(cliente):
         archivos = sorted(f for f in os.listdir(subcarpeta) if f.lower().endswith(IMAGE_EXTS))
         if not archivos:
             continue
+        propio = meta.get(nombre_carpeta, {})
         productos.append({
             "id": nombre_carpeta,
-            "nombre": NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
-            "descripcion": DESCRIPCIONES.get(nombre_carpeta, ""),
+            "nombre": propio.get("nombre") or NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
+            "descripcion": propio.get("descripcion") or DESCRIPCIONES.get(nombre_carpeta, ""),
             "referencias": [os.path.join(subcarpeta, f) for f in archivos],
+            # Nombres de archivo sueltos: la UI de gestión necesita poder
+            # referirse a una imagen concreta (para borrarla o mostrarla) sin
+            # exponer rutas absolutas del disco en una URL.
+            "imagenes": archivos,
             "representativa": os.path.join(subcarpeta, archivos[0]),
             "representativa_url": f"{public_base}/clientes/{cliente}/productos/{nombre_carpeta}/{archivos[0]}" if public_base else None,
         })
@@ -59,3 +95,73 @@ def encontrar(cliente, producto_id):
         if p["id"] == producto_id:
             return p
     return None
+
+
+def carpeta_de(cliente, producto_id):
+    """Ruta en disco de un producto, validada contra fugas de directorio: el id
+    llega desde la URL, así que un '../..' no puede terminar borrando otra cosa."""
+    base = os.path.abspath(_carpeta(cliente))
+    destino = os.path.abspath(os.path.join(base, producto_id))
+    if destino != base and not destino.startswith(base + os.sep):
+        raise ValueError(f"id de producto inválido: {producto_id!r}")
+    return destino
+
+
+def crear(cliente, nombre, descripcion=""):
+    """Crea la carpeta del producto y guarda su metadata. Devuelve el id nuevo.
+    OJO: hasta que no tenga al menos una imagen no aparece en listar(), porque
+    un producto sin fotos de referencia no sirve para generar nada."""
+    producto_id = id_desde_nombre(nombre)
+    carpeta = carpeta_de(cliente, producto_id)
+    if os.path.isdir(carpeta):
+        raise ValueError(f"Ya existe un producto con ese nombre ({producto_id}).")
+    os.makedirs(carpeta, exist_ok=True)
+    meta = cargar_meta(cliente)
+    meta[producto_id] = {"nombre": nombre.strip(), "descripcion": (descripcion or "").strip()}
+    guardar_meta(cliente, meta)
+    return producto_id
+
+
+def actualizar(cliente, producto_id, nombre=None, descripcion=None):
+    """Cambia nombre/descripción SIN tocar la carpeta ni su id. El id se queda
+    como está a propósito: es lo que guardan los swaps ya generados
+    (swaps.json -> producto_id), y renombrar la carpeta los dejaría huérfanos."""
+    carpeta_de(cliente, producto_id)  # valida el id
+    meta = cargar_meta(cliente)
+    actual = meta.get(producto_id, {})
+    if nombre is not None and nombre.strip():
+        actual["nombre"] = nombre.strip()
+    if descripcion is not None:
+        actual["descripcion"] = descripcion.strip()
+    meta[producto_id] = actual
+    guardar_meta(cliente, meta)
+
+
+def eliminar(cliente, producto_id):
+    """Borra la carpeta del producto con todas sus imágenes, y su metadata.
+    Irreversible: los archivos no van a una papelera."""
+    import shutil
+
+    carpeta = carpeta_de(cliente, producto_id)
+    if os.path.isdir(carpeta):
+        shutil.rmtree(carpeta)
+    meta = cargar_meta(cliente)
+    if meta.pop(producto_id, None) is not None:
+        guardar_meta(cliente, meta)
+
+
+def eliminar_imagen(cliente, producto_id, nombre_archivo):
+    """Borra UNA imagen de referencia. Devuelve (ok, mensaje). Nunca deja al
+    producto sin fotos: sin ninguna referencia desaparecería de listar() y
+    quedaría una carpeta fantasma imposible de gestionar desde la UI."""
+    carpeta = carpeta_de(cliente, producto_id)
+    seguro = os.path.basename(nombre_archivo)
+    ruta = os.path.join(carpeta, seguro)
+    if not os.path.isfile(ruta):
+        return False, "No encontré esa imagen."
+    restantes = [f for f in os.listdir(carpeta) if f.lower().endswith(IMAGE_EXTS) and f != seguro]
+    if not restantes:
+        return False, ("Es la única foto del producto. Si quieres quitarla, sube otra primero "
+                       "o elimina el producto completo.")
+    os.remove(ruta)
+    return True, f"Imagen eliminada: {seguro}"
