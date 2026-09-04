@@ -38,6 +38,13 @@ from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
 from providers import wavespeed_video_edit, wan3_client, wavespeed_imagen
 from providers import aspect_ratio as aspect_ratio_mod
+import ads as ads_mod
+from meta_ads import campaign as meta_campaign
+from meta_ads import adset as meta_adset
+from meta_ads import ad as meta_ad
+from meta_ads import creative as meta_creative
+from meta_ads import insights as meta_insights
+from meta_ads.targeting import Targeting
 import creative_flow
 from publicador import publicar_brief
 from higgsfield_client import (
@@ -545,6 +552,7 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
+        ads=ads_mod.cargar(cliente),
     )
 
 
@@ -1526,6 +1534,142 @@ def eliminar_swap(cliente, swap_id):
     swaps_mod.eliminar(cliente, swap_id)
     flash("Eliminado.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
+# ---------- Publicidad (Meta Ads) — publicar, actualizar resultados, pausar/activar,
+# eliminar de la lista local. Nunca borra una campaña real de Meta: eso queda para
+# Meta Ads Manager a propósito (ver eliminar_ad más abajo). ----------
+
+@app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
+def publicar_ad(cliente):
+    """Toma un anuncio en cola (creado por otro módulo vía ads.crear) y lo
+    publica de verdad en Meta: Campaign -> AdSet -> AdCreative -> Ad, todo
+    PAUSED. Corre en un job de fondo porque encadena 4 llamadas HTTP."""
+    ad_id = request.form.get("ad_id", "").strip()
+    objetivo = request.form.get("objetivo", "").strip()
+    presupuesto_diario_usd = float(request.form.get("presupuesto_diario_usd", "0") or 0)
+    dias = int(request.form.get("dias", "0") or 0)
+    pais = request.form.get("pais", "").strip()
+    edad_min = int(request.form.get("edad_min", "18") or 18)
+    edad_max = int(request.form.get("edad_max", "65") or 65)
+
+    data = ads_mod.cargar(cliente)
+    entry = data.get(ad_id)
+    if not entry:
+        flash("No encontré ese anuncio en la cola.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    if not presupuesto_diario_usd or not dias or not pais:
+        flash("Faltan presupuesto, días o país.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+    ads_mod.actualizar(
+        cliente, ad_id, estado="publicando", objetivo=objetivo,
+        presupuesto_diario_usd=presupuesto_diario_usd, dias=dias,
+        audiencia={"edad_min": edad_min, "edad_max": edad_max, "paises": [pais]},
+    )
+    job_id = f"{cliente}__{ad_id}__ads_publicar"
+
+    def trabajo():
+        _cargar_entorno_cliente(cliente)
+        centavos = int(round(presupuesto_diario_usd * 100))
+        try:
+            campaign_resp = meta_campaign.crear_campaign(entry["nombre"], objetivo, centavos)
+            campaign_id = campaign_resp["id"]
+
+            targeting = Targeting().edad(edad_min, edad_max).paises([pais]).to_dict()
+            adset_resp = meta_adset.crear_adset(
+                f"{entry['nombre']} — adset", campaign_id, objetivo, targeting, centavos, dias,
+            )
+            adset_id = adset_resp["id"]
+
+            ig_user_id = os.environ.get("META_IG_USER_ID")
+            if entry["contenido_tipo"] == "foto":
+                creative_resp = meta_creative.crear_creative_imagen(
+                    f"{entry['nombre']} — creative", entry["contenido_url"], entry["nombre"],
+                    link="https://www.facebook.com/", instagram_user_id=ig_user_id,
+                )
+            else:
+                creative_resp = meta_creative.crear_creative_video(
+                    f"{entry['nombre']} — creative", entry["contenido_url"], entry["contenido_url"],
+                    entry["nombre"], instagram_user_id=ig_user_id,
+                )
+            creative_id = creative_resp["id"]
+
+            ad_resp = meta_ad.crear_ad(entry["nombre"], adset_id, creative_id)
+
+            ads_mod.actualizar(
+                cliente, ad_id, estado="activo",
+                meta_ids={
+                    "campaign_id": campaign_id, "adset_id": adset_id,
+                    "ad_id": ad_resp["id"], "creative_id": creative_id,
+                },
+            )
+            bitacora.registrar(cliente, ad_id, "ads_publicar", "ok", campaign_id)
+            return "Anuncio publicado (pausado, revísalo en Meta Ads Manager antes de activarlo)."
+        except Exception as e:
+            ads_mod.actualizar(cliente, ad_id, estado="error", error=str(e))
+            bitacora.registrar(cliente, ad_id, "ads_publicar", "error", str(e))
+            raise
+
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=30):
+        flash("Publicando el anuncio…", "ok")
+    else:
+        flash("Ya se está publicando ese anuncio — espera a que termine.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+
+@app.route("/cliente/<cliente>/ads/<ad_id>/actualizar", methods=["POST"])
+def actualizar_resultados_ad(cliente, ad_id):
+    _cargar_entorno_cliente(cliente)
+    data = ads_mod.cargar(cliente)
+    entry = data.get(ad_id)
+    if not entry or not entry.get("meta_ids", {}).get("ad_id"):
+        flash("Ese anuncio todavía no está publicado en Meta.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    try:
+        resultados = meta_insights.obtener_resultados(entry["meta_ids"]["ad_id"])
+        resultados["actualizado_en"] = datetime.now().isoformat()
+        ads_mod.actualizar(cliente, ad_id, metricas=resultados)
+        flash("Resultados actualizados.", "ok")
+    except Exception as e:
+        flash(f"No pude traer los resultados: {e}", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+
+@app.route("/cliente/<cliente>/ads/<ad_id>/estado", methods=["POST"])
+def cambiar_estado_ad(cliente, ad_id):
+    """Pausar/activar la campaña real en Meta — la única acción de este
+    módulo que puede hacer que empiece a gastarse presupuesto de verdad."""
+    _cargar_entorno_cliente(cliente)
+    nuevo_estado = request.form.get("estado", "").strip()
+    if nuevo_estado not in ("ACTIVE", "PAUSED"):
+        flash("Estado inválido.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+    data = ads_mod.cargar(cliente)
+    entry = data.get(ad_id)
+    campaign_id = (entry or {}).get("meta_ids", {}).get("campaign_id")
+    if not campaign_id:
+        flash("Ese anuncio todavía no está publicado en Meta.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+    try:
+        meta_campaign.actualizar_estado(campaign_id, nuevo_estado)
+        ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
+        flash("Listo." if nuevo_estado == "ACTIVE" else "Pausado.", "ok")
+    except Exception as e:
+        flash(f"No pude cambiar el estado: {e}", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+
+@app.route("/cliente/<cliente>/ads/<ad_id>/eliminar", methods=["POST"])
+def eliminar_ad(cliente, ad_id):
+    """Solo borra la fila local — NO borra la campaña en Meta si ya se
+    publicó (eso se hace desde Meta Ads Manager, a propósito: esta app nunca
+    borra algo que ya está corriendo en la plataforma de otro)."""
+    ads_mod.eliminar(cliente, ad_id)
+    flash("Eliminado de la lista.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])
