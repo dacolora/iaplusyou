@@ -9,6 +9,7 @@ Uso:
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import os
+import socket
 import subprocess
 import threading
 
@@ -66,13 +67,29 @@ app.secret_key = "solo-local-no-hace-falta-secreto-real"
 _ENV_LOCK = threading.Lock()
 
 
+@app.after_request
+def _sin_cache(resp):
+    """Ni el HTML ni el JSON de estado deben cachearse: son estado vivo que cambia
+    solo (una generación que termina, una barra de progreso). Flask no mandaba
+    ningún header de caché, y ya hubo un caso de navegador sirviendo HTML viejo
+    que obligó a un recarga dura."""
+    if resp.mimetype in ("text/html", "application/json"):
+        resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    return resp
+
+
 @app.route("/trabajo/<path:job_id>/estado")
 def estado_trabajo(job_id):
     """El navegador consulta esto cada poco tiempo para actualizar la barra de
     progreso de una generación en curso (imagen, video, o publicación)."""
     info = trabajos.consultar(job_id)
     if info is None:
-        return jsonify({"estado": "desconocido", "progreso": 0, "elapsed": 0, "mensaje": None})
+        # Mismas claves que devuelve trabajos.consultar(), para que el JS no tenga
+        # que distinguir casos ni leer undefined.
+        return jsonify({
+            "estado": "desconocido", "progreso": 0, "elapsed": 0, "mensaje": None,
+            "etapa": None, "detalle": None, "progreso_real": False,
+        })
     return jsonify(info)
 
 
@@ -588,15 +605,25 @@ def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt
         video_id = f"{idea_id}_{concepto_id}_{proveedor}"
 
         try:
+            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
             est = image_provider.generar_imagen(
                 proveedor, referencia_url, prompt, local_path,
                 negative_prompt=negative_prompt, extra_params=extra_params,
             )
+            trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_IMAGEN)
+            error_storage = None
             try:
                 url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/imagenes/{nombre}")
-            except Exception:
+            except Exception as e:
+                # La imagen existe en disco; lo que falló fue R2. Se registra para
+                # que la plantilla no la reporte como "generación interrumpida".
                 url = None
-            campos = {"estado": "listo", "url": url, "local": local_path, "usd": est.get("usd")}
+                error_storage = str(e)
+                bitacora.registrar(cliente, video_id, "imagen_storage", "error", str(e))
+            campos = {
+                "estado": "listo", "url": url, "local": local_path,
+                "usd": est.get("usd"), "error_storage": error_storage,
+            }
             if proveedor == "higgsfield":
                 campos["credits"] = est.get("credits")
             conceptos_imagen.marcar_imagen(cliente, idea_id, concepto_id, proveedor, **campos)
@@ -607,7 +634,11 @@ def _lanzar_generacion_concepto(cliente, idea_id, concepto_id, proveedor, prompt
             bitacora.registrar(cliente, video_id, "imagen", "error", str(e))
             raise
 
-    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45 if proveedor == "higgsfield" else 20)
+    return trabajos.iniciar(
+        job_id, trabajo,
+        duracion_estimada=45 if proveedor == "higgsfield" else 20,
+        etapas=ETAPAS_IMAGEN,
+    )
 
 
 @app.route("/cliente/<cliente>/idea/nueva_visual", methods=["POST"])
@@ -710,6 +741,10 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
         item2 = {"aspect_ratio": aspect_ratio, "model": "kling-2.1-pro"}
 
         try:
+            # video_provider.generar_video no recibe on_progreso (no tiene forma
+            # de saber a qué job pertenece), así que acá la señal honesta son las
+            # etapas: descarga incluida, el provider deja el .mp4 en out_path.
+            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
             est = video_provider.generar_video(
                 proveedor_video, imagen_url, prompt_texto, out_path,
                 aspect_ratio=aspect_ratio, negative_prompt=negative_prompt,
@@ -720,6 +755,7 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
             bitacora.registrar(cliente, video_id, "generacion", "error", str(e))
             raise
 
+        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
         try:
             video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{video_id}.mp4")
             bitacora.registrar(cliente, video_id, "storage", "ok", video_url)
@@ -749,7 +785,12 @@ def generar_video_animacion(cliente, idea_id, concepto_id, proveedor, anim_id):
             conceptos_imagen.guardar(cliente, data2)
         return "Video listo, pendiente de revisión."
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130):
+    # ETAPAS_VIDEO sin ETAPA_DESCARGAR: el provider descarga por su cuenta dentro
+    # de generar_video, así que ese paso no se puede anunciar por separado.
+    if trabajos.iniciar(
+        job_id, trabajo, duracion_estimada=130,
+        etapas=[(ETAPA_MODELO, 90), (ETAPA_GUARDAR_VIDEO, 10)],
+    ):
         flash("Generando video…", "ok")
     else:
         flash("Ya se está generando ese video — espera a que termine.", "warn")
@@ -893,18 +934,127 @@ NOMBRES_PROVEEDOR_SWAP = {
 }
 
 
+# Etapas reales del swap. Los nombres se usan en DOS lados (al declararlas en
+# trabajos.iniciar y al anunciarlas con trabajos.reportar), así que van en
+# constantes para que no puedan desincronizarse por un typo. Los pesos son
+# "qué fracción del tiempo se lleva más o menos cada paso" — la llamada al
+# modelo es de lejos la más larga.
+ETAPA_SUBIR_ORIGINAL = "Subiendo tu video original"
+ETAPA_SUBIR_REFERENCIAS = "Subiendo las fotos del producto"
+ETAPA_PREPARAR_FOTO = "Preparando la imagen"
+ETAPA_MODELO = "Generando con el modelo"
+ETAPA_DESCARGAR = "Descargando el resultado"
+ETAPA_GUARDAR = "Guardando y evaluando la marca"
+ETAPA_GUARDAR_VIDEO = "Guardando el video"
+ETAPA_GUARDAR_IMAGEN = "Guardando la imagen"
+
+ETAPAS_SWAP_VIDEO = [
+    (ETAPA_SUBIR_ORIGINAL, 5),
+    (ETAPA_SUBIR_REFERENCIAS, 10),
+    (ETAPA_MODELO, 70),
+    (ETAPA_DESCARGAR, 5),
+    (ETAPA_GUARDAR, 10),
+]
+ETAPAS_SWAP_FOTO = [
+    (ETAPA_PREPARAR_FOTO, 10),
+    (ETAPA_MODELO, 70),
+    (ETAPA_GUARDAR, 20),
+]
+# CreativeFlowPlus: Wan 3.0 se lleva casi todo el tiempo (timeout de 1200s).
+ETAPAS_CREATIVE_FLOW = [
+    (ETAPA_MODELO, 85),
+    (ETAPA_DESCARGAR, 8),
+    (ETAPA_GUARDAR_VIDEO, 7),
+]
+
+# Pipeline clásico (prompt -> imagen candidata -> video) y flujo imagen-primero.
+# Estos trabajos iban SIN etapas y el usuario veía "Generando…" a secas durante
+# minutos, justo en el camino que es el corazón del repo. El descargar/subir es
+# corto comparado con el poll al modelo, de ahí los pesos.
+ETAPAS_IMAGEN = [
+    (ETAPA_MODELO, 78),
+    (ETAPA_GUARDAR_IMAGEN, 22),
+]
+ETAPAS_VIDEO = [
+    (ETAPA_MODELO, 85),
+    (ETAPA_DESCARGAR, 8),
+    (ETAPA_GUARDAR_VIDEO, 7),
+]
+
+# Los proveedores hablan en sus propios códigos de estado; esto es lo único
+# honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
+_FASES_PROVEEDOR = {
+    "IN_QUEUE": "en cola",
+    "IN_PROGRESS": "el modelo está trabajando",
+    "created": "en cola",
+    "processing": "el modelo está trabajando",
+    "queued": "en cola",
+    "starting": "arrancando",
+    "running": "el modelo está trabajando",
+    "in_progress": "el modelo está trabajando",
+    "pending": "en cola",
+}
+
+# Estados terminales: el poll también los emite en su última vuelta, pero mostrar
+# "completed" como detalle no le dice nada al usuario — la etapa siguiente ya se
+# encarga de contar qué sigue.
+_FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
+
+
+def _texto_fase(info):
+    """Traduce a español el estado crudo que reporta un proveedor durante el poll.
+    Con fallback: si aparece una fase que no conocemos se muestra tal cual en vez
+    de tragarse la información (los proveedores agregan estados sin avisar)."""
+    if not info:
+        return None
+    fase = info.get("fase")
+    if fase in _FASES_TERMINALES:
+        return None
+    texto = _FASES_PROVEEDOR.get(fase, fase)
+    if not texto:
+        return None
+    posicion = info.get("queue_position")
+    if posicion is not None:
+        texto = f"{texto} (puesto {posicion})"
+    return texto
+
+
+def _avisar_fase_de(job_id):
+    """Devuelve el callback on_progreso que esperan los clientes de proveedores
+    (Higgsfield, fal.ai, WaveSpeed): traduce la fase cruda del poll y la publica
+    como detalle del trabajo. Envuelto en try/except porque un fallo REPORTANDO
+    jamás puede tumbar una generación que ya gastó créditos."""
+    def avisar_fase(info):
+        try:
+            texto = _texto_fase(info)
+            if texto:
+                trabajos.reportar(job_id, detalle=texto)
+        except Exception:
+            pass
+    return avisar_fase
+
+
 def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
     """Corre la evaluación de marca sobre una imagen (foto final, o un fotograma
     extraído de un video final) y guarda el resultado. No falla el swap si esto
     falla — es un plus, no el resultado principal."""
+    # El desenlace se PERSISTE (evaluacion_estado), no solo se anota en la
+    # bitácora: sin eso, un fallo silencioso dejaba la tarjeta diciendo
+    # "Evaluando cumplimiento de marca…" para siempre, porque `evaluacion` se
+    # quedaba en None y nada volvía a tocar esa entrada. Hoy hay 6 swaps así en
+    # disco. Lo mismo cuando el cliente no tiene invariantes definidas: no es un
+    # error, pero la evaluación tampoco va a llegar nunca.
     try:
         root = marca_mod.cargar_root(cliente)
         invariantes = root.get("invariants", []) if root else []
-        if invariantes:
-            evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
-            swaps_mod.actualizar(cliente, swap_id, evaluacion=evaluacion)
-            bitacora.registrar(cliente, swap_id, "evaluacion", "ok", "")
+        if not invariantes:
+            swaps_mod.actualizar(cliente, swap_id, evaluacion_estado="sin_matriz")
+            return
+        evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
+        swaps_mod.actualizar(cliente, swap_id, evaluacion=evaluacion, evaluacion_estado="ok")
+        bitacora.registrar(cliente, swap_id, "evaluacion", "ok", "")
     except Exception as e:
+        swaps_mod.actualizar(cliente, swap_id, evaluacion_estado="error", evaluacion_error=str(e))
         bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
 
 
@@ -950,22 +1100,46 @@ def generar_swap(cliente):
     swap_id = swaps_mod.crear(cliente, foto_local, producto_id, aspect_ratio_detectado, proveedor, tipo=tipo)
     job_id = f"{cliente}__{swap_id}__swap"
 
-    def trabajo():
-        resultados_dir = os.path.join(BASE_DIR, "salidas", cliente, "swaps")
-        os.makedirs(resultados_dir, exist_ok=True)
-        negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
+    # Cada etapa se anuncia con trabajos.reportar(job_id, ...) para que la barra
+    # deje de ser un número inventado: el usuario ve en qué paso real va.
+    avisar_fase = _avisar_fase_de(job_id)
 
+    def trabajo():
         try:
+            # os.makedirs y negative_prompt_efectivo estaban FUERA del try:
+            # negative_prompt_efectivo lee marca/root.json y revienta si ese
+            # archivo está mal formado, dejando el job en "error" pero el swap
+            # en "generando" para siempre en disco (tarjeta zombie).
+            resultados_dir = os.path.join(BASE_DIR, "salidas", cliente, "swaps")
+            os.makedirs(resultados_dir, exist_ok=True)
+            negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
+            # Si la subida a R2 falla, el resultado SÍ existe en disco. Se guarda
+            # el motivo para que la plantilla pueda decir la verdad ("se generó
+            # pero no se pudo subir, está acá") en vez de dar por muerta una
+            # generación que sí terminó y ya se pagó.
+            error_storage = None
+
             if tipo == "video":
                 local_path = os.path.join(resultados_dir, f"{swap_id}.mp4")
+                trabajos.reportar(job_id, etapa=ETAPA_SUBIR_ORIGINAL)
                 video_url = r2_uploader.upload_video(foto_local, f"clientes/{cliente}/swaps_subidas/{ts}_{nombre}")
                 # Se suben hasta 9 (el máximo que acepta Wan 2.7 Video Edit) — cada
                 # cliente recorta a su propio límite (Kling O1 usa las primeras 4).
+                referencias = producto["referencias"][:9]
+                trabajos.reportar(job_id, etapa=ETAPA_SUBIR_REFERENCIAS)
                 referencias_urls = []
-                for i, ref_local in enumerate(producto["referencias"][:9]):
+                for i, ref_local in enumerate(referencias):
+                    # Son 1-2MB cada una y suben en serie: sin este detalle el
+                    # tramo se percibía como una barra colgada.
+                    trabajos.reportar(
+                        job_id,
+                        progreso=100.0 * i / len(referencias),
+                        detalle=f"foto {i + 1} de {len(referencias)}",
+                    )
                     key = f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref_local)}"
                     referencias_urls.append(r2_uploader.upload_image(ref_local, key))
 
+                trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                 if proveedor == "kling_o1":
                     citas = " ".join(f"@Image{i + 1}" for i in range(len(referencias_urls)))
                     prompt = (
@@ -975,7 +1149,9 @@ def generar_swap(cliente):
                         f"textura exactos. No cambies nada más del video: mismo "
                         f"movimiento, mismas personas, mismo fondo, misma iluminación."
                     )
-                    resultado_url = kling_o1_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
+                    resultado_url = kling_o1_client.editar_video(
+                        video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
+                    )
                     costo = kling_o1_client.estimate_video()
                 elif proveedor == "wan27_edit":
                     prompt = (
@@ -985,7 +1161,9 @@ def generar_swap(cliente):
                         f"color, diseño y textura exactos. No cambies nada más del video: "
                         f"mismo movimiento, mismas personas, mismo fondo, misma iluminación."
                     )
-                    resultado_url = wavespeed_client.editar_video(video_url, prompt, referencias_urls=referencias_urls)
+                    resultado_url = wavespeed_client.editar_video(
+                        video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
+                    )
                     costo = wavespeed_client.estimate_video()
                 elif proveedor in wavespeed_video_edit.MODELOS:
                     prompt = (
@@ -997,26 +1175,36 @@ def generar_swap(cliente):
                     )
                     resultado_url = wavespeed_video_edit.editar_video(
                         proveedor, video_url, prompt, referencias_urls=referencias_urls,
+                        on_progreso=avisar_fase,
                     )
                     costo = wavespeed_video_edit.estimate_video(proveedor)
                 else:
                     referencia = referencias_urls[0] if referencias_urls else None
                     resultado_url = comparador_modelos.editar_video(
                         proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
+                        on_progreso=avisar_fase,
                     )
                     costo = comparador_modelos.estimate_video(proveedor)
 
+                trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
                 resp = requests.get(resultado_url, timeout=180)
                 resp.raise_for_status()
                 with open(local_path, "wb") as f:
                     f.write(resp.content)
+                trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
                 try:
                     url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/swaps/{swap_id}.mp4")
-                except Exception:
+                except Exception as e:
+                    # Acá sí hay plan B: la URL del proveedor sirve igual para
+                    # mostrar y publicar, así que no queda "listo sin url".
                     url = resultado_url
+                    error_storage = str(e)
+                    bitacora.registrar(cliente, swap_id, "storage", "error", str(e))
             else:
                 local_path = os.path.join(resultados_dir, f"{swap_id}.png")
+                trabajos.reportar(job_id, etapa=ETAPA_PREPARAR_FOTO)
                 if proveedor == "nano_banana":
+                    trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                     img_bytes = nano_banana_client.swap_producto(
                         foto_local, producto["referencias"], negative_prompt=negative_prompt,
                     )
@@ -1029,24 +1217,32 @@ def generar_swap(cliente):
                         r2_uploader.upload_image(ref, f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref)}")
                         for ref in producto["referencias"][:2]
                     ]
+                    trabajos.reportar(job_id, etapa=ETAPA_MODELO)
                     resultado_url = comparador_modelos.editar_imagen(
                         proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
-                        foto_local_path=foto_local,
+                        foto_local_path=foto_local, on_progreso=avisar_fase,
                     )
+                    trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
                     resp = requests.get(resultado_url, timeout=120)
                     resp.raise_for_status()
                     with open(local_path, "wb") as f:
                         f.write(resp.content)
                     costo = comparador_modelos.estimate_image(proveedor)
 
+                trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
                 try:
                     url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/swaps/{swap_id}.png")
-                except Exception:
+                except Exception as e:
+                    # Sin plan B (nano_banana devuelve bytes, no una URL): queda
+                    # "listo" sin resultado_url. La plantilla necesita saber que
+                    # el archivo existe igual, si no muestra un mensaje falso.
                     url = None
+                    error_storage = str(e)
+                    bitacora.registrar(cliente, swap_id, "storage", "error", str(e))
 
             swaps_mod.actualizar(
                 cliente, swap_id, estado="listo", resultado_url=url, resultado_local=local_path,
-                credits=costo.get("credits"), usd=costo.get("usd"),
+                credits=costo.get("credits"), usd=costo.get("usd"), error_storage=error_storage,
             )
             bitacora.registrar(cliente, swap_id, "swap", "ok", local_path)
 
@@ -1074,7 +1270,8 @@ def generar_swap(cliente):
         duracion_estimada = 380  # media reportada por WaveSpeed para estos modelos
     else:
         duracion_estimada = 90
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada):
+    etapas = ETAPAS_SWAP_VIDEO if tipo == "video" else ETAPAS_SWAP_FOTO
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada, etapas=etapas):
         flash("Generando el swap…", "ok")
     else:
         flash("Ya se está generando ese swap — espera a que termine.", "warn")
@@ -1112,20 +1309,29 @@ def guardar_prompt(cliente, prompt_id):
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
-def _generar_imagen_candidata(cliente, prompt_id, item):
+def _generar_imagen_candidata(cliente, prompt_id, item, job_id=None, on_progreso=None):
     """Genera (o regenera) la imagen candidata para un prompt vía soul/reference,
-    la sube a R2 y actualiza el propio dict `item` en el sitio. Devuelve (ok, error)."""
+    la sube a R2 y actualiza el propio dict `item` en el sitio. Devuelve (ok, error).
+
+    job_id/on_progreso son opcionales para que esta función siga sirviendo fuera
+    de un trabajo en segundo plano. Con job_id=None, trabajos.reportar es un
+    no-op silencioso, así que no hace falta condicionar cada llamada."""
     imagenes_dir = os.path.join(BASE_DIR, "salidas", cliente, "imagenes")
     os.makedirs(imagenes_dir, exist_ok=True)
     local_path = os.path.join(imagenes_dir, f"{prompt_id}.png")
 
     try:
+        trabajos.reportar(job_id, etapa=ETAPA_MODELO)
         launch = generate_image(
             image_reference_url=item["image_url"],
             prompt=item["prompt"],
             extra_params=_extra_params_image(item, cliente),
         )
-        result = poll_until_done(launch["status_url"])
+        # on_progreso hace que el poll de Higgsfield cuente su estado crudo
+        # ("queued", "processing"): sin esto la barra sabía la etapa pero no si
+        # el modelo ya había arrancado.
+        result = poll_until_done(launch["status_url"], on_progreso=on_progreso)
+        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_IMAGEN)
         download_image_result(result, local_path)
         bitacora.registrar(cliente, prompt_id, "imagen", "ok", local_path)
     except Exception as e:
@@ -1155,13 +1361,16 @@ def _lanzar_generacion_imagen(cliente, prompt_id):
         _, item = prompts_mod.encontrar_prompt(data, prompt_id)
         if not item:
             raise RuntimeError("El prompt ya no existe (¿se descartó mientras generaba?).")
-        ok, error = _generar_imagen_candidata(cliente, prompt_id, item)
+        ok, error = _generar_imagen_candidata(
+            cliente, prompt_id, item, job_id=job_id,
+            on_progreso=_avisar_fase_de(job_id),
+        )
         prompts_mod.guardar(cliente, data)
         if not ok:
             raise RuntimeError(error)
         return "Imagen candidata lista."
 
-    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45)
+    return trabajos.iniciar(job_id, trabajo, duracion_estimada=45, etapas=ETAPAS_IMAGEN)
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/aprobar", methods=["POST"])
@@ -1228,14 +1437,19 @@ def aprobar_imagen(cliente, prompt_id):
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"{prompt_id}.mp4")
 
+        trabajos.reportar(job_id, etapa=ETAPA_MODELO)
         launch = generate_video(
             image_url=item2["imagen_url"],
             prompt=item2["prompt"],
             model=item2.get("model", "kling-2.1-pro"),
             extra_params=_extra_params_video(item2, cliente),
         )
-        result = poll_until_done(launch["status_url"])
+        # on_progreso: el poll de Higgsfield ya sabía contar su fase cruda, pero
+        # ningún llamador se la pedía — la barra se quedaba sin el "en cola / el
+        # modelo está trabajando" durante los ~2 minutos que dura esto.
+        result = poll_until_done(launch["status_url"], on_progreso=_avisar_fase_de(job_id))
         higgsfield_url = extract_video_url(result)
+        trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         try:
             download_result(result, out_path)
             bitacora.registrar(cliente, prompt_id, "generacion", "ok", out_path)
@@ -1243,6 +1457,7 @@ def aprobar_imagen(cliente, prompt_id):
             bitacora.registrar(cliente, prompt_id, "generacion", "error", str(e))
             raise
 
+        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
         try:
             video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{prompt_id}.mp4")
             bitacora.registrar(cliente, prompt_id, "storage", "ok", video_url)
@@ -1269,7 +1484,7 @@ def aprobar_imagen(cliente, prompt_id):
         prompts_mod.guardar(cliente, data2)
         return "Video listo, pendiente de revisión."
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130):
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=130, etapas=ETAPAS_VIDEO):
         flash(f"Generando el video de {prompt_id}…", "ok")
     else:
         flash(f"Ya se está generando el video de {prompt_id} — espera a que termine.", "warn")
@@ -1513,12 +1728,16 @@ def cf_generar_video(cliente, cf_id):
         os.makedirs(out_dir, exist_ok=True)
         out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
+        avisar_fase = _avisar_fase_de(job_id)
+
         try:
+            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
             video_url_wan = wan3_client.generar_video(
                 prompt_texto, referencias, duration=duracion, resolution="720p",
-                aspect_ratio=aspect_ratio,
+                aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
             )
             costo = wan3_client.estimate_video(duration=duracion, resolution="720p")
+            trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
             resp = requests.get(video_url_wan, timeout=180)
             resp.raise_for_status()
             with open(out_path, "wb") as f:
@@ -1529,6 +1748,7 @@ def cf_generar_video(cliente, cf_id):
             creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
             raise
 
+        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
         try:
             video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{cf_id}.mp4")
         except Exception:
@@ -1561,7 +1781,7 @@ def cf_generar_video(cliente, cf_id):
     # escribir "video_generando", pisando el error y dejando la sesión
     # atascada en "generando" para siempre. Mismo patrón que swaps.crear().
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=180):
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=180, etapas=ETAPAS_CREATIVE_FLOW):
         flash("Generando el video con Wan 3.0…", "ok")
     else:
         # Ya había un job corriendo — no hace falta revertir el estado, ya
@@ -1570,8 +1790,119 @@ def cf_generar_video(cliente, cf_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
+_MENSAJE_INTERRUMPIDO = (
+    "La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo."
+)
+
+
+def _reconciliar_huerfanos():
+    """Los trabajos viven SOLO en memoria (_TRABAJOS), pero el estado 'generando'
+    queda escrito en disco. Si el proceso se reinicia a mitad de una generación,
+    esa entrada queda pidiendo un trabajo que ya no existe: sin barra, sin error y
+    sin forma de avanzar (en CreativeFlowPlus ni siquiera se puede reintentar,
+    porque cf_generar_video solo acepta 'prompt_listo'/'error').
+
+    Al arrancar, _TRABAJOS está vacío por definición, así que todo lo que esté en
+    'generando' es necesariamente un huérfano: se marca como error y cae en la
+    rama que todas las plantillas ya saben mostrar.
+    """
+    clientes_dir = os.path.join(BASE_DIR, "clientes")
+    if not os.path.isdir(clientes_dir):
+        return
+    for cliente in sorted(os.listdir(clientes_dir)):
+        if not os.path.isdir(os.path.join(clientes_dir, cliente)):
+            continue
+        try:
+            swaps_data = swaps_mod.cargar(cliente)
+            tocado = False
+            for entry in swaps_data.values():
+                if entry.get("estado") == "generando":
+                    entry["estado"] = "error"
+                    entry["error"] = _MENSAJE_INTERRUMPIDO
+                    tocado = True
+            if tocado:
+                swaps_mod.guardar(cliente, swaps_data)
+
+            cf_data = creative_flow.cargar(cliente)
+            tocado = False
+            for entry in cf_data.values():
+                if entry.get("estado") == "video_generando":
+                    entry["estado"] = "error"
+                    entry["error"] = _MENSAJE_INTERRUMPIDO
+                    tocado = True
+            if tocado:
+                creative_flow.guardar(cliente, cf_data)
+
+            conceptos_data = conceptos_imagen.cargar(cliente)
+            tocado = False
+            for idea in conceptos_data.values():
+                for concepto in idea.get("conceptos", {}).values():
+                    for proveedor in conceptos_imagen.PROVEEDORES:
+                        img = concepto.get(proveedor)
+                        if img and img.get("estado") == "generando":
+                            img["estado"] = "error"
+                            img["error"] = _MENSAJE_INTERRUMPIDO
+                            tocado = True
+            if tocado:
+                conceptos_imagen.guardar(cliente, conceptos_data)
+        except Exception as e:
+            # Un cliente con el JSON corrupto no debe impedir que arranque el
+            # dashboard entero.
+            print(f"[aviso] No pude reconciliar los huérfanos de {cliente}: {e}")
+
+
+HOST = "127.0.0.1"
+PUERTO = 5050
+
+
+def _tomar_puerto_o_none(host, puerto):
+    """Intenta quedarse con el puerto ANTES de tocar nada en disco. Devuelve el
+    socket si lo consiguió, o None si ya hay otro dashboard escuchando ahí.
+
+    El porqué: _reconciliar_huerfanos() REESCRIBE swaps.json, creative_flow.json y
+    conceptos_pendientes.json de TODOS los clientes marcando como "error" todo lo
+    que esté "generando". Corriendo antes de app.run(), un segundo
+    `python3 dashboard.py` lanzado sin matar el primero (algo que el flujo de este
+    repo invita a hacer, porque hay que reiniciar tras cada cambio .py) le
+    destruía al proceso VIVO el estado de generaciones de 380s que estaban
+    perfectamente en curso... y recién después moría con "Address already in use".
+
+    SO_REUSEADDR va ENCENDIDO, al revés de lo que parece intuitivo. En macOS/BSD
+    esa opción NO permite bindear sobre un socket que está escuchando (eso sería
+    SO_REUSEPORT): lo único que habilita es reusar un puerto que quedó en
+    TIME_WAIT. Sin ella, matar el dashboard con Ctrl+C y reiniciarlo dentro de
+    los ~30s siguientes fallaba el bind por las conexiones keep-alive del
+    navegador, y entonces NO se reconciliaba nada mientras se imprimía un aviso
+    falso ("ya hay otro dashboard corriendo") — dejando swaps en "generando"
+    para siempre, que es exactamente el caso que esto vino a arreglar.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.bind((host, puerto))
+    except OSError as e:
+        s.close()
+        print(f"[aviso] {host}:{puerto} ya está ocupado ({e}). No reconcilio huérfanos "
+              f"para no pisarle el estado al dashboard que ya está corriendo.")
+        return None
+    return s
+
+
 if __name__ == "__main__":
+    _candado = _tomar_puerto_o_none(HOST, PUERTO)
+    if _candado is not None:
+        try:
+            _reconciliar_huerfanos()
+        finally:
+            # Se libera antes de app.run() para que Flask pueda bindear él mismo.
+            # Queda una ventana de milisegundos en la que otro proceso podría
+            # colarse; es aceptable, porque lo que se está evitando es el caso
+            # real (dos arranques manuales con minutos de diferencia), no una
+            # carrera entre dos procesos que arrancan en el mismo instante.
+            _candado.close()
+    # Si no se consiguió el puerto se sigue igual hasta app.run(), que va a
+    # fallar solo con su mensaje de siempre — pero sin haber tocado el disco.
     # use_reloader=False a propósito: ahora hay generaciones corriendo en hilos
     # de fondo, y el auto-reload de Flask mata el proceso completo (y con él,
     # cualquier generación en curso) apenas detecta un cambio de archivo.
-    app.run(host="127.0.0.1", port=5050, debug=True, use_reloader=False)
+    app.run(host=HOST, port=PUERTO, debug=True, use_reloader=False)

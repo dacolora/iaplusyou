@@ -1,4 +1,21 @@
-<details class="idea-block">
+{# Hay hasta 10 imágenes por idea (5 escenas x 2 proveedores) más las animaciones
+   de cada imagen aprobada, y TODAS sus barras de progreso viven dentro de este
+   <details>. Con la tarjeta colapsada el usuario no veía ni un porcentaje
+   mientras se generaba, que es justo el momento en el que quiere mirarla. Se
+   recorre la estructura real (conceptos -> imagenes -> animaciones_pendientes)
+   con un namespace porque Jinja no deja acumular en un {% set %} plano dentro
+   de un for. El id sirve además para que base.html recuerde el estado abierto
+   entre recargas; un '0' guardado (el usuario la cerró) le gana a este `open`. #}
+{%- set ns_idea = namespace(trabajando=false) -%}
+{%- for concepto in idea.conceptos -%}
+  {%- for proveedor, img in concepto.imagenes.items() -%}
+    {%- if img.trabajo %}{% set ns_idea.trabajando = true %}{% endif -%}
+    {%- for anim in img.animaciones_pendientes or [] -%}
+      {%- if anim.trabajo %}{% set ns_idea.trabajando = true %}{% endif -%}
+    {%- endfor -%}
+  {%- endfor -%}
+{%- endfor -%}
+<details class="idea-block" id="idea-visual-{{ idea.id }}"{% if ns_idea.trabajando %} open{% endif %}>
   <summary class="idea-header">
     <span class="idea-chevron">▸</span>
     <div>
@@ -24,12 +41,12 @@
       <div class="concepto-imagen">
         <div class="proveedor-label">{{ "Nano Banana" if proveedor == "nano_banana" else "Higgsfield" }}</div>
 
-        {% if img.trabajo %}
-        <div class="barra-progreso" id="trabajo-{{ img.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-        <div class="progreso-texto">Generando… 0% · 0s</div>
-        <script>iniciarPolling({{ img.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ img.trabajo.job_id) | tojson }});</script>
-
-        {% elif img.estado == "error" %}
+        {# La imagen ya generada gana sobre el trabajo en curso: la URL se escribe
+           en disco antes de que el job termine de cerrarse, así que con el orden
+           viejo la barra tapaba un resultado que ya estaba listo. "error" y
+           "descartado" siguen primero porque una descartada CONSERVA su url y
+           debe seguir viéndose como descartada, no como imagen viva. #}
+        {% if img.estado == "error" %}
         <p class="vacio" style="color:var(--error);padding:.5rem 0;">{{ img.error }}</p>
 
         {% elif img.estado == "descartado" %}
@@ -77,6 +94,32 @@
         </div>
         {% endif %}
         {% endif %}
+
+        {% elif not img.trabajo and img.estado == "listo" %}
+        {# "listo" SIN url no es una generación interrumpida: la imagen está en
+           disco y lo que falló fue subirla a R2 (dashboard.py hace
+           "except Exception: url = None"). Decir que se reinició el servidor era
+           falso y encima le escondía el archivo al usuario. #}
+        <p class="vacio" style="padding:.5rem 0;">
+          Se generó, pero no se pudo subir al almacenamiento{% if img.error_storage %} ({{ img.error_storage }}){% endif %}.
+          Está en disco:<br><code>{{ img.local }}</code>
+        </p>
+
+        {% elif not img.trabajo and img.estado == "generando" %}
+        {# Huérfano de verdad: quedó "generando" en disco sin trabajo en memoria,
+           o sea se reinició el proceso a mitad de la generación. Antes ninguna
+           rama coincidía y la celda del proveedor quedaba vacía y muda. #}
+        <p class="vacio" style="padding:.5rem 0;">La generación se interrumpió (el servidor se reinició). Vuelve a intentarlo.</p>
+        {% endif %}
+
+        {# El polling va FUERA del if/elif: la url se escribe en disco antes de
+           que el job termine de cerrarse, así que en esa ventana la celda caía en
+           la rama de la imagen y se quedaba sin polling — la vista no se
+           actualizaba sola al terminar. #}
+        {% if img.trabajo %}
+        <div class="barra-progreso" id="trabajo-{{ img.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+        <div class="progreso-texto">Generando… 0% · 0s</div>
+        <script>iniciarPolling({{ img.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ img.trabajo.job_id) | tojson }});</script>
         {% endif %}
       </div>
       {% endfor %}

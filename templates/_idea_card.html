@@ -1,4 +1,9 @@
-<details class="idea-block">
+{# id + `open`: la barra de progreso de cada prompt vive DENTRO de este <details>,
+   así que con la tarjeta colapsada el usuario no veía ningún porcentaje mientras
+   se generaba. El id además le permite a base.html recordar el estado abierto
+   entre los location.reload() automáticos; si el usuario cierra la tarjeta,
+   base.html guarda un '0' explícito que le gana a este `open`. #}
+<details class="idea-block" id="idea-{{ idea.id }}"{% if idea.prompts | selectattr("trabajo") | list %} open{% endif %}>
   <summary class="idea-header">
     <span class="idea-chevron">▸</span>
     {% if idea.prompts %}

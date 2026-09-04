@@ -19,16 +19,17 @@ COSTO_USD_POR_SEGUNDO = 0.168
 ANCHO_MINIMO_PX = 720
 
 
-def editar_video(video_url, prompt, referencias_urls=None, keep_audio=False):
+def editar_video(video_url, prompt, referencias_urls=None, keep_audio=False, on_progreso=None):
     """Edita video_url (URL pública, mp4/mov, 3-10s, mínimo 720px de ancho,
     máx 200MB) según prompt. referencias_urls: hasta 4 URLs públicas de
     imágenes citables en el prompt como @Image1, @Image2, etc. Devuelve la
-    URL pública del video editado."""
+    URL pública del video editado. on_progreso se propaga a la cola de fal.ai
+    (ver fal_client.llamar) para poder mostrar "en cola (puesto N)"."""
     payload = {"prompt": prompt, "video_url": video_url, "keep_audio": keep_audio}
     if referencias_urls:
         payload["image_urls"] = referencias_urls[:4]
 
-    data = fal_client.llamar(MODEL_PATH, payload)
+    data = fal_client.llamar(MODEL_PATH, payload, on_progreso=on_progreso)
 
     video = data.get("video") or {}
     url = video.get("url")

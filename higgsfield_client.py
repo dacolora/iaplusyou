@@ -108,12 +108,17 @@ def estimate_image(image_reference_url, prompt, model="soul-reference", extra_pa
     return {"credits": float(data["credits"]), "usd": float(data["usd"])}
 
 
-def poll_until_done(status_url, interval_seconds=5, timeout_seconds=600):
+def poll_until_done(status_url, interval_seconds=5, timeout_seconds=600, on_progreso=None):
     """Consulta status_url cada `interval_seconds` hasta que el video esté listo.
 
     La primera vez imprime la respuesta cruda: la documentación pública no muestra
     el formato exacto de esta respuesta, así que la primera corrida real nos sirve
     para confirmar los nombres de campo y ajustar el script si hace falta.
+
+    on_progreso (opcional): se llama en cada vuelta con {"fase": <status crudo>}.
+    Higgsfield es el proveedor del que MENOS señal confirmada tenemos (ver arriba),
+    así que solo se pasa el estado tal cual llega, sin inventarle un porcentaje.
+    Va al final de la firma para no romper a los llamadores existentes.
     """
     headers = _auth_header()
     start = time.time()
@@ -127,6 +132,12 @@ def poll_until_done(status_url, interval_seconds=5, timeout_seconds=600):
             print(data)
             seen_shape = True
         status = data.get("status") or data.get("state")
+        if on_progreso:
+            # Nunca dejar que un fallo reportando tumbe una generación en curso.
+            try:
+                on_progreso({"fase": status, "elapsed": time.time() - start})
+            except Exception:
+                pass
         if status in ("completed", "succeeded", "success", "done"):
             return data
         if status in ("failed", "error", "canceled", "cancelled"):

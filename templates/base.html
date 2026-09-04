@@ -8,6 +8,251 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Sniglet:wght@400;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>
+    // OJO: este bloque va en el <head> a propósito. Antes vivía al final del
+    // <body>, y como las plantillas parciales llaman a iniciarPolling(...) con
+    // un <script> inline DENTRO del contenido, ese <script> se ejecutaba en el
+    // parseo — o sea miles de líneas ANTES de que la función existiera. Las
+    // declaraciones de función solo se hoistean dentro de su propio <script>,
+    // así que cada llamada reventaba con "iniciarPolling is not defined" (error
+    // silencioso, cada script inline es independiente). Resultado: la barra
+    // nunca se pintaba y, como el location.reload() vive dentro de esta misma
+    // función, la vista tampoco se actualizaba sola al terminar. Definirla acá
+    // arriba garantiza que ya exista cuando el contenido la invoque.
+
+    // Anti doble-clic global: apenas se envía un formulario, deshabilita sus
+    // botones de submit (no cancela el envío en curso, solo evita reenvíos).
+    document.addEventListener('submit', function (e) {
+      e.target.querySelectorAll('button[type="submit"]').forEach(function (btn) {
+        btn.disabled = true;
+        if (!btn.dataset.textoOriginal) btn.dataset.textoOriginal = btn.textContent;
+        btn.textContent = 'Procesando…';
+      });
+    });
+
+    // Consulta el estado de un trabajo en segundo plano (generar imagen/video,
+    // o publicar) cada poco tiempo, y actualiza su barra de progreso hasta que
+    // termine — ahí recarga la página para mostrar el resultado.
+    var trabajosPolling = {};
+
+    // ---- Guardia contra perder texto sin guardar ----
+    // Ahora que el location.reload() automático SÍ ocurre, un trabajo que
+    // termina en una pestaña que el usuario no está mirando recargaba la página
+    // entera y se llevaba puesto lo que hubiera escrito a mano (el textarea de
+    // prompt_relleno de CreativeFlowPlus son 16 filas de trabajo). Se marca
+    // "sucio" todo campo editado y, si hay alguno, no se recarga a ciegas: se
+    // avisa en el propio .progreso-texto con un botón para recargar cuando el
+    // usuario quiera.
+    // 'change' además de 'input' para cubrir los <select>, que no emiten 'input'
+    // en todos los navegadores y quedaban fuera de la guardia.
+    ['input', 'change'].forEach(function (evento) {
+      document.addEventListener(evento, function (e) {
+        var el = e.target;
+        if (!el) return;
+        if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT' && el.tagName !== 'SELECT') return;
+        if (el.type === 'file' || el.type === 'radio' || el.type === 'checkbox') return;
+        el.dataset.sucio = '1';
+      });
+    });
+
+    // Al enviar un formulario, lo que estaba sucio ahí adentro ya se está
+    // guardando: dejarlo marcado bloquearía recargas legítimas para siempre.
+    document.addEventListener('submit', function (e) {
+      e.target.querySelectorAll('[data-sucio]').forEach(function (el) {
+        delete el.dataset.sucio;
+      });
+    });
+
+    function haySinGuardar() {
+      return !!document.querySelector('textarea[data-sucio="1"], input[data-sucio="1"], select[data-sucio="1"]');
+    }
+
+    function recargarOAvisar(texto, mensaje) {
+      if (!haySinGuardar()) { location.reload(); return; }
+
+      // El aviso NO puede vivir dentro de la tarjeta del trabajo: esa tarjeta
+      // puede estar colapsada (el usuario cerró el <details>) o en una pestaña
+      // que no es la activa (.tab-panel con display:none). En esos casos el
+      // usuario no veía absolutamente nada, la vista no se refrescaba y no había
+      // forma de forzarla — justo la queja original. Va como banner fijo, que se
+      // ve pase lo que pase. También se escribe en el .progreso-texto de la
+      // tarjeta por si el usuario sí la está mirando.
+      if (texto) texto.textContent = mensaje;
+
+      var banner = document.getElementById('aviso-recarga-global');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'aviso-recarga-global';
+        banner.className = 'aviso-recarga-global';
+        document.body.appendChild(banner);
+      }
+      banner.textContent = mensaje + ' Tienes cambios sin guardar, por eso no se recargó sola. ';
+      var boton = document.createElement('button');
+      boton.type = 'button';
+      boton.className = 'btn-aprobar btn-sm';
+      boton.textContent = 'Recargar ahora';
+      boton.addEventListener('click', function () { location.reload(); });
+      banner.appendChild(boton);
+    }
+
+    function iniciarPolling(jobId, contenedorId) {
+      // El elemento se busca ANTES de marcar la clave: si se marcara primero y
+      // el contenedor no existiera, la clave quedaría envenenada para toda la
+      // vida de la página y un intento posterior válido no arrancaría nunca.
+      var el = document.getElementById(contenedorId);
+      if (!el) return;
+
+      var clave = jobId + '|' + contenedorId;
+      if (trabajosPolling[clave]) return;
+      trabajosPolling[clave] = true;
+
+      var barra = el.querySelector('.barra-progreso-fill');
+      // En casi todas las plantillas el id está puesto sobre el propio
+      // <div class="barra-progreso"> y el <div class="progreso-texto"> es su
+      // HERMANO, no un descendiente — querySelector solo mira descendientes, así
+      // que sin este fallback al padre el porcentaje no se escribía en ningún
+      // lado (la barra mide 8px y no lleva número adentro). El único caso donde
+      // el id envuelve a ambos es _progreso_row.html, y ahí la primera búsqueda
+      // ya acierta.
+      var texto = el.querySelector('.progreso-texto');
+      // El hermano inmediato antes que el padre: cuando varias barras conviven
+      // dentro del mismo contenedor (ej. dos animaciones generándose a la vez),
+      // buscar en el padre devolvería siempre el texto de la primera.
+      if (!texto && el.nextElementSibling &&
+          el.nextElementSibling.classList.contains('progreso-texto')) {
+        texto = el.nextElementSibling;
+      }
+      if (!texto && el.parentElement) {
+        texto = el.parentElement.querySelector('.progreso-texto');
+      }
+      if (!texto) {
+        // Sin un .progreso-texto no habría dónde escribir la etapa ni el aviso
+        // de "terminó, pero tienes cambios sin guardar" — y sin ese aviso el
+        // único camino sería recargar a ciegas. Se crea uno al vuelo.
+        texto = document.createElement('div');
+        texto.className = 'progreso-texto';
+        el.insertAdjacentElement('afterend', texto);
+      }
+
+      // La plantilla YA escribió la etiqueta correcta para este trabajo
+      // ("Publicando… 0% · 0s", "Analizando referencias… 0% · 0s"). Publicar y
+      // analizar marca no declaran etapas, así que con un fallback constante el
+      // primer tick las pisaba con "Generando…", que es simplemente falso. Se
+      // rescata ese texto (todo lo anterior al '·', sin el 0% de relleno) y se
+      // usa como fallback propio de cada tarjeta.
+      var etiquetaBase = 'Generando…';
+      if (texto) {
+        var previo = texto.textContent.split('·')[0].replace(/\s*\d+(\.\d+)?%\s*$/, '').trim();
+        if (previo) etiquetaBase = previo;
+      }
+      var reintentos = 0;
+
+      function tick() {
+        // cache: 'no-store' para que ningún intermediario devuelva un estado viejo.
+        fetch('/trabajo/' + encodeURIComponent(jobId) + '/estado', { cache: 'no-store' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || data.estado === 'desconocido') {
+              reintentos += 1;
+              if (reintentos < 6) {
+                setTimeout(tick, 1200);
+                return;
+              }
+              // Se perdió el rastro del trabajo (típicamente porque se reinició
+              // el proceso a mitad de la generación). Antes esto recargaba a
+              // ciegas y el usuario no entendía por qué la barra se quedó en 0%.
+              if (texto) texto.textContent = 'Se perdió el rastro de esta generación (¿se reinició el servidor?). Recargando…';
+              setTimeout(function () {
+                recargarOAvisar(texto, 'Se perdió el rastro de esta generación.');
+              }, 1500);
+              return;
+            }
+
+            reintentos = 0;
+            // progreso_real es False mientras el número sea una estimación
+            // contra el reloj. En ese caso la barra pasa a modo INDETERMINADO
+            // (rayas en movimiento, sin posición): decir "51%" cuando WaveSpeed
+            // todavía responde 'created' es inventar, y pegado a una etapa que
+            // sí es real el invento parece dato.
+            var estimado = (data.estado === 'en_progreso' && !data.progreso_real);
+            if (barra) {
+              // Las rayas en movimiento son la señal de "este número es un
+              // estimado", pero el ancho SIGUE siendo proporcional: lo que el
+              // usuario pidió es ver el porcentaje de carga, y una barra al
+              // 100% desde el primer segundo no le dice nada. La honestidad la
+              // aporta el "~" del texto y la textura rayada, no esconder el dato.
+              barra.classList.toggle('barra-progreso-indeterminada', estimado);
+              barra.style.width = Math.max(0, Math.min(100, data.progreso)) + '%';
+            }
+            if (texto) {
+              // La etapa en español es la información honesta: ningún proveedor
+              // entrega un porcentaje real, pero sí sabemos en qué paso vamos.
+              var etiqueta = data.etapa || data.mensaje || etiquetaBase;
+              if (data.detalle) etiqueta += ' · ' + data.detalle;
+              // consultar() devuelve decimal (la curva adaptativa necesita esa
+              // resolución para que las etapas cortas se muevan); acá se redondea.
+              var pct = Math.round(data.progreso);
+              texto.textContent = etiqueta + ' · ' + (estimado ? '~' : '') + pct + '% · ' + data.elapsed + 's';
+            }
+
+            if (data.estado === 'en_progreso') {
+              setTimeout(tick, 1500);
+            } else if (data.estado === 'error') {
+              alert('Error: ' + (data.mensaje || 'No se pudo completar el trabajo.'));
+              recargarOAvisar(texto, 'Terminó con error.');
+            } else {
+              recargarOAvisar(texto, '¡Listo! Tienes cambios sin guardar en esta página.');
+            }
+          })
+          .catch(function () {
+            reintentos += 1;
+            if (reintentos < 6) {
+              setTimeout(tick, 2000);
+            } else {
+              recargarOAvisar(texto, 'Se perdió la conexión con el servidor.');
+            }
+          });
+      }
+
+      tick();
+    }
+
+    // Al terminar un trabajo se hace location.reload(), y eso devolvía todas las
+    // tarjetas <details> colapsadas: el refresco SÍ ocurría, pero el usuario veía
+    // lo mismo que antes y parecía que no había pasado nada. Se guarda el estado
+    // abierto/cerrado de cada <details> que tenga id, por pestaña del navegador.
+    document.addEventListener('toggle', function (e) {
+      var d = e.target;
+      if (!d || d.tagName !== 'DETAILS' || !d.id) return;
+      try {
+        // Se guarda '0' EXPLÍCITO al cerrar, no se borra la clave. Ahora las
+        // tarjetas con un trabajo en curso vienen con `open` desde el servidor
+        // (para que la barra y el porcentaje se vean sin tener que abrirlas a
+        // mano), así que "sin clave guardada" ya no significa "cerrada": si al
+        // cerrar borráramos, el siguiente location.reload() se la volvería a
+        // abrir en la cara al usuario una y otra vez.
+        sessionStorage.setItem('detalle-abierto-' + d.id, d.open ? '1' : '0');
+      } catch (err) { /* modo privado / cookies bloqueadas: no es crítico */ }
+    }, true);  // en captura: 'toggle' no burbujea
+
+    document.addEventListener('DOMContentLoaded', function () {
+      try {
+        document.querySelectorAll('details[id]').forEach(function (d) {
+          var guardado = sessionStorage.getItem('detalle-abierto-' + d.id);
+          // El '0' explícito GANA sobre el `open` que puso el servidor: si el
+          // usuario la cerró a propósito, tiene que quedarse cerrada aunque
+          // adentro siga generándose algo.
+          if (guardado === '1') d.open = true;
+          else if (guardado === '0') d.open = false;
+        });
+      } catch (err) { /* idem */ }
+
+      // Entrada suave de las secciones al cargar la página.
+      document.querySelectorAll('.aparece').forEach(function (el, i) {
+        setTimeout(function () { el.classList.add('aparece-visible'); }, i * 40);
+      });
+    });
+  </script>
 </head>
 <body>
   <div class="fondo-ambiente" aria-hidden="true"></div>
@@ -32,79 +277,5 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
-  <script>
-    // Anti doble-clic global: apenas se envía un formulario, deshabilita sus
-    // botones de submit (no cancela el envío en curso, solo evita reenvíos).
-    document.addEventListener('submit', function (e) {
-      e.target.querySelectorAll('button[type="submit"]').forEach(function (btn) {
-        btn.disabled = true;
-        if (!btn.dataset.textoOriginal) btn.dataset.textoOriginal = btn.textContent;
-        btn.textContent = 'Procesando…';
-      });
-    });
-
-    // Consulta el estado de un trabajo en segundo plano (generar imagen/video,
-    // o publicar) cada poco tiempo, y actualiza su barra de progreso hasta que
-    // termine — ahí recarga la página para mostrar el resultado.
-    var trabajosPolling = {};
-
-    function iniciarPolling(jobId, contenedorId) {
-      var clave = jobId + '|' + contenedorId;
-      if (trabajosPolling[clave]) return;
-      trabajosPolling[clave] = true;
-
-      var el = document.getElementById(contenedorId);
-      if (!el) return;
-      var barra = el.querySelector('.barra-progreso-fill');
-      var texto = el.querySelector('.progreso-texto');
-      var reintentos = 0;
-
-      function tick() {
-        fetch('/trabajo/' + encodeURIComponent(jobId) + '/estado')
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (!data || data.estado === 'desconocido') {
-              reintentos += 1;
-              if (reintentos < 6) {
-                setTimeout(tick, 1200);
-                return;
-              }
-              location.reload();
-              return;
-            }
-
-            reintentos = 0;
-            if (barra) barra.style.width = Math.max(0, Math.min(100, data.progreso)) + '%';
-            if (texto) texto.textContent = data.progreso + '% · ' + data.elapsed + 's';
-
-            if (data.estado === 'en_progreso') {
-              setTimeout(tick, 1500);
-            } else if (data.estado === 'error') {
-              alert('Error: ' + (data.mensaje || 'No se pudo completar el trabajo.'));
-              location.reload();
-            } else {
-              location.reload();
-            }
-          })
-          .catch(function () {
-            reintentos += 1;
-            if (reintentos < 6) {
-              setTimeout(tick, 2000);
-            } else {
-              location.reload();
-            }
-          });
-      }
-
-      tick();
-    }
-
-    // Entrada suave de las secciones al cargar la página.
-    document.addEventListener('DOMContentLoaded', function () {
-      document.querySelectorAll('.aparece').forEach(function (el, i) {
-        setTimeout(function () { el.classList.add('aparece-visible'); }, i * 40);
-      });
-    });
-  </script>
 </body>
 </html>

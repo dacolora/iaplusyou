@@ -31,10 +31,10 @@ MODEL_PATH = "alibaba/wan-2.7/video-edit"
 COSTO_USD_POR_SEGUNDO = {"720p": 0.10, "1080p": 0.15}
 
 
-def editar_video(video_url, prompt, referencias_urls=None, resolution="720p"):
+def editar_video(video_url, prompt, referencias_urls=None, resolution="720p", on_progreso=None):
     """Edita video_url reemplazando lo que indique el prompt, usando hasta 3
     referencias_urls como guía visual. Devuelve la URL pública del video
-    resultante."""
+    resultante. on_progreso se propaga tal cual al poll (ver wavespeed_common)."""
     payload = {"video": video_url, "prompt": prompt}
     if referencias_urls:
         payload["images"] = referencias_urls[:3]
@@ -51,7 +51,9 @@ def editar_video(video_url, prompt, referencias_urls=None, resolution="720p"):
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
 
-    resultado = wavespeed_common.poll_hasta_listo(prediction_id, "Wan 2.7 Video Edit")
+    resultado = wavespeed_common.poll_hasta_listo(
+        prediction_id, "Wan 2.7 Video Edit", on_progreso=on_progreso,
+    )
     outputs = resultado.get("outputs") or []
     if not outputs:
         raise RuntimeError(f"Wan 2.7 Video Edit no devolvió ningún video: {resultado}")

@@ -160,7 +160,16 @@
 {% if swaps %}
 <div class="swaps-lista">
   {% for s in swaps %}
-  <details class="swap-card">
+  {# el id habilita que base.html recuerde si la tarjeta estaba abierta: al
+     terminar la generación se hace location.reload() y sin esto la tarjeta
+     volvía colapsada, dando la impresión de que no se había actualizado nada.
+     El `open` mientras hay trabajo es la otra mitad: la barra y el porcentaje
+     viven ADENTRO del <details>, así que con la tarjeta colapsada el usuario no
+     veía ningún progreso — solo un "· generando…" en el resumen. Una tarjeta
+     recién creada tampoco tiene nada guardado en sessionStorage, así que el
+     servidor tiene que abrirla. Si el usuario la cierra, base.html guarda un
+     '0' explícito y ese '0' le gana a este `open` en la próxima recarga. #}
+  <details class="swap-card" id="swap-{{ s.id }}"{% if s.trabajo %} open{% endif %}>
     <summary class="swap-card-resumen">
       <span class="idea-chevron">▸</span>
       <span class="swap-thumb">
@@ -171,14 +180,19 @@
         {% endif %}
       </span>
       <span class="swap-thumb">
-        {% if s.resultado_url %}
+        {# "error" antes que la miniatura, igual que en el detalle: si el swap
+           falló pero conserva un resultado_url de un intento previo, mostrar esa
+           miniatura lo hacía pasar por exitoso desde la lista. #}
+        {% if s.estado == "error" %}
+        <span class="swap-thumb-vacio">✕</span>
+        {% elif s.resultado_url %}
           {% if s.tipo == "video" %}
           <video src="{{ s.resultado_url }}" muted preload="none"></video>
           {% else %}
           <img src="{{ s.resultado_url }}" alt="resultado" loading="lazy">
           {% endif %}
         {% else %}
-        <span class="swap-thumb-vacio">{% if s.trabajo %}…{% elif s.estado == "error" %}✕{% endif %}</span>
+        <span class="swap-thumb-vacio">{% if s.trabajo %}…{% endif %}</span>
         {% endif %}
       </span>
       <span class="swap-resumen-texto">
@@ -211,12 +225,18 @@
           {{ s.producto_nombre }} ·
           {{ s.proveedor_nombre }}
         </div>
-        {% if s.trabajo %}
-        <div class="barra-progreso" id="trabajo-{{ s.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-        <div class="progreso-texto">Generando… 0% · 0s</div>
-        <script>iniciarPolling({{ s.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ s.trabajo.job_id) | tojson }});</script>
-        {% elif s.estado == "error" %}
+        {# "error" va PRIMERO: un swap que falló puede conservar un resultado_url
+           de un intento anterior, y con el resultado arriba se renderizaba como
+           éxito, escondiendo el mensaje de error. Mismo criterio que
+           _idea_visual_card.html — las dos plantillas deben coincidir.
+           Después el resultado gana sobre el trabajo a propósito: cuando el swap
+           termina, swaps.json ya guardó estado="listo" + resultado_url, pero el
+           job sigue "en curso" un rato más mientras se extrae el fotograma, se
+           sube a R2 y se evalúa contra la matriz de marca (5-20s). Con el orden
+           viejo, la barra tapaba un resultado que ya estaba en disco. #}
+        {% if s.estado == "error" %}
         <p class="vacio" style="color:var(--error);">{{ s.error }}</p>
+
         {% elif s.resultado_url %}
           {% if s.tipo == "video" %}
           <video src="{{ s.resultado_url }}" controls muted preload="none"></video>
@@ -226,6 +246,34 @@
         <div class="costo-mini">
           {% if s.credits %}~{{ "%.2f"|format(s.credits) }} cr (${{ "%.2f"|format(s.usd or 0) }}){% elif s.usd %}${{ "%.3f"|format(s.usd) }}{% endif %}
         </div>
+
+        {% elif not s.trabajo and s.estado == "listo" %}
+        {# "listo" SIN resultado_url no es una generación interrumpida: la imagen
+           existe en disco y lo que falló fue subirla a R2. Decirle al usuario que
+           se reinició el servidor era falso y encima le escondía el archivo. #}
+        <p class="vacio">
+          Se generó, pero no se pudo subir al almacenamiento{% if s.error_storage %} ({{ s.error_storage }}){% endif %}.
+          Está en disco:<br><code>{{ s.resultado_local }}</code>
+        </p>
+
+        {% elif not s.trabajo and s.estado == "generando" %}
+        {# Huérfano de verdad: quedó "generando" en disco pero el trabajo en
+           memoria ya no existe (se reinició el proceso a mitad de la
+           generación). Sin esta rama ninguna condición coincidía y el panel
+           quedaba vacío y mudo para siempre, por más que el usuario recargara. #}
+        <p class="vacio">La generación se interrumpió (el servidor se reinició). Elimínala y vuelve a intentarlo.</p>
+        {% endif %}
+
+        {# El polling se emite APARTE del if/elif de arriba, a propósito. Cuando
+           el swap termina, swaps.json ya tiene estado="listo" + resultado_url
+           pero el job sigue vivo otros 5-20s extrayendo el fotograma, subiéndolo
+           y evaluando la marca. Dentro de la cadena, esa ventana caía en la rama
+           del resultado y NO arrancaba polling: la evaluación de marca no
+           aparecía nunca sola, había que recargar a mano. #}
+        {% if s.trabajo %}
+        <div class="barra-progreso" id="trabajo-{{ s.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+        <div class="progreso-texto">Generando… 0% · 0s</div>
+        <script>iniciarPolling({{ s.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ s.trabajo.job_id) | tojson }});</script>
         {% endif %}
       </div>
     </div>
@@ -247,7 +295,18 @@
         {% endfor %}
       </ul>
     </details>
-    {% elif s.estado == "listo" %}
+    {% elif s.evaluacion_estado == "error" %}
+    {# La evaluación falló y no se reintenta sola: decirlo es mejor que dejar un
+       "Evaluando…" girando para siempre (había 6 swaps así en disco). #}
+    <p class="vacio" style="font-size:.78rem;">No se pudo evaluar el cumplimiento de marca{% if s.evaluacion_error %} ({{ s.evaluacion_error }}){% endif %}.</p>
+
+    {% elif s.evaluacion_estado == "sin_matriz" %}
+    <p class="vacio" style="font-size:.78rem;">Sin evaluación de marca: este proyecto no tiene invariantes definidas.</p>
+
+    {% elif s.trabajo and s.resultado_url %}
+    {# "Evaluando…" SOLO mientras el trabajo sigue vivo. Sin resultado_url la
+       evaluación ni siquiera puede correr (la visión de Anthropic necesita una
+       URL pública), y sin trabajo vivo ya nadie la va a escribir. #}
     <p class="vacio" style="font-size:.78rem;">Evaluando cumplimiento de marca…</p>
     {% endif %}
 

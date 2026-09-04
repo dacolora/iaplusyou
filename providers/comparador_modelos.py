@@ -81,13 +81,15 @@ No cambies nada más: mismas personas, mismos rostros, mismos cuerpos, misma \
 ropa, misma pose, mismo fondo, misma luz, mismo encuadre exactos."""
 
 
-def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls, foto_local_path=None):
+def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls,
+                  foto_local_path=None, on_progreso=None):
     """Edita foto_url reemplazando el calzado por el producto mostrado en
     referencias_urls, con el modelo_id indicado (ver MODELOS_IMAGEN). Si se pasa
     foto_local_path, se detecta el encuadre real de esa foto y se le pide al
     modelo que lo respete (si no, cada uno elige su propio encuadre por default
     y el resultado sale recortado respecto al original). Devuelve la URL
-    pública de la imagen resultante."""
+    pública de la imagen resultante. on_progreso se propaga a la cola de fal.ai
+    (ver fal_client.llamar) para poder mostrar en qué fase va."""
     info = MODELOS_IMAGEN[modelo_id]
     prompt = PROMPT_EDICION_IMAGEN.format(descripcion_producto=descripcion_producto)
     payload = {"prompt": prompt, "image_urls": [foto_url] + referencias_urls[:2]}
@@ -99,17 +101,18 @@ def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls, f
             ancho, alto = aspect_ratio.dimensiones_para_qwen(foto_local_path)
             payload["image_size"] = {"width": ancho, "height": alto}
 
-    data = fal_client.llamar(info["path"], payload)
+    data = fal_client.llamar(info["path"], payload, on_progreso=on_progreso)
     imagenes_resultado = data.get("images") or []
     if not imagenes_resultado:
         raise RuntimeError(f"{info['nombre']} no devolvió ninguna imagen: {data}")
     return imagenes_resultado[0]["url"]
 
 
-def editar_video(modelo_id, video_url, descripcion_producto, referencia_imagen_url):
+def editar_video(modelo_id, video_url, descripcion_producto, referencia_imagen_url, on_progreso=None):
     """Edita video_url reemplazando el calzado por el producto mostrado en
     referencia_imagen_url, con el modelo_id indicado (ver MODELOS_VIDEO).
-    Devuelve la URL pública del video resultante."""
+    Devuelve la URL pública del video resultante. on_progreso se propaga a la
+    cola de fal.ai (ver fal_client.llamar)."""
     info = MODELOS_VIDEO[modelo_id]
 
     if modelo_id == "wan_animate_replace":
@@ -125,7 +128,7 @@ def editar_video(modelo_id, video_url, descripcion_producto, referencia_imagen_u
         )
         payload = {"video_url": video_url, "prompt": prompt, "mode": "adhere_2", "image_url": referencia_imagen_url}
 
-    data = fal_client.llamar(info["path"], payload)
+    data = fal_client.llamar(info["path"], payload, on_progreso=on_progreso)
     video = data.get("video") or {}
     url = video.get("url")
     if not url:

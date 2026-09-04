@@ -46,9 +46,10 @@ MODELOS = {
 }
 
 
-def editar_video(modelo_id, video_url, prompt, referencias_urls=None):
+def editar_video(modelo_id, video_url, prompt, referencias_urls=None, on_progreso=None):
     """Edita video_url según prompt, usando el modelo_id indicado (ver
-    MODELOS). Devuelve la URL pública del video resultante."""
+    MODELOS). Devuelve la URL pública del video resultante. on_progreso se
+    propaga tal cual al poll (ver wavespeed_common.poll_hasta_listo)."""
     info = MODELOS[modelo_id]
     payload = {"video": video_url, "prompt": prompt}
 
@@ -69,7 +70,9 @@ def editar_video(modelo_id, video_url, prompt, referencias_urls=None):
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
 
-    resultado = wavespeed_common.poll_hasta_listo(prediction_id, info["nombre"])
+    resultado = wavespeed_common.poll_hasta_listo(
+        prediction_id, info["nombre"], on_progreso=on_progreso,
+    )
     outputs = resultado.get("outputs") or []
     if not outputs:
         raise RuntimeError(f"{info['nombre']} no devolvió ningún video: {resultado}")

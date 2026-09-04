@@ -142,7 +142,20 @@
       <button type="submit">Generar video con Wan 3.0{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }} a 720p){% endif %}</button>
     </form>
     {% elif item.estado == "video_generando" %}
-    <p>Generando video…</p>
+    {# _creative_flow_items() ya venía adjuntando item.trabajo, pero esta plantilla
+       nunca lo leía: mostraba un párrafo estático, sin barra ni polling, así que
+       era imposible que la vista se actualizara sola. Con Wan 3.0 (estimado 180s,
+       timeout 1200s) eso era mirar texto muerto varios minutos. #}
+    {% if item.trabajo %}
+    <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    <div class="progreso-texto">Generando video… 0% · 0s</div>
+    <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
+    {% else %}
+    {# Huérfano tras un reinicio del proceso. Importa el doble acá: cf_generar_video
+       solo permite reintentar desde "prompt_listo"/"error", así que desde
+       "video_generando" lo único posible es descartar la sesión. #}
+    <p class="vacio">La generación se interrumpió (el servidor se reinició). Descarta la sesión y vuelve a intentarla.</p>
+    {% endif %}
     {% elif item.estado == "video_listo" %}
     <video src="{{ item.video_url }}" controls muted style="max-width:320px;"></video>
     <p>Costo: ${{ item.usd }}</p>

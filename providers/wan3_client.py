@@ -42,11 +42,12 @@ COSTO_USD_POR_SEGUNDO = {"480p": 0.05, "720p": 0.10, "1080p": 0.20}
 
 
 def generar_video(prompt, reference_images, duration=12, resolution="720p",
-                   aspect_ratio="9:16", enable_audio=False):
+                   aspect_ratio="9:16", enable_audio=False, on_progreso=None):
     """reference_images: lista de URLs públicas, en el orden
     personajes -> productos -> escenas (así @Imagen 1, @Imagen 2... del prompt
     final corresponden exactamente al orden que ve el modelo). Devuelve la URL
-    pública del video resultante."""
+    pública del video resultante. on_progreso se propaga al poll (ver
+    wavespeed_common.poll_hasta_listo) para poder mostrar la fase real."""
     if not reference_images:
         raise ValueError("Wan 3.0 reference-to-video necesita al menos una imagen de referencia.")
 
@@ -68,7 +69,9 @@ def generar_video(prompt, reference_images, duration=12, resolution="720p",
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
 
-    resultado = wavespeed_common.poll_hasta_listo(prediction_id, "Wan 3.0", timeout_seconds=1200)
+    resultado = wavespeed_common.poll_hasta_listo(
+        prediction_id, "Wan 3.0", timeout_seconds=1200, on_progreso=on_progreso,
+    )
     outputs = resultado.get("outputs") or []
     if not outputs:
         raise RuntimeError(f"Wan 3.0 no devolvió ningún video: {resultado}")

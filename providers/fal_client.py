@@ -41,22 +41,44 @@ def _headers():
     return {"Authorization": f"Key {api_key()}", "Content-Type": "application/json"}
 
 
-def llamar(model_path, payload, timeout=600, poll_interval=3):
+def _avisar(on_progreso, info):
+    """Reportar progreso es un extra: si falla, se ignora — nunca puede tumbar una
+    generación que ya está gastando créditos."""
+    if not on_progreso:
+        return
+    try:
+        on_progreso(info)
+    except Exception:
+        pass
+
+
+def llamar(model_path, payload, timeout=600, poll_interval=3, on_progreso=None):
     """Encola model_path en la cola async de fal.ai, espera hasta timeout segundos
     a que termine (poll cada poll_interval segundos) y devuelve el JSON del
-    resultado ya parseado — misma forma que devolvía el endpoint síncrono viejo."""
+    resultado ya parseado — misma forma que devolvía el endpoint síncrono viejo.
+
+    on_progreso (opcional): se llama con {"fase": "IN_QUEUE"|"IN_PROGRESS"|...,
+    "queue_position": int|None} para que la UI pueda decir "en cola (puesto 3)"
+    en vez de un porcentaje inventado. fal.ai no entrega ningún porcentaje real.
+    Va AL FINAL de la firma para no romper a los llamadores existentes."""
     resp = requests.post(f"{QUEUE_BASE_URL}/{model_path}", json=payload, headers=_headers(), timeout=30)
     if not resp.ok:
         raise RuntimeError(f"fal.ai ({model_path}) respondió {resp.status_code} al encolar: {resp.text[:500]}")
     encolado = resp.json()
     status_url = encolado["status_url"]
     response_url = encolado["response_url"]
+    _avisar(on_progreso, {"fase": "IN_QUEUE", "queue_position": encolado.get("queue_position")})
 
     inicio = time.time()
     while time.time() - inicio < timeout:
         r = requests.get(status_url, headers=_headers(), timeout=30)
         r.raise_for_status()
-        estado = r.json().get("status")
+        # Antes esto era `r.json().get("status")` y tiraba el resto de la
+        # respuesta en la misma expresión; se guarda el cuerpo entero para poder
+        # leer también queue_position cuando fal.ai lo manda.
+        cuerpo = r.json()
+        estado = cuerpo.get("status")
+        _avisar(on_progreso, {"fase": estado, "queue_position": cuerpo.get("queue_position")})
         if estado == "COMPLETED":
             resultado = requests.get(response_url, headers=_headers(), timeout=30)
             if not resultado.ok:
