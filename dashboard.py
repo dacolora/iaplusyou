@@ -1046,7 +1046,7 @@ def ver_swap(cliente):
 # Solo modelos que ven la foto de referencia del producto y clonan la foto/video
 # original — nada que solo reciba una descripción en texto del calzado (eso
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
-PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit")
+PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra")
 PROVEEDORES_SWAP_VIDEO = (
     "kling_o1", "luma_modify", "wan_animate_replace", "wan27_edit",
     "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit",
@@ -1056,6 +1056,7 @@ NOMBRES_PROVEEDOR_SWAP = {
     "nano_banana": "Nano Banana",
     "nano_banana_fal": "Nano Banana (vía fal)",
     "qwen_edit": "Qwen Image Edit Plus",
+    "nano_banana_pro_ultra": "Nano Banana Pro Ultra (4k)",
     "kling_o1": "Kling O1",
     "luma_modify": "Luma Ray3 Modify",
     "wan_animate_replace": "Wan-2.2 Animate Replace",
@@ -1083,6 +1084,7 @@ ETAPA_MODELO = "Generando con el modelo"
 ETAPA_DESCARGAR = "Descargando el resultado"
 ETAPA_GUARDAR = "Guardando y evaluando la marca"
 ETAPA_GUARDAR_VIDEO = "Guardando el video"
+ETAPA_MEJORAR = "Mejorando la calidad de la imagen"
 ETAPA_GUARDAR_IMAGEN = "Guardando la imagen"
 
 ETAPAS_SWAP_VIDEO = [
@@ -1096,6 +1098,13 @@ ETAPAS_SWAP_FOTO = [
     (ETAPA_PREPARAR_FOTO, 10),
     (ETAPA_MODELO, 70),
     (ETAPA_GUARDAR, 20),
+]
+# Con la mejora activada hay una llamada más al proveedor entre medio.
+ETAPAS_SWAP_FOTO_MEJORADA = [
+    (ETAPA_PREPARAR_FOTO, 8),
+    (ETAPA_MODELO, 57),
+    (ETAPA_MEJORAR, 20),
+    (ETAPA_GUARDAR, 15),
 ]
 # CreativeFlowPlus: Wan 3.0 se lleva casi todo el tiempo (timeout de 1200s).
 ETAPAS_CREATIVE_FLOW = [
@@ -1205,6 +1214,9 @@ def generar_swap(cliente):
     producto_id = request.form.get("producto_id", "").strip()
     proveedor_foto = request.form.get("proveedor_foto", "nano_banana").strip()
     proveedor_video = request.form.get("proveedor_video", "seedance25_edit").strip()
+    # Segunda pasada opcional de calidad. Solo aplica a FOTO: el upscaler de
+    # Bria es de imagen, no de video.
+    mejorar_calidad = bool(request.form.get("mejorar_calidad"))
     if proveedor_foto not in PROVEEDORES_SWAP_IMAGEN:
         proveedor_foto = "nano_banana"
     if proveedor_video not in PROVEEDORES_SWAP_VIDEO:
@@ -1234,6 +1246,7 @@ def generar_swap(cliente):
     # El encuadre ya no lo elige la persona — se detecta de la foto/video real
     # que subió, para que el resultado mantenga esas mismas proporciones.
     aspect_ratio_detectado = aspect_ratio_mod.detectar_gemini(foto_local) if not es_video else None
+    mejorar_calidad = mejorar_calidad and not es_video
     swap_id = swaps_mod.crear(cliente, foto_local, producto_id, aspect_ratio_detectado, proveedor, tipo=tipo)
     job_id = f"{cliente}__{swap_id}__swap"
 
@@ -1335,23 +1348,68 @@ def generar_swap(cliente):
                     with open(local_path, "wb") as f:
                         f.write(img_bytes)
                     costo = nano_banana_client.estimate_image()
-                else:  # nano_banana_fal, qwen_edit
+                else:  # nano_banana_fal, qwen_edit, nano_banana_pro_ultra
                     foto_url = r2_uploader.upload_image(foto_local, f"clientes/{cliente}/swaps_subidas/{ts}_{nombre}")
+                    # Nano Banana Pro Ultra acepta hasta 14 imágenes (13 de
+                    # referencia + la foto); los de fal solo 2. Se sube lo que
+                    # cada uno puede aprovechar, ni una más.
+                    tope_refs = 13 if proveedor == "nano_banana_pro_ultra" else 2
                     referencias_urls = [
                         r2_uploader.upload_image(ref, f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref)}")
-                        for ref in producto["referencias"][:2]
+                        for ref in producto["referencias"][:tope_refs]
                     ]
                     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-                    resultado_url = comparador_modelos.editar_imagen(
-                        proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
-                        foto_local_path=foto_local, on_progreso=avisar_fase, tipo=tipo_producto,
-                    )
+                    if proveedor == "nano_banana_pro_ultra":
+                        referencias_lista = "\n".join(
+                            f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
+                            for i in range(len(referencias_urls))
+                        )
+                        resultado_url = wavespeed_imagen.editar_imagen(
+                            foto_url, prompt_swap.prompt_imagen(tipo_producto, referencias_lista),
+                            referencias_urls=referencias_urls,
+                            aspect_ratio=aspect_ratio_mod.detectar_wavespeed_nano_banana_pro(foto_local),
+                            on_progreso=avisar_fase,
+                        )
+                        costo = wavespeed_imagen.estimate_image()
+                    else:
+                        resultado_url = comparador_modelos.editar_imagen(
+                            proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
+                            foto_local_path=foto_local, on_progreso=avisar_fase, tipo=tipo_producto,
+                        )
+                        costo = comparador_modelos.estimate_image(proveedor)
                     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
                     resp = requests.get(resultado_url, timeout=120)
                     resp.raise_for_status()
                     with open(local_path, "wb") as f:
                         f.write(resp.content)
-                    costo = comparador_modelos.estimate_image(proveedor)
+
+                if mejorar_calidad:
+                    # Segunda pasada: agranda SIN regenerar (Bria). Necesita una
+                    # URL pública, así que primero sube el resultado del swap a
+                    # R2 y después reemplaza el archivo local por el mejorado.
+                    trabajos.reportar(job_id, etapa=ETAPA_MEJORAR)
+                    try:
+                        url_para_mejorar = r2_uploader.upload_image(
+                            local_path, f"clientes/{cliente}/swaps/{swap_id}.previo.png")
+                        ancho_prev, alto_prev = aspect_ratio_mod.dimensiones(local_path)
+                        mejorada_url = wavespeed_imagen.mejorar_calidad(
+                            url_para_mejorar,
+                            factor=wavespeed_imagen.factor_seguro(ancho_prev, alto_prev),
+                            on_progreso=avisar_fase,
+                        )
+                        resp_mejorada = requests.get(mejorada_url, timeout=180)
+                        resp_mejorada.raise_for_status()
+                        with open(local_path, "wb") as f:
+                            f.write(resp_mejorada.content)
+                        costo = {
+                            "credits": costo.get("credits"),
+                            "usd": round((costo.get("usd") or 0) + wavespeed_imagen.COSTO_USD_UPSCALE, 3),
+                        }
+                    except Exception as e:
+                        # La mejora es un extra: si falla, el swap YA está hecho y
+                        # se entrega igual. Perder el resultado por el paso opcional
+                        # sería tirar a la basura lo que el usuario ya pagó.
+                        bitacora.registrar(cliente, swap_id, "mejora_calidad", "error", str(e))
 
                 trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
                 try:
@@ -1390,11 +1448,18 @@ def generar_swap(cliente):
 
     if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit"):
         duracion_estimada = 20
+    elif proveedor == "nano_banana_pro_ultra":
+        duracion_estimada = 60  # sale en 4k: tarda bastante más que los de 1k
     elif proveedor in ("wan27_edit", "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit"):
         duracion_estimada = 380  # media reportada por WaveSpeed para estos modelos
     else:
         duracion_estimada = 90
-    etapas = ETAPAS_SWAP_VIDEO if tipo == "video" else ETAPAS_SWAP_FOTO
+    if mejorar_calidad:
+        duracion_estimada += 25  # la segunda pasada del upscaler
+    if tipo == "video":
+        etapas = ETAPAS_SWAP_VIDEO
+    else:
+        etapas = ETAPAS_SWAP_FOTO_MEJORADA if mejorar_calidad else ETAPAS_SWAP_FOTO
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada, etapas=etapas):
         flash("Generando el swap…", "ok")
     else:

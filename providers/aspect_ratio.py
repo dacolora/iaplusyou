@@ -18,6 +18,14 @@ GEMINI_ASPECT_RATIOS = [
     "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9",
 ]
 
+# Verificado contra la documentación oficial de WaveSpeed
+# (google/nano-banana-pro/edit-ultra, 4 sep 2026). OJO: NO es la misma lista que
+# GEMINI_ASPECT_RATIOS — acá no existen los ratios extremos (1:4, 4:1, 8:1), así
+# que una panorámica mapeada con la lista de Gemini haría fallar la llamada.
+WAVESPEED_NANO_BANANA_PRO_ASPECT_RATIOS = [
+    "1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9",
+]
+
 # Verificado contra la documentación oficial de fal.ai (fal-ai/nano-banana/edit).
 FAL_NANO_BANANA_ASPECT_RATIOS = [
     "21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16",
@@ -45,6 +53,11 @@ def mas_cercano(ancho, alto, opciones):
 def detectar_gemini(path_local):
     ancho, alto = dimensiones(path_local)
     return mas_cercano(ancho, alto, GEMINI_ASPECT_RATIOS)
+
+
+def detectar_wavespeed_nano_banana_pro(path_local):
+    ancho, alto = dimensiones(path_local)
+    return mas_cercano(ancho, alto, WAVESPEED_NANO_BANANA_PRO_ASPECT_RATIOS)
 
 
 def detectar_fal_nano_banana(path_local):

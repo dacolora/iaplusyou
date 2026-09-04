@@ -28,10 +28,20 @@
     <div>
       <label class="campo-label">Modelo para FOTO</label>
       <div class="checks-plataformas" id="modelos-foto">
-        <label><input type="radio" name="proveedor_foto" value="nano_banana" checked> Nano Banana — recomendado (~$0.04)</label>
-        <label><input type="radio" name="proveedor_foto" value="nano_banana_fal"> Nano Banana vía fal (~$0.04)</label>
-        <label><input type="radio" name="proveedor_foto" value="qwen_edit"> Qwen Image Edit Plus (~$0.03)</label>
+        <label data-usd="0.039"><input type="radio" name="proveedor_foto" value="nano_banana" checked> Nano Banana — recomendado (~$0.039)</label>
+        <label data-usd="0.039"><input type="radio" name="proveedor_foto" value="nano_banana_fal"> Nano Banana vía fal (~$0.039)</label>
+        <label data-usd="0.03"><input type="radio" name="proveedor_foto" value="qwen_edit"> Qwen Image Edit Plus (~$0.03)</label>
+        <label data-usd="0.15"><input type="radio" name="proveedor_foto" value="nano_banana_pro_ultra"> Nano Banana Pro Ultra — sale en 4k, hasta 14 referencias (~$0.15)</label>
       </div>
+      <label style="display:block;margin-top:.5rem;font-size:.8rem;">
+        <input type="checkbox" name="mejorar_calidad" id="mejorar-calidad">
+        Mejorar la calidad al final (+$0.04)
+      </label>
+      <p class="vacio" style="padding-top:.2rem;font-size:.74rem;">
+        Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la
+        imagen, así que no te cambia la cara, la pose ni el fondo. Solo aplica a fotos.
+      </p>
+      <p class="vacio" id="costo-estimado-foto" style="padding-top:.2rem;font-size:.8rem;font-weight:600;"></p>
     </div>
     <div>
       <label class="campo-label">Modelo para VIDEO</label>
@@ -80,6 +90,25 @@
       gruposVideo.forEach(function (label) {
         label.querySelector('input').addEventListener('change', mostrarCosto);
       });
+
+      // Costo de FOTO: el modelo elegido + la mejora opcional. Se muestra siempre
+      // (no depende de leer metadatos del archivo, como sí pasa con el video),
+      // así el usuario sabe cuánto va a gastar antes de subir nada.
+      var costoFoto = document.getElementById('costo-estimado-foto');
+      var checkMejora = document.getElementById('mejorar-calidad');
+
+      function mostrarCostoFoto() {
+        var elegido = gruposFoto.find(function (l) { return l.querySelector('input').checked; });
+        if (!elegido || !elegido.dataset.usd) { costoFoto.textContent = ''; return; }
+        var total = parseFloat(elegido.dataset.usd) + (checkMejora.checked ? 0.04 : 0);
+        costoFoto.textContent = 'Si subes una FOTO: ~$' + total.toFixed(3) +
+          (checkMejora.checked ? ' (modelo + mejora)' : '');
+      }
+      gruposFoto.forEach(function (label) {
+        label.querySelector('input').addEventListener('change', mostrarCostoFoto);
+      });
+      checkMejora.addEventListener('change', mostrarCostoFoto);
+      mostrarCostoFoto();
 
       function nombreModelo(label) {
         return label.textContent.trim().split(' — ')[0].split(' (')[0];
