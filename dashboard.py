@@ -1575,8 +1575,15 @@ def cf_generar_prompt(cliente):
         duracion_objetivo = 13
     duracion_objetivo = max(12, min(15, duracion_objetivo))
 
-    if not personajes_sel:
-        flash("Elige al menos un personaje — la plantilla necesita @Imagen 1.", "error")
+    # El personaje NO es obligatorio: hay videos que son solo del producto (un
+    # plano del calzado en una escena, sin nadie en cuadro). Lo que la plantilla
+    # necesita es al menos UNA referencia protagonista para @Imagen 1, y tanto un
+    # personaje como un producto sirven — generar_prompt_creative_flow() numera
+    # las @Imagen sobre la lista real, así que con solo productos el primero pasa
+    # a ser @Imagen 1 sin ningún hueco. Las escenas no cuentan: son ambiente, no
+    # sujeto.
+    if not personajes_sel and not productos_sel:
+        flash("Elige al menos un personaje o un producto — la plantilla necesita @Imagen 1.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not accion_central:
         flash("Describe la acción central del video.", "error")
