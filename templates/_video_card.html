@@ -29,5 +29,11 @@
       </form>
     </div>
     {% endif %}
+
+    {% if v.video_url %}
+    <form method="post" action="{{ url_for('enviar_video_a_publicidad', cliente=cliente, brief_id=v.id) }}" style="display:inline;">
+      <button type="submit" class="btn-guardar btn-sm">Enviar a Publicidad</button>
+    </form>
+    {% endif %}
   </div>
 </div>

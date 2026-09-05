@@ -1551,6 +1551,20 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
 
 
+@app.route("/cliente/<cliente>/video/<brief_id>/enviar_a_publicidad", methods=["POST"])
+def enviar_video_a_publicidad(cliente, brief_id):
+    data = estado_mod.cargar(cliente)
+    entry = data.get(brief_id)
+    if not entry or not entry.get("video_url"):
+        flash("Ese video todavía no tiene una URL pública lista.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+    nombre = entry.get("title") or brief_id
+    ads_mod.crear(cliente, "idea_visual", brief_id, entry["video_url"], "video", nombre)
+    flash("Enviado a Publicidad — revísalo en esa pestaña.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
 # ---------- Publicidad (Meta Ads) — publicar, actualizar resultados, pausar/activar,
 # eliminar de la lista local. Nunca borra una campaña real de Meta: eso queda para
 # Meta Ads Manager a propósito (ver eliminar_ad más abajo). ----------
