@@ -162,6 +162,7 @@ solo cambia `render_template(...)` por `jsonify(...)`.
 |---|---|---|
 | Dispositivos | `POST /dispositivos` | nuevo — registra token FCM en Firestore |
 | Proyectos | `GET /proyectos` | `estado.listar_clientes` filtrado por `accesos` de Firestore |
+| Proyectos | `GET /proyectos/<cliente>/capacidades` | nuevo — ver "Personalización por cliente" |
 | Ideas | `POST /proyectos/<cliente>/ideas` | `generador_prompts.generar_prompts` |
 | Prompts | `GET /proyectos/<cliente>/prompts` | `prompts.cargar` |
 | Prompts | `POST /prompts/<prompt_id>/aprobar` \| `/rechazar` \| `/guardar` | rutas ya existentes `aprobar_prompt`/`rechazar_prompt`/`guardar_prompt` |
@@ -183,6 +184,45 @@ escribir cada tarea, ya que este archivo ha cambiado de forma bien
 documentada durante el desarrollo de otras funciones en este mismo
 proyecto (ver `docs/superpowers/plans/2026-09-05-meta-ads-fase1.md` para
 un precedente de ese mismo cuidado).
+
+## Personalización por cliente
+
+Cuatro piezas separadas, cada una en la versión que le corresponde.
+
+**Capacidades por cliente (v1, urgente):** hoy Happyflops no tiene cuenta
+de Meta Ads configurada — si la app muestra la pestaña Publicidad como si
+funcionara, cada acción falla contra Meta. `GET
+/proyectos/<cliente>/capacidades` calcula en el servidor, revisando qué
+credenciales/tokens existen para ese cliente (`META_AD_ACCOUNT_ID` en su
+`.env`, `token_youtube.json`, `token_tiktok.json`, `ENABLE_TIKTOK`), y
+devuelve algo como `{"meta_ads": false, "youtube": true, "facebook": true,
+"instagram": true, "tiktok": false}`. La app usa esto para **ocultar o
+mostrar en gris con un mensaje claro** ("Configura tu cuenta de Meta Ads")
+en vez de dejar que el usuario choque con un error después de llenar un
+formulario.
+
+**Marca visual por proyecto (v1.1):** `proyecto.json` (ya existe, vía
+`proyectos.py` — hoy solo guarda `nombre`) se extiende con `color_acento`
+(hex) y `logo_url` (subido a R2, mismo patrón de storage que todo lo
+demás). Al cambiar de proyecto en la app, el tema (color de acento, logo en
+el app bar) cambia con él. `GET /proyectos` devuelve estos dos campos junto
+al nombre.
+
+**Alta de un cliente nuevo (v1.1+):** crear la carpeta
+`clientes/<nombre>/`, su `proyecto.json` y el acceso correspondiente en
+Firestore sí se puede hacer desde la app. **La autorización OAuth de
+YouTube/Meta/TikTok para publicación orgánica sigue necesitando un paso
+único desde una computadora** (abre un navegador local con un servidor de
+callback en `localhost` — no se puede hacer desde el celular, es el mismo
+límite que ya documenta `CLAUDE.md` para los wizards `auth/auth_*.py`
+actuales). El flujo de alta en la app termina con un recordatorio explícito
+de ese paso pendiente, no lo oculta.
+
+**Personalización de la generación — `marca.json` (v1.1):** vive en
+FlowSettings. Pantalla para ver/editar la guía de estilo en texto, y
+disparar `generador_prompts.analizar_marca()` subiendo fotos de referencia
+desde la cámara/galería del celular — mismo resultado que hoy produce el
+análisis de marca vía Claude vision, disparado desde el navegador.
 
 ## Flujo de notificaciones push
 
