@@ -17,6 +17,18 @@ Python puros (`estado.py`, `prompts.py`, `ads.py`, `meta_ads/`,
 `generador_prompts.py`, `trabajos.py`, etc.) — este diseño no toca esa
 lógica, solo le agrega una segunda forma de invocarla.
 
+**Destino final, decidido explícitamente:** la app Flutter no es un
+complemento del dashboard HTML — es su reemplazo. El plan es que, con el
+tiempo, **las 5 pestañas** (FlowClone, Publicidad, FlowPlus, FlowCatálogo,
+FlowSettings) vivan en Flutter, compilado tanto a móvil (iOS/Android) como
+a **Flutter Web** (mismo código, build distinta) para lo que hoy se usa
+desde una laptop/navegador. El HTML de Jinja se jubila cuando ese
+reemplazo esté completo — no se diseña para convivir indefinidamente.
+La prioridad de construcción es **móvil primero**: el flujo de
+aprobación/ideas/publicidad es el que más urge tener en el celular, y
+sale primero; ver "Hoja de ruta hacia el reemplazo total" más abajo para
+el orden completo.
+
 ## Metas
 
 - Una app Flutter (iOS/Android) que permite: iniciar sesión, ver los
@@ -32,21 +44,43 @@ lógica, solo le agrega una segunda forma de invocarla.
   pipeline, solo una capa de traducción a JSON encima de las mismas
   funciones que ya usan las rutas HTML.
 
-## No-metas (explícitamente fuera de alcance de v1)
+## No-metas (explícitamente fuera de alcance de v1 — no del proyecto completo)
 
 - Modo offline / sincronización diferida. Sin conexión, la app muestra un
   error y un botón de reintentar — no hay cola local de cambios pendientes
   ni caché de escritura.
 - FlowCatálogo (gestión de catálogo de productos) y FlowSettings (guía de
-  marca, bitácora, informe de operación) — siguen siendo solo-navegador.
-  Candidatos naturales para una v2, no antes.
+  marca, bitácora, informe de operación) en Flutter — **sí entran al
+  proyecto, pero como v1.1, inmediatamente después de v1**, no como
+  "algún día". Ver la hoja de ruta abajo. Mientras tanto siguen
+  siendo solo-navegador (HTML).
 - Subir fotos/videos de referencia nuevos de personaje o producto desde el
-  celular — sigue siendo tarea de escritorio (requiere el flujo de alta que
-  hoy vive en FlowCatálogo/marca).
+  celular en v1 — llega con FlowCatálogo en v1.1, no antes.
+- Flutter Web (la build de escritorio/navegador) — se construye después de
+  que exista la versión móvil completa (v1 + v1.1), reusando el mismo
+  código con ajustes de layout, no antes.
 - Multi-idioma — la app queda en español, igual que el dashboard hoy.
 - Cualquier cambio a la lógica de negoción existente (generación, Meta Ads,
   publicación orgánica). Este spec es una capa de acceso nueva, no una
   reescritura.
+
+## Hoja de ruta hacia el reemplazo total del HTML
+
+1. **v1 (este spec, prioridad inmediata)** — Flutter móvil: Bandeja de
+   aprobación, Ideas, Publicidad. El HTML sigue vivo para FlowCatálogo y
+   FlowSettings, y por eso necesita su propia protección de acceso al
+   quedar en un VPS público (ver "Autenticación y accesos" — pendiente de
+   decidir Tailscale vs Basic Auth vs Firebase Auth también ahí, como
+   medida temporal mientras existe).
+2. **v1.1 (inmediatamente después)** — FlowCatálogo y FlowSettings suman a
+   la misma app Flutter móvil, incluyendo subida de fotos/video de
+   referencia (cámara/galería del celular). Con esto, el HTML de Jinja
+   deja de ser necesario para el uso diario — la medida de protección
+   temporal del paso 1 puede simplificarse o retirarse.
+3. **v2 — Flutter Web**: misma base de código, build web, para quien
+   prefiera pantalla grande. Reemplaza al HTML de Jinja por completo;
+   `dashboard.py` queda solo como backend de `/api/v1` (las rutas HTML
+   se pueden retirar en este punto, o dejarse inertes sin mantenimiento).
 
 ## Arquitectura general
 
