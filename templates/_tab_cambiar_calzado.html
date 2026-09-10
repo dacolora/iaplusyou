@@ -1,13 +1,14 @@
 <p class="vacio" style="padding-top:0;">
-  Sube una foto o un video real (3-10s) y elige el producto. El resultado es
-  lo mismo que subiste — misma pose, mismo rostro, mismo fondo, mismo
-  movimiento si es video — con el calzado reemplazado por el que elegiste.
-  Nada más cambia.
+  Sube una o varias fotos y/o videos reales (3-10s) y elige el producto —
+  puedes mezclar fotos y videos en la misma subida. El resultado es lo mismo
+  que subiste — misma pose, mismo rostro, mismo fondo, mismo movimiento si es
+  video — con el calzado reemplazado por el que elegiste, uno por cada
+  archivo. Nada más cambia.
 </p>
 
 <form method="post" action="{{ url_for('generar_swap', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
-  <label class="campo-label">Foto o video original</label>
-  <input type="file" name="foto" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
+  <label class="campo-label">Foto(s) o video(s) originales</label>
+  <input type="file" name="foto" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple required>
 
   <label class="campo-label" style="margin-top:1rem;display:block;">Producto</label>
   {% if productos %}

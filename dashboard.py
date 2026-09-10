@@ -1404,11 +1404,10 @@ def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
 
 @app.route("/cliente/<cliente>/swap/generar", methods=["POST"])
 def generar_swap(cliente):
-    """Sube la foto o video del usuario, y lanza en segundo plano el reemplazo de
-    calzado con el modelo elegido — uno para foto (PROVEEDORES_SWAP_IMAGEN) y otro
-    para video (PROVEEDORES_SWAP_VIDEO), cada tipo con su propia lista de
-    candidatos porque no todos los modelos hacen ambos."""
-    archivo = request.files.get("foto")
+    """Sube una o más fotos/videos del usuario y lanza un swap por cada uno en
+    segundo plano, todos contra el mismo producto elegido — antes solo
+    aceptaba un archivo a la vez."""
+    archivos = [a for a in request.files.getlist("foto") if a and a.filename]
     producto_id = request.form.get("producto_id", "").strip()
     # El modelo ya no se elige por generación — es una preferencia de
     # configuración por cliente (FlowSettings), no del flujo de uso diario.
@@ -1423,8 +1422,8 @@ def generar_swap(cliente):
     if proveedor_video not in PROVEEDORES_SWAP_VIDEO:
         proveedor_video = "seedance25_edit"
 
-    if not archivo or not archivo.filename:
-        flash("Sube una foto o video primero.", "error")
+    if not archivos:
+        flash("Sube al menos una foto o video primero.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
 
     producto = catalogo_productos.encontrar(cliente, producto_id)
@@ -1432,6 +1431,24 @@ def generar_swap(cliente):
         flash("Elige un producto del catálogo.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
 
+    lanzados = 0
+    for archivo in archivos:
+        if _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad):
+            lanzados += 1
+
+    if lanzados == 1:
+        flash("Generando el swap…", "ok")
+    elif lanzados > 1:
+        flash(f"Generando {lanzados} swaps…", "ok")
+    else:
+        flash("Ya se estaban generando esos swaps — espera a que terminen.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+
+
+def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad):
+    """Un solo archivo -> un solo swap, en su propio job de fondo. Extraído de
+    generar_swap para poder subir varios archivos a la vez, cada uno con su
+    propia barra de progreso independiente."""
     nombre = secure_filename(archivo.filename)
     ext = os.path.splitext(nombre)[1].lower()
     es_video = ext in VIDEO_EXTS
@@ -1680,11 +1697,7 @@ def generar_swap(cliente):
         etapas = ETAPAS_SWAP_VIDEO
     else:
         etapas = ETAPAS_SWAP_FOTO_MEJORADA if mejorar_calidad else ETAPAS_SWAP_FOTO
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada, etapas=etapas):
-        flash("Generando el swap…", "ok")
-    else:
-        flash("Ya se está generando ese swap — espera a que termine.", "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada, etapas=etapas)
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/original")
