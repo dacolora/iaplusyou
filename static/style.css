@@ -51,6 +51,10 @@ body {
   padding: 0 0 4rem;
   position: relative;
   min-height: 100vh;
+  /* Seguro: la página nunca debe scrollear de lado. Si algo se desborda
+     (una tabla, un bloque de código, la barra de pestañas), tiene que
+     resolverlo con su propio overflow-x: auto, no empujar la página entera. */
+  overflow-x: hidden;
 }
 
 .fondo-ambiente {
@@ -75,7 +79,10 @@ header {
   background: var(--bg);
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1rem 1.5rem;
+  /* En celular no cabe logo + breadcrumb + cerrar sesión en una sola fila —
+     que pase a la siguiente línea en vez de cortarse fuera de pantalla. */
+  flex-wrap: wrap;
 }
 
 .marca-header {
@@ -178,6 +185,12 @@ h2::before {
   gap: .4rem;
   border-bottom: 1px solid var(--border);
   margin-bottom: 2rem;
+  /* En celular las 5 pestañas no caben — que se desplace ella sola, nunca
+     la página entera (eso dejaba contenido cortado a la derecha, sin forma
+     de llegar a FlowSettings). */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 .tab-btn {
   font-family: var(--font-display);
@@ -191,6 +204,8 @@ h2::before {
   position: relative;
   top: 1px;
   transition: color .15s;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.activo {
