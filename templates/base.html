@@ -263,10 +263,18 @@
     </a>
     {% if request.view_args and request.view_args.cliente %}
     <nav class="header-nav">
-      <a href="{{ url_for('index') }}">Proyectos</a>
+      {% if session.get('rol') == 'admin' %}
+      <a href="{{ url_for('panel') }}">Proyectos</a>
       <span class="header-sep">/</span>
+      {% endif %}
       <span class="header-actual">{{ nombre_proyecto or request.view_args.cliente }}</span>
     </nav>
+    {% endif %}
+    {% if session.get('usuario') %}
+    <form method="post" action="{{ url_for('logout') }}" class="header-logout">
+      <span class="header-usuario">{{ session['usuario'] }}</span>
+      <button type="submit">Cerrar sesión</button>
+    </form>
     {% endif %}
   </header>
   <main>

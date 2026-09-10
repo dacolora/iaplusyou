@@ -34,3 +34,29 @@ def guardar_nombre(cliente, nombre):
     datos = cargar(cliente)
     datos["nombre"] = (nombre or "").strip()
     _json_store.guardar(_path(cliente), datos)
+
+
+# Modelo por defecto para FlowClone (cambiar calzado): antes se elegía cada
+# vez desde un selector en la propia pantalla de generar — eso mezclaba una
+# decisión de configuración (qué modelo usar) con el flujo de uso diario.
+# Ahora vive acá, uno por cliente, editable solo desde FlowSettings.
+DEFAULTS_PREFERENCIAS = {
+    "proveedor_foto": "nano_banana",
+    "proveedor_video": "seedance25_edit",
+    "mejorar_calidad": True,
+}
+
+
+def preferencias(cliente):
+    datos = cargar(cliente)
+    return {**DEFAULTS_PREFERENCIAS, **datos.get("preferencias_swap", {})}
+
+
+def guardar_preferencias(cliente, proveedor_foto, proveedor_video, mejorar_calidad):
+    datos = cargar(cliente)
+    datos["preferencias_swap"] = {
+        "proveedor_foto": proveedor_foto,
+        "proveedor_video": proveedor_video,
+        "mejorar_calidad": bool(mejorar_calidad),
+    }
+    _json_store.guardar(_path(cliente), datos)

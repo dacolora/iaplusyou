@@ -164,6 +164,64 @@
   })();
 </script>
 
+{# Modal de confirmación para borrar un producto. Se pide modal y no un
+   confirm() del navegador porque la acción es IRREVERSIBLE (borra la carpeta y
+   todas sus fotos del disco) y hay que poder mostrar el detalle: cuántas fotos
+   se pierden y cuántos swaps ya generados quedan sin su producto. #}
+<div class="modal-fondo" id="modal-eliminar-producto" hidden>
+  <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="modal-eliminar-titulo">
+    <h3 id="modal-eliminar-titulo">¿Eliminar este producto?</h3>
+    <p id="modal-eliminar-detalle"></p>
+    <p class="modal-advertencia">Esto borra la carpeta del producto y todas sus fotos del disco. No se puede deshacer.</p>
+    <div class="modal-acciones">
+      <button type="button" class="btn-guardar btn-sm" id="modal-eliminar-cancelar">Cancelar</button>
+      <form method="post" id="modal-eliminar-form">
+        <button type="submit" class="btn-peligro btn-sm">Sí, eliminar</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var modal = document.getElementById('modal-eliminar-producto');
+    var form = document.getElementById('modal-eliminar-form');
+    var detalle = document.getElementById('modal-eliminar-detalle');
+    var ultimoDisparador = null;
+
+    function abrir(boton) {
+      form.action = boton.dataset.accion;
+      var fotos = parseInt(boton.dataset.fotos || '0', 10);
+      var usos = parseInt(boton.dataset.usos || '0', 10);
+      var texto = 'Se eliminará «' + boton.dataset.productoNombre + '» y sus ' + fotos + ' foto(s) de referencia.';
+      if (usos > 0) {
+        // El swap guarda el producto_id, no una copia del producto: los
+        // resultados viejos siguen viéndose, pero pierden nombre y miniatura.
+        texto += ' Hay ' + usos + ' resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto.';
+      }
+      detalle.textContent = texto;
+      ultimoDisparador = boton;
+      modal.hidden = false;
+      document.getElementById('modal-eliminar-cancelar').focus();
+    }
+
+    function cerrar() {
+      modal.hidden = true;
+      if (ultimoDisparador) ultimoDisparador.focus();  // no perder el foco al cancelar
+    }
+
+    document.addEventListener('click', function (e) {
+      var boton = e.target.closest('.btn-eliminar-producto');
+      if (boton) { abrir(boton); return; }
+      if (e.target === modal) cerrar();                       // clic en el fondo
+      if (e.target.id === 'modal-eliminar-cancelar') cerrar();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !modal.hidden) cerrar();
+    });
+  })();
+</script>
+
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
 {# Los personajes son insumo igual que los productos: viven en el catálogo, no

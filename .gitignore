@@ -5,6 +5,7 @@ token_tiktok.json
 salidas/
 registro_generaciones.csv
 estado_videos.json
+usuarios.json
 venv/
 __pycache__/
 *.pyc

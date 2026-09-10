@@ -9,14 +9,16 @@ Uso:
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import os
+import secrets
 import socket
 import subprocess
 import threading
+from functools import wraps
 
 import requests
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -33,6 +35,7 @@ import mapa_corporal
 import prompt_swap
 import proyectos
 import trabajos
+import usuarios
 import generador_prompts
 from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
@@ -69,7 +72,14 @@ FRAME_SUFFIX = ".frame.jpg"
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
-app.secret_key = "solo-local-no-hace-falta-secreto-real"
+# Real y aleatoria: con login de por medio, un secret_key adivinable permite
+# falsificar la cookie de sesión y hacerse pasar por cualquier usuario — el
+# literal fijo de antes ("solo-local-no-hace-falta-secreto-real") deja de ser
+# aceptable en el momento en que existe una sesión que proteger. FLASK_SECRET_KEY
+# fija la clave entre reinicios (necesario en el VPS); sin ella, cada arranque
+# genera una nueva y todas las sesiones activas se invalidan — aceptable en
+# desarrollo local, no en producción.
+app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
@@ -77,6 +87,44 @@ app.secret_key = "solo-local-no-hace-falta-secreto-real"
 # lock serializa esa sección crítica (cargar credenciales + usarlas) para que
 # eso no pase.
 _ENV_LOCK = threading.Lock()
+
+
+def _sesion():
+    """dict de la sesión actual (usuario/rol/cliente) o None si no hay login."""
+    if "usuario" not in session:
+        return None
+    return {"usuario": session["usuario"], "rol": session["rol"], "cliente": session.get("cliente")}
+
+
+def requiere_admin(fn):
+    @wraps(fn)
+    def envuelta(*args, **kwargs):
+        sesion = _sesion()
+        if not sesion or sesion["rol"] != "admin":
+            flash("Esa página es solo para el administrador.", "error")
+            return redirect(url_for("login"))
+        return fn(*args, **kwargs)
+    return envuelta
+
+
+@app.before_request
+def _guard_por_cliente():
+    """Cualquier ruta cuya URL incluya <cliente> exige sesión con permiso
+    real sobre ESE cliente — nunca solo ocultar un botón en la plantilla.
+    rol 'admin' pasa siempre; rol 'cliente' solo si coincide con el suyo.
+    Rutas sin <cliente> en la URL (login, /, /proyectos/nuevo, estáticos)
+    no pasan por acá."""
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    if cliente is None:
+        return None
+    sesion = _sesion()
+    if not usuarios.puede_acceder(sesion, cliente):
+        if not sesion:
+            flash("Inicia sesión para entrar a este proyecto.", "error")
+            return redirect(url_for("login"))
+        flash("No tienes acceso a ese proyecto.", "error")
+        return redirect(url_for("ver_cliente", cliente=sesion["cliente"])) if sesion["rol"] == "cliente" else redirect(url_for("index"))
+    return None
 
 
 @app.after_request
@@ -383,9 +431,104 @@ def _resumen_cliente(cliente):
 
 @app.route("/")
 def index():
-    # Enfoque temporal en un solo proyecto: Happy Flops. El resto de clientes
-    # sigue intacto en disco, solo no se muestra en la portada por ahora.
-    return redirect(url_for("ver_cliente", cliente="happyflops"))
+    # Pública, sin login: explica qué hace la plataforma y ofrece crear un
+    # proyecto nuevo o entrar a uno que ya existe. Nunca lista los proyectos
+    # existentes acá — eso filtraría qué clientes hay a cualquiera que abra
+    # el link. El listado completo vive en /panel, solo para el admin.
+    return render_template("index.html")
+
+
+@app.route("/panel")
+@requiere_admin
+def panel():
+    ids = estado_mod.listar_clientes()
+    clientes = []
+    total_pendiente = total_publicado = total_rechazado = 0
+    for cid in ids:
+        resumen = _resumen_cliente(cid)
+        clientes.append({
+            "id": cid,
+            "nombre": proyectos.nombre_visible(cid),
+            "pendiente": resumen["pendiente"],
+            "publicado": resumen["publicado"],
+            "rechazado": resumen["rechazado"],
+            "portada": None,
+        })
+        total_pendiente += resumen["pendiente"]
+        total_publicado += resumen["publicado"]
+        total_rechazado += resumen["rechazado"]
+
+    totales = {
+        "clientes": len(clientes),
+        "pendiente": total_pendiente,
+        "publicado": total_publicado,
+        "rechazado": total_rechazado,
+    }
+    return render_template("panel.html", clientes=clientes, totales=totales)
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "GET":
+        return render_template("login.html")
+
+    usuario = (request.form.get("usuario") or "").strip()
+    password = request.form.get("password") or ""
+    entry = usuarios.verificar(usuario, password)
+    if not entry:
+        flash("Usuario o contraseña incorrectos.", "error")
+        return render_template("login.html"), 401
+
+    session["usuario"] = usuario
+    session["rol"] = entry["rol"]
+    session["cliente"] = entry.get("cliente")
+    if entry["rol"] == "admin":
+        return redirect(url_for("panel"))
+    return redirect(url_for("ver_cliente", cliente=entry["cliente"]))
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.clear()
+    flash("Sesión cerrada.", "ok")
+    return redirect(url_for("index"))
+
+
+@app.route("/proyectos/nuevo", methods=["POST"])
+def crear_proyecto():
+    nombre = (request.form.get("nombre") or "").strip()
+    usuario = (request.form.get("usuario") or "").strip()
+    password = request.form.get("password") or ""
+    if not nombre:
+        flash("Ponle un nombre a la empresa.", "error")
+        return redirect(url_for("index"))
+    if not usuario or not password:
+        flash("Elige un usuario y una contraseña para entrar a tu proyecto.", "error")
+        return redirect(url_for("index"))
+    if usuarios.existe(usuario):
+        flash(f"Ya existe un usuario '{usuario}' — elige otro.", "error")
+        return redirect(url_for("index"))
+
+    cid = secure_filename(nombre.lower().replace(" ", "_"))
+    if not cid:
+        flash("Ese nombre no genera un identificador de proyecto válido.", "error")
+        return redirect(url_for("index"))
+    if cid in estado_mod.listar_clientes():
+        flash(f"Ya existe un proyecto con el identificador '{cid}' — elige otro nombre.", "error")
+        return redirect(url_for("index"))
+
+    os.makedirs(os.path.join(BASE_DIR, "clientes", cid), exist_ok=True)
+    proyectos.guardar_nombre(cid, nombre)
+    usuarios.crear(usuario, password, "cliente", cliente=cid)
+
+    # Alta con sesión inmediata: quien crea el proyecto queda logueado en su
+    # propio proyecto de una vez, sin tener que ir a /login aparte.
+    session["usuario"] = usuario
+    session["rol"] = "cliente"
+    session["cliente"] = cid
+
+    flash(f"Proyecto '{nombre}' creado.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cid))
 
 
 def _job_id_imagen(cliente, prompt_id):
@@ -553,6 +696,10 @@ def ver_cliente(cliente):
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
         ads=ads_mod.cargar(cliente),
+        preferencias_swap=proyectos.preferencias(cliente),
+        proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
+        proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
+        nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
     )
 
 
@@ -915,6 +1062,27 @@ def guardar_nombre_proyecto(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
+@app.route("/cliente/<cliente>/preferencias/guardar", methods=["POST"])
+def guardar_preferencias_swap(cliente):
+    """Modelo por defecto de FlowClone (foto/video) + si la mejora de calidad
+    va marcada por defecto — antes se elegía en cada generación, ahora es
+    configuración de cliente."""
+    proveedor_foto = request.form.get("proveedor_foto", "").strip()
+    proveedor_video = request.form.get("proveedor_video", "").strip()
+    mejorar_calidad = bool(request.form.get("mejorar_calidad"))
+
+    if proveedor_foto not in PROVEEDORES_SWAP_IMAGEN:
+        flash("Modelo de foto inválido.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+    if proveedor_video not in PROVEEDORES_SWAP_VIDEO:
+        flash("Modelo de video inválido.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+    proyectos.guardar_preferencias(cliente, proveedor_foto, proveedor_video, mejorar_calidad)
+    flash("Modelos por defecto actualizados.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
 def crear_producto(cliente):
     nombre = (request.form.get("nombre") or "").strip()
@@ -1242,11 +1410,14 @@ def generar_swap(cliente):
     candidatos porque no todos los modelos hacen ambos."""
     archivo = request.files.get("foto")
     producto_id = request.form.get("producto_id", "").strip()
-    proveedor_foto = request.form.get("proveedor_foto", "nano_banana").strip()
-    proveedor_video = request.form.get("proveedor_video", "seedance25_edit").strip()
+    # El modelo ya no se elige por generación — es una preferencia de
+    # configuración por cliente (FlowSettings), no del flujo de uso diario.
+    prefs = proyectos.preferencias(cliente)
+    proveedor_foto = prefs["proveedor_foto"]
+    proveedor_video = prefs["proveedor_video"]
     # Segunda pasada opcional de calidad. Solo aplica a FOTO: el upscaler de
     # Bria es de imagen, no de video.
-    mejorar_calidad = bool(request.form.get("mejorar_calidad"))
+    mejorar_calidad = bool(prefs["mejorar_calidad"])
     if proveedor_foto not in PROVEEDORES_SWAP_IMAGEN:
         proveedor_foto = "nano_banana"
     if proveedor_video not in PROVEEDORES_SWAP_VIDEO:
@@ -1995,20 +2166,11 @@ def cf_generar_prompt(cliente):
         duracion_objetivo = 13
     duracion_objetivo = max(12, min(15, duracion_objetivo))
 
-    # El personaje NO es obligatorio: hay videos que son solo del producto (un
-    # plano del calzado en una escena, sin nadie en cuadro). Lo que la plantilla
-    # necesita es al menos UNA referencia protagonista para @Imagen 1, y tanto un
-    # personaje como un producto sirven — generar_prompt_creative_flow() numera
-    # las @Imagen sobre la lista real, así que con solo productos el primero pasa
-    # a ser @Imagen 1 sin ningún hueco. Las escenas no cuentan: son ambiente, no
-    # sujeto.
-    if not personajes_sel and not productos_sel:
-        flash("Elige al menos un personaje o un producto — la plantilla necesita @Imagen 1.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    if not accion_central:
-        flash("Describe la acción central del video.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
+    # Todo opcional a propósito: personaje, producto, escena y la acción
+    # central pueden venir vacíos. Si al final no hay ni referencias ni prompt,
+    # cf_generar_video ya tiene sus propios guardas (líneas ~2142 y ~2162) que
+    # lo avisan con un mensaje claro en vez de dejar avanzar algo a medias —
+    # nunca se valida dos veces lo mismo.
     personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
     productos_por_nombre = {p["nombre"]: p for p in _productos_referencia(cliente)}
     escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
@@ -2039,10 +2201,8 @@ def cf_generar_prompt(cliente):
     # Lista canónica de referencias, resuelta UNA sola vez acá: personaje ->
     # producto -> escena, descartando cualquier entrada sin URL pública
     # resolvible (ej. video sin .frame.jpg extraído todavía), truncada a 10
-    # (límite real de Wan 3.0). generar_prompt_creative_flow() recibe SOLO
-    # las entradas que sobrevivieron el filtro, para que su numerado interno
-    # de @Imagen N coincida exactamente con esta lista — y cf_generar_video
-    # reusa esta misma lista tal cual, sin volver a resolverla.
+    # (límite real de Wan 3.0). cf_generar_video reusa esta misma lista tal
+    # cual, sin volver a resolverla.
     combinados = (
         [("personaje", p) for p in personajes] +
         [("producto", p) for p in productos] +
@@ -2053,9 +2213,6 @@ def cf_generar_prompt(cliente):
         return item.get("url")
 
     combinados_validos = [(t, item) for t, item in combinados if _url_de(t, item)][:10]
-    personajes_validos = [item for t, item in combinados_validos if t == "personaje"]
-    productos_validos = [item for t, item in combinados_validos if t == "producto"]
-    escenas_validas = [item for t, item in combinados_validos if t == "escena"]
     referencias_urls = [_url_de(t, item) for t, item in combinados_validos]
 
     cf_id = creative_flow.crear(
@@ -2064,55 +2221,32 @@ def cf_generar_prompt(cliente):
         referencias_urls=referencias_urls, platforms=platforms,
     )
 
-    if not referencias_urls:
-        creative_flow.actualizar(
-            cliente, cf_id, estado="error",
-            error="Ninguna de las referencias elegidas tiene una URL pública válida — revisa que las imágenes estén subidas a R2.",
-        )
-        flash("Ninguna de las referencias elegidas tiene una URL pública válida — revisa que las imágenes estén subidas a R2.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
-    try:
-        guia_estilo = marca_mod.guia_efectiva(cliente)
-        prompt_relleno = generador_prompts.generar_prompt_creative_flow(
-            personajes_validos, productos_validos, escenas_validas, accion_central, duracion_objetivo,
-            tono, modo, guia_estilo=guia_estilo,
-        )
-        creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt_relleno)
-        flash("Prompt generado — revísalo antes de generar el video.", "ok")
-    except Exception as e:
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
-        flash(f"No pude generar el prompt: {e}", "error")
+    # Sin Claude de por medio: el prompt final es la acción central tal cual
+    # la escribió la persona, sin ninguna plantilla de por medio. Si queda
+    # vacía, o si no hay ninguna referencia con URL válida, cf_generar_video
+    # ya avisa con un mensaje claro al intentar generar — no se duplica esa
+    # validación aquí.
+    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=accion_central)
+    flash("Prompt listo — revísalo antes de generar el video.", "ok")
 
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/regenerar_prompt", methods=["POST"])
 def cf_regenerar_prompt(cliente, cf_id):
+    """Ya no llama a Claude — sin plantilla de por medio no hay nada que
+    'regenerar'. Esto restaura el texto original de la acción central,
+    descartando cualquier edición manual hecha en cf_guardar_prompt."""
     data = creative_flow.cargar(cliente)
     entry = data.get(cf_id)
     if not entry:
         flash("No encontré esa sesión de CreativeFlowPlus.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
-    personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
-    productos_por_nombre = {p["nombre"]: p for p in _productos_referencia(cliente)}
-    escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
-    personajes = [personajes_por_nombre[n] for n in entry["personajes_ids"] if n in personajes_por_nombre]
-    productos = [productos_por_nombre[n] for n in entry["productos_ids"] if n in productos_por_nombre]
-    escenas = [escenas_por_nombre[n] for n in entry["escenas_ids"] if n in escenas_por_nombre]
-
-    try:
-        guia_estilo = marca_mod.guia_efectiva(cliente)
-        prompt_relleno = generador_prompts.generar_prompt_creative_flow(
-            personajes, productos, escenas, entry["accion_central"], entry["duracion_objetivo"],
-            entry["tono"], entry["modo"], guia_estilo=guia_estilo,
-        )
-        creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt_relleno, error=None)
-        flash("Prompt regenerado.", "ok")
-    except Exception as e:
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
-        flash(f"No pude regenerar el prompt: {e}", "error")
+    creative_flow.actualizar(
+        cliente, cf_id, estado="prompt_listo", prompt_relleno=entry["accion_central"], error=None,
+    )
+    flash("Prompt restaurado al texto original.", "ok")
 
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
@@ -2351,4 +2485,11 @@ if __name__ == "__main__":
     # use_reloader=False a propósito: ahora hay generaciones corriendo en hilos
     # de fondo, y el auto-reload de Flask mata el proceso completo (y con él,
     # cualquier generación en curso) apenas detecta un cambio de archivo.
-    app.run(host=HOST, port=PUERTO, debug=True, use_reloader=False)
+    # debug=True por defecto era aceptable mientras esto SOLO corría en
+    # localhost — el debugger interactivo de Werkzeug permite ejecutar código
+    # arbitrario a quien lo alcance, así que en cualquier servidor accesible
+    # desde fuera tiene que estar apagado. FLASK_DEBUG=true en el .env lo
+    # reactiva para seguir depurando en la laptop; el VPS nunca define esa
+    # variable, así que ahí queda en False sin que nadie tenga que acordarse.
+    debug = os.environ.get("FLASK_DEBUG", "false").strip().lower() == "true"
+    app.run(host=HOST, port=PUERTO, debug=debug, use_reloader=False)

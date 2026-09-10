@@ -113,6 +113,26 @@ header {
 .header-sep { color: var(--muted-2); }
 .header-actual { color: var(--text); font-weight: 600; text-transform: capitalize; }
 
+.header-logout {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  font-size: .85rem;
+}
+.header-usuario { color: var(--muted); }
+.header-logout button {
+  background: none;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  color: var(--muted);
+  padding: .3rem .6rem;
+  font-size: .8rem;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.header-logout button:hover { color: var(--text); border-color: var(--muted); }
+
 /* ---------- layout ---------- */
 
 main {
@@ -337,7 +357,7 @@ h2::before {
   display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .05em;
   color: var(--muted); margin: .7rem 0 .3rem; font-weight: 600;
 }
-textarea, select, input[type="number"], input[type="text"] {
+textarea, select, input[type="number"], input[type="text"], input[type="password"] {
   width: 100%;
   background: var(--panel-2);
   border: 1px solid var(--border);

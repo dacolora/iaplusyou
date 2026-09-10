@@ -1,10 +1,9 @@
 <p class="vacio" style="padding-top:0;">
-  Elige personajes, productos y escenas (fuentes separadas, nunca mezcladas) +
-  la acción central del video. Necesitas al menos un personaje <em>o</em> un
-  producto — puede ser solo producto, si el video no lleva a nadie en cuadro;
-  las escenas son ambiente y son opcionales. Claude arma el prompt
-  cinematográfico completo siguiendo la plantilla maestra de Happy Flops; lo
-  revisas y editas antes de generar el video real con Wan 3.0.
+  Elige personajes, productos y escenas si quieres (fuentes separadas, nunca
+  mezcladas) + la acción central del video. Todo es opcional — puede ser solo
+  texto, solo referencias, o ambos. El prompt final es exactamente lo que
+  escribas acá, sin ninguna plantilla de por medio: lo revisas y editas antes
+  de generar el video real con Wan 3.0.
 </p>
 
 <div class="fila-campos-idea">
@@ -111,7 +110,7 @@
         <button type="button" class="maniqui-preset" data-prompt="{{ b.texto }}">{{ b.etiqueta }}</button>
         {% endfor %}
       </div>
-      <textarea name="accion_central" rows="2" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría" required></textarea>
+      <textarea name="accion_central" rows="2" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría"></textarea>
     </div>
     <div>
       <label class="campo-label">Tono</label>

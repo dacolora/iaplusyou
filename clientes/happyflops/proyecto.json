@@ -1,3 +1,8 @@
 {
-  "nombre": "Happy Flow"
+  "nombre": "Happy Flow",
+  "preferencias_swap": {
+    "proveedor_foto": "nano_banana",
+    "proveedor_video": "seedance25_edit",
+    "mejorar_calidad": true
+  }
 }
