@@ -18,7 +18,7 @@ def publicar_brief(brief_id, entry, cliente, token_paths):
     for platform in entry.get("platforms", []):
         print(f"  --- Publicando en {platform} ---")
         try:
-            _publicar_una(platform, entry, token_paths)
+            _publicar_una(platform, entry, cliente, token_paths)
             registrar(cliente, brief_id, platform, "ok", "")
         except Exception as e:
             ok_total = False
@@ -27,7 +27,7 @@ def publicar_brief(brief_id, entry, cliente, token_paths):
     return ok_total
 
 
-def _publicar_una(platform, entry, token_paths):
+def _publicar_una(platform, entry, cliente, token_paths):
     video_path = entry["video_local"]
     video_url = entry["video_url"]
     title = entry.get("title", "")
@@ -42,11 +42,11 @@ def _publicar_una(platform, entry, token_paths):
     elif platform == "facebook":
         from uploaders import meta_uploader
 
-        meta_uploader.upload_to_facebook_page(video_path, description=caption, title=title)
+        meta_uploader.upload_to_facebook_page(video_path, cliente, description=caption, title=title)
     elif platform == "instagram":
         from uploaders import meta_uploader
 
-        meta_uploader.upload_to_instagram_reel(video_url, caption=caption)
+        meta_uploader.upload_to_instagram_reel(video_url, cliente, caption=caption)
     elif platform == "tiktok":
         from uploaders import tiktok_uploader
 

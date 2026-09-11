@@ -1,43 +1,41 @@
 """
 Subida de video a Facebook (Página) e Instagram (cuenta Business/Creator) vía Graph API.
 
-Requiere en el .env:
-    META_PAGE_ACCESS_TOKEN   -> token de acceso de larga duración de la Página de Facebook
-    META_PAGE_ID             -> ID de la Página de Facebook
-    META_IG_USER_ID          -> ID de la cuenta de Instagram Business/Creator vinculada a esa Página
-
-Corre primero `python auth/auth_meta.py` para obtener estos valores. Ver SETUP.md.
+Las credenciales son POR PROYECTO y salen de clientes/<cliente>/meta.json
+(meta_conexion.py), donde las dejó el cliente al conectar su cuenta desde
+FlowMarketing: page_access_token, page_id, ig_user_id. Ya no se lee nada del
+entorno (variables de ambiente).
 
 Notas importantes:
 - Facebook admite subir el archivo de video local directamente.
-- Instagram (Reels) exige una URL PÚBLICA del video, no un archivo local. Por eso
-  run_batch.py le pasa la URL que devuelve Higgsfield (higgsfield_client.extract_video_url),
-  no la ruta del archivo descargado.
+- Instagram (Reels) exige una URL PÚBLICA del video, no un archivo local.
 """
-import os
 import time
 import requests
 
-GRAPH_VERSION = "v21.0"
+import meta_conexion
+
+GRAPH_VERSION = meta_conexion.GRAPH_VERSION
 GRAPH_URL = f"https://graph.facebook.com/{GRAPH_VERSION}"
 GRAPH_VIDEO_URL = f"https://graph-video.facebook.com/{GRAPH_VERSION}"
 
 
-def _page_token():
-    token = os.environ.get("META_PAGE_ACCESS_TOKEN")
-    if not token:
-        raise RuntimeError("Falta META_PAGE_ACCESS_TOKEN en .env. Corre auth/auth_meta.py")
-    return token
+def _credenciales(cliente):
+    datos = meta_conexion.cargar(cliente)
+    if not datos or not datos.get("page_access_token") or not datos.get("page_id"):
+        raise RuntimeError("Este proyecto no tiene Meta conectado — conéctalo en FlowMarketing.")
+    return {
+        "page_access_token": datos["page_access_token"],
+        "page_id": datos["page_id"],
+        "ig_user_id": datos.get("ig_user_id"),
+    }
 
 
-def upload_to_facebook_page(video_path, description="", title=None):
+def upload_to_facebook_page(video_path, cliente, description="", title=None):
     """Sube un video local al feed de la Página de Facebook. Devuelve el video_id."""
-    page_id = os.environ.get("META_PAGE_ID")
-    if not page_id:
-        raise RuntimeError("Falta META_PAGE_ID en .env")
-
-    url = f"{GRAPH_VIDEO_URL}/{page_id}/videos"
-    data = {"access_token": _page_token(), "description": description}
+    creds = _credenciales(cliente)
+    url = f"{GRAPH_VIDEO_URL}/{creds['page_id']}/videos"
+    data = {"access_token": creds["page_access_token"], "description": description}
     if title:
         data["title"] = title
 
@@ -50,16 +48,16 @@ def upload_to_facebook_page(video_path, description="", title=None):
     return video_id
 
 
-def upload_to_instagram_reel(video_url, caption="", poll_interval=5, timeout_seconds=300):
+def upload_to_instagram_reel(video_url, cliente, caption="", poll_interval=5, timeout_seconds=300):
     """Publica un Reel en Instagram a partir de una URL pública de video.
 
     Flujo de dos pasos de la Graph API: crear contenedor -> esperar a que procese -> publicar.
     """
-    ig_user_id = os.environ.get("META_IG_USER_ID")
+    creds = _credenciales(cliente)
+    ig_user_id = creds["ig_user_id"]
     if not ig_user_id:
-        raise RuntimeError("Falta META_IG_USER_ID en .env")
-
-    token = _page_token()
+        raise RuntimeError("La Página conectada no tiene Instagram vinculado: no se puede publicar el Reel.")
+    token = creds["page_access_token"]
 
     create_resp = requests.post(
         f"{GRAPH_URL}/{ig_user_id}/media",
