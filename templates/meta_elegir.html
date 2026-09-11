@@ -37,7 +37,7 @@
   {% endif %}
 </form>
 
-<form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="margin-top:1rem;">
+<form method="post" action="{{ url_for('meta_cancelar', cliente=cliente) }}" style="margin-top:1rem;">
   <button class="btn-rechazar btn-sm" type="submit">Cancelar</button>
 </form>
 {% endblock %}

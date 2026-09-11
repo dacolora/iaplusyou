@@ -1862,6 +1862,15 @@ def meta_elegir(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
+@app.route("/cliente/<cliente>/meta/cancelar", methods=["POST"])
+def meta_cancelar(cliente):
+    """Aborta una autorización a medias (borra solo meta.pendiente.json).
+    No toca meta.json: si el proyecto ya estaba conectado, sigue conectado."""
+    meta_conexion.borrar_pendiente(cliente)
+    flash("Conexión con Meta cancelada. Si ya tenías Meta conectado, sigue igual.", "ok")
+    return _ir_a_flowmarketing(cliente)
+
+
 @app.route("/cliente/<cliente>/meta/desconectar", methods=["POST"])
 def meta_desconectar(cliente):
     meta_conexion.borrar(cliente)
