@@ -102,25 +102,29 @@ de Facebook > Instagram > Conectar cuenta).
 1. Ve a [developers.facebook.com/apps](https://developers.facebook.com/apps) y crea una app nueva, tipo **"Otro" > "Empresa"**.
 2. En el panel de la app, agrega el producto **"Facebook Login for Business"**.
 3. En **Facebook Login for Business > Configuración**, agrega en "URIs de redirección de OAuth válidas":
-   `http://localhost:8765/callback`
+   `http://localhost:5050/meta/callback` (para probar en tu máquina) y la URL HTTPS de producción
+   (`https://<tu-dominio>/meta/callback`). Tienen que coincidir EXACTAMENTE con `META_REDIRECT_URI`.
+3b. En **Facebook Login for Business > Configurations**, crea una configuración con tipo de token
+   **Business integration system user** (sin expiración) y los permisos `ads_management`, `ads_read`,
+   `business_management`, `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`,
+   `publish_video`, `instagram_basic`, `instagram_content_publish`. Copia su id a `META_LOGIN_CONFIG_ID`.
 4. Agrega también el producto **"Instagram Graph API"** (o "Instagram" si aparece así) desde el catálogo de productos.
-5. En **Configuración básica** de la app, copia el **ID de la app** y el **secreto de la app**, y ponlos en tu `.env`:
+5. En **Configuración básica** de la app, copia el **ID de la app** y el **secreto de la app**, y ponlos en tu `.env` junto con la URL de redirección y el id de la configuración del paso 3/3b:
    ```
    META_APP_ID=...
    META_APP_SECRET=...
+   META_REDIRECT_URI=http://localhost:5050/meta/callback
+   META_LOGIN_CONFIG_ID=...
    ```
 6. Mientras la app esté en modo "Desarrollo" (no publicada), solo los usuarios con rol de **administrador/desarrollador/tester de la app** (agregados en "Roles de la app") pueden autorizarla. Agrégate a ti mismo si no apareces ya.
-7. Corre la autorización de una sola vez:
-   ```bash
-   python auth/auth_meta.py
-   ```
-   Inicia sesión, autoriza los permisos, elige tu Página si tienes varias. El script imprime `META_PAGE_ACCESS_TOKEN`, `META_PAGE_ID` y `META_IG_USER_ID` — cópialos a tu `.env`.
+7. La autorización ya no es un script: entra al proyecto en el dashboard, pestaña **FlowMarketing**,
+   botón **"Conectar con Meta"**, inicia sesión con el Facebook que administra la cuenta publicitaria
+   y la Página, y elige una de cada. Queda guardado en `clientes/<cliente>/meta.json`.
 
-**Nota sobre permisos avanzados**: los scopes `pages_manage_posts`, `publish_video` e
-`instagram_content_publish` son "permisos avanzados". Para uso personal (tu propia Página,
-mientras la app está en modo Desarrollo con tu usuario como administrador) funcionan sin
-revisión de Meta. Si más adelante quieres que otra persona/negocio use esta misma app,
-Meta exige pasar **App Review** para esos permisos.
+**Nota sobre permisos**: mientras la app esté en modo Desarrollo, solo pueden conectar los usuarios
+con rol en la app (Administrador/Desarrollador/Tester en "Roles de la app"). Para que un cliente
+conecte su cuenta, agrégalo como **Tester** y que acepte la invitación en Facebook. Para que cualquiera
+conecte sin ese paso, hay que pasar **App Review** de esos permisos y la **Verificación de negocio**.
 
 ---
 
@@ -194,7 +198,8 @@ contenido entre clientes.
 - El bucket de R2 (cada cliente tiene su propia carpeta dentro del mismo bucket).
 
 **Lo que es propio de cada empresa** (vive en `clientes/<empresa>/`):
-- Su `.env` con `META_PAGE_ACCESS_TOKEN`, `META_PAGE_ID`, `META_IG_USER_ID`.
+- Su `meta.json` con las credenciales de Meta (Página, cuenta de Instagram y cuenta
+  publicitaria elegidas al conectar desde el dashboard).
 - Sus tokens de YouTube y TikTok (`token_youtube.json`, `token_tiktok.json`).
 - Su carpeta `personajes/` con las imágenes de referencia que te mandó.
 - Su carpeta `briefs/` con los JSON de los videos a generar.
@@ -215,7 +220,7 @@ contenido entre clientes.
    cuando el navegador te lo pida):
    ```bash
    python auth/auth_youtube.py --cliente empresa_a
-   python auth/auth_meta.py --cliente empresa_a
+   # Meta: se conecta desde el dashboard (FlowMarketing > "Conectar con Meta"), no por script.
    python auth/auth_tiktok.py --cliente empresa_a
    ```
    (Salta el que no necesites según lo que te haya pedido esa empresa.)

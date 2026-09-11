@@ -2,10 +2,10 @@
 Conexión de un proyecto con Meta (Facebook Login for Business) y sus
 credenciales en clientes/<cliente>/meta.json.
 
-Reemplaza a auth/auth_meta.py y auth/auth_meta_ads.py: la autorización ya no
-es un script de terminal con callback en localhost, es una ruta de la app —
-así funciona en el VPS y desde el celular. Un solo permiso cubre anuncios
-(meta_ads/) y publicación orgánica (uploaders/meta_uploader.py).
+La autorización ya no es un script de terminal con callback en localhost, es
+una ruta de la app — así funciona en el VPS y desde el celular. Un solo
+permiso cubre anuncios (meta_ads/) y publicación orgánica
+(uploaders/meta_uploader.py).
 
 Reglas que este módulo hace cumplir por sí mismo:
   - El token nunca entra a un mensaje de excepción, log ni dry_run.

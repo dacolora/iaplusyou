@@ -98,8 +98,9 @@ publicador.py          ← decide a qué plataformas publicar un video, según e
 uploaders/
   youtube_uploader.py, meta_uploader.py (FB+IG), tiktok_uploader.py
 auth/
-  auth_youtube.py, auth_meta.py, auth_tiktok.py  ← login OAuth, se corre UNA VEZ
-                                                     a mano, local (no en servidor)
+  auth_youtube.py, auth_tiktok.py  ← login OAuth, se corre UNA VEZ a mano, local
+                                       (no en servidor). Meta se conecta desde el
+                                       dashboard (meta_conexion.py), no por script.
 ```
 
 ## 6. Storage

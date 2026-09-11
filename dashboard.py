@@ -1757,9 +1757,9 @@ def enviar_video_a_publicidad(cliente, brief_id):
 # Meta Ads Manager a propósito (ver eliminar_ad más abajo). ----------
 
 # ---------- Conexión con Meta (Facebook Login for Business) ----------
-# Reemplaza a auth/auth_meta.py y auth/auth_meta_ads.py: la autorización es
-# una ruta de la app, así que funciona en el VPS y desde el celular. Las
-# credenciales quedan en clientes/<cliente>/meta.json (meta_conexion.py).
+# La autorización es una ruta de la app (ya no un script de terminal), así
+# que funciona en el VPS y desde el celular. Las credenciales quedan en
+# clientes/<cliente>/meta.json (meta_conexion.py).
 
 def _ir_a_flowmarketing(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))

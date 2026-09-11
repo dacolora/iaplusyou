@@ -104,11 +104,13 @@ committed to git (`.gitignore` excludes `clientes/*/personajes/*`, `clientes/*/m
 **Publishing** (`publicador.py` + `uploaders/`): dispatches per-platform based on a
 brief's `platforms` list. `uploaders/youtube_uploader.py` (google-api-python-client),
 `uploaders/meta_uploader.py` (Graph API, covers both Facebook and Instagram),
-`uploaders/tiktok_uploader.py` (Content Posting API). Each platform needs a one-time
-OAuth authorization done locally (`auth/auth_youtube.py`, `auth/auth_meta.py`,
-`auth/auth_tiktok.py` — each opens a local browser + localhost callback server, so
-these cannot run on a remote/deployed server; tokens must be generated locally and
-copied over).
+`uploaders/tiktok_uploader.py` (Content Posting API). YouTube and TikTok need a one-time OAuth authorization done locally (`auth/auth_youtube.py`,
+`auth/auth_tiktok.py` — each opens a local browser + localhost callback server, so these
+cannot run on a remote/deployed server; tokens must be generated locally and copied over).
+Meta is different: the client connects their own account from the dashboard
+(FlowMarketing › "Conectar con Meta", routes in `dashboard.py`, logic in `meta_conexion.py`),
+and the credentials live in `clientes/<cliente>/meta.json` (git-ignored, 0600). `meta_ads/`
+receives them via `auth.configurar(...)` — the submodule never reads the environment.
 
 **Prompt generation** (`generador_prompts.py`): calls Anthropic directly (not through
 Higgsfield). `generar_prompts()` writes the 5 candidate prompts and folds in a
