@@ -39,9 +39,13 @@ def upload_to_facebook_page(video_path, cliente, description="", title=None):
     if title:
         data["title"] = title
 
-    with open(video_path, "rb") as f:
-        resp = requests.post(url, data=data, files={"source": f}, timeout=300)
-    resp.raise_for_status()
+    try:
+        with open(video_path, "rb") as f:
+            resp = requests.post(url, data=data, files={"source": f}, timeout=300)
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"No pude hablar con Meta ({type(e).__name__}).") from None
+    if not resp.ok:
+        raise RuntimeError(f"Facebook respondió {resp.status_code}: {resp.text[:500]}")
     result = resp.json()
     video_id = result.get("id")
     print(f"  Facebook listo: https://www.facebook.com/{video_id}")
@@ -59,27 +63,35 @@ def upload_to_instagram_reel(video_url, cliente, caption="", poll_interval=5, ti
         raise RuntimeError("La Página conectada no tiene Instagram vinculado: no se puede publicar el Reel.")
     token = creds["page_access_token"]
 
-    create_resp = requests.post(
-        f"{GRAPH_URL}/{ig_user_id}/media",
-        data={
-            "media_type": "REELS",
-            "video_url": video_url,
-            "caption": caption,
-            "access_token": token,
-        },
-        timeout=60,
-    )
-    create_resp.raise_for_status()
+    try:
+        create_resp = requests.post(
+            f"{GRAPH_URL}/{ig_user_id}/media",
+            data={
+                "media_type": "REELS",
+                "video_url": video_url,
+                "caption": caption,
+                "access_token": token,
+            },
+            timeout=60,
+        )
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"No pude hablar con Meta ({type(e).__name__}).") from None
+    if not create_resp.ok:
+        raise RuntimeError(f"Instagram respondió {create_resp.status_code}: {create_resp.text[:500]}")
     creation_id = create_resp.json()["id"]
 
     start = time.time()
     while time.time() - start < timeout_seconds:
-        status_resp = requests.get(
-            f"{GRAPH_URL}/{creation_id}",
-            params={"fields": "status_code", "access_token": token},
-            timeout=30,
-        )
-        status_resp.raise_for_status()
+        try:
+            status_resp = requests.get(
+                f"{GRAPH_URL}/{creation_id}",
+                params={"fields": "status_code", "access_token": token},
+                timeout=30,
+            )
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(f"No pude hablar con Meta ({type(e).__name__}).") from None
+        if not status_resp.ok:
+            raise RuntimeError(f"Instagram ({creation_id}) respondió {status_resp.status_code}: {status_resp.text[:500]}")
         status_code = status_resp.json().get("status_code")
         if status_code == "FINISHED":
             break
@@ -89,12 +101,16 @@ def upload_to_instagram_reel(video_url, cliente, caption="", poll_interval=5, ti
     else:
         raise TimeoutError("Instagram no terminó de procesar el video a tiempo.")
 
-    publish_resp = requests.post(
-        f"{GRAPH_URL}/{ig_user_id}/media_publish",
-        data={"creation_id": creation_id, "access_token": token},
-        timeout=60,
-    )
-    publish_resp.raise_for_status()
+    try:
+        publish_resp = requests.post(
+            f"{GRAPH_URL}/{ig_user_id}/media_publish",
+            data={"creation_id": creation_id, "access_token": token},
+            timeout=60,
+        )
+    except requests.exceptions.RequestException as e:
+        raise RuntimeError(f"No pude hablar con Meta ({type(e).__name__}).") from None
+    if not publish_resp.ok:
+        raise RuntimeError(f"Instagram respondió {publish_resp.status_code}: {publish_resp.text[:500]}")
     media_id = publish_resp.json()["id"]
     print(f"  Instagram listo, media_id: {media_id}")
     return media_id

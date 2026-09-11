@@ -130,7 +130,11 @@
     {% if entry.estado == "activo" %}
     <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
       <input type="hidden" name="estado" value="PAUSED">
+      {% if capacidades_meta.estado == "conectado" %}
       <button type="submit" class="btn-guardar btn-sm">Pausar</button>
+      {% else %}
+      <span class="vacio">Reconecta Meta para pausar.</span>
+      {% endif %}
     </form>
     {% elif entry.estado == "pausado" %}
     <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">

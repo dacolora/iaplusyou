@@ -1825,8 +1825,12 @@ def meta_elegir(cliente):
     if not pendiente:
         flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
         return _ir_a_flowmarketing(cliente)
-    cuentas = pendiente["activos"]["ad_accounts"]
-    paginas = pendiente["activos"]["pages"]
+    activos = pendiente.get("activos") or {}
+    cuentas = activos.get("ad_accounts") or []
+    paginas = activos.get("pages") or []
+    if not cuentas and not paginas:
+        flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
+        return _ir_a_flowmarketing(cliente)
 
     if request.method == "GET":
         return render_template(
@@ -1914,9 +1918,9 @@ def publicar_ad(cliente):
     job_id = f"{cliente}__{ad_id}__ads_publicar"
 
     def trabajo():
-        # Serializado: cargar el .env del cliente muta variables globales del
-        # proceso, así que dos publicaciones de clientes distintos no pueden
-        # hacer esa parte al mismo tiempo sin arriesgarse a mezclar credenciales.
+        # Serializado: meta_auth.configurar() escribe credenciales globales del
+        # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
+        # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
         with _ENV_LOCK:
             centavos = int(round(presupuesto_diario_usd * 100))
             try:
@@ -1961,6 +1965,8 @@ def publicar_ad(cliente):
                 ads_mod.actualizar(cliente, ad_id, estado="error", error=str(e))
                 bitacora.registrar(cliente, ad_id, "ads_publicar", "error", str(e))
                 raise
+            finally:
+                meta_auth.limpiar()
 
     if trabajos.iniciar(job_id, trabajo, duracion_estimada=30):
         flash("Publicando el anuncio…", "ok")
@@ -1976,9 +1982,9 @@ def actualizar_resultados_ad(cliente, ad_id):
     if not entry or not entry.get("meta_ids", {}).get("ad_id"):
         flash("Ese anuncio todavía no está publicado en Meta.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    # Serializado: cargar el .env del cliente muta variables globales del
-    # proceso, así que dos publicaciones de clientes distintos no pueden
-    # hacer esa parte al mismo tiempo sin arriesgarse a mezclar credenciales.
+    # Serializado: meta_auth.configurar() escribe credenciales globales del
+    # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
+    # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
     with _ENV_LOCK:
         try:
             creds = meta_conexion.credenciales_ads(cliente)
@@ -1989,6 +1995,8 @@ def actualizar_resultados_ad(cliente, ad_id):
             flash("Resultados actualizados.", "ok")
         except Exception as e:
             flash(f"No pude traer los resultados: {e}", "error")
+        finally:
+            meta_auth.limpiar()
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
@@ -2008,9 +2016,9 @@ def cambiar_estado_ad(cliente, ad_id):
         flash("Ese anuncio todavía no está publicado en Meta.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
-    # Serializado: cargar el .env del cliente muta variables globales del
-    # proceso, así que dos publicaciones de clientes distintos no pueden
-    # hacer esa parte al mismo tiempo sin arriesgarse a mezclar credenciales.
+    # Serializado: meta_auth.configurar() escribe credenciales globales del
+    # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
+    # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
     with _ENV_LOCK:
         try:
             creds = meta_conexion.credenciales_ads(cliente)
@@ -2020,6 +2028,8 @@ def cambiar_estado_ad(cliente, ad_id):
             flash("Listo." if nuevo_estado == "ACTIVE" else "Pausado.", "ok")
         except Exception as e:
             flash(f"No pude cambiar el estado: {e}", "error")
+        finally:
+            meta_auth.limpiar()
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
