@@ -43,6 +43,7 @@ from providers import nano_banana_client, video_provider, kling_o1_client, compa
 from providers import wavespeed_video_edit, wan3_client, wavespeed_imagen
 from providers import aspect_ratio as aspect_ratio_mod
 import ads as ads_mod
+from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 from meta_ads import adset as meta_adset
 from meta_ads import ad as meta_ad
@@ -1917,9 +1918,12 @@ def publicar_ad(cliente):
         # proceso, así que dos publicaciones de clientes distintos no pueden
         # hacer esa parte al mismo tiempo sin arriesgarse a mezclar credenciales.
         with _ENV_LOCK:
-            _cargar_entorno_cliente(cliente)
             centavos = int(round(presupuesto_diario_usd * 100))
             try:
+                # Credenciales del proyecto (meta.json), no del .env: cada
+                # cliente conectó su propia cuenta desde FlowMarketing.
+                creds = meta_conexion.credenciales_ads(cliente)
+                meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
                 campaign_resp = meta_campaign.crear_campaign(entry["nombre"], objetivo)
                 campaign_id = campaign_resp["id"]
 
@@ -1929,7 +1933,7 @@ def publicar_ad(cliente):
                 )
                 adset_id = adset_resp["id"]
 
-                ig_user_id = os.environ.get("META_IG_USER_ID")
+                ig_user_id = creds["ig_user_id"]
                 if entry["contenido_tipo"] == "foto":
                     creative_resp = meta_creative.crear_creative_imagen(
                         f"{entry['nombre']} — creative", entry["contenido_url"], entry["nombre"],
@@ -1976,8 +1980,9 @@ def actualizar_resultados_ad(cliente, ad_id):
     # proceso, así que dos publicaciones de clientes distintos no pueden
     # hacer esa parte al mismo tiempo sin arriesgarse a mezclar credenciales.
     with _ENV_LOCK:
-        _cargar_entorno_cliente(cliente)
         try:
+            creds = meta_conexion.credenciales_ads(cliente)
+            meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
             resultados = meta_insights.obtener_resultados(entry["meta_ids"]["ad_id"])
             resultados["actualizado_en"] = datetime.now().isoformat()
             ads_mod.actualizar(cliente, ad_id, metricas=resultados)
@@ -2007,8 +2012,9 @@ def cambiar_estado_ad(cliente, ad_id):
     # proceso, así que dos publicaciones de clientes distintos no pueden
     # hacer esa parte al mismo tiempo sin arriesgarse a mezclar credenciales.
     with _ENV_LOCK:
-        _cargar_entorno_cliente(cliente)
         try:
+            creds = meta_conexion.credenciales_ads(cliente)
+            meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
             meta_campaign.actualizar_estado(campaign_id, nuevo_estado)
             ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
             flash("Listo." if nuevo_estado == "ACTIVE" else "Pausado.", "ok")
