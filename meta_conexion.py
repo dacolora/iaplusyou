@@ -40,6 +40,11 @@ CODIGOS_CONEXION_ROTA = {190, 10, 200}
 _TTL_ESTADO_SEG = 600
 _cache_estado = {}
 
+# Un meta.pendiente.json abandonado (el usuario cerró la pestaña en la
+# pantalla de elegir cuenta/Página) deja tokens en disco indefinidamente si
+# nadie lo borra; a los 30 min se considera abandonado y se descarta.
+_TTL_PENDIENTE_SEG = 1800
+
 
 class MetaConexionError(RuntimeError):
     """Error legible para el usuario. Nunca contiene un token."""
@@ -59,7 +64,10 @@ def _env_obligatoria(clave, para_que):
 
 
 def redirect_uri():
-    return os.environ.get("META_REDIRECT_URI", "").strip() or "http://localhost:5050/meta/callback"
+    return _env_obligatoria(
+        "META_REDIRECT_URI",
+        "armar la URL de vuelta desde Meta (tiene que coincidir con la registrada en la app)",
+    )
 
 
 def nuevo_state():
@@ -100,9 +108,10 @@ def _path_pendiente(cliente):
 def _escribir_atomico(ruta, datos):
     os.makedirs(os.path.dirname(ruta), exist_ok=True)
     tmp = ruta + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(datos, f, indent=2, ensure_ascii=False)
-    os.chmod(tmp, 0o600)
+    os.chmod(tmp, 0o600)  # a prueba de umask, por si el fd nació con otros permisos
     os.replace(tmp, ruta)
 
 
@@ -147,10 +156,20 @@ def borrar(cliente):
 
 
 def cargar_pendiente(cliente):
-    return _leer(_path_pendiente(cliente))
+    ruta = _path_pendiente(cliente)
+    try:
+        mtime = os.path.getmtime(ruta)
+    except OSError:
+        return None
+    if time.time() - mtime > _TTL_PENDIENTE_SEG:
+        # Abandonado: se descarta en vez de dejar tokens en disco sin límite.
+        _borrar(ruta)
+        return None
+    return _leer(ruta)
 
 
 def guardar_pendiente(cliente, datos):
+    datos = {**datos, "creado_en": datetime.now().isoformat(timespec="seconds")}
     _escribir_atomico(_path_pendiente(cliente), datos)
 
 
@@ -175,13 +194,13 @@ def credenciales_ads(cliente):
 
 # ---------- llamadas a Graph ----------
 
-def _graph_get(edge, token, params=None):
+def _graph_get(edge, token, params=None, timeout=30):
     """GET a Graph con el token en params (nunca en la URL construida a mano).
     Convierte cualquier error en MetaConexionError sin token adentro."""
     p = dict(params or {})
     p["access_token"] = token
     try:
-        resp = requests.get(f"{GRAPH_URL}/{edge}", params=p, timeout=30)
+        resp = requests.get(f"{GRAPH_URL}/{edge}", params=p, timeout=timeout)
     except requests.exceptions.RequestException as e:
         raise MetaConexionError(f"No pude hablar con Meta ({type(e).__name__}).") from None
     try:
@@ -269,12 +288,17 @@ def estado(cliente):
         return cacheado[1]
 
     try:
-        _graph_get("me", datos["token"], {"fields": "id"})
+        _graph_get("me", datos["token"], {"fields": "id"}, timeout=5)
         resultado = {"estado": "conectado", "detalle": _detalle(datos), "verificado": True}
     except MetaConexionError as e:
         if e.codigo in CODIGOS_CONEXION_ROTA:
             resultado = {"estado": "roto", "detalle": _detalle(datos), "verificado": True, "motivo": str(e)}
         elif cacheado:
+            # Un fallo de red (timeout, DNS, etc.) no debe volver a golpear a
+            # Meta en cada render mientras dure la caída: se refresca el
+            # timestamp del último estado conocido para que siga sirviendo de
+            # caché en vez de reintentar la llamada de 30s en cada request.
+            _cache_estado[cliente] = (ahora, cacheado[1])
             return cacheado[1]
         else:
             resultado = {"estado": "conectado", "detalle": _detalle(datos), "verificado": False}
