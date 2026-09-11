@@ -12,15 +12,55 @@
 
   <label class="campo-label" style="margin-top:1rem;display:block;">Producto</label>
   {% if productos %}
-  <div class="catalogo-productos">
-    {% for p in productos %}
-    <label class="producto-opcion">
-      <input type="radio" name="producto_id" value="{{ p.id }}" required>
-      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
-      <span>{{ p.nombre }}</span>
-    </label>
-    {% endfor %}
-  </div>
+  <details class="comparacion-modelos" id="selector-producto">
+    <summary class="btn-guardar btn-sm" id="selector-producto-resumen">Elegir producto ({{ productos | length }}) →</summary>
+    <div class="comparacion-contenido">
+      <input type="text" id="buscador-producto" placeholder="Buscar por nombre…" style="margin-bottom:.8rem;">
+      <p class="vacio" id="buscador-producto-vacio" style="display:none;">Ningún producto coincide con esa búsqueda.</p>
+      <div class="catalogo-productos" id="grilla-productos">
+        {% for p in productos %}
+        <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
+          <input type="radio" name="producto_id" value="{{ p.id }}" data-nombre="{{ p.nombre }}" required>
+          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
+          <span>{{ p.nombre }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+  </details>
+  <script>
+    (function () {
+      var detalle = document.getElementById('selector-producto');
+      var resumen = document.getElementById('selector-producto-resumen');
+      var buscador = document.getElementById('buscador-producto');
+      var vacio = document.getElementById('buscador-producto-vacio');
+      var opciones = Array.prototype.slice.call(document.querySelectorAll('#grilla-productos .producto-opcion'));
+      var total = opciones.length;
+
+      // El resumen muestra qué se eligió aunque el panel esté cerrado — sin
+      // esto, colapsar la lista escondía la única pista de qué producto
+      // quedó seleccionado.
+      opciones.forEach(function (label) {
+        label.querySelector('input').addEventListener('change', function (e) {
+          resumen.textContent = 'Producto: ' + e.target.dataset.nombre + ' — cambiar →';
+          detalle.open = false;
+        });
+      });
+
+      if (buscador) {
+        buscador.addEventListener('input', function () {
+          var q = buscador.value.trim().toLowerCase();
+          var visibles = 0;
+          opciones.forEach(function (label) {
+            var coincide = !q || label.dataset.nombre.indexOf(q) !== -1;
+            label.hidden = !coincide;
+            if (coincide) visibles++;
+          });
+          vacio.style.display = visibles === 0 ? 'block' : 'none';
+        });
+      }
+    })();
+  </script>
   {% else %}
   <p class="vacio">No hay productos en el catálogo todavía — créalo en la pestaña FlowCatálogo.</p>
   {% endif %}
