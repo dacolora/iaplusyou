@@ -26,7 +26,7 @@
 </div>
 
 {% else %}
-<p class="vacio" style="padding-top:0;">
+<div class="vacio" style="padding-top:0;">
   Meta conectado: <strong>{{ cm.detalle.ad_account_nombre or cm.detalle.ad_account_id }}</strong> ·
   Página <strong>{{ cm.detalle.page_nombre or cm.detalle.page_id }}</strong>
   {% if cm.detalle.ig_username %}· Instagram @{{ cm.detalle.ig_username }}{% else %}· sin Instagram vinculado{% endif %}
@@ -35,5 +35,5 @@
   <form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit="return confirm('¿Desconectar Meta de este proyecto? No se borra nada en Meta.');">
     <button type="submit" class="btn-rechazar btn-sm">Desconectar</button>
   </form>
-</p>
+</div>
 {% endif %}
