@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Conectar con Meta — {{ nombre_proyecto }}{% endblock %}
+{% block content %}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">Conectar con Meta{% if usuario_meta %} · {{ usuario_meta }}{% endif %}</span>
+    <h1>Elige la cuenta y la Página de {{ nombre_proyecto }}.</h1>
+    <p class="hero-sub">Con esto se publican los anuncios (cuenta publicitaria) y el contenido orgánico (Página y su Instagram). Se puede cambiar después con "Desconectar".</p>
+  </div>
+</section>
+
+<form method="post" action="{{ url_for('meta_elegir', cliente=cliente) }}" class="form-nueva-idea aparece">
+  <label class="campo-label">Cuenta publicitaria</label>
+  {% if cuentas %}
+  <div class="checks-plataformas">
+    {% for a in cuentas %}
+    <label><input type="radio" name="ad_account_id" value="{{ a.id }}" {% if loop.first %}checked{% endif %}> {{ a.name }} <span class="vacio" style="display:inline;padding:0;font-size:.78rem;">· {{ a.id }}{% if a.currency %} · {{ a.currency }}{% endif %}</span></label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">Tu usuario de Facebook no administra ninguna cuenta publicitaria. Pídele al administrador de tu Business Manager que te dé acceso a la cuenta, y vuelve a conectar.</p>
+  {% endif %}
+
+  <label class="campo-label" style="margin-top:1rem;display:block;">Página de Facebook</label>
+  {% if paginas %}
+  <div class="checks-plataformas">
+    {% for p in paginas %}
+    <label><input type="radio" name="page_id" value="{{ p.id }}" {% if loop.first %}checked{% endif %}> {{ p.name }} <span class="vacio" style="display:inline;padding:0;font-size:.78rem;">· {% if p.ig_username %}Instagram @{{ p.ig_username }}{% else %}sin Instagram vinculado{% endif %}</span></label>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">Tu usuario no administra ninguna Página de Facebook. Crea una o pide acceso, y vuelve a conectar.</p>
+  {% endif %}
+
+  {% if cuentas and paginas %}
+  <button class="btn-generar" type="submit" style="margin-top:1rem;">Guardar conexión</button>
+  {% endif %}
+</form>
+
+<form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="margin-top:1rem;">
+  <button class="btn-rechazar btn-sm" type="submit">Cancelar</button>
+</form>
+{% endblock %}

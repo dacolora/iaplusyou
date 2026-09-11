@@ -36,6 +36,7 @@ import prompt_swap
 import proyectos
 import trabajos
 import usuarios
+import meta_conexion
 import generador_prompts
 from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
@@ -1752,6 +1753,123 @@ def enviar_video_a_publicidad(cliente, brief_id):
 # ---------- Publicidad (Meta Ads) — publicar, actualizar resultados, pausar/activar,
 # eliminar de la lista local. Nunca borra una campaña real de Meta: eso queda para
 # Meta Ads Manager a propósito (ver eliminar_ad más abajo). ----------
+
+# ---------- Conexión con Meta (Facebook Login for Business) ----------
+# Reemplaza a auth/auth_meta.py y auth/auth_meta_ads.py: la autorización es
+# una ruta de la app, así que funciona en el VPS y desde el celular. Las
+# credenciales quedan en clientes/<cliente>/meta.json (meta_conexion.py).
+
+def _ir_a_flowmarketing(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+
+@app.route("/cliente/<cliente>/meta/conectar")
+def meta_conectar(cliente):
+    state = meta_conexion.nuevo_state()
+    session["meta_oauth"] = {"state": state, "cliente": cliente}
+    try:
+        return redirect(meta_conexion.url_dialogo(state))
+    except meta_conexion.MetaConexionError as e:
+        session.pop("meta_oauth", None)
+        flash(str(e), "error")
+        return _ir_a_flowmarketing(cliente)
+
+
+@app.route("/meta/callback")
+def meta_callback():
+    """Única ruta nueva SIN <cliente> en la URL (Meta redirige a una sola
+    dirección registrada), así que el guard general no la cubre: el cliente
+    sale de la sesión, nunca de la query, y el state es de un solo uso."""
+    pendiente = session.pop("meta_oauth", None) or {}
+    cliente = pendiente.get("cliente")
+    state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
+    if not cliente or not state_ok:
+        flash("La autorización con Meta no coincide con esta sesión — vuelve a intentarlo desde FlowMarketing.", "error")
+        return _ir_a_flowmarketing(cliente) if cliente else redirect(url_for("index"))
+    if not usuarios.puede_acceder(_sesion(), cliente):
+        flash("No tienes acceso a ese proyecto.", "error")
+        return redirect(url_for("index"))
+
+    if request.args.get("error"):
+        detalle = request.args.get("error_description") or request.args.get("error")
+        bitacora.registrar(cliente, "meta", "conexion", "error", f"cancelado o denegado: {detalle}")
+        flash(f"Meta no autorizó la conexión: {detalle}", "error")
+        return _ir_a_flowmarketing(cliente)
+
+    code = request.args.get("code", "")
+    try:
+        token_info = meta_conexion.cambiar_code_por_token(code)
+        perfil = meta_conexion.obtener_perfil(token_info["token"])
+        activos = meta_conexion.listar_activos(token_info["token"])
+    except meta_conexion.MetaConexionError as e:
+        bitacora.registrar(cliente, "meta", "conexion", "error", str(e))
+        flash(str(e), "error")
+        return _ir_a_flowmarketing(cliente)
+
+    # Va a disco (0600, ignorado por git) y no a la sesión: la cookie de Flask
+    # tiene un tope de ~4 KB y los tokens de Página no caben.
+    meta_conexion.guardar_pendiente(cliente, {
+        **token_info,
+        "business_id": perfil.get("client_business_id"),
+        "usuario_meta": perfil.get("name"),
+        "activos": activos,
+    })
+    return redirect(url_for("meta_elegir", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/meta/elegir", methods=["GET", "POST"])
+def meta_elegir(cliente):
+    pendiente = meta_conexion.cargar_pendiente(cliente)
+    if not pendiente:
+        flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
+        return _ir_a_flowmarketing(cliente)
+    cuentas = pendiente["activos"]["ad_accounts"]
+    paginas = pendiente["activos"]["pages"]
+
+    if request.method == "GET":
+        return render_template(
+            "meta_elegir.html", cliente=cliente, cuentas=cuentas, paginas=paginas,
+            usuario_meta=pendiente.get("usuario_meta"), nombre_proyecto=proyectos.nombre_visible(cliente),
+        )
+
+    cuenta = next((a for a in cuentas if a["id"] == request.form.get("ad_account_id")), None)
+    pagina = next((p for p in paginas if p["id"] == request.form.get("page_id")), None)
+    if not cuenta or not pagina:
+        flash("Elige una cuenta publicitaria y una Página de la lista.", "error")
+        return redirect(url_for("meta_elegir", cliente=cliente))
+
+    meta_conexion.guardar(cliente, {
+        "token": pendiente["token"],
+        "tipo_token": pendiente.get("tipo_token", ""),
+        "expira_en": pendiente.get("expira_en"),
+        "business_id": pendiente.get("business_id"),
+        "ad_account_id": cuenta["id"],
+        "ad_account_nombre": cuenta.get("name"),
+        "moneda": cuenta.get("currency"),
+        "page_id": pagina["id"],
+        "page_nombre": pagina.get("name"),
+        "page_access_token": pagina.get("access_token"),
+        "ig_user_id": pagina.get("ig_user_id"),
+        "ig_username": pagina.get("ig_username"),
+        "conectado_en": datetime.now().isoformat(timespec="seconds"),
+        "conectado_por": session.get("usuario"),
+        "graph_version": meta_conexion.GRAPH_VERSION,
+    })
+    meta_conexion.borrar_pendiente(cliente)
+    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
+    aviso = "" if pagina.get("ig_user_id") else " Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
+    flash(f"Meta conectado: {cuenta.get('name')} · {pagina.get('name')}.{aviso}", "ok")
+    return _ir_a_flowmarketing(cliente)
+
+
+@app.route("/cliente/<cliente>/meta/desconectar", methods=["POST"])
+def meta_desconectar(cliente):
+    meta_conexion.borrar(cliente)
+    meta_conexion.borrar_pendiente(cliente)
+    bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado")
+    flash("Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio.", "ok")
+    return _ir_a_flowmarketing(cliente)
+
 
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
 def publicar_ad(cliente):
