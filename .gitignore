@@ -19,6 +19,8 @@ clientes/*/prompts_pendientes.json
 clientes/*/conceptos_pendientes.json
 clientes/*/swaps.json
 clientes/*/ads.json
+clientes/*/meta.json
+clientes/*/meta.pendiente.json
 clientes/*/creative_flow_pendientes.json
 clientes/*/marca.json
 
