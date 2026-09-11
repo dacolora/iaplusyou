@@ -1,3 +1,6 @@
+{% include "_meta_conectar.html" %}
+
+{% if capacidades_meta.estado != "sin_conectar" %}
 <p class="vacio" style="padding-top:0;">
   Contenido ya aprobado en otras pestañas llega acá con el botón "Enviar a
   Publicidad". Desde acá se publica como anuncio pagado real en Meta —
@@ -74,7 +77,11 @@
           <input type="url" name="destino_url" placeholder="https://tu-sitio.com" required>
         </div>
       </div>
+      {% if capacidades_meta.estado == "conectado" %}
       <button class="btn-generar" type="submit">Publicar como anuncio</button>
+      {% else %}
+      <p class="vacio">Vuelve a conectar Meta para poder publicar.</p>
+      {% endif %}
     </form>
   </details>
   {% endif %}
@@ -128,7 +135,11 @@
     {% elif entry.estado == "pausado" %}
     <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
       <input type="hidden" name="estado" value="ACTIVE">
+      {% if capacidades_meta.estado == "conectado" %}
       <button type="submit" class="btn-generar btn-sm">Activar (empieza a gastar presupuesto real)</button>
+      {% else %}
+      <span class="vacio">Reconecta Meta para activar.</span>
+      {% endif %}
     </form>
     {% endif %}
     {% endif %}
@@ -142,4 +153,5 @@
 </div>
 {% else %}
 <p class="vacio">Todavía no has publicado ningún anuncio.</p>
+{% endif %}
 {% endif %}

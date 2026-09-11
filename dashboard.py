@@ -701,6 +701,7 @@ def ver_cliente(cliente):
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
+        capacidades_meta=meta_conexion.estado(cliente),
     )
 
 
