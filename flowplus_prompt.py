@@ -24,12 +24,33 @@ def _lista(refs, tipo):
     return [r for r in refs if r.get("tipo") == tipo]
 
 
+_PALABRAS_PERSONA = ("people", "person", "feet", "foot", "toes", "hands", "skin", "nails",
+                     "persona", "gente", "pies", "pie ", "dedos", "manos", "piel", "uñas")
+
+
+def _guia_sin_personas(guia):
+    """Quita de la guía de marca las frases que hablan de personas, pies o manos:
+    en un video de solo producto esas frases empujan al modelo a meter un pie."""
+    frases = [f.strip() for f in guia.replace("\n", " ").split(".") if f.strip()]
+    utiles = [f for f in frases if not any(p in f.lower() for p in _PALABRAS_PERSONA)]
+    return (". ".join(utiles) + ".") if utiles else ""
+
 def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None):
     """texto: lo que escribió la persona (se respeta íntegro).
     referencias: [{tipo, etiqueta, producto?}] ya numeradas.
     logos: [{etiqueta}] referencias de logo agregadas por el proyecto.
     Devuelve el prompt completo (str)."""
     partes = []
+
+    # Lo primero que lee el modelo pesa más: si no hay persona, se dice antes que
+    # nada (Wan 3.0 asocia "sandalia" con "pie" con mucha fuerza y, dicho solo al
+    # final, lo ignoraba en el último tramo del video).
+    if not con_persona:
+        partes.append(
+            "VIDEO DE PRODUCTO SOLO, SIN NINGUNA PERSONA: el producto aparece vacío, sin usar, "
+            "sobre la superficie o flotando. Nadie lo lleva puesto. No hay pies, piernas, manos ni "
+            "cuerpo en ningún momento del video, ni al principio ni al final."
+        )
 
     productos = [r for r in referencias if r.get("producto")]
     imagenes = _lista(referencias, "imagen")
@@ -60,12 +81,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         partes.append(f"{et}: referencia de movimiento, ritmo y encuadre de cámara; no copies sus objetos ni personas.")
 
     # --- Personas ---
-    if not con_persona:
-        partes.append(
-            "SIN PERSONAS: no aparece ninguna persona, ni pies, ni piernas, ni manos, ni cuerpo. "
-            "El producto está solo en la escena."
-        )
-    else:
+    if con_persona:
         partes.append(
             "CON PERSONA: las personas son reales y naturales, captadas en movimiento; manos y pies "
             "anatómicamente correctos (cinco dedos, dedos relajados y juntos, uñas naturales). "
@@ -74,7 +90,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
 
     # --- Guía de marca (invariantes) ---
     if guia_marca:
-        partes.append(f"ESTILO DE MARCA: {guia_marca.strip()}")
+        partes.append(f"ESTILO DE MARCA: {_guia_sin_personas(guia_marca) if not con_persona else guia_marca.strip()}")
 
     # --- Texto de la persona, íntegro ---
     partes.append(f"ESCENA: {texto.strip()}")
@@ -86,5 +102,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     if negative_marca:
         prohibido.append(negative_marca.strip().rstrip(".")[:400])
     partes.append("EVITAR: " + ", ".join(prohibido) + ".")
+    if not con_persona:
+        partes.append("Recordatorio final: el producto permanece solo y sin nadie durante todo el video.")
 
     return "\n".join(partes)
