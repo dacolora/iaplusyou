@@ -471,6 +471,95 @@ def index():
     return render_template("index.html")
 
 
+_PRIVACIDAD_HTML = """
+<p>Creatv Machine (creatvmachine.com) es una plataforma para que empresas creen contenido con inteligencia
+artificial y lo publiquen o anuncien en sus propias redes sociales. Esta política explica qué datos tratamos
+cuando conectas tu cuenta de Meta (Facebook e Instagram) y cómo los protegemos.</p>
+<h3>Responsable</h3>
+<p>Daniel Alejandro Colorado Gaviria — Creatv Machine, Envigado, Colombia. Contacto: dacoloradog@gmail.com.</p>
+<h3>Qué datos recibimos de Meta</h3>
+<ul>
+<li>Tu nombre y el identificador de tu usuario de Facebook (para saber quién autorizó la conexión).</li>
+<li>La lista de cuentas publicitarias, Páginas de Facebook y cuentas de Instagram que administras, para que
+elijas cuál conectar al proyecto.</li>
+<li>Un token de acceso de sistema para la cuenta publicitaria y la Página elegidas.</li>
+<li>Datos de tus anuncios y sus resultados (impresiones, alcance, clics, gasto, conversiones) y, cuando
+publiques contenido orgánico, la confirmación de la publicación.</li>
+</ul>
+<h3>Para qué los usamos</h3>
+<ul>
+<li>Crear y administrar campañas, conjuntos de anuncios y anuncios en <strong>tu</strong> cuenta publicitaria,
+siempre a petición tuya desde la plataforma: ningún anuncio se crea ni se activa sin que lo pidas.</li>
+<li>Mostrarte los resultados de tus anuncios dentro de la plataforma.</li>
+<li>Publicar en tu Página de Facebook y tu Instagram el contenido que apruebes.</li>
+</ul>
+<p>No usamos tus datos para publicidad propia, no los vendemos ni los compartimos con terceros, y no los
+usamos para entrenar modelos de inteligencia artificial.</p>
+<h3>Dónde y cómo se guardan</h3>
+<p>Los tokens y los identificadores de tus activos se guardan cifrados en tránsito (HTTPS) y con permisos
+restringidos en nuestro servidor en la Unión Europea (Hetzner, Núremberg). Solo el proceso de la plataforma
+puede leerlos; nunca se muestran en pantalla ni se registran en logs.</p>
+<h3>Cuánto tiempo</h3>
+<p>Mientras el proyecto tenga Meta conectado. Al pulsar «Desconectar» en la plataforma se borran de inmediato
+el token y los identificadores. También puedes revocar el acceso desde Facebook: Configuración › Integraciones
+de negocio, o Configuración › Apps y sitios web.</p>
+<h3>Eliminación de datos</h3>
+<p>Para que eliminemos todos los datos asociados a tu cuenta de Meta escríbenos a dacoloradog@gmail.com
+indicando el nombre del proyecto; lo hacemos en un plazo máximo de 7 días y te confirmamos por correo.</p>
+<h3>Tus derechos</h3>
+<p>Puedes pedir acceso, corrección o eliminación de tus datos en cualquier momento al mismo correo.
+Cumplimos la Ley 1581 de 2012 de protección de datos personales de Colombia y las políticas de la plataforma
+de Meta.</p>
+"""
+
+_TERMINOS_HTML = """
+<p>Al usar Creatv Machine aceptas estas condiciones.</p>
+<h3>El servicio</h3>
+<p>Creatv Machine genera imágenes y videos con inteligencia artificial a partir de las referencias que subes,
+y te permite publicarlos o anunciarlos en tus propias cuentas de redes sociales. Tú decides qué se genera,
+qué se publica y qué se anuncia: cada acción con costo o efecto público requiere tu confirmación.</p>
+<h3>Tu contenido</h3>
+<p>Las referencias que subes y el contenido generado son tuyos. Declaras que tienes derecho a usar las
+imágenes, videos, marcas y productos que subes. No subas contenido de terceros sin autorización.</p>
+<h3>Cuentas de Meta y otras plataformas</h3>
+<p>Al conectar una cuenta de Meta actúas en nombre de esa cuenta y eres responsable de los anuncios y
+publicaciones que ordenes desde la plataforma, incluido su presupuesto. Cumple las políticas de publicidad
+de Meta.</p>
+<h3>Costos</h3>
+<p>Las generaciones con IA tienen un costo que se muestra antes de generar. Los anuncios se pagan
+directamente a Meta desde tu cuenta publicitaria.</p>
+<h3>Responsabilidad</h3>
+<p>El servicio se presta «tal cual». No garantizamos resultados publicitarios ni que un modelo de IA produzca
+siempre el resultado esperado. No respondemos por rechazos de anuncios por parte de Meta ni por cambios en
+las plataformas de terceros.</p>
+<h3>Contacto</h3>
+<p>Daniel Alejandro Colorado Gaviria — Creatv Machine, Envigado, Colombia. dacoloradog@gmail.com.</p>
+"""
+
+
+@app.route("/privacidad")
+def privacidad():
+    """Pública. Es la URL que exige Meta (App Review) y que cualquiera puede leer."""
+    return render_template("legal.html", titulo="Política de privacidad", actualizado="12 de septiembre de 2026", cuerpo=_PRIVACIDAD_HTML)
+
+
+@app.route("/terminos")
+def terminos():
+    return render_template("legal.html", titulo="Términos del servicio", actualizado="12 de septiembre de 2026", cuerpo=_TERMINOS_HTML)
+
+
+@app.route("/eliminar-datos")
+def eliminar_datos():
+    """URL de instrucciones de eliminación de datos que pide Meta."""
+    cuerpo = """<p>Para eliminar los datos que Creatv Machine guarda de tu cuenta de Meta:</p>
+<ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token
+y los identificadores de tu cuenta publicitaria, Página e Instagram al instante.</li>
+<li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
+con confirmación por correo.</li></ol>
+<p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Machine › Eliminar.</p>"""
+    return render_template("legal.html", titulo="Eliminación de datos", actualizado="12 de septiembre de 2026", cuerpo=cuerpo)
+
+
 @app.route("/panel")
 @requiere_admin
 def panel():
