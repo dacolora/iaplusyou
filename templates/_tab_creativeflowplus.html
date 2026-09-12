@@ -1,182 +1,87 @@
 <p class="vacio" style="padding-top:0;">
-  Elige personajes, productos y escenas si quieres (fuentes separadas, nunca
-  mezcladas) + la acción central del video. Todo es opcional — puede ser solo
-  texto, solo referencias, o ambos. El prompt final es exactamente lo que
-  escribas acá, sin ninguna plantilla de por medio: lo revisas y editas antes
-  de generar el video real con Wan 3.0.
+  Sube las imágenes de referencia (producto, persona, lugar — las que quieras),
+  elige qué buscas con el video y escribe lo que tiene que pasar. El video se
+  genera de una con Wan 3.0; el texto que escribas es exactamente lo que recibe
+  el modelo, sin plantillas de por medio.
 </p>
 
-<div class="fila-campos-idea">
-  <form method="post" action="{{ url_for('subir_personaje', cliente=cliente) }}" enctype="multipart/form-data">
-    <label class="campo-label">Agregar personaje</label>
-    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required onchange="this.form.submit()">
-    <noscript><button type="submit">Subir</button></noscript>
-  </form>
-  <form method="post" action="{{ url_for('subir_producto_referencia', cliente=cliente) }}" enctype="multipart/form-data">
-    <label class="campo-label">Agregar producto</label>
-    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required onchange="this.form.submit()">
-    <noscript><button type="submit">Subir</button></noscript>
-  </form>
-  <form method="post" action="{{ url_for('subir_escena', cliente=cliente) }}" enctype="multipart/form-data">
-    <label class="campo-label">Agregar escena</label>
-    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required onchange="this.form.submit()">
-    <noscript><button type="submit">Subir</button></noscript>
-  </form>
-</div>
+<form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
+  <label class="campo-label">Imágenes de referencia (hasta 10)</label>
+  <input type="file" name="referencias" id="fp-referencias" accept=".jpg,.jpeg,.png,.webp" multiple>
+  <div class="catalogo-productos" id="fp-previas" style="margin-top:.6rem;"></div>
+  <p class="vacio" id="fp-previas-nota" style="font-size:.76rem;display:none;"></p>
 
-<form method="post" action="{{ url_for('cf_generar_prompt', cliente=cliente) }}" class="form-nueva-idea" style="margin-top:1rem;">
-  {# Unificación con FlowCatálogo: los productos ya no se suben aparte, se
-     eligen del catálogo — con su tipo, su descripción y su mapa corporal. #}
-  <label class="campo-label">Productos del catálogo</label>
-  {% if productos %}
-  <div class="catalogo-productos">
-    {% for p in productos %}
-    <label class="producto-opcion">
-      <input type="checkbox" name="productos_catalogo" value="{{ p.id }}">
-      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
-      <span>{{ p.nombre }}</span>
-    </label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">Productos del catálogo</label>
+  {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
+  {% include "_selector_productos.html" %}
+  {% endwith %}
+
+  <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué buscas con el video?</label>
+  <div class="banco-prompts" id="fp-objetivos">
+    {% for b in banco_prompts %}
+    <button type="button" class="maniqui-preset" data-prompt="{{ b.texto }}">{{ b.etiqueta }}</button>
     {% endfor %}
   </div>
-  {% else %}
-  <p class="vacio">No hay productos en el catálogo — créalos en FlowCatálogo.</p>
-  {% endif %}
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">Personajes</label>
-  {% if personajes %}
-  <div class="catalogo-productos">
-    {% for p in personajes %}
-    <div style="position:relative;">
-      <label class="producto-opcion">
-        <input type="checkbox" name="personajes" value="{{ p.nombre }}" checked>
-        <img src="{{ p.url }}" alt="{{ p.nombre }}">
-        <span>{{ p.nombre }}</span>
-      </label>
-      <div class="personaje-eliminar">
-        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_personaje', cliente=cliente, nombre=p.nombre) }}" formmethod="post" formnovalidate onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="vacio">No hay personajes subidos todavía — usa el formulario de arriba.</p>
-  {% endif %}
+  <label class="campo-label" style="margin-top:1rem;display:block;">Qué tiene que pasar en el video</label>
+  <textarea name="accion_central" rows="3" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría; la cámara la sigue de cerca"></textarea>
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">Productos</label>
-  {% if productos_referencia %}
-  <div class="catalogo-productos">
-    {% for p in productos_referencia %}
-    <div style="position:relative;">
-      <label class="producto-opcion">
-        <input type="checkbox" name="productos" value="{{ p.nombre }}" checked>
-        <img src="{{ p.url }}" alt="{{ p.nombre }}">
-        <span>{{ p.nombre }}</span>
-      </label>
-      <div class="personaje-eliminar">
-        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_producto_referencia', cliente=cliente, nombre=p.nombre) }}" formmethod="post" formnovalidate onclick="return confirm('¿Eliminar {{ p.nombre }}?');">✕</button>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="vacio">No hay productos de referencia subidos todavía — usa el formulario de arriba. (Distinto del catálogo de "Cambiar calzado".)</p>
-  {% endif %}
-
-  <label class="campo-label" style="margin-top:1rem;display:block;">Escenas</label>
-  {% if escenas %}
-  <div class="catalogo-productos">
-    {% for e in escenas %}
-    <div style="position:relative;">
-      <label class="producto-opcion">
-        <input type="checkbox" name="escenas" value="{{ e.nombre }}" checked>
-        <img src="{{ e.url }}" alt="{{ e.nombre }}">
-        <span>{{ e.nombre }}</span>
-      </label>
-      <div class="personaje-eliminar">
-        <button type="submit" title="Eliminar" formaction="{{ url_for('eliminar_escena', cliente=cliente, nombre=e.nombre) }}" formmethod="post" formnovalidate onclick="return confirm('¿Eliminar {{ e.nombre }}?');">✕</button>
-      </div>
-    </div>
-    {% endfor %}
-  </div>
-  {% else %}
-  <p class="vacio">No hay escenas subidas todavía — usa el formulario de arriba.</p>
-  {% endif %}
-
-  <div class="fila-campos-idea" style="margin-top:1rem;">
+  <div class="fila-campos-idea" style="margin-top:1rem;align-items:end;">
     <div>
-      <label class="campo-label">Acción central / detonante</label>
-      <div class="banco-prompts">
-        {% for b in banco_prompts %}
-        <button type="button" class="maniqui-preset" data-prompt="{{ b.texto }}">{{ b.etiqueta }}</button>
+      <label class="campo-label">Duración</label>
+      <select name="duracion_objetivo">
+        {% for d in [8, 10, 12, 13, 15] %}
+        <option value="{{ d }}" {% if d == 12 %}selected{% endif %}>{{ d }} s</option>
         {% endfor %}
-      </div>
-      <textarea name="accion_central" rows="2" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría"></textarea>
+      </select>
     </div>
     <div>
-      <label class="campo-label">Tono</label>
-      <input type="text" name="tono" placeholder="ej. comedia tierna, lifestyle aspiracional...">
+      <label class="campo-label">Formato</label>
+      <select name="aspect_ratio">
+        <option value="9:16" selected>Vertical 9:16 (Reels, TikTok)</option>
+        <option value="16:9">Horizontal 16:9 (YouTube)</option>
+        <option value="1:1">Cuadrado 1:1</option>
+      </select>
+    </div>
+    <div>
+      <button class="btn-generar" type="submit">Generar video{% if costo_flowplus %} (~${{ costo_flowplus.usd }} a 720p){% endif %}</button>
     </div>
   </div>
-
-  <div class="fila-campos-idea" style="margin-top:1rem;">
-    <div>
-      <label class="campo-label">Duración objetivo (12-15s)</label>
-      <input type="number" name="duracion_objetivo" min="12" max="15" value="13">
-    </div>
-    <div>
-      <label class="campo-label">Modo</label>
-      <div class="checks-plataformas">
-        <label><input type="radio" name="modo" value="A" checked> Modo A — bullet-time / inspección de producto</label>
-        <label><input type="radio" name="modo" value="B"> Modo B — narrativa lineal</label>
-      </div>
-    </div>
-    <div>
-      <label class="campo-label">Plataformas</label>
-      <div class="checks-plataformas">
-        {% for pl in ['youtube', 'facebook', 'instagram', 'tiktok'] %}
-        <label><input type="checkbox" name="platforms" value="{{ pl }}"> {{ pl }}</label>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-
-  <button type="submit" style="margin-top:1rem;">Generar prompt (gratis)</button>
+  <p class="vacio" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.</p>
 </form>
 
+{% with sel_id="plus", sel_volver="creativeflowplus" %}
+{% include "_selector_productos_nuevo.html" %}
+{% endwith %}
+
 <div id="creativeflowplus-resultados" style="margin-top:2rem;">
-  <h3>Sesiones</h3>
+  <h3>Videos</h3>
   {% if not creative_flow_items %}
-  <p class="vacio">Todavía no hay ninguna sesión de CreativeFlowPlus.</p>
+  <p class="vacio">Todavía no has generado ningún video en FlowPlus.</p>
   {% endif %}
   {% for item in creative_flow_items %}
   <div class="idea-card">
-    <p><strong>{{ item.accion_central }}</strong> — {{ item.tono }} · Modo {{ item.modo }} · {{ item.duracion_objetivo }}s</p>
+    <p><strong>{{ item.accion_central or "(sin texto)" }}</strong> · {{ item.duracion_objetivo }}s{% if item.referencias_urls %} · {{ item.referencias_urls | length }} referencia(s){% endif %}</p>
+    {% if item.referencias_urls %}
+    <div class="catalogo-productos" style="margin-bottom:.6rem;">
+      {% for u in item.referencias_urls %}
+      <img src="{{ u }}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;background:#fff;">
+      {% endfor %}
+    </div>
+    {% endif %}
     <p>Estado: <span class="tag-estado">{{ item.estado }}</span></p>
 
     {% if item.estado == "prompt_listo" %}
-    <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}">
-      <textarea name="prompt_relleno" rows="16" style="width:100%;">{{ item.prompt_relleno }}</textarea>
-      <button type="submit">Guardar edición</button>
-    </form>
-    <form method="post" action="{{ url_for('cf_regenerar_prompt', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-      <button type="submit">Regenerar (gratis)</button>
-    </form>
+    {# Sesiones viejas (antes de que FlowPlus generara de una): se pueden lanzar tal cual. #}
     <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
       <button type="submit">Generar video con Wan 3.0{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }} a 720p){% endif %}</button>
     </form>
     {% elif item.estado == "video_generando" %}
-    {# _creative_flow_items() ya venía adjuntando item.trabajo, pero esta plantilla
-       nunca lo leía: mostraba un párrafo estático, sin barra ni polling, así que
-       era imposible que la vista se actualizara sola. Con Wan 3.0 (estimado 180s,
-       timeout 1200s) eso era mirar texto muerto varios minutos. #}
     {% if item.trabajo %}
     <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
     <div class="progreso-texto">Generando video… 0% · 0s</div>
     <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
     {% else %}
-    {# Huérfano tras un reinicio del proceso. Importa el doble acá: cf_generar_video
-       solo permite reintentar desde "prompt_listo"/"error", así que desde
-       "video_generando" lo único posible es descartar la sesión. #}
     <p class="vacio">La generación se interrumpió (el servidor se reinició). Descarta la sesión y vuelve a intentarla.</p>
     {% endif %}
     {% elif item.estado == "video_listo" %}
@@ -184,9 +89,12 @@
     <p>Costo: ${{ item.usd }}</p>
     {% elif item.estado == "error" %}
     <p class="tag-error">{{ item.error }}</p>
+    <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+      <button type="submit">Reintentar{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }}){% endif %}</button>
+    </form>
     {% endif %}
 
-    <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar esta sesión?');" style="display:inline;">
+    <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar este video?');" style="display:inline;">
       <button type="submit">Descartar</button>
     </form>
   </div>
@@ -194,14 +102,40 @@
 </div>
 
 <script>
-  // Banco de prompts: rellena la acción central con una receta base para que no
-  // haya que escribirla desde cero cada vez. Es un punto de partida editable, no
-  // un prompt fijo — el banco vive en banco_prompts.py y se edita ahí.
   (function () {
-    document.querySelectorAll('.banco-prompts .maniqui-preset').forEach(function (b) {
+    // Objetivos: rellenan el texto con una receta editable (banco_prompts.py).
+    var ta = document.querySelector('#form-flowplus textarea[name="accion_central"]');
+    document.querySelectorAll('#fp-objetivos .maniqui-preset').forEach(function (b) {
       b.addEventListener('click', function () {
-        var ta = document.querySelector('textarea[name="accion_central"]');
+        document.querySelectorAll('#fp-objetivos .maniqui-preset').forEach(function (x) { x.classList.remove('activo'); });
+        b.classList.add('activo');
         if (ta) { ta.value = b.dataset.prompt; ta.focus(); }
+      });
+    });
+
+    // Previsualización de TODAS las imágenes elegidas, con tope de 10.
+    var input = document.getElementById('fp-referencias');
+    var previas = document.getElementById('fp-previas');
+    var nota = document.getElementById('fp-previas-nota');
+    var MAX = 10;
+    input.addEventListener('change', function () {
+      previas.innerHTML = '';
+      var archivos = Array.prototype.slice.call(input.files);
+      if (archivos.length > MAX) {
+        nota.textContent = 'Elegiste ' + archivos.length + ' imágenes; solo se usan las primeras ' + MAX + '.';
+        nota.style.display = 'block';
+      } else if (archivos.length) {
+        nota.textContent = archivos.length + ' imagen(es) lista(s).';
+        nota.style.display = 'block';
+      } else {
+        nota.style.display = 'none';
+      }
+      archivos.slice(0, MAX).forEach(function (f) {
+        var img = document.createElement('img');
+        img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;background:#fff;';
+        img.src = URL.createObjectURL(f);
+        img.title = f.name;
+        previas.appendChild(img);
       });
     });
   })();

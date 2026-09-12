@@ -11,59 +11,9 @@
   <input type="file" name="foto" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple required>
 
   <label class="campo-label" style="margin-top:1rem;display:block;">Producto</label>
-  {% if productos %}
-  <details class="comparacion-modelos" id="selector-producto">
-    <summary class="btn-guardar btn-sm" id="selector-producto-resumen">Elegir producto ({{ productos | length }}) →</summary>
-    <div class="comparacion-contenido">
-      <input type="text" id="buscador-producto" placeholder="Buscar por nombre…" style="margin-bottom:.8rem;">
-      <p class="vacio" id="buscador-producto-vacio" style="display:none;">Ningún producto coincide con esa búsqueda.</p>
-      <div class="catalogo-productos" id="grilla-productos">
-        {% for p in productos %}
-        <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
-          <input type="radio" name="producto_id" value="{{ p.id }}" data-nombre="{{ p.nombre }}" required>
-          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
-          <span>{{ p.nombre }}</span>
-        </label>
-        {% endfor %}
-      </div>
-    </div>
-  </details>
-  <script>
-    (function () {
-      var detalle = document.getElementById('selector-producto');
-      var resumen = document.getElementById('selector-producto-resumen');
-      var buscador = document.getElementById('buscador-producto');
-      var vacio = document.getElementById('buscador-producto-vacio');
-      var opciones = Array.prototype.slice.call(document.querySelectorAll('#grilla-productos .producto-opcion'));
-      var total = opciones.length;
-
-      // El resumen muestra qué se eligió aunque el panel esté cerrado — sin
-      // esto, colapsar la lista escondía la única pista de qué producto
-      // quedó seleccionado.
-      opciones.forEach(function (label) {
-        label.querySelector('input').addEventListener('change', function (e) {
-          resumen.textContent = 'Producto: ' + e.target.dataset.nombre + ' — cambiar →';
-          detalle.open = false;
-        });
-      });
-
-      if (buscador) {
-        buscador.addEventListener('input', function () {
-          var q = buscador.value.trim().toLowerCase();
-          var visibles = 0;
-          opciones.forEach(function (label) {
-            var coincide = !q || label.dataset.nombre.indexOf(q) !== -1;
-            label.hidden = !coincide;
-            if (coincide) visibles++;
-          });
-          vacio.style.display = visibles === 0 ? 'block' : 'none';
-        });
-      }
-    })();
-  </script>
-  {% else %}
-  <p class="vacio">No hay productos en el catálogo todavía — créalo en la pestaña FlowCatálogo.</p>
-  {% endif %}
+  {% with sel_id="clone", sel_campo="producto_id", sel_modo="radio", sel_volver="calzado" %}
+  {% include "_selector_productos.html" %}
+  {% endwith %}
 
   <p class="vacio" style="padding-top:.6rem;font-size:.78rem;">
     Modelo de foto: <strong>{{ nombres_proveedor_swap.get(preferencias_swap.proveedor_foto, preferencias_swap.proveedor_foto) }}</strong> ·
@@ -74,6 +24,9 @@
 
   <button class="btn-generar" type="submit" {% if not productos %}disabled{% endif %}>Generar</button>
 </form>
+{% with sel_id="clone", sel_volver="calzado" %}
+{% include "_selector_productos_nuevo.html" %}
+{% endwith %}
 
 <h2 style="margin-top:2.5rem;">Resultados ({{ swaps | length }})</h2>
 {% if swaps %}

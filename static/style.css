@@ -31,8 +31,8 @@
   --shadow-soft: 0 4px 16px rgba(0, 0, 0, 0.3);
   --shadow-glow: 0 0 0 1px rgba(77, 141, 255, 0.35), 0 8px 24px rgba(77, 141, 255, 0.2);
 
-  --font-display: "Sniglet", "Helvetica Neue", sans-serif;
-  --font-body: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Space Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Inter", "Helvetica Neue", Helvetica, Arial, sans-serif;
 }
 
 * { box-sizing: border-box; }
@@ -970,6 +970,7 @@ td.estado-error { color: var(--error); }
   cursor: pointer;
 }
 .maniqui-preset:hover { color: var(--text); border-color: var(--accent); }
+.maniqui-preset.activo { color: var(--text); border-color: var(--accent); background: rgba(124,108,255,.15); }
 
 .maniqui-resumen {
   margin-top: .7rem;

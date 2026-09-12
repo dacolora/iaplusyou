@@ -48,146 +48,22 @@
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos por defecto</button>
 </form>
 
+
+<h2 style="margin-top:2rem;">Modelos por defecto — FlowPlus</h2>
+<p class="vacio" style="padding-top:0;">
+  Video con referencias y texto: <strong>Wan 3.0</strong> (reference-to-video, 720p, vía WaveSpeed).
+  Es el único modelo de FlowPlus por ahora; cuando haya alternativas se eligen acá igual que en FlowClone.
+</p>
+
 {% include "_comparacion_modelos.html" %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-{# FlowSettings agrupa lo que no es crear: la identidad de marca que alimenta
-   todos los prompts, la revisión y publicación de lo generado, la bitácora, el
-   informe de operación y la comparación de modelos. Antes estaba repartido
-   entre "Nueva idea" y esta pestaña. #}
 
 {% include "_seccion_marca.html" %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
-{% include "_seccion_videos.html" %}
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-{% include "_seccion_bitacora.html" %}
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-<h2>Settings</h2>
-
-<h3>Identidad de marca</h3>
-
-{% if marca.root %}
-<div class="idea-block" style="border-left:3px solid transparent;border-image:var(--accent-grad) 1;">
-  <div class="idea-header">
-    <div>
-      <span class="idea-label">Sistema de marca real</span>
-      <div class="idea-texto">{{ marca.root.nombre }} — v{{ marca.root.version }} · {{ marca.root.n_invariantes }} invariantes · actualizado {{ marca.root.actualizado }}</div>
-    </div>
-  </div>
-  <p class="vacio" style="padding-top:0;">
-    Cada idea que generes aquí pasa por estas {{ marca.root.n_invariantes }} reglas antes de
-    convertirse en prompts — no se pueden saltar. Vienen de
-    <code>clientes/{{ cliente }}/marca/root.json</code>, no de un texto generado por IA. Para
-    editarlas, edita el archivo directamente (o pídele a Claude Code que lo actualice) — no se
-    reescriben desde el dashboard, para que nunca se desalineen de la fuente de verdad.
-  </p>
-
-  {% if marca.root.invariantes %}
-  <ol class="lista-invariantes">
-    {% for inv in marca.root.invariantes %}
-    <li><strong>{{ inv.name.replace('_', ' ') }}</strong> — {{ inv.rule }}</li>
-    {% endfor %}
-  </ol>
-  {% endif %}
-
-  <details>
-    <summary style="cursor:pointer;color:var(--muted);font-size:.82rem;">Ver invariant_block / negative_prompt aplicados (texto crudo del prompt)</summary>
-    <p class="prompt-solo-lectura" style="margin-top:.6rem;">{{ marca.root.invariant_block }}</p>
-    <p class="prompt-solo-lectura" style="margin-top:.5rem;color:var(--muted);">{{ marca.root.negative_prompt }}</p>
-  </details>
-
-  {% if marca.root.open_items %}
-  <div class="open-items-box">
-    <span class="idea-label">Lo que le falta a esta matriz</span>
-    <ul class="lista-open-items">
-      {% for item in marca.root.open_items %}
-      <li>
-        <span class="estado-chip estado-{{ item.status }}">{{ item.status }}</span>
-        <strong>{{ item.id.replace('_', ' ') }}</strong>{% if item.note %} — {{ item.note }}{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-</div>
-{% endif %}
-
-<p class="vacio" style="padding-top:0;">
-  Referencias visuales (imágenes o videos) que definen el look de este proyecto — paleta,
-  tono, iluminación, ambientación. La guía de estilo se aplica automáticamente cada vez
-  que se generan prompts nuevos, para que el contenido no pierda identidad.
-</p>
-
-{% if marca.referencias %}
-<div class="personajes-row">
-  {% for r in marca.referencias %}
-  <div class="personaje-thumb">
-    {% if r.url %}
-    <a href="{{ r.video_url or r.url }}" target="_blank">
-      <img src="{{ r.url }}" alt="{{ r.nombre }}">
-      {% if r.tipo == 'video' %}<span class="badge-video">VIDEO</span>{% endif %}
-    </a>
-    {% else %}
-    <a href="{{ r.video_url }}" target="_blank" class="personaje-sin-frame">
-      <span>Video sin fotograma —<br>no se puede usar aún</span>
-    </a>
-    {% endif %}
-    <div class="nombre">{{ r.nombre }}</div>
-  </div>
-  {% endfor %}
-</div>
-{% else %}
-<p class="vacio">Sin referencias de marca todavía.</p>
-{% endif %}
-
-<form method="post" action="{{ url_for('subir_marca', cliente=cliente) }}" enctype="multipart/form-data" class="form-subir-personaje">
-  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" required>
-  <button class="btn-generar btn-sm" type="submit">Subir referencia de marca</button>
-</form>
-
-{% if not marca.root %}
-{% if marca.trabajo %}
-<div class="barra-progreso" id="trabajo-{{ marca.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-<div class="progreso-texto">Analizando referencias… 0% · 0s</div>
-<script>iniciarPolling({{ marca.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ marca.trabajo.job_id) | tojson }});</script>
-{% elif marca.referencias %}
-<form method="post" action="{{ url_for('analizar_marca', cliente=cliente) }}" class="form-analizar-marca">
-  <button class="btn-generar btn-sm" type="submit">Analizar referencias y generar guía de estilo</button>
-</form>
-{% endif %}
-
-<form method="post" action="{{ url_for('guardar_marca', cliente=cliente) }}" class="form-guia-estilo">
-  <label class="campo-label">Guía de estilo (editable a mano, se usa en cada generación de prompts)</label>
-  <textarea name="guia_estilo" rows="4" placeholder="Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos...">{{ marca.guia_estilo or '' }}</textarea>
-
-  <div class="fila-campos-idea">
-    <div>
-      <label class="campo-label">style_id de Higgsfield (opcional, avanzado)</label>
-      <input type="text" name="style_id" value="{{ marca.style_id or '' }}" placeholder="uuid, solo si ya lo creaste en el panel de Higgsfield">
-    </div>
-    <div>
-      <label class="campo-label">Fuerza del estilo (0-1)</label>
-      <input type="number" name="style_strength" min="0" max="1" step="0.05" value="{{ marca.style_strength if marca.style_strength is not none else 0.5 }}">
-    </div>
-  </div>
-  <button class="btn-generar btn-sm" type="submit">Guardar identidad de marca</button>
-</form>
-{% endif %}
-
-<hr style="margin:2rem 0 1rem; border:0; border-top:1px solid rgba(255,255,255,.12);">
-
-<h3>Modelos que usamos</h3>
-{% include "_comparacion_modelos.html" %}
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid rgba(255,255,255,.12);">
-
+{% if session.get('rol') == 'admin' %}
 {# Informe para sustentar la cuenta de cobro. TODO lo que se muestra acá sale de
    una fuente verificable: la bitácora (CSV append-only), el estado en disco o el
    historial de git. Nada estimado se presenta como medido. #}
@@ -281,3 +157,4 @@
     aparecen en 0 h). El tiempo real invertido es mayor que esta cifra.
   </p>
 </details>
+{% endif %}

@@ -1,0 +1,35 @@
+{# Selector de productos del catálogo, colapsable y con buscador — el mismo en
+   FlowClone y FlowPlus. Pensado para catálogos de 200 productos: cerrado
+   ocupa una línea, abierto filtra por nombre. Incluye "+ Nuevo producto" para
+   crear uno sin salir de la pestaña.
+
+   Parámetros (con {% with %}):
+     sel_id      prefijo único de ids en la página (ej. "clone", "plus")
+     sel_campo   name del input (ej. "producto_id", "productos_catalogo")
+     sel_modo    "radio" (uno solo, obligatorio) o "checkbox" (varios, opcional)
+     sel_volver  anchor de la pestaña a la que vuelve crear_producto #}
+{% set _modo = sel_modo or "radio" %}
+<details class="comparacion-modelos selector-productos" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
+  <summary class="btn-guardar btn-sm" id="sel-{{ sel_id }}-resumen">
+    {% if _modo == "radio" %}Elegir producto ({{ productos | length }}) →{% else %}Productos del catálogo (opcional, {{ productos | length }}) →{% endif %}
+  </summary>
+  <div class="comparacion-contenido">
+    <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;">
+      <input type="text" id="sel-{{ sel_id }}-buscador" placeholder="Buscar por nombre…" style="flex:1;min-width:180px;margin:0;">
+      <button type="button" class="btn-guardar btn-sm" id="sel-{{ sel_id }}-nuevo-btn">+ Nuevo producto</button>
+    </div>
+    <p class="vacio" id="sel-{{ sel_id }}-vacio" style="display:none;">Ningún producto coincide con esa búsqueda.</p>
+    {% if not productos %}
+    <p class="vacio">No hay productos en el catálogo todavía — crea el primero con "+ Nuevo producto".</p>
+    {% endif %}
+    <div class="catalogo-productos" id="sel-{{ sel_id }}-grilla">
+      {% for p in productos %}
+      <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
+        <input type="{{ _modo }}" name="{{ sel_campo }}" value="{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
+        <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
+        <span>{{ p.nombre }}</span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+</details>

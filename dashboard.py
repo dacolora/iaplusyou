@@ -697,6 +697,7 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
+        costo_flowplus=wan3_client.estimate_video(duration=12, resolution="720p"),
         ads=ads_mod.cargar(cliente),
         preferencias_swap=proyectos.preferencias(cliente),
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
@@ -1088,22 +1089,24 @@ def guardar_preferencias_swap(cliente):
 
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
 def crear_producto(cliente):
+    # "volver": pestaña que abrió el alta rápida (FlowClone, FlowPlus o FlowCatálogo).
+    volver = request.form.get("volver") or "calzado"
     nombre = (request.form.get("nombre") or "").strip()
     descripcion = (request.form.get("descripcion") or "").strip()
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not nombre:
         flash("Ponle un nombre al producto.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     if not archivos:
         flash("Sube al menos una foto del producto.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     try:
         producto_id = catalogo_productos.crear(
             cliente, nombre, descripcion, tipo=request.form.get("tipo"),
             zonas=request.form.getlist("zonas"))
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
     guardadas = _guardar_fotos_producto(cliente, producto_id, archivos)
     if not guardadas:
@@ -1113,7 +1116,7 @@ def crear_producto(cliente):
         flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
     else:
         flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
 def _guardar_fotos_producto(cliente, producto_id, archivos):
@@ -1227,7 +1230,7 @@ def _creative_flow_items(cliente):
         # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
         # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
         # así el botón nunca muestra un costo distinto al que se cobra.
-        if entry.get("estado") == "prompt_listo":
+        if entry.get("estado") in ("prompt_listo", "error"):
             item["costo_estimado"] = wan3_client.estimate_video(
                 duration=entry["duracion_objetivo"], resolution="720p",
             )
@@ -2308,117 +2311,6 @@ def rechazar(cliente, brief_id):
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
-@app.route("/cliente/<cliente>/creative_flow/generar_prompt", methods=["POST"])
-def cf_generar_prompt(cliente):
-    personajes_sel = request.form.getlist("personajes")
-    productos_sel = request.form.getlist("productos")
-    escenas_sel = request.form.getlist("escenas")
-    accion_central = (request.form.get("accion_central") or "").strip()
-    tono = (request.form.get("tono") or "").strip()
-    modo = request.form.get("modo", "A")
-    platforms = request.form.getlist("platforms")
-    try:
-        duracion_objetivo = int(request.form.get("duracion_objetivo", 13))
-    except ValueError:
-        duracion_objetivo = 13
-    duracion_objetivo = max(12, min(15, duracion_objetivo))
-
-    # Todo opcional a propósito: personaje, producto, escena y la acción
-    # central pueden venir vacíos. Si al final no hay ni referencias ni prompt,
-    # cf_generar_video ya tiene sus propios guardas (líneas ~2142 y ~2162) que
-    # lo avisan con un mensaje claro en vez de dejar avanzar algo a medias —
-    # nunca se valida dos veces lo mismo.
-    personajes_por_nombre = {p["nombre"]: p for p in _personajes(cliente)}
-    productos_por_nombre = {p["nombre"]: p for p in _productos_referencia(cliente)}
-    escenas_por_nombre = {e["nombre"]: e for e in _escenas(cliente)}
-
-    personajes = [personajes_por_nombre[n] for n in personajes_sel if n in personajes_por_nombre]
-    productos = [productos_por_nombre[n] for n in productos_sel if n in productos_por_nombre]
-    escenas = [escenas_por_nombre[n] for n in escenas_sel if n in escenas_por_nombre]
-
-    # Unificación con el catálogo: FlowPlus ya no depende de subir el producto
-    # aparte en productos_referencia — usa los mismos productos de FlowCatálogo,
-    # con sus fotos, su tipo y su mapa corporal. Se sube la foto representativa a
-    # R2 en el momento, porque Wan 3.0 necesita una URL pública y el catálogo
-    # vive solo en disco hasta que algo la necesita.
-    for pid in request.form.getlist("productos_catalogo"):
-        prod = catalogo_productos.encontrar(cliente, pid)
-        if not prod:
-            continue
-        try:
-            url = r2_uploader.upload_image(
-                prod["representativa"],
-                f"clientes/{cliente}/productos/{pid}/{os.path.basename(prod['representativa'])}")
-        except Exception as e:
-            bitacora.registrar(cliente, pid, "creative_flow_producto", "error", str(e))
-            continue
-        productos.append({"nombre": prod["nombre"], "url": url})
-        productos_sel.append(prod["nombre"])
-
-    # Lista canónica de referencias, resuelta UNA sola vez acá: personaje ->
-    # producto -> escena, descartando cualquier entrada sin URL pública
-    # resolvible (ej. video sin .frame.jpg extraído todavía), truncada a 10
-    # (límite real de Wan 3.0). cf_generar_video reusa esta misma lista tal
-    # cual, sin volver a resolverla.
-    combinados = (
-        [("personaje", p) for p in personajes] +
-        [("producto", p) for p in productos] +
-        [("escena", e) for e in escenas]
-    )
-
-    def _url_de(tipo, item):
-        return item.get("url")
-
-    combinados_validos = [(t, item) for t, item in combinados if _url_de(t, item)][:10]
-    referencias_urls = [_url_de(t, item) for t, item in combinados_validos]
-
-    cf_id = creative_flow.crear(
-        cliente, personajes_sel, productos_sel, escenas_sel,
-        accion_central, duracion_objetivo, tono, modo,
-        referencias_urls=referencias_urls, platforms=platforms,
-    )
-
-    # Sin Claude de por medio: el prompt final es la acción central tal cual
-    # la escribió la persona, sin ninguna plantilla de por medio. Si queda
-    # vacía, o si no hay ninguna referencia con URL válida, cf_generar_video
-    # ya avisa con un mensaje claro al intentar generar — no se duplica esa
-    # validación aquí.
-    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=accion_central)
-    flash("Prompt listo — revísalo antes de generar el video.", "ok")
-
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
-
-@app.route("/cliente/<cliente>/creative_flow/<cf_id>/regenerar_prompt", methods=["POST"])
-def cf_regenerar_prompt(cliente, cf_id):
-    """Ya no llama a Claude — sin plantilla de por medio no hay nada que
-    'regenerar'. Esto restaura el texto original de la acción central,
-    descartando cualquier edición manual hecha en cf_guardar_prompt."""
-    data = creative_flow.cargar(cliente)
-    entry = data.get(cf_id)
-    if not entry:
-        flash("No encontré esa sesión de CreativeFlowPlus.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
-    creative_flow.actualizar(
-        cliente, cf_id, estado="prompt_listo", prompt_relleno=entry["accion_central"], error=None,
-    )
-    flash("Prompt restaurado al texto original.", "ok")
-
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
-
-@app.route("/cliente/<cliente>/creative_flow/<cf_id>/guardar_prompt", methods=["POST"])
-def cf_guardar_prompt(cliente, cf_id):
-    prompt_editado = (request.form.get("prompt_relleno") or "").strip()
-    if not prompt_editado:
-        flash("El prompt no puede quedar vacío.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_editado)
-    flash("Prompt guardado.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
-
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])
 def cf_descartar(cliente, cf_id):
     creative_flow.eliminar(cliente, cf_id)
@@ -2426,38 +2318,16 @@ def cf_descartar(cliente, cf_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
-@app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar_video", methods=["POST"])
-def cf_generar_video(cliente, cf_id):
-    data = creative_flow.cargar(cliente)
-    entry = data.get(cf_id)
-    if not entry or not entry.get("prompt_relleno"):
-        flash("No encontré un prompt listo para esa sesión.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
-    # Guardia anti-reenvío: sin esto, un segundo POST (back del navegador +
-    # reenviar, una pestaña vieja) después de que el video ya se generó
-    # dispara una SEGUNDA generación paga, sobreescribe el .mp4 y resetea la
-    # entrada en estado_videos.json aunque ya esté aprobada/publicada.
-    # Permite reintentar tras un error, pero no tras video_generando/listo.
-    if entry.get("estado") not in ("prompt_listo", "error"):
-        flash("Este video ya se generó o se está generando — no se puede volver a disparar.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
-    # Reusa TAL CUAL la lista canónica que ya se resolvió y filtró en
-    # cf_generar_prompt (guardada como entry["referencias_urls"]) — nunca la
-    # vuelve a resolver acá, porque un segundo cómputo podría dar un
-    # resultado distinto (ej. una escena subida/borrada entre medio) y
-    # desincronizar el índice @Imagen N que Claude ya usó al escribir el
-    # prompt del índice real que recibe Wan 3.0.
+def _lanzar_video_cf(cliente, cf_id, entry):
+    """Lanza en segundo plano la generación con Wan 3.0 de una sesión de FlowPlus.
+    Lo usan cf_crear_video (de una, al enviar el formulario) y cf_generar_video
+    (reintento tras error / sesiones viejas en prompt_listo). Devuelve True si
+    arrancó, False si ya había un job corriendo."""
     referencias = entry.get("referencias_urls") or []
-    if not referencias:
-        flash("No hay URLs públicas de referencia disponibles todavía.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-
     duracion = entry["duracion_objetivo"]
-    prompt_texto = entry["prompt_relleno"]
+    prompt_texto = entry.get("prompt_relleno") or entry.get("accion_central") or ""
     platforms = entry.get("platforms", [])
-    aspect_ratio = _aspect_ratio_para_plataformas(platforms)
+    aspect_ratio = entry.get("aspect_ratio") or _aspect_ratio_para_plataformas(platforms)
     job_id = _job_id_creative_flow(cliente, cf_id)
 
     def trabajo():
@@ -2499,9 +2369,9 @@ def cf_generar_video(cliente, cf_id):
         estado = estado_mod.cargar(cliente)
         estado[cf_id] = {
             "prompt": prompt_texto,
-            "image_url": referencias[0],
+            "image_url": referencias[0] if referencias else None,
             "title": cf_id,
-            "caption": entry["accion_central"],
+            "caption": entry.get("accion_central") or "",
             "platforms": platforms,
             "video_local": out_path,
             "video_url": video_url,
@@ -2510,22 +2380,105 @@ def cf_generar_video(cliente, cf_id):
             "publicado_en": None,
         }
         estado_mod.guardar(cliente, estado)
-        return "Video de CreativeFlowPlus listo, pendiente de revisión."
+        return "Video de FlowPlus listo, pendiente de revisión."
 
-    # Escribe estado="video_generando" ANTES de lanzar el job (no después):
-    # si trabajo() falla instantáneo (ej. falta WAVESPEED_API_KEY), el hilo
-    # puede escribir estado="error" antes de que el hilo principal alcance a
-    # escribir "video_generando", pisando el error y dejando la sesión
-    # atascada en "generando" para siempre. Mismo patrón que swaps.crear().
+    # Escribe estado="video_generando" ANTES de lanzar el job: si trabajo() falla
+    # instantáneo, el hilo podría escribir "error" y el principal pisarlo.
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=180, etapas=ETAPAS_CREATIVE_FLOW):
+    return trabajos.iniciar(job_id, trabajo, duracion_estimada=180, etapas=ETAPAS_CREATIVE_FLOW)
+
+
+@app.route("/cliente/<cliente>/creative_flow/crear", methods=["POST"])
+def cf_crear_video(cliente):
+    """FlowPlus de una: referencias (imágenes subidas + productos del catálogo)
+    + texto → video con Wan 3.0 en el mismo POST. Sin paso de prompt."""
+    accion_central = (request.form.get("accion_central") or "").strip()
+    try:
+        duracion_objetivo = int(request.form.get("duracion_objetivo", 12))
+    except ValueError:
+        duracion_objetivo = 12
+    duracion_objetivo = max(5, min(30, duracion_objetivo))
+    aspect_ratio = request.form.get("aspect_ratio") or "9:16"
+    if aspect_ratio not in ("9:16", "16:9", "1:1"):
+        aspect_ratio = "9:16"
+
+    referencias_urls = []
+    # Imágenes subidas en el momento: a R2 con nombre único (varias con el mismo
+    # nombre desde el celular no se pisan).
+    subidas = [a for a in request.files.getlist("referencias") if a and a.filename][:10]
+    carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
+    os.makedirs(carpeta, exist_ok=True)
+    for i, archivo in enumerate(subidas):
+        nombre = secure_filename(archivo.filename)
+        ext = os.path.splitext(nombre)[1].lower()
+        if ext not in IMAGE_EXTS:
+            continue
+        unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{i}{ext}"
+        local_path = os.path.join(carpeta, unico)
+        archivo.save(local_path)
+        try:
+            referencias_urls.append(r2_uploader.upload_image(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}"))
+        except Exception as e:
+            bitacora.registrar(cliente, unico, "flowplus_referencia", "error", str(e))
+
+    productos_sel = []
+    for pid in request.form.getlist("productos_catalogo"):
+        prod = catalogo_productos.encontrar(cliente, pid)
+        if not prod:
+            continue
+        try:
+            url = r2_uploader.upload_image(
+                prod["representativa"],
+                f"clientes/{cliente}/productos/{pid}/{os.path.basename(prod['representativa'])}")
+        except Exception as e:
+            bitacora.registrar(cliente, pid, "flowplus_producto", "error", str(e))
+            continue
+        referencias_urls.append(url)
+        productos_sel.append(prod["nombre"])
+
+    referencias_urls = referencias_urls[:10]
+    if not referencias_urls:
+        flash("Sube al menos una imagen o elige un producto del catálogo: Wan 3.0 necesita una referencia.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if not accion_central:
+        flash("Escribe qué tiene que pasar en el video.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+    cf_id = creative_flow.crear(
+        cliente, [], productos_sel, [],
+        accion_central, duracion_objetivo, "", "A",
+        referencias_urls=referencias_urls, platforms=[],
+    )
+    creative_flow.actualizar(cliente, cf_id, prompt_relleno=accion_central, aspect_ratio=aspect_ratio)
+    entry = creative_flow.cargar(cliente)[cf_id]
+    if _lanzar_video_cf(cliente, cf_id, entry):
         flash("Generando el video con Wan 3.0…", "ok")
     else:
-        # Ya había un job corriendo — no hace falta revertir el estado, ya
-        # estaba en "video_generando" legítimamente.
         flash("Ya se está generando ese video — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar_video", methods=["POST"])
+def cf_generar_video(cliente, cf_id):
+    """Reintento tras error, o sesiones viejas que quedaron en prompt_listo."""
+    data = creative_flow.cargar(cliente)
+    entry = data.get(cf_id)
+    if not entry:
+        flash("No encontré esa sesión.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    # Guardia anti-reenvío: nunca disparar una segunda generación paga de un
+    # video que ya se generó o se está generando.
+    if entry.get("estado") not in ("prompt_listo", "error"):
+        flash("Este video ya se generó o se está generando — no se puede volver a disparar.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if not (entry.get("referencias_urls") or []):
+        flash("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if _lanzar_video_cf(cliente, cf_id, entry):
+        flash("Generando el video con Wan 3.0…", "ok")
+    else:
+        flash("Ya se está generando ese video — espera a que termine.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 _MENSAJE_INTERRUMPIDO = (
     "La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo."
