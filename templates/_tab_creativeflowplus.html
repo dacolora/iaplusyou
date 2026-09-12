@@ -6,10 +6,16 @@
 </p>
 
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
-  <label class="campo-label">Imágenes de referencia (hasta 10)</label>
-  <input type="file" name="referencias" id="fp-referencias" accept=".jpg,.jpeg,.png,.webp" multiple>
+  <label class="campo-label">Referencias: imágenes y videos juntos (hasta 10 imágenes y 5 videos)</label>
+  <input type="file" name="referencias" id="fp-referencias" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple>
   <div class="catalogo-productos" id="fp-previas" style="margin-top:.6rem;"></div>
   <p class="vacio" id="fp-previas-nota" style="font-size:.76rem;display:none;"></p>
+  <p class="vacio" style="font-size:.76rem;">
+    Cada archivo queda como <code>@Imagen 1</code>, <code>@Video 1</code>… en el orden en que los eliges
+    (los productos del catálogo se numeran después, como imágenes). Escribe esas etiquetas en el texto para
+    decirle al modelo qué es cada cosa: <em>"@Imagen 1 es el producto, @Video 1 marca el movimiento de cámara"</em>.
+    Los videos de referencia solo los usa Wan 3.0 tal cual; Kling y Seedance usan un fotograma de cada video.
+  </p>
 
   <label class="campo-label" style="margin-top:1rem;display:block;">Productos del catálogo</label>
   {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
@@ -24,7 +30,8 @@
   </div>
 
   <label class="campo-label" style="margin-top:1rem;display:block;">Qué tiene que pasar</label>
-  <textarea name="accion_central" rows="3" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría; la cámara la sigue de cerca"></textarea>
+  <div class="banco-prompts" id="fp-etiquetas" style="margin-bottom:.4rem;"></div>
+  <textarea name="accion_central" id="fp-texto" rows="3" placeholder="ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
 
   <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué quieres generar?</label>
   <div class="checks-plataformas" id="fp-tipo">
@@ -85,7 +92,16 @@
   {% for item in creative_flow_items %}
   <div class="idea-card">
     <p><strong>{{ item.accion_central or "(sin texto)" }}</strong> · {% if item.tipo == "imagen" %}Imagen{% else %}Video · {{ item.duracion_objetivo }}s{% endif %} · {{ item.modelo_nombre }}{% if item.referencias_urls %} · {{ item.referencias_urls | length }} referencia(s){% endif %}</p>
-    {% if item.referencias_urls %}
+    {% if item.referencias %}
+    <div class="catalogo-productos" style="margin-bottom:.6rem;">
+      {% for r in item.referencias %}
+      <figure style="margin:0;text-align:center;">
+        <img src="{{ r.frame_url }}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;background:#fff;{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
+        <figcaption class="vacio" style="padding:0;font-size:.68rem;">{{ r.etiqueta }}</figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    {% elif item.referencias_urls %}
     <div class="catalogo-productos" style="margin-bottom:.6rem;">
       {% for u in item.referencias_urls %}
       <img src="{{ u }}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;background:#fff;">
@@ -165,30 +181,49 @@
     duracion.addEventListener('change', refrescar);
     refrescar();
 
-    // Previsualización de TODAS las imágenes elegidas, con tope de 10.
+    // Previsualización de TODO lo elegido (imágenes y videos), con sus etiquetas
+    // @Imagen N / @Video N, y chips que las insertan en el texto.
     var input = document.getElementById('fp-referencias');
     var previas = document.getElementById('fp-previas');
     var nota = document.getElementById('fp-previas-nota');
-    var MAX = 10;
+    var chips = document.getElementById('fp-etiquetas');
+    var texto = document.getElementById('fp-texto');
+    var MAX_IMG = 10, MAX_VID = 5;
+    function insertar(etiqueta) {
+      var v = texto.value, ini = texto.selectionStart || v.length;
+      var sep = (ini > 0 && !/\s$/.test(v.slice(0, ini))) ? ' ' : '';
+      texto.value = v.slice(0, ini) + sep + etiqueta + ' ' + v.slice(ini);
+      texto.focus();
+    }
     input.addEventListener('change', function () {
-      previas.innerHTML = '';
+      previas.innerHTML = ''; chips.innerHTML = '';
       var archivos = Array.prototype.slice.call(input.files);
-      if (archivos.length > MAX) {
-        nota.textContent = 'Elegiste ' + archivos.length + ' imágenes; solo se usan las primeras ' + MAX + '.';
-        nota.style.display = 'block';
-      } else if (archivos.length) {
-        nota.textContent = archivos.length + ' imagen(es) lista(s).';
-        nota.style.display = 'block';
-      } else {
-        nota.style.display = 'none';
-      }
-      archivos.slice(0, MAX).forEach(function (f) {
-        var img = document.createElement('img');
-        img.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;background:#fff;';
-        img.src = URL.createObjectURL(f);
-        img.title = f.name;
-        previas.appendChild(img);
+      var nImg = 0, nVid = 0, extraImg = 0, extraVid = 0;
+      archivos.forEach(function (f) {
+        var esVideo = /^video\//.test(f.type) || /\.(mp4|mov|webm)$/i.test(f.name);
+        if (esVideo) { if (nVid >= MAX_VID) { extraVid++; return; } nVid++; }
+        else { if (nImg >= MAX_IMG) { extraImg++; return; } nImg++; }
+        var etiqueta = esVideo ? '@Video ' + nVid : '@Imagen ' + nImg;
+        var fig = document.createElement('figure');
+        fig.style.cssText = 'margin:0;text-align:center;';
+        var el = document.createElement(esVideo ? 'video' : 'img');
+        el.style.cssText = 'width:72px;height:72px;object-fit:cover;border-radius:6px;background:#fff;' + (esVideo ? 'outline:2px solid var(--accent);' : '');
+        el.src = URL.createObjectURL(f); el.title = f.name;
+        if (esVideo) { el.muted = true; el.playsInline = true; }
+        var cap = document.createElement('figcaption');
+        cap.className = 'vacio'; cap.style.cssText = 'padding:0;font-size:.68rem;'; cap.textContent = etiqueta;
+        fig.appendChild(el); fig.appendChild(cap); previas.appendChild(fig);
+        var chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'maniqui-preset'; chip.textContent = etiqueta;
+        chip.addEventListener('click', function () { insertar(etiqueta); });
+        chips.appendChild(chip);
       });
+      var partes = [];
+      if (nImg) partes.push(nImg + ' imagen(es)');
+      if (nVid) partes.push(nVid + ' video(s)');
+      if (extraImg || extraVid) partes.push('se ignoran ' + (extraImg + extraVid) + ' de más (máximo ' + MAX_IMG + ' imágenes y ' + MAX_VID + ' videos)');
+      nota.textContent = partes.join(' · ');
+      nota.style.display = partes.length ? 'block' : 'none';
     });
   })();
 </script>

@@ -42,14 +42,16 @@ COSTO_USD_POR_SEGUNDO = {"480p": 0.05, "720p": 0.10, "1080p": 0.20}
 
 
 def generar_video(prompt, reference_images, duration=12, resolution="720p",
-                   aspect_ratio="9:16", enable_audio=False, on_progreso=None):
+                   aspect_ratio="9:16", enable_audio=False, on_progreso=None,
+                   reference_videos=None):
     """reference_images: lista de URLs públicas, en el orden
     personajes -> productos -> escenas (así @Imagen 1, @Imagen 2... del prompt
     final corresponden exactamente al orden que ve el modelo). Devuelve la URL
     pública del video resultante. on_progreso se propaga al poll (ver
     wavespeed_common.poll_hasta_listo) para poder mostrar la fase real."""
-    if not reference_images:
-        raise ValueError("Wan 3.0 reference-to-video necesita al menos una imagen de referencia.")
+    reference_videos = list(reference_videos or [])[:5]
+    if not reference_images and not reference_videos:
+        raise ValueError("Wan 3.0 reference-to-video necesita al menos una imagen o un video de referencia.")
 
     payload = {
         "prompt": prompt,
@@ -57,8 +59,10 @@ def generar_video(prompt, reference_images, duration=12, resolution="720p",
         "aspect_ratio": aspect_ratio,
         "duration": duration,
         "enable_audio": enable_audio,
-        "reference_images": reference_images[:10],
+        "reference_images": list(reference_images or [])[:10],
     }
+    if reference_videos:
+        payload["reference_videos"] = reference_videos
     resp = requests.post(
         f"{wavespeed_common.BASE_URL}/{MODEL_PATH}", json=payload,
         headers=wavespeed_common.headers(), timeout=60,

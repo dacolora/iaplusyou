@@ -2343,6 +2343,14 @@ def _lanzar_video_cf(cliente, cf_id, entry):
     (reintento tras error / sesiones viejas en prompt_listo). Devuelve True si
     arrancó, False si ya había un job corriendo."""
     referencias = entry.get("referencias_urls") or []
+    # Videos de referencia tal cual (solo los usa Wan 3.0). Para los demás modelos
+    # el video ya está representado por su fotograma dentro de referencias_urls.
+    videos_ref = [r["url"] for r in (entry.get("referencias") or []) if r.get("tipo") == "video"]
+    if videos_ref and (entry.get("modelo") or "wan3") == "wan3":
+        # Con Wan 3.0 el video va como video: quitamos su fotograma de las imágenes
+        # para no mandar la misma referencia dos veces.
+        frames_video = {r["frame_url"] for r in entry["referencias"] if r.get("tipo") == "video"}
+        referencias = [u for u in referencias if u not in frames_video]
     duracion = entry["duracion_objetivo"]
     prompt_texto = entry.get("prompt_relleno") or entry.get("accion_central") or ""
     platforms = entry.get("platforms", [])
@@ -2396,6 +2404,7 @@ def _lanzar_video_cf(cliente, cf_id, entry):
             video_url_wan = flowplus_modelos.generar_video(
                 modelo, prompt_texto, referencias, duracion,
                 aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
+                videos=videos_ref if modelo == "wan3" else None,
             )
             costo = flowplus_modelos.estimate_video(modelo, duracion)
             trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
@@ -2423,7 +2432,7 @@ def _lanzar_video_cf(cliente, cf_id, entry):
         estado = estado_mod.cargar(cliente)
         estado[cf_id] = {
             "prompt": prompt_texto,
-            "image_url": referencias[0] if referencias else None,
+            "image_url": (referencias or (entry.get("referencias_urls") or [None]))[0],
             "title": cf_id,
             "caption": entry.get("accion_central") or "",
             "platforms": platforms,
@@ -2466,22 +2475,36 @@ def cf_crear_video(cliente):
         if modelo not in flowplus_modelos.VIDEO:
             modelo = prefs["modelo_video"]
 
-    referencias_urls = []
-    # Imágenes subidas en el momento: a R2 con nombre único (varias con el mismo
-    # nombre desde el celular no se pisan).
-    subidas = [a for a in request.files.getlist("referencias") if a and a.filename][:10]
+    # Un solo campo con imágenes Y videos, en el orden en que se eligieron. Cada
+    # uno va a R2 con nombre único (varios "image.jpeg" del celular no se pisan).
+    # A cada video se le saca un fotograma: es la miniatura y, para los modelos
+    # que no aceptan video, la referencia que se manda. Se etiquetan @Imagen N /
+    # @Video N para poder nombrarlos en el texto.
+    referencias = []          # [{tipo, url, frame_url, etiqueta}]
+    subidas = [a for a in request.files.getlist("referencias") if a and a.filename][:15]
     carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
     os.makedirs(carpeta, exist_ok=True)
+    n_img = n_vid = 0
     for i, archivo in enumerate(subidas):
         nombre = secure_filename(archivo.filename)
         ext = os.path.splitext(nombre)[1].lower()
-        if ext not in IMAGE_EXTS:
+        if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
             continue
         unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{i}{ext}"
         local_path = os.path.join(carpeta, unico)
         archivo.save(local_path)
         try:
-            referencias_urls.append(r2_uploader.upload_image(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}"))
+            if ext in VIDEO_EXTS:
+                url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
+                frame_path = local_path + FRAME_SUFFIX
+                _extraer_frame(local_path, frame_path)
+                frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{unico}{FRAME_SUFFIX}")
+                n_vid += 1
+                referencias.append({"tipo": "video", "url": url, "frame_url": frame_url, "etiqueta": f"@Video {n_vid}"})
+            else:
+                url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
+                n_img += 1
+                referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": f"@Imagen {n_img}"})
         except Exception as e:
             bitacora.registrar(cliente, unico, "flowplus_referencia", "error", str(e))
 
@@ -2497,12 +2520,16 @@ def cf_crear_video(cliente):
         except Exception as e:
             bitacora.registrar(cliente, pid, "flowplus_producto", "error", str(e))
             continue
-        referencias_urls.append(url)
+        n_img += 1
+        referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": f"@Imagen {n_img}", "producto": prod["nombre"]})
         productos_sel.append(prod["nombre"])
 
-    referencias_urls = referencias_urls[:10]
-    if not referencias_urls:
-        flash("Sube al menos una imagen o elige un producto del catálogo: Wan 3.0 necesita una referencia.", "error")
+    referencias = referencias[:15]
+    # referencias_urls sigue siendo la lista plana de IMÁGENES (los videos van por
+    # su fotograma) — es lo que consumen los modelos que no aceptan video.
+    referencias_urls = [r["frame_url"] for r in referencias][:10]
+    if not referencias:
+        flash("Sube al menos una imagen o un video, o elige un producto del catálogo: el modelo necesita una referencia.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not accion_central:
         flash("Escribe qué tiene que pasar en el video.", "error")
@@ -2513,7 +2540,7 @@ def cf_crear_video(cliente):
         accion_central, duracion_objetivo, "", "A",
         referencias_urls=referencias_urls, platforms=[],
     )
-    creative_flow.actualizar(cliente, cf_id, prompt_relleno=accion_central, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo)
+    creative_flow.actualizar(cliente, cf_id, prompt_relleno=accion_central, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias)
     entry = creative_flow.cargar(cliente)[cf_id]
     nombre_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]["nombre"]
     if _lanzar_video_cf(cliente, cf_id, entry):

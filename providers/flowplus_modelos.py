@@ -23,7 +23,8 @@ VIDEO = {
         "max_referencias": 10,
         "usd_por_segundo": wan3_client.COSTO_USD_POR_SEGUNDO["720p"],
         "duraciones": (5, 8, 10, 12, 15, 20),
-        "nota": "Hasta 10 referencias, 720p. El que mejor respeta varias imágenes a la vez.",
+        "max_videos": 5,
+        "nota": "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p. El único que usa videos tal cual.",
     },
     "kling_o3_pro": {
         "nombre": "Kling O3 Pro",
@@ -31,7 +32,8 @@ VIDEO = {
         "max_referencias": 7,
         "usd_por_segundo": 0.112,
         "duraciones": (5, 8, 10, 12, 15),
-        "nota": "Hasta 7 referencias. Movimiento y realismo de personas muy buenos.",
+        "max_videos": 0,
+        "nota": "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos.",
     },
     "seedance25": {
         "nombre": "Seedance 2.5",
@@ -39,6 +41,7 @@ VIDEO = {
         "max_referencias": 1,
         "usd_por_segundo": 0.36,
         "duraciones": (5, 8, 10, 12, 15),
+        "max_videos": 0,
         "nota": "Usa SOLO la primera imagen como fotograma de arranque; el encuadre sale de esa imagen. Calidad cinematográfica, el más caro.",
     },
 }
@@ -86,17 +89,21 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
     return outputs[0]
 
 
-def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16", on_progreso=None):
-    """Devuelve la URL pública del video. referencias: URLs públicas, la primera
-    es la principal (Seedance solo usa esa)."""
+def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16", on_progreso=None,
+                  videos=None):
+    """Devuelve la URL pública del video. referencias: URLs públicas de imágenes
+    (la primera es la principal; Seedance solo usa esa). videos: URLs públicas
+    de videos de referencia — solo Wan 3.0 los recibe tal cual; para los demás
+    el llamador ya convirtió cada video en un fotograma dentro de `referencias`."""
     info = VIDEO[modelo_id]
-    if not referencias:
+    videos = list(videos or [])[: info.get("max_videos", 0)]
+    if not referencias and not videos:
         raise ValueError(f"{info['nombre']} necesita al menos una imagen de referencia.")
     refs = list(referencias)[: info["max_referencias"]]
     if modelo_id == "wan3":
         return wan3_client.generar_video(
             prompt, refs, duration=duration, resolution="720p",
-            aspect_ratio=aspect_ratio, on_progreso=on_progreso,
+            aspect_ratio=aspect_ratio, on_progreso=on_progreso, reference_videos=videos,
         )
     if modelo_id == "kling_o3_pro":
         payload = {
