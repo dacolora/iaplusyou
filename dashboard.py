@@ -38,6 +38,8 @@ import trabajos
 import usuarios
 import meta_conexion
 import flowplus_prompt
+import referencias_flowplus
+import referencias_link
 import generador_prompts
 from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
@@ -728,6 +730,8 @@ def ver_cliente(cliente):
         creative_flow_items=_creative_flow_items(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         logos=_logos(cliente),
+        referencias_bandeja=referencias_flowplus.listar(cliente),
+        trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
         modelos_flowplus_video=flowplus_modelos.VIDEO,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         ads=ads_mod.cargar(cliente),
@@ -2482,6 +2486,114 @@ def _lanzar_video_cf(cliente, cf_id, entry):
     return trabajos.iniciar(job_id, fn, duracion_estimada=60 if tipo == "imagen" else 180, etapas=ETAPAS_CREATIVE_FLOW)
 
 
+def _job_id_link(cliente):
+    return f"{cliente}__flowplus_link"
+
+
+def _guardar_referencia_archivo(cliente, archivo, i):
+    """Sube un archivo (imagen o video) a R2 con nombre único y lo mete en la
+    bandeja. A los videos se les extrae un fotograma (miniatura + referencia
+    para los modelos que no aceptan video). Devuelve True si entró."""
+    nombre = secure_filename(archivo.filename)
+    ext = os.path.splitext(nombre)[1].lower()
+    if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
+        return False
+    carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
+    os.makedirs(carpeta, exist_ok=True)
+    unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{i}{ext}"
+    local_path = os.path.join(carpeta, unico)
+    archivo.save(local_path)
+    if ext in VIDEO_EXTS:
+        url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
+        frame_path = local_path + FRAME_SUFFIX
+        _extraer_frame(local_path, frame_path)
+        frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{unico}{FRAME_SUFFIX}")
+        referencias_flowplus.agregar(cliente, "video", url, frame_url=frame_url, origen="archivo", ruta_local=local_path, titulo=nombre)
+    else:
+        url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
+        referencias_flowplus.agregar(cliente, "imagen", url, origen="archivo", ruta_local=local_path, titulo=nombre)
+    return True
+
+
+@app.route("/cliente/<cliente>/flowplus/referencias/subir", methods=["POST"])
+def fp_subir_referencias(cliente):
+    archivos = [a for a in request.files.getlist("referencias") if a and a.filename][:15]
+    ok = 0
+    for i, a in enumerate(archivos):
+        try:
+            ok += 1 if _guardar_referencia_archivo(cliente, a, i) else 0
+        except Exception as e:
+            bitacora.registrar(cliente, a.filename, "flowplus_referencia", "error", str(e))
+            flash(f"No pude subir {a.filename}: {e}", "error")
+    if ok:
+        flash(f"{ok} referencia(s) agregada(s).", "ok")
+    elif not archivos:
+        flash("No elegiste ningún archivo.", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/flowplus/referencias/link", methods=["POST"])
+def fp_agregar_link(cliente):
+    """Descarga el video del link en segundo plano (TrendTrack directo; el resto
+    con yt-dlp), lo recorta a 15 s, lo sube a R2 y lo deja en la bandeja."""
+    url = (request.form.get("link") or "").strip()
+    if not url:
+        flash("Pega un link primero.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    job_id = _job_id_link(cliente)
+
+    def trabajo():
+        carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
+        base = f"link_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
+        try:
+            local_path, meta = referencias_link.descargar(url, carpeta, base)
+            r2_url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{base}.mp4")
+            frame_path = local_path + FRAME_SUFFIX
+            _extraer_frame(local_path, frame_path)
+            frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{base}{FRAME_SUFFIX}")
+            referencias_flowplus.agregar(cliente, "video", r2_url, frame_url=frame_url, origen=meta.get("fuente", "link"),
+                                         ruta_local=local_path, titulo=meta.get("titulo") or url)
+            bitacora.registrar(cliente, base, "flowplus_link", "ok", url)
+        except Exception as e:
+            bitacora.registrar(cliente, base, "flowplus_link", "error", str(e))
+            raise
+        return "Video del link agregado a las referencias."
+
+    if trabajos.iniciar(job_id, trabajo, duracion_estimada=40):
+        flash("Descargando el video del link… en unos segundos aparece entre las referencias.", "ok")
+    else:
+        flash("Ya se está descargando un link — espera a que termine.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/flowplus/referencias/<rid>/quitar", methods=["POST"])
+def fp_quitar_referencia(cliente, rid):
+    referencias_flowplus.quitar(cliente, rid)
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/flowplus/referencias/vaciar", methods=["POST"])
+def fp_vaciar_referencias(cliente):
+    referencias_flowplus.vaciar(cliente)
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/flowplus/describir", methods=["POST"])
+def fp_describir(cliente):
+    """Claude mira las referencias de la bandeja y propone el texto del video.
+    Devuelve JSON para rellenar el cuadro sin recargar."""
+    refs = referencias_flowplus.listar(cliente)
+    if not refs:
+        return jsonify({"ok": False, "error": "Agrega primero una imagen, un video o un link."}), 400
+    try:
+        texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente))
+    except Exception as e:
+        bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
+        return jsonify({"ok": False, "error": f"No pude describir las referencias ({type(e).__name__})."}), 502
+    bitacora.registrar(cliente, "flowplus", "describir", "ok", texto[:120])
+    return jsonify({"ok": True, "texto": texto})
+
+
 @app.route("/cliente/<cliente>/creative_flow/crear", methods=["POST"])
 def cf_crear_video(cliente):
     """FlowPlus de una: referencias (imágenes subidas + productos del catálogo)
@@ -2505,38 +2617,13 @@ def cf_crear_video(cliente):
         if modelo not in flowplus_modelos.VIDEO:
             modelo = prefs["modelo_video"]
 
-    # Un solo campo con imágenes Y videos, en el orden en que se eligieron. Cada
-    # uno va a R2 con nombre único (varios "image.jpeg" del celular no se pisan).
-    # A cada video se le saca un fotograma: es la miniatura y, para los modelos
-    # que no aceptan video, la referencia que se manda. Se etiquetan @Imagen N /
-    # @Video N para poder nombrarlos en el texto.
-    referencias = []          # [{tipo, url, frame_url, etiqueta}]
-    subidas = [a for a in request.files.getlist("referencias") if a and a.filename][:15]
-    carpeta = os.path.join(_client_dir(cliente), "referencias_flowplus")
-    os.makedirs(carpeta, exist_ok=True)
-    n_img = n_vid = 0
-    for i, archivo in enumerate(subidas):
-        nombre = secure_filename(archivo.filename)
-        ext = os.path.splitext(nombre)[1].lower()
-        if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
-            continue
-        unico = f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{i}{ext}"
-        local_path = os.path.join(carpeta, unico)
-        archivo.save(local_path)
-        try:
-            if ext in VIDEO_EXTS:
-                url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
-                frame_path = local_path + FRAME_SUFFIX
-                _extraer_frame(local_path, frame_path)
-                frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/referencias_flowplus/{unico}{FRAME_SUFFIX}")
-                n_vid += 1
-                referencias.append({"tipo": "video", "url": url, "frame_url": frame_url, "etiqueta": f"@Video {n_vid}"})
-            else:
-                url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/referencias_flowplus/{unico}")
-                n_img += 1
-                referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": f"@Imagen {n_img}"})
-        except Exception as e:
-            bitacora.registrar(cliente, unico, "flowplus_referencia", "error", str(e))
+    # Las referencias vienen de la bandeja (archivos subidos y links ya
+    # descargados), en el orden en que se agregaron, con sus etiquetas.
+    referencias = []
+    for r in referencias_flowplus.listar(cliente):
+        referencias.append({"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
+                            "etiqueta": r["etiqueta"], "origen": r.get("origen")})
+    n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
 
     productos_sel = []
     for pid in request.form.getlist("productos_catalogo"):
@@ -2597,6 +2684,8 @@ def cf_crear_video(cliente):
         entry = creative_flow.cargar(cliente)[cf_id]
         if _lanzar_video_cf(cliente, cf_id, entry):
             lanzados += 1
+    if lanzados:
+        referencias_flowplus.vaciar(cliente)
     nombre_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]["nombre"]
     que = "imagen" if tipo == "imagen" else "video"
     if lanzados == 1:

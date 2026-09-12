@@ -8,6 +8,7 @@ puede encolar algo acá con crear(...) sin conocer nada más de este archivo —
 docs/superpowers/specs/2026-09-05-meta-ads-marketing-api-design.md.
 """
 import json
+import _json_store
 import os
 from datetime import datetime
 
@@ -19,18 +20,11 @@ def _ruta(cliente):
 
 
 def cargar(cliente):
-    ruta = _ruta(cliente)
-    if not os.path.exists(ruta):
-        return {}
-    with open(ruta) as f:
-        return json.load(f)
+    return _json_store.cargar(_ruta(cliente), {})
 
 
 def _guardar(cliente, data):
-    ruta = _ruta(cliente)
-    os.makedirs(os.path.dirname(ruta), exist_ok=True)
-    with open(ruta, "w") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    _json_store.guardar(_ruta(cliente), data)
 
 
 def crear(cliente, fuente, fuente_id, contenido_url, contenido_tipo, nombre):
