@@ -2571,24 +2571,41 @@ def cf_crear_video(cliente):
         flash("Escribe qué tiene que pasar en el video.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
-    prompt_final = flowplus_prompt.armar(
-        accion_central, referencias, con_persona=con_persona,
-        guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
-        logos=[r for r in referencias if r.get("logo")],
-    )
+    try:
+        n_versiones = int(request.form.get("n_versiones", 1))
+    except ValueError:
+        n_versiones = 1
+    enfoques = flowplus_prompt.enfoques_para(n_versiones, con_persona=con_persona)
 
-    cf_id = creative_flow.crear(
-        cliente, [], productos_sel, [],
-        accion_central, duracion_objetivo, "", "A",
-        referencias_urls=referencias_urls, platforms=[],
-    )
-    creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias, con_persona=con_persona)
-    entry = creative_flow.cargar(cliente)[cf_id]
+    lanzados = 0
+    for enfoque in enfoques:
+        info = flowplus_prompt.ENFOQUES[enfoque]
+        prompt_final = flowplus_prompt.armar(
+            accion_central, referencias, con_persona=info["con_persona"],
+            guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
+            logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
+        )
+        cf_id = creative_flow.crear(
+            cliente, [], productos_sel, [],
+            accion_central, duracion_objetivo, "", "A",
+            referencias_urls=referencias_urls, platforms=[],
+        )
+        creative_flow.actualizar(
+            cliente, cf_id, prompt_relleno=prompt_final, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo,
+            referencias=referencias, con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
+        )
+        entry = creative_flow.cargar(cliente)[cf_id]
+        if _lanzar_video_cf(cliente, cf_id, entry):
+            lanzados += 1
     nombre_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]["nombre"]
-    if _lanzar_video_cf(cliente, cf_id, entry):
-        flash(f"Generando {'la imagen' if tipo == 'imagen' else 'el video'} con {nombre_modelo}…", "ok")
+    que = "imagen" if tipo == "imagen" else "video"
+    if lanzados == 1:
+        flash(f"Generando {'la' if que == 'imagen' else 'el'} {que} con {nombre_modelo} ({flowplus_prompt.ENFOQUES[enfoques[0]]['nombre']})…", "ok")
+    elif lanzados > 1:
+        etiquetas = " · ".join(flowplus_prompt.ENFOQUES[e]["nombre"] for e in enfoques)
+        flash(f"Generando {lanzados} versiones con {nombre_modelo}: {etiquetas}.", "ok")
     else:
-        flash("Ya se está generando ese video — espera a que termine.", "warn")
+        flash("Ya se estaba generando eso — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 

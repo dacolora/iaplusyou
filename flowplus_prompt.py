@@ -35,12 +35,55 @@ def _guia_sin_personas(guia):
     utiles = [f for f in frases if not any(p in f.lower() for p in _PALABRAS_PERSONA)]
     return (". ".join(utiles) + ".") if utiles else ""
 
-def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None):
+# Enfoques de una misma idea. Cuando la persona pide N versiones, se genera una
+# por enfoque, en este orden, y la tarjeta dice cuál es cuál.
+ENFOQUES = {
+    "producto": {
+        "nombre": "Solo producto",
+        "descripcion": "El producto solo, sin nadie: vacío, sin usar, sobre la superficie o flotando.",
+        "con_persona": False,
+        "bloque": None,
+    },
+    "persona": {
+        "nombre": "Con persona",
+        "descripcion": "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista.",
+        "con_persona": True,
+        "bloque": None,
+    },
+    "unboxing": {
+        "nombre": "Unboxing",
+        "descripcion": "Alguien recibe la compra y abre la caja o bolsa hasta descubrir el producto, con la emoción de estrenarlo.",
+        "con_persona": True,
+        "bloque": (
+            "ENFOQUE UNBOXING: la escena es una persona recibiendo su compra. Empieza con la caja o "
+            "bolsa cerrada sobre la mesa o en sus manos, la abre con curiosidad y saca el producto; "
+            "termina mostrándolo de cerca, feliz de estrenarlo. Solo se ven las manos y, si acaso, "
+            "parte del cuerpo; el producto es lo que la cámara busca."
+        ),
+    },
+}
+ORDEN_ENFOQUES = ("producto", "persona", "unboxing")
+
+
+def enfoques_para(n, con_persona=False):
+    """Qué enfoque lleva cada una de las n versiones (1-3). Con una sola
+    versión manda la casilla "¿aparece alguien?"."""
+    n = max(1, min(3, int(n)))
+    if n == 1:
+        return ["persona" if con_persona else "producto"]
+    return list(ORDEN_ENFOQUES[:n])
+
+
+def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None):
     """texto: lo que escribió la persona (se respeta íntegro).
     referencias: [{tipo, etiqueta, producto?}] ya numeradas.
     logos: [{etiqueta}] referencias de logo agregadas por el proyecto.
+    enfoque: clave de ENFOQUES (manda sobre con_persona) o None.
     Devuelve el prompt completo (str)."""
     partes = []
+    info_enfoque = ENFOQUES.get(enfoque) if enfoque else None
+    if info_enfoque:
+        con_persona = info_enfoque["con_persona"]
 
     # Lo primero que lee el modelo pesa más: si no hay persona, se dice antes que
     # nada (Wan 3.0 asocia "sandalia" con "pie" con mucha fuerza y, dicho solo al
@@ -91,6 +134,10 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     # --- Guía de marca (invariantes) ---
     if guia_marca:
         partes.append(f"ESTILO DE MARCA: {_guia_sin_personas(guia_marca) if not con_persona else guia_marca.strip()}")
+
+    # --- Enfoque (unboxing, etc.) ---
+    if info_enfoque and info_enfoque["bloque"]:
+        partes.append(info_enfoque["bloque"])
 
     # --- Texto de la persona, íntegro ---
     partes.append(f"ESCENA: {texto.strip()}")

@@ -33,11 +33,22 @@
   <div class="banco-prompts" id="fp-etiquetas" style="margin-bottom:.4rem;"></div>
   <textarea name="accion_central" id="fp-texto" rows="3" placeholder="ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">¿Aparece alguien?</label>
-  <div class="checks-plataformas">
-    <label><input type="radio" name="con_persona" value="no" checked> No — solo el producto (sin pies, manos ni personas)</label>
-    <label><input type="radio" name="con_persona" value="si"> Sí — con persona (se aplica la guía de personas y pies de la marca)</label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">¿Cuántas versiones?</label>
+  <div class="checks-plataformas" id="fp-versiones">
+    <label><input type="radio" name="n_versiones" value="1" checked> 1</label>
+    <label><input type="radio" name="n_versiones" value="2"> 2</label>
+    <label><input type="radio" name="n_versiones" value="3"> 3</label>
   </div>
+  <div id="fp-una-version" class="checks-plataformas" style="margin-top:.4rem;">
+    <label><input type="radio" name="con_persona" value="no" checked> Solo el producto (sin pies, manos ni personas)</label>
+    <label><input type="radio" name="con_persona" value="si"> Con persona usándolo</label>
+  </div>
+  <p class="vacio" id="fp-versiones-nota" style="font-size:.78rem;">
+    Con el mismo texto, cada versión cambia el enfoque y se cobra aparte:
+    <strong>1 · Solo producto</strong> — el producto solo, vacío, sin nadie ·
+    <strong>2 · Con persona</strong> — alguien real usándolo, el producto protagonista ·
+    <strong>3 · Unboxing</strong> — abre la caja o bolsa y descubre el producto.
+  </p>
   {% if logos %}
   <p class="vacio" style="font-size:.76rem;">Se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
   {% else %}
@@ -119,7 +130,7 @@
       {% endfor %}
     </div>
     {% endif %}
-    <p>Estado: <span class="tag-estado">{{ item.estado }}</span>{% if item.con_persona is defined %} · {% if item.con_persona %}con persona{% else %}solo producto{% endif %}{% endif %}</p>
+    <p>Estado: <span class="tag-estado">{{ item.estado }}</span>{% if item.enfoque_nombre %} · <strong>Enfoque: {{ item.enfoque_nombre }}</strong>{% elif item.con_persona is defined %} · {% if item.con_persona %}con persona{% else %}solo producto{% endif %}{% endif %}</p>
     {% if item.prompt_relleno and item.prompt_relleno != item.accion_central %}
     <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">Ver el prompt completo que recibió el modelo</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
     {% endif %}
@@ -182,16 +193,22 @@
       var n = tipoActual() === 'imagen' ? 'modelo_imagen' : 'modelo_video';
       return form.querySelector('input[name=' + n + ']:checked');
     }
+    var unaVersion = document.getElementById('fp-una-version');
+    function nVersiones() { return parseInt(form.querySelector('input[name=n_versiones]:checked').value, 10); }
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
       bloqueVideo.hidden = esImagen; bloqueImagen.hidden = !esImagen;
       var m = modeloActual();
       campoModelo.value = m ? m.value : '';
+      var n = nVersiones();
+      unaVersion.hidden = n > 1;
       var usd = 0;
       if (m) usd = esImagen ? parseFloat(m.dataset.usd) : parseFloat(m.dataset.usdSeg) * parseInt(duracion.value, 10);
-      botonGenerar.textContent = 'Generar ' + (esImagen ? 'imagen' : 'video') + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
+      usd = usd * n;
+      var que = (esImagen ? 'imagen' : 'video') + (n > 1 ? ' × ' + n : '');
+      botonGenerar.textContent = 'Generar ' + que + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
     }
-    form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
+    form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen], input[name=n_versiones]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
     refrescar();
 
