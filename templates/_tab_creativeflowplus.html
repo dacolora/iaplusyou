@@ -33,6 +33,17 @@
   <div class="banco-prompts" id="fp-etiquetas" style="margin-bottom:.4rem;"></div>
   <textarea name="accion_central" id="fp-texto" rows="3" placeholder="ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
 
+  <label class="campo-label" style="margin-top:1rem;display:block;">¿Aparece alguien?</label>
+  <div class="checks-plataformas">
+    <label><input type="radio" name="con_persona" value="no" checked> No — solo el producto (sin pies, manos ni personas)</label>
+    <label><input type="radio" name="con_persona" value="si"> Sí — con persona (se aplica la guía de personas y pies de la marca)</label>
+  </div>
+  {% if logos %}
+  <p class="vacio" style="font-size:.76rem;">Se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
+  {% else %}
+  <p class="vacio" style="font-size:.76rem;">Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación (evita marcas inventadas).</p>
+  {% endif %}
+
   <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué quieres generar?</label>
   <div class="checks-plataformas" id="fp-tipo">
     <label><input type="radio" name="tipo" value="video" checked> Video</label>
@@ -108,7 +119,10 @@
       {% endfor %}
     </div>
     {% endif %}
-    <p>Estado: <span class="tag-estado">{{ item.estado }}</span></p>
+    <p>Estado: <span class="tag-estado">{{ item.estado }}</span>{% if item.con_persona is defined %} · {% if item.con_persona %}con persona{% else %}solo producto{% endif %}{% endif %}</p>
+    {% if item.prompt_relleno and item.prompt_relleno != item.accion_central %}
+    <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">Ver el prompt completo que recibió el modelo</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
+    {% endif %}
 
     {% if item.estado == "prompt_listo" %}
     {# Sesiones viejas (antes de que FlowPlus generara de una): se pueden lanzar tal cual. #}

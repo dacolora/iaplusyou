@@ -37,6 +37,7 @@ import proyectos
 import trabajos
 import usuarios
 import meta_conexion
+import flowplus_prompt
 import generador_prompts
 from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
@@ -228,6 +229,12 @@ def _marca_referencias(cliente):
     return _listar_assets(cliente, "marca")
 
 
+def _logos(cliente):
+    """Logos oficiales del proyecto (FlowSettings): van como referencia extra en
+    cada generación de FlowPlus para que el modelo no invente la marca."""
+    return [l for l in _listar_assets(cliente, "logos") if l.get("url")]
+
+
 def _extraer_frame(video_path, frame_path, segundo=1.0):
     subprocess.run(
         ["ffmpeg", "-y", "-ss", str(segundo), "-i", video_path, "-frames:v", "1", "-q:v", "2", frame_path],
@@ -333,6 +340,28 @@ def eliminar_producto_referencia(cliente, nombre):
     _eliminar_asset(cliente, "productos_referencia", secure_filename(nombre))
     flash(f"Eliminado: {nombre}", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/logos/subir", methods=["POST"])
+def subir_logo(cliente):
+    archivos = [a for a in request.files.getlist("imagen") if a and a.filename]
+    ok_n = 0
+    for a in archivos:
+        ok, mensaje = _subir_asset(cliente, "logos", a)
+        if ok:
+            ok_n += 1
+        else:
+            flash(mensaje, "error")
+    if ok_n:
+        flash(f"{ok_n} logo(s) guardado(s). Se usan como referencia en cada generación de FlowPlus.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
+@app.route("/cliente/<cliente>/logos/<nombre>/eliminar", methods=["POST"])
+def eliminar_logo(cliente, nombre):
+    ok, mensaje = _eliminar_asset(cliente, "logos", nombre)
+    flash(mensaje, "ok" if ok else "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
 @app.route("/cliente/<cliente>/marca/subir", methods=["POST"])
@@ -698,6 +727,7 @@ def ver_cliente(cliente):
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
+        logos=_logos(cliente),
         modelos_flowplus_video=flowplus_modelos.VIDEO,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         ads=ads_mod.cargar(cliente),
@@ -2524,10 +2554,16 @@ def cf_crear_video(cliente):
         referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": f"@Imagen {n_img}", "producto": prod["nombre"]})
         productos_sel.append(prod["nombre"])
 
-    referencias = referencias[:15]
+    # Logos oficiales del proyecto: referencia extra, siempre, para que la marca
+    # salga como es y no inventada. Cuentan para el tope de imágenes del modelo.
+    logos = []
+    for i, l in enumerate(_logos(cliente)[:2], start=1):
+        logos.append({"tipo": "imagen", "url": l["url"], "frame_url": l["url"], "etiqueta": f"@Logo {i}", "logo": True})
+    referencias = (referencias + logos)[:15]
     # referencias_urls sigue siendo la lista plana de IMÁGENES (los videos van por
     # su fotograma) — es lo que consumen los modelos que no aceptan video.
     referencias_urls = [r["frame_url"] for r in referencias][:10]
+    con_persona = request.form.get("con_persona") == "si"
     if not referencias:
         flash("Sube al menos una imagen o un video, o elige un producto del catálogo: el modelo necesita una referencia.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
@@ -2535,12 +2571,18 @@ def cf_crear_video(cliente):
         flash("Escribe qué tiene que pasar en el video.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
+    prompt_final = flowplus_prompt.armar(
+        accion_central, referencias, con_persona=con_persona,
+        guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
+        logos=[r for r in referencias if r.get("logo")],
+    )
+
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [],
         accion_central, duracion_objetivo, "", "A",
         referencias_urls=referencias_urls, platforms=[],
     )
-    creative_flow.actualizar(cliente, cf_id, prompt_relleno=accion_central, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias)
+    creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias, con_persona=con_persona)
     entry = creative_flow.cargar(cliente)[cf_id]
     nombre_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]["nombre"]
     if _lanzar_video_cf(cliente, cf_id, entry):

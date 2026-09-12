@@ -79,6 +79,31 @@
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
+<h2 style="margin-top:2rem;">Logos oficiales</h2>
+<p class="vacio" style="padding-top:0;">
+  El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
+  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.
+  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto).
+</p>
+<form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
+  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
+</form>
+{% if logos %}
+<div class="catalogo-productos" style="margin-top:.8rem;">
+  {% for l in logos %}
+  <figure style="margin:0;text-align:center;">
+    <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:#fff;">
+    <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
+    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
+      <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
+    </form>
+  </figure>
+  {% endfor %}
+</div>
+{% endif %}
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
 {% include "_seccion_marca.html" %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
