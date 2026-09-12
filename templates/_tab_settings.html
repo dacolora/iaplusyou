@@ -51,9 +51,29 @@
 
 <h2 style="margin-top:2rem;">Modelos por defecto — FlowPlus</h2>
 <p class="vacio" style="padding-top:0;">
-  Video con referencias y texto: <strong>Wan 3.0</strong> (reference-to-video, 720p, vía WaveSpeed).
-  Es el único modelo de FlowPlus por ahora; cuando haya alternativas se eligen acá igual que en FlowClone.
+  Qué modelo sale marcado al abrir FlowPlus. En cada generación se puede cambiar; esto solo fija el punto de partida. Todos corren por WaveSpeed.
 </p>
+<form method="post" action="{{ url_for('guardar_preferencias_flowplus', cliente=cliente) }}" class="form-nueva-idea">
+  <div class="fila-campos-idea">
+    <div>
+      <label class="campo-label">Modelo para VIDEO</label>
+      <div class="checks-plataformas">
+        {% for id, m in modelos_flowplus_video.items() %}
+        <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo) }}/s</span></label>
+        {% endfor %}
+      </div>
+    </div>
+    <div>
+      <label class="campo-label">Modelo para IMAGEN</label>
+      <div class="checks-plataformas">
+        {% for id, m in modelos_flowplus_imagen.items() %}
+        <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }}</span></label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos de FlowPlus</button>
+</form>
 
 {% include "_comparacion_modelos.html" %}
 

@@ -40,7 +40,7 @@ import meta_conexion
 import generador_prompts
 from providers import image_provider
 from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
-from providers import wavespeed_video_edit, wan3_client, wavespeed_imagen
+from providers import wavespeed_video_edit, wan3_client, wavespeed_imagen, flowplus_modelos
 from providers import aspect_ratio as aspect_ratio_mod
 import ads as ads_mod
 from meta_ads import auth as meta_auth
@@ -697,7 +697,9 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
-        costo_flowplus=wan3_client.estimate_video(duration=12, resolution="720p"),
+        preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
+        modelos_flowplus_video=flowplus_modelos.VIDEO,
+        modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         ads=ads_mod.cargar(cliente),
         preferencias_swap=proyectos.preferencias(cliente),
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
@@ -1087,6 +1089,18 @@ def guardar_preferencias_swap(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
+@app.route("/cliente/<cliente>/preferencias_flowplus/guardar", methods=["POST"])
+def guardar_preferencias_flowplus(cliente):
+    modelo_video = request.form.get("modelo_video", "").strip()
+    modelo_imagen = request.form.get("modelo_imagen", "").strip()
+    if modelo_video not in flowplus_modelos.VIDEO or modelo_imagen not in flowplus_modelos.IMAGEN:
+        flash("Modelo inválido.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+    proyectos.guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen)
+    flash("Modelos por defecto de FlowPlus actualizados.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
 def crear_producto(cliente):
     # "volver": pestaña que abrió el alta rápida (FlowClone, FlowPlus o FlowCatálogo).
@@ -1231,9 +1245,14 @@ def _creative_flow_items(cliente):
         # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
         # así el botón nunca muestra un costo distinto al que se cobra.
         if entry.get("estado") in ("prompt_listo", "error"):
-            item["costo_estimado"] = wan3_client.estimate_video(
-                duration=entry["duracion_objetivo"], resolution="720p",
-            )
+            if entry.get("tipo") == "imagen":
+                item["costo_estimado"] = flowplus_modelos.estimate_imagen(
+                    entry.get("modelo") or flowplus_modelos.IMAGEN_POR_DEFECTO,
+                    n_referencias=len(entry.get("referencias_urls") or []))
+            else:
+                mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
+                item["costo_estimado"] = flowplus_modelos.estimate_video(mid, entry["duracion_objetivo"])
+        item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
         items.append(item)
     return items
 
@@ -2328,7 +2347,42 @@ def _lanzar_video_cf(cliente, cf_id, entry):
     prompt_texto = entry.get("prompt_relleno") or entry.get("accion_central") or ""
     platforms = entry.get("platforms", [])
     aspect_ratio = entry.get("aspect_ratio") or _aspect_ratio_para_plataformas(platforms)
+    tipo = entry.get("tipo") or "video"
+    if tipo == "imagen":
+        modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.IMAGEN else flowplus_modelos.IMAGEN_POR_DEFECTO
+    else:
+        modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
     job_id = _job_id_creative_flow(cliente, cf_id)
+
+    def trabajo_imagen():
+        out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"{cf_id}.png")
+        avisar_fase = _avisar_fase_de(job_id)
+        try:
+            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
+            url_prov = flowplus_modelos.generar_imagen(modelo, prompt_texto, referencias, on_progreso=avisar_fase)
+            costo = flowplus_modelos.estimate_imagen(modelo, n_referencias=len(referencias))
+            trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
+            resp = requests.get(url_prov, timeout=120)
+            resp.raise_for_status()
+            with open(out_path, "wb") as f:
+                f.write(resp.content)
+            bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
+        except Exception as e:
+            bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
+            creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+            raise
+        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
+        try:
+            imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
+        except Exception:
+            imagen_url = url_prov
+        creative_flow.actualizar(
+            cliente, cf_id, estado="video_listo", video_url=imagen_url, video_local=out_path,
+            credits=costo.get("credits"), usd=costo.get("usd"),
+        )
+        return "Imagen de FlowPlus lista."
 
     def trabajo():
         out_dir = os.path.join(BASE_DIR, "salidas", cliente)
@@ -2339,11 +2393,11 @@ def _lanzar_video_cf(cliente, cf_id, entry):
 
         try:
             trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-            video_url_wan = wan3_client.generar_video(
-                prompt_texto, referencias, duration=duracion, resolution="720p",
+            video_url_wan = flowplus_modelos.generar_video(
+                modelo, prompt_texto, referencias, duracion,
                 aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
             )
-            costo = wan3_client.estimate_video(duration=duracion, resolution="720p")
+            costo = flowplus_modelos.estimate_video(modelo, duracion)
             trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
             resp = requests.get(video_url_wan, timeout=180)
             resp.raise_for_status()
@@ -2385,7 +2439,8 @@ def _lanzar_video_cf(cliente, cf_id, entry):
     # Escribe estado="video_generando" ANTES de lanzar el job: si trabajo() falla
     # instantáneo, el hilo podría escribir "error" y el principal pisarlo.
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    return trabajos.iniciar(job_id, trabajo, duracion_estimada=180, etapas=ETAPAS_CREATIVE_FLOW)
+    fn = trabajo_imagen if tipo == "imagen" else trabajo
+    return trabajos.iniciar(job_id, fn, duracion_estimada=60 if tipo == "imagen" else 180, etapas=ETAPAS_CREATIVE_FLOW)
 
 
 @app.route("/cliente/<cliente>/creative_flow/crear", methods=["POST"])
@@ -2401,6 +2456,15 @@ def cf_crear_video(cliente):
     aspect_ratio = request.form.get("aspect_ratio") or "9:16"
     if aspect_ratio not in ("9:16", "16:9", "1:1"):
         aspect_ratio = "9:16"
+    tipo = "imagen" if request.form.get("tipo") == "imagen" else "video"
+    prefs = proyectos.preferencias_flowplus(cliente)
+    modelo = (request.form.get("modelo") or "").strip()
+    if tipo == "imagen":
+        if modelo not in flowplus_modelos.IMAGEN:
+            modelo = prefs["modelo_imagen"]
+    else:
+        if modelo not in flowplus_modelos.VIDEO:
+            modelo = prefs["modelo_video"]
 
     referencias_urls = []
     # Imágenes subidas en el momento: a R2 con nombre único (varias con el mismo
@@ -2449,10 +2513,11 @@ def cf_crear_video(cliente):
         accion_central, duracion_objetivo, "", "A",
         referencias_urls=referencias_urls, platforms=[],
     )
-    creative_flow.actualizar(cliente, cf_id, prompt_relleno=accion_central, aspect_ratio=aspect_ratio)
+    creative_flow.actualizar(cliente, cf_id, prompt_relleno=accion_central, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo)
     entry = creative_flow.cargar(cliente)[cf_id]
+    nombre_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]["nombre"]
     if _lanzar_video_cf(cliente, cf_id, entry):
-        flash("Generando el video con Wan 3.0…", "ok")
+        flash(f"Generando {'la imagen' if tipo == 'imagen' else 'el video'} con {nombre_modelo}…", "ok")
     else:
         flash("Ya se está generando ese video — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))

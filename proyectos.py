@@ -36,6 +36,20 @@ def guardar_nombre(cliente, nombre):
     _json_store.guardar(_path(cliente), datos)
 
 
+DEFAULTS_FLOWPLUS = {"modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro"}
+
+
+def preferencias_flowplus(cliente):
+    datos = cargar(cliente)
+    return {**DEFAULTS_FLOWPLUS, **datos.get("preferencias_flowplus", {})}
+
+
+def guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen):
+    datos = cargar(cliente)
+    datos["preferencias_flowplus"] = {"modelo_video": modelo_video, "modelo_imagen": modelo_imagen}
+    _json_store.guardar(_path(cliente), datos)
+
+
 # Modelo por defecto para FlowClone (cambiar calzado): antes se elegía cada
 # vez desde un selector en la propia pantalla de generar — eso mezclaba una
 # decisión de configuración (qué modelo usar) con el flujo de uso diario.

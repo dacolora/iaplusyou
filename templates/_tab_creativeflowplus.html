@@ -1,8 +1,8 @@
 <p class="vacio" style="padding-top:0;">
   Sube las imágenes de referencia (producto, persona, lugar — las que quieras),
-  elige qué buscas con el video y escribe lo que tiene que pasar. El video se
-  genera de una con Wan 3.0; el texto que escribas es exactamente lo que recibe
-  el modelo, sin plantillas de por medio.
+  elige qué buscas y escribe lo que tiene que pasar. Se genera de una un video
+  (Wan 3.0, Kling O3 Pro o Seedance 2.5) o una imagen (Seedream V5 Pro); el texto
+  que escribas es exactamente lo que recibe el modelo, sin plantillas de por medio.
 </p>
 
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
@@ -16,38 +16,61 @@
   {% include "_selector_productos.html" %}
   {% endwith %}
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué buscas con el video?</label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué buscas?</label>
   <div class="banco-prompts" id="fp-objetivos">
     {% for b in banco_prompts %}
     <button type="button" class="maniqui-preset" data-prompt="{{ b.texto }}">{{ b.etiqueta }}</button>
     {% endfor %}
   </div>
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">Qué tiene que pasar en el video</label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">Qué tiene que pasar</label>
   <textarea name="accion_central" rows="3" placeholder="ej. una niña descubre las sandalias nuevas y salta de alegría; la cámara la sigue de cerca"></textarea>
 
-  <div class="fila-campos-idea" style="margin-top:1rem;align-items:end;">
-    <div>
-      <label class="campo-label">Duración</label>
-      <select name="duracion_objetivo">
-        {% for d in [8, 10, 12, 13, 15] %}
-        <option value="{{ d }}" {% if d == 12 %}selected{% endif %}>{{ d }} s</option>
-        {% endfor %}
-      </select>
+  <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué quieres generar?</label>
+  <div class="checks-plataformas" id="fp-tipo">
+    <label><input type="radio" name="tipo" value="video" checked> Video</label>
+    <label><input type="radio" name="tipo" value="imagen"> Imagen</label>
+  </div>
+
+  <div id="fp-bloque-video">
+    <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de video</label>
+    <div class="checks-plataformas">
+      {% for id, m in modelos_flowplus_video.items() %}
+      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo) }}/s · hasta {{ m.max_referencias }} ref.</span></label>
+      {% endfor %}
     </div>
-    <div>
-      <label class="campo-label">Formato</label>
-      <select name="aspect_ratio">
-        <option value="9:16" selected>Vertical 9:16 (Reels, TikTok)</option>
-        <option value="16:9">Horizontal 16:9 (YouTube)</option>
-        <option value="1:1">Cuadrado 1:1</option>
-      </select>
-    </div>
-    <div>
-      <button class="btn-generar" type="submit">Generar video{% if costo_flowplus %} (~${{ costo_flowplus.usd }} a 720p){% endif %}</button>
+    <div class="fila-campos-idea" style="margin-top:.8rem;">
+      <div>
+        <label class="campo-label">Duración</label>
+        <select name="duracion_objetivo" id="fp-duracion">
+          {% for d in [5, 8, 10, 12, 15] %}
+          <option value="{{ d }}" {% if d == 10 %}selected{% endif %}>{{ d }} s</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="campo-label">Formato</label>
+        <select name="aspect_ratio">
+          <option value="9:16" selected>Vertical 9:16 (Reels, TikTok)</option>
+          <option value="16:9">Horizontal 16:9 (YouTube)</option>
+          <option value="1:1">Cuadrado 1:1</option>
+        </select>
+      </div>
     </div>
   </div>
-  <p class="vacio" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.</p>
+
+  <div id="fp-bloque-imagen" hidden>
+    <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de imagen</label>
+    <div class="checks-plataformas">
+      {% for id, m in modelos_flowplus_imagen.items() %}
+      <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }} · 2k</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  <input type="hidden" name="modelo" id="fp-modelo">
+
+  <button class="btn-generar" type="submit" id="fp-generar" style="margin-top:1.2rem;">Generar video</button>
+  <p class="vacio" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes. Los modelos por defecto se cambian en FlowSettings.</p>
 </form>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
@@ -55,13 +78,13 @@
 {% endwith %}
 
 <div id="creativeflowplus-resultados" style="margin-top:2rem;">
-  <h3>Videos</h3>
+  <h3>Generados</h3>
   {% if not creative_flow_items %}
-  <p class="vacio">Todavía no has generado ningún video en FlowPlus.</p>
+  <p class="vacio">Todavía no has generado nada en FlowPlus.</p>
   {% endif %}
   {% for item in creative_flow_items %}
   <div class="idea-card">
-    <p><strong>{{ item.accion_central or "(sin texto)" }}</strong> · {{ item.duracion_objetivo }}s{% if item.referencias_urls %} · {{ item.referencias_urls | length }} referencia(s){% endif %}</p>
+    <p><strong>{{ item.accion_central or "(sin texto)" }}</strong> · {% if item.tipo == "imagen" %}Imagen{% else %}Video · {{ item.duracion_objetivo }}s{% endif %} · {{ item.modelo_nombre }}{% if item.referencias_urls %} · {{ item.referencias_urls | length }} referencia(s){% endif %}</p>
     {% if item.referencias_urls %}
     <div class="catalogo-productos" style="margin-bottom:.6rem;">
       {% for u in item.referencias_urls %}
@@ -74,18 +97,22 @@
     {% if item.estado == "prompt_listo" %}
     {# Sesiones viejas (antes de que FlowPlus generara de una): se pueden lanzar tal cual. #}
     <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-      <button type="submit">Generar video con Wan 3.0{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }} a 720p){% endif %}</button>
+      <button type="submit">Generar {% if item.tipo == "imagen" %}imagen{% else %}video{% endif %}{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }}){% endif %}</button>
     </form>
     {% elif item.estado == "video_generando" %}
     {% if item.trabajo %}
     <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-    <div class="progreso-texto">Generando video… 0% · 0s</div>
+    <div class="progreso-texto">Generando… 0% · 0s</div>
     <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
     {% else %}
     <p class="vacio">La generación se interrumpió (el servidor se reinició). Descarta la sesión y vuelve a intentarla.</p>
     {% endif %}
     {% elif item.estado == "video_listo" %}
+    {% if item.tipo == "imagen" %}
+    <a href="{{ item.video_url }}" target="_blank"><img src="{{ item.video_url }}" alt="" style="max-width:320px;border-radius:8px;background:#fff;"></a>
+    {% else %}
     <video src="{{ item.video_url }}" controls muted style="max-width:320px;"></video>
+    {% endif %}
     <p>Costo: ${{ item.usd }}</p>
     {% elif item.estado == "error" %}
     <p class="tag-error">{{ item.error }}</p>
@@ -112,6 +139,31 @@
         if (ta) { ta.value = b.dataset.prompt; ta.focus(); }
       });
     });
+
+    // Tipo (video/imagen), modelo elegido y costo en el botón.
+    var form = document.getElementById('form-flowplus');
+    var bloqueVideo = document.getElementById('fp-bloque-video');
+    var bloqueImagen = document.getElementById('fp-bloque-imagen');
+    var campoModelo = document.getElementById('fp-modelo');
+    var botonGenerar = document.getElementById('fp-generar');
+    var duracion = document.getElementById('fp-duracion');
+    function tipoActual() { return form.querySelector('input[name=tipo]:checked').value; }
+    function modeloActual() {
+      var n = tipoActual() === 'imagen' ? 'modelo_imagen' : 'modelo_video';
+      return form.querySelector('input[name=' + n + ']:checked');
+    }
+    function refrescar() {
+      var esImagen = tipoActual() === 'imagen';
+      bloqueVideo.hidden = esImagen; bloqueImagen.hidden = !esImagen;
+      var m = modeloActual();
+      campoModelo.value = m ? m.value : '';
+      var usd = 0;
+      if (m) usd = esImagen ? parseFloat(m.dataset.usd) : parseFloat(m.dataset.usdSeg) * parseInt(duracion.value, 10);
+      botonGenerar.textContent = 'Generar ' + (esImagen ? 'imagen' : 'video') + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
+    }
+    form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
+    duracion.addEventListener('change', refrescar);
+    refrescar();
 
     // Previsualización de TODAS las imágenes elegidas, con tope de 10.
     var input = document.getElementById('fp-referencias');
