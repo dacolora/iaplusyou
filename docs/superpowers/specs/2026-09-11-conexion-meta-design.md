@@ -341,16 +341,43 @@ prueba dirigida. Además:
 7. App Review (con grabación del flujo, solo posible cuando el botón exista)
    → Live.
 
-## Lo que no está verificado y se resuelve en el plan, no por suposición
+## Verificación real (2026-09-12, cuenta ForjaPlayer Habit como tester)
 
-- Parámetros exactos del diálogo para token de usuario del sistema
-  (`override_default_response_type`).
-- Endpoints de listado de cuentas/Páginas para ese tipo de token.
-- Si el token de Página derivado de un token de sistema sin expiración
-  expira o no.
-- Disponibilidad hoy de cuentas sandbox.
-- Plazo real de la Verificación de negocio para una persona natural en
-  Colombia.
+Primera conexión de punta a punta con la app "Creatv Machine" (ID 2079910829579733,
+modo desarrollo) sobre el proyecto `forja`:
+
+- **Diálogo**: `url_dialogo()` con `config_id` + `override_default_response_type=true`
+  abre Facebook Login for Business sin error y devuelve `?code=` al callback.
+  **Verificado: el parámetro es válido y requerido tal como está.**
+- **Intercambio**: `cambiar_code_por_token` devolvió un token de usuario del sistema
+  de 338 caracteres, `token_type=bearer`, **sin `expires_in`** (`expira_en: null`).
+  **Verificado: el token no expira.**
+- **Listado**: `/me/adaccounts` y `/me/accounts` funcionan con el token de sistema y
+  devuelven la cuenta y la Página compartidas en el diálogo (incluido el
+  `access_token` de Página, 200 caracteres). **No hizo falta cambiar a los edges
+  del negocio.**
+- **Instagram**: `/me/accounts` NO trajo `instagram_business_account` aunque la
+  cuenta `forja.habit` se compartió en el diálogo. Causa: el token solo tiene
+  `ads_management, ads_read, business_management, pages_read_engagement,
+  pages_show_list, public_profile` — falta `instagram_basic` (los 4 permisos de
+  publicación orgánica no estaban disponibles al crear la configuración de login;
+  se agregan desde Use cases › Página / Instagram › Customize). Hasta entonces la
+  app muestra "sin Instagram vinculado" y los Reels no se publican. No afecta anuncios.
+- **Primera llamada de anuncios** (`act_2122370558355633`): cuenta Forja Habit,
+  COP, `account_status=1`, `America/Bogota`, gasto 0, 0 campañas. **Verificado:
+  `ads_management`/`ads_read` operativos con el token de sistema.**
+- **Cuenta publicitaria nueva desde el diálogo**: funciona (Meta la crea dentro del
+  flujo pidiendo país, sitio web, divisa y zona horaria). La divisa es permanente.
+  Meta puede interponer un control "nuevo dispositivo o ubicación" que exige
+  confirmar identidad (Google/SMS) en Business Suite; tras confirmarla el diálogo se
+  reinicia y hay que volver a elegir los activos.
+- **Modo desarrollo**: una cuenta sin rol recibe `error=access_denied` y la pantalla
+  "La app no está activa". Agregarla como Tester (App roles) + aceptar la
+  invitación en developers.facebook.com › Solicitudes lo resuelve. Cualquier
+  cliente sin ese paso requiere App Review + Verificación de negocio (ver
+  docs/meta/app-review-solicitud.md).
+- **Sandbox**: no probado (no hizo falta: la cuenta real quedó en 0 gasto).
+- **Plazo de verificación de negocio**: pendiente; aún no iniciada.
 
 ## Próximos pasos
 
