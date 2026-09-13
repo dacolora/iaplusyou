@@ -2281,11 +2281,14 @@ def publicar_ad(cliente):
                 # Meta no permite crear anuncios con la app en modo desarrollo
                 # (subcode 1885183 / "(#3) capability"): hasta pasar App Review
                 # se conecta y se leen métricas, pero no se publica.
-                if "1885183" in msg or "modo de desarrollo" in msg or "does not have the capability" in msg:
-                    msg = ("Meta todavía no deja publicar anuncios desde Creatv Machine: la app está en modo "
-                           "desarrollo y Meta exige pasar App Review + verificación de negocio para crear "
-                           "anuncios. La pieza sigue en la lista; en cuanto la app esté en Live se "
-                           "publica con un clic.")
+                if "1359188" in msg or "todo de pago" in msg:
+                    msg = ("Tu cuenta publicitaria de Meta no tiene un método de pago. Agrégalo en "
+                           "business.facebook.com › Facturación y pagos (tarjeta o PSE) y vuelve a intentar; "
+                           "la pieza sigue en la lista.")
+                elif "1885183" in msg or "modo de desarrollo" in msg or "does not have the capability" in msg:
+                    msg = ("Meta rechazó la solicitud por permisos de la app (#3). Desconecta y vuelve a "
+                           "conectar Meta para renovar los permisos; si sigue igual, avísanos. La pieza "
+                           "sigue en la lista.")
                 ads_mod.actualizar(cliente, ad_id, estado="error", error=msg)
                 bitacora.registrar(cliente, ad_id, "ads_publicar", "error", str(e))
                 raise
