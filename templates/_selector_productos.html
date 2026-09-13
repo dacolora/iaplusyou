@@ -9,9 +9,13 @@
      sel_modo    "radio" (uno solo, obligatorio) o "checkbox" (varios, opcional)
      sel_volver  anchor de la pestaña a la que vuelve crear_producto #}
 {% set _modo = sel_modo or "radio" %}
+{# En modo checkbox (FlowPlus) se muestran TODAS las categorías del catálogo por
+   secciones; en modo radio (Cambiar producto) solo productos, como siempre. #}
+{% set _activos = activos_por_categoria if (_modo == "checkbox" and activos_por_categoria is defined) else {"producto": productos} %}
+{% set _total = namespace(n=0) %}{% for cid, lista in _activos.items() %}{% set _total.n = _total.n + (lista | length) %}{% endfor %}
 <details class="comparacion-modelos selector-productos" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
   <summary class="btn-guardar btn-sm" id="sel-{{ sel_id }}-resumen">
-    {% if _modo == "radio" %}Elegir producto ({{ productos | length }}) →{% else %}Productos del catálogo (opcional, {{ productos | length }}) →{% endif %}
+    {% if _modo == "radio" %}Elegir producto ({{ productos | length }}) →{% else %}Del catálogo (opcional, {{ _total.n }}) →{% endif %}
   </summary>
   <div class="comparacion-contenido">
     <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;">
@@ -19,16 +23,23 @@
       <button type="button" class="btn-guardar btn-sm" id="sel-{{ sel_id }}-nuevo-btn">+ Nuevo producto</button>
     </div>
     <p class="vacio" id="sel-{{ sel_id }}-vacio" style="display:none;">Ningún producto coincide con esa búsqueda.</p>
-    {% if not productos %}
-    <p class="vacio">No hay productos en el catálogo todavía — crea el primero con "+ Nuevo producto".</p>
+    {% if not _total.n %}
+    <p class="vacio">No hay nada en el catálogo todavía — crea el primero con "+ Nuevo producto" o en Catálogo.</p>
     {% endif %}
-    <div class="catalogo-productos" id="sel-{{ sel_id }}-grilla">
-      {% for p in productos %}
-      <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
-        <input type="{{ _modo }}" name="{{ sel_campo }}" value="{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
-        <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}">
-        <span>{{ p.nombre }}</span>
-      </label>
+    <div id="sel-{{ sel_id }}-grilla">
+      {% for cid, lista in _activos.items() %}
+      {% if lista %}
+      {% if _modo == "checkbox" %}<p class="campo-label" style="margin:.6rem 0 .3rem;">{{ categorias[cid].plural if categorias is defined else "Productos" }}</p>{% endif %}
+      <div class="catalogo-productos">
+        {% for p in lista %}
+        <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
+          <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
+          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid) }}" alt="{{ p.nombre }}">
+          <span>{{ p.nombre }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% endfor %}
     </div>
   </div>

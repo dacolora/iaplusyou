@@ -1,0 +1,85 @@
+{# Lista de activos de una categoría del catálogo (productos, personajes, entornos).
+   Parámetros: productos, categoria_actual, con_mapa. #}
+{% for p in productos %}
+<details class="producto-gestion" id="producto-{{ p.id }}">
+  <summary class="swap-card-resumen">
+    <span class="idea-chevron">▸</span>
+    <span class="swap-thumb">
+      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=categoria_actual) }}" alt="{{ p.nombre }}" loading="lazy">
+    </span>
+    <span class="swap-resumen-texto">
+      <strong>{{ p.nombre }}</strong>
+      <span class="swap-resumen-meta">
+        {% if con_mapa %}{{ tipos_producto[p.tipo].etiqueta if p.tipo in tipos_producto else p.tipo }} · {% endif %}{{ p.imagenes | length }} foto(s)
+        {% if p.mapa_etiqueta %}· <span class="badge">{{ p.mapa_etiqueta }}</span>{% endif %}
+        {% if p.usos %}· {{ p.usos }} uso(s){% endif %}
+      </span>
+    </span>
+  </summary>
+
+  <div class="producto-gestion-fotos">
+    {% for img in p.imagenes %}
+    <div class="producto-gestion-foto">
+      <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=categoria_actual) }}" alt="{{ img }}" loading="lazy">
+      <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
+        <button type="submit" title="Quitar esta foto">✕</button>
+      </form>
+    </div>
+    {% endfor %}
+
+  </div>
+
+  <form method="post" action="{{ url_for('actualizar_producto', cliente=cliente, producto_id=p.id) }}" class="form-nueva-idea"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
+    <div class="fila-campos-idea">
+      <div>
+        <label class="campo-label">Nombre</label>
+        <input type="text" name="nombre" value="{{ p.nombre }}" required>
+      </div>
+      {% if con_mapa %}
+      <div>
+        <label class="campo-label">Tipo</label>
+        <select name="tipo">
+          {% for tid, t in tipos_producto.items() %}
+          <option value="{{ tid }}" {% if p.tipo == tid %}selected{% endif %}>{{ t.etiqueta }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+    </div>
+
+    <label class="campo-label" style="margin-top:.8rem;display:block;">Descripción</label>
+    <textarea name="descripcion" rows="2">{{ p.descripcion }}</textarea>
+
+    <label class="campo-label" style="margin-top:.8rem;display:block;">Regla de consistencia (opcional)</label>
+    <input type="text" name="regla" value="{{ p.regla_propia or '' }}" placeholder="Lo que nunca debe cambiar en este activo">
+
+    {% if con_mapa %}
+    <label class="campo-label" style="margin-top:.8rem;display:block;">Mapa corporal</label>
+    {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=p.zonas %}
+      {% include "_maniqui.html" %}
+    {% endwith %}
+    {% endif %}
+
+    {% if con_mapa and p.mapa_texto %}
+    <details style="margin-top:.4rem;">
+      <summary class="btn-guardar btn-sm">Ver la instrucción exacta que recibe el modelo →</summary>
+      <p class="vacio" style="font-size:.76rem;margin-top:.5rem;">{{ p.mapa_texto }}</p>
+    </details>
+    {% endif %}
+
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar cambios</button>
+  </form>
+
+  <div class="producto-gestion-acciones">
+    <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
+      <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()">
+    </form>
+    <button type="button" class="btn-eliminar-producto"
+            data-producto-id="{{ p.id }}"
+            data-producto-nombre="{{ p.nombre }}"
+            data-fotos="{{ p.imagenes | length }}"
+            data-usos="{{ p.usos }}"
+            data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ categoria_actual }}">Eliminar</button>
+  </div>
+</details>
+{% endfor %}

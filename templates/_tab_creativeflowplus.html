@@ -33,7 +33,7 @@
 </div>
 
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
-  <label class="campo-label" style="margin-top:1rem;display:block;">Productos del catálogo</label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">Del catálogo: productos, personajes, entornos</label>
   {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
   {% include "_selector_productos.html" %}
   {% endwith %}

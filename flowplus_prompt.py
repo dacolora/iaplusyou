@@ -97,6 +97,10 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     info_enfoque = ENFOQUES.get(enfoque) if enfoque else None
     if info_enfoque:
         con_persona = info_enfoque["con_persona"]
+    personajes = [r for r in referencias if r.get("categoria") == "personaje"]
+    if personajes:
+        # Con un personaje del catálogo la escena lleva persona sí o sí: ese personaje.
+        con_persona = True
 
     # Lo primero que lee el modelo pesa más: si no hay persona, se dice antes que
     # nada (Wan 3.0 asocia "sandalia" con "pie" con mucha fuerza y, dicho solo al
@@ -112,15 +116,21 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     imagenes = _lista(referencias, "imagen")
     videos = _lista(referencias, "video")
 
-    # --- Fidelidad de producto y de marca ---
-    if productos:
-        nombres = "; ".join(f"{r['etiqueta']} es el producto \"{r['producto']}\"" for r in productos)
-        partes.append(
-            f"PRODUCTO EXACTO: {nombres}. Reprodúcelo idéntico a su referencia: misma forma, "
-            "mismo color, misma textura y el mismo logotipo o marca tal como aparece en la imagen, "
-            "en el mismo lugar. No inventes, cambies ni agregues letras, logos, etiquetas ni textos."
-        )
-    elif imagenes:
+    # --- Activos del catálogo: cada uno con su regla de consistencia ---
+    vistos = set()
+    for r in referencias:
+        if not r.get("activo") or r["activo"] in vistos:
+            continue
+        vistos.add(r["activo"])
+        et = r["etiqueta"].replace(" (vista 1)", "")
+        cat = r.get("categoria", "producto")
+        if cat == "producto":
+            partes.append(f"PRODUCTO EXACTO: {et} es el producto \"{r['activo']}\". {r.get('regla') or ''}".strip())
+        elif cat == "personaje":
+            partes.append(f"PERSONAJE: {et} es \"{r['activo']}\" (sus vistas son la misma persona). {r.get('regla') or ''}".strip())
+        elif cat == "entorno":
+            partes.append(f"ENTORNO: {et} es \"{r['activo']}\". {r.get('regla') or ''}".strip())
+    if not vistos and imagenes:
         partes.append(
             "FIDELIDAD: los productos que aparecen en las imágenes de referencia se reproducen "
             "idénticos — forma, color, textura y cualquier logotipo tal como se ve. No inventes ni "
@@ -137,7 +147,13 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         partes.append(f"{et}: referencia de movimiento, ritmo y encuadre de cámara; no copies sus objetos ni personas.")
 
     # --- Personas ---
-    if con_persona:
+    if con_persona and personajes:
+        nombres = ", ".join(sorted({r["activo"] for r in personajes}))
+        partes.append(
+            f"CON PERSONA: la única persona en escena es {nombres}, exactamente como en sus referencias. "
+            "No aparece nadie más. Manos y pies anatómicamente correctos."
+        )
+    elif con_persona:
         partes.append(
             "CON PERSONA: las personas son reales y naturales, captadas en movimiento; manos y pies "
             "anatómicamente correctos (cinco dedos, dedos relajados y juntos, uñas naturales). "

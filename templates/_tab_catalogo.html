@@ -1,122 +1,113 @@
 <p class="vacio" style="padding-top:0;">
-  El catálogo alimenta a FlowClone y a FlowPlus. Cada producto necesita fotos de
-  referencia (3-6, del mismo producto en distintos ángulos) y, si va sobre una
-  persona, el <strong>mapa corporal</strong>: tocas en el maniquí dónde va y con qué
-  proporción, y eso es lo que le dice al modelo qué reemplazar exactamente.
+  Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos, la cara de tu marca y tus
+  espacios. Cada activo lleva fotos de referencia y una regla de consistencia que va en cada generación.
 </p>
 
-<h2>Nuevo producto</h2>
-<form method="post" action="{{ url_for('crear_producto', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
-  <div class="fila-campos-idea">
-    <div>
-      <label class="campo-label">Nombre</label>
-      <input type="text" name="nombre" placeholder="ej. HappyBlanket — White" required>
-    </div>
-    <div>
-      <label class="campo-label">Tipo</label>
-      <select name="tipo">
-        {% for tid, t in tipos_producto.items() %}
-        <option value="{{ tid }}">{{ t.etiqueta }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
+<div class="cat-tabs" id="cat-tabs">
+  {% for cid, c in categorias.items() %}
+  <button type="button" class="cat-tab" data-cat="{{ cid }}">{{ c.plural }} <span class="cat-n">{{ activos_por_categoria[cid] | length }}</span></button>
+  {% endfor %}
+  <button type="button" class="cat-tab" data-cat="logo">Logos <span class="cat-n">{{ logos | length }}</span></button>
+</div>
 
-  <label class="campo-label" style="margin-top:.8rem;display:block;">Descripción</label>
-  <textarea name="descripcion" rows="2" placeholder="Para los modelos que no ven la foto: ej. chanclas tipo slide de goma acanalada, color verde uniforme"></textarea>
+{% for cid, c in categorias.items() %}
+<div class="cat-panel" data-cat="{{ cid }}" hidden>
+  <p class="vacio" style="padding-top:0;">{{ c.descripcion_ui }}</p>
 
-  <label class="campo-label" style="margin-top:.8rem;display:block;">Mapa corporal</label>
-  {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=[] %}
-    {% include "_maniqui.html" %}
-  {% endwith %}
+  <details class="comparacion-modelos" style="margin-top:0;">
+    <summary class="btn-generar btn-sm">+ Nuevo {{ c.nombre | lower }}</summary>
+    <div class="comparacion-contenido">
+      <form method="post" action="{{ url_for('crear_producto', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea" style="margin-bottom:0;">
+        <input type="hidden" name="categoria" value="{{ cid }}">
+        <input type="hidden" name="volver" value="catalogo">
+        <div class="fila-campos-idea">
+          <div>
+            <label class="campo-label">Nombre</label>
+            <input type="text" name="nombre" placeholder="{% if cid == 'producto' %}ej. HappyBlanket — White{% elif cid == 'personaje' %}ej. Forja (personaje){% else %}ej. Showroom principal{% endif %}" required>
+          </div>
+          {% if c.con_mapa %}
+          <div>
+            <label class="campo-label">Tipo</label>
+            <select name="tipo">
+              {% for tid, t in tipos_producto.items() %}
+              <option value="{{ tid }}">{{ t.etiqueta }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          {% endif %}
+        </div>
 
-  <label class="campo-label" style="margin-top:.8rem;display:block;">Fotos de referencia (3-6 recomendadas)</label>
-  <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple required>
+        <label class="campo-label" style="margin-top:.8rem;display:block;">Descripción</label>
+        <textarea name="descripcion" rows="2" placeholder="{% if cid == 'producto' %}ej. chanclas tipo slide de goma acanalada, color verde uniforme{% elif cid == 'personaje' %}ej. hombre de 30 años, barba corta, gorra roja, sudadera negra; energético y cercano{% else %}ej. sala luminosa con piso de madera clara, sofá beige y ventanal a la izquierda{% endif %}"></textarea>
 
-  <button class="btn-generar btn-sm" type="submit" style="margin-top:.8rem;">Crear producto</button>
-</form>
+        <label class="campo-label" style="margin-top:.8rem;display:block;">Regla de consistencia (opcional)</label>
+        <input type="text" name="regla" placeholder="{% if cid == 'producto' %}ej. el logo va siempre en el lateral derecho{% elif cid == 'personaje' %}ej. siempre lleva la gorra roja y nunca sonríe con dientes{% else %}ej. el espejo va en la pared del fondo, nunca en el piso{% endif %}">
+        <p class="vacio" style="font-size:.74rem;">Se suma a la regla base de la categoría: <em>{{ c.regla }}</em></p>
 
-<h2>Productos ({{ productos | length }})</h2>
-{% if not productos %}
-<p class="vacio">Todavía no hay productos. Crea el primero arriba.</p>
-{% endif %}
+        {% if c.con_mapa %}
+        <label class="campo-label" style="margin-top:.8rem;display:block;">Mapa corporal (solo si va sobre una persona)</label>
+        {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=[] %}
+          {% include "_maniqui.html" %}
+        {% endwith %}
+        {% endif %}
 
-{% for p in productos %}
-<details class="producto-gestion" id="producto-{{ p.id }}">
-  <summary class="swap-card-resumen">
-    <span class="idea-chevron">▸</span>
-    <span class="swap-thumb">
-      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id) }}" alt="{{ p.nombre }}" loading="lazy">
-    </span>
-    <span class="swap-resumen-texto">
-      <strong>{{ p.nombre }}</strong>
-      <span class="swap-resumen-meta">
-        {{ tipos_producto[p.tipo].etiqueta if p.tipo in tipos_producto else p.tipo }}
-        · {{ p.imagenes | length }} foto(s)
-        {% if p.mapa_etiqueta %}· <span class="badge">{{ p.mapa_etiqueta }}</span>{% endif %}
-        {% if p.usos %}· {{ p.usos }} uso(s){% endif %}
-      </span>
-    </span>
-  </summary>
+        <label class="campo-label" style="margin-top:.8rem;display:block;">Fotos de referencia ({% if cid == 'personaje' %}frente, perfil y cuerpo entero — 3 a 6{% else %}3-6, distintos ángulos{% endif %})</label>
+        <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple required>
 
-  <div class="producto-gestion-fotos">
-    {% for img in p.imagenes %}
-    <div class="producto-gestion-foto">
-      <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img) }}" alt="{{ img }}" loading="lazy">
-      <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}">
-        <button type="submit" title="Quitar esta foto">✕</button>
+        <button class="btn-generar btn-sm" type="submit" style="margin-top:.8rem;">Crear {{ c.nombre | lower }}</button>
       </form>
     </div>
+  </details>
+
+  <h2 style="margin-top:1.4rem;">{{ c.plural }} ({{ activos_por_categoria[cid] | length }})</h2>
+  {% if not activos_por_categoria[cid] %}
+  <p class="vacio">Todavía no hay {{ c.plural | lower }}. Crea el primero arriba.</p>
+  {% endif %}
+  {% with productos=activos_por_categoria[cid], categoria_actual=cid, con_mapa=c.con_mapa %}
+  {% include "_catalogo_lista.html" %}
+  {% endwith %}
+</div>
+{% endfor %}
+
+<div class="cat-panel" data-cat="logo" hidden>
+  <p class="vacio" style="padding-top:0;">
+    El logo tal como debe verse. En cada generación se adjunta como <code>@Logo N</code> con la orden de
+    reproducirlo exacto. Sube 1 o 2 (PNG limpio, o una foto nítida del logo en el producto).
+  </p>
+  <form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
+    <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
+  </form>
+  {% if logos %}
+  <div class="catalogo-productos" style="margin-top:.8rem;">
+    {% for l in logos %}
+    <figure style="margin:0;text-align:center;">
+      <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:#fff;border:1px solid var(--border);">
+      <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
+      <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
+        <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
+      </form>
+    </figure>
     {% endfor %}
   </div>
+  {% endif %}
+</div>
 
-  <form method="post" action="{{ url_for('actualizar_producto', cliente=cliente, producto_id=p.id) }}" class="form-nueva-idea">
-    <div class="fila-campos-idea">
-      <div>
-        <label class="campo-label">Nombre</label>
-        <input type="text" name="nombre" value="{{ p.nombre }}" required>
-      </div>
-      <div>
-        <label class="campo-label">Tipo</label>
-        <select name="tipo">
-          {% for tid, t in tipos_producto.items() %}
-          <option value="{{ tid }}" {% if p.tipo == tid %}selected{% endif %}>{{ t.etiqueta }}</option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-
-    <label class="campo-label" style="margin-top:.8rem;display:block;">Descripción</label>
-    <textarea name="descripcion" rows="2">{{ p.descripcion }}</textarea>
-
-    <label class="campo-label" style="margin-top:.8rem;display:block;">Mapa corporal</label>
-    {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=p.zonas %}
-      {% include "_maniqui.html" %}
-    {% endwith %}
-
-    {% if p.mapa_texto %}
-    <details style="margin-top:.4rem;">
-      <summary class="btn-guardar btn-sm">Ver la instrucción exacta que recibe el modelo →</summary>
-      <p class="vacio" style="font-size:.76rem;margin-top:.5rem;">{{ p.mapa_texto }}</p>
-    </details>
-    {% endif %}
-
-    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar cambios</button>
-  </form>
-
-  <div class="producto-gestion-acciones">
-    <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data">
-      <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()">
-    </form>
-    <button type="button" class="btn-eliminar-producto"
-            data-producto-id="{{ p.id }}"
-            data-producto-nombre="{{ p.nombre }}"
-            data-fotos="{{ p.imagenes | length }}"
-            data-usos="{{ p.usos }}"
-            data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}">Eliminar producto</button>
-  </div>
-</details>
-{% endfor %}
+<script>
+  (function () {
+    var tabs = document.querySelectorAll('#cat-tabs .cat-tab');
+    var paneles = document.querySelectorAll('.cat-panel');
+    var KEY = 'catalogo-cat-{{ cliente }}';
+    function activar(cat) {
+      tabs.forEach(function (t) { t.classList.toggle('activo', t.dataset.cat === cat); });
+      paneles.forEach(function (p) { p.hidden = p.dataset.cat !== cat; });
+      try { localStorage.setItem(KEY, cat); } catch (e) {}
+    }
+    tabs.forEach(function (t) { t.addEventListener('click', function () { activar(t.dataset.cat); }); });
+    var inicial = null;
+    try { inicial = localStorage.getItem(KEY); } catch (e) {}
+    activar(inicial && document.querySelector('.cat-panel[data-cat="' + inicial + '"]') ? inicial : 'producto');
+  })();
+</script>
 
 <script>
   (function () {
@@ -175,7 +166,7 @@
     <p class="modal-advertencia">Esto borra la carpeta del producto y todas sus fotos del disco. No se puede deshacer.</p>
     <div class="modal-acciones">
       <button type="button" class="btn-guardar btn-sm" id="modal-eliminar-cancelar">Cancelar</button>
-      <form method="post" id="modal-eliminar-form">
+      <form method="post" id="modal-eliminar-form"><input type="hidden" name="categoria" id="modal-eliminar-categoria" value="producto">
         <button type="submit" class="btn-peligro btn-sm">Sí, eliminar</button>
       </form>
     </div>
@@ -191,6 +182,7 @@
 
     function abrir(boton) {
       form.action = boton.dataset.accion;
+      document.getElementById('modal-eliminar-categoria').value = boton.dataset.categoria || 'producto';
       var fotos = parseInt(boton.dataset.fotos || '0', 10);
       var usos = parseInt(boton.dataset.usos || '0', 10);
       var texto = 'Se eliminará «' + boton.dataset.productoNombre + '» y sus ' + fotos + ' foto(s) de referencia.';

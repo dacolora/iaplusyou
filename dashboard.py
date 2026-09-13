@@ -808,6 +808,8 @@ def ver_cliente(cliente):
         log=log,
         informe=informe.completo(cliente),
         productos=_productos_con_uso(cliente),
+        categorias=catalogo_productos.CATEGORIAS,
+        activos_por_categoria={cid: (_productos_con_uso(cliente) if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
         tipos_producto=prompt_swap.TIPOS,
         zonas_cuerpo=mapa_corporal.ZONAS,
         presets_cuerpo=mapa_corporal.PRESETS,
@@ -1141,11 +1143,16 @@ def eliminar_idea_visual(cliente, idea_id):
 # ---------- flujo "cambiar calzado": una foto real + un producto del catálogo ->
 # la misma foto, con el calzado reemplazado. Nada más cambia. ----------
 
+def _cat(valor):
+    """Categoría del catálogo pedida por la ruta (query o form); 'producto' por defecto."""
+    return catalogo_productos.categoria_valida(valor or catalogo_productos.CATEGORIA_POR_DEFECTO)
+
+
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagen")
 def imagen_producto(cliente, producto_id):
     """Sirve la foto representativa de un producto del catálogo directo del disco
     (son fijas, no hace falta subirlas a R2)."""
-    producto = catalogo_productos.encontrar(cliente, producto_id)
+    producto = catalogo_productos.encontrar(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
     if not producto:
         flash(f"No encontré el producto {producto_id}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
@@ -1157,7 +1164,7 @@ def imagen_producto_archivo(cliente, producto_id, nombre):
     """Sirve UNA foto concreta del producto — la pantalla de gestión muestra
     todas las referencias, no solo la representativa."""
     try:
-        carpeta = catalogo_productos.carpeta_de(cliente, producto_id)
+        carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
     except ValueError:
         abort(404)
     ruta = os.path.join(carpeta, secure_filename(nombre))
@@ -1232,42 +1239,51 @@ def crear_producto(cliente):
     descripcion = (request.form.get("descripcion") or "").strip()
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not nombre:
-        flash("Ponle un nombre al producto.", "error")
+        flash("Ponle un nombre.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     if not archivos:
-        flash("Sube al menos una foto del producto.", "error")
+        flash("Sube al menos una foto.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     try:
         producto_id = catalogo_productos.crear(
             cliente, nombre, descripcion, tipo=request.form.get("tipo"),
-            zonas=request.form.getlist("zonas"))
+            zonas=request.form.getlist("zonas"), categoria=_cat(request.form.get("categoria")),
+            regla=request.form.get("regla", ""))
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
-    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos)
+    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
     if not guardadas:
         # Sin ninguna foto válida el producto no aparecería en el catálogo:
         # mejor deshacer que dejar una carpeta fantasma.
-        catalogo_productos.eliminar(cliente, producto_id)
+        catalogo_productos.eliminar(cliente, producto_id, categoria=_cat(request.form.get("categoria")))
         flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
     else:
         flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
-def _guardar_fotos_producto(cliente, producto_id, archivos):
+def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto"):
     """Guarda las fotos en la carpeta del producto y devuelve cuántas entraron.
     Quedan SOLO en disco a propósito: catalogo_productos las lee de ahí y el
     swap las sube a R2 recién cuando se va a generar."""
-    carpeta = catalogo_productos.carpeta_de(cliente, producto_id)
+    carpeta = catalogo_productos.carpeta_de(cliente, producto_id, categoria)
     os.makedirs(carpeta, exist_ok=True)
     guardadas = 0
     for archivo in archivos:
         nombre = secure_filename(archivo.filename)
         if not nombre.lower().endswith(catalogo_productos.IMAGE_EXTS):
             continue
-        archivo.save(os.path.join(carpeta, nombre))
+        # Varias fotos con el mismo nombre (desde el celular todas llegan como
+        # "image.jpeg") no se pisan: se numeran.
+        base, ext = os.path.splitext(nombre)
+        destino = os.path.join(carpeta, nombre)
+        n = 2
+        while os.path.exists(destino):
+            destino = os.path.join(carpeta, f"{base}_{n}{ext}")
+            n += 1
+        archivo.save(destino)
         guardadas += 1
     return guardadas
 
@@ -1281,6 +1297,7 @@ def actualizar_producto(cliente, producto_id):
             descripcion=request.form.get("descripcion"),
             tipo=request.form.get("tipo"),
             zonas=request.form.getlist("zonas"),
+            categoria=_cat(request.form.get("categoria")), regla=request.form.get("regla"),
         )
     except ValueError as e:
         flash(str(e), "error")
@@ -1296,7 +1313,7 @@ def subir_imagen_producto(cliente, producto_id):
         flash("No elegiste ninguna foto.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
     try:
-        guardadas = _guardar_fotos_producto(cliente, producto_id, archivos)
+        guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
@@ -1310,7 +1327,7 @@ def subir_imagen_producto(cliente, producto_id):
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/<nombre>/eliminar", methods=["POST"])
 def eliminar_imagen_producto(cliente, producto_id, nombre):
     try:
-        ok, mensaje = catalogo_productos.eliminar_imagen(cliente, producto_id, nombre)
+        ok, mensaje = catalogo_productos.eliminar_imagen(cliente, producto_id, nombre, categoria=_cat(request.form.get("categoria")))
     except ValueError as e:
         ok, mensaje = False, str(e)
     flash(mensaje, "ok" if ok else "error")
@@ -1322,10 +1339,10 @@ def eliminar_producto(cliente, producto_id):
     """Borra el producto y TODAS sus fotos del disco. Irreversible — por eso la
     plantilla lo pide con un modal que nombra el producto y avisa cuántos swaps
     ya generados lo referencian."""
-    producto = catalogo_productos.encontrar(cliente, producto_id)
+    producto = catalogo_productos.encontrar(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
     nombre = producto["nombre"] if producto else producto_id
     try:
-        catalogo_productos.eliminar(cliente, producto_id)
+        catalogo_productos.eliminar(cliente, producto_id, categoria=_cat(request.form.get("categoria")))
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
@@ -2747,21 +2764,35 @@ def cf_crear_video(cliente):
                             "etiqueta": r["etiqueta"], "origen": r.get("origen")})
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
 
+    # Activos del catálogo (productos, personajes, entornos). El valor del
+    # checkbox es "categoria:id"; los productos viejos pueden venir como "id" a
+    # secas. Un personaje entra con hasta 3 fotos (frente/perfil/cuerpo) para
+    # que el modelo mantenga la identidad; producto y entorno con la principal.
     productos_sel = []
-    for pid in request.form.getlist("productos_catalogo"):
-        prod = catalogo_productos.encontrar(cliente, pid)
-        if not prod:
+    contadores = {}
+    for valor in request.form.getlist("productos_catalogo"):
+        cat, _, pid = valor.partition(":") if ":" in valor else ("producto", "", valor)
+        activo = catalogo_productos.encontrar(cliente, pid, categoria=cat)
+        if not activo:
             continue
-        try:
-            url = r2_uploader.upload_image(
-                prod["representativa"],
-                f"clientes/{cliente}/productos/{pid}/{os.path.basename(prod['representativa'])}")
-        except Exception as e:
-            bitacora.registrar(cliente, pid, "flowplus_producto", "error", str(e))
-            continue
-        n_img += 1
-        referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": f"@Imagen {n_img}", "producto": prod["nombre"]})
-        productos_sel.append(prod["nombre"])
+        info_cat = catalogo_productos.CATEGORIAS[activo["categoria"]]
+        n_fotos = 3 if activo["categoria"] == "personaje" else 1
+        contadores[activo["categoria"]] = contadores.get(activo["categoria"], 0) + 1
+        etiqueta = f"{info_cat['etiqueta']} {contadores[activo['categoria']]}"
+        for j, ruta in enumerate(activo["referencias"][:n_fotos]):
+            try:
+                url = r2_uploader.upload_image(
+                    ruta, f"clientes/{cliente}/{info_cat['carpeta']}/{pid}/{os.path.basename(ruta)}")
+            except Exception as e:
+                bitacora.registrar(cliente, pid, "flowplus_activo", "error", str(e))
+                continue
+            referencias.append({
+                "tipo": "imagen", "url": url, "frame_url": url,
+                "etiqueta": etiqueta if j == 0 else f"{etiqueta} (vista {j + 1})",
+                "categoria": activo["categoria"], "activo": activo["nombre"], "regla": activo["regla"],
+                "producto": activo["nombre"] if activo["categoria"] == "producto" else None,
+            })
+        productos_sel.append(activo["nombre"])
 
     # Logos oficiales del proyecto: referencia extra, siempre, para que la marca
     # salga como es y no inventada. Cuentan para el tope de imágenes del modelo.
