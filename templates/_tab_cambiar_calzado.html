@@ -15,11 +15,21 @@
   {% include "_selector_productos.html" %}
   {% endwith %}
 
-  <p class="vacio" style="padding-top:.6rem;font-size:.78rem;">
-    Modelo de foto: <strong>{{ nombres_proveedor_swap.get(preferencias_swap.proveedor_foto, preferencias_swap.proveedor_foto) }}</strong> ·
-    modelo de video: <strong>{{ nombres_proveedor_swap.get(preferencias_swap.proveedor_video, preferencias_swap.proveedor_video) }}</strong> ·
-    mejora de calidad {{ "activada" if preferencias_swap.mejorar_calidad else "desactivada" }}.
-    Se cambia desde FlowSettings.
+  <label class="campo-label" style="margin-top:1rem;display:block;">Modelo para fotos</label>
+  <div class="checks-plataformas">
+    {% for id in proveedores_swap_imagen %}
+    <label><input type="radio" name="proveedor_foto" value="{{ id }}" {% if preferencias_swap.proveedor_foto == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
+    {% endfor %}
+  </div>
+  <label class="campo-label" style="margin-top:.8rem;display:block;">Modelo para videos</label>
+  <div class="checks-plataformas">
+    {% for id in proveedores_swap_video %}
+    <label><input type="radio" name="proveedor_video" value="{{ id }}" {% if preferencias_swap.proveedor_video == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
+    {% endfor %}
+  </div>
+  <p class="vacio" style="padding-top:.4rem;font-size:.76rem;">
+    Se usa el modelo de fotos o el de videos según lo que subas. Mejora de calidad
+    {{ "activada" if preferencias_swap.mejorar_calidad else "desactivada" }} (solo fotos); los valores por defecto se cambian en Configuración.
   </p>
 
   <button class="btn-generar" type="submit" {% if not productos %}disabled{% endif %}>Generar</button>

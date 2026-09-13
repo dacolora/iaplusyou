@@ -819,6 +819,7 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
+        piezas_generadas=_piezas_generadas(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
@@ -1234,7 +1235,7 @@ def guardar_preferencias_flowplus(cliente):
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
 def crear_producto(cliente):
     # "volver": pestaña que abrió el alta rápida (FlowClone, FlowPlus o FlowCatálogo).
-    volver = request.form.get("volver") or "calzado"
+    volver = request.form.get("volver") or "cambiar"
     nombre = (request.form.get("nombre") or "").strip()
     descripcion = (request.form.get("descripcion") or "").strip()
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
@@ -1301,9 +1302,9 @@ def actualizar_producto(cliente, producto_id):
         )
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     flash("Producto actualizado.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/subir", methods=["POST"])
@@ -1311,17 +1312,17 @@ def subir_imagen_producto(cliente, producto_id):
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not archivos:
         flash("No elegiste ninguna foto.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     try:
         guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     if guardadas:
         flash(f"{guardadas} foto(s) agregada(s).", "ok")
     else:
         flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagenes/<nombre>/eliminar", methods=["POST"])
@@ -1331,7 +1332,7 @@ def eliminar_imagen_producto(cliente, producto_id, nombre):
     except ValueError as e:
         ok, mensaje = False, str(e)
     flash(mensaje, "ok" if ok else "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/eliminar", methods=["POST"])
@@ -1345,9 +1346,9 @@ def eliminar_producto(cliente, producto_id):
         catalogo_productos.eliminar(cliente, producto_id, categoria=_cat(request.form.get("categoria")))
     except ValueError as e:
         flash(str(e), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     flash(f"Producto eliminado: {nombre}", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 def _swap_items(cliente):
@@ -1582,8 +1583,10 @@ def generar_swap(cliente):
     # El modelo ya no se elige por generación — es una preferencia de
     # configuración por cliente (FlowSettings), no del flujo de uso diario.
     prefs = proyectos.preferencias(cliente)
-    proveedor_foto = prefs["proveedor_foto"]
-    proveedor_video = prefs["proveedor_video"]
+    # El modelo se elige en Crear › Cambiar producto (viene en el formulario);
+    # si no viene, manda el que está por defecto en FlowSettings.
+    proveedor_foto = (request.form.get("proveedor_foto") or "").strip() or prefs["proveedor_foto"]
+    proveedor_video = (request.form.get("proveedor_video") or "").strip() or prefs["proveedor_video"]
     # Segunda pasada opcional de calidad. Solo aplica a FOTO: el upscaler de
     # Bria es de imagen, no de video.
     mejorar_calidad = bool(prefs["mejorar_calidad"])
@@ -1594,12 +1597,12 @@ def generar_swap(cliente):
 
     if not archivos:
         flash("Sube al menos una foto o video primero.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, producto_id)
     if not producto:
         flash("Elige un producto del catálogo.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     lanzados = 0
     for archivo in archivos:
@@ -1612,7 +1615,7 @@ def generar_swap(cliente):
         flash(f"Generando {lanzados} swaps…", "ok")
     else:
         flash("Ya se estaban generando esos swaps — espera a que terminen.", "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, proveedor_video, mejorar_calidad):
@@ -1879,7 +1882,7 @@ def imagen_swap_original(cliente, swap_id):
     # os.path.exists(None) revienta con TypeError y devuelve un 500.
     if not entry or not entry.get("foto_original_local") or not os.path.exists(entry["foto_original_local"]):
         flash("No encontré la foto original.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     return send_file(entry["foto_original_local"])
 
 
@@ -1887,7 +1890,72 @@ def imagen_swap_original(cliente, swap_id):
 def eliminar_swap(cliente, swap_id):
     swaps_mod.eliminar(cliente, swap_id)
     flash("Eliminado.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+
+
+def _piezas_generadas(cliente):
+    """Todo lo que ya salió listo de Crear (videos e imágenes de FlowPlus, cambios
+    de producto, ideas en texto) con URL pública, para armar una campaña desde
+    Campañas. Lo que ya está en la lista de anuncios se marca para no duplicarlo."""
+    ya = {(a.get("fuente"), a.get("fuente_id")) for a in ads_mod.cargar(cliente).values()}
+    piezas = []
+    for cf_id, e in creative_flow.cargar(cliente).items():
+        if e.get("estado") == "video_listo" and e.get("video_url"):
+            modelo = (flowplus_modelos.IMAGEN.get(e.get("modelo")) or flowplus_modelos.VIDEO.get(e.get("modelo")) or {}).get("nombre", "")
+            piezas.append({
+                "clave": f"flowplus:{cf_id}", "url": e["video_url"],
+                "tipo": "imagen" if e.get("tipo") == "imagen" else "video",
+                "nombre": (e.get("accion_central") or "Pieza de Crear")[:80],
+                "detalle": " · ".join(x for x in (e.get("enfoque_nombre"), modelo) if x),
+                "creado_en": e.get("creado_en", ""), "en_lista": ("flowplus", cf_id) in ya,
+            })
+    for swap_id, e in swaps_mod.cargar(cliente).items():
+        if e.get("estado") == "listo" and e.get("resultado_url"):
+            producto = catalogo_productos.encontrar(cliente, e.get("producto_id"))
+            piezas.append({
+                "clave": f"swap:{swap_id}", "url": e["resultado_url"],
+                "tipo": "video" if e.get("tipo") == "video" else "imagen",
+                "nombre": producto["nombre"] if producto else (e.get("producto_id") or "Cambio de producto"),
+                "detalle": "Cambio de producto",
+                "creado_en": e.get("creado_en", ""), "en_lista": ("swap", swap_id) in ya,
+            })
+    for brief_id, e in estado_mod.cargar(cliente).items():
+        if e.get("video_url"):
+            piezas.append({
+                "clave": f"idea_visual:{brief_id}", "url": e["video_url"], "tipo": "video",
+                "nombre": e.get("title") or brief_id, "detalle": "Idea en texto",
+                "creado_en": e.get("creado_en") or e.get("created_at") or "",
+                "en_lista": ("idea_visual", brief_id) in ya,
+            })
+    piezas.sort(key=lambda p: p["creado_en"], reverse=True)
+    return piezas
+
+
+@app.route("/cliente/<cliente>/ads/nueva_campana", methods=["POST"])
+def nueva_campana(cliente):
+    """"+ Nueva campaña" en Campañas: las piezas marcadas pasan a "Listos para
+    publicar", una por anuncio, con el nombre de campaña que escribió la persona
+    por delante. Publicar sigue siendo un paso aparte, siempre pausado."""
+    claves = [c for c in request.form.getlist("piezas") if c]
+    nombre_campana = (request.form.get("nombre_campana") or "").strip()
+    if not claves:
+        flash("Marca al menos una pieza para la campaña.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    disponibles = {p["clave"]: p for p in _piezas_generadas(cliente)}
+    agregadas = 0
+    for clave in claves:
+        p = disponibles.get(clave)
+        if not p:
+            continue
+        fuente, fuente_id = clave.split(":", 1)
+        nombre = f"{nombre_campana} — {p['nombre']}" if nombre_campana else p["nombre"]
+        ads_mod.crear(cliente, fuente, fuente_id, p["url"], p["tipo"], nombre)
+        agregadas += 1
+    if agregadas:
+        flash(f"{agregadas} pieza(s) listas para publicar — define objetivo y presupuesto en cada una.", "ok")
+    else:
+        flash("Esas piezas ya no están disponibles.", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/enviar_a_publicidad", methods=["POST"])
@@ -1896,13 +1964,13 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     entry = data.get(swap_id)
     if not entry or not entry.get("resultado_url"):
         flash("Ese swap todavía no tiene un resultado listo.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
     producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
     nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
     ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
     flash("Enviado a Publicidad — revísalo en esa pestaña.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="calzado"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
 @app.route("/cliente/<cliente>/video/<brief_id>/enviar_a_publicidad", methods=["POST"])

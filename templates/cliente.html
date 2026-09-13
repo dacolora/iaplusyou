@@ -5,10 +5,6 @@
   <h1 id="titulo-seccion">{{ nombre_proyecto }}</h1>
 </div>
 
-<section id="tab-calzado" class="tab-panel" role="tabpanel">
-  {% include "_tab_cambiar_calzado.html" %}
-</section>
-
 <section id="tab-creativeflowplus" class="tab-panel" role="tabpanel">
   {% include "_tab_flowplus.html" %}
 </section>
@@ -32,7 +28,6 @@
     // son las que usan los redirect(_anchor=...) de dashboard.py y las que ya
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
-      calzado: document.getElementById('tab-calzado'),
       ads: document.getElementById('tab-ads'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
       catalogo: document.getElementById('tab-catalogo'),
@@ -59,7 +54,16 @@
     // 'idea' era una pestaña propia y ahora vive dentro de FlowPlus: quien la
     // tenga guardada en su localStorage se redirige ahí en vez de quedarse sin
     // ninguna pestaña activa.
-    function resolver(t) { return t === 'idea' ? 'creativeflowplus' : t; }
+    // 'calzado' (Cambiar producto) ahora es un modo dentro de Crear: el hash
+    // #cambiar (o el viejo #calzado) abre Crear con ese modo activo.
+    function resolver(t) {
+      if (t === 'idea') return 'creativeflowplus';
+      if (t === 'calzado' || t === 'cambiar') {
+        try { localStorage.setItem('crear-modo-{{ cliente }}', 'cambiar'); } catch (e) {}
+        return 'creativeflowplus';
+      }
+      return t;
+    }
     var inicial = resolver(desdeHash) || '';
     if (!paneles[inicial]) inicial = resolver(desdeStorage) || '';
     activar(paneles[inicial] ? inicial : 'creativeflowplus');

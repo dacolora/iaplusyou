@@ -1065,3 +1065,17 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .cat-tab.activo { background: var(--accent); border-color: var(--accent); color: #fff; }
 .cat-n { display: inline-block; min-width: 1.4em; margin-left: .3rem; padding: 0 .35em; border-radius: 999px; background: rgba(0,0,0,.08); font-size: .74rem; text-align: center; }
 .cat-tab.activo .cat-n { background: rgba(255,255,255,.25); }
+
+/* Crear: modos (Desde referencias / Cambiar producto) — mismo look que las
+   pestañas de categoría del catálogo. */
+.crear-modos { display: flex; gap: .4rem; flex-wrap: wrap; margin: 0 0 1.2rem; }
+.crear-modo { border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 999px; padding: .45rem .9rem; font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
+.crear-modo:hover { color: var(--text); border-color: var(--muted-2); }
+.crear-modo.activo { background: var(--accent); border-color: var(--accent); color: #fff; }
+.crear-panel { display: none; }
+.crear-panel.activo { display: block; }
+
+/* Campañas: piezas de Crear para armar una campaña */
+.piezas-campana .producto-opcion video { width: 100%; aspect-ratio: 1/1; object-fit: cover; border-radius: 6px; background: #000; }
+.piezas-campana .producto-opcion.ya-en-lista { opacity: .55; }
+.piezas-campana .producto-opcion small { display: block; }

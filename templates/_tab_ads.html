@@ -1,17 +1,64 @@
 {% include "_meta_conectar.html" %}
 
-{% if capacidades_meta.estado != "sin_conectar" %}
+{# La campaña se arma sin Meta conectado (es estado local); publicar sí exige la conexión. #}
 <p class="vacio" style="padding-top:0;">
-  Contenido ya aprobado en otras pestañas llega acá con el botón "Enviar a
-  Publicidad". Desde acá se publica como anuncio pagado real en Meta —
-  siempre pausado al crearse, nunca gasta presupuesto hasta que lo actives
-  a mano.
+  Arma una campaña con lo que ya generaste en Crear. Se publica como anuncio
+  pagado real en Meta — siempre pausado al crearse, nunca gasta presupuesto
+  hasta que lo actives a mano.
 </p>
 
 {% set en_cola = ads.values() | selectattr("estado", "equalto", "en_cola") | list %}
 {% set publicados = ads.values() | rejectattr("estado", "equalto", "en_cola") | list %}
 
-<h2>Listos para publicar ({{ en_cola | length }})</h2>
+{# + Nueva campaña: elige entre todas las piezas listas de Crear. Cada pieza
+   marcada pasa a "Listos para publicar" con su propio formulario. #}
+<details class="comparacion-modelos" id="nueva-campana"{% if not en_cola %} open{% endif %}>
+  <summary class="btn-generar btn-sm">+ Nueva campaña</summary>
+  <div class="comparacion-contenido">
+    {% if not piezas_generadas %}
+    <p class="vacio">Todavía no hay piezas listas. Genera un video o una imagen en Crear y aparecerá acá.</p>
+    {% else %}
+    <form method="post" action="{{ url_for('nueva_campana', cliente=cliente) }}" class="form-nueva-idea" id="form-nueva-campana">
+      <label class="campo-label">Nombre de la campaña (opcional)</label>
+      <input type="text" name="nombre_campana" placeholder="ej. Lanzamiento septiembre" maxlength="80">
+      <label class="campo-label" style="margin-top:1rem;display:block;">Piezas de Crear ({{ piezas_generadas | length }}) — marca las que van en la campaña</label>
+      <div class="catalogo-productos piezas-campana">
+        {% for p in piezas_generadas %}
+        <label class="producto-opcion{% if p.en_lista %} ya-en-lista{% endif %}" title="{{ p.nombre }}{% if p.en_lista %} — ya está en la lista de anuncios{% endif %}">
+          <input type="checkbox" name="piezas" value="{{ p.clave }}">
+          {% if p.tipo == "video" %}
+          <video src="{{ p.url }}" muted preload="metadata" playsinline></video>
+          {% else %}
+          <img src="{{ p.url }}" alt="{{ p.nombre }}" loading="lazy">
+          {% endif %}
+          <span>{{ p.nombre | truncate(38) }}</span>
+          <small class="vacio" style="padding:0;font-size:.68rem;">{{ p.detalle }}{% if p.en_lista %} · ya en lista{% endif %}</small>
+        </label>
+        {% endfor %}
+      </div>
+      <p class="campo-error" id="nc-error" hidden>Marca al menos una pieza.</p>
+      <button class="btn-generar" type="submit" style="margin-top:1rem;">Agregar a la campaña →</button>
+      <p class="vacio" style="font-size:.76rem;">Después defines objetivo, presupuesto y público en cada pieza, y publicas. Nada se cobra hasta que actives el anuncio en Meta.</p>
+    </form>
+    <script>
+      (function () {
+        var f = document.getElementById('form-nueva-campana');
+        f.addEventListener('submit', function (ev) {
+          var alguna = f.querySelector('input[name="piezas"]:checked');
+          document.getElementById('nc-error').hidden = !!alguna;
+          if (!alguna) ev.preventDefault();
+        });
+        f.querySelectorAll('.piezas-campana video').forEach(function (v) {
+          v.addEventListener('mouseenter', function () { v.play().catch(function () {}); });
+          v.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
+        });
+      })();
+    </script>
+    {% endif %}
+  </div>
+</details>
+
+<h2 style="margin-top:2rem;">Listos para publicar ({{ en_cola | length }})</h2>
 {% if en_cola %}
 <div class="swaps-lista">
   {% for item in ads.items() %}
@@ -80,6 +127,8 @@
       </div>
       {% if capacidades_meta.estado == "conectado" %}
       <button class="btn-generar" type="submit">Publicar como anuncio</button>
+      {% elif capacidades_meta.estado == "sin_conectar" %}
+      <p class="vacio">Conecta tu cuenta de Meta (arriba) para publicar esta pieza.</p>
       {% else %}
       <p class="vacio">Vuelve a conectar Meta para poder publicar.</p>
       {% endif %}
@@ -158,5 +207,4 @@
 </div>
 {% else %}
 <p class="vacio">Todavía no has publicado ningún anuncio.</p>
-{% endif %}
 {% endif %}
