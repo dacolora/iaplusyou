@@ -2604,21 +2604,46 @@ def _guardar_referencia_archivo(cliente, archivo, i):
     return True
 
 
+def _quiere_json():
+    return request.headers.get("X-Requested-With") == "fetch" or request.accept_mimetypes.best == "application/json"
+
+
+def _respuesta_bandeja(cliente, mensaje=None, error=None):
+    """Para las llamadas por fetch: devuelve la bandeja ya renderizada (HTML del
+    parcial) para reemplazar solo ese trozo de la página, sin recargar."""
+    refs = referencias_flowplus.listar(cliente)
+    html = render_template("_flowplus_bandeja.html", cliente=cliente, referencias_bandeja=refs,
+                           trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None)
+    return jsonify({"ok": error is None, "html": html, "mensaje": mensaje, "error": error,
+                    "etiquetas": [r["etiqueta"] for r in refs]})
+
+
 @app.route("/cliente/<cliente>/flowplus/referencias/subir", methods=["POST"])
 def fp_subir_referencias(cliente):
     archivos = [a for a in request.files.getlist("referencias") if a and a.filename][:15]
     ok = 0
+    errores = []
     for i, a in enumerate(archivos):
         try:
             ok += 1 if _guardar_referencia_archivo(cliente, a, i) else 0
         except Exception as e:
             bitacora.registrar(cliente, a.filename, "flowplus_referencia", "error", str(e))
-            flash(f"No pude subir {a.filename}: {e}", "error")
-    if ok:
-        flash(f"{ok} referencia(s) agregada(s).", "ok")
-    elif not archivos:
-        flash("No elegiste ningún archivo.", "error")
+            errores.append(f"No pude subir {a.filename}: {e}")
+    mensaje = f"{ok} referencia(s) agregada(s)." if ok else None
+    error = "; ".join(errores) if errores else (None if archivos else "No elegiste ningún archivo.")
+    if _quiere_json():
+        return _respuesta_bandeja(cliente, mensaje=mensaje, error=error)
+    if mensaje:
+        flash(mensaje, "ok")
+    if error:
+        flash(error, "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/flowplus/referencias/bandeja")
+def fp_bandeja(cliente):
+    """Estado actual de la bandeja (para refrescar tras la descarga de un link)."""
+    return _respuesta_bandeja(cliente)
 
 
 @app.route("/cliente/<cliente>/flowplus/referencias/link", methods=["POST"])
@@ -2648,7 +2673,11 @@ def fp_agregar_link(cliente):
             raise
         return "Video del link agregado a las referencias."
 
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=40):
+    arranco = trabajos.iniciar(job_id, trabajo, duracion_estimada=40)
+    if _quiere_json():
+        return _respuesta_bandeja(cliente, mensaje="Descargando el video del link…" if arranco else None,
+                                  error=None if arranco else "Ya se está descargando un link — espera a que termine.")
+    if arranco:
         flash("Descargando el video del link… en unos segundos aparece entre las referencias.", "ok")
     else:
         flash("Ya se está descargando un link — espera a que termine.", "warn")
@@ -2658,12 +2687,16 @@ def fp_agregar_link(cliente):
 @app.route("/cliente/<cliente>/flowplus/referencias/<rid>/quitar", methods=["POST"])
 def fp_quitar_referencia(cliente, rid):
     referencias_flowplus.quitar(cliente, rid)
+    if _quiere_json():
+        return _respuesta_bandeja(cliente)
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 @app.route("/cliente/<cliente>/flowplus/referencias/vaciar", methods=["POST"])
 def fp_vaciar_referencias(cliente):
     referencias_flowplus.vaciar(cliente)
+    if _quiere_json():
+        return _respuesta_bandeja(cliente)
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -2751,7 +2784,7 @@ def cf_crear_video(cliente):
         n_versiones = int(request.form.get("n_versiones", 1))
     except ValueError:
         n_versiones = 1
-    enfoques = flowplus_prompt.enfoques_para(n_versiones, con_persona=con_persona)
+    enfoques = flowplus_prompt.enfoques_para(n_versiones, con_persona=con_persona, elegidos=request.form.getlist("enfoques"))
 
     lanzados = 0
     for enfoque in enfoques:

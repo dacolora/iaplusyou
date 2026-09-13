@@ -65,13 +65,26 @@ ENFOQUES = {
 ORDEN_ENFOQUES = ("producto", "persona", "unboxing")
 
 
-def enfoques_para(n, con_persona=False):
-    """Qué enfoque lleva cada una de las n versiones (1-3). Con una sola
-    versión manda la casilla "¿aparece alguien?"."""
+def enfoques_para(n, con_persona=False, elegidos=None):
+    """Qué enfoque lleva cada una de las n versiones (1-3). La persona marca
+    los enfoques que quiere (`elegidos`, en cualquier orden); si marca menos
+    que n se completa con los que faltan en el orden por defecto, y si marca
+    más se recortan. Con una sola versión y nada marcado manda con_persona."""
     n = max(1, min(3, int(n)))
-    if n == 1:
-        return ["persona" if con_persona else "producto"]
-    return list(ORDEN_ENFOQUES[:n])
+    validos = [e for e in (elegidos or []) if e in ENFOQUES]
+    # sin duplicados, respetando el orden en que se marcaron
+    lista = []
+    for e in validos:
+        if e not in lista:
+            lista.append(e)
+    if not lista and n == 1:
+        lista = ["persona" if con_persona else "producto"]
+    for e in ORDEN_ENFOQUES:
+        if len(lista) >= n:
+            break
+        if e not in lista:
+            lista.append(e)
+    return lista[:n]
 
 
 def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None):

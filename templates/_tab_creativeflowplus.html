@@ -13,37 +13,22 @@
     de movimiento y estructura para recrearlo con tu producto — no se publica ni se copia tal cual.
   </p>
   <div class="fila-campos-idea">
-    <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data">
-      <input type="file" name="referencias" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple onchange="this.form.submit()">
+    <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir">
+      <input type="file" name="referencias" id="fp-input-archivos" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple>
+      <noscript><button type="submit">Subir</button></noscript>
     </form>
-    <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" style="display:flex;gap:.4rem;">
+    <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" style="display:flex;gap:.4rem;" id="fp-form-link">
       <input type="url" name="link" placeholder="https://app.trendtrack.io/… o TikTok / Instagram / YouTube" style="flex:1;margin:0;" required>
       <button class="btn-guardar btn-sm" type="submit">Agregar link</button>
     </form>
   </div>
-  {% if trabajo_link %}
-  <div class="barra-progreso" id="trabajo-{{ trabajo_link.job_id }}" style="margin-top:.6rem;"><div class="barra-progreso-fill" style="width:0%"></div></div>
-  <div class="progreso-texto">Descargando el video del link… 0% · 0s</div>
-  <script>iniciarPolling({{ trabajo_link.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_link.job_id) | tojson }});</script>
-  {% endif %}
-  {% if referencias_bandeja %}
-  <div class="catalogo-productos" id="fp-bandeja" style="margin-top:.8rem;">
-    {% for r in referencias_bandeja %}
-    <figure style="margin:0;text-align:center;position:relative;">
-      <img src="{{ r.frame_url }}" alt="" title="{{ r.titulo or '' }}" style="width:84px;height:84px;object-fit:cover;border-radius:6px;background:#fff;{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
-      <figcaption class="vacio" style="padding:0;font-size:.7rem;">{{ r.etiqueta }}{% if r.origen not in ('archivo', None) %} · {{ r.origen }}{% endif %}</figcaption>
-      <form method="post" action="{{ url_for('fp_quitar_referencia', cliente=cliente, rid=r.id) }}"><button type="submit" class="btn-rechazar btn-sm" title="Quitar">✕</button></form>
-    </figure>
-    {% endfor %}
+  <div id="fp-subida" class="vacio" style="font-size:.78rem;display:none;margin-top:.5rem;">
+    <div class="barra-progreso"><div class="barra-progreso-fill" id="fp-subida-barra" style="width:0%"></div></div>
+    <span id="fp-subida-texto">Subiendo…</span>
   </div>
-  <div style="margin-top:.6rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;">
-    <button type="button" class="btn-guardar btn-sm" id="fp-describir">Describir con IA → rellena el texto</button>
-    <form method="post" action="{{ url_for('fp_vaciar_referencias', cliente=cliente) }}" onsubmit="return confirm('¿Quitar todas las referencias?');"><button type="submit" class="btn-rechazar btn-sm">Vaciar</button></form>
-    <span class="vacio" id="fp-describir-estado" style="padding:0;font-size:.76rem;"></span>
+  <div id="fp-bandeja-wrap">
+    {% include "_flowplus_bandeja.html" %}
   </div>
-  {% else %}
-  <p class="vacio" style="font-size:.78rem;">Todavía no hay referencias. Sube archivos o pega un link.</p>
-  {% endif %}
 </div>
 
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
@@ -69,15 +54,16 @@
     <label><input type="radio" name="n_versiones" value="2"> 2</label>
     <label><input type="radio" name="n_versiones" value="3"> 3</label>
   </div>
-  <div id="fp-una-version" class="checks-plataformas" style="margin-top:.4rem;">
-    <label><input type="radio" name="con_persona" value="no" checked> Solo el producto (sin pies, manos ni personas)</label>
-    <label><input type="radio" name="con_persona" value="si"> Con persona usándolo</label>
+  <label class="campo-label" style="margin-top:.8rem;display:block;">Enfoque de cada versión</label>
+  <div id="fp-enfoques" class="checks-plataformas">
+    <label><input type="checkbox" name="enfoques" value="producto" checked> Solo producto — vacío, sin nadie</label>
+    <label><input type="checkbox" name="enfoques" value="persona"> Con persona — alguien real usándolo</label>
+    <label><input type="checkbox" name="enfoques" value="unboxing"> Unboxing — abre la caja y descubre el producto</label>
   </div>
+  <input type="hidden" name="con_persona" id="fp-con-persona" value="no">
   <p class="vacio" id="fp-versiones-nota" style="font-size:.78rem;">
-    Con el mismo texto, cada versión cambia el enfoque y se cobra aparte:
-    <strong>1 · Solo producto</strong> — el producto solo, vacío, sin nadie ·
-    <strong>2 · Con persona</strong> — alguien real usándolo, el producto protagonista ·
-    <strong>3 · Unboxing</strong> — abre la caja o bolsa y descubre el producto.
+    Con el mismo texto, cada versión usa un enfoque distinto y se cobra aparte. Marca tantos como versiones;
+    si marcas menos, se completa en este orden: solo producto, con persona, unboxing.
   </p>
   {% if logos %}
   <p class="vacio" style="font-size:.76rem;">Se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
@@ -223,15 +209,35 @@
       var n = tipoActual() === 'imagen' ? 'modelo_imagen' : 'modelo_video';
       return form.querySelector('input[name=' + n + ']:checked');
     }
-    var unaVersion = document.getElementById('fp-una-version');
+    var enfoques = Array.prototype.slice.call(form.querySelectorAll('input[name=enfoques]'));
+    var conPersona = document.getElementById('fp-con-persona');
     function nVersiones() { return parseInt(form.querySelector('input[name=n_versiones]:checked').value, 10); }
+    // No más enfoques marcados que versiones: al marcar uno de más, se desmarca el más antiguo.
+    var ordenMarcado = enfoques.filter(function (e) { return e.checked; }).map(function (e) { return e.value; });
+    enfoques.forEach(function (e) {
+      e.addEventListener('change', function () {
+        if (e.checked) { ordenMarcado.push(e.value); }
+        else { ordenMarcado = ordenMarcado.filter(function (v) { return v !== e.value; }); }
+        while (ordenMarcado.length > nVersiones()) {
+          var viejo = ordenMarcado.shift();
+          var inp = enfoques.filter(function (x) { return x.value === viejo; })[0];
+          if (inp) inp.checked = false;
+        }
+        refrescar();
+      });
+    });
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
       bloqueVideo.hidden = esImagen; bloqueImagen.hidden = !esImagen;
       var m = modeloActual();
       campoModelo.value = m ? m.value : '';
       var n = nVersiones();
-      unaVersion.hidden = n > 1;
+      while (ordenMarcado.length > n) {
+        var viejo = ordenMarcado.shift();
+        var inp = enfoques.filter(function (x) { return x.value === viejo; })[0];
+        if (inp) inp.checked = false;
+      }
+      conPersona.value = (ordenMarcado.length === 1 && ordenMarcado[0] !== 'producto') ? 'si' : 'no';
       var usd = 0;
       if (m) usd = esImagen ? parseFloat(m.dataset.usd) : parseFloat(m.dataset.usdSeg) * parseInt(duracion.value, 10);
       usd = usd * n;
@@ -251,28 +257,103 @@
       texto.value = v.slice(0, ini) + sep + etiqueta + ' ' + v.slice(ini);
       texto.focus();
     }
-    {{ referencias_bandeja | map(attribute='etiqueta') | list | tojson }}.forEach(function (et) {
-      var chip = document.createElement('button');
-      chip.type = 'button'; chip.className = 'maniqui-preset'; chip.textContent = et;
-      chip.addEventListener('click', function () { insertar(et); });
-      chips.appendChild(chip);
+    function pintarChips(etiquetas) {
+      chips.innerHTML = '';
+      etiquetas.forEach(function (et) {
+        var chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'maniqui-preset'; chip.textContent = et;
+        chip.addEventListener('click', function () { insertar(et); });
+        chips.appendChild(chip);
+      });
+    }
+    pintarChips({{ referencias_bandeja | map(attribute='etiqueta') | list | tojson }});
+
+    // --- Bandeja sin recargas: subir con progreso, link, quitar, vaciar ---
+    var wrap = document.getElementById('fp-bandeja-wrap');
+    var subida = document.getElementById('fp-subida');
+    var subidaBarra = document.getElementById('fp-subida-barra');
+    var subidaTexto = document.getElementById('fp-subida-texto');
+    var pollLink = null;
+    function aplicar(d) {
+      if (d.html !== undefined) { wrap.innerHTML = d.html; engancharBandeja(); }
+      if (d.etiquetas) pintarChips(d.etiquetas);
+      if (d.error) { subidaTexto.textContent = d.error; subida.style.display = 'block'; subidaBarra.style.width = '0%'; }
+      vigilarLink();
+    }
+    function enviar(url, body) {
+      return fetch(url, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.json(); }).then(aplicar)
+        .catch(function () { subidaTexto.textContent = 'Se perdió la conexión; recarga la página.'; subida.style.display = 'block'; });
+    }
+    function engancharBandeja() {
+      wrap.querySelectorAll('form[data-fp]').forEach(function (f) {
+        f.addEventListener('submit', function (e) {
+          e.preventDefault();
+          if (f.dataset.confirm && !confirm(f.dataset.confirm)) return;
+          enviar(f.action, new FormData(f));
+        });
+      });
+      var btn = document.getElementById('fp-describir');
+      if (btn) btn.addEventListener('click', describir);
+    }
+    // Si hay un link descargándose, consultar la bandeja cada 3 s hasta que aparezca.
+    function vigilarLink() {
+      var marca = wrap.querySelector('.fp-link-descargando');
+      if (pollLink) { clearInterval(pollLink); pollLink = null; }
+      if (!marca) return;
+      pollLink = setInterval(function () {
+        fetch({{ url_for('fp_bandeja', cliente=cliente) | tojson }}, { headers: { 'X-Requested-With': 'fetch' } })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { if (!/fp-link-descargando/.test(d.html)) { clearInterval(pollLink); pollLink = null; aplicar(d); } })
+          .catch(function () {});
+      }, 3000);
+    }
+    var inputArchivos = document.getElementById('fp-input-archivos');
+    var formSubir = document.getElementById('fp-form-subir');
+    inputArchivos.addEventListener('change', function () {
+      if (!inputArchivos.files.length) return;
+      var fd = new FormData(formSubir);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', formSubir.action);
+      xhr.setRequestHeader('X-Requested-With', 'fetch');
+      subida.style.display = 'block'; subidaBarra.style.width = '0%';
+      subidaTexto.textContent = 'Subiendo ' + inputArchivos.files.length + ' archivo(s)… 0%';
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable) return;
+        var pct = Math.round(ev.loaded * 100 / ev.total);
+        subidaBarra.style.width = pct + '%';
+        subidaTexto.textContent = pct < 100 ? 'Subiendo… ' + pct + '%' : 'Procesando (fotogramas y almacenamiento)…';
+      };
+      xhr.onload = function () {
+        try { var d = JSON.parse(xhr.responseText); aplicar(d); subida.style.display = d.error ? 'block' : 'none'; }
+        catch (e) { subidaTexto.textContent = 'Error al subir; recarga la página.'; }
+        inputArchivos.value = '';
+      };
+      xhr.onerror = function () { subidaTexto.textContent = 'Error de red al subir.'; };
+      xhr.send(fd);
+    });
+    var formLink = document.getElementById('fp-form-link');
+    formLink.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var fd = new FormData(formLink);
+      formLink.querySelector('input[name=link]').value = '';
+      enviar(formLink.action, fd);
     });
 
     // Describir con IA: Claude mira las referencias y propone el texto.
-    var btnDescribir = document.getElementById('fp-describir');
-    var estadoDescribir = document.getElementById('fp-describir-estado');
-    if (btnDescribir) {
-      btnDescribir.addEventListener('click', function () {
-        btnDescribir.disabled = true; estadoDescribir.textContent = 'Mirando las referencias…';
-        fetch({{ url_for('fp_describir', cliente=cliente) | tojson }}, { method: 'POST' })
-          .then(function (r) { return r.json(); })
-          .then(function (d) {
-            if (d.ok) { texto.value = d.texto; texto.focus(); estadoDescribir.textContent = 'Listo: edítalo a tu gusto antes de generar.'; }
-            else { estadoDescribir.textContent = d.error || 'No se pudo describir.'; }
-          })
-          .catch(function () { estadoDescribir.textContent = 'No se pudo describir (red).'; })
-          .finally(function () { btnDescribir.disabled = false; });
-      });
+    function describir() {
+      var btnDescribir = document.getElementById('fp-describir');
+      var estadoDescribir = document.getElementById('fp-describir-estado');
+      btnDescribir.disabled = true; estadoDescribir.textContent = 'Mirando las referencias…';
+      fetch({{ url_for('fp_describir', cliente=cliente) | tojson }}, { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d.ok) { texto.value = d.texto; texto.focus(); estadoDescribir.textContent = 'Listo: edítalo a tu gusto antes de generar.'; }
+          else { estadoDescribir.textContent = d.error || 'No se pudo describir.'; }
+        })
+        .catch(function () { estadoDescribir.textContent = 'No se pudo describir (red).'; })
+        .finally(function () { btnDescribir.disabled = false; });
     }
+    engancharBandeja();
   })();
 </script>
