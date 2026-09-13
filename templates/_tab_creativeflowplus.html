@@ -29,6 +29,7 @@
   <div id="fp-bandeja-wrap">
     {% include "_flowplus_bandeja.html" %}
   </div>
+  <p class="campo-error" id="fp-refs-error" hidden>Sube al menos una imagen o un video, pega un link, o elige un producto del catálogo.</p>
 </div>
 
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
@@ -47,6 +48,7 @@
   <label class="campo-label" style="margin-top:1rem;display:block;">Qué tiene que pasar</label>
   <div class="banco-prompts" id="fp-etiquetas" style="margin-bottom:.4rem;"></div>
   <textarea name="accion_central" id="fp-texto" rows="3" placeholder="ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
+  <p class="campo-error" id="fp-texto-error" hidden>Escribe qué tiene que pasar en el video.</p>
 
   <label class="campo-label" style="margin-top:1rem;display:block;">¿Cuántas versiones?</label>
   <div class="checks-plataformas" id="fp-versiones">
@@ -355,5 +357,20 @@
         .finally(function () { btnDescribir.disabled = false; });
     }
     engancharBandeja();
+
+    // Validación en sitio: el error se muestra en rojo junto al cuadro, no arriba.
+    var textoError = document.getElementById('fp-texto-error');
+    var refsError = document.getElementById('fp-refs-error');
+    form.addEventListener('submit', function (e) {
+      var vacio = !texto.value.trim();
+      texto.classList.toggle('con-error', vacio);
+      textoError.hidden = !vacio;
+      var sinRefs = !wrap.querySelector('#fp-bandeja') && !form.querySelector('input[name=productos_catalogo]:checked');
+      refsError.hidden = !sinRefs;
+      if (vacio || sinRefs) { e.preventDefault(); (sinRefs ? refsError : texto).scrollIntoView({block: 'center'}); if (vacio) texto.focus(); }
+    });
+    texto.addEventListener('input', function () {
+      if (texto.value.trim()) { texto.classList.remove('con-error'); textoError.hidden = true; }
+    });
   })();
 </script>

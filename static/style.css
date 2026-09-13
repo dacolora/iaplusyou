@@ -986,3 +986,6 @@ td.estado-error { color: var(--error); }
 
 /* Banco de recetas de FlowPlus: chips que rellenan la acción central. */
 .banco-prompts { display: flex; flex-wrap: wrap; gap: .3rem; margin: .3rem 0 .5rem; }
+
+.campo-error { color: var(--error); font-size: .8rem; margin: .35rem 0 0; }
+textarea.con-error, input.con-error { border-color: var(--error) !important; box-shadow: 0 0 0 2px rgba(255, 90, 90, .25); }
