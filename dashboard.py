@@ -140,6 +140,10 @@ def _sin_cache(resp):
     que obligó a un recarga dura."""
     if resp.mimetype in ("text/html", "application/json"):
         resp.headers["Cache-Control"] = "no-store, must-revalidate"
+    # Los recursos de marca (ícono de la app, logo) son públicos: otros sitios
+    # (p. ej. el panel de Meta) pueden cargarlos por fetch.
+    if request.path.startswith("/static/img/"):
+        resp.headers["Access-Control-Allow-Origin"] = "*"
     return resp
 
 
