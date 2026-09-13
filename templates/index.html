@@ -1,32 +1,81 @@
 {% extends "base.html" %}
-{% block title %}Creatv Flow{% endblock %}
+{% block title %}Creatv Machine{% endblock %}
 {% block content %}
-<section class="hero aparece">
-  <div class="hero-texto">
-    <span class="eyebrow">Pipeline de contenido</span>
-    <h1>De una idea a video publicado.</h1>
-    <p class="hero-sub">
-      Personaje, guion, escena candidata, video final — cada paso se aprueba antes de gastar
-      crédito en el siguiente. Cambia el calzado de una foto real, arma videos con producto y
-      personaje, y publícalos como contenido orgánico o como anuncio pagado en Meta.
+<section class="landing-hero aparece">
+  <div class="landing-hero-texto">
+    <span class="eyebrow">Creatv Machine</span>
+    <h1>Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado.</h1>
+    <p class="hero-sub" style="max-width:56ch;">
+      Sube tus productos, personajes y espacios una sola vez. Genera videos e imágenes con los
+      mejores modelos del mercado, cambia el producto en fotos y videos reales, y lanza campañas en
+      Meta desde el mismo lugar — sin agencia, sin editor, sin esperar.
     </p>
+    <div class="landing-cta">
+      <a class="btn-generar" href="#empezar">Crear mi proyecto</a>
+      <a class="btn-guardar" href="{{ url_for('login') }}">Ya tengo cuenta</a>
+    </div>
+    <p class="landing-modelos vacio">Wan 3.0 · Kling O3 Pro · Seedance 2.5 · Seedream V5 Pro · Nano Banana · Meta Ads</p>
+  </div>
+  <div class="landing-hero-visual" aria-hidden="true">
+    <div class="landing-tarjeta t1"><span class="generado-tipo">Video · 10s</span><strong>Solo producto</strong><small>Wan 3.0</small></div>
+    <div class="landing-tarjeta t2"><span class="generado-tipo">Video · 8s</span><strong>Con persona</strong><small>Kling O3 Pro</small></div>
+    <div class="landing-tarjeta t3"><span class="generado-tipo">Imagen</span><strong>Unboxing</strong><small>Seedream V5</small></div>
   </div>
 </section>
 
-<form method="post" action="{{ url_for('crear_proyecto') }}" class="form-nueva-idea aparece" style="max-width:26rem;">
-  <label class="campo-label">Crear un proyecto nuevo</label>
-  <input type="text" name="nombre" placeholder="Nombre de la empresa" required>
-  <label class="campo-label" style="margin-top:.8rem;display:block;">Usuario</label>
-  <input type="text" name="usuario" placeholder="Para entrar a tu proyecto" autocomplete="username" required>
-  <label class="campo-label" style="margin-top:.8rem;display:block;">Contraseña</label>
-  <input type="password" name="password" autocomplete="new-password" required>
-  <button type="submit" style="margin-top:1rem;">+ Crear proyecto</button>
-</form>
+<section class="landing-features aparece">
+  <article>
+    <span class="landing-icono">✦</span>
+    <h3>Crear</h3>
+    <p>Referencias, un texto y listo: varias versiones de un mismo concepto — solo producto, con persona, unboxing — con el modelo que elijas. Pega un link de TikTok o TrendTrack y recréalo con tu marca.</p>
+  </article>
+  <article>
+    <span class="landing-icono">⇄</span>
+    <h3>Cambiar producto</h3>
+    <p>Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde.</p>
+  </article>
+  <article>
+    <span class="landing-icono">▣</span>
+    <h3>Catálogo universal</h3>
+    <p>Productos, personajes, entornos y logos con su regla de fidelidad. La IA reproduce exactamente tu marca, sin inventar letras ni logotipos.</p>
+  </article>
+  <article>
+    <span class="landing-icono">◎</span>
+    <h3>Campañas</h3>
+    <p>Conecta tu cuenta de Meta, arma la campaña con lo que generaste y publica. Siempre en pausa al crearse; tú decides cuándo gasta y ves los resultados aquí.</p>
+  </article>
+</section>
 
-<p class="vacio" style="margin-top:1.2rem;">
-  ¿Ya tienes un proyecto? <a href="{{ url_for('login') }}">Iniciar sesión</a>.
-</p>
-<footer class="vacio" style="margin-top:3rem;font-size:.76rem;">
-  Creatv Machine · <a href="{{ url_for('privacidad') }}">Privacidad</a> · <a href="{{ url_for('terminos') }}">Términos</a> · <a href="{{ url_for('eliminar_datos') }}">Eliminación de datos</a>
+<section class="landing-pasos aparece">
+  <div><span>1</span><strong>Carga tu catálogo</strong><p>Fotos del producto, tus personajes, tus espacios y el logo.</p></div>
+  <div><span>2</span><strong>Escribe qué tiene que pasar</strong><p>O deja que la IA lo describa a partir de tus referencias.</p></div>
+  <div><span>3</span><strong>Genera y publica</strong><p>Descarga, edita a partir del resultado, o lánzalo como anuncio.</p></div>
+</section>
+
+<section class="landing-empezar aparece" id="empezar">
+  <div class="landing-empezar-texto">
+    <h2>Empieza hoy</h2>
+    <p class="vacio" style="padding:0;">Crea tu proyecto en un minuto. Sin tarjeta: pagas solo lo que generas.</p>
+  </div>
+  <form method="post" action="{{ url_for('crear_proyecto') }}" class="form-nueva-idea landing-form">
+    <label class="campo-label">Nombre de tu empresa o marca</label>
+    <input type="text" name="nombre" placeholder="ej. Happy Flops" required>
+    <div class="fila-campos-idea">
+      <div>
+        <label class="campo-label">Usuario</label>
+        <input type="text" name="usuario" autocomplete="username" required>
+      </div>
+      <div>
+        <label class="campo-label">Contraseña</label>
+        <input type="password" name="password" autocomplete="new-password" required>
+      </div>
+    </div>
+    <button type="submit" class="btn-generar" style="margin-top:.6rem;">Crear mi proyecto →</button>
+    <p class="vacio" style="font-size:.78rem;">¿Ya tienes uno? <a href="{{ url_for('login') }}">Iniciar sesión</a></p>
+  </form>
+</section>
+
+<footer class="landing-pie vacio">
+  © 2026 Creatv Machine · <a href="{{ url_for('privacidad') }}">Privacidad</a> · <a href="{{ url_for('terminos') }}">Términos</a> · <a href="{{ url_for('eliminar_datos') }}">Eliminación de datos</a>
 </footer>
 {% endblock %}

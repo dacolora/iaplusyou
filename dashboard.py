@@ -468,6 +468,14 @@ def _resumen_cliente(cliente):
 
 @app.route("/")
 def index():
+    # Con sesión abierta, la portada no tiene sentido: se va derecho al
+    # proyecto (o al panel si es admin). Solo se vuelve a ver al cerrar sesión.
+    sesion = _sesion()
+    if sesion:
+        if sesion["rol"] == "admin":
+            return redirect(url_for("panel"))
+        if sesion.get("cliente"):
+            return redirect(url_for("ver_cliente", cliente=sesion["cliente"]))
     # Pública, sin login: explica qué hace la plataforma y ofrece crear un
     # proyecto nuevo o entrar a uno que ya existe. Nunca lista los proyectos
     # existentes acá — eso filtraría qué clientes hay a cualquiera que abra
@@ -596,6 +604,8 @@ def panel():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
+        if _sesion():
+            return redirect(url_for("index"))
         return render_template("login.html")
 
     usuario = (request.form.get("usuario") or "").strip()
@@ -825,6 +835,7 @@ def ver_cliente(cliente):
         creative_flow_items=_creative_flow_items(cliente),
         piezas_generadas=_piezas_generadas(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
+        fp_prefill=session.pop("fp_prefill", None),
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
@@ -2859,6 +2870,39 @@ def fp_vaciar_referencias(cliente):
     referencias_flowplus.vaciar(cliente)
     if _quiere_json():
         return _respuesta_bandeja(cliente)
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
+def fp_reusar(cliente, cf_id):
+    """"Editar y crear otra a partir de esta": las referencias de esa pieza (sin
+    los logos, que se adjuntan solos) vuelven a la bandeja y el texto, tipo,
+    modelo, duración y formato quedan precargados en el formulario de Crear.
+    Si la pieza es una imagen generada, ella misma puede entrar como referencia."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry:
+        flash("No encontré esa pieza.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    ya = {r["url"] for r in referencias_flowplus.listar(cliente)}
+    for r in entry.get("referencias") or []:
+        if r.get("logo") or r.get("url") in ya:
+            continue
+        referencias_flowplus.agregar(
+            cliente, r.get("tipo") or "imagen", r["url"], frame_url=r.get("frame_url"),
+            origen="reutilizada", titulo=r.get("activo") or r.get("etiqueta"), producto=r.get("producto"),
+        )
+        ya.add(r["url"])
+    if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
+        referencias_flowplus.agregar(cliente, "imagen", entry["video_url"], origen="generada", titulo="Imagen generada")
+    session["fp_prefill"] = {
+        "texto": entry.get("accion_central") or "",
+        "tipo": entry.get("tipo") or "video",
+        "modelo": entry.get("modelo") or "",
+        "duracion": entry.get("duracion_objetivo") or 10,
+        "aspect_ratio": entry.get("aspect_ratio") or "9:16",
+        "enfoque": entry.get("enfoque") or "",
+    }
+    flash("Referencias y texto cargados — ajusta lo que quieras y genera.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 

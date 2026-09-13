@@ -125,67 +125,142 @@
 {% endwith %}
 
 <div id="creativeflowplus-resultados" style="margin-top:2rem;">
-  <h3>Generados</h3>
-  {% if not creative_flow_items %}
-  <p class="vacio">Todavía no has generado nada en FlowPlus.</p>
-  {% endif %}
-  {% for item in creative_flow_items %}
-  <div class="idea-card">
-    <p><strong>{{ item.accion_central or "(sin texto)" }}</strong> · {% if item.tipo == "imagen" %}Imagen{% else %}Video · {{ item.duracion_objetivo }}s{% endif %} · {{ item.modelo_nombre }}{% if item.referencias_urls %} · {{ item.referencias_urls | length }} referencia(s){% endif %}</p>
-    {% if item.referencias %}
-    <div class="catalogo-productos" style="margin-bottom:.6rem;">
-      {% for r in item.referencias %}
-      <figure style="margin:0;text-align:center;">
-        <img src="{{ r.frame_url }}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;background:#fff;{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
-        <figcaption class="vacio" style="padding:0;font-size:.68rem;">{{ r.etiqueta }}</figcaption>
-      </figure>
-      {% endfor %}
-    </div>
-    {% elif item.referencias_urls %}
-    <div class="catalogo-productos" style="margin-bottom:.6rem;">
-      {% for u in item.referencias_urls %}
-      <img src="{{ u }}" alt="" style="width:64px;height:64px;object-fit:cover;border-radius:6px;background:#fff;">
-      {% endfor %}
-    </div>
-    {% endif %}
-    <p>Estado: <span class="tag-estado">{{ item.estado }}</span>{% if item.enfoque_nombre %} · <strong>Enfoque: {{ item.enfoque_nombre }}</strong>{% elif item.con_persona is defined %} · {% if item.con_persona %}con persona{% else %}solo producto{% endif %}{% endif %}</p>
-    {% if item.prompt_relleno and item.prompt_relleno != item.accion_central %}
-    <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">Ver el prompt completo que recibió el modelo</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
-    {% endif %}
-
-    {% if item.estado == "prompt_listo" %}
-    {# Sesiones viejas (antes de que FlowPlus generara de una): se pueden lanzar tal cual. #}
-    <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-      <button type="submit">Generar {% if item.tipo == "imagen" %}imagen{% else %}video{% endif %}{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }}){% endif %}</button>
-    </form>
-    {% elif item.estado == "video_generando" %}
-    {% if item.trabajo %}
-    <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-    <div class="progreso-texto">Generando… 0% · 0s</div>
-    <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
-    {% else %}
-    <p class="vacio">La generación se interrumpió (el servidor se reinició). Descarta la sesión y vuelve a intentarla.</p>
-    {% endif %}
-    {% elif item.estado == "video_listo" %}
-    {% if item.tipo == "imagen" %}
-    <a href="{{ item.video_url }}" target="_blank"><img src="{{ item.video_url }}" alt="" style="max-width:320px;border-radius:8px;background:#fff;"></a>
-    {% else %}
-    <video src="{{ item.video_url }}" controls muted style="max-width:320px;"></video>
-    {% endif %}
-    <p>Costo: ${{ item.usd }}</p>
-    {% elif item.estado == "error" %}
-    <p class="tag-error">{{ item.error }}</p>
-    <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-      <button type="submit">Reintentar{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }}){% endif %}</button>
-    </form>
-    {% endif %}
-
-    <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar este video?');" style="display:inline;">
-      <button type="submit">Descartar</button>
-    </form>
+  <div style="display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;">
+    <h3 style="margin:0;">Generados ({{ creative_flow_items | length }})</h3>
+    <span class="vacio" style="padding:0;font-size:.78rem;">Toca una pieza para ver el detalle, descargarla o crear otra a partir de ella.</span>
   </div>
-  {% endfor %}
+  {% if not creative_flow_items %}
+  <p class="vacio">Todavía no has generado nada en Crear.</p>
+  {% endif %}
+  <div class="generados-grid">
+    {% for item in creative_flow_items %}
+    <div class="generado" data-cf="{{ item.id }}" tabindex="0" role="button">
+      <div class="generado-media">
+        {% if item.estado == "video_listo" and item.tipo == "imagen" %}
+        <img src="{{ item.video_url }}" alt="" loading="lazy">
+        {% elif item.estado == "video_listo" %}
+        <video src="{{ item.video_url }}" muted playsinline preload="metadata"></video>
+        {% else %}
+        {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
+        {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
+        {% endif %}
+        <span class="generado-tipo">{% if item.tipo == "imagen" %}Imagen{% else %}Video · {{ item.duracion_objetivo }}s{% endif %}</span>
+        {% if item.estado == "video_generando" %}
+        <div class="generado-velo">
+          {% if item.trabajo %}
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto">Generando… 0% · 0s</div>
+          <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
+          {% else %}
+          <span class="generado-estado">Interrumpido</span>
+          {% endif %}
+        </div>
+        {% elif item.estado == "error" %}
+        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        {% elif item.estado == "prompt_listo" %}
+        <div class="generado-velo"><span class="generado-estado">Sin generar</span></div>
+        {% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
+        <small>{{ item.modelo_nombre }}{% if item.usd %} · ${{ item.usd }}{% endif %}</small>
+      </div>
+      <template class="generado-detalle">
+        <div class="detalle-media">
+          {% if item.estado == "video_listo" and item.tipo == "imagen" %}
+          <img src="{{ item.video_url }}" alt="">
+          {% elif item.estado == "video_listo" %}
+          <video src="{{ item.video_url }}" controls autoplay muted loop playsinline></video>
+          {% elif item.referencias %}
+          <img src="{{ item.referencias[0].frame_url }}" alt="" style="opacity:.6;">
+          {% endif %}
+        </div>
+        <div class="detalle-info">
+          <p class="campo-label">Qué tenía que pasar</p>
+          <p class="detalle-texto">{{ item.accion_central or "(sin texto)" }}</p>
+          <p class="vacio" style="padding:0;font-size:.78rem;">
+            {% if item.tipo == "imagen" %}Imagen{% else %}Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "9:16" }}{% endif %}
+            · {{ item.modelo_nombre }}
+            {% if item.enfoque_nombre %} · {{ item.enfoque_nombre }}{% endif %}
+            {% if item.usd %} · costó ${{ item.usd }}{% endif %}
+            · <span class="tag-estado">{{ item.estado }}</span>
+          </p>
+          {% if item.referencias %}
+          <p class="campo-label" style="margin-top:.8rem;">Referencias</p>
+          <div class="catalogo-productos" style="margin-bottom:.6rem;">
+            {% for r in item.referencias %}
+            <figure style="margin:0;text-align:center;">
+              <img src="{{ r.frame_url }}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;background:#fff;{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
+              <figcaption class="vacio" style="padding:0;font-size:.66rem;">{{ r.etiqueta }}</figcaption>
+            </figure>
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if item.prompt_relleno and item.prompt_relleno != item.accion_central %}
+          <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">Ver el prompt completo que recibió el modelo</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
+          {% endif %}
+          {% if item.estado == "error" %}
+          <p class="tag-error">{{ item.error }}</p>
+          {% endif %}
+
+          <div class="detalle-acciones">
+            {% if item.estado == "video_listo" %}
+            <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">Descargar</a>
+            {% endif %}
+            {% if item.estado in ("video_listo", "error", "prompt_listo") %}
+            <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+              {% if item.estado == "video_listo" and item.tipo == "imagen" %}
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> Usar esta imagen como referencia</label>
+              {% endif %}
+              <button type="submit" class="btn-guardar btn-sm">Editar y crear otra a partir de esta</button>
+            </form>
+            {% endif %}
+            {% if item.estado in ("prompt_listo", "error") %}
+            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+              <button type="submit" class="btn-guardar btn-sm">{% if item.estado == "error" %}Reintentar{% else %}Generar{% endif %}{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }}){% endif %}</button>
+            </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar esta pieza?');" style="display:inline;">
+              <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+            </form>
+          </div>
+        </div>
+      </template>
+    </div>
+    {% endfor %}
+  </div>
 </div>
+
+<dialog id="generado-modal" class="generado-modal">
+  <button type="button" class="generado-cerrar" id="generado-cerrar" aria-label="Cerrar">×</button>
+  <div id="generado-modal-cuerpo" class="generado-modal-cuerpo"></div>
+</dialog>
+<script>
+  (function () {
+    var modal = document.getElementById('generado-modal');
+    var cuerpo = document.getElementById('generado-modal-cuerpo');
+    if (!modal) return;
+    function abrir(card) {
+      var tpl = card.querySelector('template.generado-detalle');
+      if (!tpl) return;
+      cuerpo.innerHTML = '';
+      cuerpo.appendChild(tpl.content.cloneNode(true));
+      modal.showModal();
+    }
+    document.querySelectorAll('.generado').forEach(function (card) {
+      card.addEventListener('click', function (e) { if (!e.target.closest('form, a, button')) abrir(card); });
+      card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); } });
+      var v = card.querySelector('.generado-media video');
+      if (v) {
+        card.addEventListener('mouseenter', function () { v.play().catch(function () {}); });
+        card.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
+      }
+    });
+    document.getElementById('generado-cerrar').addEventListener('click', function () { modal.close(); });
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
+    modal.addEventListener('close', function () { cuerpo.innerHTML = ''; });
+  })();
+</script>
 
 <script>
   (function () {
@@ -213,6 +288,24 @@
     }
     var enfoques = Array.prototype.slice.call(form.querySelectorAll('input[name=enfoques]'));
     var conPersona = document.getElementById('fp-con-persona');
+
+    // "Editar y crear otra a partir de esta": el servidor deja el texto y los
+    // ajustes de la pieza original; acá se cargan en el formulario.
+    var prefill = {{ fp_prefill | tojson }};
+    if (prefill) {
+      if (ta && prefill.texto) ta.value = prefill.texto;
+      var rTipo = form.querySelector('input[name=tipo][value="' + prefill.tipo + '"]');
+      if (rTipo) rTipo.checked = true;
+      var rModelo = form.querySelector('input[name=modelo_video][value="' + prefill.modelo + '"], input[name=modelo_imagen][value="' + prefill.modelo + '"]');
+      if (rModelo) rModelo.checked = true;
+      if (duracion && prefill.duracion) duracion.value = String(prefill.duracion);
+      var selAr = form.querySelector('select[name=aspect_ratio]');
+      if (selAr && prefill.aspect_ratio) selAr.value = prefill.aspect_ratio;
+      if (prefill.enfoque) {
+        enfoques.forEach(function (c) { c.checked = c.value === prefill.enfoque; });
+      }
+      setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
+    }
     function nVersiones() { return parseInt(form.querySelector('input[name=n_versiones]:checked').value, 10); }
     // No más enfoques marcados que versiones: al marcar uno de más, se desmarca el más antiguo.
     var ordenMarcado = enfoques.filter(function (e) { return e.checked; }).map(function (e) { return e.value; });
