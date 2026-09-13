@@ -1893,39 +1893,62 @@ def eliminar_swap(cliente, swap_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
+def _fecha_corta(iso):
+    """'2026-09-12T16:05:50' -> '12 sep 16:05' (para nombrar piezas sin mostrar el prompt)."""
+    try:
+        d = datetime.fromisoformat(iso)
+    except (TypeError, ValueError):
+        return ""
+    meses = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+    return f"{d.day} {meses[d.month - 1]} {d:%H:%M}"
+
+
 def _piezas_generadas(cliente):
     """Todo lo que ya salió listo de Crear (videos e imágenes de FlowPlus, cambios
     de producto, ideas en texto) con URL pública, para armar una campaña desde
-    Campañas. Lo que ya está en la lista de anuncios se marca para no duplicarlo."""
+    Campañas. Se nombra por tipo/enfoque/modelo/fecha, nunca por el prompt. Los
+    videos de FlowPlus también quedan copiados en estado_videos.json (para la
+    revisión), así que se deduplica por URL. Lo que ya está en la lista de
+    anuncios se marca para no repetirlo."""
     ya = {(a.get("fuente"), a.get("fuente_id")) for a in ads_mod.cargar(cliente).values()}
-    piezas = []
+    piezas, urls = [], set()
+
+    def agregar(pieza):
+        if pieza["url"] in urls:
+            return
+        urls.add(pieza["url"])
+        piezas.append(pieza)
+
     for cf_id, e in creative_flow.cargar(cliente).items():
         if e.get("estado") == "video_listo" and e.get("video_url"):
+            tipo = "imagen" if e.get("tipo") == "imagen" else "video"
             modelo = (flowplus_modelos.IMAGEN.get(e.get("modelo")) or flowplus_modelos.VIDEO.get(e.get("modelo")) or {}).get("nombre", "")
-            piezas.append({
-                "clave": f"flowplus:{cf_id}", "url": e["video_url"],
-                "tipo": "imagen" if e.get("tipo") == "imagen" else "video",
-                "nombre": (e.get("accion_central") or "Pieza de Crear")[:80],
-                "detalle": " · ".join(x for x in (e.get("enfoque_nombre"), modelo) if x),
+            nombre = ("Imagen" if tipo == "imagen" else "Video") + (f" · {e['enfoque_nombre']}" if e.get("enfoque_nombre") else "")
+            agregar({
+                "clave": f"flowplus:{cf_id}", "url": e["video_url"], "tipo": tipo,
+                "nombre": nombre,
+                "detalle": " · ".join(x for x in (modelo, _fecha_corta(e.get("creado_en"))) if x),
                 "creado_en": e.get("creado_en", ""), "en_lista": ("flowplus", cf_id) in ya,
             })
     for swap_id, e in swaps_mod.cargar(cliente).items():
         if e.get("estado") == "listo" and e.get("resultado_url"):
             producto = catalogo_productos.encontrar(cliente, e.get("producto_id"))
-            piezas.append({
+            agregar({
                 "clave": f"swap:{swap_id}", "url": e["resultado_url"],
                 "tipo": "video" if e.get("tipo") == "video" else "imagen",
-                "nombre": producto["nombre"] if producto else (e.get("producto_id") or "Cambio de producto"),
-                "detalle": "Cambio de producto",
+                "nombre": producto["nombre"] if producto else "Cambio de producto",
+                "detalle": " · ".join(x for x in ("Cambio de producto", _fecha_corta(e.get("creado_en"))) if x),
                 "creado_en": e.get("creado_en", ""), "en_lista": ("swap", swap_id) in ya,
             })
     for brief_id, e in estado_mod.cargar(cliente).items():
         if e.get("video_url"):
-            piezas.append({
+            titulo = e.get("title") or ""
+            creado = e.get("generado_en") or e.get("creado_en") or ""
+            agregar({
                 "clave": f"idea_visual:{brief_id}", "url": e["video_url"], "tipo": "video",
-                "nombre": e.get("title") or brief_id, "detalle": "Idea en texto",
-                "creado_en": e.get("creado_en") or e.get("created_at") or "",
-                "en_lista": ("idea_visual", brief_id) in ya,
+                "nombre": titulo if titulo and titulo != brief_id else "Video · Idea en texto",
+                "detalle": " · ".join(x for x in ("Idea en texto", _fecha_corta(creado)) if x),
+                "creado_en": creado, "en_lista": ("idea_visual", brief_id) in ya,
             })
     piezas.sort(key=lambda p: p["creado_en"], reverse=True)
     return piezas
