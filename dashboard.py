@@ -2165,7 +2165,16 @@ def publicar_ad(cliente):
                 bitacora.registrar(cliente, ad_id, "ads_publicar", "ok", campaign_id)
                 return "Anuncio publicado (pausado, revísalo en Meta Ads Manager antes de activarlo)."
             except Exception as e:
-                ads_mod.actualizar(cliente, ad_id, estado="error", error=str(e))
+                msg = str(e)
+                # Meta no permite crear anuncios con la app en modo desarrollo
+                # (subcode 1885183 / "(#3) capability"): hasta pasar App Review
+                # se conecta y se leen métricas, pero no se publica.
+                if "1885183" in msg or "modo de desarrollo" in msg or "does not have the capability" in msg:
+                    msg = ("Meta todavía no deja publicar anuncios desde Creatv Machine: la app está en modo "
+                           "desarrollo y Meta exige pasar App Review + verificación de negocio para crear "
+                           "anuncios. La campaña quedó creada en pausa; en cuanto la app esté en Live se "
+                           "publica con un clic.")
+                ads_mod.actualizar(cliente, ad_id, estado="error", error=msg)
                 bitacora.registrar(cliente, ad_id, "ads_publicar", "error", str(e))
                 raise
             finally:
