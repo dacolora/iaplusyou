@@ -271,6 +271,7 @@ def _detalle(datos):
         "ad_account_id": datos.get("ad_account_id"), "ad_account_nombre": datos.get("ad_account_nombre"),
         "page_id": datos.get("page_id"), "page_nombre": datos.get("page_nombre"),
         "ig_username": datos.get("ig_username"), "conectado_en": datos.get("conectado_en"),
+        "moneda": datos.get("moneda"),
     }
 
 

@@ -1408,6 +1408,11 @@ def ver_swap(cliente):
 # Solo modelos que ven la foto de referencia del producto y clonan la foto/video
 # original — nada que solo reciba una descripción en texto del calzado (eso
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
+# Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
+PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
+# Divisas que Meta maneja sin decimales (el monto se manda tal cual, no ×100).
+MONEDAS_SIN_DECIMALES = {"JPY", "CLP", "HUF", "ISK", "KRW", "TWD", "VND", "PYG", "UGX", "XAF", "XOF"}
+
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
     "kling_o1", "luma_modify", "wan_animate_replace", "wan27_edit",
@@ -2055,7 +2060,11 @@ def publicar_ad(cliente):
     PAUSED. Corre en un job de fondo porque encadena 4 llamadas HTTP."""
     ad_id = request.form.get("ad_id", "").strip()
     objetivo = request.form.get("objetivo", "").strip()
-    presupuesto_diario_usd = float(request.form.get("presupuesto_diario_usd", "0") or 0)
+    # El presupuesto se escribe en la MONEDA DE LA CUENTA (meta.json -> moneda):
+    # Meta interpreta daily_budget en esa divisa. Antes se asumía USD y con una
+    # cuenta en COP "5" terminaba siendo 500 pesos diarios.
+    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    presupuesto_diario = float(request.form.get("presupuesto_diario") or request.form.get("presupuesto_diario_usd") or 0)
     dias = int(request.form.get("dias", "0") or 0)
     pais = request.form.get("pais", "").strip()
     edad_min = int(request.form.get("edad_min", "18") or 18)
@@ -2067,13 +2076,18 @@ def publicar_ad(cliente):
     if not entry:
         flash("No encontré ese anuncio en la cola.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if not presupuesto_diario_usd or not dias or not pais or not destino_url:
+    if not presupuesto_diario or not dias or not pais or not destino_url:
         flash("Faltan presupuesto, días, país o URL de destino.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
+    if presupuesto_diario < minimo:
+        flash(f"Meta exige al menos {minimo:,.0f} {moneda} por día en esta cuenta.".replace(",", "."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
     ads_mod.actualizar(
         cliente, ad_id, estado="publicando", objetivo=objetivo,
-        presupuesto_diario_usd=presupuesto_diario_usd, dias=dias,
+        presupuesto_diario=presupuesto_diario, moneda=moneda,
+        presupuesto_diario_usd=presupuesto_diario if moneda == "USD" else None, dias=dias,
         audiencia={"edad_min": edad_min, "edad_max": edad_max, "paises": [pais]},
         destino_url=destino_url,
     )
@@ -2084,7 +2098,9 @@ def publicar_ad(cliente):
         # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
         # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
         with _ENV_LOCK:
-            centavos = int(round(presupuesto_diario_usd * 100))
+            # Meta recibe el presupuesto en la unidad menor de la divisa (centavos
+            # para USD y COP; sin decimales para JPY/CLP/etc.).
+            centavos = int(round(presupuesto_diario * (1 if moneda in MONEDAS_SIN_DECIMALES else 100)))
             try:
                 # Credenciales del proyecto (meta.json), no del .env: cada
                 # cliente conectó su propia cuenta desde FlowMarketing.

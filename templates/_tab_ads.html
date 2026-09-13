@@ -47,8 +47,9 @@
           </select>
         </div>
         <div>
-          <label class="campo-label">Presupuesto diario (USD)</label>
-          <input type="number" name="presupuesto_diario_usd" min="1" step="0.5" value="10" required>
+          <label class="campo-label">Presupuesto diario ({{ capacidades_meta.detalle.moneda or "USD" }})</label>
+          <input type="number" name="presupuesto_diario" min="1" step="any" value="{% if capacidades_meta.detalle.moneda == 'COP' %}20000{% else %}10{% endif %}" required>
+          <p class="vacio" style="font-size:.74rem;padding-top:.2rem;">En la moneda de tu cuenta publicitaria. {% if capacidades_meta.detalle.moneda == 'COP' %}Mínimo de Meta ≈ 4.000 COP/día.{% endif %}</p>
         </div>
       </div>
       <div class="fila-campos-idea">
