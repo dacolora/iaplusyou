@@ -2053,6 +2053,26 @@ def meta_desconectar(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
+def _miniatura_para_ad(cliente, ad_id, video_url):
+    """Fotograma del video (segundo 1) subido a R2, para image_url del creative.
+    Si algo falla, devuelve la propia URL del video (Meta genera una por defecto)."""
+    try:
+        carpeta = os.path.join(BASE_DIR, "salidas", cliente, "ads")
+        os.makedirs(carpeta, exist_ok=True)
+        local_video = os.path.join(carpeta, f"{ad_id}.mp4")
+        with requests.get(video_url, timeout=120, stream=True) as r:
+            r.raise_for_status()
+            with open(local_video, "wb") as f:
+                for chunk in r.iter_content(1 << 16):
+                    f.write(chunk)
+        frame = os.path.join(carpeta, f"{ad_id}.jpg")
+        _extraer_frame(local_video, frame)
+        return r2_uploader.upload_image(frame, f"clientes/{cliente}/ads/{ad_id}.jpg")
+    except Exception as e:
+        bitacora.registrar(cliente, ad_id, "ads_miniatura", "error", str(e))
+        return video_url
+
+
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
 def publicar_ad(cliente):
     """Toma un anuncio en cola (creado por otro módulo vía ads.crear) y lo
@@ -2122,10 +2142,15 @@ def publicar_ad(cliente):
                         link=destino_url, instagram_user_id=ig_user_id,
                     )
                 else:
+                    # El video se sube a la cuenta publicitaria (advideos) y se
+                    # usa su id; la miniatura es un fotograma real subido a R2.
+                    meta_video_id = meta_creative.subir_video(entry["contenido_url"], titulo=entry["nombre"])
+                    miniatura_url = _miniatura_para_ad(cliente, ad_id, entry["contenido_url"])
                     creative_resp = meta_creative.crear_creative_video(
-                        f"{entry['nombre']} — creative", entry["contenido_url"], entry["contenido_url"],
+                        f"{entry['nombre']} — creative", meta_video_id, miniatura_url,
                         entry["nombre"], destino_url, instagram_user_id=ig_user_id,
                     )
+                    ads_mod.actualizar(cliente, ad_id, meta_video_id=meta_video_id)
                 creative_id = creative_resp["id"]
 
                 ad_resp = meta_ad.crear_ad(entry["nombre"], adset_id, creative_id)
