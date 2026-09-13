@@ -177,6 +177,20 @@ def borrar_pendiente(cliente):
     return _borrar(_path_pendiente(cliente))
 
 
+def revocar(cliente):
+    """DELETE /me/permissions con el token guardado: Meta invalida ese token y
+    los de Página derivados. Devuelve True si Meta confirmó; nunca lanza."""
+    datos = cargar(cliente)
+    token = (datos or {}).get("token")
+    if not token:
+        return False
+    try:
+        r = requests.delete(f"{GRAPH_URL}/me/permissions", params={"access_token": token}, timeout=30)
+        return bool(r.ok and r.json().get("success"))
+    except Exception:
+        return False
+
+
 def credenciales_ads(cliente):
     """Lo que meta_ads/auth.configurar() necesita, o MetaConexionError si el
     proyecto no está conectado. ad_account_id se guarda tal cual lo devuelve

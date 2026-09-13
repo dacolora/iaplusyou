@@ -2152,10 +2152,16 @@ def meta_cancelar(cliente):
 
 @app.route("/cliente/<cliente>/meta/desconectar", methods=["POST"])
 def meta_desconectar(cliente):
+    # Revocar la autorización en Meta invalida el token (y los de Página que
+    # derivan de él); si falla, igual se borra localmente.
+    revocado = meta_conexion.revocar(cliente)
     meta_conexion.borrar(cliente)
     meta_conexion.borrar_pendiente(cliente)
-    bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado")
-    flash("Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio.", "ok")
+    bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado" + (" y revocado en Meta" if revocado else ""))
+    if revocado:
+        flash("Meta desconectado de este proyecto y acceso revocado en Meta.", "ok")
+    else:
+        flash("Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio.", "ok")
     return _ir_a_flowmarketing(cliente)
 
 
