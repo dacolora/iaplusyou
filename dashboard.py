@@ -2351,6 +2351,19 @@ def cambiar_estado_ad(cliente, ad_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
+@app.route("/cliente/<cliente>/ads/<ad_id>/reintentar", methods=["POST"])
+def reintentar_ad(cliente, ad_id):
+    """Un anuncio que falló al publicar vuelve a "Listos para publicar" con su
+    formulario, sin tener que quitarlo y agregarlo de nuevo."""
+    entry = ads_mod.cargar(cliente).get(ad_id)
+    if not entry or entry.get("estado") != "error":
+        flash("Ese anuncio no está en error.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    ads_mod.actualizar(cliente, ad_id, estado="en_cola", error=None)
+    flash("Listo para volver a publicar.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+
 @app.route("/cliente/<cliente>/ads/<ad_id>/eliminar", methods=["POST"])
 def eliminar_ad(cliente, ad_id):
     """Solo borra la fila local — NO borra la campaña en Meta si ya se

@@ -173,6 +173,11 @@
     {% if entry.error %}
     <p class="vacio" style="color:var(--error);">{{ entry.error }}</p>
     {% endif %}
+    {% if entry.estado == "error" %}
+    <form method="post" action="{{ url_for('reintentar_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
+      <button type="submit" class="btn-generar btn-sm">Volver a intentar</button>
+    </form>
+    {% endif %}
 
     {% if entry.meta_ids and entry.meta_ids.ad_id %}
     <form method="post" action="{{ url_for('actualizar_resultados_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
