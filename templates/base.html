@@ -254,8 +254,11 @@
     });
   </script>
 </head>
-<body>
+<body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}">
   <div class="fondo-ambiente" aria-hidden="true"></div>
+  {% if request.view_args and request.view_args.cliente %}
+  {% include "_sidebar.html" %}
+  {% endif %}
   <header>
     <a class="marca-header" href="{{ url_for('index') }}">
       <span class="marca-mark"></span>

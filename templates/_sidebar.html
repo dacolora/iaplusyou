@@ -1,0 +1,53 @@
+{# Barra lateral del proyecto (referencia: DoReel). Colapsable: solo íconos o
+   íconos + texto; el estado se recuerda. Las claves data-tab son las mismas de
+   siempre (calzado, creativeflowplus, catalogo, ads, settings) para que los
+   redirect(_anchor=...) y los enlaces guardados sigan funcionando. #}
+<aside class="sidebar" id="sidebar">
+  <a class="sidebar-marca" href="{{ url_for('index') }}" title="Creatv Machine">
+    <span class="marca-mark"></span>
+    <span class="sidebar-texto marca-texto">Creatv<span class="marca-punto">Flow</span></span>
+  </a>
+
+  <nav class="sidebar-nav" role="tablist">
+    <button type="button" class="sidebar-item" data-tab="creativeflowplus" role="tab" title="Crear">
+      <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      <span class="sidebar-texto">Crear</span>
+    </button>
+    <button type="button" class="sidebar-item" data-tab="calzado" role="tab" title="Cambiar producto">
+      <svg viewBox="0 0 24 24"><path d="M4 7h11l5 5-5 5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M8 12h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <span class="sidebar-texto">Cambiar producto</span>
+    </button>
+    <button type="button" class="sidebar-item" data-tab="ads" role="tab" title="Campañas">
+      <svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M16 9a4 4 0 0 1 0 6M19 7a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      <span class="sidebar-texto">Campañas</span>
+    </button>
+    <button type="button" class="sidebar-item" data-tab="catalogo" role="tab" title="Catálogo">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 10h18M9 4v16" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sidebar-texto">Catálogo</span>
+    </button>
+    <button type="button" class="sidebar-item" data-tab="settings" role="tab" title="Configuración">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2" fill="none"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+      <span class="sidebar-texto">Configuración</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-pie">
+    <button type="button" class="sidebar-colapsar" id="sidebar-colapsar" title="Plegar / desplegar">
+      <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M9 4v16M13 10l2 2-2 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+    </button>
+    {% if session.get('rol') == 'admin' %}
+    <a class="sidebar-item sidebar-link" href="{{ url_for('panel') }}" title="Todos los proyectos">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+      <span class="sidebar-texto">Proyectos</span>
+    </a>
+    {% endif %}
+    <div class="sidebar-usuario">
+      <span class="sidebar-avatar">{{ (session.get('usuario') or '?')[0] | upper }}</span>
+      <span class="sidebar-texto sidebar-usuario-datos">
+        <strong>{{ nombre_proyecto or request.view_args.cliente }}</strong>
+        <small>{{ session.get('usuario') }}</small>
+      </span>
+      <form method="post" action="{{ url_for('logout') }}" class="sidebar-texto"><button type="submit" class="sidebar-salir" title="Cerrar sesión">Salir</button></form>
+    </div>
+  </div>
+</aside>

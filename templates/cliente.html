@@ -1,14 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ nombre_proyecto }}{% endblock %}
 {% block content %}
-<h1>{{ nombre_proyecto }}</h1>
-
-<div class="tabs-nav" role="tablist">
-  <button type="button" class="tab-btn" data-tab="calzado" role="tab">FlowClone</button>
-  <button type="button" class="tab-btn" data-tab="creativeflowplus" role="tab">FlowPlus</button>
-  <button type="button" class="tab-btn" data-tab="catalogo" role="tab">FlowCatálogo</button>
-  <button type="button" class="tab-btn" data-tab="ads" role="tab">FlowMarketing</button>
-  <button type="button" class="tab-btn" data-tab="settings" role="tab">FlowSettings</button>
+<div class="pagina-cabecera">
+  <h1 id="titulo-seccion">{{ nombre_proyecto }}</h1>
 </div>
 
 <section id="tab-calzado" class="tab-panel" role="tabpanel">
@@ -33,7 +27,7 @@
 
 <script>
   (function () {
-    var botones = document.querySelectorAll('.tab-btn');
+    var botones = document.querySelectorAll('.sidebar-item[data-tab], .tab-btn');
     // Las claves siguen siendo las viejas ('calzado', 'idea', ...) a propósito:
     // son las que usan los redirect(_anchor=...) de dashboard.py y las que ya
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
@@ -68,7 +62,20 @@
     function resolver(t) { return t === 'idea' ? 'creativeflowplus' : t; }
     var inicial = resolver(desdeHash) || '';
     if (!paneles[inicial]) inicial = resolver(desdeStorage) || '';
-    activar(paneles[inicial] ? inicial : 'calzado');
+    activar(paneles[inicial] ? inicial : 'creativeflowplus');
+  })();
+
+  // Barra lateral plegable; el estado se recuerda por navegador.
+  (function () {
+    var sb = document.getElementById('sidebar');
+    var btn = document.getElementById('sidebar-colapsar');
+    if (!sb || !btn) return;
+    var KEY = 'sidebar-plegada';
+    try { if (localStorage.getItem(KEY) === '1') document.body.classList.add('sidebar-plegada'); } catch (e) {}
+    btn.addEventListener('click', function () {
+      var plegada = document.body.classList.toggle('sidebar-plegada');
+      try { localStorage.setItem(KEY, plegada ? '1' : '0'); } catch (e) {}
+    });
   })();
 </script>
 {% endblock %}
