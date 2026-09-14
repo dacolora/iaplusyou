@@ -33,6 +33,7 @@ PERIODICAS = []
 def encolar_periodicas():
     """Encola cada periódica cuando pasó su ventana desde la última vez (kv)."""
     ahora = datetime.now()
+    marcadas = set()
     with db.conectar() as con:
         for tipo, cada in PERIODICAS:
             clave = f"ultimo_{tipo}"
@@ -42,15 +43,9 @@ def encolar_periodicas():
             con.execute(insert_sqlite(db.kv).values(
                 clave=clave, valor=ahora.isoformat(timespec="seconds"), actualizado_en=db.ahora()
             ).on_conflict_do_update(index_elements=["clave"], set_={"valor": ahora.isoformat(timespec="seconds"), "actualizado_en": db.ahora()}))
-    for tipo, _ in PERIODICAS:
-        if _recien_marcada(tipo, ahora):
-            cola.encolar(tipo, {}, job_id=f"periodica__{tipo}")
-
-
-def _recien_marcada(tipo, ahora):
-    with db.conectar() as con:
-        valor = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == f"ultimo_{tipo}")).scalar()
-    return valor == ahora.isoformat(timespec="seconds")
+            marcadas.add(tipo)
+    for tipo in marcadas:
+        cola.encolar(tipo, {}, job_id=f"periodica__{tipo}")
 
 
 def ejecutar(tarea):

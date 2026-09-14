@@ -46,3 +46,18 @@ def test_periodicas_se_encolan_una_vez_por_ventana(base_temporal, monkeypatch):
     worker.encolar_periodicas()
     assert cola.reclamar() is not None
     assert cola.reclamar() is None  # solo una en la ventana
+
+
+def test_periodicas_no_se_duplican_aunque_la_primera_termine(base_temporal, monkeypatch):
+    import cola, tareas, worker
+    monkeypatch.setattr(worker, "PERIODICAS", [("tick", 3600)])
+
+    @tareas.registrar("tick")
+    def _t(t):
+        return "tick"
+
+    worker.encolar_periodicas()
+    t = cola.reclamar()
+    cola.terminar(t["id"], "ok")
+    worker.encolar_periodicas()
+    assert cola.reclamar() is None
