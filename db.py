@@ -148,6 +148,7 @@ experimento = Table("experimento", metadata,
     Column("meta_campaign_id", String(40)),
     Column("gasto_acumulado", Float, default=0.0),
     Column("legado", Boolean, default=False),               # True = importado de ads.json
+    sa.Index("uq_experimento_legado", "cliente", unique=True, sqlite_where=sa.text("legado = 1")),
 )
 
 experimento_pieza = Table("experimento_pieza", metadata,

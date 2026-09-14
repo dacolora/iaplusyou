@@ -6,6 +6,7 @@ experimento legado del cliente ("Anuncios sueltos"); las métricas son filas de
 `metrica_snapshot` (se conserva historial; el dict devuelve la última).
 ads.json queda como respaldo de solo lectura.
 """
+import threading
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -19,7 +20,12 @@ _SNAP_COLS = {"impresiones": "impresiones", "reach": "alcance", "frecuencia": "f
               "clics_enlace": "clics_enlace", "ctr": "ctr", "cpc": "cpc", "cpm": "cpm", "gasto_usd": "gasto",
               "compras": "compras", "ingresos": "ingresos", "roas": "roas", "costo_por_resultado": "cpa"}
 _SNAP_INV = {v: k for k, v in _SNAP_COLS.items()}
-_META_IDS = ("campaign_id", "adset_id", "ad_id", "creative_id")
+# Serializa el select-or-insert del experimento legado: dos hilos concurrentes en
+# crear() podrían ver ambos el SELECT vacío antes de que ninguno inserte, creando
+# dos "Anuncios sueltos" para el mismo cliente. El índice único parcial en db.py
+# es la garantía real a nivel de base; este lock evita el IntegrityError en el
+# caso normal (mismo proceso, hilos de trabajos.py).
+_LOCK_EXPERIMENTO_LEGADO = threading.Lock()
 
 
 def _experimento_legado(con, cliente):
@@ -79,11 +85,12 @@ def crear(cliente, fuente, fuente_id, contenido_url, contenido_tipo, nombre):
     extra = {"fuente": fuente, "fuente_id": fuente_id, "contenido_url": contenido_url, "contenido_tipo": contenido_tipo,
              "nombre": nombre, "objetivo": None, "presupuesto_diario_usd": None, "dias": None, "audiencia": None,
              "campaign_id": None}
-    with db.conectar() as con:
-        eid = _experimento_legado(con, cliente)
-        con.execute(db.experimento_pieza.insert().values(
-            cliente=cliente, creado_en=ahora, actualizado_en=ahora, experimento_id=eid, estado="en_cola",
-            legado_id=ad_id, extra=extra))
+    with _LOCK_EXPERIMENTO_LEGADO:
+        with db.conectar() as con:
+            eid = _experimento_legado(con, cliente)
+            con.execute(db.experimento_pieza.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, experimento_id=eid, estado="en_cola",
+                legado_id=ad_id, extra=extra))
     return ad_id
 
 
@@ -119,7 +126,7 @@ def actualizar(cliente, ad_id, **campos):
                         snap[col] = int(float(val or 0))
                     else:
                         snap[col] = float(val or 0)
-                tomado = m.pop("actualizado_en", None) or db.ahora()
+                tomado = (m.pop("actualizado_en", None) or db.ahora())[:19]
                 estado_meta = m.get("estado_meta")
                 con.execute(db.metrica_snapshot.insert().values(experimento_pieza_id=epid, tomado_en=tomado, extra=m, **snap))
                 if estado_meta:

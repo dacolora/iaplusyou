@@ -58,3 +58,33 @@ def test_metricas_historial(base_temporal):
         import sqlalchemy as sa
         n = con.execute(sa.select(sa.func.count()).select_from(db.metrica_snapshot)).scalar()
     assert n == 2
+
+
+def test_experimento_legado_unico_bajo_concurrencia(base_temporal):
+    import threading
+
+    import sqlalchemy as sa
+
+    import ads
+    import db
+
+    n = 8
+    barrera = threading.Barrier(n)
+    hilos = []
+
+    def trabajo(i):
+        barrera.wait()
+        ads.crear("acme", "f", str(i), "u", "video", "n")
+
+    for i in range(n):
+        t = threading.Thread(target=trabajo, args=(i,))
+        hilos.append(t)
+        t.start()
+    for t in hilos:
+        t.join()
+
+    with db.conectar() as con:
+        total = con.execute(sa.select(sa.func.count()).select_from(db.experimento).where(
+            db.experimento.c.cliente == "acme", db.experimento.c.legado.is_(True))).scalar()
+    assert total == 1
+    assert len(ads.cargar("acme")) == n
