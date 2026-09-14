@@ -2316,7 +2316,7 @@ def actualizar_resultados_ad(cliente, ad_id):
         try:
             creds = meta_conexion.credenciales_ads(cliente)
             meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
-            resultados = meta_insights.obtener_resultados(entry["meta_ids"]["ad_id"])
+            resultados = meta_insights.obtener_resultados(entry["meta_ids"]["ad_id"], objetivo=entry.get("objetivo"))
             resultados["actualizado_en"] = datetime.now().isoformat()
             ads_mod.actualizar(cliente, ad_id, metricas=resultados)
             flash("Resultados actualizados.", "ok")

@@ -162,9 +162,9 @@
       <span class="swap-resumen-texto">
         <strong>{{ entry.nombre }}</strong>
         <span class="swap-resumen-meta">
-          {{ entry.estado }}
+          {{ entry.estado }}{% if entry.metricas and entry.metricas.estado_meta_texto %} · {{ entry.metricas.estado_meta_texto }}{% endif %}
           {% if entry.metricas and entry.metricas.impresiones %}
-          · {{ entry.metricas.impresiones }} impr. · {{ entry.metricas.clics }} clics · ${{ "%.2f"|format(entry.metricas.gasto_usd) }}
+          · {{ entry.metricas.impresiones }} impr. · {{ entry.metricas.resultado }} {{ entry.metricas.resultado_nombre | lower }} · {{ "{:,.0f}".format(entry.metricas.gasto_usd).replace(",", ".") }} {{ capacidades_meta.detalle.moneda or "USD" }}
           {% endif %}
         </span>
       </span>
@@ -172,6 +172,32 @@
 
     {% if entry.error %}
     <p class="vacio" style="color:var(--error);">{{ entry.error }}</p>
+    {% endif %}
+    {% if entry.meta_ids and entry.meta_ids.ad_id %}
+    {% set m = entry.metricas or {} %}
+    {% set mon = capacidades_meta.detalle.moneda or "USD" %}
+    <div class="ad-resultados">
+      <div class="ad-resultados-cab">
+        <strong>Resultados</strong>
+        <span class="vacio" style="padding:0;font-size:.76rem;">
+          {% if m.estado_meta_texto %}Estado en Meta: <strong>{{ m.estado_meta_texto }}</strong> · {% endif %}
+          {% if m.actualizado_en %}actualizado {{ m.actualizado_en[:16].replace("T", " ") }}{% else %}todavía no se han traído resultados{% endif %}
+        </span>
+      </div>
+      {% if m.motivo_rechazo %}<p class="tag-error">Meta rechazó el anuncio: {{ m.motivo_rechazo }}</p>{% endif %}
+      <div class="kpis">
+        <div class="kpi"><span>{{ m.resultado_nombre or "Resultados" }}</span><strong>{{ m.resultado or 0 }}</strong><small>{% if m.costo_por_resultado %}{{ "{:,.0f}".format(m.costo_por_resultado).replace(",", ".") }} {{ mon }} c/u{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>Personas alcanzadas</span><strong>{{ m.reach or 0 }}</strong><small>{% if m.frecuencia %}{{ "%.1f"|format(m.frecuencia) }} veces c/u{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>Impresiones</span><strong>{{ m.impresiones or 0 }}</strong><small>{% if m.cpm %}CPM {{ "{:,.0f}".format(m.cpm).replace(",", ".") }} {{ mon }}{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>Clics</span><strong>{{ m.clics or 0 }}</strong><small>{% if m.ctr %}CTR {{ "%.2f"|format(m.ctr) }}%{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>Gasto</span><strong>{{ "{:,.0f}".format(m.gasto_usd or 0).replace(",", ".") }} {{ mon }}</strong><small>{% if entry.presupuesto_diario_usd %}de {{ "{:,.0f}".format(entry.presupuesto_diario_usd).replace(",", ".") }}/día{% else %}—{% endif %}</small></div>
+      </div>
+      {% if not m.impresiones %}
+      <p class="vacio" style="font-size:.76rem;">
+        {% if m.estado_meta == "PENDING_REVIEW" or not m.estado_meta %}Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, "Actualizar resultados" trae las cifras.{% elif entry.estado == "pausado" %}El anuncio está pausado: no se muestra ni gasta. Actívalo para que empiece a circular.{% else %}Todavía sin impresiones — dale a "Actualizar resultados" en unas horas.{% endif %}
+      </p>
+      {% endif %}
+    </div>
     {% endif %}
     {% if entry.estado == "error" %}
     <form method="post" action="{{ url_for('reintentar_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">
