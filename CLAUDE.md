@@ -26,15 +26,17 @@ that defeats the reason this exists.
 ```bash
 python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 cp .env.example .env   # fill in HF_API_KEY_ID/SECRET, R2_*, ANTHROPIC_API_KEY, etc.
+venv/bin/alembic upgrade head   # creates/updates data/creatv.db
 python dashboard.py    # http://127.0.0.1:5050
+venv/bin/python3 worker.py      # second terminal — processes the tarea queue
 ```
 
 `ffmpeg` must be installed on the system (`brew install ffmpeg`) — used to extract a
 still frame from uploaded video assets, since Higgsfield's APIs need a static image
 reference, never a video.
 
-There is no test suite and no linter configured. `python3 -m py_compile <file>.py` is
-the only sanity check currently used before committing.
+Tests: `venv/bin/python3 -m pytest -q`. There is no linter configured;
+`python3 -m py_compile <file>.py` remains a quick sanity check before committing.
 
 The alternate CLI entry points (`run_batch.py`, `revisar.py`, `subir_personaje.py`)
 predate the dashboard and still work, but `dashboard.py` is the primary interface —
@@ -74,18 +76,30 @@ under an `idea_id`; each prompt's `estado` field drives which template renders i
 (`pendiente` -> `_prompt_row.html`, `imagen_pendiente` -> `_imagen_row.html`). When a
 video finally generates, its entry is deleted from `prompts_pendientes.json` and
 created fresh in `estado_videos.json` — the two files together are the full pipeline
-state for a client.
+state for a client. `creative_flow.py` and `ads.py` present the same read/write API
+but now persist to `data/creatv.db` (see `db.py`, `migrations/`) instead of JSON;
+`creative_flow_pendientes.json`/`ads.json` are kept only as a read-only backup,
+and `migrar_json_a_db.py` (idempotent) is what originally imported them into the
+database.
 
-**Background jobs** (`trabajos.py`): every slow action (image gen, video gen, brand
-analysis, publish) is launched via `trabajos.iniciar(job_id, fn, duracion_estimada)`
-on a daemon thread instead of blocking the request. The Flask route returns almost
-instantly; the browser polls `/trabajo/<job_id>/estado` (JSON) and renders a progress
-bar via the shared `iniciarPolling()` JS in `base.html`, reloading the page on
-completion. `job_id` is deterministic per (cliente, prompt_id/brief_id, acción) —
-`trabajos.iniciar` no-ops if that job is already running, which is the anti-double-
-click guard. **`dashboard.py` runs with `use_reloader=False` on purpose**: Flask's
-auto-reloader kills the whole process on file changes, which would silently abort
-any in-flight background generation.
+**Background jobs** (`trabajos.py`): this is an adapter over two execution paths.
+The older Higgsfield pipeline (image gen, video gen, brand analysis, publish) still
+goes through `trabajos.iniciar(job_id, fn, duracion_estimada)`, which runs the
+function in-memory on a daemon thread. The migrated jobs (`flowplus_video`,
+`flowplus_imagen`, `meta_publicar`, `meta_refrescar`, `swap_generar`, under
+`tareas/`) go through `trabajos.encolar(...)`, which inserts a row into the `tarea`
+table (`cola.py`, `data/creatv.db`) for the separate `worker.py` process (systemd
+unit `deploy/creatv-worker.service`) to pick up and run. Either way the Flask route
+returns almost instantly; the browser polls `/trabajo/<job_id>/estado` (JSON) —
+the same endpoint for both paths — and renders a progress bar via the shared
+`iniciarPolling()` JS in `base.html`, reloading the page on completion. `job_id` is
+deterministic per (cliente, prompt_id/brief_id, acción) so a repeat click no-ops
+instead of double-launching. Tasks that spend credits are queued with
+`max_intentos=1` — they never auto-retry. A queued task stuck running for more than
+30 minutes is either re-queued (if it still has attempts left) or marked `error`
+(once `max_intentos` is exhausted). **`dashboard.py` runs with `use_reloader=False`
+on purpose**: Flask's auto-reloader kills the whole process on file changes, which
+would silently abort any in-flight background generation.
 
 **Higgsfield API wrapper** (`higgsfield_client.py`): all calls follow launch ->
 `poll_until_done(status_url)` -> extract-result, for both video (`kling-2.1-pro`,

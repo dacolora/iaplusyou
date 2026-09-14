@@ -42,6 +42,38 @@ instalado en el sistema: `brew install ffmpeg`.
 
 ---
 
+## 0.1 Base de datos y worker
+
+FlowPlus, las campañas de Meta y los swaps ya no viven solo en JSON: usan una base
+SQLite (`data/creatv.db`) y una cola de tareas que procesa un proceso aparte.
+
+1. Crea/actualiza el esquema (idempotente, se corre cada vez que hay migraciones nuevas):
+   ```bash
+   venv/bin/alembic upgrade head
+   ```
+2. La primera vez, importa lo que ya existía en `creative_flow_pendientes.json` /
+   `ads.json` a la base (también idempotente, se puede volver a correr sin duplicar):
+   ```bash
+   python migrar_json_a_db.py
+   ```
+3. Instala el servicio del worker (procesa la cola: generación de FlowPlus, publicar
+   en Meta, refrescar métricas, generar swaps):
+   ```bash
+   sudo cp deploy/creatv-worker.service /etc/systemd/system/
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now creatv-worker
+   ```
+   En local basta con correrlo en una segunda terminal: `venv/bin/python3 worker.py`.
+
+**En cada despliegue hay que reiniciar los dos servicios**, no solo el dashboard:
+```bash
+sudo systemctl restart iaplusyou creatv-worker
+```
+Si solo se reinicia `iaplusyou`, el worker sigue corriendo código viejo y puede quedar
+desalineado con el esquema de la base tras una migración.
+
+---
+
 ## 1. Cloudflare R2 — storage propio y permanente
 
 Cada video generado se sube aquí antes de publicarse en cualquier red. Es tu copia
