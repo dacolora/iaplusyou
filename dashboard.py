@@ -2350,7 +2350,12 @@ def cambiar_estado_ad(cliente, ad_id):
         try:
             creds = meta_conexion.credenciales_ads(cliente)
             meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
-            meta_campaign.actualizar_estado(campaign_id, nuevo_estado)
+            # Activar/pausar los tres niveles: Meta solo entrega si campaña,
+            # conjunto Y anuncio están ACTIVE (se crean todos en pausa).
+            ids = entry.get("meta_ids") or {}
+            for oid in (campaign_id, ids.get("adset_id"), ids.get("ad_id")):
+                if oid:
+                    meta_campaign.actualizar_estado(oid, nuevo_estado)
             ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
             flash("Listo." if nuevo_estado == "ACTIVE" else "Pausado.", "ok")
         except Exception as e:
