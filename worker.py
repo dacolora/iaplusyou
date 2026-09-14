@@ -3,12 +3,15 @@ Worker de Creatv Machine: proceso aparte de gunicorn (servicio systemd
 creatv-worker) que ejecuta las tareas de la cola persistente (cola.py) una a la
 vez. Si el proceso muere a mitad de una tarea, esa tarea vuelve a `pendiente`
 a los 30 min (recuperar_colgadas) y se reintenta — a diferencia de los hilos
-en memoria de trabajos.py, nada se pierde con un reinicio.
+en memoria de trabajos.py, nada se pierde con un reinicio. Al arrancar, además,
+recupera de inmediato lo que quedó en_curso (solo hay un worker: es huérfano
+seguro), y ante SIGINT/SIGTERM termina la tarea en curso antes de salir.
 
 Uso: `python worker.py` (carga .env como dashboard.py).
 """
 import logging
 import os
+import signal
 import sys
 import time
 import traceback
@@ -28,6 +31,20 @@ log = logging.getLogger("creatv.worker")
 # (tipo, cada_segundos). Los tipos se registran en tareas/ (bloques siguientes
 # agregan refrescar_metricas_todos, sincronizar_tiendas, decidir_experimentos).
 PERIODICAS = []
+
+# Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
+# levantan esta bandera; el bucle termina la tarea en curso y recién ahí sale.
+_PARAR = False
+
+
+def debe_parar():
+    return _PARAR
+
+
+def _pedir_parada(signum, _frame):
+    global _PARAR
+    _PARAR = True
+    log.info("señal %s: termino la tarea en curso y paro", signal.Signals(signum).name)
 
 
 def encolar_periodicas():
@@ -56,6 +73,8 @@ def ejecutar(tarea):
 
 
 def ciclo():
+    if debe_parar():
+        return False
     cola.recuperar_colgadas(30)
     encolar_periodicas()
     tarea = cola.reclamar()
@@ -76,14 +95,24 @@ def main():
     load_dotenv(os.path.join(BASE_DIR, ".env"))
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", stream=sys.stdout)
     tareas.cargar_todas()
+    signal.signal(signal.SIGINT, _pedir_parada)
+    signal.signal(signal.SIGTERM, _pedir_parada)
     log.info("worker arriba · base %s · tipos %s", db.url(), sorted(tareas.REGISTRO))
-    while True:
+    # Un solo worker: lo que esté en_curso al arrancar quedó huérfano del
+    # proceso anterior (murió a mitad), no hay que esperar los 30 min.
+    huerfanas = cola.recuperar_colgadas(0)
+    if huerfanas:
+        log.info("recuperadas %s tareas que quedaron en curso del proceso anterior", huerfanas)
+    while not debe_parar():
         try:
-            if not ciclo():
+            if not ciclo() and not debe_parar():
                 time.sleep(2)
+        except KeyboardInterrupt:
+            _pedir_parada(signal.SIGINT, None)
         except Exception as e:  # noqa: BLE001
             log.error("ciclo falló: %s", cola.sin_token(e))
             time.sleep(5)
+    log.info("worker parado")
 
 
 if __name__ == "__main__":

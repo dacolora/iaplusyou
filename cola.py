@@ -6,19 +6,31 @@ reclamo es un UPDATE condicionado (WHERE id=? AND estado='pendiente') que solo
 gana un proceso.
 """
 import re
+import threading
 import time
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 
 import db
 
 _RE_TOKEN = re.compile(r"(access_token=)[^&\s\"']+")
 
+# Dedupe de encolar dentro del proceso (gunicorn con hilos). Entre procesos
+# manda el índice único parcial uq_tarea_job_viva (db.py / migración 0003).
+_ENCOLAR_LOCK = threading.Lock()
+
 
 def sin_token(texto):
-    """Nunca guardar tokens: Meta los mete en paging.next y en mensajes."""
-    return _RE_TOKEN.sub(r"\1***", str(texto or ""))[:500]
+    """Nunca guardar tokens: Meta los mete en paging.next y en mensajes. Solo
+    redacta; para acortar (mensajes/errores en la tabla) ver recortar()."""
+    return _RE_TOKEN.sub(r"\1***", str(texto or ""))
+
+
+def recortar(texto, n=500):
+    """Corta a n caracteres lo que va a una columna de mensaje/error."""
+    return str(texto or "")[:n]
 
 
 def _fila(r):
@@ -27,18 +39,25 @@ def _fila(r):
 
 def encolar(tipo, payload, *, cliente=None, job_id=None, duracion_estimada=60, etapas=None,
             ejecutar_desde=None, max_intentos=5):
+    """Devuelve el id de la tarea nueva, o None si ya hay una viva (pendiente
+    o en_curso) con ese job_id. El chequeo+insert va bajo lock (mismo proceso)
+    y el índice único parcial uq_tarea_job_viva cubre la carrera entre
+    procesos: si dos pasan el chequeo, el segundo insert falla y devuelve None."""
     ahora = db.ahora()
-    with db.conectar() as con:
+    with _ENCOLAR_LOCK, db.conectar() as con:
         if job_id:
             viva = con.execute(sa.select(db.tarea.c.id).where(
                 db.tarea.c.job_id == job_id, db.tarea.c.estado.in_(("pendiente", "en_curso")))).first()
             if viva:
                 return None
-        r = con.execute(db.tarea.insert().values(
-            cliente=cliente, job_id=job_id, tipo=tipo, payload=payload or {}, estado="pendiente",
-            intentos=0, max_intentos=max_intentos, ejecutar_desde=ejecutar_desde or ahora, creada_en=ahora,
-            duracion_estimada=float(duracion_estimada), etapas=[list(e) for e in (etapas or [])],
-        ))
+        try:
+            r = con.execute(db.tarea.insert().values(
+                cliente=cliente, job_id=job_id, tipo=tipo, payload=payload or {}, estado="pendiente",
+                intentos=0, max_intentos=max_intentos, ejecutar_desde=ejecutar_desde or ahora, creada_en=ahora,
+                duracion_estimada=float(duracion_estimada), etapas=[list(e) for e in (etapas or [])],
+            ))
+        except IntegrityError:
+            return None  # otro proceso encoló la misma job_id entre el chequeo y el insert
         return int(r.inserted_primary_key[0])
 
 
@@ -75,29 +94,33 @@ def fallar(tarea_id, error):
         if fila.intentos < fila.max_intentos:
             espera = timedelta(minutes=2 ** fila.intentos)
             con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
-                estado="pendiente", error=sin_token(error),
+                estado="pendiente", error=recortar(sin_token(error)),
                 ejecutar_desde=(datetime.now() + espera).isoformat(timespec="seconds")))
         else:
             con.execute(db.tarea.update().where(db.tarea.c.id == tarea_id).values(
-                estado="error", error=sin_token(error), terminada_en=db.ahora(), mensaje=sin_token(error)))
+                estado="error", error=recortar(sin_token(error)), terminada_en=db.ahora(),
+                mensaje=recortar(sin_token(error))))
 
 
 def recuperar_colgadas(minutos=30):
+    """Devuelve a `pendiente` (o marca `error` si agotó intentos) lo que lleva
+    más de `minutos` en_curso. Con minutos=0 (arranque del worker) toma todo lo
+    en_curso, incluso lo iniciado en este mismo segundo — por eso el `<=`."""
     limite = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
     with db.conectar() as con:
         filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos).where(
-            db.tarea.c.estado == "en_curso", db.tarea.c.iniciada_en < limite)).all()
+            db.tarea.c.estado == "en_curso", db.tarea.c.iniciada_en <= limite)).all()
         tocadas = 0
         for fila in filas:
             if fila.intentos >= fila.max_intentos:
-                mensaje = ("Se interrumpió (llevaba más de %d min en curso). Revisa el resultado y "
-                           "vuelve a intentar." % minutos)
+                mensaje = recortar("Se interrumpió (llevaba más de %d min en curso). Revisa el resultado y "
+                                   "vuelve a intentar." % minutos)
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
                     estado="error", terminada_en=db.ahora(), error=mensaje, mensaje=mensaje))
             else:
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
                     estado="pendiente", ejecutar_desde=db.ahora(),
-                    error="recuperada: llevaba más de %d min en curso" % minutos))
+                    error=recortar("recuperada: llevaba más de %d min en curso" % minutos)))
             tocadas += 1
         return tocadas
 

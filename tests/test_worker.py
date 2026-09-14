@@ -61,3 +61,32 @@ def test_periodicas_no_se_duplican_aunque_la_primera_termine(base_temporal, monk
     cola.terminar(t["id"], "ok")
     worker.encolar_periodicas()
     assert cola.reclamar() is None
+
+
+def test_ciclo_no_reclama_si_debe_parar(base_temporal, monkeypatch):
+    """Con la bandera levantada (SIGINT/SIGTERM) ciclo() sale sin tocar la cola."""
+    import cola, worker
+    tid = cola.encolar("prueba_ok", {})
+    monkeypatch.setattr(worker, "_PARAR", True)
+    assert worker.debe_parar() is True
+    assert worker.ciclo() is False
+    assert cola.consultar_por_id(tid)["estado"] == "pendiente"  # sigue ahí para el próximo arranque
+
+
+def test_pedir_parada_levanta_la_bandera(monkeypatch):
+    import signal
+    import worker
+    monkeypatch.setattr(worker, "_PARAR", False)
+    worker._pedir_parada(signal.SIGTERM, None)
+    assert worker.debe_parar() is True
+
+
+def test_recuperar_colgadas_al_arrancar_marca_error_sin_reintentos(base_temporal):
+    """Al arrancar el worker llama recuperar_colgadas(0): lo que quedó en_curso
+    del proceso anterior con max_intentos=1 pasa a error (no se reintenta)."""
+    import cola
+    tid = cola.encolar("prueba", {}, max_intentos=1)
+    cola.reclamar()
+    assert cola.recuperar_colgadas(0) == 1
+    fila = cola.consultar_por_id(tid)
+    assert fila["estado"] == "error" and "interrumpió" in fila["error"]

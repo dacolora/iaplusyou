@@ -80,3 +80,54 @@ def test_reportar_y_consultar_por_job(base_temporal):
 def test_sin_token():
     import cola
     assert cola.sin_token("x?access_token=EAAB123&y=1") == "x?access_token=***&y=1"
+
+
+def test_sin_token_no_recorta_y_recortar_si():
+    import cola
+    largo = "a" * 800
+    assert cola.sin_token(largo) == largo
+    assert len(cola.recortar(largo)) == 500
+    assert cola.recortar("abc", 2) == "ab"
+
+
+def test_fallar_recorta_el_error_a_500(base_temporal):
+    import cola
+    tid = cola.encolar("prueba", {}, max_intentos=1)
+    t = cola.reclamar(); cola.fallar(t["id"], "x" * 900 + "access_token=SECRETO")
+    fila = cola.consultar_por_id(tid)
+    assert len(fila["error"]) == 500 and "SECRETO" not in fila["error"]
+
+
+def test_encolar_concurrente_solo_una_viva(base_temporal):
+    """8 hilos encolan la misma job_id a la vez: una sola gana (lock en el
+    proceso + índice único parcial uq_tarea_job_viva)."""
+    import threading
+    import cola, db
+    n = 8
+    barrera = threading.Barrier(n)
+    resultados = [None] * n
+
+    def _correr(i):
+        barrera.wait()
+        resultados[i] = cola.encolar("x", {}, job_id="mismo")
+
+    hilos = [threading.Thread(target=_correr, args=(i,)) for i in range(n)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+    assert sum(1 for r in resultados if r is not None) == 1
+    with db.conectar() as con:
+        total = con.execute(sa.select(sa.func.count()).select_from(db.tarea)).scalar()
+    assert total == 1
+
+
+def test_indice_unico_parcial_devuelve_none(base_temporal):
+    """Aunque el chequeo previo no vea la fila (otro proceso), el insert
+    duplicado choca con uq_tarea_job_viva y encolar devuelve None."""
+    import cola, db
+    with db.conectar() as con:
+        con.execute(db.tarea.insert().values(job_id="j9", tipo="x", estado="en_curso", payload={},
+                                             intentos=1, max_intentos=1, ejecutar_desde=db.ahora(), creada_en=db.ahora()))
+    assert cola.encolar("x", {}, job_id="j9") is None
+    assert cola.encolar("x", {}, job_id="otra") is not None

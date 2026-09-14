@@ -8,6 +8,8 @@ from sqlalchemy import engine_from_config, pool
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import db  # noqa: E402
 
+db.asegurar_carpeta()  # checkout limpio: data/ todavía no existe
+
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

@@ -22,14 +22,23 @@ def url():
     return os.environ.get("CREATV_DB_URL") or f"sqlite:///{os.path.join(BASE_DIR, 'data', 'creatv.db')}"
 
 
+def asegurar_carpeta():
+    """Crea la carpeta del archivo SQLite (data/) si no existe. La usan engine()
+    y migrations/env.py (que abre su propio engine con engine_from_config y en
+    un checkout limpio fallaba con 'unable to open database file'). No hace
+    nada con :memory: ni con otras bases."""
+    u = url()
+    if u.startswith("sqlite:///") and not u.endswith(":memory:"):
+        os.makedirs(os.path.dirname(u.replace("sqlite:///", "")) or ".", exist_ok=True)
+
+
 def engine():
     """Engine singleton del proceso. SQLite con WAL para que gunicorn (hilos) y
     el worker (otro proceso) lean y escriban a la vez sin 'database is locked'."""
     global _ENGINE
     if _ENGINE is None:
         u = url()
-        if u.startswith("sqlite:///") and not u.endswith(":memory:"):
-            os.makedirs(os.path.dirname(u.replace("sqlite:///", "")) or ".", exist_ok=True)
+        asegurar_carpeta()
         _ENGINE = sa.create_engine(u, connect_args={"check_same_thread": False, "timeout": 5}, future=True)
 
         @sa.event.listens_for(_ENGINE, "connect")
@@ -234,6 +243,10 @@ tarea = Table("tarea", metadata,
     Column("progreso_etapa", Float),
     Column("progreso_visto", Float, default=0.0),
     Column("detalle", Text),
+    # Una sola tarea viva por job_id: es lo que hace atómico el dedupe de
+    # cola.encolar aunque encolen dos procesos a la vez (migración 0003).
+    sa.Index("uq_tarea_job_viva", "job_id", unique=True,
+             sqlite_where=sa.text("estado IN ('pendiente','en_curso')")),
 )
 
 tienda = Table("tienda", metadata,
