@@ -1,0 +1,16 @@
+[Unit]
+Description=Creatv Machine worker (cola persistente)
+After=network.target
+
+[Service]
+User=deploy
+WorkingDirectory=/home/deploy/iaplusyou
+EnvironmentFile=/home/deploy/iaplusyou/.env
+ExecStart=/home/deploy/iaplusyou/venv/bin/python3 worker.py
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=600
+
+[Install]
+WantedBy=multi-user.target
