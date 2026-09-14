@@ -9,3 +9,7 @@ anthropic
 jsonschema
 Pillow
 yt-dlp
+
+SQLAlchemy>=2.0,<3
+alembic>=1.13,<2
+pytest>=8,<9

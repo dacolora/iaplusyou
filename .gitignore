@@ -47,3 +47,5 @@ clientes/*/marca/*
 # de verdad del cliente (ej. Happyflops), tiene que vivir en git para nunca desalinearse.
 !clientes/*/marca/root.json
 !clientes/*/marca/schema.json
+
+data/
