@@ -86,11 +86,12 @@ def cargar(cliente):
 
 
 def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
-          duracion_objetivo, tono, modo, referencias_urls=None, platforms=None):
+          duracion_objetivo, tono, modo, referencias_urls=None, platforms=None,
+          legado_id=None, creado_en=None):
     if modo not in MODOS_VALIDOS:
         raise ValueError(f"Modo inválido: {modo}. Opciones: {MODOS_VALIDOS}")
-    cf_id = "cf_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    ahora = db.ahora()
+    cf_id = legado_id or ("cf_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+    ahora = creado_en[:19] if creado_en else db.ahora()
     extra = {"personajes_ids": personajes_ids, "productos_ids": productos_ids, "escenas_ids": escenas_ids,
              "accion_central": accion_central, "duracion_objetivo": duracion_objetivo, "tono": tono, "modo": modo,
              "platforms": platforms or [], "prompt_relleno": None, "referencias_urls": referencias_urls,

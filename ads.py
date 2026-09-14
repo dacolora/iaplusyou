@@ -79,9 +79,10 @@ def cargar(cliente):
         return {f._mapping[db.experimento_pieza.c.legado_id]: _a_dict(con, f) for f in filas}
 
 
-def crear(cliente, fuente, fuente_id, contenido_url, contenido_tipo, nombre):
-    ad_id = "ad_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    ahora = db.ahora()
+def crear(cliente, fuente, fuente_id, contenido_url, contenido_tipo, nombre,
+          legado_id=None, creado_en=None):
+    ad_id = legado_id or ("ad_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
+    ahora = creado_en[:19] if creado_en else db.ahora()
     extra = {"fuente": fuente, "fuente_id": fuente_id, "contenido_url": contenido_url, "contenido_tipo": contenido_tipo,
              "nombre": nombre, "objetivo": None, "presupuesto_diario_usd": None, "dias": None, "audiencia": None,
              "campaign_id": None}

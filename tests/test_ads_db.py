@@ -88,3 +88,13 @@ def test_experimento_legado_unico_bajo_concurrencia(base_temporal):
             db.experimento.c.cliente == "acme", db.experimento.c.legado.is_(True))).scalar()
     assert total == 1
     assert len(ads.cargar("acme")) == n
+
+
+def test_crear_con_legado_id_y_creado_en(base_temporal):
+    import ads
+    aid = ads.crear("acme", "flowplus", "cf_1", "https://r2/v.mp4", "video", "N",
+                    legado_id="ad_x", creado_en="2026-01-02T03:04:05.123456")
+    assert aid == "ad_x"
+    data = ads.cargar("acme")
+    assert "ad_x" in data
+    assert data["ad_x"]["creado_en"] == "2026-01-02T03:04:05"

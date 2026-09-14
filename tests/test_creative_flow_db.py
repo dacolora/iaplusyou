@@ -92,3 +92,13 @@ def test_actualizar_y_eliminar_ignoran_piezas_final(base_temporal):
         ).fetchall()
     assert len(piezas) == 1 and piezas[0].tipo == "final"
     assert cid not in cf.cargar("acme")
+
+
+def test_crear_con_legado_id_y_creado_en(base_temporal):
+    import creative_flow as cf
+    cid = cf.crear("acme", [], [], [], "uno", 5, "", "A",
+                   legado_id="cf_x", creado_en="2026-01-02T03:04:05.123456")
+    assert cid == "cf_x"
+    data = cf.cargar("acme")
+    assert "cf_x" in data
+    assert data["cf_x"]["creado_en"] == "2026-01-02T03:04:05"
