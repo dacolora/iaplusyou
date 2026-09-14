@@ -1,6 +1,7 @@
 {% include "_meta_conectar.html" %}
 
 {# La campaña se arma sin Meta conectado (es estado local); publicar sí exige la conexión. #}
+{# trabajos_ads: {ad_id: {"job_id": ...}} para las tarjetas con un trabajo del worker en curso. #}
 <p class="vacio" style="padding-top:0;">
   Arma una campaña con lo que ya generaste en Crear. Se publica como anuncio
   pagado real en Meta — siempre pausado al crearse, nunca gasta presupuesto
@@ -198,6 +199,13 @@
       </p>
       {% endif %}
     </div>
+    {% endif %}
+    {% set trabajo_ad = trabajos_ads.get(ad_id) if trabajos_ads else none %}
+    {% if trabajo_ad %}
+    {# El worker está publicando o trayendo métricas: barra + recarga sola al terminar. #}
+    <div class="barra-progreso" id="trabajo-{{ trabajo_ad.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    <div class="progreso-texto">{% if entry.estado == "publicando" %}Publicando en Meta…{% else %}Actualizando resultados…{% endif %} 0% · 0s</div>
+    <script>iniciarPolling({{ trabajo_ad.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_ad.job_id) | tojson }});</script>
     {% endif %}
     {% if entry.estado == "error" %}
     <form method="post" action="{{ url_for('reintentar_ad', cliente=cliente, ad_id=ad_id) }}" style="display:inline;">

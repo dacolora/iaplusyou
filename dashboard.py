@@ -49,11 +49,6 @@ from providers import aspect_ratio as aspect_ratio_mod
 import ads as ads_mod
 from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
-from meta_ads import adset as meta_adset
-from meta_ads import ad as meta_ad
-from meta_ads import creative as meta_creative
-from meta_ads import insights as meta_insights
-from meta_ads.targeting import Targeting
 import creative_flow
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 from publicador import publicar_brief
@@ -825,6 +820,16 @@ def ver_cliente(cliente):
 
     log = bitacora.leer(cliente=cliente, limit=100)
 
+    # Campañas: qué tarjetas tienen un trabajo del worker en curso (publicar o
+    # refrescar métricas), para que la tarjeta muestre la barra y se recargue sola.
+    ads_dict = ads_mod.cargar(cliente)
+    trabajos_ads = {}
+    for ad_id in ads_dict:
+        for jid in (f"{cliente}__{ad_id}__metricas", f"{cliente}__{ad_id}__ads_publicar"):
+            if trabajos.en_curso(jid):
+                trabajos_ads[ad_id] = {"job_id": jid}
+                break
+
     return render_template(
         "cliente.html",
         cliente=cliente,
@@ -857,7 +862,8 @@ def ver_cliente(cliente):
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
         modelos_flowplus_video=flowplus_modelos.VIDEO,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
-        ads=ads_mod.cargar(cliente),
+        ads=ads_dict,
+        trabajos_ads=trabajos_ads,
         preferencias_swap=proyectos.preferencias(cliente),
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
@@ -1442,8 +1448,6 @@ def ver_swap(cliente):
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
 PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
-# Divisas que Meta maneja sin decimales (el monto se manda tal cual, no ×100).
-MONEDAS_SIN_DECIMALES = {"JPY", "CLP", "HUF", "ISK", "KRW", "TWD", "VND", "PYG", "UGX", "XAF", "XOF"}
 
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
@@ -2176,42 +2180,27 @@ def meta_desconectar(cliente):
     return _ir_a_flowmarketing(cliente)
 
 
-def _miniatura_para_ad(cliente, ad_id, video_url):
-    """Fotograma del video (segundo 1) subido a R2, para image_url del creative.
-    Si algo falla, devuelve la propia URL del video (Meta genera una por defecto)."""
-    try:
-        carpeta = os.path.join(BASE_DIR, "salidas", cliente, "ads")
-        os.makedirs(carpeta, exist_ok=True)
-        local_video = os.path.join(carpeta, f"{ad_id}.mp4")
-        with requests.get(video_url, timeout=120, stream=True) as r:
-            r.raise_for_status()
-            with open(local_video, "wb") as f:
-                for chunk in r.iter_content(1 << 16):
-                    f.write(chunk)
-        frame = os.path.join(carpeta, f"{ad_id}.jpg")
-        _extraer_frame(local_video, frame)
-        return r2_uploader.upload_image(frame, f"clientes/{cliente}/ads/{ad_id}.jpg")
-    except Exception as e:
-        bitacora.registrar(cliente, ad_id, "ads_miniatura", "error", str(e))
-        return video_url
-
-
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
 def publicar_ad(cliente):
     """Toma un anuncio en cola (creado por otro módulo vía ads.crear) y lo
     publica de verdad en Meta: Campaign -> AdSet -> AdCreative -> Ad, todo
-    PAUSED. Corre en un job de fondo porque encadena 4 llamadas HTTP."""
+    PAUSED. La ruta solo valida el formulario y encola; la cadena de 4
+    llamadas HTTP la ejecuta el worker (tareas/meta.py, meta_publicar)."""
     ad_id = request.form.get("ad_id", "").strip()
     objetivo = request.form.get("objetivo", "").strip()
     # El presupuesto se escribe en la MONEDA DE LA CUENTA (meta.json -> moneda):
     # Meta interpreta daily_budget en esa divisa. Antes se asumía USD y con una
     # cuenta en COP "5" terminaba siendo 500 pesos diarios.
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
-    presupuesto_diario = float(request.form.get("presupuesto_diario") or request.form.get("presupuesto_diario_usd") or 0)
-    dias = int(request.form.get("dias", "0") or 0)
+    try:
+        presupuesto_diario = float(request.form.get("presupuesto_diario") or request.form.get("presupuesto_diario_usd") or 0)
+        dias = int(request.form.get("dias", "0") or 0)
+        edad_min = int(request.form.get("edad_min", "18") or 18)
+        edad_max = int(request.form.get("edad_max", "65") or 65)
+    except ValueError:
+        flash("Presupuesto, días y edades deben ser números.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
     pais = request.form.get("pais", "").strip()
-    edad_min = int(request.form.get("edad_min", "18") or 18)
-    edad_max = int(request.form.get("edad_max", "65") or 65)
     destino_url = request.form.get("destino_url", "").strip()
 
     data = ads_mod.cargar(cliente)
@@ -2219,8 +2208,17 @@ def publicar_ad(cliente):
     if not entry:
         flash("No encontré ese anuncio en la cola.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    if objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1:
+        flash("Elige un objetivo válido para el anuncio.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
     if not presupuesto_diario or not dias or not pais or not destino_url:
         flash("Faltan presupuesto, días, país o URL de destino.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    if not (13 <= edad_min <= edad_max <= 65):
+        flash("Las edades deben estar entre 13 y 65, y la mínima no puede superar la máxima.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    if not destino_url.startswith(("http://", "https://")):
+        flash("La URL de destino debe empezar por http:// o https://.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
     if presupuesto_diario < minimo:
@@ -2228,7 +2226,7 @@ def publicar_ad(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
     ads_mod.actualizar(
-        cliente, ad_id, estado="publicando", objetivo=objetivo,
+        cliente, ad_id, estado="publicando", error=None, objetivo=objetivo,
         presupuesto_diario=presupuesto_diario, moneda=moneda,
         presupuesto_diario_usd=presupuesto_diario if moneda == "USD" else None, dias=dias,
         audiencia={"edad_min": edad_min, "edad_max": edad_max, "paises": [pais]},
@@ -2236,77 +2234,13 @@ def publicar_ad(cliente):
     )
     job_id = f"{cliente}__{ad_id}__ads_publicar"
 
-    def trabajo():
-        # Serializado: meta_auth.configurar() escribe credenciales globales del
-        # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
-        # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
-        with _ENV_LOCK:
-            # Meta recibe el presupuesto en la unidad menor de la divisa (centavos
-            # para USD y COP; sin decimales para JPY/CLP/etc.).
-            centavos = int(round(presupuesto_diario * (1 if moneda in MONEDAS_SIN_DECIMALES else 100)))
-            try:
-                # Credenciales del proyecto (meta.json), no del .env: cada
-                # cliente conectó su propia cuenta desde FlowMarketing.
-                creds = meta_conexion.credenciales_ads(cliente)
-                meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
-                campaign_resp = meta_campaign.crear_campaign(entry["nombre"], objetivo)
-                campaign_id = campaign_resp["id"]
-
-                targeting = Targeting().edad(edad_min, edad_max).paises([pais]).to_dict()
-                adset_resp = meta_adset.crear_adset(
-                    f"{entry['nombre']} — adset", campaign_id, objetivo, targeting, centavos, dias,
-                )
-                adset_id = adset_resp["id"]
-
-                ig_user_id = creds["ig_user_id"]
-                if entry["contenido_tipo"] == "foto":
-                    creative_resp = meta_creative.crear_creative_imagen(
-                        f"{entry['nombre']} — creative", entry["contenido_url"], entry["nombre"],
-                        link=destino_url, instagram_user_id=ig_user_id,
-                    )
-                else:
-                    # El video se sube a la cuenta publicitaria (advideos) y se
-                    # usa su id; la miniatura es un fotograma real subido a R2.
-                    meta_video_id = meta_creative.subir_video(entry["contenido_url"], titulo=entry["nombre"])
-                    miniatura_url = _miniatura_para_ad(cliente, ad_id, entry["contenido_url"])
-                    creative_resp = meta_creative.crear_creative_video(
-                        f"{entry['nombre']} — creative", meta_video_id, miniatura_url,
-                        entry["nombre"], destino_url, instagram_user_id=ig_user_id,
-                    )
-                    ads_mod.actualizar(cliente, ad_id, meta_video_id=meta_video_id)
-                creative_id = creative_resp["id"]
-
-                ad_resp = meta_ad.crear_ad(entry["nombre"], adset_id, creative_id)
-
-                ads_mod.actualizar(
-                    cliente, ad_id, estado="pausado",
-                    meta_ids={
-                        "campaign_id": campaign_id, "adset_id": adset_id,
-                        "ad_id": ad_resp["id"], "creative_id": creative_id,
-                    },
-                )
-                bitacora.registrar(cliente, ad_id, "ads_publicar", "ok", campaign_id)
-                return "Anuncio publicado (pausado, revísalo en Meta Ads Manager antes de activarlo)."
-            except Exception as e:
-                msg = str(e)
-                # Meta no permite crear anuncios con la app en modo desarrollo
-                # (subcode 1885183 / "(#3) capability"): hasta pasar App Review
-                # se conecta y se leen métricas, pero no se publica.
-                if "1359188" in msg or "todo de pago" in msg:
-                    msg = ("Tu cuenta publicitaria de Meta no tiene un método de pago. Agrégalo en "
-                           "business.facebook.com › Facturación y pagos (tarjeta o PSE) y vuelve a intentar; "
-                           "la pieza sigue en la lista.")
-                elif "1885183" in msg or "modo de desarrollo" in msg or "does not have the capability" in msg:
-                    msg = ("Meta rechazó la solicitud por permisos de la app (#3). Desconecta y vuelve a "
-                           "conectar Meta para renovar los permisos; si sigue igual, avísanos. La pieza "
-                           "sigue en la lista.")
-                ads_mod.actualizar(cliente, ad_id, estado="error", error=msg)
-                bitacora.registrar(cliente, ad_id, "ads_publicar", "error", str(e))
-                raise
-            finally:
-                meta_auth.limpiar()
-
-    if trabajos.iniciar(job_id, trabajo, duracion_estimada=30):
+    # max_intentos=1: un reintento automático a mitad de la cadena crearía
+    # campañas huérfanas en Meta; la persona reintenta con "Volver a intentar".
+    arranco = trabajos.encolar(job_id, "meta_publicar", {
+        "cliente": cliente, "ad_id": ad_id, "objetivo": objetivo, "presupuesto_diario": presupuesto_diario,
+        "dias": dias, "pais": pais, "edad_min": edad_min, "edad_max": edad_max, "destino_url": destino_url,
+    }, cliente=cliente, duracion_estimada=90, max_intentos=1)
+    if arranco:
         flash("Publicando el anuncio…", "ok")
     else:
         flash("Ya se está publicando ese anuncio — espera a que termine.", "warn")
@@ -2320,21 +2254,16 @@ def actualizar_resultados_ad(cliente, ad_id):
     if not entry or not entry.get("meta_ids", {}).get("ad_id"):
         flash("Ese anuncio todavía no está publicado en Meta.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    # Serializado: meta_auth.configurar() escribe credenciales globales del
-    # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
-    # llamadas a Meta -> limpiar() para que dos proyectos nunca se mezclen.
-    with _ENV_LOCK:
-        try:
-            creds = meta_conexion.credenciales_ads(cliente)
-            meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
-            resultados = meta_insights.obtener_resultados(entry["meta_ids"]["ad_id"], objetivo=entry.get("objetivo"))
-            resultados["actualizado_en"] = datetime.now().isoformat()
-            ads_mod.actualizar(cliente, ad_id, metricas=resultados)
-            flash("Resultados actualizados.", "ok")
-        except Exception as e:
-            flash(f"No pude traer los resultados: {e}", "error")
-        finally:
-            meta_auth.limpiar()
+    # El snapshot lo trae el worker (tareas/meta.py, meta_refrescar); la
+    # tarjeta se recarga sola por el polling.
+    arranco = trabajos.encolar(
+        f"{cliente}__{ad_id}__metricas", "meta_refrescar", {"cliente": cliente, "ad_id": ad_id},
+        cliente=cliente, duracion_estimada=10,
+    )
+    if arranco:
+        flash("Actualizando resultados…", "ok")
+    else:
+        flash("Ya se están actualizando.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
