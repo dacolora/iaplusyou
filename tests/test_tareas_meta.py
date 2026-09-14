@@ -31,6 +31,49 @@ def test_refrescar_guarda_snapshot(base_temporal, monkeypatch):
     assert m["impresiones"] == 120 and m["resultado"] == 8 and m["actualizado_en"] and "actualizados" in msg.lower()
 
 
+def test_refrescar_anuncio_inexistente(base_temporal, monkeypatch):
+    import tareas.meta as tm
+
+    def _boom(c):
+        raise AssertionError("no debía pedir credenciales")
+    monkeypatch.setattr(tm.meta_conexion, "credenciales_ads", _boom)
+    msg = tm.refrescar({"payload": {"cliente": "acme", "ad_id": "no-existe"}, "job_id": "j"})
+    assert "ya no existe" in msg
+
+
+def test_publicar_interrumpido_no_repite_campana(base_temporal, monkeypatch):
+    """Si el proceso murió a mitad de la cadena y recuperar_colgadas ya marcó
+    error, o si ya alcanzó a crear una campaña en Meta, publicar() no debe
+    volver a llamar a Meta (crearía una segunda campaña huérfana)."""
+    import ads
+    import tareas.meta as tm
+    aid = ads.crear("acme", "flowplus", "cf", "https://r2/f.png", "foto", "Pieza")
+    ads.actualizar("acme", aid, estado="pausado", meta_ids={"campaign_id": "1"})
+
+    def _boom(*a, **k):
+        raise AssertionError("no debía llamar a Meta")
+    monkeypatch.setattr(tm.meta_campaign, "crear_campaign", _boom)
+    monkeypatch.setattr(tm.meta_conexion, "credenciales_ads", lambda c: _boom())
+    msg = tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, "objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": 20000,
+                                   "dias": 3, "pais": "CO", "edad_min": 18, "edad_max": 45,
+                                   "destino_url": "https://tienda.com/p"}, "job_id": "j"})
+    assert "interrumpió" in msg
+    e = ads.cargar("acme")[aid]
+    assert e["estado"] == "error" and "interrumpió" in e["error"]
+
+
+def test_publicar_anuncio_inexistente(base_temporal, monkeypatch):
+    import tareas.meta as tm
+
+    def _boom(*a, **k):
+        raise AssertionError("no debía llamar a Meta")
+    monkeypatch.setattr(tm.meta_campaign, "crear_campaign", _boom)
+    msg = tm.publicar({"payload": {"cliente": "acme", "ad_id": "no-existe", "objetivo": "OUTCOME_TRAFFIC",
+                                   "presupuesto_diario": 20000, "dias": 3, "pais": "CO", "edad_min": 18,
+                                   "edad_max": 45, "destino_url": "https://tienda.com/p"}, "job_id": "j"})
+    assert "ya no existe" in msg
+
+
 def test_refrescar_sin_publicar_no_llama_a_meta(base_temporal, monkeypatch):
     import ads
     import tareas.meta as tm

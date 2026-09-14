@@ -85,10 +85,21 @@ def fallar(tarea_id, error):
 def recuperar_colgadas(minutos=30):
     limite = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
     with db.conectar() as con:
-        r = con.execute(db.tarea.update().where(
-            db.tarea.c.estado == "en_curso", db.tarea.c.iniciada_en < limite
-        ).values(estado="pendiente", ejecutar_desde=db.ahora(), error="recuperada: llevaba más de %d min en curso" % minutos))
-        return r.rowcount
+        filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos).where(
+            db.tarea.c.estado == "en_curso", db.tarea.c.iniciada_en < limite)).all()
+        tocadas = 0
+        for fila in filas:
+            if fila.intentos >= fila.max_intentos:
+                mensaje = ("Se interrumpió (llevaba más de %d min en curso). Revisa el resultado y "
+                           "vuelve a intentar." % minutos)
+                con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
+                    estado="error", terminada_en=db.ahora(), error=mensaje, mensaje=mensaje))
+            else:
+                con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
+                    estado="pendiente", ejecutar_desde=db.ahora(),
+                    error="recuperada: llevaba más de %d min en curso" % minutos))
+            tocadas += 1
+        return tocadas
 
 
 def reportar(job_id, etapa=None, progreso=None, detalle=None):

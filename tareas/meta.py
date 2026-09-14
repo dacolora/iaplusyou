@@ -79,7 +79,19 @@ def publicar(tarea):
     edad_min = int(p["edad_min"])
     edad_max = int(p["edad_max"])
     destino_url = p["destino_url"]
-    entry = ads.cargar(cliente)[ad_id]
+    entry = ads.cargar(cliente).get(ad_id)
+    if entry is None:
+        return "Ese anuncio ya no existe."
+
+    # Idempotencia: max_intentos=1, pero si el proceso murió a mitad de la
+    # cadena (recuperar_colgadas la marcó "error") no reintentamos solos —
+    # reintentar automáticamente crearía una segunda campaña huérfana en
+    # Meta. Si ya no está "publicando" o si ya alcanzó a crear una campaña,
+    # paramos sin llamar a Meta; la persona revisa y reintenta a mano.
+    if entry.get("estado") != "publicando" or (entry.get("meta_ids") or {}).get("campaign_id"):
+        msg = "Se interrumpió la publicación; revisa Ads Manager antes de volver a intentar."
+        ads.actualizar(cliente, ad_id, estado="error", error=msg)
+        return msg
 
     # El presupuesto se escribe en la MONEDA DE LA CUENTA (meta.json -> moneda):
     # Meta interpreta daily_budget en esa divisa. Antes se asumía USD y con una
@@ -162,7 +174,9 @@ def refrescar(tarea):
     reintentarse con los max_intentos por defecto."""
     p = tarea["payload"]
     cliente, ad_id = p["cliente"], p["ad_id"]
-    entry = ads.cargar(cliente)[ad_id]
+    entry = ads.cargar(cliente).get(ad_id)
+    if entry is None:
+        return "Ese anuncio ya no existe."
     if not entry.get("meta_ids", {}).get("ad_id"):
         return "Ese anuncio todavía no está publicado en Meta."
     # Serializado: meta_auth.configurar() escribe credenciales globales del

@@ -52,6 +52,20 @@ def test_recuperar_colgadas(base_temporal):
     assert cola.consultar_por_id(tid)["estado"] == "pendiente"
 
 
+def test_recuperar_colgadas_respeta_max_intentos(base_temporal):
+    import cola, db
+    tid = cola.encolar("prueba", {}, max_intentos=1)
+    cola.reclamar()
+    vieja = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.id == tid).values(iniciada_en=vieja))
+    assert cola.recuperar_colgadas(30) == 1
+    fila = cola.consultar_por_id(tid)
+    assert fila["estado"] == "error"
+    assert "interrumpió" in fila["error"] and "interrumpió" in fila["mensaje"]
+    assert fila["terminada_en"]
+
+
 def test_reportar_y_consultar_por_job(base_temporal):
     import cola
     cola.encolar("prueba", {}, job_id="j2", etapas=[["Subir", 10], ["Modelo", 90]], duracion_estimada=100)
