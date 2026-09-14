@@ -8,6 +8,7 @@ Uso:
 
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
+import json
 import os
 import secrets
 import socket
@@ -120,7 +121,8 @@ def _guard_por_cliente():
     Rutas sin <cliente> en la URL (login, /, /proyectos/nuevo, estáticos)
     no pasan por acá."""
     cliente = request.view_args.get("cliente") if request.view_args else None
-    if cliente is None:
+    if cliente is None or request.endpoint == "landing_cliente":
+        # la landing pública de un proyecto es, justamente, pública
         return None
     sesion = _sesion()
     if not usuarios.puede_acceder(sesion, cliente):
@@ -570,6 +572,19 @@ y los identificadores de tu cuenta publicitaria, Página e Instagram al instante
 con confirmación por correo.</li></ol>
 <p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Machine › Eliminar.</p>"""
     return render_template("legal.html", titulo="Eliminación de datos", actualizado="12 de septiembre de 2026", cuerpo=cuerpo)
+
+
+@app.route("/l/<cliente>")
+def landing_cliente(cliente):
+    """Página pública de destino de un proyecto (clientes/<c>/landing.json).
+    Sirve de landing para anuncios cuando el cliente no tiene web propia —
+    p. ej. una app, porque Meta no acepta el link a la tienda con Tráfico."""
+    ruta = os.path.join(BASE_DIR, "clientes", secure_filename(cliente), "landing.json")
+    if not os.path.isfile(ruta):
+        abort(404)
+    with open(ruta, encoding="utf-8") as f:
+        datos = json.load(f)
+    return render_template("landing_cliente.html", l=datos)
 
 
 @app.route("/panel")

@@ -1,0 +1,35 @@
+{# Landing pública de un proyecto (clientes/<c>/landing.json): destino para
+   anuncios cuando el cliente no tiene página web — p. ej. una app, donde Meta
+   no acepta el link directo a la tienda con objetivo Tráfico. #}
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ l.titulo }}</title>
+  <meta name="description" content="{{ l.descripcion }}">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root { --acc: {{ l.color or "#7c3aed" }}; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #0f0f16; color: #fff; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 2rem 1.2rem; }
+    .caja { max-width: 420px; width: 100%; text-align: center; }
+    video, img.hero { width: 100%; max-height: 62vh; object-fit: cover; border-radius: 22px; box-shadow: 0 30px 80px rgba(0,0,0,.6); background: #000; }
+    h1 { font-family: "Space Grotesk", sans-serif; font-size: 2rem; margin: 1.4rem 0 .5rem; letter-spacing: -.02em; }
+    p { color: #b8b8c8; line-height: 1.5; margin: 0 0 1.4rem; }
+    .btn { display: inline-flex; align-items: center; gap: .6rem; background: var(--acc); color: #fff; text-decoration: none; font-weight: 600; padding: 1rem 1.6rem; border-radius: 999px; font-size: 1.05rem; box-shadow: 0 10px 30px rgba(124,58,237,.4); }
+    .btn:hover { filter: brightness(1.08); }
+    small { display: block; margin-top: 1.6rem; color: #6c6c80; font-size: .72rem; }
+    small a { color: inherit; }
+  </style>
+</head>
+<body>
+  <div class="caja">
+    {% if l.video_url %}<video src="{{ l.video_url }}" autoplay muted loop playsinline></video>{% elif l.imagen_url %}<img class="hero" src="{{ l.imagen_url }}" alt="">{% endif %}
+    <h1>{{ l.titulo }}</h1>
+    <p>{{ l.descripcion }}</p>
+    <a class="btn" href="{{ l.boton_url }}" rel="noopener">{{ l.boton_texto or "Descargar" }} →</a>
+    <small><a href="{{ url_for('privacidad') }}">Privacidad</a> · Hecho con Creatv Machine</small>
+  </div>
+</body>
+</html>
