@@ -1,0 +1,68 @@
+import time
+from datetime import datetime, timedelta
+
+import sqlalchemy as sa
+
+
+def test_encolar_y_reclamar(base_temporal):
+    import cola
+    tid = cola.encolar("prueba", {"x": 1}, cliente="c1", job_id="c1__j1")
+    assert isinstance(tid, int)
+    t = cola.reclamar()
+    assert t["id"] == tid and t["estado"] == "en_curso" and t["payload"] == {"x": 1}
+    assert t["intentos"] == 1 and t["iniciada_en"] and t["inicio"]
+    assert cola.reclamar() is None
+
+
+def test_encolar_dedupe_por_job_id(base_temporal):
+    import cola
+    assert cola.encolar("prueba", {}, job_id="j") is not None
+    assert cola.encolar("prueba", {}, job_id="j") is None
+    t = cola.reclamar()
+    cola.terminar(t["id"], "ok")
+    assert cola.encolar("prueba", {}, job_id="j") is not None  # terminada -> se puede repetir
+
+
+def test_fallar_reintenta_con_espera_exponencial(base_temporal):
+    import cola
+    tid = cola.encolar("prueba", {}, max_intentos=3)
+    t = cola.reclamar(); cola.fallar(t["id"], "boom 1")
+    fila = cola.consultar_por_id(tid)
+    assert fila["estado"] == "pendiente" and fila["error"] == "boom 1"
+    espera = datetime.fromisoformat(fila["ejecutar_desde"]) - datetime.now()
+    assert timedelta(minutes=1, seconds=-5) < espera <= timedelta(minutes=2)
+    assert cola.reclamar() is None  # todavía no toca
+
+
+def test_fallar_agota_intentos(base_temporal):
+    import cola
+    tid = cola.encolar("prueba", {}, max_intentos=1)
+    t = cola.reclamar(); cola.fallar(t["id"], "boom")
+    assert cola.consultar_por_id(tid)["estado"] == "error"
+
+
+def test_recuperar_colgadas(base_temporal):
+    import cola, db
+    tid = cola.encolar("prueba", {})
+    cola.reclamar()
+    vieja = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        con.execute(db.tarea.update().where(db.tarea.c.id == tid).values(iniciada_en=vieja))
+    assert cola.recuperar_colgadas(30) == 1
+    assert cola.consultar_por_id(tid)["estado"] == "pendiente"
+
+
+def test_reportar_y_consultar_por_job(base_temporal):
+    import cola
+    cola.encolar("prueba", {}, job_id="j2", etapas=[["Subir", 10], ["Modelo", 90]], duracion_estimada=100)
+    cola.reclamar()
+    cola.reportar("j2", etapa="Modelo", detalle="en cola, puesto 2")
+    fila = cola.consultar_por_job("j2")
+    assert fila["etapa_actual"] == "Modelo" and fila["indice_etapa"] == 1 and fila["detalle"] == "en cola, puesto 2"
+    cola.reportar("j2", progreso=50)
+    assert cola.consultar_por_job("j2")["progreso_etapa"] == 50.0
+
+
+def test_sin_token():
+    import cola
+    assert cola.sin_token("x?access_token=EAAB123&y=1") == "x?access_token=***&y=1"
