@@ -43,14 +43,14 @@ import referencias_flowplus
 import referencias_link
 import generador_prompts
 from providers import image_provider
-from providers import nano_banana_client, video_provider, kling_o1_client, comparador_modelos, wavespeed_client
-from providers import wavespeed_video_edit, wan3_client, wavespeed_imagen, flowplus_modelos
+from providers import video_provider, wan3_client, flowplus_modelos
 from providers import aspect_ratio as aspect_ratio_mod
 import ads as ads_mod
 from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
+from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
 from higgsfield_client import (
     generate_video,
@@ -1476,40 +1476,19 @@ NOMBRES_PROVEEDOR_SWAP = {
 }
 
 
-# Etapas reales del swap. Los nombres se usan en DOS lados (al declararlas en
-# trabajos.iniciar y al anunciarlas con trabajos.reportar), así que van en
+# Etapas reales de los trabajos. Los nombres se usan en DOS lados (al declararlas
+# en trabajos.iniciar y al anunciarlas con trabajos.reportar), así que van en
 # constantes para que no puedan desincronizarse por un typo. Los pesos son
 # "qué fracción del tiempo se lleva más o menos cada paso" — la llamada al
 # modelo es de lejos la más larga.
-ETAPA_SUBIR_ORIGINAL = "Subiendo tu video original"
-ETAPA_SUBIR_REFERENCIAS = "Subiendo las fotos del producto"
-ETAPA_PREPARAR_FOTO = "Preparando la imagen"
 ETAPA_MODELO = "Generando con el modelo"
 ETAPA_DESCARGAR = "Descargando el resultado"
-ETAPA_GUARDAR = "Guardando y evaluando la marca"
 ETAPA_GUARDAR_VIDEO = "Guardando el video"
-ETAPA_MEJORAR = "Mejorando la calidad de la imagen"
 ETAPA_GUARDAR_IMAGEN = "Guardando la imagen"
+# Las etapas propias del swap (subir original, preparar foto, mejorar, guardar
+# y evaluar) viven en tareas/swap.py junto con ETAPAS_SWAP_*.
 
-ETAPAS_SWAP_VIDEO = [
-    (ETAPA_SUBIR_ORIGINAL, 5),
-    (ETAPA_SUBIR_REFERENCIAS, 10),
-    (ETAPA_MODELO, 70),
-    (ETAPA_DESCARGAR, 5),
-    (ETAPA_GUARDAR, 10),
-]
-ETAPAS_SWAP_FOTO = [
-    (ETAPA_PREPARAR_FOTO, 10),
-    (ETAPA_MODELO, 70),
-    (ETAPA_GUARDAR, 20),
-]
-# Con la mejora activada hay una llamada más al proveedor entre medio.
-ETAPAS_SWAP_FOTO_MEJORADA = [
-    (ETAPA_PREPARAR_FOTO, 8),
-    (ETAPA_MODELO, 57),
-    (ETAPA_MEJORAR, 20),
-    (ETAPA_GUARDAR, 15),
-]
+# ETAPAS_SWAP_* viven en tareas/swap.py (se importan arriba).
 # ETAPAS_CREATIVE_FLOW vive en tareas/flowplus.py (se importa arriba).
 
 # Pipeline clásico (prompt -> imagen candidata -> video) y flujo imagen-primero.
@@ -1577,30 +1556,6 @@ def _avisar_fase_de(job_id):
         except Exception:
             pass
     return avisar_fase
-
-
-def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
-    """Corre la evaluación de marca sobre una imagen (foto final, o un fotograma
-    extraído de un video final) y guarda el resultado. No falla el swap si esto
-    falla — es un plus, no el resultado principal."""
-    # El desenlace se PERSISTE (evaluacion_estado), no solo se anota en la
-    # bitácora: sin eso, un fallo silencioso dejaba la tarjeta diciendo
-    # "Evaluando cumplimiento de marca…" para siempre, porque `evaluacion` se
-    # quedaba en None y nada volvía a tocar esa entrada. Hoy hay 6 swaps así en
-    # disco. Lo mismo cuando el cliente no tiene invariantes definidas: no es un
-    # error, pero la evaluación tampoco va a llegar nunca.
-    try:
-        root = marca_mod.cargar_root(cliente)
-        invariantes = root.get("invariants", []) if root else []
-        if not invariantes:
-            swaps_mod.actualizar(cliente, swap_id, evaluacion_estado="sin_matriz")
-            return
-        evaluacion = generador_prompts.evaluar_contra_matriz(image_url, invariantes)
-        swaps_mod.actualizar(cliente, swap_id, evaluacion=evaluacion, evaluacion_estado="ok")
-        bitacora.registrar(cliente, swap_id, "evaluacion", "ok", "")
-    except Exception as e:
-        swaps_mod.actualizar(cliente, swap_id, evaluacion_estado="error", evaluacion_error=str(e))
-        bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
 
 
 @app.route("/cliente/<cliente>/swap/generar", methods=["POST"])
@@ -1671,221 +1626,6 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
     swap_id = swaps_mod.crear(cliente, foto_local, producto_id, aspect_ratio_detectado, proveedor, tipo=tipo)
     job_id = f"{cliente}__{swap_id}__swap"
 
-    # Cada etapa se anuncia con trabajos.reportar(job_id, ...) para que la barra
-    # deje de ser un número inventado: el usuario ve en qué paso real va.
-    avisar_fase = _avisar_fase_de(job_id)
-
-    def trabajo():
-        try:
-            # os.makedirs y negative_prompt_efectivo estaban FUERA del try:
-            # negative_prompt_efectivo lee marca/root.json y revienta si ese
-            # archivo está mal formado, dejando el job en "error" pero el swap
-            # en "generando" para siempre en disco (tarjeta zombie).
-            resultados_dir = os.path.join(BASE_DIR, "salidas", cliente, "swaps")
-            os.makedirs(resultados_dir, exist_ok=True)
-            negative_prompt = marca_mod.negative_prompt_efectivo(cliente)
-            # El TIPO del producto decide qué prompt se arma: un calzado va en
-            # los pies y no puede sobresalir del contorno del pie; una cobija se
-            # drapea sobre la persona o el mueble y sigue sus pliegues.
-            tipo_producto = producto.get("tipo")
-            # Instrucción de ubicación y proporción derivada del mapa corporal.
-            # None si el producto no va sobre una persona (cobija, objeto).
-            mapa_producto = producto.get("mapa_texto")
-            # Si la subida a R2 falla, el resultado SÍ existe en disco. Se guarda
-            # el motivo para que la plantilla pueda decir la verdad ("se generó
-            # pero no se pudo subir, está acá") en vez de dar por muerta una
-            # generación que sí terminó y ya se pagó.
-            error_storage = None
-
-            if tipo == "video":
-                local_path = os.path.join(resultados_dir, f"{swap_id}.mp4")
-                trabajos.reportar(job_id, etapa=ETAPA_SUBIR_ORIGINAL)
-                video_url = r2_uploader.upload_video(foto_local, f"clientes/{cliente}/swaps_subidas/{ts}_{nombre}")
-                # Se suben hasta 9 (el máximo que acepta Wan 2.7 Video Edit) — cada
-                # cliente recorta a su propio límite (Kling O1 usa las primeras 4).
-                referencias = producto["referencias"][:9]
-                trabajos.reportar(job_id, etapa=ETAPA_SUBIR_REFERENCIAS)
-                referencias_urls = []
-                for i, ref_local in enumerate(referencias):
-                    # Son 1-2MB cada una y suben en serie: sin este detalle el
-                    # tramo se percibía como una barra colgada.
-                    trabajos.reportar(
-                        job_id,
-                        progreso=100.0 * i / len(referencias),
-                        detalle=f"foto {i + 1} de {len(referencias)}",
-                    )
-                    key = f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref_local)}"
-                    referencias_urls.append(r2_uploader.upload_image(ref_local, key))
-
-                trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-                if proveedor == "kling_o1":
-                    citas = " ".join(f"@Image{i + 1}" for i in range(len(referencias_urls)))
-                    prompt = prompt_swap.prompt_video(tipo_producto, citas=citas, mapa=mapa_producto)
-                    resultado_url = kling_o1_client.editar_video(
-                        video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
-                    )
-                    costo = kling_o1_client.estimate_video()
-                elif proveedor == "wan27_edit":
-                    prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
-                    resultado_url = wavespeed_client.editar_video(
-                        video_url, prompt, referencias_urls=referencias_urls, on_progreso=avisar_fase,
-                    )
-                    costo = wavespeed_client.estimate_video()
-                elif proveedor in wavespeed_video_edit.MODELOS:
-                    prompt = prompt_swap.prompt_video(tipo_producto, mapa=mapa_producto)
-                    resultado_url = wavespeed_video_edit.editar_video(
-                        proveedor, video_url, prompt, referencias_urls=referencias_urls,
-                        on_progreso=avisar_fase,
-                    )
-                    costo = wavespeed_video_edit.estimate_video(proveedor)
-                else:
-                    referencia = referencias_urls[0] if referencias_urls else None
-                    resultado_url = comparador_modelos.editar_video(
-                        proveedor, video_url, producto["descripcion"], referencia_imagen_url=referencia,
-                        on_progreso=avisar_fase, tipo=tipo_producto, mapa=mapa_producto,
-                    )
-                    costo = comparador_modelos.estimate_video(proveedor)
-
-                trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
-                resp = requests.get(resultado_url, timeout=180)
-                resp.raise_for_status()
-                with open(local_path, "wb") as f:
-                    f.write(resp.content)
-                trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
-                try:
-                    url = r2_uploader.upload_video(local_path, f"clientes/{cliente}/swaps/{swap_id}.mp4")
-                except Exception as e:
-                    # Acá sí hay plan B: la URL del proveedor sirve igual para
-                    # mostrar y publicar, así que no queda "listo sin url".
-                    url = resultado_url
-                    error_storage = str(e)
-                    bitacora.registrar(cliente, swap_id, "storage", "error", str(e))
-            else:
-                local_path = os.path.join(resultados_dir, f"{swap_id}.png")
-                trabajos.reportar(job_id, etapa=ETAPA_PREPARAR_FOTO)
-                if proveedor == "nano_banana":
-                    trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-                    img_bytes = nano_banana_client.swap_producto(
-                        foto_local, producto["referencias"], negative_prompt=negative_prompt,
-                        tipo=tipo_producto, mapa=mapa_producto,
-                    )
-                    with open(local_path, "wb") as f:
-                        f.write(img_bytes)
-                    costo = nano_banana_client.estimate_image()
-                else:  # nano_banana_fal, qwen_edit, nano_banana_pro_ultra
-                    foto_url = r2_uploader.upload_image(foto_local, f"clientes/{cliente}/swaps_subidas/{ts}_{nombre}")
-                    # Nano Banana Pro Ultra acepta hasta 14 imágenes (13 de
-                    # referencia + la foto); los de fal solo 2. Se sube lo que
-                    # cada uno puede aprovechar, ni una más.
-                    if proveedor == "nano_banana_pro_ultra":
-                        tope_refs = 13
-                    elif proveedor == "seedream_v5_pro":
-                        tope_refs = 9   # acepta 10 en total, una la ocupa la foto
-                    else:
-                        tope_refs = 2
-                    referencias_urls = [
-                        r2_uploader.upload_image(ref, f"clientes/{cliente}/productos/{producto_id}/{os.path.basename(ref)}")
-                        for ref in producto["referencias"][:tope_refs]
-                    ]
-                    trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-                    if proveedor == "nano_banana_pro_ultra":
-                        referencias_lista = "\n".join(
-                            f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
-                            for i in range(len(referencias_urls))
-                        )
-                        resultado_url = wavespeed_imagen.editar_imagen(
-                            foto_url, prompt_swap.prompt_imagen(tipo_producto, referencias_lista, mapa=mapa_producto),
-                            referencias_urls=referencias_urls,
-                            aspect_ratio=aspect_ratio_mod.detectar_wavespeed_nano_banana_pro(foto_local),
-                            on_progreso=avisar_fase,
-                        )
-                        costo = wavespeed_imagen.estimate_image()
-                    elif proveedor == "seedream_v5_pro":
-                        referencias_lista = "\n".join(
-                            f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
-                            for i in range(len(referencias_urls))
-                        )
-                        resultado_url = wavespeed_imagen.editar_imagen_seedream(
-                            foto_url,
-                            prompt_swap.prompt_imagen(tipo_producto, referencias_lista, mapa=mapa_producto),
-                            referencias_urls=referencias_urls, on_progreso=avisar_fase,
-                        )
-                        costo = wavespeed_imagen.estimate_seedream(n_imagenes=len(referencias_urls) + 1)
-                    else:
-                        resultado_url = comparador_modelos.editar_imagen(
-                            proveedor, foto_url, producto["descripcion"], referencias_urls=referencias_urls,
-                            foto_local_path=foto_local, on_progreso=avisar_fase, tipo=tipo_producto, mapa=mapa_producto,
-                        )
-                        costo = comparador_modelos.estimate_image(proveedor)
-                    trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
-                    resp = requests.get(resultado_url, timeout=120)
-                    resp.raise_for_status()
-                    with open(local_path, "wb") as f:
-                        f.write(resp.content)
-
-                if mejorar_calidad:
-                    # Segunda pasada: agranda SIN regenerar (Bria). Necesita una
-                    # URL pública, así que primero sube el resultado del swap a
-                    # R2 y después reemplaza el archivo local por el mejorado.
-                    trabajos.reportar(job_id, etapa=ETAPA_MEJORAR)
-                    try:
-                        url_para_mejorar = r2_uploader.upload_image(
-                            local_path, f"clientes/{cliente}/swaps/{swap_id}.previo.png")
-                        ancho_prev, alto_prev = aspect_ratio_mod.dimensiones(local_path)
-                        mejorada_url = wavespeed_imagen.mejorar_calidad(
-                            url_para_mejorar,
-                            factor=wavespeed_imagen.factor_seguro(ancho_prev, alto_prev),
-                            on_progreso=avisar_fase,
-                        )
-                        resp_mejorada = requests.get(mejorada_url, timeout=180)
-                        resp_mejorada.raise_for_status()
-                        with open(local_path, "wb") as f:
-                            f.write(resp_mejorada.content)
-                        costo = {
-                            "credits": costo.get("credits"),
-                            "usd": round((costo.get("usd") or 0) + wavespeed_imagen.COSTO_USD_UPSCALE, 3),
-                        }
-                    except Exception as e:
-                        # La mejora es un extra: si falla, el swap YA está hecho y
-                        # se entrega igual. Perder el resultado por el paso opcional
-                        # sería tirar a la basura lo que el usuario ya pagó.
-                        bitacora.registrar(cliente, swap_id, "mejora_calidad", "error", str(e))
-
-                trabajos.reportar(job_id, etapa=ETAPA_GUARDAR)
-                try:
-                    url = r2_uploader.upload_image(local_path, f"clientes/{cliente}/swaps/{swap_id}.png")
-                except Exception as e:
-                    # Sin plan B (nano_banana devuelve bytes, no una URL): queda
-                    # "listo" sin resultado_url. La plantilla necesita saber que
-                    # el archivo existe igual, si no muestra un mensaje falso.
-                    url = None
-                    error_storage = str(e)
-                    bitacora.registrar(cliente, swap_id, "storage", "error", str(e))
-
-            swaps_mod.actualizar(
-                cliente, swap_id, estado="listo", resultado_url=url, resultado_local=local_path,
-                credits=costo.get("credits"), usd=costo.get("usd"), error_storage=error_storage,
-            )
-            bitacora.registrar(cliente, swap_id, "swap", "ok", local_path)
-
-            if url:
-                if tipo == "video":
-                    frame_path = os.path.join(resultados_dir, f"{swap_id}.frame.jpg")
-                    try:
-                        _extraer_frame(local_path, frame_path)
-                        frame_url = r2_uploader.upload_image(frame_path, f"clientes/{cliente}/swaps/{swap_id}.frame.jpg")
-                        _evaluar_swap_contra_matriz(cliente, swap_id, frame_url)
-                    except Exception as e:
-                        bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
-                else:
-                    _evaluar_swap_contra_matriz(cliente, swap_id, url)
-
-            return "Swap listo."
-        except Exception as e:
-            swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e))
-            bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
-            raise
-
     if proveedor in ("nano_banana", "nano_banana_fal", "qwen_edit"):
         duracion_estimada = 20
     elif proveedor in ("nano_banana_pro_ultra", "seedream_v5_pro"):
@@ -1900,7 +1640,13 @@ def _lanzar_swap(cliente, archivo, producto, producto_id, proveedor_foto, provee
         etapas = ETAPAS_SWAP_VIDEO
     else:
         etapas = ETAPAS_SWAP_FOTO_MEJORADA if mejorar_calidad else ETAPAS_SWAP_FOTO
-    return trabajos.iniciar(job_id, trabajo, duracion_estimada=duracion_estimada, etapas=etapas)
+    # La generación corre en el worker (sobrevive reinicios). Sin reintento
+    # automático: es generación pagada, un segundo intento gastaría créditos
+    # otra vez sobre un fallo que ya se le mostró a la persona.
+    return trabajos.encolar(job_id, "swap_generar", {
+        "cliente": cliente, "swap_id": swap_id, "producto_id": producto_id,
+        "proveedor": proveedor, "tipo": tipo, "mejorar_calidad": bool(mejorar_calidad),
+    }, cliente=cliente, duracion_estimada=duracion_estimada, etapas=etapas, max_intentos=1)
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/original")
