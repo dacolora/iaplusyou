@@ -3,6 +3,8 @@ Importa a la base del motor lo que hoy vive en JSON por cliente:
   clientes/<c>/creative_flow_pendientes.json -> concepto + pieza (via creative_flow)
   clientes/<c>/ads.json                      -> experimento legado + experimento_pieza + metrica_snapshot (via ads)
 Idempotente: una entrada cuyo id (cf_.../ad_...) ya está en la base se salta.
+Los estados a mitad de camino (cf "video_generando", ad "publicando") entran
+como "error" con un mensaje: el hilo que los estaba corriendo ya no existe.
 Los JSON no se borran ni se modifican: quedan como respaldo de solo lectura.
 
 Cada entrada se inserta con su id final (legado_id=cf_id/ad_id) desde el
@@ -42,6 +44,10 @@ def migrar_cliente(cliente, base_dir=BASE_DIR):
                             e.get("tono", ""), e.get("modo", "A"), referencias_urls=e.get("referencias_urls"),
                             platforms=e.get("platforms"), legado_id=cf_id, creado_en=e.get("creado_en"))
         campos = {k: v for k, v in e.items() if k not in ("creado_en",)}
+        if campos.get("estado") == "video_generando":
+            # Estaba a mitad de generación en el proceso viejo; nadie la va a terminar.
+            campos["estado"] = "error"
+            campos["error"] = "Se interrumpió la generación durante la migración. Vuelve a generarla."
         creative_flow.actualizar(cliente, cf_id, **campos)
         res["conceptos"] += 1
 
@@ -55,6 +61,10 @@ def migrar_cliente(cliente, base_dir=BASE_DIR):
                  e.get("contenido_tipo"), e.get("nombre"), legado_id=ad_id, creado_en=e.get("creado_en"))
         campos = {k: v for k, v in e.items() if k not in ("fuente", "fuente_id", "contenido_url", "contenido_tipo", "nombre", "creado_en")}
         metricas = campos.pop("metricas", None)
+        if campos.get("estado") == "publicando":
+            campos["estado"] = "error"
+            campos["error"] = ("Se interrumpió la publicación durante la migración. Revisa Ads Manager "
+                               "y vuelve a intentar.")
         ads.actualizar(cliente, ad_id, **campos)
         if metricas and (metricas.get("actualizado_en") or metricas.get("impresiones")):
             ads.actualizar(cliente, ad_id, metricas=metricas)

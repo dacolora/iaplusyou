@@ -139,6 +139,39 @@ def test_publicar_crea_campana_y_deja_pausado(base_temporal, monkeypatch):
     assert "pausado" in msg.lower()
 
 
+def test_publicar_guarda_campaign_id_apenas_la_crea(base_temporal, monkeypatch):
+    """Si falla un paso posterior a crear_campaign, meta_ids.campaign_id ya
+    quedó guardado: el guardia de idempotencia impide una segunda campaña."""
+    import ads
+    import tareas.meta as tm
+    aid = ads.crear("acme", "flowplus", "cf", "https://r2/f.png", "foto", "Pieza")
+    ads.actualizar("acme", aid, estado="publicando")
+    monkeypatch.setattr(tm.meta_conexion, "credenciales_ads", _creds_falsas)
+    monkeypatch.setattr(tm.meta_conexion, "cargar", lambda c: {"moneda": "USD"})
+    monkeypatch.setattr(tm.meta_auth, "configurar", lambda *a, **k: None)
+    monkeypatch.setattr(tm.meta_auth, "limpiar", lambda: None)
+    monkeypatch.setattr(tm.meta_campaign, "crear_campaign", lambda nombre, objetivo: {"id": "c7"})
+
+    def _boom(*a, **k):
+        raise RuntimeError("adset falló")
+    monkeypatch.setattr(tm.meta_adset, "crear_adset", _boom)
+    monkeypatch.setattr(tm.bitacora, "registrar", lambda *a, **k: None)
+    payload = {"cliente": "acme", "ad_id": aid, "objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": 5,
+               "dias": 1, "pais": "CO", "edad_min": 18, "edad_max": 45, "destino_url": "https://tienda.com/p"}
+    with pytest.raises(RuntimeError):
+        tm.publicar({"payload": payload, "job_id": "j"})
+    e = ads.cargar("acme")[aid]
+    assert e["estado"] == "error" and e["meta_ids"]["campaign_id"] == "c7"
+    assert not e["meta_ids"].get("ad_id")
+
+    # Segundo intento sin tocar nada: no debe volver a llamar a Meta.
+    def _no(*a, **k):
+        raise AssertionError("no debía crear otra campaña")
+    monkeypatch.setattr(tm.meta_campaign, "crear_campaign", _no)
+    msg = tm.publicar({"payload": payload, "job_id": "j"})
+    assert "interrumpió" in msg
+
+
 def test_publicar_mapea_error_sin_metodo_de_pago(base_temporal, monkeypatch):
     import ads
     import tareas.meta as tm
@@ -237,7 +270,7 @@ def test_ruta_actualizar_resultados_encola_refrescar(base_temporal, monkeypatch)
     assert capturado["tipo"] == "meta_refrescar"
     assert capturado["job_id"] == f"acme__{aid}__metricas"
     assert capturado["payload"] == {"cliente": "acme", "ad_id": aid}
-    assert "max_intentos" not in capturado  # idempotente: reintentos por defecto
+    assert capturado["max_intentos"] == 1  # el error de Meta se ve ya, no tras 30 min de reintentos
 
 
 def test_plantilla_ads_compila():

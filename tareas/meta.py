@@ -112,6 +112,11 @@ def publicar(tarea):
             meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
             campaign_resp = meta_campaign.crear_campaign(entry["nombre"], objetivo)
             campaign_id = campaign_resp["id"]
+            # Se guarda ya: si un paso posterior falla o el proceso muere, el
+            # guardia de idempotencia de arriba ve la campaña y no crea otra.
+            ads.actualizar(cliente, ad_id, meta_ids={
+                "campaign_id": campaign_id, "adset_id": None, "ad_id": None, "creative_id": None,
+            })
 
             targeting = Targeting().edad(edad_min, edad_max).paises([pais]).to_dict()
             adset_resp = meta_adset.crear_adset(

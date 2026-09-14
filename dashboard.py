@@ -2002,9 +2002,11 @@ def actualizar_resultados_ad(cliente, ad_id):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
     # El snapshot lo trae el worker (tareas/meta.py, meta_refrescar); la
     # tarjeta se recarga sola por el polling.
+    # max_intentos=1: si Meta falla, la persona tiene que ver el error ya, no
+    # después de 30 min de reintentos con espera exponencial.
     arranco = trabajos.encolar(
         f"{cliente}__{ad_id}__metricas", "meta_refrescar", {"cliente": cliente, "ad_id": ad_id},
-        cliente=cliente, duracion_estimada=10,
+        cliente=cliente, duracion_estimada=10, max_intentos=1,
     )
     if arranco:
         flash("Actualizando resultados…", "ok")
@@ -2697,6 +2699,10 @@ def _reconciliar_huerfanos():
     Al arrancar, _TRABAJOS está vacío por definición, así que todo lo que esté en
     'generando' es necesariamente un huérfano: se marca como error y cae en la
     rama que todas las plantillas ya saben mostrar.
+
+    Excepción: los swaps y las piezas de CreativeFlowPlus ya corren en el worker
+    (cola persistente). Si su job sigue vivo en la cola (trabajos.en_curso), no
+    es huérfano — el worker puede estar generándolo — y se deja como está.
     """
     clientes_dir = os.path.join(BASE_DIR, "clientes")
     if not os.path.isdir(clientes_dir):
@@ -2707,8 +2713,10 @@ def _reconciliar_huerfanos():
         try:
             swaps_data = swaps_mod.cargar(cliente)
             tocado = False
-            for entry in swaps_data.values():
+            for swap_id, entry in swaps_data.items():
                 if entry.get("estado") == "generando":
+                    if trabajos.en_curso(f"{cliente}__{swap_id}__swap"):
+                        continue
                     entry["estado"] = "error"
                     entry["error"] = _MENSAJE_INTERRUMPIDO
                     tocado = True
@@ -2717,8 +2725,10 @@ def _reconciliar_huerfanos():
 
             cf_data = creative_flow.cargar(cliente)
             tocado = False
-            for entry in cf_data.values():
+            for cf_id, entry in cf_data.items():
                 if entry.get("estado") == "video_generando":
+                    if trabajos.en_curso(f"{cliente}__{cf_id}__creative_flow"):
+                        continue
                     entry["estado"] = "error"
                     entry["error"] = _MENSAJE_INTERRUMPIDO
                     tocado = True

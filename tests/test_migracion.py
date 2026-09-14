@@ -46,3 +46,26 @@ def test_cliente_sin_json(base_temporal):
     import migrar_json_a_db as mig
     base = tempfile.mkdtemp(); os.makedirs(os.path.join(base, "clientes", "vacio"))
     assert mig.migrar_cliente("vacio", base) == {"conceptos": 0, "anuncios": 0, "saltados": 0}
+
+
+def test_migra_estados_a_mitad_de_camino_como_error(base_temporal):
+    """Un cf en 'video_generando' o un ad en 'publicando' del JSON viejo no
+    tienen quién los termine: entran como error con un mensaje claro."""
+    import ads, creative_flow as cf, migrar_json_a_db as mig
+    base = _cliente_con_json()
+    c = os.path.join(base, "clientes", "acme")
+    ruta_cf = os.path.join(c, "creative_flow_pendientes.json")
+    ruta_ads = os.path.join(c, "ads.json")
+    d = json.load(open(ruta_cf))
+    d["cf_20260912_160550_108303"]["estado"] = "video_generando"
+    json.dump(d, open(ruta_cf, "w"))
+    a = json.load(open(ruta_ads))
+    a["ad_20260913_193256_500057"]["estado"] = "publicando"
+    a["ad_20260913_193256_500057"]["meta_ids"] = {}
+    json.dump(a, open(ruta_ads, "w"))
+
+    assert mig.migrar_cliente("acme", base) == {"conceptos": 1, "anuncios": 1, "saltados": 0}
+    e = cf.cargar("acme")["cf_20260912_160550_108303"]
+    assert e["estado"] == "error" and "interrumpió la generación" in e["error"]
+    ad = ads.cargar("acme")["ad_20260913_193256_500057"]
+    assert ad["estado"] == "error" and "Ads Manager" in ad["error"]
