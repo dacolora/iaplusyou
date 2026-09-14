@@ -18,11 +18,12 @@ def test_registra_tipos(base_temporal):
 
 
 def test_etapas_mismos_pesos_que_dashboard():
+    import dashboard
     import tareas.flowplus as fp
     assert fp.ETAPAS_CREATIVE_FLOW == [
-        ("Generando con el modelo", 85),
-        ("Descargando el resultado", 8),
-        ("Guardando el video", 7),
+        (dashboard.ETAPA_MODELO, 85),
+        (dashboard.ETAPA_DESCARGAR, 8),
+        (dashboard.ETAPA_GUARDAR_VIDEO, 7),
     ]
 
 
@@ -132,5 +133,7 @@ def test_lanzar_video_cf_encola(base_temporal, monkeypatch):
     fila = cola.consultar_por_job(f"acme__{cid}__creative_flow")
     assert fila["tipo"] == "flowplus_imagen" and fila["payload"] == {"cliente": "acme", "cf_id": cid}
     assert fila["estado"] == "pendiente"
+    # sin reintento automático: una generación fallida pudo haber cobrado ya
+    assert fila["max_intentos"] == 1
     # segunda vez con la misma sesión: ya hay una viva, no encola otra
     assert dashboard._lanzar_video_cf("acme", cid, entry) is False

@@ -2682,10 +2682,14 @@ def _lanzar_video_cf(cliente, cf_id, entry):
     # Escribe estado="video_generando" ANTES de encolar: si el worker fallara
     # instantáneo, podría escribir "error" y el principal pisarlo.
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
+    # max_intentos=1: si la generación falla (p.ej. timeout al descargar) ya
+    # pudo haberse cobrado el crédito en el proveedor. No la reintentamos
+    # solos — que la persona decida con "Reintentar" en la UI.
     return trabajos.encolar(
         job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
         {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
         duracion_estimada=60 if tipo == "imagen" else 180, etapas=ETAPAS_CREATIVE_FLOW,
+        max_intentos=1,
     )
 
 
