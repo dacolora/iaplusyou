@@ -28,7 +28,7 @@ from providers import aspect_ratio as aspect_ratio_mod
 from providers import nano_banana_client, kling_o1_client, comparador_modelos, wavespeed_client
 from providers import wavespeed_video_edit, wavespeed_imagen
 from storage import r2_uploader
-from tareas import registrar
+from tareas import al_interrumpir, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -147,6 +147,14 @@ def _evaluar_swap_contra_matriz(cliente, swap_id, image_url):
     except Exception as e:
         swaps_mod.actualizar(cliente, swap_id, evaluacion_estado="error", evaluacion_error=str(e))
         bitacora.registrar(cliente, swap_id, "evaluacion", "error", str(e))
+
+
+@al_interrumpir("swap_generar")
+def interrumpida(tarea, mensaje):
+    """El worker murió a mitad del swap: sin esto la tarjeta queda en
+    `generando` para siempre. En error, con motivo, se puede volver a lanzar."""
+    cliente, swap_id = tarea["payload"]["cliente"], tarea["payload"]["swap_id"]
+    swaps_mod.actualizar(cliente, swap_id, estado="error", error=mensaje)
 
 
 @registrar("swap_generar")

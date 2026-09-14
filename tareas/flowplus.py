@@ -19,7 +19,7 @@ import estado as estado_mod
 import trabajos
 from providers import flowplus_modelos
 from storage import r2_uploader
-from tareas import registrar
+from tareas import al_interrumpir, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -57,6 +57,16 @@ _FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
 
 def _job_id(cliente, cf_id):
     return f"{cliente}__{cf_id}__creative_flow"
+
+
+@al_interrumpir("flowplus_video")
+@al_interrumpir("flowplus_imagen")
+def interrumpida(tarea, mensaje):
+    """El worker murió a mitad de la generación: la sesión quedaría en
+    `video_generando` para siempre (la tarjeta no ofrece reintentar). Se marca
+    en error con el motivo para que la persona pueda volver a generar."""
+    cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
+    creative_flow.actualizar(cliente, cf_id, estado="error", error=mensaje)
 
 
 def _aspect_ratio_para_plataformas(platforms):

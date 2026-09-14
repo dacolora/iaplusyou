@@ -23,6 +23,19 @@ def test_registro_contiene_swap_generar(base_temporal):
     ]
 
 
+def test_interrumpida_marca_el_swap_en_error(base_temporal, monkeypatch, tmp_path):
+    import swaps as swaps_mod
+    import tareas
+    import tareas.swap as sw
+    assert tareas.AL_INTERRUMPIR["swap_generar"] is sw.interrumpida
+    monkeypatch.setattr(swaps_mod, "_path", lambda c: str(tmp_path / f"swaps_{c}.json"))
+    sid = swaps_mod.crear("acme", str(tmp_path / "foto.jpg"), "p1", "9:16")
+    swaps_mod.actualizar("acme", sid, estado="generando")
+    sw.interrumpida({"payload": {"cliente": "acme", "swap_id": sid}}, "Se interrumpió.")
+    e = swaps_mod.cargar("acme")[sid]
+    assert e["estado"] == "error" and e["error"] == "Se interrumpió."
+
+
 def test_etapas_mismas_que_dashboard():
     import dashboard
     import tareas.swap as sw

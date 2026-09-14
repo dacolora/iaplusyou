@@ -84,9 +84,55 @@ def test_pedir_parada_levanta_la_bandera(monkeypatch):
 def test_recuperar_colgadas_al_arrancar_marca_error_sin_reintentos(base_temporal):
     """Al arrancar el worker llama recuperar_colgadas(0): lo que quedó en_curso
     del proceso anterior con max_intentos=1 pasa a error (no se reintenta)."""
-    import cola
+    import cola, worker
     tid = cola.encolar("prueba", {}, max_intentos=1)
     cola.reclamar()
-    assert cola.recuperar_colgadas(0) == 1
+    assert worker.recuperar_interrumpidas(0) == 1
     fila = cola.consultar_por_id(tid)
     assert fila["estado"] == "error" and "interrumpió" in fila["error"]
+
+
+def test_interrumpida_marca_la_sesion_de_crear_en_error(base_temporal):
+    """Worker muerto a mitad de flowplus_imagen y reiniciado: la tarea queda en
+    error (sin reintentos) Y la sesión cf_ detrás pasa de video_generando a
+    error con el motivo — antes quedaba "generando" para siempre sin reintento."""
+    import cola, creative_flow, tareas, worker
+    tareas.cargar_todas()
+    cid = creative_flow.crear("acme", [], [], [], "camina", 5, "", "A", referencias_urls=["https://x/1.png"])
+    creative_flow.actualizar("acme", cid, estado="video_generando", tipo="imagen")
+    tid = cola.encolar("flowplus_imagen", {"cliente": "acme", "cf_id": cid},
+                       job_id=f"acme__{cid}__creative_flow", max_intentos=1)
+    assert cola.reclamar()["id"] == tid
+    assert creative_flow.cargar("acme")[cid]["estado"] == "video_generando"
+
+    assert worker.recuperar_interrumpidas(0) == 1
+
+    assert cola.consultar_por_id(tid)["estado"] == "error"
+    e = creative_flow.cargar("acme")[cid]
+    assert e["estado"] == "error" and e["error"] == worker.MENSAJE_INTERRUMPIDA
+
+
+def test_interrumpida_con_reintentos_no_toca_la_entidad(base_temporal):
+    """Si la tarea todavía tiene intentos vuelve a pendiente: la sesión sigue
+    generando (la va a retomar el worker), no se marca en error."""
+    import cola, creative_flow, tareas, worker
+    tareas.cargar_todas()
+    cid = creative_flow.crear("acme", [], [], [], "camina", 5, "", "A")
+    creative_flow.actualizar("acme", cid, estado="video_generando", tipo="video")
+    tid = cola.encolar("flowplus_video", {"cliente": "acme", "cf_id": cid}, max_intentos=3)
+    cola.reclamar()
+    assert worker.recuperar_interrumpidas(0) == 1
+    assert cola.consultar_por_id(tid)["estado"] == "pendiente"
+    assert creative_flow.cargar("acme")[cid]["estado"] == "video_generando"
+
+
+def test_hook_que_falla_no_tumba_la_recuperacion(base_temporal, monkeypatch):
+    import cola, tareas, worker
+
+    def _boom(t, mensaje):
+        raise RuntimeError("hook roto access_token=SECRETO")
+    monkeypatch.setitem(tareas.AL_INTERRUMPIR, "prueba_hook", _boom)
+    tid = cola.encolar("prueba_hook", {}, max_intentos=1)
+    cola.reclamar()
+    assert worker.recuperar_interrumpidas(0) == 1
+    assert cola.consultar_por_id(tid)["estado"] == "error"

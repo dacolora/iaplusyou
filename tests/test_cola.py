@@ -48,7 +48,7 @@ def test_recuperar_colgadas(base_temporal):
     vieja = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
     with db.conectar() as con:
         con.execute(db.tarea.update().where(db.tarea.c.id == tid).values(iniciada_en=vieja))
-    assert cola.recuperar_colgadas(30) == 1
+    assert cola.recuperar_colgadas(30) == (1, [])  # vuelve a pendiente: no es interrumpida
     assert cola.consultar_por_id(tid)["estado"] == "pendiente"
 
 
@@ -59,11 +59,14 @@ def test_recuperar_colgadas_respeta_max_intentos(base_temporal):
     vieja = (datetime.now() - timedelta(minutes=45)).isoformat(timespec="seconds")
     with db.conectar() as con:
         con.execute(db.tarea.update().where(db.tarea.c.id == tid).values(iniciada_en=vieja))
-    assert cola.recuperar_colgadas(30) == 1
+    tocadas, interrumpidas = cola.recuperar_colgadas(30)
+    assert tocadas == 1
     fila = cola.consultar_por_id(tid)
     assert fila["estado"] == "error"
     assert "interrumpió" in fila["error"] and "interrumpió" in fila["mensaje"]
     assert fila["terminada_en"]
+    # La devuelve ya en su estado final, con la misma forma que consultar_por_id.
+    assert interrumpidas == [fila]
 
 
 def test_reportar_y_consultar_por_job(base_temporal):

@@ -105,24 +105,31 @@ def fallar(tarea_id, error):
 def recuperar_colgadas(minutos=30):
     """Devuelve a `pendiente` (o marca `error` si agotó intentos) lo que lleva
     más de `minutos` en_curso. Con minutos=0 (arranque del worker) toma todo lo
-    en_curso, incluso lo iniciado en este mismo segundo — por eso el `<=`."""
+    en_curso, incluso lo iniciado en este mismo segundo — por eso el `<=`.
+
+    Devuelve `(tocadas, interrumpidas)`: cuántas tareas tocó y la lista (dicts,
+    misma forma que consultar_por_id) de las que quedaron en `error` sin más
+    reintentos — el worker las pasa a tareas.AL_INTERRUMPIR para que la
+    sesión/swap/anuncio de atrás no quede "en curso" para siempre."""
     limite = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
     with db.conectar() as con:
         filas = con.execute(sa.select(db.tarea.c.id, db.tarea.c.intentos, db.tarea.c.max_intentos).where(
             db.tarea.c.estado == "en_curso", db.tarea.c.iniciada_en <= limite)).all()
         tocadas = 0
+        interrumpidas = []
         for fila in filas:
             if fila.intentos >= fila.max_intentos:
                 mensaje = recortar("Se interrumpió (llevaba más de %d min en curso). Revisa el resultado y "
                                    "vuelve a intentar." % minutos)
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
                     estado="error", terminada_en=db.ahora(), error=mensaje, mensaje=mensaje))
+                interrumpidas.append(_fila(con.execute(sa.select(db.tarea).where(db.tarea.c.id == fila.id)).first()))
             else:
                 con.execute(db.tarea.update().where(db.tarea.c.id == fila.id).values(
                     estado="pendiente", ejecutar_desde=db.ahora(),
                     error=recortar("recuperada: llevaba más de %d min en curso" % minutos)))
             tocadas += 1
-        return tocadas
+        return tocadas, interrumpidas
 
 
 def reportar(job_id, etapa=None, progreso=None, detalle=None):

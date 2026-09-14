@@ -62,6 +62,27 @@ def test_publicar_interrumpido_no_repite_campana(base_temporal, monkeypatch):
     assert e["estado"] == "error" and "interrumpió" in e["error"]
 
 
+def test_interrumpida_marca_el_anuncio_en_error_solo_si_publicando(base_temporal):
+    """Worker muerto a mitad de meta_publicar: el anuncio en `publicando` pasa a
+    error con el motivo. Si ya está en otro estado (pausado) no se pisa."""
+    import ads
+    import tareas
+    import tareas.meta as tm
+    assert tareas.AL_INTERRUMPIR["meta_publicar"] is tm.interrumpida
+    assert "meta_refrescar" not in tareas.AL_INTERRUMPIR
+    aid = ads.crear("acme", "flowplus", "cf", "https://r2/f.png", "foto", "Pieza")
+    ads.actualizar("acme", aid, estado="publicando")
+    tm.interrumpida({"payload": {"cliente": "acme", "ad_id": aid}}, "Se interrumpió por un reinicio.")
+    e = ads.cargar("acme")[aid]
+    assert e["estado"] == "error" and e["error"] == "Se interrumpió por un reinicio."
+
+    otro = ads.crear("acme", "flowplus", "cf", "https://r2/f.png", "foto", "Pieza 2")
+    ads.actualizar("acme", otro, estado="pausado")
+    tm.interrumpida({"payload": {"cliente": "acme", "ad_id": otro}}, "x")
+    assert ads.cargar("acme")[otro]["estado"] == "pausado"
+    tm.interrumpida({"payload": {"cliente": "acme", "ad_id": "no-existe"}}, "x")  # no revienta
+
+
 def test_publicar_anuncio_inexistente(base_temporal, monkeypatch):
     import tareas.meta as tm
 

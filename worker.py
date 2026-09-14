@@ -72,10 +72,33 @@ def ejecutar(tarea):
     return fn(tarea)
 
 
+MENSAJE_INTERRUMPIDA = "Se interrumpió por un reinicio del servidor. Vuelve a intentar."
+
+
+def recuperar_interrumpidas(minutos):
+    """cola.recuperar_colgadas + hooks: la tarea que quedó en `error` sin más
+    reintentos deja atrás una sesión en `video_generando`, un swap en
+    `generando` o un anuncio en `publicando` que nadie más va a tocar. Cada
+    tipo registra en tareas.AL_INTERRUMPIR cómo marcar esa entidad en error
+    para que la persona pueda reintentar. Un hook que falla no tumba el ciclo.
+    Devuelve cuántas tareas tocó recuperar_colgadas (mismo número de antes)."""
+    tocadas, interrumpidas = cola.recuperar_colgadas(minutos)
+    for t in interrumpidas:
+        hook = tareas.AL_INTERRUMPIR.get(t["tipo"])
+        if hook is None:
+            continue
+        try:
+            hook(t, MENSAJE_INTERRUMPIDA)
+            log.info("tarea %s interrumpida → entidad marcada en error", t["id"])
+        except Exception as e:  # noqa: BLE001 — el hook nunca tumba al worker
+            log.error("tarea %s interrumpida: el hook de %s falló: %s", t["id"], t["tipo"], cola.sin_token(e))
+    return tocadas
+
+
 def ciclo():
     if debe_parar():
         return False
-    cola.recuperar_colgadas(30)
+    recuperar_interrumpidas(30)
     encolar_periodicas()
     tarea = cola.reclamar()
     if tarea is None:
@@ -100,7 +123,7 @@ def main():
     log.info("worker arriba · base %s · tipos %s", db.url(), sorted(tareas.REGISTRO))
     # Un solo worker: lo que esté en_curso al arrancar quedó huérfano del
     # proceso anterior (murió a mitad), no hay que esperar los 30 min.
-    huerfanas = cola.recuperar_colgadas(0)
+    huerfanas = recuperar_interrumpidas(0)
     if huerfanas:
         log.info("recuperadas %s tareas que quedaron en curso del proceso anterior", huerfanas)
     while not debe_parar():

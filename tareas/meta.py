@@ -28,7 +28,7 @@ from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, camp
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
 from storage import r2_uploader
-from tareas import registrar
+from tareas import al_interrumpir, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -63,6 +63,18 @@ def _miniatura_para_ad(cliente, ad_id, video_url):
     except Exception as e:
         bitacora.registrar(cliente, ad_id, "ads_miniatura", "error", str(e))
         return video_url
+
+
+@al_interrumpir("meta_publicar")
+def interrumpida(tarea, mensaje):
+    """El worker murió a mitad de la cadena Campaign -> Ad: el anuncio quedaría
+    en `publicando` para siempre. Solo si sigue ahí pasa a error (si ya llegó a
+    pausado/error por otro camino no se pisa); meta_refrescar no necesita hook."""
+    cliente, ad_id = tarea["payload"]["cliente"], tarea["payload"]["ad_id"]
+    entry = ads.cargar(cliente).get(ad_id)
+    if entry is None or entry.get("estado") != "publicando":
+        return
+    ads.actualizar(cliente, ad_id, estado="error", error=mensaje)
 
 
 @registrar("meta_publicar")
