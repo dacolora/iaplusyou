@@ -33,6 +33,9 @@ justo la mentira que este módulo trata de evitar.
 import math
 import threading
 import time
+from datetime import datetime
+
+import cola  # cola persistente (db.py); los trabajos migrados al worker viven ahí
 
 _LOCK = threading.Lock()
 _TRABAJOS = {}
@@ -90,6 +93,24 @@ def _dur_efectiva(dur, transcurrido):
     if transcurrido <= dur:
         return dur
     return math.sqrt(dur * transcurrido)
+
+
+def _progreso_de(t, ahora):
+    """% de la barra para un trabajo en progreso: progreso real de la etapa si
+    lo hay, si no la curva asintótica contra el reloj. Nunca retrocede
+    (progreso_visto). Sirve igual para un dict en memoria que para una fila
+    de la tabla tarea (mismas claves)."""
+    etapa = t["etapas"][t["indice_etapa"]]
+    piso, techo = etapa["piso"], etapa["techo"]
+    if t["progreso_etapa"] is not None:
+        p = piso + (techo - piso) * t["progreso_etapa"] / 100.0
+    else:
+        transcurrido_etapa = ahora - t["inicio_etapa"]
+        frac = 1.0 - math.exp(-transcurrido_etapa / _dur_efectiva(etapa["dur"], transcurrido_etapa))
+        p = piso + (techo - piso) * frac
+    p = max(t["progreso_visto"], min(techo, p))
+    t["progreso_visto"] = p
+    return round(min(99.0, p), 1)
 
 
 def _purgar():
@@ -178,6 +199,11 @@ def reportar(job_id, etapa=None, progreso=None, detalle=None):
     generación que ya gastó créditos."""
     with _LOCK:
         t = _TRABAJOS.get(job_id)
+    if not t:
+        cola.reportar(job_id, etapa=etapa, progreso=progreso, detalle=detalle)
+        return
+    with _LOCK:
+        t = _TRABAJOS.get(job_id)
         if not t:
             return
         if etapa is not None:
@@ -199,11 +225,19 @@ def reportar(job_id, etapa=None, progreso=None, detalle=None):
 def en_curso(job_id):
     with _LOCK:
         t = _TRABAJOS.get(job_id)
-        return bool(t and t["estado"] == "en_progreso")
+        if t:
+            return t["estado"] == "en_progreso"
+    fila = cola.consultar_por_job(job_id)
+    return bool(fila and fila["estado"] in ("pendiente", "en_curso"))
 
 
 def consultar(job_id):
     """Para el endpoint que el navegador consulta (polling). None si no existe."""
+    with _LOCK:
+        t = _TRABAJOS.get(job_id)
+    if not t:
+        fila = cola.consultar_por_job(job_id)
+        return _desde_fila(fila) if fila else None
     with _LOCK:
         t = _TRABAJOS.get(job_id)
         if not t:
@@ -215,19 +249,6 @@ def consultar(job_id):
         elapsed = (t.get("fin") or ahora) - t["inicio"]
 
         if t["estado"] == "en_progreso":
-            etapa = t["etapas"][t["indice_etapa"]]
-            piso, techo = etapa["piso"], etapa["techo"]
-            if t["progreso_etapa"] is not None:
-                p = piso + (techo - piso) * t["progreso_etapa"] / 100.0
-            else:
-                # Curva asintótica: se acerca al techo de la etapa sin llegar
-                # nunca, así que la barra siempre se mueve un poquito y nunca
-                # miente diciendo que ya terminó.
-                transcurrido_etapa = ahora - t["inicio_etapa"]
-                frac = 1.0 - math.exp(-transcurrido_etapa / _dur_efectiva(etapa["dur"], transcurrido_etapa))
-                p = piso + (techo - piso) * frac
-            p = max(t["progreso_visto"], min(techo, p))
-            t["progreso_visto"] = p
             # Un decimal, no int(): hay etapas cuyo rango entero mide apenas 5
             # puntos (subir el video original pesa 5 sobre 100), y ahí int()
             # dejaba el mismo número en pantalla durante minutos aunque la barra
@@ -235,7 +256,7 @@ def consultar(job_id):
             # devuelve la sensación de que algo está pasando. Ojo: JSON manda
             # 59.0 y JavaScript lo imprime como "59", así que las etapas anchas
             # se siguen viendo redondas.
-            progreso = round(min(99.0, p), 1)
+            progreso = _progreso_de(t, ahora)
         else:
             progreso = 100
 
@@ -253,3 +274,46 @@ def consultar(job_id):
 def limpiar(job_id):
     with _LOCK:
         _TRABAJOS.pop(job_id, None)
+
+
+# ---------- Trabajos persistentes (worker) ----------
+
+def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=None, max_intentos=5):
+    """Igual que iniciar(), pero la tarea la ejecuta el worker (worker.py) y
+    sobrevive reinicios. Devuelve False si ya hay una viva con ese job_id."""
+    tid = cola.encolar(tipo, payload, cliente=cliente, job_id=job_id,
+                       duracion_estimada=duracion_estimada, etapas=etapas or [],
+                       max_intentos=max_intentos)
+    return tid is not None
+
+
+def _desde_fila(fila):
+    """Fila de la tabla tarea -> el mismo dict que devuelve consultar()."""
+    ahora = time.time()
+    if fila["estado"] == "pendiente":
+        return {"estado": "en_progreso", "progreso": 0, "elapsed": 0, "mensaje": None,
+                "etapa": "En cola", "detalle": fila.get("error"), "progreso_real": False}
+    if fila["estado"] == "en_curso":
+        etapas = _preparar_etapas([tuple(e) for e in (fila.get("etapas") or [])], fila.get("duracion_estimada") or 60)
+        t = {
+            "etapas": etapas,
+            "indice_etapa": min(fila.get("indice_etapa") or 0, len(etapas) - 1),
+            "progreso_etapa": fila.get("progreso_etapa"),
+            "inicio_etapa": fila.get("inicio_etapa") or fila.get("inicio") or ahora,
+            "progreso_visto": fila.get("progreso_visto") or 0.0,
+        }
+        progreso = _progreso_de(t, ahora)
+        cola.actualizar_progreso_visto(fila["id"], t["progreso_visto"])
+        return {"estado": "en_progreso", "progreso": progreso,
+                "elapsed": int(ahora - (fila.get("inicio") or ahora)), "mensaje": None,
+                "etapa": fila.get("etapa_actual"), "detalle": fila.get("detalle"),
+                "progreso_real": fila.get("progreso_etapa") is not None}
+    estado = "completado" if fila["estado"] == "hecha" else "error"
+    inicio = fila.get("inicio") or ahora
+    fin = ahora
+    try:
+        fin = datetime.fromisoformat(fila["terminada_en"]).timestamp() if fila.get("terminada_en") else ahora
+    except (TypeError, ValueError):
+        pass
+    return {"estado": estado, "progreso": 100, "elapsed": int(max(0, fin - inicio)),
+            "mensaje": fila.get("mensaje"), "etapa": None, "detalle": None, "progreso_real": False}
