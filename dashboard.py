@@ -55,6 +55,7 @@ from meta_ads import creative as meta_creative
 from meta_ads import insights as meta_insights
 from meta_ads.targeting import Targeting
 import creative_flow
+from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 from publicador import publicar_brief
 from higgsfield_client import (
     generate_video,
@@ -1505,12 +1506,7 @@ ETAPAS_SWAP_FOTO_MEJORADA = [
     (ETAPA_MEJORAR, 20),
     (ETAPA_GUARDAR, 15),
 ]
-# CreativeFlowPlus: Wan 3.0 se lleva casi todo el tiempo (timeout de 1200s).
-ETAPAS_CREATIVE_FLOW = [
-    (ETAPA_MODELO, 85),
-    (ETAPA_DESCARGAR, 8),
-    (ETAPA_GUARDAR_VIDEO, 7),
-]
+# ETAPAS_CREATIVE_FLOW vive en tareas/flowplus.py (se importa arriba).
 
 # Pipeline clásico (prompt -> imagen candidata -> video) y flujo imagen-primero.
 # Estos trabajos iban SIN etapas y el usuario veía "Generando…" a secas durante
@@ -2676,118 +2672,21 @@ def cf_descartar(cliente, cf_id):
 
 
 def _lanzar_video_cf(cliente, cf_id, entry):
-    """Lanza en segundo plano la generación con Wan 3.0 de una sesión de FlowPlus.
-    Lo usan cf_crear_video (de una, al enviar el formulario) y cf_generar_video
-    (reintento tras error / sesiones viejas en prompt_listo). Devuelve True si
-    arrancó, False si ya había un job corriendo."""
-    referencias = entry.get("referencias_urls") or []
-    # Videos de referencia tal cual (solo los usa Wan 3.0). Para los demás modelos
-    # el video ya está representado por su fotograma dentro de referencias_urls.
-    videos_ref = [r["url"] for r in (entry.get("referencias") or []) if r.get("tipo") == "video"]
-    if videos_ref and (entry.get("modelo") or "wan3") == "wan3":
-        # Con Wan 3.0 el video va como video: quitamos su fotograma de las imágenes
-        # para no mandar la misma referencia dos veces.
-        frames_video = {r["frame_url"] for r in entry["referencias"] if r.get("tipo") == "video"}
-        referencias = [u for u in referencias if u not in frames_video]
-    duracion = entry["duracion_objetivo"]
-    prompt_texto = entry.get("prompt_relleno") or entry.get("accion_central") or ""
-    platforms = entry.get("platforms", [])
-    aspect_ratio = entry.get("aspect_ratio") or _aspect_ratio_para_plataformas(platforms)
+    """Encola en el worker la generación de una sesión de FlowPlus (video o
+    imagen). Lo usan cf_crear_video (de una, al enviar el formulario) y
+    cf_generar_video (reintento tras error / sesiones viejas en prompt_listo).
+    Devuelve True si encoló, False si ya había una en curso. El cuerpo real
+    vive en tareas/flowplus.py (ejecutar_video / ejecutar_imagen)."""
     tipo = entry.get("tipo") or "video"
-    if tipo == "imagen":
-        modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.IMAGEN else flowplus_modelos.IMAGEN_POR_DEFECTO
-    else:
-        modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
     job_id = _job_id_creative_flow(cliente, cf_id)
-
-    def trabajo_imagen():
-        out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{cf_id}.png")
-        avisar_fase = _avisar_fase_de(job_id)
-        try:
-            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-            url_prov = flowplus_modelos.generar_imagen(modelo, prompt_texto, referencias, on_progreso=avisar_fase)
-            costo = flowplus_modelos.estimate_imagen(modelo, n_referencias=len(referencias))
-            trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
-            resp = requests.get(url_prov, timeout=120)
-            resp.raise_for_status()
-            with open(out_path, "wb") as f:
-                f.write(resp.content)
-            bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
-        except Exception as e:
-            bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
-            creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
-            raise
-        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
-        try:
-            imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
-        except Exception:
-            imagen_url = url_prov
-        creative_flow.actualizar(
-            cliente, cf_id, estado="video_listo", video_url=imagen_url, video_local=out_path,
-            credits=costo.get("credits"), usd=costo.get("usd"),
-        )
-        return "Imagen de FlowPlus lista."
-
-    def trabajo():
-        out_dir = os.path.join(BASE_DIR, "salidas", cliente)
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{cf_id}.mp4")
-
-        avisar_fase = _avisar_fase_de(job_id)
-
-        try:
-            trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-            video_url_wan = flowplus_modelos.generar_video(
-                modelo, prompt_texto, referencias, duracion,
-                aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
-                videos=videos_ref if modelo == "wan3" else None,
-            )
-            costo = flowplus_modelos.estimate_video(modelo, duracion)
-            trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
-            resp = requests.get(video_url_wan, timeout=180)
-            resp.raise_for_status()
-            with open(out_path, "wb") as f:
-                f.write(resp.content)
-            bitacora.registrar(cliente, cf_id, "generacion", "ok", out_path)
-        except Exception as e:
-            bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
-            creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
-            raise
-
-        trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
-        try:
-            video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{cf_id}.mp4")
-        except Exception:
-            video_url = video_url_wan
-
-        creative_flow.actualizar(
-            cliente, cf_id, estado="video_listo", video_url=video_url, video_local=out_path,
-            credits=costo.get("credits"), usd=costo.get("usd"),
-        )
-
-        estado = estado_mod.cargar(cliente)
-        estado[cf_id] = {
-            "prompt": prompt_texto,
-            "image_url": (referencias or (entry.get("referencias_urls") or [None]))[0],
-            "title": cf_id,
-            "caption": entry.get("accion_central") or "",
-            "platforms": platforms,
-            "video_local": out_path,
-            "video_url": video_url,
-            "estado": "pendiente",
-            "generado_en": datetime.now().isoformat(),
-            "publicado_en": None,
-        }
-        estado_mod.guardar(cliente, estado)
-        return "Video de FlowPlus listo, pendiente de revisión."
-
-    # Escribe estado="video_generando" ANTES de lanzar el job: si trabajo() falla
-    # instantáneo, el hilo podría escribir "error" y el principal pisarlo.
+    # Escribe estado="video_generando" ANTES de encolar: si el worker fallara
+    # instantáneo, podría escribir "error" y el principal pisarlo.
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    fn = trabajo_imagen if tipo == "imagen" else trabajo
-    return trabajos.iniciar(job_id, fn, duracion_estimada=60 if tipo == "imagen" else 180, etapas=ETAPAS_CREATIVE_FLOW)
+    return trabajos.encolar(
+        job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
+        {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
+        duracion_estimada=60 if tipo == "imagen" else 180, etapas=ETAPAS_CREATIVE_FLOW,
+    )
 
 
 def _job_id_link(cliente):
