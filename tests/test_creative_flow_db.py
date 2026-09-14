@@ -18,6 +18,10 @@ def test_crear_actualizar_cargar_eliminar(base_temporal):
     assert e["prompt_relleno"] == "PROMPT" and e["modelo"] == "wan3" and e["enfoque_nombre"] == "Solo producto"
     assert e["referencias"][0]["etiqueta"] == "@Imagen 1" and e["aspect_ratio"] == "9:16"
 
+    assert cf.actualizar("acme", cid, tipo="imagen")
+    e = cf.cargar("acme")[cid]
+    assert e["tipo"] == "imagen"
+
     assert cf.eliminar("acme", cid) is True
     assert cid not in cf.cargar("acme")
     assert cf.actualizar("acme", cid, estado="x") is False
@@ -38,7 +42,9 @@ def test_guardar_dict_completo(base_temporal):
     data = cf.cargar("acme")
     data[cid]["estado"] = "error"; data[cid]["error"] = "boom"
     cf.guardar("acme", data)
-    assert cf.cargar("acme")[cid]["error"] == "boom"
+    e = cf.cargar("acme")[cid]
+    assert e["error"] == "boom"
+    assert e["estado"] == "error"
 
 
 def test_campos_extra_redondean(base_temporal):
@@ -52,3 +58,37 @@ def test_campos_extra_redondean(base_temporal):
     assert e["credits"] == 3
     assert e["platforms"] == ["youtube", "tiktok"]
     assert e["productos_ids"] == ["P1", "P2"]
+
+
+def test_actualizar_y_eliminar_ignoran_piezas_final(base_temporal):
+    import creative_flow as cf
+    import db
+
+    cid = cf.crear("acme", [], [], [], "uno", 5, "", "A")
+    ahora = db.ahora()
+    with db.conectar() as con:
+        concepto_id = con.execute(
+            db.concepto.select().where(db.concepto.c.legado_id == cid)
+        ).first().id
+        con.execute(db.pieza.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora,
+            concepto_id=concepto_id, tipo="final", estado="pendiente"))
+
+    assert cf.actualizar("acme", cid, video_url="https://r2/v.mp4")
+
+    with db.conectar() as con:
+        piezas = con.execute(
+            db.pieza.select().where(db.pieza.c.concepto_id == concepto_id)
+        ).fetchall()
+    final = next(p for p in piezas if p.tipo == "final")
+    legado = next(p for p in piezas if p.tipo != "final")
+    assert final.url_video is None
+    assert legado.url_video == "https://r2/v.mp4"
+
+    assert cf.eliminar("acme", cid) is True
+    with db.conectar() as con:
+        piezas = con.execute(
+            db.pieza.select().where(db.pieza.c.concepto_id == concepto_id)
+        ).fetchall()
+    assert len(piezas) == 1 and piezas[0].tipo == "final"
+    assert cid not in cf.cargar("acme")

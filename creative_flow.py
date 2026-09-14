@@ -49,6 +49,7 @@ def _a_dict(c, p):
         "duracion_objetivo": e.get("duracion_objetivo") or (int(p.duracion_s) if p.duracion_s else None),
         "creado_en": c.creado_en,
     })
+    e.pop("estado_legado", None)
     return e
 
 
@@ -107,7 +108,9 @@ def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
 def _ids(con, cliente, cf_id):
     f = con.execute(sa.select(db.concepto.c.id, db.pieza.c.id, db.concepto.c.extra, db.pieza.c.extra)
                     .join(db.pieza, db.pieza.c.concepto_id == db.concepto.c.id)
-                    .where(db.concepto.c.cliente == cliente, db.concepto.c.legado_id == cf_id)).first()
+                    .where(db.concepto.c.cliente == cliente, db.concepto.c.legado_id == cf_id,
+                           db.pieza.c.tipo != "final")
+                    .order_by(db.pieza.c.id)).first()
     return f
 
 
@@ -135,8 +138,12 @@ def eliminar(cliente, cf_id):
         if not f:
             return False
         cid, pid = f[0], f[1]
-        con.execute(db.pieza.delete().where(db.pieza.c.concepto_id == cid))
-        con.execute(db.concepto.delete().where(db.concepto.c.id == cid))
+        con.execute(db.pieza.delete().where(db.pieza.c.id == pid))
+        restantes = con.execute(
+            sa.select(sa.func.count()).select_from(db.pieza).where(db.pieza.c.concepto_id == cid)
+        ).scalar()
+        if not restantes:
+            con.execute(db.concepto.delete().where(db.concepto.c.id == cid))
     return True
 
 
