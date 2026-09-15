@@ -50,6 +50,9 @@ from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
+from tareas import final_edition as tareas_fe
+from final_edition import ETAPAS_FINAL, tipos as fe_tipos
+from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
 from higgsfield_client import (
@@ -869,6 +872,9 @@ def ver_cliente(cliente):
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
         capacidades_meta=meta_conexion.estado(cliente),
+        paises_fe=fe_tipos.PAISES,
+        voces_fe=fal_audio.VOCES,
+        estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
     )
 
 
@@ -1431,6 +1437,19 @@ def _creative_flow_items(cliente):
                 mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
                 item["costo_estimado"] = flowplus_modelos.estimate_video(mid, entry["duracion_objetivo"])
         item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
+        # Final edition: solo tiene sentido sobre un video ya listo. Cada final
+        # y el guion llevan su propio trabajo del worker para la barra de la UI.
+        item["guion_base"] = None
+        item["finales"] = []
+        item["trabajo_guion"] = None
+        if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
+            item["guion_base"] = creative_flow.guion_base(cliente, cf_id)
+            jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
+            item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
+            for f in creative_flow.finales(cliente, cf_id):
+                jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"])
+                f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
+                item["finales"].append(f)
         items.append(item)
     return items
 
@@ -2346,6 +2365,151 @@ def cf_descartar(cliente, cf_id):
     creative_flow.eliminar(cliente, cf_id)
     flash("Sesión de CreativeFlowPlus descartada.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+# ---------------------------------------------------------- Final edition ---
+
+IDIOMAS_FE = ("es", "en", "pt")
+
+
+def _volver_crear(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+def _precio_form(valor):
+    """Precio opcional del formulario -> float o None (vacío o basura = None)."""
+    valor = (valor or "").strip().replace(",", ".")
+    if not valor:
+        return None
+    try:
+        return float(valor)
+    except ValueError:
+        return None
+
+
+def _sesion_con_video(cliente, cf_id):
+    """Sesión de Crear con video listo, o None (con flash) si no aplica."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry:
+        flash("Esa sesión de Crear ya no existe.", "error")
+        return None
+    if entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") == "imagen":
+        flash("Final edition necesita un video listo (no una imagen ni una sesión sin generar).", "error")
+        return None
+    return entry
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/preparar", methods=["POST"])
+def fe_preparar(cliente, cf_id):
+    """Encola la escritura del guion base (capa 0, Anthropic). No produce nada."""
+    if _sesion_con_video(cliente, cf_id) is None:
+        return _volver_crear(cliente)
+    idioma_base = request.form.get("idioma_base") or "es"
+    if idioma_base not in IDIOMAS_FE:
+        idioma_base = "es"
+    opciones = {"precio": _precio_form(request.form.get("precio")), "idioma_base": idioma_base}
+    encolado = trabajos.encolar(
+        tareas_fe.job_id_guion(cliente, cf_id), "final_guion",
+        {"cliente": cliente, "cf_id": cf_id, "opciones": opciones},
+        cliente=cliente, duracion_estimada=25, max_intentos=2,
+    )
+    flash("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises." if encolado
+          else "Ya se estaba escribiendo el guion de esta pieza.", "ok")
+    return _volver_crear(cliente)
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/guion", methods=["POST"])
+def fe_guardar_guion(cliente, cf_id):
+    """Guarda la edición del guion base: solo cambian los textos (pantalla y
+    voz) de cada bloque; tiempos, roles, idioma y país se conservan."""
+    if _sesion_con_video(cliente, cf_id) is None:
+        return _volver_crear(cliente)
+    base = creative_flow.guion_base(cliente, cf_id)
+    if not base or not base.get("bloques"):
+        flash("Primero prepara el guion con IA; después lo editas.", "error")
+        return _volver_crear(cliente)
+    guion = dict(base)
+    guion["bloques"] = []
+    for i, bloque in enumerate(base["bloques"]):
+        b = dict(bloque)
+        b["texto_pantalla"] = (request.form.get(f"bloque_{i}_pantalla") or "").strip()
+        b["texto_voz"] = (request.form.get(f"bloque_{i}_voz") or "").strip()
+        guion["bloques"].append(b)
+    duracion = float(base["bloques"][-1].get("fin_s") or 0) + 0.05
+    errores = fe_tipos.validar_guion(guion, duracion)
+    if errores:
+        flash("No se guardó el guion: " + " ".join(errores), "error")
+        return _volver_crear(cliente)
+    creative_flow.guardar_guion_base(cliente, cf_id, guion)
+    flash("Guion guardado. Ahora elige los destinos y produce las finales.", "ok")
+    return _volver_crear(cliente)
+
+
+def _destinos_form(valores):
+    """["es_CO", "en_US", ...] -> [("es", "CO"), ...]; None si alguno no vale."""
+    destinos = []
+    for v in valores:
+        partes = (v or "").split("_")
+        if len(partes) != 2 or partes[0] not in IDIOMAS_FE or partes[1] not in fe_tipos.PAISES:
+            return None
+        if (partes[0], partes[1]) not in destinos:
+            destinos.append((partes[0], partes[1]))
+    return destinos
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/producir", methods=["POST"])
+def fe_producir(cliente, cf_id):
+    """Encola una tarea `final_producir` por cada destino marcado. Exige guion
+    base ya preparado (y revisado): sin él no se gasta nada."""
+    if _sesion_con_video(cliente, cf_id) is None:
+        return _volver_crear(cliente)
+    base = creative_flow.guion_base(cliente, cf_id)
+    if not base:
+        flash("Primero prepara el guion con IA y revísalo; sin guion no se produce nada.", "error")
+        return _volver_crear(cliente)
+    destinos = _destinos_form(request.form.getlist("destinos"))
+    if not destinos:
+        flash("Marca al menos un destino (idioma y país) válido para producir.", "error")
+        return _volver_crear(cliente)
+
+    idioma_base = base.get("idioma") if base.get("idioma") in IDIOMAS_FE else "es"
+    voces_validas = {v for lista in fal_audio.VOCES.values() for v in lista}
+    voz = request.form.get("voz") or ""
+    if voz not in voces_validas:
+        voz = (fal_audio.VOCES.get(idioma_base) or fal_audio.VOCES["es"])[0]
+    estilo = request.form.get("estilo_musica") or ""
+    if estilo not in fe_tipos.ESTILOS_MUSICA:
+        estilo = "energetico"
+    opciones = {
+        "voz": voz,
+        "estilo_musica": estilo,
+        "con_voz": bool(request.form.get("con_voz")),
+        "con_musica": bool(request.form.get("con_musica")),
+        "precio": _precio_form(request.form.get("precio")),
+        "idioma_base": idioma_base,
+    }
+    encolados = 0
+    for idioma, pais in destinos:
+        if trabajos.encolar(
+            tareas_fe.job_id_final(cliente, cf_id, idioma, pais), "final_producir",
+            {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
+            cliente=cliente, duracion_estimada=150, etapas=ETAPAS_FINAL, max_intentos=1,
+        ):
+            encolados += 1
+    if encolados:
+        flash(f"Produciendo {encolados} finales… cada una aparece en Generados cuando termina.", "ok")
+    else:
+        flash("Ya se estaban produciendo esas finales.", "ok")
+    return _volver_crear(cliente)
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/descartar", methods=["POST"])
+def fe_descartar(cliente, cf_id, final_id):
+    if not final_id.startswith(cf_id + "__") or not creative_flow.eliminar_final(cliente, final_id):
+        flash("Esa final ya no existe.", "error")
+    else:
+        flash("Final descartada.", "ok")
+    return _volver_crear(cliente)
 
 
 def _lanzar_video_cf(cliente, cf_id, entry):

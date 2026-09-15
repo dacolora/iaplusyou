@@ -203,6 +203,97 @@
           <p class="tag-error">{{ item.error }}</p>
           {% endif %}
 
+          {% if item.estado == "video_listo" and item.tipo != "imagen" %}
+          <section class="fe-seccion">
+            <h4 class="fe-titulo">Final edition</h4>
+            <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
+            {% if not item.guion_base %}
+              {% if item.trabajo_guion %}
+              <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+              <div class="progreso-texto">Escribiendo el guion…</div>
+              {% else %}
+              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar">
+                <label>Precio (opcional)
+                  <input type="number" name="precio" min="0" step="any" placeholder="p.ej. 89900" style="width:9rem;">
+                </label>
+                <label>Idioma base
+                  <select name="idioma_base">
+                    <option value="es">Español</option>
+                    <option value="en">English</option>
+                    <option value="pt">Português</option>
+                  </select>
+                </label>
+                <button type="submit" class="btn-guardar btn-sm">Preparar guion con IA</button>
+              </form>
+              {% endif %}
+            {% else %}
+              {% set _g = item.guion_base %}
+              <form method="post" action="{{ url_for('fe_guardar_guion', cliente=cliente, cf_id=item.id) }}" class="fe-guion">
+                {% for b in _g.bloques %}
+                <div class="fe-bloque">
+                  <div class="fe-bloque-cab"><strong>{{ loop.index }}. {{ b.rol }}</strong> <small>{{ b.inicio_s }}s – {{ b.fin_s }}s</small></div>
+                  <label>Texto en pantalla <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
+                  <label>Texto de voz <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
+                </div>
+                {% endfor %}
+                <button type="submit" class="btn-guardar btn-sm">Guardar guion</button>
+                {% if item.trabajo_guion %}<span class="vacio" style="padding:0;font-size:.74rem;">(se está reescribiendo el guion)</span>{% endif %}
+              </form>
+
+              <h5 class="fe-subtitulo">Producir finales</h5>
+              <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir">
+                <div class="fe-destinos checks-plataformas">
+                  {% for codigo, p in paises_fe.items() %}
+                  <label><input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}"> {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small></label>
+                  {% endfor %}
+                </div>
+                <div class="fe-opciones">
+                  <label>Voz
+                    <select name="voz">
+                      {% for v in (voces_fe.get(_g.idioma) or voces_fe.get("es") or []) %}
+                      <option value="{{ v }}">{{ v }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>Música
+                    <select name="estilo_musica">
+                      {% for e in estilos_fe %}
+                      <option value="{{ e }}">{{ e }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>Precio <input type="number" name="precio" min="0" step="any" placeholder="opcional" style="width:8rem;"></label>
+                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> con voz</label>
+                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> con música</label>
+                </div>
+                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales">Producir finales</button>
+              </form>
+            {% endif %}
+
+            {% if item.finales %}
+            <h5 class="fe-subtitulo">Finales de esta pieza</h5>
+            <ul class="fe-lista">
+              {% for f in item.finales %}
+              <li class="fe-final">
+                <span class="fe-final-mini">{% if f.url_miniatura %}<img src="{{ f.url_miniatura }}" alt="">{% endif %}</span>
+                <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
+                <span class="tag-estado">{{ f.estado }}</span>
+                {% if f.estado == "generando" %}
+                <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}produciendo…{% else %}interrumpida{% endif %}</span>
+                {% elif f.estado == "error" and f.error %}
+                <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
+                {% endif %}
+                {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>{% endif %}
+                <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
+                  <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </section>
+          {% endif %}
+
           <div class="detalle-acciones">
             {% if item.estado == "video_listo" %}
             <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">Descargar</a>
@@ -227,6 +318,80 @@
         </div>
       </template>
     </div>
+    {% for f in item.finales %}
+    {% set _bandera = paises_fe[f.pais].bandera if f.pais in paises_fe else "" %}
+    <div class="generado generado-final" data-cf="{{ f.id }}" tabindex="0" role="button">
+      <div class="generado-media">
+        {% if f.estado in ("listo", "degradada") and f.video_url %}
+        <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" muted playsinline preload="metadata"></video>
+        {% elif f.url_miniatura %}
+        <img src="{{ f.url_miniatura }}" alt="" loading="lazy" class="generado-portada">
+        {% else %}
+        <video src="{{ item.video_url }}" muted playsinline preload="metadata" class="generado-portada"></video>
+        {% endif %}
+        <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
+        {% if f.estado == "generando" %}
+        <div class="generado-velo">
+          {% if f.trabajo %}
+          <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto">Produciendo… 0% · 0s</div>
+          <script>iniciarPolling({{ f.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ f.trabajo.job_id) | tojson }});</script>
+          {% else %}
+          <span class="generado-estado">Interrumpida</span>
+          {% endif %}
+        </div>
+        {% elif f.estado == "error" %}
+        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        {% elif f.estado == "degradada" %}
+        <div class="generado-velo"><span class="generado-estado">Sin voz/música</span></div>
+        {% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
+        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · ${{ f.costo_usd }}{% endif %}</small>
+      </div>
+      <template class="generado-detalle">
+        <div class="detalle-media">
+          {% if f.video_url %}
+          <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" controls autoplay muted loop playsinline></video>
+          {% elif f.url_miniatura %}
+          <img src="{{ f.url_miniatura }}" alt="">
+          {% else %}
+          <video src="{{ item.video_url }}" muted playsinline style="opacity:.6;"></video>
+          {% endif %}
+        </div>
+        <div class="detalle-info">
+          <p class="campo-label">Final edition</p>
+          <p class="detalle-texto">{{ _bandera }} {{ paises_fe[f.pais].nombre if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
+          <p class="vacio" style="padding:0;font-size:.78rem;">
+            Final de: {{ item.accion_central or item.id }}
+            {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
+            {% if f.costo_usd %} · costó ${{ f.costo_usd }}{% endif %}
+            · <span class="tag-estado">{{ f.estado }}</span>
+          </p>
+          {% if f.capas %}
+          <p class="campo-label" style="margin-top:.8rem;">Capas</p>
+          <ul class="fe-capas">
+            {% for nombre, capa in f.capas.items() %}
+            <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · ${{ capa.costo_usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          {% if f.estado == "error" and f.error %}
+          <p class="tag-error">{{ f.error }}</p>
+          {% endif %}
+          <div class="detalle-acciones">
+            {% if f.video_url %}
+            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>
+            {% endif %}
+            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
+              <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+            </form>
+          </div>
+        </div>
+      </template>
+    </div>
+    {% endfor %}
     {% endfor %}
   </div>
 </div>
@@ -254,6 +419,23 @@
       if (v) {
         card.addEventListener('mouseenter', function () { v.play().catch(function () {}); });
         card.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
+      }
+    });
+    // "Producir N finales": el formulario vive en un <template> clonado, así
+    // que el listener va delegado sobre el cuerpo del modal.
+    cuerpo.addEventListener('change', function (e) {
+      if (!e.target.matches('input[name="destinos"]')) return;
+      var form = e.target.closest('form');
+      var btn = form && form.querySelector('.fe-producir-btn');
+      if (!btn) return;
+      var n = form.querySelectorAll('input[name="destinos"]:checked').length;
+      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : 'Producir finales';
+    });
+    cuerpo.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
+        e.preventDefault();
+        alert('Marca al menos un destino.');
       }
     });
     document.getElementById('generado-cerrar').addEventListener('click', function () { modal.close(); });

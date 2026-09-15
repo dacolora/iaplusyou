@@ -35,3 +35,10 @@ def test_fuentes_existen():
     from final_edition import tipos
     for ruta in tipos.FUENTES.values():
         assert os.path.isfile(ruta) and ruta.endswith(".ttf")
+
+
+def test_paises_tienen_bandera():
+    from final_edition import tipos
+    for c, p in tipos.PAISES.items():
+        assert p.get("bandera"), f"{c} sin bandera"
+    assert tipos.PAISES["CO"]["bandera"] == "🇨🇴"

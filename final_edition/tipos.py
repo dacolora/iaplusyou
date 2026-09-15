@@ -9,16 +9,16 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ROLES = ("hook", "problema", "producto", "prueba", "cta")
 
-# país -> {"nombre", "idioma" (ISO-639-1), "moneda" (ISO-4217), "simbolo"}
+# país -> {"nombre", "idioma" (ISO-639-1), "moneda" (ISO-4217), "simbolo", "bandera" (emoji para la UI)}
 PAISES = {
-    "CO": {"nombre": "Colombia", "idioma": "es", "moneda": "COP", "simbolo": "$"},
-    "MX": {"nombre": "México", "idioma": "es", "moneda": "MXN", "simbolo": "$"},
-    "US": {"nombre": "Estados Unidos", "idioma": "en", "moneda": "USD", "simbolo": "$"},
-    "ES": {"nombre": "España", "idioma": "es", "moneda": "EUR", "simbolo": "€"},
-    "BR": {"nombre": "Brasil", "idioma": "pt", "moneda": "BRL", "simbolo": "R$"},
-    "AR": {"nombre": "Argentina", "idioma": "es", "moneda": "ARS", "simbolo": "$"},
-    "CL": {"nombre": "Chile", "idioma": "es", "moneda": "CLP", "simbolo": "$"},
-    "PE": {"nombre": "Perú", "idioma": "es", "moneda": "PEN", "simbolo": "S/"},
+    "CO": {"nombre": "Colombia", "idioma": "es", "moneda": "COP", "simbolo": "$", "bandera": "🇨🇴"},
+    "MX": {"nombre": "México", "idioma": "es", "moneda": "MXN", "simbolo": "$", "bandera": "🇲🇽"},
+    "US": {"nombre": "Estados Unidos", "idioma": "en", "moneda": "USD", "simbolo": "$", "bandera": "🇺🇸"},
+    "ES": {"nombre": "España", "idioma": "es", "moneda": "EUR", "simbolo": "€", "bandera": "🇪🇸"},
+    "BR": {"nombre": "Brasil", "idioma": "pt", "moneda": "BRL", "simbolo": "R$", "bandera": "🇧🇷"},
+    "AR": {"nombre": "Argentina", "idioma": "es", "moneda": "ARS", "simbolo": "$", "bandera": "🇦🇷"},
+    "CL": {"nombre": "Chile", "idioma": "es", "moneda": "CLP", "simbolo": "$", "bandera": "🇨🇱"},
+    "PE": {"nombre": "Perú", "idioma": "es", "moneda": "PEN", "simbolo": "S/", "bandera": "🇵🇪"},
 }
 
 # Prompts en inglés (Stable Audio funciona mejor con prompts en inglés).
