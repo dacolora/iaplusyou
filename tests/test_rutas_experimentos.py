@@ -135,7 +135,6 @@ def test_estado_presupuesto_refrescar_cerrar(app, base_temporal, monkeypatch):
     assert app["encolados"][-1]["tipo"] == "exp_refrescar" and app["encolados"][-1]["max_intentos"] == 1
 
 
-@pytest.mark.xfail(reason="template en Task 5", strict=True)
 def test_ver_cliente_incluye_experimentos(app, base_temporal):
     import experimentos as ex
     ex.crear("acme", "Visible", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
@@ -214,3 +213,38 @@ def test_quitar_pieza_rechaza_fuera_de_armado(app, base_temporal):
     ex.actualizar("acme", eid, estado="armando", meta_campaign_id="cam_1")
     app["c"].post(f"/cliente/acme/experimentos/{eid}/piezas/{ep_id}/quitar")
     assert len(ex.piezas("acme", eid)) == 1
+
+
+@pytest.mark.parametrize("estado, con_campana, esperados, no_esperados", [
+    ("armando", False, ["Lanzar a Meta"], ["Activar todo", "Reintentar lanzamiento", ">Cerrar</button>"]),
+    ("pausado", True, ["Activar todo", ">Cerrar</button>"], ["Lanzar a Meta", "Reintentar lanzamiento"]),
+    ("error", True, ["Reintentar lanzamiento", ">Cerrar</button>"], ["Lanzar a Meta", "Activar todo"]),
+    ("cerrado", True, [], ["Lanzar a Meta", "Activar todo", "Reintentar lanzamiento", ">Cerrar</button>"]),
+])
+def test_tab_experimentos_render_estados(app, base_temporal, estado, con_campana, esperados, no_esperados):
+    """Smoke test del template Task 5 en cada estado — atrapa errores de Jinja
+    (atributos sobre metricas={} vacío, etc.) que un solo experimento en
+    'armando' no alcanzaría a mostrar."""
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    eid = ex.crear("acme", f"Exp {estado}", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, clon, "CO")
+    ep_id = ex.piezas("acme", eid)[0]["id"]
+    campos = {"estado": estado}
+    if estado == "error":
+        campos["error"] = "Meta rechazó el anuncio."
+    if con_campana:
+        campos["meta_campaign_id"] = "cam_1"
+    ex.actualizar("acme", eid, **campos)
+    if con_campana:
+        ex.actualizar_pieza("acme", ep_id, estado="activo", meta_adset_id="adset_1", meta_ad_id="ad_1")
+        ex.snapshot(ep_id, {"impresiones": 1000, "clics_enlace": 20, "ctr": 2.0, "cpc": 500.0,
+                             "thruplay_rate": 0.4, "gasto": 15000.0, "compras": 3, "roas": 2.5,
+                             "estado_meta_texto": "Activo"})
+    r = app["c"].get("/cliente/acme")
+    assert r.status_code == 200
+    cuerpo = r.data.decode("utf-8")
+    for texto in esperados:
+        assert texto in cuerpo, f"esperaba '{texto}' en estado {estado}"
+    for texto in no_esperados:
+        assert texto not in cuerpo, f"no esperaba '{texto}' en estado {estado}"
