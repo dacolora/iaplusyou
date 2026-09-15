@@ -25,6 +25,15 @@ El filtergraph se escribe SIEMPRE a `<salida>.filtergraph.txt` y se pasa con
 `-/filter_complex <archivo>` (sintaxis de ffmpeg ≥ 7; `-filter_complex_script`
 desapareció en ffmpeg 8). Evita el límite de argv y facilita depurar; el
 archivo se borra tras un render correcto y se conserva si ffmpeg falla.
+
+Presupuesto de memoria medido (2026-09-15, clip 30 s / 1080x1920, testsrc2):
+cada `overlay` encadenado le cuesta a ffmpeg ~8 MB de RSS (decodifica un PNG
+una vez, pero el filtro sigue buffereando el frame completo yuv420p por cada
+capa de la cadena); 63 overlays ≈ 482 MB, 113 overlays ≈ 980-1027 MB — el
+costo es lineal en el NÚMERO de overlays, no en el tamaño de cada PNG. En el
+VPS de 1 CPU / 2 GB (gunicorn + worker en el mismo proceso) eso deja poco
+margen, así que `MAX_OVERLAYS_TOTAL` corta duro antes de intentar el render
+en vez de dejar que ffmpeg reviente por OOM a mitad de un render ya pagado.
 """
 import os
 
@@ -36,6 +45,10 @@ VOL_MUSICA_CON_VOZ = 0.35
 VOL_MUSICA_SOLA = 0.5
 DUCKING = "threshold=0.05:ratio=8:attack=20:release=300"
 TOLERANCIA_DURACION_S = 0.2
+# ~8 MB de RSS de ffmpeg por overlay encadenado (medido, ver docstring del
+# módulo); 80 overlays ≈ 640 MB, deja margen en el VPS de 2 GB compartido con
+# gunicorn + worker.
+MAX_OVERLAYS_TOTAL = 80
 
 
 def componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_mp4,
@@ -43,13 +56,19 @@ def componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_m
     """Renderiza `salida_mp4` (H.264 + AAC, faststart) y una miniatura PNG
     del segundo 1. Valida el resultado con ffprobe (duración ± 0.2 s, tamaño,
     audio presente si y solo si hay voz o música). Devuelve
-    `{"archivo", "miniatura", "duracion_s"}`."""
+    `{"archivo", "miniatura", "duracion_s"}`. Lanza `ValueError` si el número
+    total de overlays supera `MAX_OVERLAYS_TOTAL` (ver presupuesto de memoria
+    en el docstring del módulo) en vez de arriesgar un OOM de ffmpeg."""
     if not segmentos:
         raise ValueError("componer: no hay segmentos que renderizar")
     duracion_s = float(duracion_s)
     hay_voz = bool(archivo_voz)
     hay_musica = bool(pista_musica)
     lista_overlays = _lista_overlays(overlays)
+    if len(lista_overlays) > MAX_OVERLAYS_TOTAL:
+        raise ValueError(
+            f"Demasiados textos en pantalla ({len(lista_overlays)} > {MAX_OVERLAYS_TOTAL}); acorta el guion"
+        )
 
     args = ["-i", clon_path]
     for ov in lista_overlays:

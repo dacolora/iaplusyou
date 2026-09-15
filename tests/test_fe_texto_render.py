@@ -278,6 +278,19 @@ def test_componer_muchos_overlays_filtergraph_por_archivo(tmp_path, medios):
     print(f"\nrender 20 s / {len(render._lista_overlays(ov))} overlays wall time: {wall:.1f}s")
 
 
+def test_componer_corta_si_hay_demasiados_overlays(tmp_path):
+    """I2: `MAX_OVERLAYS_TOTAL` corta duro ANTES de invocar ffmpeg (no hay
+    PNGs reales ni segmentos válidos: si esto llamara a ffmpeg, fallaría por
+    otra razón antes de llegar al ValueError esperado)."""
+    n = render.MAX_OVERLAYS_TOTAL + 1
+    overlays_de_mas = {"hook": None, "badge": None, "cta": None,
+                       "subtitulos": [{"png": "no-existe.png", "inicio": i, "fin": i + 1, "x": 0, "y": 0}
+                                      for i in range(n)]}
+    with pytest.raises(ValueError, match=r"Demasiados textos en pantalla \(\d+ > 80\)"):
+        render.componer("no-existe.mp4", [{"inicio": 0.0, "fin": 1.0}], overlays_de_mas,
+                        None, None, str(tmp_path / "salida.mp4"), 1.0)
+
+
 def test_filtergraph_forma(overlays):
     fg = render.construir_filtergraph(SEGMENTOS, overlays, True, True, 1080, 1920)
     assert fg.count("zoompan") == 3
