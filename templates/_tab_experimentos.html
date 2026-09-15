@@ -1,0 +1,143 @@
+{# Experimentos: árbol experimento -> país -> pieza. Contexto de ver_cliente
+   (Task 4): experimentos, experimentos_armando, elegibles_exp, trabajos_exp
+   ({eid: {"job_id"}}), objetivos_exp, minimo_diario_exp, moneda_exp,
+   paises_fe, capacidades_meta. Nada se lanza ni activa sin un clic explícito
+   con confirm() cuando gasta. #}
+<div class="panel-cabecera">
+  <h2>Experimentos</h2>
+  <p class="vacio">Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Todo nace en pausa: lanzar crea los anuncios, activar empieza a gastar.</p>
+</div>
+
+{% if capacidades_meta.estado != "conectado" %}
+<p class="tag-error">Conecta Meta en Configuración para crear experimentos.</p>
+{% else %}
+<details class="swap-card" id="nuevo-experimento">
+  <summary class="swap-card-resumen">+ Nuevo experimento</summary>
+  <form method="post" action="{{ url_for('exp_crear', cliente=cliente) }}" class="form-experimento">
+    <label>Nombre <input name="nombre" required maxlength="200"></label>
+    <label>Objetivo
+      <select name="objetivo">{% for o in objetivos_exp %}<option value="{{ o }}">{{ o }}</option>{% endfor %}</select>
+    </label>
+    <fieldset class="exp-paises">
+      <legend>Países y presupuesto diario en {{ moneda_exp }} — la moneda de tu cuenta de Meta, sin importar el país (mínimo {{ minimo_diario_exp }})</legend>
+      {% for codigo, p in paises_fe.items() %}
+      <label class="fe-destino">
+        <input type="checkbox" name="paises" value="{{ codigo }}"> {{ p.bandera }} {{ p.nombre }}
+        <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" placeholder="{{ minimo_diario_exp }}" style="width:8rem;">
+      </label>
+      {% endfor %}
+    </fieldset>
+    <div class="fe-opciones">
+      <label>Días <input type="number" name="dias" value="7" min="1" max="90"></label>
+      <label>Tope total ({{ moneda_exp }}) <input type="number" name="tope_total" min="0" step="any" required></label>
+      <label>Edad <input type="number" name="edad_min" value="18" min="13" max="65" style="width:4rem;"> – <input type="number" name="edad_max" value="65" min="13" max="65" style="width:4rem;"></label>
+      <label>URL de destino <input type="url" name="destino_url" value="{{ url_for('landing_cliente', cliente=cliente, _external=True) }}" required></label>
+    </div>
+    <button type="submit" class="btn-generar btn-sm">Crear experimento</button>
+  </form>
+</details>
+{% endif %}
+
+{% for e in experimentos %}
+<details class="swap-card experimento experimento-{{ e.estado }}" {% if loop.first %}open{% endif %}>
+  <summary class="swap-card-resumen">
+    <span class="semaforo semaforo-{{ e.estado }}"></span>
+    <strong>{{ e.nombre }}</strong>
+    <span class="tag-estado">{{ e.estado }}</span>
+    <small>{{ e.resumen.activos }}/{{ e.resumen.total }} activos · gasto {{ "%.2f"|format(e.gasto_acumulado) }} / {{ e.tope_total }} {{ e.moneda }}
+      {% if e.resumen.mejor_cpc %}· mejor CPC {{ "%.2f"|format(e.resumen.mejor_cpc) }}{% endif %}</small>
+  </summary>
+  {% if e.error %}<p class="tag-error">{{ e.error }}</p>{% endif %}
+  {% set trabajo = trabajos_exp.get(e.id) %}
+  {% if trabajo %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+  <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ ("trabajo-" ~ trabajo.job_id) | tojson }});</script>
+  {% endif %}
+
+  <div class="exp-acciones">
+    {% if e.estado in ("armando", "error") and not e.meta_campaign_id %}
+      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit="return confirm('Se crean la campaña, los conjuntos y los anuncios en Meta, en pausa. ¿Seguimos?');"><button class="btn-generar btn-sm">Lanzar a Meta (en pausa)</button></form>
+    {% elif e.estado == "error" %}
+      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit="return confirm('Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta). ¿Seguimos?');"><button class="btn-generar btn-sm">Reintentar lanzamiento</button></form>
+    {% elif e.estado == "pausado" %}
+      <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" onsubmit="return confirm('Activar empieza a gastar en Meta. ¿Seguimos?');"><input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-sm">Activar todo</button></form>
+    {% elif e.estado == "corriendo" %}
+      <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}"><input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-sm">Pausar todo</button></form>
+    {% endif %}
+    {% if e.meta_campaign_id and e.estado != "cerrado" %}
+      <form method="post" action="{{ url_for('exp_refrescar', cliente=cliente, eid=e.id) }}"><button class="btn-guardar btn-sm">Actualizar métricas</button></form>
+      <form method="post" action="{{ url_for('exp_cerrar', cliente=cliente, eid=e.id) }}" onsubmit="return confirm('Se pausa todo en Meta y el experimento queda cerrado.');"><button class="btn-rechazar btn-sm">Cerrar</button></form>
+    {% endif %}
+  </div>
+
+  {# Árbol: experimento → países → piezas #}
+  <ul class="exp-arbol">
+    {% for p in e.paises %}
+    {% set info = paises_fe.get(p.pais, {}) %}
+    <li class="exp-pais">
+      <div class="exp-pais-cab">
+        <span>{{ info.bandera }} <strong>{{ info.nombre or p.pais }}</strong> · {{ p.presupuesto_dia }} {{ e.moneda }}/día <span class="tag-estado">{{ p.estado }}</span></span>
+        {% if p.meta_adset_id and e.estado in ("pausado", "corriendo") %}
+        <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" class="inline">
+          <input type="hidden" name="pais" value="{{ p.pais }}">
+          {% if p.estado == "activo" %}<input type="hidden" name="estado" value="PAUSED"><button class="btn-rechazar btn-xs">Pausar país</button>
+          {% else %}<input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-xs" onclick="return confirm('Activar {{ p.pais }} empieza a gastar.');">Activar país</button>{% endif %}
+        </form>
+        <form method="post" action="{{ url_for('exp_presupuesto', cliente=cliente, eid=e.id) }}" class="inline">
+          <input type="hidden" name="pais" value="{{ p.pais }}">
+          <input type="number" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp }}" step="any" style="width:7rem;" title="En {{ e.moneda }}, la moneda de la cuenta de Meta">
+          <button class="btn-guardar btn-xs">Cambiar presupuesto</button>
+        </form>
+        {% endif %}
+      </div>
+      <ul class="exp-piezas">
+        {% for pz in e.piezas if pz.pais == p.pais %}
+        <li class="exp-pieza exp-pieza-{{ pz.estado }}">
+          <span class="exp-pieza-mini">{% if pz.url_miniatura %}<img src="{{ pz.url_miniatura }}" alt="">{% endif %}</span>
+          <span class="exp-pieza-nombre">{{ pz.nombre }} <small>({{ pz.tipo }})</small> <span class="tag-estado">{{ pz.estado }}</span>
+            {% if pz.metricas.estado_meta_texto %}<small>· {{ pz.metricas.estado_meta_texto }}</small>{% endif %}
+            {% if pz.error %}<span class="tag-error">{{ pz.error }}</span>{% endif %}</span>
+          {% if pz.metricas %}
+          <span class="kpis kpis-mini">
+            <span class="kpi"><b>{{ pz.metricas.impresiones }}</b> impr.</span>
+            <span class="kpi"><b>{{ pz.metricas.clics_enlace }}</b> clics</span>
+            <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.ctr or 0) }}%</b> CTR</span>
+            <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.cpc or 0) }}</b> CPC</span>
+            <span class="kpi"><b>{{ "%.0f"|format((pz.metricas.thruplay_rate or 0) * 100) }}%</b> ThruPlay</span>
+            <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.gasto or 0) }}</b> gasto</span>
+            {% if pz.metricas.compras %}<span class="kpi"><b>{{ pz.metricas.compras }}</b> compras · ROAS {{ "%.1f"|format(pz.metricas.roas or 0) }}</span>{% endif %}
+            {% if pz.metricas.motivo_rechazo %}<span class="tag-error">{{ pz.metricas.motivo_rechazo }}</span>{% endif %}
+          </span>
+          {% endif %}
+          {% if pz.estado == "en_cola" and not e.meta_campaign_id %}
+          <form method="post" action="{{ url_for('exp_quitar_pieza', cliente=cliente, eid=e.id, ep_id=pz.id) }}" class="inline"><button class="btn-rechazar btn-xs">Quitar</button></form>
+          {% endif %}
+        </li>
+        {% else %}
+        <li class="vacio">Sin piezas para este país todavía.</li>
+        {% endfor %}
+      </ul>
+    </li>
+    {% endfor %}
+  </ul>
+
+  {% if e.estado in ("armando", "error") and not e.meta_campaign_id %}
+  <form method="post" action="{{ url_for('exp_agregar_pieza', cliente=cliente, eid=e.id) }}" class="exp-agregar">
+    <label>Agregar pieza
+      <select name="pieza_id">
+        {% for el in elegibles_exp %}<option value="{{ el.pieza_id }}" data-pais="{{ el.pais or '' }}">{{ el.nombre }}{% if el.pais %} · {{ el.pais }}{% endif %}</option>{% endfor %}
+      </select>
+    </label>
+    <label>País <select name="pais">{% for p in e.paises %}<option value="{{ p.pais }}">{{ p.pais }}</option>{% endfor %}</select></label>
+    <button class="btn-guardar btn-sm">Agregar</button>
+    <small class="vacio">Las finales van a su propio país; los clones sin texto a cualquiera.</small>
+  </form>
+  {% endif %}
+
+  <details class="exp-eventos"><summary>Bitácora ({{ e.eventos|length }})</summary>
+    <ul>{% for ev in e.eventos %}<li><small>{{ ev.creado_en }}</small> <span class="tag-estado">{{ ev.tipo }}</span> {{ ev.mensaje }}</li>{% endfor %}</ul>
+  </details>
+</details>
+{% else %}
+<p class="vacio">Todavía no hay experimentos. Crea uno, agrega piezas desde Crear («Meter en experimento») y lánzalo.</p>
+{% endfor %}

@@ -82,6 +82,13 @@ mkdir -p data/musica
 No hace falta ninguna llave nueva en `.env`: usa las mismas `FAL_KEY` (fal.ai — voz y
 música) y `ANTHROPIC_API_KEY` (guion) que ya configuraste en el paso 0.
 
+**Experimentos** (campaña multi-país en Meta con métricas cada 2 h): no necesita
+llaves nuevas — usa la conexión de Meta del proyecto (Configuración › Conectar con
+Meta). La actualización periódica de métricas corre dentro de `creatv-worker`
+(`worker.PERIODICAS`), así que sin el worker los experimentos se lanzan pero no se
+refrescan solos. La migración `0004` agrega columnas a `experimento`: correr
+`venv/bin/alembic upgrade head` en cada despliegue como siempre.
+
 ---
 
 ## 1. Cloudflare R2 — storage propio y permanente

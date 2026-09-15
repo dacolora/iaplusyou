@@ -9,6 +9,7 @@ Uso:
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import json
+import math
 import os
 import secrets
 import socket
@@ -17,6 +18,7 @@ import threading
 from functools import wraps
 
 import requests
+import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session
@@ -49,8 +51,13 @@ import ads as ads_mod
 from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
+import cola
+import db
+import experimentos
+import lanzador
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 from tareas import final_edition as tareas_fe
+from tareas import experimentos as tareas_exp
 from final_edition import ETAPAS_FINAL, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
@@ -833,6 +840,23 @@ def ver_cliente(cliente):
                 trabajos_ads[ad_id] = {"job_id": jid}
                 break
 
+    # Experimentos: solo se consulta trabajos.en_curso para los experimentos
+    # que de verdad podrían tener un job vivo (lanzando, o corriendo/pausado
+    # con campaña ya creada en Meta) — evita 2 queries por cada experimento
+    # ya cerrado/armando.
+    experimentos_exp = experimentos.cargar(cliente)
+    trabajos_exp = {}
+    for e in experimentos_exp:
+        if e["estado"] == "lanzando":
+            jid = tareas_exp.job_id_lanzar(cliente, e["id"])
+            if trabajos.en_curso(jid):
+                trabajos_exp[e["id"]] = {"job_id": jid}
+        elif e["meta_campaign_id"]:
+            jid = tareas_exp.job_id_refrescar(cliente, e["id"])
+            if trabajos.en_curso(jid):
+                trabajos_exp[e["id"]] = {"job_id": jid}
+    moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+
     return render_template(
         "cliente.html",
         cliente=cliente,
@@ -875,6 +899,13 @@ def ver_cliente(cliente):
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
+        experimentos=experimentos_exp,
+        experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
+        elegibles_exp=experimentos.elegibles(cliente),
+        trabajos_exp=trabajos_exp,
+        objetivos_exp=meta_campaign.OBJETIVOS_VALIDOS_FASE1,
+        minimo_diario_exp=PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
+        moneda_exp=moneda_exp,
     )
 
 
@@ -2095,6 +2126,271 @@ def eliminar_ad(cliente, ad_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
+@app.route("/cliente/<cliente>/experimentos/nuevo", methods=["POST"])
+def exp_crear(cliente):
+    """Crea un experimento en 'armando' — sin piezas ni objetos en Meta
+    todavía. Nunca gasta: eso solo ocurre en exp_lanzar y solo si la persona
+    lo pide."""
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    if meta_conexion.estado(cliente).get("estado") != "conectado":
+        flash("Conecta Meta en Configuración antes de crear un experimento.", "error")
+        return volver
+    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    nombre = (request.form.get("nombre") or "").strip()[:200]
+    objetivo = request.form.get("objetivo") or ""
+    codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
+    destino = (request.form.get("destino_url") or "").strip()
+    try:
+        dias = int(request.form.get("dias") or 7)
+        tope = float(request.form.get("tope_total") or 0)
+        edad_min = int(request.form.get("edad_min") or 18)
+        edad_max = int(request.form.get("edad_max") or 65)
+        paises = [{"pais": p, "idioma": fe_tipos.PAISES[p]["idioma"],
+                   "presupuesto_dia": float(request.form.get(f"presupuesto_{p}") or 0)} for p in codigos]
+    except ValueError:
+        flash("Revisa los números del formulario.", "error")
+        return volver
+    # float("nan")/float("inf") no disparan ValueError arriba, y nan<=0 y
+    # nan<minimo son ambos False — sin este chequeo un tope o presupuesto
+    # NaN/inf crea el experimento y falla después en lanzador.centavos
+    # (int(nan) -> ValueError), gastando el único intento del job.
+    if not math.isfinite(tope) or any(not math.isfinite(p["presupuesto_dia"]) for p in paises):
+        flash("Revisa los números del formulario.", "error")
+        return volver
+    if (not nombre or objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
+            or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
+            or not (13 <= edad_min <= edad_max <= 65)):
+        flash("Faltan datos: nombre, objetivo, al menos un país, días (1–90), tope, edades (13–65) "
+              "y una URL de destino http(s).", "error")
+        return volver
+    # Meta interpreta daily_budget en la moneda de FACTURACIÓN de la cuenta
+    # publicitaria, sin importar qué país apunte ese adset (una cuenta en COP
+    # que le pega a México sigue fijando el presupuesto de ese adset en COP).
+    # Por eso el mínimo se valida contra la moneda de la cuenta, no la del país.
+    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
+    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
+    if bajos:
+        flash(f"El presupuesto diario no alcanza el mínimo de Meta ({minimo} {moneda}) en: {', '.join(bajos)}.", "error")
+        return volver
+    eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max)
+    experimentos.registrar_evento(cliente, eid, "creado", f"Experimento creado con {len(paises)} países")
+    flash(f"Experimento «{nombre}» creado. Agrega piezas y lánzalo cuando esté listo.", "ok")
+    return volver
+
+
+def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
+    """Valida y agrega una pieza (final o clon) a un experimento en armado.
+    Devuelve un mensaje de error en español, o None si quedó agregada.
+    Compartida por exp_agregar_pieza y exp_meter_pieza (Crear -> Experimentos)."""
+    ex = experimentos.obtener(cliente, experimento_id)
+    if not ex:
+        return "Ese experimento no existe."
+    if ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
+        return "Ese experimento ya no acepta piezas nuevas."
+    candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
+    if not candidata:
+        return "Esa pieza no está disponible (o no está lista)."
+    if candidata["tipo"] == "final":
+        pais_final = candidata["pais"]
+        if pais not in (None, "") and pais != pais_final:
+            return f"Esa final es de {pais_final}; no se puede meter a otro país."
+        pais = pais_final
+    else:
+        paises_experimento = {p["pais"] for p in ex["paises"]}
+        if pais not in paises_experimento:
+            return f"Ese país no está en el experimento (elige entre {', '.join(sorted(paises_experimento))})."
+    experimentos.agregar_pieza(cliente, experimento_id, pieza_id, pais)
+    return None
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/piezas", methods=["POST"])
+def exp_agregar_pieza(cliente, eid):
+    try:
+        pieza_id = int(request.form.get("pieza_id") or request.form.get("legado_id") or 0)
+    except ValueError:
+        pieza_id = 0
+    if not pieza_id:
+        legado_id = (request.form.get("legado_id") or "").strip()
+        pieza_id = creative_flow.pieza_id_por_legado(cliente, legado_id) if legado_id else None
+    pais = (request.form.get("pais") or "").strip() or None
+    if not pieza_id:
+        flash("No encontré esa pieza.", "error")
+    else:
+        error = _agregar_pieza_validada(cliente, eid, pieza_id, pais)
+        flash(error, "error") if error else flash("Pieza agregada.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/piezas/<int:ep_id>/quitar", methods=["POST"])
+def exp_quitar_pieza(cliente, eid, ep_id):
+    # Misma guardia que _agregar_pieza_validada: mientras el experimento está
+    # "lanzando", las piezas que el worker todavía no procesó siguen en
+    # "en_cola" (que es lo único que exige experimentos.quitar_pieza), así que
+    # sin esto se podían borrar piezas que lanzador.lanzar ya cargó en memoria
+    # y está a punto de publicar en Meta — el anuncio queda huérfano allá.
+    ex = experimentos.obtener(cliente, eid)
+    if not ex or ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
+        flash("Ese experimento ya no acepta cambios de piezas.", "error")
+    elif experimentos.quitar_pieza(cliente, eid, ep_id):
+        flash("Pieza quitada.", "ok")
+    else:
+        flash("No pude quitar esa pieza (¿ya está en Meta?).", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+
+
+@app.route("/cliente/<cliente>/experimentos/meter", methods=["POST"])
+def exp_meter_pieza(cliente):
+    """Desde la pestaña Crear: manda una pieza recién generada directo a un
+    experimento existente, sin tener que ir a la pestaña Experimentos."""
+    legado_id = (request.form.get("legado_id") or "").strip()
+    try:
+        experimento_id = int(request.form.get("experimento_id") or 0)
+    except ValueError:
+        experimento_id = 0
+    pais = (request.form.get("pais") or "").strip() or None
+    pieza_id = creative_flow.pieza_id_por_legado(cliente, legado_id) if legado_id else None
+    if not pieza_id or not experimento_id:
+        flash("No encontré esa pieza o ese experimento.", "error")
+    else:
+        error = _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais)
+        flash(error, "error") if error else flash("Pieza enviada al experimento.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/lanzar", methods=["POST"])
+def exp_lanzar(cliente, eid):
+    """Encola el lanzamiento a Meta (campaña + conjuntos por país + anuncios,
+    todo PAUSED). Valida acá lo mismo que lanzador.lanzar para poder avisar
+    por flash sin gastar un intento de la cola (max_intentos=1: un reintento
+    automático a mitad de la cadena crearía objetos huérfanos en Meta)."""
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    ex = experimentos.obtener(cliente, eid)
+    if not ex:
+        flash("Ese experimento no existe.", "error")
+        return volver
+    if ex["estado"] not in ("armando", "error"):
+        flash("Ese experimento ya fue lanzado.", "error")
+        return volver
+    if not ex["piezas"]:
+        flash("El experimento no tiene piezas: agrega al menos una antes de lanzar.", "error")
+        return volver
+    paises_con_piezas = {p["pais"] for p in ex["piezas"]}
+    faltan = [p["pais"] for p in ex["paises"] if p["pais"] not in paises_con_piezas]
+    if faltan:
+        flash(f"Sin piezas para: {', '.join(faltan)}. Agrega una pieza por país o quita el país.", "error")
+        return volver
+    job_id = tareas_exp.job_id_lanzar(cliente, eid)
+    # M2: encolar primero y solo marcar "lanzando" si de verdad arrancó — si
+    # se pusiera "lanzando" antes y trabajos.encolar fallara (ej. "database is
+    # locked"), el experimento quedaría colgado ahí sin tarea que lo saque
+    # (_reconciliar_huerfanos no corre bajo gunicorn).
+    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
+                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    if arranco:
+        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+        flash("Lanzando el experimento a Meta (queda en pausa)…", "ok")
+    else:
+        flash("Ya se está lanzando ese experimento.", "warn")
+    return volver
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/estado", methods=["POST"])
+def exp_estado(cliente, eid):
+    estado = (request.form.get("estado") or "").strip()
+    pais = (request.form.get("pais") or "").strip() or None
+    if estado not in ("ACTIVE", "PAUSED"):
+        flash("Estado inválido.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    with _ENV_LOCK:
+        try:
+            lanzador.cambiar_estado(cliente, eid, estado, pais=pais)
+            flash("Listo." if estado == "ACTIVE" else "Pausado.", "ok")
+        except ValueError as e:
+            flash(str(e), "error")
+        except Exception as e:
+            flash(f"No pude cambiar el estado: {cola.sin_token(str(e))}", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/presupuesto", methods=["POST"])
+def exp_presupuesto(cliente, eid):
+    pais = (request.form.get("pais") or "").strip()
+    # Igual que en exp_crear: el presupuesto se valida en la moneda de la
+    # cuenta publicitaria de Meta, no en la moneda local de la audiencia. Y
+    # es la misma moneda con la que lanzador.cambiar_presupuesto_pais convierte
+    # a centavos (ex["moneda"], guardada al crear el experimento con la moneda
+    # de la cuenta de ese momento) — si esa cuenta cambió de moneda entre crear
+    # y ajustar, cambiar_presupuesto_pais ya cae al fallback ex["moneda"] or
+    # "USD", así que valida y convierte con el mismo número salvo ese caso raro.
+    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
+    try:
+        presupuesto_dia = float(request.form.get("presupuesto_dia") or 0)
+    except ValueError:
+        flash("El presupuesto debe ser un número.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
+        flash(f"El presupuesto diario mínimo es {minimo} {moneda}.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    with _ENV_LOCK:
+        try:
+            lanzador.cambiar_presupuesto_pais(cliente, eid, pais, presupuesto_dia)
+            flash("Presupuesto actualizado.", "ok")
+        except ValueError as e:
+            flash(str(e), "error")
+        except Exception as e:
+            flash(f"No pude cambiar el presupuesto: {cola.sin_token(str(e))}", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/refrescar", methods=["POST"])
+def exp_refrescar(cliente, eid):
+    ex = experimentos.obtener(cliente, eid)
+    if not ex or not ex["meta_campaign_id"]:
+        flash("Ese experimento todavía no está en Meta.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    job_id = tareas_exp.job_id_refrescar(cliente, eid)
+    # M10: max_intentos=2 como la periódica (tareas/experimentos.py) — refrescar
+    # nunca gasta, así que no hay razón para ser más estricto acá que allá.
+    arranco = trabajos.encolar(job_id, "exp_refrescar", {"cliente": cliente, "experimento_id": eid},
+                               cliente=cliente, duracion_estimada=30, max_intentos=2)
+    if arranco:
+        flash("Actualizando resultados…", "ok")
+    else:
+        flash("Ya se están actualizando.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/cerrar", methods=["POST"])
+def exp_cerrar(cliente, eid):
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    ex = experimentos.obtener(cliente, eid)
+    if not ex:
+        flash("Ese experimento no existe.", "error")
+        return volver
+    if ex["estado"] == "cerrado":
+        flash("Ese experimento ya estaba cerrado.", "ok")
+        return volver
+    # "lanzando" nunca se cierra desde acá: el worker está a mitad de crear
+    # campaña/adsets/anuncios en Meta y, al terminar, vuelve a escribir
+    # "pausado" (lanzador.lanzar) — un "cerrado" acá se perdería y dejaría
+    # los objetos ya creados en Meta sin que el experimento se entere. Solo
+    # se puede cerrar desde armando/error (nunca se lanzó) o pausado/corriendo
+    # (ya está en Meta).
+    if ex["estado"] not in ("pausado", "corriendo", "armando", "error"):
+        flash("Espera a que termine el lanzamiento antes de cerrar.", "error")
+        return volver
+    with _ENV_LOCK:
+        try:
+            lanzador.cerrar(cliente, eid)
+            flash("Experimento cerrado.", "ok")
+        except ValueError as e:
+            flash(str(e), "error")
+        except Exception as e:
+            flash(f"No pude cerrar el experimento: {cola.sin_token(str(e))}", "error")
+    return volver
+
+
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])
 def guardar_prompt(cliente, prompt_id):
     data = prompts_mod.cargar(cliente)
@@ -2936,6 +3232,22 @@ def _reconciliar_huerfanos():
             # Un cliente con el JSON corrupto no debe impedir que arranque el
             # dashboard entero.
             print(f"[aviso] No pude reconciliar los huérfanos de {cliente}: {e}")
+
+    # Experimentos "lanzando" viven en la base (no en JSON): si el proceso se
+    # reinició a mitad de un lanzamiento y el job ya no está en la cola, el
+    # experimento quedó pidiendo un trabajo que no va a volver — se marca en
+    # error para que la persona pueda revisar Ads Manager y reintentar.
+    try:
+        with db.conectar() as con:
+            filas = con.execute(sa.select(db.experimento.c.id, db.experimento.c.cliente).where(
+                db.experimento.c.legado.is_(False), db.experimento.c.estado == "lanzando")).all()
+        for eid, cliente in filas:
+            if trabajos.en_curso(tareas_exp.job_id_lanzar(cliente, eid)):
+                continue
+            experimentos.actualizar(cliente, eid, estado="error",
+                                     error="Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar.")
+    except Exception as e:
+        print(f"[aviso] No pude reconciliar experimentos lanzando: {e}")
 
 
 HOST = "127.0.0.1"

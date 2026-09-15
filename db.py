@@ -157,6 +157,11 @@ experimento = Table("experimento", metadata,
     Column("meta_campaign_id", String(40)),
     Column("gasto_acumulado", Float, default=0.0),
     Column("legado", Boolean, default=False),               # True = importado de ads.json
+    Column("destino_url", String(500)),
+    Column("edad_min", Integer, default=18),
+    Column("edad_max", Integer, default=65),
+    Column("error", Text),
+    Column("extra", JSON, default=dict),                    # lanzamiento: etapa, ids parciales
     sa.Index("uq_experimento_legado", "cliente", unique=True, sqlite_where=sa.text("legado = 1")),
 )
 
