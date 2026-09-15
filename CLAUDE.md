@@ -162,6 +162,25 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 `tareas/final_edition.py`; the dashboard routes are `fe_preparar`, `fe_guardar_guion`,
 `fe_producir`, `fe_descartar`.
 
+**Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
+of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
+sueltos" is the one `legado=True` row per client and is untouched) names countries with
+a daily budget each, a total cap, days, objective and destination URL; pieces (finals
+for their own country, or text-free clones for any country) are attached as
+`experimento_pieza` rows. `lanzador.lanzar` maps it onto Meta as 1 campaign
+(`spend_cap` = tope total, only when it clears Meta's minimum) -> 1 adset per country
+(`Targeting().edad().paises([pais])`, budget in the ad ACCOUNT's currency, never the
+country's) -> 1 ad per piece, all `PAUSED`, saving every id as soon as Meta returns it so
+a retry resumes instead of duplicating. Launching and activating are two different
+clicks (`exp_lanzar` queues the `exp_lanzar` task with `max_intentos=1`; `exp_estado`
+activates/pauses the whole experiment or one country inline). Metrics: `lanzador.refrescar`
+appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports them) —
+the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
+every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
+states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
+launch (resumable). UI: sidebar tab "Experimentos" (`_tab_experimentos.html`, tree
+experiment -> country -> piece) and "Meter en experimento" in Crear's detail modal.
+
 ## Agent skills
 
 ### Issue tracker
