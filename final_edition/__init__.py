@@ -25,6 +25,8 @@ import requests
 
 import catalogo_productos
 import creative_flow
+import marca
+import proyectos
 from final_edition import cortes, guion as guion_mod, musica, render, texto, tipos, voz
 from providers import fal_audio
 from storage import r2_uploader
@@ -101,18 +103,14 @@ def _logo_local(cliente, carpeta):
 
 def _color_acento(cliente):
     try:
-        import proyectos
-        return proyectos.cargar(cliente).get("color_acento") or COLOR_ACENTO_DEFECTO
+        datos = proyectos.cargar(cliente)
     except Exception:
         return COLOR_ACENTO_DEFECTO
+    return datos.get("color_acento") or COLOR_ACENTO_DEFECTO
 
 
 def _guia_marca(cliente):
-    try:
-        import marca as marca_mod
-        return getattr(marca_mod, "guia_efectiva")(cliente) or ""
-    except Exception:
-        return ""
+    return marca.guia_efectiva(cliente) or ""
 
 
 # ---------------------------------------------------------------- sesión ---
@@ -126,19 +124,47 @@ def _sesion(cliente, cf_id):
 
 def _producto(cliente, entry, precio):
     """{"nombre","descripcion","precio","moneda","beneficios","tipo"} desde el
-    catálogo (primer producto de la sesión) o desde la acción central."""
+    catálogo o desde la acción central.
+
+    `productos_ids` guarda NOMBRES visibles (no ids), y puede mezclar
+    productos con personajes/entornos — se busca cada uno primero por id en
+    la categoría "producto" (compatibilidad con sesiones viejas) y si no,
+    por nombre entre los productos del catálogo. Si nada resuelve, se cae a
+    la primera referencia con categoria=="producto" (el nombre del activo
+    tal como quedó en la sesión) y luego a la acción central."""
     ids = entry.get("productos_ids") or []
-    p = catalogo_productos.encontrar(cliente, ids[0]) if ids else None
+    p = None
+    nombre_activo = None
+    for x in ids:
+        p = catalogo_productos.encontrar(cliente, x, categoria="producto")
+        if p:
+            nombre_activo = x
+            break
+        for cand in catalogo_productos.listar(cliente, "producto"):
+            if cand.get("nombre") == x:
+                p, nombre_activo = cand, x
+                break
+        if p:
+            break
+    if not p:
+        for r in entry.get("referencias") or []:
+            if r.get("categoria") == "producto" and r.get("activo"):
+                nombre_activo = r["activo"]
+                break
     if p:
-        return {"nombre": p.get("nombre") or ids[0], "descripcion": p.get("descripcion") or "",
+        return {"nombre": p.get("nombre") or nombre_activo, "descripcion": p.get("descripcion") or "",
                 "precio": precio, "moneda": None, "beneficios": [], "tipo": p.get("tipo")}
+    if nombre_activo:
+        return {"nombre": nombre_activo, "descripcion": "", "precio": precio, "moneda": None,
+                "beneficios": [], "tipo": None}
     accion = entry.get("accion_central") or ""
     return {"nombre": accion[:60], "descripcion": accion, "precio": precio, "moneda": None,
             "beneficios": [], "tipo": None}
 
 
 def _referencia(entry, idioma_base):
-    referencias = [r for r in (entry.get("referencias") or []) if r.get("tipo") != "logo"]
+    referencias = [r for r in (entry.get("referencias") or [])
+                   if not r.get("logo") and r.get("tipo") != "logo"]
     frames = [r["frame_url"] for r in referencias if r.get("frame_url")]
     transcripcion, costo = None, 0.0
     for r in referencias:
@@ -205,9 +231,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
             guion_base, costo_base = preparar_guion(cliente, cf_id, o)
             costo += costo_base
     except Exception as e:
+        capas["guion"] = {"proveedor": "anthropic", "parametros": {}, "costo_usd": 0.0,
+                          "estado": "error", "error": str(e)}
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas)
         raise
     carpeta = _carpeta_final(cliente, final_id)
+    shutil.rmtree(carpeta, ignore_errors=True)
     os.makedirs(carpeta, exist_ok=True)
 
     def capa(nombre, proveedor, parametros, costo_capa=0.0, estado="ok", error=None):

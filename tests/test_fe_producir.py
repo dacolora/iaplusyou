@@ -52,17 +52,20 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
     import catalogo_productos
 
     monkeypatch.setattr(final_edition, "BASE_DIR", str(tmp_path))
-    cf_id = cf.crear("acme", [], ["chancla_rose"], [], "la persona camina con las chanclas", 8, "", "A")
+    cf_id = cf.crear("acme", [], ["Chancla Rose"], [], "la persona camina con las chanclas", 8, "", "A")
     cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", video_local=clip,
                   enfoque="producto", aspect_ratio="9:16",
-                  referencias=[{"tipo": "imagen", "url": "https://x/1.png", "frame_url": "https://x/1f.png"},
+                  referencias=[{"tipo": "imagen", "url": "https://x/1.png", "frame_url": "https://x/1f.png",
+                                "categoria": "producto", "activo": "Chancla Rose"},
                                {"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/vf.png"},
-                               {"tipo": "logo", "url": "https://x/logo.png", "frame_url": "https://x/logo.png"}])
+                               {"tipo": "imagen", "url": "https://x/logo.png", "frame_url": "https://x/logo.png",
+                                "logo": True}])
 
     llamadas = {"cf_id": cf_id}
-    monkeypatch.setattr(catalogo_productos, "encontrar",
-                        lambda cliente, pid, categoria=None: {"id": pid, "nombre": "Chancla Rose",
-                                                              "descripcion": "Chancla cómoda", "tipo": "calzado"})
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda cliente, pid, categoria=None: None)
+    monkeypatch.setattr(catalogo_productos, "listar",
+                        lambda cliente, categoria="producto": [{"id": "chancla_rose", "nombre": "Chancla Rose",
+                                                                "descripcion": "Chancla cómoda", "tipo": "calzado"}])
 
     def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint):
         llamadas["generar"] = dict(producto=producto, referencia=referencia, enfoque=enfoque,
@@ -127,6 +130,7 @@ def test_preparar_guion_guarda_guion_base(entorno):
     assert cf.guion_base("acme", entorno["cf_id"])["bloques"][4]["rol"] == "cta"
     args = entorno["generar"]
     assert args["producto"]["nombre"] == "Chancla Rose" and args["producto"]["precio"] == 89900
+    assert args["producto"]["descripcion"] == "Chancla cómoda"
     assert args["referencia"]["frames"] == ["https://x/1f.png", "https://x/vf.png"]
     assert args["referencia"]["transcripcion"] == "hola mundo"
     assert args["enfoque"] == "producto" and args["duracion_s"] == pytest.approx(8.0, abs=0.1)
@@ -138,6 +142,9 @@ def test_preparar_guion_sin_producto_ni_transcripcion(entorno, monkeypatch):
     import catalogo_productos
     from providers import fal_audio
     monkeypatch.setattr(catalogo_productos, "encontrar", lambda *a, **k: None)
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [])
+    cf.actualizar("acme", entorno["cf_id"], productos_ids=[],
+                  referencias=[{"tipo": "video", "url": "https://x/v.mp4", "frame_url": "https://x/vf.png"}])
 
     def falla(*a, **k):
         raise RuntimeError("whisper caído")
