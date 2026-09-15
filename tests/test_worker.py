@@ -1,5 +1,6 @@
-def test_ciclo_ejecuta_y_termina(base_temporal):
+def test_ciclo_ejecuta_y_termina(base_temporal, monkeypatch):
     import cola, tareas, worker
+    monkeypatch.setattr(worker, "PERIODICAS", [])  # aislado de las periódicas reales (exp_refrescar_todos)
     hecho = {}
 
     @tareas.registrar("prueba_ok")
