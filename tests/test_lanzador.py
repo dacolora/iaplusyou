@@ -87,7 +87,7 @@ def test_lanzar_crea_campana_conjuntos_y_anuncios(entorno):
     assert e["estado"] == "pausado" and e["meta_campaign_id"] == "campaign_1"
     assert {p["pais"]: p["meta_adset_id"] for p in e["paises"]} == {"CO": "adset_2", "MX": "adset_3"}
     assert all(p["estado"] == "pausado" and p["meta_ad_id"] for p in e["piezas"])
-    assert etapas == lz.ETAPAS_LANZAR
+    assert etapas == [nombre for nombre, _peso in lz.ETAPAS_LANZAR]
     assert any(ev["tipo"] == "lanzamiento" for ev in e["eventos"])
 
 
@@ -131,7 +131,9 @@ def test_cambiar_estado_y_presupuesto(entorno):
     meta.llamadas.clear()
     lz.cambiar_estado("acme", eid, "PAUSED", pais="MX")
     ids = [kw["oid"] for t, kw in meta.llamadas if t == "estado"]
-    assert ids == ["adset_3", "ad_9"]
+    # ad_8, no ad_9: M4 comparte el creative del clon entre CO y MX, un
+    # "creative_N" menos que antes corre la numeración de todo lo posterior.
+    assert ids == ["adset_3", "ad_8"]
     e = ex.obtener("acme", eid)
     assert e["estado"] == "corriendo" and [p["estado"] for p in e["paises"]] == ["activo", "pausado"]
     assert [p["estado"] for p in e["piezas"]] == ["activo", "activo", "pausado"]
@@ -269,3 +271,88 @@ def test_refrescar_continua_si_falla_una_pieza(entorno):
     assert n == 2  # 3 piezas, 1 falló
     e = ex.obtener("acme", eid)
     assert any(ev["tipo"] == "error" for ev in e["eventos"])
+
+
+def test_encolar_exp_lanzar_con_etapas_reales_no_rompe_consultar(base_temporal):
+    """I1: ETAPAS_LANZAR debe ser [(nombre, peso), ...] como cualquier otra
+    lista de etapas — antes eran strings sueltos y cola.encolar los guardaba
+    como '[list(e) for e in etapas]', partiendo cada nombre en caracteres
+    ("Campaña" -> ['C','a','m','p','a','ñ','a']). trabajos.consultar()
+    reventaba con ValueError al desempacar esas 'tuplas' de un carácter."""
+    import cola
+    import lanzador
+    import trabajos
+    job_id = "acme__exp1__lanzar"
+    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": "acme", "experimento_id": 1},
+                               cliente="acme", duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    assert arranco is True
+    cola.reclamar()
+    info = trabajos.consultar(job_id)  # no debe lanzar ValueError
+    assert info["estado"] == "en_progreso"
+    cola.reportar(job_id, etapa=lanzador.ETAPAS_LANZAR[0][0])
+    info = trabajos.consultar(job_id)
+    assert info["etapa"] == lanzador.ETAPAS_LANZAR[0][0]
+
+
+def test_lanzar_mismo_clon_en_dos_paises_comparte_video_y_creative(entorno):
+    """M4: el fixture ya agrega el mismo clon a CO y a MX — subir el video y
+    crear el creative para cada país duplicaría una subida que puede tardar
+    hasta 180s bajo _LOCK, sin ganar nada (utm_content=pieza_id es igual en
+    ambos, es la misma pieza)."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    llamadas_subir = []
+    original = lz.meta_creative.subir_video
+
+    def contando(*a, **k):
+        llamadas_subir.append(1)
+        return original(*a, **k)
+
+    entorno["monkeypatch"].setattr(lz.meta_creative, "subir_video", contando)
+    lz.lanzar("acme", eid)
+    tipos = [t for t, _ in meta.llamadas]
+    assert tipos.count("creative") == 2  # f_co + 1 creative compartido por el clon (CO y MX)
+    assert len(llamadas_subir) == 2       # f_co sube su video, el clon sube el suyo una sola vez
+    e = ex.obtener("acme", eid)
+    clones = [p for p in e["piezas"] if p["tipo"] == "clon"]
+    assert len(clones) == 2
+    assert clones[0]["meta_creative_id"] == clones[1]["meta_creative_id"]
+    assert clones[0]["extra"].get("meta_video_id") == clones[1]["extra"].get("meta_video_id")
+
+
+def test_cambiar_presupuesto_pais_rechaza_lanzando(entorno):
+    """M1: mientras el experimento está lanzando, cambiar el presupuesto de un
+    país haría un read-modify-write sobre experimento.paises que podría pisar
+    el meta_adset_id que lanzador.lanzar acaba de guardar (carrera sin lock)."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, estado="lanzando")
+    ex.actualizar_pais("acme", eid, "CO", meta_adset_id="adset_x")
+    with pytest.raises(ValueError, match="todavía no está en Meta"):
+        lz.cambiar_presupuesto_pais("acme", eid, "CO", 300)
+
+
+def test_cambiar_estado_pausar_ultimo_pais_activo_marca_experimento_pausado(entorno):
+    """M5: si el país que se pausa era el único que quedaba activo, el
+    experimento ya no está 'corriendo' de verdad (todos los conjuntos en
+    Meta quedaron PAUSED) — y exp_refrescar_todos solo pule lo 'corriendo'."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    lz.cambiar_estado("acme", eid, "PAUSED", pais="CO")
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"  # MX sigue activo
+    lz.cambiar_estado("acme", eid, "PAUSED", pais="MX")
+    assert ex.obtener("acme", eid)["estado"] == "pausado"
+
+
+def test_lanzar_autosana_si_preflight_falla_con_estado_ya_lanzando(entorno):
+    """M3: si el llamador (la ruta) ya puso 'lanzando' antes de encolar y el
+    pre-flight de lanzar() falla (ej. alguien quitó todas las piezas entre el
+    clic y que el worker la tomara), el experimento no debe quedar colgado en
+    'lanzando' para siempre — antes esos ValueError se disparaban fuera de
+    cualquier try/except que sanara el estado."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    ex.actualizar("acme", eid, estado="lanzando")
+    for p in ex.piezas("acme", eid):
+        ex.quitar_pieza("acme", eid, p["id"])
+    with pytest.raises(ValueError):
+        lz.lanzar("acme", eid)
+    assert ex.obtener("acme", eid)["estado"] == "error"

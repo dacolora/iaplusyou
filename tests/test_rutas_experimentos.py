@@ -112,6 +112,44 @@ def test_lanzar_encola_una_sola_vez_y_valida(app, base_temporal):
     assert len(ex.piezas("acme", eid)) == 2
 
 
+def test_lanzar_no_marca_lanzando_si_encolar_no_arranca(app, base_temporal, monkeypatch):
+    """M2: si trabajos.encolar devuelve False (ya hay una tarea viva, o algo
+    falló al insertar en la cola), la ruta no debe marcar el experimento como
+    'lanzando' — antes lo hacía ANTES de encolar, así que un encolar fallido
+    dejaba el experimento colgado en 'lanzando' sin ninguna tarea detrás."""
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, clon, "CO")
+    ex.agregar_pieza("acme", eid, clon, "MX")
+    monkeypatch.setattr(app["dashboard"].trabajos, "encolar", lambda *a, **kw: False)
+    r = app["c"].post(f"/cliente/acme/experimentos/{eid}/lanzar")
+    assert r.status_code == 302
+    assert ex.obtener("acme", eid)["estado"] == "armando"
+
+
+def test_rutas_experimentos_rechazan_cliente_cruzado(app, base_temporal):
+    """M9(b): un usuario con sesión de 'acme' no puede tocar experimentos de
+    otro proyecto — el guard genérico (_guard_por_cliente) ya lo cubre, pero
+    esto lo deja fijado como test de regresión para las rutas exp_*."""
+    import experimentos as ex
+    eid = ex.crear("otro", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    r = c.post(f"/cliente/otro/experimentos/{eid}/lanzar")
+    assert r.status_code == 302
+    assert "/cliente/acme" in r.headers["Location"]
+    assert ex.obtener("otro", eid)["estado"] == "armando"
+    r = c.post(f"/cliente/otro/experimentos/{eid}/estado", data={"estado": "ACTIVE"})
+    assert r.status_code == 302 and "/cliente/acme" in r.headers["Location"]
+    r = c.post(f"/cliente/otro/experimentos/{eid}/presupuesto", data={"pais": "CO", "presupuesto_dia": "30000"})
+    assert r.status_code == 302 and "/cliente/acme" in r.headers["Location"]
+    r = c.post(f"/cliente/otro/experimentos/{eid}/cerrar")
+    assert r.status_code == 302 and "/cliente/acme" in r.headers["Location"]
+    assert ex.obtener("otro", eid)["estado"] == "armando"
+
+
 def test_estado_presupuesto_refrescar_cerrar(app, base_temporal, monkeypatch):
     import experimentos as ex
     d = app["dashboard"]
@@ -132,7 +170,9 @@ def test_estado_presupuesto_refrescar_cerrar(app, base_temporal, monkeypatch):
     c.post(f"/cliente/acme/experimentos/{eid}/refrescar")
     c.post(f"/cliente/acme/experimentos/{eid}/cerrar")
     assert llamadas == [("estado", "ACTIVE", None), ("estado", "PAUSED", "MX"), ("presupuesto", "MX", 30000.0), ("cerrar",)]
-    assert app["encolados"][-1]["tipo"] == "exp_refrescar" and app["encolados"][-1]["max_intentos"] == 1
+    # M10: max_intentos=2, igual que la periódica (tareas/experimentos.py) —
+    # refrescar nunca gasta, así que ser más estricto acá no protege nada.
+    assert app["encolados"][-1]["tipo"] == "exp_refrescar" and app["encolados"][-1]["max_intentos"] == 2
 
 
 def test_ver_cliente_incluye_experimentos(app, base_temporal):

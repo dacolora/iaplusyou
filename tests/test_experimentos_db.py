@@ -1,4 +1,5 @@
 import pytest
+import sqlalchemy as sa
 
 PAISES = [{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0},
           {"pais": "MX", "idioma": "es", "presupuesto_dia": 150.0}]
@@ -49,6 +50,36 @@ def test_agregar_quitar_piezas_y_unicidad(base_temporal):
     ex.actualizar_pieza("acme", ep1, meta_ad_id="120", estado="pausado")
     assert ex.quitar_pieza("acme", eid, ep1) is False  # ya está en Meta
     assert ex.quitar_pieza("otro", eid, ep1) is False
+
+
+def test_agregar_pieza_rechaza_cruce_de_cliente(base_temporal):
+    """M8: agregar_pieza debe verificar que el experimento sea de `cliente`
+    (y no legado) y que la pieza también lo sea — sin esto, un llamador que
+    se saltara la validación de la ruta podría meter una pieza de otro
+    cliente a un experimento ajeno."""
+    import ads
+    import experimentos as ex
+    pid_acme = _pieza(base_temporal, cliente="acme")
+    pid_otro = _pieza(base_temporal, cliente="otro")
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    # Experimento inexistente.
+    assert ex.agregar_pieza("acme", 999999, pid_acme, "CO") is None
+    # Experimento de otro cliente.
+    assert ex.agregar_pieza("otro", eid, pid_otro, "CO") is None
+    # Pieza de otro cliente sobre un experimento propio.
+    assert ex.agregar_pieza("acme", eid, pid_otro, "CO") is None
+    assert ex.piezas("acme", eid) == []
+    # Experimento legado ("Anuncios sueltos", visto por ads.py): agregar_pieza
+    # no debe tocarlo, es de otro mundo (ver docstring del módulo).
+    ads.crear("acme", "creative_flow", "cf_legado", "https://r2/v.mp4", "video", "suelto")
+    import db as db_mod
+    with base_temporal.conectar() as con:
+        eid_legado = con.execute(sa.select(db_mod.experimento.c.id).where(
+            db_mod.experimento.c.cliente == "acme", db_mod.experimento.c.legado.is_(True))).scalar()
+    assert ex.agregar_pieza("acme", eid_legado, pid_acme, "CO") is None
+    # Camino feliz de control: sí funciona con cliente y pieza correctos.
+    assert ex.agregar_pieza("acme", eid, pid_acme, "CO") is not None
+    assert [p["pieza_id"] for p in ex.piezas("acme", eid)] == [pid_acme]
 
 
 def test_actualizar_pais_y_experimento(base_temporal):

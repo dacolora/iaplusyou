@@ -2279,11 +2279,15 @@ def exp_lanzar(cliente, eid):
     if faltan:
         flash(f"Sin piezas para: {', '.join(faltan)}. Agrega una pieza por país o quita el país.", "error")
         return volver
-    experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
+    # M2: encolar primero y solo marcar "lanzando" si de verdad arrancó — si
+    # se pusiera "lanzando" antes y trabajos.encolar fallara (ej. "database is
+    # locked"), el experimento quedaría colgado ahí sin tarea que lo saque
+    # (_reconciliar_huerfanos no corre bajo gunicorn).
     arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
     if arranco:
+        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
         flash("Lanzando el experimento a Meta (queda en pausa)…", "ok")
     else:
         flash("Ya se está lanzando ese experimento.", "warn")
@@ -2346,8 +2350,10 @@ def exp_refrescar(cliente, eid):
         flash("Ese experimento todavía no está en Meta.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     job_id = tareas_exp.job_id_refrescar(cliente, eid)
+    # M10: max_intentos=2 como la periódica (tareas/experimentos.py) — refrescar
+    # nunca gasta, así que no hay razón para ser más estricto acá que allá.
     arranco = trabajos.encolar(job_id, "exp_refrescar", {"cliente": cliente, "experimento_id": eid},
-                               cliente=cliente, duracion_estimada=30, max_intentos=1)
+                               cliente=cliente, duracion_estimada=30, max_intentos=2)
     if arranco:
         flash("Actualizando resultados…", "ok")
     else:

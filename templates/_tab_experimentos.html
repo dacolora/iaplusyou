@@ -23,7 +23,7 @@
       {% for codigo, p in paises_fe.items() %}
       <label class="fe-destino">
         <input type="checkbox" name="paises" value="{{ codigo }}"> {{ p.bandera }} {{ p.nombre }}
-        <input type="number" name="presupuesto_{{ codigo }}" min="0" step="any" placeholder="{{ minimo_diario_exp }}" style="width:8rem;">
+        <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" placeholder="{{ minimo_diario_exp }}" style="width:8rem;">
       </label>
       {% endfor %}
     </fieldset>
@@ -85,7 +85,7 @@
         </form>
         <form method="post" action="{{ url_for('exp_presupuesto', cliente=cliente, eid=e.id) }}" class="inline">
           <input type="hidden" name="pais" value="{{ p.pais }}">
-          <input type="number" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="0" step="any" style="width:7rem;" title="En {{ e.moneda }}, la moneda de la cuenta de Meta">
+          <input type="number" name="presupuesto_dia" value="{{ p.presupuesto_dia }}" min="{{ minimo_diario_exp }}" step="any" style="width:7rem;" title="En {{ e.moneda }}, la moneda de la cuenta de Meta">
           <button class="btn-guardar btn-xs">Cambiar presupuesto</button>
         </form>
         {% endif %}

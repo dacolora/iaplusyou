@@ -69,7 +69,18 @@ def actualizar_pais(cliente, experimento_id, pais, **campos):
 
 
 def agregar_pieza(cliente, experimento_id, pieza_id, pais):
+    """None si el experimento no existe/no es de ese cliente/es legado, o si la
+    pieza no es de ese cliente (M8) — la validación de negocio (país válido,
+    estado del experimento, etc.) sigue viviendo en dashboard._agregar_pieza_validada;
+    esto es solo el guard de tenencia que agregar_pieza necesita para ser
+    seguro si algún otro llamador la usa sin pasar por ahí."""
     with db.conectar() as con:
+        if not _fila_experimento(con, cliente, experimento_id):
+            return None
+        pieza_ok = con.execute(sa.select(db.pieza.c.id).where(
+            db.pieza.c.id == pieza_id, db.pieza.c.cliente == cliente)).scalar()
+        if not pieza_ok:
+            return None
         existente = con.execute(sa.select(db.experimento_pieza.c.id).where(
             db.experimento_pieza.c.experimento_id == experimento_id, db.experimento_pieza.c.pieza_id == pieza_id,
             db.experimento_pieza.c.pais == pais, db.experimento_pieza.c.cliente == cliente)).scalar()
