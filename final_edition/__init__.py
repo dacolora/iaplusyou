@@ -46,8 +46,8 @@ ETAPAS_FINAL = (
 COLOR_ACENTO_DEFECTO = texto.COLOR_ACENTO_DEFECTO
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _TAMANOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
-_OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "con_voz": True, "con_musica": True,
-                     "idioma_base": "es", "duracion_s": None}
+_OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "precios": None, "con_voz": True,
+                     "con_musica": True, "idioma_base": "es", "duracion_s": None}
 
 
 # ------------------------------------------------------------------ rutas ---
@@ -110,7 +110,13 @@ def _color_acento(cliente):
 
 
 def _guia_marca(cliente):
-    return marca.guia_efectiva(cliente) or ""
+    """Guía de estilo efectiva del cliente para inyectar en el prompt del
+    guion. Un `root.json` de marca corrupto es un extra, no algo que deba
+    tumbar la escritura del guion: se degrada a "" (M6)."""
+    try:
+        return marca.guia_efectiva(cliente) or ""
+    except (OSError, ValueError):
+        return ""
 
 
 # ---------------------------------------------------------------- sesión ---
@@ -244,8 +250,20 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
                          "costo_usd": round(float(costo_capa or 0.0), 4), "estado": estado, "error": error}
 
     try:
-        # 0. Guion localizado
-        precio = o.get("precio")
+        # 0. Guion localizado — precio por destino (I1): la moneda del país
+        # base y la del destino casi nunca coinciden, así que un solo precio
+        # no se convierte de una a otra. `opciones["precios"]` trae un valor
+        # por destino (clave "<idioma>_<pais>"); `opciones["precio"]` es un
+        # atajo que solo aplica al país base del guion (misma moneda), nunca
+        # a los demás destinos.
+        precios_por_destino = o.get("precios") or {}
+        clave_destino = f"{idioma}_{pais}"
+        if clave_destino in precios_por_destino:
+            precio = precios_por_destino.get(clave_destino)
+        elif pais == (guion_base or {}).get("pais"):
+            precio = o.get("precio")
+        else:
+            precio = None
         try:
             guion, c = guion_mod.localizar_guion(guion_base, idioma, pais, precio)
         except Exception as e:
@@ -283,6 +301,16 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
                 palabras = salida_voz.get("palabras") or []
                 costo += float(c or 0.0)
                 capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, c)
+            except voz.ErrorPrimerBloque as e:
+                # El primer bloque (hook) falló: casi siempre algo
+                # determinístico (voz inválida para fal/ElevenLabs, texto
+                # vacío) que fallaría igual en cualquier otro bloque —
+                # degradar aquí solo pagaría música por una pieza que de
+                # todos modos sale sin voz. Es fatal: no se genera música.
+                capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=str(e))
+                raise ValueError(
+                    f"No se pudo generar la voz (revisa la voz elegida, '{nombre_voz}'): {e}"
+                ) from e
             except Exception as e:
                 degradada = True
                 archivo_voz, palabras = None, []
@@ -312,12 +340,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         avisar(ETAPAS_FINAL[4][0])
         ancho, alto = _TAMANOS.get(entry.get("aspect_ratio") or "9:16", _TAMANOS["9:16"])
         try:
-            marca = {"color_acento": _color_acento(cliente), "logo_path": _logo_local(cliente, carpeta)}
-            overlays = texto.generar_overlays(guion, palabras, marca, os.path.join(carpeta, "overlays"), ancho, alto)
+            marca_textos = {"color_acento": _color_acento(cliente), "logo_path": _logo_local(cliente, carpeta)}
+            overlays = texto.generar_overlays(guion, palabras, marca_textos, os.path.join(carpeta, "overlays"), ancho, alto)
         except Exception as e:
             capa("texto", "pillow", {"ancho": ancho, "alto": alto}, estado="error", error=str(e))
             raise
-        capa("texto", "pillow", {"ancho": ancho, "alto": alto, "logo": bool(marca["logo_path"])})
+        capa("texto", "pillow", {"ancho": ancho, "alto": alto, "logo": bool(marca_textos["logo_path"])})
 
         salida_mp4 = os.path.join(carpeta, f"{final_id}.mp4")
         try:

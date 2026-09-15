@@ -137,6 +137,20 @@ def test_preparar_guion_guarda_guion_base(entorno):
     assert args["idioma_base"] == "es"
 
 
+def test_guia_marca_corrupta_no_tumba_el_guion(entorno, monkeypatch):
+    """M6/Task 8: un root.json de marca corrupto (JSON inválido) es un extra
+    que se degrada a "" en vez de reventar `preparar_guion`."""
+    import marca
+
+    def root_corrupto(cliente):
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
+    monkeypatch.setattr(marca, "cargar_root", root_corrupto)
+
+    g, _ = final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    assert g["bloques"][0]["rol"] == "hook"  # no revienta
+    assert entorno["generar"]["marca"] == ""
+
+
 def test_preparar_guion_sin_producto_ni_transcripcion(entorno, monkeypatch):
     import creative_flow as cf
     import catalogo_productos
@@ -160,12 +174,12 @@ def test_producir_ok(entorno):
     import creative_flow as cf
     cf_id = entorno["cf_id"]
     etapas = []
-    final_id, resumen = final_edition.producir("acme", cf_id, "en", "US", {"precio": 19.9, "voz": "Josh"},
-                                               on_etapa=etapas.append)
+    final_id, resumen = final_edition.producir(
+        "acme", cf_id, "en", "US", {"precios": {"en_US": 19.9}, "voz": "Daniel"}, on_etapa=etapas.append)
     assert final_id == f"{cf_id}__en_US"
     assert etapas == [nombre for nombre, _ in final_edition.ETAPAS_FINAL]
     assert entorno["localizar"] == ("en", "US", 19.9)
-    assert entorno["voz"] == {"voz": "Josh", "cliente": "acme", "idioma": "en"}
+    assert entorno["voz"] == {"voz": "Daniel", "cliente": "acme", "idioma": "en"}
     assert entorno["musica"]["estilo"] == "urbano"
     assert entorno["texto"]["palabras"][0]["texto"] == "Hola"
     assert entorno["texto"]["marca"]["color_acento"] == "#7c3aed"
@@ -188,6 +202,20 @@ def test_producir_ok(entorno):
     # la final no aparece como sesión de Crear
     assert final_id not in cf.cargar("acme") and cf_id in cf.cargar("acme")
     assert os.path.exists(f["url_local"])
+
+
+def test_producir_precio_base_solo_aplica_al_pais_base(entorno):
+    """I1: `opciones["precio"]` (sin `precios`) solo se usa como precio para
+    el destino cuyo país coincide con el país del guion base (es/CO en
+    GUION_BASE); a un destino de otro país no le llega ese número sin
+    convertir."""
+    import creative_flow as cf
+    cf_id = entorno["cf_id"]
+    cf.guardar_guion_base("acme", cf_id, dict(GUION_BASE))  # pais base = CO
+    final_edition.producir("acme", cf_id, "es", "CO", {"precio": 89900})
+    assert entorno["localizar"] == ("es", "CO", 89900)
+    final_edition.producir("acme", cf_id, "en", "US", {"precio": 89900})
+    assert entorno["localizar"] == ("en", "US", None)  # NO se le aplica el precio del país base
 
 
 def test_producir_reusa_fila_y_omite_capas(entorno):
@@ -219,6 +247,31 @@ def test_producir_degradada_si_falla_voz(entorno, monkeypatch):
     assert f["capas"]["musica"]["estado"] == "ok" and f["capas"]["render"]["estado"] == "ok"
     assert entorno["render"]["voz"] is None and entorno["texto"]["palabras"] == []
     assert f["video_url"]
+
+
+def test_producir_error_si_falla_primer_bloque_de_voz_y_no_paga_musica(entorno, monkeypatch):
+    """I3: una voz inválida (fal 422 en el primer bloque) es fatal —
+    estado='error' en español, y música NUNCA se llega a generar/pagar."""
+    import creative_flow as cf
+
+    def falla(*a, **k):
+        raise voz.ErrorPrimerBloque("Voice not found: NoExiste")
+    monkeypatch.setattr(voz, "sintetizar", falla)
+
+    def musica_no_debe_llamarse(*a, **k):
+        raise AssertionError("música no debía generarse: la voz falló en el primer bloque")
+    monkeypatch.setattr(musica, "obtener_pista", musica_no_debe_llamarse)
+
+    with pytest.raises(ValueError, match="No se pudo generar la voz"):
+        final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"voz": "NoExiste"})
+
+    f = cf.finales("acme", entorno["cf_id"])[0]
+    assert f["estado"] == "error"
+    assert "no se pudo generar la voz" in f["error"].lower()
+    assert f["capas"]["voz"]["estado"] == "error"
+    assert "musica" not in f["capas"]
+    assert f["video_url"] is None
+    assert "musica" not in entorno
 
 
 def test_producir_error_si_falla_render(entorno, monkeypatch):

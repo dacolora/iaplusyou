@@ -107,7 +107,7 @@ def test_producir_encola_una_tarea_por_destino(base_temporal, monkeypatch):
     llamadas = _capturar_encolar(monkeypatch, dashboard)
     c = _cliente_admin(dashboard)
     r = c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
-        "destinos": ["es_CO", "en_US"], "voz": "Josh", "estilo_musica": "lujo",
+        "destinos": ["es_CO", "en_US"], "voz": "Daniel", "estilo_musica": "lujo",
         "con_voz": "si", "precio": "89900",
     })
     assert r.status_code == 302
@@ -119,13 +119,51 @@ def test_producir_encola_una_tarea_por_destino(base_temporal, monkeypatch):
     p0, p1 = llamadas[0]["payload"], llamadas[1]["payload"]
     assert (p0["cliente"], p0["cf_id"], p0["idioma"], p0["pais"]) == ("acme", cf_id, "es", "CO")
     assert (p1["idioma"], p1["pais"]) == ("en", "US")
-    assert p0["opciones"] == {"voz": "Josh", "estilo_musica": "lujo", "con_voz": True, "con_musica": False,
-                              "precio": 89900.0, "idioma_base": "es"}
+    assert p0["opciones"] == {"voz": "Daniel", "estilo_musica": "lujo", "con_voz": True, "con_musica": False,
+                              "precio": 89900.0, "precios": {"es_CO": None, "en_US": None}, "idioma_base": "es"}
     assert any("2 finales" in m for m in _flashes(c))
     # Las filas finales existen en `generando` desde que se encola, no desde
     # que el worker arranca: la cuadrícula las muestra de una con su barra.
     filas = cf.finales("acme", cf_id)
     assert [(f["idioma"], f["pais"], f["estado"]) for f in filas] == [("es", "CO", "generando"), ("en", "US", "generando")]
+
+
+def test_producir_precio_por_destino_no_se_convierte(base_temporal, monkeypatch):
+    """I1: dos destinos con monedas distintas (CO/COP y US/USD) reciben cada
+    uno el precio que se escribió en SU campo, no el precio del otro país
+    formateado con su símbolo (el bug original)."""
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)  # base es_CO
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
+        "destinos": ["es_CO", "en_US"], "voz": "Rachel", "estilo_musica": "energetico",
+        "precio_es_CO": "89900", "precio_en_US": "24.99",
+    })
+    assert r.status_code == 302
+    p_co, p_us = llamadas[0]["payload"], llamadas[1]["payload"]
+    assert p_co["opciones"]["precios"] == {"es_CO": 89900.0, "en_US": 24.99}
+    assert p_us["opciones"]["precios"] == {"es_CO": 89900.0, "en_US": 24.99}
+
+
+def test_producir_destino_sin_precio_propio_queda_none(base_temporal, monkeypatch):
+    """Un destino sin su propio campo de precio no hereda el precio de otro
+    país ni el 'Precio base' cuando su país no es el país base del guion."""
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)  # base es_CO
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    c = _cliente_admin(dashboard)
+    c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
+        "destinos": ["es_CO", "en_US"], "voz": "Rachel", "estilo_musica": "energetico",
+        "precio": "89900",  # solo el precio base; en_US no manda precio_en_US
+    })
+    p_co = llamadas[0]["payload"]
+    assert p_co["opciones"]["precios"] == {"es_CO": None, "en_US": None}
+    assert p_co["opciones"]["precio"] == 89900.0
 
 
 def test_producir_destino_en_curso_no_reinicia_la_fila(base_temporal, monkeypatch):
@@ -394,6 +432,14 @@ def test_plantilla_con_guion_y_finales_renderiza():
     assert "ffmpeg murió" in html
     assert html.count('data-cf="') == 4  # la clon + 3 finales en la cuadrícula
     assert "Final de Producto" in html
+    # I4: es_CO ya tiene una final -> hint + checkbox marcado para confirm(); en_US y pt_BR no.
+    assert "ya producida — se reemplaza" in html
+    assert 'value="es_CO" data-ya-producida="1"' in html
+    assert 'value="en_US"' in html and 'value="en_US" data-ya-producida="1"' not in html
+    assert "feConfirmarReemplazo" in html
+    # precio por destino (I1): un input propio por país, con su moneda.
+    assert 'name="precio_es_CO"' in html and 'data-moneda="COP"' in html
+    assert 'name="precio_en_US"' in html and 'data-moneda="USD"' in html
 
 
 def test_plantilla_imagen_no_muestra_final_edition():

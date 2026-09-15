@@ -2480,12 +2480,17 @@ def fe_producir(cliente, cf_id):
     estilo = request.form.get("estilo_musica") or ""
     if estilo not in fe_tipos.ESTILOS_MUSICA:
         estilo = "energetico"
+    precios = {
+        f"{idioma}_{pais}": _precio_form(request.form.get(f"precio_{idioma}_{pais}"))
+        for idioma, pais in destinos
+    }
     opciones = {
         "voz": voz,
         "estilo_musica": estilo,
         "con_voz": bool(request.form.get("con_voz")),
         "con_musica": bool(request.form.get("con_musica")),
         "precio": _precio_form(request.form.get("precio")),
+        "precios": precios,
         "idioma_base": idioma_base,
     }
     encolados = 0

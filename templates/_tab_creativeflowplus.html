@@ -256,11 +256,24 @@
               </form>
               {% endif %}
 
+              {% set _finales_por_destino = {} %}
+              {% for f in item.finales if f.estado in ("listo", "degradada") %}
+              {% set _ = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
+              {% endfor %}
               <h5 class="fe-subtitulo">Producir finales</h5>
-              <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir">
+              <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir"
+                    data-moneda-base="{{ paises_fe[_g.pais].moneda if _g.pais in paises_fe else '' }}"
+                    onsubmit="return feConfirmarReemplazo(this);">
                 <div class="fe-destinos checks-plataformas">
                   {% for codigo, p in paises_fe.items() %}
-                  <label><input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}"> {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small></label>
+                  {% set _ya = _finales_por_destino.get(p.idioma ~ "_" ~ codigo) %}
+                  <label class="fe-destino">
+                    <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
+                    {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small>
+                    <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
+                           placeholder="Precio (opcional)" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;">
+                    {% if _ya %}<small class="tag-estado">(ya producida — se reemplaza)</small>{% endif %}
+                  </label>
                   {% endfor %}
                 </div>
                 <div class="fe-opciones">
@@ -278,7 +291,8 @@
                       {% endfor %}
                     </select>
                   </label>
-                  <label>Precio <input type="number" name="precio" min="0" step="any" placeholder="opcional" style="width:8rem;"></label>
+                  <label>Precio base <input type="number" name="precio" min="0" step="any"
+                         placeholder="opcional, país base" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
                   <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> con voz</label>
                   <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> con música</label>
                 </div>
@@ -416,6 +430,34 @@
   <button type="button" class="generado-cerrar" id="generado-cerrar" aria-label="Cerrar">×</button>
   <div id="generado-modal-cuerpo" class="generado-modal-cuerpo"></div>
 </dialog>
+<script>
+  // Precio base -> se copia solo a los destinos cuya moneda coincide con la
+  // del país base (nunca convierte), y solo si el usuario no escribió ya un
+  // precio propio para ese destino. Global (window.*) porque el formulario
+  // "Producir finales" vive dentro de un <template> clonado — sus <script>
+  // internos nunca corren, pero los atributos onXXX sí, y al clonar buscan la
+  // función en window en el momento del evento (no al parsear el template).
+  window.feAplicarPrecioBase = function (input) {
+    var form = input.closest('form');
+    if (!form) return;
+    var monedaBase = form.dataset.monedaBase || '';
+    form.querySelectorAll('.fe-precio-destino').forEach(function (destino) {
+      if (destino.dataset.moneda === monedaBase && !destino.value) {
+        destino.value = input.value;
+      }
+    });
+  };
+  // Confirma si algún destino marcado ya tiene una final producida (se
+  // reemplaza al volver a producir).
+  window.feConfirmarReemplazo = function (form) {
+    var reemplaza = false;
+    form.querySelectorAll('input[name="destinos"]:checked').forEach(function (cb) {
+      if (cb.dataset.yaProducida) reemplaza = true;
+    });
+    if (!reemplaza) return true;
+    return confirm('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).');
+  };
+</script>
 <script>
   (function () {
     var modal = document.getElementById('generado-modal');

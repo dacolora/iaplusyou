@@ -126,7 +126,11 @@ El guion tiene EXACTAMENTE 5 bloques con los roles hook, problema, producto, pru
 Reglas:
 - Traduce y adapta texto_pantalla y texto_voz al idioma '{idioma}' con el tono, expresiones, unidades y \
 referencias culturales de {info['nombre']}; que suene local, no traducido.
-- Si el guion menciona precio, usa exactamente el precio_texto indicado y la moneda {info['moneda']}.
+- Si precio_texto NO es null, y el guion menciona precio, usa exactamente el precio_texto indicado y la moneda \
+{info['moneda']}.
+- Si precio_texto ES null: NO menciones ningún precio ni cifra en texto_pantalla ni en texto_voz aunque el guion \
+base sí lo mencione — reescribe esas partes sin precio (p.ej. usa el beneficio o la llamada a la acción en su \
+lugar), y deja "precio_texto": null.
 - Menciona envío/entrega solo como corresponde a {info['nombre']}.
 - Conserva EXACTAMENTE los roles, el orden, inicio_s y fin_s de cada bloque.
 - texto_pantalla: máximo {MAX_PALABRAS_PANTALLA} palabras. texto_voz: natural, largo similar al original.
