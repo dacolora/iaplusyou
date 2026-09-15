@@ -9,6 +9,7 @@ Uso:
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import json
+import math
 import os
 import secrets
 import socket
@@ -839,6 +840,23 @@ def ver_cliente(cliente):
                 trabajos_ads[ad_id] = {"job_id": jid}
                 break
 
+    # Experimentos: solo se consulta trabajos.en_curso para los experimentos
+    # que de verdad podrían tener un job vivo (lanzando, o corriendo/pausado
+    # con campaña ya creada en Meta) — evita 2 queries por cada experimento
+    # ya cerrado/armando.
+    experimentos_exp = experimentos.cargar(cliente)
+    trabajos_exp = {}
+    for e in experimentos_exp:
+        if e["estado"] == "lanzando":
+            jid = tareas_exp.job_id_lanzar(cliente, e["id"])
+            if trabajos.en_curso(jid):
+                trabajos_exp[e["id"]] = {"job_id": jid}
+        elif e["meta_campaign_id"]:
+            jid = tareas_exp.job_id_refrescar(cliente, e["id"])
+            if trabajos.en_curso(jid):
+                trabajos_exp[e["id"]] = {"job_id": jid}
+    moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+
     return render_template(
         "cliente.html",
         cliente=cliente,
@@ -881,6 +899,13 @@ def ver_cliente(cliente):
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
+        experimentos=experimentos_exp,
+        experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
+        elegibles_exp=experimentos.elegibles(cliente),
+        trabajos_exp=trabajos_exp,
+        objetivos_exp=meta_campaign.OBJETIVOS_VALIDOS_FASE1,
+        minimo_diario_exp=PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
+        moneda_exp=moneda_exp,
     )
 
 
@@ -2125,6 +2150,13 @@ def exp_crear(cliente):
     except ValueError:
         flash("Revisa los números del formulario.", "error")
         return volver
+    # float("nan")/float("inf") no disparan ValueError arriba, y nan<=0 y
+    # nan<minimo son ambos False — sin este chequeo un tope o presupuesto
+    # NaN/inf crea el experimento y falla después en lanzador.centavos
+    # (int(nan) -> ValueError), gastando el único intento del job.
+    if not math.isfinite(tope) or any(not math.isfinite(p["presupuesto_dia"]) for p in paises):
+        flash("Revisa los números del formulario.", "error")
+        return volver
     if (not nombre or objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
             or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
@@ -2191,7 +2223,15 @@ def exp_agregar_pieza(cliente, eid):
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/piezas/<int:ep_id>/quitar", methods=["POST"])
 def exp_quitar_pieza(cliente, eid, ep_id):
-    if experimentos.quitar_pieza(cliente, eid, ep_id):
+    # Misma guardia que _agregar_pieza_validada: mientras el experimento está
+    # "lanzando", las piezas que el worker todavía no procesó siguen en
+    # "en_cola" (que es lo único que exige experimentos.quitar_pieza), así que
+    # sin esto se podían borrar piezas que lanzador.lanzar ya cargó en memoria
+    # y está a punto de publicar en Meta — el anuncio queda huérfano allá.
+    ex = experimentos.obtener(cliente, eid)
+    if not ex or ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
+        flash("Ese experimento ya no acepta cambios de piezas.", "error")
+    elif experimentos.quitar_pieza(cliente, eid, ep_id):
         flash("Pieza quitada.", "ok")
     else:
         flash("No pude quitar esa pieza (¿ya está en Meta?).", "error")
@@ -2272,7 +2312,12 @@ def exp_estado(cliente, eid):
 def exp_presupuesto(cliente, eid):
     pais = (request.form.get("pais") or "").strip()
     # Igual que en exp_crear: el presupuesto se valida en la moneda de la
-    # cuenta publicitaria de Meta, no en la moneda local de la audiencia.
+    # cuenta publicitaria de Meta, no en la moneda local de la audiencia. Y
+    # es la misma moneda con la que lanzador.cambiar_presupuesto_pais convierte
+    # a centavos (ex["moneda"], guardada al crear el experimento con la moneda
+    # de la cuenta de ese momento) — si esa cuenta cambió de moneda entre crear
+    # y ajustar, cambiar_presupuesto_pais ya cae al fallback ex["moneda"] or
+    # "USD", así que valida y convierte con el mismo número salvo ese caso raro.
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
     try:
@@ -2280,7 +2325,7 @@ def exp_presupuesto(cliente, eid):
     except ValueError:
         flash("El presupuesto debe ser un número.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
-    if presupuesto_dia < minimo:
+    if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
         flash(f"El presupuesto diario mínimo es {minimo} {moneda}.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     with _ENV_LOCK:
@@ -2296,6 +2341,10 @@ def exp_presupuesto(cliente, eid):
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/refrescar", methods=["POST"])
 def exp_refrescar(cliente, eid):
+    ex = experimentos.obtener(cliente, eid)
+    if not ex or not ex["meta_campaign_id"]:
+        flash("Ese experimento todavía no está en Meta.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     job_id = tareas_exp.job_id_refrescar(cliente, eid)
     arranco = trabajos.encolar(job_id, "exp_refrescar", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=30, max_intentos=1)
@@ -2308,6 +2357,23 @@ def exp_refrescar(cliente, eid):
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/cerrar", methods=["POST"])
 def exp_cerrar(cliente, eid):
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    ex = experimentos.obtener(cliente, eid)
+    if not ex:
+        flash("Ese experimento no existe.", "error")
+        return volver
+    if ex["estado"] == "cerrado":
+        flash("Ese experimento ya estaba cerrado.", "ok")
+        return volver
+    # "lanzando" nunca se cierra desde acá: el worker está a mitad de crear
+    # campaña/adsets/anuncios en Meta y, al terminar, vuelve a escribir
+    # "pausado" (lanzador.lanzar) — un "cerrado" acá se perdería y dejaría
+    # los objetos ya creados en Meta sin que el experimento se entere. Solo
+    # se puede cerrar desde armando/error (nunca se lanzó) o pausado/corriendo
+    # (ya está en Meta).
+    if ex["estado"] not in ("pausado", "corriendo", "armando", "error"):
+        flash("Espera a que termine el lanzamiento antes de cerrar.", "error")
+        return volver
     with _ENV_LOCK:
         try:
             lanzador.cerrar(cliente, eid)
@@ -2316,7 +2382,7 @@ def exp_cerrar(cliente, eid):
             flash(str(e), "error")
         except Exception as e:
             flash(f"No pude cerrar el experimento: {cola.sin_token(str(e))}", "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    return volver
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])

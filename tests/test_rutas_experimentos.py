@@ -126,6 +126,9 @@ def test_estado_presupuesto_refrescar_cerrar(app, base_temporal, monkeypatch):
     c.post(f"/cliente/acme/experimentos/{eid}/estado", data={"estado": "DELETED"})
     c.post(f"/cliente/acme/experimentos/{eid}/presupuesto", data={"pais": "MX", "presupuesto_dia": "30000"})
     c.post(f"/cliente/acme/experimentos/{eid}/presupuesto", data={"pais": "MX", "presupuesto_dia": "10"})   # < mínimo COP
+    # refrescar exige que el experimento ya tenga campaña en Meta (exp_refrescar
+    # ahora valida existencia + meta_campaign_id antes de encolar).
+    ex.actualizar("acme", eid, meta_campaign_id="cam_1")
     c.post(f"/cliente/acme/experimentos/{eid}/refrescar")
     c.post(f"/cliente/acme/experimentos/{eid}/cerrar")
     assert llamadas == [("estado", "ACTIVE", None), ("estado", "PAUSED", "MX"), ("presupuesto", "MX", 30000.0), ("cerrar",)]
@@ -146,3 +149,68 @@ def test_reconciliar_lanzando_huerfano(app, base_temporal):
     ex.actualizar("acme", eid, estado="lanzando")
     app["dashboard"]._reconciliar_huerfanos()
     assert ex.obtener("acme", eid)["estado"] == "error"
+
+
+def test_ver_cliente_pasa_contexto_experimentos(app, base_temporal, monkeypatch):
+    """C1 (review round 2): ver_cliente debe pasar el contexto de
+    experimentos a la plantilla — probado acá capturando render_template en
+    vez de depender del template de la Task 5 (ese es el xfail de arriba)."""
+    import experimentos as ex
+    from meta_ads import campaign as meta_campaign
+    d = app["dashboard"]
+    eid_armando = ex.crear("acme", "Armando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    eid_lanzando = ex.crear("acme", "Lanzando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.actualizar("acme", eid_lanzando, estado="lanzando")
+    job_id = d.tareas_exp.job_id_lanzar("acme", eid_lanzando)
+    monkeypatch.setattr(d.trabajos, "en_curso", lambda jid: jid == job_id)
+    capturado = {}
+
+    def _render(nombre, **ctx):
+        capturado.update(ctx)
+        return "ok"
+    monkeypatch.setattr(d, "render_template", _render)
+    r = app["c"].get("/cliente/acme")
+    assert r.status_code == 200
+    assert {e["id"] for e in capturado["experimentos"]} == {eid_armando, eid_lanzando}
+    assert [e["id"] for e in capturado["experimentos_armando"]] == [eid_armando]
+    assert capturado["elegibles_exp"] == ex.elegibles("acme")
+    assert capturado["trabajos_exp"] == {eid_lanzando: {"job_id": job_id}}
+    assert capturado["objetivos_exp"] is meta_campaign.OBJETIVOS_VALIDOS_FASE1
+    assert capturado["moneda_exp"] == "COP"
+    assert capturado["minimo_diario_exp"] == 4000
+
+
+def test_cerrar_rechaza_mientras_esta_lanzando(app, base_temporal, monkeypatch):
+    """I1 (review round 2): cerrar durante 'lanzando' dejaría objetos
+    huérfanos en Meta si el worker termina y vuelve a marcar 'pausado'."""
+    import experimentos as ex
+    d = app["dashboard"]
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.actualizar("acme", eid, estado="lanzando")
+    llamado = []
+    monkeypatch.setattr(d.lanzador, "cerrar", lambda c, e: llamado.append(True))
+    r = app["c"].post(f"/cliente/acme/experimentos/{eid}/cerrar")
+    assert r.status_code == 302 and llamado == []
+    assert ex.obtener("acme", eid)["estado"] == "lanzando"
+
+
+def test_cerrar_experimento_inexistente_no_falla(app, base_temporal):
+    r = app["c"].post("/cliente/acme/experimentos/999999/cerrar")
+    assert r.status_code == 302
+
+
+def test_quitar_pieza_rechaza_fuera_de_armado(app, base_temporal):
+    """I2 (review round 2): mientras el experimento está lanzando (o ya
+    tiene campaña en Meta), quitar una pieza en_cola dejaría un anuncio
+    huérfano cuando lanzador.lanzar la publique de todas formas."""
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, clon, "CO")
+    ep_id = ex.piezas("acme", eid)[0]["id"]
+    ex.actualizar("acme", eid, estado="lanzando")
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/piezas/{ep_id}/quitar")
+    assert len(ex.piezas("acme", eid)) == 1
+    ex.actualizar("acme", eid, estado="armando", meta_campaign_id="cam_1")
+    app["c"].post(f"/cliente/acme/experimentos/{eid}/piezas/{ep_id}/quitar")
+    assert len(ex.piezas("acme", eid)) == 1
