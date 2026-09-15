@@ -12,6 +12,10 @@ REGLAS_DEFECTO = {
     "n_reediciones": 3, "n_regeneraciones": 2, "escalar_pct_dia": 20, "escalar_tope_dia": None,
 }
 _ENTEROS = {"ventana_horas", "impresiones_min", "ventana_ventas_horas", "n_reediciones", "n_regeneraciones", "escalar_pct_dia"}
+# Umbrales que un cliente/experimento puede desactivar explícitamente pasando
+# None (o "" desde un formulario web) en su capa: la ausencia de valor apaga
+# la comparación, no equivale a "sin dato todavía".
+_UMBRALES_DESACTIVABLES = {"cpc_max", "ctr_min", "thruplay_min", "cpa_max", "roas_min", "escalar_tope_dia"}
 
 
 def _num(clave, valor):
@@ -23,14 +27,33 @@ def _num(clave, valor):
         return None
 
 
+def _int_or_none(valor):
+    if valor is None:
+        return None
+    try:
+        return int(valor)
+    except (TypeError, ValueError):
+        try:
+            return int(float(valor))
+        except (TypeError, ValueError):
+            return None
+
+
 def reglas_efectivas(reglas_cliente, reglas_experimento):
     out = dict(REGLAS_DEFECTO)
     for capa in (reglas_cliente or {}, reglas_experimento or {}):
         for k, v in capa.items():
-            if k in REGLAS_DEFECTO:
-                n = _num(k, v)
-                if n is not None or REGLAS_DEFECTO[k] is None:
-                    out[k] = n
+            if k not in REGLAS_DEFECTO:
+                continue
+            if k in _UMBRALES_DESACTIVABLES and (v is None or v == ""):
+                # Override explícito para apagar el umbral.
+                out[k] = None
+                continue
+            n = _num(k, v)
+            if n is not None:
+                out[k] = n
+            # Si n es None y la clave no es un umbral desactivable, se
+            # conserva el valor de la capa anterior (no se toca out[k]).
     return out
 
 
@@ -82,8 +105,10 @@ def decidir(snapshots, reglas, contexto):
         accion = "archivar" if escalon >= 3 else "rescatar"
         return _resultado("perdedor", "No pasó la puerta de tráfico: " + "; ".join(fallas) + ".", accion, 1, numeros)
 
-    # Puerta 2: ventas (solo con atribución).
-    if c.get("atribucion") in ("pixel", "tienda"):
+    # Puerta 2: ventas (solo con atribución y al menos un umbral de venta activo).
+    con_atribucion = c.get("atribucion") in ("pixel", "tienda")
+    sin_umbrales_venta = r["roas_min"] is None and r["cpa_max"] is None
+    if con_atribucion and not sin_umbrales_venta:
         if horas < r["ventana_ventas_horas"]:
             return _resultado("pendiente", f"Pasó tráfico; esperando {r['ventana_ventas_horas']} h para medir ventas "
                               f"({horas:.0f} h).", None, 2, numeros)
@@ -96,13 +121,16 @@ def decidir(snapshots, reglas, contexto):
                               + (f" (máximo {r['cpa_max']})" if r["cpa_max"] is not None else "") + ".", accion, 2, numeros)
         motivo_ventas = f"ROAS {numeros['roas']:.2f} ≥ {r['roas_min']}" if ok_roas else f"CPA {numeros['cpa']:.2f} ≤ {r['cpa_max']}"
         puerta = 2
+    elif con_atribucion:
+        motivo_ventas = "sin umbrales de ventas"
+        puerta = 1
     else:
         motivo_ventas = "sin ventas medibles"
         puerta = 1
 
     # Ranking: tercio superior de su país cuando hay ≥ 3 anuncios.
     total = int(c.get("total_pais") or 1)
-    pos = c.get("posicion")
+    pos = _int_or_none(c.get("posicion"))
     if total >= 3 and pos is not None and pos > max(1, total // 3):
         return _resultado("pendiente", f"Pasa umbrales pero no está en el tercio superior de su país "
                           f"(posición {pos} de {total}).", None, puerta, numeros)

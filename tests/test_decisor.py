@@ -90,6 +90,45 @@ def test_sin_snapshots():
     assert v["veredicto"] == "pendiente" and v["numeros"] == {}
 
 
+def test_posicion_como_string_no_lanza_typeerror():
+    r = decisor.reglas_efectivas(None, {"cpc_max": 0.5})
+    ok = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=27.0, thruplay_rate=0.25)]
+    # posición como string: debe comportarse igual que el entero equivalente.
+    v = decisor.decidir(ok, r, dict(CTX, posicion="3", total_pais=4))
+    assert v["veredicto"] == "pendiente" and "tercio" in v["motivo"]
+    v2 = decisor.decidir(ok, r, dict(CTX, posicion="1", total_pais=4))
+    assert v2["veredicto"] == "ganador"
+    # posición no numérica o None: se ignora el ranking, no explota.
+    v3 = decisor.decidir(ok, r, dict(CTX, posicion=None, total_pais=4))
+    assert v3["veredicto"] == "ganador"
+    v4 = decisor.decidir(ok, r, dict(CTX, posicion="", total_pais=4))
+    assert v4["veredicto"] == "ganador"
+
+
+def test_atribucion_sin_umbrales_de_venta_gana_por_trafico():
+    r = decisor.reglas_efectivas(None, {"cpc_max": 0.5, "roas_min": None, "cpa_max": None})
+    ok = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=27.0, thruplay_rate=0.25)]
+    ctx = dict(CTX, atribucion="pixel", horas_activo=80)
+    v = decisor.decidir(ok, r, ctx)
+    assert v["veredicto"] == "ganador" and v["accion"] == "escalar_y_derivar" and v["puerta"] == 1
+    assert "sin umbrales de ventas" in v["motivo"]
+    # incluso con menos de 72h de ventana de ventas: no debe quedar pendiente en puerta 2.
+    v2 = decisor.decidir(ok, r, dict(ctx, horas_activo=50))
+    assert v2["veredicto"] == "ganador" and v2["puerta"] == 1
+
+
+def test_reglas_efectivas_permite_desactivar_umbrales_con_none_o_vacio():
+    r = decisor.reglas_efectivas({"ctr_min": None, "roas_min": ""}, None)
+    assert r["ctr_min"] is None and r["roas_min"] is None
+    # los umbrales por defecto ya None siguen apagables (sin cambios de comportamiento).
+    r2 = decisor.reglas_efectivas(None, {"cpc_max": 0.8, "escalar_tope_dia": 50})
+    r3 = decisor.reglas_efectivas(r2, {"cpc_max": None, "escalar_tope_dia": ""})
+    assert r3["cpc_max"] is None and r3["escalar_tope_dia"] is None
+    # claves no-umbral con valor vacío/None conservan el valor de la capa anterior.
+    r4 = decisor.reglas_efectivas({"ventana_horas": 72}, {"ventana_horas": None, "impresiones_min": ""})
+    assert r4["ventana_horas"] == 72 and r4["impresiones_min"] == decisor.REGLAS_DEFECTO["impresiones_min"]
+
+
 def test_reglas_defecto_por_proyecto(tmp_path, monkeypatch):
     import proyectos
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
