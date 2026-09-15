@@ -58,15 +58,25 @@ def test_ganador_sin_atribucion_por_trafico_y_ranking():
 
 def test_puerta_2_ventas_espera_72h_y_decide_por_roas_o_cpa():
     r = decisor.reglas_efectivas(None, {"cpc_max": 0.5, "roas_min": 2.0, "cpa_max": 8.0})
-    bien = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=30.0, compras=5, cpa=6.0, roas=3.0)]
+    bien = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=30.0, compras=5, cpa=6.0, roas=3.0, thruplay_rate=0.3)]
     ctx = dict(CTX, atribucion="pixel")
     v = decisor.decidir(bien, r, dict(ctx, horas_activo=50))
     assert v["veredicto"] == "pendiente" and v["puerta"] == 2 and "72" in v["motivo"]
     v = decisor.decidir(bien, r, dict(ctx, horas_activo=80))
     assert v["veredicto"] == "ganador" and v["puerta"] == 2 and "roas" in v["motivo"].lower()
-    mal = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=30.0, compras=1, cpa=30.0, roas=0.5)]
+    mal = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=30.0, compras=1, cpa=30.0, roas=0.5, thruplay_rate=0.3)]
     v = decisor.decidir(mal, r, dict(ctx, horas_activo=80))
     assert v["veredicto"] == "perdedor" and v["puerta"] == 2 and v["accion"] == "rescatar"
+
+
+def test_thruplay_cero_es_senal_de_falla_real():
+    r = decisor.reglas_efectivas(None, {"cpc_max": 0.5})
+    v = decisor.decidir([snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=27.0, thruplay_rate=0.0)], r, CTX)
+    assert v["veredicto"] == "perdedor" and v["puerta"] == 1
+    assert "thruplay" in v["motivo"].lower()
+    r2 = dict(r, cpc_max=0.5, thruplay_min=None)
+    v2 = decisor.decidir([snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=27.0, thruplay_rate=0.0)], r2, CTX)
+    assert v2["veredicto"] != "perdedor" or "thruplay" not in v2["motivo"].lower()
 
 
 def test_inconcluso_al_cerrar_la_ventana_de_dias():

@@ -75,7 +75,7 @@ def decidir(snapshots, reglas, contexto):
         fallas.append(f"CPC {numeros['cpc']:.2f} > {r['cpc_max']:.2f}")
     if r["ctr_min"] is not None and numeros["ctr"] < r["ctr_min"]:
         fallas.append(f"CTR {numeros['ctr']:.2f}% < {r['ctr_min']:.2f}%")
-    if r["thruplay_min"] is not None and numeros["thruplay_rate"] > 0 and numeros["thruplay_rate"] < r["thruplay_min"]:
+    if r["thruplay_min"] is not None and numeros["thruplay_rate"] < r["thruplay_min"]:
         fallas.append(f"ThruPlay {numeros['thruplay_rate'] * 100:.0f}% < {r['thruplay_min'] * 100:.0f}%")
     escalon = int(c.get("escalon_rescate") or 0)
     if fallas:
