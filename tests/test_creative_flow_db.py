@@ -115,9 +115,22 @@ def test_piezas_finales(base_temporal):
                                capas={"voz": {"estado": "ok"}}, costo_usd=0.5)
     f = cf.final_por_legado("acme", fid)
     assert f["estado"] == "listo" and f["video_url"] == "https://r2/f.mp4" and f["capas"]["voz"]["estado"] == "ok"
-    # volver a crear la misma final la reinicia (misma fila, resultado limpio)
+    # volver a crear la misma final la reinicia a "generando" (misma fila),
+    # pero NO borra el video/miniatura anteriores (I4): la cuadrícula sigue
+    # mostrando la final anterior hasta que la nueva termine (bien o mal).
     assert cf.crear_final("acme", cid, "es", "CO") == fid
-    assert len(cf.finales("acme", cid)) == 1 and cf.finales("acme", cid)[0]["video_url"] is None
+    finales = cf.finales("acme", cid)
+    assert len(finales) == 1
+    assert finales[0]["estado"] == "generando"
+    assert finales[0]["video_url"] == "https://r2/f.mp4"  # conservado, no nulled
+    assert finales[0]["error"] is None and finales[0]["capas"] == {} and finales[0]["costo_usd"] is None
+    # si el reintento falla, actualizar_final(estado="error") deja intacto el video anterior
+    assert cf.actualizar_final("acme", fid, estado="error", error="fal caído")
+    f_err = cf.final_por_legado("acme", fid)
+    assert f_err["estado"] == "error" and f_err["video_url"] == "https://r2/f.mp4"
+    # si el reintento tiene éxito, actualizar_final SÍ sobrescribe con lo nuevo
+    assert cf.actualizar_final("acme", fid, estado="listo", url_video="https://r2/nueva.mp4")
+    assert cf.final_por_legado("acme", fid)["video_url"] == "https://r2/nueva.mp4"
     # Crear no la ve como sesión
     assert fid not in cf.cargar("acme") and cid in cf.cargar("acme")
     with pytest.raises(ValueError):

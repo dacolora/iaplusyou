@@ -217,9 +217,16 @@ def _fila_final(con, cliente, final_id):
 
 
 def crear_final(cliente, cf_id, idioma, pais):
-    """Crea (o reinicia a `generando`, limpiando el resultado anterior) la
-    pieza final de la sesión para ese idioma/país. Devuelve su legado_id
-    `<cf_id>__<idioma>_<pais>`."""
+    """Crea (o reinicia a `generando`) la pieza final de la sesión para ese
+    idioma/país. Devuelve su legado_id `<cf_id>__<idioma>_<pais>`.
+
+    Si ya existía (se está reproduciendo un destino que ya tenía una final),
+    NO se borra `url_video`/`url_miniatura`: la cuadrícula sigue mostrando el
+    video anterior mientras el worker produce el nuevo, y solo se pierde si
+    el nuevo intento tiene éxito (`actualizar_final` con estado "listo" o
+    "degradada" los sobrescribe) — si falla, `actualizar_final` con
+    estado="error" los deja intactos, así que el cliente nunca se queda sin
+    nada por un reintento fallido (I4)."""
     final_id = f"{cf_id}__{idioma}_{pais}"
     with db.conectar() as con:
         f = _ids(con, cliente, cf_id)
@@ -230,8 +237,7 @@ def crear_final(cliente, cf_id, idioma, pais):
         existente = _fila_final(con, cliente, final_id)
         if existente:
             con.execute(db.pieza.update().where(db.pieza.c.id == existente._mapping[db.pieza.c.id]).values(
-                actualizado_en=ahora, estado="generando", error=None, url_video=None, url_miniatura=None,
-                url_local=None, duracion_s=None, capas={}, costo_usd=None, guion=None))
+                actualizado_en=ahora, estado="generando", error=None, capas={}, costo_usd=None))
         else:
             con.execute(db.pieza.insert().values(
                 cliente=cliente, creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo="final",
