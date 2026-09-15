@@ -81,7 +81,8 @@ def planificar_segmentos(duracion_s, cortes, objetivo_s, min_seg=1.5, max_seg=4.
     objetivo_s)]` de forma contigua. Usa los cortes naturales cuando todos
     los trozos que definen miden ≥ `min_seg` (los mayores que `max_seg` se
     parten en partes iguales); si no hay cortes utilizables fabrica
-    `clamp(round(objetivo/2.5), 3, 4)` segmentos iguales. `zoom` alterna
+    `clamp(round(objetivo/2.5), 3, 4)` segmentos iguales, o menos si el clip
+    es corto (para no bajar de `min_seg` por segmento). `zoom` alterna
     "in"/"out" empezando por "in"."""
     total = round(min(float(duracion_s), float(objetivo_s)), 3)
     if total <= 0:
@@ -90,6 +91,8 @@ def planificar_segmentos(duracion_s, cortes, objetivo_s, min_seg=1.5, max_seg=4.
     limites = _limites_por_cortes(total, cortes, min_seg, max_seg)
     if limites is None:
         n = max(3, min(4, int(round(total / 2.5))))
+        while n > 1 and total / n < min_seg:
+            n -= 1
         paso = total / n
         limites = [round(i * paso, 3) for i in range(n)] + [total]
 

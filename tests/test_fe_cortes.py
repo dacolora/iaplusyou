@@ -132,6 +132,20 @@ def test_planificar_cortes_muy_pegados_cae_a_ken_burns():
     assert _suma(plan) == pytest.approx(8.0, abs=0.05)
 
 
+def test_planificar_clip_corto_reduce_a_dos_segmentos():
+    plan = cortes.planificar_segmentos(3.0, [], 3.0)
+    assert _suma(plan) == pytest.approx(3.0, abs=0.05)
+    assert len(plan) in (1, 2)
+    for s in plan:
+        assert s["fin"] - s["inicio"] >= 1.5 - 0.01
+
+
+def test_planificar_clip_muy_corto_da_un_solo_segmento():
+    plan = cortes.planificar_segmentos(2.0, [], 2.0)
+    assert len(plan) == 1
+    assert _suma(plan) == pytest.approx(2.0, abs=0.05)
+
+
 def test_planificar_objetivo_mayor_que_duracion():
     plan = cortes.planificar_segmentos(5.0, [], 12.0)
     assert _suma(plan) == pytest.approx(5.0, abs=0.05)
