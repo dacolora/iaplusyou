@@ -58,7 +58,7 @@
     {% if e.estado in ("armando", "error") and not e.meta_campaign_id %}
       <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit="return confirm('Se crean la campaña, los conjuntos y los anuncios en Meta, en pausa. ¿Seguimos?');"><button class="btn-generar btn-sm">Lanzar a Meta (en pausa)</button></form>
     {% elif e.estado == "error" %}
-      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}"><button class="btn-generar btn-sm">Reintentar lanzamiento</button></form>
+      <form method="post" action="{{ url_for('exp_lanzar', cliente=cliente, eid=e.id) }}" onsubmit="return confirm('Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta). ¿Seguimos?');"><button class="btn-generar btn-sm">Reintentar lanzamiento</button></form>
     {% elif e.estado == "pausado" %}
       <form method="post" action="{{ url_for('exp_estado', cliente=cliente, eid=e.id) }}" onsubmit="return confirm('Activar empieza a gastar en Meta. ¿Seguimos?');"><input type="hidden" name="estado" value="ACTIVE"><button class="btn-aprobar btn-sm">Activar todo</button></form>
     {% elif e.estado == "corriendo" %}
