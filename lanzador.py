@@ -172,14 +172,22 @@ def _piezas_de(ex, pais=None):
     return [p for p in ex["piezas"] if p["meta_ad_id"] and (pais is None or p["pais"] == pais)]
 
 
-def _con_activado(ex):
-    """extra del experimento con 'activado_en' sembrado la primera vez que
+def _con_activado(extra):
+    """`extra` del experimento con 'activado_en' sembrado la primera vez que
     pasa a 'corriendo' (Bloque 4: el decisor lo usa para medir cuánto lleva
     corriendo). Si ya estaba, se conserva sin tocar."""
-    extra = ex.get("extra") or {}
     if extra.get("activado_en"):
         return extra
     return {**extra, "activado_en": db.ahora()}
+
+
+def _a_corriendo(cliente, experimento_id):
+    """Pasa a `corriendo` sembrando `activado_en` con un read-modify-write
+    atómico de `extra` (`experimentos.actualizar_extra`): entre que se leyó
+    el experimento y acá pasaron segundos hablando con Meta, y el worker
+    (derivaciones) pudo escribir `extra.derivaciones` en ese intervalo —
+    escribir la foto vieja las pisaría."""
+    experimentos.actualizar_extra(cliente, experimento_id, _con_activado, estado="corriendo")
 
 
 def cambiar_estado(cliente, experimento_id, status, pais=None):
@@ -220,11 +228,11 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
     _con_credenciales(cliente, _correr)
     if pais is None:
         if status == "ACTIVE":
-            experimentos.actualizar(cliente, experimento_id, estado="corriendo", extra=_con_activado(ex))
+            _a_corriendo(cliente, experimento_id)
         else:
             experimentos.actualizar(cliente, experimento_id, estado="pausado")
     elif status == "ACTIVE" and ex["estado"] != "corriendo":
-        experimentos.actualizar(cliente, experimento_id, estado="corriendo", extra=_con_activado(ex))
+        _a_corriendo(cliente, experimento_id)
     elif status == "PAUSED":
         # M5: si ese país era el último activo, "corriendo" ya no refleja la
         # realidad (todos los conjuntos quedaron PAUSED en Meta) — el rótulo
@@ -365,7 +373,7 @@ def activar_pieza(cliente, ep_id):
     if pais:
         experimentos.actualizar_pais(cliente, ex["id"], pz["pais"], estado="activo")
     if campaña_pausada:
-        experimentos.actualizar(cliente, ex["id"], estado="corriendo", extra=_con_activado(ex))
+        _a_corriendo(cliente, ex["id"])
     experimentos.registrar_evento(cliente, ex["id"], "estado", f"Activado: {pz['nombre']} ({pz['pais']})", ep_id=ep_id)
 
 

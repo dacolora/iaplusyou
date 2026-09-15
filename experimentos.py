@@ -78,6 +78,30 @@ def actualizar(cliente, experimento_id, **campos):
             db.experimento.c.legado.is_(False)).values(actualizado_en=db.ahora(), **campos))
 
 
+def actualizar_extra(cliente, experimento_id, fn, **campos):
+    """Read-modify-write atómico de `experimento.extra`: SELECT del `extra`
+    actual y UPDATE con `fn(extra) -> extra` dentro de UNA transacción
+    (`db.conectar()`). Con SQLite (journal WAL) los escritores se serializan:
+    dos llamadas concurrentes se ejecutan una detrás de otra, cada una sobre
+    el `extra` que dejó la anterior, así que no hay lost update aunque el
+    llamador tenga una foto vieja del experimento. `campos` son otras
+    columnas a escribir en el mismo UPDATE (p. ej. `estado`). Todo lo que
+    modifique `extra` (derivaciones, `activado_en` del lanzador) debe pasar
+    por acá y nunca por `actualizar(extra=...)`, que reemplaza el dict con lo
+    que el llamador leyó. Devuelve el `extra` escrito (None si no existe)."""
+    malos = (set(campos) - set(_EXP_COLS)) | ({"extra"} & set(campos))
+    if malos:
+        raise ValueError(f"Campos no permitidos: {sorted(malos)}")
+    with db.conectar() as con:
+        f = _fila_experimento(con, cliente, experimento_id)
+        if not f:
+            return None
+        extra = fn(dict(f._mapping[db.experimento.c.extra] or {}))
+        con.execute(db.experimento.update().where(db.experimento.c.id == experimento_id)
+                    .values(actualizado_en=db.ahora(), extra=extra, **campos))
+        return extra
+
+
 def actualizar_pais(cliente, experimento_id, pais, **campos):
     with db.conectar() as con:
         f = _fila_experimento(con, cliente, experimento_id)

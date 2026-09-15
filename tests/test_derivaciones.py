@@ -291,3 +291,160 @@ def test_periodica_avanzar_registrada():
     import worker
     assert ("exp_avanzar_todos", 600) in worker.PERIODICAS
     assert ("exp_refrescar_todos", 7200) in worker.PERIODICAS
+
+
+# ------------------------------------------------ fix round 1 (I-1..I-3) ---
+
+def test_otro_rota_sobre_los_distintos_del_actual(ent):
+    dv = ent["dv"]
+    assert dv._otro(("a", "b", "c"), "a", 0) == "b"
+    assert dv._otro(("a", "b", "c"), "a", 1) == "c"
+    assert dv._otro(("a", "b", "c"), "a", 2) == "b"      # cíclico, nunca "a"
+    assert dv._otro(("a", "b", "c"), "zzz", 0) == "a"    # actual fuera de la lista
+    assert dv._otro(("a",), "a", 5) == "a"               # único: no hay otro
+
+
+def test_rescate_escalon_3_regenera_con_otro_modelo_y_otro_enfoque(ent):
+    """I-1: el escalón 3 (regeneración) debe cambiar modelo y enfoque, no
+    repetir los del original (antes `_otro(..., 3)` con 3 opciones devolvía
+    el mismo)."""
+    dv, ex, cf, eid, ep, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"], ent["cf_id"]
+    ex.actualizar_pieza("acme", ep, escalon_rescate=2)
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep})
+    item = _derivacion(ex, eid)["items"][0]
+    origen, nueva = cf.cargar("acme")[cf_id], cf.cargar("acme")[item["cf_id"]]
+    assert item["clase"] == "regeneracion"
+    assert nueva["modelo"] != origen["modelo"] and nueva["modelo"] in dv.flowplus_modelos.VIDEO
+    assert nueva["enfoque"] != (origen["enfoque"] or dv.ENFOQUES[0]) and nueva["enfoque"] in dv.ENFOQUES
+
+
+def test_derivar_tres_regeneraciones_ninguna_repite_el_original(ent):
+    dv, ex, cf, eid, ep, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"], ent["cf_id"]
+    ex.actualizar("acme", eid, reglas={"n_reediciones": 0, "n_regeneraciones": 3})
+    hijo = dv.planificar("acme", eid, "derivar", {"ep_id": ep})
+    sesiones = cf.cargar("acme")
+    nuevas = [sesiones[i["cf_id"]] for i in _derivacion(ex, hijo)["items"]]
+    assert len(nuevas) == 3
+    assert all(s["modelo"] != "wan3" and s["enfoque"] != "producto" for s in nuevas)
+    assert len({s["modelo"] for s in nuevas[:2]}) == 2 and len({s["enfoque"] for s in nuevas[:2]}) == 2
+
+
+def test_derivar_sin_reediciones_ni_regeneraciones_falla_sin_crear_hijo(ent):
+    dv, ex, eid, ep = ent["dv"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar("acme", eid, reglas={"n_reediciones": 0, "n_regeneraciones": 0})
+    with pytest.raises(ValueError, match="nada que derivar"):
+        dv.planificar("acme", eid, "derivar", {"ep_id": ep})
+    assert ex.obtener("acme", eid)["hijos"] == [] and ent["encolados"] == []
+
+
+def test_encolar_final_no_reproduce_una_final_que_ya_existe(ent):
+    """I-2: si el estado en memoria se perdió antes de guardarse, la pasada
+    siguiente encuentra la final ya creada: si terminó (`listo`/`degradada`)
+    se registra sin volver a producirla; si está `generando` se espera. Solo
+    se crea y encola cuando no existe o falló."""
+    dv, ex, cf, eid, ep, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"], ent["cf_id"]
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep})
+    d = _derivacion(ex, eid)
+    legado = d["items"][0]["finales"]["es_CO"]
+    assert legado == f"{cf_id}__es_CO__v1" and len(ent["encolados"]) == 1
+    cf.actualizar_final("acme", legado, estado="listo", url_video="https://r2/v1.mp4", costo_usd=0.7)
+    # Se pierde el estado en memoria: la derivación vuelve a no saber de esa final.
+    d["items"][0]["finales"] = {}
+    dv._guardar("acme", eid, d)
+    resumen = dv.avanzar("acme", eid)
+    item = _derivacion(ex, eid)["items"][0]
+    f = cf.final_por_legado("acme", legado)
+    assert item["finales"] == {"es_CO": legado} and len(ent["encolados"]) == 1      # ni re-crea ni re-encola
+    assert f["estado"] == "listo" and f["costo_usd"] == 0.7                            # no se reinició
+    # La pasada siguiente la ve lista y cierra.
+    resumen = dv.avanzar("acme", eid)
+    assert resumen["estado"] == "listo" and len(ent["encolados"]) == 1
+    # `generando` sin tarea viva: también se espera, sin reiniciar.
+    cf.crear_final("acme", cf_id, "es", "MX", variante=7)
+    assert dv._encolar_final("acme", cf_id, "es", "MX", {"variante": 7, "variante_tipo": "hook"}) == f"{cf_id}__es_MX__v7"
+    assert len(ent["encolados"]) == 1
+    # `error`: sí se reproduce.
+    cf.actualizar_final("acme", f"{cf_id}__es_MX__v7", estado="error", error="x")
+    dv._encolar_final("acme", cf_id, "es", "MX", {"variante": 7, "variante_tipo": "hook"})
+    assert len(ent["encolados"]) == 2 and cf.final_por_legado("acme", f"{cf_id}__es_MX__v7")["estado"] == "generando"
+
+
+def test_actualizar_extra_no_pierde_escrituras_intercaladas(ent):
+    """I-3: dos escritores con fotos viejas de `extra`: cada `fn` recibe el
+    `extra` actual de la base (SELECT+UPDATE en la misma transacción), así
+    que las dos claves sobreviven aunque el segundo llamador haya leído antes
+    de que el primero escribiera."""
+    ex, eid = ent["ex"], ent["eid"]
+    foto_vieja = dict(ex.obtener("acme", eid)["extra"])       # ambos leyeron acá
+    ex.actualizar_extra("acme", eid, lambda e: {**e, "derivaciones": [{"id": "d1"}]})
+
+    def _activar(e):
+        assert e.get("derivaciones") == [{"id": "d1"}]        # ve lo del primero, no la foto vieja
+        return {**e, "activado_en": "2026-09-15T10:00:00"}
+    ex.actualizar_extra("acme", eid, _activar, estado="corriendo")
+    assert "derivaciones" not in foto_vieja
+    e = ex.obtener("acme", eid)
+    assert e["extra"] == {"derivaciones": [{"id": "d1"}], "activado_en": "2026-09-15T10:00:00"}
+    assert e["estado"] == "corriendo"
+    with pytest.raises(ValueError):
+        ex.actualizar_extra("acme", eid, lambda e: e, extra={})
+    assert ex.actualizar_extra("acme", 999999, lambda e: e) is None
+
+
+def test_guardar_derivacion_conserva_activado_en(ent):
+    dv, ex, eid, ep = ent["dv"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar_extra("acme", eid, lambda e: {**e, "activado_en": "2026-09-15T09:00:00"})
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep})
+    e = ex.obtener("acme", eid)["extra"]
+    assert e["activado_en"] == "2026-09-15T09:00:00" and len(e["derivaciones"]) == 1
+
+
+def test_lanzador_activar_pieza_conserva_derivaciones_escritas_entre_medio(ent, monkeypatch):
+    """I-3 del lado del dashboard: `activar_pieza` leyó el experimento, habló
+    con Meta y recién ahí escribe `activado_en`; si el worker guardó
+    `derivaciones` en el intervalo, no deben perderse."""
+    import lanzador
+    dv, ex, eid, ep = ent["dv"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar("acme", eid, estado="pausado")
+    ex.actualizar_pieza("acme", ep, estado="pausado")
+
+    def _meta(cliente, fn):
+        dv.planificar("acme", eid, "rescatar", {"ep_id": ep})   # el worker escribe mientras "Meta" responde
+        fn({})
+    monkeypatch.setattr(lanzador, "_con_credenciales", _meta)
+    monkeypatch.setattr(lanzador.meta_campaign, "actualizar_estado", lambda *a, **k: None)
+    monkeypatch.setattr(lanzador.meta_adset, "actualizar_estado", lambda *a, **k: None)
+    monkeypatch.setattr(lanzador.meta_ad, "actualizar_estado", lambda *a, **k: None)
+    lanzador.activar_pieza("acme", ep)
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "corriendo" and e["extra"]["activado_en"]
+    assert len(e["extra"]["derivaciones"]) == 1
+
+
+def test_rescate_fallido_deja_propuesta_y_evento_sobre_la_pieza(ent):
+    """M-2: la pieza origen quedó pausada; si el rescate falla, evento `error`
+    con `ep_id` y una propuesta `rescatar` para que la persona decida."""
+    import propuestas
+    dv, ex, cf, eid, ep = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"]
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep, "motivo": "perdedora"})
+    legado = _derivacion(ex, eid)["items"][0]["finales"]["es_CO"]
+    cf.actualizar_final("acme", legado, estado="error", error="sin voz")
+    assert dv.avanzar("acme", eid)["estado"] == "error"
+    errores = [e for e in ex.eventos("acme", eid) if e["tipo"] == "error"]
+    assert errores and all(e["ep_id"] == ep for e in errores)
+    assert any("sin voz" in e["mensaje"] for e in errores)
+    pend = propuestas.pendientes("acme", eid)
+    assert len(pend) == 1 and pend[0]["accion"] == "rescatar" and pend[0]["payload"]["ep_id"] == ep
+    assert "reintentar rescate" in pend[0]["payload"]["motivo"]
+    dv.avanzar("acme", eid)
+    assert len(propuestas.pendientes("acme", eid)) == 1
+
+
+def test_regeneracion_de_sesion_de_imagen_encola_flowplus_imagen(ent):
+    dv, ex, cf, eid, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["cf_id"]
+    cf_img = _sesion_con_video(cf)
+    cf.actualizar("acme", cf_img, tipo="imagen")
+    ep_img = ex.agregar_pieza("acme", eid, cf.pieza_id_por_legado("acme", cf_img), "MX")
+    ex.actualizar_pieza("acme", ep_img, escalon_rescate=2)
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep_img})
+    assert [e["tipo"] for e in ent["encolados"]] == ["flowplus_imagen"]

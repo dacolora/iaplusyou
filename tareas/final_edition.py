@@ -25,10 +25,10 @@ def job_id_guion(cliente, cf_id):
 
 
 def job_id_final(cliente, cf_id, idioma, pais, variante=None):
-    return f"{cliente}__{_legado_final(cf_id, idioma, pais, variante)}__final"
+    return f"{cliente}__{legado_final(cf_id, idioma, pais, variante)}__final"
 
 
-def _legado_final(cf_id, idioma, pais, variante=None):
+def legado_final(cf_id, idioma, pais, variante=None):
     """Mismo legado_id que `creative_flow.crear_final` (sufijo `__v<n>` si hay
     variante)."""
     base = f"{cf_id}__{idioma}_{pais}"
@@ -74,7 +74,7 @@ def interrumpida(tarea, mensaje):
     camino no se pisa). final_guion no necesita hook: no deja estado a medias."""
     p = tarea["payload"]
     cliente = p["cliente"]
-    final_id = _legado_final(p["cf_id"], p["idioma"], p["pais"], _variante(p))
+    final_id = legado_final(p["cf_id"], p["idioma"], p["pais"], _variante(p))
     entry = creative_flow.final_por_legado(cliente, final_id)
     if entry is None or entry.get("estado") != "generando":
         return

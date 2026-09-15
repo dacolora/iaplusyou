@@ -27,8 +27,16 @@ Forma guardada (una entrada por derivación):
               "finales": {"<idioma>_<pais>": legado_id}, "ep_ids": [...],
               "error": str|None}]}
 
-`acciones` importa este módulo a nivel de módulo; acá se importa `acciones`
-de forma perezosa (solo en `_cerrar_si_lista`) para evitar el ciclo.
+Nota (cierre con fallo parcial): un item con varios países que falla en uno
+después de haber agregado la pieza de otro deja esa pieza en el experimento
+pero fuera de los `ep_ids` que se lanzan/activan (queda `en_cola`, sin
+anuncio si el experimento ya está en Meta). Hoy no ocurre: `rescatar` es de
+un solo país y `derivar` produce sobre un hijo `armando`, cuyo `lanzar`
+toma todas las piezas `en_cola`.
+
+`acciones` importa este módulo a nivel de módulo; acá se importan `acciones`
+y `propuestas` de forma perezosa (solo en `_cerrar_si_lista`) para evitar el
+ciclo.
 """
 import creative_flow
 import db
@@ -39,11 +47,11 @@ import proyectos
 import trabajos
 from final_edition import ETAPAS_FINAL
 from final_edition.tipos import PAISES
+from flowplus_prompt import ORDEN_ENFOQUES as ENFOQUES
 from providers import flowplus_modelos
 from tareas import final_edition as tareas_fe
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 
-ENFOQUES = ("producto", "persona", "unboxing")
 TIPOS_VARIANTE = ("hook", "estructura")
 _ESCALONES = {1: ("reedicion", "hook"), 2: ("reedicion", "estructura"), 3: ("regeneracion", None)}
 _ESTADOS_FINAL_OK = ("listo", "degradada")
@@ -91,12 +99,15 @@ def _siguiente_variante(cliente, cf_id, idiomas):
     return (max(usadas) if usadas else 0) + 1
 
 
-def _otro(lista, actual, desplazamiento):
-    """Elemento `desplazamiento` posiciones después de `actual` en `lista`
-    (cíclico) — así dos regeneraciones no repiten modelo/enfoque."""
-    lista = list(lista)
-    base = lista.index(actual) if actual in lista else 0
-    return lista[(base + desplazamiento) % len(lista)]
+def _otro(lista, actual, k):
+    """k-ésimo (desde 0, cíclico) de los elementos de `lista` DISTINTOS de
+    `actual`: una regeneración nunca repite el modelo/enfoque del original y
+    dos regeneraciones seguidas (k=0, 1, …) tampoco repiten entre sí mientras
+    haya otros. Si `actual` es el único, se devuelve tal cual."""
+    otros = [x for x in lista if x != actual]
+    if not otros:
+        return actual
+    return otros[k % len(otros)]
 
 
 def _item_reedicion(cf_id, variante, variante_tipo, idiomas):
@@ -105,12 +116,12 @@ def _item_reedicion(cf_id, variante, variante_tipo, idiomas):
             "finales": {}, "ep_ids": [], "error": None}
 
 
-def _item_regeneracion(cliente, cf_id, n, idiomas):
-    """Sesión nueva (n-ésima regeneración, n >= 1) con otro modelo de video y
+def _item_regeneracion(cliente, cf_id, k, idiomas):
+    """Sesión nueva (k-ésima regeneración, k >= 0) con otro modelo de video y
     otro enfoque que el original; el clon se genera en `avanzar`."""
     sesion = creative_flow.cargar(cliente).get(cf_id) or {}
-    modelo = _otro(flowplus_modelos.VIDEO, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, n)
-    enfoque = _otro(ENFOQUES, sesion.get("enfoque") or ENFOQUES[0], n)
+    modelo = _otro(flowplus_modelos.VIDEO, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, k)
+    enfoque = _otro(ENFOQUES, sesion.get("enfoque") or ENFOQUES[0], k)
     nuevo = creative_flow.duplicar(cliente, cf_id, modelo=modelo, enfoque=enfoque)
     return {"clase": "regeneracion", "variante": None, "variante_tipo": None, "cf_id": nuevo,
             "paises": list(idiomas), "idiomas": dict(idiomas), "estado": "produciendo_clon",
@@ -118,14 +129,16 @@ def _item_regeneracion(cliente, cf_id, n, idiomas):
 
 
 def _guardar(cliente, experimento_id, derivacion):
-    """Escribe la derivación en `extra.derivaciones` del experimento releyendo
-    `extra` justo antes (actualizar reemplaza el dict completo)."""
-    ex = _experimento(cliente, experimento_id)
-    extra = dict(ex["extra"] or {})
-    lista = [d for d in (extra.get("derivaciones") or []) if d.get("id") != derivacion["id"]]
-    lista.append(derivacion)
-    extra["derivaciones"] = sorted(lista, key=lambda d: int(d["id"][1:]))
-    experimentos.actualizar(cliente, experimento_id, extra=extra)
+    """Escribe la derivación en `extra.derivaciones` del experimento con un
+    read-modify-write atómico (`experimentos.actualizar_extra`): no pisa
+    `activado_en` ni lo que otra ruta haya escrito en `extra` entre medio."""
+    def _poner(extra):
+        lista = [d for d in (extra.get("derivaciones") or []) if d.get("id") != derivacion["id"]]
+        lista.append(derivacion)
+        extra["derivaciones"] = sorted(lista, key=lambda d: int(d["id"][1:]))
+        return extra
+    if experimentos.actualizar_extra(cliente, experimento_id, _poner) is None:
+        raise ValueError("Ese experimento no existe.")
 
 
 def _nueva(cliente, experimento_id, tipo, pz, cf_id, motivo, items):
@@ -160,14 +173,19 @@ def planificar(cliente, experimento_id, tipo, payload):
 def _planificar_derivar(cliente, ex, pz, motivo):
     cf_id = _cf_id_de(pz)
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
+    n_re, n_rg = int(reglas.get("n_reediciones") or 0), int(reglas.get("n_regeneraciones") or 0)
+    if n_re + n_rg <= 0:
+        raise ValueError("La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar.")
     idiomas = _idiomas(pz, [p["pais"] for p in ex["paises"]])
-    hijo = experimentos.crear_hijo(cliente, ex["id"], f"{ex['nombre']} · derivado de {pz['nombre']}", pz["id"])
+    # Items primero (duplicar puede fallar) y el hijo después: así no queda
+    # un hijo huérfano sin derivación.
     items = []
     base = _siguiente_variante(cliente, cf_id, idiomas)
-    for k in range(int(reglas.get("n_reediciones") or 0)):
+    for k in range(n_re):
         items.append(_item_reedicion(cf_id, base + k, TIPOS_VARIANTE[k % 2], idiomas))
-    for k in range(int(reglas.get("n_regeneraciones") or 0)):
-        items.append(_item_regeneracion(cliente, cf_id, k + 1, idiomas))
+    for k in range(n_rg):
+        items.append(_item_regeneracion(cliente, cf_id, k, idiomas))
+    hijo = experimentos.crear_hijo(cliente, ex["id"], f"{ex['nombre']} · derivado de {pz['nombre']}", pz["id"])
     d = _nueva(cliente, hijo, "derivar", pz, cf_id, motivo, items)
     _guardar(cliente, hijo, d)
     mensaje = f"Derivación {d['id']} a partir de {pz['nombre']}: {_resumen_items(items) or 'sin piezas'}."
@@ -189,7 +207,7 @@ def _planificar_rescatar(cliente, ex, pz, motivo):
     if clase == "reedicion":
         item = _item_reedicion(cf_id, _siguiente_variante(cliente, cf_id, idiomas), variante_tipo, idiomas)
     else:
-        item = _item_regeneracion(cliente, cf_id, escalon, idiomas)
+        item = _item_regeneracion(cliente, cf_id, 0, idiomas)
     experimentos.actualizar_pieza(cliente, pz["id"], escalon_rescate=escalon)
     d = _nueva(cliente, ex["id"], "rescatar", pz, cf_id, motivo, [item])
     _guardar(cliente, ex["id"], d)
@@ -203,24 +221,37 @@ def _planificar_rescatar(cliente, ex, pz, motivo):
 
 # ------------------------------------------------------------ avanzar ---
 
-def _encolar_clon(cliente, cf_id):
-    """Genera el video de la sesión nueva (como `dashboard._lanzar_video_cf`):
-    marca `video_generando` antes de encolar; no encola si ya hay una viva."""
+def _encolar_clon(cliente, cf_id, tipo="video"):
+    """Genera el clon de la sesión nueva (como `dashboard._lanzar_video_cf`,
+    tarea según el `tipo` de la sesión): marca `video_generando` antes de
+    encolar; no encola si ya hay una viva."""
     job_id = f"{cliente}__{cf_id}__creative_flow"
     if trabajos.en_curso(job_id):
         return False
     creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    return trabajos.encolar(job_id, "flowplus_video", {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
-                            duracion_estimada=180, etapas=ETAPAS_CREATIVE_FLOW, max_intentos=1)
+    return trabajos.encolar(job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
+                            {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
+                            duracion_estimada=60 if tipo == "imagen" else 180,
+                            etapas=ETAPAS_CREATIVE_FLOW, max_intentos=1)
 
 
 def _encolar_final(cliente, cf_id, idioma, pais, opciones):
     """Produce una final (como `dashboard.fe_producir`): fila en `generando`
-    desde que se encola. Devuelve el legado_id de la final."""
+    desde que se encola. Devuelve el legado_id de la final.
+
+    Nunca reproduce una final que ya existe y no falló: cualquier final con
+    ese legado es nuestra (las variantes son números nuevos y las
+    regeneraciones son sesiones nuevas), así que si ya está `listo`/
+    `degradada` o `generando` (o su tarea sigue viva) se devuelve el legado
+    sin tocar nada — `crear_final` la reiniciaría y se pagaría dos veces si
+    el estado en memoria de una pasada anterior no llegó a guardarse."""
     variante = opciones.get("variante")
     job_id = tareas_fe.job_id_final(cliente, cf_id, idioma, pais, variante=variante)
-    legado = tareas_fe._legado_final(cf_id, idioma, pais, variante)
+    legado = tareas_fe.legado_final(cf_id, idioma, pais, variante)
     if trabajos.en_curso(job_id):
+        return legado
+    existente = creative_flow.final_por_legado(cliente, legado)
+    if existente is not None and existente.get("estado") != "error":
         return legado
     creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=variante)
     trabajos.encolar(job_id, "final_producir",
@@ -229,11 +260,8 @@ def _encolar_final(cliente, cf_id, idioma, pais, opciones):
     return legado
 
 
-def _estado_sesion(cliente, cf_id):
-    s = creative_flow.cargar(cliente).get(cf_id)
-    if s is None:
-        return "error", f"la sesión {cf_id} ya no existe"
-    return s.get("estado"), s.get("error")
+def _sesion(cliente, cf_id):
+    return creative_flow.cargar(cliente).get(cf_id)
 
 
 def _estado_final(cliente, legado):
@@ -249,25 +277,30 @@ def _opciones_de(item):
     return {"variante": None}
 
 
-def _fallar(cliente, experimento_id, item, motivo):
+def _fallar(cliente, experimento_id, d, item, motivo):
     item["estado"], item["error"] = "error", motivo
     experimentos.registrar_evento(cliente, experimento_id, "error",
-                                  f"Falló {_resumen_items([item])}: {motivo}.", datos={"cf_id": item["cf_id"]})
+                                  f"Derivación {d['id']}: falló {_resumen_items([item])}: {motivo}.",
+                                  datos={"derivacion": d["id"], "cf_id": item["cf_id"]}, ep_id=d["origen_ep_id"])
 
 
-def _avanzar_clon(cliente, experimento_id, item):
-    estado, error = _estado_sesion(cliente, item["cf_id"])
+def _avanzar_clon(cliente, experimento_id, d, item):
+    s = _sesion(cliente, item["cf_id"])
+    if s is None:
+        _fallar(cliente, experimento_id, d, item, f"la sesión {item['cf_id']} ya no existe")
+        return
+    estado = s.get("estado")
     if estado == "video_listo":
         item["estado"] = "produciendo_finales"
-        _avanzar_finales(cliente, experimento_id, item)
+        _avanzar_finales(cliente, experimento_id, d, item)
     elif estado == "error":
-        _fallar(cliente, experimento_id, item, error or "la generación del clon falló")
+        _fallar(cliente, experimento_id, d, item, s.get("error") or "la generación del clon falló")
     elif estado != "video_generando":
-        _encolar_clon(cliente, item["cf_id"])
+        _encolar_clon(cliente, item["cf_id"], s.get("tipo") or "video")
     # video_generando: esperar.
 
 
-def _avanzar_finales(cliente, experimento_id, item):
+def _avanzar_finales(cliente, experimento_id, d, item):
     """Encola las finales que falten, agrega al experimento las que terminaron
     y deja el item `listo` cuando todas están dentro."""
     opciones = _opciones_de(item)
@@ -286,18 +319,18 @@ def _avanzar_finales(cliente, experimento_id, item):
                 item["ep_ids"].append(ep_id)
             listas.add(clave)
         elif estado == "error":
-            _fallar(cliente, experimento_id, item, error or f"la final {clave} falló")
+            _fallar(cliente, experimento_id, d, item, error or f"la final {clave} falló")
             return
         # generando: esperar.
     if len(listas) == len(item["paises"]):
         item["estado"] = "listo"
 
 
-def _avanzar_item(cliente, experimento_id, item):
+def _avanzar_item(cliente, experimento_id, d, item):
     if item["estado"] == "produciendo_clon":
-        _avanzar_clon(cliente, experimento_id, item)
+        _avanzar_clon(cliente, experimento_id, d, item)
     elif item["estado"] == "produciendo_finales":
-        _avanzar_finales(cliente, experimento_id, item)
+        _avanzar_finales(cliente, experimento_id, d, item)
 
 
 def _lanzar_piezas(cliente, experimento_id):
@@ -316,10 +349,16 @@ def _cerrar_si_lista(cliente, experimento_id, d):
     (puerta de modo) y cierra la derivación como `listo` (todo bien) o
     `error` (algún item falló; lo que sí salió entra igual)."""
     import acciones  # perezoso: acciones importa este módulo
+    import propuestas
     if any(i["estado"] in _PENDIENTES for i in d["items"]):
         return
     ep_ids = sorted({ep for i in d["items"] if i["estado"] == "listo" for ep in i["ep_ids"]})
     con_error = [i for i in d["items"] if i["estado"] == "error"]
+    if con_error and d["tipo"] == "rescatar":
+        # La pieza origen quedó pausada y el decisor no vuelve a pedir ese
+        # escalón: que la persona decida (reintentar el rescate o archivar).
+        propuestas.crear(cliente, experimento_id, "rescatar", {"ep_id": d["origen_ep_id"]},
+                         f"reintentar rescate: falló {'; '.join(i['error'] or 'sin detalle' for i in con_error)}")
     motivo = (f"derivación {d['id']} lista: {len(ep_ids)} pieza(s) nueva(s)"
               + (f", {len(con_error)} fallida(s)" if con_error else "")
               + (f"; {d['motivo']}" if d.get("motivo") else ""))
@@ -331,7 +370,7 @@ def _cerrar_si_lista(cliente, experimento_id, d):
             d["estado"] = "error"
             experimentos.registrar_evento(cliente, experimento_id, "error",
                                           f"Derivación {d['id']}: no se pudieron lanzar las piezas nuevas: {error}",
-                                          datos={"derivacion": d["id"], "ep_ids": ep_ids})
+                                          datos={"derivacion": d["id"], "ep_ids": ep_ids}, ep_id=d["origen_ep_id"])
             return
     d["estado"] = "error" if con_error else "listo"
     d["motivo_cierre"] = motivo
@@ -339,7 +378,7 @@ def _cerrar_si_lista(cliente, experimento_id, d):
         cliente, experimento_id, "derivacion" if not con_error else "error",
         (f"Derivación {d['id']} lista: {len(ep_ids)} pieza(s) nueva(s) en el experimento." if not con_error
          else f"Derivación {d['id']} terminó con {len(con_error)} item(s) fallido(s); {len(ep_ids)} pieza(s) sí entraron."),
-        datos={"derivacion": d["id"], "ep_ids": ep_ids})
+        datos={"derivacion": d["id"], "ep_ids": ep_ids}, ep_id=d["origen_ep_id"])
 
 
 def avanzar(cliente, experimento_id):
@@ -353,7 +392,8 @@ def avanzar(cliente, experimento_id):
         if d.get("estado") != "produciendo":
             continue
         for item in d["items"]:
-            _avanzar_item(cliente, experimento_id, item)
+            _avanzar_item(cliente, experimento_id, d, item)
+            _guardar(cliente, experimento_id, d)  # persistir lo encolado apenas se encola
         _cerrar_si_lista(cliente, experimento_id, d)
         _guardar(cliente, experimento_id, d)
         resumen["estado"], resumen["motivo"] = d["estado"], d.get("motivo_cierre")
