@@ -53,7 +53,8 @@ def crear_hijo(cliente, padre_id, nombre, pieza_origen_ep_id):
         e = db.experimento
         return con.execute(e.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, modo=m[e.c.modo],
-            reglas=dict(m[e.c.reglas] or {}), paises=[_pais_nuevo(p) for p in (m[e.c.paises] or [])],
+            producto_id=m[e.c.producto_id], reglas=dict(m[e.c.reglas] or {}),
+            paises=[_pais_nuevo(p) for p in (m[e.c.paises] or [])],
             moneda=m[e.c.moneda], tope_total=m[e.c.tope_total], dias=m[e.c.dias],
             objetivo_meta=m[e.c.objetivo_meta], atribucion=m[e.c.atribucion] or "ninguna", estado="armando",
             gasto_acumulado=0.0, legado=False, destino_url=m[e.c.destino_url], edad_min=m[e.c.edad_min],
@@ -144,6 +145,24 @@ def actualizar_pieza(cliente, ep_id, **campos):
         con.execute(db.experimento_pieza.update().where(
             db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)
             .values(actualizado_en=db.ahora(), **campos))
+
+
+def marcar_pieza(cliente, ep_id, **flags):
+    """Read-modify-write atómico de `extra` para las banderas de idempotencia
+    del decisor (derivado, rescatado_en_escalon, archivado): relee `extra`
+    dentro de la misma transacción, justo antes de escribir, así no pisa lo
+    que otra parte del motor (p. ej. lanzador.activar_pieza, o Task 5) haya
+    escrito en `extra` entre que acciones.ejecutar leyó la pieza y este
+    marcado. ValueError si la pieza no existe."""
+    ep = db.experimento_pieza
+    with db.conectar() as con:
+        f = con.execute(sa.select(ep.c.extra).where(
+            ep.c.id == ep_id, ep.c.cliente == cliente)).first()
+        if f is None:
+            raise ValueError("Esa pieza no está en el experimento.")
+        extra = {**(f._mapping[ep.c.extra] or {}), **flags}
+        con.execute(ep.update().where(ep.c.id == ep_id, ep.c.cliente == cliente)
+                    .values(actualizado_en=db.ahora(), extra=extra))
 
 
 def _ultima_metrica(con, ep_id):

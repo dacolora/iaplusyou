@@ -15,6 +15,7 @@ aquí. Dos puertas:
 Nada se activa solo: la única vía es `ejecutar(..., "activar", ...)`, que en
 los modos manual/semi solo llega tras aprobar la propuesta.
 """
+import cola
 import creative_flow
 import decisor
 import derivaciones
@@ -40,10 +41,6 @@ def _pieza(ex, ep_id):
     if pz is None:
         raise ValueError("Esa pieza no está en el experimento.")
     return pz
-
-
-def _marcar(cliente, pz, **flags):
-    experimentos.actualizar_pieza(cliente, pz["id"], extra={**(pz.get("extra") or {}), **flags})
 
 
 def _pausar_si_activa(cliente, pz):
@@ -87,23 +84,37 @@ def ejecutar(cliente, experimento_id, accion, payload):
         if (pz.get("extra") or {}).get("derivado"):
             return f"{pz['nombre']} ya derivada: no se vuelve a producir."
         hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
-        _marcar(cliente, pz, derivado=True)
+        experimentos.marcar_pieza(cliente, pz["id"], derivado=True)
         return f"Derivación planificada a partir de {pz['nombre']} (experimento hijo {hijo})."
 
     if accion == "rescatar":
         pz = _pieza(ex, payload["ep_id"])
-        escalon = int(pz.get("escalon_rescate") or 0) + 1
-        if (pz.get("extra") or {}).get("rescatado_en_escalon") == escalon:
-            return f"{pz['nombre']} ya rescatada en ese escalón ({escalon})."
-        _pausar_si_activa(cliente, pz)
+        extra = pz.get("extra") or {}
+        escalon_actual = int(pz.get("escalon_rescate") or 0)
+        marcado = extra.get("rescatado_en_escalon")
+        # A lo sumo un rescate por escalón: si ya se marcó un rescate en este
+        # escalón (o en uno más alto — el decisor volvió a pedirlo sin que la
+        # pieza avanzara), no se vuelve a planificar ni a gastar. Solo si el
+        # escalón actual superó al marcado (avanzó por otra vía) se deja
+        # pasar un nuevo rescate.
+        if marcado is not None and marcado >= escalon_actual + 1:
+            return f"{pz['nombre']} ya rescatada en ese escalón ({marcado})."
         derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
-        _marcar(cliente, pz, rescatado_en_escalon=escalon)
+        _pausar_si_activa(cliente, pz)
+        # Releer el escalón después de planificar: Task 5 puede subir
+        # `escalon_rescate` de la pieza al planificar el rescate; si no lo
+        # hace todavía (stub), se usa el que ya teníamos.
+        pz_post = _pieza(_experimento(cliente, experimento_id), pz["id"])
+        escalon = int(pz_post.get("escalon_rescate") or 0) + 1
+        experimentos.marcar_pieza(cliente, pz["id"], rescatado_en_escalon=escalon)
         return f"Rescate planificado para {pz['nombre']} (escalón {escalon}); la pieza queda pausada."
 
     if accion == "activar":
         ep_ids = list(payload.get("ep_ids") or ([payload["ep_id"]] if payload.get("ep_id") else []))
         if not ep_ids:
             raise ValueError("No hay piezas para activar.")
+        if ex["estado"] not in ("pausado", "corriendo"):
+            raise ValueError("El experimento todavía no está en Meta.")
         if ex["estado"] == "pausado":
             lanzador.cambiar_estado(cliente, experimento_id, "ACTIVE")
         for ep_id in ep_ids:
@@ -117,7 +128,7 @@ def ejecutar(cliente, experimento_id, accion, payload):
         _pausar_si_activa(cliente, pz)
         if payload.get("cf_id"):
             creative_flow.archivar_concepto(cliente, payload["cf_id"], motivo)
-        _marcar(cliente, pz, archivado=True)
+        experimentos.marcar_pieza(cliente, pz["id"], archivado=True)
         return f"Archivado el concepto de {pz['nombre']}: {motivo or 'sin motivo'}."
 
     raise ValueError(f"Acción desconocida: {accion!r}.")
@@ -139,7 +150,12 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
     datos = {"accion": accion, "payload": payload, "modo": ex["modo"]}
 
     if puerta == "ejecutar":
-        mensaje = ejecutar(cliente, experimento_id, accion, payload)
+        try:
+            mensaje = ejecutar(cliente, experimento_id, accion, payload)
+        except Exception as error:
+            experimentos.registrar_evento(cliente, experimento_id, "error",
+                                          cola.sin_token(str(error)), datos=datos, ep_id=ep_id)
+            raise
         experimentos.registrar_evento(cliente, experimento_id, "accion",
                                       f"{mensaje} Motivo: {motivo}.", datos=datos, ep_id=ep_id)
         return "ejecutada", mensaje

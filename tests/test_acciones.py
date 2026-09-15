@@ -65,3 +65,95 @@ def test_ejecutar_activar(ent):
     ex.actualizar("acme", eid, estado="pausado")
     ac.ejecutar("acme", eid, "activar", {"ep_ids": [ep]})
     assert ("estado", eid, "ACTIVE") in ent["llamadas"] and ("activar", ep) in ent["llamadas"]
+
+
+@pytest.mark.parametrize("estado", ["armando", "lanzando", "error"])
+def test_ejecutar_activar_arroja_si_no_esta_en_meta(ent, estado):
+    """M/brief: activar sobre un experimento que todavía no llegó a Meta
+    (armando/lanzando/error) no es un no-op silencioso: lanza ValueError con
+    el mensaje que la UI puede mostrar tal cual."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar("acme", eid, estado=estado)
+    with pytest.raises(ValueError, match="El experimento todavía no está en Meta."):
+        ac.ejecutar("acme", eid, "activar", {"ep_ids": [ep]})
+    assert not any(l[0] == "activar" for l in ent["llamadas"])
+
+
+def test_rescatar_idempotente_aunque_planificar_avance_el_escalon(ent, monkeypatch):
+    """I1: cada pieza engendra a lo sumo un rescate por escalón. Simula lo
+    que hará Task 5 (planificar sube escalon_rescate de la pieza) y verifica
+    que una segunda llamada sobre el mismo escalón no vuelve a planificar ni
+    a gastar, aunque la comparación ya no sea `==` sino `>=`."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+
+    def _planificar_y_subir_escalon(c, e, tipo, payload):
+        ent["llamadas"].append(("planificar", tipo, payload.get("ep_id")))
+        ex.actualizar_pieza(c, payload["ep_id"], escalon_rescate=1)
+        return 99
+
+    monkeypatch.setattr(ac.derivaciones, "planificar", _planificar_y_subir_escalon)
+    ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    p = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    # `escalon_rescate` (columna) ya la subió el planificar (Task 5); la
+    # marca de idempotencia se calcula sobre ese valor releído, no sobre el
+    # que había antes de llamarlo.
+    assert p["escalon_rescate"] == 1 and p["extra"]["rescatado_en_escalon"] == 2
+
+    # Segunda llamada: el decisor vuelve a pedir el rescate sin que la pieza
+    # haya avanzado más allá del escalón ya marcado -> no repite.
+    ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    assert [l for l in ent["llamadas"] if l[0] == "planificar" and l[1] == "rescatar"] == \
+        [("planificar", "rescatar", ep)]
+
+    # Si la pieza avanza de escalón por otra vía, un nuevo rescate sí procede.
+    ex.actualizar_pieza("acme", ep, escalon_rescate=2)
+    ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    assert len([l for l in ent["llamadas"] if l[0] == "planificar" and l[1] == "rescatar"]) == 2
+
+
+def test_rescatar_llama_planificar_antes_de_pausar(ent, monkeypatch):
+    """I3: si planificar falla, la pieza no debe quedar pausada — pausar solo
+    ocurre después de que el rescate exista."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+
+    def _falla(c, e, tipo, payload):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(ac.derivaciones, "planificar", _falla)
+    with pytest.raises(RuntimeError):
+        ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    assert not any(l[0] == "pausar" for l in ent["llamadas"])
+
+
+def test_marcar_pieza_no_pisa_extra_escrito_despues_del_read_inicial(ent):
+    """I2: acciones.ejecutar lee `pz` al principio; si algo más escribe en
+    `extra` de la misma pieza entre ese read y el marcado (p. ej.
+    lanzador.activar_pieza guardando `activado_en`), marcar_pieza no debe
+    perder ese dato."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    pz_vieja = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert pz_vieja["extra"] == {}
+    # Algo más (fuera de este ejecutar) escribe en extra después del read.
+    ex.actualizar_pieza("acme", ep, extra={"activado_en": "2026-09-15T00:00:00"})
+    ex.marcar_pieza("acme", ep, derivado=True)
+    p = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert p["extra"] == {"activado_en": "2026-09-15T00:00:00", "derivado": True}
+
+
+def test_pedir_registra_evento_error_y_relanza(ent, monkeypatch):
+    """I3: pedir() no traga la excepción de ejecutar(); antes de relanzarla
+    deja un evento tipo error, en español, con el token de Meta redactado."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+
+    def _falla(c, ep_):
+        raise RuntimeError("Meta dijo: access_token=SECRETO123 inválido")
+
+    monkeypatch.setattr(ac.lanzador, "pausar_pieza", _falla)
+    with pytest.raises(RuntimeError):
+        ac.pedir("acme", eid, "pausar", {"ep_id": ep}, "perdedor")
+    eventos = ex.eventos("acme", eid)
+    errores = [e for e in eventos if e["tipo"] == "error"]
+    assert len(errores) == 1
+    assert "access_token=***" in errores[0]["mensaje"]
+    assert "SECRETO123" not in errores[0]["mensaje"]
+    assert errores[0]["datos"]["accion"] == "pausar"

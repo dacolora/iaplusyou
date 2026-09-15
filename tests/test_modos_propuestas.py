@@ -45,3 +45,24 @@ def test_crear_hijo(base_temporal):
     assert [p["pais"] for p in h["paises"]] == ["CO", "MX"] and all(p["meta_adset_id"] is None for p in h["paises"])
     assert h["padre_experimento_id"] == eid and h["extra"]["origen_ep_id"] == 42
     assert ex.obtener("acme", eid)["hijos"] == [hijo]
+
+
+def test_crear_hijo_copia_producto_id(base_temporal):
+    """M6: el spec usa producto_id para no volver a proponer el mismo
+    concepto para ese producto en el hijo — así que el hijo debe heredarlo
+    del padre."""
+    import sqlalchemy as sa
+
+    import experimentos as ex
+    db = base_temporal
+    with db.conectar() as con:
+        producto_id = con.execute(db.producto.insert().values(
+            cliente="acme", creado_en=db.ahora(), actualizado_en=db.ahora(),
+            fuente="manual", nombre="Cojín abrazable")).inserted_primary_key[0]
+    eid = ex.crear("acme", "Padre", PAISES, "OUTCOME_TRAFFIC", 7, 500.0, "https://t", "COP")
+    with db.conectar() as con:
+        con.execute(db.experimento.update().where(db.experimento.c.id == eid).values(producto_id=producto_id))
+    hijo = ex.crear_hijo("acme", eid, "Padre · derivado", 42)
+    with db.conectar() as con:
+        heredado = con.execute(sa.select(db.experimento.c.producto_id).where(db.experimento.c.id == hijo)).scalar()
+    assert heredado == producto_id
