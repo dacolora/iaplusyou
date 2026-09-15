@@ -254,6 +254,11 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
     entry = _sesion(cliente, cf_id)
     avisar = on_etapa or (lambda nombre: None)
     variante_tipo = o.get("variante_tipo")
+    # `variante` y `variante_tipo` van juntos: sin el número la variante pisaría
+    # la final original; sin el tipo se gastaría voz/música en una copia igual.
+    if bool(variante_tipo) != (o.get("variante") is not None):
+        raise ValueError("Para producir una variante hay que indicar `variante` (número) y "
+                         "`variante_tipo` (hook | estructura) a la vez.")
     if variante_tipo and variante_tipo not in guion_mod.VARIANTES_GUION:
         raise ValueError(
             f"Tipo de variante no soportado: {variante_tipo}. Opciones: {sorted(guion_mod.VARIANTES_GUION)}")

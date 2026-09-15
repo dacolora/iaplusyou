@@ -315,9 +315,12 @@ VARIANTES_GUION = {
         "conserva tiempos, estructura y los demás bloques salvo ajustes mínimos de continuidad."
     ),
     "estructura": (
-        "Cambia la estructura narrativa (p.ej. problema→prueba social→producto, o "
-        "testimonio→producto→CTA) manteniendo los tiempos de los bloques y el producto; "
-        "todos los textos nuevos."
+        "Cambia el ángulo narrativo del guion con TODOS los textos nuevos, pero mantén "
+        "los 5 bloques con sus roles fijos y en el mismo orden (hook, problema, producto, "
+        "prueba, cta) y con sus mismos tiempos: no agregues, quites ni reordenes bloques. "
+        "Varía lo que pasa dentro de cada bloque: otro problema del que parte la historia, "
+        "otra prueba (testimonio, dato, comparación...), otro ritmo de frases y otra "
+        "sugerencia de música, y un CTA distinto; el producto es el mismo."
     ),
 }
 
@@ -336,7 +339,7 @@ def _mensaje_variar(guion_base, variante_tipo, marca):
 def variar_guion(guion_base, variante_tipo, marca):
     """Variante del guion base (mismo idioma/país, mismos tiempos) con UNA
     llamada a Claude. `variante_tipo` ∈ VARIANTES_GUION ("hook": otro gancho y
-    CTA; "estructura": otra estructura narrativa, textos nuevos). Conserva
+    CTA; "estructura": otro ángulo en cada bloque, textos nuevos, mismos roles/orden/tiempos). Conserva
     `idioma`, `pais` y `precio_base` del base y no lo muta. Devuelve
     (guion, costo_usd)."""
     if variante_tipo not in VARIANTES_GUION:

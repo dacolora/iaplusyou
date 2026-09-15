@@ -32,7 +32,14 @@ def test_variar_guion_hook_y_estructura(monkeypatch):
     assert "hook" in capturado["mensaje"].lower() and "CTA" in capturado["mensaje"]
     assert base["bloques"][0]["texto_pantalla"] == "A"  # no muta el base
     g.variar_guion(base, "estructura", "")
-    assert "estructura" in capturado["mensaje"].lower()
+    m = capturado["mensaje"].lower()
+    assert "estructura" in m
+    # I3: la variante de estructura NO puede reordenar bloques (validar_guion
+    # exige roles fijos en orden): el mensaje pide conservar roles, orden y
+    # tiempos y variar el ángulo dentro de cada bloque.
+    assert "mismo orden" in m and "hook, problema, producto, prueba, cta" in m
+    assert "mismos tiempos" in m and "no agregues, quites ni reordenes" in m
+    assert "cta distinto" in m
     with pytest.raises(ValueError):
         g.variar_guion(base, "otra", "")
 
@@ -66,15 +73,60 @@ def test_duplicar_y_archivar(base_temporal):
     assert e.get("derivado_de") == cf_id and e.get("enfoque") == "persona"
     assert e["productos_ids"] == ["p1"] and e["tono"] == "alegre" and e["referencias_urls"] == ["https://r"]
     assert e["video_url"] is None  # el clon no se copia: la copia se genera de nuevo
+    # Con enfoque nuevo el prompt se arma como en Crear (marca + enfoque) y el
+    # nombre/con_persona reflejan el enfoque nuevo, no el del original.
+    assert e["prompt_relleno"] and "acción central" in e["prompt_relleno"]
+    assert e["enfoque_nombre"] == "Con persona" and e["con_persona"] is True
     # Sin modelo ni enfoque: conserva los del original.
     otro = cf.duplicar("acme", cf_id)
     e2 = cf.cargar("acme")[otro]
     assert e2["modelo"] == "wan3" and e2.get("enfoque") is None and e2["derivado_de"] == cf_id
+    with pytest.raises(ValueError):
+        cf.duplicar("acme", cf_id, enfoque="inexistente")
     assert cf.concepto_archivado("acme", cf_id) is False
     cf.archivar_concepto("acme", cf_id, "perdió el escalón 3")
     assert cf.concepto_archivado("acme", cf_id) is True
     assert all(p["legado_id"] != cf_id for p in ex.elegibles("acme"))
     assert cf.concepto_archivado("acme", "cf_inexistente") is False
+
+
+def test_duplicar_conserva_o_rearma_prompt(base_temporal):
+    import creative_flow as cf
+    import flowplus_prompt
+    cf_id = cf.crear("acme", [], ["p1"], [], "sandalia sobre arena", 10, "", "A", referencias_urls=["https://r"])
+    refs = [{"tipo": "imagen", "etiqueta": "@Imagen 1", "url": "https://r", "frame_url": "https://r"}]
+    prompt_orig = flowplus_prompt.armar("sandalia sobre arena", refs, enfoque="producto")
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/v.mp4", modelo="wan3",
+                  prompt_relleno=prompt_orig, referencias=refs, enfoque="producto",
+                  enfoque_nombre="Solo producto", con_persona=False)
+    # Mismo enfoque (implícito o explícito) y otro modelo: el prompt viaja tal cual.
+    n1 = cf.duplicar("acme", cf_id, modelo="kling_o3")
+    e = cf.cargar("acme")[n1]
+    assert e["prompt_relleno"] == prompt_orig and e["enfoque_nombre"] == "Solo producto" and e["con_persona"] is False
+    n2 = cf.duplicar("acme", cf_id, enfoque="producto")
+    e = cf.cargar("acme")[n2]
+    assert e["prompt_relleno"] == prompt_orig
+    # Otro enfoque: se rearma igual que una sesión nueva de Crear.
+    n3 = cf.duplicar("acme", cf_id, enfoque="unboxing")
+    e = cf.cargar("acme")[n3]
+    esperado = flowplus_prompt.armar("sandalia sobre arena", refs, con_persona=True, enfoque="unboxing")
+    assert e["prompt_relleno"] == esperado and e["prompt_relleno"] != prompt_orig
+    assert e["enfoque_nombre"] == "Unboxing" and e["con_persona"] is True and e["enfoque"] == "unboxing"
+    assert e["referencias"] == refs and e["accion_central"] == "sandalia sobre arena"
+
+
+def test_producir_exige_variante_y_tipo_juntos(entorno_fe, monkeypatch):
+    import creative_flow as cf
+    import final_edition
+    cf_id = entorno_fe["cf_id"]
+    llamadas = []
+    monkeypatch.setattr(cf, "crear_final", lambda *a, **k: llamadas.append((a, k)))
+    with pytest.raises(ValueError, match="variante"):
+        final_edition.producir("acme", cf_id, "es", "CO", {"variante_tipo": "hook"})
+    with pytest.raises(ValueError, match="variante"):
+        final_edition.producir("acme", cf_id, "es", "CO", {"variante": 1})
+    assert llamadas == []  # falla antes de tocar ninguna final
+    assert cf.finales("acme", cf_id) == []
 
 
 @_sin_ffmpeg

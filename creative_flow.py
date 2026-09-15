@@ -192,13 +192,39 @@ def guardar(cliente, data):
         eliminar(cliente, cf_id)
 
 
+def armar_prompt_sesion(cliente, extra, enfoque):
+    """Arma `prompt_relleno` para una sesión de Crear exactamente como lo hace
+    la ruta `cf_crear_video` del dashboard: acción central + referencias (con
+    sus logos) + guía y negative de la marca + bloque del enfoque. Devuelve
+    (prompt, info_enfoque). No llama a ningún modelo: es texto puro."""
+    import flowplus_prompt
+    import marca as marca_mod
+    info = flowplus_prompt.ENFOQUES[enfoque]
+    referencias = list(extra.get("referencias") or [])
+    prompt = flowplus_prompt.armar(
+        extra.get("accion_central") or "", referencias, con_persona=info["con_persona"],
+        guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
+        logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
+    )
+    return prompt, info
+
+
 def duplicar(cliente, cf_id, modelo=None, enfoque=None):
     """Nueva sesión a partir de `cf_id`: copia la idea del concepto (acción
     central, referencias, productos, tono, modo, platforms...) y crea la pieza
     clon en `prompt_listo` (pendiente) para que Crear la genere de nuevo —
     no copia el video ni genera nada. `modelo` va a la columna de la pieza y
     `enfoque` a la del concepto si se dan; si no, se conservan los del
-    original. `extra["derivado_de"] = cf_id`. Devuelve el nuevo cf_id."""
+    original. `extra["derivado_de"] = cf_id`. Devuelve el nuevo cf_id.
+
+    El prompt armado (`prompt_relleno`, con marca y enfoque) se conserva tal
+    cual cuando el enfoque no cambia; si cambia (o el original no lo tenía),
+    se vuelve a armar con `armar_prompt_sesion` — igual que una sesión nueva —
+    y `enfoque_nombre`/`con_persona` se actualizan al enfoque nuevo. Así la
+    copia genera exactamente lo que generaría Crear, no la acción cruda."""
+    import flowplus_prompt
+    if enfoque is not None and enfoque not in flowplus_prompt.ENFOQUES:
+        raise ValueError(f"Enfoque desconocido: {enfoque}. Opciones: {list(flowplus_prompt.ENFOQUES)}")
     with db.conectar() as con:
         f = con.execute(sa.select(db.concepto.c.extra, db.concepto.c.enfoque, db.pieza.c.modelo,
                                   db.pieza.c.aspect_ratio, db.pieza.c.duracion_s, db.pieza.c.tipo)
@@ -211,15 +237,21 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None):
         extra_c, enfoque_orig, modelo_orig, aspect_ratio, duracion_s, tipo = f
         extra = dict(extra_c or {})
         # Lo que pertenece al video generado, no a la idea, no viaja.
-        for k in ("credits", "prompt_relleno", "guion_base"):
-            extra.pop(k, None)
+        extra.pop("credits", None)
+        enfoque_final = enfoque if enfoque is not None else enfoque_orig
+        cambia_enfoque = enfoque is not None and enfoque != enfoque_orig
+        if (cambia_enfoque or not extra.get("prompt_relleno")) and enfoque_final in flowplus_prompt.ENFOQUES:
+            prompt, info = armar_prompt_sesion(cliente, extra, enfoque_final)
+            extra["prompt_relleno"] = prompt
+            extra["enfoque_nombre"] = info["nombre"]
+            extra["con_persona"] = info["con_persona"]
         extra["estado_legado"] = "prompt_listo"
         extra["derivado_de"] = cf_id
         nuevo_id = "cf_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         ahora = db.ahora()
         cid = con.execute(db.concepto.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, origen="manual",
-            enfoque=enfoque if enfoque is not None else enfoque_orig,
+            enfoque=enfoque_final,
             legado_id=nuevo_id, extra=extra)).inserted_primary_key[0]
         con.execute(db.pieza.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, concepto_id=cid,
@@ -368,7 +400,7 @@ def eliminar_final(cliente, final_id):
 
 def pieza_id_por_legado(cliente, legado_id):
     """Id numérico de la fila `pieza` (clon o final) a partir de su id legado
-    (cf_... o cf_...__idioma_pais). Lo usa Experimentos para enlazar piezas."""
+    (cf_..., cf_...__idioma_pais o cf_...__idioma_pais__v<n>). Lo usa Experimentos para enlazar piezas."""
     with db.conectar() as con:
         return con.execute(sa.select(db.pieza.c.id).where(
             db.pieza.c.cliente == cliente, db.pieza.c.legado_id == legado_id)).scalar()
