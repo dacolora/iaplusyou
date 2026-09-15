@@ -26,7 +26,7 @@ def app(base_temporal, monkeypatch):
 
 
 FORM = {"nombre": "Cojín", "objetivo": "OUTCOME_TRAFFIC", "paises": ["CO", "MX"], "presupuesto_CO": "20000",
-        "presupuesto_MX": "150", "dias": "7", "tope_total": "500000", "destino_url": "https://tienda.co/p",
+        "presupuesto_MX": "20000", "dias": "7", "tope_total": "500000", "destino_url": "https://tienda.co/p",
         "edad_min": "18", "edad_max": "55"}
 
 
@@ -36,7 +36,17 @@ def test_crear_experimento(app):
     assert r.status_code == 302 and "experimentos" in r.headers["Location"]
     e = ex.cargar("acme")[0]
     assert e["nombre"] == "Cojín" and e["moneda"] == "COP" and e["edad_max"] == 55
-    assert [(p["pais"], p["presupuesto_dia"]) for p in e["paises"]] == [("CO", 20000.0), ("MX", 150.0)]
+    assert [(p["pais"], p["presupuesto_dia"]) for p in e["paises"]] == [("CO", 20000.0), ("MX", 20000.0)]
+
+
+def test_crear_rechaza_presupuesto_bajo_en_moneda_de_la_cuenta(app):
+    """La cuenta es COP: un presupuesto de 150 en MX (válido en pesos
+    mexicanos, pero muy por debajo del mínimo en COP) debe rechazarse — Meta
+    interpreta ese 150 como 150 COP, no como moneda local del país."""
+    import experimentos as ex
+    malo = dict(FORM, presupuesto_MX="150")
+    app["c"].post("/cliente/acme/experimentos/nuevo", data=malo)
+    assert ex.cargar("acme") == []
 
 
 def test_crear_valida_minimo_y_destino(app):
@@ -114,11 +124,11 @@ def test_estado_presupuesto_refrescar_cerrar(app, base_temporal, monkeypatch):
     c.post(f"/cliente/acme/experimentos/{eid}/estado", data={"estado": "ACTIVE"})
     c.post(f"/cliente/acme/experimentos/{eid}/estado", data={"estado": "PAUSED", "pais": "MX"})
     c.post(f"/cliente/acme/experimentos/{eid}/estado", data={"estado": "DELETED"})
-    c.post(f"/cliente/acme/experimentos/{eid}/presupuesto", data={"pais": "MX", "presupuesto_dia": "300"})
+    c.post(f"/cliente/acme/experimentos/{eid}/presupuesto", data={"pais": "MX", "presupuesto_dia": "30000"})
     c.post(f"/cliente/acme/experimentos/{eid}/presupuesto", data={"pais": "MX", "presupuesto_dia": "10"})   # < mínimo COP
     c.post(f"/cliente/acme/experimentos/{eid}/refrescar")
     c.post(f"/cliente/acme/experimentos/{eid}/cerrar")
-    assert llamadas == [("estado", "ACTIVE", None), ("estado", "PAUSED", "MX"), ("presupuesto", "MX", 300.0), ("cerrar",)]
+    assert llamadas == [("estado", "ACTIVE", None), ("estado", "PAUSED", "MX"), ("presupuesto", "MX", 30000.0), ("cerrar",)]
     assert app["encolados"][-1]["tipo"] == "exp_refrescar" and app["encolados"][-1]["max_intentos"] == 1
 
 

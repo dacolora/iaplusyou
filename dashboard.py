@@ -2131,13 +2131,14 @@ def exp_crear(cliente):
         flash("Faltan datos: nombre, objetivo, al menos un país, días (1–90), tope, edades (13–65) "
               "y una URL de destino http(s).", "error")
         return volver
-    # Cada país entra con su presupuesto en la moneda local de esa audiencia
-    # (no en la de facturación de la cuenta), así que el mínimo se valida por
-    # país según fe_tipos.PAISES[pais]["moneda"].
-    bajos = [p["pais"] for p in paises
-             if p["presupuesto_dia"] < PRESUPUESTO_MINIMO_DIARIO.get(fe_tipos.PAISES[p["pais"]]["moneda"], 1)]
+    # Meta interpreta daily_budget en la moneda de FACTURACIÓN de la cuenta
+    # publicitaria, sin importar qué país apunte ese adset (una cuenta en COP
+    # que le pega a México sigue fijando el presupuesto de ese adset en COP).
+    # Por eso el mínimo se valida contra la moneda de la cuenta, no la del país.
+    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
+    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
     if bajos:
-        flash(f"El presupuesto diario no alcanza el mínimo de Meta en: {', '.join(bajos)}.", "error")
+        flash(f"El presupuesto diario no alcanza el mínimo de Meta ({minimo} {moneda}) en: {', '.join(bajos)}.", "error")
         return volver
     eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max)
     experimentos.registrar_evento(cliente, eid, "creado", f"Experimento creado con {len(paises)} países")
@@ -2270,9 +2271,9 @@ def exp_estado(cliente, eid):
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/presupuesto", methods=["POST"])
 def exp_presupuesto(cliente, eid):
     pais = (request.form.get("pais") or "").strip()
-    # Igual que en exp_crear: el presupuesto de cada país se valida en la
-    # moneda local de esa audiencia, no en la de facturación de la cuenta.
-    moneda = fe_tipos.PAISES.get(pais, {}).get("moneda") or "USD"
+    # Igual que en exp_crear: el presupuesto se valida en la moneda de la
+    # cuenta publicitaria de Meta, no en la moneda local de la audiencia.
+    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
     try:
         presupuesto_dia = float(request.form.get("presupuesto_dia") or 0)
