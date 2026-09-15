@@ -448,3 +448,69 @@ def test_regeneracion_de_sesion_de_imagen_encola_flowplus_imagen(ent):
     ex.actualizar_pieza("acme", ep_img, escalon_rescate=2)
     dv.planificar("acme", eid, "rescatar", {"ep_id": ep_img})
     assert [e["tipo"] for e in ent["encolados"]] == ["flowplus_imagen"]
+
+
+# ------------------------------------------- fix escalera (por concepto) ---
+
+def _cerrar_item(ent, eid):
+    """Termina lo que la última derivación tenga produciendo (clon y/o
+    finales) y avanza hasta que cierre. Devuelve la pieza nueva."""
+    dv, ex, cf = ent["dv"], ent["ex"], ent["cf"]
+    d = ex.obtener("acme", eid)["extra"]["derivaciones"][-1]
+    item = d["items"][0]
+    if item["estado"] == "produciendo_clon":
+        cf.actualizar("acme", item["cf_id"], estado="video_listo", video_url="https://r2/regen.mp4")
+        dv.avanzar("acme", eid)
+        item = ex.obtener("acme", eid)["extra"]["derivaciones"][-1]["items"][0]
+    for legado in item["finales"].values():
+        cf.actualizar_final("acme", legado, estado="listo", url_video=f"https://r2/{legado}.mp4")
+    assert dv.avanzar("acme", eid)["estado"] == "listo"
+    d = ex.obtener("acme", eid)["extra"]["derivaciones"][-1]
+    assert len(d["items"][0]["ep_ids"]) == 1
+    return [p for p in ex.piezas("acme", eid) if p["id"] == d["items"][0]["ep_ids"][0]][0]
+
+
+def test_rescate_hereda_el_escalon_y_la_escalera_se_agota_en_tres(ent):
+    """La escalera es por concepto: la pieza rescatada en el escalón n nace
+    con `escalon_rescate = n` (antes nacía en 0 y el hook se re-editaba sin
+    fin). Rescatarla a ella pide el n+1; después del 3, ValueError."""
+    dv, ex, eid, ep, cf_id = ent["dv"], ent["ex"], ent["eid"], ent["ep"], ent["cf_id"]
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep, "motivo": "perdedora"})
+    d1 = ex.obtener("acme", eid)["extra"]["derivaciones"][0]
+    assert d1["escalon"] == 1
+    p1 = _cerrar_item(ent, eid)
+    assert p1["escalon_rescate"] == 1 and p1["extra"]["origen_ep_id"] == ep and p1["veredicto"] == "pendiente"
+
+    dv.planificar("acme", eid, "rescatar", {"ep_id": p1["id"]})
+    d2 = ex.obtener("acme", eid)["extra"]["derivaciones"][1]
+    assert d2["escalon"] == 2 and (d2["items"][0]["clase"], d2["items"][0]["variante_tipo"]) == ("reedicion", "estructura")
+    assert [p for p in ex.piezas("acme", eid) if p["id"] == p1["id"]][0]["escalon_rescate"] == 2
+    p2 = _cerrar_item(ent, eid)
+    assert p2["escalon_rescate"] == 2 and p2["extra"]["origen_ep_id"] == p1["id"]
+
+    dv.planificar("acme", eid, "rescatar", {"ep_id": p2["id"]})
+    d3 = ex.obtener("acme", eid)["extra"]["derivaciones"][2]
+    assert d3["escalon"] == 3 and d3["items"][0]["clase"] == "regeneracion"
+    p3 = _cerrar_item(ent, eid)
+    assert p3["escalon_rescate"] == 3 and p3["extra"]["origen_ep_id"] == p2["id"]
+    assert p3["legado_id"].split("__")[0] != cf_id            # sesión regenerada
+    assert ent["cf"].cargar("acme")[p3["legado_id"].split("__")[0]]["derivado_de"] == cf_id
+
+    with pytest.raises(ValueError, match="agotó"):
+        dv.planificar("acme", eid, "rescatar", {"ep_id": p3["id"]})
+    assert len(ex.obtener("acme", eid)["extra"]["derivaciones"]) == 3
+
+
+def test_derivar_deja_las_piezas_hijas_en_escalon_cero_con_origen(ent):
+    dv, ex, cf, eid, ep = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"]
+    ex.actualizar_pieza("acme", ep, escalon_rescate=2)
+    ex.actualizar("acme", eid, reglas={"n_reediciones": 1, "n_regeneraciones": 0})
+    hijo = dv.planificar("acme", eid, "derivar", {"ep_id": ep})
+    d = _derivacion(ex, hijo)
+    assert d["escalon"] == 0
+    for legado in d["items"][0]["finales"].values():
+        cf.actualizar_final("acme", legado, estado="listo", url_video="https://r2/x.mp4")
+    assert dv.avanzar("acme", hijo)["estado"] == "listo"
+    piezas = ex.piezas("acme", hijo)
+    assert len(piezas) == 2
+    assert all(p["escalon_rescate"] == 0 and p["extra"]["origen_ep_id"] == ep for p in piezas)

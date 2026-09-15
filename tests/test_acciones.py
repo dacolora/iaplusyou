@@ -91,35 +91,81 @@ def test_ejecutar_activar_arroja_si_no_esta_en_meta(ent, estado):
 
 
 def test_rescatar_idempotente_aunque_planificar_avance_el_escalon(ent, monkeypatch):
-    """I1: cada pieza engendra a lo sumo un rescate por escalón. Simula lo
-    que hará Task 5 (planificar sube escalon_rescate de la pieza) y verifica
-    que una segunda llamada sobre el mismo escalón no vuelve a planificar ni
-    a gastar, aunque la comparación ya no sea `==` sino `>=`."""
+    """I1: cada pieza engendra a lo sumo un rescate por escalón. planificar
+    sube `escalon_rescate` de la pieza; la marca de idempotencia es ese mismo
+    escalón, y una segunda llamada sobre él no vuelve a planificar ni a
+    gastar (solo asegura la pausa)."""
     ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
 
     def _planificar_y_subir_escalon(c, e, tipo, payload):
         ent["llamadas"].append(("planificar", tipo, payload.get("ep_id")))
-        ex.actualizar_pieza(c, payload["ep_id"], escalon_rescate=1)
+        pz = [p for p in ex.piezas(c, e) if p["id"] == payload["ep_id"]][0]
+        ex.actualizar_pieza(c, payload["ep_id"], escalon_rescate=pz["escalon_rescate"] + 1)
         return 99
 
     monkeypatch.setattr(ac.derivaciones, "planificar", _planificar_y_subir_escalon)
     ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
     p = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
-    # `escalon_rescate` (columna) ya la subió el planificar (Task 5); la
-    # marca de idempotencia se calcula sobre ese valor releído, no sobre el
-    # que había antes de llamarlo.
-    assert p["escalon_rescate"] == 1 and p["extra"]["rescatado_en_escalon"] == 2
+    assert p["escalon_rescate"] == 1 and p["extra"]["rescatado_en_escalon"] == 1
 
     # Segunda llamada: el decisor vuelve a pedir el rescate sin que la pieza
     # haya avanzado más allá del escalón ya marcado -> no repite.
-    ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    msg = ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    assert "ya rescatada" in msg
     assert [l for l in ent["llamadas"] if l[0] == "planificar" and l[1] == "rescatar"] == \
         [("planificar", "rescatar", ep)]
 
-    # Si la pieza avanza de escalón por otra vía, un nuevo rescate sí procede.
+    # Si la pieza avanza de escalón por otra vía, un nuevo rescate sí procede
+    # y la marca sube con ella.
     ex.actualizar_pieza("acme", ep, escalon_rescate=2)
     ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
     assert len([l for l in ent["llamadas"] if l[0] == "planificar" and l[1] == "rescatar"]) == 2
+    p = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert p["escalon_rescate"] == 3 and p["extra"]["rescatado_en_escalon"] == 3
+
+
+def test_rescatar_marca_antes_de_pausar_y_no_replanifica_si_pausar_fallo(ent, monkeypatch):
+    """Fix escalera (2): si planificar salió bien pero Meta falla al pausar,
+    la marca ya quedó escrita; la excepción sube (la propuesta se reabre) y
+    al reintentar NO se vuelve a planificar (no hay doble producción): solo
+    se reintenta la pausa."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    intentos = []
+
+    def _pausar(c, ep_):
+        intentos.append(ep_)
+        if len(intentos) == 1:
+            raise RuntimeError("Meta caída")
+
+    monkeypatch.setattr(ac.lanzador, "pausar_pieza", _pausar)
+    with pytest.raises(RuntimeError, match="Meta caída"):
+        ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    p = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert p["extra"]["rescatado_en_escalon"] == 1
+    assert [l for l in ent["llamadas"] if l[0] == "planificar"] == [("planificar", "rescatar", ep)]
+
+    msg = ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    assert "ya rescatada" in msg and "pausada" in msg
+    assert intentos == [ep, ep]
+    assert [l for l in ent["llamadas"] if l[0] == "planificar"] == [("planificar", "rescatar", ep)]
+
+
+def test_archivar_recorre_la_cadena_de_sesiones_regeneradas(ent, monkeypatch):
+    """Fix escalera (1): archivar el concepto de una pieza que salió de una
+    regeneración archiva también la sesión original (y su cadena
+    `derivado_de`), no solo la última."""
+    ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
+    import creative_flow as cf
+    a = cf.crear("acme", [], ["p1"], [], "sandalia", 10, "", "A", referencias_urls=["https://r"])
+    b = cf.duplicar("acme", a)
+    c = cf.duplicar("acme", b)
+    ac.ejecutar("acme", eid, "archivar", {"ep_id": ep, "cf_id": c, "motivo": "agotó la escalera"})
+    assert all(cf.concepto_archivado("acme", x) for x in (a, b, c))
+    assert ac._cadena_conceptos("acme", c) == [c, b, a]
+    assert ("pausar", ep) in ent["llamadas"]
+    # Un ciclo en los datos no cuelga: tope de 5 saltos.
+    assert ac._cadena_conceptos("acme", "cf_no_existe") == ["cf_no_existe"]
+    assert ac._cadena_conceptos("acme", None) == []
 
 
 def test_rescatar_llama_planificar_antes_de_pausar(ent, monkeypatch):

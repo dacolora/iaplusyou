@@ -8,7 +8,9 @@ experimento y meterlas al experimento cuando estén listas.
   finales por país).
 - `rescatar` (pieza perdedora): una sola pieza en el mismo experimento según
   el escalón (1 → re-edición hook, 2 → re-edición estructura, 3 →
-  regeneración).
+  regeneración). La escalera es por concepto: la pieza rescatada nace con
+  `escalon_rescate = n`, así que si también pierde el decisor pide el n+1
+  y, agotados los 3, archivar (toda la cadena de sesiones).
 
 La producción es asíncrona (worker): `planificar` deja la máquina de estados
 en `experimento.extra["derivaciones"]` del experimento DESTINO y encola lo que
@@ -19,7 +21,8 @@ activación pasa por `acciones.pedir("activar")` (puerta de modo).
 
 Forma guardada (una entrada por derivación):
   {"id": "d1", "tipo": "derivar"|"rescatar", "origen_ep_id", "cf_id",
-   "motivo", "estado": "produciendo"|"listo"|"error", "creado_en",
+   "motivo", "escalon" (n del rescate; 0 en derivar),
+   "estado": "produciendo"|"listo"|"error", "creado_en",
    "items": [{"clase": "reedicion"|"regeneracion", "variante": n|None,
               "variante_tipo": "hook"|"estructura"|None, "cf_id",
               "paises": [...], "idiomas": {pais: idioma},
@@ -141,10 +144,11 @@ def _guardar(cliente, experimento_id, derivacion):
         raise ValueError("Ese experimento no existe.")
 
 
-def _nueva(cliente, experimento_id, tipo, pz, cf_id, motivo, items):
+def _nueva(cliente, experimento_id, tipo, pz, cf_id, motivo, items, escalon=0):
     existentes = (_experimento(cliente, experimento_id)["extra"] or {}).get("derivaciones") or []
     return {"id": f"d{len(existentes) + 1}", "tipo": tipo, "origen_ep_id": pz["id"], "cf_id": cf_id,
-            "motivo": motivo or "", "estado": "produciendo", "creado_en": db.ahora(), "items": items}
+            "motivo": motivo or "", "estado": "produciendo", "creado_en": db.ahora(), "escalon": escalon,
+            "items": items}
 
 
 def _resumen_items(items):
@@ -209,7 +213,7 @@ def _planificar_rescatar(cliente, ex, pz, motivo):
     else:
         item = _item_regeneracion(cliente, cf_id, 0, idiomas)
     experimentos.actualizar_pieza(cliente, pz["id"], escalon_rescate=escalon)
-    d = _nueva(cliente, ex["id"], "rescatar", pz, cf_id, motivo, [item])
+    d = _nueva(cliente, ex["id"], "rescatar", pz, cf_id, motivo, [item], escalon=escalon)
     _guardar(cliente, ex["id"], d)
     experimentos.registrar_evento(
         cliente, ex["id"], "derivacion",
@@ -300,6 +304,17 @@ def _avanzar_clon(cliente, experimento_id, d, item):
     # video_generando: esperar.
 
 
+def _heredar(cliente, d, ep_id):
+    """La pieza nueva hereda la posición en la escalera del concepto: un
+    rescate hecho en el escalón n deja la pieza en `escalon_rescate = n`
+    (si vuelve a perder, el decisor pide el n+1 y, pasado el 3, archivar);
+    una derivación (ganadora) arranca su propia escalera en 0. En ambos
+    casos `extra.origen_ep_id` apunta a la pieza de la que salió."""
+    if d["tipo"] == "rescatar":
+        experimentos.actualizar_pieza(cliente, ep_id, escalon_rescate=int(d.get("escalon") or 0))
+    experimentos.marcar_pieza(cliente, ep_id, origen_ep_id=d["origen_ep_id"])
+
+
 def _avanzar_finales(cliente, experimento_id, d, item):
     """Encola las finales que falten, agrega al experimento las que terminaron
     y deja el item `listo` cuando todas están dentro."""
@@ -316,6 +331,7 @@ def _avanzar_finales(cliente, experimento_id, d, item):
             ep_id = experimentos.agregar_pieza(cliente, experimento_id,
                                                creative_flow.pieza_id_por_legado(cliente, item["finales"][clave]), pais)
             if ep_id and ep_id not in item["ep_ids"]:
+                _heredar(cliente, d, ep_id)
                 item["ep_ids"].append(ep_id)
             listas.add(clave)
         elif estado == "error":

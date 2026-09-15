@@ -8,9 +8,10 @@ aquí. Dos puertas:
   humano. En ambos casos escribe un evento.
 - `ejecutar(...)`: hace la acción de verdad (Meta vía lanzador, producción vía
   derivaciones). Es idempotente sobre `experimento_pieza.extra`
-  (`derivado`, `rescatado_en_escalon`, `archivado`), marcado solo cuando la
-  acción terminó bien: repetir una acción cara no vuelve a gastar, y una que
-  falló se puede volver a intentar.
+  (`derivado`, `rescatado_en_escalon`, `archivado`): repetir una acción cara
+  no vuelve a gastar. La marca se escribe apenas la parte que gasta
+  (producción) quedó planificada, antes de la parte barata y reintentable
+  (pausar en Meta), así un fallo de Meta no provoca doble producción.
 
 Nada se activa solo: la única vía es `ejecutar(..., "activar", ...)`, que en
 los modos manual/semi solo llega tras aprobar la propuesta.
@@ -48,6 +49,21 @@ def _pausar_si_activa(cliente, pz):
     exige meta_ad_id)."""
     if pz.get("meta_ad_id") and pz.get("estado") != "pausado":
         lanzador.pausar_pieza(cliente, pz["id"])
+
+
+def _cadena_conceptos(cliente, cf_id, maximo=5):
+    """La sesión de la pieza y, hacia arriba, de las que fue regenerada
+    (`derivado_de`): archivar un concepto que perdió sus 3 escalones archiva
+    toda la cadena, no solo la última regeneración. Tope de `maximo` saltos
+    por si hubiera un ciclo en los datos."""
+    if not cf_id:
+        return []
+    sesiones = creative_flow.cargar(cliente)
+    cadena = []
+    while cf_id and cf_id not in cadena and len(cadena) < maximo:
+        cadena.append(cf_id)
+        cf_id = (sesiones.get(cf_id) or {}).get("derivado_de")
+    return cadena
 
 
 def reglas_de(cliente, ex):
@@ -92,21 +108,23 @@ def ejecutar(cliente, experimento_id, accion, payload):
         extra = pz.get("extra") or {}
         escalon_actual = int(pz.get("escalon_rescate") or 0)
         marcado = extra.get("rescatado_en_escalon")
-        # A lo sumo un rescate por escalón: si ya se marcó un rescate en este
-        # escalón (o en uno más alto — el decisor volvió a pedirlo sin que la
-        # pieza avanzara), no se vuelve a planificar ni a gastar. Solo si el
-        # escalón actual superó al marcado (avanzó por otra vía) se deja
-        # pasar un nuevo rescate.
-        if marcado is not None and marcado >= escalon_actual + 1:
-            return f"{pz['nombre']} ya rescatada en ese escalón ({marcado})."
+        # A lo sumo un rescate por escalón. `planificar` sube
+        # `escalon_rescate` de la pieza y acá se marca ese mismo número, así
+        # que "ya marcado en el escalón actual (o más alto)" significa que el
+        # rescate de este escalón ya se planificó: no se vuelve a producir ni
+        # a gastar; solo se asegura la pausa (por si falló la primera vez).
+        if marcado is not None and marcado >= escalon_actual:
+            _pausar_si_activa(cliente, pz)
+            return f"{pz['nombre']} ya rescatada (escalón {marcado}); pieza pausada."
         derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
-        _pausar_si_activa(cliente, pz)
-        # Releer el escalón después de planificar: Task 5 puede subir
-        # `escalon_rescate` de la pieza al planificar el rescate; si no lo
-        # hace todavía (stub), se usa el que ya teníamos.
+        # Marcar ANTES de pausar: si Meta falla al pausar, la marca ya existe
+        # y una re-ejecución (reintento de la propuesta) no vuelve a
+        # planificar — solo reintenta la pausa. El escalón es el que
+        # planificar dejó en la pieza (al menos el siguiente al que había).
         pz_post = _pieza(_experimento(cliente, experimento_id), pz["id"])
-        escalon = int(pz_post.get("escalon_rescate") or 0) + 1
+        escalon = max(int(pz_post.get("escalon_rescate") or 0), escalon_actual + 1)
         experimentos.marcar_pieza(cliente, pz["id"], rescatado_en_escalon=escalon)
+        _pausar_si_activa(cliente, pz)
         return f"Rescate planificado para {pz['nombre']} (escalón {escalon}); la pieza queda pausada."
 
     if accion == "activar":
@@ -126,8 +144,8 @@ def ejecutar(cliente, experimento_id, accion, payload):
         if (pz.get("extra") or {}).get("archivado"):
             return f"{pz['nombre']} ya archivada."
         _pausar_si_activa(cliente, pz)
-        if payload.get("cf_id"):
-            creative_flow.archivar_concepto(cliente, payload["cf_id"], motivo)
+        for cf_id in _cadena_conceptos(cliente, payload.get("cf_id")):
+            creative_flow.archivar_concepto(cliente, cf_id, motivo)
         experimentos.marcar_pieza(cliente, pz["id"], archivado=True)
         return f"Archivado el concepto de {pz['nombre']}: {motivo or 'sin motivo'}."
 
