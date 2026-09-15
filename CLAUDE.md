@@ -35,8 +35,11 @@ venv/bin/python3 worker.py      # second terminal — processes the tarea queue
 still frame from uploaded video assets, since Higgsfield's APIs need a static image
 reference, never a video.
 
-Tests: `venv/bin/python3 -m pytest -q`. There is no linter configured;
-`python3 -m py_compile <file>.py` remains a quick sanity check before committing.
+Tests: `venv/bin/python3 -m pytest -q` (fast by default; tests marked `slow`
+render real video with ffmpeg and take several seconds each — still included
+in the default run, `-m "not slow"` skips them for a quick loop). There is
+no linter configured; `python3 -m py_compile <file>.py` remains a quick
+sanity check before committing.
 
 The alternate CLI entry points (`run_batch.py`, `revisar.py`, `subir_personaje.py`)
 predate the dashboard and still work, but `dashboard.py` is the primary interface —
@@ -132,6 +135,32 @@ Higgsfield). `generar_prompts()` writes the 5 candidate prompts and folds in a
 client's `marca.json` guía de estilo when present, so brand consistency doesn't have
 to be repeated per idea. `analizar_marca()` uses Claude's vision input on uploaded
 brand reference images to auto-write that guía de estilo.
+
+**Final edition** (`final_edition/`): a second pipeline that takes an already-approved
+CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
+subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with
+Anthropic; `fe_producir` queues one `final_producir` task per destino ticked, each
+worth its own approval). `final_edition/__init__.py` orchestrates the layers in order
+— `guion` (Anthropic: base guion, then localize per destino) -> `cortes` (ffmpeg: cut
+detection on the source clip) -> `voz` (fal/ElevenLabs TTS per block, degradable
+except a failure on the FIRST block, which is fatal and never reaches música) ->
+`musica` (fal/Stable Audio, degradable, cached) -> `texto` (Pillow: overlay PNGs for
+hook/subtitles/price badge/CTA) -> `render` (ffmpeg: one filtergraph, `MAX_OVERLAYS_TOTAL`
+caps the overlay count so a long guion can't OOM the box). State lives on
+`creative_flow.crear_final`/`actualizar_final` (`data/creatv.db`), one row per
+idioma/país keyed `<cf_id>__<idioma>_<pais>`; re-producing a destino that already has
+a final keeps its `url_video`/`url_miniatura` until the new attempt succeeds, so a
+failed retry never leaves the client without a video. Every price is per-destino
+(`opciones["precios"]`, one raw number per país — never converted between currencies)
+so a badge/voice-over price is either the number typed for that specific country or
+absent, never another country's number reformatted. All fal.ai calls go through
+`providers/fal_audio.py` (ElevenLabs `multilingual-v2` for TTS, `fal-ai/whisper` for
+word-level timestamps, Stable Audio for music); the premade voice list there is
+individually verified against fal (see the module docstring) rather than assumed from
+ElevenLabs' own catalog. Fonts are checked into `static/fonts/`; generated music
+tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
+`tareas/final_edition.py`; the dashboard routes are `fe_preparar`, `fe_guardar_guion`,
+`fe_producir`, `fe_descartar`.
 
 ## Agent skills
 

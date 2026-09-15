@@ -72,6 +72,16 @@ sudo systemctl restart iaplusyou creatv-worker
 Si solo se reinicia `iaplusyou`, el worker sigue corriendo código viejo y puede quedar
 desalineado con el esquema de la base tras una migración.
 
+**Final edition** (guion + voz + música + texto en pantalla sobre un video de
+CreativeFlowPlus ya aprobado) necesita que exista la carpeta donde cachea las pistas
+de música generadas — no la crea sola, y si falta el worker revienta al primer
+`final_producir`:
+```bash
+mkdir -p data/musica
+```
+No hace falta ninguna llave nueva en `.env`: usa las mismas `FAL_KEY` (fal.ai — voz y
+música) y `ANTHROPIC_API_KEY` (guion) que ya configuraste en el paso 0.
+
 ---
 
 ## 1. Cloudflare R2 — storage propio y permanente
