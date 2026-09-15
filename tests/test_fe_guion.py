@@ -71,10 +71,36 @@ def test_generar_guion_base_una_llamada(monkeypatch):
     for rol in ("hook", "problema", "producto", "prueba", "cta"):
         assert rol in sistema
     assert "JSON" in sistema and "10" in sistema
-    usuario = kw["messages"][0]["content"]
-    assert "Chancla Rose" in usuario and "hola mundo" in usuario and "Tono cercano" in usuario
+    contenido = kw["messages"][0]["content"]
+    assert isinstance(contenido, list)
+    bloques_imagen = [b for b in contenido if b["type"] == "image"]
+    assert [b["source"]["url"] for b in bloques_imagen] == ["https://x/f1.jpg"]
+    primer_texto = next(b["text"] for b in contenido if b["type"] == "text")
+    assert "Chancla Rose" in primer_texto and "hola mundo" in primer_texto and "Tono cercano" in primer_texto
     assert [b["rol"] for b in g["bloques"]] == ["hook", "problema", "producto", "prueba", "cta"]
     assert g["idioma"] == "es" and g["pais"] == "CO"
+
+
+def test_generar_guion_base_con_referencia_envia_frames_como_imagenes(monkeypatch):
+    from final_edition import guion
+    urls = ["https://x/f1.jpg", "https://x/f2.jpg", "https://x/f3.jpg"]
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido())])
+    guion.generar_guion_base(
+        PRODUCTO, {"frames": urls, "transcripcion": "hola"},
+        "producto", 10.0, "es", "", "")
+    contenido = reg.kwargs[0]["messages"][0]["content"]
+    assert isinstance(contenido, list)
+    bloques_imagen = [b for b in contenido if b["type"] == "image"]
+    assert len(bloques_imagen) == 3
+    assert [b["source"]["url"] for b in bloques_imagen] == urls
+
+
+def test_generar_guion_base_sin_referencia_envia_string(monkeypatch):
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido())])
+    guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    contenido = reg.kwargs[0]["messages"][0]["content"]
+    assert isinstance(contenido, str)
 
 
 def test_generar_guion_base_tolera_fences_y_texto_alrededor(monkeypatch):

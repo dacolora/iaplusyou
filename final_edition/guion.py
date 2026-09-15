@@ -78,7 +78,7 @@ FORMATO_JSON = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional
 
 def _system_generar(duracion_s, idioma_base):
     return f"""Eres un guionista de videos cortos de venta (reels, TikTok, shorts). \
-Escribes guiones en el idioma '{idioma_base}' para un video de {duracion_s} segundos.
+Escribes guiones en el idioma '{idioma_base}' para un video de {duracion_s:g} segundos.
 
 El guion tiene EXACTAMENTE 5 bloques, en este orden y con estos roles:
 1. hook: gancho que detiene el scroll.
@@ -87,7 +87,7 @@ El guion tiene EXACTAMENTE 5 bloques, en este orden y con estos roles:
 4. prueba: evidencia (beneficio concreto, resultado, testimonio, demostración).
 5. cta: llamado a la acción claro.
 
-Tiempos sugeridos por bloque (inicio_s / fin_s en segundos; el último fin_s no puede pasar de {duracion_s}):
+Tiempos sugeridos por bloque (inicio_s / fin_s en segundos; el último fin_s no puede pasar de {duracion_s:g}):
 {_lineas_tiempos(duracion_s)}
 
 Reglas:
@@ -101,7 +101,22 @@ NUNCA su texto literal ni su marca.
 {FORMATO_JSON}"""
 
 
-def _system_localizar(idioma, pais):
+def _formato_json_localizado(idioma, pais, moneda, precio_texto):
+    """Mismo formato que FORMATO_JSON pero con el ejemplo de moneda/precio_texto
+    que se espera realmente para esta localización (evita que Claude copie el
+    `null` del ejemplo genérico cuando sí se le pidió una moneda concreta)."""
+    moneda_ej = json.dumps(moneda, ensure_ascii=False)
+    precio_ej = json.dumps(precio_texto, ensure_ascii=False)
+    idioma_ej = json.dumps(idioma, ensure_ascii=False)
+    pais_ej = json.dumps(pais, ensure_ascii=False)
+    return (
+        "Responde ÚNICAMENTE con un JSON estricto (sin texto adicional ni markdown) con esta forma:\n"
+        '{"bloques": [{"rol": "hook", "texto_pantalla": "...", "texto_voz": "...", "inicio_s": 0, "fin_s": 2}, ...],\n'
+        f' "idioma": {idioma_ej}, "pais": {pais_ej}, "moneda": {moneda_ej}, "precio_texto": {precio_ej}}}'
+    )
+
+
+def _system_localizar(idioma, pais, precio_texto=None):
     info = tipos.PAISES[pais]
     return f"""Eres un traductor y adaptador de guiones de videos cortos de venta. \
 Recibes un guion en JSON y lo localizas al idioma '{idioma}' para {info['nombre']} ({pais}).
@@ -117,27 +132,43 @@ referencias culturales de {info['nombre']}; que suene local, no traducido.
 - texto_pantalla: máximo {MAX_PALABRAS_PANTALLA} palabras. texto_voz: natural, largo similar al original.
 - Devuelve "idioma": "{idioma}", "pais": "{pais}", "moneda": "{info['moneda']}".
 
-{FORMATO_JSON}"""
+{_formato_json_localizado(idioma, pais, info['moneda'], precio_texto)}"""
 
 
 def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint):
+    """Devuelve el contenido del mensaje de usuario: un string si no hay
+    referencia con frames, o una lista de bloques (texto + imágenes) para que
+    Claude vea los fotogramas del referente, no solo su conteo."""
     partes = [f"Producto: {json.dumps(producto, ensure_ascii=False)}",
               f"Enfoque del video: {enfoque}",
-              f"Duración objetivo: {duracion_s} segundos"]
+              f"Duración objetivo: {duracion_s:g} segundos"]
     if marca and str(marca).strip():
         partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
     if cliente_hint and str(cliente_hint).strip():
         partes.append(f"Contexto del cliente/audiencia: {str(cliente_hint).strip()}")
+
+    frames = []
     if referencia:
         transcripcion = (referencia.get("transcripcion") or "").strip()
-        frames = referencia.get("frames") or []
+        frames = list(referencia.get("frames") or [])[:6]
         partes.append(
             "Video referente (copia su ESTRUCTURA, no su texto):\n"
-            f"- Frames disponibles: {len(frames)}\n"
+            f"- Frames adjuntos: {len(frames)}\n"
             f"- Transcripción: {transcripcion or '(sin transcripción)'}"
         )
     partes.append("Escribe el guion.")
-    return "\n\n".join(partes)
+    texto = "\n\n".join(partes)
+
+    if not frames:
+        return texto
+
+    contenido = [{"type": "text", "text": texto}]
+    contenido += [{"type": "image", "source": {"type": "url", "url": url}} for url in frames]
+    contenido.append({
+        "type": "text",
+        "text": "Escribe el guion copiando la ESTRUCTURA de estos fotogramas, nunca su texto.",
+    })
+    return contenido
 
 
 def _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto):
@@ -261,10 +292,14 @@ def localizar_guion(guion_base, idioma, pais, precio):
         return g
 
     if idioma == guion_base.get("idioma") and pais == guion_base.get("pais"):
-        return ajustar(copy.deepcopy(guion_base)), 0.0
+        g = ajustar(copy.deepcopy(guion_base))
+        errores = tipos.validar_guion(g, duracion_s)
+        if errores:
+            raise GuionInvalido(errores)
+        return g, 0.0
 
     return _generar_con_correccion(
-        _system_localizar(idioma, pais),
+        _system_localizar(idioma, pais, precio_texto),
         _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto),
         duracion_s, ajustar,
     )
