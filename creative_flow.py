@@ -288,3 +288,11 @@ def eliminar_final(cliente, final_id):
             return False
         con.execute(db.pieza.delete().where(db.pieza.c.id == fila._mapping[db.pieza.c.id]))
     return True
+
+
+def pieza_id_por_legado(cliente, legado_id):
+    """Id numérico de la fila `pieza` (clon o final) a partir de su id legado
+    (cf_... o cf_...__idioma_pais). Lo usa Experimentos para enlazar piezas."""
+    with db.conectar() as con:
+        return con.execute(sa.select(db.pieza.c.id).where(
+            db.pieza.c.cliente == cliente, db.pieza.c.legado_id == legado_id)).scalar()
