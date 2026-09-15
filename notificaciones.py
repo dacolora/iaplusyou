@@ -20,7 +20,7 @@ import proyectos
 
 log = logging.getLogger("creatv.notificaciones")
 
-TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento")
+TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope")
 
 
 def _config():

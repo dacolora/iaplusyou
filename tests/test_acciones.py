@@ -67,6 +67,17 @@ def test_ejecutar_activar(ent):
     assert ("estado", eid, "ACTIVE") in ent["llamadas"] and ("activar", ep) in ent["llamadas"]
 
 
+def test_ejecutar_activar_acepta_experimento_decidido(ent):
+    """I-1 del review de decidir: un rescate aprobado después de que el
+    experimento pasó a 'decidido' tiene que poder activarse en Meta — si no,
+    la propuesta aprobada queda inejecutable."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar("acme", eid, estado="decidido")
+    ac.ejecutar("acme", eid, "activar", {"ep_ids": [ep]})
+    assert ("activar", ep) in ent["llamadas"]
+    assert not any(l[0] == "estado" for l in ent["llamadas"])  # no toca la campaña: no estaba 'pausado'
+
+
 @pytest.mark.parametrize("estado", ["armando", "lanzando", "error"])
 def test_ejecutar_activar_arroja_si_no_esta_en_meta(ent, estado):
     """M/brief: activar sobre un experimento que todavía no llegó a Meta

@@ -285,7 +285,7 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None:
         raise ValueError("Ese experimento no existe.")
-    if ex["estado"] not in ("pausado", "corriendo") or not ex["meta_campaign_id"]:
+    if ex["estado"] not in ("pausado", "corriendo", "decidido") or not ex["meta_campaign_id"]:
         raise ValueError("Ese experimento todavía no está en Meta.")
     adsets = {p["pais"]: p["meta_adset_id"] for p in ex["paises"] if p.get("meta_adset_id")}
     piezas_nuevas = [p for p in ex["piezas"] if p["estado"] == "en_cola" and p["pais"] in adsets]
@@ -345,18 +345,19 @@ def pausar_pieza(cliente, ep_id):
 
 
 def activar_pieza(cliente, ep_id):
-    """Activar una pieza exige el experimento en Meta (pausado o corriendo).
-    Reactiva la campaña si el experimento entero seguía 'pausado' (nunca se
-    activó nada), y reactiva el conjunto del país si el estado LOCAL de ese
-    país no es 'activo' — no si el experimento entero sigue 'corriendo',
-    porque cambiar_estado(pais=) permite pausar un país individual sin bajar
-    el experimento completo a 'pausado' (queda 'corriendo' mientras otro país
-    siga activo). Mirar solo ex['estado'] dejaría ese conjunto en PAUSED en
-    Meta con el anuncio ACTIVE encima — sin entrega — igual que hace
-    cambiar_estado con pais=, que reactiva el conjunto incondicionalmente
-    dentro de esa rama."""
+    """Activar una pieza exige el experimento en Meta (pausado, corriendo o
+    decidido — un rescate aprobado después de que el experimento ya cerró
+    veredictos igual tiene que poder entrar a Meta). Reactiva la campaña si
+    el experimento entero seguía 'pausado' (nunca se activó nada), y reactiva
+    el conjunto del país si el estado LOCAL de ese país no es 'activo' — no
+    si el experimento entero sigue 'corriendo', porque cambiar_estado(pais=)
+    permite pausar un país individual sin bajar el experimento completo a
+    'pausado' (queda 'corriendo' mientras otro país siga activo). Mirar solo
+    ex['estado'] dejaría ese conjunto en PAUSED en Meta con el anuncio ACTIVE
+    encima — sin entrega — igual que hace cambiar_estado con pais=, que
+    reactiva el conjunto incondicionalmente dentro de esa rama."""
     ex, pz = _experimento_de_pieza(cliente, ep_id)
-    if ex["estado"] not in ("pausado", "corriendo"):
+    if ex["estado"] not in ("pausado", "corriendo", "decidido"):
         raise ValueError("Ese experimento todavía no está en Meta.")
     if not pz["meta_ad_id"]:
         raise ValueError("Esa pieza todavía no tiene anuncio en Meta.")

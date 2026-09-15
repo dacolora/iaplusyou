@@ -113,7 +113,7 @@ def ejecutar(cliente, experimento_id, accion, payload):
         ep_ids = list(payload.get("ep_ids") or ([payload["ep_id"]] if payload.get("ep_id") else []))
         if not ep_ids:
             raise ValueError("No hay piezas para activar.")
-        if ex["estado"] not in ("pausado", "corriendo"):
+        if ex["estado"] not in ("pausado", "corriendo", "decidido"):
             raise ValueError("El experimento todavía no está en Meta.")
         if ex["estado"] == "pausado":
             lanzador.cambiar_estado(cliente, experimento_id, "ACTIVE")

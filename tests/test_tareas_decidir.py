@@ -177,6 +177,48 @@ def test_no_pasa_a_decidido_con_derivacion_produciendo(ent):
     assert ex.obtener("acme", eid)["estado"] == "corriendo"
 
 
+def test_no_pasa_a_decidido_con_propuestas_pendientes(ent):
+    """I-1 del review: en modo semi/manual, una propuesta (p.ej. el rescate
+    de la perdedora) que todavía no se aprobó no puede dejar que el
+    experimento pase a 'decidido' — si no, cuando se apruebe, lanzar la
+    pieza rescatada chocaría con el guard de lanzador (solo pausado|corriendo,
+    antes de este fix)."""
+    ex, eid = ent["ex"], ent["eid"]
+    import propuestas as pr
+    ent["pieza"](metricas=GANADOR)  # única pieza con anuncio: queda con veredicto final
+    pr.crear("acme", eid, "rescatar", {"ep_id": 999999}, "motivo de prueba, sin relación con esta pieza")
+    ent["decidir"]()
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"
+
+
+def test_no_pasa_a_decidido_con_pieza_en_cola(ent):
+    """I-1: una pieza agregada al experimento que todavía no tiene anuncio en
+    Meta ('en_cola', la crea lanzador.lanzar_piezas_nuevas de forma asíncrona)
+    no debe contar como 'ya decidido' solo porque no tiene meta_ad_id."""
+    ex, eid = ent["ex"], ent["eid"]
+    from tests.test_experimentos_db import _pieza as _crear_pieza
+    ent["pieza"](metricas=GANADOR)
+    pid_nueva = _crear_pieza(ex.db, legado="cf_2__es_CO")
+    ex.agregar_pieza("acme", eid, pid_nueva, "CO")  # queda 'en_cola'
+    ent["decidir"]()
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"
+
+
+def test_dos_ganadores_del_mismo_pais_escalan_una_sola_vez(ent):
+    """I-2 del review: 'escalar' sube el presupuesto del país, no de la
+    pieza — con dos ganadores del mismo país en una sola pasada, solo el
+    primero debe pedir escalar; el segundo solo deriva."""
+    ex, eid = ent["ex"], ent["eid"]
+    a = ent["pieza"](legado="cf_a__es_CO", metricas={**GANADOR, "cpc": 0.5})
+    b = ent["pieza"](legado="cf_b__es_CO", metricas={**GANADOR, "cpc": 0.4})
+    ent["decidir"]()
+    assert _pz(ent, a)["veredicto"] == "ganador" and _pz(ent, b)["veredicto"] == "ganador"
+    escalar = [l for l in ent["llamadas"] if l[0] == "escalar"]
+    derivar = [l for l in ent["llamadas"] if l[0] == "derivar"]
+    assert len(escalar) == 1 and len(derivar) == 2
+    assert any(e["tipo"] == "escalado" and "ya pedido en esta pasada" in e["mensaje"] for e in ex.eventos("acme", eid))
+
+
 def test_error_en_una_accion_no_frena_las_demas(ent, monkeypatch):
     ex, eid = ent["ex"], ent["eid"]
 
@@ -193,6 +235,28 @@ def test_error_en_una_accion_no_frena_las_demas(ent, monkeypatch):
     assert _pz(ent, a)["veredicto"] == "ganador" and _pz(ent, b)["veredicto"] == "perdedor"
     assert [l[0] for l in ent["llamadas"]] == ["derivar", "rescatar"]
     assert "1 acción(es) con error" in msg
+
+
+def test_accion_que_falla_queda_como_propuesta(ent, monkeypatch):
+    """I-3 del review: el veredicto ya quedó persistido y la pieza no se
+    vuelve a evaluar, así que una acción que falló al ejecutarse no puede
+    perderse solo con el evento de error — tiene que quedar como propuesta
+    para que el humano la reintente desde el panel."""
+    import propuestas as pr
+    ex, eid = ent["ex"], ent["eid"]
+
+    def pedir(cliente, e, accion, payload, motivo):
+        if accion == "escalar":
+            raise RuntimeError("Meta dijo no")
+        ent["llamadas"].append((accion, payload))
+        return "ejecutada", "ok"
+
+    monkeypatch.setattr(ent["te"].acciones, "pedir", pedir)
+    ent["pieza"](metricas=GANADOR)
+    ent["decidir"]()
+    pendientes = pr.pendientes("acme", eid)
+    assert [p["accion"] for p in pendientes] == ["escalar"]
+    assert "falló al ejecutar" in pendientes[0]["payload"]["motivo"] and "Meta dijo no" in pendientes[0]["payload"]["motivo"]
 
 
 def test_snapshots_cronologicos(base_temporal):

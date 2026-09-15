@@ -18,6 +18,7 @@ import derivaciones
 import experimentos
 import lanzador
 import notificaciones
+import propuestas
 import proyectos
 import trabajos
 from tareas import al_interrumpir, registrar
@@ -133,11 +134,17 @@ def _cf_id(pz):
 
 def _pedir(cliente, eid, accion, payload, motivo, resultado):
     """acciones.pedir con captura: un fallo al ejecutar la acción queda como
-    evento (lo escribe pedir) y no frena las demás piezas de la pasada."""
+    evento (lo escribe pedir) y no frena las demás piezas de la pasada. Como
+    el veredicto ya quedó persistido y la pieza no se vuelve a evaluar, la
+    acción fallida además se deja como propuesta pendiente — si no, se pierde
+    sin que nada la reintente ni aparezca en el panel."""
     try:
         estado, mensaje = acciones.pedir(cliente, eid, accion, payload, motivo)
     except Exception as error:  # noqa: BLE001
-        resultado["errores"].append(f"{accion}: {cola.sin_token(str(error))}")
+        mensaje_error = cola.sin_token(str(error))
+        resultado["errores"].append(f"{accion}: {mensaje_error}")
+        propuestas.crear(cliente, eid, accion, payload, motivo=f"falló al ejecutar: {mensaje_error}")
+        resultado["propuestas"].append(f"{accion} (falló al ejecutar, quedó pendiente de reintento): {mensaje_error}")
         return None
     if estado == "propuesta":
         resultado["propuestas"].append(mensaje)
@@ -157,7 +164,16 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
     resultado["veredictos"].append((pz, v))
     accion = v["accion"]
     if accion == "escalar_y_derivar":
-        _pedir(cliente, ex["id"], "escalar", {"pais": pz["pais"], "ep_id": ep_id}, v["motivo"], resultado)
+        # "escalar" es una acción por país (sube el presupuesto del conjunto
+        # en Meta), no por pieza: con varios ganadores del mismo país en una
+        # misma pasada, solo el primero la pide — los demás solo derivan.
+        if pz["pais"] in resultado["escalados"]:
+            experimentos.registrar_evento(cliente, ex["id"], "escalado",
+                                          f"{pz['nombre']} ({pz['pais']}): escalado ya pedido en esta pasada.",
+                                          ep_id=ep_id)
+        else:
+            resultado["escalados"].add(pz["pais"])
+            _pedir(cliente, ex["id"], "escalar", {"pais": pz["pais"], "ep_id": ep_id}, v["motivo"], resultado)
         _pedir(cliente, ex["id"], "derivar", {"ep_id": ep_id}, v["motivo"], resultado)
         resultado["ganadores"].append(pz)
     elif accion == "rescatar":
@@ -180,7 +196,7 @@ def _pausar_por_tope(cliente, ex):
                                       f"No se pudo pausar por tope: {cola.sin_token(str(error))}")
         raise
     experimentos.registrar_evento(cliente, eid, "tope", texto)
-    notificaciones.avisar(cliente, "propuesta", f"Tope alcanzado en «{ex['nombre']}»",
+    notificaciones.avisar(cliente, "tope", f"Tope alcanzado en «{ex['nombre']}»",
                           f"{texto}\n\nSi quieres seguir, sube el tope total y vuelve a activarlo desde el panel "
                           f"del experimento #{eid}.")
     return texto
@@ -200,14 +216,23 @@ def _avisar_resultado(cliente, ex, resultado):
 
 
 def _marcar_decidido(cliente, ex):
-    """`decidido` cuando todas las piezas con anuncio tienen veredicto final y
-    no queda ninguna derivación produciendo. Relee el experimento (las
-    acciones de esta pasada pudieron cambiar piezas y extra)."""
+    """`decidido` cuando todas las piezas con anuncio tienen veredicto final,
+    no hay ninguna propuesta pendiente (en semi/manual el rescate/escalada
+    puede seguir esperando aprobación humana: marcar `decidido` ahora la
+    dejaría inejecutable — lanzador.lanzar_piezas_nuevas/activar_pieza no
+    aceptan ese estado), no queda ninguna pieza nueva a mitad de camino
+    (`en_cola`/`publicando`, el anuncio todavía no existe en Meta) y no queda
+    ninguna derivación produciendo. Relee el experimento (las acciones de
+    esta pasada pudieron cambiar piezas y extra)."""
     ex = experimentos.obtener(cliente, ex["id"])
     if ex is None or ex["estado"] != "corriendo":
         return False
+    if ex.get("propuestas_pendientes"):
+        return False
     con_anuncio = [p for p in ex["piezas"] if p.get("meta_ad_id")]
     if not con_anuncio or any((p.get("veredicto") or "pendiente") == "pendiente" for p in con_anuncio):
+        return False
+    if any(p.get("estado") in ("en_cola", "publicando") for p in ex["piezas"]):
         return False
     if any(d.get("estado") == "produciendo" for d in ((ex.get("extra") or {}).get("derivaciones") or [])):
         return False
@@ -232,7 +257,7 @@ def exp_decidir(tarea):
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
     ahora = datetime.now()
     dias_transcurridos = _horas_desde((ex.get("extra") or {}).get("activado_en"), ahora) / 24
-    resultado = {"veredictos": [], "ganadores": [], "propuestas": [], "errores": []}
+    resultado = {"veredictos": [], "ganadores": [], "propuestas": [], "errores": [], "escalados": set()}
     for pais in ex["paises"]:
         piezas_pais = [pz for pz in ex["piezas"] if pz["pais"] == pais["pais"]]
         orden = _ranking(piezas_pais, ex.get("atribucion"))

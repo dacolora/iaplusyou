@@ -384,6 +384,21 @@ def test_lanzar_piezas_nuevas_exige_experimento_en_meta(entorno):
         lz.lanzar_piezas_nuevas("acme", eid)  # aún 'armando', sin meta_campaign_id
 
 
+def test_lanzar_piezas_nuevas_acepta_experimento_decidido(entorno, base_temporal):
+    """Bloque 4 (I-1 del review de decidir): un rescate aprobado después de
+    que el experimento ya pasó a 'decidido' tiene que poder crear su anuncio
+    en Meta — si no, el escalón queda producido (créditos gastados) pero
+    nunca entra a Meta."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    ex.actualizar("acme", eid, estado="decidido")
+    nueva = _pieza(base_temporal, tipo="final", legado="cf_1__es_CO__v4", pais="CO")
+    ex.agregar_pieza("acme", eid, nueva, "CO")
+    assert lz.lanzar_piezas_nuevas("acme", eid) == 1
+    p = [p for p in ex.piezas("acme", eid) if p["pieza_id"] == nueva][0]
+    assert p["estado"] == "pausado" and p["meta_ad_id"]
+
+
 def test_pausar_activar_pieza(entorno):
     ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
     lz.lanzar("acme", eid)
@@ -395,6 +410,21 @@ def test_pausar_activar_pieza(entorno):
     assert ex.piezas("acme", eid)[0]["estado"] == "pausado"
     lz.activar_pieza("acme", ep["id"])
     assert ex.piezas("acme", eid)[0]["estado"] == "activo"
+
+
+def test_activar_pieza_acepta_experimento_decidido(entorno):
+    """Bloque 4 (I-1 del review de decidir): activar una pieza rescatada con
+    el experimento ya 'decidido' no debe fallar, y no cambia ese estado —
+    solo lanzar_piezas_nuevas/activar_pieza necesitaban el guard ampliado."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    ep = ex.piezas("acme", eid)[0]
+    lz.pausar_pieza("acme", ep["id"])
+    ex.actualizar("acme", eid, estado="decidido")
+    lz.activar_pieza("acme", ep["id"])
+    assert ex.piezas("acme", eid)[0]["estado"] == "activo"
+    assert ex.obtener("acme", eid)["estado"] == "decidido"
 
 
 def test_activar_pieza_marca_activado_en_pieza_y_experimento(entorno):
