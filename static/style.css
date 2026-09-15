@@ -1226,6 +1226,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .exp-pieza-mini img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .exp-pieza-nombre { font-size: .82rem; display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
 
+.kpis-mini { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: flex-end; max-width: 26rem; }
 .kpis-mini .kpi { font-size: .72rem; padding: .3rem .5rem; }
 .btn-xs { padding: .15rem .5rem; font-size: .72rem; }
 
