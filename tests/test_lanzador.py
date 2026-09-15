@@ -343,6 +343,109 @@ def test_cambiar_estado_pausar_ultimo_pais_activo_marca_experimento_pausado(ento
     assert ex.obtener("acme", eid)["estado"] == "pausado"
 
 
+def test_lanzar_piezas_nuevas_solo_crea_anuncios_faltantes(entorno, base_temporal):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    from tests.test_experimentos_db import _pieza
+    nueva = _pieza(base_temporal, tipo="final", legado="cf_1__es_CO__v1", pais="CO")
+    ex.agregar_pieza("acme", eid, nueva, "CO")
+    meta.llamadas.clear()
+    assert lz.lanzar_piezas_nuevas("acme", eid) == 1
+    tipos = [t for t, _ in meta.llamadas]
+    assert tipos.count("ad") == 1 and "campaign" not in tipos and "adset" not in tipos
+    p = [p for p in ex.piezas("acme", eid) if p["pieza_id"] == nueva][0]
+    assert p["estado"] == "pausado" and p["meta_ad_id"]
+    assert lz.lanzar_piezas_nuevas("acme", eid) == 0
+
+
+def test_lanzar_piezas_nuevas_pieza_con_error_sigue_con_las_demas(entorno, base_temporal):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    nueva1 = _pieza(base_temporal, tipo="final", legado="cf_1__es_CO__v2", pais="CO")
+    nueva2 = _pieza(base_temporal, tipo="final", legado="cf_1__es_CO__v3", pais="CO")
+    ex.agregar_pieza("acme", eid, nueva1, "CO")
+    ex.agregar_pieza("acme", eid, nueva2, "CO")
+    meta.llamadas.clear()
+    meta.fallar_en = "ad"
+    with pytest.raises(RuntimeError):
+        lz.lanzar_piezas_nuevas("acme", eid)
+    meta.fallar_en = None
+    piezas = {p["id"]: p for p in ex.piezas("acme", eid)}
+    fallidas = [p for p in piezas.values() if p["pieza_id"] in (nueva1, nueva2)]
+    assert all(p["estado"] == "error" and p["error"] for p in fallidas)
+    e = ex.obtener("acme", eid)
+    assert any(ev["tipo"] == "error" for ev in e["eventos"])
+    assert e["estado"] == "pausado"  # el estado del experimento no lo toca esta función
+
+
+def test_lanzar_piezas_nuevas_exige_experimento_en_meta(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    with pytest.raises(ValueError):
+        lz.lanzar_piezas_nuevas("acme", eid)  # aún 'armando', sin meta_campaign_id
+
+
+def test_pausar_activar_pieza(entorno):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    ep = ex.piezas("acme", eid)[0]
+    meta.llamadas.clear()
+    lz.pausar_pieza("acme", ep["id"])
+    assert meta.llamadas[-1] == ("estado", {"oid": ep["meta_ad_id"], "status": "PAUSED"})
+    assert ex.piezas("acme", eid)[0]["estado"] == "pausado"
+    lz.activar_pieza("acme", ep["id"])
+    assert ex.piezas("acme", eid)[0]["estado"] == "activo"
+
+
+def test_activar_pieza_marca_activado_en_pieza_y_experimento(entorno):
+    """Bloque 4 (decisor/escalera): activado_en debe sembrarse en el 'extra'
+    de la pieza cada vez que se activa, y en el del experimento solo la
+    primera vez que pasa a 'corriendo' — sin pisarse en activaciones
+    posteriores."""
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "pausado" and not e["extra"].get("activado_en")
+    ep = e["piezas"][0]
+    assert not ep["extra"].get("activado_en")
+
+    lz.activar_pieza("acme", ep["id"])
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "corriendo"
+    primer_activado_en = e["extra"]["activado_en"]
+    assert primer_activado_en
+    ep_activada = [p for p in e["piezas"] if p["id"] == ep["id"]][0]
+    assert ep_activada["extra"]["activado_en"]
+
+    # Activar otra pieza (experimento ya 'corriendo') no debe pisar el
+    # activado_en del experimento.
+    otra = [p for p in e["piezas"] if p["id"] != ep["id"]][0]
+    lz.activar_pieza("acme", otra["id"])
+    e = ex.obtener("acme", eid)
+    assert e["extra"]["activado_en"] == primer_activado_en
+
+
+def test_cambiar_estado_marca_activado_en(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    e = ex.obtener("acme", eid)
+    assert not e["extra"].get("activado_en")
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    e = ex.obtener("acme", eid)
+    assert e["extra"]["activado_en"]
+    assert all(p["extra"].get("activado_en") for p in e["piezas"])
+
+
+def test_escalar_pais(entorno):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    assert lz.escalar_pais("acme", eid, "MX", 20) == 180.0
+    assert meta.llamadas[-1][0] == "presupuesto"
+    assert lz.escalar_pais("acme", eid, "MX", 20, tope_dia=200) == 200.0
+    n = len(meta.llamadas)
+    assert lz.escalar_pais("acme", eid, "MX", 20, tope_dia=200) == 200.0 and len(meta.llamadas) == n
+
+
 def test_lanzar_autosana_si_preflight_falla_con_estado_ya_lanzando(entorno):
     """M3: si el llamador (la ruta) ya puso 'lanzando' antes de encolar y el
     pre-flight de lanzar() falla (ej. alguien quitó todas las piezas entre el

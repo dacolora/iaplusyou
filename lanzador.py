@@ -6,7 +6,10 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import sqlalchemy as sa
+
 import cola
+import db
 import experimentos
 import meta_conexion
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
@@ -62,6 +65,56 @@ def _validar_para_lanzar(cliente, experimento_id):
     return ex
 
 
+def _crear_anuncios(cliente, ex, creds, adsets):
+    """El paso "Anuncios" de lanzar(): crea creative (si falta) + ad para cada
+    pieza sin meta_ad_id de ex['piezas']. Devuelve cuántos anuncios creó.
+    Compartido con lanzar_piezas_nuevas, que lo llama pieza por pieza para
+    poder aislar el error de una sin frenar a las demás."""
+    experimento_id = ex["id"]
+    # M4: la misma pieza (mismo pieza_id) clonada a dos países comparte
+    # video+creative — el link (utm_content=pieza_id) es idéntico para
+    # ambas, así que crearlo dos veces solo duplica la subida (hasta 180s
+    # bajo _LOCK) sin ganar nada. Se cachea por pieza_id dentro de esta
+    # corrida, sembrado con lo que ya esté guardado de una corrida previa.
+    creativos_por_pieza = {}
+    for pz in ex["piezas"]:
+        if pz.get("meta_creative_id"):
+            creativos_por_pieza.setdefault(pz["pieza_id"], {
+                "video_id": (pz.get("extra") or {}).get("meta_video_id"),
+                "creative_id": pz["meta_creative_id"]})
+    creadas = 0
+    for pz in ex["piezas"]:
+        if pz["meta_ad_id"]:
+            continue
+        experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adsets[pz["pais"]])
+        creative_id = pz["meta_creative_id"]
+        if not creative_id:
+            cache = creativos_por_pieza.get(pz["pieza_id"])
+            if cache and cache.get("creative_id"):
+                creative_id = cache["creative_id"]
+                experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id,
+                                              extra={**(pz.get("extra") or {}), "meta_video_id": cache.get("video_id")})
+            else:
+                video_id = (pz.get("extra") or {}).get("meta_video_id") or (cache and cache.get("video_id"))
+                if not video_id:
+                    video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
+                    experimentos.actualizar_pieza(cliente, pz["id"],
+                                                  extra={**(pz.get("extra") or {}), "meta_video_id": video_id})
+                mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
+                creative_id = meta_creative.crear_creative_video(
+                    f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
+                    url_destino(ex["destino_url"], pz["pieza_id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+                experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
+                creativos_por_pieza[pz["pieza_id"]] = {"video_id": video_id, "creative_id": creative_id}
+        ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
+        experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
+                                      presupuesto_dia_actual=next(p["presupuesto_dia"] for p in ex["paises"] if p["pais"] == pz["pais"]))
+        experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", f"Anuncio creado: {pz['nombre']} ({pz['pais']})",
+                                      {"ad_id": ad_id}, ep_id=pz["id"])
+        creadas += 1
+    return creadas
+
+
 def lanzar(cliente, experimento_id, on_etapa=None):
     try:
         ex = _validar_para_lanzar(cliente, experimento_id)
@@ -96,45 +149,7 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                                               {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"]})
             adsets[p["pais"]] = adset_id
         etapa(ETAPAS_LANZAR[2][0])
-        # M4: la misma pieza (mismo pieza_id) clonada a dos países comparte
-        # video+creative — el link (utm_content=pieza_id) es idéntico para
-        # ambas, así que crearlo dos veces solo duplica la subida (hasta 180s
-        # bajo _LOCK) sin ganar nada. Se cachea por pieza_id dentro de esta
-        # corrida, sembrado con lo que ya esté guardado de una corrida previa.
-        creativos_por_pieza = {}
-        for pz in ex["piezas"]:
-            if pz.get("meta_creative_id"):
-                creativos_por_pieza.setdefault(pz["pieza_id"], {
-                    "video_id": (pz.get("extra") or {}).get("meta_video_id"),
-                    "creative_id": pz["meta_creative_id"]})
-        for pz in ex["piezas"]:
-            if pz["meta_ad_id"]:
-                continue
-            experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adsets[pz["pais"]])
-            creative_id = pz["meta_creative_id"]
-            if not creative_id:
-                cache = creativos_por_pieza.get(pz["pieza_id"])
-                if cache and cache.get("creative_id"):
-                    creative_id = cache["creative_id"]
-                    experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id,
-                                                  extra={**(pz.get("extra") or {}), "meta_video_id": cache.get("video_id")})
-                else:
-                    video_id = (pz.get("extra") or {}).get("meta_video_id") or (cache and cache.get("video_id"))
-                    if not video_id:
-                        video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
-                        experimentos.actualizar_pieza(cliente, pz["id"],
-                                                      extra={**(pz.get("extra") or {}), "meta_video_id": video_id})
-                    mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
-                    creative_id = meta_creative.crear_creative_video(
-                        f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
-                        url_destino(ex["destino_url"], pz["pieza_id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
-                    experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
-                    creativos_por_pieza[pz["pieza_id"]] = {"video_id": video_id, "creative_id": creative_id}
-            ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
-            experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
-                                          presupuesto_dia_actual=next(p["presupuesto_dia"] for p in ex["paises"] if p["pais"] == pz["pais"]))
-            experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", f"Anuncio creado: {pz['nombre']} ({pz['pais']})",
-                                          {"ad_id": ad_id}, ep_id=pz["id"])
+        _crear_anuncios(cliente, ex, creds, adsets)
 
     try:
         _con_credenciales(cliente, _correr)
@@ -153,6 +168,16 @@ def lanzar(cliente, experimento_id, on_etapa=None):
 
 def _piezas_de(ex, pais=None):
     return [p for p in ex["piezas"] if p["meta_ad_id"] and (pais is None or p["pais"] == pais)]
+
+
+def _con_activado(ex):
+    """extra del experimento con 'activado_en' sembrado la primera vez que
+    pasa a 'corriendo' (Bloque 4: el decisor lo usa para medir cuánto lleva
+    corriendo). Si ya estaba, se conserva sin tocar."""
+    extra = ex.get("extra") or {}
+    if extra.get("activado_en"):
+        return extra
+    return {**extra, "activado_en": db.ahora()}
 
 
 def cambiar_estado(cliente, experimento_id, status, pais=None):
@@ -184,13 +209,20 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
             experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
         for pz in _piezas_de(ex, pais):
             meta_ad.actualizar_estado(pz["meta_ad_id"], status)
-            experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
+            if local == "activo":
+                experimentos.actualizar_pieza(cliente, pz["id"], estado=local,
+                                              extra={**(pz.get("extra") or {}), "activado_en": db.ahora()})
+            else:
+                experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
 
     _con_credenciales(cliente, _correr)
     if pais is None:
-        experimentos.actualizar(cliente, experimento_id, estado="corriendo" if status == "ACTIVE" else "pausado")
+        if status == "ACTIVE":
+            experimentos.actualizar(cliente, experimento_id, estado="corriendo", extra=_con_activado(ex))
+        else:
+            experimentos.actualizar(cliente, experimento_id, estado="pausado")
     elif status == "ACTIVE" and ex["estado"] != "corriendo":
-        experimentos.actualizar(cliente, experimento_id, estado="corriendo")
+        experimentos.actualizar(cliente, experimento_id, estado="corriendo", extra=_con_activado(ex))
     elif status == "PAUSED":
         # M5: si ese país era el último activo, "corriendo" ya no refleja la
         # realidad (todos los conjuntos quedaron PAUSED en Meta) — el rótulo
@@ -227,6 +259,116 @@ def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
         experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
     experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"Presupuesto diario de {pais}: {presupuesto_dia} {moneda}",
                                   {"anterior": p["presupuesto_dia"], "nuevo": float(presupuesto_dia)})
+
+
+def lanzar_piezas_nuevas(cliente, experimento_id):
+    """Bloque 4: crea el anuncio de cada pieza que se agregó después de
+    lanzar() — solo las 'en_cola' cuyo país ya tiene conjunto en Meta; no
+    toca campaña ni conjuntos (reusa el mismo bloque de lanzar() vía
+    _crear_anuncios). Una pieza que falla queda en 'error' con su mensaje;
+    las demás siguen, y si alguna falló se relanza la excepción al final —
+    el estado del experimento no lo cambia esta función."""
+    ex = experimentos.obtener(cliente, experimento_id)
+    if ex is None:
+        raise ValueError("Ese experimento no existe.")
+    if ex["estado"] not in ("pausado", "corriendo") or not ex["meta_campaign_id"]:
+        raise ValueError("Ese experimento todavía no está en Meta.")
+    adsets = {p["pais"]: p["meta_adset_id"] for p in ex["paises"] if p.get("meta_adset_id")}
+    piezas_nuevas = [p for p in ex["piezas"] if p["estado"] == "en_cola" and p["pais"] in adsets]
+    if not piezas_nuevas:
+        return 0
+
+    def _correr(creds):
+        creadas = 0
+        fallidas = []
+        for pz in piezas_nuevas:
+            try:
+                creadas += _crear_anuncios(cliente, {**ex, "piezas": [pz]}, creds, adsets)
+            except Exception as e:
+                mensaje = cola.sin_token(str(e))
+                experimentos.actualizar_pieza(cliente, pz["id"], estado="error", error=mensaje)
+                experimentos.registrar_evento(cliente, experimento_id, "error",
+                                              f"No se pudo crear el anuncio de {pz['nombre']} ({pz['pais']}): {mensaje}", ep_id=pz["id"])
+                fallidas.append(pz["nombre"])
+        if fallidas:
+            raise RuntimeError(f"Fallaron {len(fallidas)} pieza(s) al crear su anuncio: {', '.join(fallidas)}")
+        return creadas
+
+    return _con_credenciales(cliente, _correr)
+
+
+def _experimento_de_pieza(cliente, ep_id):
+    with db.conectar() as con:
+        experimento_id = con.execute(sa.select(db.experimento_pieza.c.experimento_id).where(
+            db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)).scalar()
+    if experimento_id is None:
+        raise ValueError("Esa pieza no existe.")
+    ex = experimentos.obtener(cliente, experimento_id)
+    pz = next((p for p in (ex["piezas"] if ex else []) if p["id"] == ep_id), None)
+    if pz is None:
+        raise ValueError("Esa pieza no existe.")
+    return ex, pz
+
+
+def pausar_pieza(cliente, ep_id):
+    ex, pz = _experimento_de_pieza(cliente, ep_id)
+    if not pz["meta_ad_id"]:
+        raise ValueError("Esa pieza todavía no tiene anuncio en Meta.")
+    _con_credenciales(cliente, lambda _c: meta_ad.actualizar_estado(pz["meta_ad_id"], "PAUSED"))
+    experimentos.actualizar_pieza(cliente, ep_id, estado="pausado")
+    experimentos.registrar_evento(cliente, ex["id"], "estado", f"Pausado: {pz['nombre']} ({pz['pais']})", ep_id=ep_id)
+
+
+def activar_pieza(cliente, ep_id):
+    """Activar una pieza exige el experimento en Meta (pausado o corriendo).
+    Si aún está 'pausado' del todo (nunca se activó nada), activa también la
+    campaña y el conjunto de ese país primero — igual que cambiar_estado con
+    pais=: sin la campaña ACTIVE en Meta el anuncio no entrega aunque quede
+    ACTIVE local."""
+    ex, pz = _experimento_de_pieza(cliente, ep_id)
+    if ex["estado"] not in ("pausado", "corriendo"):
+        raise ValueError("Ese experimento todavía no está en Meta.")
+    if not pz["meta_ad_id"]:
+        raise ValueError("Esa pieza todavía no tiene anuncio en Meta.")
+    pais = next((p for p in ex["paises"] if p["pais"] == pz["pais"]), None)
+    primera_activacion = ex["estado"] == "pausado"
+
+    def _correr(_creds):
+        if primera_activacion:
+            meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")
+            if pais and pais.get("meta_adset_id"):
+                meta_adset.actualizar_estado(pais["meta_adset_id"], "ACTIVE")
+        meta_ad.actualizar_estado(pz["meta_ad_id"], "ACTIVE")
+
+    _con_credenciales(cliente, _correr)
+    experimentos.actualizar_pieza(cliente, ep_id, estado="activo",
+                                  extra={**(pz.get("extra") or {}), "activado_en": db.ahora()})
+    if pais:
+        experimentos.actualizar_pais(cliente, ex["id"], pz["pais"], estado="activo")
+    if primera_activacion:
+        experimentos.actualizar(cliente, ex["id"], estado="corriendo", extra=_con_activado(ex))
+    experimentos.registrar_evento(cliente, ex["id"], "estado", f"Activado: {pz['nombre']} ({pz['pais']})", ep_id=ep_id)
+
+
+def escalar_pais(cliente, experimento_id, pais, pct, tope_dia=None):
+    """Bloque 4 (decisor): sube el presupuesto diario de un país en pct%,
+    limitado por tope_dia si se da. Si el resultado no supera el actual (pct
+    <= 0, o el tope ya estaba alcanzado) no llama a Meta y devuelve el actual
+    sin cambios."""
+    ex = experimentos.obtener(cliente, experimento_id)
+    if ex is None:
+        raise ValueError("Ese experimento no existe.")
+    p = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
+    if not p:
+        raise ValueError("Ese país no existe en el experimento.")
+    actual = float(p["presupuesto_dia"] or 0)
+    nuevo = round(actual * (1 + float(pct) / 100), 2)
+    if tope_dia is not None:
+        nuevo = min(nuevo, float(tope_dia))
+    if nuevo <= actual:
+        return actual
+    cambiar_presupuesto_pais(cliente, experimento_id, pais, nuevo)
+    return nuevo
 
 
 def refrescar(cliente, experimento_id):
