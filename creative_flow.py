@@ -133,6 +133,28 @@ def actualizar(cliente, cf_id, **campos):
     return True
 
 
+def guardar_guion_base(cliente, cf_id, guion):
+    """Guarda el guion base (capa 0 de Final Edition) en `concepto.guion_base`.
+    Devuelve False si la sesión no existe."""
+    with db.conectar() as con:
+        f = _ids(con, cliente, cf_id)
+        if not f:
+            return False
+        con.execute(db.concepto.update().where(db.concepto.c.id == f[0])
+                    .values(actualizado_en=db.ahora(), guion_base=guion))
+    return True
+
+
+def guion_base(cliente, cf_id):
+    """Guion base guardado para la sesión, o None si no hay o no existe."""
+    with db.conectar() as con:
+        f = _ids(con, cliente, cf_id)
+        if not f:
+            return None
+        return con.execute(sa.select(db.concepto.c.guion_base)
+                           .where(db.concepto.c.id == f[0])).scalar()
+
+
 def eliminar(cliente, cf_id):
     with db.conectar() as con:
         f = _ids(con, cliente, cf_id)
