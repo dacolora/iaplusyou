@@ -102,3 +102,31 @@ def test_crear_con_legado_id_y_creado_en(base_temporal):
     data = cf.cargar("acme")
     assert "cf_x" in data
     assert data["cf_x"]["creado_en"] == "2026-01-02T03:04:05"
+
+
+def test_piezas_finales(base_temporal):
+    import pytest
+    import creative_flow as cf
+    cid = cf.crear("acme", [], [], [], "uno", 8, "", "A")
+    fid = cf.crear_final("acme", cid, "es", "CO")
+    assert fid == f"{cid}__es_CO"
+    assert cf.finales("acme", cid)[0]["estado"] == "generando"
+    assert cf.actualizar_final("acme", fid, estado="listo", url_video="https://r2/f.mp4",
+                               capas={"voz": {"estado": "ok"}}, costo_usd=0.5)
+    f = cf.final_por_legado("acme", fid)
+    assert f["estado"] == "listo" and f["video_url"] == "https://r2/f.mp4" and f["capas"]["voz"]["estado"] == "ok"
+    # volver a crear la misma final la reinicia (misma fila, resultado limpio)
+    assert cf.crear_final("acme", cid, "es", "CO") == fid
+    assert len(cf.finales("acme", cid)) == 1 and cf.finales("acme", cid)[0]["video_url"] is None
+    # Crear no la ve como sesión
+    assert fid not in cf.cargar("acme") and cid in cf.cargar("acme")
+    with pytest.raises(ValueError):
+        cf.actualizar_final("acme", fid, otra_cosa=1)
+    assert cf.actualizar_final("acme", "no_existe", estado="x") is False
+    assert cf.finales("acme", "no_existe") == []
+    with pytest.raises(ValueError):
+        cf.crear_final("acme", "no_existe", "es", "CO")
+    # borrar la sesión borra también sus finales (FK padre_pieza_id)
+    assert cf.eliminar("acme", cid) is True
+    assert cf.final_por_legado("acme", fid) is None
+    assert cf.eliminar_final("acme", fid) is False

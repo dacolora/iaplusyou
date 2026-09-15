@@ -161,6 +161,8 @@ def eliminar(cliente, cf_id):
         if not f:
             return False
         cid, pid = f[0], f[1]
+        # Las piezas finales cuelgan de la clon (FK padre_pieza_id): van primero.
+        con.execute(db.pieza.delete().where(db.pieza.c.padre_pieza_id == pid, db.pieza.c.tipo == "final"))
         con.execute(db.pieza.delete().where(db.pieza.c.id == pid))
         restantes = con.execute(
             sa.select(sa.func.count()).select_from(db.pieza).where(db.pieza.c.concepto_id == cid)
@@ -188,3 +190,95 @@ def guardar(cliente, data):
             actualizar(cliente, cf_id, **entry)
     for cf_id in set(actuales) - set(data):
         eliminar(cliente, cf_id)
+
+
+# ------------------------------------------------------------ piezas finales ---
+# Una pieza `final` cuelga de la pieza clon de la sesión (padre_pieza_id) y
+# comparte su concepto. `cargar`/`_ids` las excluyen (tipo != "final") para
+# que Crear siga viendo una sola pieza por sesión.
+
+_FINAL_COLS = ("estado", "url_video", "url_miniatura", "url_local", "duracion_s",
+               "capas", "costo_usd", "guion", "error")
+
+
+def _final_a_dict(p):
+    return {
+        "id": p.legado_id, "idioma": p.idioma, "pais": p.pais, "estado": p.estado,
+        "video_url": p.url_video, "url_miniatura": p.url_miniatura, "url_local": p.url_local,
+        "duracion_s": p.duracion_s, "costo_usd": p.costo_usd, "capas": p.capas or {},
+        "guion": p.guion, "error": p.error, "creado_en": p.creado_en,
+    }
+
+
+def _fila_final(con, cliente, final_id):
+    return con.execute(sa.select(db.pieza).where(
+        db.pieza.c.cliente == cliente, db.pieza.c.tipo == "final",
+        db.pieza.c.legado_id == final_id)).first()
+
+
+def crear_final(cliente, cf_id, idioma, pais):
+    """Crea (o reinicia a `generando`, limpiando el resultado anterior) la
+    pieza final de la sesión para ese idioma/país. Devuelve su legado_id
+    `<cf_id>__<idioma>_<pais>`."""
+    final_id = f"{cf_id}__{idioma}_{pais}"
+    with db.conectar() as con:
+        f = _ids(con, cliente, cf_id)
+        if not f:
+            raise ValueError(f"No existe la sesión {cf_id} de {cliente}.")
+        cid, pid = f[0], f[1]
+        ahora = db.ahora()
+        existente = _fila_final(con, cliente, final_id)
+        if existente:
+            con.execute(db.pieza.update().where(db.pieza.c.id == existente._mapping[db.pieza.c.id]).values(
+                actualizado_en=ahora, estado="generando", error=None, url_video=None, url_miniatura=None,
+                url_local=None, duracion_s=None, capas={}, costo_usd=None, guion=None))
+        else:
+            con.execute(db.pieza.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo="final",
+                idioma=idioma, pais=pais, estado="generando", padre_pieza_id=pid, legado_id=final_id,
+                capas={}, extra={}))
+    return final_id
+
+
+def actualizar_final(cliente, final_id, **campos):
+    """Actualiza columnas de la pieza final (estado, url_video, url_miniatura,
+    url_local, duracion_s, capas, costo_usd, guion, error). False si no existe."""
+    desconocidos = set(campos) - set(_FINAL_COLS)
+    if desconocidos:
+        raise ValueError(f"actualizar_final: campos no permitidos {sorted(desconocidos)}")
+    with db.conectar() as con:
+        fila = _fila_final(con, cliente, final_id)
+        if not fila:
+            return False
+        con.execute(db.pieza.update().where(db.pieza.c.id == fila._mapping[db.pieza.c.id])
+                    .values(actualizado_en=db.ahora(), **campos))
+    return True
+
+
+def finales(cliente, cf_id):
+    """Piezas finales de la sesión (dicts con id=legado_id, idioma, pais,
+    estado, video_url, url_miniatura, url_local, duracion_s, costo_usd, capas,
+    guion, error, creado_en), en orden de creación."""
+    with db.conectar() as con:
+        f = _ids(con, cliente, cf_id)
+        if not f:
+            return []
+        filas = con.execute(sa.select(db.pieza).where(
+            db.pieza.c.tipo == "final", db.pieza.c.padre_pieza_id == f[1]).order_by(db.pieza.c.id)).fetchall()
+    return [_final_a_dict(_Cols(fila, db.pieza)) for fila in filas]
+
+
+def final_por_legado(cliente, final_id):
+    """Una pieza final por su legado_id, o None."""
+    with db.conectar() as con:
+        fila = _fila_final(con, cliente, final_id)
+    return _final_a_dict(_Cols(fila, db.pieza)) if fila else None
+
+
+def eliminar_final(cliente, final_id):
+    with db.conectar() as con:
+        fila = _fila_final(con, cliente, final_id)
+        if not fila:
+            return False
+        con.execute(db.pieza.delete().where(db.pieza.c.id == fila._mapping[db.pieza.c.id]))
+    return True
