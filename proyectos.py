@@ -88,3 +88,16 @@ def guardar_reglas_defecto(cliente, reglas):
     data = cargar(cliente)
     data["reglas_experimentos"] = {k: v for k, v in (reglas or {}).items() if k in decisor.REGLAS_DEFECTO}
     _json_store.guardar(_path(cliente), data)
+
+
+def correo_notificaciones(cliente):
+    """Correo al que el motor manda avisos (propuestas, ganadores, rechazos
+    de Meta). None si el proyecto no configuró uno."""
+    correo = (cargar(cliente).get("correo_notificaciones") or "").strip()
+    return correo or None
+
+
+def guardar_correo_notificaciones(cliente, correo):
+    datos = cargar(cliente)
+    datos["correo_notificaciones"] = (correo or "").strip()
+    _json_store.guardar(_path(cliente), datos)

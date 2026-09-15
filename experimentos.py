@@ -189,11 +189,7 @@ def marcar_pieza(cliente, ep_id, **flags):
                     .values(actualizado_en=db.ahora(), extra=extra))
 
 
-def _ultima_metrica(con, ep_id):
-    f = con.execute(sa.select(db.metrica_snapshot).where(db.metrica_snapshot.c.experimento_pieza_id == ep_id)
-                    .order_by(db.metrica_snapshot.c.id.desc()).limit(1)).first()
-    if not f:
-        return {}
+def _snapshot_a_dict(f):
     m = f._mapping
     out = {c: m[db.metrica_snapshot.c[c]] for c in _SNAP_COLS}
     out.update(m[db.metrica_snapshot.c.extra] or {})
@@ -201,9 +197,24 @@ def _ultima_metrica(con, ep_id):
     return out
 
 
+def _ultima_metrica(con, ep_id):
+    f = con.execute(sa.select(db.metrica_snapshot).where(db.metrica_snapshot.c.experimento_pieza_id == ep_id)
+                    .order_by(db.metrica_snapshot.c.id.desc()).limit(1)).first()
+    return _snapshot_a_dict(f) if f else {}
+
+
 def ultima_metrica(ep_id):
     with db.conectar() as con:
         return _ultima_metrica(con, ep_id)
+
+
+def snapshots(ep_id):
+    """Todas las métricas de una pieza en orden cronológico (misma forma que
+    ultima_metrica, incluido tomado_en). Es lo que consume decisor.decidir."""
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.metrica_snapshot).where(db.metrica_snapshot.c.experimento_pieza_id == ep_id)
+                            .order_by(db.metrica_snapshot.c.id))
+        return [_snapshot_a_dict(f) for f in filas]
 
 
 def snapshot(ep_id, metricas):
@@ -238,6 +249,7 @@ def _piezas(con, cliente, experimento_id):
             "error": m[ep.c.error], "meta_adset_id": m[ep.c.meta_adset_id], "meta_ad_id": m[ep.c.meta_ad_id],
             "meta_creative_id": m[ep.c.meta_creative_id], "estado_meta": m[ep.c.estado_meta],
             "presupuesto_dia_actual": m[ep.c.presupuesto_dia_actual], "veredicto": m[ep.c.veredicto],
+            "veredicto_motivo": m[ep.c.veredicto_motivo], "veredicto_en": m[ep.c.veredicto_en],
             "nombre": nombre[:80], "url_video": m["url_video"], "url_miniatura": m["url_miniatura"], "tipo": tipo,
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
             "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
@@ -296,7 +308,8 @@ def _a_dict(con, f, limite_eventos):
         "dias": m[e.c.dias], "objetivo_meta": m[e.c.objetivo_meta], "destino_url": m[e.c.destino_url],
         "edad_min": m[e.c.edad_min], "edad_max": m[e.c.edad_max], "meta_campaign_id": m[e.c.meta_campaign_id],
         "gasto_acumulado": m[e.c.gasto_acumulado] or 0.0, "error": m[e.c.error], "extra": extra,
-        "reglas": m[e.c.reglas] or {}, "creado_en": m[e.c.creado_en], "piezas": pzs, "resumen": _resumen(pzs),
+        "reglas": m[e.c.reglas] or {}, "atribucion": m[e.c.atribucion] or "ninguna", "creado_en": m[e.c.creado_en],
+        "piezas": pzs, "resumen": _resumen(pzs),
         "eventos": _eventos(con, m[e.c.cliente], m[e.c.id], limite_eventos),
         "padre_experimento_id": extra.get("padre_experimento_id"),
         "hijos": _hijos(con, m[e.c.cliente], m[e.c.id]),

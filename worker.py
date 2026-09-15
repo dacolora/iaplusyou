@@ -29,8 +29,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("creatv.worker")
 
 # (tipo, cada_segundos). Los tipos se registran en tareas/ (bloques siguientes
-# agregan sincronizar_tiendas, decidir_experimentos).
-PERIODICAS = [("exp_refrescar_todos", 7200), ("exp_avanzar_todos", 600)]
+# agregan sincronizar_tiendas).
+PERIODICAS = [("exp_refrescar_todos", 7200), ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600)]
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el bucle termina la tarea en curso y recién ahí sale.

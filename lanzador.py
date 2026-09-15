@@ -10,6 +10,7 @@ import cola
 import db
 import experimentos
 import meta_conexion
+import notificaciones
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
@@ -163,6 +164,9 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="en_cola")
         experimentos.actualizar(cliente, experimento_id, estado="error", error=mensaje)
         experimentos.registrar_evento(cliente, experimento_id, "error", f"Falló el lanzamiento: {mensaje}")
+        notificaciones.avisar(cliente, "error_lanzamiento", f"Falló el lanzamiento de «{ex['nombre']}»",
+                              f"El experimento «{ex['nombre']}» (#{experimento_id}) no se pudo lanzar a Meta.\n\n"
+                              f"Motivo: {mensaje}\n\nRevísalo en el panel y vuelve a intentar.")
         raise
     experimentos.actualizar(cliente, experimento_id, estado="pausado", error=None)
     return "Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar."
@@ -404,6 +408,8 @@ def refrescar(cliente, experimento_id):
     if not piezas:
         return 0
 
+    rechazados = []
+
     def _correr(_creds):
         n = 0
         for pz in piezas:
@@ -414,7 +420,10 @@ def refrescar(cliente, experimento_id):
                 for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
                     snap[k] = r.get(k)
                 experimentos.snapshot(pz["id"], snap)
-                experimentos.actualizar_pieza(cliente, pz["id"], estado_meta=r.get("estado_meta"))
+                estado_meta = r.get("estado_meta")
+                experimentos.actualizar_pieza(cliente, pz["id"], estado_meta=estado_meta)
+                if estado_meta in ESTADOS_META_RECHAZO and pz.get("estado_meta") not in ESTADOS_META_RECHAZO:
+                    rechazados.append((pz, estado_meta, r.get("motivo_rechazo")))
                 n += 1
             except Exception as e:
                 experimentos.registrar_evento(
@@ -425,7 +434,26 @@ def refrescar(cliente, experimento_id):
     n = _con_credenciales(cliente, _correr)
     gasto = sum(float((p["metricas"] or {}).get("gasto") or 0) for p in experimentos.piezas(cliente, experimento_id))
     experimentos.actualizar(cliente, experimento_id, gasto_acumulado=round(gasto, 2))
+    for pz, estado_meta, motivo in rechazados:
+        _avisar_rechazo_meta(cliente, ex, pz, estado_meta, motivo)
     return n
+
+
+# Estados de Meta que significan "este anuncio no entrega hasta que alguien
+# lo mire": rechazado por políticas o con problemas de revisión.
+ESTADOS_META_RECHAZO = ("DISAPPROVED", "WITH_ISSUES")
+
+
+def _avisar_rechazo_meta(cliente, ex, pz, estado_meta, motivo):
+    """Evento `rechazo_meta` + aviso por correo la primera vez que un anuncio
+    pasa a DISAPPROVED/WITH_ISSUES (no en cada refresco mientras siga así)."""
+    detalle = cola.sin_token(str(motivo)) if motivo else "Meta no dio un motivo"
+    texto = f"Meta rechazó el anuncio de {pz['nombre']} ({pz['pais']}): {estado_meta}. {detalle}"
+    experimentos.registrar_evento(cliente, ex["id"], "rechazo_meta", texto,
+                                  {"estado_meta": estado_meta, "motivo": detalle}, ep_id=pz["id"])
+    notificaciones.avisar(cliente, "rechazo_meta", f"Meta rechazó un anuncio de «{ex['nombre']}»",
+                          f"{texto}\n\nEl anuncio no entrega hasta que se corrija o se reemplace. "
+                          f"Revísalo en el panel del experimento #{ex['id']}.")
 
 
 def cerrar(cliente, experimento_id):

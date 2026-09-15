@@ -1,0 +1,235 @@
+"""exp_decidir (Bloque 4): veredictos por país, acciones vía acciones.pedir,
+tope, periódica y paso a `decidido`."""
+from datetime import datetime, timedelta
+
+import pytest
+
+from tests.test_experimentos_db import PAISES, _pieza
+
+GANADOR = {"impresiones": 5000, "clics_enlace": 100, "ctr": 2.0, "cpc": 0.3, "thruplay_rate": 0.3, "gasto": 10.0}
+PERDEDOR = {"impresiones": 5000, "clics_enlace": 5, "ctr": 0.2, "cpc": 3.0, "thruplay_rate": 0.05, "gasto": 10.0}
+
+
+def _hace(horas):
+    return (datetime.now() - timedelta(hours=horas)).isoformat(timespec="seconds")
+
+
+@pytest.fixture()
+def ent(base_temporal, monkeypatch):
+    import experimentos as ex
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    llamadas, avisos = [], []
+
+    def pedir(cliente, eid, accion, payload, motivo):
+        llamadas.append((accion, payload))
+        return ("propuesta" if accion in ("escalar", "derivar") else "ejecutada"), f"{accion} ok"
+
+    monkeypatch.setattr(te.acciones, "pedir", pedir)
+    monkeypatch.setattr(te.lanzador, "cambiar_estado", lambda c, e, s, pais=None: llamadas.append(("estado", e, s)))
+    monkeypatch.setattr(te.notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: (avisos.append((tipo, asunto, cuerpo)), True)[1])
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP", modo="semi")
+    ex.actualizar("acme", eid, estado="corriendo", meta_campaign_id="c1")
+    ex.actualizar_extra("acme", eid, lambda extra: {**extra, "activado_en": _hace(72)})
+
+    def pieza(pais="CO", legado="cf_1__es_CO", horas=72, metricas=None):
+        pid = _pieza(base_temporal, pais=pais, legado=legado)
+        ep = ex.agregar_pieza("acme", eid, pid, pais)
+        ex.actualizar_pieza("acme", ep, meta_ad_id=f"ad{ep}", estado="activo", extra={"activado_en": _hace(horas)})
+        if metricas is not None:
+            ex.snapshot(ep, metricas)
+        return ep
+
+    return {"ex": ex, "te": te, "eid": eid, "pieza": pieza, "llamadas": llamadas, "avisos": avisos,
+            "decidir": lambda: te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})}
+
+
+def _pz(ent, ep):
+    return next(p for p in ent["ex"].obtener("acme", ent["eid"])["piezas"] if p["id"] == ep)
+
+
+def test_tope_alcanzado_pausa_y_no_evalua(ent):
+    ex, eid = ent["ex"], ent["eid"]
+    ep = ent["pieza"](metricas=GANADOR)
+    ex.actualizar("acme", eid, gasto_acumulado=100.0)
+    msg = ent["decidir"]()
+    assert "tope" in msg.lower()
+    assert ent["llamadas"] == [("estado", eid, "PAUSED")]
+    assert _pz(ent, ep)["veredicto"] == "pendiente"
+    assert any(e["tipo"] == "tope" for e in ex.eventos("acme", eid))
+    assert ent["avisos"] and "Tope" in ent["avisos"][0][1]
+
+
+def test_ganador_escala_deriva_y_avisa(ent):
+    ex, eid = ent["ex"], ent["eid"]
+    ep = ent["pieza"](metricas=GANADOR)
+    msg = ent["decidir"]()
+    pz = _pz(ent, ep)
+    assert pz["veredicto"] == "ganador" and pz["veredicto_motivo"].startswith("Ganador")
+    assert ent["llamadas"] == [("escalar", {"pais": "CO", "ep_id": ep}), ("derivar", {"ep_id": ep})]
+    ev = [e for e in ex.eventos("acme", eid) if e["tipo"] == "veredicto"]
+    assert len(ev) == 1 and ev[0]["ep_id"] == ep and ev[0]["datos"]["numeros"]["impresiones"] == 5000
+    tipos = [a[0] for a in ent["avisos"]]
+    assert tipos == ["ganador", "propuesta"]  # escalar/derivar quedaron como propuesta (modo semi): un solo correo
+    assert "2 propuesta" in ent["avisos"][1][1]
+    assert "1 ganador" in msg and "2 propuesta" in msg
+
+
+def test_perdedora_pide_rescate(ent):
+    ep = ent["pieza"](metricas=PERDEDOR)
+    ent["decidir"]()
+    assert _pz(ent, ep)["veredicto"] == "perdedor"
+    assert ent["llamadas"] == [("rescatar", {"ep_id": ep})]
+    assert [a[0] for a in ent["avisos"]] == []
+
+
+def test_perdedora_en_escalon_3_archiva_con_cf_id(ent):
+    ex = ent["ex"]
+    ep = ent["pieza"](metricas=PERDEDOR)
+    ex.actualizar_pieza("acme", ep, escalon_rescate=3)
+    ent["decidir"]()
+    assert ent["llamadas"][0][0] == "archivar"
+    assert ent["llamadas"][0][1]["ep_id"] == ep and ent["llamadas"][0][1]["cf_id"] == "cf_1"
+    assert ent["llamadas"][0][1]["motivo"]
+
+
+def test_sin_evidencia_sigue_pendiente_y_no_pide_nada(ent):
+    ep = ent["pieza"](horas=1, metricas={"impresiones": 10, "ctr": 2.0, "cpc": 0.3, "thruplay_rate": 0.3, "gasto": 1.0})
+    msg = ent["decidir"]()
+    assert _pz(ent, ep)["veredicto"] == "pendiente"
+    assert ent["llamadas"] == [] and ent["avisos"] == []
+    assert msg.startswith("0 veredicto")
+
+
+def test_solo_evalua_piezas_activas_con_anuncio(ent):
+    ex = ent["ex"]
+    ep_pausada = ent["pieza"](metricas=GANADOR)
+    ex.actualizar_pieza("acme", ep_pausada, estado="pausado")
+    ep_sin_ad = ent["pieza"](legado="cf_2__es_CO", metricas=GANADOR)
+    ex.actualizar_pieza("acme", ep_sin_ad, meta_ad_id=None)
+    ent["decidir"]()
+    assert _pz(ent, ep_pausada)["veredicto"] == "pendiente"
+    assert _pz(ent, ep_sin_ad)["veredicto"] == "pendiente"
+    assert ent["llamadas"] == []
+
+
+def test_ranking_dos_piezas_ambas_ganan_con_tres_solo_la_mejor(ent):
+    ex = ent["ex"]
+    a = ent["pieza"](legado="cf_a__es_CO", metricas={**GANADOR, "cpc": 0.5})
+    b = ent["pieza"](legado="cf_b__es_CO", metricas={**GANADOR, "cpc": 0.4})
+    ent["decidir"]()
+    assert _pz(ent, a)["veredicto"] == "ganador" and _pz(ent, b)["veredicto"] == "ganador"
+    # Tercera pieza en el país: ahora solo el tercio superior (1 de 3) gana.
+    # (La pasada anterior dejó el experimento `decidido`: se vuelve a abrir.)
+    ex.actualizar("acme", ent["eid"], estado="corriendo")
+    for ep in (a, b):
+        ex.actualizar_pieza("acme", ep, veredicto="pendiente")
+    c = ent["pieza"](legado="cf_c__es_CO", metricas={**GANADOR, "cpc": 0.2})
+    ent["llamadas"].clear()
+    ent["decidir"]()
+    assert _pz(ent, c)["veredicto"] == "ganador"
+    assert _pz(ent, a)["veredicto"] == "pendiente" and _pz(ent, b)["veredicto"] == "pendiente"
+    assert [l[0] for l in ent["llamadas"]] == ["escalar", "derivar"] and ent["llamadas"][0][1]["ep_id"] == c
+
+
+def test_ranking_por_roas_con_atribucion_y_compras(ent):
+    ex, eid = ent["ex"], ent["eid"]
+    ex.actualizar("acme", eid, atribucion="pixel", reglas={"roas_min": None, "cpa_max": None})
+    a = ent["pieza"](legado="cf_a__es_CO", metricas={**GANADOR, "cpc": 0.2, "compras": 1, "roas": 1.0})
+    b = ent["pieza"](legado="cf_b__es_CO", metricas={**GANADOR, "cpc": 0.9, "compras": 3, "roas": 4.0})
+    c = ent["pieza"](legado="cf_c__es_CO", metricas={**GANADOR, "cpc": 0.5, "compras": 0, "roas": 0.0})
+    ent["decidir"]()
+    assert _pz(ent, b)["veredicto"] == "ganador"
+    assert _pz(ent, a)["veredicto"] == "pendiente" and _pz(ent, c)["veredicto"] == "pendiente"
+
+
+def test_horas_activo_desde_primer_snapshot_con_impresiones(ent):
+    ex = ent["ex"]
+    ep = ent["pieza"](metricas=None)
+    ex.actualizar_pieza("acme", ep, extra={})  # sin activado_en
+    with ex.db.conectar() as con:
+        con.execute(ex.db.metrica_snapshot.insert().values(experimento_pieza_id=ep, tomado_en=_hace(80), extra={}, **GANADOR))
+    ex.snapshot(ep, GANADOR)
+    ent["decidir"]()
+    assert _pz(ent, ep)["veredicto"] == "ganador"
+
+
+def test_pasa_a_decidido_cuando_todo_tiene_veredicto(ent):
+    ex, eid = ent["ex"], ent["eid"]
+    a = ent["pieza"](metricas=GANADOR)
+    b = ent["pieza"](pais="MX", legado="cf_b__es_MX", horas=1, metricas={"impresiones": 5})
+    msg = ent["decidir"]()
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"  # b sigue pendiente
+    ex.actualizar_pieza("acme", b, veredicto="perdedor")
+    msg = ent["decidir"]()
+    assert ex.obtener("acme", eid)["estado"] == "decidido" and "decidido" in msg
+    assert any("decidido" in e["mensaje"].lower() for e in ex.eventos("acme", eid))
+    # Ya decidido: otra pasada no hace nada.
+    assert "no se decide" in ent["decidir"]()
+
+
+def test_no_pasa_a_decidido_con_derivacion_produciendo(ent):
+    ex, eid = ent["ex"], ent["eid"]
+    ent["pieza"](metricas=GANADOR)
+    ex.actualizar_extra("acme", eid, lambda extra: {**extra, "derivaciones": [{"estado": "produciendo"}]})
+    ent["decidir"]()
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"
+
+
+def test_error_en_una_accion_no_frena_las_demas(ent, monkeypatch):
+    ex, eid = ent["ex"], ent["eid"]
+
+    def pedir(cliente, e, accion, payload, motivo):
+        if accion == "escalar":
+            raise RuntimeError("Meta dijo no")
+        ent["llamadas"].append((accion, payload))
+        return "ejecutada", "ok"
+
+    monkeypatch.setattr(ent["te"].acciones, "pedir", pedir)
+    a = ent["pieza"](legado="cf_a__es_CO", metricas=GANADOR)
+    b = ent["pieza"](legado="cf_b__es_CO", metricas=PERDEDOR)
+    msg = ent["decidir"]()
+    assert _pz(ent, a)["veredicto"] == "ganador" and _pz(ent, b)["veredicto"] == "perdedor"
+    assert [l[0] for l in ent["llamadas"]] == ["derivar", "rescatar"]
+    assert "1 acción(es) con error" in msg
+
+
+def test_snapshots_cronologicos(base_temporal):
+    import experimentos as ex
+    pid = _pieza(base_temporal)
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    assert ex.snapshots(ep) == []
+    ex.snapshot(ep, {"impresiones": 1, "extra_x": "a"})
+    ex.snapshot(ep, {"impresiones": 2})
+    s = ex.snapshots(ep)
+    assert [x["impresiones"] for x in s] == [1, 2] and s[0]["extra_x"] == "a" and all(x["tomado_en"] for x in s)
+    assert s[-1] == ex.ultima_metrica(ep)
+
+
+def test_exp_decidir_todos_encola_solo_corriendo(base_temporal, monkeypatch):
+    import cola
+    import experimentos as ex
+    import tareas
+    tareas.cargar_todas()
+    e1 = ex.crear("acme", "A", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    e2 = ex.crear("acme", "B", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    e3 = ex.crear("otro", "C", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.actualizar("acme", e1, estado="corriendo")
+    ex.actualizar("acme", e2, estado="decidido")
+    ex.actualizar("otro", e3, estado="pausado")
+    encolados = []
+    monkeypatch.setattr(cola, "encolar", lambda tipo, payload, **kw: encolados.append((tipo, payload, kw)))
+    tareas.REGISTRO["exp_decidir_todos"]({"payload": {}})
+    assert [(t, p["experimento_id"]) for t, p, _ in encolados] == [("exp_decidir", e1)]
+    assert encolados[0][2]["job_id"] == "acme__exp%s__decidir" % e1 and encolados[0][2]["max_intentos"] == 2
+    # refrescar_todos sí incluye los decididos (sus anuncios siguen entregando).
+    encolados.clear()
+    tareas.REGISTRO["exp_refrescar_todos"]({"payload": {}})
+    assert sorted(p["experimento_id"] for _, p, _ in encolados) == sorted([e1, e2])
+
+
+def test_periodica_decidir_registrada():
+    import worker
+    assert worker.PERIODICAS == [("exp_refrescar_todos", 7200), ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600)]

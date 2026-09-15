@@ -557,3 +557,30 @@ def test_activar_pieza_reactiva_conjunto_de_pais_pausado_individualmente(entorno
 
     e = ex.obtener("acme", eid)
     assert [p for p in e["paises"] if p["pais"] == "MX"][0]["estado"] == "activo"
+
+
+def test_refrescar_avisa_rechazo_de_meta_solo_al_cambiar(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    avisos = []
+    entorno["monkeypatch"].setattr(lz.notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: (avisos.append((tipo, asunto, cuerpo)), True)[1])
+    lz.lanzar("acme", eid)
+    lz.refrescar("acme", eid)   # ACTIVE: nada
+    assert avisos == []
+    base = lz.meta_insights.obtener_resultados("x")
+    lz.meta_insights.obtener_resultados = lambda ad_id, objetivo=None: {**base, "estado_meta": "DISAPPROVED", "motivo_rechazo": "texto engañoso"}
+    lz.refrescar("acme", eid)
+    assert [a[0] for a in avisos] == ["rechazo_meta"] * 3 and "texto engañoso" in avisos[0][2]
+    assert sum(1 for e in ex.eventos("acme", eid) if e["tipo"] == "rechazo_meta") == 3
+    lz.refrescar("acme", eid)   # sigue DISAPPROVED: no repite el aviso
+    assert len(avisos) == 3
+    assert all(p["estado_meta"] == "DISAPPROVED" for p in ex.obtener("acme", eid)["piezas"])
+
+
+def test_lanzar_con_error_avisa(entorno):
+    lz, eid = entorno["lanzador"], entorno["eid"]
+    avisos = []
+    entorno["monkeypatch"].setattr(lz.notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: (avisos.append((tipo, asunto, cuerpo)), True)[1])
+    entorno["meta"].fallar_en = "adset"
+    with pytest.raises(RuntimeError):
+        lz.lanzar("acme", eid)
+    assert [a[0] for a in avisos] == ["error_lanzamiento"] and "Meta falló en adset" in avisos[0][2]
