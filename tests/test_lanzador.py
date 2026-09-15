@@ -414,8 +414,9 @@ def test_pausar_activar_pieza(entorno):
 
 def test_activar_pieza_acepta_experimento_decidido(entorno):
     """Bloque 4 (I-1 del review de decidir): activar una pieza rescatada con
-    el experimento ya 'decidido' no debe fallar, y no cambia ese estado —
-    solo lanzar_piezas_nuevas/activar_pieza necesitaban el guard ampliado."""
+    el experimento ya 'decidido' no debe fallar, y lo devuelve a 'corriendo'
+    para que exp_decidir_todos vuelva a evaluarlo (si no, la pieza rescatada
+    nunca recibe veredicto)."""
     ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
     lz.lanzar("acme", eid)
     lz.cambiar_estado("acme", eid, "ACTIVE")
@@ -424,7 +425,7 @@ def test_activar_pieza_acepta_experimento_decidido(entorno):
     ex.actualizar("acme", eid, estado="decidido")
     lz.activar_pieza("acme", ep["id"])
     assert ex.piezas("acme", eid)[0]["estado"] == "activo"
-    assert ex.obtener("acme", eid)["estado"] == "decidido"
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"
 
 
 def test_activar_pieza_marca_activado_en_pieza_y_experimento(entorno):

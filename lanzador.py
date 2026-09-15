@@ -377,7 +377,10 @@ def activar_pieza(cliente, ep_id):
                                   extra={**(pz.get("extra") or {}), "activado_en": db.ahora()})
     if pais:
         experimentos.actualizar_pais(cliente, ex["id"], pz["pais"], estado="activo")
-    if campaña_pausada:
+    if campaña_pausada or ex["estado"] == "decidido":
+        # Un experimento 'decidido' que vuelve a tener un anuncio activo
+        # (pieza de rescate aprobada después) vuelve a 'corriendo' para que
+        # exp_decidir_todos la evalúe; si no, la escalera se queda sin juez.
         _a_corriendo(cliente, ex["id"])
     experimentos.registrar_evento(cliente, ex["id"], "estado", f"Activado: {pz['nombre']} ({pz['pais']})", ep_id=ep_id)
 
