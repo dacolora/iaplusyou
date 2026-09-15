@@ -74,3 +74,17 @@ def guardar_preferencias(cliente, proveedor_foto, proveedor_video, mejorar_calid
         "mejorar_calidad": bool(mejorar_calidad),
     }
     _json_store.guardar(_path(cliente), datos)
+
+
+def reglas_defecto(cliente):
+    """Reglas del decisor por defecto del proyecto (Configuración). Solo claves conocidas."""
+    import decisor
+    data = cargar(cliente).get("reglas_experimentos") or {}
+    return {k: v for k, v in data.items() if k in decisor.REGLAS_DEFECTO}
+
+
+def guardar_reglas_defecto(cliente, reglas):
+    import decisor
+    data = cargar(cliente)
+    data["reglas_experimentos"] = {k: v for k, v in (reglas or {}).items() if k in decisor.REGLAS_DEFECTO}
+    _json_store.guardar(_path(cliente), data)
