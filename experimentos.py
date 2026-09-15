@@ -39,6 +39,28 @@ def crear(cliente, nombre, paises, objetivo_meta, dias, tope_total, destino_url,
             extra={})).inserted_primary_key[0]
 
 
+def crear_hijo(cliente, padre_id, nombre, pieza_origen_ep_id):
+    """Experimento derivado (Bloque 4): copia países (con presupuestos, sin
+    conjuntos de Meta), moneda, tope, días, objetivo, destino, edades, modo y
+    reglas del padre; nace `armando` sin piezas. `extra` guarda el vínculo
+    (padre_experimento_id, origen_ep_id). ValueError si el padre no existe."""
+    ahora = db.ahora()
+    with db.conectar() as con:
+        f = _fila_experimento(con, cliente, padre_id)
+        if not f:
+            raise ValueError("Ese experimento no existe.")
+        m = f._mapping
+        e = db.experimento
+        return con.execute(e.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, modo=m[e.c.modo],
+            reglas=dict(m[e.c.reglas] or {}), paises=[_pais_nuevo(p) for p in (m[e.c.paises] or [])],
+            moneda=m[e.c.moneda], tope_total=m[e.c.tope_total], dias=m[e.c.dias],
+            objetivo_meta=m[e.c.objetivo_meta], atribucion=m[e.c.atribucion] or "ninguna", estado="armando",
+            gasto_acumulado=0.0, legado=False, destino_url=m[e.c.destino_url], edad_min=m[e.c.edad_min],
+            edad_max=m[e.c.edad_max],
+            extra={"padre_experimento_id": padre_id, "origen_ep_id": pieza_origen_ep_id})).inserted_primary_key[0]
+
+
 def _fila_experimento(con, cliente, experimento_id):
     return con.execute(sa.select(db.experimento).where(
         db.experimento.c.id == experimento_id, db.experimento.c.cliente == cliente,
@@ -176,7 +198,7 @@ def _piezas(con, cliente, experimento_id):
             "nombre": nombre[:80], "url_video": m["url_video"], "url_miniatura": m["url_miniatura"], "tipo": tipo,
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
             "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
-            "extra": m[ep.c.extra] or {},
+            "extra": m[ep.c.extra] or {}, "escalon_rescate": m[ep.c.escalon_rescate] or 0,
         })
     return out
 
@@ -205,18 +227,37 @@ def _eventos(con, cliente, experimento_id, limite):
              "creado_en": f._mapping[db.evento.c.creado_en]} for f in con.execute(q)]
 
 
+def _hijos(con, cliente, experimento_id):
+    """Ids (ascendentes) de los experimentos cuyo extra.padre_experimento_id es este."""
+    e = db.experimento
+    return [f._mapping[e.c.id] for f in con.execute(
+        sa.select(e.c.id).where(e.c.cliente == cliente, e.c.legado.is_(False),
+                                e.c.extra["padre_experimento_id"].as_integer() == experimento_id)
+        .order_by(e.c.id))]
+
+
+def _propuestas_pendientes(con, cliente, experimento_id):
+    p = db.propuesta
+    return con.execute(sa.select(sa.func.count()).select_from(p).where(
+        p.c.cliente == cliente, p.c.experimento_id == experimento_id, p.c.estado == "pendiente")).scalar() or 0
+
+
 def _a_dict(con, f, limite_eventos):
     m = f._mapping
     e = db.experimento
     pzs = _piezas(con, m[e.c.cliente], m[e.c.id])
+    extra = m[e.c.extra] or {}
     return {
         "id": m[e.c.id], "nombre": m[e.c.nombre], "estado": m[e.c.estado], "modo": m[e.c.modo],
         "paises": [dict(p) for p in (m[e.c.paises] or [])], "moneda": m[e.c.moneda], "tope_total": m[e.c.tope_total],
         "dias": m[e.c.dias], "objetivo_meta": m[e.c.objetivo_meta], "destino_url": m[e.c.destino_url],
         "edad_min": m[e.c.edad_min], "edad_max": m[e.c.edad_max], "meta_campaign_id": m[e.c.meta_campaign_id],
-        "gasto_acumulado": m[e.c.gasto_acumulado] or 0.0, "error": m[e.c.error], "extra": m[e.c.extra] or {},
+        "gasto_acumulado": m[e.c.gasto_acumulado] or 0.0, "error": m[e.c.error], "extra": extra,
         "reglas": m[e.c.reglas] or {}, "creado_en": m[e.c.creado_en], "piezas": pzs, "resumen": _resumen(pzs),
         "eventos": _eventos(con, m[e.c.cliente], m[e.c.id], limite_eventos),
+        "padre_experimento_id": extra.get("padre_experimento_id"),
+        "hijos": _hijos(con, m[e.c.cliente], m[e.c.id]),
+        "propuestas_pendientes": _propuestas_pendientes(con, m[e.c.cliente], m[e.c.id]),
     }
 
 
