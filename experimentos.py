@@ -93,6 +93,15 @@ def agregar_pieza(cliente, experimento_id, pieza_id, pais):
             extra={})).inserted_primary_key[0]
 
 
+def experimento_de_pieza(cliente, ep_id):
+    """Id del experimento dueño de una pieza, o None si no existe (para
+    ese cliente). Usado por lanzador._experimento_de_pieza en vez de que
+    ese módulo consulte experimento_pieza con SQL crudo."""
+    with db.conectar() as con:
+        return con.execute(sa.select(db.experimento_pieza.c.experimento_id).where(
+            db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)).scalar()
+
+
 def quitar_pieza(cliente, experimento_id, ep_id):
     with db.conectar() as con:
         f = con.execute(sa.select(db.experimento_pieza).where(

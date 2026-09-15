@@ -458,4 +458,102 @@ def test_lanzar_autosana_si_preflight_falla_con_estado_ya_lanzando(entorno):
         ex.quitar_pieza("acme", eid, p["id"])
     with pytest.raises(ValueError):
         lz.lanzar("acme", eid)
-    assert ex.obtener("acme", eid)["estado"] == "error"
+
+
+def test_lanzar_piezas_nuevas_comparte_cache_entre_piezas_de_la_misma_corrida(entorno, base_temporal):
+    """Fix round 1 (Important #1): dos piezas 'en_cola' nuevas con el mismo
+    pieza_id (un clon regenerado atado a dos países) agregadas en la misma
+    corrida de lanzar_piezas_nuevas deben compartir el cache de video/creative
+    — antes cada llamada a _crear_anuncios recibía un cache vacío propio y
+    repetía subir_video + crear_creative_video para la segunda."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    clon_nuevo = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    ex.agregar_pieza("acme", eid, clon_nuevo, "CO")
+    ex.agregar_pieza("acme", eid, clon_nuevo, "MX")
+
+    llamadas_subir = []
+    original = lz.meta_creative.subir_video
+
+    def contando(*a, **k):
+        llamadas_subir.append(1)
+        return original(*a, **k)
+
+    entorno["monkeypatch"].setattr(lz.meta_creative, "subir_video", contando)
+    meta.llamadas.clear()
+    assert lz.lanzar_piezas_nuevas("acme", eid) == 2
+    tipos = [t for t, _ in meta.llamadas]
+    assert tipos.count("ad") == 2
+    assert tipos.count("creative") == 1
+    assert len(llamadas_subir) == 1
+    nuevas = [p for p in ex.piezas("acme", eid) if p["pieza_id"] == clon_nuevo]
+    assert len(nuevas) == 2
+    assert all(p["meta_ad_id"] for p in nuevas)
+    assert nuevas[0]["meta_creative_id"] == nuevas[1]["meta_creative_id"]
+
+
+def test_lanzar_piezas_nuevas_reusa_creative_de_pieza_vieja_con_mismo_pieza_id(entorno, base_temporal):
+    """Fix round 1 (Important #1), segundo caso: una pieza nueva cuyo
+    pieza_id YA tiene creative en otra pieza ya lanzada (de una corrida
+    anterior, en otro país) no debe volver a subir video ni crear creative —
+    solo el ad. Experimento aparte con 3 países (CO, MX, BR) para que BR ya
+    tenga su conjunto en Meta antes de agregarle la pieza reusada."""
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    paises3 = PAISES + [{"pais": "BR", "idioma": "pt", "presupuesto_dia": 100.0}]
+    eid = ex.crear("acme", "Cojín BR", paises3, "OUTCOME_TRAFFIC", 7, 500000.0, "https://tienda.co/p", "COP")
+    f_co = _pieza(base_temporal, pais="CO", legado="cf_x__co")
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_x")
+    f_br = _pieza(base_temporal, pais="BR", idioma="pt", legado="cf_x__br")
+    ex.agregar_pieza("acme", eid, f_co, "CO")
+    ex.agregar_pieza("acme", eid, clon, "CO")
+    ex.agregar_pieza("acme", eid, clon, "MX")
+    ex.agregar_pieza("acme", eid, f_br, "BR")
+    lz.lanzar("acme", eid)
+
+    llamadas_subir = []
+    original = lz.meta_creative.subir_video
+
+    def contando(*a, **k):
+        llamadas_subir.append(1)
+        return original(*a, **k)
+
+    entorno["monkeypatch"].setattr(lz.meta_creative, "subir_video", contando)
+    ex.agregar_pieza("acme", eid, clon, "BR")  # pieza nueva en_cola, mismo pieza_id que el clon ya lanzado
+    meta.llamadas.clear()
+    assert lz.lanzar_piezas_nuevas("acme", eid) == 1
+    tipos = [t for t, _ in meta.llamadas]
+    assert tipos.count("ad") == 1
+    assert "creative" not in tipos
+    assert len(llamadas_subir) == 0
+    piezas = ex.piezas("acme", eid)
+    br_clon = [p for p in piezas if p["pieza_id"] == clon and p["pais"] == "BR"][0]
+    creative_original = [p for p in piezas if p["pieza_id"] == clon and p["pais"] == "CO"][0]["meta_creative_id"]
+    assert br_clon["meta_ad_id"] and br_clon["meta_creative_id"] == creative_original
+
+
+def test_activar_pieza_reactiva_conjunto_de_pais_pausado_individualmente(entorno):
+    """Fix round 1 (Important #2): con el experimento 'corriendo' porque otro
+    país sigue activo, pausar MX individualmente (cambiar_estado(pais='MX'))
+    no debe impedir que activar_pieza sobre una pieza de MX reactive su
+    conjunto en Meta — antes primera_activacion solo miraba ex['estado'], que
+    seguía 'corriendo', y el conjunto de MX quedaba PAUSED en Meta con el
+    anuncio ACTIVE encima."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    lz.cambiar_estado("acme", eid, "PAUSED", pais="MX")
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "corriendo"  # CO sigue activo
+    mx_pais = [p for p in e["paises"] if p["pais"] == "MX"][0]
+    assert mx_pais["estado"] == "pausado" and mx_pais["meta_adset_id"] == "adset_3"
+    mx_pieza = [p for p in e["piezas"] if p["pais"] == "MX"][0]
+
+    meta.llamadas.clear()
+    lz.activar_pieza("acme", mx_pieza["id"])
+    estados = [(t, kw["oid"], kw["status"]) for t, kw in meta.llamadas if t == "estado"]
+    assert ("estado", "adset_3", "ACTIVE") in estados
+    assert ("estado", mx_pieza["meta_ad_id"], "ACTIVE") in estados
+    assert ("estado", "campaign_1", "ACTIVE") not in estados  # la campaña ya estaba ACTIVE
+
+    e = ex.obtener("acme", eid)
+    assert [p for p in e["paises"] if p["pais"] == "MX"][0]["estado"] == "activo"

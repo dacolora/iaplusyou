@@ -6,8 +6,6 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
-import sqlalchemy as sa
-
 import cola
 import db
 import experimentos
@@ -65,18 +63,22 @@ def _validar_para_lanzar(cliente, experimento_id):
     return ex
 
 
-def _crear_anuncios(cliente, ex, creds, adsets):
+def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
     """El paso "Anuncios" de lanzar(): crea creative (si falta) + ad para cada
     pieza sin meta_ad_id de ex['piezas']. Devuelve cuántos anuncios creó.
     Compartido con lanzar_piezas_nuevas, que lo llama pieza por pieza para
-    poder aislar el error de una sin frenar a las demás."""
+    poder aislar el error de una sin frenar a las demás — por eso `cache`
+    es un parámetro: lanzar_piezas_nuevas construye un solo dict, sembrado
+    con TODAS las piezas del experimento (no solo las nuevas), y lo pasa
+    igual en cada llamada, así la segunda pieza nueva con el mismo pieza_id
+    ve el creative que subió la primera en la misma corrida."""
     experimento_id = ex["id"]
     # M4: la misma pieza (mismo pieza_id) clonada a dos países comparte
     # video+creative — el link (utm_content=pieza_id) es idéntico para
     # ambas, así que crearlo dos veces solo duplica la subida (hasta 180s
     # bajo _LOCK) sin ganar nada. Se cachea por pieza_id dentro de esta
     # corrida, sembrado con lo que ya esté guardado de una corrida previa.
-    creativos_por_pieza = {}
+    creativos_por_pieza = {} if cache is None else cache
     for pz in ex["piezas"]:
         if pz.get("meta_creative_id"):
             creativos_por_pieza.setdefault(pz["pieza_id"], {
@@ -281,9 +283,22 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
     def _correr(creds):
         creadas = 0
         fallidas = []
+        # Cache de creative/video compartido entre TODAS las piezas nuevas de
+        # esta corrida (no uno nuevo por llamada a _crear_anuncios): así la
+        # segunda pieza nueva con el mismo pieza_id reutiliza lo que subió la
+        # primera en vez de repetir subir_video/crear_creative_video. Sembrado
+        # desde ex["piezas"] completo (no solo piezas_nuevas), para cubrir
+        # también el caso de una pieza nueva cuyo pieza_id ya tiene creative
+        # en una pieza vieja de otra corrida/lanzar().
+        cache = {}
+        for pz_ in ex["piezas"]:
+            if pz_.get("meta_creative_id"):
+                cache.setdefault(pz_["pieza_id"], {
+                    "video_id": (pz_.get("extra") or {}).get("meta_video_id"),
+                    "creative_id": pz_["meta_creative_id"]})
         for pz in piezas_nuevas:
             try:
-                creadas += _crear_anuncios(cliente, {**ex, "piezas": [pz]}, creds, adsets)
+                creadas += _crear_anuncios(cliente, {**ex, "piezas": [pz]}, creds, adsets, cache=cache)
             except Exception as e:
                 mensaje = cola.sin_token(str(e))
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="error", error=mensaje)
@@ -298,9 +313,7 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
 
 
 def _experimento_de_pieza(cliente, ep_id):
-    with db.conectar() as con:
-        experimento_id = con.execute(sa.select(db.experimento_pieza.c.experimento_id).where(
-            db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)).scalar()
+    experimento_id = experimentos.experimento_de_pieza(cliente, ep_id)
     if experimento_id is None:
         raise ValueError("Esa pieza no existe.")
     ex = experimentos.obtener(cliente, experimento_id)
@@ -321,23 +334,29 @@ def pausar_pieza(cliente, ep_id):
 
 def activar_pieza(cliente, ep_id):
     """Activar una pieza exige el experimento en Meta (pausado o corriendo).
-    Si aún está 'pausado' del todo (nunca se activó nada), activa también la
-    campaña y el conjunto de ese país primero — igual que cambiar_estado con
-    pais=: sin la campaña ACTIVE en Meta el anuncio no entrega aunque quede
-    ACTIVE local."""
+    Reactiva la campaña si el experimento entero seguía 'pausado' (nunca se
+    activó nada), y reactiva el conjunto del país si el estado LOCAL de ese
+    país no es 'activo' — no si el experimento entero sigue 'corriendo',
+    porque cambiar_estado(pais=) permite pausar un país individual sin bajar
+    el experimento completo a 'pausado' (queda 'corriendo' mientras otro país
+    siga activo). Mirar solo ex['estado'] dejaría ese conjunto en PAUSED en
+    Meta con el anuncio ACTIVE encima — sin entrega — igual que hace
+    cambiar_estado con pais=, que reactiva el conjunto incondicionalmente
+    dentro de esa rama."""
     ex, pz = _experimento_de_pieza(cliente, ep_id)
     if ex["estado"] not in ("pausado", "corriendo"):
         raise ValueError("Ese experimento todavía no está en Meta.")
     if not pz["meta_ad_id"]:
         raise ValueError("Esa pieza todavía no tiene anuncio en Meta.")
     pais = next((p for p in ex["paises"] if p["pais"] == pz["pais"]), None)
-    primera_activacion = ex["estado"] == "pausado"
+    campaña_pausada = ex["estado"] == "pausado"
+    pais_pausado = bool(pais) and pais["estado"] != "activo"
 
     def _correr(_creds):
-        if primera_activacion:
+        if campaña_pausada:
             meta_campaign.actualizar_estado(ex["meta_campaign_id"], "ACTIVE")
-            if pais and pais.get("meta_adset_id"):
-                meta_adset.actualizar_estado(pais["meta_adset_id"], "ACTIVE")
+        if pais_pausado and pais.get("meta_adset_id"):
+            meta_adset.actualizar_estado(pais["meta_adset_id"], "ACTIVE")
         meta_ad.actualizar_estado(pz["meta_ad_id"], "ACTIVE")
 
     _con_credenciales(cliente, _correr)
@@ -345,7 +364,7 @@ def activar_pieza(cliente, ep_id):
                                   extra={**(pz.get("extra") or {}), "activado_en": db.ahora()})
     if pais:
         experimentos.actualizar_pais(cliente, ex["id"], pz["pais"], estado="activo")
-    if primera_activacion:
+    if campaña_pausada:
         experimentos.actualizar(cliente, ex["id"], estado="corriendo", extra=_con_activado(ex))
     experimentos.registrar_evento(cliente, ex["id"], "estado", f"Activado: {pz['nombre']} ({pz['pais']})", ep_id=ep_id)
 
