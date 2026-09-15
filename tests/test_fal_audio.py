@@ -87,4 +87,5 @@ def test_voces():
     assert fal_audio.VOCES["en"][0] == "Rachel"
     assert fal_audio.VOCES["pt"][0] == "Rachel"
     for idioma in ("es", "en", "pt"):
-        assert "Antoni" in fal_audio.VOCES[idioma]
+        assert "Roger" in fal_audio.VOCES[idioma]
+        assert "Antoni" not in fal_audio.VOCES[idioma]  # legacy: fal ya no la sirve (404)

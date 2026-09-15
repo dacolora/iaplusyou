@@ -24,9 +24,17 @@ COSTO_USD_POR_PISTA_MUSICA = 0.02
 # Voces premade multilingües de ElevenLabs disponibles vía fal. Todas sirven
 # para es/en/pt (multilingües); Rachel primero en las tres por ser la más
 # verificada.
+#
+# Verificadas una a una contra fal.ai el 2026-09-15 (una llamada TTS mínima
+# "Hola." por nombre, script en el plan de Bloque 2 final edition — I3).
+# `Antoni`, `Bella`, `Domi`, `Elli`, `Josh`, `Arnold` y `Sam` son voces
+# "legacy" de ElevenLabs que YA NO existen en el catálogo que expone fal
+# (fal.ai responde 422 "Voice not found") — se quitaron de la lista. El resto
+# de la lista (incluidas las agregadas) respondió 200 con audio.
 _VOCES_MULTILINGUES = [
-    "Rachel", "Antoni", "Bella", "Domi", "Elli", "Josh",
-    "Arnold", "Adam", "Sam", "Charlotte", "Matilda", "Daniel",
+    "Rachel", "Adam", "Charlotte", "Matilda", "Daniel", "Aria", "Roger",
+    "Sarah", "Laura", "Charlie", "George", "Callum", "River", "Liam",
+    "Alice", "Jessica", "Eric", "Chris", "Brian", "Lily", "Bill", "Will",
 ]
 VOCES = {
     "es": list(_VOCES_MULTILINGUES),

@@ -21,6 +21,17 @@ SOLAPE_MAX_S = 0.4  # lo que una pista puede invadir al bloque siguiente
 FRECUENCIA = 44100
 
 
+class ErrorPrimerBloque(Exception):
+    """La síntesis del PRIMER bloque (hook) falló. A diferencia de un bloque
+    posterior (donde el orquestador se conforma con degradar la pieza: sale
+    sin voz, con música), un fallo en el primer bloque casi siempre viene de
+    algo determinístico (nombre de voz inválido para fal/ElevenLabs, texto
+    vacío) que va a fallar exactamente igual en cada bloque — degradar aquí
+    solo pagaría música por una pieza que igual sale sin voz. Por eso
+    `producir()` lo trata como fatal (estado="error") y nunca llega a generar
+    música."""
+
+
 def sintetizar(guion, voz, carpeta, on_progreso=None, cliente=None):
     """Devuelve `(salida, costo_usd)` con
     salida = {"pistas": [{"rol", "archivo_mp3", "inicio_s", "fin_s",
@@ -42,8 +53,13 @@ def sintetizar(guion, voz, carpeta, on_progreso=None, cliente=None):
     total = len(bloques)
     for i, bloque in enumerate(bloques):
         _avisar(on_progreso, {"fase": f"voz {i + 1}/{total}"})
-        pista, palabras_bloque, costo_bloque = _sintetizar_bloque(
-            bloque, voz, idioma, carpeta, cliente)
+        try:
+            pista, palabras_bloque, costo_bloque = _sintetizar_bloque(
+                bloque, voz, idioma, carpeta, cliente)
+        except Exception as e:
+            if i == 0:
+                raise ErrorPrimerBloque(str(e)) from e
+            raise
         pistas.append(pista)
         palabras.extend(palabras_bloque)
         costo += costo_bloque

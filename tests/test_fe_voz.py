@@ -156,6 +156,39 @@ def test_on_progreso_por_bloque_y_no_rompe(tmp_path, proveedores_falsos):
     assert fases[:5] == ["voz 1/5", "voz 2/5", "voz 3/5", "voz 4/5", "voz 5/5"]
 
 
+def test_falla_primer_bloque_levanta_error_primer_bloque(tmp_path, proveedores_falsos, monkeypatch):
+    """I3: si el bloque 0 (hook) falla, sintetizar() envuelve la excepción en
+    ErrorPrimerBloque — la señal que producir() usa para tratarlo como fatal
+    en vez de degradar la pieza."""
+    guion = _guion([(0, 4), (4, 8), (8, 12), (12, 16), (16, 20)])
+
+    def tts_falla(texto, voz="Rachel", idioma="es", on_progreso=None):
+        raise RuntimeError("Voice not found: NoExiste")
+    monkeypatch.setattr(fal_audio, "tts", tts_falla)
+
+    with pytest.raises(voz.ErrorPrimerBloque, match="Voice not found"):
+        voz.sintetizar(guion, "NoExiste", str(tmp_path))
+
+
+def test_falla_bloque_posterior_no_es_error_primer_bloque(tmp_path, proveedores_falsos, monkeypatch):
+    """Un fallo en un bloque que no es el primero se propaga tal cual (sigue
+    siendo degradable en producir(), no fatal)."""
+    guion = _guion([(0, 4), (4, 8), (8, 12), (12, 16), (16, 20)])
+    llamadas = {"n": 0}
+    tts_real = fal_audio.tts
+
+    def tts_falla_en_segundo(texto, voz="Rachel", idioma="es", on_progreso=None):
+        llamadas["n"] += 1
+        if llamadas["n"] == 2:
+            raise RuntimeError("fal caído a mitad de camino")
+        return tts_real(texto, voz, idioma, on_progreso)
+    monkeypatch.setattr(fal_audio, "tts", tts_falla_en_segundo)
+
+    with pytest.raises(RuntimeError, match="fal caído a mitad de camino") as exc:
+        voz.sintetizar(guion, "Rachel", str(tmp_path))
+    assert not isinstance(exc.value, voz.ErrorPrimerBloque)
+
+
 def test_cliente_por_kwarg_y_obligatorio(tmp_path, proveedores_falsos):
     guion = _guion([(0, 4), (4, 8), (8, 12), (12, 16), (16, 20)])
     del guion["cliente"]
