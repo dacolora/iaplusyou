@@ -4,20 +4,27 @@ proceso (sin archivos intermedios).
 Filtergraph:
   por segmento i:  [0:v]trim,setpts,scale(cover),crop,fps=30,zoompan[v_i]
   [v_0]..[v_n]concat[vc]
-  [vc][1:v]overlay(enable=between)[o1] ... [oK]format=yuv420p[vout]
+  [vc][1:v]overlay=x:y:eof_action=repeat:enable='gte(t,a)*lt(t,b)'[o1] ...
+  [oK]format=yuv420p[vout]
   audio:  voz+música -> música volume=0.35 + sidechaincompress (ducking por la
           voz) + amix; solo música -> volume=0.5; solo voz -> tal cual; nada ->
           sin stream de audio.
 
-Cada PNG de overlay entra como `-loop 1 -i png` (imagen fija infinita) y el
-overlay usa `eof_action=pass`; `-t duracion_s` cierra la salida. La música
-entra con `-stream_loop -1` y la voz lleva `apad` para que ninguna de las dos
-corte el audio antes de la duración objetivo (una voz corta terminaría el
-`sidechaincompress` y con él la música).
+Cada PNG de overlay (recortado a su contenido por texto.py, con `x`/`y` en
+coordenadas del frame) entra como `-i png` a secas: un solo frame decodificado
+una vez, y `overlay=...:eof_action=repeat` lo mantiene el resto del video. No
+se usa `-loop 1 -framerate 30` porque eso re-decodifica el PNG 30 veces por
+segundo por overlay (con 60 overlays: varios GB de RSS y decenas de segundos
+de CPU). La ventana `enable` es semiabierta (`gte*lt`) para que dos overlays
+consecutivos no coincidan en el frame de frontera. `-t duracion_s` cierra la
+salida. La música entra con `-stream_loop -1` y la voz lleva `apad` para que
+ninguna de las dos corte el audio antes de la duración objetivo (una voz corta
+terminaría el `sidechaincompress` y con él la música).
 
-Si el filtergraph pasa de MAX_FILTERGRAPH_INLINE caracteres se escribe a un
-archivo y se pasa con `-filter_complex_script` (límite de argv y legibilidad
-al depurar; el archivo se borra tras un render correcto).
+El filtergraph se escribe SIEMPRE a `<salida>.filtergraph.txt` y se pasa con
+`-/filter_complex <archivo>` (sintaxis de ffmpeg ≥ 7; `-filter_complex_script`
+desapareció en ffmpeg 8). Evita el límite de argv y facilita depurar; el
+archivo se borra tras un render correcto y se conserva si ffmpeg falla.
 """
 import os
 
@@ -25,7 +32,6 @@ from final_edition import cortes
 
 FPS = 30
 ZOOM_MAX = 1.08
-MAX_FILTERGRAPH_INLINE = 8000
 VOL_MUSICA_CON_VOZ = 0.35
 VOL_MUSICA_SOLA = 0.5
 DUCKING = "threshold=0.05:ratio=8:attack=20:release=300"
@@ -47,21 +53,18 @@ def componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_m
 
     args = ["-i", clon_path]
     for ov in lista_overlays:
-        args += ["-loop", "1", "-framerate", str(FPS), "-i", ov["png"]]
+        args += ["-i", ov["png"]]
     if hay_voz:
         args += ["-i", archivo_voz]
     if hay_musica:
         args += ["-stream_loop", "-1", "-i", pista_musica]
 
+    os.makedirs(os.path.dirname(os.path.abspath(salida_mp4)), exist_ok=True)
     fg = construir_filtergraph(segmentos, overlays, hay_voz, hay_musica, ancho, alto)
-    archivo_fg = None
-    if len(fg) > MAX_FILTERGRAPH_INLINE:
-        archivo_fg = salida_mp4 + ".filtergraph.txt"
-        with open(archivo_fg, "w", encoding="utf-8") as f:
-            f.write(fg)
-        args += ["-filter_complex_script", archivo_fg]
-    else:
-        args += ["-filter_complex", fg]
+    archivo_fg = salida_mp4 + ".filtergraph.txt"
+    with open(archivo_fg, "w", encoding="utf-8") as f:
+        f.write(fg)
+    args += ["-/filter_complex", archivo_fg]
 
     args += ["-map", "[vout]"]
     if hay_voz or hay_musica:
@@ -71,9 +74,8 @@ def componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_m
         "-r", str(FPS), "-movflags", "+faststart", "-t", f"{duracion_s:.3f}",
         salida_mp4,
     ]
-    os.makedirs(os.path.dirname(os.path.abspath(salida_mp4)), exist_ok=True)
     cortes.ffmpeg(args, timeout=max(600, int(duracion_s * 30)))
-    if archivo_fg and os.path.exists(archivo_fg):
+    if os.path.exists(archivo_fg):
         os.remove(archivo_fg)
 
     real = _validar(salida_mp4, duracion_s, ancho, alto, hay_voz or hay_musica)
@@ -106,8 +108,8 @@ def construir_filtergraph(segmentos, overlays, hay_voz, hay_musica, ancho, alto)
     for k, ov in enumerate(lista_overlays, start=1):
         etiqueta = f"[o{k}]"
         partes.append(
-            f"{actual}[{k}:v]overlay=0:0:eof_action=pass:"
-            f"enable='between(t,{float(ov['inicio']):.3f},{float(ov['fin']):.3f})'{etiqueta}"
+            f"{actual}[{k}:v]overlay={int(ov.get('x', 0))}:{int(ov.get('y', 0))}:eof_action=repeat:"
+            f"enable='gte(t,{float(ov['inicio']):.3f})*lt(t,{float(ov['fin']):.3f})'{etiqueta}"
         )
         actual = etiqueta
     partes.append(f"{actual}format=yuv420p[vout]")

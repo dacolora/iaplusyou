@@ -1,26 +1,34 @@
 """Final Edition, capa 4a: texto en pantalla rasterizado con Pillow.
 
 ffmpeg local/VPS no trae `drawtext` ni `subtitles` (sin libfreetype/libass),
-así que cada elemento de texto se dibuja como un PNG RGBA del tamaño exacto
-del video, con fondo transparente, y el render lo sobreimprime con
-`overlay=0:0:enable='between(t,ini,fin)'` sin necesidad de posicionarlo.
+así que cada elemento de texto se dibuja como un PNG RGBA con fondo
+transparente, **recortado a su contenido** (más PAD_RECORTE px), y el render lo
+sobreimprime con `overlay=x:y:enable='gte(t,ini)*lt(t,fin)'`. Cada entrada
+devuelta lleva por eso `{"png", "inicio", "fin", "x", "y"}` con `x`/`y` la
+esquina superior izquierda del PNG en coordenadas del frame. Recortar los PNG
+(en vez de emitirlos a tamaño de frame) es lo que mantiene bajo el consumo de
+memoria/CPU de ffmpeg con decenas de overlays.
 
 Elementos:
 - hook: `texto_pantalla` del bloque hook, SpaceGrotesk-Bold 88 px, centrado en
   el tercio superior con sombra, durante todo el bloque.
 - subtítulos: las `palabras` (de voz.py) agrupadas en líneas de ≤ 4 palabras
-  (grupo nuevo también si hay un hueco > 0.8 s); por cada palabra un PNG de la
-  línea con esa palabra en el color de acento y el resto en blanco, Inter-Bold
+  que quepan en `ancho - 2*MARGEN_SUB` (medido con la fuente; grupo nuevo
+  también si hay un hueco > 0.8 s); si una sola palabra no cabe, la fuente de
+  ese grupo se reduce hasta TAM_SUB_MIN. Por cada palabra un PNG de la línea
+  con esa palabra en el color de acento y el resto en blanco, Inter-Bold
   64 px sobre caja negra 60 % alpha en el tercio inferior. Cada PNG se activa
   desde el inicio de la palabra hasta el inicio de la siguiente del grupo (la
-  última: hasta su fin + 0.3 s).
+  última: hasta su fin + 0.3 s, pero nunca más allá del inicio del grupo
+  siguiente, para que nunca haya dos líneas a la vez).
   Si hubiera más de MAX_OVERLAYS_SUBTITULOS palabras, se cae a un PNG por
   LÍNEA (grupos de 6 palabras, todas en blanco) para no disparar el número de
   entradas del filtergraph.
 - badge: `precio_texto` en píldora de acento arriba a la derecha, desde el
   inicio del bloque producto hasta el fin del bloque prueba.
 - cta: tarjeta oscura redondeada (80 % del ancho) con el logo (opcional, máx.
-  240 px) y el `texto_pantalla` del cta, durante el bloque cta.
+  240 px) y el `texto_pantalla` del cta ajustado por ancho medido, durante el
+  bloque cta.
 """
 import os
 
@@ -35,20 +43,21 @@ HUECO_NUEVO_GRUPO_S = 0.8
 COLA_ULTIMA_PALABRA_S = 0.3
 MAX_OVERLAYS_SUBTITULOS = 120
 LOGO_MAX_PX = 240
+PAD_RECORTE = 8      # px alrededor del contenido al recortar el PNG
+MARGEN_SUB = 60      # margen lateral mínimo de la caja de subtítulo (a 1080)
+MARGEN_HOOK = 60
 
 TAM_HOOK = 88
 TAM_SUB = 64
+TAM_SUB_MIN = 48
 TAM_BADGE = 56
 TAM_CTA = 72
-
-# Caracteres por línea aproximados para el ajuste voraz de texto.
-_CHARS_POR_LINEA = {88: 18, 64: 22, 72: 20}
 
 
 def generar_overlays(guion, palabras, marca, carpeta, ancho=1080, alto=1920):
     """Genera los PNG y devuelve `{"hook", "subtitulos", "badge", "cta"}`;
-    cada entrada es `{"png", "inicio", "fin"}` (badge puede ser None y
-    subtitulos una lista, vacía si no hay palabras)."""
+    cada entrada es `{"png", "inicio", "fin", "x", "y"}` (badge puede ser None
+    y subtitulos una lista, vacía si no hay palabras)."""
     os.makedirs(carpeta, exist_ok=True)
     marca = marca or {}
     acento = _color(marca.get("color_acento") or COLOR_ACENTO_DEFECTO)
@@ -57,9 +66,9 @@ def generar_overlays(guion, palabras, marca, carpeta, ancho=1080, alto=1920):
 
     hook = bloques.get("hook") or {}
     ruta_hook = os.path.join(carpeta, "hook.png")
-    _png_hook(hook.get("texto_pantalla") or "", ruta_hook, ancho, alto, escala)
+    x, y = _png_hook(hook.get("texto_pantalla") or "", ruta_hook, ancho, alto, escala)
     salida = {
-        "hook": {"png": ruta_hook, "inicio": hook.get("inicio_s", 0), "fin": hook.get("fin_s", 0)},
+        "hook": _entrada(ruta_hook, hook.get("inicio_s", 0), hook.get("fin_s", 0), x, y),
         "subtitulos": _subtitulos(palabras or [], acento, carpeta, ancho, alto, escala),
         "badge": None,
         "cta": None,
@@ -68,92 +77,139 @@ def generar_overlays(guion, palabras, marca, carpeta, ancho=1080, alto=1920):
     precio = guion.get("precio_texto")
     if precio:
         ruta_badge = os.path.join(carpeta, "badge.png")
-        _png_badge(str(precio), acento, ruta_badge, ancho, alto, escala)
+        x, y = _png_badge(str(precio), acento, ruta_badge, ancho, alto, escala)
         producto = bloques.get("producto") or {}
         prueba = bloques.get("prueba") or producto
-        salida["badge"] = {"png": ruta_badge, "inicio": producto.get("inicio_s", 0),
-                           "fin": prueba.get("fin_s", producto.get("fin_s", 0))}
+        salida["badge"] = _entrada(ruta_badge, producto.get("inicio_s", 0),
+                                   prueba.get("fin_s", producto.get("fin_s", 0)), x, y)
 
     cta = bloques.get("cta") or {}
     ruta_cta = os.path.join(carpeta, "cta.png")
-    _png_cta(cta.get("texto_pantalla") or "", marca.get("logo_path"), ruta_cta, ancho, alto, escala)
-    salida["cta"] = {"png": ruta_cta, "inicio": cta.get("inicio_s", 0), "fin": cta.get("fin_s", 0)}
+    x, y = _png_cta(cta.get("texto_pantalla") or "", marca.get("logo_path"), ruta_cta, ancho, alto, escala)
+    salida["cta"] = _entrada(ruta_cta, cta.get("inicio_s", 0), cta.get("fin_s", 0), x, y)
     return salida
+
+
+def _entrada(png, inicio, fin, x, y):
+    return {"png": png, "inicio": inicio, "fin": fin, "x": int(x), "y": int(y)}
 
 
 # --- subtítulos -------------------------------------------------------------
 
-def agrupar_palabras(palabras, max_por_grupo=MAX_PALABRAS_GRUPO):
-    """Grupos consecutivos de ≤ `max_por_grupo` palabras; se abre grupo nuevo
+def agrupar_palabras(palabras, max_por_grupo=MAX_PALABRAS_GRUPO, ancho_max=None, fuente=None):
+    """Grupos consecutivos de ≤ `max_por_grupo` palabras. Se abre grupo nuevo
     también cuando el hueco entre el fin de una y el inicio de la siguiente
-    supera HUECO_NUEVO_GRUPO_S."""
+    supera HUECO_NUEVO_GRUPO_S o cuando, con `ancho_max`/`fuente`, añadir la
+    palabra haría que la línea medida supere `ancho_max` px (una palabra que
+    por sí sola no cabe va en su propio grupo)."""
+    medir = None
+    if ancho_max is not None and fuente is not None:
+        d = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        espacio = d.textlength(" ", font=fuente)
+
+        def medir(textos):
+            return sum(d.textlength(t, font=fuente) for t in textos) + espacio * (len(textos) - 1)
+
     grupos, actual = [], []
     for p in palabras:
-        if actual and (len(actual) >= max_por_grupo
-                       or p["inicio"] - actual[-1]["fin"] > HUECO_NUEVO_GRUPO_S):
-            grupos.append(actual)
-            actual = []
+        if actual:
+            nuevo = (len(actual) >= max_por_grupo
+                     or p["inicio"] - actual[-1]["fin"] > HUECO_NUEVO_GRUPO_S)
+            if not nuevo and medir is not None:
+                nuevo = medir([q["texto"] for q in actual] + [p["texto"]]) > ancho_max
+            if nuevo:
+                grupos.append(actual)
+                actual = []
         actual.append(p)
     if actual:
         grupos.append(actual)
     return grupos
 
 
-def _ventanas(grupo):
+def _ventanas(grupo, limite=None):
     """[(inicio, fin)] por palabra del grupo: hasta el inicio de la siguiente,
-    la última hasta su fin + cola."""
+    la última hasta su fin + cola, sin pasar de `limite` (inicio del grupo
+    siguiente) para que nunca se dibujen dos líneas a la vez."""
     ventanas = []
     for i, p in enumerate(grupo):
         if i + 1 < len(grupo):
             fin = grupo[i + 1]["inicio"]
         else:
             fin = p["fin"] + COLA_ULTIMA_PALABRA_S
+            if limite is not None:
+                fin = min(fin, limite)
         ventanas.append((round(float(p["inicio"]), 3), round(float(max(fin, p["inicio"])), 3)))
     return ventanas
+
+
+def _fuente_grupo(grupo, fuente_base, ancho_max, escala):
+    """Fuente del grupo: la base salvo que una palabra sola no quepa, en cuyo
+    caso se reduce (hasta TAM_SUB_MIN) hasta que quepa."""
+    d = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+    mas_ancha = max(d.textlength(p["texto"], font=fuente_base) for p in grupo)
+    if mas_ancha <= ancho_max:
+        return fuente_base
+    tam = TAM_SUB
+    fuente = fuente_base
+    while tam > TAM_SUB_MIN:
+        tam -= 2
+        fuente = _fuente("texto", tam * escala)
+        if max(d.textlength(p["texto"], font=fuente) for p in grupo) <= ancho_max:
+            break
+    return fuente
 
 
 def _subtitulos(palabras, acento, carpeta, ancho, alto, escala):
     palabras = [p for p in palabras if (p.get("texto") or "").strip()]
     if not palabras:
         return []
-    fuente = _fuente("texto", TAM_SUB * escala)
+    fuente_base = _fuente("texto", TAM_SUB * escala)
+    pad_x, pad_y = int(36 * escala), int(24 * escala)
+    # El PNG recortado mide texto + 2*pad_x + 2*PAD_RECORTE; debe caber en
+    # ancho - 2*MARGEN_SUB.
+    ancho_texto_max = ancho - 2 * int(MARGEN_SUB * escala) - 2 * pad_x - 2 * PAD_RECORTE
 
-    if len(palabras) > MAX_OVERLAYS_SUBTITULOS:
-        # Modo denso: un PNG por línea de 6 palabras, sin resaltar.
-        entradas = []
-        for grupo in agrupar_palabras(palabras, MAX_PALABRAS_LINEA_DENSA):
+    denso = len(palabras) > MAX_OVERLAYS_SUBTITULOS
+    max_grupo = MAX_PALABRAS_LINEA_DENSA if denso else MAX_PALABRAS_GRUPO
+    grupos = agrupar_palabras(palabras, max_grupo, ancho_texto_max, fuente_base)
+
+    entradas = []  # (textos, resaltada, ini, fin, fuente)
+    for g, grupo in enumerate(grupos):
+        limite = grupos[g + 1][0]["inicio"] if g + 1 < len(grupos) else None
+        fuente = _fuente_grupo(grupo, fuente_base, ancho_texto_max, escala)
+        textos = [p["texto"] for p in grupo]
+        if denso:
+            # Modo denso: un PNG por línea, sin resaltar.
             ini = round(float(grupo[0]["inicio"]), 3)
-            fin = round(float(grupo[-1]["fin"]) + COLA_ULTIMA_PALABRA_S, 3)
-            entradas.append(([p["texto"] for p in grupo], None, ini, fin))
-    else:
-        entradas = []
-        for grupo in agrupar_palabras(palabras):
-            textos = [p["texto"] for p in grupo]
-            for k, (ini, fin) in enumerate(_ventanas(grupo)):
-                entradas.append((textos, k, ini, fin))
+            fin = float(grupo[-1]["fin"]) + COLA_ULTIMA_PALABRA_S
+            if limite is not None:
+                fin = min(fin, limite)
+            entradas.append((textos, None, ini, round(fin, 3), fuente))
+        else:
+            for k, (ini, fin) in enumerate(_ventanas(grupo, limite)):
+                entradas.append((textos, k, ini, fin, fuente))
 
     # Deduplicación: ventanas idénticas (misma línea, mismo rango) se funden.
     resultado, vistos = [], {}
-    for n, (textos, k, ini, fin) in enumerate(entradas):
+    for n, (textos, k, ini, fin, fuente) in enumerate(entradas):
         clave = (tuple(textos), ini, fin)
         if clave in vistos:
             continue
         if fin <= ini:
             continue
         ruta = os.path.join(carpeta, f"sub_{n:03d}.png")
-        _png_subtitulo(textos, k, acento, fuente, ruta, ancho, alto, escala)
+        x, y = _png_subtitulo(textos, k, acento, fuente, ruta, ancho, alto, pad_x, pad_y, escala)
         vistos[clave] = True
-        resultado.append({"png": ruta, "inicio": ini, "fin": fin})
+        resultado.append(_entrada(ruta, ini, fin, x, y))
     return resultado
 
 
-def _png_subtitulo(textos, resaltada, acento, fuente, ruta, ancho, alto, escala):
+def _png_subtitulo(textos, resaltada, acento, fuente, ruta, ancho, alto, pad_x, pad_y, escala):
     im = Image.new("RGBA", (ancho, alto), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     espacio = _ancho_texto(d, " ", fuente)
     anchos = [_ancho_texto(d, t, fuente) for t in textos]
     total = sum(anchos) + espacio * (len(textos) - 1)
-    pad_x, pad_y = int(36 * escala), int(24 * escala)
     alto_linea = int(fuente.size * 1.25)
     x0 = (ancho - total) // 2
     y0 = int(alto * 0.78) - alto_linea // 2
@@ -166,7 +222,7 @@ def _png_subtitulo(textos, resaltada, acento, fuente, ruta, ancho, alto, escala)
         color = acento if i == resaltada else (255, 255, 255, 255)
         d.text((x, y0), t, font=fuente, fill=color)
         x += w + espacio
-    im.save(ruta)
+    return _guardar_recortado(im, ruta)
 
 
 # --- hook / badge / cta -----------------------------------------------------
@@ -175,7 +231,7 @@ def _png_hook(texto_hook, ruta, ancho, alto, escala):
     im = Image.new("RGBA", (ancho, alto), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     fuente = _fuente("titulo", TAM_HOOK * escala)
-    lineas = _ajustar(texto_hook, _CHARS_POR_LINEA[TAM_HOOK])
+    lineas = _ajustar(d, texto_hook, fuente, ancho - 2 * int(MARGEN_HOOK * escala))
     bloque = "\n".join(lineas)
     espaciado = int(12 * escala)
     bbox = d.multiline_textbbox((0, 0), bloque, font=fuente, spacing=espaciado, align="center")
@@ -188,7 +244,7 @@ def _png_hook(texto_hook, ruta, ancho, alto, escala):
     d.multiline_text((x, y), bloque, font=fuente, fill=(255, 255, 255, 255),
                      spacing=espaciado, align="center", stroke_width=int(3 * escala),
                      stroke_fill=(0, 0, 0, 220))
-    im.save(ruta)
+    return _guardar_recortado(im, ruta)
 
 
 def _png_badge(precio, acento, ruta, ancho, alto, escala):
@@ -205,14 +261,16 @@ def _png_badge(precio, acento, ruta, ancho, alto, escala):
     y1 = y0 + h + 2 * pad_y
     d.rounded_rectangle([x0, y0, x1, y1], radius=(y1 - y0) // 2, fill=acento)
     d.text((x0 + pad_x - bbox[0], y0 + pad_y - bbox[1]), precio, font=fuente, fill=(255, 255, 255, 255))
-    im.save(ruta)
+    return _guardar_recortado(im, ruta)
 
 
 def _png_cta(texto_cta, logo_path, ruta, ancho, alto, escala):
     im = Image.new("RGBA", (ancho, alto), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     fuente = _fuente("titulo", TAM_CTA * escala)
-    lineas = _ajustar(texto_cta, _CHARS_POR_LINEA[TAM_CTA])
+    pad = int(64 * escala)
+    card_w = int(ancho * 0.8)
+    lineas = _ajustar(d, texto_cta, fuente, card_w - 2 * pad)
     bloque = "\n".join(lineas)
     espaciado = int(14 * escala)
     bbox = d.multiline_textbbox((0, 0), bloque, font=fuente, spacing=espaciado, align="center")
@@ -222,8 +280,6 @@ def _png_cta(texto_cta, logo_path, ruta, ancho, alto, escala):
     lh = logo.size[1] if logo else 0
     sep = int(40 * escala) if logo else 0
 
-    pad = int(64 * escala)
-    card_w = int(ancho * 0.8)
     card_h = th + lh + sep + 2 * pad
     cx0 = (ancho - card_w) // 2
     cy0 = (alto - card_h) // 2
@@ -235,7 +291,7 @@ def _png_cta(texto_cta, logo_path, ruta, ancho, alto, escala):
         y += lh + sep
     d.multiline_text(((ancho - tw) // 2 - bbox[0], y - bbox[1]), bloque, font=fuente,
                      fill=(255, 255, 255, 255), spacing=espaciado, align="center")
-    im.save(ruta)
+    return _guardar_recortado(im, ruta)
 
 
 def _cargar_logo(logo_path, max_px):
@@ -253,12 +309,27 @@ def _cargar_logo(logo_path, max_px):
 
 # --- utilidades -------------------------------------------------------------
 
-def _ajustar(texto_libre, max_chars):
-    """Ajuste voraz por palabras a ~`max_chars` caracteres por línea."""
+def _guardar_recortado(im, ruta, pad=PAD_RECORTE):
+    """Guarda `im` recortada a su contenido (alpha > 0) más `pad` px, sin
+    salirse del frame. Devuelve (x, y) de la esquina superior izquierda del
+    recorte en coordenadas del frame. Una imagen vacía se guarda como 1x1."""
+    bbox = im.getbbox()
+    if not bbox:
+        bbox = (0, 0, 1, 1)
+        pad = 0
+    x0, y0 = max(0, bbox[0] - pad), max(0, bbox[1] - pad)
+    x1, y1 = min(im.width, bbox[2] + pad), min(im.height, bbox[3] + pad)
+    im.crop((x0, y0, x1, y1)).save(ruta)
+    return x0, y0
+
+
+def _ajustar(d, texto_libre, fuente, ancho_max):
+    """Ajuste voraz por palabras: línea nueva cuando la medida con `fuente`
+    superaría `ancho_max` px (una palabra más ancha que el límite va sola)."""
     lineas, actual = [], ""
     for palabra in (texto_libre or "").split():
         candidata = f"{actual} {palabra}".strip()
-        if actual and len(candidata) > max_chars:
+        if actual and d.textlength(candidata, font=fuente) > ancho_max:
             lineas.append(actual)
             actual = palabra
         else:
