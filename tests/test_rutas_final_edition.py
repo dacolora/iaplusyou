@@ -122,6 +122,28 @@ def test_producir_encola_una_tarea_por_destino(base_temporal, monkeypatch):
     assert p0["opciones"] == {"voz": "Josh", "estilo_musica": "lujo", "con_voz": True, "con_musica": False,
                               "precio": 89900.0, "idioma_base": "es"}
     assert any("2 finales" in m for m in _flashes(c))
+    # Las filas finales existen en `generando` desde que se encola, no desde
+    # que el worker arranca: la cuadrícula las muestra de una con su barra.
+    filas = cf.finales("acme", cf_id)
+    assert [(f["idioma"], f["pais"], f["estado"]) for f in filas] == [("es", "CO", "generando"), ("en", "US", "generando")]
+
+
+def test_producir_destino_en_curso_no_reinicia_la_fila(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    fid = cf.crear_final("acme", cf_id, "es", "CO")
+    cf.actualizar_final("acme", fid, estado="listo", url_video="https://r2/f.mp4")
+    monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda jid: jid == f"acme__{cf_id}__es_CO__final")
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    c = _cliente_admin(dashboard)
+    c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir",
+           data={"destinos": ["es_CO", "en_US"], "voz": "Rachel", "estilo_musica": "energetico"})
+    assert [t["job_id"] for t in llamadas] == [f"acme__{cf_id}__en_US__final"]
+    assert cf.final_por_legado("acme", fid)["estado"] == "listo"  # la fila viva no se tocó
+    assert cf.final_por_legado("acme", f"{cf_id}__en_US")["estado"] == "generando"
+    assert any("1 finales" in m for m in _flashes(c))
 
 
 def test_producir_rechaza_destinos_invalidos(base_temporal, monkeypatch):
@@ -230,6 +252,19 @@ def test_descartar_final_la_elimina(base_temporal):
     assert cf.cargar("acme").get(cf_id)  # la clon sigue
 
 
+def test_descartar_final_en_curso_no_la_borra(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import dashboard
+    cf_id = _sesion_video_listo()
+    fid = cf.crear_final("acme", cf_id, "es", "CO")
+    monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda jid: jid == f"acme__{cf_id}__es_CO__final")
+    c = _cliente_admin(dashboard)
+    r = c.post(f"/cliente/acme/creative_flow/{cf_id}/final/{fid}/descartar")
+    assert r.status_code == 302
+    assert cf.final_por_legado("acme", fid) is not None
+    assert any("se está produciendo" in m for m in _flashes(c))
+
+
 # ---------- items y plantilla ----------
 
 def test_creative_flow_items_incluye_guion_finales_y_trabajos(base_temporal, monkeypatch):
@@ -307,10 +342,30 @@ def test_plantilla_sin_guion_ofrece_preparar():
     assert "Preparar guion con IA" in html and 'name="precio"' in html
     assert "Guardar guion" not in html and "trabajo-acme__cf_1__final_guion" not in html
 
-    # Con el guion en curso: barra de progreso en vez del botón (no se puede encolar dos veces).
+    # Con el guion en curso: barra de progreso en la TARJETA (fuera del <template>,
+    # cuyos <script> clonados no corren) con polling real, y sin el botón (no se
+    # puede encolar dos veces).
     html = tpl.render(**_contexto_minimo([_item_video_listo(trabajo_guion={"job_id": "acme__cf_1__final_guion"})]))
-    assert "trabajo-acme__cf_1__final_guion" in html
+    assert 'iniciarPolling("acme__cf_1__final_guion"' in html
+    tarjeta = html.split('<template class="generado-detalle">')[0]
+    assert 'id="trabajo-acme__cf_1__final_guion"' in tarjeta and "Escribiendo el guion…" in tarjeta
+    detalle = html.split('<template class="generado-detalle">')[1]
+    assert "Se está escribiendo el guion…" in detalle and "barra-progreso" not in detalle
     assert "Preparar guion con IA" not in html
+    assert "Volver a escribir con IA" not in html
+
+
+def test_plantilla_con_guion_ofrece_reescribir():
+    env = _entorno_plantilla()
+    tpl = env.get_template("_tab_creativeflowplus.html")
+    html = tpl.render(**_contexto_minimo([_item_video_listo(guion_base=GUION_BASE)]))
+    assert "Volver a escribir con IA" in html and "Volver a escribir el guion con IA" in html  # botón + confirm
+    assert 'name="idioma_base" value="es"' in html
+    assert "reescribiendo" not in html
+    # Mientras se reescribe no se ofrece el botón (ni la barra dentro del template).
+    html = tpl.render(**_contexto_minimo([_item_video_listo(guion_base=GUION_BASE, trabajo_guion={"job_id": "acme__cf_1__final_guion"})]))
+    assert "Volver a escribir con IA" not in html
+    assert 'iniciarPolling("acme__cf_1__final_guion"' in html
 
 
 def test_plantilla_con_guion_y_finales_renderiza():

@@ -159,6 +159,15 @@
         <div class="generado-velo"><span class="generado-estado error">Error</span></div>
         {% elif item.estado == "prompt_listo" %}
         <div class="generado-velo"><span class="generado-estado">Sin generar</span></div>
+        {% elif item.trabajo_guion %}
+        {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
+           <template> del detalle, cuyos <script> clonados nunca corren) para
+           que el polling arranque al cargar la página y un fallo se vea. #}
+        <div class="generado-velo">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+          <div class="progreso-texto">Escribiendo el guion…</div>
+          <script>iniciarPolling({{ item.trabajo_guion.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_guion.job_id) | tojson }});</script>
+        </div>
         {% endif %}
       </div>
       <div class="generado-pie">
@@ -209,8 +218,7 @@
             <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
             {% if not item.guion_base %}
               {% if item.trabajo_guion %}
-              <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-              <div class="progreso-texto">Escribiendo el guion…</div>
+              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
               {% else %}
               <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar">
                 <label>Precio (opcional)
@@ -237,8 +245,16 @@
                 </div>
                 {% endfor %}
                 <button type="submit" class="btn-guardar btn-sm">Guardar guion</button>
-                {% if item.trabajo_guion %}<span class="vacio" style="padding:0;font-size:.74rem;">(se está reescribiendo el guion)</span>{% endif %}
               </form>
+              {% if item.trabajo_guion %}
+              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
+              {% else %}
+              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar"
+                    onsubmit="return confirm('¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).');">
+                <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in ('es', 'en', 'pt') else 'es' }}">
+                <button type="submit" class="btn-rechazar btn-sm">Volver a escribir con IA</button>
+              </form>
+              {% endif %}
 
               <h5 class="fe-subtitulo">Producir finales</h5>
               <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir">

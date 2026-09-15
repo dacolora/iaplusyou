@@ -2490,8 +2490,15 @@ def fe_producir(cliente, cf_id):
     }
     encolados = 0
     for idioma, pais in destinos:
+        job_id = tareas_fe.job_id_final(cliente, cf_id, idioma, pais)
+        if trabajos.en_curso(job_id):
+            # Ya hay una viva: no se toca la fila (el worker la está escribiendo).
+            continue
+        # La fila final existe en `generando` desde que se encola, así la
+        # cuadrícula la muestra con su barra sin esperar a que el worker arranque.
+        creative_flow.crear_final(cliente, cf_id, idioma, pais)
         if trabajos.encolar(
-            tareas_fe.job_id_final(cliente, cf_id, idioma, pais), "final_producir",
+            job_id, "final_producir",
             {"cliente": cliente, "cf_id": cf_id, "idioma": idioma, "pais": pais, "opciones": dict(opciones)},
             cliente=cliente, duracion_estimada=150, etapas=ETAPAS_FINAL, max_intentos=1,
         ):
@@ -2505,7 +2512,13 @@ def fe_producir(cliente, cf_id):
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/descartar", methods=["POST"])
 def fe_descartar(cliente, cf_id, final_id):
-    if not final_id.startswith(cf_id + "__") or not creative_flow.eliminar_final(cliente, final_id):
+    final = creative_flow.final_por_legado(cliente, final_id) if final_id.startswith(cf_id + "__") else None
+    if final and trabajos.en_curso(tareas_fe.job_id_final(cliente, cf_id, final["idioma"], final["pais"])):
+        # Borrar la fila mientras el worker la escribe la dejaría resucitar a
+        # medias (actualizar_final sobre una pieza que ya no existe).
+        flash("Esa final se está produciendo; espera a que termine.", "error")
+        return _volver_crear(cliente)
+    if not final or not creative_flow.eliminar_final(cliente, final_id):
         flash("Esa final ya no existe.", "error")
     else:
         flash("Final descartada.", "ok")
