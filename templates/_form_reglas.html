@@ -1,0 +1,20 @@
+{# Campos de reglas del decisor. Espera: reglas_defecto_exp, reglas_enteras_exp,
+   reglas_desactivables_exp, etiquetas_reglas_exp (contexto de ver_cliente) y,
+   por `with`: reglas_valores (capa propia: {clave: valor|None}), reglas_placeholder
+   (valor efectivo que aplica hoy) y prefijo (para ids únicos). Vacío = hereda;
+   la casilla «sin umbral» guarda None explícito (apaga la comparación). #}
+<div class="reglas-grid">
+  {% for k in reglas_defecto_exp %}
+  {% set propio = reglas_valores.get(k) if k in reglas_valores else none %}
+  {% set apagado = (k in reglas_valores) and reglas_valores.get(k) is none %}
+  <label class="regla" for="{{ prefijo }}-{{ k }}">
+    <span class="regla-nombre">{{ etiquetas_reglas_exp.get(k, k) }} <code>{{ k }}</code></span>
+    <input type="number" id="{{ prefijo }}-{{ k }}" name="{{ k }}" step="{{ '1' if k in reglas_enteras_exp else 'any' }}" min="0"
+           value="{{ propio if propio is not none else '' }}"
+           placeholder="{{ reglas_placeholder.get(k) if reglas_placeholder.get(k) is not none else 'sin umbral' }}">
+    {% if k in reglas_desactivables_exp %}
+    <span class="regla-sin"><input type="checkbox" name="sin_{{ k }}" value="1" {% if apagado %}checked{% endif %}> sin umbral</span>
+    {% endif %}
+  </label>
+  {% endfor %}
+</div>

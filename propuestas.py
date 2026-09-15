@@ -96,6 +96,14 @@ def marcar_ejecutada(cliente, propuesta_id):
                 or _cambiar_estado(con, cliente, propuesta_id, "pendiente", "ejecutada"))
 
 
+def reabrir(cliente, propuesta_id):
+    """Aprobada → pendiente: cuando la ruta aprobó pero acciones.ejecutar
+    falló, la propuesta vuelve a la lista para reintentarla o rechazarla.
+    Atómico (UPDATE ... WHERE estado='aprobada'); None si no estaba aprobada."""
+    with db.conectar() as con:
+        return _cambiar_estado(con, cliente, propuesta_id, "aprobada", "pendiente")
+
+
 def aprobar_todas(cliente, experimento_id):
     """Aprueba todas las pendientes de un experimento; devuelve las aprobadas
     en orden de creación."""

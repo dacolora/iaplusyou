@@ -103,6 +103,29 @@
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
+<h2>Reglas por defecto de los experimentos</h2>
+<p class="vacio" style="padding-top:0;">
+  Con estas reglas el motor decide ganadores y perdedores en todos los
+  experimentos del proyecto. Cada experimento puede sobreescribir una regla en
+  su propio panel. Vacío = valor de fábrica (en gris). «Sin umbral» apaga esa comparación.
+</p>
+<form method="post" action="{{ url_for('cfg_reglas', cliente=cliente) }}" class="form-nueva-idea exp-reglas-form">
+  {% with reglas_valores=reglas_cliente, reglas_placeholder=reglas_defecto_exp, prefijo="cfg" %}{% include "_form_reglas.html" %}{% endwith %}
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar reglas por defecto</button>
+</form>
+
+<h2 style="margin-top:2rem;">Correo para avisos</h2>
+<p class="vacio" style="padding-top:0;">
+  A este correo llegan las propuestas que esperan aprobación, los ganadores y
+  los rechazos de Meta. Vacío = sin avisos por correo.
+</p>
+<form method="post" action="{{ url_for('cfg_correo', cliente=cliente) }}" class="form-nueva-idea">
+  <input type="email" name="correo" value="{{ correo_notificaciones }}" placeholder="dueño@tuproyecto.com">
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+</form>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
 {% include "_seccion_marca.html" %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">

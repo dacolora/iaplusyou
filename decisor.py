@@ -16,6 +16,40 @@ _ENTEROS = {"ventana_horas", "impresiones_min", "ventana_ventas_horas", "n_reedi
 # None (o "" desde un formulario web) en su capa: la ausencia de valor apaga
 # la comparación, no equivale a "sin dato todavía".
 _UMBRALES_DESACTIVABLES = {"cpc_max", "ctr_min", "thruplay_min", "cpa_max", "roas_min", "escalar_tope_dia"}
+# Alias públicos para los formularios (dashboard) — misma tupla de claves.
+ENTEROS = frozenset(_ENTEROS)
+UMBRALES_DESACTIVABLES = frozenset(_UMBRALES_DESACTIVABLES)
+# Texto corto de cada regla para la UI (misma clave que REGLAS_DEFECTO).
+ETIQUETAS = {
+    "ventana_horas": "Ventana de tráfico (horas)", "impresiones_min": "Impresiones mínimas",
+    "gasto_min_x_presupuesto": "Gasto mínimo (x presupuesto diario)", "cpc_max": "CPC máximo",
+    "ctr_min": "CTR mínimo (%)", "thruplay_min": "ThruPlay mínimo (0–1)",
+    "ventana_ventas_horas": "Ventana de ventas (horas)", "cpa_max": "CPA máximo", "roas_min": "ROAS mínimo",
+    "n_reediciones": "Re-ediciones por derivación", "n_regeneraciones": "Regeneraciones por derivación",
+    "escalar_pct_dia": "Escalar (% por día)", "escalar_tope_dia": "Tope diario al escalar",
+}
+
+
+def reglas_desde_formulario(form):
+    """Convierte un formulario web en una capa de reglas: por cada clave de
+    REGLAS_DEFECTO, vacío → no se guarda (hereda); número → se guarda (int en
+    las enteras); `sin_<clave>` marcado en un umbral desactivable → None
+    explícito (apaga el umbral). Devuelve (reglas, errores) donde errores es
+    la lista de claves con valor no numérico."""
+    reglas, errores = {}, []
+    for k in REGLAS_DEFECTO:
+        if k in _UMBRALES_DESACTIVABLES and form.get(f"sin_{k}"):
+            reglas[k] = None
+            continue
+        crudo = (form.get(k) or "").strip()
+        if crudo == "":
+            continue
+        n = _num(k, crudo)
+        if n is None or n != n or n in (float("inf"), float("-inf")):
+            errores.append(k)
+            continue
+        reglas[k] = n
+    return reglas, errores
 
 
 def _num(clave, valor):
@@ -23,7 +57,7 @@ def _num(clave, valor):
         return None
     try:
         return int(float(valor)) if clave in _ENTEROS else float(valor)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 

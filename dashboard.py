@@ -11,6 +11,7 @@ Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 import json
 import math
 import os
+import re
 import secrets
 import socket
 import subprocess
@@ -55,6 +56,10 @@ import cola
 import db
 import experimentos
 import lanzador
+import acciones
+import decisor
+import modos
+import propuestas
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 from tareas import final_edition as tareas_fe
 from tareas import experimentos as tareas_exp
@@ -856,6 +861,10 @@ def ver_cliente(cliente):
             if trabajos.en_curso(jid):
                 trabajos_exp[e["id"]] = {"job_id": jid}
     moneda_exp = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    # Bloque 4: propuestas pendientes por experimento (una consulta por
+    # experimento con contador > 0), reglas y modos para los formularios.
+    propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in experimentos_exp if e["propuestas_pendientes"]}
+    reglas_cliente = proyectos.reglas_defecto(cliente)
 
     return render_template(
         "cliente.html",
@@ -906,6 +915,16 @@ def ver_cliente(cliente):
         objetivos_exp=meta_campaign.OBJETIVOS_VALIDOS_FASE1,
         minimo_diario_exp=PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         moneda_exp=moneda_exp,
+        propuestas_exp=propuestas_exp,
+        reglas_defecto_exp=decisor.REGLAS_DEFECTO,
+        reglas_enteras_exp=decisor.ENTEROS,
+        reglas_desactivables_exp=decisor.UMBRALES_DESACTIVABLES,
+        etiquetas_reglas_exp=decisor.ETIQUETAS,
+        reglas_cliente=reglas_cliente,
+        reglas_efectivas_exp={e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
+        correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
+        modos_exp=modos.MODOS,
+        nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
     )
 
 
@@ -2172,8 +2191,11 @@ def exp_crear(cliente):
     if bajos:
         flash(f"El presupuesto diario no alcanza el mínimo de Meta ({minimo} {moneda}) en: {', '.join(bajos)}.", "error")
         return volver
-    eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max)
-    experimentos.registrar_evento(cliente, eid, "creado", f"Experimento creado con {len(paises)} países")
+    modo = request.form.get("modo") or "manual"
+    if modo not in modos.MODOS:
+        modo = "manual"   # nunca se sube de puerta por un valor raro en el form
+    eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max, modo=modo)
+    experimentos.registrar_evento(cliente, eid, "creado", f"Experimento creado con {len(paises)} países (modo {modo})")
     flash(f"Experimento «{nombre}» creado. Agrega piezas y lánzalo cuando esté listo.", "ok")
     return volver
 
@@ -2388,6 +2410,186 @@ def exp_cerrar(cliente, eid):
             flash(str(e), "error")
         except Exception as e:
             flash(f"No pude cerrar el experimento: {cola.sin_token(str(e))}", "error")
+    return volver
+
+
+# ---- Bloque 4: modo, reglas, propuestas, evaluar ahora ---------------------
+
+def _volver_exp(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/modo", methods=["POST"])
+def exp_modo(cliente, eid):
+    """Cambia la puerta del experimento (manual/semi/auto). Solo cambia lo que
+    el decisor hará DESPUÉS: no ejecuta ninguna propuesta ya pendiente."""
+    modo = (request.form.get("modo") or "").strip()
+    ex = experimentos.obtener(cliente, eid)
+    if not ex:
+        flash("Ese experimento no existe.", "error")
+        return _volver_exp(cliente)
+    if modo not in modos.MODOS:
+        flash("Modo inválido.", "error")
+        return _volver_exp(cliente)
+    if ex["estado"] == "cerrado":
+        flash("Un experimento cerrado no cambia de modo.", "error")
+        return _volver_exp(cliente)
+    if modo != ex["modo"]:
+        experimentos.actualizar(cliente, eid, modo=modo)
+        experimentos.registrar_evento(cliente, eid, "modo", f"Modo cambiado de {ex['modo']} a {modo}.",
+                                      {"antes": ex["modo"], "despues": modo})
+    flash(f"Modo: {modo}.", "ok")
+    return _volver_exp(cliente)
+
+
+def _flash_reglas_invalidas(errores):
+    nombres = ", ".join(errores)
+    flash(f"Revisa estos valores, deben ser números: {nombres}. No se guardó nada.", "error")
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/reglas", methods=["POST"])
+def exp_reglas(cliente, eid):
+    ex = experimentos.obtener(cliente, eid)
+    if not ex:
+        flash("Ese experimento no existe.", "error")
+        return _volver_exp(cliente)
+    reglas, errores = decisor.reglas_desde_formulario(request.form)
+    if errores:
+        _flash_reglas_invalidas(errores)
+        return _volver_exp(cliente)
+    experimentos.actualizar(cliente, eid, reglas=reglas)
+    experimentos.registrar_evento(cliente, eid, "reglas", "Reglas del experimento actualizadas.", {"reglas": reglas})
+    flash("Reglas guardadas. Lo vacío hereda de Configuración.", "ok")
+    return _volver_exp(cliente)
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/decidir", methods=["POST"])
+def exp_decidir_ahora(cliente, eid):
+    """Encola una pasada del decisor. Evaluar no gasta por sí mismo: lo que
+    gasta pasa por la puerta del modo (acciones.pedir) y en manual/semi queda
+    como propuesta."""
+    ex = experimentos.obtener(cliente, eid)
+    if not ex or ex["estado"] != "corriendo":
+        flash("Solo se evalúa un experimento que está corriendo.", "error")
+        return _volver_exp(cliente)
+    job_id = tareas_exp.job_id_decidir(cliente, eid)
+    arranco = trabajos.encolar(job_id, "exp_decidir", {"cliente": cliente, "experimento_id": eid},
+                               cliente=cliente, duracion_estimada=60, max_intentos=1)
+    flash("Evaluando…" if arranco else "Ya se está evaluando.", "ok" if arranco else "warn")
+    return _volver_exp(cliente)
+
+
+def _ep_id_evento(cliente, pr):
+    """ep_id del payload solo si la pieza sigue existiendo (el evento tiene
+    FK a experimento_pieza; una propuesta vieja no debe tumbar la ruta)."""
+    ep_id = (pr.get("payload") or {}).get("ep_id")
+    if ep_id is None:
+        return None
+    return ep_id if experimentos.experimento_de_pieza(cliente, ep_id) == pr["experimento_id"] else None
+
+
+def _ejecutar_propuesta(cliente, pr):
+    """Ejecuta una propuesta ya aprobada y la marca ejecutada. Si falla, la
+    devuelve a pendiente y devuelve el mensaje de error (None si fue bien).
+    Va bajo _ENV_LOCK porque acciones.ejecutar puede tocar Meta."""
+    with _ENV_LOCK:
+        try:
+            mensaje = acciones.ejecutar(cliente, pr["experimento_id"], pr["accion"], pr["payload"])
+        except ValueError as e:
+            propuestas.reabrir(cliente, pr["id"])
+            return str(e)
+        except Exception as e:  # noqa: BLE001
+            propuestas.reabrir(cliente, pr["id"])
+            return f"No pude ejecutar «{pr['accion']}»: {cola.sin_token(str(e))}"
+    propuestas.marcar_ejecutada(cliente, pr["id"])
+    experimentos.registrar_evento(cliente, pr["experimento_id"], "accion",
+                                  f"{mensaje} (propuesta #{pr['id']} aprobada a mano)",
+                                  {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
+                                  ep_id=_ep_id_evento(cliente, pr))
+    flash(mensaje, "ok")
+    return None
+
+
+@app.route("/cliente/<cliente>/propuestas/<int:pid>/aprobar", methods=["POST"])
+def prop_aprobar(cliente, pid):
+    # propuestas.resolver filtra por cliente: una propuesta de otro proyecto
+    # devuelve None y no se ejecuta nada.
+    pr = propuestas.resolver(cliente, pid, "aprobada")
+    if not pr:
+        flash("Esa propuesta no existe o ya estaba resuelta.", "error")
+        return _volver_exp(cliente)
+    error = _ejecutar_propuesta(cliente, pr)
+    if error:
+        flash(error, "error")
+    return _volver_exp(cliente)
+
+
+@app.route("/cliente/<cliente>/propuestas/<int:pid>/rechazar", methods=["POST"])
+def prop_rechazar(cliente, pid):
+    pr = propuestas.resolver(cliente, pid, "rechazada")
+    if not pr:
+        flash("Esa propuesta no existe o ya estaba resuelta.", "error")
+        return _volver_exp(cliente)
+    experimentos.registrar_evento(cliente, pr["experimento_id"], "propuesta",
+                                  f"Propuesta #{pr['id']} ({pr['accion']}) rechazada a mano.",
+                                  {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
+                                  ep_id=_ep_id_evento(cliente, pr))
+    flash("Propuesta rechazada.", "ok")
+    return _volver_exp(cliente)
+
+
+@app.route("/cliente/<cliente>/experimentos/<int:eid>/propuestas/aprobar_todas", methods=["POST"])
+def prop_aprobar_todas(cliente, eid):
+    """Aprueba y ejecuta en orden de creación; en el primer error se detiene:
+    esa propuesta vuelve a pendiente y las que siguen se quedan pendientes
+    (no se aprueban), para que la persona decida con el error a la vista."""
+    ex = experimentos.obtener(cliente, eid)
+    if not ex:
+        flash("Ese experimento no existe.", "error")
+        return _volver_exp(cliente)
+    pendientes = propuestas.pendientes(cliente, eid)
+    if not pendientes:
+        flash("No había propuestas pendientes.", "ok")
+        return _volver_exp(cliente)
+    hechas = 0
+    for pr in pendientes:
+        aprobada = propuestas.resolver(cliente, pr["id"], "aprobada")
+        if not aprobada:
+            continue   # alguien la resolvió entre medio
+        error = _ejecutar_propuesta(cliente, aprobada)
+        if error:
+            flash(f"Me detuve en la propuesta #{pr['id']} ({pr['accion']}): {error}", "error")
+            break
+        hechas += 1
+    if hechas:
+        flash(f"{hechas} propuesta(s) ejecutada(s).", "ok")
+    return _volver_exp(cliente)
+
+
+@app.route("/cliente/<cliente>/config/reglas", methods=["POST"])
+def cfg_reglas(cliente):
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+    reglas, errores = decisor.reglas_desde_formulario(request.form)
+    if errores:
+        _flash_reglas_invalidas(errores)
+        return volver
+    proyectos.guardar_reglas_defecto(cliente, reglas)
+    flash("Reglas por defecto guardadas.", "ok")
+    return volver
+
+
+_CORREO_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+@app.route("/cliente/<cliente>/config/correo", methods=["POST"])
+def cfg_correo(cliente):
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+    correo = (request.form.get("correo") or "").strip()
+    if correo and not _CORREO_RE.match(correo):
+        flash("Ese correo no parece válido.", "error")
+        return volver
+    proyectos.guardar_correo_notificaciones(cliente, correo)
+    flash("Correo guardado." if correo else "Avisos por correo desactivados.", "ok")
     return volver
 
 

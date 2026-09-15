@@ -1208,6 +1208,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .semaforo-cerrado { background: var(--muted); }
 .semaforo-error { background: var(--error); }
 .semaforo-lanzando { background: var(--warn); animation: exp-pulso 1.1s ease-in-out infinite; }
+.semaforo-decidido { background: var(--accent, #6c5ce7); }
 @keyframes exp-pulso { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
 .exp-acciones { display: flex; gap: .5rem; flex-wrap: wrap; margin: .6rem 0; }
@@ -1233,3 +1234,37 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 .exp-eventos { margin-top: .8rem; }
 .exp-eventos ul { font-size: .76rem; max-height: 14rem; overflow: auto; list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+
+/* ---- Experimentos (bloque 4): modo, propuestas, veredictos, reglas ---- */
+.tag-modo { text-transform: none; }
+.tag-propuestas { font-size: .72rem; padding: .1rem .45rem; border-radius: 999px; background: var(--warn); color: #222; font-weight: 600; }
+.exp-ayuda-modo { font-size: .76rem; padding-top: .3rem; }
+.exp-parentesco { font-size: .8rem; display: flex; gap: 1rem; flex-wrap: wrap; margin: .4rem 0; }
+.exp-modo { display: inline-flex; align-items: center; gap: .6rem; margin: .4rem 0; flex-wrap: wrap; font-size: .82rem; }
+.exp-modo label { display: inline-flex; align-items: center; gap: .3rem; }
+.exp-modo small { font-size: .72rem; padding: 0; display: inline; }
+.exp-propuestas { border: 1px solid var(--warn); border-radius: var(--radius); padding: .6rem .8rem; margin: .6rem 0; background: color-mix(in srgb, var(--warn) 8%, transparent); }
+.exp-propuestas-cab { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; font-size: .84rem; }
+.exp-propuestas ul { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .35rem; }
+.exp-propuesta { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-size: .8rem; }
+.exp-propuesta form.inline { margin: 0; display: inline; }
+.exp-propuesta-que { flex: 1 1 14rem; }
+.exp-propuesta-que small, .exp-numeros { color: var(--muted); }
+.exp-numeros { display: block; font-size: .72rem; }
+.tag-accion { text-transform: uppercase; letter-spacing: .03em; }
+.veredicto { font-size: .7rem; padding: .1rem .45rem; border-radius: 999px; font-weight: 600; color: #fff; cursor: help; }
+.veredicto-ganador { background: var(--ok); }
+.veredicto-perdedor { background: var(--error); }
+.veredicto-inconcluso { background: var(--muted); }
+.tag-escalon { cursor: help; }
+.exp-derivaciones { margin: .6rem 0; font-size: .8rem; }
+.exp-derivaciones > ul { list-style: none; margin: .3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+.exp-derivacion-items { list-style: none; margin: .2rem 0 0 1.2rem; padding: 0; font-size: .74rem; color: var(--muted); }
+.exp-reglas { margin-top: .6rem; }
+.exp-reglas summary { cursor: pointer; font-size: .84rem; }
+.reglas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: .5rem .9rem; margin: .5rem 0; }
+.regla { display: flex; flex-direction: column; gap: .2rem; font-size: .76rem; }
+.regla-nombre code { font-size: .68rem; color: var(--muted); }
+.regla input[type="number"] { width: 100%; }
+.regla-sin { font-size: .72rem; color: var(--muted); display: inline-flex; align-items: center; gap: .3rem; }
+.exp-reglas-form .vacio { font-size: .74rem; padding-top: .2rem; }
