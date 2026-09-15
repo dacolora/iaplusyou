@@ -192,6 +192,66 @@ def guardar(cliente, data):
         eliminar(cliente, cf_id)
 
 
+def duplicar(cliente, cf_id, modelo=None, enfoque=None):
+    """Nueva sesión a partir de `cf_id`: copia la idea del concepto (acción
+    central, referencias, productos, tono, modo, platforms...) y crea la pieza
+    clon en `prompt_listo` (pendiente) para que Crear la genere de nuevo —
+    no copia el video ni genera nada. `modelo` va a la columna de la pieza y
+    `enfoque` a la del concepto si se dan; si no, se conservan los del
+    original. `extra["derivado_de"] = cf_id`. Devuelve el nuevo cf_id."""
+    with db.conectar() as con:
+        f = con.execute(sa.select(db.concepto.c.extra, db.concepto.c.enfoque, db.pieza.c.modelo,
+                                  db.pieza.c.aspect_ratio, db.pieza.c.duracion_s, db.pieza.c.tipo)
+                        .join(db.pieza, db.pieza.c.concepto_id == db.concepto.c.id)
+                        .where(db.concepto.c.cliente == cliente, db.concepto.c.legado_id == cf_id,
+                               db.pieza.c.tipo != "final")
+                        .order_by(db.pieza.c.id)).first()
+        if not f:
+            raise ValueError(f"No existe la sesión {cf_id} de {cliente}.")
+        extra_c, enfoque_orig, modelo_orig, aspect_ratio, duracion_s, tipo = f
+        extra = dict(extra_c or {})
+        # Lo que pertenece al video generado, no a la idea, no viaja.
+        for k in ("credits", "prompt_relleno", "guion_base"):
+            extra.pop(k, None)
+        extra["estado_legado"] = "prompt_listo"
+        extra["derivado_de"] = cf_id
+        nuevo_id = "cf_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        ahora = db.ahora()
+        cid = con.execute(db.concepto.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, origen="manual",
+            enfoque=enfoque if enfoque is not None else enfoque_orig,
+            legado_id=nuevo_id, extra=extra)).inserted_primary_key[0]
+        con.execute(db.pieza.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, concepto_id=cid,
+            tipo=tipo if tipo in ("video", "imagen") else "video", estado="pendiente",
+            modelo=modelo if modelo is not None else modelo_orig, aspect_ratio=aspect_ratio,
+            duracion_s=duracion_s, legado_id=nuevo_id, extra={}))
+    return nuevo_id
+
+
+def archivar_concepto(cliente, cf_id, motivo):
+    """Marca el concepto de la sesión como archivado (`archivado=True`,
+    `motivo_archivo=motivo`): sus piezas dejan de ser elegibles para
+    experimentos. No borra nada. False si la sesión no existe."""
+    with db.conectar() as con:
+        f = _ids(con, cliente, cf_id)
+        if not f:
+            return False
+        con.execute(db.concepto.update().where(db.concepto.c.id == f[0])
+                    .values(actualizado_en=db.ahora(), archivado=True, motivo_archivo=motivo))
+    return True
+
+
+def concepto_archivado(cliente, cf_id):
+    """True si el concepto de la sesión está archivado (False si no existe)."""
+    with db.conectar() as con:
+        f = _ids(con, cliente, cf_id)
+        if not f:
+            return False
+        return bool(con.execute(sa.select(db.concepto.c.archivado)
+                                .where(db.concepto.c.id == f[0])).scalar())
+
+
 # ------------------------------------------------------------ piezas finales ---
 # Una pieza `final` cuelga de la pieza clon de la sesión (padre_pieza_id) y
 # comparte su concepto. `cargar`/`_ids` las excluyen (tipo != "final") para
@@ -201,9 +261,17 @@ _FINAL_COLS = ("estado", "url_video", "url_miniatura", "url_local", "duracion_s"
                "capas", "costo_usd", "guion", "error")
 
 
+def _variante_de(legado_id):
+    """Número de variante a partir del legado_id de una final
+    (`..__v<n>` -> n; sin sufijo -> None)."""
+    _, sep, cola = (legado_id or "").rpartition("__v")
+    return int(cola) if sep and cola.isdigit() else None
+
+
 def _final_a_dict(p):
     return {
         "id": p.legado_id, "idioma": p.idioma, "pais": p.pais, "estado": p.estado,
+        "variante": _variante_de(p.legado_id),
         "video_url": p.url_video, "url_miniatura": p.url_miniatura, "url_local": p.url_local,
         "duracion_s": p.duracion_s, "costo_usd": p.costo_usd, "capas": p.capas or {},
         "guion": p.guion, "error": p.error, "creado_en": p.creado_en,
@@ -216,9 +284,12 @@ def _fila_final(con, cliente, final_id):
         db.pieza.c.legado_id == final_id)).first()
 
 
-def crear_final(cliente, cf_id, idioma, pais):
+def crear_final(cliente, cf_id, idioma, pais, variante=None):
     """Crea (o reinicia a `generando`) la pieza final de la sesión para ese
-    idioma/país. Devuelve su legado_id `<cf_id>__<idioma>_<pais>`.
+    idioma/país. Devuelve su legado_id `<cf_id>__<idioma>_<pais>`, o
+    `<cf_id>__<idioma>_<pais>__v<variante>` si `variante` (int >= 1) viene:
+    una variante (otro hook, otra estructura) convive con la final original
+    del mismo destino en vez de reemplazarla.
 
     Si ya existía (se está reproduciendo un destino que ya tenía una final),
     NO se borra `url_video`/`url_miniatura`: la cuadrícula sigue mostrando el
@@ -228,6 +299,10 @@ def crear_final(cliente, cf_id, idioma, pais):
     estado="error" los deja intactos, así que el cliente nunca se queda sin
     nada por un reintento fallido (I4)."""
     final_id = f"{cf_id}__{idioma}_{pais}"
+    if variante is not None:
+        if int(variante) < 1:
+            raise ValueError(f"La variante debe ser un entero >= 1, no {variante!r}.")
+        final_id += f"__v{int(variante)}"
     with db.conectar() as con:
         f = _ids(con, cliente, cf_id)
         if not f:
@@ -263,8 +338,9 @@ def actualizar_final(cliente, final_id, **campos):
 
 def finales(cliente, cf_id):
     """Piezas finales de la sesión (dicts con id=legado_id, idioma, pais,
-    estado, video_url, url_miniatura, url_local, duracion_s, costo_usd, capas,
-    guion, error, creado_en), en orden de creación."""
+    variante (int o None), estado, video_url, url_miniatura, url_local,
+    duracion_s, costo_usd, capas, guion, error, creado_en), en orden de
+    creación. Incluye tanto las finales originales como sus variantes."""
     with db.conectar() as con:
         f = _ids(con, cliente, cf_id)
         if not f:

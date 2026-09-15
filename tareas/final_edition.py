@@ -7,6 +7,7 @@ el reporte de etapas y el mensaje que ve la persona.
 Ids de trabajo (los mismos que usa dashboard para encolar y consultar):
   final_guion    -> f"{cliente}__{cf_id}__final_guion"            (max_intentos=2)
   final_producir -> f"{cliente}__{cf_id}__{idioma}_{pais}__final"  (max_intentos=1)
+                    (variante n: f"{cliente}__{cf_id}__{idioma}_{pais}__v{n}__final")
 
 `final_producir` va con max_intentos=1: cada capa cobra (voz, música,
 localización) y `producir` ya deja la pieza en `error` con el motivo; la
@@ -23,8 +24,19 @@ def job_id_guion(cliente, cf_id):
     return f"{cliente}__{cf_id}__final_guion"
 
 
-def job_id_final(cliente, cf_id, idioma, pais):
-    return f"{cliente}__{cf_id}__{idioma}_{pais}__final"
+def job_id_final(cliente, cf_id, idioma, pais, variante=None):
+    return f"{cliente}__{_legado_final(cf_id, idioma, pais, variante)}__final"
+
+
+def _legado_final(cf_id, idioma, pais, variante=None):
+    """Mismo legado_id que `creative_flow.crear_final` (sufijo `__v<n>` si hay
+    variante)."""
+    base = f"{cf_id}__{idioma}_{pais}"
+    return f"{base}__v{int(variante)}" if variante is not None else base
+
+
+def _variante(payload):
+    return (payload.get("opciones") or {}).get("variante")
 
 
 @registrar("final_guion")
@@ -43,13 +55,16 @@ def ejecutar_producir(tarea):
     y se arma el mensaje."""
     p = tarea["payload"]
     cliente, cf_id, idioma, pais = p["cliente"], p["cf_id"], p["idioma"], p["pais"]
-    job_id = tarea.get("job_id") or job_id_final(cliente, cf_id, idioma, pais)
+    job_id = tarea.get("job_id") or job_id_final(cliente, cf_id, idioma, pais, variante=_variante(p))
     _, resumen = final_edition.producir(
         cliente, cf_id, idioma, pais, p.get("opciones") or {},
         on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    nombre = f"Final {idioma}_{pais}"
+    if _variante(p) is not None:
+        nombre = f"Variante {_variante(p)} de la final {idioma}_{pais}"
     if (resumen or {}).get("estado") == "degradada":
-        return f"Final {idioma}_{pais} lista (sin voz/música)."
-    return f"Final {idioma}_{pais} lista."
+        return f"{nombre} lista (sin voz/música)."
+    return f"{nombre} lista."
 
 
 @al_interrumpir("final_producir")
@@ -59,7 +74,7 @@ def interrumpida(tarea, mensaje):
     camino no se pisa). final_guion no necesita hook: no deja estado a medias."""
     p = tarea["payload"]
     cliente = p["cliente"]
-    final_id = f"{p['cf_id']}__{p['idioma']}_{p['pais']}"
+    final_id = _legado_final(p["cf_id"], p["idioma"], p["pais"], _variante(p))
     entry = creative_flow.final_por_legado(cliente, final_id)
     if entry is None or entry.get("estado") != "generando":
         return

@@ -1478,7 +1478,7 @@ def _creative_flow_items(cliente):
             jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
             item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
             for f in creative_flow.finales(cliente, cf_id):
-                jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"])
+                jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
                 f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
                 item["finales"].append(f)
         items.append(item)
@@ -2817,7 +2817,8 @@ def fe_producir(cliente, cf_id):
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/descartar", methods=["POST"])
 def fe_descartar(cliente, cf_id, final_id):
     final = creative_flow.final_por_legado(cliente, final_id) if final_id.startswith(cf_id + "__") else None
-    if final and trabajos.en_curso(tareas_fe.job_id_final(cliente, cf_id, final["idioma"], final["pais"])):
+    if final and trabajos.en_curso(tareas_fe.job_id_final(cliente, cf_id, final["idioma"], final["pais"],
+                                                          variante=final.get("variante"))):
         # Borrar la fila mientras el worker la escribe la dejaría resucitar a
         # medias (actualizar_final sobre una pieza que ya no existe).
         flash("Esa final se está produciendo; espera a que termine.", "error")

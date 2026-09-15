@@ -47,7 +47,8 @@ COLOR_ACENTO_DEFECTO = texto.COLOR_ACENTO_DEFECTO
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _TAMANOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
 _OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "precios": None, "con_voz": True,
-                     "con_musica": True, "idioma_base": "es", "duracion_s": None}
+                     "con_musica": True, "idioma_base": "es", "duracion_s": None,
+                     "variante": None, "variante_tipo": None}
 
 
 # ------------------------------------------------------------------ rutas ---
@@ -217,15 +218,47 @@ def preparar_guion(cliente, cf_id, opciones=None):
     return guion_base, round(costo, 4)
 
 
+def _siguiente(lista, actual):
+    """El elemento que sigue a `actual` en `lista` (cíclico); el primero si
+    `actual` no está. Para elegir "otra" voz / "otro" estilo de música."""
+    lista = list(lista)
+    if not lista:
+        return actual
+    try:
+        return lista[(lista.index(actual) + 1) % len(lista)]
+    except ValueError:
+        return lista[0]
+
+
+def _parametro_capa_original(cliente, cf_id, idioma, pais, capa, clave):
+    """Valor usado por la final original (sin variante) del mismo destino en
+    `capas[capa]["parametros"][clave]`, o None si no existe."""
+    original = creative_flow.final_por_legado(cliente, f"{cf_id}__{idioma}_{pais}")
+    if not original:
+        return None
+    return (((original.get("capas") or {}).get(capa) or {}).get("parametros") or {}).get(clave)
+
+
 def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
     """Produce la pieza final `idioma`/`pais` de la sesión. Devuelve
     `(final_id, resumen)`; `resumen` es el dict de `creative_flow.finales`.
-    `on_etapa(nombre)` se llama antes de cada etapa de `ETAPAS_FINAL`."""
+    `on_etapa(nombre)` se llama antes de cada etapa de `ETAPAS_FINAL`.
+
+    Variantes: si `opciones` trae `variante` (int >= 1) y `variante_tipo`
+    ("hook" | "estructura"), la pieza sale como `<cf_id>__<idioma>_<pais>__v<n>`
+    con un guion variado a partir del guion base (`guion.variar_guion`) — el
+    guion base del concepto NO se toca. Si no se fija `voz`/`estilo_musica`,
+    `hook` cambia la voz respecto a la final original del destino y
+    `estructura` cambia el estilo de música."""
     o = _opciones(opciones)
     entry = _sesion(cliente, cf_id)
     avisar = on_etapa or (lambda nombre: None)
+    variante_tipo = o.get("variante_tipo")
+    if variante_tipo and variante_tipo not in guion_mod.VARIANTES_GUION:
+        raise ValueError(
+            f"Tipo de variante no soportado: {variante_tipo}. Opciones: {sorted(guion_mod.VARIANTES_GUION)}")
 
-    final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais)
+    final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=o.get("variante"))
     costo = 0.0
     guion_base = None
     guion = None
@@ -239,9 +272,15 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         if not guion_base:
             guion_base, costo_base = preparar_guion(cliente, cf_id, o)
             costo += costo_base
+        # Variante: el guion variado reemplaza al base SOLO para esta pieza;
+        # `concepto.guion_base` sigue intacto para las demás finales.
+        costo_variante = 0.0
+        if variante_tipo:
+            guion_base, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, _guia_marca(cliente))
+            costo += float(costo_variante or 0.0)
     except Exception as e:
-        capas["guion"] = {"proveedor": "anthropic", "parametros": {}, "costo_usd": 0.0,
-                          "estado": "error", "error": str(e)}
+        capas["guion"] = {"proveedor": "anthropic", "parametros": {"variante_tipo": variante_tipo} if variante_tipo else {},
+                          "costo_usd": 0.0, "estado": "error", "error": str(e)}
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas)
         raise
     carpeta = _carpeta_final(cliente, final_id)
@@ -269,13 +308,16 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
                 precio = (guion_base or {}).get("precio_base")
         else:
             precio = None
+        params_guion = {"idioma": idioma, "pais": pais, "precio": precio}
+        if variante_tipo:
+            params_guion["variante_tipo"] = variante_tipo
         try:
             guion, c = guion_mod.localizar_guion(guion_base, idioma, pais, precio)
         except Exception as e:
-            capa("guion", "anthropic", {"idioma": idioma, "pais": pais, "precio": precio}, estado="error", error=str(e))
+            capa("guion", "anthropic", params_guion, costo_variante, estado="error", error=str(e))
             raise
         costo += float(c or 0.0)
-        capa("guion", "anthropic", {"idioma": idioma, "pais": pais, "precio": precio}, c)
+        capa("guion", "anthropic", params_guion, float(c or 0.0) + costo_variante)
 
         # 1. Cortes y plan de segmentos
         avisar(ETAPAS_FINAL[1][0])
@@ -296,7 +338,13 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         # 2. Voz (degradable)
         avisar(ETAPAS_FINAL[2][0])
         archivo_voz, palabras = None, []
-        nombre_voz = o.get("voz") or (fal_audio.VOCES.get(idioma) or fal_audio.VOCES["es"])[0]
+        voces = fal_audio.VOCES.get(idioma) or fal_audio.VOCES["es"]
+        nombre_voz = o.get("voz")
+        if not nombre_voz and variante_tipo == "hook":
+            # Otra voz que la de la final original del destino (o la siguiente
+            # a la de defecto si no hay original).
+            nombre_voz = _siguiente(voces, _parametro_capa_original(cliente, cf_id, idioma, pais, "voz", "voz") or voces[0])
+        nombre_voz = nombre_voz or voces[0]
         if not o.get("con_voz", True):
             capa("voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="omitida")
         else:
@@ -328,6 +376,10 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         if not estilo:
             producto = _producto(cliente, entry, precio)
             estilo = musica.elegir_estilo(producto.get("tipo"), entry.get("enfoque"))
+            if variante_tipo == "estructura":
+                # Otro estilo que el de la final original del destino.
+                estilo = _siguiente(tipos.ESTILOS_MUSICA,
+                                    _parametro_capa_original(cliente, cf_id, idioma, pais, "musica", "estilo") or estilo)
         if not o.get("con_musica", True):
             capa("musica", "fal/stable-audio", {"estilo": estilo}, estado="omitida")
         else:

@@ -244,6 +244,7 @@ def elegibles(cliente):
     q = (sa.select(pz, cp.c.extra.label("c_extra"))
          .select_from(pz.outerjoin(cp, cp.c.id == pz.c.concepto_id))
          .where(pz.c.cliente == cliente, pz.c.url_video.isnot(None),
+                cp.c.archivado.isnot(True),
                 sa.or_(sa.and_(pz.c.tipo == "final", pz.c.estado.in_(("listo", "degradada"))),
                        sa.and_(pz.c.tipo.in_(_TIPOS_CLON), pz.c.estado == "listo")))
          .order_by(pz.c.id.desc()))

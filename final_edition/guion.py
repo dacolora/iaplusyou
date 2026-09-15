@@ -309,6 +309,63 @@ def localizar_guion(guion_base, idioma, pais, precio):
     )
 
 
+VARIANTES_GUION = {
+    "hook": (
+        "Reescribe el hook (bloque 1) y el CTA (último bloque) con un ángulo distinto; "
+        "conserva tiempos, estructura y los demás bloques salvo ajustes mínimos de continuidad."
+    ),
+    "estructura": (
+        "Cambia la estructura narrativa (p.ej. problema→prueba social→producto, o "
+        "testimonio→producto→CTA) manteniendo los tiempos de los bloques y el producto; "
+        "todos los textos nuevos."
+    ),
+}
+
+
+def _mensaje_variar(guion_base, variante_tipo, marca):
+    partes = [
+        "Guion base (en su idioma, con tiempos):\n" + json.dumps(guion_base, ensure_ascii=False),
+        f"Variante pedida ({variante_tipo}): {VARIANTES_GUION[variante_tipo]}",
+    ]
+    if marca and str(marca).strip():
+        partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
+    partes.append("Escribe la variante del guion, en el mismo idioma que el guion base.")
+    return "\n\n".join(partes)
+
+
+def variar_guion(guion_base, variante_tipo, marca):
+    """Variante del guion base (mismo idioma/país, mismos tiempos) con UNA
+    llamada a Claude. `variante_tipo` ∈ VARIANTES_GUION ("hook": otro gancho y
+    CTA; "estructura": otra estructura narrativa, textos nuevos). Conserva
+    `idioma`, `pais` y `precio_base` del base y no lo muta. Devuelve
+    (guion, costo_usd)."""
+    if variante_tipo not in VARIANTES_GUION:
+        raise ValueError(
+            f"Tipo de variante no soportado: {variante_tipo}. Opciones: {sorted(VARIANTES_GUION)}")
+    base = copy.deepcopy(guion_base)
+    idioma = base.get("idioma") or "es"
+    pais = base.get("pais") or _pais_por_idioma(idioma)
+    tiempos = [(b.get("inicio_s"), b.get("fin_s")) for b in base.get("bloques") or []]
+    duracion_s = float(tiempos[-1][1]) if tiempos and tiempos[-1][1] is not None else 0.0
+
+    def ajustar(g):
+        g["idioma"] = idioma
+        g["pais"] = pais
+        g["moneda"] = base.get("moneda")
+        g["precio_texto"] = base.get("precio_texto")
+        if "precio_base" in base:
+            g["precio_base"] = base["precio_base"]
+        for bloque, (ini, fin) in zip(g.get("bloques") or [], tiempos):
+            bloque["inicio_s"], bloque["fin_s"] = ini, fin
+        return g
+
+    return _generar_con_correccion(
+        _system_generar(duracion_s, idioma),
+        _mensaje_variar(base, variante_tipo, marca),
+        duracion_s, ajustar,
+    )
+
+
 def _pais_por_idioma(idioma):
     """País por defecto para el guion base (solo para que valide): el primero
     de PAISES con ese idioma, o CO."""
