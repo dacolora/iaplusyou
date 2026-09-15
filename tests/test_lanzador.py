@@ -153,3 +153,119 @@ def test_refrescar_guarda_snapshots(entorno):
     m = e["piezas"][0]["metricas"]
     assert m["impresiones"] == 100 and m["alcance"] == 90 and m["gasto"] == 2.0 and m["thruplay"] == 10
     assert m["estado_meta_texto"] == "Activo" and e["piezas"][0]["estado_meta"] == "ACTIVE"
+
+
+def test_cambiar_estado_activa_campana_al_activar_un_pais_pausado(entorno):
+    """Activar un solo país mientras la campaña sigue en pausa en Meta no debe
+    quedar como 'corriendo' sin entregar: hay que activar también la campaña."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "pausado"
+    meta.llamadas.clear()
+    lz.cambiar_estado("acme", eid, "ACTIVE", pais="CO")
+    ids = [(t, kw["oid"]) for t, kw in meta.llamadas if t == "estado"]
+    assert ("estado", "campaign_1") in ids
+    assert ids[0] == ("estado", "campaign_1")  # campaña antes que el conjunto
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "corriendo"
+
+    # Un segundo país activado con la campaña ya corriendo no debe repetir la llamada.
+    meta.llamadas.clear()
+    lz.cambiar_estado("acme", eid, "ACTIVE", pais="MX")
+    ids = [(t, kw["oid"]) for t, kw in meta.llamadas if t == "estado"]
+    assert ("estado", "campaign_1") not in ids
+
+
+def test_cambiar_estado_pausar_un_pais_no_toca_la_campana(entorno):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    meta.llamadas.clear()
+    lz.cambiar_estado("acme", eid, "PAUSED", pais="MX")
+    ids = [(t, kw["oid"]) for t, kw in meta.llamadas if t == "estado"]
+    assert ("estado", "campaign_1") not in ids
+
+
+def test_cambiar_estado_y_presupuesto_rechazan_experimento_cerrado(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    lz.cerrar("acme", eid)
+    with pytest.raises(ValueError, match="cerrado"):
+        lz.cambiar_estado("acme", eid, "ACTIVE")
+    with pytest.raises(ValueError, match="cerrado"):
+        lz.cambiar_presupuesto_pais("acme", eid, "CO", 300)
+
+
+def test_cambiar_presupuesto_pais_rechaza_valor_no_positivo(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    with pytest.raises(ValueError):
+        lz.cambiar_presupuesto_pais("acme", eid, "CO", 0)
+    with pytest.raises(ValueError):
+        lz.cambiar_presupuesto_pais("acme", eid, "CO", -100)
+
+
+def test_lanzar_reintenta_creative_sin_volver_a_subir_video(entorno, base_temporal):
+    from tests.test_experimentos_db import PAISES, _pieza
+    ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
+    # Experimento aparte con una sola pieza para no mezclar el orden de subidas
+    # de las otras piezas del fixture compartido.
+    pid = _pieza(base_temporal, pais="CO")
+    eid2 = ex.crear("acme", "Solo", PAISES[:1], "OUTCOME_TRAFFIC", 7, 100000.0, "https://t.co/x", "COP")
+    ex.agregar_pieza("acme", eid2, pid, "CO")
+
+    llamadas_subir = []
+    original = lz.meta_creative.subir_video
+
+    def contando(*a, **k):
+        llamadas_subir.append(1)
+        return original(*a, **k)
+
+    entorno["monkeypatch"].setattr(lz.meta_creative, "subir_video", contando)
+    meta.fallar_en = "creative"
+    with pytest.raises(RuntimeError):
+        lz.lanzar("acme", eid2)
+    assert len(llamadas_subir) == 1
+    e = ex.obtener("acme", eid2)
+    assert e["piezas"][0]["extra"].get("meta_video_id") == "vid_1"
+
+    meta.fallar_en = None
+    lz.lanzar("acme", eid2)
+    assert len(llamadas_subir) == 1  # no se resubió el video en el reintento
+    assert ex.obtener("acme", eid2)["estado"] == "pausado"
+
+
+def test_lanzar_falla_deja_piezas_en_cola_no_publicando(entorno):
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    meta.fallar_en = "ad"
+    with pytest.raises(RuntimeError):
+        lz.lanzar("acme", eid)
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "error"
+    # La pieza que falló en 'ad' quedó sin meta_ad_id: debe volver a en_cola, no publicando.
+    fallida = [p for p in e["piezas"] if not p["meta_ad_id"]]
+    assert fallida and all(p["estado"] == "en_cola" for p in fallida)
+
+
+def test_refrescar_continua_si_falla_una_pieza(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+    lz.lanzar("acme", eid)
+
+    original = lz.meta_insights.obtener_resultados
+    llamados = []
+
+    def fallando(ad_id, objetivo=None):
+        llamados.append(ad_id)
+        if len(llamados) == 1:
+            raise RuntimeError("ad eliminado en Ads Manager")
+        return original(ad_id, objetivo=objetivo)
+
+    lz.meta_insights.obtener_resultados = fallando
+    try:
+        n = lz.refrescar("acme", eid)
+    finally:
+        lz.meta_insights.obtener_resultados = original
+    assert n == 2  # 3 piezas, 1 falló
+    e = ex.obtener("acme", eid)
+    assert any(ev["tipo"] == "error" for ev in e["eventos"])

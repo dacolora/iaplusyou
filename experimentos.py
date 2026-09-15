@@ -156,6 +156,7 @@ def _piezas(con, cliente, experimento_id):
             "nombre": nombre[:80], "url_video": m["url_video"], "url_miniatura": m["url_miniatura"], "tipo": tipo,
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
             "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
+            "extra": m[ep.c.extra] or {},
         })
     return out
 

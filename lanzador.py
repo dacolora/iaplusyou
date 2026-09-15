@@ -6,6 +6,7 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import cola
 import experimentos
 import meta_conexion
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
@@ -86,7 +87,11 @@ def lanzar(cliente, experimento_id, on_etapa=None):
             experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adsets[pz["pais"]])
             creative_id = pz["meta_creative_id"]
             if not creative_id:
-                video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
+                video_id = (pz.get("extra") or {}).get("meta_video_id")
+                if not video_id:
+                    video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
+                    experimentos.actualizar_pieza(cliente, pz["id"],
+                                                  extra={**(pz.get("extra") or {}), "meta_video_id": video_id})
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
                     f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
@@ -101,8 +106,13 @@ def lanzar(cliente, experimento_id, on_etapa=None):
     try:
         _con_credenciales(cliente, _correr)
     except Exception as e:
-        experimentos.actualizar(cliente, experimento_id, estado="error", error=str(e))
-        experimentos.registrar_evento(cliente, experimento_id, "error", f"Falló el lanzamiento: {e}")
+        mensaje = cola.sin_token(str(e))
+        ex_actual = experimentos.obtener(cliente, experimento_id)
+        for pz in (ex_actual["piezas"] if ex_actual else []):
+            if pz["estado"] == "publicando" and not pz["meta_ad_id"]:
+                experimentos.actualizar_pieza(cliente, pz["id"], estado="en_cola")
+        experimentos.actualizar(cliente, experimento_id, estado="error", error=mensaje)
+        experimentos.registrar_evento(cliente, experimento_id, "error", f"Falló el lanzamiento: {mensaje}")
         raise
     experimentos.actualizar(cliente, experimento_id, estado="pausado", error=None)
     return "Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar."
@@ -118,6 +128,8 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None or not ex["meta_campaign_id"] or ex["estado"] in ("armando", "lanzando", "error"):
         raise ValueError("Ese experimento todavía no está en Meta.")
+    if ex["estado"] == "cerrado":
+        raise ValueError("Ese experimento está cerrado.")
     local = "activo" if status == "ACTIVE" else "pausado"
 
     def _correr(_creds):
@@ -131,6 +143,10 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
             p = next((p for p in ex["paises"] if p["pais"] == pais), None)
             if not p or not p.get("meta_adset_id"):
                 raise ValueError("Ese país no tiene conjunto en Meta.")
+            if status == "ACTIVE" and ex["estado"] != "corriendo":
+                # Activar un solo país no sirve de nada si la campaña sigue en pausa
+                # en Meta: sin ella, el conjunto no entrega aunque quede ACTIVE local.
+                meta_campaign.actualizar_estado(ex["meta_campaign_id"], status)
             meta_adset.actualizar_estado(p["meta_adset_id"], status)
             experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
         for pz in _piezas_de(ex, pais):
@@ -147,8 +163,14 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
 
 
 def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
+    if float(presupuesto_dia or 0) <= 0:
+        raise ValueError("El presupuesto diario debe ser mayor que cero.")
     ex = experimentos.obtener(cliente, experimento_id)
-    p = next((p for p in (ex or {}).get("paises", []) if p["pais"] == pais), None)
+    if ex is None:
+        raise ValueError("Ese experimento no existe.")
+    if ex["estado"] == "cerrado":
+        raise ValueError("Ese experimento está cerrado.")
+    p = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
     if not p or not p.get("meta_adset_id"):
         raise ValueError("Ese país no tiene conjunto en Meta.")
     moneda = ex["moneda"] or "USD"
@@ -169,14 +191,19 @@ def refrescar(cliente, experimento_id):
     def _correr(_creds):
         n = 0
         for pz in piezas:
-            r = meta_insights.obtener_resultados(pz["meta_ad_id"], objetivo=ex["objetivo_meta"])
-            snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
-            snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
-            for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
-                snap[k] = r.get(k)
-            experimentos.snapshot(pz["id"], snap)
-            experimentos.actualizar_pieza(cliente, pz["id"], estado_meta=r.get("estado_meta"))
-            n += 1
+            try:
+                r = meta_insights.obtener_resultados(pz["meta_ad_id"], objetivo=ex["objetivo_meta"])
+                snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
+                snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
+                for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
+                    snap[k] = r.get(k)
+                experimentos.snapshot(pz["id"], snap)
+                experimentos.actualizar_pieza(cliente, pz["id"], estado_meta=r.get("estado_meta"))
+                n += 1
+            except Exception as e:
+                experimentos.registrar_evento(
+                    cliente, experimento_id, "error",
+                    f"No se pudo refrescar {pz['nombre']} ({pz['pais']}): {cola.sin_token(str(e))}", ep_id=pz["id"])
         return n
 
     n = _con_credenciales(cliente, _correr)
