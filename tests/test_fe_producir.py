@@ -291,3 +291,20 @@ def test_producir_error_si_falla_render(entorno, monkeypatch):
 def test_producir_sin_sesion(entorno):
     with pytest.raises(ValueError):
         final_edition.producir("acme", "cf_nada", "es", "CO")
+
+
+def test_producir_usa_precio_base_guardado_al_preparar(entorno):
+    """El precio escrito al preparar el guion viaja en `guion_base.precio_base`
+    y aplica al país base cuando al producir no se escribe uno (el campo vacío
+    no lo tapa); los demás países siguen sin precio."""
+    import creative_flow as cf
+    cf_id = entorno["cf_id"]
+    g = dict(GUION_BASE)
+    g["precio_base"] = 129900
+    cf.guardar_guion_base("acme", cf_id, g)
+    final_edition.producir("acme", cf_id, "es", "CO", {"precios": {}})
+    assert entorno["localizar"] == ("es", "CO", 129900)
+    final_edition.producir("acme", cf_id, "en", "US", {"precios": {}})
+    assert entorno["localizar"] == ("en", "US", None)
+    final_edition.producir("acme", cf_id, "es", "CO", {"precios": {"es_CO": 99900}})
+    assert entorno["localizar"] == ("es", "CO", 99900)

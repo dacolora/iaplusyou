@@ -120,7 +120,7 @@ def test_producir_encola_una_tarea_por_destino(base_temporal, monkeypatch):
     assert (p0["cliente"], p0["cf_id"], p0["idioma"], p0["pais"]) == ("acme", cf_id, "es", "CO")
     assert (p1["idioma"], p1["pais"]) == ("en", "US")
     assert p0["opciones"] == {"voz": "Daniel", "estilo_musica": "lujo", "con_voz": True, "con_musica": False,
-                              "precio": 89900.0, "precios": {"es_CO": None, "en_US": None}, "idioma_base": "es"}
+                              "precio": 89900.0, "precios": {}, "idioma_base": "es"}
     assert any("2 finales" in m for m in _flashes(c))
     # Las filas finales existen en `generando` desde que se encola, no desde
     # que el worker arranca: la cuadrícula las muestra de una con su barra.
@@ -162,7 +162,7 @@ def test_producir_destino_sin_precio_propio_queda_none(base_temporal, monkeypatc
         "precio": "89900",  # solo el precio base; en_US no manda precio_en_US
     })
     p_co = llamadas[0]["payload"]
-    assert p_co["opciones"]["precios"] == {"es_CO": None, "en_US": None}
+    assert p_co["opciones"]["precios"] == {}  # campos vacíos no se mandan
     assert p_co["opciones"]["precio"] == 89900.0
 
 

@@ -271,7 +271,8 @@
                     <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
                     {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small>
                     <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
-                           placeholder="Precio (opcional)" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;">
+                           placeholder="Precio (opcional)" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
+                           {% if codigo == _g.pais and _g.precio_base is not none %}value="{{ _g.precio_base }}"{% endif %}>
                     {% if _ya %}<small class="tag-estado">(ya producida — se reemplaza)</small>{% endif %}
                   </label>
                   {% endfor %}

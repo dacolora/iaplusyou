@@ -210,6 +210,9 @@ def preparar_guion(cliente, cf_id, opciones=None):
         producto, referencia, enfoque, float(duracion_s), idioma_base,
         _guia_marca(cliente), entry.get("tono") or "")
     costo += float(costo_guion or 0.0)
+    # El precio escrito al preparar viaja con el guion base para prellenar el
+    # destino del país base al producir (los demás países piden el suyo).
+    guion_base["precio_base"] = o.get("precio")
     creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
     return guion_base, round(costo, 4)
 
@@ -262,6 +265,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
             precio = precios_por_destino.get(clave_destino)
         elif pais == (guion_base or {}).get("pais"):
             precio = o.get("precio")
+            if precio is None:
+                precio = (guion_base or {}).get("precio_base")
         else:
             precio = None
         try:
