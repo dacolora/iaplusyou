@@ -66,3 +66,24 @@ def test_crear_hijo_copia_producto_id(base_temporal):
     with db.conectar() as con:
         heredado = con.execute(sa.select(db.experimento.c.producto_id).where(db.experimento.c.id == hijo)).scalar()
     assert heredado == producto_id
+
+
+def test_crear_hijo_profundidad_tope_restante_e_idempotente(base_temporal):
+    """I-9 + I-6: el hijo lleva `profundidad` = padre + 1 y su tope es lo que
+    le queda al padre (mínimo 0); repetir crear_hijo para la misma pieza
+    devuelve el mismo hijo (no hay dos hijos por una pieza)."""
+    import experimentos as ex
+    eid = ex.crear("acme", "Raíz", PAISES, "OUTCOME_TRAFFIC", 7, 500.0, "https://t", "COP", modo="auto")
+    ex.actualizar("acme", eid, gasto_acumulado=120.0)
+    assert ex.profundidad(ex.obtener("acme", eid)) == 0
+    hijo = ex.crear_hijo("acme", eid, "Hijo", 42)
+    assert ex.crear_hijo("acme", eid, "Hijo otra vez", 42) == hijo
+    assert ex.crear_hijo("acme", eid, "Hijo de otra pieza", 43) != hijo
+    h = ex.obtener("acme", hijo)
+    assert h["extra"]["profundidad"] == 1 and h["tope_total"] == 380.0 and ex.profundidad(h) == 1
+    ex.actualizar("acme", hijo, gasto_acumulado=900.0)
+    nieto = ex.crear_hijo("acme", hijo, "Nieto", 77)
+    n = ex.obtener("acme", nieto)
+    assert n["extra"]["profundidad"] == 2 and n["tope_total"] == 0.0
+    with pytest.raises(ValueError):
+        ex.crear_hijo("acme", 999999, "x", 1)

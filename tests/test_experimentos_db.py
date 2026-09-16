@@ -144,3 +144,60 @@ def test_pieza_id_por_legado(base_temporal):
     assert cf.pieza_id_por_legado("acme", "cf_1__es_CO") == pid
     assert cf.pieza_id_por_legado("acme", "nada") is None
     assert cf.pieza_id_por_legado("otro", "cf_1__es_CO") is None
+
+
+# ------------------------------------------------- final fix: C-1 (RMW) ---
+
+def test_actualizar_extra_y_marcar_pieza_son_atomicos_entre_hilos(base_temporal):
+    """C-1: pysqlite solo abre la transacción delante de un UPDATE, así que
+    SELECT→UPDATE en dos hilos se intercalaba y se perdían escrituras (el
+    reviewer lo reprodujo). Con el lock previo (`_bloquear`) 2 hilos × 50
+    incrementos sobre la misma clave terminan en 100, sin excepciones."""
+    import threading
+
+    import experimentos as ex
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ep = ex.agregar_pieza("acme", eid, _pieza(base_temporal), "CO")
+    errores = []
+
+    def _inc(e):
+        return {**e, "n": int(e.get("n") or 0) + 1}
+
+    def _hilo(clave):
+        try:
+            for _ in range(50):
+                ex.actualizar_extra("acme", eid, _inc)
+                ex.marcar_pieza("acme", ep, **{clave: True})
+        except Exception as error:  # noqa: BLE001
+            errores.append(error)
+
+    hilos = [threading.Thread(target=_hilo, args=(f"h{i}",)) for i in range(2)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+    assert errores == []
+    assert ex.obtener("acme", eid)["extra"]["n"] == 100
+    p = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert p["extra"] == {"h0": True, "h1": True}
+
+
+def test_marcar_pieza_atomico_con_lecturas_intercaladas(base_temporal):
+    """El repro del reviewer: una fn lenta que duerme tras leer y una rápida
+    entre medio. Con el lock previo la rápida espera y no se pierde nada."""
+    import threading
+    import time
+
+    import experimentos as ex
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+
+    def _lenta(e):
+        time.sleep(0.5)
+        return {**e, "a": 1}
+
+    t = threading.Thread(target=lambda: ex.actualizar_extra("acme", eid, _lenta))
+    t.start()
+    time.sleep(0.1)
+    ex.actualizar_extra("acme", eid, lambda e: {**e, "b": 1})
+    t.join()
+    assert ex.obtener("acme", eid)["extra"] == {"a": 1, "b": 1}

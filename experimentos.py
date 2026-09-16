@@ -39,27 +39,69 @@ def crear(cliente, nombre, paises, objetivo_meta, dias, tope_total, destino_url,
             extra={})).inserted_primary_key[0]
 
 
+def _bloquear(con, tabla, fila_id, cliente):
+    """Toma el lock de escritura de SQLite ANTES de leer (semántica de
+    `BEGIN IMMEDIATE`). pysqlite (modo legacy) solo emite `BEGIN` delante de
+    un INSERT/UPDATE/DELETE: un SELECT seguido de UPDATE deja el SELECT en
+    autocommit y dos procesos (gunicorn + worker) leen la misma foto y el
+    último en escribir pisa al otro (lost update, comprobado con dos hilos).
+    Un UPDATE sin efecto sobre la fila objetivo obliga al driver a abrir la
+    transacción y tomar el lock RESERVED ya; con `busy_timeout=5000` el
+    segundo escritor espera en vez de fallar, así que el SELECT que sigue ve
+    lo que dejó el anterior. Devuelve True si la fila existe."""
+    r = con.execute(tabla.update().where(tabla.c.id == fila_id, tabla.c.cliente == cliente)
+                    .values(actualizado_en=tabla.c.actualizado_en))
+    return r.rowcount == 1
+
+
+def _hijo_existente(con, cliente, padre_id, pieza_origen_ep_id):
+    e = db.experimento
+    return con.execute(sa.select(e.c.id).where(
+        e.c.cliente == cliente, e.c.legado.is_(False),
+        e.c.extra["padre_experimento_id"].as_integer() == padre_id,
+        e.c.extra["origen_ep_id"].as_integer() == pieza_origen_ep_id).order_by(e.c.id)).scalar()
+
+
 def crear_hijo(cliente, padre_id, nombre, pieza_origen_ep_id):
     """Experimento derivado (Bloque 4): copia países (con presupuestos, sin
-    conjuntos de Meta), moneda, tope, días, objetivo, destino, edades, modo y
+    conjuntos de Meta), moneda, días, objetivo, destino, edades, modo y
     reglas del padre; nace `armando` sin piezas. `extra` guarda el vínculo
-    (padre_experimento_id, origen_ep_id). ValueError si el padre no existe."""
+    (padre_experimento_id, origen_ep_id) y la `profundidad` (la del padre +
+    1: el decisor deja de derivar solo a partir de 2). El tope del hijo es lo
+    que le queda al padre (`tope_total - gasto_acumulado`, mínimo 0): el
+    tope acota a toda la familia, no a cada generación. Idempotente: si ya
+    hay un hijo de este padre para esa pieza, devuelve ese id (el lock lo
+    toma sobre la fila del padre, así dos `planificar` a la vez no crean
+    dos hijos). ValueError si el padre no existe."""
     ahora = db.ahora()
     with db.conectar() as con:
+        if not _bloquear(con, db.experimento, padre_id, cliente):
+            raise ValueError("Ese experimento no existe.")
+        existente = _hijo_existente(con, cliente, padre_id, pieza_origen_ep_id)
+        if existente:
+            return existente
         f = _fila_experimento(con, cliente, padre_id)
         if not f:
             raise ValueError("Ese experimento no existe.")
         m = f._mapping
         e = db.experimento
+        extra_padre = m[e.c.extra] or {}
+        tope = max(0.0, float(m[e.c.tope_total] or 0) - float(m[e.c.gasto_acumulado] or 0))
         return con.execute(e.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, modo=m[e.c.modo],
             producto_id=m[e.c.producto_id], reglas=dict(m[e.c.reglas] or {}),
             paises=[_pais_nuevo(p) for p in (m[e.c.paises] or [])],
-            moneda=m[e.c.moneda], tope_total=m[e.c.tope_total], dias=m[e.c.dias],
+            moneda=m[e.c.moneda], tope_total=tope, dias=m[e.c.dias],
             objetivo_meta=m[e.c.objetivo_meta], atribucion=m[e.c.atribucion] or "ninguna", estado="armando",
             gasto_acumulado=0.0, legado=False, destino_url=m[e.c.destino_url], edad_min=m[e.c.edad_min],
             edad_max=m[e.c.edad_max],
-            extra={"padre_experimento_id": padre_id, "origen_ep_id": pieza_origen_ep_id})).inserted_primary_key[0]
+            extra={"padre_experimento_id": padre_id, "origen_ep_id": pieza_origen_ep_id,
+                   "profundidad": int(extra_padre.get("profundidad") or 0) + 1})).inserted_primary_key[0]
+
+
+def profundidad(ex):
+    """Generaciones de derivación por encima de este experimento (0 = raíz)."""
+    return int(((ex or {}).get("extra") or {}).get("profundidad") or 0)
 
 
 def _fila_experimento(con, cliente, experimento_id):
@@ -79,20 +121,23 @@ def actualizar(cliente, experimento_id, **campos):
 
 
 def actualizar_extra(cliente, experimento_id, fn, **campos):
-    """Read-modify-write atómico de `experimento.extra`: SELECT del `extra`
-    actual y UPDATE con `fn(extra) -> extra` dentro de UNA transacción
-    (`db.conectar()`). Con SQLite (journal WAL) los escritores se serializan:
-    dos llamadas concurrentes se ejecutan una detrás de otra, cada una sobre
-    el `extra` que dejó la anterior, así que no hay lost update aunque el
-    llamador tenga una foto vieja del experimento. `campos` son otras
-    columnas a escribir en el mismo UPDATE (p. ej. `estado`). Todo lo que
-    modifique `extra` (derivaciones, `activado_en` del lanzador) debe pasar
-    por acá y nunca por `actualizar(extra=...)`, que reemplaza el dict con lo
-    que el llamador leyó. Devuelve el `extra` escrito (None si no existe)."""
+    """Read-modify-write atómico de `experimento.extra`: toma el lock de
+    escritura (`_bloquear`, semántica BEGIN IMMEDIATE), SELECT del `extra`
+    actual y UPDATE con `fn(extra) -> extra`, todo en UNA transacción. Dos
+    llamadas concurrentes (hilos de gunicorn o el worker) se ejecutan una
+    detrás de otra, cada una sobre el `extra` que dejó la anterior: no hay
+    lost update aunque el llamador tenga una foto vieja del experimento.
+    `campos` son otras columnas a escribir en el mismo UPDATE (p. ej.
+    `estado`). Todo lo que modifique `extra` (derivaciones, `activado_en`
+    del lanzador) debe pasar por acá y nunca por `actualizar(extra=...)`,
+    que reemplaza el dict con lo que el llamador leyó. Devuelve el `extra`
+    escrito (None si no existe)."""
     malos = (set(campos) - set(_EXP_COLS)) | ({"extra"} & set(campos))
     if malos:
         raise ValueError(f"Campos no permitidos: {sorted(malos)}")
     with db.conectar() as con:
+        if not _bloquear(con, db.experimento, experimento_id, cliente):
+            return None
         f = _fila_experimento(con, cliente, experimento_id)
         if not f:
             return None
@@ -103,7 +148,10 @@ def actualizar_extra(cliente, experimento_id, fn, **campos):
 
 
 def actualizar_pais(cliente, experimento_id, pais, **campos):
+    """RMW de `paises` con el mismo lock previo que actualizar_extra."""
     with db.conectar() as con:
+        if not _bloquear(con, db.experimento, experimento_id, cliente):
+            return
         f = _fila_experimento(con, cliente, experimento_id)
         if not f:
             return
@@ -122,6 +170,10 @@ def agregar_pieza(cliente, experimento_id, pieza_id, pais):
     esto es solo el guard de tenencia que agregar_pieza necesita para ser
     seguro si algún otro llamador la usa sin pasar por ahí."""
     with db.conectar() as con:
+        # Lock antes del SELECT de dedupe: dos pasadas de `avanzar` a la vez
+        # no insertan la misma pieza dos veces.
+        if not _bloquear(con, db.experimento, experimento_id, cliente):
+            return None
         if not _fila_experimento(con, cliente, experimento_id):
             return None
         pieza_ok = con.execute(sa.select(db.pieza.c.id).where(
@@ -177,9 +229,13 @@ def marcar_pieza(cliente, ep_id, **flags):
     dentro de la misma transacción, justo antes de escribir, así no pisa lo
     que otra parte del motor (p. ej. lanzador.activar_pieza, o Task 5) haya
     escrito en `extra` entre que acciones.ejecutar leyó la pieza y este
-    marcado. ValueError si la pieza no existe."""
+    marcado. El lock se toma antes del SELECT (`_bloquear`, ver ahí por
+    qué); sin eso el SELECT corría en autocommit y dos marcados a la vez se
+    pisaban. ValueError si la pieza no existe."""
     ep = db.experimento_pieza
     with db.conectar() as con:
+        if not _bloquear(con, ep, ep_id, cliente):
+            raise ValueError("Esa pieza no está en el experimento.")
         f = con.execute(sa.select(ep.c.extra).where(
             ep.c.id == ep_id, ep.c.cliente == cliente)).first()
         if f is None:
