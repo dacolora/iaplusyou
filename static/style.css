@@ -1269,3 +1269,75 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .regla input[type="number"] { width: 100%; }
 .regla-sin { font-size: .72rem; color: var(--muted); display: inline-flex; align-items: center; gap: .3rem; }
 .exp-reglas-form .vacio { font-size: .74rem; padding-top: .2rem; }
+
+/* Sprints */
+.sprints-lista { display: grid; gap: .6rem; margin-bottom: 1rem; }
+.sprint-card { display: flex; gap: 1rem; align-items: center; padding: .8rem 1rem; text-decoration: none; color: inherit; }
+.sprint-card:hover { background: var(--panel-hover); }
+.anillo text { font-family: var(--font-body); font-weight: 700; }
+.estado-sprint { text-transform: capitalize; }
+.estado-sprint-planeando, .estado-sprint-planeada { border-color: var(--muted-2); }
+.estado-sprint-referencias { border-color: var(--accent); }
+.estado-sprint-listo_para_generar, .estado-sprint-ideas_aprobadas { border-color: var(--ok); }
+.estado-sprint-generando { border-color: var(--warn); }
+.estado-sprint-revision { border-color: var(--accent-2); }
+.estado-sprint-completado, .estado-sprint-completada { border-color: var(--ok); color: var(--ok); }
+.sprint-paso { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .8rem 1rem; margin: .6rem 0; }
+.sprint-paso legend { font-weight: 700; padding: 0 .4rem; }
+.sprint-matriz-scroll { overflow-x: auto; }
+.sprint-matriz { border-collapse: collapse; min-width: 100%; }
+.sprint-matriz th, .sprint-matriz td { border: 1px solid var(--border); padding: .4rem .5rem; text-align: center; vertical-align: middle; }
+.sprint-matriz tbody th { text-align: left; white-space: nowrap; }
+.sprint-celda-btn { width: 2rem; height: 2rem; border-radius: 50%; border: 1px dashed var(--muted-2); background: transparent; color: var(--text); cursor: pointer; }
+.sprint-celda.activa { background: rgba(77, 141, 255, .12); }
+.sprint-celda.activa .sprint-celda-btn { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
+.sprint-celda.en-otra { background: rgba(255, 255, 255, .03); color: var(--muted); }
+.sprint-celda-campos { display: flex; gap: .4rem; justify-content: center; margin-top: .3rem; }
+.sprint-celda-campos .mini-input { width: 3.2rem; }
+.sprint-totales { font-weight: 700; margin: .6rem 0 .2rem; }
+.sprint-subtitulo { margin-top: 1.6rem; }
+.sprint-punto { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; vertical-align: middle; margin-right: .3rem; }
+.sprint-mini { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; vertical-align: middle; }
+.sprint-paleta { display: inline-flex; gap: .2rem; vertical-align: middle; margin-left: .4rem; }
+.sprint-paleta span { width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--border-soft); display: inline-block; }
+.sprint-presets { display: flex; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
+.sprint-calendario { margin: .6rem 0 1rem; }
+.sprint-aviso { display: block; margin: .3rem 0; border-color: var(--warn); }
+.sprint-cabecera { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.sprint-cabecera-derecha { text-align: center; }
+.sprint-migas { color: var(--muted); font-size: .85rem; margin: 0 0 .6rem; }
+.sprint-tablero { display: grid; gap: .6rem; }
+.sprint-campana { padding: .7rem 1rem; }
+.sprint-campana-cab { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
+.sprint-sep { color: var(--muted-2); }
+.sprint-campana-cuerpo { display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center; margin-top: .5rem; }
+.sprint-cantidades { display: flex; gap: .5rem; align-items: end; }
+.sprint-cantidades .mini-input { width: 4rem; }
+.sprint-barra { position: relative; height: 1.3rem; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.sprint-barra-fill { height: 100%; background: var(--accent-grad); transition: width .4s ease; }
+.sprint-barra span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .75rem; }
+.sprint-campana-acciones { display: flex; gap: .4rem; align-items: center; }
+.sprint-eventos li small { color: var(--muted); margin-right: .4rem; }
+.sprint-refs-progreso { margin: .6rem 0 1rem; }
+.sprint-zona { border: 2px dashed var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: .8rem; }
+.sprint-zona.sobre { border-color: var(--accent); background: rgba(77, 141, 255, .06); }
+.sprint-zona-drop { display: block; padding: 1.4rem; text-align: center; cursor: pointer; }
+.sprint-refs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: .8rem; margin-top: 1rem; }
+.sprint-ref { padding: 0; overflow: hidden; }
+.sprint-ref-media { position: relative; background: #000; }
+.sprint-ref-media img, .sprint-ref-media video { width: 100%; max-height: 260px; object-fit: contain; display: block; }
+.sprint-ref-estado { position: absolute; top: .5rem; left: .5rem; }
+.sprint-ref-cuerpo { padding: .7rem .9rem .9rem; display: grid; gap: .5rem; }
+.sprint-chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.sprint-chip { font-size: .75rem; border: 1px solid var(--border); border-radius: 999px; padding: .15rem .5rem; cursor: pointer; }
+.sprint-chip:has(input:checked) { border-color: var(--accent); background: rgba(77, 141, 255, .15); }
+.sprint-chip input { display: none; }
+.sprint-ref-analisis p { margin: 0 0 .3rem; font-size: .85rem; }
+.sprint-analisis-dl { font-size: .8rem; display: grid; grid-template-columns: auto 1fr; gap: .2rem .6rem; }
+.sprint-analisis-dl dt { color: var(--muted); }
+.sprint-analisis-dl dd { margin: 0; }
+.sprint-analizando::before { content: ""; display: inline-block; width: .7rem; height: .7rem; border: 2px solid var(--accent); border-right-color: transparent; border-radius: 50%; margin-right: .4rem; animation: girar 1s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+.sprint-ref-acciones { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; }
+.sprint-guardado { color: var(--ok); font-size: .75rem; }
+.sprint-reutilizar ul { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .3rem; }

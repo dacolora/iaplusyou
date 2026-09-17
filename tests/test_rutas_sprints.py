@@ -272,3 +272,15 @@ def test_referencia_editar_json_no_objeto_devuelve_400(app):
     rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg")
     r = app["c"].post(f"/cliente/acme/sprints/referencias/{rid}", json=["descripcion"])
     assert r.status_code == 400 and r.get_json()["ok"] is False
+
+
+def test_pestana_sprints_se_renderiza(app):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    r = app["c"].get("/cliente/acme")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'id="tab-sprints"' in html and 'data-tab="sprints"' in html
+    assert "Octubre" in html and "Premium" in html and "Verano" in html and "Nuevo sprint" in html
+    assert "campanas_json" in html and "Sugerir personas" in html and "Black Friday" in html

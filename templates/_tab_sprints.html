@@ -1,0 +1,290 @@
+{% from "_sprint_macros.html" import anillo, chip_estado %}
+{# Pestaña Sprints. Contexto de sprints.rutas.contexto(cliente): sprints_lista,
+   personas_sprint, temporadas_sprint, presets_temporadas, pais_calendario,
+   paises_calendario, productos_sprint, destinos_sprint, estimado_sprint,
+   intenciones_sprint, tipos_temporada, trabajo_sugerir, hoy. #}
+<div class="panel-cabecera">
+  <h2>Sprints</h2>
+  <p class="vacio">Un sprint planea un mes de contenido como una matriz persona × producto × temporada. Cada celda es una campaña con sus videos e imágenes; nada se genera sin tu aprobación y sin ver el costo antes.</p>
+</div>
+
+<div class="sprints-lista">
+  {% for sp in sprints_lista %}
+  <a class="swap-card sprint-card" href="{{ url_for('sprints.ver', cliente=cliente, sid=sp.id) }}">
+    {{ anillo(sp.progreso.porcentaje) }}
+    <div>
+      <strong>{{ sp.nombre }}</strong> {{ chip_estado(sp.estado) }}
+      <br><small class="vacio">{{ sp.inicio }} → {{ sp.fin }} · {{ sp.campanas_total }} campaña(s) · {{ sp.piezas_planeadas }} piezas · {{ sp.progreso.texto }}</small>
+    </div>
+  </a>
+  {% else %}
+  <p class="vacio">Todavía no hay sprints. Crea el primero abajo: necesitas al menos una persona, un producto en el catálogo y una temporada.</p>
+  {% endfor %}
+</div>
+
+<details class="swap-card" id="nuevo-sprint" {% if not sprints_lista %}open{% endif %}>
+  <summary class="swap-card-resumen">+ Nuevo sprint</summary>
+  {% if not personas_sprint or not productos_sprint or not temporadas_sprint %}
+  <p class="tag-estado sprint-aviso">Para armar la matriz hacen falta
+    {% if not personas_sprint %}personas{% endif %}{% if not productos_sprint %} · productos en el catálogo{% endif %}{% if not temporadas_sprint %} · temporadas{% endif %}. Créalos más abajo.</p>
+  {% else %}
+  <form method="post" action="{{ url_for('sprints.crear', cliente=cliente) }}" id="form-sprint"
+        data-estimado-video="{{ estimado_sprint.video }}" data-estimado-imagen="{{ estimado_sprint.imagen }}" data-cliente="{{ cliente }}">
+    <fieldset class="sprint-paso" data-paso="1">
+      <legend>1. Datos del sprint</legend>
+      <div class="fe-opciones">
+        <label>Nombre <input name="nombre" required maxlength="200" placeholder="Sprint octubre"></label>
+        <label>Inicio <input type="date" name="inicio" required></label>
+        <label>Fin <input type="date" name="fin" required></label>
+        <label>Referencias por campaña <input type="number" name="referencias_objetivo" value="5" min="1" class="mini-input"></label>
+      </div>
+      <div class="fe-destinos checks-plataformas">
+        <span class="campo-label">Destinos (idioma · país)</span>
+        {% for d in destinos_sprint %}
+        <label class="fe-destino"><input type="checkbox" name="destinos" value="{{ d.codigo }}" {% if d.codigo == "es_CO" %}checked{% endif %}> {{ d.bandera }} {{ d.nombre }} <small>({{ d.idioma }})</small></label>
+        {% endfor %}
+      </div>
+      <label>Notas <textarea name="notas" rows="2"></textarea></label>
+      <button type="button" class="btn-generar btn-sm" data-ir="2">Siguiente: la matriz →</button>
+    </fieldset>
+
+    <fieldset class="sprint-paso" data-paso="2" hidden>
+      <legend>2. Matriz persona × producto</legend>
+      <div class="fe-opciones">
+        <label>Temporada
+          <select id="matriz-temporada">{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }} → {{ t.fin }})</option>{% endfor %}</select>
+        </label>
+        <small class="vacio">Haz clic en una celda para agregar esa campaña a la temporada elegida y fija sus videos e imágenes. Las celdas grises ya existen en esa temporada.</small>
+      </div>
+      <div class="sprint-matriz-scroll">
+        <table class="sprint-matriz" id="matriz">
+          <thead><tr><th></th>{% for p in productos_sprint %}<th>{% if p.representativa_url %}<img class="sprint-mini" src="{{ p.representativa_url }}" alt="">{% endif %}<br>{{ p.nombre }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for pe in personas_sprint %}
+            <tr>
+              <th><span class="sprint-punto" style="background: {{ pe.color or 'var(--accent)' }}"></span> {{ pe.nombre }}</th>
+              {% for p in productos_sprint %}
+              <td class="sprint-celda" data-persona="{{ pe.id }}" data-producto="{{ p.id }}" data-persona-nombre="{{ pe.nombre }}" data-producto-nombre="{{ p.nombre }}">
+                <button type="button" class="sprint-celda-btn">+</button>
+                <div class="sprint-celda-campos" hidden>
+                  <label>V <input type="number" min="0" value="5" class="mini-input celda-videos"></label>
+                  <label>I <input type="number" min="0" value="5" class="mini-input celda-imagenes"></label>
+                </div>
+              </td>
+              {% endfor %}
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <p class="sprint-totales" id="matriz-totales">0 campañas · 0 videos · 0 imágenes · costo estimado USD 0,00</p>
+      <small class="vacio">Estimado con {{ estimado_sprint.modelo_video }} ({{ estimado_sprint.duracion_s }} s por video) y {{ estimado_sprint.modelo_imagen }}. Se confirma antes de generar; hoy no se gasta nada.</small>
+      <div class="acciones">
+        <button type="button" class="btn-sm" data-ir="1">← Atrás</button>
+        <button type="button" class="btn-generar btn-sm" data-ir="3">Siguiente: resumen →</button>
+      </div>
+    </fieldset>
+
+    <fieldset class="sprint-paso" data-paso="3" hidden>
+      <legend>3. Resumen</legend>
+      <ul id="resumen-campanas"></ul>
+      <input type="hidden" name="campanas_json" id="campanas-json">
+      <div class="acciones">
+        <button type="button" class="btn-sm" data-ir="2">← Atrás</button>
+        <button type="submit" class="btn-generar btn-sm">Crear sprint</button>
+      </div>
+    </fieldset>
+  </form>
+  {% endif %}
+</details>
+
+<h3 class="sprint-subtitulo">Personas</h3>
+<div class="sprints-personas">
+  {% for p in personas_sprint %}
+  <details class="swap-card sprint-persona">
+    <summary class="swap-card-resumen"><span class="sprint-punto" style="background: {{ p.color or 'var(--accent)' }}"></span> <strong>{{ p.nombre }}</strong>
+      <small class="vacio">{{ p.resumen }}{% if p.edad_rango %} · {{ p.edad_rango }}{% endif %}{% if p.origen == "sugerida_ia" %} · sugerida por IA{% endif %}</small></summary>
+    <form method="post" action="{{ url_for('sprints.persona_editar', cliente=cliente, pid=p.id) }}" class="form-experimento">
+      <div class="fe-opciones">
+        <label>Nombre <input name="nombre" value="{{ p.nombre }}" required></label>
+        <label>Resumen <input name="resumen" value="{{ p.resumen or '' }}" maxlength="200"></label>
+        <label>Edad <input name="edad_rango" value="{{ p.edad_rango or '' }}" placeholder="30-45" class="mini-input"></label>
+        <label>Color <input type="color" name="color" value="{{ p.color or '#4d8dff' }}"></label>
+      </div>
+      <label>Descripción (quién es, qué le importa, qué le duele) <textarea name="descripcion" rows="3">{{ p.descripcion or '' }}</textarea></label>
+      <label>Tono (cómo hablarle) <input name="tono" value="{{ p.tono or '' }}"></label>
+      <label>Señales visuales (separadas por coma) <input name="senales_visuales" value="{{ (p.senales_visuales or []) | join(', ') }}"></label>
+      <label>Palabras clave <input name="palabras_clave" value="{{ (p.palabras_clave or []) | join(', ') }}"></label>
+      <div class="acciones">
+        <button type="submit" class="btn-generar btn-sm">Guardar</button>
+        <button type="submit" class="btn-sm btn-peligro" formaction="{{ url_for('sprints.persona_archivar', cliente=cliente, pid=p.id) }}">Archivar</button>
+      </div>
+    </form>
+  </details>
+  {% else %}<p class="vacio">Sin personas todavía.</p>{% endfor %}
+</div>
+<div class="acciones">
+  <details class="swap-card inline">
+    <summary class="swap-card-resumen">+ Nueva persona</summary>
+    <form method="post" action="{{ url_for('sprints.persona_crear', cliente=cliente) }}" class="form-experimento">
+      <div class="fe-opciones">
+        <label>Nombre <input name="nombre" required placeholder="Cliente Premium"></label>
+        <label>Resumen <input name="resumen" maxlength="200" placeholder="Busca calidad y diseño"></label>
+        <label>Edad <input name="edad_rango" placeholder="30-45" class="mini-input"></label>
+        <label>Color <input type="color" name="color" value="#4d8dff"></label>
+      </div>
+      <label>Descripción <textarea name="descripcion" rows="3"></textarea></label>
+      <label>Tono <input name="tono" placeholder="cercano y experto"></label>
+      <label>Señales visuales (coma) <input name="senales_visuales" placeholder="cocina moderna, luz natural"></label>
+      <label>Palabras clave (coma) <input name="palabras_clave"></label>
+      <button type="submit" class="btn-generar btn-sm">Crear persona</button>
+    </form>
+  </details>
+  <form method="post" action="{{ url_for('sprints.personas_sugerir', cliente=cliente) }}" class="inline">
+    <input type="hidden" name="cuantas" value="3">
+    <button type="submit" class="btn-sm" {% if trabajo_sugerir %}disabled{% endif %}>Sugerir personas con IA</button>
+  </form>
+  {% if trabajo_sugerir %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo_sugerir.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+  <script>iniciarPolling({{ trabajo_sugerir.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_sugerir.job_id) | tojson }});</script>
+  {% endif %}
+</div>
+
+<h3 class="sprint-subtitulo">Temporadas</h3>
+<div class="sprints-temporadas">
+  {% for t in temporadas_sprint %}
+  <details class="swap-card sprint-temporada">
+    <summary class="swap-card-resumen"><strong>{{ t.nombre }}</strong> <small class="vacio">{{ t.inicio }} → {{ t.fin }} · {{ t.tipo }}</small>
+      <span class="sprint-paleta">{% for c in (t.mood_visual or {}).get("paleta", []) %}<span style="background: {{ c }}" title="{{ c }}"></span>{% endfor %}</span></summary>
+    <form method="post" action="{{ url_for('sprints.temporada_editar', cliente=cliente, tid=t.id) }}" class="form-experimento">
+      <div class="fe-opciones">
+        <label>Nombre <input name="nombre" value="{{ t.nombre }}" required></label>
+        <label>Inicio <input type="date" name="inicio" value="{{ t.inicio }}"></label>
+        <label>Fin <input type="date" name="fin" value="{{ t.fin }}"></label>
+        <label>Tipo <select name="tipo">{% for tt in tipos_temporada %}<option value="{{ tt }}" {% if tt == t.tipo %}selected{% endif %}>{{ tt }}</option>{% endfor %}</select></label>
+      </div>
+      <label>Contexto <textarea name="contexto" rows="2">{{ t.contexto or '' }}</textarea></label>
+      <div class="fe-opciones">
+        <label>Paleta (hex, coma) <input name="paleta" value="{{ (t.mood_visual or {}).get('paleta', []) | join(', ') }}"></label>
+        <label>Luz <input name="luz" value="{{ (t.mood_visual or {}).get('luz', '') }}"></label>
+        <label>Elementos (coma) <input name="elementos" value="{{ (t.mood_visual or {}).get('elementos', []) | join(', ') }}"></label>
+      </div>
+      <div class="acciones">
+        <button type="submit" class="btn-generar btn-sm">Guardar</button>
+        <button type="submit" class="btn-sm btn-peligro" formaction="{{ url_for('sprints.temporada_archivar', cliente=cliente, tid=t.id) }}">Archivar</button>
+      </div>
+    </form>
+  </details>
+  {% else %}<p class="vacio">Sin temporadas todavía. Adopta una del calendario o crea la tuya.</p>{% endfor %}
+</div>
+<div class="sprint-calendario">
+  <form method="post" action="{{ url_for('sprints.calendario_pais', cliente=cliente) }}" class="inline">
+    <label>Calendario comercial de
+      <select name="pais" onchange="this.form.submit()">{% for p in paises_calendario %}<option value="{{ p }}" {% if p == pais_calendario %}selected{% endif %}>{{ p }}</option>{% endfor %}</select>
+    </label>
+  </form>
+  <div class="sprint-presets">
+    {% for pr in presets_temporadas %}
+    <form method="post" action="{{ url_for('sprints.temporada_adoptar', cliente=cliente) }}" class="inline">
+      <input type="hidden" name="clave" value="{{ pr.clave }}">
+      <button type="submit" class="btn-xs" title="{{ pr.inicio }} → {{ pr.fin }}">+ {{ pr.nombre }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  <details class="swap-card inline">
+    <summary class="swap-card-resumen">+ Nueva temporada propia</summary>
+    <form method="post" action="{{ url_for('sprints.temporada_crear', cliente=cliente) }}" class="form-experimento">
+      <div class="fe-opciones">
+        <label>Nombre <input name="nombre" required placeholder="Lanzamiento línea baño"></label>
+        <label>Inicio <input type="date" name="inicio" required></label>
+        <label>Fin <input type="date" name="fin" required></label>
+        <label>Tipo <select name="tipo">{% for tt in tipos_temporada %}<option value="{{ tt }}" {% if tt == "propia" %}selected{% endif %}>{{ tt }}</option>{% endfor %}</select></label>
+      </div>
+      <label>Contexto (qué pasa, qué se vende, qué emoción) <textarea name="contexto" rows="2"></textarea></label>
+      <div class="fe-opciones">
+        <label>Paleta (hex, coma) <input name="paleta" placeholder="#1B2A41, #F2C14E"></label>
+        <label>Luz <input name="luz" placeholder="cálida, de tarde"></label>
+        <label>Elementos (coma) <input name="elementos"></label>
+      </div>
+      <button type="submit" class="btn-generar btn-sm">Crear temporada</button>
+    </form>
+  </details>
+</div>
+
+<script>
+  (function () {
+    var form = document.getElementById('form-sprint');
+    if (!form) return;
+    var KEY = 'sprint-asistente-' + form.dataset.cliente;
+    var costoV = parseFloat(form.dataset.estimadoVideo || '0'), costoI = parseFloat(form.dataset.estimadoImagen || '0');
+    var campanas = {};   // "persona|producto|temporada" -> {persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, nombres}
+    var selTemporada = document.getElementById('matriz-temporada');
+
+    // Fechas por defecto: el mes siguiente completo.
+    var hoy = new Date(), ini = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1), fin = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
+    function iso(d) { return d.toISOString().slice(0, 10); }
+    if (!form.inicio.value) form.inicio.value = iso(ini);
+    if (!form.fin.value) form.fin.value = iso(fin);
+    if (!form.nombre.value) form.nombre.value = 'Sprint ' + ini.toLocaleDateString('es', {month: 'long', year: 'numeric'});
+
+    // Estado guardado (por si se crea una persona o temporada a mitad de camino y la página recarga).
+    try { var g = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (g) { campanas = g.campanas || {}; if (g.nombre) form.nombre.value = g.nombre; if (g.inicio) form.inicio.value = g.inicio; if (g.fin) form.fin.value = g.fin; } } catch (e) {}
+    function guardarEstado() { try { sessionStorage.setItem(KEY, JSON.stringify({campanas: campanas, nombre: form.nombre.value, inicio: form.inicio.value, fin: form.fin.value})); } catch (e) {} }
+
+    function clave(td) { return td.dataset.persona + '|' + td.dataset.producto + '|' + selTemporada.value; }
+    function pintar() {
+      var tNombre = selTemporada.options[selTemporada.selectedIndex].text;
+      form.querySelectorAll('.sprint-celda').forEach(function (td) {
+        var c = campanas[clave(td)];
+        var enOtra = Object.keys(campanas).some(function (k) { return k.indexOf(td.dataset.persona + '|' + td.dataset.producto + '|') === 0 && k !== clave(td); });
+        td.classList.toggle('activa', !!c);
+        td.classList.toggle('en-otra', !c && enOtra);
+        td.querySelector('.sprint-celda-campos').hidden = !c;
+        td.querySelector('.sprint-celda-btn').textContent = c ? '✓' : '+';
+        if (c) { td.querySelector('.celda-videos').value = c.n_videos; td.querySelector('.celda-imagenes').value = c.n_imagenes; }
+      });
+      var n = 0, v = 0, i = 0;
+      Object.keys(campanas).forEach(function (k) { n++; v += +campanas[k].n_videos; i += +campanas[k].n_imagenes; });
+      document.getElementById('matriz-totales').textContent = n + ' campañas · ' + v + ' videos · ' + i + ' imágenes · costo estimado USD ' + (v * costoV + i * costoI).toFixed(2).replace('.', ',');
+      var ul = document.getElementById('resumen-campanas'); ul.innerHTML = '';
+      Object.keys(campanas).forEach(function (k) {
+        var c = campanas[k], li = document.createElement('li');
+        li.textContent = c.persona_nombre + ' · ' + c.producto_nombre + ' · ' + c.temporada_nombre + ': ' + c.n_videos + ' videos, ' + c.n_imagenes + ' imágenes';
+        ul.appendChild(li);
+      });
+      document.getElementById('campanas-json').value = JSON.stringify(Object.keys(campanas).map(function (k) {
+        var c = campanas[k]; return {persona_id: c.persona_id, catalogo_id: c.catalogo_id, temporada_id: c.temporada_id, n_videos: c.n_videos, n_imagenes: c.n_imagenes};
+      }));
+      guardarEstado();
+    }
+    form.querySelectorAll('.sprint-celda').forEach(function (td) {
+      td.querySelector('.sprint-celda-btn').addEventListener('click', function () {
+        var k = clave(td);
+        if (campanas[k]) { delete campanas[k]; }
+        else {
+          campanas[k] = {persona_id: +td.dataset.persona, catalogo_id: td.dataset.producto, temporada_id: +selTemporada.value,
+                         n_videos: 5, n_imagenes: 5, persona_nombre: td.dataset.personaNombre, producto_nombre: td.dataset.productoNombre,
+                         temporada_nombre: selTemporada.options[selTemporada.selectedIndex].text};
+        }
+        pintar();
+      });
+      ['.celda-videos', '.celda-imagenes'].forEach(function (sel, idx) {
+        td.querySelector(sel).addEventListener('input', function (e) {
+          var c = campanas[clave(td)]; if (!c) return;
+          c[idx === 0 ? 'n_videos' : 'n_imagenes'] = Math.max(0, parseInt(e.target.value || '0', 10)); pintar();
+        });
+      });
+    });
+    selTemporada.addEventListener('change', pintar);
+    ['nombre', 'inicio', 'fin'].forEach(function (n) { form[n].addEventListener('input', guardarEstado); });
+    form.querySelectorAll('[data-ir]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var destino = b.dataset.ir;
+        if (destino === '3' && !Object.keys(campanas).length) { alert('Agrega al menos una campaña en la matriz.'); return; }
+        form.querySelectorAll('.sprint-paso').forEach(function (p) { p.hidden = p.dataset.paso !== destino; });
+      });
+    });
+    form.addEventListener('submit', function () { try { sessionStorage.removeItem(KEY); } catch (e) {} });
+    pintar();
+  })();
+</script>
