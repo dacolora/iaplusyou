@@ -527,6 +527,9 @@ def test_revision_pagina_y_acciones(con_ideas, monkeypatch, tmp_path):
     c = con_ideas["c"]
     r = c.get(f"/cliente/acme/sprints/{sid}/revision")
     assert r.status_code == 200 and b"Amanecer" in r.data and b"Marco" in r.data and b"90" in r.data and "Aprobar todas las que pasaron QA".encode() in r.data
+    # F3: los atajos A/R/flechas ignoran Cmd/Ctrl/Alt (Cmd+A o Cmd+R son del navegador) y toleran activeElement nulo
+    html = r.data.decode()
+    assert "if (e.metaKey || e.ctrlKey || e.altKey) return;" in html and "activo && ['INPUT', 'TEXTAREA', 'SELECT']" in html
     r = c.post(f"/cliente/acme/sprints/ideas/{iv}/revision", json={"accion": "aprobar"})
     assert r.get_json()["ok"] and r.get_json()["revision"] == "aprobada"
     r = c.post(f"/cliente/acme/sprints/ideas/{ii}/revision", json={"accion": "rechazar", "motivo": ""})
@@ -538,6 +541,30 @@ def test_revision_pagina_y_acciones(con_ideas, monkeypatch, tmp_path):
     datos.actualizar_idea("acme", iv, revision="pendiente")
     c.post(f"/cliente/acme/sprints/{sid}/revision/aprobar_qa")
     assert datos.idea("acme", iv)["revision"] == "aprobada"
+
+
+def test_repetir_qa_limpia_el_marcador_y_encola_un_solo_qa(con_ideas, monkeypatch, tmp_path):
+    """F5: una pieza cuyo QA falló muestra el motivo y «Repetir QA»; el POST
+    borra el marcador y encola exactamente un `sprint_qa_pieza` (nunca
+    generación) y vuelve a la bandeja."""
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    datos.actualizar_idea("acme", iv, qa={"veredicto": "error", "score": None, "checks": {}, "nota": "ffprobe no responde", "cf_id": cfs[iv]})
+    html = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert "QA falló: ffprobe no responde" in html and "Repetir QA" in html and f"/sprints/ideas/{iv}/qa" in html
+    n_antes = len(con_ideas["encolados"])
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/qa")
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}/revision")
+    nuevos = con_ideas["encolados"][n_antes:]
+    assert len(nuevos) == 1 and nuevos[0]["tipo"] == "sprint_qa_pieza" and nuevos[0]["job_id"] == f"acme__cp{iv}__qa"
+    assert nuevos[0]["payload"] == {"cliente": "acme", "cp_id": iv} and datos.idea("acme", iv)["qa"] is None
+    # una pieza que no está lista no se manda a QA (gastaría centavos a ciegas)
+    import creative_flow
+    creative_flow.actualizar("acme", cfs[ii], estado="error", error="x")
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}/qa")
+    assert r.status_code == 302 and len(con_ideas["encolados"]) == n_antes + 1
+    assert c.post("/cliente/acme/sprints/ideas/999/qa").status_code == 404
 
 
 def test_cerrar_reabrir_y_entrega(con_ideas, monkeypatch, tmp_path):

@@ -854,6 +854,24 @@ def pieza_revision(cliente, cp_id):
     return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
 
 
+@bp.post("/ideas/<int:cp_id>/qa")
+def pieza_qa(cliente, cp_id):
+    """«Repetir QA»: limpia el marcador (`qa=None`) y encola un solo
+    `sprint_qa_pieza` para la sesión actual. Solo visión (centavos), nunca
+    generación: sin puerta de costo."""
+    i = _idea_o_404(cliente, cp_id)
+    destino = redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
+    if not i.get("cf_id") or i.get("estado") not in revision_mod.TERMINADAS:
+        flash("Esa pieza todavía no está lista para el QA.", "error")
+        return destino
+    datos.actualizar_idea(cliente, cp_id, qa=None)
+    if tareas_sprints.encolar_qa(cliente, cp_id):
+        flash("Repitiendo el QA de la pieza; el resultado aparecerá aquí en unos segundos.", "ok")
+    else:
+        flash("Ya hay un QA en curso para esa pieza.", "warn")
+    return destino
+
+
 @bp.post("/<int:sid>/revision/aprobar_qa")
 def revision_aprobar_qa(cliente, sid):
     _sprint_o_404(cliente, sid)

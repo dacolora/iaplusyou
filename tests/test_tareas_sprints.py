@@ -141,8 +141,47 @@ def test_qa_pieza_guarda_resultado_y_error(base_temporal, monkeypatch):
     datos.actualizar_idea("acme", cp, qa=None)
     with pytest.raises(RuntimeError):
         tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
-    assert datos.idea("acme", cp)["qa"] is None       # queda pendiente para el reintento de la cola
+    # F5: queda un marcador terminal (la periódica no vuelve a encolar) y la
+    # excepción sigue subiendo para que la cola agote sus propios intentos.
+    marca = datos.idea("acme", cp)["qa"]
+    assert marca == {"veredicto": "error", "score": None, "checks": {}, "nota": "visión caída", "cf_id": cf}
     assert tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": 999}}) == "La pieza ya no existe."
+
+
+def test_qa_pieza_error_no_se_reencola_y_un_intento_bueno_pisa_el_marcador(base_temporal, monkeypatch):
+    """F5: con el marcador `veredicto=error` la periódica ya no encola otro
+    QA para esa pieza (antes lo hacía cada 5 min, descargando el video otra
+    vez); un intento posterior que sí funciona sobrescribe el marcador."""
+    import cola
+    import creative_flow
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    def rompe(*a, **k):
+        raise RuntimeError("x" * 500)
+    monkeypatch.setattr(qa, "evaluar", rompe)
+    tareas.cargar_todas()
+    with pytest.raises(RuntimeError):
+        tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert len(datos.idea("acme", cp)["qa"]["nota"]) == 300
+    encolados = []
+    monkeypatch.setattr(cola, "encolar", lambda tipo, payload, **kw: encolados.append(tipo) or 1)
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert encolados == []
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {"score": 85, "checks": {}, "veredicto": "pasa"})
+    tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert datos.idea("acme", cp)["qa"]["veredicto"] == "pasa"
+
+
+def test_encolar_qa_usa_el_worker(base_temporal, monkeypatch):
+    import trabajos
+    from tareas import sprints as ts
+    encolados = []
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload, kw)) or True)
+    assert ts.encolar_qa("acme", 5) is True
+    job_id, tipo, payload, kw = encolados[0]
+    assert job_id == "acme__cp5__qa" and tipo == "sprint_qa_pieza" and payload == {"cliente": "acme", "cp_id": 5}
+    assert kw["max_intentos"] == 3 and kw["cliente"] == "acme"
 
 
 def test_qa_pieza_descarta_el_resultado_si_la_pieza_se_regenero(base_temporal, monkeypatch):

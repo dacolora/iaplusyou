@@ -42,6 +42,8 @@ def test_aprobar_rechazar_y_aprobar_qa(base_temporal, monkeypatch, tmp_path):
     assert revision.aprobar("acme", cp2) is False        # en error, no se puede aprobar
     datos.actualizar_idea("acme", cp1, revision="pendiente")
     assert revision.aprobar_pasaron_qa("acme", sid) == 0   # cp0 ya aprobada, cp1 es "revisar"
+    datos.actualizar_idea("acme", cp1, qa={"veredicto": "error", "score": None, "checks": {}, "nota": "ffprobe"})
+    assert revision.aprobar_pasaron_qa("acme", sid) == 0   # F5: un QA fallido no es un QA pasado
     datos.actualizar_idea("acme", cp1, qa={"veredicto": "pasa", "score": 80})
     assert revision.aprobar_pasaron_qa("acme", sid) == 1
     tipos = [e["tipo"] for e in datos.eventos("acme", sid)]

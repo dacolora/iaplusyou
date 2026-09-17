@@ -29,7 +29,7 @@
     <select id="filtro-campana"><option value="">todas</option>{% for c in sprint.campanas %}<option value="{{ c.id }}">{{ c.orden + 1 }} · {{ c.persona_nombre }} · {{ c.temporada_nombre }}</option>{% endfor %}</select>
   </label>
   <label class="fe-check">Tipo <select id="filtro-tipo"><option value="">todos</option><option value="video">video</option><option value="imagen">imagen</option></select></label>
-  <label class="fe-check">QA <select id="filtro-qa"><option value="">todos</option><option value="pasa">pasa</option><option value="revisar">revisar</option><option value="falla">falla</option><option value="sin">sin evaluar</option></select></label>
+  <label class="fe-check">QA <select id="filtro-qa"><option value="">todos</option><option value="pasa">pasa</option><option value="revisar">revisar</option><option value="falla">falla</option><option value="error">QA falló</option><option value="sin">sin evaluar</option></select></label>
 </div>
 
 <div class="sprint-revision-grid" id="revision-grid">
@@ -47,7 +47,12 @@
     <div class="sprint-ref-cuerpo">
       <strong>{{ p.titulo }}</strong>
       <small class="vacio">Campaña {{ p.campana_n }} · {{ p.persona_nombre }} · {{ p.temporada_nombre }} · {{ p.tipo }}{% if p.costo_usd %} · USD {{ '%.2f' % p.costo_usd }}{% endif %}</small>
-      {% if p.qa %}
+      {% if p.qa and p.qa.veredicto == "error" %}
+      <div class="sprint-qa">
+        <span class="tag-error" title="{{ p.qa.nota or '' }}">QA falló: {{ p.qa.nota or 'sin detalle' }}</span>
+        <form method="post" action="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}" class="inline"><button type="submit" class="btn-xs">Repetir QA</button></form>
+      </div>
+      {% elif p.qa %}
       <div class="sprint-qa">
         <span class="sprint-qa-score sprint-qa-{{ p.qa.veredicto }}">{{ p.qa.score }}</span>
         {% for k in checks %}{% set ch = (p.qa.checks or {}).get(k) %}{% if ch %}<span class="qa-check {{ 'ok' if ch.ok else 'mal' }}" title="{{ k | replace('_', ' ') }}: {{ ch.nota }}">{{ '✓' if ch.ok else '✗' }}</span>{% endif %}{% endfor %}
@@ -112,7 +117,9 @@
       if (r) r.addEventListener('click', function () { var m = prompt('Motivo del rechazo:'); if (m) enviar(card, 'rechazar', m); });
     });
     document.addEventListener('keydown', function (e) {
-      if (['INPUT', 'TEXTAREA', 'SELECT'].indexOf(document.activeElement.tagName) >= 0) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;   // Cmd+A / Ctrl+R son del navegador, no atajos de la bandeja
+      var activo = document.activeElement;
+      if (activo && ['INPUT', 'TEXTAREA', 'SELECT'].indexOf(activo.tagName) >= 0) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); seleccionar(idx + 1); }
       else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); seleccionar(idx - 1); }
       else if (e.key === 'a' || e.key === 'A') accionSeleccionada('aprobar');

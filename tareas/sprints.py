@@ -141,13 +141,23 @@ def job_id_qa(cliente, cp_id):
     return f"{cliente}__cp{cp_id}__qa"
 
 
+def encolar_qa(cliente, cp_id):
+    """El mismo trabajo que encola la periódica; lo usa «Repetir QA» desde la
+    bandeja. Solo QA (centavos de visión), nunca generación."""
+    return trabajos.encolar(job_id_qa(cliente, cp_id), "sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id},
+                            cliente=cliente, duracion_estimada=30, max_intentos=3)
+
+
 @registrar("sprint_qa_pieza")
 def ejecutar_qa_pieza(tarea):
     """QA de una pieza lista. Si falla, la tarea reintenta sola (max 3): el QA
     no gasta en generación, solo centavos de visión. El resultado se guarda
     con `datos.guardar_qa` contra la sesión (`cf_id`) que se evaluó: si la
     pieza se regeneró mientras tanto, el veredicto viejo se descarta y la
-    periódica evaluará la sesión nueva."""
+    periódica evaluará la sesión nueva. Un fallo (descarga, ffprobe, visión)
+    deja el marcador terminal `veredicto="error"` antes de subir la
+    excepción: la cola agota sus intentos, pero la periódica ya no la vuelve
+    a encolar cada 5 min; «Repetir QA» (rutas.pieza_qa) limpia el marcador."""
     p = tarea["payload"]
     cliente, cp_id = p["cliente"], int(p["cp_id"])
     i = datos.idea(cliente, cp_id)
@@ -161,7 +171,12 @@ def ejecutar_qa_pieza(tarea):
     sp = datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}
     umbral = (sp.get("extra") or {}).get("qa_umbral") or qa.UMBRAL_DEFECTO
     campana["marca"] = proyectos.nombre_visible(cliente)
-    resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
+    try:
+        resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
+    except Exception as e:
+        datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {}, "nota": str(e)[:300],
+                                                 "cf_id": cf_id})
+        raise
     resultado["cf_id"] = cf_id
     if not datos.guardar_qa(cliente, cp_id, cf_id, resultado):
         bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado", "QA descartado: la pieza fue regenerada")
