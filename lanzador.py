@@ -6,6 +6,7 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+import atribucion
 import cola
 import db
 import experimentos
@@ -430,6 +431,24 @@ def escalar_pais(cliente, experimento_id, pais, pct, tope_dia=None):
     return nuevo
 
 
+def _mezclar_ventas_tienda(cliente, pz, snap):
+    """Atribución por tienda: las compras/ingresos del snapshot salen de los
+    pedidos con utm de esa pieza (atribucion.ventas_tienda), no de lo que
+    reporta Meta — sin Pixel, Meta no ve ventas; con uno a medias, las
+    infla o las pierde. ROAS y CPA se recalculan sobre el gasto de Meta; los
+    ingresos quedan en la moneda de la tienda (nunca se convierten), así que
+    el ROAS es tienda/cuenta: igual de válido para comparar piezas entre sí,
+    que es lo único que hace el decisor con él."""
+    v = atribucion.ventas_tienda(cliente, pz)
+    gasto = float(snap.get("gasto") or 0)
+    compras, ingresos = int(v["compras"]), float(v["ingresos"])
+    snap["compras"] = compras
+    snap["ingresos"] = ingresos
+    snap["roas"] = ingresos / gasto if gasto else 0.0
+    snap["cpa"] = gasto / compras if compras else 0.0
+    snap["fuente_ventas"] = "tienda"
+
+
 def refrescar(cliente, experimento_id):
     ex = experimentos.obtener(cliente, experimento_id)
     piezas = _piezas_de(ex) if ex else []
@@ -445,6 +464,8 @@ def refrescar(cliente, experimento_id):
                 r = meta_insights.obtener_resultados(pz["meta_ad_id"], objetivo=ex["objetivo_meta"])
                 snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
                 snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
+                if ex["atribucion"] == "tienda":
+                    _mezclar_ventas_tienda(cliente, pz, snap)
                 for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
                     snap[k] = r.get(k)
                 experimentos.snapshot(pz["id"], snap)

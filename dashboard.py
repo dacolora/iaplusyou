@@ -2194,8 +2194,18 @@ def exp_crear(cliente):
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"   # nunca se sube de puerta por un valor raro en el form
-    eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max, modo=modo)
-    experimentos.registrar_evento(cliente, eid, "creado", f"Experimento creado con {len(paises)} países (modo {modo})")
+    # Atribución opcional en el form; sin ella, experimentos.crear usa la
+    # sugerida (Pixel vivo → pixel, tienda conectada → tienda, si no ninguna).
+    atribucion = request.form.get("atribucion") or None
+    if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
+        flash("La atribución tiene que ser pixel, tienda o ninguna.", "error")
+        return volver
+    eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max,
+                             modo=modo, atribucion=atribucion)
+    ex = experimentos.obtener(cliente, eid)
+    experimentos.registrar_evento(
+        cliente, eid, "creado",
+        f"Experimento creado con {len(paises)} países (modo {modo}, atribución {ex['atribucion']})")
     flash(f"Experimento «{nombre}» creado. Agrega piezas y lánzalo cuando esté listo.", "ok")
     return volver
 

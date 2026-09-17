@@ -39,6 +39,17 @@ def test_crear_experimento(app):
     assert [(p["pais"], p["presupuesto_dia"]) for p in e["paises"]] == [("CO", 20000.0), ("MX", 20000.0)]
 
 
+def test_crear_atribucion_del_form_o_sugerida(app, monkeypatch):
+    import experimentos as ex
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado_pixel", lambda c: {"estado": "ok"})
+    app["c"].post("/cliente/acme/experimentos/nuevo", data=FORM)                              # sin campo: sugerida
+    app["c"].post("/cliente/acme/experimentos/nuevo", data=dict(FORM, atribucion="ninguna"))  # explícita
+    app["c"].post("/cliente/acme/experimentos/nuevo", data=dict(FORM, atribucion="magia"))    # inválida: no crea
+    lista = ex.cargar("acme")
+    assert [e["atribucion"] for e in lista] == ["ninguna", "pixel"]
+    assert any("atribución pixel" in ev["mensaje"] for ev in lista[1]["eventos"])
+
+
 def test_crear_rechaza_presupuesto_bajo_en_moneda_de_la_cuenta(app):
     """La cuenta es COP: un presupuesto de 150 en MX (válido en pesos
     mexicanos, pero muy por debajo del mínimo en COP) debe rechazarse — Meta

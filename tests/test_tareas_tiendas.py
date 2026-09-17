@@ -1,8 +1,6 @@
 """Tareas del worker de tiendas (`tareas/tiendas.py`): sync de productos y
 pedidos con un conector falso, importación de catálogo y las periódicas."""
 import os
-import sys
-import types
 
 import pytest
 
@@ -77,7 +75,7 @@ def entorno(base_temporal, tmp_path, monkeypatch):
     avisos = []
     monkeypatch.setattr(notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: avisos.append((c, tipo, asunto, cuerpo)))
     tareas.cargar_todas()
-    return {"avisos": avisos}
+    return {"avisos": avisos, "db": base_temporal}
 
 
 def _tienda(cliente="acme", tipo="shopify", creds=None):
@@ -223,36 +221,44 @@ def test_sync_tienda_inexistente(entorno):
     assert "no existe" in tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": 99}})
 
 
-def test_sync_pedidos_guarda_y_resuelve_atribucion(entorno, monkeypatch):
+def test_sync_pedidos_guarda_y_resuelve_atribucion(entorno):
+    """La sync liga los pedidos con utm_content=<pieza.id> (atribucion real,
+    sin stub) y deja sin resolver los que traen un utm que no es una pieza."""
+    import experimentos as ex
     import tareas
     import tiendas
+    from tests.test_experimentos_db import _pieza
     tid = _tienda()
+    pieza = _pieza(entorno["db"])
+    eid = ex.crear("acme", "Cojín", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP", atribucion="tienda")
+    ep_id = ex.agregar_pieza("acme", eid, pieza, "CO")
     Falso.pedidos = [normalizar_pedido({"fuente_id": "o1", "fecha": "2026-09-15T10:00:00Z", "total": 50,
+                                        "moneda": "USD", "utm_content": str(pieza)}),
+                     normalizar_pedido({"fuente_id": "o2", "fecha": "2026-09-15T11:00:00Z", "total": 5,
                                         "moneda": "USD", "utm_content": "ep_1"})]
-    resueltos = []
-    monkeypatch.setitem(sys.modules, "atribucion",
-                        types.SimpleNamespace(resolver_pendientes=lambda c: (resueltos.append(c), 1)[1]))
     msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
-    assert "1 pedido(s)" in msg and "1 nuevo(s)" in msg and "1 atribuido(s)" in msg
-    assert resueltos == ["acme"]
-    assert len(tiendas.pedidos_sin_resolver("acme")) == 1
+    assert "2 pedido(s)" in msg and "2 nuevo(s)" in msg and "1 atribuido(s)" in msg
+    pendientes = tiendas.pedidos_sin_resolver("acme")
+    assert [p["fuente_id"] for p in pendientes] == ["o2"]
+    assert tiendas.ventas_por_pieza("acme", ep_id, "2026-01-01T00:00:00") == {"compras": 1, "ingresos": 50.0}
     t = tiendas.obtener("acme", tid)
     assert t["ultima_sync_pedidos"] and t["estado"] == "conectada"
     # sin ultima_sync: 30 días atrás; con ella: un día de solape
     primera = Falso.instancias[0].desde
     assert primera < t["ultima_sync_pedidos"]
-    tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
+    msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
+    assert "0 nuevo(s)" in msg and "0 atribuido(s)" in msg   # resync: nada nuevo, o1 sigue ligado
     assert Falso.instancias[-1].desde < t["ultima_sync_pedidos"] and Falso.instancias[-1].desde > primera
 
 
-def test_sync_pedidos_sin_modulo_atribucion(entorno, monkeypatch):
+def test_sync_pedidos_sin_utm_no_atribuye(entorno):
     import tareas
     import tiendas
     tid = _tienda()
-    monkeypatch.setitem(sys.modules, "atribucion", None)   # ImportError al importar
     Falso.pedidos = [normalizar_pedido({"fuente_id": "o1", "fecha": "2026-09-15", "total": 5})]
     msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
-    assert "1 nuevo(s)" in msg and "atribuido" not in msg
+    assert "1 nuevo(s)" in msg and "0 atribuido(s)" in msg
+    assert tiendas.pedidos_sin_resolver("acme") == []
     assert tiendas.obtener("acme", tid)["ultima_sync_pedidos"]
 
 

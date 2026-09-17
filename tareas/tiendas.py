@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 
+import atribucion
 import cifrado
 import cola
 import conectores
@@ -167,17 +168,6 @@ def _desde_para_pedidos(tienda):
     return (datetime.now() - timedelta(days=DIAS_PEDIDOS_INICIAL)).isoformat(timespec="seconds")
 
 
-def _resolver_atribucion(cliente):
-    """atribucion.resolver_pendientes (Task 5). Si el módulo todavía no
-    existe, se salta: los pedidos quedan guardados con su utm_content y
-    `tiendas.pedidos_sin_resolver` los entrega cuando el atribuidor llegue."""
-    try:
-        import atribucion  # noqa: PLC0415 — perezoso a propósito
-    except ImportError:
-        return None
-    return atribucion.resolver_pendientes(cliente)
-
-
 @registrar("tienda_sync_pedidos")
 def tienda_sync_pedidos(tarea):
     p = tarea["payload"]
@@ -204,14 +194,13 @@ def tienda_sync_pedidos(tarea):
     _guardar_credenciales(cliente, tienda, con)
 
     nuevos = tiendas.guardar_pedidos(cliente, tid, pedidos)
-    resueltos = _resolver_atribucion(cliente)
+    # Liga los pedidos con utm_content=<pieza.id> a su experimento_pieza; los
+    # que no resuelven quedan en cola para la próxima sync.
+    resueltos = atribucion.resolver_pendientes(cliente)
     # `inicio` (no "ahora"): un pedido creado mientras corría la sync entra en
     # la próxima ventana en vez de perderse.
     tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_pedidos=inicio)
-    texto = f"{len(pedidos)} pedido(s) leído(s), {nuevos} nuevo(s)."
-    if resueltos is not None:
-        texto += f" {resueltos} atribuido(s) a piezas."
-    return texto
+    return f"{len(pedidos)} pedido(s) leído(s), {nuevos} nuevo(s), {resueltos} atribuido(s) a piezas."
 
 
 # --- importar archivo / URL --------------------------------------------------
