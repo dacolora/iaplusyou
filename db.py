@@ -283,6 +283,122 @@ kv = Table("kv", metadata,
     Column("actualizado_en", String(19), nullable=False),
 )
 
+# --- Sprints de contenido (docs/superpowers/specs/2026-09-16-sprints-design.md, Parte 1) ---
+
+persona = Table("persona", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("nombre", String(120), nullable=False),
+    Column("resumen", String(200)),
+    Column("descripcion", Text),
+    Column("edad_rango", String(20)),
+    Column("tono", Text),
+    Column("senales_visuales", JSON, default=list),
+    Column("palabras_clave", JSON, default=list),
+    Column("color", String(7)),
+    Column("origen", String(12), nullable=False, default="manual"),      # manual|sugerida_ia
+    Column("archivada", Boolean, default=False),
+    Column("extra", JSON, default=dict),
+)
+
+temporada = Table("temporada", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("nombre", String(120), nullable=False),
+    Column("inicio", String(10), nullable=False),                        # YYYY-MM-DD
+    Column("fin", String(10), nullable=False),
+    Column("contexto", Text),
+    Column("mood_visual", JSON, default=dict),
+    Column("tipo", String(12), nullable=False, default="propia"),        # comercial|estacional|propia
+    Column("archivada", Boolean, default=False),
+    Column("extra", JSON, default=dict),
+)
+
+sprint = Table("sprint", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("nombre", String(200), nullable=False),
+    Column("inicio", String(10), nullable=False),
+    Column("fin", String(10), nullable=False),
+    Column("estado", String(20), nullable=False, default="planeando"),
+    Column("destinos", JSON, default=list),                             # ["es_CO", ...]
+    Column("referencias_objetivo_defecto", Integer, default=5),
+    Column("notas", Text),
+    Column("archivado", Boolean, default=False),
+    Column("extra", JSON, default=dict),                                # listo_manual, qa_umbral, modelos del lote
+)
+
+campana = Table("campana", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("sprint_id", Integer, sa.ForeignKey("sprint.id"), nullable=False, index=True),
+    Column("persona_id", Integer, sa.ForeignKey("persona.id"), nullable=False),
+    Column("catalogo_id", String(120), nullable=False),                  # carpeta del producto en el catálogo de Crear
+    Column("producto_id", Integer, sa.ForeignKey("producto.id")),        # bloque 5, cuando enlace catálogo y tabla
+    Column("temporada_id", Integer, sa.ForeignKey("temporada.id"), nullable=False),
+    Column("n_videos", Integer, nullable=False, default=0),
+    Column("n_imagenes", Integer, nullable=False, default=0),
+    Column("referencias_objetivo", Integer, default=5),
+    Column("estado", String(20), nullable=False, default="planeada"),
+    Column("orden", Integer, default=0),
+    Column("extra", JSON, default=dict),
+    sa.UniqueConstraint("sprint_id", "persona_id", "catalogo_id", "temporada_id", name="uq_campana_combinacion"),
+)
+
+referencia = Table("referencia", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("campana_id", Integer, sa.ForeignKey("campana.id"), nullable=False, index=True),
+    Column("tipo", String(6), nullable=False),                          # imagen|video
+    Column("url", Text, nullable=False),
+    Column("frame_url", Text),
+    Column("ruta_local", Text),
+    Column("origen", String(12), nullable=False, default="archivo"),    # archivo|link|catalogo|reutilizada
+    Column("titulo", String(200)),
+    Column("intencion", JSON, default=list),                            # etiquetas de sprints.datos.INTENCIONES
+    Column("intencion_otro", String(200)),
+    Column("descripcion", Text),
+    Column("analisis", JSON),
+    Column("analisis_estado", String(10), default="pendiente"),         # pendiente|listo|error
+    Column("estado", String(8), nullable=False, default="borrador"),    # borrador|lista
+    Column("orden", Integer, default=0),
+    Column("extra", JSON, default=dict),
+)
+
+campana_pieza = Table("campana_pieza", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("campana_id", Integer, sa.ForeignKey("campana.id"), nullable=False, index=True),
+    Column("tipo", String(6), nullable=False),                          # video|imagen
+    Column("titulo", String(200)),
+    Column("escena", Text),
+    Column("sonido", Text),
+    Column("enfoque", String(20)),
+    Column("gancho", String(200)),
+    Column("referencias_ids", JSON, default=list),
+    Column("duracion_s", Float),
+    Column("plataformas", JSON, default=list),
+    Column("estado_idea", String(10), nullable=False, default="propuesta"),   # propuesta|aprobada|descartada
+    Column("cf_id", String(60), index=True),                            # legado_id de la sesión de Crear
+    Column("qa", JSON),
+    Column("revision", String(10), nullable=False, default="pendiente"),      # pendiente|aprobada|rechazada
+    Column("revision_motivo", Text),
+    Column("textos", JSON),
+    Column("orden", Integer, default=0),
+    Column("extra", JSON, default=dict),
+)
+
+sprint_evento = Table("sprint_evento", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("sprint_id", Integer, sa.ForeignKey("sprint.id"), nullable=False, index=True),
+    Column("campana_id", Integer, sa.ForeignKey("campana.id")),
+    Column("tipo", String(30), nullable=False),
+    Column("mensaje", Text),
+    Column("datos", JSON, default=dict),
+    Column("creado_en", String(19), nullable=False),
+)
+
 
 def crear_todo():
     """Solo para tests y scripts locales. En producción manda Alembic."""
