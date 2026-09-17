@@ -233,7 +233,9 @@ def ejecutar_video(tarea):
     creative_flow.actualizar(
         cliente, cf_id, estado="video_listo", video_url=video_url, video_local=out_path,
         credits=costo.get("credits"), usd=costo.get("usd"),
-        sonido={"proveedor": modelo, "estado": estado_sonido},
+        capas={"sonido": {"proveedor": modelo, "estado": estado_sonido,
+                          "parametros": {"con_sonido": True, "sonido": entry.get("sonido_texto") or ""},
+                          "costo_usd": 0.0}},
     )
 
     estado = estado_mod.cargar(cliente)

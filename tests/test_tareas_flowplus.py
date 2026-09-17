@@ -158,7 +158,8 @@ def test_ejecutar_video_anota_si_el_video_trae_sonido(base_temporal, monkeypatch
     monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: False)
     fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     e = cf.cargar("acme")[cid]
-    assert e["sonido"] == {"proveedor": "kling_o3_pro", "estado": "ausente"}
+    assert e["capas"]["sonido"]["estado"] == "ausente"
+    assert e["capas"]["sonido"]["proveedor"] == "kling_o3_pro"
     assert ("sonido", "ausente") in [(p, r) for p, r, _ in anotado]
     # el estimado que se guarda ya incluye el recargo de Kling por el sonido (5 s × 0,14)
     assert e["usd"] == 0.7
@@ -166,14 +167,16 @@ def test_ejecutar_video_anota_si_el_video_trae_sonido(base_temporal, monkeypatch
     cf.actualizar("acme", cid, estado="video_generando")
     monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: True)
     fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
-    assert cf.cargar("acme")[cid]["sonido"] == {"proveedor": "kling_o3_pro", "estado": "ok"}
+    assert cf.cargar("acme")[cid]["capas"]["sonido"]["estado"] == "ok"
+    assert cf.cargar("acme")[cid]["capas"]["sonido"]["proveedor"] == "kling_o3_pro"
 
     # ffprobe ausente o roto: no se sabe, pero el video queda listo igual
     cf.actualizar("acme", cid, estado="video_generando")
     monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: None)
     fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     e = cf.cargar("acme")[cid]
-    assert e["estado"] == "video_listo" and e["sonido"] == {"proveedor": "kling_o3_pro", "estado": "desconocido"}
+    assert e["estado"] == "video_listo" and e["capas"]["sonido"]["estado"] == "desconocido"
+    assert e["capas"]["sonido"]["proveedor"] == "kling_o3_pro"
 
 
 def test_tiene_pista_de_audio_lee_los_streams_de_ffprobe(monkeypatch):

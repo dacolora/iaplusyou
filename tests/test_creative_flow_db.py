@@ -173,3 +173,25 @@ def test_duplicar_rearma_el_prompt_con_sonido_solo_para_videos(base_temporal, mo
     todo = cf.cargar("acme")
     assert "SONIDO: ambiente natural de la escena." in todo[copia_v]["prompt_relleno"]
     assert "SONIDO" not in todo[copia_i]["prompt_relleno"] and "ESCENA: gira despacio" in todo[copia_i]["prompt_relleno"]
+
+
+def test_capas_del_clon_y_duplicar_no_arrastra_lo_generado(base_temporal, monkeypatch):
+    """`capas` es columna de la pieza (como en las finales) y sale en cargar();
+    el video crudo vive en extra. Una copia empieza sin nada del video generado."""
+    import creative_flow as cf
+    import marca as marca_mod
+    monkeypatch.setattr(marca_mod, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(marca_mod, "negative_prompt_efectivo", lambda c: None)
+    cf_id = cf.crear("acme", [], ["P"], [], "gira", 8, "", "A", referencias_urls=["https://x/1.png"])
+    assert cf.cargar("acme")[cf_id]["capas"] == {}
+    capas = {"sonido": {"proveedor": "wan3", "estado": "ok", "parametros": {"con_sonido": True, "sonido": ""}, "costo_usd": 0.0}}
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/v.mp4", video_url_crudo="https://r2/v_crudo.mp4",
+                  video_local_crudo="/tmp/v_crudo.mp4", capas=capas, sonido={"viejo": True}, prompt_relleno="P",
+                  referencias=[], enfoque="producto", tipo="video")
+    e = cf.cargar("acme")[cf_id]
+    assert e["capas"] == capas and e["video_url_crudo"] == "https://r2/v_crudo.mp4" and e["video_local_crudo"] == "/tmp/v_crudo.mp4"
+    nuevo_id = cf.duplicar("acme", cf_id)
+    copia = cf.cargar("acme")[nuevo_id]
+    assert copia["capas"] == {} and copia["video_url"] is None
+    for k in ("video_url_crudo", "video_local_crudo", "sonido", "credits"):
+        assert k not in copia, k

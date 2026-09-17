@@ -20,10 +20,10 @@ def test_crear_muestra_tarifa_con_sonido_e_indicador(app):
     import creative_flow as cf
     con = cf.crear("acme", [], ["P"], [], "gira", 5, "", "A", referencias_urls=["https://x/1.png"])
     cf.actualizar("acme", con, estado="video_listo", tipo="video", modelo="kling_o3_pro", video_url="https://r2/v.mp4",
-                  usd=0.7, sonido={"proveedor": "kling_o3_pro", "estado": "ok"})
+                  usd=0.7, capas={"sonido": {"proveedor": "kling_o3_pro", "estado": "ok"}})
     mudo = cf.crear("acme", [], ["P"], [], "gira", 5, "", "A", referencias_urls=["https://x/1.png"])
     cf.actualizar("acme", mudo, estado="video_listo", tipo="video", modelo="wan3", video_url="https://r2/m.mp4",
-                  sonido={"proveedor": "wan3", "estado": "ausente"})
+                  capas={"sonido": {"proveedor": "wan3", "estado": "ausente"}})
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert 'data-usd-seg="0.14"' in html and "$0.140/s con sonido" in html
     assert 'data-usd-seg="0.1"' in html

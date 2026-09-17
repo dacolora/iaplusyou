@@ -17,7 +17,8 @@ MODOS_VALIDOS = ("A", "B")
 # Campos del dict legado que van a columnas propias
 _CONCEPTO_COLS = {"enfoque": "enfoque"}
 _PIEZA_COLS = {"modelo": "modelo", "video_url": "url_video", "video_local": "url_local",
-               "aspect_ratio": "aspect_ratio", "usd": "costo_usd", "error": "error", "tipo": "tipo"}
+               "aspect_ratio": "aspect_ratio", "usd": "costo_usd", "error": "error", "tipo": "tipo",
+               "capas": "capas"}
 _ESTADO_A_PIEZA = {"prompt_pendiente": "pendiente", "prompt_listo": "pendiente",
                    "video_generando": "generando", "video_listo": "listo", "error": "error"}
 _PIEZA_A_ESTADO = {v: k for k, v in _ESTADO_A_PIEZA.items()}
@@ -45,6 +46,7 @@ def _a_dict(c, p):
         "estado": e.get("estado_legado") or _PIEZA_A_ESTADO.get(p.estado, p.estado),
         "modelo": p.modelo, "video_url": p.url_video, "video_local": p.url_local,
         "aspect_ratio": p.aspect_ratio, "usd": p.costo_usd, "error": p.error,
+        "capas": p.capas or {},
         "tipo": p.tipo if p.tipo in ("video", "imagen") else e.get("tipo", "video"),
         "duracion_objetivo": e.get("duracion_objetivo") or (int(p.duracion_s) if p.duracion_s else None),
         "creado_en": c.creado_en,
@@ -243,8 +245,10 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None):
             raise ValueError(f"No existe la sesión {cf_id} de {cliente}.")
         extra_c, enfoque_orig, modelo_orig, aspect_ratio, duracion_s, tipo = f
         extra = dict(extra_c or {})
-        # Lo que pertenece al video generado, no a la idea, no viaja.
-        extra.pop("credits", None)
+        # Lo que pertenece al video generado, no a la idea, no viaja
+        # (`capas` es columna de la pieza nueva: nace vacía).
+        for k in ("credits", "sonido", "video_url_crudo", "video_local_crudo"):
+            extra.pop(k, None)
         enfoque_final = enfoque if enfoque is not None else enfoque_orig
         cambia_enfoque = enfoque is not None and enfoque != enfoque_orig
         if (cambia_enfoque or not extra.get("prompt_relleno")) and enfoque_final in flowplus_prompt.ENFOQUES:

@@ -366,7 +366,7 @@ def _item_video_listo(**extra):
         "id": "cf_1", "estado": "video_listo", "tipo": "video", "video_url": "https://r2/clon.mp4",
         "duracion_objetivo": 8, "aspect_ratio": "9:16", "modelo_nombre": "Wan 3.0", "accion_central": "camina",
         "referencias": [], "referencias_urls": [], "trabajo": None, "usd": 0.8, "enfoque_nombre": "Producto",
-        "guion_base": None, "finales": [], "trabajo_guion": None,
+        "guion_base": None, "finales": [], "trabajo_guion": None, "capas": {},
     }
     item.update(extra)
     return item
