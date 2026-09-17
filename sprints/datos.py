@@ -319,6 +319,11 @@ def _cantidades(n_videos, n_imagenes):
     return n_videos, n_imagenes
 
 
+def validar_cantidades(n_videos, n_imagenes):
+    """Para que la ruta valide todas las campañas ANTES de crear el sprint."""
+    return _cantidades(n_videos, n_imagenes)
+
+
 def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n_videos, n_imagenes,
                     referencias_objetivo=None):
     n_videos, n_imagenes = _cantidades(n_videos, n_imagenes)

@@ -205,3 +205,179 @@ def calendario_pais(cliente):
     except ValueError as e:
         flash(str(e), "error")
     return _volver(cliente)
+
+
+# ------------------------------------------------------------ sprints ---
+
+def _sprint_o_404(cliente, sid):
+    sp = estado.recalcular(cliente, sid)
+    if not sp:
+        abort(404)
+    return sp
+
+
+def _campana_o_404(cliente, sid, cid):
+    c = datos.campana(cliente, cid)
+    if not c or c["sprint_id"] != sid:
+        abort(404)
+    return c
+
+
+def _campanas_desde_form():
+    """El asistente manda las campañas como JSON en `campanas_json`:
+    [{persona_id, catalogo_id, temporada_id, n_videos, n_imagenes}]. El
+    formulario simple manda una sola con los campos sueltos."""
+    crudo = request.form.get("campanas_json")
+    if crudo:
+        try:
+            lista = json.loads(crudo)
+        except ValueError:
+            raise datos.ErrorDatos("Las campañas del asistente no se pudieron leer.")
+        if not isinstance(lista, list):
+            raise datos.ErrorDatos("Las campañas del asistente no se pudieron leer.")
+        return lista
+    if request.form.get("persona_id"):
+        return [{"persona_id": request.form.get("persona_id"), "catalogo_id": request.form.get("catalogo_id"),
+                 "temporada_id": request.form.get("temporada_id"), "n_videos": request.form.get("n_videos"),
+                 "n_imagenes": request.form.get("n_imagenes"),
+                 "referencias_objetivo": request.form.get("referencias_objetivo")}]
+    return []
+
+
+def _validar_campanas(cliente, lista):
+    """Producto en el catálogo, cantidades válidas y sin combinaciones
+    repetidas dentro del mismo envío. Devuelve la lista normalizada."""
+    ids = {p["id"] for p in catalogo_productos.listar(cliente, "producto")}
+    vistas, limpias = set(), []
+    for i, c in enumerate(lista, 1):
+        try:
+            persona_id, temporada_id = int(c.get("persona_id") or 0), int(c.get("temporada_id") or 0)
+        except (TypeError, ValueError):
+            raise datos.ErrorDatos(f"Campaña {i}: persona o temporada inválida.")
+        catalogo_id = (c.get("catalogo_id") or "").strip()
+        if catalogo_id not in ids:
+            raise datos.ErrorDatos(f"Campaña {i}: el producto «{catalogo_id}» no está en el catálogo.")
+        n_videos, n_imagenes = datos.validar_cantidades(c.get("n_videos"), c.get("n_imagenes"))
+        clave = (persona_id, catalogo_id, temporada_id)
+        if clave in vistas:
+            raise datos.ErrorDatos(f"Campaña {i}: esa combinación de persona, producto y temporada está repetida.")
+        vistas.add(clave)
+        limpias.append({"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id,
+                        "n_videos": n_videos, "n_imagenes": n_imagenes,
+                        "referencias_objetivo": c.get("referencias_objetivo") or None})
+    return limpias
+
+
+@bp.post("/nuevo")
+def crear(cliente):
+    try:
+        campanas = _validar_campanas(cliente, _campanas_desde_form())
+        if not campanas:
+            raise datos.ErrorDatos("Un sprint necesita al menos una campaña.")
+        sid = datos.crear_sprint(cliente, request.form.get("nombre"), request.form.get("inicio"),
+                                 request.form.get("fin"), destinos=[d for d in request.form.getlist("destinos") if d],
+                                 referencias_objetivo_defecto=request.form.get("referencias_objetivo") or 5,
+                                 notas=request.form.get("notas"))
+        for c in campanas:
+            datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
+                                  c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"])
+        estado.recalcular(cliente, sid)
+        flash(f"Sprint creado con {len(campanas)} campaña(s). Ahora sube referencias a cada campaña.", "ok")
+        return _volver(cliente, sid)
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return _volver(cliente)
+
+
+@bp.get("/<int:sid>")
+def ver(cliente, sid):
+    sp = _sprint_o_404(cliente, sid)
+    for c in sp["campanas"]:
+        c["progreso"] = progreso.progreso_campana(c)
+    sp["progreso"] = progreso.progreso_sprint(sp["campanas"])
+    productos = _productos(cliente)
+    return render_template("sprint_detalle.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           sprint=sp, productos_por_id={p["id"]: p for p in productos}, productos_sprint=productos,
+                           personas_sprint=datos.personas(cliente), temporadas_sprint=datos.temporadas(cliente),
+                           combinaciones=[list(x) for x in datos.combinaciones(cliente, sid)])
+
+
+@bp.get("/<int:sid>/progreso")
+def progreso_json(cliente, sid):
+    sp = _sprint_o_404(cliente, sid)
+    return jsonify({"estado": sp["estado"], "sprint": progreso.progreso_sprint(sp["campanas"]),
+                    "campanas": [{"id": c["id"], "estado": c["estado"], **progreso.progreso_campana(c)}
+                                 for c in sp["campanas"]]})
+
+
+@bp.post("/<int:sid>/listo")
+def marcar_listo(cliente, sid):
+    sp = _sprint_o_404(cliente, sid)
+    if sp["estado"] in ("generando", "revision", "completado"):
+        flash("El sprint ya pasó de la planificación.", "error")
+        return _volver(cliente, sid)
+    extra = dict(sp.get("extra") or {})
+    extra["listo_manual"] = True
+    datos.actualizar_sprint(cliente, sid, extra=extra)
+    faltantes = [c["id"] for c in sp["campanas"] if c["referencias_listas"] < int(c["referencias_objetivo"] or 1)]
+    datos.registrar_evento(cliente, sid, "marcado_listo", "Marcado listo para generar a mano",
+                           {"campanas_con_referencias_incompletas": faltantes})
+    estado.recalcular(cliente, sid)
+    aviso = f" Ojo: {len(faltantes)} campaña(s) no llegan al objetivo de referencias." if faltantes else ""
+    flash("Sprint marcado como listo para generar." + aviso, "ok")
+    return _volver(cliente, sid)
+
+
+@bp.post("/<int:sid>/archivar")
+def archivar(cliente, sid):
+    if not datos.archivar_sprint(cliente, sid, archivado=request.form.get("desarchivar") is None):
+        abort(404)
+    flash("Sprint archivado.", "ok")
+    return _volver(cliente)
+
+
+@bp.post("/<int:sid>/campanas")
+def campana_agregar(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    try:
+        lista = _validar_campanas(cliente, _campanas_desde_form())
+        if not lista:
+            raise datos.ErrorDatos("Faltan los datos de la campaña.")
+        c = lista[0]
+        datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
+                              c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"])
+        estado.recalcular(cliente, sid)
+        flash("Campaña agregada.", "ok")
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+    return _volver(cliente, sid)
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>")
+def campana_editar(cliente, sid, cid):
+    _campana_o_404(cliente, sid, cid)
+    try:
+        campos = {k: request.form.get(k) for k in ("n_videos", "n_imagenes", "referencias_objetivo")
+                  if request.form.get(k) is not None}
+        datos.actualizar_campana(cliente, cid, **campos)
+        estado.recalcular(cliente, sid)
+        flash("Campaña guardada.", "ok")
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+    return _volver(cliente, sid)
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>/eliminar")
+def campana_eliminar(cliente, sid, cid):
+    _campana_o_404(cliente, sid, cid)
+    datos.eliminar_campana(cliente, cid)
+    estado.recalcular(cliente, sid)
+    flash("Campaña eliminada.", "ok")
+    return _volver(cliente, sid)
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>")
+def campana_ver(cliente, sid, cid):
+    _sprint_o_404(cliente, sid)
+    _campana_o_404(cliente, sid, cid)
+    return _volver(cliente, sid)   # la Task 12 renderiza campana_referencias.html

@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% from "_sprint_macros.html" import anillo, chip_estado, barra %}
+{% block title %}{{ sprint.nombre }} · Sprints{% endblock %}
+{% block content %}
+{% include "_sprint_nav.html" %}
+
+<div class="pagina-cabecera sprint-cabecera">
+  <div>
+    <h1>{{ sprint.nombre }}</h1>
+    <p class="vacio">{{ sprint.inicio }} → {{ sprint.fin }} · {{ chip_estado(sprint.estado) }}
+      · {{ sprint.campanas | length }} campaña(s) · {{ sprint.progreso.planeadas }} piezas planeadas
+      {% if sprint.destinos %}· destinos: {{ sprint.destinos | join(", ") }}{% endif %}</p>
+  </div>
+  <div class="sprint-cabecera-derecha">
+    {{ anillo(sprint.progreso.porcentaje, 72) }}
+    <small class="vacio" id="sprint-progreso-texto">{{ sprint.progreso.texto }}</small>
+  </div>
+</div>
+
+<div class="acciones sprint-acciones">
+  {% if sprint.estado in ("planeando", "referencias") %}
+  <form method="post" action="{{ url_for('sprints.marcar_listo', cliente=cliente, sid=sprint.id) }}" class="inline"
+        onsubmit="return confirm('¿Marcar el sprint como listo para generar aunque falten referencias?');">
+    <button type="submit" class="btn-generar btn-sm">Marcar listo para generar</button>
+  </form>
+  {% endif %}
+  <form method="post" action="{{ url_for('sprints.archivar', cliente=cliente, sid=sprint.id) }}" class="inline"
+        onsubmit="return confirm('¿Archivar este sprint? Se puede desarchivar después.');">
+    <button type="submit" class="btn-sm btn-peligro">Archivar</button>
+  </form>
+</div>
+
+<h2>Campañas</h2>
+{% if not sprint.campanas %}<p class="vacio">Este sprint no tiene campañas todavía.</p>{% endif %}
+<div class="sprint-tablero">
+  {% for c in sprint.campanas %}
+  <article class="swap-card sprint-campana" id="campana-{{ c.id }}" data-cid="{{ c.id }}">
+    <header class="sprint-campana-cab">
+      <span class="sprint-punto" style="background: {{ c.persona_color or 'var(--accent)' }}"></span>
+      <strong>{{ c.persona_nombre }}</strong>
+      <span class="sprint-sep">·</span>
+      {% set prod = productos_por_id.get(c.catalogo_id) %}
+      {% if prod and prod.representativa_url %}<img class="sprint-mini" src="{{ prod.representativa_url }}" alt="">{% endif %}
+      <strong>{{ prod.nombre if prod else c.catalogo_id }}</strong>
+      <span class="sprint-sep">·</span>
+      <span>{{ c.temporada_nombre }}</span>
+      {{ chip_estado(c.estado) }}
+    </header>
+    <div class="sprint-campana-cuerpo">
+      <form method="post" action="{{ url_for('sprints.campana_editar', cliente=cliente, sid=sprint.id, cid=c.id) }}" class="sprint-cantidades">
+        <label>Videos <input type="number" name="n_videos" value="{{ c.n_videos }}" min="0" class="mini-input"></label>
+        <label>Imágenes <input type="number" name="n_imagenes" value="{{ c.n_imagenes }}" min="0" class="mini-input"></label>
+        <label>Ref. objetivo <input type="number" name="referencias_objetivo" value="{{ c.referencias_objetivo }}" min="1" class="mini-input"></label>
+        <button type="submit" class="btn-xs">Guardar</button>
+      </form>
+      <div class="sprint-campana-progreso" data-cid="{{ c.id }}">
+        {{ barra(c.progreso.porcentaje, c.progreso.texto) }}
+      </div>
+      <div class="sprint-campana-acciones">
+        <a class="btn-generar btn-sm" href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">
+          {% if c.referencias_total == 0 %}Subir referencias{% else %}Referencias ({{ c.referencias_listas }}/{{ c.referencias_objetivo }}){% endif %}
+        </a>
+        <form method="post" action="{{ url_for('sprints.campana_eliminar', cliente=cliente, sid=sprint.id, cid=c.id) }}" class="inline"
+              onsubmit="return confirm('¿Eliminar esta campaña y sus referencias?');">
+          <button type="submit" class="btn-xs btn-peligro">Eliminar</button>
+        </form>
+      </div>
+    </div>
+  </article>
+  {% endfor %}
+</div>
+
+{% if sprint.estado in ("planeando", "referencias", "listo_para_generar") %}
+<details class="swap-card" id="agregar-campana">
+  <summary class="swap-card-resumen">+ Agregar campaña</summary>
+  <form method="post" action="{{ url_for('sprints.campana_agregar', cliente=cliente, sid=sprint.id) }}" class="form-experimento" id="form-agregar-campana"
+        data-combinaciones='{{ combinaciones | tojson }}'>
+    <div class="fe-opciones">
+      <label>Persona
+        <select name="persona_id" required>{% for p in personas_sprint %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}</select>
+      </label>
+      <label>Producto
+        <select name="catalogo_id" required>{% for p in productos_sprint %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}</select>
+      </label>
+      <label>Temporada
+        <select name="temporada_id" required>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }})</option>{% endfor %}</select>
+      </label>
+      <label>Videos <input type="number" name="n_videos" value="5" min="0"></label>
+      <label>Imágenes <input type="number" name="n_imagenes" value="5" min="0"></label>
+      <label>Ref. objetivo <input type="number" name="referencias_objetivo" value="{{ sprint.referencias_objetivo_defecto }}" min="1"></label>
+    </div>
+    <p class="campo-error" id="aviso-combinacion" hidden>Esa combinación ya existe en este sprint.</p>
+    <button type="submit" class="btn-generar btn-sm">Agregar</button>
+  </form>
+</details>
+{% endif %}
+
+<h2>Línea de tiempo</h2>
+<ul class="exp-eventos sprint-eventos">
+  {% for e in sprint.eventos %}
+  <li><small>{{ e.creado_en | replace("T", " ") }}</small> {{ e.mensaje }}{% if e.campana_id %} <small>(campaña #{{ e.campana_id }})</small>{% endif %}</li>
+  {% else %}<li class="vacio">Sin eventos todavía.</li>{% endfor %}
+</ul>
+
+<script>
+  (function () {
+    // La combinación repetida se avisa antes de enviar (el servidor la rechaza igual).
+    var form = document.getElementById('form-agregar-campana');
+    if (form) {
+      var usadas = JSON.parse(form.dataset.combinaciones || '[]').map(function (c) { return c.join('|'); });
+      function revisar() {
+        var clave = [form.persona_id.value, form.catalogo_id.value, form.temporada_id.value].join('|');
+        var repetida = usadas.indexOf(clave) >= 0;
+        document.getElementById('aviso-combinacion').hidden = !repetida;
+        form.querySelector('button[type=submit]').disabled = repetida;
+      }
+      ['persona_id', 'catalogo_id', 'temporada_id'].forEach(function (n) { form[n].addEventListener('change', revisar); });
+      revisar();
+    }
+    // Progreso agregado: mientras el sprint genera, el tablero se actualiza solo (Parte 2 lo usa de verdad).
+    var estado = {{ sprint.estado | tojson }};
+    if (estado === 'generando') {
+      setInterval(function () {
+        fetch({{ url_for('sprints.progreso_json', cliente=cliente, sid=sprint.id) | tojson }}, {headers: {'X-Requested-With': 'fetch'}})
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            document.getElementById('sprint-progreso-texto').textContent = j.sprint.texto;
+            j.campanas.forEach(function (c) {
+              var caja = document.querySelector('.sprint-campana-progreso[data-cid="' + c.id + '"]');
+              if (!caja) return;
+              caja.querySelector('.sprint-barra-fill').style.width = c.porcentaje + '%';
+              caja.querySelector('span').textContent = c.texto;
+            });
+            if (j.estado !== 'generando') location.reload();
+          }).catch(function () {});
+      }, 5000);
+    }
+  })();
+</script>
+{% endblock %}
