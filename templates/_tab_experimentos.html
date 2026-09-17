@@ -243,8 +243,16 @@
 
 <script>
   (function () {
-    // Prellenado desde Productos («Crear experimento»): ?exp_nombre=&exp_destino=
     var q = new URLSearchParams(location.search);
+    // Desde el Tablero («Ver experimento»): ?exp=<id>#experimentos abre ese
+    // <details id="exp-<id>">. El scroll va en un setTimeout porque la
+    // pestaña se activa en el script de cliente.html, que corre después.
+    var exp = q.get('exp');
+    if (exp) {
+      var det = document.getElementById('exp-' + exp);
+      if (det) { det.open = true; setTimeout(function () { det.scrollIntoView({ block: 'start' }); }, 0); }
+    }
+    // Prellenado desde Productos («Crear experimento»): ?exp_nombre=&exp_destino=
     var nombre = q.get('exp_nombre'), destino = q.get('exp_destino');
     if (!nombre && !destino) return;
     var det = document.getElementById('nuevo-experimento');

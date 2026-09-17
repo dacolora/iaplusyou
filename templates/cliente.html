@@ -5,6 +5,10 @@
   <h1 id="titulo-seccion">{{ nombre_proyecto }}</h1>
 </div>
 
+<section id="tab-tablero" class="tab-panel" role="tabpanel">
+  {% include "_tab_tablero.html" %}
+</section>
+
 <section id="tab-creativeflowplus" class="tab-panel" role="tabpanel">
   {% include "_tab_flowplus.html" %}
 </section>
@@ -36,6 +40,7 @@
     // son las que usan los redirect(_anchor=...) de dashboard.py y las que ya
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
+      tablero: document.getElementById('tab-tablero'),
       ads: document.getElementById('tab-ads'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
       experimentos: document.getElementById('tab-experimentos'),
@@ -74,9 +79,11 @@
       }
       return t;
     }
+    // Sin hash ni pestaña recordada, la página abre en el Tablero (Bloque 6):
+    // es lo que el dueño mira cada mañana. La recordada sigue mandando.
     var inicial = resolver(desdeHash) || '';
     if (!paneles[inicial]) inicial = resolver(desdeStorage) || '';
-    activar(paneles[inicial] ? inicial : 'creativeflowplus');
+    activar(paneles[inicial] ? inicial : 'tablero');
   })();
 
   // Barra lateral plegable; el estado se recuerda por navegador.

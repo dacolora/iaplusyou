@@ -22,7 +22,7 @@ import requests
 import sqlalchemy as sa
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session
+from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -63,6 +63,7 @@ import propuestas
 import cifrado
 import conectores
 import tiendas
+import tablero
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
@@ -964,6 +965,7 @@ def ver_cliente(cliente):
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
+        tablero=_contexto_tablero(cliente),
     )
 
 
@@ -2186,6 +2188,132 @@ def eliminar_ad(cliente, ad_id):
     ads_mod.eliminar(cliente, ad_id)
     flash("Eliminado de la lista.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+
+
+# ---------- Tablero (Bloque 6) ----------
+
+MESES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
+            "noviembre", "diciembre")
+# Geometría del gráfico de 30 días (viewBox fija; el SVG escala al ancho).
+_TB_ANCHO, _TB_ALTO = 720, 220
+_TB_MARGEN = {"izq": 60, "der": 12, "arriba": 12, "abajo": 26}
+
+
+def _nice_max(valor):
+    """Máximo «bonito» para el eje: el primer 1/2/2,5/5/10 × 10^n que cubre
+    el valor, para que las 4 marcas queden en números redondos."""
+    if valor <= 0:
+        return 1.0
+    exp = 10 ** math.floor(math.log10(valor))
+    for f in (1, 2, 2.5, 5, 10):
+        if f * exp >= valor:
+            return float(f * exp)
+    return float(10 * exp)
+
+
+def _compacto(valor):
+    """Etiqueta corta para el eje: 1,2 M / 250 k / 12."""
+    v = float(valor or 0)
+    if v >= 1_000_000:
+        t = f"{v / 1_000_000:.1f}".rstrip("0").rstrip(".") + " M"
+    elif v >= 1_000:
+        t = f"{v / 1_000:.1f}".rstrip("0").rstrip(".") + " k"
+    elif v == int(v):
+        t = str(int(v))
+    else:
+        t = f"{v:.2f}"
+    return t.replace(".", ",")
+
+
+def _grafico_tablero(serie):
+    """Coordenadas listas para pintar la serie de 30 días como SVG inline:
+    barras de gasto y línea de ingresos sobre UN solo eje (las dos son dinero
+    en `serie.moneda`, así que comparten escala), 4 marcas + máximo redondeado,
+    etiqueta de fecha cada 5 días y un `titulo` por día para el tooltip nativo.
+    None si no hay días o todo es cero (la plantilla muestra el estado vacío
+    en vez de un gráfico en blanco)."""
+    dias = (serie or {}).get("dias") or []
+    moneda = (serie or {}).get("moneda") or tablero.MONEDA_POR_DEFECTO
+    if not dias:
+        return None
+    tope = max(max(float(d["gasto"] or 0), float(d["ingresos"] or 0)) for d in dias)
+    if tope <= 0:
+        return None
+    maximo = _nice_max(tope)
+    m = _TB_MARGEN
+    ancho_plot = _TB_ANCHO - m["izq"] - m["der"]
+    alto_plot = _TB_ALTO - m["arriba"] - m["abajo"]
+    base_y = m["arriba"] + alto_plot
+    paso = ancho_plot / len(dias)
+    ancho_barra = max(2.0, paso - 2)   # 2px de aire entre barras
+
+    def y_de(v):
+        return round(base_y - (float(v or 0) / maximo) * alto_plot, 2)
+
+    salida = []
+    for i, d in enumerate(dias):
+        dd, mm = d["dia"][8:10], d["dia"][5:7]
+        x = m["izq"] + i * paso
+        gasto, ingresos = float(d["gasto"] or 0), float(d["ingresos"] or 0)
+        salida.append({
+            "dia": d["dia"], "gasto": gasto, "ingresos": ingresos, "compras": int(d.get("compras") or 0),
+            "x": round(x, 2), "x_centro": round(x + paso / 2, 2), "ancho": round(ancho_barra, 2),
+            "gasto_y": y_de(gasto), "ingresos_y": y_de(ingresos),
+            "etiqueta": f"{dd}/{mm}" if i % 5 == 0 else "",
+            "titulo": f"{dd}/{mm} · gasto {tablero.dinero(gasto, moneda)} · ingresos {tablero.dinero(ingresos, moneda)}",
+        })
+    marcas = [{"valor": maximo * k / 4, "y": y_de(maximo * k / 4), "texto": _compacto(maximo * k / 4)} for k in range(5)]
+    puntos = " ".join(f"{d['x_centro']},{d['ingresos_y']}" for d in salida)
+    return {"ancho": _TB_ANCHO, "alto": _TB_ALTO, "margen": m, "base_y": base_y, "maximo": maximo, "moneda": moneda,
+            "marcas": marcas, "dias": salida, "puntos_linea": puntos}
+
+
+@app.template_filter("dinero")
+def _filtro_dinero(valor, moneda):
+    """«1.250.000 COP» / «12,50 USD» (la misma regla que las alertas)."""
+    return tablero.dinero(valor, moneda)
+
+
+@app.template_filter("roas")
+def _filtro_roas(valor):
+    """ROAS con un decimal y coma: 28,0."""
+    return f"{float(valor or 0):.1f}".replace(".", ",")
+
+
+def _contexto_tablero(cliente):
+    """Todo lo que pinta la pestaña Tablero. Cada parte (resumen del mes,
+    serie de 30 días, top de ganadoras, alertas) va en su propio try/except:
+    si una explota (Meta caída, tienda rota) llega como None con el nombre y
+    la clase del error en `errores` — nunca el mensaje, que podría arrastrar
+    un token — y la plantilla muestra «No se pudo calcular X» para esa parte
+    y pinta el resto."""
+    ahora = db.ahora()
+    partes = {
+        "resumen": lambda: tablero.resumen_mes(cliente, ahora),
+        "serie": lambda: tablero.serie_diaria(cliente, 30, ahora),
+        "top": lambda: tablero.top_ganadoras(cliente),
+        "alertas": lambda: tablero.alertas(cliente, ahora),
+    }
+    out = {"ahora": ahora, "mes": MESES_ES[int(ahora[5:7]) - 1], "anio": ahora[:4], "errores": []}
+    for nombre, fn in partes.items():
+        try:
+            out[nombre] = fn()
+        except Exception as e:  # noqa: BLE001 — una parte rota no tumba la página del proyecto
+            out[nombre] = None
+            out["errores"].append(f"{nombre}: {type(e).__name__}")
+            print(f"[aviso] Tablero de {cliente}: no pude calcular {nombre}: {type(e).__name__}")
+    out["grafico"] = _grafico_tablero(out["serie"]) if out["serie"] else None
+    return out
+
+
+@app.route("/cliente/<cliente>/tablero/mes.csv")
+def tab_descargar_csv(cliente):
+    """CSV del mes en curso (una fila por pieza, `;`, BOM) para abrir en Excel."""
+    ahora = db.ahora()
+    texto = tablero.csv_mes(cliente, ahora)
+    resp = Response(texto, content_type="text/csv; charset=utf-8")
+    resp.headers["Content-Disposition"] = f'attachment; filename="tablero_{cliente}_{ahora[:7]}.csv"'
+    return resp
 
 
 @app.route("/cliente/<cliente>/experimentos/nuevo", methods=["POST"])

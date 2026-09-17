@@ -241,6 +241,10 @@ def _dinero(valor, moneda):
     return f"{texto} {moneda}"
 
 
+# La plantilla del tablero formatea con la misma regla que las alertas.
+dinero = _dinero
+
+
 def _plural(n, singular, plural):
     return f"{n} {singular if n == 1 else plural}"
 

@@ -2,7 +2,7 @@
    íconos + texto; el estado se recuerda. Las claves data-tab son las mismas de
    siempre (calzado, creativeflowplus, experimentos, productos, catalogo, ads, settings)
    para que los redirect(_anchor=...) y los enlaces guardados sigan
-   funcionando. #}
+   funcionando; `tablero` (Bloque 6) va primero y es la pestaña por defecto. #}
 <aside class="sidebar" id="sidebar">
   <a class="sidebar-marca" href="{{ url_for('index') }}" title="Creatv Machine">
     <span class="marca-mark"></span>
@@ -10,6 +10,10 @@
   </a>
 
   <nav class="sidebar-nav" role="tablist">
+    <button type="button" class="sidebar-item" data-tab="tablero" role="tab" title="Tablero">
+      <svg viewBox="0 0 24 24"><path d="M4 20h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/><rect x="5" y="11" width="3.5" height="6" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="10.25" y="5" width="3.5" height="12" rx="1" stroke="currentColor" stroke-width="2" fill="none"/><rect x="15.5" y="8" width="3.5" height="9" rx="1" stroke="currentColor" stroke-width="2" fill="none"/></svg>
+      <span class="sidebar-texto">Tablero</span>
+    </button>
     <button type="button" class="sidebar-item" data-tab="creativeflowplus" role="tab" title="Crear">
       <svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
       <span class="sidebar-texto">Crear</span>
