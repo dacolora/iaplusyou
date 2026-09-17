@@ -50,6 +50,24 @@ def guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen):
     _json_store.guardar(_path(cliente), datos)
 
 
+# Sonido al crear (spec estudio S1): si los videos de Crear piden el sonido de
+# la escena y qué música se mezcla al crear ("" = ninguna). El estilo lo
+# valida la ruta contra final_edition.tipos.ESTILOS_MUSICA (este módulo no
+# importa final_edition: final_edition importa proyectos).
+DEFAULTS_SONIDO = {"con_sonido": True, "musica_al_crear": ""}
+
+
+def preferencias_sonido(cliente):
+    datos = cargar(cliente)
+    return {**DEFAULTS_SONIDO, **datos.get("preferencias_sonido", {})}
+
+
+def guardar_preferencias_sonido(cliente, con_sonido, musica_al_crear):
+    datos = cargar(cliente)
+    datos["preferencias_sonido"] = {"con_sonido": bool(con_sonido), "musica_al_crear": str(musica_al_crear or "")}
+    _json_store.guardar(_path(cliente), datos)
+
+
 # Modelo por defecto para FlowClone (cambiar calzado): antes se elegía cada
 # vez desde un selector en la propia pantalla de generar — eso mezclaba una
 # decisión de configuración (qué modelo usar) con el flujo de uso diario.

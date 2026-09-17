@@ -341,6 +341,23 @@
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos de FlowPlus</button>
 </form>
 
+<h2 style="margin-top:2rem;">Sonido al crear</h2>
+<p class="vacio" style="padding-top:0;">
+  Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual.
+</p>
+<form method="post" action="{{ url_for('guardar_preferencias_sonido', cliente=cliente) }}" class="form-nueva-idea">
+  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)</label>
+  <div style="margin-top:.6rem;">
+    <label class="campo-label">Música al crear</label>
+    <select name="musica_al_crear">
+      <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>ninguna</option>
+      {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+    </select>
+    <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)</span>
+  </div>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar sonido al crear</button>
+</form>
+
 {% include "_comparacion_modelos.html" %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">

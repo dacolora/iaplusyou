@@ -188,3 +188,17 @@ def test_orden_de_secciones_y_enlace_a_reglas(app):
     # Reglas: solo el enlace a Experimentos, nada del formulario.
     assert "Las reglas del decisor están en" in cfg and 'href="#experimentos"' in cfg
     assert "/cliente/acme/config/reglas" not in cfg and "Reglas por defecto de los experimentos" not in cfg
+
+
+def test_guardar_preferencias_sonido(app, monkeypatch, tmp_path):
+    import proyectos
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    r = app["c"].post("/cliente/acme/preferencias_sonido/guardar",
+                      data={"con_sonido": "si", "musica_al_crear": "lujo"}, follow_redirects=False)
+    assert r.status_code == 302
+    assert proyectos.preferencias_sonido("acme") == {"con_sonido": True, "musica_al_crear": "lujo"}
+    # sin el check → False; estilo desconocido → ninguna
+    app["c"].post("/cliente/acme/preferencias_sonido/guardar", data={"musica_al_crear": "reguetón"})
+    assert proyectos.preferencias_sonido("acme") == {"con_sonido": False, "musica_al_crear": ""}
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert 'name="musica_al_crear"' in html and "Sonido al crear" in html

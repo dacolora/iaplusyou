@@ -934,6 +934,7 @@ def ver_cliente(cliente):
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
+        preferencias_sonido=proyectos.preferencias_sonido(cliente),
         fp_prefill=session.pop("fp_prefill", None),
         logos=_logos(cliente),
         referencias_bandeja=referencias_flowplus.listar(cliente),
@@ -1553,6 +1554,17 @@ def guardar_preferencias_flowplus(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
     proyectos.guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen)
     flash("Modelos por defecto de FlowPlus actualizados.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
+@app.route("/cliente/<cliente>/preferencias_sonido/guardar", methods=["POST"])
+def guardar_preferencias_sonido(cliente):
+    con_sonido = request.form.get("con_sonido") == "si"
+    estilo = (request.form.get("musica_al_crear") or "").strip()
+    if estilo not in fe_tipos.ESTILOS_MUSICA:
+        estilo = ""
+    proyectos.guardar_preferencias_sonido(cliente, con_sonido, estilo)
+    flash("Preferencias de sonido guardadas.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
