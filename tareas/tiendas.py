@@ -22,6 +22,17 @@ termina bien vuelve a `conectada` y limpia `error`.
 
 MELI: si el conector renovó el token (`credenciales_actualizadas`), se guarda
 SIEMPRE, incluso si la sync falló después — el refresh token es de un solo uso.
+
+Tope de trabajo por corrida: crear un activo baja hasta 6 fotos y llama a
+Claude, y el worker es de un solo hilo — una Shopify de 2 000 productos no
+puede bloquearlo horas (ni al decisor de experimentos). Por eso una sync
+liga como mucho `MAX_ACTIVOS_SYNC` productos sin activo por corrida (en
+prueba → prioridad → nunca intentados; ver `importador.importar_lista`) y
+una importación de archivo `MAX_ACTIVOS_IMPORTAR`; si quedaron pendientes
+que nunca se intentaron, la misma tarea se vuelve a encolar para dentro de
+`ESPERA_CONTINUACION` s (job_id alternando con el sufijo `__cont`, porque
+el propio job_id sigue vivo mientras corre) hasta que no quede nada. Un
+archivo importado solo se borra en la última corrida.
 """
 import logging
 import os
@@ -54,6 +65,10 @@ DIAS_PEDIDOS_INICIAL = 30
 # pierde ventas.
 SOLAPE_PEDIDOS = timedelta(days=1)
 MAX_INTENTOS_SYNC = 3
+MAX_ACTIVOS_SYNC = 25
+MAX_ACTIVOS_IMPORTAR = 50
+ESPERA_CONTINUACION = 60
+SUFIJO_CONTINUACION = "__cont"
 
 
 def job_id_sync_productos(cliente, tienda_id):
@@ -74,6 +89,25 @@ def job_id_importar_url(cliente):
 
 def job_id_vincular(cliente, producto_id):
     return f"{cliente}__producto{producto_id}__vincular"
+
+
+def job_id_continuacion(job_id):
+    """El job_id de la corrida siguiente: alterna `<id>` ↔ `<id>__cont`. Una
+    tarea no puede encolar su propio job_id (sigue `en_curso` hasta que
+    termina), pero sí el otro de la pareja, que ya terminó."""
+    if job_id.endswith(SUFIJO_CONTINUACION):
+        return job_id[:-len(SUFIJO_CONTINUACION)]
+    return job_id + SUFIJO_CONTINUACION
+
+
+def _encolar_continuacion(tipo, payload, cliente, job_id, duracion_estimada):
+    """Encola la corrida siguiente de una tarea que llegó a su tope.
+    max_intentos=1: crea activos y llama a Claude. Devuelve True si quedó en cola."""
+    cuando = (datetime.now() + timedelta(seconds=ESPERA_CONTINUACION)).isoformat(timespec="seconds")
+    tid = cola.encolar(tipo, payload, cliente=cliente, job_id=job_id_continuacion(job_id),
+                       duracion_estimada=duracion_estimada, etapas=ETAPAS_IMPORTAR, ejecutar_desde=cuando,
+                       max_intentos=1)
+    return tid is not None
 
 
 # --- helpers ---------------------------------------------------------------
@@ -155,13 +189,15 @@ def tienda_sync_productos(tarea):
     _guardar_credenciales(cliente, tienda, con)
 
     resumen = importador.importar_lista(
-        cliente, tienda["tipo"], lista,
+        cliente, tienda["tipo"], lista, max_activos=MAX_ACTIVOS_SYNC,
         on_progreso=lambda etapa, detalle: trabajos.reportar(job_id, etapa=etapa, detalle=detalle))
     archivados = tiendas.archivar_faltantes(cliente, tienda["tipo"], [pr["fuente_id"] for pr in lista])
     tiendas.actualizar(cliente, tid, estado="conectada", error=None, ultima_sync_productos=db.ahora())
     texto = importador.resumen_texto(resumen)
     if archivados:
         texto += f" {archivados} archivado(s) por no estar ya en la tienda."
+    if resumen.get("pendientes"):
+        _encolar_continuacion("tienda_sync_productos", {"cliente": cliente, "tienda_id": tid}, cliente, job_id, 120)
     return texto
 
 
@@ -228,24 +264,38 @@ def catalogo_importar(tarea):
     def avanzar(etapa, detalle=None):
         trabajos.reportar(job_id, etapa=etapa, detalle=detalle)
 
+    continua = False
     try:
         if url:
-            resumen = importador.desde_url(cliente, url, on_progreso=avanzar)
+            resumen = importador.desde_url(cliente, url, on_progreso=avanzar, max_activos=MAX_ACTIVOS_IMPORTAR)
         else:
             if not p.get("ruta"):
                 raise ErrorConector("La importación no trae archivo ni URL.")
             resumen = importador.desde_archivo(cliente, p["ruta"], p.get("nombre_archivo") or p["ruta"],
-                                               on_progreso=avanzar)
+                                               on_progreso=avanzar, max_activos=MAX_ACTIVOS_IMPORTAR)
+            if resumen.get("pendientes"):
+                # La corrida siguiente vuelve a leer el mismo archivo (los ya
+                # ligados solo se refrescan) y liga los siguientes 50.
+                continua = _encolar_continuacion("catalogo_importar", dict(p), cliente, job_id, 120)
     finally:
         # El dashboard sube el archivo a clientes/<c>/importaciones/ solo para
         # esta tarea (`borrar_al_terminar`): se borra al terminar, salga bien o
-        # mal (max_intentos=1: nadie lo va a releer). Sin la bandera (una ruta
+        # mal (max_intentos=1: nadie lo va a releer), salvo que quede una
+        # continuación en cola que lo necesita. Sin la bandera (una ruta
         # ajena, p. ej. un fixture) el archivo no se toca.
-        if p.get("borrar_al_terminar") and p.get("ruta"):
+        if p.get("borrar_al_terminar") and p.get("ruta") and not continua:
             try:
                 os.remove(p["ruta"])
             except OSError:
                 pass
+    if continua:
+        guardados = int(resumen.get("nuevos") or 0) + int(resumen.get("actualizados") or 0)
+        texto = (f"Importación en curso: {guardados} producto(s) guardado(s), "
+                 f"{resumen.get('activos', 0)} activo(s) creado(s); el resto se completa solo en unos minutos.")
+        errores = resumen.get("errores") or []
+        if errores:
+            texto += f" {len(errores)} aviso(s): " + "; ".join(errores[:3])
+        return texto
     return "Importación lista: " + importador.resumen_texto(resumen)
 
 
@@ -332,7 +382,8 @@ def tienda_sync_pedidos_todas(tarea):
 
 
 __all__ = ["ETAPAS_IMPORTAR", "ETAPAS_VINCULAR", "CADA_SYNC_PRODUCTOS", "CADA_SYNC_PEDIDOS", "MAX_INTENTOS_SYNC",
+           "MAX_ACTIVOS_SYNC", "MAX_ACTIVOS_IMPORTAR", "ESPERA_CONTINUACION",
            "tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar", "producto_vincular",
            "tienda_sync_productos_todas", "tienda_sync_pedidos_todas",
            "job_id_sync_productos", "job_id_sync_pedidos", "job_id_importar_archivo", "job_id_importar_url",
-           "job_id_vincular"]
+           "job_id_vincular", "job_id_continuacion"]

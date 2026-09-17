@@ -18,6 +18,12 @@ las fotos a mano.
      de duplicarla. Sin ninguna foto descargable no se crea activo: el
      producto queda con `activo_catalogo_id=None` y un aviso en `errores`.
 
+`max_activos` (opcional) acota cuántos productos SIN activo se ligan por
+corrida — el paso 2 baja fotos y llama a Claude, y el worker es de un solo
+hilo. El resto se guarda igual (paso 1) y cuenta en `resumen["pendientes"]`
+para que la tarea encole otra corrida (ver `tareas/tiendas.py`); los ya
+ligados siempre se refrescan (barato) y no cuentan para el tope.
+
 Un producto que falle no frena a los demás: el error queda listado en
 `errores` (texto en español, sin URLs completas ni credenciales) y el
 resumen sigue. Las fotos se bajan primero a una carpeta temporal y solo se
@@ -35,6 +41,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 import catalogo_productos
+import db
 import generador_prompts
 import prompt_swap
 import tiendas
@@ -410,12 +417,41 @@ def _progreso(on_progreso, etapa, detalle=None):
         log.debug("on_progreso falló", exc_info=True)
 
 
-def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None):
+def _activo_completo(cliente, prod):
+    """True si el producto ya está ligado a un activo que existe en disco y
+    tiene al menos una imagen — o sea, `vincular_activo` solo le refrescaría
+    nombre/descripción (barato: ni fotos ni Claude)."""
+    activo_id = prod.get("activo_catalogo_id")
+    if not activo_id or not catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
+        return False
+    return _tiene_imagenes(catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO))
+
+
+def _orden_pendientes(prod):
+    """Primero lo que está en prueba, luego por prioridad, luego lo que nunca
+    se intentó ligar (un intento anterior sin activo — sin fotos
+    descargables — va al final para no bloquear al resto corrida tras
+    corrida), y por id para que sea estable."""
+    extra = prod.get("extra") or {}
+    return (0 if prod.get("en_prueba") else 1, -int(prod.get("prioridad") or 0),
+            1 if extra.get("vinculo_intentado_en") else 0, int(prod.get("id") or 0))
+
+
+def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, max_activos=None):
     """Guarda cada producto normalizado (ver conectores.base.CLAVES_PRODUCTO)
     bajo `fuente` y le liga su activo. `on_progreso(etapa, detalle)` recibe
     "Guardando productos" y luego "Creando activos" con "n de N".
-    Devuelve {"nuevos", "actualizados", "activos", "errores": [str]}."""
-    resumen = {"nuevos": 0, "actualizados": 0, "activos": 0, "errores": []}
+
+    `max_activos` acota el trabajo caro por corrida: cuántos productos SIN
+    activo completo (fotos a bajar + regla de Claude) se intentan ligar
+    (orden `_orden_pendientes`); los ya ligados se refrescan siempre (solo
+    nombre/descripción). Los que quedan fuera del tope se guardan igual
+    (fila `producto`, sin activo) y cuentan en `pendientes` — la tarea que
+    llama decide cómo completarlos (una corrida siguiente). `pendientes`
+    solo cuenta los que NUNCA se intentaron: los que ya se intentaron y no
+    dieron activo (sin fotos) no justifican otra corrida.
+    Devuelve {"nuevos", "actualizados", "activos", "pendientes", "errores": [str]}."""
+    resumen = {"nuevos": 0, "actualizados": 0, "activos": 0, "pendientes": 0, "errores": []}
     lista = list(productos_normalizados or [])
     _progreso(on_progreso, "Guardando productos", f"{len(lista)} producto(s)")
     ids = []
@@ -426,38 +462,63 @@ def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None):
                 resumen["errores"].append(_aviso(prod, "sin nombre o sin identificador; se omitió."))
                 continue
             existia = tiendas.producto_por_fuente(cliente, fuente, fuente_id) is not None
+            if existia and (prod.get("extra") or {}).get("descripcion_cargada") is False:
+                # MELI solo trae la descripción en la primera sync (cuota por
+                # ítem): una corrida sin ella no debe borrar la guardada.
+                prod = {k: v for k, v in prod.items() if k != "descripcion"}
             pid = tiendas.upsert_producto(cliente, fuente, fuente_id, prod)
             resumen["actualizados" if existia else "nuevos"] += 1
             ids.append(pid)
         except Exception as error:  # noqa: BLE001 — un producto malo no frena la lista
             log.warning("importar %s/%s: %s", cliente, fuente, error, exc_info=True)
             resumen["errores"].append(_aviso(prod, f"no se pudo guardar ({type(error).__name__})."))
-    total = len(ids)
-    for i, pid in enumerate(ids, start=1):
-        _progreso(on_progreso, "Creando activos", f"{i} de {total}")
+
+    ids_set = set(ids)
+    guardados = {p["id"]: p for p in tiendas.productos(cliente, incluir_archivados=True) if p["id"] in ids_set}
+    completos = [pid for pid in ids if pid in guardados and _activo_completo(cliente, guardados[pid])]
+    completos_set = set(completos)
+    pendientes = sorted((guardados[pid] for pid in ids if pid in guardados and pid not in completos_set),
+                        key=_orden_pendientes)
+    if max_activos is not None and len(pendientes) > max_activos:
+        fuera = pendientes[max_activos:]
+        pendientes = pendientes[:max_activos]
+        resumen["pendientes"] = sum(1 for p in fuera if not (p.get("extra") or {}).get("vinculo_intentado_en"))
+    a_ligar = {p["id"] for p in pendientes}
+    orden = [p["id"] for p in pendientes] + completos
+    for i, pid in enumerate(orden, start=1):
+        _progreso(on_progreso, "Creando activos", f"{i} de {len(orden)}")
         try:
             if vincular_activo(cliente, pid, errores=resumen["errores"]):
                 resumen["activos"] += 1
+            elif pid in a_ligar:
+                tiendas.anotar_extra(cliente, pid, vinculo_intentado_en=db.ahora())
         except Exception as error:  # noqa: BLE001
             log.warning("vincular activo %s/%s: %s", cliente, pid, error, exc_info=True)
             prod = tiendas.producto(cliente, pid) or {}
             resumen["errores"].append(_aviso(prod, f"no se pudo crear el activo ({type(error).__name__})."))
+            if pid in a_ligar:
+                tiendas.anotar_extra(cliente, pid, vinculo_intentado_en=db.ahora())
     return resumen
 
 
-def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None):
+def desde_archivo(cliente, ruta, nombre_archivo, on_progreso=None, max_activos=None):
     """CSV/Excel (conectores.csv_excel) → importar_lista(fuente="csv").
-    ErrorConector si el archivo no se puede leer (la tarea lo muestra tal cual)."""
+    ErrorConector si el archivo no se puede leer (la tarea lo muestra tal
+    cual). Un archivo con más filas que el tope del lector deja el aviso
+    en `errores` (la persona tiene que saber que se recortó)."""
     _progreso(on_progreso, "Leyendo", os.path.basename(str(nombre_archivo or "")))
-    lista = csv_excel.leer(ruta, nombre_archivo)
-    return importar_lista(cliente, "csv", lista, on_progreso=on_progreso)
+    avisos = []
+    lista = csv_excel.leer(ruta, nombre_archivo, avisos=avisos)
+    resumen = importar_lista(cliente, "csv", lista, on_progreso=on_progreso, max_activos=max_activos)
+    resumen["errores"] = avisos + resumen["errores"]
+    return resumen
 
 
-def desde_url(cliente, url, on_progreso=None):
+def desde_url(cliente, url, on_progreso=None, max_activos=None):
     """Página de producto (conectores.url) → importar_lista(fuente="url")."""
     _progreso(on_progreso, "Leyendo", None)
     prod = conector_url.leer(url)
-    return importar_lista(cliente, "url", [prod], on_progreso=on_progreso)
+    return importar_lista(cliente, "url", [prod], on_progreso=on_progreso, max_activos=max_activos)
 
 
 def resumen_texto(resumen):
@@ -466,6 +527,10 @@ def resumen_texto(resumen):
               f"{resumen.get('actualizados', 0)} actualizado(s)",
               f"{resumen.get('activos', 0)} con activo en el catálogo"]
     texto = ", ".join(partes) + "."
+    pendientes = int(resumen.get("pendientes") or 0)
+    if pendientes:
+        texto += (f" {pendientes} producto(s) guardado(s) sin activo todavía: "
+                  "el resto se completa solo en las próximas corridas.")
     errores = resumen.get("errores") or []
     if errores:
         muestra = "; ".join(errores[:3])

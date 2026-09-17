@@ -7,12 +7,18 @@ mayúsculas ni acentos, con alias (`name`/`producto`/`titulo` valen como
 `nombre`, `image`/`imagenes`/`foto` como `fotos`, etc. — ver `_ALIAS`). La
 única obligatoria es `nombre`; sin ella, o sin ningún producto, se lanza
 `ErrorConector` con un mensaje que el dashboard muestra tal cual.
+
+Tope de `MAX_FILAS` filas de datos (CSV y Excel por igual, leídas con
+`islice` para no materializar un libro de cientos de miles de filas): si el
+archivo trae más, se importan las primeras y `leer(..., avisos=[...])`
+deja el aviso en español para que la persona sepa que se recortó.
 """
 import csv
 import io
 import os
 import re
 import unicodedata
+from itertools import islice
 
 from .base import ErrorConector, normalizar_producto
 
@@ -32,7 +38,9 @@ _ALIAS = {
 _ALIAS_A_CLAVE = {alias: clave for clave, aliases in _ALIAS.items() for alias in aliases}
 
 _RE_VARIAS_URLS = re.compile(r"\s*[|,]\s*")
-_MAX_FILAS = 5000
+MAX_FILAS = 5000
+AVISO_RECORTE = (f"El archivo tiene más de {MAX_FILAS} filas: solo se importaron las primeras {MAX_FILAS}. "
+                 "Divídelo en varios archivos para importar el resto.")
 
 
 def _clave_columna(cabecera):
@@ -80,7 +88,8 @@ def _filas_csv(datos):
     except csv.Error:
         separador = ","
     lector = csv.reader(io.StringIO(texto), delimiter=separador)
-    filas = [f for f in lector]
+    # cabecera + MAX_FILAS + 1 de más para saber si se recortó
+    filas = list(islice(lector, MAX_FILAS + 2))
     if not filas:
         raise ErrorConector("El archivo está vacío.")
     return filas[0], filas[1:]
@@ -97,7 +106,7 @@ def _filas_xlsx(datos):
         raise ErrorConector("No se pudo abrir el archivo Excel. ¿Es un .xlsx válido?")
     try:
         hoja = libro.worksheets[0]
-        filas = [list(f) for f in hoja.iter_rows(values_only=True)]
+        filas = [list(f) for f in islice(hoja.iter_rows(values_only=True), MAX_FILAS + 2)]
     finally:
         libro.close()
     if not filas:
@@ -105,9 +114,10 @@ def _filas_xlsx(datos):
     return filas[0], filas[1:]
 
 
-def leer(ruta_o_bytes, nombre_archivo):
+def leer(ruta_o_bytes, nombre_archivo, avisos=None):
     """`ruta_o_bytes`: ruta en disco o el contenido en bytes. `nombre_archivo`
-    solo aporta la extensión (.csv / .xlsx)."""
+    solo aporta la extensión (.csv / .xlsx). `avisos` (lista opcional) recibe
+    los avisos no fatales, hoy solo AVISO_RECORTE cuando hay más de MAX_FILAS."""
     extension = os.path.splitext(str(nombre_archivo or ""))[1].lower()
     if extension not in (".csv", ".xlsx"):
         raise ErrorConector("Formato no soportado: sube un archivo .csv o .xlsx.")
@@ -129,8 +139,10 @@ def leer(ruta_o_bytes, nombre_archivo):
         raise ErrorConector(
             "No encontré la columna 'nombre' en la primera fila. Columnas reconocidas: " + COLUMNAS_AYUDA + ".")
 
+    if len(filas) > MAX_FILAS and avisos is not None:
+        avisos.append(AVISO_RECORTE)
     productos = []
-    for numero, fila in enumerate(filas[:_MAX_FILAS], start=2):
+    for numero, fila in enumerate(filas[:MAX_FILAS], start=2):
         celdas = [_celda(v) for v in fila]
         if not any(celdas):
             continue

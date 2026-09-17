@@ -2845,7 +2845,10 @@ def prod_marcar(cliente, pid):
 @app.route("/cliente/<cliente>/productos/<int:pid>/archivar", methods=["POST"])
 def prod_archivar(cliente, pid):
     """Archiva (o, con archivado=0, recupera) un producto. No borra nada: un
-    producto archivado sigue ligado a su activo y a sus experimentos."""
+    producto archivado sigue ligado a su activo y a sus experimentos. Es un
+    archivado MANUAL (`tiendas.marcar_producto` deja `extra.archivado_por =
+    "manual"`): la sync de la tienda no lo desarchiva aunque el producto
+    siga allá; solo «Recuperar» (archivado=0) lo devuelve a la lista."""
     if not tiendas.producto(cliente, pid):
         flash("No encontré ese producto.", "error")
         return _volver_productos(cliente)
@@ -3021,7 +3024,7 @@ def tienda_sync(cliente, tid):
 @app.route("/cliente/<cliente>/config/tienda/<int:tid>/desconectar", methods=["POST"])
 def tienda_desconectar(cliente, tid):
     if tiendas.desconectar(cliente, tid):
-        flash("Tienda desconectada. Sus productos quedaron archivados (no se borró nada).", "ok")
+        flash("Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada).", "ok")
     else:
         flash("Esa tienda no existe.", "error")
     return _volver_config(cliente)

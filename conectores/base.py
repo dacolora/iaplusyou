@@ -26,6 +26,11 @@ _RE_URL_HTTP = re.compile(r"^https?://", re.IGNORECASE)
 _RE_MONEDA = re.compile(r"^[A-Z]{3}$")
 _RE_ETIQUETAS = re.compile(r"<[^>]+>")
 _RE_ESPACIOS = re.compile(r"\s+")
+# Caracteres de control (salvo los espacios en blanco normales, que
+# _RE_ESPACIOS colapsa): un nombre importado nunca debe llevar \x00, ESC ni
+# saltos raros hasta el catálogo/los prompts/la pestaña.
+_RE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+MAX_NOMBRE = 200
 
 
 class ErrorConector(Exception):
@@ -110,6 +115,13 @@ def _texto(valor):
     return str(valor).strip()
 
 
+def _nombre(valor):
+    """Nombre de producto saneado: sin caracteres de control, espacios
+    colapsados, máximo MAX_NOMBRE caracteres."""
+    t = _RE_ESPACIOS.sub(" ", _RE_CONTROL.sub("", _texto(valor))).strip()
+    return t[:MAX_NOMBRE].strip()
+
+
 def _texto_o_none(valor):
     t = _texto(valor)
     return t or None
@@ -143,7 +155,7 @@ def normalizar_producto(d):
     `nombre` es obligatorio (ErrorConector si falta); `fuente_id` cae al slug
     del nombre; `url_imagen_principal` cae a la primera foto."""
     d = dict(d or {})
-    nombre = _texto(d.get("nombre"))
+    nombre = _nombre(d.get("nombre"))
     if not nombre:
         raise ErrorConector("El producto no tiene nombre: cada producto necesita un nombre.")
     fotos = _fotos(d.get("fotos"))

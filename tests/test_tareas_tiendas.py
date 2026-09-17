@@ -454,3 +454,84 @@ def test_catalogo_importar_borra_el_archivo_solo_si_se_lo_piden(entorno, monkeyp
     shutil.copy(fixture, temporal)
     tareas.REGISTRO["catalogo_importar"]({"payload": {"cliente": "acme", "ruta": temporal, "nombre_archivo": "productos.csv"}})
     assert os.path.exists(temporal)
+
+
+
+# --- tope por corrida y continuación -----------------------------------------
+
+def test_sync_productos_con_tope_encola_continuacion(entorno, monkeypatch):
+    """Con más productos sin activo que MAX_ACTIVOS_SYNC, la sync guarda
+    todas las filas, liga solo el tope y se vuelve a encolar (job_id con
+    `__cont`, ejecutar_desde en el futuro, max_intentos=1). La continuación
+    liga el resto y, al no quedar pendientes, no encola nada más."""
+    import cola
+    import tareas
+    import tareas.tiendas as tt
+    import tiendas
+    monkeypatch.setattr(tt, "MAX_ACTIVOS_SYNC", 2)
+    tid = _tienda()
+    Falso.productos = [_prod(f"p{i}", f"Prod {i}") for i in range(1, 4)]
+    job_id = tt.job_id_sync_productos("acme", tid)
+    msg = tareas.REGISTRO["tienda_sync_productos"]({"payload": {"cliente": "acme", "tienda_id": tid}, "job_id": job_id})
+    assert "3 producto(s) nuevo(s)" in msg and "2 con activo" in msg and "se completa solo" in msg
+    assert sum(1 for p in tiendas.productos("acme") if p["activo_catalogo_id"]) == 2
+    cont = cola.consultar_por_job(job_id + "__cont")
+    assert cont and cont["estado"] == "pendiente" and cont["tipo"] == "tienda_sync_productos"
+    assert cont["payload"] == {"cliente": "acme", "tienda_id": tid} and cont["max_intentos"] == 1
+    assert cont["ejecutar_desde"] > cont["creada_en"]
+    assert cola.consultar_por_job(job_id) is None   # la propia no se duplica
+    # la continuación corre con su job_id y liga el resto
+    msg = tareas.REGISTRO["tienda_sync_productos"]({"payload": cont["payload"], "job_id": job_id + "__cont"})
+    assert "3 con activo" in msg and "se completa solo" not in msg
+    assert all(p["activo_catalogo_id"] for p in tiendas.productos("acme"))
+    assert cola.consultar_por_job(job_id) is None
+    assert tt.job_id_continuacion(job_id + "__cont") == job_id
+
+
+def test_catalogo_importar_con_tope_conserva_el_archivo_y_continua(entorno, monkeypatch, tmp_path):
+    """Una importación de archivo que llega al tope deja el archivo para la
+    continuación (misma tarea, mismo payload, `__cont`) y avisa «el resto se
+    completa solo»; la última corrida borra el archivo."""
+    import shutil
+    import cola
+    import tareas
+    import tareas.tiendas as tt
+    import tiendas
+    import trabajos
+    monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: None)
+    monkeypatch.setattr(tt, "MAX_ACTIVOS_IMPORTAR", 1)
+    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "productos.csv")
+    temporal = str(tmp_path / "20260916_120000_productos.csv")
+    shutil.copy(fixture, temporal)
+    payload = {"cliente": "acme", "ruta": temporal, "nombre_archivo": "productos.csv", "borrar_al_terminar": True}
+    job_id = tt.job_id_importar_archivo("acme")
+    msg = tareas.REGISTRO["catalogo_importar"]({"payload": payload, "job_id": job_id})
+    assert msg.startswith("Importación en curso: 3 producto(s) guardado(s), 1 activo(s) creado(s); el resto se completa solo")
+    assert os.path.exists(temporal)
+    cont = cola.consultar_por_job(job_id + "__cont")
+    assert cont and cont["estado"] == "pendiente" and cont["payload"] == payload and cont["max_intentos"] == 1
+    # segunda corrida: liga el segundo con fotos; la Repisa (sin fotos) sigue sin intentarse → otra continuación
+    msg = tareas.REGISTRO["catalogo_importar"]({"payload": payload, "job_id": job_id + "__cont"})
+    assert msg.startswith("Importación en curso: 3 producto(s) guardado(s), 2 activo(s) creado(s)")
+    assert os.path.exists(temporal)
+    assert cola.consultar_por_job(job_id)["estado"] == "pendiente"   # alterna de vuelta al job_id base
+    # tercera: la Repisa se intenta (sin fotos, aviso) y ya no cuenta como pendiente → fin, archivo borrado
+    msg = tareas.REGISTRO["catalogo_importar"]({"payload": payload, "job_id": job_id})
+    assert msg.startswith("Importación lista: ") and "2 con activo" in msg and "Repisa" in msg
+    assert not os.path.exists(temporal)
+    assert cola.consultar_por_job(job_id + "__cont")["estado"] == "pendiente"   # la de antes; no hay una nueva
+    assert cola.consultar_por_job(job_id + "__cont")["id"] < cola.consultar_por_job(job_id)["id"]
+    assert sum(1 for p in tiendas.productos("acme") if p["activo_catalogo_id"]) == 2
+
+
+def test_catalogo_importar_avisa_recorte_de_filas(entorno, monkeypatch, tmp_path):
+    import tareas
+    import trabajos
+    from conectores import csv_excel
+    monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: None)
+    monkeypatch.setattr(csv_excel, "MAX_FILAS", 1)
+    monkeypatch.setattr(csv_excel, "AVISO_RECORTE", "El archivo tiene más de 1 filas: solo se importaron las primeras 1.")
+    ruta = tmp_path / "grande.csv"
+    ruta.write_text("nombre\nA\nB\nC\n", encoding="utf-8")
+    msg = tareas.REGISTRO["catalogo_importar"]({"payload": {"cliente": "acme", "ruta": str(ruta), "nombre_archivo": "grande.csv"}})
+    assert "1 producto(s) nuevo(s)" in msg and "más de 1 filas" in msg

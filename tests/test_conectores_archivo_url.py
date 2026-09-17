@@ -430,3 +430,41 @@ def test_url_location_relativa_es_seguida(monkeypatch):
     p = conector_url.leer("https://tienda.test/origen")
     assert llamadas == ["https://tienda.test/origen", "https://tienda.test/otra-pagina"]
     assert p["nombre"] == "Destino"
+
+
+def test_tope_de_filas_csv_y_xlsx_con_aviso(monkeypatch):
+    """Más de MAX_FILAS filas de datos: se importan las primeras y `avisos`
+    recibe AVISO_RECORTE (con la cifra); sin `avisos` no revienta. En .xlsx
+    las filas se leen con islice — no se materializa el libro entero."""
+    import openpyxl
+    monkeypatch.setattr(csv_excel, "MAX_FILAS", 3)
+    texto = "nombre,precio\n" + "\n".join(f"P{i},{i}" for i in range(1, 8))
+    avisos = []
+    productos = csv_excel.leer(texto.encode("utf-8"), "c.csv", avisos=avisos)
+    assert [p["nombre"] for p in productos] == ["P1", "P2", "P3"]
+    assert avisos == [csv_excel.AVISO_RECORTE] and "5000" in csv_excel.AVISO_RECORTE
+    assert csv_excel.leer(texto.encode("utf-8"), "c.csv") and True   # sin lista de avisos, igual funciona
+    # justo en el tope: sin aviso
+    avisos = []
+    csv_excel.leer(b"nombre\nA\nB\nC\n", "c.csv", avisos=avisos)
+    assert avisos == []
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["nombre"])
+    for i in range(1, 8):
+        ws.append([f"X{i}"])
+    buf = io.BytesIO()
+    wb.save(buf)
+    llamadas = []
+    original = openpyxl.worksheet._read_only.ReadOnlyWorksheet.iter_rows
+
+    def _iter_rows(self, *a, **kw):
+        for fila in original(self, *a, **kw):
+            llamadas.append(fila)
+            yield fila
+    monkeypatch.setattr(openpyxl.worksheet._read_only.ReadOnlyWorksheet, "iter_rows", _iter_rows)
+    avisos = []
+    productos = csv_excel.leer(buf.getvalue(), "c.xlsx", avisos=avisos)
+    assert [p["nombre"] for p in productos] == ["X1", "X2", "X3"] and avisos == [csv_excel.AVISO_RECORTE]
+    assert len(llamadas) == 3 + 2   # cabecera + tope + 1 para detectar el recorte, nada más

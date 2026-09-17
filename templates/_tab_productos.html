@@ -147,7 +147,7 @@
     document.querySelectorAll('.prod-form-archivar').forEach(function (f) {
       f.addEventListener('submit', function (ev) {
         var nombre = f.dataset.nombre || 'este producto';
-        if (!confirm('¿Archivar «' + nombre + '»? No se borra: se oculta de la lista.')) ev.preventDefault();
+        if (!confirm('¿Archivar «' + nombre + '»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»).')) ev.preventDefault();
       });
     });
   })();

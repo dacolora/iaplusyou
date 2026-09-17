@@ -189,13 +189,19 @@ def test_marcar_y_archivar_no_cruzan_clientes(app):
 
 
 def test_archivar_y_recuperar(app):
+    """Archivar desde la pestaña es MANUAL (`extra.archivado_por`): una sync
+    que traiga el producto no lo desarchiva. «Recuperar» limpia la marca."""
     import tiendas
     pid = _producto()
     c = app["c"]
     c.post(f"/cliente/acme/productos/{pid}/archivar")
+    p = tiendas.producto("acme", pid)
+    assert p["archivado"] is True and p["extra"]["archivado_por"] == "manual"
+    tiendas.upsert_producto("acme", p["fuente"], p["fuente_id"], {"nombre": p["nombre"], "extra": {"handle": "h"}})
     assert tiendas.producto("acme", pid)["archivado"] is True
     c.post(f"/cliente/acme/productos/{pid}/archivar", data={"archivado": "0"})
-    assert tiendas.producto("acme", pid)["archivado"] is False
+    p = tiendas.producto("acme", pid)
+    assert p["archivado"] is False and "archivado_por" not in p["extra"] and p["extra"]["handle"] == "h"
 
 
 def test_vincular_encola_la_tarea_y_no_llama_al_importador(app, monkeypatch):
@@ -329,9 +335,14 @@ def test_desconectar_borra_tienda_y_archiva_productos(app):
     ajena = tiendas.conectar("otro", "shopify", {"dominio": "d", "token": "t"})
     app["c"].post(f"/cliente/acme/config/tienda/{ajena}/desconectar")
     assert tiendas.listar("otro") != []
+    # con un pedido sincronizado: antes reventaba con IntegrityError (FK pedido.tienda_id)
+    tiendas.guardar_pedidos("acme", tid, [{"fuente_id": "1001", "fecha": "2026-09-16T10:00:00", "total": 5.0,
+                                           "moneda": "USD", "items": [], "utm_content": "7"}])
     r = app["c"].post(f"/cliente/acme/config/tienda/{tid}/desconectar")
     assert r.status_code == 302 and tiendas.listar("acme") == []
     assert tiendas.producto("acme", pid)["archivado"] is True
+    assert [p["fuente_id"] for p in tiendas.pedidos_sin_resolver("acme")] == ["1001"]
+    assert any("pedidos se conservan" in m for m in _flashes(app["c"]))
 
 
 # --- MercadoLibre ------------------------------------------------------------
