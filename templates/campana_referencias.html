@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% from "_sprint_macros.html" import chip_estado, barra %}
+{% block title %}Referencias · {{ sprint.nombre }}{% endblock %}
+{% block content %}
+{% include "_sprint_nav.html" %}
+
+<div class="pagina-cabecera sprint-cabecera">
+  <div>
+    <h1>Referencias de la campaña {{ campana.orden + 1 }}</h1>
+    <p class="vacio">
+      <span class="sprint-punto" style="background: {{ campana.persona_color or 'var(--accent)' }}"></span> {{ campana.persona_nombre }}
+      · {% if producto and producto.representativa_url %}<img class="sprint-mini" src="{{ producto.representativa_url }}" alt="">{% endif %}{{ producto.nombre if producto else campana.catalogo_id }}
+      · {{ campana.temporada_nombre }} · {{ campana.n_videos }} videos · {{ campana.n_imagenes }} imágenes · {{ chip_estado(campana.estado) }}
+    </p>
+  </div>
+</div>
+
+<section class="sprint-refs-progreso">
+  <strong id="refs-contador">{{ campana.referencias_listas }} / {{ campana.referencias_objetivo }} referencias listas</strong>
+  <div id="refs-barra">{{ barra(campana.progreso.porcentaje, campana.progreso.texto) }}</div>
+  <p class="vacio">Una referencia cuenta cuando tiene descripción. Dinos qué quieres reutilizar de cada una: eso es lo que Claude analiza y lo que después arma las ideas.</p>
+  {% for aviso in cobertura %}<p class="tag-estado sprint-aviso">{{ aviso }}</p>{% endfor %}
+</section>
+
+<form method="post" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=campana.id) }}"
+      enctype="multipart/form-data" class="sprint-zona" id="zona-subida">
+  <label class="sprint-zona-drop" for="input-archivos">
+    <strong>Arrastra imágenes o videos aquí</strong>, o haz clic para elegir (jpg, png, webp, mp4, mov, webm).
+    <input type="file" id="input-archivos" name="archivos" multiple accept="image/*,video/*" hidden>
+  </label>
+  <div class="fe-opciones">
+    <span class="campo-label">Intención inicial (se puede cambiar por referencia):</span>
+    {% for clave, nombre in intenciones_sprint.items() if clave != "otro" %}
+    <label class="fe-check"><input type="checkbox" name="intencion" value="{{ clave }}"> {{ nombre }}</label>
+    {% endfor %}
+  </div>
+  <div class="fe-opciones">
+    <label>O pega un link (TikTok, Instagram, YouTube) <input type="url" name="link" placeholder="https://..." style="width: 22rem;"></label>
+    <button type="submit" class="btn-generar btn-sm">Subir</button>
+  </div>
+  {% if trabajo_link %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo_link.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+  <script>iniciarPolling({{ trabajo_link.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_link.job_id) | tojson }});</script>
+  {% endif %}
+</form>
+
+<div class="acciones">
+  <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
+    <button type="submit" class="btn-sm">Traer las fotos del producto</button>
+  </form>
+  {% if otras_campanas %}
+  <details class="inline sprint-reutilizar">
+    <summary class="btn-sm">Reutilizar de otra campaña</summary>
+    <ul>
+      {% for o in otras_campanas %}{% for r in o.referencias %}
+      <li>
+        <img class="sprint-mini" src="{{ r.frame_url or r.url }}" alt=""> {{ r.titulo or r.url }} <small>({{ o.campana.persona_nombre }} · {{ o.campana.temporada_nombre }})</small>
+        <form method="post" action="{{ url_for('sprints.referencias_reutilizar', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
+          <input type="hidden" name="referencia_id" value="{{ r.id }}"><button type="submit" class="btn-xs">Usar</button>
+        </form>
+      </li>
+      {% endfor %}{% endfor %}
+    </ul>
+  </details>
+  {% endif %}
+</div>
+
+<div class="sprint-refs-grid" id="refs-grid"
+     data-url-estado="{{ url_for('sprints.referencias_estado', cliente=cliente, sid=sprint.id, cid=campana.id) }}">
+  {% for r in referencias %}
+  <article class="swap-card sprint-ref" data-rid="{{ r.id }}" data-url="{{ url_for('sprints.referencia_editar', cliente=cliente, rid=r.id) }}">
+    <div class="sprint-ref-media">
+      {% if r.tipo == "video" %}<video src="{{ r.url }}" poster="{{ r.frame_url }}" controls muted preload="none"></video>
+      {% else %}<img src="{{ r.url }}" alt="{{ r.titulo }}">{% endif %}
+      <span class="tag-estado sprint-ref-estado">{{ r.estado }}</span>
+    </div>
+    <div class="sprint-ref-cuerpo">
+      <small class="vacio">{{ r.titulo or r.url }} · {{ r.origen }}</small>
+      <div class="sprint-chips">
+        {% for clave, nombre in intenciones_sprint.items() %}
+        <label class="sprint-chip"><input type="checkbox" name="intencion" value="{{ clave }}" {% if clave in (r.intencion or []) %}checked{% endif %}> {{ nombre }}</label>
+        {% endfor %}
+        <input type="text" name="intencion_otro" value="{{ r.intencion_otro or '' }}" placeholder="otro: ¿qué?" class="mini-input" {% if "otro" not in (r.intencion or []) %}hidden{% endif %}>
+      </div>
+      <textarea name="descripcion" rows="2" placeholder="¿Qué quieres reutilizar de esta referencia? (obligatorio para que cuente)">{{ r.descripcion or '' }}</textarea>
+      <div class="sprint-ref-analisis" data-estado="{{ r.analisis_estado }}">
+        {% if r.analisis_estado == "listo" and r.analisis %}
+          <p>{{ r.analisis.resumen }}</p>
+          <div class="sprint-paleta">{% for c in r.analisis.paleta %}<span title="{{ c }}" style="background: {{ c }}"></span>{% endfor %}</div>
+          <details><summary>Ver análisis completo</summary>
+            <dl class="sprint-analisis-dl">
+              <dt>Composición</dt><dd>{{ r.analisis.composicion }}</dd>
+              <dt>Iluminación</dt><dd>{{ r.analisis.iluminacion }}</dd>
+              <dt>Movimiento</dt><dd>{{ r.analisis.movimiento }}</dd>
+              <dt>Tipografía</dt><dd>{{ r.analisis.tipografia }}</dd>
+              <dt>Estética</dt><dd>{{ r.analisis.estetica }}</dd>
+              <dt>Storytelling</dt><dd>{{ r.analisis.storytelling }}</dd>
+              <dt>Elementos</dt><dd>{{ r.analisis.elementos | join(", ") }}</dd>
+            </dl>
+          </details>
+        {% elif r.analisis_estado == "error" %}
+          <p class="tag-error">No se pudo analizar{% if r.analisis and r.analisis.error %}: {{ r.analisis.error }}{% endif %}</p>
+        {% else %}
+          <p class="vacio sprint-analizando">Analizando con IA…</p>
+        {% endif %}
+      </div>
+      <div class="sprint-ref-acciones">
+        <span class="sprint-guardado" hidden>Guardado</span>
+        <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline"><button type="submit" class="btn-xs">Reanalizar</button></form>
+        <form method="post" action="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}" class="inline"
+              onsubmit="return confirm('¿Quitar esta referencia?');"><button type="submit" class="btn-xs btn-peligro">Quitar</button></form>
+      </div>
+    </div>
+  </article>
+  {% else %}
+  <p class="vacio" id="refs-vacio">Todavía no hay referencias. Sube las que inspiran esta campaña.</p>
+  {% endfor %}
+</div>
+
+<script>
+  (function () {
+    // 1) Arrastrar y soltar: los archivos entran al input y el formulario se envía.
+    var zona = document.getElementById('zona-subida'), input = document.getElementById('input-archivos');
+    ['dragenter', 'dragover'].forEach(function (ev) { zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.add('sobre'); }); });
+    ['dragleave', 'drop'].forEach(function (ev) { zona.addEventListener(ev, function (e) { e.preventDefault(); zona.classList.remove('sobre'); }); });
+    zona.addEventListener('drop', function (e) { if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; zona.submit(); } });
+    input.addEventListener('change', function () { if (input.files.length) zona.submit(); });
+
+    // 2) Autoguardado por tarjeta (intención, otro, descripción) con espera de 800 ms.
+    document.querySelectorAll('.sprint-ref').forEach(function (card) {
+      var temporizador = null;
+      function guardar() {
+        var intencion = Array.prototype.map.call(card.querySelectorAll('input[name=intencion]:checked'), function (i) { return i.value; });
+        var otro = card.querySelector('input[name=intencion_otro]');
+        otro.hidden = intencion.indexOf('otro') < 0;
+        var cuerpo = {intencion: intencion, intencion_otro: otro.value, descripcion: card.querySelector('textarea[name=descripcion]').value};
+        fetch(card.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'}, body: JSON.stringify(cuerpo)})
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (!j.ok) { alert(j.error); return; }
+            card.querySelector('.sprint-ref-estado').textContent = j.estado;
+            document.getElementById('refs-contador').textContent = j.referencias_listas + ' / ' + j.referencias_objetivo + ' referencias listas';
+            var pct = Math.min(100, Math.round(100 * j.referencias_listas / Math.max(1, j.referencias_objetivo)));
+            var fill = document.querySelector('#refs-barra .sprint-barra-fill'); if (fill) fill.style.width = pct + '%';
+            var ok = card.querySelector('.sprint-guardado'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500);
+          }).catch(function () {});
+      }
+      function programar() { clearTimeout(temporizador); temporizador = setTimeout(guardar, 800); }
+      card.querySelectorAll('input[name=intencion]').forEach(function (i) { i.addEventListener('change', guardar); });
+      card.querySelector('input[name=intencion_otro]').addEventListener('input', programar);
+      var ta = card.querySelector('textarea[name=descripcion]');
+      ta.addEventListener('input', function () { ta.dataset.sucio = '1'; programar(); });
+      ta.addEventListener('blur', function () { delete ta.dataset.sucio; });
+    });
+
+    // 3) Análisis en curso: se consulta el estado cada 4 s y se pinta sin recargar.
+    var grid = document.getElementById('refs-grid');
+    function hayPendientes() { return !!grid.querySelector('.sprint-ref-analisis[data-estado="pendiente"]'); }
+    function pintar(j) {
+      j.referencias.forEach(function (r) {
+        var caja = grid.querySelector('.sprint-ref[data-rid="' + r.id + '"] .sprint-ref-analisis');
+        if (!caja || caja.dataset.estado === r.analisis_estado) return;
+        caja.dataset.estado = r.analisis_estado;
+        if (r.analisis_estado === 'listo' && r.analisis) {
+          var paleta = (r.analisis.paleta || []).map(function (c) { return '<span title="' + c + '" style="background:' + c + '"></span>'; }).join('');
+          caja.innerHTML = '<p></p><div class="sprint-paleta">' + paleta + '</div><p class="vacio">Recarga para ver el análisis completo.</p>';
+          caja.querySelector('p').textContent = r.analisis.resumen || '';
+        } else if (r.analisis_estado === 'error') {
+          caja.innerHTML = '<p class="tag-error">No se pudo analizar.</p>';
+        }
+      });
+    }
+    function sondear() {
+      if (!hayPendientes()) return;
+      fetch(grid.dataset.urlEstado, {headers: {'X-Requested-With': 'fetch'}}).then(function (r) { return r.json(); }).then(pintar).catch(function () {});
+      setTimeout(sondear, 4000);
+    }
+    setTimeout(sondear, 2000);
+  })();
+</script>
+{% endblock %}

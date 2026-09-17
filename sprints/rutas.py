@@ -8,6 +8,7 @@ la URL lleva <cliente>. `contexto(cliente)` es lo que `ver_cliente` agrega
 al render de cliente.html para la pestaña.
 """
 import json
+import os
 from datetime import date
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
@@ -17,7 +18,7 @@ import proyectos
 import trabajos
 from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
-from sprints import calendario, datos, estado, progreso
+from sprints import archivos, calendario, datos, estado, progreso
 from tareas import sprints as tareas_sprints
 
 bp = Blueprint("sprints", __name__, url_prefix="/cliente/<cliente>/sprints")
@@ -387,8 +388,166 @@ def campana_eliminar(cliente, sid, cid):
     return _volver(cliente, sid)
 
 
+# -------------------------------------------------------- referencias ---
+
+def _referencia_o_404(cliente, rid):
+    r = datos.referencia(cliente, rid)
+    if not r:
+        abort(404)
+    return r
+
+
 @bp.get("/<int:sid>/campanas/<int:cid>")
 def campana_ver(cliente, sid, cid):
-    _sprint_o_404(cliente, sid)
+    sp = _sprint_o_404(cliente, sid)
+    c = _campana_o_404(cliente, sid, cid)
+    refs = datos.referencias(cliente, cid)
+    c["progreso"] = progreso.progreso_campana(c)
+    otras = [{"campana": oc, "referencias": datos.referencias(cliente, oc["id"])}
+             for oc in sp["campanas"] if oc["id"] != cid]
+    producto = next((p for p in _productos(cliente) if p["id"] == c["catalogo_id"]), None)
+    job_link = tareas_sprints.job_id_link(cliente, cid)
+    return render_template("campana_referencias.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           sprint=sp, campana=c, referencias=refs, producto=producto, otras_campanas=otras,
+                           intenciones_sprint=datos.INTENCIONES_NOMBRE, cobertura=progreso.cobertura(c, refs),
+                           trabajo_link={"job_id": job_link} if trabajos.en_curso(job_link) else None)
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>/referencias")
+def referencias_subir(cliente, sid, cid):
     _campana_o_404(cliente, sid, cid)
-    return _volver(cliente, sid)   # la Task 12 renderiza campana_referencias.html
+    link = (request.form.get("link") or "").strip()
+    intencion = request.form.getlist("intencion")
+    subidas, rechazadas = 0, 0
+    for archivo in request.files.getlist("archivos"):
+        if not archivo or not archivo.filename:
+            continue
+        info = archivos.guardar_subida(cliente, archivo)
+        if not info:
+            rechazadas += 1
+            continue
+        try:
+            rid = datos.agregar_referencia(cliente, cid, info["tipo"], info["url"], frame_url=info["frame_url"],
+                                           ruta_local=info["ruta_local"], origen="archivo", titulo=info["titulo"],
+                                           intencion=intencion)
+        except datos.ErrorDatos as e:
+            flash(str(e), "error")
+            continue
+        tareas_sprints.encolar_analisis(cliente, rid)
+        subidas += 1
+    if link:
+        if tareas_sprints.encolar_link(cliente, cid, link):
+            flash("Descargando el link; la referencia aparecerá en unos segundos.", "ok")
+        else:
+            flash("Ya hay un link descargándose para esta campaña.", "error")
+    if subidas:
+        flash(f"{subidas} referencia(s) subida(s). Cuéntanos qué reutilizar de cada una.", "ok")
+    if rechazadas:
+        flash(f"{rechazadas} archivo(s) no son imagen ni video (jpg, png, webp, mp4, mov, webm).", "error")
+    estado.recalcular(cliente, sid)
+    if _quiere_json():
+        return jsonify({"ok": True, "subidas": subidas, "rechazadas": rechazadas})
+    return _volver(cliente, sid, cid)
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>/referencias/catalogo")
+def referencias_catalogo(cliente, sid, cid):
+    """Trae las fotos reales del producto de la campaña como referencias
+    (origen catalogo), con intención ángulo de producto y descripción
+    automática — cuentan como listas desde el primer momento."""
+    c = _campana_o_404(cliente, sid, cid)
+    producto = catalogo_productos.encontrar(cliente, c["catalogo_id"], "producto")
+    if not producto:
+        flash("El producto de la campaña ya no está en el catálogo.", "error")
+        return _volver(cliente, sid, cid)
+    existentes = {r["url"] for r in datos.referencias(cliente, cid)}
+    base = (os.environ.get("R2_PUBLIC_BASE_URL") or "").rstrip("/")
+    carpeta = catalogo_productos.CATEGORIAS["producto"]["carpeta"]
+    nuevas = 0
+    for nombre in producto.get("imagenes") or []:
+        url = f"{base}/clientes/{cliente}/{carpeta}/{producto['id']}/{nombre}"
+        if url in existentes:
+            continue
+        rid = datos.agregar_referencia(cliente, cid, "imagen", url, origen="catalogo", titulo=nombre,
+                                       intencion=["angulo_producto"],
+                                       descripcion=f"Foto real del producto {producto['nombre']}, tal como es.")
+        tareas_sprints.encolar_analisis(cliente, rid)
+        nuevas += 1
+    flash(f"{nuevas} foto(s) del producto traídas del catálogo." if nuevas else "Las fotos del producto ya estaban.", "ok")
+    estado.recalcular(cliente, sid)
+    return _volver(cliente, sid, cid)
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>/referencias/reutilizar")
+def referencias_reutilizar(cliente, sid, cid):
+    _campana_o_404(cliente, sid, cid)
+    try:
+        datos.reutilizar_referencia(cliente, _entero("referencia_id"), cid)
+        flash("Referencia reutilizada.", "ok")
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+    estado.recalcular(cliente, sid)
+    return _volver(cliente, sid, cid)
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/referencias/estado")
+def referencias_estado(cliente, sid, cid):
+    c = _campana_o_404(cliente, sid, cid)
+    return jsonify({"listas": c["referencias_listas"], "objetivo": c["referencias_objetivo"],
+                    "referencias": [{"id": r["id"], "analisis_estado": r["analisis_estado"], "analisis": r["analisis"],
+                                     "estado": r["estado"]} for r in datos.referencias(cliente, cid)]})
+
+
+@bp.post("/referencias/<int:rid>")
+def referencia_editar(cliente, rid):
+    """Autoguardado de la tarjeta (JSON por fetch) o formulario clásico."""
+    r = _referencia_o_404(cliente, rid)
+    cuerpo = request.get_json(silent=True)
+    es_json = cuerpo is not None or _quiere_json()
+    fuente = cuerpo if cuerpo is not None else request.form
+    campos = {}
+    if "descripcion" in fuente:
+        campos["descripcion"] = fuente.get("descripcion")
+    if "intencion" in fuente:
+        campos["intencion"] = fuente.get("intencion") if cuerpo is not None else request.form.getlist("intencion")
+    if "intencion_otro" in fuente:
+        campos["intencion_otro"] = fuente.get("intencion_otro")
+    if "titulo" in fuente:
+        campos["titulo"] = fuente.get("titulo")
+    try:
+        datos.actualizar_referencia(cliente, rid, **campos)
+    except datos.ErrorDatos as e:
+        if es_json:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        flash(str(e), "error")
+        return _volver(cliente, r["sprint_id"], r["campana_id"])
+    sp = estado.recalcular(cliente, r["sprint_id"])
+    c = next((x for x in sp["campanas"] if x["id"] == r["campana_id"]), None)
+    if es_json:
+        nueva = datos.referencia(cliente, rid)
+        return jsonify({"ok": True, "estado": nueva["estado"],
+                        "referencias_listas": c["referencias_listas"] if c else 0,
+                        "referencias_objetivo": c["referencias_objetivo"] if c else 0,
+                        "estado_sprint": sp["estado"]})
+    return _volver(cliente, r["sprint_id"], r["campana_id"])
+
+
+@bp.post("/referencias/<int:rid>/quitar")
+def referencia_quitar(cliente, rid):
+    r = _referencia_o_404(cliente, rid)
+    datos.quitar_referencia(cliente, rid)
+    estado.recalcular(cliente, r["sprint_id"])
+    if _quiere_json():
+        return jsonify({"ok": True})
+    return _volver(cliente, r["sprint_id"], r["campana_id"])
+
+
+@bp.post("/referencias/<int:rid>/reanalizar")
+def referencia_reanalizar(cliente, rid):
+    r = _referencia_o_404(cliente, rid)
+    datos.actualizar_referencia(cliente, rid, analisis_estado="pendiente")
+    tareas_sprints.encolar_analisis(cliente, rid)
+    if _quiere_json():
+        return jsonify({"ok": True})
+    flash("Analizando de nuevo.", "ok")
+    return _volver(cliente, r["sprint_id"], r["campana_id"])

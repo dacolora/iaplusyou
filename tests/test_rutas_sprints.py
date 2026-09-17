@@ -1,6 +1,7 @@
 """Rutas del Blueprint sprints: validan y delegan a sprints.datos / tareas;
 encolar, R2 y ffmpeg se monkeypatchean. Sesión admin como en
 test_rutas_experimentos."""
+import io
 import json
 
 import pytest
@@ -187,3 +188,56 @@ def test_validar_campanas_prefija_numero_de_campana_en_error_de_cantidades(app):
         rutas._validar_campanas("acme", [{"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid,
                                           "n_videos": 0, "n_imagenes": 0}])
     assert str(exc.value).startswith("Campaña 1:")
+
+
+def test_referencias_subir_editar_quitar(app, monkeypatch):
+    from sprints import archivos, datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    monkeypatch.setattr(archivos, "guardar_subida", lambda c, a: None if a.filename.endswith(".pdf") else {
+        "tipo": "imagen", "url": f"https://r2/{a.filename}", "frame_url": None, "ruta_local": "/tmp/x", "titulo": a.filename})
+    c = app["c"]
+    r = c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias", data={
+        "archivos": [(io.BytesIO(b"a"), "a.jpg"), (io.BytesIO(b"b"), "b.pdf")], "intencion": ["paleta"]},
+        content_type="multipart/form-data")
+    assert r.status_code == 302
+    refs = datos.referencias("acme", cid)
+    assert len(refs) == 1 and refs[0]["intencion"] == ["paleta"] and refs[0]["estado"] == "borrador"
+    assert [e["tipo"] for e in app["encolados"]] == ["sprint_analizar_referencia"]
+    rid = refs[0]["id"]
+    r = c.post(f"/cliente/acme/sprints/referencias/{rid}", json={"descripcion": "quiero esa luz", "intencion": ["iluminacion", "otro"], "intencion_otro": "reflejos"})
+    j = r.get_json()
+    assert j["ok"] and j["estado"] == "lista" and j["referencias_listas"] == 1 and j["estado_sprint"] == "referencias"
+    r = c.post(f"/cliente/acme/sprints/referencias/{rid}", json={"intencion": ["magia"]})
+    assert r.status_code == 400 and not r.get_json()["ok"]
+    page = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert page.status_code == 200 and b"quiero esa luz" in page.data and b"a.jpg" in page.data
+    j = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/estado").get_json()
+    assert j["listas"] == 1 and j["referencias"][0]["analisis_estado"] == "pendiente"
+    c.post(f"/cliente/acme/sprints/referencias/{rid}/reanalizar")
+    assert len(app["encolados"]) == 2
+    c.post(f"/cliente/acme/sprints/referencias/{rid}/quitar")
+    assert datos.referencias("acme", cid) == []
+    assert c.get(f"/cliente/acme/sprints/{sid}/campanas/999").status_code == 404
+
+
+def test_referencias_link_catalogo_y_reutilizar(app, monkeypatch):
+    from sprints import datos
+    import catalogo_productos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    c = app["c"]
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias", data={"link": "https://www.tiktok.com/@x/video/1"})
+    assert app["encolados"][-1]["tipo"] == "sprint_referencia_link" and app["encolados"][-1]["payload"]["campana_id"] == cid
+    monkeypatch.setenv("R2_PUBLIC_BASE_URL", "https://r2")
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda cl, pid_, categoria=None: {"id": "espejo_led", "nombre": "Espejo LED", "imagenes": ["1.jpg", "2.jpg"]})
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo")
+    refs = datos.referencias("acme", cid)
+    assert [r["origen"] for r in refs] == ["catalogo", "catalogo"] and refs[0]["estado"] == "lista"
+    assert refs[0]["url"] == "https://r2/clientes/acme/productos/espejo_led/1.jpg"
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo")     # idempotente
+    assert len(datos.referencias("acme", cid)) == 2
+    tid2 = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
+    cid2 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid2, 1, 0)
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid2}/referencias/reutilizar", data={"referencia_id": refs[0]["id"]})
+    assert datos.referencias("acme", cid2)[0]["origen"] == "reutilizada"
