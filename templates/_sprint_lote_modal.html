@@ -9,7 +9,7 @@
     <div class="fe-opciones">
       <label>Modelo de video
         <select name="modelo_video" id="lote-modelo-video">
-          {% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} (USD {{ '%.3f' % m.usd_por_segundo }}/s)</option>{% endfor %}
+          {% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} (USD {{ '%.3f' % m.usd_por_segundo_efectivo }}/s con sonido)</option>{% endfor %}
         </select>
       </label>
       <label>Modelo de imagen

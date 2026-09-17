@@ -68,6 +68,12 @@ IMAGEN = {
     },
 }
 
+# Tarifa que ve la persona antes del clic: la del modelo más el recargo del
+# sonido (siempre se pide). Las plantillas la muestran y el estimado en vivo
+# de Crear la multiplica por la duración.
+for _info in VIDEO.values():
+    _info["usd_por_segundo_efectivo"] = round(_info["usd_por_segundo"] + _info["audio_nativo"]["recargo_usd_s"], 4)
+
 VIDEO_POR_DEFECTO = "wan3"
 IMAGEN_POR_DEFECTO = "seedream_v5_pro"
 
@@ -76,8 +82,7 @@ def usd_por_segundo(modelo_id, con_sonido=True):
     """Costo por segundo efectivo: el del modelo más el recargo del sonido
     nativo cuando se pide (Kling O3 Pro es el único que cobra aparte)."""
     info = VIDEO[modelo_id]
-    recargo = info["audio_nativo"]["recargo_usd_s"] if con_sonido else 0.0
-    return info["usd_por_segundo"] + recargo
+    return info["usd_por_segundo_efectivo"] if con_sonido else info["usd_por_segundo"]
 
 
 def estimate_video(modelo_id, duration, con_sonido=True):

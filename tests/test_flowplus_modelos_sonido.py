@@ -62,3 +62,9 @@ def test_costo_por_segundo_efectivo_incluye_el_recargo():
     assert fm.usd_por_segundo("kling_o3_pro") == pytest.approx(0.14)
     assert fm.usd_por_segundo("kling_o3_pro", con_sonido=False) == pytest.approx(0.112)
     assert fm.usd_por_segundo("wan3") == pytest.approx(0.10)
+
+
+def test_tarifa_efectiva_para_las_plantillas():
+    assert fm.VIDEO["kling_o3_pro"]["usd_por_segundo_efectivo"] == pytest.approx(0.14)
+    assert fm.VIDEO["wan3"]["usd_por_segundo_efectivo"] == pytest.approx(0.10)
+    assert fm.VIDEO["seedance25"]["usd_por_segundo_efectivo"] == pytest.approx(0.36)

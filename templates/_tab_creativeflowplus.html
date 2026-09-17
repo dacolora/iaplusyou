@@ -83,7 +83,7 @@
     <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de video</label>
     <div class="checks-plataformas">
       {% for id, m in modelos_flowplus_video.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo) }}/s · hasta {{ m.max_referencias }} ref.</span></label>
+      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
       {% endfor %}
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
@@ -173,7 +173,7 @@
       <div class="generado-pie">
         <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
         {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">Sprint · Campaña {{ item.sprint.campana_n }}</a>{% endif %}
-        <small>{{ item.modelo_nombre }}{% if item.usd %} · ${{ item.usd }}{% endif %}</small>
+        <small>{{ item.modelo_nombre }}{% if item.usd %} · ${{ item.usd }}{% endif %}{% if item.sonido and item.sonido.estado == "ok" %} · <span title="El video trae el sonido de la escena">🔊</span>{% elif item.sonido and item.sonido.estado == "ausente" %} · <span title="El proveedor entregó el video sin pista de audio">🔇 sin sonido</span>{% endif %}</small>
       </div>
       <template class="generado-detalle">
         <div class="detalle-media">

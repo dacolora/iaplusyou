@@ -325,7 +325,7 @@
       <label class="campo-label">Modelo para VIDEO</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_video.items() %}
-        <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo) }}/s</span></label>
+        <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido</span></label>
         {% endfor %}
       </div>
     </div>
