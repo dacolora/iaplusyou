@@ -400,3 +400,111 @@ def campana(cliente, campana_id):
 def campanas(cliente, sprint_id):
     with db.conectar() as con:
         return _campanas(con, cliente, sprint_id=sprint_id)
+
+
+# -------------------------------------------------------- referencias ---
+
+def intencion_valida(lista):
+    lista = [str(x) for x in (lista or []) if x]
+    malas = [x for x in lista if x not in INTENCIONES]
+    if malas:
+        raise ErrorDatos(f"Intención desconocida: {', '.join(malas)}")
+    return list(dict.fromkeys(lista))    # sin repetidos, en orden
+
+
+def _estado_referencia(descripcion):
+    return "lista" if (descripcion or "").strip() else "borrador"
+
+
+def agregar_referencia(cliente, campana_id, tipo, url, frame_url=None, ruta_local=None, origen="archivo", titulo="",
+                       intencion=None, descripcion=""):
+    if tipo not in ("imagen", "video"):
+        raise ErrorDatos(f"Tipo de referencia inválido: {tipo}")
+    if origen not in ORIGENES_REFERENCIA:
+        raise ErrorDatos(f"Origen de referencia inválido: {origen}")
+    if not (url or "").strip():
+        raise ErrorDatos("La referencia necesita una URL.")
+    intencion = intencion_valida(intencion)
+    descripcion = _texto(descripcion)
+    ahora = db.ahora()
+    with db.conectar() as con:
+        c = _fila(con, db.campana, campana_id, cliente)
+        if not c:
+            raise ErrorDatos("Esa campaña no existe.")
+        r = db.referencia
+        orden = con.execute(sa.select(sa.func.count()).select_from(r).where(r.c.campana_id == campana_id)).scalar() or 0
+        rid = con.execute(r.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, campana_id=campana_id, tipo=tipo, url=url.strip(),
+            frame_url=frame_url, ruta_local=ruta_local, origen=origen, titulo=_texto(titulo, 200), intencion=intencion,
+            intencion_otro=None, descripcion=descripcion, analisis=None, analisis_estado="pendiente",
+            estado=_estado_referencia(descripcion), orden=orden, extra={})).inserted_primary_key[0]
+        _evento(con, cliente, c.sprint_id, campana_id, "referencia_agregada", f"Referencia agregada ({tipo}, {origen})",
+                {"referencia_id": rid, "titulo": _texto(titulo, 200)})
+    return rid
+
+
+def actualizar_referencia(cliente, referencia_id, /, **campos):
+    if "intencion" in campos:
+        campos["intencion"] = intencion_valida(campos["intencion"])
+    if "descripcion" in campos:
+        campos["descripcion"] = _texto(campos["descripcion"])
+    if "intencion_otro" in campos:
+        campos["intencion_otro"] = _texto(campos["intencion_otro"], 200) or None
+    if "analisis_estado" in campos and campos["analisis_estado"] not in ("pendiente", "listo", "error"):
+        raise ErrorDatos(f"Estado de análisis inválido: {campos['analisis_estado']}")
+    permitidas = _REFERENCIA_COLS + ("estado",)
+    if "descripcion" in campos:
+        campos["estado"] = _estado_referencia(campos["descripcion"])
+    with db.conectar() as con:
+        return _actualizar(con, db.referencia, referencia_id, cliente, permitidas, campos)
+
+
+def quitar_referencia(cliente, referencia_id):
+    with db.conectar() as con:
+        f = _fila(con, db.referencia, referencia_id, cliente)
+        if not f:
+            return False
+        c = con.execute(sa.select(db.campana.c.sprint_id).where(db.campana.c.id == f.campana_id)).first()
+        con.execute(db.referencia.delete().where(db.referencia.c.id == referencia_id))
+        if c:
+            _evento(con, cliente, c.sprint_id, f.campana_id, "referencia_quitada", "Referencia quitada",
+                    {"referencia_id": referencia_id, "titulo": f.titulo})
+    return True
+
+
+def _referencias(con, cliente, campana_id=None, referencia_id=None):
+    r, c = db.referencia, db.campana
+    q = (sa.select(r, c.c.sprint_id.label("sprint_id")).select_from(r.join(c, c.c.id == r.c.campana_id))
+         .where(r.c.cliente == cliente))
+    if campana_id is not None:
+        q = q.where(r.c.campana_id == campana_id)
+    if referencia_id is not None:
+        q = q.where(r.c.id == referencia_id)
+    return [_a_dict(f) for f in con.execute(q.order_by(r.c.orden, r.c.id))]
+
+
+def referencias(cliente, campana_id):
+    with db.conectar() as con:
+        return _referencias(con, cliente, campana_id=campana_id)
+
+
+def referencia(cliente, referencia_id):
+    with db.conectar() as con:
+        lista = _referencias(con, cliente, referencia_id=referencia_id)
+    return lista[0] if lista else None
+
+
+def reutilizar_referencia(cliente, referencia_id, campana_destino_id):
+    """Copia la referencia (con su análisis) a otra campaña, origen `reutilizada`."""
+    origen = referencia(cliente, referencia_id)
+    if not origen:
+        raise ErrorDatos("Esa referencia no existe.")
+    if origen["campana_id"] == campana_destino_id:
+        raise ErrorDatos("Esa referencia ya está en esta campaña.")
+    rid = agregar_referencia(cliente, campana_destino_id, origen["tipo"], origen["url"], frame_url=origen["frame_url"],
+                             ruta_local=origen["ruta_local"], origen="reutilizada", titulo=origen["titulo"],
+                             intencion=origen["intencion"], descripcion=origen["descripcion"])
+    if origen.get("analisis"):
+        actualizar_referencia(cliente, rid, analisis=origen["analisis"], analisis_estado=origen["analisis_estado"],
+                              intencion_otro=origen.get("intencion_otro"))
+    return rid

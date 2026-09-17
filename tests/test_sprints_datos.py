@@ -103,3 +103,50 @@ def test_sprints_lista_con_totales(base_temporal):
     assert len(lista) == 1 and lista[0]["piezas_planeadas"] == 35 and lista[0]["campanas_total"] == 1
     datos.archivar_sprint("acme", sid)
     assert datos.sprints("acme") == [] and len(datos.sprints("acme", incluir_archivados=True)) == 1
+
+
+def test_referencias_borrador_y_lista(base_temporal):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 2)
+    r1 = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", titulo="a.jpg",
+                                  intencion=["paleta", "composicion"])
+    r2 = datos.agregar_referencia("acme", cid, "video", "https://r2/b.mp4", frame_url="https://r2/b.frame.jpg",
+                                  origen="link", descripcion="El movimiento de cámara lento")
+    a, b = datos.referencia("acme", r1), datos.referencia("acme", r2)
+    assert a["estado"] == "borrador" and b["estado"] == "lista" and a["sprint_id"] == sid
+    assert a["analisis_estado"] == "pendiente" and a["intencion"] == ["paleta", "composicion"]
+    c = datos.campana("acme", cid)
+    assert c["referencias_total"] == 2 and c["referencias_listas"] == 1
+    datos.actualizar_referencia("acme", r1, descripcion="Quiero esta paleta", intencion=["paleta", "otro"],
+                                intencion_otro="textura del vidrio")
+    assert datos.referencia("acme", r1)["estado"] == "lista"
+    datos.actualizar_referencia("acme", r1, descripcion="   ")
+    assert datos.referencia("acme", r1)["estado"] == "borrador"
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_referencia("acme", cid, "audio", "https://x")
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_referencia("acme", cid, "imagen", "https://x", intencion=["magia"])
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_referencia("acme", cid, "imagen", "https://x", origen="marte")
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_referencia("acme", 999, "imagen", "https://x")
+    assert [r["id"] for r in datos.referencias("acme", cid)] == [r1, r2]
+    assert datos.quitar_referencia("acme", r2) and len(datos.referencias("acme", cid)) == 1
+    assert not datos.quitar_referencia("otro", r1)
+
+
+def test_reutilizar_referencia_copia_con_analisis(base_temporal):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 2)
+    tid2 = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
+    cid2 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid2, 1, 1)
+    r1 = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", descripcion="luz", intencion=["iluminacion"])
+    datos.actualizar_referencia("acme", r1, analisis={"resumen": "x"}, analisis_estado="listo")
+    r2 = datos.reutilizar_referencia("acme", r1, cid2)
+    b = datos.referencia("acme", r2)
+    assert b["campana_id"] == cid2 and b["origen"] == "reutilizada" and b["analisis"] == {"resumen": "x"}
+    assert b["estado"] == "lista" and b["analisis_estado"] == "listo"
+    with pytest.raises(datos.ErrorDatos):
+        datos.reutilizar_referencia("acme", r1, cid)      # ya está en esa campaña
