@@ -777,6 +777,14 @@ def lote(cliente, sid):
     return _volver(cliente, sid)
 
 
+def _volver_pieza(cliente, i):
+    """A la bandeja si el formulario vino de ahí (`volver=revision`); si no,
+    al sprint."""
+    if request.form.get("volver") == "revision":
+        return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
+    return _volver(cliente, i["sprint_id"])
+
+
 @bp.post("/ideas/<int:cp_id>/reintentar")
 def pieza_reintentar(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
@@ -786,7 +794,7 @@ def pieza_reintentar(cliente, cp_id):
         flash(str(e), "error")
         return _volver(cliente, i["sprint_id"])
     flash("Reintentando la pieza." if ok else "Esa pieza no está en error o ya se está generando.", "ok" if ok else "warn")
-    return _volver(cliente, i["sprint_id"])
+    return _volver_pieza(cliente, i)
 
 
 @bp.post("/ideas/<int:cp_id>/regenerar")
@@ -794,14 +802,13 @@ def pieza_regenerar(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
     try:
         produccion.regenerar(cliente, cp_id)
-    except datos.ErrorDatos as e:
+    except (datos.ErrorDatos, ValueError) as e:
+        # ValueError: `creative_flow.duplicar` con una sesión que no existe
+        # (cf_id colgado o placeholder) — se muestra como un ErrorDatos.
         flash(str(e), "error")
         return _volver(cliente, i["sprint_id"])
     flash("Regenerando la pieza (sesión nueva, misma idea).", "ok")
-    destino = request.form.get("volver")
-    if destino == "revision":
-        return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
-    return _volver(cliente, i["sprint_id"])
+    return _volver_pieza(cliente, i)
 
 
 # ----------------------------------------------------------- revisión ---

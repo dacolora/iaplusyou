@@ -601,6 +601,42 @@ def test_repetir_qa_limpia_el_marcador_y_encola_un_solo_qa(con_ideas, monkeypatc
     assert c.post("/cliente/acme/sprints/ideas/999/qa").status_code == 404
 
 
+def test_reintentar_desde_la_bandeja_vuelve_a_la_bandeja(con_ideas, monkeypatch, tmp_path):
+    """F6: el formulario Reintentar de la bandeja manda `volver=revision` y
+    `pieza_reintentar` lo honra igual que `pieza_regenerar`."""
+    import creative_flow
+    import flowplus_lanzar
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cl, cf, e, prioridad=5: True)
+    creative_flow.actualizar("acme", cfs[iv], estado="error", error="timeout")
+    html = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert html.count('name="volver" value="revision"') == 3      # 1 Reintentar + 2 Regenerar
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/reintentar", data={"volver": "revision"})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}/revision")
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/reintentar")
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}")
+
+
+def test_regenerar_una_sesion_desconocida_no_da_500(con_ideas, monkeypatch, tmp_path):
+    """E2: `creative_flow.duplicar` lanza ValueError si la sesión no existe
+    (cf_id colgado o placeholder); la ruta responde como un ErrorDatos."""
+    import creative_flow
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    def _rompe(cliente, cf_id, modelo=None, enfoque=None):
+        raise ValueError(f"No existe la sesión {cf_id} de {cliente}.")
+    monkeypatch.setattr(creative_flow, "duplicar", _rompe)
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", data={"volver": "revision"})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}")
+    assert datos.idea("acme", iv)["cf_id"] == cfs[iv]
+    with c.session_transaction() as s:
+        flashes = s.get("_flashes") or []
+    assert any("No existe la sesión" in m for _, m in flashes)
+
+
 def test_cerrar_reabrir_y_entrega(con_ideas, monkeypatch, tmp_path):
     from sprints import datos, revision
     sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)

@@ -94,7 +94,10 @@ def test_reintentar_y_regenerar(escenario, monkeypatch):
     cf = datos.idea("acme", escenario["iv"])["cf_id"]
     assert produccion.reintentar("acme", escenario["iv"]) is False       # no está en error
     creative_flow.actualizar("acme", cf, estado="error", error="timeout")
+    datos.actualizar_extra_sprint("acme", escenario["sid"], lambda e: {**e, "lote_en_curso": False})   # el lote ya "terminó"
     assert produccion.reintentar("acme", escenario["iv"]) is True and lanzados[-1] == cf
+    # E1: reintentar vuelve a encender el lote, como regenerar, para que la periódica avise al terminar
+    assert datos.sprint("acme", escenario["sid"])["extra"]["lote_en_curso"] is True
     creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2/v.mp4")
     datos.actualizar_idea("acme", escenario["iv"], qa={"score": 40}, revision="rechazada", revision_motivo="feo")
     nuevo = produccion.regenerar("acme", escenario["iv"])

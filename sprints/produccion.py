@@ -298,6 +298,9 @@ def reintentar(cliente, cp_id):
     if ok:
         datos.registrar_evento(cliente, i["sprint_id"], "pieza_reintentada", f"Reintento de «{i['titulo']}»",
                                {"cp_id": cp_id, "cf_id": i["cf_id"]}, campana_id=i["campana_id"])
+        # Como `regenerar`: el lote vuelve a estar en curso, así la periódica
+        # avisa «lote terminado» cuando la última pieza reintentada acaba.
+        datos.actualizar_extra_sprint(cliente, i["sprint_id"], lambda extra: {**extra, "lote_en_curso": True})
         estado.recalcular(cliente, i["sprint_id"])
     return ok
 
