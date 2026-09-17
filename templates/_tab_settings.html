@@ -1,133 +1,58 @@
-<h2>Nombre del proyecto</h2>
-<form method="post" action="{{ url_for('guardar_nombre_proyecto', cliente=cliente) }}" class="form-nueva-idea">
-  <input type="text" name="nombre" value="{{ nombre_proyecto }}" placeholder="Nombre visible del proyecto">
-  <p class="vacio" style="font-size:.76rem;padding-top:.3rem;">
-    Solo cambia lo que se ve. El identificador interno sigue siendo
-    <code>{{ cliente }}</code>: es la clave de las rutas de almacenamiento, del
-    historial ya generado y de los tokens de publicación, y renombrarlo los
-    rompería.
-  </p>
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar nombre</button>
-</form>
+{# Configuración = puesta a punto del proyecto. Orden: Puesta a punto (llaves
+   por servicio, `llaves` de dashboard._estado_llaves: solo estado, nunca el
+   valor) → Conectar tu tienda → Pixel → Correo de avisos → Nombre → Modelos →
+   Logos → Marca → informe (admin). Las reglas del decisor ya no están aquí:
+   viven en Experimentos › «Reglas del motor» (ruta cfg_reglas). #}
 
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-<h2>Modelos por defecto — Cambiar producto</h2>
+{# ---- Puesta a punto: una tarjeta por servicio externo ---- #}
+<h2 id="config-puesta-a-punto">Puesta a punto</h2>
 <p class="vacio" style="padding-top:0;">
-  Modelo que viene marcado en Crear › Cambiar producto cada vez que subes una
-  foto o un video. Ahí mismo puedes cambiarlo por generación.
+  Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar
+  anuncios, en el orden en que se usa. Cada tarjeta dice para qué sirve, cómo se
+  paga y cómo conseguir la llave. Las llaves las pone quien administra el
+  servidor en el archivo <code>.env</code>; aquí solo se ve si están o faltan,
+  nunca su valor.
 </p>
-<form method="post" action="{{ url_for('guardar_preferencias_swap', cliente=cliente) }}" class="form-nueva-idea">
-  <div class="fila-campos-idea">
-    <div>
-      <label class="campo-label">Modelo para FOTO</label>
-      <div class="checks-plataformas">
-        {% for id in proveedores_swap_imagen %}
-        <label><input type="radio" name="proveedor_foto" value="{{ id }}" {% if preferencias_swap.proveedor_foto == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
-        {% endfor %}
-      </div>
+<div class="llaves-tarjetas">
+  {% for l in llaves %}
+  <article class="llave-tarjeta llave-{{ l.estado }}" id="llave-{{ l.id }}">
+    <header class="llave-cabecera">
+      <h3>{{ l.nombre }}</h3>
+      {% if l.estado == "configurada" %}<span class="tag-estado tag-en-uso">configurada</span>
+      {% elif l.estado == "parcial" %}<span class="tag-estado tag-advertencia">parcial</span>
+      {% else %}<span class="tag-estado tag-advertencia">falta</span>{% endif %}
+    </header>
+    <p class="llave-para-que">{{ l.para_que }}</p>
+    <p class="vacio llave-costo" style="padding-top:0;"><strong>Cómo se paga:</strong> {{ l.costo }}</p>
+    <p class="vacio" style="padding-top:0;">
+      <strong>Variables en el <code>.env</code> del servidor:</strong>
+      {% for v in l.variables %}<code class="llave-var{% if v in l.faltan %} llave-var-falta{% endif %}">{{ v }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+    </p>
+    {% if l.estado == "parcial" %}
+    <p class="tag-error">Faltan: {% for v in l.faltan %}<code>{{ v }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+    {% endif %}
+    <p class="vacio llave-nota" style="padding-top:0;">{{ l.nota }}</p>
+    <p class="vacio" style="padding-top:0;font-size:.74rem;">Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí.</p>
+    <a class="llave-enlace" href="{{ l.url }}" target="_blank" rel="noopener">{{ l.url_texto }} ↗</a>
+    <details class="llave-pasos">
+      <summary>Cómo conseguirla</summary>
+      <ol>
+        {% for paso in l.pasos %}<li>{{ paso }}</li>{% endfor %}
+      </ol>
+    </details>
+    {% if l.id == "meta" %}
+    <div class="llave-meta-conexion">
+      {% include "_meta_conectar.html" %}
     </div>
-    <div>
-      <label class="campo-label">Modelo para VIDEO</label>
-      <div class="checks-plataformas">
-        {% for id in proveedores_swap_video %}
-        <label><input type="radio" name="proveedor_video" value="{{ id }}" {% if preferencias_swap.proveedor_video == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  <label style="display:block;margin-top:.8rem;font-size:.85rem;">
-    <input type="checkbox" name="mejorar_calidad" {% if preferencias_swap.mejorar_calidad %}checked{% endif %}>
-    Mejorar la calidad al final (+$0.04, solo aplica a fotos)
-  </label>
-  <p class="vacio" style="padding-top:.2rem;font-size:.76rem;">
-    Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la
-    imagen, así que no cambia la cara, la pose ni el fondo.
-  </p>
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos por defecto</button>
-</form>
-
-
-<h2 style="margin-top:2rem;">Modelos por defecto — FlowPlus</h2>
-<p class="vacio" style="padding-top:0;">
-  Qué modelo sale marcado al abrir FlowPlus. En cada generación se puede cambiar; esto solo fija el punto de partida. Todos corren por WaveSpeed.
-</p>
-<form method="post" action="{{ url_for('guardar_preferencias_flowplus', cliente=cliente) }}" class="form-nueva-idea">
-  <div class="fila-campos-idea">
-    <div>
-      <label class="campo-label">Modelo para VIDEO</label>
-      <div class="checks-plataformas">
-        {% for id, m in modelos_flowplus_video.items() %}
-        <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo) }}/s</span></label>
-        {% endfor %}
-      </div>
-    </div>
-    <div>
-      <label class="campo-label">Modelo para IMAGEN</label>
-      <div class="checks-plataformas">
-        {% for id, m in modelos_flowplus_imagen.items() %}
-        <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }}</span></label>
-        {% endfor %}
-      </div>
-    </div>
-  </div>
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos de FlowPlus</button>
-</form>
-
-{% include "_comparacion_modelos.html" %}
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-<h2 style="margin-top:2rem;">Logos oficiales</h2>
-<p class="vacio" style="padding-top:0;">
-  El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
-  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.
-  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto).
-</p>
-<form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
-  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
-</form>
-{% if logos %}
-<div class="catalogo-productos" style="margin-top:.8rem;">
-  {% for l in logos %}
-  <figure style="margin:0;text-align:center;">
-    <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:#fff;">
-    <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
-    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
-      <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
-    </form>
-  </figure>
+    {% endif %}
+  </article>
   {% endfor %}
 </div>
-{% endif %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
-<h2>Reglas por defecto de los experimentos</h2>
-<p class="vacio" style="padding-top:0;">
-  Con estas reglas el motor decide ganadores y perdedores en todos los
-  experimentos del proyecto. Cada experimento puede sobreescribir una regla en
-  su propio panel. Vacío = valor de fábrica (en gris). «Sin umbral» apaga esa comparación.
-</p>
-<form method="post" action="{{ url_for('cfg_reglas', cliente=cliente) }}" class="form-nueva-idea exp-reglas-form">
-  {% with reglas_valores=reglas_cliente, reglas_placeholder=reglas_defecto_exp, prefijo="cfg" %}{% include "_form_reglas.html" %}{% endwith %}
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar reglas por defecto</button>
-</form>
-
-<h2 style="margin-top:2rem;">Correo para avisos</h2>
-<p class="vacio" style="padding-top:0;">
-  A este correo llegan las propuestas que esperan aprobación, los ganadores y
-  los rechazos de Meta. Vacío = sin avisos por correo.
-</p>
-<form method="post" action="{{ url_for('cfg_correo', cliente=cliente) }}" class="form-nueva-idea">
-  <input type="email" name="correo" value="{{ correo_notificaciones }}" placeholder="dueño@tuproyecto.com">
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
-</form>
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-{# ---- Bloque 5: Tienda conectada ---- #}
-<h2 id="config-tienda">Tienda</h2>
+{# ---- Bloque 5: Conectar tu tienda ---- #}
+<h2 id="config-tienda">Conectar tu tienda</h2>
 <p class="vacio" style="padding-top:0;">
   Conecta tu tienda para traer el catálogo solo (cada 6 h) y, en Shopify y
   WooCommerce, leer los pedidos que llegan con una pieza en la URL — así un
@@ -138,6 +63,47 @@
 {% if not cifrado_ok %}
 <p class="tag-error">Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de tiendas. Ponla y reinicia para habilitar estos formularios.</p>
 {% endif %}
+
+<div class="tienda-pasos">
+  <details class="tienda-paso-a-paso" id="pasos-shopify">
+    <summary>Shopify, paso a paso</summary>
+    <ol>
+      <li>En el admin de Shopify ve a <em>Configuración › Apps y canales de venta › Desarrollar apps</em> y pulsa <em>Crear una app</em> (ponle un nombre, por ejemplo «creatv»).</li>
+      <li>En <em>Configurar alcances de la API de administrador</em> marca <code>read_products</code> y <code>read_orders</code>; nada más.</li>
+      <li>Pulsa <em>Instalar app</em> y confirma.</li>
+      <li>Copia el <em>Admin API access token</em> (empieza por <code>shpat_</code>): Shopify lo muestra una sola vez.</li>
+      <li>Abajo, en <em>Conectar tienda › Shopify</em>, pega el token junto con el dominio <code>xxx.myshopify.com</code>.</li>
+    </ol>
+    <p class="vacio" style="padding-top:0;"><strong>Qué trae:</strong> productos y pedidos con UTM — los experimentos se pueden decidir por ventas aunque no haya Pixel.</p>
+  </details>
+  <details class="tienda-paso-a-paso" id="pasos-woo">
+    <summary>WooCommerce, paso a paso</summary>
+    <ol>
+      <li>En WordPress ve a <em>WooCommerce › Ajustes › Avanzado › REST API</em> y pulsa <em>Añadir clave</em>.</li>
+      <li>Descripción «creatv», usuario un administrador, permisos <em>Lectura</em>. Pulsa <em>Generar clave de API</em>.</li>
+      <li>Copia la <em>Consumer key</em> (<code>ck_…</code>) y el <em>Consumer secret</em> (<code>cs_…</code>): también se muestran una sola vez.</li>
+      <li>Abajo, en <em>Conectar tienda › WooCommerce</em>, pégalos con la URL de la tienda, que tiene que ir por <code>https://</code>.</li>
+    </ol>
+    <p class="vacio" style="padding-top:0;"><strong>Qué trae:</strong> productos y pedidos con UTM — los experimentos se pueden decidir por ventas aunque no haya Pixel.</p>
+  </details>
+  <details class="tienda-paso-a-paso" id="pasos-meli">
+    <summary>MercadoLibre, paso a paso</summary>
+    {% if meli_configurado %}
+    <ol>
+      <li>Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>.</li>
+      <li>Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token.</li>
+      <li>Al volver, la tienda queda conectada y se sincroniza sola cada 6 h.</li>
+    </ol>
+    {% else %}
+    <p class="tag-error">Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>{{ url_for('meli_callback', _external=True) }}</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>.</p>
+    <ol>
+      <li>Cuando las variables estén, aquí aparece el botón <em>Conectar con MercadoLibre</em>.</li>
+      <li>Inicias sesión con la cuenta de la tienda y autorizas la app: no se pega ningún token.</li>
+    </ol>
+    {% endif %}
+    <p class="vacio" style="padding-top:0;"><strong>Qué trae:</strong> solo productos (publicaciones activas). MercadoLibre no deja instalar código en una publicación, así que sus experimentos se deciden por tráfico.</p>
+  </details>
+</div>
 
 {% if tiendas_cliente %}
 <div style="overflow-x:auto;">
@@ -268,7 +234,7 @@
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Comprobar Pixel</button></form>
 </div>
 {% else %}
-<p class="vacio"><span class="tag-estado">sin conexión</span> Conecta Meta en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;">Experimentos</a> para comprobar el Pixel.</p>
+<p class="vacio"><span class="tag-estado">sin conexión</span> Conecta Meta arriba, en la tarjeta <a href="#llave-meta">Meta (anuncios)</a> de Puesta a punto (o en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;">Experimentos</a>), para comprobar el Pixel.</p>
 {% endif %}
 <details class="pixel-ayuda">
   <summary>Cómo instalar el Pixel según tu plataforma</summary>
@@ -279,6 +245,126 @@
     <li><strong>MercadoLibre:</strong> no aplica — no se puede instalar código en una publicación. Los experimentos de MELI se deciden por tráfico.</li>
   </ul>
 </details>
+
+{# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor». #}
+<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;">Experimentos →</a></p>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
+<h2 id="config-correo">Correo de avisos</h2>
+<p class="vacio" style="padding-top:0;">
+  A este correo llegan las propuestas que esperan aprobación, los ganadores y
+  los rechazos de Meta. Vacío = sin avisos por correo.
+</p>
+<form method="post" action="{{ url_for('cfg_correo', cliente=cliente) }}" class="form-nueva-idea">
+  <input type="email" name="correo" value="{{ correo_notificaciones }}" placeholder="dueño@tuproyecto.com">
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+</form>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
+<h2>Nombre del proyecto</h2>
+<form method="post" action="{{ url_for('guardar_nombre_proyecto', cliente=cliente) }}" class="form-nueva-idea">
+  <input type="text" name="nombre" value="{{ nombre_proyecto }}" placeholder="Nombre visible del proyecto">
+  <p class="vacio" style="font-size:.76rem;padding-top:.3rem;">
+    Solo cambia lo que se ve. El identificador interno sigue siendo
+    <code>{{ cliente }}</code>: es la clave de las rutas de almacenamiento, del
+    historial ya generado y de los tokens de publicación, y renombrarlo los
+    rompería.
+  </p>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar nombre</button>
+</form>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
+<h2>Modelos por defecto — Cambiar producto</h2>
+<p class="vacio" style="padding-top:0;">
+  Modelo que viene marcado en Crear › Cambiar producto cada vez que subes una
+  foto o un video. Ahí mismo puedes cambiarlo por generación.
+</p>
+<form method="post" action="{{ url_for('guardar_preferencias_swap', cliente=cliente) }}" class="form-nueva-idea">
+  <div class="fila-campos-idea">
+    <div>
+      <label class="campo-label">Modelo para FOTO</label>
+      <div class="checks-plataformas">
+        {% for id in proveedores_swap_imagen %}
+        <label><input type="radio" name="proveedor_foto" value="{{ id }}" {% if preferencias_swap.proveedor_foto == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
+        {% endfor %}
+      </div>
+    </div>
+    <div>
+      <label class="campo-label">Modelo para VIDEO</label>
+      <div class="checks-plataformas">
+        {% for id in proveedores_swap_video %}
+        <label><input type="radio" name="proveedor_video" value="{{ id }}" {% if preferencias_swap.proveedor_video == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <label style="display:block;margin-top:.8rem;font-size:.85rem;">
+    <input type="checkbox" name="mejorar_calidad" {% if preferencias_swap.mejorar_calidad %}checked{% endif %}>
+    Mejorar la calidad al final (+$0.04, solo aplica a fotos)
+  </label>
+  <p class="vacio" style="padding-top:.2rem;font-size:.76rem;">
+    Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la
+    imagen, así que no cambia la cara, la pose ni el fondo.
+  </p>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos por defecto</button>
+</form>
+
+
+<h2 style="margin-top:2rem;">Modelos por defecto — FlowPlus</h2>
+<p class="vacio" style="padding-top:0;">
+  Qué modelo sale marcado al abrir FlowPlus. En cada generación se puede cambiar; esto solo fija el punto de partida. Todos corren por WaveSpeed.
+</p>
+<form method="post" action="{{ url_for('guardar_preferencias_flowplus', cliente=cliente) }}" class="form-nueva-idea">
+  <div class="fila-campos-idea">
+    <div>
+      <label class="campo-label">Modelo para VIDEO</label>
+      <div class="checks-plataformas">
+        {% for id, m in modelos_flowplus_video.items() %}
+        <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo) }}/s</span></label>
+        {% endfor %}
+      </div>
+    </div>
+    <div>
+      <label class="campo-label">Modelo para IMAGEN</label>
+      <div class="checks-plataformas">
+        {% for id, m in modelos_flowplus_imagen.items() %}
+        <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }}</span></label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos de FlowPlus</button>
+</form>
+
+{% include "_comparacion_modelos.html" %}
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
+<h2>Logos oficiales</h2>
+<p class="vacio" style="padding-top:0;">
+  El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
+  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.
+  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto).
+</p>
+<form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
+  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
+</form>
+{% if logos %}
+<div class="catalogo-productos" style="margin-top:.8rem;">
+  {% for l in logos %}
+  <figure style="margin:0;text-align:center;">
+    <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:#fff;">
+    <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
+    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
+      <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
+    </form>
+  </figure>
+  {% endfor %}
+</div>
+{% endif %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
@@ -381,3 +467,4 @@
   </p>
 </details>
 {% endif %}
+

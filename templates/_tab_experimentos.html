@@ -8,7 +8,9 @@
    con ?exp_nombre=&exp_destino= para prellenar «Nuevo experimento». Campañas
    ya no es pestaña: la conexión con Meta (_meta_conectar.html) vive acá y los
    anuncios sueltos que quedaron de esa pestaña se pintan al final
-   (_anuncios_sueltos.html, solo si `ads` no está vacío). #}
+   (_anuncios_sueltos.html, solo si `ads` no está vacío). Las reglas por
+   defecto del decisor (reglas_cliente, ruta cfg_reglas) también viven acá,
+   en «Reglas del motor», arriba de la lista. #}
 <div class="panel-cabecera">
   <h2>Experimentos</h2>
   <p class="vacio">Un experimento con una pieza y un país es un anuncio; con varias piezas y países, el motor decide cuál gana.</p>
@@ -55,6 +57,22 @@
   </form>
 </details>
 {% endif %}
+
+{# Reglas del motor (antes «Reglas por defecto» en Configuración): valen para
+   todos los experimentos del proyecto; cada experimento puede sobreescribir
+   una regla en su propio panel. Mismo formulario y misma ruta (cfg_reglas). #}
+<details class="swap-card exp-reglas-motor" id="reglas-motor">
+  <summary class="swap-card-resumen">Reglas del motor (valen para todos los experimentos)</summary>
+  <p class="vacio" style="padding-top:0;">
+    Con estas reglas el motor decide ganadores y perdedores en todos los
+    experimentos del proyecto. Cada experimento puede sobreescribir una regla en
+    su propio panel. Vacío = valor de fábrica (en gris). «Sin umbral» apaga esa comparación.
+  </p>
+  <form method="post" action="{{ url_for('cfg_reglas', cliente=cliente) }}" class="form-nueva-idea exp-reglas-form">
+    {% with reglas_valores=reglas_cliente, reglas_placeholder=reglas_defecto_exp, prefijo="cfg" %}{% include "_form_reglas.html" %}{% endwith %}
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar reglas del motor</button>
+  </form>
+</details>
 
 {% for e in experimentos %}
 <details class="swap-card experimento experimento-{{ e.estado }}" id="exp-{{ e.id }}" {% if loop.first %}open{% endif %}>

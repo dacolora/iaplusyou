@@ -1,7 +1,8 @@
 """Rutas del Bloque 4 en dashboard: modo, reglas, propuestas (aprobar /
-rechazar / aprobar todas), evaluar ahora, y en Configuración las reglas por
-defecto y el correo de avisos. Las rutas validan y delegan; acciones.ejecutar
-(que toca Meta) se reemplaza por un fake."""
+rechazar / aprobar todas), evaluar ahora, las reglas por defecto del motor
+(que viven en Experimentos › «Reglas del motor», ruta cfg_reglas) y en
+Configuración el correo de avisos. Las rutas validan y delegan;
+acciones.ejecutar (que toca Meta) se reemplaza por un fake."""
 import pytest
 
 from tests.test_experimentos_db import PAISES, _pieza
@@ -35,6 +36,14 @@ def _experimento(cliente="acme", modo="manual"):
 def _flashes(c):
     with c.session_transaction() as s:
         return [m for _cat, m in s.get("_flashes", [])]
+
+
+def _seccion(html, tab):
+    """HTML de una pestaña de cliente.html: desde `<section id="tab-<tab>"`
+    hasta la siguiente `<section id="tab-` (o el final)."""
+    ini = html.index(f'<section id="tab-{tab}"')
+    fin = html.find('<section id="tab-', ini + 1)
+    return html[ini:fin if fin != -1 else None]
 
 
 # ---- modo ----------------------------------------------------------------
@@ -96,9 +105,13 @@ def test_cfg_reglas_y_correo(app):
     import proyectos
     c = app["c"]
     r = c.post("/cliente/acme/config/reglas", data={"roas_min": "3", "n_reediciones": "2", "sin_ctr_min": "on"})
-    assert r.status_code == 302 and "settings" in r.headers["Location"]
+    # Las reglas del motor viven en Experimentos: el POST vuelve a esa pestaña.
+    assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
     assert proyectos.reglas_defecto("acme") == {"roas_min": 3.0, "n_reediciones": 2, "ctr_min": None}
-    c.post("/cliente/acme/config/correo", data={"correo": " dueño@acme.co "})
+    r = c.post("/cliente/acme/config/reglas", data={"roas_min": "abc"})
+    assert r.headers["Location"].endswith("#experimentos")    # también con error
+    r = c.post("/cliente/acme/config/correo", data={"correo": " dueño@acme.co "})
+    assert r.headers["Location"].endswith("#settings")        # el correo sigue en Configuración
     assert proyectos.correo_notificaciones("acme") == "dueño@acme.co"
     c.post("/cliente/acme/config/correo", data={"correo": "sin-arroba"})
     assert proyectos.correo_notificaciones("acme") == "dueño@acme.co"   # inválido: no cambia
@@ -229,8 +242,16 @@ def test_render_pestana_con_propuesta_y_veredicto(app, base_temporal):
     assert "ganador en CO" in html
     assert f'name="modo"' in html and "Evaluar ahora" in html
     assert 'value="1.7"' in html   # override propio de ctr_min
-    assert "Reglas por defecto de los experimentos" in html and "Correo para avisos" in html
     assert 'id="exp-%d"' % eid in html
+    # Reglas del motor: formulario (prefijo cfg → cfg_reglas) dentro de
+    # Experimentos, y ni rastro en Configuración, que solo enlaza.
+    exp, cfg = _seccion(html, "experimentos"), _seccion(html, "settings")
+    assert "Reglas del motor (valen para todos los experimentos)" in exp
+    assert "/cliente/acme/config/reglas" in exp and 'id="cfg-ctr_min"' in exp
+    assert "/cliente/acme/config/reglas" not in cfg and 'id="cfg-ctr_min"' not in cfg
+    assert "Reglas por defecto de los experimentos" not in cfg
+    assert "Las reglas del decisor están en" in cfg and 'href="#experimentos"' in cfg
+    assert "Correo de avisos" in cfg and "/cliente/acme/config/correo" in cfg
 
 
 def test_tab_lista_las_piezas_de_una_propuesta_activar(app, base_temporal):

@@ -978,10 +978,174 @@ def ver_cliente(cliente):
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
+        llaves=_estado_llaves(url_for("meli_callback", _external=True)),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=_contexto_tablero(cliente),
         **sprints_rutas.contexto(cliente),
     )
+
+
+# Configuración › Puesta a punto: una tarjeta por servicio externo. Cada
+# entrada dice para qué sirve, cómo se paga, dónde se consigue y qué variables
+# van en el .env del servidor. El estado se calcula SOLO con
+# bool(os.environ.get(var)) — el valor de una llave nunca sale de aquí ni
+# llega a la plantilla. `{callback_meli}` en un paso se reemplaza por la URL
+# real del callback cuando hay request (ver _estado_llaves).
+SERVICIOS_LLAVES = (
+    {
+        "id": "anthropic",
+        "nombre": "Anthropic (guiones y prompts)",
+        "para_que": "Escribe los 5 prompts por idea y los guiones de las finales.",
+        "costo": "Se paga por uso: centavos por guion.",
+        "url": "https://console.anthropic.com/settings/keys",
+        "url_texto": "console.anthropic.com › API keys",
+        "variables": ["ANTHROPIC_API_KEY"],
+        "nota": "Sin ella no hay prompts ni guiones.",
+        "pasos": [
+            "Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa).",
+            "En «Billing» carga saldo o pon una tarjeta: sin saldo la llave existe pero no responde.",
+            "Ve a «API keys» › «Create key», ponle un nombre (por ejemplo «creatv») y cópiala: solo se muestra una vez.",
+            "Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios.",
+        ],
+    },
+    {
+        "id": "fal",
+        "nombre": "fal.ai (voz y música)",
+        "para_que": "Voz en off (ElevenLabs), subtítulos por palabra (Whisper) y música (Stable Audio) de las finales.",
+        "costo": "Se paga por uso: alrededor de $0.05 por final.",
+        "url": "https://fal.ai/dashboard/keys",
+        "url_texto": "fal.ai › Dashboard › Keys",
+        "variables": ["FAL_KEY"],
+        "nota": "Sin ella las finales salen sin voz ni música.",
+        "pasos": [
+            "Regístrate en fal.ai (con Google o GitHub; no pide verificación de negocio).",
+            "En «Billing» agrega una tarjeta o saldo prepago.",
+            "Ve a «Keys» › «Add key», elige alcance «API» y copia la llave.",
+            "Pégala como FAL_KEY en el .env del servidor y reinicia.",
+        ],
+    },
+    {
+        "id": "higgsfield",
+        "nombre": "Higgsfield (video e imagen)",
+        "para_que": "Genera la imagen candidata y el video de cada pieza.",
+        "costo": "Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes.",
+        "url": "https://higgsfield.ai/",
+        "url_texto": "higgsfield.ai › API",
+        "variables": ["HF_API_KEY_ID", "HF_API_KEY_SECRET"],
+        "nota": "Sin ella no se generan piezas.",
+        "pasos": [
+            "Inicia sesión en higgsfield.ai y compra un paquete de créditos en «Billing».",
+            "Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva.",
+            "Copia los dos valores: el Key ID y el Key Secret (el secreto solo se muestra una vez).",
+            "Pégalos como HF_API_KEY_ID y HF_API_KEY_SECRET en el .env del servidor y reinicia.",
+        ],
+    },
+    {
+        "id": "r2",
+        "nombre": "Cloudflare R2 (almacenamiento)",
+        "para_que": "Guarda cada imagen y video generado y les da una URL pública permanente.",
+        "costo": "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga.",
+        "url": "https://dash.cloudflare.com/?to=/:account/r2",
+        "url_texto": "dash.cloudflare.com › R2 › Manage API tokens",
+        "variables": ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL"],
+        "nota": "Sin ella los videos no tienen URL pública y Meta no puede usarlos.",
+        "pasos": [
+            "En dash.cloudflare.com entra a «R2» y crea un bucket (ese nombre es R2_BUCKET_NAME).",
+            "En «Settings» del bucket activa «Public access» (r2.dev o un dominio propio): esa URL es R2_PUBLIC_BASE_URL.",
+            "Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write».",
+            "Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2.",
+            "Pega las cinco variables en el .env del servidor y reinicia.",
+        ],
+    },
+    {
+        "id": "meta",
+        "nombre": "Meta (anuncios)",
+        "para_que": "Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas.",
+        "costo": "La pauta se cobra en tu cuenta publicitaria; la API no cuesta.",
+        "url": "https://business.facebook.com/settings/payment-methods",
+        "url_texto": "business.facebook.com › Facturación",
+        "variables": ["META_APP_ID", "META_APP_SECRET"],
+        "nota": "La app la pone el administrador; el proyecto se conecta con el botón «Conectar con Meta» de abajo.",
+        "pasos": [
+            "Administrador: en developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; copia el App ID y el App Secret al .env.",
+            "En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio.",
+            "Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página.",
+            "Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app.",
+        ],
+    },
+    {
+        "id": "smtp",
+        "nombre": "Correo de avisos (opcional)",
+        "para_que": "Manda un correo cuando hay propuestas pendientes, un ganador, un rechazo de Meta o un lanzamiento fallido.",
+        "costo": "Depende del proveedor de correo; con una cuenta normal no cuesta.",
+        "url": "https://support.google.com/accounts/answer/185833",
+        "url_texto": "Google › Contraseñas de aplicación",
+        "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"],
+        "nota": "Sin esto los avisos solo quedan en la bitácora.",
+        "opcional": True,
+        "pasos": [
+            "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio).",
+            "Si es Gmail, activa la verificación en dos pasos y crea una «Contraseña de aplicación»: esa es SMTP_PASS.",
+            "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS).",
+            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor y reinicia.",
+            "Abajo, en «Correo de avisos», escribe a qué dirección deben llegar los avisos de este proyecto.",
+        ],
+    },
+    {
+        "id": "meli",
+        "nombre": "MercadoLibre (opcional)",
+        "para_que": "Trae las publicaciones activas de una tienda de MercadoLibre al catálogo.",
+        "costo": "Gratis: solo lectura de tus publicaciones.",
+        "url": "https://developers.mercadolibre.com/",
+        "url_texto": "developers.mercadolibre.com",
+        "variables": ["MELI_APP_ID", "MELI_SECRET"],
+        "nota": "Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda.",
+        "opcional": True,
+        "pasos": [
+            "En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación».",
+            "Marca los permisos de lectura y «offline_access» (para renovar el token solo).",
+            "En «URI de redirect» pon exactamente {callback_meli}.",
+            "Copia el App ID y la Secret Key y pégalos como MELI_APP_ID y MELI_SECRET en el .env del servidor; reinicia.",
+            "Luego, en «Conectar tu tienda» › MercadoLibre, pulsa «Conectar con MercadoLibre».",
+        ],
+    },
+)
+
+
+def _estado_llaves(callback_meli=None):
+    """Tarjetas de Configuración › Puesta a punto. Devuelve una lista de dicts
+    {id, nombre, para_que, costo, estado, url, url_texto, variables, faltan,
+    nota, pasos, opcional} donde `estado` es «configurada» (todas las
+    variables presentes), «falta» (ninguna) o «parcial» (algunas). Solo mira
+    bool(os.environ.get(var)): ningún valor sale de aquí. `callback_meli` es
+    la URL real del callback de MercadoLibre para el paso de la app (fuera de
+    un request se deja el texto genérico)."""
+    callback = callback_meli or "<url del sitio>/meli/callback"
+    tarjetas = []
+    for s in SERVICIOS_LLAVES:
+        presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
+        faltan = [v for v in s["variables"] if v not in presentes]
+        if not faltan:
+            estado = "configurada"
+        elif not presentes:
+            estado = "falta"
+        else:
+            estado = "parcial"
+        tarjetas.append({
+            "id": s["id"],
+            "nombre": s["nombre"],
+            "para_que": s["para_que"],
+            "costo": s["costo"],
+            "estado": estado,
+            "url": s["url"],
+            "url_texto": s["url_texto"],
+            "variables": list(s["variables"]),
+            "faltan": faltan,
+            "nota": s["nota"],
+            "opcional": bool(s.get("opcional")),
+            "pasos": [p.replace("{callback_meli}", callback) for p in s["pasos"]],
+        })
+    return tarjetas
 
 
 PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
@@ -2818,7 +2982,8 @@ def prop_aprobar_todas(cliente, eid):
 
 @app.route("/cliente/<cliente>/config/reglas", methods=["POST"])
 def cfg_reglas(cliente):
-    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+    # Las reglas del motor viven en Experimentos, no en Configuración.
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     reglas, errores = decisor.reglas_desde_formulario(request.form)
     if errores:
         _flash_reglas_invalidas(errores)
