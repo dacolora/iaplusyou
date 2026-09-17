@@ -52,3 +52,6 @@ data/
 
 # Archivos CSV/XLSX subidos para importar (precios del cliente); la tarea los borra al terminar
 clientes/*/importaciones/
+
+# Referencias subidas a los sprints (imágenes/videos + fotogramas); viven en R2, la copia local es caché
+clientes/*/sprints/
