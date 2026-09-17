@@ -51,6 +51,18 @@ def atribucion_sugerida(cliente):
     return "ninguna"
 
 
+def objetivo_sugerido(cliente, atribucion=None):
+    """Objetivo de Meta para un experimento nuevo (Bloque 6): OUTCOME_SALES
+    (optimiza por compras del Pixel) solo cuando la atribución sugerida es
+    `pixel`; con tienda o sin nada, OUTCOME_TRAFFIC. El objetivo se fija al
+    crear (Meta no deja cambiarlo después), por eso es sugerencia, no regla.
+    `atribucion` permite pasar la sugerida ya calculada (ver_cliente la
+    consulta una sola vez) en vez de volver a mirar Pixel y tiendas."""
+    if atribucion is None:
+        atribucion = atribucion_sugerida(cliente)
+    return "OUTCOME_SALES" if atribucion == "pixel" else "OUTCOME_TRAFFIC"
+
+
 def crear(cliente, nombre, paises, objetivo_meta, dias, tope_total, destino_url, moneda,
           edad_min=18, edad_max=65, modo="manual", atribucion=None):
     """`atribucion` None → la sugerida para el proyecto (atribucion_sugerida);

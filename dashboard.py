@@ -888,6 +888,8 @@ def ver_cliente(cliente):
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
     productos_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
+    # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
+    atribucion_sug = experimentos.atribucion_sugerida(cliente)
 
     return render_template(
         "cliente.html",
@@ -936,6 +938,8 @@ def ver_cliente(cliente):
         elegibles_exp=experimentos.elegibles(cliente),
         trabajos_exp=trabajos_exp,
         objetivos_exp=meta_campaign.OBJETIVOS_VALIDOS_FASE1,
+        objetivo_exp_sugerido=experimentos.objetivo_sugerido(cliente, atribucion_sug),
+        nombres_objetivo_exp=NOMBRES_OBJETIVO_EXP,
         minimo_diario_exp=PRESUPUESTO_MINIMO_DIARIO.get(moneda_exp, 1),
         moneda_exp=moneda_exp,
         propuestas_exp=propuestas_exp,
@@ -953,7 +957,7 @@ def ver_cliente(cliente):
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
         estado_pixel=estado_pixel,
         meta_conectado=meta_conectado,
-        atribucion_sugerida=experimentos.atribucion_sugerida(cliente),
+        atribucion_sugerida=atribucion_sug,
         atribuciones_exp=experimentos.ATRIBUCIONES,
         pedidos_por_exp=tiendas.pedidos_por_experimento(cliente),
         cifrado_ok=cifrado.disponible(),
@@ -1552,6 +1556,10 @@ def ver_swap(cliente):
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
 PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
+# Rótulos en español del objetivo de Meta en «Nuevo experimento» (Bloque 6).
+# El valor sigue siendo el enum de Meta; solo cambia lo que se lee.
+NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": "Compras (requiere Pixel)", "OUTCOME_TRAFFIC": "Tráfico (clics al enlace)",
+                        "OUTCOME_ENGAGEMENT": "Interacción", "OUTCOME_LEADS": "Clientes potenciales"}
 
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
@@ -2234,6 +2242,14 @@ def exp_crear(cliente):
     atribucion = request.form.get("atribucion") or None
     if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
         flash("La atribución tiene que ser pixel, tienda o ninguna.", "error")
+        return volver
+    # Bloque 6: optimizar por compras exige que Meta vea las compras, o sea
+    # el Pixel disparando y atribución pixel. El objetivo no se puede cambiar
+    # después de lanzar (Meta no lo permite), así que se corta acá y no en
+    # el lanzador, donde ya sería un experimento armado que no puede salir.
+    if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
+        flash("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
+              "Configuración, o elige el objetivo de tráfico.", "error")
         return volver
     eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max,
                              modo=modo, atribucion=atribucion)

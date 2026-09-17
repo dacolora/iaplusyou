@@ -2,7 +2,8 @@
    (Task 4): experimentos, experimentos_armando, elegibles_exp, trabajos_exp
    ({eid: {"job_id"}}), objetivos_exp, minimo_diario_exp, moneda_exp,
    paises_fe, capacidades_meta; (Bloque 5) atribucion_sugerida, atribuciones_exp,
-   pedidos_por_exp ({eid: pedidos atribuidos}). Nada se lanza ni activa sin un
+   pedidos_por_exp ({eid: pedidos atribuidos}); (Bloque 6) objetivo_exp_sugerido,
+   nombres_objetivo_exp. Nada se lanza ni activa sin un
    clic explícito con confirm() cuando gasta. La pestaña Productos manda acá
    con ?exp_nombre=&exp_destino= para prellenar «Nuevo experimento». #}
 <div class="panel-cabecera">
@@ -18,7 +19,7 @@
   <form method="post" action="{{ url_for('exp_crear', cliente=cliente) }}" class="form-experimento">
     <label>Nombre <input name="nombre" required maxlength="200"></label>
     <label>Objetivo
-      <select name="objetivo">{% for o in objetivos_exp %}<option value="{{ o }}">{{ o }}</option>{% endfor %}</select>
+      <select name="objetivo">{% for o in objetivos_exp %}<option value="{{ o }}" {% if o == objetivo_exp_sugerido %}selected{% endif %}>{{ nombres_objetivo_exp.get(o, o) }}{% if o == objetivo_exp_sugerido %} (sugerido){% endif %}</option>{% endfor %}</select>
     </label>
     <fieldset class="exp-paises">
       <legend>Países y presupuesto diario en {{ moneda_exp }} — la moneda de tu cuenta de Meta, sin importar el país (mínimo {{ minimo_diario_exp }})</legend>
@@ -42,6 +43,7 @@
       </label>
     </div>
     <p class="vacio exp-ayuda-modo">Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar (no gastan) se hacen solos; escalar, derivar, rescatar y activar esperan tu aprobación. Auto: todo se ejecuta solo, salvo cuando el tope está alcanzado.</p>
+    <p class="vacio exp-ayuda-modo">Objetivo — qué optimiza Meta: <strong>Compras</strong> (el conjunto optimiza por compras reportadas por el Pixel; requiere el Pixel activo y atribución pixel) o <strong>Tráfico</strong> (clics al enlace; sirve con cualquier atribución). No se puede cambiar después de lanzar: el sugerido sale del Pixel comprobado en Configuración.</p>
     <p class="vacio exp-ayuda-modo">Atribución — con qué se miden las ventas: <strong>pixel</strong> (Meta reporta compras y ROAS; requiere el Pixel disparando), <strong>tienda</strong> (pedidos de tu Shopify/WooCommerce que llegan con la pieza en la URL) o <strong>ninguna</strong> (solo tráfico). La sugerida sale de lo que tienes conectado en Configuración: pulsa «Comprobar Pixel» allí para que la sugerencia lo tenga en cuenta.</p>
     <button type="submit" class="btn-generar btn-sm">Crear experimento</button>
   </form>

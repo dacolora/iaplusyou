@@ -23,8 +23,9 @@ class MetaFalsa:
         campaign = types.SimpleNamespace(crear_campaign=lambda nombre, objetivo, dry_run=False, spend_cap_centavos=None:
                                          self._id("campaign", nombre=nombre, spend_cap=spend_cap_centavos),
                                          actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
-        adset = types.SimpleNamespace(crear_adset=lambda nombre, cid, obj, targeting, centavos, dias, dry_run=False:
-                                      self._id("adset", nombre=nombre, targeting=targeting, centavos=centavos, dias=dias),
+        adset = types.SimpleNamespace(crear_adset=lambda nombre, cid, obj, targeting, centavos, dias, dry_run=False, promoted_object=None:
+                                      self._id("adset", nombre=nombre, objetivo=obj, targeting=targeting, centavos=centavos, dias=dias,
+                                               promoted_object=promoted_object),
                                       actualizar_presupuesto=lambda oid, c, dry_run=False: self._id("presupuesto", oid=oid, centavos=c),
                                       actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: "vid_1",
