@@ -28,7 +28,7 @@ import notificaciones
 import proyectos
 import referencias_link
 import trabajos
-from sprints import analisis, archivos, datos, estado, ideas, qa, sugerencias
+from sprints import analisis, archivos, datos, entrega, estado, ideas, qa, sugerencias
 from tareas import al_interrumpir, registrar
 
 
@@ -224,3 +224,20 @@ def ejecutar_qa_pendientes(tarea):
                               "Entra a la bandeja de revisión para aprobar o rechazar.")
         terminados += 1
     return f"{n} pieza(s) a QA; {terminados} lote(s) terminado(s)."
+
+
+def job_id_zip(cliente, sprint_id):
+    return f"{cliente}__sprint{sprint_id}__zip"
+
+
+def encolar_zip(cliente, sprint_id):
+    return trabajos.encolar(job_id_zip(cliente, sprint_id), "sprint_empaquetar",
+                            {"cliente": cliente, "sprint_id": sprint_id}, cliente=cliente,
+                            duracion_estimada=120, max_intentos=2)
+
+
+@registrar("sprint_empaquetar")
+def ejecutar_empaquetar(tarea):
+    p = tarea["payload"]
+    info = entrega.empaquetar(p["cliente"], int(p["sprint_id"]))
+    return f"Zip listo con {info['n']} pieza(s)."

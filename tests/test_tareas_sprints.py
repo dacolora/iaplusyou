@@ -196,3 +196,16 @@ def test_qa_pendientes_no_avisa_con_idea_reservando(base_temporal, monkeypatch):
 def test_periodica_qa_registrada():
     import worker
     assert ("sprint_qa_pendientes", 300) in worker.PERIODICAS
+
+
+def test_empaquetar_tarea(base_temporal, monkeypatch):
+    import tareas
+    import trabajos
+    from sprints import entrega
+    from tareas import sprints as ts
+    monkeypatch.setattr(entrega, "empaquetar", lambda c, sid, descargar=None: {"url": "https://r2/z.zip", "n": 3, "creado_en": "x"})
+    tareas.cargar_todas()
+    assert "3 pieza" in tareas.REGISTRO["sprint_empaquetar"]({"payload": {"cliente": "acme", "sprint_id": 1}})
+    encolados = []
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload, kw)) or True)
+    assert ts.encolar_zip("acme", 4) is True and encolados[0][0] == "acme__sprint4__zip" and encolados[0][3]["max_intentos"] == 2
