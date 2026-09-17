@@ -21,6 +21,20 @@ from providers import flowplus_modelos
 from storage import r2_uploader
 from tareas import al_interrumpir, registrar
 
+_ESTADO_SONIDO = {True: "ok", False: "ausente", None: "desconocido"}
+
+
+def _tiene_pista_de_audio(path):
+    """True/False según ffprobe encuentre una pista de audio en el archivo;
+    None si ffprobe no está o falla. Solo informa (bitácora y `sonido` de la
+    sesión): nunca bloquea ni repite una generación."""
+    try:
+        from final_edition import cortes
+        info = cortes.ffprobe_json(path)
+    except Exception:
+        return None
+    return any((st or {}).get("codec_type") == "audio" for st in (info.get("streams") or []))
+
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ETAPA_MODELO = "Generando con el modelo"
@@ -205,6 +219,11 @@ def ejecutar_video(tarea):
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
         raise
 
+    # Sonido de la escena (spec estudio S1): se pidió el audio nativo; ffprobe
+    # dice si el proveedor lo entregó. Queda anotado para la tarjeta y la bitácora.
+    estado_sonido = _ESTADO_SONIDO[_tiene_pista_de_audio(out_path)]
+    bitacora.registrar(cliente, cf_id, "sonido", estado_sonido, f"{modelo}: pista de audio {estado_sonido}")
+
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
     try:
         video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{cf_id}.mp4")
@@ -214,6 +233,7 @@ def ejecutar_video(tarea):
     creative_flow.actualizar(
         cliente, cf_id, estado="video_listo", video_url=video_url, video_local=out_path,
         credits=costo.get("credits"), usd=costo.get("usd"),
+        sonido={"proveedor": modelo, "estado": estado_sonido},
     )
 
     estado = estado_mod.cargar(cliente)

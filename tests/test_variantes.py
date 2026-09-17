@@ -106,10 +106,11 @@ def test_duplicar_conserva_o_rearma_prompt(base_temporal):
     n2 = cf.duplicar("acme", cf_id, enfoque="producto")
     e = cf.cargar("acme")[n2]
     assert e["prompt_relleno"] == prompt_orig
-    # Otro enfoque: se rearma igual que una sesión nueva de Crear.
+    # Otro enfoque: se rearma igual que una sesión nueva de Crear (un video
+    # pide el sonido de la escena).
     n3 = cf.duplicar("acme", cf_id, enfoque="unboxing")
     e = cf.cargar("acme")[n3]
-    esperado = flowplus_prompt.armar("sandalia sobre arena", refs, con_persona=True, enfoque="unboxing")
+    esperado = flowplus_prompt.armar("sandalia sobre arena", refs, con_persona=True, enfoque="unboxing", con_sonido=True)
     assert e["prompt_relleno"] == esperado and e["prompt_relleno"] != prompt_orig
     assert e["enfoque_nombre"] == "Unboxing" and e["con_persona"] is True and e["enfoque"] == "unboxing"
     assert e["referencias"] == refs and e["accion_central"] == "sandalia sobre arena"

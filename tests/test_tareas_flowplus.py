@@ -137,3 +137,54 @@ def test_lanzar_video_cf_encola(base_temporal, monkeypatch):
     assert fila["max_intentos"] == 1
     # segunda vez con la misma sesión: ya hay una viva, no encola otra
     assert dashboard._lanzar_video_cf("acme", cid, entry) is False
+
+
+def test_ejecutar_video_anota_si_el_video_trae_sonido(base_temporal, monkeypatch, tmp_path):
+    """Después de bajar el video, ffprobe dice si trae pista de audio: queda
+    en la bitácora y en la sesión (`sonido`), sin bloquear nunca la generación."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], ["Rose"], [], "camina", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="kling_o3_pro", prompt_relleno="P", aspect_ratio="9:16")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.estado_mod, "cargar", lambda c: {})
+    monkeypatch.setattr(fp.estado_mod, "guardar", lambda c, d: None)
+    anotado = []
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda c, i, paso, res, det="": anotado.append((paso, res, det)))
+
+    monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: False)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    assert e["sonido"] == {"proveedor": "kling_o3_pro", "estado": "ausente"}
+    assert ("sonido", "ausente") in [(p, r) for p, r, _ in anotado]
+    # el estimado que se guarda ya incluye el recargo de Kling por el sonido (5 s × 0,14)
+    assert e["usd"] == 0.7
+
+    cf.actualizar("acme", cid, estado="video_generando")
+    monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: True)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    assert cf.cargar("acme")[cid]["sonido"] == {"proveedor": "kling_o3_pro", "estado": "ok"}
+
+    # ffprobe ausente o roto: no se sabe, pero el video queda listo igual
+    cf.actualizar("acme", cid, estado="video_generando")
+    monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: None)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "video_listo" and e["sonido"] == {"proveedor": "kling_o3_pro", "estado": "desconocido"}
+
+
+def test_tiene_pista_de_audio_lee_los_streams_de_ffprobe(monkeypatch):
+    import tareas.flowplus as fp
+    from final_edition import cortes
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video"}, {"codec_type": "audio"}]})
+    assert fp._tiene_pista_de_audio("/x.mp4") is True
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video"}]})
+    assert fp._tiene_pista_de_audio("/x.mp4") is False
+
+    def _boom(p):
+        raise FileNotFoundError("ffprobe")
+    monkeypatch.setattr(cortes, "ffprobe_json", _boom)
+    assert fp._tiene_pista_de_audio("/x.mp4") is None
