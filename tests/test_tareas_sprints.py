@@ -91,3 +91,21 @@ def test_referencia_desde_link_descarga_registra_y_encola(base_temporal, monkeyp
     nueva = refs[-1]
     assert nueva["origen"] == "link" and nueva["titulo"] == "Baile" and nueva["frame_url"] == "https://r2/l.frame.jpg"
     assert encolados == [("acme", nueva["id"])] and "link" in msg
+
+
+def test_proponer_ideas_tarea_y_encolar(base_temporal, monkeypatch):
+    import tareas
+    import trabajos
+    from sprints import datos, ideas
+    from tareas import sprints as ts
+    sid, cid, rid = _referencia(datos)
+    monkeypatch.setattr(ideas, "proponer", lambda c, cid_, n_videos=None, n_imagenes=None, reemplaza=None: [1, 2])
+    tareas.cargar_todas()
+    msg = tareas.REGISTRO["sprint_proponer_ideas"]({"payload": {"cliente": "acme", "campana_id": cid, "n_videos": 2, "n_imagenes": 0}})
+    assert "2 ideas" in msg
+    encolados = []
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload, kw)) or True)
+    assert ts.encolar_ideas("acme", cid, n_videos=3, reemplaza=7) is True
+    job_id, tipo, payload, kw = encolados[0]
+    assert job_id == f"acme__campana{cid}__ideas" and tipo == "sprint_proponer_ideas"
+    assert payload == {"cliente": "acme", "campana_id": cid, "n_videos": 3, "n_imagenes": None, "reemplaza": 7} and kw["max_intentos"] == 2

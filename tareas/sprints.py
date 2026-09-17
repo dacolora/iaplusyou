@@ -1,12 +1,14 @@
 """
-Tareas del worker para Sprints (Parte 1): analizar una referencia con Claude,
-sugerir personas y traer una referencia desde un link. Las tres son baratas
-(centavos, sin generación de video), por eso llevan reintentos.
+Tareas del worker para Sprints: analizar una referencia con Claude, sugerir
+personas, traer una referencia desde un link (Parte 1, baratas — centavos, sin
+generación de video, por eso llevan reintentos) y proponer ideas por campaña
+con el prompt maestro (Parte 2, también solo texto).
 
 Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
   sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"   (max_intentos=3)
   sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"      (max_intentos=2)
   sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"      (max_intentos=2)
+  sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"     (max_intentos=2)
 """
 import os
 from datetime import datetime
@@ -14,7 +16,7 @@ from datetime import datetime
 import proyectos
 import referencias_link
 import trabajos
-from sprints import analisis, archivos, datos, sugerencias
+from sprints import analisis, archivos, datos, estado, ideas, sugerencias
 from tareas import al_interrumpir, registrar
 
 
@@ -98,3 +100,25 @@ def ejecutar_link(tarea):
                                    ruta_local=info["ruta_local"], origen="link", titulo=info["titulo"])
     encolar_analisis(cliente, rid)
     return "Referencia agregada desde el link."
+
+
+def job_id_ideas(cliente, campana_id):
+    return f"{cliente}__campana{campana_id}__ideas"
+
+
+def encolar_ideas(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None):
+    return trabajos.encolar(job_id_ideas(cliente, campana_id), "sprint_proponer_ideas",
+                            {"cliente": cliente, "campana_id": campana_id, "n_videos": n_videos, "n_imagenes": n_imagenes,
+                             "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40, max_intentos=2)
+
+
+@registrar("sprint_proponer_ideas")
+def ejecutar_proponer_ideas(tarea):
+    p = tarea["payload"]
+    cliente, campana_id = p["cliente"], int(p["campana_id"])
+    creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
+                             reemplaza=p.get("reemplaza"))
+    c = datos.campana(cliente, campana_id)
+    if c:
+        estado.recalcular(cliente, c["sprint_id"])
+    return f"{len(creadas)} ideas propuestas — revísalas y aprueba las que sirvan."
