@@ -194,7 +194,8 @@ def tienda_sync_pedidos(tarea):
     _guardar_credenciales(cliente, tienda, con)
 
     nuevos = tiendas.guardar_pedidos(cliente, tid, pedidos)
-    # Liga los pedidos con utm_content=<pieza.id> a su experimento_pieza; los
+    # Liga los pedidos con utm_content=<experimento_pieza.id> (o pieza.id en
+    # links viejos) a su experimento_pieza; los
     # que no resuelven quedan en cola para la próxima sync.
     resueltos = atribucion.resolver_pendientes(cliente)
     # `inicio` (no "ahora"): un pedido creado mientras corría la sync entra en

@@ -222,8 +222,9 @@ def test_sync_tienda_inexistente(entorno):
 
 
 def test_sync_pedidos_guarda_y_resuelve_atribucion(entorno):
-    """La sync liga los pedidos con utm_content=<pieza.id> (atribucion real,
-    sin stub) y deja sin resolver los que traen un utm que no es una pieza."""
+    """La sync liga los pedidos con utm_content=<experimento_pieza.id>
+    (atribucion real, sin stub) y deja sin resolver los que traen un utm
+    que no es un id."""
     import experimentos as ex
     import tareas
     import tiendas
@@ -233,14 +234,14 @@ def test_sync_pedidos_guarda_y_resuelve_atribucion(entorno):
     eid = ex.crear("acme", "Cojín", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP", atribucion="tienda")
     ep_id = ex.agregar_pieza("acme", eid, pieza, "CO")
     Falso.pedidos = [normalizar_pedido({"fuente_id": "o1", "fecha": "2026-09-15T10:00:00Z", "total": 50,
-                                        "moneda": "USD", "utm_content": str(pieza)}),
+                                        "moneda": "USD", "utm_content": str(ep_id)}),
                      normalizar_pedido({"fuente_id": "o2", "fecha": "2026-09-15T11:00:00Z", "total": 5,
                                         "moneda": "USD", "utm_content": "ep_1"})]
     msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
     assert "2 pedido(s)" in msg and "2 nuevo(s)" in msg and "1 atribuido(s)" in msg
     pendientes = tiendas.pedidos_sin_resolver("acme")
     assert [p["fuente_id"] for p in pendientes] == ["o2"]
-    assert tiendas.ventas_por_pieza("acme", ep_id, "2026-01-01T00:00:00") == {"compras": 1, "ingresos": 50.0}
+    assert tiendas.ventas_por_pieza("acme", ep_id, "2026-01-01T00:00:00") == {"compras": 1, "ingresos": 50.0, "monedas": ["USD"]}
     t = tiendas.obtener("acme", tid)
     assert t["ultima_sync_pedidos"] and t["estado"] == "conectada"
     # sin ultima_sync: 30 días atrás; con ella: un día de solape

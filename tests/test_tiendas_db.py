@@ -71,7 +71,7 @@ def test_pedidos(base_temporal):
 
     assert tiendas.resolver_pedido("acme", sin[0]["id"], ep_id) is True
     assert tiendas.pedidos_sin_resolver("acme") == []
-    assert tiendas.ventas_por_pieza("acme", ep_id, "2026-09-16T00:00:00") == {"compras": 1, "ingresos": 55.0}
+    assert tiendas.ventas_por_pieza("acme", ep_id, "2026-09-16T00:00:00") == {"compras": 1, "ingresos": 55.0, "monedas": ["USD"]}
 
 
 def test_resolver_pedido_rechaza_pieza_ajena(base_temporal):
@@ -93,4 +93,4 @@ def test_resolver_pedido_rechaza_pieza_ajena(base_temporal):
     assert tiendas.resolver_pedido("acme", pedido_id, ep_ajeno) is False
 
     assert [p["id"] for p in tiendas.pedidos_sin_resolver("acme")] == [pedido_id]
-    assert tiendas.ventas_por_pieza("acme", 7, "2026-09-17T00:00:00") == {"compras": 0, "ingresos": 0.0}
+    assert tiendas.ventas_por_pieza("acme", 7, "2026-09-17T00:00:00") == {"compras": 0, "ingresos": 0.0, "monedas": []}

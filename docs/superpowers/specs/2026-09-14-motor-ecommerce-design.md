@@ -89,7 +89,7 @@ FLASK_SECRET_KEY-derivada), ultima_sync_productos, ultima_sync_pedidos, estado`.
 
 ### pedido
 `id, cliente, tienda_id, fuente_id, fecha, total, moneda, items (json),
-utm_content (pieza_id si viene), experimento_pieza_id (resuelto)`.
+utm_content (experimento_pieza.id si viene), experimento_pieza_id (resuelto)`.
 
 Migración: `ads.json` → `experimento` "legado" + `experimento_pieza`;
 `creative_flow.json` → `concepto` (origen manual) + `pieza` (clon_limpio). El
@@ -148,7 +148,13 @@ Objetivo según capacidades del cliente: sin Pixel → `OUTCOME_TRAFFIC`
 optimizando `purchase`; app → `OUTCOME_APP_PROMOTION` (requiere app
 registrada en Meta; fuera del primer bloque).
 
-Cada URL de destino lleva `utm_source=creatv&utm_medium=meta&utm_content=<pieza_id>`.
+Cada URL de destino lleva `utm_source=creatv&utm_medium=meta&utm_content=<experimento_pieza.id>`
+(el id de la pieza *dentro del experimento y país*, no `pieza.id`: el mismo clon en
+dos países son dos anuncios y sus ventas tienen que caer cada una en el suyo —
+cambiado en Bloque 5; los links viejos con `pieza.id` se siguen resolviendo).
+Con atribución por tienda, si la moneda de los pedidos no es la de la cuenta
+publicitaria el ROAS se deja en 0 (no comparable, nunca se convierte) y el
+veredicto se apoya en el CPA; se avisa con un evento por experimento.
 
 Atribución, de mejor a peor, el experimento usa la mejor disponible:
 1. Meta Insights `actions.purchase`, `action_values`, `purchase_roas` (requiere Pixel).

@@ -146,3 +146,15 @@ def test_parsear_fecha_meta_formatos():
     assert meta_conexion._parsear_fecha_meta("2026-09-15T10:00:00").tzinfo is not None
     assert meta_conexion._parsear_fecha_meta("ayer") is None
     assert meta_conexion._parsear_fecha_meta(None) is None
+
+
+def test_estado_pixel_solo_cache_no_llama_a_meta(conectado):
+    """F6: el POST de crear experimento solo mira el caché — sin nada
+    vigente devuelve None y no toca Graph; con caché, lo devuelve."""
+    import meta_conexion
+    conectado["estado"]["respuesta"] = {"data": [{"id": "1", "name": "Px", "last_fired_time": _hace(0, 1)}]}
+    assert meta_conexion.estado_pixel("acme", solo_cache=True) is None
+    assert conectado["llamadas"] == []
+    assert meta_conexion.estado_pixel("acme")["estado"] == "ok"
+    assert meta_conexion.estado_pixel("acme", solo_cache=True)["estado"] == "ok"
+    assert len(conectado["llamadas"]) == 1

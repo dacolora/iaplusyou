@@ -31,9 +31,14 @@ def centavos(monto, moneda):
     return int(round(float(monto) * (1 if moneda in MONEDAS_SIN_DECIMALES else 100)))
 
 
-def url_destino(base, pieza_id):
+def url_destino(base, ep_id):
+    """Link del anuncio: `utm_content` lleva el id de la `experimento_pieza`
+    (único por experimento+pieza+país), no el de la pieza — el mismo clon en
+    dos países son dos anuncios y sus ventas tienen que caer cada una en el
+    suyo (atribucion.resolver_pendientes lo resuelve por ep id, con el
+    pieza.id viejo como fallback para links ya publicados)."""
     sep = "&" if "?" in base else "?"
-    return f"{base}{sep}utm_source=creatv&utm_medium=meta&utm_content={pieza_id}"
+    return f"{base}{sep}utm_source=creatv&utm_medium=meta&utm_content={ep_id}"
 
 
 def _con_credenciales(cliente, fn):
@@ -73,19 +78,19 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
     es un parámetro: lanzar_piezas_nuevas construye un solo dict, sembrado
     con TODAS las piezas del experimento (no solo las nuevas), y lo pasa
     igual en cada llamada, así la segunda pieza nueva con el mismo pieza_id
-    ve el creative que subió la primera en la misma corrida."""
+    ve el video que subió la primera en la misma corrida."""
     experimento_id = ex["id"]
-    # M4: la misma pieza (mismo pieza_id) clonada a dos países comparte
-    # video+creative — el link (utm_content=pieza_id) es idéntico para
-    # ambas, así que crearlo dos veces solo duplica la subida (hasta 180s
-    # bajo _LOCK) sin ganar nada. Se cachea por pieza_id dentro de esta
-    # corrida, sembrado con lo que ya esté guardado de una corrida previa.
-    creativos_por_pieza = {} if cache is None else cache
+    # M4 + Bloque 5: la misma pieza (mismo pieza_id) clonada a dos países
+    # comparte la SUBIDA del video (hasta 180s bajo _LOCK) pero NO el
+    # creative: el link lleva utm_content=<experimento_pieza.id>, distinto
+    # por país, así que cada ep necesita su propio creative (una llamada
+    # barata, sin subida). El cache es pieza_id -> meta_video_id dentro de
+    # esta corrida, sembrado con lo que ya esté guardado de corridas previas.
+    videos_por_pieza = {} if cache is None else cache
     for pz in ex["piezas"]:
-        if pz.get("meta_creative_id"):
-            creativos_por_pieza.setdefault(pz["pieza_id"], {
-                "video_id": (pz.get("extra") or {}).get("meta_video_id"),
-                "creative_id": pz["meta_creative_id"]})
+        video_guardado = (pz.get("extra") or {}).get("meta_video_id")
+        if video_guardado:
+            videos_por_pieza.setdefault(pz["pieza_id"], video_guardado)
     creadas = 0
     for pz in ex["piezas"]:
         if pz["meta_ad_id"]:
@@ -93,22 +98,18 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
         experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adsets[pz["pais"]])
         creative_id = pz["meta_creative_id"]
         if not creative_id:
-            cache = creativos_por_pieza.get(pz["pieza_id"])
-            if cache and cache.get("creative_id"):
-                creative_id = cache["creative_id"]
-                experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
-                experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=cache.get("video_id"))
-            else:
-                video_id = (pz.get("extra") or {}).get("meta_video_id") or (cache and cache.get("video_id"))
+            video_id = (pz.get("extra") or {}).get("meta_video_id")
+            if not video_id:
+                video_id = videos_por_pieza.get(pz["pieza_id"])
                 if not video_id:
                     video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
-                    experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
-                mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
-                creative_id = meta_creative.crear_creative_video(
-                    f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
-                    url_destino(ex["destino_url"], pz["pieza_id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
-                experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
-                creativos_por_pieza[pz["pieza_id"]] = {"video_id": video_id, "creative_id": creative_id}
+                    videos_por_pieza[pz["pieza_id"]] = video_id
+                experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
+            mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
+            creative_id = meta_creative.crear_creative_video(
+                f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
+                url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+            experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
         ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
                                       presupuesto_dia_actual=next(p["presupuesto_dia"] for p in ex["paises"] if p["pais"] == pz["pais"]))
@@ -320,19 +321,18 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
     def _correr(creds):
         creadas = 0
         fallidas = []
-        # Cache de creative/video compartido entre TODAS las piezas nuevas de
-        # esta corrida (no uno nuevo por llamada a _crear_anuncios): así la
-        # segunda pieza nueva con el mismo pieza_id reutiliza lo que subió la
-        # primera en vez de repetir subir_video/crear_creative_video. Sembrado
-        # desde ex["piezas"] completo (no solo piezas_nuevas), para cubrir
-        # también el caso de una pieza nueva cuyo pieza_id ya tiene creative
-        # en una pieza vieja de otra corrida/lanzar().
+        # Cache de video (pieza_id -> meta_video_id) compartido entre TODAS
+        # las piezas nuevas de esta corrida (no uno nuevo por llamada a
+        # _crear_anuncios): así la segunda pieza nueva con el mismo pieza_id
+        # reutiliza la subida de la primera. El creative sí es por pieza
+        # (ver _crear_anuncios). Sembrado desde ex["piezas"] completo (no
+        # solo piezas_nuevas), para cubrir también el caso de una pieza nueva
+        # cuyo pieza_id ya subió video en una pieza vieja de otra corrida.
         cache = {}
         for pz_ in ex["piezas"]:
-            if pz_.get("meta_creative_id"):
-                cache.setdefault(pz_["pieza_id"], {
-                    "video_id": (pz_.get("extra") or {}).get("meta_video_id"),
-                    "creative_id": pz_["meta_creative_id"]})
+            video_guardado = (pz_.get("extra") or {}).get("meta_video_id")
+            if video_guardado:
+                cache.setdefault(pz_["pieza_id"], video_guardado)
         for pz in piezas_nuevas:
             try:
                 creadas += _crear_anuncios(cliente, {**ex, "piezas": [pz]}, creds, adsets, cache=cache)
@@ -431,22 +431,40 @@ def escalar_pais(cliente, experimento_id, pais, pct, tope_dia=None):
     return nuevo
 
 
-def _mezclar_ventas_tienda(cliente, pz, snap):
+def _mezclar_ventas_tienda(cliente, ex, pz, snap):
     """Atribución por tienda: las compras/ingresos del snapshot salen de los
     pedidos con utm de esa pieza (atribucion.ventas_tienda), no de lo que
     reporta Meta — sin Pixel, Meta no ve ventas; con uno a medias, las
-    infla o las pierde. ROAS y CPA se recalculan sobre el gasto de Meta; los
-    ingresos quedan en la moneda de la tienda (nunca se convierten), así que
-    el ROAS es tienda/cuenta: igual de válido para comparar piezas entre sí,
-    que es lo único que hace el decisor con él."""
+    infla o las pierde. ROAS y CPA se recalculan sobre el gasto de Meta. Los
+    ingresos quedan en la moneda de la tienda (nunca se convierten): si esa
+    moneda no es la de la cuenta publicitaria (ex['moneda']) el ROAS no es
+    comparable con nada (el decisor lo mide contra un umbral absoluto), así
+    que se deja en 0.0 y queda el CPA (gasto/compras, moneda de la cuenta).
+    Devuelve el set de monedas ajenas vistas (vacío si todo es comparable)."""
     v = atribucion.ventas_tienda(cliente, pz)
     gasto = float(snap.get("gasto") or 0)
     compras, ingresos = int(v["compras"]), float(v["ingresos"])
+    ajenas = {m or "sin moneda" for m in v.get("monedas") or [] if (m or "") != ex["moneda"]}
     snap["compras"] = compras
     snap["ingresos"] = ingresos
-    snap["roas"] = ingresos / gasto if gasto else 0.0
+    snap["roas"] = ingresos / gasto if gasto and not ajenas else 0.0
     snap["cpa"] = gasto / compras if compras else 0.0
     snap["fuente_ventas"] = "tienda"
+    return ajenas
+
+
+def _avisar_moneda_no_comparable(cliente, ex, ajenas):
+    """Un solo evento por experimento (extra.aviso_moneda) cuando las ventas
+    de la tienda llegan en otra moneda que la cuenta: el ROAS queda en 0 y
+    el decisor se apoya en el CPA."""
+    if (ex.get("extra") or {}).get("aviso_moneda"):
+        return
+    monedas = ", ".join(sorted(ajenas))
+    experimentos.registrar_evento(
+        cliente, ex["id"], "atribucion",
+        f"Ventas en {monedas}, cuenta en {ex['moneda']}: ROAS no comparable, se usa CPA",
+        {"monedas_tienda": sorted(ajenas), "moneda_cuenta": ex["moneda"]})
+    experimentos.actualizar_extra(cliente, ex["id"], lambda extra: {**extra, "aviso_moneda": monedas})
 
 
 def refrescar(cliente, experimento_id):
@@ -456,6 +474,7 @@ def refrescar(cliente, experimento_id):
         return 0
 
     rechazados = []
+    monedas_ajenas = set()
 
     def _correr(_creds):
         n = 0
@@ -465,7 +484,7 @@ def refrescar(cliente, experimento_id):
                 snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
                 snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
                 if ex["atribucion"] == "tienda":
-                    _mezclar_ventas_tienda(cliente, pz, snap)
+                    monedas_ajenas.update(_mezclar_ventas_tienda(cliente, ex, pz, snap))
                 for k in ("resultado_nombre", "resultado", "estado_meta_texto", "motivo_rechazo"):
                     snap[k] = r.get(k)
                 experimentos.snapshot(pz["id"], snap)
@@ -483,6 +502,8 @@ def refrescar(cliente, experimento_id):
     n = _con_credenciales(cliente, _correr)
     gasto = sum(float((p["metricas"] or {}).get("gasto") or 0) for p in experimentos.piezas(cliente, experimento_id))
     experimentos.actualizar(cliente, experimento_id, gasto_acumulado=round(gasto, 2))
+    if monedas_ajenas:
+        _avisar_moneda_no_comparable(cliente, ex, monedas_ajenas)
     for pz, estado_meta, motivo in rechazados:
         _avisar_rechazo_meta(cliente, ex, pz, estado_meta, motivo)
     return n

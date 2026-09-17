@@ -374,7 +374,7 @@ def _listar_pixels_con_credenciales(cliente):
             meta_auth.limpiar()
 
 
-def estado_pixel(cliente):
+def estado_pixel(cliente, solo_cache=False):
     """¿Tiene el proyecto un Pixel de Meta disparando? Cacheado 10 min por
     proceso (como estado()). Devuelve {estado, pixel_id, nombre,
     ultimo_disparo, detalle}:
@@ -382,11 +382,17 @@ def estado_pixel(cliente):
       sin_pixel     la cuenta no tiene ningún pixel
       sin_datos     hay pixel pero nunca disparó, o no en los últimos 7 días
       ok            disparó en los últimos 7 días
-      error         la API falló (detalle sin token)"""
+      error         la API falló (detalle sin token)
+    Con `solo_cache=True` nunca llama a Graph: devuelve lo cacheado o None
+    si no hay nada vigente — para rutas POST (crear experimento) que no
+    pueden esperar hasta 30 s bajo el lock de Meta; la página de ajustes es
+    la que llena el caché."""
     ahora = time.time()
     cacheado = _cache_pixel.get(cliente)
     if cacheado and ahora - cacheado[0] < _TTL_ESTADO_SEG:
         return cacheado[1]
+    if solo_cache:
+        return None
 
     resultado = {"estado": "sin_conexion", "pixel_id": None, "nombre": None, "ultimo_disparo": None, "detalle": ""}
     if estado(cliente).get("estado") != "conectado":

@@ -41,7 +41,7 @@ def test_crear_experimento(app):
 
 def test_crear_atribucion_del_form_o_sugerida(app, monkeypatch):
     import experimentos as ex
-    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado_pixel", lambda c: {"estado": "ok"})
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado_pixel", lambda c, solo_cache=False: {"estado": "ok"})
     app["c"].post("/cliente/acme/experimentos/nuevo", data=FORM)                              # sin campo: sugerida
     app["c"].post("/cliente/acme/experimentos/nuevo", data=dict(FORM, atribucion="ninguna"))  # explícita
     app["c"].post("/cliente/acme/experimentos/nuevo", data=dict(FORM, atribucion="magia"))    # inválida: no crea

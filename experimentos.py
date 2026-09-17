@@ -13,7 +13,8 @@ ESTADOS_EXPERIMENTO = ("armando", "lanzando", "pausado", "corriendo", "cerrado",
                        "esperando_aprobacion", "decidido")
 ESTADOS_PIEZA = ("en_cola", "publicando", "pausado", "activo", "error")
 # Cómo se miden las ventas de un experimento: por el Pixel de Meta (insights),
-# por los pedidos de la tienda conectada (utm_content → pieza) o no se miden.
+# por los pedidos de la tienda conectada (utm_content → experimento_pieza) o
+# no se miden.
 ATRIBUCIONES = ("pixel", "tienda", "ninguna")
 _EXP_COLS = ("estado", "error", "meta_campaign_id", "gasto_acumulado", "paises", "nombre", "tope_total",
              "dias", "destino_url", "edad_min", "edad_max", "extra", "modo", "reglas", "atribucion", "objetivo_meta")
@@ -34,11 +35,15 @@ def atribucion_sugerida(cliente):
     """Con qué medir ventas, según lo que el proyecto tiene conectado:
     `pixel` si el Pixel de Meta está disparando (meta_conexion.estado_pixel
     == ok), si no `tienda` si hay una Shopify/Woo conectada (son las que
-    exponen pedidos con utm), si no `ninguna`. Imports tardíos: este módulo
-    es solo datos y meta_conexion/tiendas arrastran requests, cifrado, etc."""
+    exponen pedidos con utm), si no `ninguna`. El Pixel se mira solo en
+    caché (`solo_cache=True`): esto corre dentro del POST de crear
+    experimento y no puede esperar una ida a Graph; si nadie consultó el
+    Pixel hace poco (la página de ajustes lo hace), se sugiere tienda/ninguna.
+    Imports tardíos: este módulo es solo datos y meta_conexion/tiendas
+    arrastran requests, cifrado, etc."""
     import meta_conexion  # noqa: PLC0415
     import tiendas  # noqa: PLC0415
-    if meta_conexion.estado_pixel(cliente).get("estado") == "ok":
+    if (meta_conexion.estado_pixel(cliente, solo_cache=True) or {}).get("estado") == "ok":
         return "pixel"
     if any(t["tipo"] in ("shopify", "woo") and t["estado"] == "conectada" for t in tiendas.listar(cliente)):
         return "tienda"

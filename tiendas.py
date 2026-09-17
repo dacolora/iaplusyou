@@ -13,6 +13,7 @@ lee y marca banderas puntuales (`marcar_producto`, `actualizar`). No hay
 carrera de lost-update que justifique el lock `_bloquear` de experimentos.py.
 """
 import json
+from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 
@@ -232,14 +233,22 @@ def guardar_pedidos(cliente, tienda_id, pedidos):
     return insertados
 
 
-def pedidos_sin_resolver(cliente):
-    """Pedidos con `utm_content` (llegaron con una pieza en la URL) que
-    todavía no se ligaron a un `experimento_pieza_id` — la cola que debe
-    resolver el atribuidor del Bloque 5."""
+# Un pedido con utm que no se pudo ligar en 30 días (utm ajeno, experimento
+# ya cerrado) deja de reintentarse: sin este tope la cola crecería con cada
+# utm foráneo y cada sync la volvería a recorrer entera.
+DIAS_RESOLVER_PEDIDOS = 30
+
+
+def pedidos_sin_resolver(cliente, dias=DIAS_RESOLVER_PEDIDOS):
+    """Pedidos con `utm_content` (llegaron con una pieza en la URL) de los
+    últimos `dias` que todavía no se ligaron a un `experimento_pieza_id` —
+    la cola que debe resolver el atribuidor del Bloque 5."""
     pe = db.pedido
+    desde = (datetime.now() - timedelta(days=dias)).isoformat(timespec="seconds")
     with db.conectar() as con:
         filas = con.execute(sa.select(pe).where(
-            pe.c.cliente == cliente, pe.c.utm_content.isnot(None), pe.c.experimento_pieza_id.is_(None))
+            pe.c.cliente == cliente, pe.c.utm_content.isnot(None), pe.c.experimento_pieza_id.is_(None),
+            pe.c.fecha >= desde)
             .order_by(pe.c.id))
         return [_pedido_a_dict(f) for f in filas]
 
@@ -262,12 +271,17 @@ def resolver_pedido(cliente, pedido_id, ep_id):
 
 
 def ventas_por_pieza(cliente, ep_id, desde_iso):
-    """Compras e ingresos (suma de `total`) de una pieza desde `desde_iso`
+    """Compras, ingresos (suma de `total`) y `monedas` (las distintas que
+    traían esos pedidos, ordenadas) de una pieza desde `desde_iso`
     (comparación lexicográfica — funciona porque `fecha` es ISO de 19
-    caracteres, igual que el resto del motor)."""
+    caracteres, igual que el resto del motor). Los ingresos se suman tal
+    cual, sin convertir: quien los use tiene que mirar `monedas` antes de
+    compararlos con un gasto en otra moneda."""
     pe = db.pedido
+    filtro = (pe.c.cliente == cliente, pe.c.experimento_pieza_id == ep_id, pe.c.fecha >= desde_iso)
     with db.conectar() as con:
         fila = con.execute(sa.select(
-            sa.func.count(pe.c.id), sa.func.coalesce(sa.func.sum(pe.c.total), 0.0)
-        ).where(pe.c.cliente == cliente, pe.c.experimento_pieza_id == ep_id, pe.c.fecha >= desde_iso)).first()
-    return {"compras": int(fila[0] or 0), "ingresos": float(fila[1] or 0.0)}
+            sa.func.count(pe.c.id), sa.func.coalesce(sa.func.sum(pe.c.total), 0.0)).where(*filtro)).first()
+        monedas = con.execute(sa.select(pe.c.moneda).where(*filtro).distinct()).scalars().all()
+    return {"compras": int(fila[0] or 0), "ingresos": float(fila[1] or 0.0),
+            "monedas": sorted(monedas, key=lambda m: m or "")}
