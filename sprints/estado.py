@@ -55,7 +55,8 @@ def recalcular(cliente, sprint_id):
         return None
     for c in sp["campanas"]:
         total = int(c["n_videos"] or 0) + int(c["n_imagenes"] or 0)
-        nuevo = estado_campana(c["referencias_total"], total, ideas=c.get("ideas") or [], piezas=c.get("piezas") or [])
+        ideas_vivas = [i for i in (c.get("ideas") or []) if i.get("estado_idea") != "descartada"]
+        nuevo = estado_campana(c["referencias_total"], total, ideas=ideas_vivas, piezas=c.get("piezas") or [])
         if nuevo != c["estado"]:
             datos.actualizar_campana(cliente, c["id"], estado=nuevo)
             c["estado"] = nuevo

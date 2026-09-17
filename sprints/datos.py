@@ -30,6 +30,10 @@ ESTADOS_CAMPANA = ("planeada", "referencias", "ideas_propuestas", "ideas_aprobad
 TIPOS_TEMPORADA = ("comercial", "estacional", "propia")
 ORIGENES_REFERENCIA = ("archivo", "link", "catalogo", "reutilizada")
 ORIGENES_PERSONA = ("manual", "sugerida_ia")
+TIPOS_PIEZA = ("video", "imagen")
+ESTADOS_IDEA = ("propuesta", "aprobada", "descartada")
+REVISIONES = ("pendiente", "aprobada", "rechazada")
+PLATAFORMAS = ("instagram", "tiktok", "facebook", "youtube")
 
 _PERSONA_COLS = ("nombre", "resumen", "descripcion", "edad_rango", "tono", "senales_visuales", "palabras_clave",
                  "color", "origen", "archivada", "extra")
@@ -39,6 +43,9 @@ _SPRINT_COLS = ("nombre", "inicio", "fin", "estado", "destinos", "referencias_ob
 _CAMPANA_COLS = ("n_videos", "n_imagenes", "referencias_objetivo", "estado", "orden", "extra", "producto_id")
 _REFERENCIA_COLS = ("titulo", "intencion", "intencion_otro", "descripcion", "analisis", "analisis_estado", "orden",
                     "extra", "frame_url", "ruta_local")
+_IDEA_COLS = ("titulo", "escena", "sonido", "enfoque", "gancho", "referencias_ids", "duracion_s", "plataformas",
+              "estado_idea", "cf_id", "qa", "revision", "revision_motivo", "textos", "orden", "extra")
+_PIEZA_TERMINADA = ("listo", "degradada")
 
 
 class ErrorDatos(ValueError):
@@ -293,7 +300,11 @@ def _campanas(con, cliente, sprint_id=None, campana_id=None):
     salida = []
     for f in con.execute(q.order_by(c.c.orden, c.c.id)):
         d = _a_dict(f)
-        d.update({"ideas": [], "piezas": [], "piezas_listas": 0, "piezas_aprobadas": 0,
+        todas = _ideas(con, cliente, campana_id=d["id"])
+        piezas_ = [i for i in todas if i["cf_id"] and i["estado_idea"] != "descartada"]
+        d.update({"ideas": todas, "piezas": piezas_,
+                  "piezas_listas": sum(1 for i in piezas_ if i["estado"] in _PIEZA_TERMINADA),
+                  "piezas_aprobadas": sum(1 for i in piezas_ if i["revision"] == "aprobada"),
                   "referencias_total": int(d["referencias_total"] or 0),
                   "referencias_listas": int(d["referencias_listas"] or 0)})
         salida.append(d)
@@ -544,3 +555,110 @@ def reutilizar_referencia(cliente, referencia_id, campana_destino_id):
                           analisis_estado=origen.get("analisis_estado") or "pendiente",
                           intencion_otro=origen.get("intencion_otro"))
     return rid
+
+
+# -------------------------------------------------------------- ideas ---
+
+def _ideas(con, cliente, campana_id=None, cp_id=None):
+    """Ideas de una campaña unidas (LEFT JOIN) con la sesión de Crear que las
+    generó: `pieza.legado_id == campana_pieza.cf_id`. Las finales tienen otro
+    legado_id (`cf__idioma_pais`) y otro tipo, así que nunca se confunden."""
+    cp, pz, c = db.campana_pieza, db.pieza, db.campana
+    q = (sa.select(cp, c.c.sprint_id.label("sprint_id"), c.c.orden.label("campana_orden"),
+                   pz.c.estado.label("estado"), pz.c.url_video, pz.c.url_miniatura, pz.c.url_local,
+                   pz.c.costo_usd, pz.c.error.label("pieza_error"), pz.c.modelo)
+         .select_from(cp.join(c, c.c.id == cp.c.campana_id)
+                      .outerjoin(pz, sa.and_(pz.c.legado_id == cp.c.cf_id, pz.c.cliente == cp.c.cliente,
+                                             pz.c.tipo.in_(TIPOS_PIEZA))))
+         .where(cp.c.cliente == cliente))
+    if campana_id is not None:
+        q = q.where(cp.c.campana_id == campana_id)
+    if cp_id is not None:
+        q = q.where(cp.c.id == cp_id)
+    salida = []
+    for f in con.execute(q.order_by(cp.c.orden, cp.c.id)):
+        d = _a_dict(f)
+        d["referencias_ids"] = list(d.get("referencias_ids") or [])
+        d["plataformas"] = list(d.get("plataformas") or [])
+        d["extra"] = d.get("extra") or {}
+        salida.append(d)
+    return salida
+
+
+def _validar_idea(campos):
+    if "tipo" in campos and campos["tipo"] not in TIPOS_PIEZA:
+        raise ErrorDatos(f"Tipo de pieza inválido: {campos['tipo']}")
+    if "estado_idea" in campos and campos["estado_idea"] not in ESTADOS_IDEA:
+        raise ErrorDatos(f"Estado de idea inválido: {campos['estado_idea']}")
+    if "revision" in campos and campos["revision"] not in REVISIONES:
+        raise ErrorDatos(f"Revisión inválida: {campos['revision']}")
+    if "plataformas" in campos:
+        campos["plataformas"] = [p for p in (campos["plataformas"] or []) if p in PLATAFORMAS]
+    if "referencias_ids" in campos:
+        campos["referencias_ids"] = [int(x) for x in (campos["referencias_ids"] or [])]
+    if "duracion_s" in campos and campos["duracion_s"] is not None:
+        try:
+            campos["duracion_s"] = float(campos["duracion_s"])
+        except (TypeError, ValueError):
+            raise ErrorDatos("La duración debe ser un número.")
+    for k in ("titulo", "escena", "sonido", "gancho", "revision_motivo"):
+        if k in campos and campos[k] is not None:
+            campos[k] = _texto(campos[k], 200 if k in ("titulo", "gancho") else None)
+    return campos
+
+
+def crear_idea(cliente, campana_id, tipo, titulo, escena, sonido="", enfoque=None, gancho="", referencias_ids=None,
+               duracion_s=None, plataformas=None, estado_idea="propuesta"):
+    campos = _validar_idea({"tipo": tipo, "titulo": titulo, "escena": escena, "sonido": sonido, "gancho": gancho,
+                            "referencias_ids": referencias_ids, "duracion_s": duracion_s, "plataformas": plataformas,
+                            "estado_idea": estado_idea})
+    if not campos["titulo"] or not campos["escena"]:
+        raise ErrorDatos("Una idea necesita título y escena.")
+    ahora = db.ahora()
+    with db.conectar() as con:
+        c = _fila(con, db.campana, campana_id, cliente)
+        if not c:
+            raise ErrorDatos("Esa campaña no existe.")
+        cp = db.campana_pieza
+        orden = con.execute(sa.select(sa.func.coalesce(sa.func.max(cp.c.orden), -1)).where(cp.c.campana_id == campana_id)).scalar() + 1
+        cp_id = con.execute(cp.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, campana_id=campana_id, tipo=campos["tipo"],
+            titulo=campos["titulo"], escena=campos["escena"], sonido=campos["sonido"] or None, enfoque=enfoque,
+            gancho=campos["gancho"] or None, referencias_ids=campos["referencias_ids"], duracion_s=campos["duracion_s"],
+            plataformas=campos["plataformas"], estado_idea=campos["estado_idea"], cf_id=None, qa=None,
+            revision="pendiente", revision_motivo=None, textos=None, orden=orden, extra={})).inserted_primary_key[0]
+        _evento(con, cliente, c.sprint_id, campana_id, "idea_creada", f"Idea «{campos['titulo']}» ({campos['tipo']})",
+                {"cp_id": cp_id})
+    return cp_id
+
+
+def actualizar_idea(cliente, cp_id, /, **campos):
+    campos = _validar_idea(campos)
+    with db.conectar() as con:
+        return _actualizar(con, db.campana_pieza, cp_id, cliente, _IDEA_COLS, campos)
+
+
+def idea(cliente, cp_id):
+    with db.conectar() as con:
+        lista = _ideas(con, cliente, cp_id=cp_id)
+    return lista[0] if lista else None
+
+
+def ideas(cliente, campana_id, incluir_descartadas=True):
+    with db.conectar() as con:
+        lista = _ideas(con, cliente, campana_id=campana_id)
+    return lista if incluir_descartadas else [i for i in lista if i["estado_idea"] != "descartada"]
+
+
+def eliminar_idea(cliente, cp_id):
+    with db.conectar() as con:
+        f = _fila(con, db.campana_pieza, cp_id, cliente)
+        if not f:
+            return False
+        if f.cf_id:
+            raise ErrorDatos("Esa idea ya tiene una pieza generada; descártala en vez de borrarla.")
+        c = con.execute(sa.select(db.campana.c.sprint_id).where(db.campana.c.id == f.campana_id)).first()
+        con.execute(db.campana_pieza.delete().where(db.campana_pieza.c.id == cp_id))
+        if c:
+            _evento(con, cliente, c.sprint_id, f.campana_id, "idea_eliminada", f"Idea «{f.titulo}» eliminada", {"cp_id": cp_id})
+    return True

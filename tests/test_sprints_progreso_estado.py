@@ -77,3 +77,29 @@ def test_recalcular_escribe_estados(base_temporal):
     assert estado.recalcular("acme", sid)["estado"] == "listo_para_generar"
     assert datos.sprint("acme", sid)["estado"] == "listo_para_generar"
     assert estado.recalcular("acme", 999) is None
+
+
+def test_recalcular_con_ideas_y_piezas_reales(base_temporal):
+    import creative_flow
+    from sprints import datos, estado
+    pid = datos.crear_persona("acme", "Premium")
+    tid = datos.crear_temporada("acme", "Verano", "2026-06-01", "2026-07-15")
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31", referencias_objetivo_defecto=1)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo", tid, 1, 0)
+    datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", descripcion="luz")
+    i_desc = datos.crear_idea("acme", cid, "video", "X", "x", estado_idea="descartada")
+    assert estado.recalcular("acme", sid)["campanas"][0]["estado"] == "referencias"   # descartadas no cuentan
+    i1 = datos.crear_idea("acme", cid, "video", "A", "a")
+    assert estado.recalcular("acme", sid)["campanas"][0]["estado"] == "ideas_propuestas"
+    datos.actualizar_idea("acme", i1, estado_idea="aprobada")
+    assert estado.recalcular("acme", sid)["campanas"][0]["estado"] == "ideas_aprobadas"
+    cf = creative_flow.crear("acme", [], ["Espejo"], [], "a", 8, "", "A")
+    datos.actualizar_idea("acme", i1, cf_id=cf)
+    creative_flow.actualizar("acme", cf, estado="video_generando")
+    sp = estado.recalcular("acme", sid)
+    assert sp["campanas"][0]["estado"] == "generando" and sp["estado"] == "generando"
+    creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2/v.mp4")
+    sp = estado.recalcular("acme", sid)
+    assert sp["campanas"][0]["estado"] == "revision" and sp["estado"] == "revision"
+    datos.actualizar_idea("acme", i1, revision="aprobada")
+    assert estado.recalcular("acme", sid)["campanas"][0]["estado"] == "completada"

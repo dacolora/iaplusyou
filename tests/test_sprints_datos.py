@@ -216,3 +216,71 @@ def test_temporada_paleta_descarta_lo_que_no_es_hex(base_temporal):
     assert datos.temporada("acme", tid)["mood_visual"]["paleta"] == ["#FFFFFF"]
     tid2 = datos.crear_temporada("acme", "Sin", "2026-01-01", "2026-02-01", mood_visual={"luz": "x"})
     assert datos.temporada("acme", tid2)["mood_visual"] == {"luz": "x"}
+
+
+def _campana(datos):
+    pid = datos.crear_persona("acme", "Premium")
+    tid = datos.crear_temporada("acme", "Verano", "2026-06-01", "2026-07-15")
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31")
+    return sid, datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 1)
+
+
+def test_ideas_crud_y_validaciones(base_temporal):
+    from sprints import datos
+    sid, cid = _campana(datos)
+    i1 = datos.crear_idea("acme", cid, "video", "Espejo al amanecer", "La cámara rodea el espejo...", sonido="pájaros",
+                          enfoque="producto", gancho="Luz que despierta", referencias_ids=[], duracion_s=8,
+                          plataformas=["instagram", "tiktok"])
+    i2 = datos.crear_idea("acme", cid, "imagen", "Detalle del marco", "Primer plano del marco...")
+    a = datos.idea("acme", i1)
+    assert a["estado_idea"] == "propuesta" and a["revision"] == "pendiente" and a["estado"] is None
+    assert a["sprint_id"] == sid and a["campana_orden"] == 0 and a["plataformas"] == ["instagram", "tiktok"]
+    assert [i["id"] for i in datos.ideas("acme", cid)] == [i1, i2]
+    assert datos.actualizar_idea("acme", i1, estado_idea="aprobada", escena="Nueva escena")
+    assert datos.idea("acme", i1)["escena"] == "Nueva escena"
+    with pytest.raises(datos.ErrorDatos):
+        datos.crear_idea("acme", cid, "audio", "x", "y")
+    with pytest.raises(datos.ErrorDatos):
+        datos.crear_idea("acme", cid, "video", "", "y")
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_idea("acme", i1, estado_idea="rara")
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_idea("acme", i1, revision="quizas")
+    with pytest.raises(datos.ErrorDatos):
+        datos.crear_idea("acme", 999, "video", "x", "y")
+    assert datos.idea("otro", i1) is None
+    datos.actualizar_idea("acme", i2, estado_idea="descartada")
+    assert [i["id"] for i in datos.ideas("acme", cid, incluir_descartadas=False)] == [i1]
+    assert datos.eliminar_idea("acme", i2) and datos.idea("acme", i2) is None
+    tipos = [e["tipo"] for e in datos.eventos("acme", sid)]
+    assert "idea_creada" in tipos and "idea_eliminada" in tipos
+
+
+def test_ideas_se_unen_con_la_sesion_de_crear(base_temporal):
+    import creative_flow
+    from sprints import datos
+    sid, cid = _campana(datos)
+    i1 = datos.crear_idea("acme", cid, "video", "A", "a", estado_idea="aprobada")
+    i2 = datos.crear_idea("acme", cid, "imagen", "B", "b", estado_idea="aprobada")
+    i3 = datos.crear_idea("acme", cid, "video", "C", "c", estado_idea="descartada")
+    cf1 = creative_flow.crear("acme", [], ["Espejo"], [], "a", 8, "", "A")
+    cf2 = creative_flow.crear("acme", [], ["Espejo"], [], "b", 0, "", "A")
+    creative_flow.actualizar("acme", cf2, tipo="imagen")
+    datos.actualizar_idea("acme", i1, cf_id=cf1)
+    datos.actualizar_idea("acme", i2, cf_id=cf2)
+    datos.actualizar_idea("acme", i3, cf_id=cf1)
+    creative_flow.actualizar("acme", cf1, estado="video_listo", video_url="https://r2/v.mp4", usd=0.8)
+    creative_flow.actualizar("acme", cf2, estado="video_generando")
+    c = datos.campana("acme", cid)
+    assert len(c["ideas"]) == 3 and [p["id"] for p in c["piezas"]] == [i1, i2]
+    assert c["piezas_listas"] == 1 and c["piezas_aprobadas"] == 0
+    p1 = next(p for p in c["piezas"] if p["id"] == i1)
+    assert p1["estado"] == "listo" and p1["url_video"] == "https://r2/v.mp4" and p1["costo_usd"] == 0.8
+    assert next(p for p in c["piezas"] if p["id"] == i2)["estado"] == "generando"
+    datos.actualizar_idea("acme", i1, revision="aprobada")
+    assert datos.campana("acme", cid)["piezas_aprobadas"] == 1
+    # Una final de la misma sesión (legado_id cf__es_CO) NO se confunde con el clon.
+    creative_flow.crear_final("acme", cf1, "es", "CO")
+    assert datos.idea("acme", i1)["estado"] == "listo"
+    with pytest.raises(datos.ErrorDatos):
+        datos.eliminar_idea("acme", i1)     # ya tiene sesión
