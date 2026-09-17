@@ -226,13 +226,15 @@ temporada (contexto, mood_visual), análisis de las referencias (resumen, paleta
 movimiento), guía de marca (`marca.guia_efectiva`) y el banco de prompts como
 ejemplos de estilo. Devuelve `n_videos` ideas de video y `n_imagenes` de imagen,
 cada una con `titulo`, `tipo`, `escena` (texto que irá a Crear como
-`accion_central`), `enfoque` (clave de `flowplus_prompt.ENFOQUES`), `gancho`
+`accion_central`), `sonido` (descripción del sonido de la escena, va al prompt
+como `SONIDO:`; ver `2026-09-16-final-edition-estudio-design.md` §S1), `enfoque`
+(clave de `flowplus_prompt.ENFOQUES`), `gancho`
 (frase corta para el texto de final edition), `referencias_ids`, `duracion_s`
 (videos, dentro de lo que admite el modelo por defecto) y `plataformas`.
 Salida JSON validada; reintento único con corrección.
 
 **campana_pieza** (creada en la migración de la Parte 1): `campana_id` (FK),
-`tipo` (`video|imagen`), `titulo`, `escena`, `enfoque`, `gancho`,
+`tipo` (`video|imagen`), `titulo`, `escena`, `sonido`, `enfoque`, `gancho`,
 `referencias_ids` (json[]), `duracion_s`, `plataformas` (json[]), `estado_idea`
 (`propuesta|aprobada|descartada`), `cf_id` (legado_id de la sesión de Crear,
 nullable, indexado), `qa` (json, §2.4), `revision`
