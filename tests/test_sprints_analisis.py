@@ -89,3 +89,22 @@ def test_sugerir_personas_rechaza_json_malo(monkeypatch):
     monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700: "nada")
     with pytest.raises(analisis.AnalisisInvalido):
         sugerencias.sugerir_personas("acme")
+
+
+def test_sugerir_personas_coerciona_nombre_no_string(monkeypatch):
+    from sprints import analisis, sugerencias
+    import catalogo_productos, marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "X")
+    capturado = {}
+    salida = {"personas": [
+        {"nombre": "Válido", "resumen": "r", "descripcion": "d", "edad_rango": "35-50", "tono": "t",
+         "senales_visuales": ["cocina"], "palabras_clave": ["lujo"]},
+        {"nombre": 123, "resumen": "r", "descripcion": "d", "edad_rango": "28-40", "tono": "t",
+         "senales_visuales": ["sala"], "palabras_clave": ["hogar"]},
+        {"nombre": ["x"], "resumen": "r", "descripcion": "d", "edad_rango": "20-30", "tono": "t",
+         "senales_visuales": ["balcon"], "palabras_clave": ["joven"]}]}
+    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700: capturado.update(c=content) or json.dumps(salida))
+    personas = sugerencias.sugerir_personas("acme", cuantas=3)
+    assert len(personas) == 1 and personas[0]["nombre"] == "Válido" and isinstance(personas[0]["nombre"], str)

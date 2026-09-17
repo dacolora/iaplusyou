@@ -38,9 +38,18 @@ def _parsear(texto):
         raise analisis.AnalisisInvalido("El JSON no trae la lista «personas».")
     limpias = []
     for p in personas:
-        if not isinstance(p, dict) or not (p.get("nombre") or "").strip() or any(k not in p for k in _CLAVES):
+        if not isinstance(p, dict) or any(k not in p for k in _CLAVES):
             continue
-        limpias.append({k: p[k] for k in _CLAVES})
+        # Coerce nombre to string, but only accept if originally a string
+        nombre_raw = p.get("nombre")
+        if not isinstance(nombre_raw, str):
+            continue
+        nombre = nombre_raw.strip()
+        if not nombre:
+            continue
+        persona_limpia = {k: p[k] for k in _CLAVES}
+        persona_limpia["nombre"] = nombre
+        limpias.append(persona_limpia)
     if not limpias:
         raise analisis.AnalisisInvalido("Ninguna persona venía completa.")
     return limpias
