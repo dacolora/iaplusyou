@@ -138,11 +138,14 @@ def persona_archivar(cliente, pid):
 
 @bp.post("/personas/sugerir")
 def personas_sugerir(cliente):
-    cuantas = min(5, max(1, _entero("cuantas", 3)))
-    if tareas_sprints.encolar_sugerir(cliente, cuantas):
-        flash("Claude está proponiendo personas; aparecerán aquí en unos segundos.", "ok")
-    else:
-        flash("Ya hay una sugerencia en curso.", "error")
+    try:
+        cuantas = min(5, max(1, _entero("cuantas", 3)))
+        if tareas_sprints.encolar_sugerir(cliente, cuantas):
+            flash("Claude está proponiendo personas; aparecerán aquí en unos segundos.", "ok")
+        else:
+            flash("Ya hay una sugerencia en curso.", "error")
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
     return _volver(cliente)
 
 

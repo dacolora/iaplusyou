@@ -50,6 +50,12 @@ def test_personas_sugerir_encola(app):
     assert app["encolados"][0]["tipo"] == "sprint_sugerir_personas" and app["encolados"][0]["payload"]["cuantas"] == 3
 
 
+def test_personas_sugerir_cuantas_no_numerica_no_revienta(app):
+    r = app["c"].post("/cliente/acme/sprints/personas/sugerir", data={"cuantas": "abc"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#sprints")
+    assert app["encolados"] == []
+
+
 def test_temporadas_crear_adoptar_pais(app):
     from sprints import datos
     import proyectos
