@@ -113,14 +113,24 @@ def manejador_shopify(metodo, url, kw):
     if "shop {" in query:
         return Respuesta(200, fixture("shopify_shop.json"))
     if "products(" in query:
-        assert variables["first"] == 50
+        assert variables["first"] == shopify.PAGINA_PRODUCTOS == 25
         if variables.get("after"):
             return Respuesta(200, fixture("shopify_products_p2.json"))
         return Respuesta(200, fixture("shopify_products_p1.json"))
     if "orders(" in query:
         assert variables["query"] == "created_at:>=2026-09-01"
+        assert variables["first"] == shopify.PAGINA_PEDIDOS == 10
         return Respuesta(200, fixture("shopify_orders.json"))
     raise AssertionError("query inesperada")
+
+
+def test_shopify_tamanos_de_pagina_bajo_el_tope_de_coste():
+    """Coste estimado por Shopify (objeto 1, conexión 2 + first × nodo), tope 1000."""
+    productos = 2 + shopify.PAGINA_PRODUCTOS * (1 + 1 + (2 + 6) + (2 + 1))
+    pedidos = 2 + shopify.PAGINA_PEDIDOS * (5 + (2 + 10 * 3))
+    assert productos == 327 < 1000 and pedidos == 372 < 1000
+    assert "images(first: 6)" in shopify._Q_PRODUCTOS and "variants(first: 1)" in shopify._Q_PRODUCTOS
+    assert "lineItems(first: 10)" in shopify._Q_PEDIDOS
 
 
 def test_shopify_valida_credenciales():
@@ -242,6 +252,81 @@ def test_429_dos_veces_es_error_y_espera_tope_5s(sesion, monkeypatch):
     assert "429" in ei.value.usuario and len(s.llamadas) == 2 and esperas == [5.0]
 
 
+THROTTLED = {"errors": [{"message": "Throttled", "extensions": {"code": "THROTTLED"}}],
+             "extensions": {"cost": {"requestedQueryCost": 327, "actualQueryCost": None,
+                                     "throttleStatus": {"maximumAvailable": 1000.0,
+                                                        "currentlyAvailable": 27.0, "restoreRate": 100.0}}}}
+
+
+def test_shopify_throttled_en_200_espera_y_reintenta_una_vez(sesion, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(shopify.time, "sleep", esperas.append)
+    contador = {"n": 0}
+
+    def manejador(m, u, kw):
+        contador["n"] += 1
+        if contador["n"] == 2:  # la primera página de productos llega limitada
+            return Respuesta(200, THROTTLED)
+        return manejador_shopify(m, u, kw)
+
+    s = sesion(manejador)
+    productos = shopify.Shopify(CRED_SHOPIFY).listar_productos()
+    assert [p["fuente_id"] for p in productos] == ["8811", "8812", "8813"]
+    assert len(s.llamadas) == 4  # shop + productos p1 (throttled) + p1 + p2
+    assert s.llamadas[1]["json"] == s.llamadas[2]["json"]
+    assert esperas == [3.0]  # (327 - 27) / 100
+
+
+def test_shopify_throttled_dos_veces_es_error(sesion, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(shopify.time, "sleep", esperas.append)
+    s = sesion(lambda m, u, kw: Respuesta(200, THROTTLED))
+    with pytest.raises(ErrorConector) as ei:
+        shopify.Shopify(CRED_SHOPIFY).probar()
+    assert ei.value.usuario == "Shopify limitó las llamadas; reintenta en un minuto."
+    assert len(s.llamadas) == 2 and esperas == [3.0]
+
+
+@pytest.mark.parametrize("extensiones, esperado", [
+    ({"cost": {"requestedQueryCost": 327, "throttleStatus": {"currentlyAvailable": 27, "restoreRate": 100}}}, 3.0),
+    ({"cost": {"requestedQueryCost": 327, "throttleStatus": {"currentlyAvailable": 300, "restoreRate": 100}}}, 1.0),
+    ({"cost": {"requestedQueryCost": 1000, "throttleStatus": {"currentlyAvailable": 0, "restoreRate": 50}}}, 5.0),
+    ({"cost": {"requestedQueryCost": 10, "throttleStatus": {"currentlyAvailable": 0, "restoreRate": 0}}}, 5.0),
+    ({}, 2.0), (None, 2.0),
+    ({"cost": {"requestedQueryCost": "x"}}, 2.0),
+])
+def test_shopify_espera_throttled(extensiones, esperado):
+    assert shopify._espera_throttled(extensiones) == esperado
+
+
+def test_5xx_reintenta_con_pausa_de_1s(sesion, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(_http.time, "sleep", esperas.append)
+    contador = {"n": 0}
+
+    def manejador(m, u, kw):
+        contador["n"] += 1
+        if contador["n"] == 1:
+            return Respuesta(503, None, texto="<html>bad gateway</html>")
+        return Respuesta(200, fixture("shopify_shop.json"))
+
+    s = sesion(manejador)
+    assert shopify.Shopify(CRED_SHOPIFY).probar()["ok"]
+    assert len(s.llamadas) == 2 and esperas == [_http.ESPERA_5XX] == [1.0]
+
+
+def test_pedir_sin_reintentar_no_repite_timeout_ni_5xx(sesion, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(_http.time, "sleep", esperas.append)
+    s = sesion(lambda m, u, kw: requests.exceptions.Timeout("lento"))
+    with pytest.raises(_http.ErrorTiempo) as ei:
+        _http.pedir(s, "POST", "https://x/oauth/token", reintentar=False)
+    assert isinstance(ei.value, ErrorConector) and len(s.llamadas) == 1
+    s = sesion(lambda m, u, kw: Respuesta(503, None, texto="x"))
+    assert _http.pedir(s, "POST", "https://x/oauth/token", reintentar=False).status_code == 503
+    assert len(s.llamadas) == 1 and esperas == []
+
+
 def test_5xx_y_timeout_reintentan_una_vez(sesion):
     contador = {"n": 0}
 
@@ -344,6 +429,34 @@ def test_woo_una_sola_pagina_sin_cabecera(sesion):
                                           else fixture("woo_products_p2.json")))
     assert len(woo.Woo(CRED_WOO).listar_productos()) == 1
     assert sum("products" in c["url"] for c in s.llamadas) == 1
+
+
+def test_woo_sin_cabecera_sigue_mientras_la_pagina_venga_llena(sesion):
+    base_ = fixture("woo_products_p1.json")[0]
+
+    def manejador(m, u, kw):
+        if "settings" in u:
+            return Respuesta(200, fixture("woo_settings.json"))
+        pagina = kw["params"]["page"]
+        if pagina == 1:
+            return Respuesta(200, [dict(base_, id=1000 + n) for n in range(50)])
+        if pagina == 2:
+            return Respuesta(200, [dict(base_, id=2000 + n) for n in range(7)])
+        raise AssertionError(f"no debía pedir la página {pagina}")
+
+    s = sesion(manejador)
+    productos = woo.Woo(CRED_WOO).listar_productos()
+    assert len(productos) == 57 and productos[-1]["fuente_id"] == "2006"
+    assert [c["params"]["page"] for c in s.llamadas if c["params"].get("page")] == [1, 2]
+
+
+def test_woo_sin_cabecera_y_pagina_llena_para_en_la_vacia(sesion):
+    base_ = fixture("woo_products_p1.json")[0]
+    s = sesion(lambda m, u, kw: Respuesta(200, fixture("woo_settings.json") if "settings" in u
+                                          else ([dict(base_, id=n) for n in range(50)]
+                                                if kw["params"]["page"] == 1 else [])))
+    assert len(woo.Woo(CRED_WOO).listar_productos()) == 50
+    assert [c["params"]["page"] for c in s.llamadas if c["params"].get("page")] == [1, 2]
 
 
 def test_woo_pedidos_desde_utm_de_meta_data(sesion):
@@ -567,6 +680,58 @@ def test_meli_refresh_rechazado(sesion, env_meli):
         c.probar()
     assert "Vuelve a conectar" in ei.value.usuario and "TG-refresh-viejo" not in ei.value.usuario
     assert c.credenciales_actualizadas is None
+
+
+def test_meli_refresh_con_timeout_no_se_reintenta(sesion, env_meli):
+    s = sesion(lambda m, u, kw: requests.exceptions.Timeout("lento"))
+    c = meli.Meli(cred_meli(minutos_para_vencer=0))
+    with pytest.raises(ErrorConector) as ei:
+        c.probar()
+    assert len(s.llamadas) == 1 and s.llamadas[0]["url"].endswith("/oauth/token")
+    assert "Vuelve a conectar" in ei.value.usuario and "TG-refresh-viejo" not in ei.value.usuario
+    assert c.credenciales_actualizadas is None
+
+
+def test_meli_refresh_con_5xx_no_se_reintenta(sesion, env_meli, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(_http.time, "sleep", esperas.append)
+    s = sesion(lambda m, u, kw: Respuesta(502, None, texto="<html>bad gateway</html>"))
+    c = meli.Meli(cred_meli(minutos_para_vencer=0))
+    with pytest.raises(ErrorConector) as ei:
+        c.listar_productos()
+    assert len(s.llamadas) == 1 and esperas == []
+    assert "502" in ei.value.usuario and c.credenciales_actualizadas is None
+
+
+def test_meli_descripcion_404_queda_vacia_y_sigue(sesion, env_meli):
+    def manejador(m, u, kw):
+        ruta = u[len(API_MELI):]
+        if ruta == "items/MCO1001/description":
+            return Respuesta(404, {"message": "Item description not found", "error": "not_found",
+                                   "status": 404})
+        return manejador_meli(m, u, kw)
+
+    s = sesion(manejador)
+    productos = meli.Meli(cred_meli(), cargar_descripciones=True).listar_productos()
+    assert len(productos) == 24
+    assert productos[0]["fuente_id"] == "MCO1001" and productos[0]["descripcion"] == ""
+    assert productos[0]["extra"]["descripcion_cargada"] is True
+    assert productos[1]["descripcion"] == "Descripción larga de MCO1002"
+    assert sum("/description" in c["url"] for c in s.llamadas) == 24
+    # otros 404 siguen siendo error
+    sesion(lambda m, u, kw: Respuesta(404, {"message": "not found"}))
+    with pytest.raises(ErrorConector) as ei:
+        meli.Meli(cred_meli()).listar_productos()
+    assert "404" in ei.value.usuario
+
+
+def test_meli_cambiar_code_sin_refresh_token_es_error(sesion, env_meli):
+    s = sesion(lambda m, u, kw: Respuesta(200, {"access_token": "APP_USR-x", "token_type": "Bearer",
+                                                "expires_in": 21600, "user_id": 123456}))
+    with pytest.raises(ErrorConector) as ei:
+        meli.cambiar_code("TG-code-123", "https://app.creatvmachine.com/meli/callback")
+    assert "offline_access" in ei.value.usuario and "APP_USR-x" not in ei.value.usuario
+    assert len(s.llamadas) == 1  # no llega a /users/me
 
 
 def test_meli_url_autorizacion(env_meli, monkeypatch):

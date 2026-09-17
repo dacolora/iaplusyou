@@ -4,7 +4,8 @@ sobre https (obligatorio: las claves viajan en cada petición).
 
 Credenciales: `url` (`https://tienda.com`), `ck`, `cs`.
 `listar_productos` pagina `/products?status=publish&per_page=50` con la
-cabecera `X-WP-TotalPages` y pide `/settings/general` UNA vez para la
+cabecera `X-WP-TotalPages` (si un proxy la quita, sigue mientras la página
+venga llena y para en la primera corta o vacía) y pide `/settings/general` UNA vez para la
 moneda (`woocommerce_currency`). `pedidos_desde` pagina `/orders?after=…`
 (processing + completed) y saca `utm_content` de `meta_data`
 (`_wc_order_attribution_utm_content`, lo que escribe Order Attribution).
@@ -79,11 +80,17 @@ class Woo(Conector):
             for fila in filas:
                 if isinstance(fila, dict):
                     yield fila
+            if not filas:
+                return
             try:
-                total = int((r.headers or {}).get("X-WP-TotalPages") or 1)
+                total = int((r.headers or {}).get("X-WP-TotalPages"))
             except (TypeError, ValueError):
-                total = 1
-            if not filas or pagina >= total:
+                total = None
+            if total is not None:
+                if pagina >= total:
+                    return
+            elif len(filas) < TAMANO_PAGINA:
+                # Sin cabecera (proxy/CDN que la quita): una página corta es la última.
                 return
             pagina += 1
 

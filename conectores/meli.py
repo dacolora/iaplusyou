@@ -10,13 +10,16 @@ access token dura 6 h, antes de cualquier llamada `_asegurar_token` mira
 entorno), actualiza `self.credenciales` y deja la copia en
 `self.credenciales_actualizadas` para que el sincronizador la guarde —
 si no hubo refresh queda en None. El refresh token es de UN solo uso: si
-no se guarda el nuevo, la próxima vez no hay forma de renovar.
+no se guarda el nuevo, la próxima vez no hay forma de renovar. Por lo
+mismo el POST a `/oauth/token` NUNCA se reintenta (`reintentar=False`):
+un timeout ahí pide reconectar la tienda en vez de reenviar el token.
 
 `listar_productos`: `/users/{user_id}/items/search?status=active` (ids,
 paginado por offset) y `/items?ids=…` en lotes de 20 con `attributes`
 recortados. La descripción (`/items/{id}/description`, una llamada por
 ítem) solo se pide con `cargar_descripciones=True` (primera importación)
-para no gastar cuota; `extra["descripcion_cargada"]` lo deja anotado.
+para no gastar cuota; `extra["descripcion_cargada"]` lo deja anotado
+(un 404 ahí significa "sin descripción": queda `""` y se sigue).
 `pedidos_desde`: `/orders/search?seller=…&order.date_created.from=…`.
 MELI no expone utm de origen: `soporta_utm=False`, `utm_content` siempre None.
 
@@ -31,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from . import registrar
-from ._http import error_generico, json_de, pedir, sesion
+from ._http import ErrorTiempo, error_generico, json_de, pedir, sesion
 from .base import Conector, ErrorConector, normalizar_pedido, normalizar_producto
 
 API = "https://api.mercadolibre.com"
@@ -102,8 +105,14 @@ def _credenciales_de_token(cuerpo, anteriores=None):
 
 
 def _post_token(datos):
-    r = pedir(sesion(), "POST", f"{API}/oauth/token", nombre=NOMBRE, data=datos,
-              headers={"Accept": "application/json"})
+    # Sin reintentos: el refresh token (y el code) son de un solo uso, así
+    # que reenviar el POST tras un timeout/5xx solo produciría invalid_grant.
+    try:
+        r = pedir(sesion(), "POST", f"{API}/oauth/token", nombre=NOMBRE, reintentar=False,
+                  data=datos, headers={"Accept": "application/json"})
+    except ErrorTiempo:
+        raise ErrorConector("MercadoLibre no respondió a tiempo al renovar el token (es de un "
+                            "solo uso y pudo quedar consumido). Vuelve a conectar la tienda.")
     if r.status_code in (400, 401, 403):
         raise ErrorConector("MercadoLibre rechazó la autorización (código o refresh token inválido "
                             "o vencido). Vuelve a conectar la tienda.")
@@ -143,6 +152,10 @@ def cambiar_code(code, redirect_uri):
                           "client_secret": secreto, "code": str(code).strip(),
                           "redirect_uri": redirect_uri})
     credenciales = _credenciales_de_token(cuerpo)
+    if not credenciales["refresh_token"]:
+        raise ErrorConector("MercadoLibre no devolvió refresh token: la app necesita el permiso "
+                            "offline_access (developers.mercadolibre.com). Revisa la app y vuelve "
+                            "a conectar la tienda.")
     yo = _get_users_me(credenciales["access_token"])
     credenciales["site_id"] = str(yo.get("site_id") or "")
     credenciales["nickname"] = str(yo.get("nickname") or "")
@@ -184,7 +197,9 @@ class Meli(Conector):
 
     # --- transporte ----------------------------------------------------------
 
-    def _get(self, ruta, params=None):
+    def _get(self, ruta, params=None, tolerar_404=False):
+        """GET con el bearer; con `tolerar_404=True` un 404 devuelve None
+        en vez de ErrorConector (p. ej. ítem sin descripción)."""
         if self._s is None:
             self._s = sesion()
         r = pedir(self._s, "GET", f"{API}/{ruta.lstrip('/')}", nombre=NOMBRE, params=params or {},
@@ -193,6 +208,8 @@ class Meli(Conector):
         if r.status_code in (401, 403):
             raise ErrorConector(_MSG_CREDENCIALES)
         if r.status_code == 404:
+            if tolerar_404:
+                return None
             raise ErrorConector("MercadoLibre no encontró el recurso pedido (HTTP 404).")
         if r.status_code != 200:
             raise error_generico(r, NOMBRE)
@@ -232,8 +249,9 @@ class Meli(Conector):
                     continue
                 descripcion, cargada = "", False
                 if self.cargar_descripciones:
-                    desc = self._get(f"items/{item['id']}/description")
-                    descripcion = str((desc or {}).get("plain_text") or "")
+                    # MELI responde 404 cuando el ítem simplemente no tiene descripción.
+                    desc = self._get(f"items/{item['id']}/description", tolerar_404=True)
+                    descripcion = str((desc or {}).get("plain_text") or "") if isinstance(desc, dict) else ""
                     cargada = True
                 fotos = [f.get("secure_url") or f.get("url") for f in item.get("pictures") or []
                          if isinstance(f, dict)]

@@ -3,9 +3,13 @@ HTTP común de los conectores con API (Shopify, Woo, MELI).
 
 `pedir(sesion, metodo, url, nombre=..., **kw)` hace UNA petición con timeout
 de 30 s y estas reglas, iguales para las tres tiendas:
-  - timeout o 5xx: se reintenta una sola vez;
+  - timeout o 5xx: se reintenta una sola vez (el 5xx tras 1 s de pausa);
   - 429: se reintenta una sola vez tras esperar `Retry-After` (tope 5 s);
   - error de conexión: `ErrorConector` en español, sin la URL completa.
+Con `reintentar=False` NO se repite nada tras un timeout ni un 5xx (para
+POST que no son idempotentes, como el refresh de MELI, cuyo refresh token
+es de un solo uso); el timeout sale como `ErrorTiempo` (subclase de
+`ErrorConector`) para que el conector pueda dar un mensaje más preciso.
 Devuelve la respuesta tal cual (cualquier código): interpretar 4xx es cosa
 de cada conector, que sabe qué significa en su API. Nunca se registran
 cabeceras ni cuerpos: lo único que llega al usuario es el código HTTP.
@@ -18,6 +22,11 @@ from .base import ErrorConector
 
 TIMEOUT = 30
 MAX_ESPERA_429 = 5
+ESPERA_5XX = 1.0
+
+
+class ErrorTiempo(ErrorConector):
+    """La tienda no respondió dentro de TIMEOUT (ya agotados los reintentos)."""
 
 
 def sesion():
@@ -33,15 +42,17 @@ def _espera_429(respuesta):
     return max(0.0, min(segundos, MAX_ESPERA_429))
 
 
-def pedir(sesion, metodo, url, nombre="la tienda", **kw):
+def pedir(sesion, metodo, url, nombre="la tienda", reintentar=True, **kw):
     kw.setdefault("timeout", TIMEOUT)
-    reintento_5xx = reintento_429 = reintento_timeout = False
+    # Con reintentar=False los dos reintentos "ya gastados" desde el inicio.
+    reintento_5xx = reintento_timeout = not reintentar
+    reintento_429 = False
     while True:
         try:
             r = sesion.request(metodo, url, **kw)
         except requests.exceptions.Timeout:
             if reintento_timeout:
-                raise ErrorConector(f"{nombre} no respondió a tiempo (más de {TIMEOUT} s). Intenta de nuevo.")
+                raise ErrorTiempo(f"{nombre} no respondió a tiempo (más de {TIMEOUT} s). Intenta de nuevo.")
             reintento_timeout = True
             continue
         except requests.exceptions.ConnectionError:
@@ -50,6 +61,7 @@ def pedir(sesion, metodo, url, nombre="la tienda", **kw):
             raise ErrorConector(f"Error de red al hablar con {nombre}.")
         if r.status_code >= 500 and not reintento_5xx:
             reintento_5xx = True
+            time.sleep(ESPERA_5XX)
             continue
         if r.status_code == 429 and not reintento_429:
             reintento_429 = True
