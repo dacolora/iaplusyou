@@ -94,13 +94,22 @@ def _palabras(texto):
 
 _TIPO_POR_PALABRA = {palabra: tipo for tipo, claves in PALABRAS_TIPO.items() for palabra in claves}
 
+# "tenis" solo es calzado si no va con una raqueta: "Raqueta de tenis" es un
+# implemento deportivo, no un zapato. Compañeras de un deporte de raqueta —
+# si aparecen en el mismo texto, "tenis" se ignora como palabra clave.
+_DEMOTE_TENIS = ("raqueta", "raquetas")
+
 
 def inferir_tipo(nombre, descripcion="", categoria=""):
     """Tipo de `prompt_swap.TIPOS` por palabras clave; `otro` si nada calza.
     Solo tipos que existan en prompt_swap (si alguien renombra uno, cae a
     `otro` en vez de guardar un tipo inválido)."""
-    for texto in (nombre, categoria, descripcion):
+    textos = (nombre, categoria, descripcion)
+    demotar_tenis = any(palabra in _DEMOTE_TENIS for texto in textos for palabra in _palabras(texto))
+    for texto in textos:
         for palabra in _palabras(texto):
+            if demotar_tenis and palabra == "tenis":
+                continue
             tipo = _TIPO_POR_PALABRA.get(palabra)
             if tipo and tipo in prompt_swap.TIPOS:
                 return tipo
@@ -257,17 +266,48 @@ def _aviso(prod, texto):
     return f"{prod.get('nombre') or prod.get('fuente_id') or '?'}: {texto}"
 
 
+def _activo_ocupado_por_otro(cliente, activo_id, producto_id):
+    """True si OTRO producto (id distinto) del mismo cliente ya está ligado a
+    `activo_id`. Dos productos con el mismo nombre ("Gorra" en dos
+    colecciones) derivarían el mismo id por `id_desde_nombre`; sin este
+    chequeo el segundo pisaría fotos/descripción del primero cada sync."""
+    return any(p["activo_catalogo_id"] == activo_id and p["id"] != producto_id
+               for p in tiendas.productos(cliente, incluir_archivados=True))
+
+
+def _id_activo_disponible(cliente, nombre, fuente_id, producto_id):
+    """`activo_id` derivado del nombre, o `-2`/`-3`… si ese id ya lo tiene
+    OTRO producto. Uno libre (no existe en disco, o existe pero nadie más lo
+    reclama — carpeta subida a mano) se devuelve tal cual."""
+    base = catalogo_productos.id_desde_nombre(nombre or fuente_id or "producto")
+    candidato = base
+    sufijo = 2
+    while (catalogo_productos.existe(cliente, candidato, CATEGORIA_ACTIVO)
+           and _activo_ocupado_por_otro(cliente, candidato, producto_id)):
+        candidato = f"{base}-{sufijo}"
+        sufijo += 1
+    return candidato
+
+
 def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     """Liga el producto (fila `producto`) a un activo del catálogo de Crear.
     Devuelve el `activo_id` (None si no se pudo). Si se pasa `errores` (lista),
     ahí deja los avisos en español; nunca lanza por un producto concreto.
+    Nunca marca `activo_catalogo_id` en la fila del producto a menos que el
+    activo termine con al menos una imagen — un activo sin fotos no aparece
+    en `catalogo_productos.listar()`, y quedaría ligado a algo invisible que
+    nadie puede arreglar desde la UI.
 
     - Ya ligado y la carpeta existe → refresca nombre/descripción; fotos solo
-      con `forzar_fotos`; la regla no se toca.
-    - No ligado → descarga fotos a un temporal; sin ninguna, no hay activo.
-      Si ya existe la carpeta con ese id la adopta (fotos solo si no tenía o
-      `forzar_fotos`); si no, `catalogo_productos.crear` con tipo inferido y
-      regla de Claude, y mueve las fotos adentro.
+      con `forzar_fotos` (o si el activo se había quedado sin ninguna); la
+      regla no se toca.
+    - No ligado → si otro producto ya reclamó el id derivado del nombre, se
+      desambigua (`-2`, `-3`…) en vez de colapsar los dos en un activo.
+      Descarga fotos a un temporal; sin ninguna, no hay activo. Si ya existe
+      la carpeta con ese id la adopta (fotos solo si no tenía o
+      `forzar_fotos`; si sigue sin ninguna, no se liga); si no,
+      `catalogo_productos.crear` con tipo inferido y regla de Claude, y mueve
+      las fotos adentro.
     """
     if errores is None:
         errores = []
@@ -281,9 +321,10 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
 
     activo_id = prod.get("activo_catalogo_id")
     if activo_id and catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
-        catalogo_productos.actualizar(cliente, activo_id, nombre=nombre, descripcion=descripcion,
+        catalogo_productos.actualizar(cliente, activo_id, nombre=nombre, descripcion=descripcion or None,
                                       categoria=CATEGORIA_ACTIVO)
-        if forzar_fotos and fotos:
+        carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
+        if (forzar_fotos or not _tiene_imagenes(carpeta)) and fotos:
             _bajar_y_colocar(cliente, activo_id, fotos, prod, errores)
         return activo_id
 
@@ -291,19 +332,24 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
         return None
 
-    activo_id = catalogo_productos.id_desde_nombre(nombre or prod.get("fuente_id") or "producto")
+    activo_id = _id_activo_disponible(cliente, nombre, prod.get("fuente_id"), producto_id)
     if catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
-        # Mismo nombre que un activo subido a mano: se adopta, no se duplica.
-        catalogo_productos.actualizar(cliente, activo_id, nombre=nombre, descripcion=descripcion,
+        # Mismo nombre que un activo subido a mano (y libre): se adopta, no se duplica.
+        catalogo_productos.actualizar(cliente, activo_id, nombre=nombre, descripcion=descripcion or None,
                                       categoria=CATEGORIA_ACTIVO)
         carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
         if forzar_fotos or not _tiene_imagenes(carpeta):
+            # La carpeta adoptada puede no tener fotos (subida vacía, o una
+            # sync anterior que falló al bajarlas): se intenta igual, como si
+            # forzar_fotos estuviera activo.
             if not _bajar_y_colocar(cliente, activo_id, fotos, prod, errores) and not _tiene_imagenes(carpeta):
-                errores.append(_aviso(prod, "no se pudo descargar ninguna foto; el activo sigue sin imágenes."))
+                errores.append(_aviso(prod, "sin fotos: no se enlazó al activo del catálogo."))
+                return None
         tiendas.marcar_producto(cliente, producto_id, activo_catalogo_id=activo_id)
         return activo_id
 
     temporal = tempfile.mkdtemp(prefix="creatv_fotos_")
+    creado_ahora = False
     try:
         rutas, fallidas = descargar_fotos(fotos, temporal)
         if not rutas:
@@ -315,13 +361,22 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         tipo = inferir_tipo(nombre, descripcion, prod.get("categoria") or "")
         try:
             activo_id = catalogo_productos.crear(cliente, nombre, descripcion, tipo=tipo,
-                                                 categoria=CATEGORIA_ACTIVO, regla=regla)
+                                                 categoria=CATEGORIA_ACTIVO, regla=regla, producto_id=activo_id)
+            creado_ahora = True
         except ValueError:
             # Carrera: alguien creó la carpeta entre `existe` y `crear`. Se adopta.
             if not catalogo_productos.existe(cliente, activo_id, CATEGORIA_ACTIVO):
                 raise
         carpeta = catalogo_productos.carpeta_de(cliente, activo_id, CATEGORIA_ACTIVO)
         _reemplazar_fotos(carpeta, temporal)
+        if not _tiene_imagenes(carpeta):
+            # No debería pasar (rutas no estaba vacío), pero por si acaso: no
+            # se deja un activo fantasma, y solo se borra la carpeta si la
+            # creó esta misma llamada (no la de otro producto en una carrera).
+            if creado_ahora:
+                catalogo_productos.eliminar(cliente, activo_id, CATEGORIA_ACTIVO)
+            errores.append(_aviso(prod, "sin fotos: no se creó el activo del catálogo."))
+            return None
     finally:
         shutil.rmtree(temporal, ignore_errors=True)
     tiendas.marcar_producto(cliente, producto_id, activo_catalogo_id=activo_id)

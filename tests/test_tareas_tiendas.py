@@ -190,6 +190,33 @@ def test_credenciales_ilegibles_marcan_rota(entorno, monkeypatch):
     assert "FLASK_SECRET_KEY" in tiendas.obtener("acme", tid)["error"]
 
 
+def test_valueerror_al_listar_productos_no_marca_rota(entorno):
+    """Un ValueError propio del conector (p. ej. un parseo raro) al listar no
+    es un problema de la tienda: sale como error de la tarea tal cual, sin
+    tocar `estado` ni avisar al cliente."""
+    import tareas
+    import tiendas
+    tid = _tienda()
+    Falso.error = ValueError("no se pudo parsear el precio")
+    with pytest.raises(ValueError):
+        tareas.REGISTRO["tienda_sync_productos"]({"payload": {"cliente": "acme", "tienda_id": tid},
+                                                 "intentos": 3, "max_intentos": 3})
+    assert tiendas.obtener("acme", tid)["estado"] == "conectada"
+    assert entorno["avisos"] == []
+
+
+def test_valueerror_al_listar_pedidos_no_marca_rota(entorno):
+    import tareas
+    import tiendas
+    tid = _tienda()
+    Falso.error = ValueError("no se pudo parsear la fecha")
+    with pytest.raises(ValueError):
+        tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid},
+                                              "intentos": 3, "max_intentos": 3})
+    assert tiendas.obtener("acme", tid)["estado"] == "conectada"
+    assert entorno["avisos"] == []
+
+
 def test_sync_tienda_inexistente(entorno):
     import tareas
     assert "no existe" in tareas.REGISTRO["tienda_sync_productos"]({"payload": {"cliente": "acme", "tienda_id": 99}})

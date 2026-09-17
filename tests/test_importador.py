@@ -246,6 +246,7 @@ def test_on_progreso_recibe_etapas(entorno):
     ("Kit", "sábanas y toallas", "", "textil_hogar"),
     ("Bolso para tenis", "", "", "bolso"),   # el nombre manda sobre la descripción
     ("Set regalo", "", "Calzado", "calzado"),
+    ("Raqueta de tenis", "", "", "otro"),   # "tenis" no es calzado con una raqueta al lado
     ("", "", "", "otro"),
 ])
 def test_inferir_tipo(nombre, descripcion, categoria, esperado):
@@ -317,6 +318,77 @@ def test_regla_fidelidad_nunca_lanza(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setattr(generador_prompts.anthropic, "Anthropic", _Cliente)
     assert generador_prompts.regla_fidelidad("X", "desc", "cat") == "Regla lista."
+
+
+def test_dos_productos_con_mismo_nombre_no_colapsan_en_un_activo(entorno):
+    import catalogo_productos
+    import importador
+    import tiendas
+    entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(content_type="image/jpeg")
+    entorno["respuestas"]["https://cdn.test/z.jpg"] = _Respuesta(content_type="image/jpeg")
+    res1 = importador.importar_lista("acme", "shopify", [
+        _prod(nombre="Gorra", fuente_id="g1", descripcion="Gorra roja", fotos=("https://cdn.test/a.jpg",))])
+    assert res1["activos"] == 1
+    res2 = importador.importar_lista("acme", "shopify", [
+        _prod(nombre="Gorra", fuente_id="g2", descripcion="Gorra negra", fotos=("https://cdn.test/z.jpg",))])
+    assert res2["activos"] == 1 and res2["errores"] == []
+
+    prods = {p["fuente_id"]: p for p in tiendas.productos("acme")}
+    assert prods["g1"]["activo_catalogo_id"] == "gorra"
+    assert prods["g2"]["activo_catalogo_id"] == "gorra-2"  # no pisa al primero
+
+    activo1 = catalogo_productos.encontrar("acme", "gorra", "producto")
+    activo2 = catalogo_productos.encontrar("acme", "gorra-2", "producto")
+    assert activo1["descripcion"] == "Gorra roja" and activo2["descripcion"] == "Gorra negra"
+    assert activo1["imagenes"] and activo2["imagenes"]  # cada uno con su propia foto
+    assert len(catalogo_productos.listar("acme", "producto")) == 2
+
+    # una nueva sync de g1 (ya ligado) sigue actualizando SU activo, no el del otro
+    importador.importar_lista("acme", "shopify", [
+        _prod(nombre="Gorra", fuente_id="g1", descripcion="Gorra roja v2", fotos=("https://cdn.test/a.jpg",))])
+    prods = {p["fuente_id"]: p for p in tiendas.productos("acme")}
+    assert prods["g1"]["activo_catalogo_id"] == "gorra"
+    assert catalogo_productos.encontrar("acme", "gorra", "producto")["descripcion"] == "Gorra roja v2"
+    assert catalogo_productos.encontrar("acme", "gorra-2", "producto")["descripcion"] == "Gorra negra"
+
+
+def test_adopta_carpeta_vacia_sin_fotos_no_vincula_ni_avisa_activo(entorno):
+    import catalogo_productos
+    import importador
+    import tiendas
+    catalogo_productos.crear("acme", "Cojín Azul", "", tipo="otro")  # carpeta subida a mano, sin imágenes
+    entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(status=500)
+    entorno["respuestas"]["https://cdn.test/b.png"] = _Respuesta(status=500)
+    res = importador.importar_lista("acme", "shopify", [_prod()])
+    assert res["activos"] == 0
+    assert any("sin fotos" in e for e in res["errores"])
+    assert tiendas.productos("acme")[0]["activo_catalogo_id"] is None
+    # la carpeta sigue existiendo (no la creamos en esta llamada) pero invisible en listar()
+    assert catalogo_productos.existe("acme", "cojin_azul")
+    assert catalogo_productos.listar("acme", "producto") == []
+
+
+def test_adopta_carpeta_vacia_y_descarga_fotos_como_forzar_fotos(entorno):
+    import catalogo_productos
+    import importador
+    import tiendas
+    catalogo_productos.crear("acme", "Cojín Azul", "", tipo="otro")  # carpeta subida a mano, sin imágenes
+    entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(content_type="image/jpeg")
+    res = importador.importar_lista("acme", "shopify", [_prod()])
+    assert res["activos"] == 1 and res["errores"] == []
+    assert tiendas.productos("acme")[0]["activo_catalogo_id"] == "cojin_azul"
+    assert catalogo_productos.encontrar("acme", "cojin_azul", "producto")["imagenes"]
+
+
+def test_descripcion_vacia_no_borra_la_escrita_a_mano(entorno):
+    import catalogo_productos
+    import importador
+    entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(content_type="image/jpeg")
+    importador.importar_lista("acme", "shopify", [_prod()])
+    catalogo_productos.actualizar("acme", "cojin_azul", descripcion="Escrita a mano.")
+    importador.importar_lista("acme", "shopify", [_prod(descripcion="")])
+    activo = catalogo_productos.encontrar("acme", "cojin_azul", "producto")
+    assert activo["descripcion"] == "Escrita a mano."
 
 
 def test_catalogo_existe_y_producto_por_fuente(entorno):

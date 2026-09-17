@@ -185,12 +185,16 @@ def existe(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
         return False
 
 
-def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATEGORIA_POR_DEFECTO, regla=""):
-    """Crea la carpeta del activo y guarda su metadata. Devuelve el id nuevo.
-    OJO: hasta que no tenga al menos una imagen no aparece en listar(), porque
-    un activo sin fotos de referencia no sirve para generar nada."""
+def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATEGORIA_POR_DEFECTO, regla="",
+          producto_id=None):
+    """Crea la carpeta del activo y guarda su metadata. Devuelve el id nuevo
+    (el derivado de `nombre`, salvo que se pase `producto_id` explícito —
+    lo usa el importador para desambiguar dos productos con el mismo
+    nombre sin pisar el activo del primero). OJO: hasta que no tenga al
+    menos una imagen no aparece en listar(), porque un activo sin fotos de
+    referencia no sirve para generar nada."""
     categoria = categoria_valida(categoria)
-    producto_id = id_desde_nombre(nombre)
+    producto_id = producto_id or id_desde_nombre(nombre)
     carpeta = carpeta_de(cliente, producto_id, categoria)
     if os.path.isdir(carpeta):
         raise ValueError(f"Ya existe un {CATEGORIAS[categoria]['nombre'].lower()} con ese nombre ({producto_id}).")

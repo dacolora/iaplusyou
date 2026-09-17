@@ -123,17 +123,23 @@ def tienda_sync_productos(tarea):
     tienda = tiendas.obtener(cliente, tid)
     if tienda is None:
         return "Esa tienda no existe."
-    con = None
     try:
         # Primera importación de esta fuente: vale la pena pedir descripciones.
         primera = not any(pr["fuente"] == tienda["tipo"]
                           for pr in tiendas.productos(cliente, incluir_archivados=True))
         con = _conector(cliente, tienda, cargar_descripciones=primera)
-        trabajos.reportar(job_id, etapa="Leyendo", detalle=_nombre(tienda))
-        lista = con.listar_productos()
     except _ERRORES_TIENDA as error:
-        if con is not None:
-            _guardar_credenciales(cliente, tienda, con)
+        mensaje = _marcar_rota(cliente, tienda, tarea, "productos", error)
+        raise ErrorConector(mensaje) from error
+    trabajos.reportar(job_id, etapa="Leyendo", detalle=_nombre(tienda))
+    try:
+        lista = con.listar_productos()
+    except ErrorConector as error:
+        # Solo un ErrorConector (credenciales/API) rompe la tienda; cualquier
+        # otra excepción del conector al listar (p. ej. un parseo que lanza
+        # ValueError) es un bug propio, no una tienda "rota", y sale tal cual
+        # como error de la tarea.
+        _guardar_credenciales(cliente, tienda, con)
         mensaje = _marcar_rota(cliente, tienda, tarea, "productos", error)
         raise ErrorConector(mensaje) from error
     _guardar_credenciales(cliente, tienda, con)
@@ -179,16 +185,20 @@ def tienda_sync_pedidos(tarea):
     tienda = tiendas.obtener(cliente, tid)
     if tienda is None:
         return "Esa tienda no existe."
-    con = None
     inicio = db.ahora()
     try:
         con = _conector(cliente, tienda)
-        if not getattr(con, "tiene_pedidos", False):
-            return f"La tienda {_nombre(tienda)} no expone pedidos; no hay nada que sincronizar."
-        pedidos = con.pedidos_desde(_desde_para_pedidos(tienda))
     except _ERRORES_TIENDA as error:
-        if con is not None:
-            _guardar_credenciales(cliente, tienda, con)
+        mensaje = _marcar_rota(cliente, tienda, tarea, "pedidos", error)
+        raise ErrorConector(mensaje) from error
+    if not getattr(con, "tiene_pedidos", False):
+        return f"La tienda {_nombre(tienda)} no expone pedidos; no hay nada que sincronizar."
+    try:
+        pedidos = con.pedidos_desde(_desde_para_pedidos(tienda))
+    except ErrorConector as error:
+        # Igual que en tienda_sync_productos: solo un ErrorConector al pedir
+        # los pedidos rompe la tienda; otra excepción sale como error de tarea.
+        _guardar_credenciales(cliente, tienda, con)
         mensaje = _marcar_rota(cliente, tienda, tarea, "pedidos", error)
         raise ErrorConector(mensaje) from error
     _guardar_credenciales(cliente, tienda, con)
