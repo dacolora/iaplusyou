@@ -303,7 +303,10 @@ def snapshots(ep_id):
         return [_snapshot_a_dict(f) for f in filas]
 
 
-def snapshot(ep_id, metricas):
+def snapshot(ep_id, metricas, tomado_en=None):
+    """Guarda una foto ACUMULADA de las métricas de una pieza. `tomado_en`
+    (ISO naive, como db.ahora()) solo lo fijan los tests y un backfill: en
+    producción siempre es «ahora»."""
     valores, extra = {}, {}
     for k, v in (metricas or {}).items():
         if k in _SNAP_COLS:
@@ -315,7 +318,8 @@ def snapshot(ep_id, metricas):
             extra[k] = v
     with db.conectar() as con:
         return con.execute(db.metrica_snapshot.insert().values(
-            experimento_pieza_id=ep_id, tomado_en=db.ahora(), extra=extra, **valores)).inserted_primary_key[0]
+            experimento_pieza_id=ep_id, tomado_en=tomado_en or db.ahora(), extra=extra,
+            **valores)).inserted_primary_key[0]
 
 
 def _piezas(con, cliente, experimento_id):
