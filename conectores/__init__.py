@@ -11,6 +11,9 @@ import importlib
 from .base import Conector, ErrorConector  # noqa: F401 (re-export)
 
 REGISTRO = {}
+# Tipos con API (credenciales + sync). La UI los lista sin importar los módulos;
+# `por_tipo` los importa perezosamente al pedirlos.
+TIPOS_API = ("shopify", "woo", "meli")
 
 
 def registrar(cls):

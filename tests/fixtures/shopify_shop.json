@@ -1,0 +1,9 @@
+{
+  "data": {
+    "shop": {
+      "name": "Vidrios Demo",
+      "currencyCode": "COP",
+      "myshopifyDomain": "vidrios-demo.myshopify.com"
+    }
+  }
+}

@@ -1,0 +1,586 @@
+[
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1001",
+      "title": "Espejo redondo 60cm #1",
+      "price": 95000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1001-producto-1",
+      "pictures": [
+        {
+          "id": "p0a",
+          "url": "http://http2.mlstatic.com/D_0a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_0a-O.jpg"
+        },
+        {
+          "id": "p0b",
+          "url": "http://http2.mlstatic.com/D_0b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_0b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 5
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1002",
+      "title": "Vidrio templado 8mm #2",
+      "price": 96000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1002-producto-2",
+      "pictures": [
+        {
+          "id": "p1a",
+          "url": "http://http2.mlstatic.com/D_1a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_1a-O.jpg"
+        },
+        {
+          "id": "p1b",
+          "url": "http://http2.mlstatic.com/D_1b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_1b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 6
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1003",
+      "title": "Repisa flotante de vidrio #3",
+      "price": 97000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1003-producto-3",
+      "pictures": [
+        {
+          "id": "p2a",
+          "url": "http://http2.mlstatic.com/D_2a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_2a-O.jpg"
+        },
+        {
+          "id": "p2b",
+          "url": "http://http2.mlstatic.com/D_2b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_2b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 7
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1004",
+      "title": "Espejo redondo 60cm #4",
+      "price": 98000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1004-producto-4",
+      "pictures": [
+        {
+          "id": "p3a",
+          "url": "http://http2.mlstatic.com/D_3a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_3a-O.jpg"
+        },
+        {
+          "id": "p3b",
+          "url": "http://http2.mlstatic.com/D_3b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_3b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 8
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1005",
+      "title": "Vidrio templado 8mm #5",
+      "price": 99000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1005-producto-5",
+      "pictures": [
+        {
+          "id": "p4a",
+          "url": "http://http2.mlstatic.com/D_4a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_4a-O.jpg"
+        },
+        {
+          "id": "p4b",
+          "url": "http://http2.mlstatic.com/D_4b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_4b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 9
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1006",
+      "title": "Repisa flotante de vidrio #6",
+      "price": 100000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1006-producto-6",
+      "pictures": [
+        {
+          "id": "p5a",
+          "url": "http://http2.mlstatic.com/D_5a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_5a-O.jpg"
+        },
+        {
+          "id": "p5b",
+          "url": "http://http2.mlstatic.com/D_5b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_5b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 10
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1007",
+      "title": "Espejo redondo 60cm #7",
+      "price": 101000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1007-producto-7",
+      "pictures": [
+        {
+          "id": "p6a",
+          "url": "http://http2.mlstatic.com/D_6a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_6a-O.jpg"
+        },
+        {
+          "id": "p6b",
+          "url": "http://http2.mlstatic.com/D_6b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_6b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 11
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1008",
+      "title": "Vidrio templado 8mm #8",
+      "price": 102000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1008-producto-8",
+      "pictures": [
+        {
+          "id": "p7a",
+          "url": "http://http2.mlstatic.com/D_7a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_7a-O.jpg"
+        },
+        {
+          "id": "p7b",
+          "url": "http://http2.mlstatic.com/D_7b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_7b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 12
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1009",
+      "title": "Repisa flotante de vidrio #9",
+      "price": 103000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1009-producto-9",
+      "pictures": [
+        {
+          "id": "p8a",
+          "url": "http://http2.mlstatic.com/D_8a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_8a-O.jpg"
+        },
+        {
+          "id": "p8b",
+          "url": "http://http2.mlstatic.com/D_8b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_8b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 13
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1010",
+      "title": "Espejo redondo 60cm #10",
+      "price": 104000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1010-producto-10",
+      "pictures": [
+        {
+          "id": "p9a",
+          "url": "http://http2.mlstatic.com/D_9a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_9a-O.jpg"
+        },
+        {
+          "id": "p9b",
+          "url": "http://http2.mlstatic.com/D_9b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_9b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 14
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1011",
+      "title": "Vidrio templado 8mm #11",
+      "price": 105000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1011-producto-11",
+      "pictures": [
+        {
+          "id": "p10a",
+          "url": "http://http2.mlstatic.com/D_10a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_10a-O.jpg"
+        },
+        {
+          "id": "p10b",
+          "url": "http://http2.mlstatic.com/D_10b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_10b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 15
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1012",
+      "title": "Repisa flotante de vidrio #12",
+      "price": 106000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1012-producto-12",
+      "pictures": [
+        {
+          "id": "p11a",
+          "url": "http://http2.mlstatic.com/D_11a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_11a-O.jpg"
+        },
+        {
+          "id": "p11b",
+          "url": "http://http2.mlstatic.com/D_11b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_11b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 16
+    }
+  },
+  {
+    "code": 404,
+    "body": {
+      "message": "Item with id MCO1013 not found",
+      "error": "not_found",
+      "status": 404
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1014",
+      "title": "Vidrio templado 8mm #14",
+      "price": 108000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1014-producto-14",
+      "pictures": [
+        {
+          "id": "p13a",
+          "url": "http://http2.mlstatic.com/D_13a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_13a-O.jpg"
+        },
+        {
+          "id": "p13b",
+          "url": "http://http2.mlstatic.com/D_13b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_13b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 18
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1015",
+      "title": "Repisa flotante de vidrio #15",
+      "price": 109000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1015-producto-15",
+      "pictures": [
+        {
+          "id": "p14a",
+          "url": "http://http2.mlstatic.com/D_14a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_14a-O.jpg"
+        },
+        {
+          "id": "p14b",
+          "url": "http://http2.mlstatic.com/D_14b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_14b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 19
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1016",
+      "title": "Espejo redondo 60cm #16",
+      "price": 110000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1016-producto-16",
+      "pictures": [
+        {
+          "id": "p15a",
+          "url": "http://http2.mlstatic.com/D_15a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_15a-O.jpg"
+        },
+        {
+          "id": "p15b",
+          "url": "http://http2.mlstatic.com/D_15b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_15b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 20
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1017",
+      "title": "Vidrio templado 8mm #17",
+      "price": 111000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1017-producto-17",
+      "pictures": [
+        {
+          "id": "p16a",
+          "url": "http://http2.mlstatic.com/D_16a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_16a-O.jpg"
+        },
+        {
+          "id": "p16b",
+          "url": "http://http2.mlstatic.com/D_16b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_16b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 21
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1018",
+      "title": "Repisa flotante de vidrio #18",
+      "price": 112000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1018-producto-18",
+      "pictures": [
+        {
+          "id": "p17a",
+          "url": "http://http2.mlstatic.com/D_17a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_17a-O.jpg"
+        },
+        {
+          "id": "p17b",
+          "url": "http://http2.mlstatic.com/D_17b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_17b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 22
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1019",
+      "title": "Espejo redondo 60cm #19",
+      "price": 113000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1019-producto-19",
+      "pictures": [
+        {
+          "id": "p18a",
+          "url": "http://http2.mlstatic.com/D_18a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_18a-O.jpg"
+        },
+        {
+          "id": "p18b",
+          "url": "http://http2.mlstatic.com/D_18b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_18b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 23
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1020",
+      "title": "Vidrio templado 8mm #20",
+      "price": 114000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1020-producto-20",
+      "pictures": [
+        {
+          "id": "p19a",
+          "url": "http://http2.mlstatic.com/D_19a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_19a-O.jpg"
+        },
+        {
+          "id": "p19b",
+          "url": "http://http2.mlstatic.com/D_19b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_19b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 24
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1021",
+      "title": "Repisa flotante de vidrio #21",
+      "price": 115000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1021-producto-21",
+      "pictures": [
+        {
+          "id": "p20a",
+          "url": "http://http2.mlstatic.com/D_20a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_20a-O.jpg"
+        },
+        {
+          "id": "p20b",
+          "url": "http://http2.mlstatic.com/D_20b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_20b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 25
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1022",
+      "title": "Espejo redondo 60cm #22",
+      "price": 116000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1022-producto-22",
+      "pictures": [
+        {
+          "id": "p21a",
+          "url": "http://http2.mlstatic.com/D_21a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_21a-O.jpg"
+        },
+        {
+          "id": "p21b",
+          "url": "http://http2.mlstatic.com/D_21b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_21b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 26
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1023",
+      "title": "Vidrio templado 8mm #23",
+      "price": 117000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1023-producto-23",
+      "pictures": [
+        {
+          "id": "p22a",
+          "url": "http://http2.mlstatic.com/D_22a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_22a-O.jpg"
+        },
+        {
+          "id": "p22b",
+          "url": "http://http2.mlstatic.com/D_22b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_22b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 27
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1024",
+      "title": "Repisa flotante de vidrio #24",
+      "price": 118000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1024-producto-24",
+      "pictures": [
+        {
+          "id": "p23a",
+          "url": "http://http2.mlstatic.com/D_23a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_23a-O.jpg"
+        },
+        {
+          "id": "p23b",
+          "url": "http://http2.mlstatic.com/D_23b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_23b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 28
+    }
+  },
+  {
+    "code": 200,
+    "body": {
+      "id": "MCO1025",
+      "title": "Espejo redondo 60cm #25",
+      "price": 119000,
+      "currency_id": "COP",
+      "permalink": "https://articulo.mercadolibre.com.co/MCO1025-producto-25",
+      "pictures": [
+        {
+          "id": "p24a",
+          "url": "http://http2.mlstatic.com/D_24a-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_24a-O.jpg"
+        },
+        {
+          "id": "p24b",
+          "url": "http://http2.mlstatic.com/D_24b-O.jpg",
+          "secure_url": "https://http2.mlstatic.com/D_24b-O.jpg"
+        }
+      ],
+      "category_id": "MCO1234",
+      "available_quantity": 29
+    }
+  }
+]

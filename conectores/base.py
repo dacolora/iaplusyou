@@ -13,6 +13,7 @@ las fotos.
 dashboard/worker: `.usuario` (== `str(e)`) es un mensaje en español apto
 para mostrar tal cual y NUNCA lleva credenciales ni HTML ajeno.
 """
+import html
 import re
 import unicodedata
 from datetime import datetime
@@ -23,6 +24,8 @@ CLAVES_PEDIDO = ("fuente_id", "fecha", "total", "moneda", "items", "utm_content"
 
 _RE_URL_HTTP = re.compile(r"^https?://", re.IGNORECASE)
 _RE_MONEDA = re.compile(r"^[A-Z]{3}$")
+_RE_ETIQUETAS = re.compile(r"<[^>]+>")
+_RE_ESPACIOS = re.compile(r"\s+")
 
 
 class ErrorConector(Exception):
@@ -35,6 +38,15 @@ class ErrorConector(Exception):
 
 
 # --- helpers de normalización ----------------------------------------------
+
+def limpiar_html(texto):
+    """HTML de una descripción -> texto plano: quita etiquetas, decodifica
+    entidades y colapsa espacios. `<br>`/`</p>` se vuelven un espacio."""
+    if texto is None:
+        return ""
+    texto = html.unescape(_RE_ETIQUETAS.sub(" ", str(texto)))
+    return _RE_ESPACIOS.sub(" ", texto).strip()
+
 
 def slug(texto):
     """"Espejo redondo 60cm" -> "espejo-redondo-60cm" (sin acentos, ASCII)."""

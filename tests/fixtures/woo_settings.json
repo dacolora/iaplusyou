@@ -1,0 +1,7 @@
+[
+  {"id": "woocommerce_store_address", "label": "Address line 1", "type": "text", "value": "Calle 10 # 5-20"},
+  {"id": "woocommerce_store_city", "label": "City", "type": "text", "value": "Bogotá"},
+  {"id": "woocommerce_default_country", "label": "Country / State", "type": "select", "value": "CO"},
+  {"id": "woocommerce_currency", "label": "Currency", "type": "select", "value": "COP"},
+  {"id": "woocommerce_currency_pos", "label": "Currency position", "type": "select", "value": "left"}
+]
