@@ -135,3 +135,18 @@ def test_reglas_defecto_por_proyecto(tmp_path, monkeypatch):
     assert proyectos.reglas_defecto("acme") == {}
     proyectos.guardar_reglas_defecto("acme", {"ctr_min": 1.2, "basura": 9})
     assert proyectos.reglas_defecto("acme") == {"ctr_min": 1.2}
+
+
+def test_cero_impresiones_nunca_es_perdedor_aunque_pase_la_ventana():
+    """I-8 (review final): un anuncio que Meta no entregó (0 impresiones) no
+    tiene evidencia aunque lleve más horas que `ventana_horas`: queda
+    `pendiente`, o `inconcluso` (pausar) si ya cerró la ventana de días —
+    nunca `perdedor` (eso rescataría con crédito algo que nadie vio)."""
+    r = decisor.reglas_efectivas(None, None)
+    v = decisor.decidir([snap(impresiones=0, gasto=0.0)], r, dict(CTX, horas_activo=200, dias_transcurridos=3))
+    assert v["veredicto"] == "pendiente" and v["accion"] is None
+    v = decisor.decidir([snap(impresiones=0, gasto=0.0)], r, dict(CTX, horas_activo=200, dias_transcurridos=8))
+    assert v["veredicto"] == "inconcluso" and v["accion"] == "pausar"
+    # Con al menos una impresión la ventana de horas sigue valiendo como evidencia.
+    v = decisor.decidir([snap(impresiones=1, ctr=0.0, gasto=0.1)], r, dict(CTX, horas_activo=200))
+    assert v["veredicto"] == "perdedor"

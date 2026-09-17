@@ -22,14 +22,21 @@ def _a_dict(f):
             "resuelta_en": m[p.c.resuelta_en]}
 
 
+def _clave(payload):
+    """(ep_id, pais, ep_ids ordenados): dos propuestas `activar` con listas
+    de piezas distintas son cosas distintas (I-4) — antes None == None las
+    fundía y la segunda derivación lista nunca pedía activarse."""
+    return tuple(payload.get(k) for k in _CLAVES_DEDUPE) + (tuple(sorted(payload.get("ep_ids") or [])),)
+
+
 def _misma_cosa(a, b):
-    return all(a.get(k) == b.get(k) for k in _CLAVES_DEDUPE)
+    return _clave(a) == _clave(b)
 
 
 def crear(cliente, experimento_id, accion, payload, motivo):
     """Crea una propuesta pendiente y devuelve su id. Si ya hay una pendiente
-    con la misma acción sobre la misma pieza/país (payload ep_id/pais), no
-    duplica: devuelve la existente."""
+    con la misma acción sobre la misma pieza/país/lista de piezas (payload
+    ep_id/pais/ep_ids), no duplica: devuelve la existente."""
     payload = dict(payload or {})
     payload["motivo"] = motivo
     with db.conectar() as con:

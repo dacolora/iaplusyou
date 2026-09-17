@@ -615,3 +615,53 @@ def test_lanzar_con_error_avisa(entorno):
     with pytest.raises(RuntimeError):
         lz.lanzar("acme", eid)
     assert [a[0] for a in avisos] == ["error_lanzamiento"] and "Meta falló en adset" in avisos[0][2]
+
+
+def test_cambiar_estado_active_no_reactiva_piezas_retiradas_por_el_decisor(entorno):
+    """I-1 (review final): al reactivar el experimento entero, las piezas con
+    veredicto perdedor/inconcluso o marcadas `archivado`/`rescatado_en_escalon`
+    se quedan en pausa en Meta; el evento dice cuáles se saltaron."""
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    lz.lanzar("acme", eid)
+    p1, p2, p3 = [p["id"] for p in ex.obtener("acme", eid)["piezas"]]
+    ex.actualizar_pieza("acme", p1, veredicto="perdedor")
+    ex.marcar_pieza("acme", p1, rescatado_en_escalon=1)
+    ex.marcar_pieza("acme", p2, archivado=True)
+    meta.llamadas.clear()
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    ads_activados = [kw["oid"] for t, kw in meta.llamadas if t == "estado" and kw["oid"].startswith("ad_")]
+    e = ex.obtener("acme", eid)
+    estados = {p["id"]: p["estado"] for p in e["piezas"]}
+    assert estados == {p1: "pausado", p2: "pausado", p3: "activo"}
+    assert ads_activados == [next(p["meta_ad_id"] for p in e["piezas"] if p["id"] == p3)]
+    assert e["estado"] == "corriendo"
+    ev = next(v for v in e["eventos"] if v["tipo"] == "estado" and "Activado" in v["mensaje"])
+    assert "Siguen en pausa" in ev["mensaje"] and sorted(ev["datos"]["saltadas"]) == sorted([p1, p2])
+    # Inconcluso también cuenta como retirada; pausar sí toca todas.
+    ex.actualizar_pieza("acme", p3, veredicto="inconcluso")
+    lz.cambiar_estado("acme", eid, "PAUSED")
+    meta.llamadas.clear()
+    lz.cambiar_estado("acme", eid, "ACTIVE")
+    assert not any(kw["oid"].startswith("ad_") for t, kw in meta.llamadas if t == "estado")
+    assert all(p["estado"] == "pausado" for p in ex.obtener("acme", eid)["piezas"])
+    assert lz.pieza_retirada({"veredicto": "ganador", "extra": {}}) is False
+
+
+def test_activar_pieza_y_lanzar_escriben_extra_sin_pisar_lo_que_llego_entre_medio(entorno):
+    """Menor (review final): `activado_en` y `meta_video_id` de la pieza van
+    por `marcar_pieza` (RMW bajo lock), no por `actualizar_pieza(extra=foto
+    vieja)`: una bandera escrita mientras se hablaba con Meta sobrevive."""
+    ex, lz, eid, mp = entorno["ex"], entorno["lanzador"], entorno["eid"], entorno["monkeypatch"]
+    lz.lanzar("acme", eid)
+    ep = ex.obtener("acme", eid)["piezas"][0]["id"]
+    assert ex.piezas("acme", eid)[0]["extra"]["meta_video_id"] == "vid_1"
+    original = lz._con_credenciales
+
+    def _meta(cliente, fn):
+        ex.marcar_pieza("acme", ep, rescatado_en_escalon=1)   # el worker escribe mientras Meta responde
+        return original(cliente, fn)
+
+    mp.setattr(lz, "_con_credenciales", _meta)
+    lz.activar_pieza("acme", ep)
+    extra = next(p for p in ex.piezas("acme", eid) if p["id"] == ep)["extra"]
+    assert extra["activado_en"] and extra["rescatado_en_escalon"] == 1 and extra["meta_video_id"] == "vid_1"

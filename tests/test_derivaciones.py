@@ -440,14 +440,24 @@ def test_rescate_fallido_deja_propuesta_y_evento_sobre_la_pieza(ent):
     assert len(propuestas.pendientes("acme", eid)) == 1
 
 
-def test_regeneracion_de_sesion_de_imagen_encola_flowplus_imagen(ent):
-    dv, ex, cf, eid, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["cf_id"]
+@pytest.mark.parametrize("tipo", ["rescatar", "derivar"])
+def test_sesion_de_imagen_no_se_deriva_ni_rescata(ent, tipo):
+    """Menor (review final): una sesión `imagen` no tiene video que cortar —
+    `producir` fallaría después de gastar el guion. Se rechaza antes de
+    duplicar, crear hijo o encolar nada, y la pieza queda como estaba."""
+    dv, ex, cf, eid = ent["dv"], ent["ex"], ent["cf"], ent["eid"]
     cf_img = _sesion_con_video(cf)
     cf.actualizar("acme", cf_img, tipo="imagen")
     ep_img = ex.agregar_pieza("acme", eid, cf.pieza_id_por_legado("acme", cf_img), "MX")
     ex.actualizar_pieza("acme", ep_img, escalon_rescate=2)
-    dv.planificar("acme", eid, "rescatar", {"ep_id": ep_img})
-    assert [e["tipo"] for e in ent["encolados"]] == ["flowplus_imagen"]
+    n_sesiones = len(cf.cargar("acme"))
+    with pytest.raises(ValueError, match="imagen"):
+        dv.planificar("acme", eid, tipo, {"ep_id": ep_img})
+    assert ent["encolados"] == [] and len(cf.cargar("acme")) == n_sesiones
+    e = ex.obtener("acme", eid)
+    assert e["hijos"] == [] and not (e["extra"] or {}).get("derivaciones")
+    pz = next(p for p in e["piezas"] if p["id"] == ep_img)
+    assert pz["escalon_rescate"] == 2 and pz["extra"] == {}
 
 
 # ------------------------------------------- fix escalera (por concepto) ---
@@ -514,3 +524,153 @@ def test_derivar_deja_las_piezas_hijas_en_escalon_cero_con_origen(ent):
     piezas = ex.piezas("acme", hijo)
     assert len(piezas) == 2
     assert all(p["escalon_rescate"] == 0 and p["extra"]["origen_ep_id"] == ep for p in piezas)
+
+
+# ------------------------------------------------- review final (I-3..I-7) ---
+
+def test_cierre_con_fallo_al_lanzar_no_filtra_el_token(ent, monkeypatch):
+    """I-3: el error de `lanzar` (que relanza el de meta_ads, con token) va
+    al evento pasado por `cola.sin_token`."""
+    dv, ex, cf, eid, ep = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"]
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep})
+    legado = _derivacion(ex, eid)["items"][0]["finales"]["es_CO"]
+    cf.actualizar_final("acme", legado, estado="listo", url_video="https://r2/v1.mp4")
+
+    def _falla(c, e):
+        raise RuntimeError("Meta: access_token=SECRETO123 caducado")
+    monkeypatch.setattr(dv.lanzador, "lanzar_piezas_nuevas", _falla)
+    assert dv.avanzar("acme", eid)["estado"] == "error"
+    errores = [e["mensaje"] for e in ex.eventos("acme", eid) if e["tipo"] == "error"]
+    assert errores and all("SECRETO123" not in m for m in errores)
+    assert any("access_token=***" in m for m in errores)
+
+
+def test_fallo_de_item_no_filtra_el_token(ent):
+    dv, ex, cf, eid, ep = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"]
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep})
+    legado = _derivacion(ex, eid)["items"][0]["finales"]["es_CO"]
+    cf.actualizar_final("acme", legado, estado="error", error="fal: access_token=SECRETO123")
+    dv.avanzar("acme", eid)
+    d = _derivacion(ex, eid)
+    assert "SECRETO123" not in d["items"][0]["error"]
+    assert all("SECRETO123" not in e["mensaje"] for e in ex.eventos("acme", eid))
+
+
+@pytest.mark.parametrize("tipo", ["rescatar", "derivar"])
+def test_planificar_marca_la_pieza_antes_de_encolar_y_no_relanza_si_avanzar_falla(ent, monkeypatch, tipo):
+    """I-5: si `avanzar` explota dentro de `planificar`, la derivación ya
+    está guardada y la bandera de idempotencia (`rescatado_en_escalon` /
+    `derivado`) ya está en la pieza; no sube excepción (queda evento `error`)
+    y un segundo `acciones.ejecutar` NO vuelve a planificar. La periódica
+    retoma la derivación después."""
+    import acciones
+    dv, ex, eid, ep = ent["dv"], ent["ex"], ent["eid"], ent["ep"]
+    monkeypatch.setattr(acciones.lanzador, "pausar_pieza", lambda c, e: None)
+    ex.actualizar("acme", eid, reglas={"n_reediciones": 1, "n_regeneraciones": 0})
+    intentos = []
+    avanzar_real = dv.avanzar
+
+    def _avanzar_roto(c, e):
+        intentos.append(e)
+        raise RuntimeError("cola caída access_token=SECRETO123")
+    monkeypatch.setattr(dv, "avanzar", _avanzar_roto)
+
+    acciones.ejecutar("acme", eid, tipo, {"ep_id": ep})          # no relanza
+    destino = eid if tipo == "rescatar" else ex.obtener("acme", eid)["hijos"][0]
+    d = _derivacion(ex, destino)
+    assert d["estado"] == "produciendo" and d["id"] == "d1" and intentos == [destino]
+    pz = next(p for p in ex.piezas("acme", eid) if p["id"] == ep)
+    if tipo == "rescatar":
+        assert pz["extra"]["rescatado_en_escalon"] == 1 and pz["escalon_rescate"] == 1
+    else:
+        assert pz["extra"]["derivado"] is True
+    errores = [e for e in ex.eventos("acme", destino) if e["tipo"] == "error"]
+    assert len(errores) == 1 and "SECRETO123" not in errores[0]["mensaje"] and "periódica" in errores[0]["mensaje"]
+    assert ent["encolados"] == []
+
+    # Reintento (la propuesta se vuelve a aprobar): no planifica de nuevo.
+    msg = acciones.ejecutar("acme", eid, tipo, {"ep_id": ep})
+    assert "ya" in msg and intentos == [destino]
+    assert len(ex.obtener("acme", destino)["extra"]["derivaciones"]) == 1
+    assert len(ex.obtener("acme", eid)["hijos"]) == (0 if tipo == "rescatar" else 1)
+
+    # La periódica retoma con el avanzar real y encola lo pendiente.
+    monkeypatch.setattr(dv, "avanzar", avanzar_real)
+    resumen = dv.avanzar("acme", destino)
+    assert resumen["estado"] == "produciendo" and len(ent["encolados"]) >= 1
+
+
+def test_ids_de_derivacion_se_asignan_dentro_del_rmw(ent):
+    """I-6: `_nueva`/`_guardar` asignan `d{max+1}` dentro del callback de
+    `actualizar_extra`; dos seguidas dan d1 y d2; con huecos también sigue
+    del máximo."""
+    dv, ex, eid, ep = ent["dv"], ent["ex"], ent["eid"], ent["ep"]
+    pz = {"id": ep}
+    d1 = dv._nueva("acme", eid, "rescatar", pz, "cf_x", "", [], escalon=1)
+    d2 = dv._nueva("acme", eid, "rescatar", pz, "cf_x", "", [], escalon=2)
+    assert (d1["id"], d2["id"]) == ("d1", "d2")
+    assert [d["id"] for d in ex.obtener("acme", eid)["extra"]["derivaciones"]] == ["d1", "d2"]
+    ex.actualizar_extra("acme", eid, lambda e: {**e, "derivaciones": [d for d in e["derivaciones"] if d["id"] != "d1"]})
+    assert dv._nueva("acme", eid, "rescatar", pz, "cf_x", "", [], escalon=3)["id"] == "d3"
+    # Volver a guardar la misma derivación reemplaza, no duplica.
+    d2["estado"] = "listo"
+    assert dv._guardar("acme", eid, d2) == "d2"
+    ds = ex.obtener("acme", eid)["extra"]["derivaciones"]
+    assert [(d["id"], d["estado"]) for d in ds] == [("d2", "listo"), ("d3", "produciendo")]
+
+
+def test_dos_planificar_concurrentes_no_comparten_id(ent, monkeypatch):
+    """I-6 (carrera): dos hilos planificando rescates de piezas distintas del
+    mismo experimento a la vez terminan con d1 y d2 — ninguno pisa al otro."""
+    import threading
+    dv, ex, cf, eid, ep = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"]
+    cf2 = _sesion_con_video(cf)
+    f2 = cf.crear_final("acme", cf2, "es", "MX")
+    cf.actualizar_final("acme", f2, estado="listo", url_video="https://r2/f2.mp4")
+    ep2 = ex.agregar_pieza("acme", eid, cf.pieza_id_por_legado("acme", f2), "MX")
+    barrera = threading.Barrier(2, timeout=10)
+    original = dv._guardar
+
+    def _guardar_lento(c, e, d):
+        if not d.get("id"):
+            barrera.wait()      # los dos llegan sin id: asignación bajo el lock
+        return original(c, e, d)
+    monkeypatch.setattr(dv, "_guardar", _guardar_lento)
+    monkeypatch.setattr(dv, "avanzar", lambda c, e: None)
+    errores = []
+
+    def _correr(ep_):
+        try:
+            dv.planificar("acme", eid, "rescatar", {"ep_id": ep_})
+        except Exception as error:  # noqa: BLE001
+            errores.append(error)
+    hilos = [threading.Thread(target=_correr, args=(x,)) for x in (ep, ep2)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join(15)
+    assert errores == []
+    ds = ex.obtener("acme", eid)["extra"]["derivaciones"]
+    assert sorted(d["id"] for d in ds) == ["d1", "d2"]
+    assert sorted(d["origen_ep_id"] for d in ds) == sorted([ep, ep2])
+
+
+def test_derivar_usa_el_idioma_de_cada_pais_del_experimento(ent):
+    """I-7: un ganador es_CO derivado a un experimento CO(es)+BR(pt) produce
+    es para CO (el de la final origen) y pt para BR — no español para Brasil."""
+    dv, ex, cf, eid, ep, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"], ent["cf_id"]
+    ex.actualizar("acme", eid, paises=[{"pais": "CO", "idioma": "es", "presupuesto_dia": 1.0},
+                                       {"pais": "BR", "idioma": "pt", "presupuesto_dia": 1.0}],
+                  reglas={"n_reediciones": 1, "n_regeneraciones": 1})
+    hijo = dv.planificar("acme", eid, "derivar", {"ep_id": ep})
+    d = _derivacion(ex, hijo)
+    assert all(i["idiomas"] == {"CO": "es", "BR": "pt"} for i in d["items"])
+    finales = [e for e in ent["encolados"] if e["tipo"] == "final_producir"]
+    assert {(e["payload"]["idioma"], e["payload"]["pais"]) for e in finales} == {("es", "CO"), ("pt", "BR")}
+    assert set(d["items"][0]["finales"]) == {"es_CO", "pt_BR"}
+    # El país de origen conserva el idioma de la final aunque el experimento
+    # diga otro (final en_CO sobre un experimento CO=es).
+    pz = {"tipo": "final", "idioma": "en", "pais": "CO"}
+    assert dv._idiomas(pz, [{"pais": "CO", "idioma": "es"}, {"pais": "BR", "idioma": "pt"}]) == {"CO": "en", "BR": "pt"}
+    assert dv._idiomas(pz, [{"pais": "CO", "idioma": "es"}, {"pais": "BR", "idioma": "pt"}], solo=["BR"]) == {"BR": "pt"}
+    assert dv._idiomas({"tipo": "clon"}, [{"pais": "MX"}]) == {"MX": "es"}     # sin idioma: base del país

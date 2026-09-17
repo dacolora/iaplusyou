@@ -13,11 +13,17 @@ experimento y meterlas al experimento cuando estén listas.
   y, agotados los 3, archivar (toda la cadena de sesiones).
 
 La producción es asíncrona (worker): `planificar` deja la máquina de estados
-en `experimento.extra["derivaciones"]` del experimento DESTINO y encola lo que
-puede; `avanzar` (periódica `exp_avanzar_todos`, cada 10 min) es idempotente:
-mira qué terminó, encola lo que falta y, cuando todo está listo, mete las
-piezas al experimento y lanza sus anuncios. Nada se activa solo: la
-activación pasa por `acciones.pedir("activar")` (puerta de modo).
+en `experimento.extra["derivaciones"]` del experimento DESTINO, marca en la
+pieza origen la bandera de idempotencia (`derivado` / `rescatado_en_escalon`)
+y recién entonces intenta encolar (`avanzar`); si encolar falla queda un
+evento `error` y la periódica lo retoma — nunca se vuelve a planificar (I-5).
+`avanzar` (periódica `exp_avanzar_todos`, cada 10 min) es idempotente: mira
+qué terminó, encola lo que falta y, cuando todo está listo, mete las piezas
+al experimento y lanza sus anuncios. Nada se activa solo: la activación pasa
+por `acciones.pedir("activar")` (puerta de modo). El id de cada derivación
+(`d{n}`) se asigna dentro del RMW de `extra` (`_guardar`), así dos
+planificaciones a la vez nunca comparten id (I-6). Las sesiones de tipo
+`imagen` no se derivan ni rescatan (no hay video que cortar): ValueError.
 
 Forma guardada (una entrada por derivación):
   {"id": "d1", "tipo": "derivar"|"rescatar", "origen_ep_id", "cf_id",
@@ -41,6 +47,7 @@ toma todas las piezas `en_cola`.
 y `propuestas` de forma perezosa (solo en `_cerrar_si_lista`) para evitar el
 ciclo.
 """
+import cola
 import creative_flow
 import db
 import decisor
@@ -86,12 +93,26 @@ def _cf_id_de(pz):
     return legado.split("__")[0]
 
 
-def _idiomas(pz, paises):
-    """País destino -> idioma de la final a producir: el de la final origen
-    si la pieza es una final; si es un clon, el idioma base de cada país."""
-    if pz.get("tipo") == "final" and pz.get("idioma"):
-        return {p: pz["idioma"] for p in paises}
-    return {p: (PAISES.get(p) or {}).get("idioma", "es") for p in paises}
+def _rechazar_imagen(cliente, cf_id):
+    """Una sesión de imagen no tiene video que cortar: `producir` fallaría
+    después de gastar el guion. Se rechaza antes de planificar nada."""
+    sesion = creative_flow.cargar(cliente).get(cf_id) or {}
+    if sesion.get("tipo") == "imagen":
+        raise ValueError("Esa pieza viene de una sesión de imagen: no se puede derivar ni rescatar (no hay video).")
+
+
+def _idiomas(pz, paises_ex, solo=None):
+    """País destino -> idioma de la final a producir (I-7): el idioma que el
+    experimento fijó para cada país (`ex["paises"][i]["idioma"]`); el país
+    de origen de una final conserva el idioma de esa final. `solo` limita a
+    esos países (rescatar: el de la pieza). Sin idioma en el experimento se
+    cae al idioma base del país (clones viejos)."""
+    idiomas = {p["pais"]: p.get("idioma") or (PAISES.get(p["pais"]) or {}).get("idioma", "es") for p in paises_ex}
+    if solo is not None:
+        idiomas = {p: idiomas.get(p) or (PAISES.get(p) or {}).get("idioma", "es") for p in solo}
+    if pz.get("tipo") == "final" and pz.get("idioma") and pz.get("pais") in idiomas:
+        idiomas[pz["pais"]] = pz["idioma"]
+    return idiomas
 
 
 def _siguiente_variante(cliente, cf_id, idiomas):
@@ -131,24 +152,56 @@ def _item_regeneracion(cliente, cf_id, k, idiomas):
             "finales": {}, "ep_ids": [], "error": None}
 
 
+def _numero(d):
+    try:
+        return int(str(d.get("id") or "d0")[1:])
+    except ValueError:
+        return 0
+
+
 def _guardar(cliente, experimento_id, derivacion):
     """Escribe la derivación en `extra.derivaciones` del experimento con un
     read-modify-write atómico (`experimentos.actualizar_extra`): no pisa
-    `activado_en` ni lo que otra ruta haya escrito en `extra` entre medio."""
+    `activado_en` ni lo que otra ruta haya escrito en `extra` entre medio.
+    Una derivación sin `id` recibe `d{max existente + 1}` DENTRO del RMW
+    (bajo el lock de escritura), así dos planificaciones concurrentes nunca
+    comparten id ni se pisan (I-6). Devuelve el id."""
     def _poner(extra):
-        lista = [d for d in (extra.get("derivaciones") or []) if d.get("id") != derivacion["id"]]
+        lista = list(extra.get("derivaciones") or [])
+        if not derivacion.get("id"):
+            derivacion["id"] = f"d{max((_numero(d) for d in lista), default=0) + 1}"
+        lista = [d for d in lista if d.get("id") != derivacion["id"]]
         lista.append(derivacion)
-        extra["derivaciones"] = sorted(lista, key=lambda d: int(d["id"][1:]))
+        extra["derivaciones"] = sorted(lista, key=_numero)
         return extra
     if experimentos.actualizar_extra(cliente, experimento_id, _poner) is None:
         raise ValueError("Ese experimento no existe.")
+    return derivacion["id"]
 
 
 def _nueva(cliente, experimento_id, tipo, pz, cf_id, motivo, items, escalon=0):
-    existentes = (_experimento(cliente, experimento_id)["extra"] or {}).get("derivaciones") or []
-    return {"id": f"d{len(existentes) + 1}", "tipo": tipo, "origen_ep_id": pz["id"], "cf_id": cf_id,
-            "motivo": motivo or "", "estado": "produciendo", "creado_en": db.ahora(), "escalon": escalon,
-            "items": items}
+    """Guarda una derivación nueva en el experimento destino y la devuelve
+    ya con su id (asignado en `_guardar`)."""
+    d = {"id": None, "tipo": tipo, "origen_ep_id": pz["id"], "cf_id": cf_id,
+         "motivo": motivo or "", "estado": "produciendo", "creado_en": db.ahora(), "escalon": escalon,
+         "items": items}
+    _guardar(cliente, experimento_id, d)
+    return d
+
+
+def _avanzar_sin_relanzar(cliente, experimento_id, d, ep_id):
+    """Primer intento de encolar la producción recién planificada. Si falla
+    (base, `crear_final`, `encolar`) NO se relanza: la derivación ya está
+    guardada y la bandera de idempotencia ya está en la pieza, así que un
+    reintento no debe volver a planificar; la periódica `exp_avanzar_todos`
+    retoma lo que falte (I-5). Queda un evento `error` sin token."""
+    try:
+        avanzar(cliente, experimento_id)
+    except Exception as error:  # noqa: BLE001
+        experimentos.registrar_evento(
+            cliente, experimento_id, "error",
+            f"Derivación {d['id']}: no se pudo encolar la producción ({cola.sin_token(str(error))}); "
+            f"la periódica lo reintenta.", datos={"derivacion": d["id"]}, ep_id=ep_id)
 
 
 def _resumen_items(items):
@@ -176,11 +229,12 @@ def planificar(cliente, experimento_id, tipo, payload):
 
 def _planificar_derivar(cliente, ex, pz, motivo):
     cf_id = _cf_id_de(pz)
+    _rechazar_imagen(cliente, cf_id)
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
     n_re, n_rg = int(reglas.get("n_reediciones") or 0), int(reglas.get("n_regeneraciones") or 0)
     if n_re + n_rg <= 0:
         raise ValueError("La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar.")
-    idiomas = _idiomas(pz, [p["pais"] for p in ex["paises"]])
+    idiomas = _idiomas(pz, ex["paises"])
     # Items primero (duplicar puede fallar) y el hijo después: así no queda
     # un hijo huérfano sin derivación.
     items = []
@@ -189,24 +243,27 @@ def _planificar_derivar(cliente, ex, pz, motivo):
         items.append(_item_reedicion(cf_id, base + k, TIPOS_VARIANTE[k % 2], idiomas))
     for k in range(n_rg):
         items.append(_item_regeneracion(cliente, cf_id, k, idiomas))
-    hijo = experimentos.crear_hijo(cliente, ex["id"], f"{ex['nombre']} · derivado de {pz['nombre']}", pz["id"])
+    hijo = experimentos.crear_hijo(cliente, ex["id"], f"{ex['nombre']} · derivado de {pz['nombre']}"[:200], pz["id"])
     d = _nueva(cliente, hijo, "derivar", pz, cf_id, motivo, items)
-    _guardar(cliente, hijo, d)
+    # Bandera de idempotencia apenas la derivación está guardada y ANTES de
+    # encolar: si encolar falla, un reintento no vuelve a planificar (I-5).
+    experimentos.marcar_pieza(cliente, pz["id"], derivado=True)
     mensaje = f"Derivación {d['id']} a partir de {pz['nombre']}: {_resumen_items(items) or 'sin piezas'}."
     experimentos.registrar_evento(cliente, ex["id"], "derivacion", f"{mensaje} Experimento hijo {hijo}.",
                                   datos={"hijo": hijo, "derivacion": d["id"]}, ep_id=pz["id"])
     experimentos.registrar_evento(cliente, hijo, "derivacion", f"{mensaje} Motivo: {motivo or 'sin motivo'}.",
                                   datos={"padre": ex["id"], "derivacion": d["id"]})
-    avanzar(cliente, hijo)
+    _avanzar_sin_relanzar(cliente, hijo, d, None)
     return hijo
 
 
 def _planificar_rescatar(cliente, ex, pz, motivo):
     cf_id = _cf_id_de(pz)
+    _rechazar_imagen(cliente, cf_id)
     escalon = int(pz.get("escalon_rescate") or 0) + 1
     if escalon not in _ESCALONES:
         raise ValueError(f"{pz['nombre']} ya agotó los {len(_ESCALONES)} escalones de rescate.")
-    idiomas = _idiomas(pz, [pz["pais"]])
+    idiomas = _idiomas(pz, ex["paises"], solo=[pz["pais"]])
     clase, variante_tipo = _ESCALONES[escalon]
     if clase == "reedicion":
         item = _item_reedicion(cf_id, _siguiente_variante(cliente, cf_id, idiomas), variante_tipo, idiomas)
@@ -214,12 +271,15 @@ def _planificar_rescatar(cliente, ex, pz, motivo):
         item = _item_regeneracion(cliente, cf_id, 0, idiomas)
     experimentos.actualizar_pieza(cliente, pz["id"], escalon_rescate=escalon)
     d = _nueva(cliente, ex["id"], "rescatar", pz, cf_id, motivo, [item], escalon=escalon)
-    _guardar(cliente, ex["id"], d)
+    # Bandera de idempotencia apenas la derivación está guardada y ANTES de
+    # encolar (I-5): `acciones.ejecutar("rescatar")` la relee y no vuelve a
+    # planificar este escalón aunque encolar haya fallado.
+    experimentos.marcar_pieza(cliente, pz["id"], rescatado_en_escalon=escalon)
     experimentos.registrar_evento(
         cliente, ex["id"], "derivacion",
         f"Rescate {d['id']} de {pz['nombre']} (escalón {escalon}): {_resumen_items([item])}. Motivo: {motivo or 'sin motivo'}.",
         datos={"derivacion": d["id"], "escalon": escalon}, ep_id=pz["id"])
-    avanzar(cliente, ex["id"])
+    _avanzar_sin_relanzar(cliente, ex["id"], d, pz["id"])
     return ex["id"]
 
 
@@ -282,6 +342,7 @@ def _opciones_de(item):
 
 
 def _fallar(cliente, experimento_id, d, item, motivo):
+    motivo = cola.sin_token(str(motivo))
     item["estado"], item["error"] = "error", motivo
     experimentos.registrar_evento(cliente, experimento_id, "error",
                                   f"Derivación {d['id']}: falló {_resumen_items([item])}: {motivo}.",
@@ -385,7 +446,7 @@ def _cerrar_si_lista(cliente, experimento_id, d):
         except Exception as error:
             d["estado"] = "error"
             experimentos.registrar_evento(cliente, experimento_id, "error",
-                                          f"Derivación {d['id']}: no se pudieron lanzar las piezas nuevas: {error}",
+                                          f"Derivación {d['id']}: no se pudieron lanzar las piezas nuevas: {cola.sin_token(str(error))}",
                                           datos={"derivacion": d["id"], "ep_ids": ep_ids}, ep_id=d["origen_ep_id"])
             return
     d["estado"] = "error" if con_error else "listo"

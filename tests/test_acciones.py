@@ -61,10 +61,15 @@ def test_ejecutar_derivar_rescatar_archivar_idempotentes(ent, monkeypatch):
 
 
 def test_ejecutar_activar(ent):
+    """I-1 (review final): activar piezas NUNCA pasa por
+    `cambiar_estado(ACTIVE)` del experimento entero, ni siquiera con el
+    experimento `pausado` — eso reactivaría en Meta las perdedoras que el
+    decisor pausó. `activar_pieza` ya reactiva campaña y conjunto."""
     ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
     ex.actualizar("acme", eid, estado="pausado")
     ac.ejecutar("acme", eid, "activar", {"ep_ids": [ep]})
-    assert ("estado", eid, "ACTIVE") in ent["llamadas"] and ("activar", ep) in ent["llamadas"]
+    assert ("activar", ep) in ent["llamadas"]
+    assert not any(l[0] == "estado" for l in ent["llamadas"])
 
 
 def test_ejecutar_activar_acepta_experimento_decidido(ent):
@@ -214,3 +219,45 @@ def test_pedir_registra_evento_error_y_relanza(ent, monkeypatch):
     assert "access_token=***" in errores[0]["mensaje"]
     assert "SECRETO123" not in errores[0]["mensaje"]
     assert errores[0]["datos"]["accion"] == "pausar"
+
+
+def test_pedir_derivar_en_profundidad_maxima_propone_aunque_sea_auto(ent):
+    """I-9: a partir de `PROFUNDIDAD_MAXIMA` generaciones (extra.profundidad
+    del experimento) un ganador ya no deriva solo ni en `auto`: queda como
+    propuesta con motivo "profundidad máxima". Por debajo sigue igual."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+    import propuestas as pr
+    ex.actualizar("acme", eid, modo="auto")
+    ex.actualizar_extra("acme", eid, lambda e: {**e, "profundidad": ac.PROFUNDIDAD_MAXIMA - 1})
+    assert ac.pedir("acme", eid, "derivar", {"ep_id": ep}, "ganador")[0] == "ejecutada"
+    assert ("planificar", "derivar", ep) in ent["llamadas"]
+    ex.marcar_pieza("acme", ep, derivado=False)
+    ex.actualizar_extra("acme", eid, lambda e: {**e, "profundidad": ac.PROFUNDIDAD_MAXIMA})
+    estado, msg = ac.pedir("acme", eid, "derivar", {"ep_id": ep}, "ganador")
+    assert estado == "propuesta" and "profundidad máxima" in msg
+    pend = pr.pendientes("acme", eid)
+    assert [p["accion"] for p in pend] == ["derivar"] and "profundidad máxima" in pend[0]["payload"]["motivo"]
+    assert len([l for l in ent["llamadas"] if l[0] == "planificar"]) == 1
+    # Las demás acciones no se ven afectadas por la profundidad.
+    assert ac.pedir("acme", eid, "pausar", {"ep_id": ep}, "x")[0] == "ejecutada"
+
+
+def test_rescatar_tolera_la_marca_que_planificar_ya_dejo(ent, monkeypatch):
+    """I-5: `derivaciones.planificar` marca `rescatado_en_escalon` por su
+    cuenta (antes de encolar). `ejecutar("rescatar")` no debe bajarla ni
+    volver a planificar cuando ya está puesta."""
+    ac, ex, eid, ep = ent["ac"], ent["ex"], ent["eid"], ent["ep"]
+
+    def _planificar_marcando(c, e, tipo, payload):
+        ent["llamadas"].append(("planificar", tipo, payload.get("ep_id")))
+        ex.actualizar_pieza(c, payload["ep_id"], escalon_rescate=1)
+        ex.marcar_pieza(c, payload["ep_id"], rescatado_en_escalon=1)
+        return e
+
+    monkeypatch.setattr(ac.derivaciones, "planificar", _planificar_marcando)
+    ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    p = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert p["extra"]["rescatado_en_escalon"] == 1 and p["escalon_rescate"] == 1
+    msg = ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
+    assert "ya rescatada" in msg
+    assert [l for l in ent["llamadas"] if l[0] == "planificar"] == [("planificar", "rescatar", ep)]

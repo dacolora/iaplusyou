@@ -231,3 +231,20 @@ def test_render_pestana_con_propuesta_y_veredicto(app, base_temporal):
     assert 'value="1.7"' in html   # override propio de ctr_min
     assert "Reglas por defecto de los experimentos" in html and "Correo para avisos" in html
     assert 'id="exp-%d"' % eid in html
+
+
+def test_tab_lista_las_piezas_de_una_propuesta_activar(app, base_temporal):
+    """Menor (review final): una propuesta `activar` con `ep_ids` (las que
+    deja `derivaciones._cerrar_si_lista`) muestra el nombre y país de cada
+    pieza, no una fila vacía."""
+    import experimentos as ex
+    import propuestas
+    eid = _experimento()
+    ex.agregar_pieza("acme", eid, _pieza(base_temporal), "CO")
+    ex.agregar_pieza("acme", eid, _pieza(base_temporal, pais="MX", legado="cf_1__es_MX"), "MX")
+    ep_co, ep_mx = [p["id"] for p in ex.piezas("acme", eid)]
+    ex.actualizar("acme", eid, estado="pausado", meta_campaign_id="c1")
+    propuestas.crear("acme", eid, "activar", {"ep_ids": [ep_co, ep_mx]}, "derivación d1 lista: 2 pieza(s) nueva(s)")
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert "Final es_CO (CO), Final es_MX (MX)" in html
+    assert "derivación d1 lista" in html

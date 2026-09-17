@@ -87,3 +87,22 @@ def test_crear_hijo_profundidad_tope_restante_e_idempotente(base_temporal):
     assert n["extra"]["profundidad"] == 2 and n["tope_total"] == 0.0
     with pytest.raises(ValueError):
         ex.crear_hijo("acme", 999999, "x", 1)
+
+
+def test_propuestas_activar_con_ep_ids_distintos_no_se_funden(base_temporal):
+    """I-4 (review final): dos derivaciones que cierran generan dos
+    propuestas `activar` con listas de piezas distintas — son dos cosas
+    distintas (antes None == None en ep_id/pais las fundía y la segunda
+    nunca pedía activarse). La misma lista, en otro orden, sí es la misma."""
+    import experimentos as ex
+    import propuestas as pr
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    p1 = pr.crear("acme", eid, "activar", {"ep_ids": [1, 2]}, "derivación d1 lista")
+    p2 = pr.crear("acme", eid, "activar", {"ep_ids": [3]}, "derivación d2 lista")
+    assert p1 != p2
+    assert pr.crear("acme", eid, "activar", {"ep_ids": [2, 1]}, "otra vez") == p1
+    assert [sorted(p["payload"]["ep_ids"]) for p in pr.pendientes("acme", eid)] == [[1, 2], [3]]
+    # ep_id/pais siguen deduplicando como antes.
+    p3 = pr.crear("acme", eid, "rescatar", {"ep_id": 7}, "x")
+    assert pr.crear("acme", eid, "rescatar", {"ep_id": 7}, "y") == p3
+    assert pr.crear("acme", eid, "rescatar", {"ep_id": 8}, "y") != p3

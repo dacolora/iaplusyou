@@ -21,6 +21,7 @@ def ent(base_temporal, monkeypatch):
     from tareas import experimentos as te
     tareas.cargar_todas()
     llamadas, avisos = [], []
+    pedir_real = te.acciones.pedir
 
     def pedir(cliente, eid, accion, payload, motivo):
         llamadas.append((accion, payload))
@@ -41,7 +42,7 @@ def ent(base_temporal, monkeypatch):
             ex.snapshot(ep, metricas)
         return ep
 
-    return {"ex": ex, "te": te, "eid": eid, "pieza": pieza, "llamadas": llamadas, "avisos": avisos,
+    return {"ex": ex, "te": te, "eid": eid, "pieza": pieza, "llamadas": llamadas, "avisos": avisos, "pedir_real": pedir_real,
             "decidir": lambda: te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})}
 
 
@@ -76,11 +77,14 @@ def test_ganador_escala_deriva_y_avisa(ent):
     assert "1 ganador" in msg and "2 propuesta" in msg
 
 
-def test_perdedora_pide_rescate(ent):
+def test_perdedora_pide_pausar_y_luego_rescate(ent):
+    """I-2 (review final, spec §7): la pausa del perdedor es una acción
+    aparte y sin gasto que se pide ANTES del rescate — así en semi el
+    anuncio deja de gastar aunque el rescate espere aprobación."""
     ep = ent["pieza"](metricas=PERDEDOR)
     ent["decidir"]()
     assert _pz(ent, ep)["veredicto"] == "perdedor"
-    assert ent["llamadas"] == [("rescatar", {"ep_id": ep})]
+    assert ent["llamadas"] == [("pausar", {"ep_id": ep}), ("rescatar", {"ep_id": ep})]
     assert [a[0] for a in ent["avisos"]] == []
 
 
@@ -89,9 +93,9 @@ def test_perdedora_en_escalon_3_archiva_con_cf_id(ent):
     ep = ent["pieza"](metricas=PERDEDOR)
     ex.actualizar_pieza("acme", ep, escalon_rescate=3)
     ent["decidir"]()
-    assert ent["llamadas"][0][0] == "archivar"
-    assert ent["llamadas"][0][1]["ep_id"] == ep and ent["llamadas"][0][1]["cf_id"] == "cf_1"
-    assert ent["llamadas"][0][1]["motivo"]
+    assert [l[0] for l in ent["llamadas"]] == ["pausar", "archivar"]
+    assert ent["llamadas"][1][1]["ep_id"] == ep and ent["llamadas"][1][1]["cf_id"] == "cf_1"
+    assert ent["llamadas"][1][1]["motivo"]
 
 
 def test_sin_evidencia_sigue_pendiente_y_no_pide_nada(ent):
@@ -233,7 +237,7 @@ def test_error_en_una_accion_no_frena_las_demas(ent, monkeypatch):
     b = ent["pieza"](legado="cf_b__es_CO", metricas=PERDEDOR)
     msg = ent["decidir"]()
     assert _pz(ent, a)["veredicto"] == "ganador" and _pz(ent, b)["veredicto"] == "perdedor"
-    assert [l[0] for l in ent["llamadas"]] == ["derivar", "rescatar"]
+    assert [l[0] for l in ent["llamadas"]] == ["derivar", "pausar", "rescatar"]
     assert "1 acción(es) con error" in msg
 
 
@@ -297,3 +301,94 @@ def test_exp_decidir_todos_encola_solo_corriendo(base_temporal, monkeypatch):
 def test_periodica_decidir_registrada():
     import worker
     assert worker.PERIODICAS == [("exp_refrescar_todos", 7200), ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600)]
+
+
+def test_semi_perdedora_se_pausa_ya_y_el_rescate_queda_propuesto(ent, monkeypatch):
+    """I-2 con `acciones.pedir` real (modo semi): pausar se ejecuta en Meta
+    (sin gasto) y el rescate queda como propuesta pendiente; el experimento
+    no pasa a decidido mientras la propuesta espere."""
+    import acciones
+    import propuestas as pr
+    ex, eid = ent["ex"], ent["eid"]
+    monkeypatch.setattr(ent["te"].acciones, "pedir", ent["pedir_real"])
+    pausadas = []
+
+    def _pausar(c, ep_):
+        pausadas.append(ep_)
+        ex.actualizar_pieza(c, ep_, estado="pausado")
+    monkeypatch.setattr(acciones.lanzador, "pausar_pieza", _pausar)
+    monkeypatch.setattr(acciones.derivaciones, "planificar", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no debe planificar en semi")))
+    ep = ent["pieza"](metricas=PERDEDOR)
+    msg = ent["decidir"]()
+    assert pausadas == [ep] and _pz(ent, ep)["estado"] == "pausado"
+    pend = pr.pendientes("acme", eid)
+    assert [(p["accion"], p["payload"]["ep_id"]) for p in pend] == [("rescatar", ep)]
+    assert "1 propuesta" in msg and ex.obtener("acme", eid)["estado"] == "corriendo"
+    tipos = [e["tipo"] for e in ex.eventos("acme", eid)]
+    assert "accion" in tipos and "propuesta" in tipos
+    assert [a[0] for a in ent["avisos"]] == ["propuesta"]
+
+
+def test_pieza_rechazada_por_meta_no_se_evalua_y_avisa_una_vez(ent):
+    """I-8: un anuncio DISAPPROVED/WITH_ISSUES no entrega; el decisor lo
+    salta (no hay veredicto ni acción) y deja UN evento `rechazo_meta`
+    (bandera `extra.rechazo_avisado`), no uno por pasada."""
+    ex, eid = ent["ex"], ent["eid"]
+    import lanzador
+    assert lanzador.ESTADOS_META_RECHAZO == ("DISAPPROVED", "WITH_ISSUES")
+    ep = ent["pieza"](metricas=PERDEDOR)
+    ex.actualizar_pieza("acme", ep, estado_meta="DISAPPROVED")
+    ok = ent["pieza"](legado="cf_2__es_CO", metricas=GANADOR)
+    ex.actualizar_pieza("acme", ok, estado_meta="WITH_ISSUES")
+    ent["decidir"]()
+    ent["decidir"]()
+    assert _pz(ent, ep)["veredicto"] == "pendiente" and _pz(ent, ok)["veredicto"] == "pendiente"
+    assert ent["llamadas"] == []
+    avisos = [e for e in ex.eventos("acme", eid) if e["tipo"] == "rechazo_meta"]
+    assert sorted(e["ep_id"] for e in avisos) == sorted([ep, ok])
+    assert _pz(ent, ep)["extra"]["rechazo_avisado"] is True
+    # Corregido en Meta: vuelve a evaluarse.
+    ex.actualizar_pieza("acme", ok, estado_meta="ACTIVE")
+    ent["decidir"]()
+    assert _pz(ent, ok)["veredicto"] == "ganador"
+
+
+def test_pieza_pausada_a_mano_sin_veredicto_no_bloquea_decidido(ent):
+    """Menor (review final): `decidido` = todas las piezas ACTIVAS tienen
+    veredicto; una pausada a mano y sin veredicto no lo bloquea para siempre."""
+    ex, eid = ent["ex"], ent["eid"]
+    a = ent["pieza"](metricas=GANADOR)
+    b = ent["pieza"](legado="cf_b__es_CO", metricas=None)
+    ex.actualizar_pieza("acme", b, estado="pausado")
+    ent["decidir"]()
+    assert _pz(ent, a)["veredicto"] == "ganador" and _pz(ent, b)["veredicto"] == "pendiente"
+    assert ex.obtener("acme", eid)["estado"] == "decidido"
+
+
+def test_todas_pausadas_sin_veredicto_no_es_decidido(ent):
+    ex, eid = ent["ex"], ent["eid"]
+    b = ent["pieza"](metricas=None)
+    ex.actualizar_pieza("acme", b, estado="pausado")
+    ent["decidir"]()
+    assert ex.obtener("acme", eid)["estado"] == "corriendo"
+
+
+def test_dias_transcurridos_sin_activado_en_usa_el_primer_snapshot_con_impresiones(ent):
+    """Menor (review final): experimentos activados antes de que existiera
+    `extra.activado_en` cuentan los días desde el primer snapshot con
+    impresiones (de cualquier pieza); si no, `inconcluso` nunca dispararía."""
+    ex, eid = ent["ex"], ent["eid"]
+    ex.actualizar("acme", eid, extra={})       # sin activado_en
+    pocas = {"impresiones": 10, "ctr": 2.0, "cpc": 0.3, "thruplay_rate": 0.3, "gasto": 0.5}
+    ep = ent["pieza"](horas=1, metricas=None)
+    with ex.db.conectar() as con:
+        con.execute(ex.db.metrica_snapshot.insert().values(experimento_pieza_id=ep, tomado_en=_hace(24 * 8), extra={}, **pocas))
+    ex.snapshot(ep, pocas)
+    ent["decidir"]()
+    pz = _pz(ent, ep)
+    assert pz["veredicto"] == "inconcluso" and ent["llamadas"] == [("pausar", {"ep_id": ep})]
+    # Con `activado_en` reciente, la ventana de 7 días sigue abierta: pendiente.
+    from tareas import experimentos as te
+    from datetime import datetime
+    assert te._dias_transcurridos({"extra": {"activado_en": _hace(2)}}, {}, datetime.now()) < 1
+    assert te._dias_transcurridos({"extra": {}}, {ep: []}, datetime.now()) == 0.0

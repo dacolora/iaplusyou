@@ -9,9 +9,11 @@ aquí. Dos puertas:
 - `ejecutar(...)`: hace la acción de verdad (Meta vía lanzador, producción vía
   derivaciones). Es idempotente sobre `experimento_pieza.extra`
   (`derivado`, `rescatado_en_escalon`, `archivado`): repetir una acción cara
-  no vuelve a gastar. La marca se escribe apenas la parte que gasta
-  (producción) quedó planificada, antes de la parte barata y reintentable
-  (pausar en Meta), así un fallo de Meta no provoca doble producción.
+  no vuelve a gastar. La marca la escribe `derivaciones.planificar` apenas
+  la parte que gasta (producción) quedó guardada — antes de encolar y antes
+  de la parte barata y reintentable (pausar en Meta) — y acá solo se
+  refuerza (idempotente: `max` con lo que ya haya), así ni un fallo de
+  Meta ni un fallo al encolar provocan doble producción (I-5).
 
 Nada se activa solo: la única vía es `ejecutar(..., "activar", ...)`, que en
 los modos manual/semi solo llega tras aprobar la propuesta.
@@ -28,6 +30,9 @@ import proyectos
 
 # Acciones que pueden aumentar el gasto: chequean el tope antes de ejecutarse.
 _ACCIONES_CON_GASTO = ("escalar", "activar", "derivar")
+# Generaciones de derivación (extra.profundidad) a partir de las cuales
+# "derivar" siempre queda como propuesta, sea cual sea el modo (I-9).
+PROFUNDIDAD_MAXIMA = 2
 
 
 def _experimento(cliente, experimento_id):
@@ -100,6 +105,7 @@ def ejecutar(cliente, experimento_id, accion, payload):
         if (pz.get("extra") or {}).get("derivado"):
             return f"{pz['nombre']} ya derivada: no se vuelve a producir."
         hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
+        # planificar ya marcó `derivado`; repetirlo es inocuo (misma bandera).
         experimentos.marcar_pieza(cliente, pz["id"], derivado=True)
         return f"Derivación planificada a partir de {pz['nombre']} (experimento hijo {hijo})."
 
@@ -117,12 +123,13 @@ def ejecutar(cliente, experimento_id, accion, payload):
             _pausar_si_activa(cliente, pz)
             return f"{pz['nombre']} ya rescatada (escalón {marcado}); pieza pausada."
         derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
-        # Marcar ANTES de pausar: si Meta falla al pausar, la marca ya existe
-        # y una re-ejecución (reintento de la propuesta) no vuelve a
-        # planificar — solo reintenta la pausa. El escalón es el que
-        # planificar dejó en la pieza (al menos el siguiente al que había).
+        # planificar ya dejó `rescatado_en_escalon` (I-5); acá se refuerza
+        # ANTES de pausar y sin bajar lo que ya haya: si Meta falla al
+        # pausar, la marca existe y una re-ejecución (reintento de la
+        # propuesta) no vuelve a planificar — solo reintenta la pausa.
         pz_post = _pieza(_experimento(cliente, experimento_id), pz["id"])
-        escalon = max(int(pz_post.get("escalon_rescate") or 0), escalon_actual + 1)
+        escalon = max(int(pz_post.get("escalon_rescate") or 0), escalon_actual + 1,
+                      int((pz_post.get("extra") or {}).get("rescatado_en_escalon") or 0))
         experimentos.marcar_pieza(cliente, pz["id"], rescatado_en_escalon=escalon)
         _pausar_si_activa(cliente, pz)
         return f"Rescate planificado para {pz['nombre']} (escalón {escalon}); la pieza queda pausada."
@@ -133,8 +140,9 @@ def ejecutar(cliente, experimento_id, accion, payload):
             raise ValueError("No hay piezas para activar.")
         if ex["estado"] not in ("pausado", "corriendo", "decidido"):
             raise ValueError("El experimento todavía no está en Meta.")
-        if ex["estado"] == "pausado":
-            lanzador.cambiar_estado(cliente, experimento_id, "ACTIVE")
+        # I-1: nunca `cambiar_estado(ACTIVE)` del experimento entero desde
+        # acá — reactivaría en Meta las piezas que el decisor ya retiró.
+        # `activar_pieza` reactiva campaña y conjunto por su cuenta.
         for ep_id in ep_ids:
             lanzador.activar_pieza(cliente, ep_id)
         return f"Activadas {len(ep_ids)} pieza(s)."
@@ -164,6 +172,12 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
     if accion in _ACCIONES_CON_GASTO and tope_alcanzado(ex):
         puerta = "propuesta"
         motivo_prop = f"tope alcanzado ({ex.get('gasto_acumulado'):g} de {ex.get('tope_total'):g} {ex.get('moneda') or ''}); {motivo}".strip()
+    elif accion == "derivar" and experimentos.profundidad(ex) >= PROFUNDIDAD_MAXIMA:
+        # I-9: a partir de la generación N un ganador ya no deriva solo (en
+        # auto la cadena hijo → nieto → … no tendría freno); la persona
+        # decide si abrir otra generación.
+        puerta = "propuesta"
+        motivo_prop = f"profundidad máxima ({experimentos.profundidad(ex)} generaciones de derivación); {motivo}".strip()
     ep_id = payload.get("ep_id")
     datos = {"accion": accion, "payload": payload, "modo": ex["modo"]}
 

@@ -95,14 +95,13 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
             cache = creativos_por_pieza.get(pz["pieza_id"])
             if cache and cache.get("creative_id"):
                 creative_id = cache["creative_id"]
-                experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id,
-                                              extra={**(pz.get("extra") or {}), "meta_video_id": cache.get("video_id")})
+                experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
+                experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=cache.get("video_id"))
             else:
                 video_id = (pz.get("extra") or {}).get("meta_video_id") or (cache and cache.get("video_id"))
                 if not video_id:
                     video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
-                    experimentos.actualizar_pieza(cliente, pz["id"],
-                                                  extra={**(pz.get("extra") or {}), "meta_video_id": video_id})
+                    experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
                 mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
                 creative_id = meta_creative.crear_creative_video(
                     f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
@@ -194,6 +193,19 @@ def _a_corriendo(cliente, experimento_id):
     experimentos.actualizar_extra(cliente, experimento_id, _con_activado, estado="corriendo")
 
 
+# Veredictos con los que una pieza ya no vuelve a entregar sola.
+_VEREDICTOS_RETIRADA = ("perdedor", "inconcluso")
+
+
+def pieza_retirada(pz):
+    """True si el decisor ya retiró la pieza: veredicto perdedor/inconcluso,
+    o marcada `archivado`/`rescatado_en_escalon` en `extra`. Estas piezas no
+    se reactivan al activar el experimento entero (I-1)."""
+    extra = pz.get("extra") or {}
+    return (pz.get("veredicto") in _VEREDICTOS_RETIRADA or bool(extra.get("archivado"))
+            or extra.get("rescatado_en_escalon") is not None)
+
+
 def cambiar_estado(cliente, experimento_id, status, pais=None):
     if status not in ("ACTIVE", "PAUSED"):
         raise ValueError("Estado no permitido.")
@@ -203,6 +215,7 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
     if ex["estado"] == "cerrado":
         raise ValueError("Ese experimento está cerrado.")
     local = "activo" if status == "ACTIVE" else "pausado"
+    saltadas = []
 
     def _correr(_creds):
         if pais is None:
@@ -222,10 +235,17 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
             meta_adset.actualizar_estado(p["meta_adset_id"], status)
             experimentos.actualizar_pais(cliente, experimento_id, pais, estado=local)
         for pz in _piezas_de(ex, pais):
+            if status == "ACTIVE" and pieza_retirada(pz):
+                # I-1: lo que el decisor ya retiró (perdedora rescatada,
+                # inconclusa, archivada) se queda en pausa aunque se
+                # reactive el experimento entero: si no, "activar la pieza
+                # de rescate" volvería a gastar en las que ya perdieron.
+                saltadas.append(pz)
+                continue
             meta_ad.actualizar_estado(pz["meta_ad_id"], status)
             if local == "activo":
-                experimentos.actualizar_pieza(cliente, pz["id"], estado=local,
-                                              extra={**(pz.get("extra") or {}), "activado_en": db.ahora()})
+                experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
+                experimentos.marcar_pieza(cliente, pz["id"], activado_en=db.ahora())
             else:
                 experimentos.actualizar_pieza(cliente, pz["id"], estado=local)
 
@@ -245,8 +265,12 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
         otros_activos = any(p["estado"] == "activo" for p in ex["paises"] if p["pais"] != pais)
         if not otros_activos:
             experimentos.actualizar(cliente, experimento_id, estado="pausado")
-    experimentos.registrar_evento(cliente, experimento_id, "estado",
-                                  f"{'Activado' if status == 'ACTIVE' else 'Pausado'}{' ' + pais if pais else ' todo el experimento'}")
+    mensaje = f"{'Activado' if status == 'ACTIVE' else 'Pausado'}{' ' + pais if pais else ' todo el experimento'}"
+    if saltadas:
+        mensaje += (". Siguen en pausa (retiradas por el decisor): "
+                    + ", ".join(f"{p['nombre']} ({p['pais']})" for p in saltadas))
+    experimentos.registrar_evento(cliente, experimento_id, "estado", mensaje,
+                                  {"saltadas": [p["id"] for p in saltadas]} if saltadas else None)
 
 
 def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
@@ -373,8 +397,8 @@ def activar_pieza(cliente, ep_id):
         meta_ad.actualizar_estado(pz["meta_ad_id"], "ACTIVE")
 
     _con_credenciales(cliente, _correr)
-    experimentos.actualizar_pieza(cliente, ep_id, estado="activo",
-                                  extra={**(pz.get("extra") or {}), "activado_en": db.ahora()})
+    experimentos.actualizar_pieza(cliente, ep_id, estado="activo")
+    experimentos.marcar_pieza(cliente, ep_id, activado_en=db.ahora())
     if pais:
         experimentos.actualizar_pais(cliente, ex["id"], pz["pais"], estado="activo")
     if campaña_pausada or ex["estado"] == "decidido":

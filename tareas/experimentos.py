@@ -107,7 +107,7 @@ def _horas_activo(pz, snaps, ahora):
     activado = (pz.get("extra") or {}).get("activado_en")
     if activado:
         return _horas_desde(activado, ahora)
-    primero = next((s for s in snaps if int(s.get("impresiones") or 0) > 0), None)
+    primero = _primer_snapshot_con_impresiones(snaps)
     return _horas_desde(primero.get("tomado_en"), ahora) if primero else 0.0
 
 
@@ -177,12 +177,48 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
         _pedir(cliente, ex["id"], "derivar", {"ep_id": ep_id}, v["motivo"], resultado)
         resultado["ganadores"].append(pz)
     elif accion == "rescatar":
+        # I-2 (spec §7): la pausa del perdedor es una acción aparte y sin
+        # gasto — en semi/auto se ejecuta ya, en manual se propone. Así el
+        # anuncio deja de gastar aunque el rescate espere aprobación.
+        _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
         _pedir(cliente, ex["id"], "rescatar", {"ep_id": ep_id}, v["motivo"], resultado)
     elif accion == "archivar":
+        _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
         _pedir(cliente, ex["id"], "archivar", {"ep_id": ep_id, "cf_id": _cf_id(pz), "motivo": v["motivo"]},
                v["motivo"], resultado)
     elif accion == "pausar":
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
+
+
+def _rechazada_por_meta(cliente, ex, pz):
+    """I-8: un anuncio DISAPPROVED/WITH_ISSUES no entrega; no se evalúa (a
+    las 48 h con 0 impresiones sería 'perdedor' y se rescataría con crédito
+    algo que nadie vio). Evento una sola vez (`extra.rechazo_avisado`)."""
+    if pz.get("estado_meta") not in lanzador.ESTADOS_META_RECHAZO:
+        return False
+    if not (pz.get("extra") or {}).get("rechazo_avisado"):
+        experimentos.registrar_evento(
+            cliente, ex["id"], "rechazo_meta",
+            f"{pz['nombre']} ({pz['pais']}): anuncio {pz['estado_meta']} en Meta, el decisor no la evalúa "
+            f"hasta que se corrija o se reemplace.", {"estado_meta": pz["estado_meta"]}, ep_id=pz["id"])
+        experimentos.marcar_pieza(cliente, pz["id"], rechazo_avisado=True)
+    return True
+
+
+def _primer_snapshot_con_impresiones(snaps):
+    return next((s for s in snaps if int(s.get("impresiones") or 0) > 0), None)
+
+
+def _dias_transcurridos(ex, snaps_por_pieza, ahora):
+    """Días desde que el experimento se activó (`extra.activado_en`). Para
+    experimentos activados antes de que existiera esa marca: desde el primer
+    snapshot con impresiones de cualquiera de sus piezas (si no, 0 y la
+    ventana de días nunca cierra — mejor que inventar una fecha)."""
+    activado = (ex.get("extra") or {}).get("activado_en")
+    if activado:
+        return _horas_desde(activado, ahora) / 24
+    primeros = [s["tomado_en"] for s in map(_primer_snapshot_con_impresiones, snaps_por_pieza.values()) if s]
+    return _horas_desde(min(primeros), ahora) / 24 if primeros else 0.0
 
 
 def _pausar_por_tope(cliente, ex):
@@ -230,7 +266,13 @@ def _marcar_decidido(cliente, ex):
     if ex.get("propuestas_pendientes"):
         return False
     con_anuncio = [p for p in ex["piezas"] if p.get("meta_ad_id")]
-    if not con_anuncio or any((p.get("veredicto") or "pendiente") == "pendiente" for p in con_anuncio):
+    activas = [p for p in con_anuncio if p.get("estado") == "activo"]
+    # Una pieza pausada a mano sin veredicto no bloquea: `decidido` es "todas
+    # las piezas ACTIVAS tienen veredicto". Sin ninguna activa ni ninguna
+    # con veredicto no hay nada decidido (experimento recién activado).
+    if not con_anuncio or any((p.get("veredicto") or "pendiente") == "pendiente" for p in activas):
+        return False
+    if not any((p.get("veredicto") or "pendiente") != "pendiente" for p in con_anuncio):
         return False
     if any(p.get("estado") in ("en_cola", "publicando") for p in ex["piezas"]):
         return False
@@ -238,7 +280,7 @@ def _marcar_decidido(cliente, ex):
         return False
     experimentos.actualizar(cliente, ex["id"], estado="decidido")
     experimentos.registrar_evento(cliente, ex["id"], "estado",
-                                  "Experimento decidido: todas las piezas con anuncio tienen veredicto.")
+                                  "Experimento decidido: todas las piezas activas tienen veredicto.")
     return True
 
 
@@ -256,15 +298,18 @@ def exp_decidir(tarea):
 
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
     ahora = datetime.now()
-    dias_transcurridos = _horas_desde((ex.get("extra") or {}).get("activado_en"), ahora) / 24
     resultado = {"veredictos": [], "ganadores": [], "propuestas": [], "errores": [], "escalados": set()}
+    snaps_por_pieza = {}
     for pais in ex["paises"]:
         piezas_pais = [pz for pz in ex["piezas"] if pz["pais"] == pais["pais"]]
         orden = _ranking(piezas_pais, ex.get("atribucion"))
         for pz in piezas_pais:
             if not pz.get("meta_ad_id") or pz.get("estado") != "activo" or (pz.get("veredicto") or "pendiente") != "pendiente":
                 continue
-            snaps = experimentos.snapshots(pz["id"])
+            if _rechazada_por_meta(cliente, ex, pz):
+                continue
+            snaps = snaps_por_pieza.setdefault(pz["id"], experimentos.snapshots(pz["id"]))
+            dias_transcurridos = _dias_transcurridos(ex, snaps_por_pieza, ahora)
             ctx = {"horas_activo": _horas_activo(pz, snaps, ahora), "presupuesto_dia": pais.get("presupuesto_dia"),
                    "dias_experimento": ex.get("dias"), "dias_transcurridos": dias_transcurridos,
                    "escalon_rescate": pz.get("escalon_rescate") or 0, "atribucion": ex.get("atribucion"),

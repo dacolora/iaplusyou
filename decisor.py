@@ -116,8 +116,12 @@ def decidir(snapshots, reglas, contexto):
     dias = float(c.get("dias_experimento") or 0)
     transcurridos = float(c.get("dias_transcurridos") or 0)
 
-    # Evidencia mínima: impresiones + gasto, o bien la ventana de horas cumplida.
-    evidencia = (numeros["impresiones"] >= r["impresiones_min"] and numeros["gasto"] >= gasto_min) or horas >= r["ventana_horas"]
+    # Evidencia mínima: impresiones + gasto, o bien la ventana de horas
+    # cumplida. Con CERO impresiones nunca hay evidencia (I-8): un anuncio
+    # que Meta no entregó (rechazado, en revisión, sin subasta) no es un
+    # perdedor — sería rescatar (con crédito) algo que nadie vio.
+    evidencia = ((numeros["impresiones"] >= r["impresiones_min"] and numeros["gasto"] >= gasto_min)
+                 or (horas >= r["ventana_horas"] and numeros["impresiones"] > 0))
     if not evidencia:
         if dias and transcurridos >= dias:
             return _resultado("inconcluso", f"Cerró la ventana de {int(dias)} días sin evidencia suficiente "
