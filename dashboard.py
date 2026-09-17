@@ -2302,7 +2302,12 @@ def _contexto_tablero(cliente):
             out[nombre] = None
             out["errores"].append(f"{nombre}: {type(e).__name__}")
             print(f"[aviso] Tablero de {cliente}: no pude calcular {nombre}: {type(e).__name__}")
-    out["grafico"] = _grafico_tablero(out["serie"]) if out["serie"] else None
+    try:
+        out["grafico"] = _grafico_tablero(out["serie"]) if out["serie"] else None
+    except Exception as e:  # noqa: BLE001 — el gráfico es una parte más: si falla, se muestra el resto
+        out["grafico"] = None
+        out["errores"].append(f"grafico: {type(e).__name__}")
+        print(f"[aviso] Tablero de {cliente}: no pude dibujar el gráfico: {type(e).__name__}")
     return out
 
 

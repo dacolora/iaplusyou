@@ -158,3 +158,15 @@ def test_grafico_tablero_geometria(app):
     assert d._grafico_tablero({"moneda": None, "dias": []}) is None
     vacio = [{"dia": "2026-09-01", "gasto": 0, "compras": 0, "ingresos": 0}]
     assert d._grafico_tablero({"moneda": "COP", "dias": vacio}) is None
+
+
+def test_contexto_tablero_tolera_grafico_roto(app, base_temporal, monkeypatch):
+    d = app["dashboard"]
+    _sembrar(base_temporal)
+    _reloj(monkeypatch)
+    monkeypatch.setattr(d, "_grafico_tablero", lambda serie: (_ for _ in ()).throw(ZeroDivisionError("x")))
+    ctx = d._contexto_tablero("acme")
+    assert ctx["grafico"] is None and ctx["serie"] is not None
+    assert "grafico: ZeroDivisionError" in ctx["errores"]
+    r = app["c"].get("/cliente/acme")
+    assert r.status_code == 200 and "250 COP" in r.get_data(as_text=True)
