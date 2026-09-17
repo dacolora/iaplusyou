@@ -81,7 +81,9 @@ def test_mezclar_musica_con_y_sin_sonido(tmp_path):
     assert r["con_sonido"] is True and r["duracion_s"] == pytest.approx(6.0, abs=0.3)
     streams = {s["codec_type"]: s for s in cortes.ffprobe_json(r["archivo"])["streams"]}
     assert streams["audio"]["codec_name"] == "aac" and streams["video"]["codec_name"] == "h264"
+    assert int(streams["audio"]["sample_rate"]) == 48000
     assert -14 - 2.5 <= _loudness(r["archivo"]) <= -14 + 2.5
     r2 = mezcla.mezclar_musica(mudo, pista, str(tmp_path / "mudo_musica.mp4"), cortes.duracion(mudo))
     assert r2["con_sonido"] is False
+    assert r2["duracion_s"] == pytest.approx(6.0, abs=0.3)
     assert "audio" in {s["codec_type"] for s in cortes.ffprobe_json(r2["archivo"])["streams"]}

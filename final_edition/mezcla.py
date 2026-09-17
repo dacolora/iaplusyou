@@ -110,7 +110,7 @@ def mezclar_musica(video_in, pista_musica, salida_mp4, duracion_s, volumenes=Non
     cortes.ffmpeg([
         "-i", video_in, "-stream_loop", "-1", "-i", pista_musica,
         "-filter_complex", fg, "-map", "0:v", "-map", "[aout]",
-        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
         "-t", f"{duracion_s:.3f}", "-movflags", "+faststart", salida_mp4,
     ], timeout=max(300, int(duracion_s * 10)))
     return {"archivo": salida_mp4, "con_sonido": con_sonido, "duracion_s": round(cortes.duracion(salida_mp4), 3)}
