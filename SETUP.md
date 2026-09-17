@@ -99,6 +99,28 @@ Configuración. Sin SMTP todo queda igualmente en la bitácora del experimento. 
 reglas por defecto del decisor se editan en Configuración y se pueden afinar por
 experimento.
 
+**Productos y tiendas** (bloque 5): `pip install -r requirements.txt` trae dos
+dependencias nuevas (`cryptography`, `openpyxl`) y hay migración (`0005`). Las
+credenciales de las tiendas se guardan cifradas con una clave derivada de
+`FLASK_SECRET_KEY`: esa variable tiene que existir en el `.env` del servidor (si la
+cambias, hay que volver a conectar cada tienda). Para conectar:
+- **Shopify**: en la tienda, Configuración › Apps y canales de venta › Desarrollar apps ›
+  Crear app › permisos `read_products` y `read_orders` › instalar y copiar el "Admin API
+  access token" (empieza por `shpat_`). En Creatv: Configuración › Tienda › Shopify con el
+  dominio `xxx.myshopify.com` y ese token.
+- **WooCommerce**: WooCommerce › Ajustes › Avanzado › REST API › Añadir clave (permisos de
+  lectura) → pegar Consumer key y Consumer secret junto con la URL https de la tienda.
+- **MercadoLibre**: requiere una app en developers.mercadolibre.com con redirect URI
+  `https://app.creatvmachine.com/meli/callback`; poner `MELI_APP_ID` y `MELI_SECRET` en
+  `.env` y usar el botón "Conectar con MercadoLibre". MELI no manda UTM ni Pixel: sus
+  experimentos se deciden por tráfico.
+- **CSV/Excel**: columnas `nombre, precio, moneda, url_compra, fotos (varias con |),
+  descripcion, categoria, sku`. **URL**: pega el enlace de un producto (lee JSON-LD / Open
+  Graph).
+El Pixel de Meta se comprueba desde Configuración › Pixel (botón "Comprobar"); con Pixel
+activo los experimentos nuevos usan atribución `pixel`, con tienda Shopify/Woo conectada
+usan `tienda` (pedidos con `utm_content`), si no `ninguna` (solo tráfico).
+
 ---
 
 ## 1. Cloudflare R2 — storage propio y permanente

@@ -210,6 +210,35 @@ updates. Notifications (`notificaciones.avisar`: propuesta, ganador, rechazo_met
 error_lanzamiento) go by SMTP when `SMTP_HOST` is set and the project has a
 `correo_notificaciones`; otherwise they are only eventos.
 
+**Catálogo ecommerce y conectores** (`tiendas.py`, `conectores/`, `importador.py`,
+`atribucion.py`, `cifrado.py`): the `producto` table is the normalized catalog (unique per
+`(cliente, fuente, fuente_id)`; sync = upsert, disappearing products are archived, never
+deleted; a manual archive — `extra.archivado_por="manual"` — survives syncs). Every source
+implements one contract in `conectores/base.py` (`listar_productos()`, `pedidos_desde(fecha)`,
+`probar()`, normalized dict shapes): `csv_excel` and `url` (JSON-LD/OG scraper with SSRF
+guards: private hosts refused, redirects re-validated) for files/links, and `shopify`
+(Admin GraphQL 2025-07, query cost kept under the 1 000-point cap, THROTTLED handled),
+`woo` (REST v3, `_wc_order_attribution_utm_content`) and `meli` (OAuth, single-use refresh
+token persisted after every refresh, never retried) for stores — registered by `tipo` and
+loaded lazily by `conectores.por_tipo`. Store credentials live Fernet-encrypted in
+`tienda.credenciales` with a key derived from `FLASK_SECRET_KEY` (rotating it means
+reconnecting every store); they never reach logs, flashes or eventos. `importador` turns
+a normalized product into an activo of the Crear catalog (`catalogo_productos`, folder
+`clientes/<c>/productos/<id>/`, ≤ 6 photos ≤ 8 MB, one Claude call for the fidelity rule
+that is never overwritten once edited; no photo → no activo), capped per run
+(`max_activos`) with a self-scheduled continuation task so a big catalog never starves the
+single-threaded worker; all `productos.json` writes go through
+`catalogo_productos.modificar_meta` (flock) because Flask and the worker both write it.
+Worker periodics: `tienda_sync_productos_todas` (6 h) and `tienda_sync_pedidos_todas` (2 h,
+only for clients with a `corriendo` experiment attributed by store). Orders carry
+`utm_content = experimento_pieza.id` (set by `lanzador.url_destino`; legacy `pieza.id`
+still resolves) and `atribucion.resolver_pendientes` links them; when an experiment's
+`atribucion` is `tienda`, `lanzador.refrescar` overrides purchases/revenue/CPA from the
+store (ROAS forced to 0 when order and account currencies differ, with one evento).
+`meta_conexion.estado_pixel` (cached 10 min, computed only by the Configuración button —
+never on page load) feeds `experimentos.atribucion_sugerida`: pixel > tienda > ninguna.
+UI: sidebar tab "Productos" (`_tab_productos.html`) and Configuración › Tienda / Pixel.
+
 ## Agent skills
 
 ### Issue tracker
