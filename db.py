@@ -234,6 +234,7 @@ tarea = Table("tarea", metadata,
     Column("estado", String(10), nullable=False, default="pendiente", index=True),
     Column("intentos", Integer, default=0),
     Column("max_intentos", Integer, default=5),
+    Column("prioridad", Integer, default=5),                # mayor = antes; los lotes de sprint van con 3
     Column("ejecutar_desde", String(19), nullable=False),
     Column("creada_en", String(19), nullable=False),
     Column("iniciada_en", String(19)),

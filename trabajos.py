@@ -278,12 +278,14 @@ def limpiar(job_id):
 
 # ---------- Trabajos persistentes (worker) ----------
 
-def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=None, max_intentos=5):
+def encolar(job_id, tipo, payload, duracion_estimada=60, etapas=None, cliente=None, max_intentos=5, prioridad=5):
     """Igual que iniciar(), pero la tarea la ejecuta el worker (worker.py) y
-    sobrevive reinicios. Devuelve False si ya hay una viva con ese job_id."""
+    sobrevive reinicios. Devuelve False si ya hay una viva con ese job_id.
+    `prioridad`: mayor se atiende antes (5 = normal; los lotes de sprint usan 3
+    para no bloquear a quien genera una pieza suelta desde Crear)."""
     tid = cola.encolar(tipo, payload, cliente=cliente, job_id=job_id,
                        duracion_estimada=duracion_estimada, etapas=etapas or [],
-                       max_intentos=max_intentos)
+                       max_intentos=max_intentos, prioridad=prioridad)
     return tid is not None
 
 

@@ -38,7 +38,7 @@ def _fila(r):
 
 
 def encolar(tipo, payload, *, cliente=None, job_id=None, duracion_estimada=60, etapas=None,
-            ejecutar_desde=None, max_intentos=5):
+            ejecutar_desde=None, max_intentos=5, prioridad=5):
     """Devuelve el id de la tarea nueva, o None si ya hay una viva (pendiente
     o en_curso) con ese job_id. El chequeo+insert va bajo lock (mismo proceso)
     y el índice único parcial uq_tarea_job_viva cubre la carrera entre
@@ -53,7 +53,7 @@ def encolar(tipo, payload, *, cliente=None, job_id=None, duracion_estimada=60, e
         try:
             r = con.execute(db.tarea.insert().values(
                 cliente=cliente, job_id=job_id, tipo=tipo, payload=payload or {}, estado="pendiente",
-                intentos=0, max_intentos=max_intentos, ejecutar_desde=ejecutar_desde or ahora, creada_en=ahora,
+                intentos=0, max_intentos=max_intentos, prioridad=int(prioridad), ejecutar_desde=ejecutar_desde or ahora, creada_en=ahora,
                 duracion_estimada=float(duracion_estimada), etapas=[list(e) for e in (etapas or [])],
             ))
         except IntegrityError:
@@ -66,7 +66,7 @@ def reclamar():
     with db.conectar() as con:
         cand = con.execute(sa.select(db.tarea.c.id).where(
             db.tarea.c.estado == "pendiente", db.tarea.c.ejecutar_desde <= ahora
-        ).order_by(db.tarea.c.ejecutar_desde, db.tarea.c.id).limit(1)).first()
+        ).order_by(db.tarea.c.prioridad.desc(), db.tarea.c.ejecutar_desde, db.tarea.c.id).limit(1)).first()
         if not cand:
             return None
         t0 = time.time()

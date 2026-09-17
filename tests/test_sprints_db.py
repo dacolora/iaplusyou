@@ -66,3 +66,17 @@ def test_alembic_tiene_una_sola_cabeza():
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     heads = ScriptDirectory.from_config(Config(os.path.join(raiz, "alembic.ini"))).get_heads()
     assert len(heads) == 1, heads
+
+
+def test_migracion_0008_agrega_prioridad(tmp_path, monkeypatch):
+    import os
+    from alembic import command
+    from alembic.config import Config
+    import db
+    monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{tmp_path / 'mig8.db'}")
+    db._reset_para_tests()
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    command.upgrade(Config(os.path.join(raiz, "alembic.ini")), "head")
+    cols = {c["name"] for c in sa.inspect(db.engine()).get_columns("tarea")}
+    assert "prioridad" in cols
+    db._reset_para_tests()

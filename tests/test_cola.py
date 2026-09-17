@@ -134,3 +134,21 @@ def test_indice_unico_parcial_devuelve_none(base_temporal):
                                              intentos=1, max_intentos=1, ejecutar_desde=db.ahora(), creada_en=db.ahora()))
     assert cola.encolar("x", {}, job_id="j9") is None
     assert cola.encolar("x", {}, job_id="otra") is not None
+
+
+def test_reclamar_respeta_prioridad_y_luego_orden_de_llegada(base_temporal):
+    import cola
+    a = cola.encolar("prueba", {"n": "lote1"}, prioridad=3)
+    b = cola.encolar("prueba", {"n": "suelta"})            # prioridad 5 por defecto
+    c = cola.encolar("prueba", {"n": "lote2"}, prioridad=3)
+    assert [cola.reclamar()["payload"]["n"] for _ in range(3)] == ["suelta", "lote1", "lote2"]
+    assert cola.consultar_por_id(a)["prioridad"] == 3 and cola.consultar_por_id(b)["prioridad"] == 5
+
+
+def test_trabajos_encolar_pasa_prioridad(base_temporal):
+    import cola
+    import trabajos
+    assert trabajos.encolar("j1", "prueba", {}, prioridad=3) is True
+    assert cola.consultar_por_job("j1")["prioridad"] == 3
+    assert trabajos.encolar("j2", "prueba", {}) is True
+    assert cola.consultar_por_job("j2")["prioridad"] == 5
