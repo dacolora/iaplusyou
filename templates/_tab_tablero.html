@@ -145,7 +145,7 @@
           <span class="tb-bandera" title="{{ paises_fe[p.pais].nombre if p.pais in paises_fe else p.pais }}">{{ paises_fe[p.pais].bandera if p.pais in paises_fe else p.pais }}</span>
           <strong>{{ p.nombre }}</strong>
         </div>
-        <small class="tb-ganadora-exp">{{ p.experimento_nombre }}</small>
+        <small class="tb-ganadora-exp">{{ p.experimento_nombre }}{% if p.experimento_estado == "cerrado" %} (cerrado){% endif %}</small>
         <div class="tb-ganadora-kpis" {% if p.veredicto_motivo %}title="{{ p.veredicto_motivo }}"{% endif %}>
           <span><b>{{ "%.2f"|format(m.ctr or 0) }}%</b> CTR</span>
           <span><b>{{ "%.2f"|format(m.cpc or 0) }}</b> CPC {{ p.moneda }}</span>

@@ -148,6 +148,103 @@ def test_serie_diaria_vacia(base_temporal, sin_red):
     assert s["moneda"] is None and len(s["dias"]) == 2 and s["dias"][-1]["gasto"] == 0.0
 
 
+def test_serie_diaria_cruza_el_cambio_de_mes(base_temporal, sin_red):
+    """Ventana de 4 días que empieza en agosto: los cortes de día son
+    aritmética de fechas, no de texto, y el snapshot anterior a la ventana
+    (31/08 mañana) es la base del delta del primer día."""
+    import experimentos as ex
+    import tablero
+    eid = _experimento(base_temporal)
+    ep = _pieza_en(base_temporal, eid)
+    ex.snapshot(ep, {"gasto": 50}, tomado_en="2026-08-29T12:00:00")     # antes de la ventana: base
+    ex.snapshot(ep, {"gasto": 80}, tomado_en="2026-08-31T20:00:00")     # 31/08: +30
+    ex.snapshot(ep, {"gasto": 100}, tomado_en="2026-09-01T08:00:00")    # 01/09: +20
+    ex.snapshot(ep, {"gasto": 140}, tomado_en="2026-09-02T23:59:59")    # 02/09: +40
+    s = tablero.serie_diaria("acme", dias=4, ahora_iso="2026-09-02T23:59:59")
+    assert [d["dia"] for d in s["dias"]] == ["2026-08-30", "2026-08-31", "2026-09-01", "2026-09-02"]
+    assert [d["gasto"] for d in s["dias"]] == [0.0, 30.0, 20.0, 40.0]
+
+
+# ---------- carga compartida / Serie ----------
+
+def test_serie_indexada_equivale_a_la_lista_cruda():
+    import tablero
+    snaps = [_snap("2026-09-03T08:00:00", gasto=240.0),
+             _snap("2026-09-01T08:00:00", gasto=100.0),   # desordenado a propósito
+             _snap("2026-09-02T08:00:00", gasto=250.0)]
+    serie = tablero.Serie(snaps)
+    assert serie.claves == ["2026-09-01T08:00:00", "2026-09-02T08:00:00", "2026-09-03T08:00:00"]
+    for instante in ("2026-08-31T00:00:00", "2026-09-01T08:00:00", "2026-09-02T12:00:00", "2026-09-09T00:00:00"):
+        assert tablero.valor_en(serie, instante, "gasto") == tablero.valor_en(snaps, instante, "gasto")
+    assert tablero.delta(serie, "2026-09-01T12:00:00", "2026-09-02T12:00:00", "gasto") == 150.0
+    assert tablero.Serie([]).en("2026-09-01T00:00:00") is None
+
+
+def test_snapshots_con_desde_trae_la_ventana_y_la_base(base_temporal):
+    import experimentos as ex
+    eid = _experimento(base_temporal)
+    ep = _pieza_en(base_temporal, eid)
+    for t, g in (("2026-08-20T08:00:00", 10), ("2026-08-30T08:00:00", 20), ("2026-08-31T08:00:00", 30),
+                 ("2026-09-01T00:00:00", 40), ("2026-09-05T08:00:00", 50)):
+        ex.snapshot(ep, {"gasto": g}, tomado_en=t)
+    todos = ex.snapshots(ep)
+    assert [s["gasto"] for s in todos] == [10.0, 20.0, 30.0, 40.0, 50.0]
+    ventana = ex.snapshots(ep, desde="2026-09-01T00:00:00")
+    # La última anterior a `desde` (31/08, base del delta) + las de la ventana (>= desde).
+    assert [s["gasto"] for s in ventana] == [30.0, 40.0, 50.0]
+    assert ex.snapshots(ep, desde="2026-08-01T00:00:00") == todos          # nada antes: sin base
+    assert [s["gasto"] for s in ex.snapshots(ep, desde="2026-09-30T00:00:00")] == [50.0]   # solo la base
+    assert ex.snapshots(ep + 999, desde="2026-09-01T00:00:00") == []
+
+
+def test_cargar_datos_una_vez_y_contexto(base_temporal, sin_red, monkeypatch):
+    """`contexto` deriva todas las partes de UNA carga: experimentos.cargar
+    y experimentos.snapshots se llaman una vez (por proyecto / por pieza),
+    y el resultado coincide con las funciones sueltas."""
+    import experimentos as ex
+    import tablero
+    eid = _experimento(base_temporal, "Cojín")
+    ep = _pieza_en(base_temporal, eid, veredicto="ganador")
+    ex.snapshot(ep, {"gasto": 100, "compras": 1, "ingresos": 5000, "fuente_ventas": "meta"},
+                tomado_en="2026-07-01T08:00:00")     # viejo: solo entra como base
+    ex.snapshot(ep, {"gasto": 350, "compras": 3, "ingresos": 12000, "fuente_ventas": "meta"},
+                tomado_en="2026-09-15T23:00:00")
+    sueltas = {"resumen": tablero.resumen_mes("acme", AHORA), "serie": tablero.serie_diaria("acme", 30, AHORA),
+               "top": tablero.top_ganadoras("acme"), "alertas": tablero.alertas("acme", AHORA),
+               "csv": tablero.csv_mes("acme", AHORA)}
+    llamadas = {"cargar": 0, "snapshots": []}
+    cargar, snapshots = ex.cargar, ex.snapshots
+
+    def _cargar(cliente):
+        llamadas["cargar"] += 1
+        return cargar(cliente)
+
+    def _snapshots(ep_id, desde=None):
+        llamadas["snapshots"].append(desde)
+        return snapshots(ep_id, desde=desde)
+    monkeypatch.setattr(ex, "cargar", _cargar)
+    monkeypatch.setattr(ex, "snapshots", _snapshots)
+    ctx = tablero.contexto("acme", AHORA)
+    assert llamadas["cargar"] == 1
+    # Una consulta por pieza, acotada a lo más temprano entre el mes y los 30 días.
+    assert llamadas["snapshots"] == ["2026-08-18T00:00:00"]
+    assert ctx["ahora"] == AHORA
+    for parte, valor in sueltas.items():
+        assert ctx[parte] == valor, parte
+    assert ctx["resumen"]["por_moneda"]["COP"]["gasto"] == 250.0
+    assert ctx["top"][0]["experimento_estado"] == "corriendo"
+    # Con `datos` cargados para otra ventana más corta, una parte que necesite
+    # empezar antes vuelve a cargar (no se queda sin base del delta).
+    datos = tablero.cargar_datos("acme", AHORA, desde="2026-09-10T00:00:00")
+    assert datos.desde == "2026-09-10T00:00:00"
+    llamadas["snapshots"].clear()
+    r = tablero.resumen_periodo("acme", "2026-09-01T00:00:00", AHORA, datos=datos)
+    assert llamadas["snapshots"] == ["2026-09-01T00:00:00"] and r["por_moneda"]["COP"]["gasto"] == 250.0
+    llamadas["snapshots"].clear()
+    r2 = tablero.resumen_periodo("acme", "2026-09-12T00:00:00", AHORA, datos=datos)
+    assert llamadas["snapshots"] == [] and r2["por_moneda"]["COP"]["gasto"] == 250.0
+
+
 # ---------- top_ganadoras ----------
 
 def test_top_ganadoras_ordena_por_roas_y_cpc(base_temporal, sin_red):
@@ -310,6 +407,39 @@ def test_csv_mes_cabecera_y_fila(base_temporal, sin_red):
     assert lineas[0] == "experimento;pais;pieza;veredicto;impresiones;clics;gasto;compras;ingresos;roas;moneda"
     assert lineas[1] == f"Cojín;CO;Final es_CO;ganador;3000;30;250.50;2;7000;{round(7000 / 250.5, 2)};COP"
     assert len(lineas) == 2
+
+
+def test_csv_mes_neutraliza_formulas(base_temporal, sin_red):
+    """Un nombre que empiece por =, +, -, @, tab o CR se abriría como fórmula
+    en Excel: va con `'` delante. Los números no se tocan."""
+    import csv
+    import io
+    import experimentos as ex
+    import tablero
+    nombre = '=HYPERLINK("http://malo.example/x";"Cojín")'
+    eid = _experimento(base_temporal, nombre)
+    # Pieza clon: su nombre sale del legado_id (texto que no escribe el dueño).
+    pid = _pieza(base_temporal, tipo="video", legado="-2+3")
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.actualizar_pieza("acme", ep, estado="activo", veredicto="ganador")
+    ex.snapshot(ep, {"gasto": 10, "impresiones": 100}, tomado_en="2026-09-15T23:00:00")
+    texto = tablero.csv_mes("acme", ahora_iso=AHORA).lstrip("﻿")
+    filas = list(csv.reader(io.StringIO(texto), delimiter=";"))
+    assert filas[1] == ["'" + nombre, "CO", "'-2+3", "ganador", "100", "0", "10", "0", "0", "0", "COP"]
+    assert "\n'=HYPERLINK" not in texto and '"\'=HYPERLINK' in texto   # csv.writer entrecomilla por las `"` y el `;`
+    for v, esperado in (("=1+1", "'=1+1"), ("+1", "'+1"), ("-1", "'-1"), ("@x", "'@x"), ("\tx", "'\tx"),
+                        ("\rx", "'\rx"), ("Cojín", "Cojín"), ("", ""), (None, "")):
+        assert tablero._celda(v) == esperado
+
+
+def test_alerta_sin_metricas_redondea_las_horas(base_temporal, sin_red):
+    import experimentos as ex
+    import tablero
+    eid = _experimento(base_temporal, "Cojín")
+    ep = _pieza_en(base_temporal, eid)
+    ex.snapshot(ep, {"gasto": 1}, tomado_en="2026-09-16T03:24:00")   # 6,6 h antes de AHORA: «7 h», no «6 h»
+    a = [x for x in tablero.alertas("acme", ahora_iso=AHORA) if x["tipo"] == "sin_metricas"]
+    assert len(a) == 1 and "lleva 7 h sin métricas" in a[0]["texto"]
 
 
 def test_csv_mes_sin_piezas(base_temporal, sin_red):

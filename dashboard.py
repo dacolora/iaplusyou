@@ -16,6 +16,7 @@ import secrets
 import socket
 import subprocess
 import threading
+import time
 from functools import wraps
 
 import requests
@@ -2221,7 +2222,7 @@ def _compacto(valor):
     elif v == int(v):
         t = str(int(v))
     else:
-        t = f"{v:.2f}"
+        t = f"{v:.2f}".rstrip("0").rstrip(".")   # 0,5 y 0,25, no 0,50
     return t.replace(".", ",")
 
 
@@ -2280,21 +2281,29 @@ def _filtro_roas(valor):
     return f"{float(valor or 0):.1f}".replace(".", ",")
 
 
-def _contexto_tablero(cliente):
-    """Todo lo que pinta la pestaña Tablero. Cada parte (resumen del mes,
-    serie de 30 días, top de ganadoras, alertas) va en su propio try/except:
-    si una explota (Meta caída, tienda rota) llega como None con el nombre y
-    la clase del error en `errores` — nunca el mensaje, que podría arrastrar
-    un token — y la plantilla muestra «No se pudo calcular X» para esa parte
-    y pinta el resto."""
+def _calcular_tablero(cliente):
+    """Todo lo que pinta la pestaña Tablero, de UNA carga de la base
+    (`tablero.cargar_datos`). Cada parte (resumen del mes, serie de 30 días,
+    top de ganadoras, alertas, CSV, gráfico) va en su propio try/except: si
+    una explota (Meta caída, tienda rota) llega como None con el nombre y la
+    clase del error en `errores` — nunca el mensaje, que podría arrastrar un
+    token — y la plantilla muestra «No se pudo calcular X» para esa parte y
+    pinta el resto. Si la carga misma falla, cada parte carga por su cuenta
+    (más lento, mismo resultado)."""
     ahora = db.ahora()
-    partes = {
-        "resumen": lambda: tablero.resumen_mes(cliente, ahora),
-        "serie": lambda: tablero.serie_diaria(cliente, 30, ahora),
-        "top": lambda: tablero.top_ganadoras(cliente),
-        "alertas": lambda: tablero.alertas(cliente, ahora),
-    }
     out = {"ahora": ahora, "mes": MESES_ES[int(ahora[5:7]) - 1], "anio": ahora[:4], "errores": []}
+    try:
+        datos = tablero.cargar_datos(cliente, ahora)
+    except Exception as e:  # noqa: BLE001 — sin carga compartida cada parte se las arregla sola
+        datos = None
+        print(f"[aviso] Tablero de {cliente}: no pude cargar los datos de una vez: {type(e).__name__}")
+    partes = {
+        "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
+        "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
+        "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
+        "alertas": lambda: tablero.alertas(cliente, ahora, datos=datos),
+        "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
+    }
     for nombre, fn in partes.items():
         try:
             out[nombre] = fn()
@@ -2311,13 +2320,77 @@ def _contexto_tablero(cliente):
     return out
 
 
+# Caché en proceso del tablero: ver_cliente lo calcula en cada pestaña y en
+# cada redirect tras un POST, así que se guarda 60 s por proyecto. La clave
+# lleva además el estado que cambia lo que se ve (último snapshot, propuestas
+# pendientes, experimentos) para que un refresco del worker o una acción del
+# dueño lo invaliden al instante sin esperar el TTL. Con gunicorn multi-worker
+# es por proceso: aceptable.
+TABLERO_TTL_S = 60
+_TABLERO_CACHE = {}          # cliente -> (monotonic, clave, contexto)
+_TABLERO_LOCK = threading.Lock()
+
+
+def _clave_tablero(cliente):
+    """(último id de metrica_snapshot, propuestas pendientes, nº de
+    experimentos y su último actualizado_en, último actualizado_en de pieza)
+    del proyecto: cuatro consultas baratas con índice. Cualquier cambio que
+    el tablero pinte (snapshot del worker, propuesta del motor, estado o
+    veredicto tocado por el dueño) mueve la clave."""
+    ms, ep, pr, ex = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento
+    with db.conectar() as con:
+        ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
+            ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
+        propuestas_n = con.execute(sa.select(sa.func.count()).select_from(pr).where(
+            pr.c.cliente == cliente, pr.c.estado == "pendiente")).scalar()
+        exps = con.execute(sa.select(sa.func.count(), sa.func.max(ex.c.actualizado_en)).select_from(ex).where(
+            ex.c.cliente == cliente, ex.c.legado.is_(False))).first()
+        piezas = con.execute(sa.select(sa.func.max(ep.c.actualizado_en)).where(ep.c.cliente == cliente)).scalar()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas)
+
+
+def invalidar_tablero(cliente=None):
+    """Olvida el tablero cacheado de un proyecto (o de todos)."""
+    with _TABLERO_LOCK:
+        if cliente is None:
+            _TABLERO_CACHE.clear()
+        else:
+            _TABLERO_CACHE.pop(cliente, None)
+
+
+def _contexto_tablero(cliente):
+    """`_calcular_tablero` con caché de `TABLERO_TTL_S` por proyecto,
+    invalidada antes si cambia `_clave_tablero`. Si la clave no se puede
+    consultar, se calcula sin caché."""
+    try:
+        clave = _clave_tablero(cliente)
+    except Exception as e:  # noqa: BLE001 — sin clave no hay caché, pero sí tablero
+        print(f"[aviso] Tablero de {cliente}: no pude leer la clave de caché: {type(e).__name__}")
+        return _calcular_tablero(cliente)
+    ahora = time.monotonic()
+    with _TABLERO_LOCK:
+        entrada = _TABLERO_CACHE.get(cliente)
+        if entrada and entrada[1] == clave and ahora - entrada[0] < TABLERO_TTL_S:
+            return entrada[2]
+    ctx = _calcular_tablero(cliente)
+    with _TABLERO_LOCK:
+        _TABLERO_CACHE[cliente] = (ahora, clave, ctx)
+    return ctx
+
+
 @app.route("/cliente/<cliente>/tablero/mes.csv")
 def tab_descargar_csv(cliente):
-    """CSV del mes en curso (una fila por pieza, `;`, BOM) para abrir en Excel."""
-    ahora = db.ahora()
-    texto = tablero.csv_mes(cliente, ahora)
+    """CSV del mes en curso (una fila por pieza, `;`, BOM) para abrir en
+    Excel. Sale del mismo contexto cacheado que la pestaña; si esa parte
+    falló, se vuelve a intentar sola para que el error llegue al navegador."""
+    ctx = _contexto_tablero(cliente)
+    ahora = ctx["ahora"]
+    texto = ctx.get("csv")
+    if texto is None:
+        texto = tablero.csv_mes(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
-    resp.headers["Content-Disposition"] = f'attachment; filename="tablero_{cliente}_{ahora[:7]}.csv"'
+    nombre = secure_filename(f"tablero_{cliente}_{ahora[:7]}.csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 
 

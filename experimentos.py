@@ -306,13 +306,22 @@ def ultima_metrica(ep_id):
         return _ultima_metrica(con, ep_id)
 
 
-def snapshots(ep_id):
-    """Todas las métricas de una pieza en orden cronológico (misma forma que
-    ultima_metrica, incluido tomado_en). Es lo que consume decisor.decidir."""
+def snapshots(ep_id, desde=None):
+    """Métricas de una pieza en orden cronológico (misma forma que
+    ultima_metrica, incluido tomado_en). Sin `desde`, todas: es lo que
+    consume decisor.decidir. Con `desde` (ISO naive), las de `tomado_en >=
+    desde` MÁS la última anterior a `desde`, que es la base del delta en el
+    arranque de la ventana (tablero): así el histórico viejo no se carga."""
+    ms = db.metrica_snapshot
     with db.conectar() as con:
-        filas = con.execute(sa.select(db.metrica_snapshot).where(db.metrica_snapshot.c.experimento_pieza_id == ep_id)
-                            .order_by(db.metrica_snapshot.c.id))
-        return [_snapshot_a_dict(f) for f in filas]
+        if desde is None:
+            filas = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id).order_by(ms.c.id))
+            return [_snapshot_a_dict(f) for f in filas]
+        base = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id, ms.c.tomado_en < desde)
+                           .order_by(ms.c.tomado_en.desc(), ms.c.id.desc()).limit(1)).first()
+        ventana = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id, ms.c.tomado_en >= desde)
+                              .order_by(ms.c.id))
+        return ([_snapshot_a_dict(base)] if base else []) + [_snapshot_a_dict(f) for f in ventana]
 
 
 def snapshot(ep_id, metricas, tomado_en=None):

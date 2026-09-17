@@ -127,7 +127,7 @@ def test_contexto_tablero_tolera_una_parte_rota(app, base_temporal, monkeypatch)
     _sembrar(base_temporal)
     _reloj(monkeypatch)
 
-    def _explota(cliente, ahora_iso=None):
+    def _explota(cliente, ahora_iso=None, datos=None):
         raise RuntimeError("token=SECRETO Meta caída")
     monkeypatch.setattr(tablero, "alertas", _explota)
     ctx = d._contexto_tablero("acme")
@@ -158,6 +158,122 @@ def test_grafico_tablero_geometria(app):
     assert d._grafico_tablero({"moneda": None, "dias": []}) is None
     vacio = [{"dia": "2026-09-01", "gasto": 0, "compras": 0, "ingresos": 0}]
     assert d._grafico_tablero({"moneda": "COP", "dias": vacio}) is None
+
+
+def test_grafico_tablero_tope_menor_que_uno(app):
+    """Gasto en céntimos (< 1): el máximo «bonito» y las etiquetas siguen
+    siendo números razonables, no 0 ni un eje vacío."""
+    d = app["dashboard"]
+    dias = [{"dia": "2026-09-01", "gasto": 0.42, "compras": 0, "ingresos": 0.0},
+            {"dia": "2026-09-02", "gasto": 0.07, "compras": 0, "ingresos": 0.3}]
+    g = d._grafico_tablero({"moneda": "USD", "dias": dias})
+    assert g["maximo"] == 0.5
+    assert [t["texto"] for t in g["marcas"]] == ["0", "0,12", "0,25", "0,38", "0,5"]
+    assert g["dias"][0]["gasto_y"] < g["dias"][1]["gasto_y"] < g["base_y"]   # 0,42 más alto que 0,07
+    assert g["dias"][1]["ingresos_y"] < g["dias"][1]["gasto_y"]
+    assert d._nice_max(0.001) == 0.001 and d._nice_max(0.0011) == 0.002
+
+
+def test_top_ganadora_de_experimento_cerrado_lo_avisa(app, base_temporal, monkeypatch):
+    import experimentos as ex
+    eid, _ep = _sembrar(base_temporal)
+    ex.actualizar("acme", eid, estado="cerrado")
+    _reloj(monkeypatch)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "Cojín abrazable (cerrado)" in html
+
+
+def test_contexto_tablero_cachea_60s_e_invalida_con_snapshot(app, base_temporal, monkeypatch):
+    """Mismo objeto dentro de los 60 s; uno nuevo cuando entra un snapshot,
+    una propuesta, cambia un experimento o vence el TTL."""
+    import experimentos as ex
+    import propuestas
+    d = app["dashboard"]
+    eid, ep = _sembrar(base_temporal)
+    _reloj(monkeypatch)
+    reloj = {"t": 1000.0}
+    monkeypatch.setattr(d.time, "monotonic", lambda: reloj["t"])
+
+    ctx1 = d._contexto_tablero("acme")
+    reloj["t"] += 59
+    assert d._contexto_tablero("acme") is ctx1
+    assert d._contexto_tablero("otro") is not ctx1          # por proyecto
+    # Un snapshot nuevo invalida al instante (sin esperar el TTL).
+    ex.snapshot(ep, {"gasto": 400, "impresiones": 5000, "clics_enlace": 50, "compras": 4, "ingresos": 15000,
+                     "fuente_ventas": "meta"}, tomado_en="2026-09-16T09:00:00")
+    ctx2 = d._contexto_tablero("acme")
+    assert ctx2 is not ctx1
+    assert ctx2["resumen"]["por_moneda"]["COP"]["gasto"] == 300.0
+    assert d._contexto_tablero("acme") is ctx2
+    # Una propuesta pendiente también.
+    propuestas.crear("acme", eid, "pausar", {"ep_id": ep}, "prueba")
+    ctx3 = d._contexto_tablero("acme")
+    assert ctx3 is not ctx2 and ctx3["resumen"]["propuestas_pendientes"] == 1
+    # Y un cambio de estado del experimento (actualizado_en).
+    monkeypatch.setattr(d.db, "ahora", lambda: "2026-09-16T10:00:01")
+    ex.actualizar("acme", eid, estado="pausado")
+    ctx4 = d._contexto_tablero("acme")
+    assert ctx4 is not ctx3 and ctx4["resumen"]["experimentos_corriendo"] == 0
+    # Y un cambio en una pieza (veredicto): desaparece del top al instante.
+    monkeypatch.setattr(d.db, "ahora", lambda: "2026-09-16T10:00:02")
+    ex.actualizar_pieza("acme", ep, veredicto="perdedor")
+    ctx4b = d._contexto_tablero("acme")
+    assert ctx4b is not ctx4 and ctx4b["top"] == []
+    # TTL: pasados 60 s se recalcula aunque nada cambie.
+    reloj["t"] += 60
+    ctx5 = d._contexto_tablero("acme")
+    assert ctx5 is not ctx4b and ctx5["resumen"] == ctx4b["resumen"]
+    d.invalidar_tablero("acme")
+    assert d._contexto_tablero("acme") is not ctx5
+    # El CSV sale del mismo contexto cacheado.
+    r = app["c"].get("/cliente/acme/tablero/mes.csv")
+    assert r.status_code == 200 and r.get_data(as_text=True) == d._contexto_tablero("acme")["csv"]
+
+
+def _sembrar_masivo(base_temporal, n_exp, n_piezas, n_snaps, ahora=AHORA):
+    """n_exp experimentos corriendo × n_piezas × n_snaps snapshots cada 2 h
+    hacia atrás desde `ahora`, insertados en bloque."""
+    from datetime import datetime, timedelta
+    import db
+    paises = [{"pais": "CO", "presupuesto_dia": 20000.0}]
+    t0 = datetime.fromisoformat(ahora) - timedelta(hours=2 * n_snaps)
+    with db.conectar() as con:
+        for i in range(n_exp):
+            eid = con.execute(db.experimento.insert().values(
+                cliente="acme", nombre=f"Exp {i}", paises=paises, moneda="COP", tope_total=500000.0, dias=7,
+                objetivo_meta="OUTCOME_TRAFFIC", estado="corriendo", creado_en=ahora, actualizado_en=ahora,
+                legado=False)).inserted_primary_key[0]
+            for j in range(n_piezas):
+                ep = con.execute(db.experimento_pieza.insert().values(
+                    cliente="acme", experimento_id=eid, pais="CO", estado="activo",
+                    veredicto="ganador" if j == 0 else "pendiente", creado_en=ahora, actualizado_en=ahora,
+                    extra={})).inserted_primary_key[0]
+                con.execute(db.metrica_snapshot.insert(), [
+                    dict(experimento_pieza_id=ep, tomado_en=(t0 + timedelta(hours=2 * k)).isoformat(timespec="seconds"),
+                         gasto=float(k * 100), compras=k, ingresos=float(k * 1000), clics_enlace=k * 3,
+                         impresiones=k * 50, fuente_ventas="meta", extra={})
+                    for k in range(n_snaps)])
+
+
+def test_contexto_tablero_rinde_con_20_experimentos(app, base_temporal, monkeypatch):
+    """20 experimentos × 3 piezas × 90 snapshots: el tablero frío (sin caché)
+    se calcula en menos de 0,5 s. Antes de indexar las series y acotar la
+    consulta de snapshots tardaba ~190 ms aquí y crecía con el histórico."""
+    import time
+    d = app["dashboard"]
+    _sembrar_masivo(base_temporal, 20, 3, 90)
+    _reloj(monkeypatch)
+    d.invalidar_tablero("acme")
+    d._contexto_tablero("acme")            # calienta imports/conexión
+    d.invalidar_tablero("acme")
+    inicio = time.perf_counter()
+    ctx = d._contexto_tablero("acme")
+    duracion = time.perf_counter() - inicio
+    assert ctx["errores"] == []
+    assert ctx["resumen"]["experimentos_corriendo"] == 20 and len(ctx["top"]) == 5
+    assert len(ctx["serie"]["dias"]) == 30 and ctx["csv"].count("\n") == 61
+    print(f"\n_contexto_tablero frío 20x3x90: {duracion * 1000:.0f} ms")
+    assert duracion < 0.5, f"{duracion:.3f}s"
 
 
 def test_contexto_tablero_tolera_grafico_roto(app, base_temporal, monkeypatch):
