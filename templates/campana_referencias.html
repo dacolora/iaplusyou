@@ -161,12 +161,19 @@
         var caja = grid.querySelector('.sprint-ref[data-rid="' + r.id + '"] .sprint-ref-analisis');
         if (!caja || caja.dataset.estado === r.analisis_estado) return;
         caja.dataset.estado = r.analisis_estado;
+        caja.textContent = '';
         if (r.analisis_estado === 'listo' && r.analisis) {
-          var paleta = (r.analisis.paleta || []).map(function (c) { return '<span title="' + c + '" style="background:' + c + '"></span>'; }).join('');
-          caja.innerHTML = '<p></p><div class="sprint-paleta">' + paleta + '</div><p class="vacio">Recarga para ver el análisis completo.</p>';
-          caja.querySelector('p').textContent = r.analisis.resumen || '';
+          var p = document.createElement('p'); p.textContent = r.analisis.resumen || '';
+          var pal = document.createElement('div'); pal.className = 'sprint-paleta';
+          (r.analisis.paleta || []).forEach(function (c) {
+            if (!/^#[0-9a-fA-F]{3,8}$/.test(c)) return;
+            var s = document.createElement('span'); s.title = c; s.style.background = c; pal.appendChild(s);
+          });
+          var aviso = document.createElement('p'); aviso.className = 'vacio'; aviso.textContent = 'Recarga para ver el análisis completo.';
+          caja.appendChild(p); caja.appendChild(pal); caja.appendChild(aviso);
         } else if (r.analisis_estado === 'error') {
-          caja.innerHTML = '<p class="tag-error">No se pudo analizar.</p>';
+          var err = document.createElement('p'); err.className = 'tag-error'; err.textContent = 'No se pudo analizar.';
+          caja.appendChild(err);
         }
       });
     }

@@ -418,11 +418,15 @@ def referencias_subir(cliente, sid, cid):
     _campana_o_404(cliente, sid, cid)
     link = (request.form.get("link") or "").strip()
     intencion = request.form.getlist("intencion")
-    subidas, rechazadas = 0, 0
+    subidas, rechazadas, fallidas = 0, 0, 0
     for archivo in request.files.getlist("archivos"):
         if not archivo or not archivo.filename:
             continue
-        info = archivos.guardar_subida(cliente, archivo)
+        try:
+            info = archivos.guardar_subida(cliente, archivo)
+        except Exception:
+            fallidas += 1
+            continue
         if not info:
             rechazadas += 1
             continue
@@ -444,6 +448,8 @@ def referencias_subir(cliente, sid, cid):
         flash(f"{subidas} referencia(s) subida(s). Cuéntanos qué reutilizar de cada una.", "ok")
     if rechazadas:
         flash(f"{rechazadas} archivo(s) no son imagen ni video (jpg, png, webp, mp4, mov, webm).", "error")
+    if fallidas:
+        flash(f"{fallidas} archivo(s) no se pudieron guardar.", "error")
     estado.recalcular(cliente, sid)
     if _quiere_json():
         return jsonify({"ok": True, "subidas": subidas, "rechazadas": rechazadas})
@@ -503,6 +509,8 @@ def referencia_editar(cliente, rid):
     """Autoguardado de la tarjeta (JSON por fetch) o formulario clásico."""
     r = _referencia_o_404(cliente, rid)
     cuerpo = request.get_json(silent=True)
+    if cuerpo is not None and not isinstance(cuerpo, dict):
+        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
     es_json = cuerpo is not None or _quiere_json()
     fuente = cuerpo if cuerpo is not None else request.form
     campos = {}

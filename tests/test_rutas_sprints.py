@@ -241,3 +241,34 @@ def test_referencias_link_catalogo_y_reutilizar(app, monkeypatch):
     cid2 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid2, 1, 0)
     c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid2}/referencias/reutilizar", data={"referencia_id": refs[0]["id"]})
     assert datos.referencias("acme", cid2)[0]["origen"] == "reutilizada"
+
+
+def test_referencias_subir_una_falla_al_guardar_no_pierde_las_demas(app, monkeypatch):
+    from sprints import archivos, datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+
+    def _guardar(cliente, a):
+        if a.filename == "malo.mp4":
+            raise RuntimeError("ffmpeg")
+        return {"tipo": "imagen", "url": f"https://r2/{a.filename}", "frame_url": None, "ruta_local": "/tmp/x",
+                "titulo": a.filename}
+
+    monkeypatch.setattr(archivos, "guardar_subida", _guardar)
+    c = app["c"]
+    r = c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias", data={
+        "archivos": [(io.BytesIO(b"a"), "malo.mp4"), (io.BytesIO(b"b"), "bueno.jpg")]},
+        content_type="multipart/form-data")
+    assert r.status_code == 302
+    refs = datos.referencias("acme", cid)
+    assert len(refs) == 1 and refs[0]["titulo"] == "bueno.jpg"
+    assert [e["tipo"] for e in app["encolados"]] == ["sprint_analizar_referencia"]
+
+
+def test_referencia_editar_json_no_objeto_devuelve_400(app):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg")
+    r = app["c"].post(f"/cliente/acme/sprints/referencias/{rid}", json=["descripcion"])
+    assert r.status_code == 400 and r.get_json()["ok"] is False
