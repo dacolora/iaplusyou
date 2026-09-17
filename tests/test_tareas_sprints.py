@@ -109,3 +109,68 @@ def test_proponer_ideas_tarea_y_encolar(base_temporal, monkeypatch):
     job_id, tipo, payload, kw = encolados[0]
     assert job_id == f"acme__campana{cid}__ideas" and tipo == "sprint_proponer_ideas"
     assert payload == {"cliente": "acme", "campana_id": cid, "n_videos": 3, "n_imagenes": None, "reemplaza": 7} and kw["max_intentos"] == 2
+
+
+def _pieza_lista(datos, creative_flow, cliente="acme", estado_pieza="video_listo"):
+    pid = datos.crear_persona(cliente, "P")
+    tid = datos.crear_temporada(cliente, "T", "2026-06-01", "2026-07-15")
+    sid = datos.crear_sprint(cliente, "S", "2026-10-01", "2026-10-31")
+    cid = datos.agregar_campana(cliente, sid, pid, "espejo", tid, 1, 0)
+    cp = datos.crear_idea(cliente, cid, "video", "A", "a", estado_idea="aprobada")
+    cf = creative_flow.crear(cliente, [], ["E"], [], "a", 8, "", "A")
+    datos.actualizar_idea(cliente, cp, cf_id=cf)
+    creative_flow.actualizar(cliente, cf, estado=estado_pieza, video_url="https://r2/v.mp4")
+    return sid, cid, cp, cf
+
+
+def test_qa_pieza_guarda_resultado_y_error(base_temporal, monkeypatch):
+    import creative_flow
+    import tareas
+    from sprints import datos, qa
+    from tareas import sprints as ts
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {"score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x"})
+    tareas.cargar_todas()
+    assert ts.job_id_qa("acme", cp) == f"acme__cp{cp}__qa"
+    msg = tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert datos.idea("acme", cp)["qa"]["veredicto"] == "pasa" and "pasa" in msg
+    assert any(e["tipo"] == "qa_evaluada" for e in datos.eventos("acme", sid))
+    def rompe(*a, **k):
+        raise RuntimeError("visión caída")
+    monkeypatch.setattr(qa, "evaluar", rompe)
+    datos.actualizar_idea("acme", cp, qa=None)
+    with pytest.raises(RuntimeError):
+        tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert datos.idea("acme", cp)["qa"] is None       # queda pendiente para el reintento de la cola
+    assert tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": 999}}) == "La pieza ya no existe."
+
+
+def test_qa_pendientes_encola_y_avisa_fin_de_lote(base_temporal, monkeypatch):
+    import cola
+    import creative_flow
+    import notificaciones
+    import tareas
+    from sprints import datos
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    datos.actualizar_sprint("acme", sid, extra={"lote_en_curso": True})
+    sid2, cid2, cp2, cf2 = _pieza_lista(datos, creative_flow, cliente="otro", estado_pieza="video_generando")
+    datos.actualizar_sprint("otro", sid2, extra={"lote_en_curso": True})
+    encolados, avisos = [], []
+    monkeypatch.setattr(cola, "encolar", lambda tipo, payload, **kw: encolados.append((tipo, payload, kw.get("job_id"))) or 1)
+    monkeypatch.setattr(notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: avisos.append((c, tipo, asunto)) or False)
+    tareas.cargar_todas()
+    msg = tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert [(t, p["cp_id"]) for t, p, _ in encolados] == [("sprint_qa_pieza", cp)]
+    assert avisos == [("acme", "sprint_lote", "Lote terminado: S")] and "1 pieza" in msg
+    assert datos.sprint("acme", sid)["extra"]["lote_en_curso"] is False
+    assert datos.sprint("otro", sid2)["extra"]["lote_en_curso"] is True
+    assert datos.sprint("acme", sid)["eventos"][0]["tipo"] == "lote_terminado"
+    datos.actualizar_idea("acme", cp, qa={"veredicto": "pasa"})
+    encolados.clear()
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert encolados == []
+
+
+def test_periodica_qa_registrada():
+    import worker
+    assert ("sprint_qa_pendientes", 300) in worker.PERIODICAS

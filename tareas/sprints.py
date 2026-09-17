@@ -1,22 +1,34 @@
 """
 Tareas del worker para Sprints: analizar una referencia con Claude, sugerir
 personas, traer una referencia desde un link (Parte 1, baratas — centavos, sin
-generación de video, por eso llevan reintentos) y proponer ideas por campaña
-con el prompt maestro (Parte 2, también solo texto).
+generación de video, por eso llevan reintentos), proponer ideas por campaña
+con el prompt maestro (Parte 2, también solo texto) y el control de calidad
+automático de una pieza ya generada (también Parte 2, centavos de visión).
 
 Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
   sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"   (max_intentos=3)
   sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"      (max_intentos=2)
   sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"      (max_intentos=2)
   sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"     (max_intentos=2)
+  sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                  (max_intentos=3)
+
+`sprint_qa_pendientes` es la periódica (worker.PERIODICAS, cada 300 s) que
+encola sprint_qa_pieza para toda pieza lista sin qa, y avisa (notificaciones)
+cuando un lote de producción (sprints/produccion.py) termina.
 """
 import os
 from datetime import datetime
 
+import sqlalchemy as sa
+
+import cola
+import creative_flow
+import db
+import notificaciones
 import proyectos
 import referencias_link
 import trabajos
-from sprints import analisis, archivos, datos, estado, ideas, sugerencias
+from sprints import analisis, archivos, datos, estado, ideas, qa, sugerencias
 from tareas import al_interrumpir, registrar
 
 
@@ -122,3 +134,87 @@ def ejecutar_proponer_ideas(tarea):
     if c:
         estado.recalcular(cliente, c["sprint_id"])
     return f"{len(creadas)} ideas propuestas — revísalas y aprueba las que sirvan."
+
+
+def job_id_qa(cliente, cp_id):
+    return f"{cliente}__cp{cp_id}__qa"
+
+
+@registrar("sprint_qa_pieza")
+def ejecutar_qa_pieza(tarea):
+    """QA de una pieza lista. Si falla, la tarea reintenta sola (max 3): el QA
+    no gasta en generación, solo centavos de visión."""
+    p = tarea["payload"]
+    cliente, cp_id = p["cliente"], int(p["cp_id"])
+    i = datos.idea(cliente, cp_id)
+    if not i or not i.get("cf_id"):
+        return "La pieza ya no existe."
+    entry = creative_flow.cargar(cliente).get(i["cf_id"])
+    campana = datos.campana(cliente, i["campana_id"])
+    if not entry or not campana:
+        return "La pieza ya no existe."
+    sp = datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}
+    umbral = (sp.get("extra") or {}).get("qa_umbral") or qa.UMBRAL_DEFECTO
+    campana["marca"] = proyectos.nombre_visible(cliente)
+    resultado = qa.evaluar(cliente, i, entry, campana, umbral=umbral)
+    datos.actualizar_idea(cliente, cp_id, qa=resultado)
+    datos.registrar_evento(cliente, i["sprint_id"], "qa_evaluada",
+                           f"QA de «{i['titulo']}»: {resultado['veredicto']} ({resultado['score']})",
+                           {"cp_id": cp_id, "score": resultado["score"], "veredicto": resultado["veredicto"]},
+                           campana_id=i["campana_id"])
+    return f"QA: {resultado['veredicto']} ({resultado['score']}/100)."
+
+
+def _piezas_listas_sin_qa():
+    """(cliente, cp_id) de ideas con sesión lista/degradada y qa NULL.
+    `qa` es una columna JSON: SQLAlchemy guarda un `None` de Python como el
+    valor JSON `null` (texto), no como SQL NULL (`JSON.none_as_null` es False
+    por defecto) — así que `IS NULL` sola no alcanza, hace falta cubrir
+    también el `null` JSON con `json_type`."""
+    cp, pz = db.campana_pieza, db.pieza
+    sin_qa = sa.or_(cp.c.qa.is_(None), sa.func.json_type(cp.c.qa) == "null")
+    with db.conectar() as con:
+        filas = con.execute(sa.select(cp.c.cliente, cp.c.id).select_from(
+            cp.join(pz, sa.and_(pz.c.legado_id == cp.c.cf_id, pz.c.cliente == cp.c.cliente, pz.c.tipo.in_(datos.TIPOS_PIEZA))))
+            .where(sin_qa, cp.c.estado_idea != "descartada", pz.c.estado.in_(("listo", "degradada")))
+            .order_by(cp.c.id)).all()
+    return [(f.cliente, f.id) for f in filas]
+
+
+def _sprints_con_lote():
+    """Sprints con `extra.lote_en_curso`. Se filtra en Python: son pocos y el
+    JSON de SQLite no garantiza el tipo del booleano."""
+    s = db.sprint
+    with db.conectar() as con:
+        filas = con.execute(sa.select(s.c.cliente, s.c.id, s.c.nombre, s.c.extra).where(s.c.archivado.is_(False))).all()
+    return [(f.cliente, f.id, f.nombre) for f in filas if (f.extra or {}).get("lote_en_curso")]
+
+
+@registrar("sprint_qa_pendientes")
+def ejecutar_qa_pendientes(tarea):
+    """Periódica (5 min): encola el QA de las piezas listas sin evaluar y avisa
+    cuando un lote termina (ninguna pieza pendiente ni generando)."""
+    n = 0
+    for cliente, cp_id in _piezas_listas_sin_qa():
+        if cola.encolar("sprint_qa_pieza", {"cliente": cliente, "cp_id": cp_id}, cliente=cliente,
+                        job_id=job_id_qa(cliente, cp_id), duracion_estimada=30, max_intentos=3):
+            n += 1
+    terminados = 0
+    for cliente, sid, nombre in _sprints_con_lote():
+        sp = estado.recalcular(cliente, sid)
+        if not sp:
+            continue
+        vivas = [p for c in sp["campanas"] for p in c["piezas"] if p.get("estado") in ("pendiente", "generando")]
+        if vivas:
+            continue
+        piezas = [p for c in sp["campanas"] for p in c["piezas"]]
+        listas = sum(1 for p in piezas if p.get("estado") in ("listo", "degradada"))
+        errores = sum(1 for p in piezas if p.get("estado") == "error")
+        datos.actualizar_extra_sprint(cliente, sid, lambda e: {**e, "lote_en_curso": False})
+        datos.registrar_evento(cliente, sid, "lote_terminado", f"Lote terminado: {listas} lista(s), {errores} con error",
+                               {"listas": listas, "errores": errores})
+        notificaciones.avisar(cliente, "sprint_lote", f"Lote terminado: {nombre}",
+                              f"El lote del sprint «{nombre}» terminó: {listas} pieza(s) lista(s) y {errores} con error. "
+                              "Entra a la bandeja de revisión para aprobar o rechazar.")
+        terminados += 1
+    return f"{n} pieza(s) a QA; {terminados} lote(s) terminado(s)."
