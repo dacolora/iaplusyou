@@ -615,7 +615,7 @@ def campana_ideas(cliente, sid, cid):
     conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
               "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
               "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
-              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and not i["cf_id"])}
+              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"])}
     job = tareas_sprints.job_id_ideas(cliente, cid)
     return render_template("campana_ideas.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, campana=c, ideas=lista, referencias_por_id=refs, conteo=conteo,

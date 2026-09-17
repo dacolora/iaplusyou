@@ -172,18 +172,17 @@ def test_qa_pendientes_encola_y_avisa_fin_de_lote(base_temporal, monkeypatch):
 
 
 def test_qa_pendientes_no_avisa_con_idea_reservando(base_temporal, monkeypatch):
-    """Fix round 1, hallazgo 2: una idea con cf_id="reservando_*" (se cayó el
-    proceso entre reservar y crear la sesión de Crear) no tiene fila en
-    `pieza` — queda con estado None. Antes solo se contaba como "viva"
-    ("pendiente", "generando"), así que un lote con una pieza colgada así se
-    reportaba terminado igual (bandera apagada + aviso), dejándola invisible."""
+    """Fix round 1, hallazgo 2: una idea con una reserva VIVA (cf_id
+    "reservando_<cp>_<epoch>", otro lote está armando su sesión de Crear) no
+    tiene fila en `pieza` — queda con estado None. Cuenta como viva: el lote
+    no se reporta terminado (bandera encendida, sin aviso)."""
     import creative_flow
     import notificaciones
     import tareas
-    from sprints import datos
+    from sprints import datos, produccion
     sid, cid, cp, cf = _pieza_lista(datos, creative_flow)  # una pieza "listo"
     cp2 = datos.crear_idea("acme", cid, "video", "B", "b", estado_idea="aprobada")
-    datos.actualizar_idea("acme", cp2, cf_id="reservando_9")  # sin sesión de Crear todavía
+    datos.actualizar_idea("acme", cp2, cf_id=produccion.reserva_placeholder(cp2))  # reserva fresca
     datos.actualizar_sprint("acme", sid, extra={"lote_en_curso": True})
     avisos = []
     monkeypatch.setattr(notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: avisos.append((c, tipo, asunto)) or False)
@@ -191,6 +190,27 @@ def test_qa_pendientes_no_avisa_con_idea_reservando(base_temporal, monkeypatch):
     tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
     assert avisos == []
     assert datos.sprint("acme", sid)["extra"]["lote_en_curso"] is True
+
+
+def test_qa_pendientes_cierra_el_lote_con_una_reserva_vencida(base_temporal, monkeypatch):
+    """F1: una reserva vencida (el proceso murió entre reservar y crear la
+    sesión; formato viejo sin hora incluido) ya no es una pieza viva: el lote
+    termina (bandera apagada + aviso) en vez de quedar colgado para siempre."""
+    import creative_flow
+    import notificaciones
+    import tareas
+    from sprints import datos
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    cp2 = datos.crear_idea("acme", cid, "video", "B", "b", estado_idea="aprobada")
+    datos.actualizar_idea("acme", cp2, cf_id="reservando_9")      # formato viejo: vencida
+    datos.actualizar_sprint("acme", sid, extra={"lote_en_curso": True})
+    avisos = []
+    monkeypatch.setattr(notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: avisos.append((c, tipo, asunto)) or False)
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert avisos == [("acme", "sprint_lote", "Lote terminado: S")]
+    assert datos.sprint("acme", sid)["extra"]["lote_en_curso"] is False
+    assert datos.idea("acme", cp2)["sin_sesion"] is True
 
 
 def test_periodica_qa_registrada():

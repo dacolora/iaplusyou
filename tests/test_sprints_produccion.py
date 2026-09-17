@@ -215,3 +215,98 @@ def test_progreso_agregado(escenario, monkeypatch):
     datos.actualizar_idea("acme", escenario["iv"], revision="aprobada")
     s = produccion.progreso("acme", escenario["sid"])["sprint"]
     assert s["listas"] == 1 and s["error"] == 1 and s["aprobadas"] == 1 and abs(s["costo_usd"] - 0.8) < 1e-6 and s["segundos_restantes"] == 0
+
+
+def test_reserva_placeholder_es_reserva_y_vence(base_temporal):
+    """F1: el placeholder lleva la hora (`reservando_<cp>_<epoch>`); vence a
+    los RESERVA_TTL_S. Un placeholder viejo sin hora (`reservando_<cp>`) cuenta
+    como vencido; un cf_id real nunca es reserva ni está vencido."""
+    from sprints import datos, produccion
+    r = produccion.reserva_placeholder(7, ahora=1000)
+    assert r == "reservando_7_1000" and produccion.es_reserva(r) and datos.es_reserva(r)
+    assert produccion.RESERVA_TTL_S == 600
+    assert produccion.reserva_vencida(r, ahora=1000 + 599) is False
+    assert produccion.reserva_vencida(r, ahora=1000 + 601) is True
+    assert produccion.reserva_vencida("reservando_7") is True          # formato viejo, sin hora
+    assert produccion.reserva_vencida("reservando_7_abc") is True      # hora ilegible
+    assert produccion.es_reserva("cf_abc") is False and produccion.es_reserva(None) is False
+    assert produccion.reserva_vencida("cf_abc") is False and produccion.reserva_vencida(None) is False
+
+
+def test_lanzar_lote_recupera_una_reserva_vencida(escenario, monkeypatch):
+    """F1 (a): una idea que quedó con un placeholder vencido (se cayó el
+    proceso entre reservar y crear la sesión) vuelve a `pendientes()` y
+    `lanzar_lote` la reclama atómicamente y le crea la sesión."""
+    import flowplus_lanzar
+    from sprints import datos, produccion
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append(cf) or True)
+    vieja = produccion.reserva_placeholder(escenario["iv"], ahora=1)      # hace mucho: vencida
+    datos.actualizar_idea("acme", escenario["iv"], cf_id=vieja)
+    ids = [i["id"] for _, i in produccion.pendientes("acme", escenario["sid"])]
+    assert escenario["iv"] in ids and escenario["ii"] in ids
+    assert datos.idea("acme", escenario["iv"])["sin_sesion"] is True
+    r = produccion.lanzar_lote("acme", escenario["sid"])
+    assert r["encoladas"] == 2 and r["omitidas"] == 0
+    cf = datos.idea("acme", escenario["iv"])["cf_id"]
+    assert cf in lanzados and not produccion.es_reserva(cf)
+
+
+def test_lanzar_lote_no_roba_una_reserva_viva(escenario, monkeypatch):
+    """F1 (b): una reserva fresca (otro lote la tomó hace segundos) no está
+    en `pendientes()` y `lanzar_lote` no la toca."""
+    import flowplus_lanzar
+    from sprints import datos, produccion
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append(cf) or True)
+    fresca = produccion.reserva_placeholder(escenario["iv"])
+    datos.actualizar_idea("acme", escenario["iv"], cf_id=fresca)
+    assert [i["id"] for _, i in produccion.pendientes("acme", escenario["sid"])] == [escenario["ii"]]
+    assert datos.idea("acme", escenario["iv"])["sin_sesion"] is False
+    r = produccion.lanzar_lote("acme", escenario["sid"])
+    assert r["encoladas"] == 1 and len(lanzados) == 1
+    assert datos.idea("acme", escenario["iv"])["cf_id"] == fresca
+
+
+def test_progreso_con_reserva_vencida_no_cuenta_el_lote_en_curso(escenario, monkeypatch):
+    """F1 (c): una reserva vencida no es una pieza viva (ni encolada ni
+    generando): el lote no está en curso. Una viva sí cuenta como encolada."""
+    import cola
+    from sprints import datos, produccion
+    monkeypatch.setattr(cola, "consultar_por_job", lambda job_id: None)
+    datos.actualizar_idea("acme", escenario["iv"], cf_id=produccion.reserva_placeholder(escenario["iv"], ahora=1))
+    s = produccion.progreso("acme", escenario["sid"])["sprint"]
+    assert s["encoladas"] == 0 and s["generando"] == 0 and s["en_curso"] is False
+    assert datos.sprint("acme", escenario["sid"])["campanas"][0]["piezas"] == []
+    datos.actualizar_idea("acme", escenario["iv"], cf_id=produccion.reserva_placeholder(escenario["iv"]))
+    s = produccion.progreso("acme", escenario["sid"])["sprint"]
+    assert s["encoladas"] == 1 and s["en_curso"] is True and s["segundos_restantes"] == produccion.SEGUNDOS_VIDEO
+
+
+def test_crear_sesion_no_pisa_una_reserva_que_ya_no_es_suya(escenario, monkeypatch):
+    """F1: si la reserva con la que se llamó a `crear_sesion` ya no es el
+    cf_id de la idea (venció y otro lote la reclamó), el vínculo no se
+    escribe encima: se avisa con ErrorDatos y `lanzar_lote` la cuenta omitida
+    sin soltar la reserva ajena."""
+    import flowplus_lanzar
+    from sprints import datos, produccion
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append(cf) or True)
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    idea = datos.idea("acme", escenario["iv"])
+    ajena = produccion.reserva_placeholder(escenario["iv"])
+    datos.actualizar_idea("acme", escenario["iv"], cf_id=ajena)
+    with pytest.raises(datos.ErrorDatos):
+        produccion.crear_sesion("acme", sp, c, idea, "wan3", "seedream_v5_pro", reserva="reservando_%d_1" % escenario["iv"])
+    assert datos.idea("acme", escenario["iv"])["cf_id"] == ajena
+    # y en el lote: la reserva vencida se reclama, pero si alguien la pisa antes del vínculo, se libera solo la propia
+    monkeypatch.setattr(produccion, "reserva_vencida", lambda cf_id, ahora=None: True)
+    vieja = datos.idea("acme", escenario["iv"])
+    original = produccion.crear_sesion
+    def _pisa(cliente, sprint, campana, idea, mv, mi, reserva=None):
+        datos.actualizar_idea(cliente, idea["id"], cf_id="reservando_%d_%d" % (idea["id"], 2 ** 40))   # otro lote se adelantó
+        return original(cliente, sprint, campana, idea, mv, mi, reserva=reserva)
+    monkeypatch.setattr(produccion, "crear_sesion", _pisa)
+    r = produccion.lanzar_lote("acme", escenario["sid"], campana_id=escenario["cid"])
+    assert r["omitidas"] >= 1 and datos.idea("acme", escenario["iv"])["cf_id"].startswith("reservando_")

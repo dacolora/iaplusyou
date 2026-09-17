@@ -103,3 +103,25 @@ def test_recalcular_con_ideas_y_piezas_reales(base_temporal):
     assert sp["campanas"][0]["estado"] == "revision" and sp["estado"] == "revision"
     datos.actualizar_idea("acme", i1, revision="aprobada")
     assert estado.recalcular("acme", sid)["campanas"][0]["estado"] == "completada"
+
+
+def test_recalcular_reserva_viva_genera_y_vencida_vuelve_a_ideas_aprobadas(base_temporal):
+    """F1: una idea con reserva viva (placeholder fresco, sin sesión de Crear
+    aún) deja la campaña en `generando`; una reserva vencida cuenta como
+    idea aprobada sin sesión (campaña `ideas_aprobadas`, sprint
+    `listo_para_generar`) para que «Generar lote» vuelva a ofrecerse."""
+    from sprints import datos, estado
+    pid = datos.crear_persona("acme", "Premium")
+    tid = datos.crear_temporada("acme", "Verano", "2026-06-01", "2026-07-15")
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31", referencias_objetivo_defecto=1)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo", tid, 1, 0)
+    datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", descripcion="luz")
+    i1 = datos.crear_idea("acme", cid, "video", "A", "a", estado_idea="aprobada")
+    assert estado.recalcular("acme", sid)["campanas"][0]["estado"] == "ideas_aprobadas"
+    datos.actualizar_idea("acme", i1, cf_id=datos.reserva_placeholder(i1))
+    sp = estado.recalcular("acme", sid)
+    assert sp["campanas"][0]["estado"] == "generando" and sp["estado"] == "generando"
+    datos.actualizar_idea("acme", i1, cf_id=datos.reserva_placeholder(i1, ahora=1))
+    sp = estado.recalcular("acme", sid)
+    assert sp["campanas"][0]["estado"] == "ideas_aprobadas" and sp["estado"] == "listo_para_generar"
+    assert sp["campanas"][0]["piezas"] == [] and sp["campanas"][0]["ideas"][0]["sin_sesion"] is True

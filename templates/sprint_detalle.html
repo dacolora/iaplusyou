@@ -24,7 +24,7 @@
     <button type="submit" class="btn-generar btn-sm">Marcar listo para generar</button>
   </form>
   {% endif %}
-  {% set pendientes_sprint = sprint.campanas | map(attribute='ideas') | sum(start=[]) | rejectattr('estado_idea', 'equalto', 'descartada') | selectattr('estado_idea', 'equalto', 'aprobada') | rejectattr('cf_id') | list %}
+  {% set pendientes_sprint = sprint.campanas | map(attribute='ideas') | sum(start=[]) | rejectattr('estado_idea', 'equalto', 'descartada') | selectattr('estado_idea', 'equalto', 'aprobada') | selectattr('sin_sesion') | list %}
   {% if pendientes_sprint %}
   <button type="button" class="btn-generar btn-sm" onclick="abrirLote('')">Generar lote del sprint ({{ pendientes_sprint | length }})</button>
   {% endif %}
@@ -71,7 +71,7 @@
       </div>
       {% set vivas = c.ideas | rejectattr('estado_idea', 'equalto', 'descartada') | list %}
       {% set aprobadas = vivas | selectattr('estado_idea', 'equalto', 'aprobada') | list %}
-      {% set pendientes_lote = aprobadas | rejectattr('cf_id') | list %}
+      {% set pendientes_lote = aprobadas | selectattr('sin_sesion') | list %}
       <div class="sprint-campana-acciones">
         <a class="btn-sm" href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">
           {% if c.referencias_total == 0 %}Subir referencias{% else %}Referencias ({{ c.referencias_listas }}/{{ c.referencias_objetivo }}){% endif %}

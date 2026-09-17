@@ -56,7 +56,12 @@ def recalcular(cliente, sprint_id):
     for c in sp["campanas"]:
         total = int(c["n_videos"] or 0) + int(c["n_imagenes"] or 0)
         ideas_vivas = [i for i in (c.get("ideas") or []) if i.get("estado_idea") != "descartada"]
-        nuevo = estado_campana(c["referencias_total"], total, ideas=ideas_vivas, piezas=c.get("piezas") or [])
+        # Una reserva viva (cf_id "reservando_*" sin sesión de Crear todavía,
+        # estado None) cuenta como generando; una vencida ya no viene en
+        # `piezas` (datos._campanas la deja como idea aprobada sin sesión).
+        piezas = [{**p, "estado": "pendiente"} if p.get("estado") is None and datos.es_reserva(p.get("cf_id")) else p
+                  for p in (c.get("piezas") or [])]
+        nuevo = estado_campana(c["referencias_total"], total, ideas=ideas_vivas, piezas=piezas)
         if nuevo != c["estado"]:
             datos.actualizar_campana(cliente, c["id"], estado=nuevo)
             c["estado"] = nuevo

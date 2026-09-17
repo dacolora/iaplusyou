@@ -28,6 +28,14 @@ MAX_REFERENCIAS = 15
 MAX_IMAGENES_MODELO = 10
 PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
 
+# Reserva de una idea (placeholder en cf_id) mientras se arma su sesión. El
+# formato y el vencimiento viven en `datos` (dueño de `reclamar_cf`), aquí solo
+# se re-exportan para que este módulo sea el punto de entrada de producción.
+RESERVA_TTL_S = datos.RESERVA_TTL_S
+reserva_placeholder = datos.reserva_placeholder
+es_reserva = datos.es_reserva
+reserva_vencida = datos.reserva_vencida
+
 
 # ---------------------------------------------------------------- lote ---
 
@@ -50,14 +58,16 @@ def _sprint(cliente, sprint_id):
 
 
 def pendientes(cliente, sprint_id, campana_id=None):
-    """[(campana, idea)] aprobadas y todavía sin sesión de Crear."""
+    """[(campana, idea)] aprobadas y todavía sin sesión de Crear: `cf_id`
+    NULL o una reserva vencida (`datos.reserva_vencida`); una reserva viva es
+    de otro lote y no se toca."""
     sp = _sprint(cliente, sprint_id)
     salida = []
     for c in sp["campanas"]:
         if campana_id is not None and c["id"] != campana_id:
             continue
         for i in c["ideas"]:
-            if i["estado_idea"] == "aprobada" and not i["cf_id"]:
+            if i["estado_idea"] == "aprobada" and (not i["cf_id"] or reserva_vencida(i["cf_id"])):
                 salida.append((c, i))
     return salida
 
@@ -181,9 +191,11 @@ def _contexto(cliente, campana):
             "temporada": {k: t.get(k) for k in ("nombre", "contexto", "mood_visual")}}, p
 
 
-def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen):
+def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, reserva=None):
     """Crea la sesión de Crear de una idea aprobada, arma su prompt y la
-    vincula (idea.cf_id y extra["sprint"]). No encola nada."""
+    vincula (idea.cf_id y extra["sprint"]). No encola nada. `reserva`: el
+    placeholder que `lanzar_lote` puso en `cf_id`; el vínculo final solo se
+    escribe si sigue ahí."""
     referencias, referencias_urls, productos_sel = referencias_sesion(cliente, campana, idea)
     contexto, persona = _contexto(cliente, campana)
     enfoque = idea.get("enfoque") if idea.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
@@ -203,13 +215,16 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen):
     creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt, aspect_ratio=_aspect_ratio(plataformas), tipo=idea["tipo"],
                              modelo=modelo_video if idea["tipo"] == "video" else modelo_imagen, referencias=referencias,
                              con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"])
-    # `lanzar_lote` ya reservó cf_id="reservando_<id>" antes de llamar acá, así
-    # que el vínculo final es el mismo compare-and-swap (evita que una idea
-    # tenga dos sesiones si dos lotes corrieron a la vez). Llamada directa
-    # (sin reserva previa, como en las pruebas) cae al `actualizar_idea` de
-    # siempre.
-    if not datos.reclamar_cf(cliente, idea["id"], cf_id, esperado=f"reservando_{idea['id']}"):
+    # `lanzar_lote` ya reservó cf_id con un placeholder antes de llamar acá,
+    # así que el vínculo final es el mismo compare-and-swap (evita que una
+    # idea tenga dos sesiones si dos lotes corrieron a la vez). Si la reserva
+    # ya no está (venció y otro lote la reclamó), no se pisa lo ajeno: se
+    # avisa y el lote la cuenta como omitida. Llamada directa (sin reserva
+    # previa, como en las pruebas) cae al `actualizar_idea` de siempre.
+    if reserva is None:
         datos.actualizar_idea(cliente, idea["id"], cf_id=cf_id)
+    elif not datos.reclamar_cf(cliente, idea["id"], cf_id, esperado=reserva):
+        raise datos.ErrorDatos("Otro lote tomó esta idea mientras se armaba la sesión.")
     return cf_id
 
 
@@ -218,25 +233,29 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
     {encoladas, omitidas, cf_ids, usd}. La puerta de costo es de la ruta: aquí
     ya se decidió gastar.
 
-    Cada idea se reserva (`datos.reclamar_cf` con un `cf_id` placeholder
-    "reservando_<id>") ANTES de armar su sesión: si dos llamadas a
-    `lanzar_lote` corren a la vez (dos clics, el worker y un cron) y las dos
-    leyeron la misma lista de `pendientes`, solo la primera gana la reserva
-    de cada idea — la segunda la ve omitida en vez de generar dos sesiones
-    para la misma pieza (double spend). Un fallo al armar la sesión (p. ej.
-    el producto no tiene foto, §referencias_sesion) libera la reserva."""
+    Cada idea se reserva (`datos.reclamar_cf` con el placeholder de
+    `reserva_placeholder`, "reservando_<id>_<epoch>") ANTES de armar su
+    sesión: si dos llamadas a `lanzar_lote` corren a la vez (dos clics, el
+    worker y un cron) y las dos leyeron la misma lista de `pendientes`, solo
+    la primera gana la reserva de cada idea — la segunda la ve omitida en vez
+    de generar dos sesiones para la misma pieza (double spend). El swap
+    espera el `cf_id` que se leyó (None o una reserva vencida), así una
+    reserva colgada de un proceso muerto se recupera y una viva nunca se
+    roba. Un fallo al armar la sesión (p. ej. el producto no tiene foto,
+    §referencias_sesion) libera la reserva propia, nunca una ajena."""
     sp = _sprint(cliente, sprint_id)
     mv, mi = modelos(cliente, modelo_video, modelo_imagen)
     est = estimar(cliente, sprint_id, campana_id, mv, mi)
     encoladas, omitidas, cf_ids = 0, 0, []
     for c, i in pendientes(cliente, sprint_id, campana_id):
-        if not datos.reclamar_cf(cliente, i["id"], f"reservando_{i['id']}"):
+        reserva = reserva_placeholder(i["id"])
+        if not datos.reclamar_cf(cliente, i["id"], reserva, esperado=i["cf_id"]):
             omitidas += 1
             continue
         try:
-            cf_id = crear_sesion(cliente, sp, c, i, mv, mi)
+            cf_id = crear_sesion(cliente, sp, c, i, mv, mi, reserva=reserva)
         except Exception as e:
-            datos.actualizar_idea(cliente, i["id"], cf_id=None)
+            datos.reclamar_cf(cliente, i["id"], None, esperado=reserva)
             omitidas += 1
             datos.registrar_evento(cliente, sprint_id, "pieza_omitida", f"«{i['titulo']}» no se pudo preparar: {e}",
                                    {"cp_id": i["id"], "error": str(e)}, campana_id=c["id"])
@@ -313,6 +332,16 @@ def regenerar(cliente, cp_id):
 
 # ------------------------------------------------------------ progreso ---
 
+def pieza_viva(p):
+    """True mientras la pieza no terminó: sesión pendiente/generando, o una
+    reserva viva (todavía sin sesión de Crear, estado None). Una reserva
+    vencida no es viva: la idea volvió a ser «aprobada sin sesión»."""
+    est = p.get("estado")
+    if est in ("pendiente", "generando"):
+        return True
+    return est is None and es_reserva(p.get("cf_id")) and not reserva_vencida(p.get("cf_id"))
+
+
 def _resumen(piezas, planeadas):
     r = {"planeadas": planeadas, "encoladas": 0, "generando": 0, "listas": 0, "error": 0, "aprobadas": 0,
          "costo_usd": 0.0, "segundos_restantes": 0}
@@ -325,14 +354,15 @@ def _resumen(piezas, planeadas):
             r["listas"] += 1
         elif est == "error":
             r["error"] += 1
-        elif est in ("pendiente", "generando"):
-            tarea = cola.consultar_por_job(flowplus_lanzar.job_id(p["cliente"], p["cf_id"])) or {}
+        elif pieza_viva(p):
+            tarea = {} if est is None else (cola.consultar_por_job(flowplus_lanzar.job_id(p["cliente"], p["cf_id"])) or {})
             if tarea.get("estado") == "en_curso":
                 r["generando"] += 1
             else:
                 r["encoladas"] += 1
             r["segundos_restantes"] += SEGUNDOS_VIDEO if p.get("tipo") == "video" else SEGUNDOS_IMAGEN
     r["costo_usd"] = round(r["costo_usd"], 4)
+    r["en_curso"] = (r["encoladas"] + r["generando"]) > 0
     return r
 
 

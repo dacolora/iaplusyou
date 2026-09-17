@@ -460,6 +460,22 @@ def test_pagina_de_ideas_y_acciones(con_ideas):
     assert c.post("/cliente/acme/sprints/ideas/999/aprobar").status_code == 404
 
 
+def test_reserva_vencida_vuelve_a_ofrecer_generar_lote(con_ideas):
+    """F1: con una reserva colgada (vencida) la página del sprint y la de
+    ideas vuelven a ofrecer «Generar lote»; con una reserva viva, no."""
+    from sprints import datos
+    c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
+    datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv))          # viva: otro lote la tiene
+    html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
+    assert "Generar lote del sprint" not in html
+    assert "Generar lote de esta campaña" not in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv, ahora=1))  # vencida
+    html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
+    assert "Generar lote del sprint (1)" in html and "Generar lote (1)" in html
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "Generar lote de esta campaña (1)" in html and "Otra idea" in html
+
+
 def test_estimar_y_lanzar_lote(con_ideas, monkeypatch):
     import flowplus_lanzar
     from sprints import datos

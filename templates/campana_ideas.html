@@ -45,16 +45,16 @@
   <article class="swap-card sprint-idea sprint-idea-{{ i.estado_idea }}" data-url="{{ url_for('sprints.idea_editar', cliente=cliente, cp_id=i.id) }}">
     <header class="sprint-idea-cab">
       <span class="tag-estado">{{ i.tipo }}</span>
-      <input class="sprint-idea-titulo" name="titulo" value="{{ i.titulo }}" {% if i.cf_id %}readonly{% endif %}>
-      <span class="tag-estado estado-sprint estado-sprint-{{ 'ideas_aprobadas' if i.estado_idea == 'aprobada' else ('completada' if i.cf_id else 'planeada') }}">{{ i.estado_idea }}{% if i.cf_id %} · generada{% endif %}</span>
+      <input class="sprint-idea-titulo" name="titulo" value="{{ i.titulo }}" {% if not i.sin_sesion %}readonly{% endif %}>
+      <span class="tag-estado estado-sprint estado-sprint-{{ 'ideas_aprobadas' if i.estado_idea == 'aprobada' else ('completada' if not i.sin_sesion else 'planeada') }}">{{ i.estado_idea }}{% if not i.sin_sesion %} · generada{% endif %}</span>
       {% if i.enfoque %}<span class="sprint-chip">{{ enfoques.get(i.enfoque, i.enfoque) }}</span>{% endif %}
       {% if i.duracion_s %}<small class="vacio">{{ i.duracion_s | int }} s</small>{% endif %}
       <span class="sprint-guardado" hidden>Guardado</span>
     </header>
-    <textarea name="escena" rows="3" {% if i.cf_id %}readonly{% endif %}>{{ i.escena }}</textarea>
+    <textarea name="escena" rows="3" {% if not i.sin_sesion %}readonly{% endif %}>{{ i.escena }}</textarea>
     <div class="fe-opciones">
-      {% if i.tipo == "video" %}<label>Sonido <input name="sonido" value="{{ i.sonido or '' }}" {% if i.cf_id %}readonly{% endif %}></label>{% endif %}
-      <label>Gancho <input name="gancho" value="{{ i.gancho or '' }}" {% if i.cf_id %}readonly{% endif %}></label>
+      {% if i.tipo == "video" %}<label>Sonido <input name="sonido" value="{{ i.sonido or '' }}" {% if not i.sin_sesion %}readonly{% endif %}></label>{% endif %}
+      <label>Gancho <input name="gancho" value="{{ i.gancho or '' }}" {% if not i.sin_sesion %}readonly{% endif %}></label>
       {% if i.plataformas %}<small class="vacio">{{ i.plataformas | join(', ') }}</small>{% endif %}
     </div>
     {% if i.referencias_ids %}
@@ -63,7 +63,7 @@
     </div>
     {% endif %}
     <div class="sprint-idea-acciones">
-      {% if not i.cf_id %}
+      {% if i.sin_sesion %}
         {% if i.estado_idea != "aprobada" %}
         <form method="post" action="{{ url_for('sprints.idea_aprobar', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-generar btn-xs">Aprobar</button></form>
         {% endif %}

@@ -28,7 +28,7 @@ import notificaciones
 import proyectos
 import referencias_link
 import trabajos
-from sprints import analisis, archivos, datos, entrega, estado, ideas, qa, sugerencias
+from sprints import analisis, archivos, datos, entrega, estado, ideas, produccion, qa, sugerencias
 from tareas import al_interrumpir, registrar
 
 
@@ -204,13 +204,12 @@ def ejecutar_qa_pendientes(tarea):
         sp = estado.recalcular(cliente, sid)
         if not sp:
             continue
-        # Cualquier estado no terminal cuenta como viva, incluido None: una
-        # idea con un placeholder "reservando_*" (se cayó el proceso entre
-        # reservar y crear la sesión de Crear) no tiene fila en `pieza` — el
-        # LEFT JOIN de _ideas() la deja con estado None, y si solo mirábamos
-        # ("pendiente", "generando") esa pieza quedaba invisible: el lote se
-        # reportaba terminado (bandera apagada + aviso) con una pieza colgada.
-        vivas = [p for c in sp["campanas"] for p in c["piezas"] if p.get("estado") not in ("listo", "error", "degradada")]
+        # Viva = pendiente/generando o una reserva viva (placeholder
+        # "reservando_*" sin fila en `pieza` todavía, estado None). Una
+        # reserva vencida (el proceso murió entre reservar y crear la sesión)
+        # ya no es pieza: `produccion.pieza_viva` la ignora y el lote puede
+        # cerrarse en vez de quedar colgado para siempre.
+        vivas = [p for c in sp["campanas"] for p in c["piezas"] if produccion.pieza_viva(p)]
         if vivas:
             continue
         piezas = [p for c in sp["campanas"] for p in c["piezas"]]

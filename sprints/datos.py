@@ -7,6 +7,7 @@ de productos la hace la ruta, para que este módulo se pruebe sin carpetas de
 clientes.
 """
 import re
+import time
 from datetime import date
 
 import sqlalchemy as sa
@@ -46,6 +47,37 @@ _REFERENCIA_COLS = ("titulo", "intencion", "intencion_otro", "descripcion", "ana
 _IDEA_COLS = ("titulo", "escena", "sonido", "enfoque", "gancho", "referencias_ids", "duracion_s", "plataformas",
               "estado_idea", "cf_id", "qa", "revision", "revision_motivo", "textos", "orden", "extra")
 _PIEZA_TERMINADA = ("listo", "degradada")
+
+# Reserva de una idea antes de crear su sesión de Crear (produccion.lanzar_lote):
+# `campana_pieza.cf_id` guarda el placeholder "reservando_<cp_id>_<epoch>" hasta
+# que el vínculo real lo reemplaza. Si el proceso muere en medio, la reserva
+# vence a los RESERVA_TTL_S y la idea vuelve a contar como aprobada sin sesión.
+RESERVA_PREFIJO = "reservando_"
+RESERVA_TTL_S = 600
+
+
+def reserva_placeholder(cp_id, ahora=None):
+    return f"{RESERVA_PREFIJO}{int(cp_id)}_{int(ahora if ahora is not None else time.time())}"
+
+
+def es_reserva(cf_id):
+    return isinstance(cf_id, str) and cf_id.startswith(RESERVA_PREFIJO)
+
+
+def reserva_vencida(cf_id, ahora=None):
+    """True si `cf_id` es una reserva más vieja que RESERVA_TTL_S. El formato
+    viejo sin hora ("reservando_<cp>") y una hora ilegible cuentan como
+    vencidas. Un cf_id real (o None) nunca está vencido: no es reserva."""
+    if not es_reserva(cf_id):
+        return False
+    partes = cf_id[len(RESERVA_PREFIJO):].split("_")
+    if len(partes) < 2:
+        return True
+    try:
+        creada = int(partes[-1])
+    except ValueError:
+        return True
+    return (ahora if ahora is not None else time.time()) - creada > RESERVA_TTL_S
 
 
 class ErrorDatos(ValueError):
@@ -334,7 +366,7 @@ def _campanas(con, cliente, sprint_id=None, campana_id=None):
     for f in con.execute(q.order_by(c.c.orden, c.c.id)):
         d = _a_dict(f)
         todas = _ideas(con, cliente, campana_id=d["id"])
-        piezas_ = [i for i in todas if i["cf_id"] and i["estado_idea"] != "descartada"]
+        piezas_ = [i for i in todas if not i["sin_sesion"] and i["estado_idea"] != "descartada"]
         d.update({"ideas": todas, "piezas": piezas_,
                   "piezas_listas": sum(1 for i in piezas_ if i["estado"] in _PIEZA_TERMINADA),
                   "piezas_aprobadas": sum(1 for i in piezas_ if i["revision"] == "aprobada"),
@@ -614,6 +646,10 @@ def _ideas(con, cliente, campana_id=None, cp_id=None):
         d["referencias_ids"] = list(d.get("referencias_ids") or [])
         d["plataformas"] = list(d.get("plataformas") or [])
         d["extra"] = d.get("extra") or {}
+        # Sin sesión de Crear que la represente: cf_id NULL o una reserva
+        # vencida. Es lo que `produccion.pendientes` y los botones «Generar
+        # lote» miran; una reserva viva NO es sin_sesion (otro lote la tiene).
+        d["sin_sesion"] = not d["cf_id"] or reserva_vencida(d["cf_id"])
         salida.append(d)
     return salida
 
