@@ -24,10 +24,12 @@
     </header>
     <p class="llave-para-que">{{ l.para_que }}</p>
     <p class="vacio llave-costo" style="padding-top:0;"><strong>Cómo se paga:</strong> {{ l.costo }}</p>
+    {% if l.variables %}
     <p class="vacio" style="padding-top:0;">
       <strong>Variables en el <code>.env</code> del servidor:</strong>
       {% for v in l.variables %}<code class="llave-var{% if v in l.faltan %} llave-var-falta{% endif %}">{{ v }}</code>{% if not loop.last %} {% endif %}{% endfor %}
     </p>
+    {% endif %}
     {% if l.estado == "parcial" %}
     <p class="tag-error">Faltan: {% for v in l.faltan %}<code>{{ v }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
     {% endif %}

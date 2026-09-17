@@ -981,7 +981,7 @@ def ver_cliente(cliente):
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
-        llaves=_estado_llaves(url_for("meli_callback", _external=True)),
+        llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app)),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=_contexto_tablero(cliente),
         **sprints_rutas.contexto(cliente),
@@ -1067,10 +1067,12 @@ SERVICIOS_LLAVES = (
         "costo": "La pauta se cobra en tu cuenta publicitaria; la API no cuesta.",
         "url": "https://business.facebook.com/settings/payment-methods",
         "url_texto": "business.facebook.com › Facturación",
-        "variables": ["META_APP_ID", "META_APP_SECRET"],
-        "nota": "La app la pone el administrador; el proyecto se conecta con el botón «Conectar con Meta» de abajo.",
+        "variables": [],
+        "por_proyecto": True,
+        "nota": "No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta».",
         "pasos": [
-            "Administrador: en developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; copia el App ID y el App Secret al .env.",
+            "En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login.",
+            "Pégalos en «Conecta tu cuenta de Meta» (abajo, o en Experimentos): el secret se guarda en el servidor y nunca vuelve a pantalla.",
             "En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio.",
             "Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página.",
             "Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app.",
@@ -1115,7 +1117,7 @@ SERVICIOS_LLAVES = (
 )
 
 
-def _estado_llaves(callback_meli=None):
+def _estado_llaves(callback_meli=None, meta_app_registrada=False):
     """Tarjetas de Configuración › Puesta a punto. Devuelve una lista de dicts
     {id, nombre, para_que, costo, estado, url, url_texto, variables, faltan,
     nota, pasos, opcional} donde `estado` es «configurada» (todas las
@@ -1126,8 +1128,13 @@ def _estado_llaves(callback_meli=None):
     callback = callback_meli or "<url del sitio>/meli/callback"
     tarjetas = []
     for s in SERVICIOS_LLAVES:
-        presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
-        faltan = [v for v in s["variables"] if v not in presentes]
+        if s.get("por_proyecto"):
+            # Meta: la app es del proyecto (clientes/<c>/meta_app.json), no del .env.
+            presentes = ["app de Meta del proyecto"] if meta_app_registrada else []
+            faltan = [] if meta_app_registrada else ["app de Meta del proyecto"]
+        else:
+            presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
+            faltan = [v for v in s["variables"] if v not in presentes]
         if not faltan:
             estado = "configurada"
         elif not presentes:

@@ -76,7 +76,7 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
     assert por_id["r2"]["estado"] == "falta" and por_id["fal"]["estado"] == "falta"
-    assert por_id["meta"]["variables"] == ["META_APP_ID", "META_APP_SECRET"]
+    assert por_id["meta"]["variables"] == [] and por_id["meta"]["estado"] == "falta"   # la app es del proyecto, no del .env
     assert por_id["smtp"]["opcional"] and por_id["meli"]["opcional"] and not por_id["anthropic"]["opcional"]
     # Sin request: el paso de MELI lleva el texto genérico; con URL, la real.
     assert any("<url del sitio>/meli/callback" in p for p in por_id["meli"]["pasos"])
@@ -101,7 +101,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     cfg = _config(html)
     assert "Puesta a punto" in cfg
     esperado = {"anthropic": "configurada", "fal": "configurada", "higgsfield": "configurada",
-                "r2": "parcial", "meta": "configurada", "smtp": "parcial", "meli": "falta"}
+                "r2": "parcial", "meta": "falta", "smtp": "parcial", "meli": "falta"}
     for sid, estado in esperado.items():
         t = _tarjeta(cfg, sid)
         assert _badge(t) == estado, (sid, _badge(t))
@@ -119,9 +119,9 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
     # Meta: el botón de conectar también vive en Configuración (y sigue en Experimentos).
-    assert "Conectar con Meta" in _tarjeta(cfg, "meta")
+    assert "Conecta tu cuenta de Meta" in cfg   # bloque de registro/conexión de la app del proyecto
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
-    assert "Conectar con Meta" in exp
+    assert "Conecta tu cuenta de Meta" in exp   # sin app registrada se pide registrarla; con app, «Conectar con Meta»
 
 
 def test_render_todo_falta(app):
@@ -134,6 +134,8 @@ def test_render_todo_falta(app):
 def test_render_todo_configurado(app, monkeypatch):
     for v in TODAS:
         monkeypatch.setenv(v, f"valor-{v.lower()}-XYZ")
+    # Meta no va en el .env: cuenta como configurada cuando el proyecto registró su app.
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "app_publica", lambda c: {"app_id": "1", "login_config_id": "2"})
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
     for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli"):
