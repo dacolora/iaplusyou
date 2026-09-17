@@ -172,6 +172,7 @@
       </div>
       <div class="generado-pie">
         <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
+        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">Sprint · Campaña {{ item.sprint.campana_n }}</a>{% endif %}
         <small>{{ item.modelo_nombre }}{% if item.usd %} · ${{ item.usd }}{% endif %}</small>
       </div>
       <template class="generado-detalle">

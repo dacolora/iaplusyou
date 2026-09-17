@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% from "_sprint_macros.html" import chip_estado %}
+{% block title %}Ideas · {{ sprint.nombre }}{% endblock %}
+{% block content %}
+{% include "_sprint_nav.html" %}
+
+<div class="pagina-cabecera sprint-cabecera">
+  <div>
+    <h1>Ideas de la campaña {{ campana.orden + 1 }}</h1>
+    <p class="vacio">{{ campana.persona_nombre }} · {{ campana.catalogo_id }} · {{ campana.temporada_nombre }} · {{ chip_estado(campana.estado) }}</p>
+  </div>
+</div>
+
+<section class="sprint-refs-progreso">
+  <strong>{{ conteo.videos_aprobados }} de {{ campana.n_videos }} videos · {{ conteo.imagenes_aprobadas }} de {{ campana.n_imagenes }} imágenes aprobadas</strong>
+  <p class="vacio">Claude propone ideas con la persona, el producto, la temporada, tus referencias y la guía de marca. Aprueba las que sirvan; solo esas se generan, y solo cuando pulses «Generar lote» con el costo a la vista.</p>
+</section>
+
+<div class="acciones">
+  <form method="post" action="{{ url_for('sprints.ideas_proponer', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
+    <button type="submit" class="btn-generar btn-sm" {% if trabajo_ideas or (conteo.faltan_videos + conteo.faltan_imagenes) == 0 %}disabled{% endif %}>
+      Proponer las que faltan ({{ conteo.faltan_videos }} videos, {{ conteo.faltan_imagenes }} imágenes)
+    </button>
+  </form>
+  <form method="post" action="{{ url_for('sprints.ideas_proponer', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
+    <input type="hidden" name="mas" value="3"><button type="submit" class="btn-sm" {% if trabajo_ideas %}disabled{% endif %}>Proponer 3 videos más</button>
+  </form>
+  <form method="post" action="{{ url_for('sprints.ideas_proponer', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
+    <input type="hidden" name="mas" value="3"><input type="hidden" name="tipo" value="imagen"><button type="submit" class="btn-sm" {% if trabajo_ideas %}disabled{% endif %}>Proponer 3 imágenes más</button>
+  </form>
+  <form method="post" action="{{ url_for('sprints.ideas_aprobar_todas', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
+    <button type="submit" class="btn-sm">Aprobar todas las propuestas</button>
+  </form>
+  {% if conteo.pendientes_lote %}
+  <button type="button" class="btn-generar btn-sm" onclick="abrirLote({{ campana.id }})">Generar lote de esta campaña ({{ conteo.pendientes_lote }})</button>
+  {% endif %}
+  {% if trabajo_ideas %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo_ideas.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+  <script>iniciarPolling({{ trabajo_ideas.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_ideas.job_id) | tojson }});</script>
+  {% endif %}
+</div>
+
+<div class="sprint-ideas">
+  {% for i in ideas %}
+  <article class="swap-card sprint-idea sprint-idea-{{ i.estado_idea }}" data-url="{{ url_for('sprints.idea_editar', cliente=cliente, cp_id=i.id) }}">
+    <header class="sprint-idea-cab">
+      <span class="tag-estado">{{ i.tipo }}</span>
+      <input class="sprint-idea-titulo" name="titulo" value="{{ i.titulo }}" {% if i.cf_id %}readonly{% endif %}>
+      <span class="tag-estado estado-sprint estado-sprint-{{ 'ideas_aprobadas' if i.estado_idea == 'aprobada' else ('completada' if i.cf_id else 'planeada') }}">{{ i.estado_idea }}{% if i.cf_id %} · generada{% endif %}</span>
+      {% if i.enfoque %}<span class="sprint-chip">{{ enfoques.get(i.enfoque, i.enfoque) }}</span>{% endif %}
+      {% if i.duracion_s %}<small class="vacio">{{ i.duracion_s | int }} s</small>{% endif %}
+      <span class="sprint-guardado" hidden>Guardado</span>
+    </header>
+    <textarea name="escena" rows="3" {% if i.cf_id %}readonly{% endif %}>{{ i.escena }}</textarea>
+    <div class="fe-opciones">
+      {% if i.tipo == "video" %}<label>Sonido <input name="sonido" value="{{ i.sonido or '' }}" {% if i.cf_id %}readonly{% endif %}></label>{% endif %}
+      <label>Gancho <input name="gancho" value="{{ i.gancho or '' }}" {% if i.cf_id %}readonly{% endif %}></label>
+      {% if i.plataformas %}<small class="vacio">{{ i.plataformas | join(', ') }}</small>{% endif %}
+    </div>
+    {% if i.referencias_ids %}
+    <div class="sprint-idea-refs">
+      {% for rid in i.referencias_ids %}{% set r = referencias_por_id.get(rid) %}{% if r %}<img class="sprint-mini" src="{{ r.frame_url or r.url }}" alt="" title="{{ r.titulo }}">{% endif %}{% endfor %}
+    </div>
+    {% endif %}
+    <div class="sprint-idea-acciones">
+      {% if not i.cf_id %}
+        {% if i.estado_idea != "aprobada" %}
+        <form method="post" action="{{ url_for('sprints.idea_aprobar', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-generar btn-xs">Aprobar</button></form>
+        {% endif %}
+        {% if i.estado_idea != "descartada" %}
+        <form method="post" action="{{ url_for('sprints.idea_otra', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-xs">Otra idea</button></form>
+        <form method="post" action="{{ url_for('sprints.idea_descartar', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-xs btn-peligro">Descartar</button></form>
+        {% endif %}
+      {% else %}
+        <small class="vacio">Pieza {{ i.estado or 'en cola' }}{% if i.revision != 'pendiente' %} · {{ i.revision }}{% endif %}</small>
+      {% endif %}
+    </div>
+  </article>
+  {% else %}
+  <p class="vacio">Todavía no hay ideas. Pulsa «Proponer las que faltan».</p>
+  {% endfor %}
+</div>
+
+{% include "_sprint_lote_modal.html" %}
+
+<script>
+  (function () {
+    document.querySelectorAll('.sprint-idea').forEach(function (card) {
+      var t = null;
+      function guardar() {
+        var cuerpo = {};
+        card.querySelectorAll('input[name], textarea[name]').forEach(function (el) { if (!el.readOnly) cuerpo[el.name] = el.value; });
+        fetch(card.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'}, body: JSON.stringify(cuerpo)})
+          .then(function (r) { return r.json(); })
+          .then(function (j) { if (!j.ok) { alert(j.error); return; } var ok = card.querySelector('.sprint-guardado'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500); })
+          .catch(function () {});
+      }
+      card.querySelectorAll('input[name], textarea[name]').forEach(function (el) {
+        if (el.readOnly) return;
+        el.addEventListener('input', function () { el.dataset.sucio = '1'; clearTimeout(t); t = setTimeout(guardar, 800); });
+        el.addEventListener('blur', function () { delete el.dataset.sucio; });
+      });
+    });
+  })();
+</script>
+{% endblock %}

@@ -19,7 +19,7 @@ import proyectos
 import trabajos
 from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
-from sprints import archivos, calendario, datos, estado, progreso
+from sprints import archivos, calendario, datos, estado, ideas, produccion, progreso
 from tareas import sprints as tareas_sprints
 
 bp = Blueprint("sprints", __name__, url_prefix="/cliente/<cliente>/sprints")
@@ -326,15 +326,18 @@ def ver(cliente, sid):
     return render_template("sprint_detalle.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, productos_por_id={p["id"]: p for p in productos}, productos_sprint=productos,
                            personas_sprint=datos.personas(cliente), temporadas_sprint=datos.temporadas(cliente),
-                           combinaciones=[list(x) for x in datos.combinaciones(cliente, sid)])
+                           combinaciones=[list(x) for x in datos.combinaciones(cliente, sid)],
+                           lote=produccion.progreso(cliente, sid)["sprint"], **_contexto_lote(cliente))
 
 
 @bp.get("/<int:sid>/progreso")
 def progreso_json(cliente, sid):
     sp = _sprint_o_404(cliente, sid)
-    return jsonify({"estado": sp["estado"], "sprint": progreso.progreso_sprint(sp["campanas"]),
-                    "campanas": [{"id": c["id"], "estado": c["estado"], **progreso.progreso_campana(c)}
-                                 for c in sp["campanas"]]})
+    lote = produccion.progreso(cliente, sid)
+    por_campana = {c["id"]: c for c in lote["campanas"]}
+    return jsonify({"estado": sp["estado"], "sprint": progreso.progreso_sprint(sp["campanas"]), "lote": lote["sprint"],
+                    "campanas": [{"id": c["id"], "estado": c["estado"], **progreso.progreso_campana(c),
+                                  "lote": por_campana.get(c["id"], {})} for c in sp["campanas"]]})
 
 
 @bp.post("/<int:sid>/listo")
@@ -584,3 +587,211 @@ def referencia_reanalizar(cliente, rid):
         return jsonify({"ok": True})
     flash("Analizando de nuevo.", "ok")
     return _volver(cliente, r["sprint_id"], r["campana_id"])
+
+
+@bp.get("/<int:sid>/revision")
+def revision(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    return _volver(cliente, sid)   # la Task 9 renderiza sprint_revision.html
+
+
+# -------------------------------------------------------------- ideas ---
+
+def _idea_o_404(cliente, cp_id, sid=None):
+    i = datos.idea(cliente, cp_id)
+    if not i or (sid is not None and i["sprint_id"] != sid):
+        abort(404)
+    return i
+
+
+def _contexto_lote(cliente):
+    mv, mi = produccion.modelos(cliente)
+    return {"modelos_video": flowplus_modelos.VIDEO, "modelos_imagen": flowplus_modelos.IMAGEN,
+            "modelo_video_defecto": mv, "modelo_imagen_defecto": mi}
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/ideas")
+def campana_ideas(cliente, sid, cid):
+    sp = _sprint_o_404(cliente, sid)
+    c = _campana_o_404(cliente, sid, cid)
+    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
+    lista = datos.ideas(cliente, cid)
+    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
+    faltan_v, faltan_i = ideas.faltantes(c)
+    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
+              "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
+              "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
+              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and not i["cf_id"])}
+    job = tareas_sprints.job_id_ideas(cliente, cid)
+    return render_template("campana_ideas.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           sprint=sp, campana=c, ideas=lista, referencias_por_id=refs, conteo=conteo,
+                           enfoques=flowplus_prompt_enfoques(), trabajo_ideas={"job_id": job} if trabajos.en_curso(job) else None,
+                           **_contexto_lote(cliente))
+
+
+def flowplus_prompt_enfoques():
+    import flowplus_prompt
+    return {k: v["nombre"] for k, v in flowplus_prompt.ENFOQUES.items()}
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>/ideas/proponer")
+def ideas_proponer(cliente, sid, cid):
+    _campana_o_404(cliente, sid, cid)
+    try:
+        if request.form.get("mas"):
+            n_v, n_i = _entero("mas", 3), 0
+            if request.form.get("tipo") == "imagen":
+                n_v, n_i = 0, _entero("mas", 3)
+        else:
+            n_v = _entero("n_videos") if request.form.get("n_videos") else None
+            n_i = _entero("n_imagenes") if request.form.get("n_imagenes") else None
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+    if tareas_sprints.encolar_ideas(cliente, cid, n_videos=n_v, n_imagenes=n_i):
+        flash("Claude está proponiendo ideas; aparecerán aquí en unos segundos.", "ok")
+    else:
+        flash("Ya hay una propuesta de ideas en curso para esta campaña.", "error")
+    return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>/ideas/aprobar_todas")
+def ideas_aprobar_todas(cliente, sid, cid):
+    _campana_o_404(cliente, sid, cid)
+    n = 0
+    for i in datos.ideas(cliente, cid, incluir_descartadas=False):
+        if i["estado_idea"] == "propuesta":
+            datos.actualizar_idea(cliente, i["id"], estado_idea="aprobada")
+            n += 1
+    estado.recalcular(cliente, sid)
+    flash(f"{n} idea(s) aprobada(s).", "ok")
+    return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+
+
+def _volver_ideas(i):
+    return redirect(url_for("sprints.campana_ideas", cliente=i["cliente"], sid=i["sprint_id"], cid=i["campana_id"]))
+
+
+@bp.post("/ideas/<int:cp_id>")
+def idea_editar(cliente, cp_id):
+    i = _idea_o_404(cliente, cp_id)
+    cuerpo = request.get_json(silent=True)
+    if cuerpo is not None and not isinstance(cuerpo, dict):
+        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+    es_json = cuerpo is not None or _quiere_json()
+    fuente = cuerpo if cuerpo is not None else request.form
+    campos = {k: fuente.get(k) for k in ("titulo", "escena", "sonido", "gancho") if k in fuente}
+    if any(v is not None and not isinstance(v, str) for v in campos.values()):
+        if es_json:
+            return jsonify({"ok": False, "error": "Formato inválido."}), 400
+        flash("Formato inválido.", "error")
+        return _volver_ideas(i)
+    try:
+        if "titulo" in campos and not (campos["titulo"] or "").strip():
+            raise datos.ErrorDatos("Una idea necesita título.")
+        if "escena" in campos and not (campos["escena"] or "").strip():
+            raise datos.ErrorDatos("Una idea necesita escena.")
+        datos.actualizar_idea(cliente, cp_id, **campos)
+    except datos.ErrorDatos as e:
+        if es_json:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        flash(str(e), "error")
+        return _volver_ideas(i)
+    if es_json:
+        return jsonify({"ok": True})
+    flash("Idea guardada.", "ok")
+    return _volver_ideas(i)
+
+
+@bp.post("/ideas/<int:cp_id>/aprobar")
+def idea_aprobar(cliente, cp_id):
+    i = _idea_o_404(cliente, cp_id)
+    datos.actualizar_idea(cliente, cp_id, estado_idea="aprobada")
+    estado.recalcular(cliente, i["sprint_id"])
+    if _quiere_json():
+        return jsonify({"ok": True})
+    return _volver_ideas(i)
+
+
+@bp.post("/ideas/<int:cp_id>/descartar")
+def idea_descartar(cliente, cp_id):
+    i = _idea_o_404(cliente, cp_id)
+    datos.actualizar_idea(cliente, cp_id, estado_idea="descartada")
+    estado.recalcular(cliente, i["sprint_id"])
+    if _quiere_json():
+        return jsonify({"ok": True})
+    return _volver_ideas(i)
+
+
+@bp.post("/ideas/<int:cp_id>/otra")
+def idea_otra(cliente, cp_id):
+    """Descarta esta idea y pide otra del mismo tipo (una sola)."""
+    i = _idea_o_404(cliente, cp_id)
+    if i.get("cf_id"):
+        flash("Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión.", "error")
+        return _volver_ideas(i)
+    datos.actualizar_idea(cliente, cp_id, estado_idea="descartada")
+    if tareas_sprints.encolar_ideas(cliente, i["campana_id"], reemplaza=cp_id):
+        flash("Pidiendo otra idea en su lugar.", "ok")
+    else:
+        flash("Ya hay una propuesta de ideas en curso para esta campaña.", "error")
+    estado.recalcular(cliente, i["sprint_id"])
+    return _volver_ideas(i)
+
+
+# --------------------------------------------------------------- lote ---
+
+@bp.get("/<int:sid>/lote/estimar")
+def lote_estimar(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    cid = request.args.get("campana_id", type=int)
+    try:
+        return jsonify(produccion.estimar(cliente, sid, campana_id=cid, modelo_video=request.args.get("modelo_video"),
+                                          modelo_imagen=request.args.get("modelo_imagen")))
+    except datos.ErrorDatos as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+
+@bp.post("/<int:sid>/lote")
+def lote(cliente, sid):
+    """Puerta de gasto: el modal ya mostró el costo; aquí se encola."""
+    _sprint_o_404(cliente, sid)
+    cid = request.form.get("campana_id", type=int)
+    try:
+        r = produccion.lanzar_lote(cliente, sid, campana_id=cid, modelo_video=request.form.get("modelo_video"),
+                                   modelo_imagen=request.form.get("modelo_imagen"))
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return _volver(cliente, sid)
+    if r["encoladas"]:
+        flash(f"Lote encolado: {r['encoladas']} pieza(s), USD {r['usd']:.2f} estimado. Te avisamos por correo al terminar si está configurado.", "ok")
+    else:
+        flash("No había ideas aprobadas sin generar." if not r["omitidas"] else "Esas piezas ya se estaban generando.", "warn")
+    return _volver(cliente, sid)
+
+
+@bp.post("/ideas/<int:cp_id>/reintentar")
+def pieza_reintentar(cliente, cp_id):
+    i = _idea_o_404(cliente, cp_id)
+    try:
+        ok = produccion.reintentar(cliente, cp_id)
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return _volver(cliente, i["sprint_id"])
+    flash("Reintentando la pieza." if ok else "Esa pieza no está en error o ya se está generando.", "ok" if ok else "warn")
+    return _volver(cliente, i["sprint_id"])
+
+
+@bp.post("/ideas/<int:cp_id>/regenerar")
+def pieza_regenerar(cliente, cp_id):
+    i = _idea_o_404(cliente, cp_id)
+    try:
+        produccion.regenerar(cliente, cp_id)
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return _volver(cliente, i["sprint_id"])
+    flash("Regenerando la pieza (sesión nueva, misma idea).", "ok")
+    destino = request.form.get("volver")
+    if destino == "revision":
+        return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
+    return _volver(cliente, i["sprint_id"])

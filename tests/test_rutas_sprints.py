@@ -415,3 +415,74 @@ def test_pestana_sprints_se_renderiza(app):
     assert 'id="tab-sprints"' in html and 'data-tab="sprints"' in html
     assert "Octubre" in html and "Premium" in html and "Verano" in html and "Nuevo sprint" in html
     assert "campanas_json" in html and "Sugerir personas" in html and "Black Friday" in html
+
+
+@pytest.fixture()
+def con_ideas(app, monkeypatch):
+    import catalogo_productos, marca, proyectos
+    from sprints import datos
+    from storage import r2_uploader
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Luz natural.")
+    monkeypatch.setattr(marca, "negative_prompt_efectivo", lambda c: None)
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None: {
+        "id": "espejo_led", "nombre": "Espejo LED", "descripcion": "redondo", "regla": "Idéntico.", "categoria": "producto",
+        "referencias": ["/tmp/e/1.jpg"], "imagenes": ["1.jpg"]})
+    monkeypatch.setattr(r2_uploader, "upload_image", lambda ruta, key: f"https://r2/{key}")
+    monkeypatch.setattr(proyectos, "preferencias_flowplus", lambda c: {"modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro"})
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)                      # 2 videos, 1 imagen
+    iv = datos.crear_idea("acme", cid, "video", "Amanecer", "rodea el espejo", sonido="pájaros", gancho="Luz", duracion_s=8, estado_idea="aprobada")
+    ii = datos.crear_idea("acme", cid, "imagen", "Marco", "primer plano")
+    return dict(app, sid=sid, cid=cid, iv=iv, ii=ii)
+
+
+def test_pagina_de_ideas_y_acciones(con_ideas):
+    from sprints import datos
+    c, sid, cid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
+    r = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas")
+    assert r.status_code == 200 and b"Amanecer" in r.data and b"Marco" in r.data and "1 de 2 videos".encode() in r.data
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/proponer", data={})
+    assert con_ideas["encolados"][-1]["tipo"] == "sprint_proponer_ideas" and con_ideas["encolados"][-1]["payload"]["n_videos"] is None
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/proponer", data={"mas": "3"})
+    assert con_ideas["encolados"][-1]["payload"] == {"cliente": "acme", "campana_id": cid, "n_videos": 3, "n_imagenes": 0, "reemplaza": None}
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}", json={"titulo": "Marco cálido", "escena": "primer plano con luz", "gancho": "Detalle"})
+    assert r.get_json()["ok"] and datos.idea("acme", ii)["titulo"] == "Marco cálido"
+    c.post(f"/cliente/acme/sprints/ideas/{ii}/aprobar")
+    assert datos.idea("acme", ii)["estado_idea"] == "aprobada"
+    c.post(f"/cliente/acme/sprints/ideas/{ii}/otra")
+    assert con_ideas["encolados"][-1]["payload"]["reemplaza"] == ii and datos.idea("acme", ii)["estado_idea"] == "descartada"
+    i3 = datos.crear_idea("acme", cid, "video", "Tercera", "x")
+    c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/aprobar_todas")
+    assert datos.idea("acme", i3)["estado_idea"] == "aprobada"
+    c.post(f"/cliente/acme/sprints/ideas/{i3}/descartar")
+    assert datos.idea("acme", i3)["estado_idea"] == "descartada"
+    assert c.get(f"/cliente/acme/sprints/{sid}/campanas/999/ideas").status_code == 404
+    assert c.post("/cliente/acme/sprints/ideas/999/aprobar").status_code == 404
+
+
+def test_estimar_y_lanzar_lote(con_ideas, monkeypatch):
+    import flowplus_lanzar
+    from sprints import datos
+    c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
+    j = c.get(f"/cliente/acme/sprints/{sid}/lote/estimar?campana_id={cid}").get_json()
+    assert j["videos"] == 1 and j["imagenes"] == 0 and j["usd"] > 0 and "USD" in j["texto"] and j["modelo_video"] == "wan3"
+    j2 = c.get(f"/cliente/acme/sprints/{sid}/lote/estimar?modelo_video=kling_o3_pro").get_json()
+    assert j2["modelo_video"] == "kling_o3_pro" and j2["usd"] > j["usd"]
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cl, cf, e, prioridad=5: lanzados.append((cf, prioridad)) or True)
+    r = c.post(f"/cliente/acme/sprints/{sid}/lote", data={"campana_id": cid, "modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro"})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}")
+    assert len(lanzados) == 1 and lanzados[0][1] == 3
+    i = datos.idea("acme", iv)
+    assert i["cf_id"] == lanzados[0][0]
+    j = c.get(f"/cliente/acme/sprints/{sid}/progreso").get_json()
+    assert j["lote"]["planeadas"] == 3 and j["lote"]["encoladas"] + j["lote"]["generando"] == 1 and j["campanas"][0]["lote"]["planeadas"] == 3
+    import creative_flow
+    creative_flow.actualizar("acme", i["cf_id"], estado="error", error="x")
+    c.post(f"/cliente/acme/sprints/ideas/{iv}/reintentar")
+    assert lanzados[-1][0] == i["cf_id"] and len(lanzados) == 2
+    creative_flow.actualizar("acme", i["cf_id"], estado="video_listo", video_url="https://r2/v.mp4")
+    c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar")
+    assert len(lanzados) == 3 and datos.idea("acme", iv)["cf_id"] == lanzados[-1][0]
+    r = c.get("/cliente/acme")
+    assert "Sprint · Campaña 1".encode() in r.data      # distintivo en la tarjeta de Crear

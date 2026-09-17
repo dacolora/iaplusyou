@@ -24,11 +24,24 @@
     <button type="submit" class="btn-generar btn-sm">Marcar listo para generar</button>
   </form>
   {% endif %}
+  {% set pendientes_sprint = sprint.campanas | map(attribute='ideas') | sum(start=[]) | rejectattr('estado_idea', 'equalto', 'descartada') | selectattr('estado_idea', 'equalto', 'aprobada') | rejectattr('cf_id') | list %}
+  {% if pendientes_sprint %}
+  <button type="button" class="btn-generar btn-sm" onclick="abrirLote('')">Generar lote del sprint ({{ pendientes_sprint | length }})</button>
+  {% endif %}
+  {% if lote and (lote.listas or lote.error or lote.generando or lote.encoladas) %}
+  <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}">Revisar ({{ lote.aprobadas }}/{{ lote.listas }} listas)</a>
+  {% endif %}
   <form method="post" action="{{ url_for('sprints.archivar', cliente=cliente, sid=sprint.id) }}" class="inline"
         onsubmit="return confirm('¿Archivar este sprint? Se puede desarchivar después.');">
     <button type="submit" class="btn-sm btn-peligro">Archivar</button>
   </form>
 </div>
+
+{% if lote and lote.planeadas %}
+<p class="vacio sprint-lote-resumen" id="sprint-lote-resumen">
+  {{ lote.listas }} listas · {{ lote.generando }} generando · {{ lote.encoladas }} en cola · {{ lote.error }} con error · {{ lote.aprobadas }} aprobadas · USD {{ '%.2f' % lote.costo_usd }} gastado
+</p>
+{% endif %}
 
 <h2>Campañas</h2>
 {% if not sprint.campanas %}<p class="vacio">Este sprint no tiene campañas todavía.</p>{% endif %}
@@ -56,10 +69,22 @@
       <div class="sprint-campana-progreso" data-cid="{{ c.id }}">
         {{ barra(c.progreso.porcentaje, c.progreso.texto) }}
       </div>
+      {% set vivas = c.ideas | rejectattr('estado_idea', 'equalto', 'descartada') | list %}
+      {% set aprobadas = vivas | selectattr('estado_idea', 'equalto', 'aprobada') | list %}
+      {% set pendientes_lote = aprobadas | rejectattr('cf_id') | list %}
       <div class="sprint-campana-acciones">
-        <a class="btn-generar btn-sm" href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">
+        <a class="btn-sm" href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">
           {% if c.referencias_total == 0 %}Subir referencias{% else %}Referencias ({{ c.referencias_listas }}/{{ c.referencias_objetivo }}){% endif %}
         </a>
+        <a class="btn-sm {% if c.referencias_total and not aprobadas %}btn-generar{% endif %}" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=sprint.id, cid=c.id) }}">
+          Ideas ({{ aprobadas | length }}/{{ c.n_videos + c.n_imagenes }})
+        </a>
+        {% if pendientes_lote %}
+        <button type="button" class="btn-generar btn-sm" onclick="abrirLote({{ c.id }})">Generar lote ({{ pendientes_lote | length }})</button>
+        {% endif %}
+        {% if c.piezas %}
+        <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}#campana-{{ c.id }}">Revisar ({{ c.piezas_aprobadas }}/{{ c.piezas | length }})</a>
+        {% endif %}
         <form method="post" action="{{ url_for('sprints.campana_eliminar', cliente=cliente, sid=sprint.id, cid=c.id) }}" class="inline"
               onsubmit="return confirm('¿Eliminar esta campaña y sus referencias?');">
           <button type="submit" class="btn-xs btn-peligro">Eliminar</button>
@@ -102,6 +127,8 @@
   {% else %}<li class="vacio">Sin eventos todavía.</li>{% endfor %}
 </ul>
 
+{% include "_sprint_lote_modal.html" %}
+
 <script>
   (function () {
     // La combinación repetida se avisa antes de enviar (el servidor la rechaza igual).
@@ -125,6 +152,8 @@
           .then(function (r) { return r.json(); })
           .then(function (j) {
             document.getElementById('sprint-progreso-texto').textContent = j.sprint.texto;
+            var res = document.getElementById('sprint-lote-resumen');
+            if (res && j.lote) res.textContent = j.lote.listas + ' listas · ' + j.lote.generando + ' generando · ' + j.lote.encoladas + ' en cola · ' + j.lote.error + ' con error · ' + j.lote.aprobadas + ' aprobadas · USD ' + j.lote.costo_usd.toFixed(2) + ' gastado';
             j.campanas.forEach(function (c) {
               var caja = document.querySelector('.sprint-campana-progreso[data-cid="' + c.id + '"]');
               if (!caja) return;
