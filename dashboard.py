@@ -1371,12 +1371,93 @@ def guardar_preferencias_flowplus(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
+_MONEDA_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def _moneda_por_defecto(cliente):
+    """La moneda de la cuenta publicitaria de Meta del proyecto, o COP si
+    todavía no conectó Meta — es la que hereda un producto del catálogo al
+    que no se le escribió moneda."""
+    return ((meta_conexion.cargar(cliente) or {}).get("moneda") or "COP").upper()
+
+
+def _campos_comerciales(form):
+    """Lee del formulario de Catálogo lo comercial de un producto (precio,
+    moneda, url_compra, en_prueba, prioridad) para `tiendas.marcar_producto`.
+    Solo devuelve las claves que venían en el formulario, salvo `en_prueba`
+    (un checkbox sin marcar no viaja: siempre se resuelve). Un valor
+    inválido NO frena el alta ni la edición del activo: se avisa con flash
+    y esa clave se omite (queda como estaba, o vacía si es nueva).
+    `wa.me/…` se normaliza a `https://wa.me/…` — es la URL de compra más
+    común de quien vende por WhatsApp y nadie la escribe con https."""
+    campos = {"en_prueba": form.get("en_prueba") in ("on", "1", "true")}
+    if "precio" in form:
+        precio_txt = (form.get("precio") or "").strip().replace(",", ".")
+        try:
+            precio = float(precio_txt) if precio_txt else None
+            if precio is not None and (not math.isfinite(precio) or precio < 0):
+                raise ValueError
+            campos["precio"] = precio
+        except ValueError:
+            flash("El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé.", "error")
+    if "prioridad" in form:
+        try:
+            prioridad = int(form.get("prioridad") or 0)
+            if not (0 <= prioridad <= 100):
+                raise ValueError
+            campos["prioridad"] = prioridad
+        except ValueError:
+            flash("La prioridad va de 0 a 100; no la guardé.", "error")
+    if "moneda" in form:
+        moneda = (form.get("moneda") or "").strip().upper()
+        if moneda and not _MONEDA_RE.match(moneda):
+            flash("La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé.", "error")
+        else:
+            campos["moneda"] = moneda or None
+    if "url_compra" in form:
+        url = (form.get("url_compra") or "").strip()
+        if url.lower().startswith("wa.me/"):
+            url = "https://" + url
+        if url and not url.startswith(("http://", "https://")):
+            flash("La URL de compra tiene que empezar por http:// o https:// (o ser wa.me/…); no la guardé.", "error")
+        else:
+            campos["url_compra"] = url or None
+    return campos
+
+
+def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False):
+    """Escribe lo comercial del activo `producto_id` en su fila `producto`
+    (`tiendas.asegurar_manual` la crea si no existe). Una fila sin moneda
+    hereda la de la cuenta de Meta (o COP). `desarchivar`: al CREAR el
+    activo, si su fila estaba archivada (se eliminó y se volvió a crear con
+    el mismo nombre) vuelve a la lista."""
+    nombre = (nombre or "").strip()
+    if not nombre:
+        # Editar sin nombre (el formulario no lo trae) no debe dejar una
+        # fila nueva sin nombre: el del activo, o su id.
+        nombre = (catalogo_productos.cargar_meta(cliente).get(producto_id) or {}).get("nombre") or producto_id
+    pid = tiendas.asegurar_manual(cliente, producto_id, nombre, descripcion)
+    fila = tiendas.producto(cliente, pid)
+    valores = dict(campos)
+    if nombre:
+        valores["nombre"] = nombre
+    if descripcion is not None:
+        valores["descripcion"] = descripcion.strip()
+    if not valores.get("moneda") and not (fila or {}).get("moneda"):
+        valores["moneda"] = _moneda_por_defecto(cliente)
+    if desarchivar and (fila or {}).get("archivado"):
+        valores["archivado"] = False
+    tiendas.marcar_producto(cliente, pid, **valores)
+    return pid
+
+
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
 def crear_producto(cliente):
     # "volver": pestaña que abrió el alta rápida (FlowClone, FlowPlus o FlowCatálogo).
     volver = request.form.get("volver") or "cambiar"
     nombre = (request.form.get("nombre") or "").strip()
     descripcion = (request.form.get("descripcion") or "").strip()
+    categoria = _cat(request.form.get("categoria"))
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not nombre:
         flash("Ponle un nombre.", "error")
@@ -1387,20 +1468,25 @@ def crear_producto(cliente):
     try:
         producto_id = catalogo_productos.crear(
             cliente, nombre, descripcion, tipo=request.form.get("tipo"),
-            zonas=request.form.getlist("zonas"), categoria=_cat(request.form.get("categoria")),
+            zonas=request.form.getlist("zonas"), categoria=categoria,
             regla=request.form.get("regla", ""))
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
-    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
+    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=categoria)
     if not guardadas:
         # Sin ninguna foto válida el producto no aparecería en el catálogo:
         # mejor deshacer que dejar una carpeta fantasma.
-        catalogo_productos.eliminar(cliente, producto_id, categoria=_cat(request.form.get("categoria")))
+        catalogo_productos.eliminar(cliente, producto_id, categoria=categoria)
         flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
-    else:
-        flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
+    if categoria == "producto":
+        # Solo lo que se vende tiene fila comercial (precio, url de compra,
+        # en prueba): un personaje o un entorno no van a un experimento.
+        _guardar_fila_producto(cliente, producto_id, nombre, descripcion,
+                               _campos_comerciales(request.form), desarchivar=True)
+    flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
@@ -1430,6 +1516,7 @@ def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto"
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/actualizar", methods=["POST"])
 def actualizar_producto(cliente, producto_id):
+    categoria = _cat(request.form.get("categoria"))
     try:
         catalogo_productos.actualizar(
             cliente, producto_id,
@@ -1437,11 +1524,16 @@ def actualizar_producto(cliente, producto_id):
             descripcion=request.form.get("descripcion"),
             tipo=request.form.get("tipo"),
             zonas=request.form.getlist("zonas"),
-            categoria=_cat(request.form.get("categoria")), regla=request.form.get("regla"),
+            categoria=categoria, regla=request.form.get("regla"),
         )
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if categoria == "producto":
+        # La fila comercial se crea aquí si el activo es anterior a que
+        # existiera (no hay migración: se enlaza al primer uso).
+        _guardar_fila_producto(cliente, producto_id, request.form.get("nombre"),
+                               request.form.get("descripcion"), _campos_comerciales(request.form))
     flash("Producto actualizado.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
@@ -1479,13 +1571,21 @@ def eliminar_producto(cliente, producto_id):
     """Borra el producto y TODAS sus fotos del disco. Irreversible — por eso la
     plantilla lo pide con un modal que nombra el producto y avisa cuántos swaps
     ya generados lo referencian."""
+    categoria = _cat(request.form.get("categoria"))
     producto = catalogo_productos.encontrar(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
     nombre = producto["nombre"] if producto else producto_id
     try:
-        catalogo_productos.eliminar(cliente, producto_id, categoria=_cat(request.form.get("categoria")))
+        catalogo_productos.eliminar(cliente, producto_id, categoria=categoria)
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if categoria == "producto":
+        # La fila comercial NO se borra: se archiva (a mano, como en
+        # prod_archivar) para que un experimento que ya la use no se quede
+        # sin producto y para no perder precio/url si se vuelve a crear.
+        fila = tiendas.por_activo(cliente).get(producto_id)
+        if fila and not fila["archivado"]:
+            tiendas.marcar_producto(cliente, fila["id"], archivado=True)
     flash(f"Producto eliminado: {nombre}", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
@@ -3021,9 +3121,6 @@ def prod_importar_url(cliente):
     else:
         flash("Ya hay una importación desde URL en curso — espera a que termine.", "warn")
     return _volver_productos(cliente)
-
-
-_MONEDA_RE = re.compile(r"^[A-Z]{3}$")
 
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/marcar", methods=["POST"])

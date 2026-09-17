@@ -173,3 +173,72 @@ def test_desconectar_archiva_por_sync_y_reconectar_desarchiva(base_temporal):
     assert tiendas.producto("acme", pid)["extra"]["archivado_por"] == "sync"
     tiendas.upsert_producto("acme", "shopify", "p1", {"nombre": "Cojín"})
     assert tiendas.producto("acme", pid)["archivado"] is False
+
+
+# --- activo del catálogo ⇄ fila producto (fuente manual) --------------------
+
+def test_asegurar_manual_crea_una_sola_fila(base_temporal):
+    import tiendas
+    pid = tiendas.asegurar_manual("acme", "cojin_azul", "Cojín Azul", "suave")
+    p = tiendas.producto("acme", pid)
+    assert p["fuente"] == "manual" and p["fuente_id"] == "cojin_azul"
+    assert p["activo_catalogo_id"] == "cojin_azul" and p["nombre"] == "Cojín Azul" and p["descripcion"] == "suave"
+    assert p["archivado"] is False and p["en_prueba"] is False and p["prioridad"] == 0
+    # Idempotente: misma fila aunque cambie el nombre que se pasa.
+    assert tiendas.asegurar_manual("acme", "cojin_azul", "Otro nombre") == pid
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
+    # Otro cliente con el mismo activo_id es otra fila.
+    assert tiendas.asegurar_manual("otro", "cojin_azul", "Cojín") != pid
+
+
+def test_asegurar_manual_respeta_fila_importada_enlazada(base_temporal):
+    """Si un producto importado (csv/shopify…) ya apunta al activo, no se
+    crea una fila manual: se devuelve la importada."""
+    import tiendas
+    pid = tiendas.upsert_producto("acme", "csv", "sku-1", {"nombre": "Cojín", "precio": 100, "moneda": "COP"})
+    tiendas.marcar_producto("acme", pid, activo_catalogo_id="cojin")
+    assert tiendas.asegurar_manual("acme", "cojin", "Cojín") == pid
+    filas = tiendas.productos("acme", incluir_archivados=True)
+    assert len(filas) == 1 and filas[0]["fuente"] == "csv"
+
+
+def test_asegurar_manual_reusa_fila_archivada(base_temporal):
+    """Una fila archivada que apunta al activo también cuenta: nunca dos
+    filas para el mismo activo."""
+    import tiendas
+    pid = tiendas.asegurar_manual("acme", "cojin", "Cojín")
+    tiendas.marcar_producto("acme", pid, archivado=True)
+    assert tiendas.asegurar_manual("acme", "cojin", "Cojín") == pid
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
+
+
+def test_marcar_producto_acepta_nombre_y_descripcion(base_temporal):
+    import tiendas
+    pid = tiendas.asegurar_manual("acme", "cojin", "Cojín")
+    tiendas.marcar_producto("acme", pid, nombre="Cojín XL", descripcion="grande", precio=5.0, moneda="USD")
+    p = tiendas.producto("acme", pid)
+    assert p["nombre"] == "Cojín XL" and p["descripcion"] == "grande" and p["precio"] == 5.0
+
+
+def test_por_activo(base_temporal):
+    import tiendas
+    a = tiendas.asegurar_manual("acme", "cojin", "Cojín")
+    b = tiendas.upsert_producto("acme", "csv", "sku-2", {"nombre": "Manta", "precio": 1, "moneda": "COP"})
+    tiendas.marcar_producto("acme", b, activo_catalogo_id="manta")
+    tiendas.upsert_producto("acme", "csv", "sku-3", {"nombre": "Sin activo", "precio": 1, "moneda": "COP"})
+    tiendas.asegurar_manual("otro", "cojin", "Cojín ajeno")
+    mapa = tiendas.por_activo("acme")
+    assert set(mapa) == {"cojin", "manta"}
+    assert mapa["cojin"]["id"] == a and mapa["manta"]["id"] == b and mapa["manta"]["fuente"] == "csv"
+    # Si dos filas apuntan al mismo activo (una archivada), gana la viva.
+    with base_temporal.conectar() as con:
+        p = base_temporal.producto
+        con.execute(p.update().where(p.c.id == a).values(archivado=True))
+        ahora = base_temporal.ahora()
+        c = con.execute(p.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, fuente="url", fuente_id="https://x/cojin",
+            nombre="Cojín url", activo_catalogo_id="cojin", prioridad=0, en_prueba=False, archivado=False,
+            extra={})).inserted_primary_key[0]
+    mapa = tiendas.por_activo("acme")
+    assert mapa["cojin"]["id"] == c
+    assert tiendas.por_activo("nadie") == {}

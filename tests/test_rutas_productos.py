@@ -585,3 +585,150 @@ def test_pedidos_por_experimento(app, base_temporal):
     assert tiendas.pedidos_por_experimento("otro") == {}
     html = app["c"].get("/cliente/acme").data.decode()
     assert "ventas por tienda: 2 pedido(s)" in html and "atribución tienda" in html
+
+
+# --- Catálogo: activo de categoría producto ⇄ fila producto (manual) --------
+
+def _foto(nombre="a.jpg"):
+    return (io.BytesIO(b"\xff\xd8\xff\xe0fake-jpg"), nombre)
+
+
+def _crear_activo(c, nombre="Cojín Azul", categoria="producto", **extra):
+    data = {"nombre": nombre, "descripcion": "suave", "categoria": categoria, "volver": "catalogo",
+            "imagenes": _foto()}
+    data.update(extra)
+    return c.post("/cliente/acme/productos/crear", data=data, content_type="multipart/form-data")
+
+
+def _fila_por_activo(activo_id, cliente="acme"):
+    import tiendas
+    return tiendas.por_activo(cliente).get(activo_id)
+
+
+def test_crear_producto_con_precio_crea_fila_manual(app):
+    import tiendas
+    c = app["c"]
+    r = _crear_activo(c, precio="89900,50", moneda="cop", url_compra="https://tienda.test/cojin",
+                      en_prueba="on", prioridad="7")
+    assert r.status_code == 302
+    p = _fila_por_activo("cojin_azul")
+    assert p is not None and p["fuente"] == "manual" and p["fuente_id"] == "cojin_azul"
+    assert p["nombre"] == "Cojín Azul" and p["descripcion"] == "suave"
+    assert p["precio"] == 89900.5 and p["moneda"] == "COP"
+    assert p["url_compra"] == "https://tienda.test/cojin" and p["en_prueba"] is True and p["prioridad"] == 7
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
+
+
+def test_crear_producto_sin_campos_comerciales_usa_moneda_de_meta(app):
+    _crear_activo(app["c"])
+    p = _fila_por_activo("cojin_azul")
+    assert p is not None and p["precio"] is None and p["moneda"] == "COP" and p["url_compra"] is None
+    assert p["en_prueba"] is False and p["prioridad"] == 0
+
+
+def test_crear_producto_sin_meta_usa_cop(app, monkeypatch):
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "cargar", lambda c: None)
+    _crear_activo(app["c"], moneda="")
+    assert _fila_por_activo("cojin_azul")["moneda"] == "COP"
+
+
+def test_crear_producto_normaliza_wa_me(app):
+    _crear_activo(app["c"], url_compra="wa.me/573001234567")
+    assert _fila_por_activo("cojin_azul")["url_compra"] == "https://wa.me/573001234567"
+
+
+def test_crear_producto_url_invalida_avisa_y_crea_igual(app):
+    c = app["c"]
+    _crear_activo(c, url_compra="tienda.test/cojin", precio="10")
+    p = _fila_por_activo("cojin_azul")
+    assert p is not None and p["url_compra"] is None and p["precio"] == 10.0
+    assert any("URL de compra" in m for m in _flashes(c))
+
+
+def test_crear_producto_precio_invalido_avisa_y_crea_igual(app):
+    c = app["c"]
+    _crear_activo(c, precio="abc", prioridad="500")
+    p = _fila_por_activo("cojin_azul")
+    assert p is not None and p["precio"] is None and p["prioridad"] == 0
+    assert any("precio" in m.lower() or "prioridad" in m.lower() for m in _flashes(c))
+
+
+def test_crear_personaje_no_crea_fila(app):
+    import tiendas
+    _crear_activo(app["c"], nombre="Laura", categoria="personaje", precio="10")
+    assert tiendas.productos("acme", incluir_archivados=True) == []
+
+
+def test_actualizar_producto_cambia_precio_y_nombre(app):
+    c = app["c"]
+    _crear_activo(c, precio="10", moneda="COP")
+    pid = _fila_por_activo("cojin_azul")["id"]
+    r = c.post("/cliente/acme/productos/cojin_azul/actualizar",
+               data={"nombre": "Cojín Rojo", "descripcion": "nuevo", "categoria": "producto",
+                     "precio": "25,5", "moneda": "usd", "url_compra": "wa.me/57300", "prioridad": "3"})
+    assert r.status_code == 302
+    p = _fila_por_activo("cojin_azul")
+    assert p["id"] == pid and p["nombre"] == "Cojín Rojo" and p["descripcion"] == "nuevo"
+    assert p["precio"] == 25.5 and p["moneda"] == "USD" and p["url_compra"] == "https://wa.me/57300"
+    assert p["en_prueba"] is False and p["prioridad"] == 3
+
+
+def test_actualizar_producto_crea_fila_si_no_existe(app):
+    """Un activo anterior a esta versión no tiene fila: editarlo la crea."""
+    import catalogo_productos
+    c = app["c"]
+    catalogo_productos.crear("acme", "Viejo", "d")
+    assert _fila_por_activo("viejo") is None
+    c.post("/cliente/acme/productos/viejo/actualizar",
+           data={"nombre": "Viejo", "categoria": "producto", "precio": "5", "en_prueba": "on"})
+    p = _fila_por_activo("viejo")
+    assert p is not None and p["fuente"] == "manual" and p["precio"] == 5.0 and p["en_prueba"] is True
+
+
+def test_actualizar_producto_url_invalida_avisa_y_conserva(app):
+    c = app["c"]
+    _crear_activo(c, url_compra="https://tienda.test/a")
+    c.post("/cliente/acme/productos/cojin_azul/actualizar",
+           data={"nombre": "Cojín Azul", "categoria": "producto", "url_compra": "ftp://nada"})
+    assert _fila_por_activo("cojin_azul")["url_compra"] == "https://tienda.test/a"
+    assert any("URL de compra" in m for m in _flashes(c))
+
+
+def test_actualizar_personaje_no_crea_fila(app):
+    import tiendas
+    c = app["c"]
+    _crear_activo(c, nombre="Laura", categoria="personaje")
+    c.post("/cliente/acme/productos/laura/actualizar",
+           data={"nombre": "Laura", "categoria": "personaje", "precio": "5"})
+    assert tiendas.productos("acme", incluir_archivados=True) == []
+
+
+def test_eliminar_producto_archiva_la_fila(app):
+    import tiendas
+    c = app["c"]
+    _crear_activo(c, precio="10")
+    pid = _fila_por_activo("cojin_azul")["id"]
+    r = c.post("/cliente/acme/productos/cojin_azul/eliminar", data={"categoria": "producto"})
+    assert r.status_code == 302
+    p = tiendas.producto("acme", pid)
+    assert p["archivado"] is True and p["extra"].get("archivado_por") == "manual"
+    assert p["activo_catalogo_id"] == "cojin_azul"
+    assert tiendas.productos("acme") == []
+
+
+def test_eliminar_producto_sin_fila_no_falla(app):
+    import catalogo_productos
+    import tiendas
+    c = app["c"]
+    catalogo_productos.crear("acme", "Viejo", "d")
+    r = c.post("/cliente/acme/productos/viejo/eliminar", data={"categoria": "producto"})
+    assert r.status_code == 302 and tiendas.productos("acme", incluir_archivados=True) == []
+
+
+def test_eliminar_personaje_no_toca_filas(app):
+    import tiendas
+    c = app["c"]
+    _crear_activo(c, precio="10")
+    _crear_activo(c, nombre="Laura", categoria="personaje")
+    c.post("/cliente/acme/productos/laura/eliminar", data={"categoria": "personaje"})
+    assert len(tiendas.productos("acme")) == 1
