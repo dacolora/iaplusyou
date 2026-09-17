@@ -98,6 +98,9 @@ app = Flask(__name__)
 # desarrollo local, no en producción.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
+from sprints import rutas as sprints_rutas  # noqa: E402  (Blueprint de la pestaña Sprints)
+app.register_blueprint(sprints_rutas.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -925,6 +928,7 @@ def ver_cliente(cliente):
         correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
         modos_exp=modos.MODOS,
         nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
+        **sprints_rutas.contexto(cliente),
     )
 
 
