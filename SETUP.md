@@ -187,24 +187,30 @@ Requisito previo: necesitas una **Página de Facebook** y una cuenta de **Instag
 Business o Creator vinculada a esa Página** (se vincula desde Configuración de la Página
 de Facebook > Instagram > Conectar cuenta).
 
-1. Ve a [developers.facebook.com/apps](https://developers.facebook.com/apps) y crea una app nueva, tipo **"Otro" > "Empresa"**.
-2. En el panel de la app, agrega el producto **"Facebook Login for Business"**.
-3. En **Facebook Login for Business > Configuración**, agrega en "URIs de redirección de OAuth válidas":
-   `http://localhost:5050/meta/callback` (para probar en tu máquina) y la URL HTTPS de producción
-   (`https://<tu-dominio>/meta/callback`). Tienen que coincidir EXACTAMENTE con `META_REDIRECT_URI`.
-4. En **Facebook Login for Business > Configurations**, crea una configuración con tipo de token
-   **Business integration system user** (sin expiración) y los permisos `ads_management`, `ads_read`,
-   `business_management`, `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`,
-   `publish_video`, `instagram_basic`, `instagram_content_publish`. Copia su id a `META_LOGIN_CONFIG_ID`.
-5. Agrega también el producto **"Instagram Graph API"** (o "Instagram" si aparece así) desde el catálogo de productos.
-6. En **Configuración básica** de la app, copia el **ID de la app** y el **secreto de la app**, y ponlos en tu `.env` junto con la URL de redirección y el id de la configuración del paso 3/4:
-   ```
-   META_APP_ID=...
-   META_APP_SECRET=...
-   META_REDIRECT_URI=http://localhost:5050/meta/callback
-   META_LOGIN_CONFIG_ID=...
-   ```
-7. Mientras la app esté en modo "Desarrollo" (no publicada), solo los usuarios con rol de **administrador/desarrollador/tester de la app** (agregados en "Roles de la app") pueden autorizarla. Agrégate a ti mismo si no apareces ya.
+Cada proyecto es un mundo aparte: **el cliente crea su propia app de Meta** y la registra en
+el dashboard. CreatvMachine no tiene una app propia en medio; solo comparte la URL de vuelta
+(`META_REDIRECT_URI` en el `.env`), que el cliente pega tal cual en su app.
+
+1. Ve a [developers.facebook.com/apps/creation](https://developers.facebook.com/apps/creation/), crea una app
+   (nombre libre) y elige tu **portafolio comercial**.
+2. Casos de uso: **Crear y administrar anuncios con la API de marketing**, **Medir datos de rendimiento**,
+   **Administrar todos los aspectos de tu página** y, si vas a publicar Reels, **Administrar mensajes y
+   contenido en Instagram**. (El "inicio de sesión con Facebook" normal se desactiva solo: las apps de
+   negocio usan *Facebook Login for Business*, que se agrega automáticamente.)
+3. En **Inicio de sesión con Facebook para empresas › Configurar**, agrega en "URI de redireccionamiento
+   de OAuth válidos" la URL de producción (`https://<tu-dominio>/meta/callback`). Tiene que coincidir
+   EXACTAMENTE con `META_REDIRECT_URI`. Con "Aplicar HTTPS" activo, Meta rechaza `http://localhost`.
+4. En **Casos de uso › Personalizar** de cada caso, agrega los permisos que falten: `pages_manage_ads`
+   (Marketing API), `pages_manage_posts` (Página), `instagram_basic` e `instagram_content_publish` (Instagram).
+5. En **Inicio de sesión con Facebook para empresas › Configuraciones**, crea una configuración con tipo de
+   token **usuario del sistema**, caducidad **Nunca**, activos Páginas y Cuentas publicitarias (requeridos) e
+   Instagram, y los permisos `ads_management`, `ads_read`, `business_management`, `pages_show_list`,
+   `pages_read_engagement`, `pages_manage_ads`, `pages_manage_posts`, `instagram_basic`,
+   `instagram_content_publish`. Copia el **identificador de configuración**.
+6. En **Configuración de la app › Básica**, copia el **identificador de la app** y la **clave secreta**.
+7. En el dashboard, pestaña **FlowMarketing** › "Registra tu app de Meta": pega los tres valores. Quedan en
+   `clientes/<cliente>/meta_app.json` (0600, fuera de git). Mientras la app esté en modo Desarrollo, solo
+   los usuarios con rol en ella (Roles de la app) pueden autorizarla; el administrador del portafolio ya lo tiene.
 8. La autorización ya no es un script: entra al proyecto en el dashboard, pestaña **FlowMarketing**,
    botón **"Conectar con Meta"**, inicia sesión con el Facebook que administra la cuenta publicitaria
    y la Página, y elige una de cada. Queda guardado en `clientes/<cliente>/meta.json`.

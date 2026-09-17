@@ -21,11 +21,13 @@ clientes/*/swaps.json
 clientes/*/ads.json
 clientes/*/meta.json
 clientes/*/meta.pendiente.json
+clientes/*/meta_app.json
 clientes/*/referencias_flowplus/
 clientes/*/logos/
 clientes/*/referencias_pendientes.json
 clientes/*/meta.json.tmp
 clientes/*/meta.pendiente.json.tmp
+clientes/*/meta_app.json.tmp
 clientes/*/creative_flow_pendientes.json
 clientes/*/marca.json
 

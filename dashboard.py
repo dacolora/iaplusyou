@@ -889,6 +889,7 @@ def ver_cliente(cliente):
     # plantilla muestra «sin comprobar» + el botón. atribucion_sugerida
     # (más abajo) también mira solo caché, así que coincide con Configuración.
     capacidades_meta = meta_conexion.estado(cliente)
+    meta_app = meta_conexion.app_publica(cliente)
     meta_conectado = capacidades_meta.get("estado") == "conectado"
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
@@ -935,6 +936,8 @@ def ver_cliente(cliente):
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
         capacidades_meta=capacidades_meta,
+        meta_app=meta_app,
+        meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
@@ -1918,12 +1921,38 @@ def _ir_a_flowmarketing(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
 
 
+@app.route("/cliente/<cliente>/meta/app", methods=["POST"])
+def meta_app_guardar(cliente):
+    """El proyecto registra SU app de Meta (id, secret, config de login).
+    El secret va a disco (meta_app.json, 0600) y nunca vuelve a pantalla."""
+    try:
+        meta_conexion.guardar_app(cliente, {
+            "app_id": request.form.get("app_id"),
+            "app_secret": request.form.get("app_secret"),
+            "login_config_id": request.form.get("login_config_id"),
+        })
+    except meta_conexion.MetaConexionError as e:
+        flash(str(e), "error")
+        return _ir_a_flowmarketing(cliente)
+    bitacora.registrar(cliente, "meta", "app", "ok", f"app {request.form.get('app_id', '').strip()} registrada")
+    flash("App de Meta registrada para este proyecto. Ahora sí: Conectar con Meta.", "ok")
+    return _ir_a_flowmarketing(cliente)
+
+
+@app.route("/cliente/<cliente>/meta/app/borrar", methods=["POST"])
+def meta_app_borrar(cliente):
+    meta_conexion.borrar_app(cliente)
+    bitacora.registrar(cliente, "meta", "app", "ok", "app de Meta quitada")
+    flash("App de Meta quitada de este proyecto. La conexión existente sigue hasta que la desconectes.", "ok")
+    return _ir_a_flowmarketing(cliente)
+
+
 @app.route("/cliente/<cliente>/meta/conectar")
 def meta_conectar(cliente):
     state = meta_conexion.nuevo_state()
     session["meta_oauth"] = {"state": state, "cliente": cliente}
     try:
-        return redirect(meta_conexion.url_dialogo(state))
+        return redirect(meta_conexion.url_dialogo(cliente, state))
     except meta_conexion.MetaConexionError as e:
         session.pop("meta_oauth", None)
         flash(str(e), "error")
@@ -1953,7 +1982,7 @@ def meta_callback():
 
     code = request.args.get("code", "")
     try:
-        token_info = meta_conexion.cambiar_code_por_token(code)
+        token_info = meta_conexion.cambiar_code_por_token(cliente, code)
         perfil = meta_conexion.obtener_perfil(token_info["token"])
         activos = meta_conexion.listar_activos(token_info["token"])
     except meta_conexion.MetaConexionError as e:

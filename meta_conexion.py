@@ -9,8 +9,13 @@ permiso cubre anuncios (meta_ads/) y publicación orgánica
 
 Reglas que este módulo hace cumplir por sí mismo:
   - El token nunca entra a un mensaje de excepción, log ni dry_run.
-  - META_APP_SECRET solo se lee en cambiar_code_por_token().
-  - meta.json se escribe atómico (tmp + os.replace) y con permisos 0600.
+  - El app_secret del proyecto solo se lee en cambiar_code_por_token().
+  - meta.json y meta_app.json se escriben atómicos (tmp + os.replace), 0600.
+
+Cada proyecto es un mundo aparte: trae SU app de Meta (id, secret y
+configuración de Facebook Login for Business) en clientes/<cliente>/meta_app.json.
+El .env raíz ya no tiene credenciales de Meta; solo META_REDIRECT_URI, que es
+la misma URL pública para todos los proyectos.
 
 Ver docs/superpowers/specs/2026-09-11-conexion-meta-design.md.
 """
@@ -60,13 +65,63 @@ class MetaConexionError(RuntimeError):
         self.codigo = codigo
 
 
-# ---------- configuración de la app (viene del .env raíz) ----------
+# ---------- configuración compartida (solo la URL de vuelta) ----------
 
 def _env_obligatoria(clave, para_que):
     valor = os.environ.get(clave, "").strip()
     if not valor:
         raise MetaConexionError(f"Falta {clave} en el .env — hace falta para {para_que}.")
     return valor
+
+
+# ---------- app de Meta del proyecto: clientes/<cliente>/meta_app.json ----------
+
+CAMPOS_APP = ("app_id", "app_secret", "login_config_id")
+
+
+def _path_app(cliente):
+    return os.path.join(_dir(cliente), "meta_app.json")
+
+
+def cargar_app(cliente):
+    datos = _leer(_path_app(cliente))
+    if not datos or not all(datos.get(c) for c in CAMPOS_APP):
+        return None
+    return {c: datos[c] for c in CAMPOS_APP}
+
+
+def guardar_app(cliente, datos):
+    """Valida y guarda las tres credenciales de la app del proyecto (0600)."""
+    limpio = {}
+    for campo in CAMPOS_APP:
+        valor = str((datos or {}).get(campo) or "").strip()
+        if not valor:
+            raise MetaConexionError(f"Falta {campo}: los tres datos de la app de Meta son obligatorios.")
+        limpio[campo] = valor
+    _escribir_atomico(_path_app(cliente), limpio)
+
+
+def borrar_app(cliente):
+    try:
+        os.remove(_path_app(cliente))
+    except FileNotFoundError:
+        pass
+
+
+def app_publica(cliente):
+    """Lo que se puede mostrar en pantalla: id y config, nunca el secret."""
+    app = cargar_app(cliente)
+    if not app:
+        return None
+    return {"app_id": app["app_id"], "login_config_id": app["login_config_id"]}
+
+
+def _app_obligatoria(cliente, para_que):
+    app = cargar_app(cliente)
+    if not app:
+        raise MetaConexionError(
+            f"Este proyecto no tiene registrada su app de Meta — hace falta para {para_que}.")
+    return app
 
 
 def redirect_uri():
@@ -80,15 +135,16 @@ def nuevo_state():
     return secrets.token_urlsafe(32)
 
 
-def url_dialogo(state):
-    """URL del diálogo de Facebook Login for Business. config_id reemplaza a
-    scope: la configuración (creada en el panel de la app) define el tipo de
-    token y los permisos. override_default_response_type va por si la
-    configuración pide token de usuario del sistema — se confirma contra
-    Meta en la Task 7 del plan."""
+def url_dialogo(cliente, state):
+    """URL del diálogo de Facebook Login for Business con la app DEL
+    PROYECTO. config_id reemplaza a scope: la configuración (creada en el
+    panel de esa app) define el tipo de token y los permisos.
+    override_default_response_type va por si la configuración pide token de
+    usuario del sistema."""
+    app = _app_obligatoria(cliente, "abrir el diálogo de Meta")
     params = {
-        "client_id": _env_obligatoria("META_APP_ID", "abrir el diálogo de Meta"),
-        "config_id": _env_obligatoria("META_LOGIN_CONFIG_ID", "abrir el diálogo de Meta"),
+        "client_id": app["app_id"],
+        "config_id": app["login_config_id"],
         "redirect_uri": redirect_uri(),
         "state": state,
         "response_type": "code",
@@ -236,11 +292,12 @@ def _graph_get(edge, token, params=None, timeout=30):
     return datos
 
 
-def cambiar_code_por_token(code):
-    """Servidor a servidor: el único lugar donde se usa META_APP_SECRET."""
+def cambiar_code_por_token(cliente, code):
+    """Servidor a servidor: el único lugar donde se usa el app_secret del proyecto."""
+    app = _app_obligatoria(cliente, "cambiar el código por un token")
     params = {
-        "client_id": _env_obligatoria("META_APP_ID", "cambiar el código por un token"),
-        "client_secret": _env_obligatoria("META_APP_SECRET", "cambiar el código por un token"),
+        "client_id": app["app_id"],
+        "client_secret": app["app_secret"],
         "redirect_uri": redirect_uri(),
         "code": code,
     }

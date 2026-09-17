@@ -125,9 +125,15 @@ brief's `platforms` list. `uploaders/youtube_uploader.py` (google-api-python-cli
 OAuth authorization done locally (`auth/auth_youtube.py`, `auth/auth_tiktok.py` — each
 opens a local browser + localhost callback server, so these cannot run on a
 remote/deployed server; tokens must be generated locally and copied over). Meta is
-different: the client connects their own account from the dashboard (FlowMarketing ›
-"Conectar con Meta", routes in `dashboard.py`, logic in `meta_conexion.py`), and the
-credentials live in `clientes/<cliente>/meta.json` (git-ignored, 0600). `meta_ads/`
+different: **each proyecto brings its own Meta app** (app id, app secret, Facebook Login
+for Business config id), registered from the dashboard (FlowMarketing › "Registra tu app de
+Meta") into `clientes/<cliente>/meta_app.json` (git-ignored, 0600); only then does
+"Conectar con Meta" (routes in `dashboard.py`, logic in `meta_conexion.py`) open that
+app's login dialog, and the resulting tokens/ad account/Page live in
+`clientes/<cliente>/meta.json` (also git-ignored, 0600). There is NO shared Meta app and
+no `META_APP_ID`/`META_APP_SECRET` in the root `.env` — only `META_REDIRECT_URI`, the same
+public callback URL every client registers in their own app. Never reintroduce a global
+Meta credential: a client's data must only ever flow through that client's app. `meta_ads/`
 receives them via `auth.configurar(...)` — the submodule never reads the environment.
 
 **Prompt generation** (`generador_prompts.py`): calls Anthropic directly (not through

@@ -1,3 +1,37 @@
+{# Cada proyecto trae SU app de Meta. Sin ella no hay nada que conectar:
+   CreatvMachine no pone credenciales propias en medio. #}
+{% if not meta_app %}
+<div class="idea-block" style="border-left:3px solid var(--accent);">
+  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">Registra tu app de Meta</div></div></div>
+  <p class="vacio" style="padding-top:0;">
+    Tu proyecto usa su propia app de Meta: así CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena.
+    Se crea una sola vez en <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noopener">developers.facebook.com</a>:
+  </p>
+  <ol class="vacio" style="padding-top:0;margin-top:0;">
+    <li>Crear app, nombre libre, y elegir tu <strong>portafolio comercial</strong>.</li>
+    <li>Casos de uso: <em>Crear y administrar anuncios (API de marketing)</em>, <em>Medir datos de rendimiento</em>, <em>Administrar todos los aspectos de tu página</em> y, si publicas Reels, <em>Administrar mensajes y contenido en Instagram</em>.</li>
+    <li>En <em>Inicio de sesión con Facebook para empresas › Configuraciones</em>, crear una configuración con token de <strong>usuario del sistema</strong> que <strong>nunca</strong> caduque, activos Páginas y Cuentas publicitarias, y los permisos
+      <code>ads_management, ads_read, business_management, pages_show_list, pages_read_engagement, pages_manage_ads, pages_manage_posts, instagram_basic, instagram_content_publish</code>
+      (los que no aparezcan, agrégalos primero desde <em>Casos de uso › Personalizar</em>). Copia el <strong>identificador de configuración</strong>.</li>
+    <li>En <em>Inicio de sesión con Facebook para empresas › Configurar</em>, agrega como URI de redireccionamiento válido: <code>{{ meta_redirect_uri }}</code></li>
+    <li>En <em>Configuración de la app › Básica</em>, copia el <strong>identificador de la app</strong> y la <strong>clave secreta</strong>.</li>
+  </ol>
+  <form method="post" action="{{ url_for('meta_app_guardar', cliente=cliente) }}" autocomplete="off" style="display:grid;gap:.5rem;max-width:32rem;">
+    <label>Identificador de la app <input name="app_id" required inputmode="numeric" pattern="[0-9]+"></label>
+    <label>Clave secreta de la app <input name="app_secret" type="password" required></label>
+    <label>Identificador de configuración de inicio de sesión <input name="login_config_id" required inputmode="numeric" pattern="[0-9]+"></label>
+    <button type="submit" class="btn-generar">Guardar app de Meta</button>
+  </form>
+</div>
+{% else %}
+<div class="vacio" style="padding-top:0;">
+  App de Meta del proyecto: <strong>{{ meta_app.app_id }}</strong> · configuración <strong>{{ meta_app.login_config_id }}</strong>
+  <form method="post" action="{{ url_for('meta_app_borrar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit="return confirm('¿Quitar la app de Meta de este proyecto? Tendrás que registrarla de nuevo para volver a conectar.');">
+    <button type="submit" class="btn-rechazar btn-sm">Quitar app</button>
+  </form>
+</div>
+{% endif %}
+
 {# Estado de la conexión con Meta, decidido en el servidor (meta_conexion.estado).
    Es lo que cierra el hallazgo "FlowMarketing se ve funcional sin cuenta de Meta". #}
 {% set cm = capacidades_meta %}
@@ -7,9 +41,13 @@
   <p class="vacio" style="padding-top:0;">
     Para publicar anuncios y también contenido orgánico en tu Página de Facebook y tu Instagram.
     Vas a iniciar sesión con tu Facebook y elegir tu cuenta publicitaria y tu Página — nunca ves ni pegas un token.
-    Si Meta te muestra un error de permisos, pídenos que agreguemos tu Facebook a la app.
+    Inicia sesión con el Facebook que administra esa app.
   </p>
+  {% if meta_app %}
   <a class="btn-generar" href="{{ url_for('meta_conectar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">Conectar con Meta</a>
+  {% else %}
+  <p class="vacio" style="padding-top:0;"><em>Primero registra tu app de Meta arriba.</em></p>
+  {% endif %}
 </div>
 
 {% elif cm.estado == "roto" %}
@@ -19,7 +57,9 @@
     El acceso fue revocado o expiró{% if cm.motivo %} ({{ cm.motivo }}){% endif %}. Estaba conectado a
     <strong>{{ cm.detalle.ad_account_nombre or cm.detalle.ad_account_id }}</strong> · <strong>{{ cm.detalle.page_nombre or cm.detalle.page_id }}</strong>.
   </p>
+  {% if meta_app %}
   <a class="btn-generar" href="{{ url_for('meta_conectar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">Volver a conectar</a>
+  {% endif %}
   <form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;">
     <button type="submit" class="btn-rechazar btn-sm">Desconectar</button>
   </form>
