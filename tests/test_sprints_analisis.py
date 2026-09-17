@@ -57,3 +57,35 @@ def test_analizar_video_usa_fotogramas_locales(monkeypatch, tmp_path):
     assert imagenes == [{"type": "image", "source": {"type": "url", "url": "https://r2/v.frame.jpg"}}]
     with pytest.raises(analisis.AnalisisInvalido):
         analisis.analizar({"tipo": "imagen", "url": "", "intencion": [], "descripcion": ""})
+
+
+def test_sugerir_personas_arma_prompt_y_colores(monkeypatch):
+    from sprints import analisis, sugerencias
+    import catalogo_productos, marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Luz natural, sin saturar.")
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [{"nombre": "Espejo LED", "descripcion": "redondo"}])
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Vidrios Sol")
+    capturado = {}
+    salida = {"personas": [
+        {"nombre": "Cliente Premium", "resumen": "r", "descripcion": "d", "edad_rango": "35-50", "tono": "t",
+         "senales_visuales": ["cocina"], "palabras_clave": ["lujo"]},
+        {"nombre": "Familia joven", "resumen": "r", "descripcion": "d", "edad_rango": "28-40", "tono": "t",
+         "senales_visuales": ["sala"], "palabras_clave": ["hogar"]},
+        {"nombre": "sin claves"}]}
+    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700: capturado.update(c=content) or json.dumps(salida))
+    personas = sugerencias.sugerir_personas("acme", cuantas=2)
+    texto = capturado["c"][0]["text"]
+    assert "Vidrios Sol" in texto and "Luz natural" in texto and "Espejo LED: redondo" in texto and "Propón 2" in texto
+    assert [p["nombre"] for p in personas] == ["Cliente Premium", "Familia joven"]
+    assert personas[0]["color"] == sugerencias.COLORES[0] and personas[1]["color"] == sugerencias.COLORES[1]
+
+
+def test_sugerir_personas_rechaza_json_malo(monkeypatch):
+    from sprints import analisis, sugerencias
+    import catalogo_productos, marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "X")
+    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700: "nada")
+    with pytest.raises(analisis.AnalisisInvalido):
+        sugerencias.sugerir_personas("acme")

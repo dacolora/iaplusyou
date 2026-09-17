@@ -57,3 +57,15 @@ def test_encolar_analisis_usa_el_worker(base_temporal, monkeypatch):
     job_id, tipo, payload, kw = encolados[0]
     assert job_id == "acme__ref5__analizar" and tipo == "sprint_analizar_referencia"
     assert payload == {"cliente": "acme", "referencia_id": 5} and kw["max_intentos"] == 3 and kw["cliente"] == "acme"
+
+
+def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
+    import tareas
+    from sprints import datos, sugerencias
+    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3: [
+        {"nombre": "Cliente Premium", "resumen": "r", "descripcion": "d", "edad_rango": "35-50", "tono": "t",
+         "senales_visuales": ["cocina"], "palabras_clave": ["lujo"], "color": "#4d8dff"}])
+    tareas.cargar_todas()
+    msg = tareas.REGISTRO["sprint_sugerir_personas"]({"payload": {"cliente": "acme", "cuantas": 1}})
+    p = datos.personas("acme")
+    assert len(p) == 1 and p[0]["origen"] == "sugerida_ia" and p[0]["color"] == "#4d8dff" and "1 personas" in msg
