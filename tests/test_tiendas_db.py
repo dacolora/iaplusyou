@@ -6,6 +6,19 @@ def clave(monkeypatch):
     monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
 
 
+PAISES = [{"pais": "CO", "idioma": "es", "presupuesto_dia": 20000.0}]
+
+
+def _pieza(db, cliente="acme", tipo="final", estado="listo", pais="CO", idioma="es", legado="cf_1__es_CO", url="https://r2/f.mp4"):
+    with db.conectar() as con:
+        ahora = db.ahora()
+        cid = con.execute(db.concepto.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, origen="manual", legado_id="cf_1", extra={})).inserted_primary_key[0]
+        return con.execute(db.pieza.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo=tipo, estado=estado,
+            pais=pais, idioma=idioma, url_video=url, legado_id=legado, extra={})).inserted_primary_key[0]
+
+
 def test_conectar_listar_credenciales_desconectar(base_temporal):
     import tiendas
     tid = tiendas.conectar("acme", "shopify", {"token": "shpat_1", "dominio": "acme.myshopify.com"}, nombre="Acme", dominio="acme.myshopify.com")
@@ -40,6 +53,7 @@ def test_upsert_producto_conserva_marcas(base_temporal):
 
 
 def test_pedidos(base_temporal):
+    import experimentos as ex
     import tiendas
     tid = tiendas.conectar("acme", "woo", {"ck": "a", "cs": "b"})
     n = tiendas.guardar_pedidos("acme", tid, [
@@ -50,7 +64,33 @@ def test_pedidos(base_temporal):
     assert tiendas.guardar_pedidos("acme", tid, [{"fuente_id": "1001", "fecha": "2026-09-16T10:00:00", "total": 55.0, "moneda": "USD", "items": [], "utm_content": "42"}]) == 0
     sin = tiendas.pedidos_sin_resolver("acme")
     assert [p["fuente_id"] for p in sin] == ["1001"] and sin[0]["total"] == 55.0
-    tiendas.resolver_pedido("acme", sin[0]["id"], 7)
+
+    eid = ex.crear("acme", "Cojín", PAISES, "OUTCOME_TRAFFIC", 7, 500000.0, "https://tienda.co/p", "COP")
+    pid = _pieza(base_temporal)
+    ep_id = ex.agregar_pieza("acme", eid, pid, "CO")
+
+    assert tiendas.resolver_pedido("acme", sin[0]["id"], ep_id) is True
     assert tiendas.pedidos_sin_resolver("acme") == []
-    assert tiendas.ventas_por_pieza("acme", 7, "2026-09-16T00:00:00") == {"compras": 1, "ingresos": 55.0}
+    assert tiendas.ventas_por_pieza("acme", ep_id, "2026-09-16T00:00:00") == {"compras": 1, "ingresos": 55.0}
+
+
+def test_resolver_pedido_rechaza_pieza_ajena(base_temporal):
+    """resolver_pedido no debe ligar un pedido a una experimento_pieza que
+    no existe, o que existe pero es de otro cliente."""
+    import experimentos as ex
+    import tiendas
+    tid = tiendas.conectar("acme", "woo", {"ck": "a", "cs": "b"})
+    tiendas.guardar_pedidos("acme", tid, [
+        {"fuente_id": "1001", "fecha": "2026-09-16T10:00:00", "total": 50.0, "moneda": "USD", "items": [], "utm_content": "42"},
+    ])
+    pedido_id = tiendas.pedidos_sin_resolver("acme")[0]["id"]
+
+    assert tiendas.resolver_pedido("acme", pedido_id, 999) is False
+
+    eid_otro = ex.crear("otro", "Cojín ajeno", PAISES, "OUTCOME_TRAFFIC", 7, 500000.0, "https://tienda.co/p", "COP")
+    pid_otro = _pieza(base_temporal, cliente="otro")
+    ep_ajeno = ex.agregar_pieza("otro", eid_otro, pid_otro, "CO")
+    assert tiendas.resolver_pedido("acme", pedido_id, ep_ajeno) is False
+
+    assert [p["id"] for p in tiendas.pedidos_sin_resolver("acme")] == [pedido_id]
     assert tiendas.ventas_por_pieza("acme", 7, "2026-09-17T00:00:00") == {"compras": 0, "ingresos": 0.0}

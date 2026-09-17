@@ -278,9 +278,7 @@ pedido = Table("pedido", metadata,
     Column("total", Float), Column("moneda", String(3)),
     Column("items", JSON, default=list),
     Column("utm_content", String(120)),
-    # Sin FK dura (bloque 5, migración 0005 la quita): un pedido debe sobrevivir
-    # aunque la pieza a la que se atribuye ya no exista o se resuelva desordenada.
-    Column("experimento_pieza_id", Integer),
+    Column("experimento_pieza_id", Integer, sa.ForeignKey("experimento_pieza.id")),
     sa.UniqueConstraint("cliente", "fuente_id", name="uq_pedido_fuente"),
 )
 

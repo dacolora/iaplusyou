@@ -234,10 +234,20 @@ def pedidos_sin_resolver(cliente):
 
 
 def resolver_pedido(cliente, pedido_id, ep_id):
+    """Liga un pedido a la `experimento_pieza` que lo generó. `False` si la
+    pieza no existe o no es de ese cliente (nunca atribuir un pedido a una
+    pieza ajena) — la columna sigue siendo FK dura (ver migración 0001), así
+    que un `ep_id` inválido también fallaría en el UPDATE, pero esto evita
+    ligar cliente A a una pieza real de cliente B."""
+    ep = db.experimento_pieza
     pe = db.pedido
     with db.conectar() as con:
+        ep_ok = con.execute(sa.select(ep.c.id).where(ep.c.id == ep_id, ep.c.cliente == cliente)).scalar()
+        if not ep_ok:
+            return False
         con.execute(pe.update().where(pe.c.id == pedido_id, pe.c.cliente == cliente)
                     .values(experimento_pieza_id=ep_id))
+        return True
 
 
 def ventas_por_pieza(cliente, ep_id, desde_iso):
