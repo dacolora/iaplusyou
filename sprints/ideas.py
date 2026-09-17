@@ -134,6 +134,14 @@ def armar_prompt(ctx, n_videos, n_imagenes):
         plataformas=", ".join(f'"{p}"' for p in datos.PLATAFORMAS))
 
 
+def max_tokens_para(n_ideas):
+    """Tope de tokens de salida según cuántas ideas se piden: una idea serializa
+    a ~130-140 tokens, así que un tope fijo se queda corto en campañas grandes
+    (truncando la respuesta y haciendo fallar también el reintento, siempre con
+    el mismo tope)."""
+    return min(8000, 600 + 220 * max(1, int(n_ideas)))
+
+
 def _mas_cercana(valor, duraciones):
     try:
         v = float(valor)
@@ -200,11 +208,12 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     validos = {r["id"] for r in ctx["referencias"]}
     texto = armar_prompt(ctx, n_videos, n_imagenes)
     content = [{"type": "text", "text": texto}]
+    tokens = max_tokens_para(n_videos + n_imagenes)
     try:
-        lista = parsear(analisis._llamar(content, max_tokens=3000), validos, ctx["duraciones"])
+        lista = parsear(analisis._llamar(content, max_tokens=tokens), validos, ctx["duraciones"])
     except AnalisisInvalido as e:
         content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
-        lista = parsear(analisis._llamar(content, max_tokens=3000), validos, ctx["duraciones"])
+        lista = parsear(analisis._llamar(content, max_tokens=tokens), validos, ctx["duraciones"])
     videos = [i for i in lista if i["tipo"] == "video"][:n_videos]
     imagenes = [i for i in lista if i["tipo"] == "imagen"][:n_imagenes]
     creadas = []

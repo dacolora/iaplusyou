@@ -68,9 +68,14 @@ def test_proponer_crea_ideas_y_reemplaza(base_temporal, monkeypatch):
     from sprints import analisis, datos, ideas
     sid, cid, rid = _ctx(monkeypatch, datos)
     respuestas = [json.dumps({"ideas": [dict(IDEA_V, referencias_ids=[rid]), IDEA_I]})]
-    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700: respuestas.pop(0))
+    llamadas = []
+    def _llamar_falso(content, max_tokens=700):
+        llamadas.append(max_tokens)
+        return respuestas.pop(0)
+    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
     creadas = ideas.proponer("acme", cid)          # faltantes: 2 videos, 1 imagen → pide 2 y 1; Claude devuelve 1 y 1
     assert len(creadas) == 2
+    assert llamadas == [ideas.max_tokens_para(3)]   # 2 videos + 1 imagen pedidos, un solo llamado (sin reintento)
     lista = datos.ideas("acme", cid)
     assert lista[0]["titulo"] == "Espejo al amanecer" and lista[0]["referencias_ids"] == [rid] and lista[0]["duracion_s"] == 8.0
     assert lista[1]["tipo"] == "imagen" and lista[1]["enfoque"] == "producto"
@@ -80,6 +85,12 @@ def test_proponer_crea_ideas_y_reemplaza(base_temporal, monkeypatch):
     assert datos.idea("acme", lista[0]["id"])["estado_idea"] == "descartada"
     assert datos.idea("acme", nuevas[0])["titulo"] == "Otra versión" and datos.idea("acme", nuevas[0])["tipo"] == "video"
     assert any(e["tipo"] == "ideas_propuestas" for e in datos.eventos("acme", sid))
+
+
+def test_max_tokens_para_escala_con_la_cantidad_de_ideas():
+    from sprints import ideas
+    assert ideas.max_tokens_para(1) == 820
+    assert ideas.max_tokens_para(35) == 8000     # 8300 sin el tope, recortado a 8000
 
 
 def test_proponer_sin_faltantes_no_llama(base_temporal, monkeypatch):
