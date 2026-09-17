@@ -69,3 +69,25 @@ def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
     msg = tareas.REGISTRO["sprint_sugerir_personas"]({"payload": {"cliente": "acme", "cuantas": 1}})
     p = datos.personas("acme")
     assert len(p) == 1 and p[0]["origen"] == "sugerida_ia" and p[0]["color"] == "#4d8dff" and "1 personas" in msg
+
+
+def test_referencia_desde_link_descarga_registra_y_encola(base_temporal, monkeypatch, tmp_path):
+    import tareas
+    import referencias_link
+    from sprints import archivos, datos
+    from tareas import sprints as ts
+    sid, cid, _ = _referencia(datos)
+    def descargar_falso(url, carpeta, nombre_base):
+        ruta = tmp_path / f"{nombre_base}.mp4"; ruta.write_bytes(b"mp4")
+        return str(ruta), {"fuente": "tiktok", "titulo": "Baile", "url_origen": url}
+    monkeypatch.setattr(referencias_link, "descargar", descargar_falso)
+    monkeypatch.setattr(archivos, "registrar_local", lambda c, ruta, titulo: {
+        "tipo": "video", "url": "https://r2/l.mp4", "frame_url": "https://r2/l.frame.jpg", "ruta_local": ruta, "titulo": titulo})
+    encolados = []
+    monkeypatch.setattr(ts, "encolar_analisis", lambda c, rid: encolados.append((c, rid)) or True)
+    tareas.cargar_todas()
+    msg = tareas.REGISTRO["sprint_referencia_link"]({"payload": {"cliente": "acme", "campana_id": cid, "url": "https://t.t/v"}})
+    refs = datos.referencias("acme", cid)
+    nueva = refs[-1]
+    assert nueva["origen"] == "link" and nueva["titulo"] == "Baile" and nueva["frame_url"] == "https://r2/l.frame.jpg"
+    assert encolados == [("acme", nueva["id"])] and "link" in msg
