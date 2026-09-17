@@ -53,5 +53,26 @@
 
 - [ ] Implementar; verificación manual; commit `"Campañas se funde en Experimentos: anuncios sueltos anteriores en solo lectura"`.
 
-### Task 4: Docs
+### Task 4: Configuración = puesta a punto, y las reglas se van a Experimentos
+
+**Files:** `templates/_tab_settings.html`, `templates/_tab_experimentos.html`, `templates/_form_reglas.html`, `dashboard.py` (`cfg_reglas` redirige a `#experimentos`; nuevo helper `_estado_llaves()`), `static/style.css`, tests `tests/test_rutas_bloque4.py` (reglas por defecto), `tests/test_rutas_productos.py` (Configuración).
+
+Decisión del dueño (2026-09-17): "Reglas por defecto de los experimentos que está en Configuración debe estar dentro de Experimentos"; "en Configuración debemos tener el paso a paso de todas las API keys necesarias para pagar" y "cómo esto se conecta a Shopify, WooCommerce, MercadoLibre".
+
+- **Reglas**: el bloque "Reglas por defecto de los experimentos" (`_form_reglas.html` con `prefijo="cfg"`) se mueve de Configuración a Experimentos, arriba de la lista, dentro de `<details>` "Reglas del motor (valen para todos los experimentos)". La ruta `cfg_reglas` se conserva y redirige con `_anchor="experimentos"`. Configuración deja un enlace "Las reglas del decisor están en Experimentos →".
+- **Puesta a punto** en Configuración, una tarjeta por servicio, en este orden y con este contenido (todo en español, sin mostrar jamás el valor de la llave — solo "configurada" / "falta"):
+  1. **Anthropic (guiones y prompts)** — `ANTHROPIC_API_KEY`; console.anthropic.com › API keys; se paga por uso (centavos por guion); sin ella no hay prompts ni guiones.
+  2. **fal.ai (voz y música)** — `FAL_KEY`; fal.ai/dashboard/keys; por uso (~$0.05 por final); sin ella las finales salen sin voz ni música.
+  3. **Higgsfield (video e imagen)** — `HF_API_KEY_ID`/`HF_API_KEY_SECRET`; higgsfield.ai › API; por créditos; sin ella no se generan piezas.
+  4. **Cloudflare R2 (almacenamiento)** — `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_PUBLIC_BASE_URL`; dash.cloudflare.com › R2 › Manage API tokens; casi gratis; sin ella los videos no tienen URL pública y Meta no puede usarlos.
+  5. **Meta (anuncios)** — `META_APP_ID`/`META_APP_SECRET` los pone el administrador; el proyecto se conecta con el botón "Conectar con Meta" (ya existente) y la cuenta publicitaria necesita método de pago en business.facebook.com › Facturación.
+  6. **Correo de avisos (opcional)** — `SMTP_HOST/PORT/USER/PASS/FROM`.
+  7. **MercadoLibre (opcional)** — `MELI_APP_ID`/`MELI_SECRET`, app en developers.mercadolibre.com con redirect `<url del sitio>/meli/callback`.
+  Cada tarjeta: nombre, para qué sirve, cómo se paga, estado (badge verde "configurada" / ámbar "falta"), enlace externo (`target="_blank" rel="noopener"`), y la lista de variables que van en el `.env` del servidor (con nota "las pone quien administra el servidor; no se escriben desde aquí"). `_estado_llaves()` devuelve `[{clave(s), nombre, para_que, costo, estado, url, variables}]` leyendo solo `bool(os.environ.get(...))`.
+- **Conectar tu tienda** (la sección de Tienda existente gana el paso a paso, en `<details>` por plataforma): Shopify (Configuración › Apps y canales de venta › Desarrollar apps › crear app › permisos `read_products` y `read_orders` › instalar › copiar el Admin API access token `shpat_…` › pegar aquí con el dominio `xxx.myshopify.com`); WooCommerce (WooCommerce › Ajustes › Avanzado › REST API › Añadir clave, permisos de lectura › copiar Consumer key y secret › pegar con la URL https de la tienda); MercadoLibre (botón "Conectar con MercadoLibre" si `MELI_APP_ID` está; si no, qué falta). Qué trae cada una: productos y pedidos con UTM (Shopify/Woo) o solo productos (MELI, se decide por tráfico).
+- Tests: Configuración renderiza las 7 tarjetas con el badge correcto según variables de entorno monkeypatcheadas; no aparece ningún valor de llave en el HTML; Experimentos renderiza el formulario de reglas y `cfg_reglas` redirige a `#experimentos`; Configuración enlaza a Experimentos para las reglas.
+
+- [ ] Implementar; verificación manual; commit `"Configuración: puesta a punto de llaves y tiendas paso a paso; las reglas del motor se van a Experimentos"`.
+
+### Task 5: Docs
 - [ ] `CLAUDE.md`/`SETUP.md`: Catálogo como único lugar de productos (importar es secundario); Experimentos como único lugar de anuncios; Campañas/Productos solo como rutas heredadas. Commit `"Docs: catálogo y experimentos unificados"`.
