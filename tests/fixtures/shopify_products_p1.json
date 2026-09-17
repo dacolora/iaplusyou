@@ -1,0 +1,34 @@
+{
+  "data": {
+    "products": {
+      "pageInfo": {"hasNextPage": true, "endCursor": "eyJsYXN0X2lkIjo4ODEyfQ=="},
+      "nodes": [
+        {
+          "id": "gid://shopify/Product/8811",
+          "title": "Espejo redondo 60cm",
+          "descriptionHtml": "<p>Espejo <strong>biselado</strong> de 60&nbsp;cm.<br>Marco negro.</p>",
+          "handle": "espejo-redondo-60cm",
+          "onlineStoreUrl": "https://vidriosdemo.com/products/espejo-redondo-60cm",
+          "productType": "Espejos",
+          "featuredImage": {"url": "https://cdn.shopify.com/s/files/espejo-1.jpg"},
+          "images": {"nodes": [
+            {"url": "https://cdn.shopify.com/s/files/espejo-1.jpg"},
+            {"url": "https://cdn.shopify.com/s/files/espejo-2.jpg"}
+          ]},
+          "variants": {"nodes": [{"price": "189900.00", "sku": "ESP-60"}]}
+        },
+        {
+          "id": "gid://shopify/Product/8812",
+          "title": "Vidrio templado 8mm",
+          "descriptionHtml": "",
+          "handle": "vidrio-templado-8mm",
+          "onlineStoreUrl": null,
+          "productType": "",
+          "featuredImage": null,
+          "images": {"nodes": []},
+          "variants": {"nodes": [{"price": "95000.00", "sku": null}]}
+        }
+      ]
+    }
+  }
+}

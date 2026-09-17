@@ -20,3 +20,20 @@ def base_temporal(monkeypatch):
     db.crear_todo()
     yield db
     db._reset_para_tests()
+
+
+@pytest.fixture(autouse=True)
+def _sin_cache_meta():
+    """Los cachés por proceso de meta_conexion (estado y Pixel) no deben
+    filtrarse entre tests: un `error` cacheado para "acme" en una suite
+    cambiaría la atribución sugerida en la siguiente. Solo si el módulo ya
+    está importado (no se fuerza el import de requests en tests que no lo
+    necesitan)."""
+    def limpiar():
+        mod = sys.modules.get("meta_conexion")
+        if mod is not None:
+            mod._cache_pixel.clear()
+            mod._cache_estado.clear()
+    limpiar()
+    yield
+    limpiar()

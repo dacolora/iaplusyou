@@ -1,0 +1,36 @@
+{
+  "data": {
+    "orders": {
+      "pageInfo": {"hasNextPage": false, "endCursor": "eyJsYXN0X2lkIjo1NTAyfQ=="},
+      "nodes": [
+        {
+          "id": "gid://shopify/Order/5501",
+          "name": "#1041",
+          "createdAt": "2026-09-10T14:22:05Z",
+          "currentTotalPriceSet": {"shopMoney": {"amount": "189900.00", "currencyCode": "COP"}},
+          "customerJourneySummary": {
+            "lastVisit": {
+              "landingPage": "https://vidriosdemo.com/products/espejo-redondo-60cm?utm_source=facebook&utm_medium=paid&utm_content=pieza-7&fbclid=abc",
+              "referrerUrl": "https://l.facebook.com/"
+            }
+          },
+          "lineItems": {"nodes": [
+            {"sku": "ESP-60", "title": "Espejo redondo 60cm", "quantity": 1,
+             "originalUnitPriceSet": {"shopMoney": {"amount": "189900.00"}}}
+          ]}
+        },
+        {
+          "id": "gid://shopify/Order/5502",
+          "name": "#1042",
+          "createdAt": "2026-09-12T09:00:00-05:00",
+          "currentTotalPriceSet": {"shopMoney": {"amount": "190000.00", "currencyCode": "COP"}},
+          "customerJourneySummary": {"lastVisit": null},
+          "lineItems": {"nodes": [
+            {"sku": null, "title": "Vidrio templado 8mm", "quantity": 2,
+             "originalUnitPriceSet": {"shopMoney": {"amount": "95000.00"}}}
+          ]}
+        }
+      ]
+    }
+  }
+}

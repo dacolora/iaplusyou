@@ -85,7 +85,37 @@ def cargar_meta(cliente, categoria=CATEGORIA_POR_DEFECTO):
 
 
 def guardar_meta(cliente, meta, categoria=CATEGORIA_POR_DEFECTO):
+    """Escritura directa (atómica, pero SIN lock). Para leer-modificar-
+    escribir usa `modificar_meta`: gunicorn (Catálogo) y el worker
+    (importador, una vez por producto durante una sync) escriben el mismo
+    JSON, y sin lock una de las dos escrituras pisa a la otra."""
     _json_store.guardar(_meta_path(cliente, categoria), meta)
+
+
+def _lock_meta(cliente, categoria):
+    return os.path.join(_carpeta(cliente, categoria), ".meta.lock")
+
+
+def modificar_meta(cliente, categoria, fn):
+    """cargar → `fn(meta) -> meta` → guardar, bajo un `fcntl.flock` exclusivo
+    sobre `<carpeta de la categoría>/.meta.lock`, que serializa hilos Y
+    procesos (Flask y worker) sobre el JSON de metadatos. `fn` recibe el
+    dict recién leído y devuelve el que se guarda (None = no guardar
+    nada). Devuelve lo que devolvió `fn`."""
+    import fcntl
+
+    categoria = categoria_valida(categoria)
+    ruta_lock = _lock_meta(cliente, categoria)
+    os.makedirs(os.path.dirname(ruta_lock), exist_ok=True)
+    with open(ruta_lock, "a+") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            resultado = fn(cargar_meta(cliente, categoria))
+            if resultado is not None:
+                guardar_meta(cliente, resultado, categoria)
+            return resultado
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
 
 
 def id_desde_nombre(nombre):
@@ -173,25 +203,43 @@ def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
     return destino
 
 
-def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATEGORIA_POR_DEFECTO, regla=""):
-    """Crea la carpeta del activo y guarda su metadata. Devuelve el id nuevo.
-    OJO: hasta que no tenga al menos una imagen no aparece en listar(), porque
-    un activo sin fotos de referencia no sirve para generar nada."""
+def existe(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
+    """True si la carpeta del activo existe en disco (tenga o no fotos: un
+    activo recién creado sin imágenes también "existe", aunque no aparezca
+    en listar()). Un id inválido (fuga de directorio) es False, no error."""
+    if not producto_id:
+        return False
+    try:
+        return os.path.isdir(carpeta_de(cliente, producto_id, categoria))
+    except ValueError:
+        return False
+
+
+def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATEGORIA_POR_DEFECTO, regla="",
+          producto_id=None):
+    """Crea la carpeta del activo y guarda su metadata. Devuelve el id nuevo
+    (el derivado de `nombre`, salvo que se pase `producto_id` explícito —
+    lo usa el importador para desambiguar dos productos con el mismo
+    nombre sin pisar el activo del primero). OJO: hasta que no tenga al
+    menos una imagen no aparece en listar(), porque un activo sin fotos de
+    referencia no sirve para generar nada."""
     categoria = categoria_valida(categoria)
-    producto_id = id_desde_nombre(nombre)
+    producto_id = producto_id or id_desde_nombre(nombre)
     carpeta = carpeta_de(cliente, producto_id, categoria)
     if os.path.isdir(carpeta):
         raise ValueError(f"Ya existe un {CATEGORIAS[categoria]['nombre'].lower()} con ese nombre ({producto_id}).")
     os.makedirs(carpeta, exist_ok=True)
-    meta = cargar_meta(cliente, categoria)
-    meta[producto_id] = {
-        "nombre": nombre.strip(),
-        "descripcion": (descripcion or "").strip(),
-        "tipo": prompt_swap.tipo_valido(tipo),
-        "zonas": mapa_corporal.normalizar(zonas) if CATEGORIAS[categoria]["con_mapa"] else [],
-        "regla": (regla or "").strip(),
-    }
-    guardar_meta(cliente, meta, categoria)
+
+    def _poner(meta):
+        meta[producto_id] = {
+            "nombre": nombre.strip(),
+            "descripcion": (descripcion or "").strip(),
+            "tipo": prompt_swap.tipo_valido(tipo),
+            "zonas": mapa_corporal.normalizar(zonas) if CATEGORIAS[categoria]["con_mapa"] else [],
+            "regla": (regla or "").strip(),
+        }
+        return meta
+    modificar_meta(cliente, categoria, _poner)
     return producto_id
 
 
@@ -201,20 +249,22 @@ def actualizar(cliente, producto_id, nombre=None, descripcion=None, tipo=None, z
     (swaps.json -> producto_id), y renombrar la carpeta los dejaría huérfanos."""
     categoria = categoria_valida(categoria)
     carpeta_de(cliente, producto_id, categoria)  # valida el id
-    meta = cargar_meta(cliente, categoria)
-    actual = meta.get(producto_id, {})
-    if nombre is not None and nombre.strip():
-        actual["nombre"] = nombre.strip()
-    if descripcion is not None:
-        actual["descripcion"] = descripcion.strip()
-    if tipo is not None:
-        actual["tipo"] = prompt_swap.tipo_valido(tipo)
-    if zonas is not None:
-        actual["zonas"] = mapa_corporal.normalizar(zonas)
-    if regla is not None:
-        actual["regla"] = regla.strip()
-    meta[producto_id] = actual
-    guardar_meta(cliente, meta, categoria)
+
+    def _editar(meta):
+        actual = meta.get(producto_id, {})
+        if nombre is not None and nombre.strip():
+            actual["nombre"] = nombre.strip()
+        if descripcion is not None:
+            actual["descripcion"] = descripcion.strip()
+        if tipo is not None:
+            actual["tipo"] = prompt_swap.tipo_valido(tipo)
+        if zonas is not None:
+            actual["zonas"] = mapa_corporal.normalizar(zonas)
+        if regla is not None:
+            actual["regla"] = regla.strip()
+        meta[producto_id] = actual
+        return meta
+    modificar_meta(cliente, categoria, _editar)
 
 
 def eliminar(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
@@ -226,9 +276,10 @@ def eliminar(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
     carpeta = carpeta_de(cliente, producto_id, categoria)
     if os.path.isdir(carpeta):
         shutil.rmtree(carpeta)
-    meta = cargar_meta(cliente, categoria)
-    if meta.pop(producto_id, None) is not None:
-        guardar_meta(cliente, meta, categoria)
+
+    def _quitar(meta):
+        return meta if meta.pop(producto_id, None) is not None else None
+    modificar_meta(cliente, categoria, _quitar)
 
 
 def eliminar_imagen(cliente, producto_id, nombre_archivo, categoria=CATEGORIA_POR_DEFECTO):

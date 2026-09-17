@@ -126,6 +126,162 @@
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
+{# ---- Bloque 5: Tienda conectada ---- #}
+<h2 id="config-tienda">Tienda</h2>
+<p class="vacio" style="padding-top:0;">
+  Conecta tu tienda para traer el catálogo solo (cada 6 h) y, en Shopify y
+  WooCommerce, leer los pedidos que llegan con una pieza en la URL — así un
+  experimento sabe qué vendió aunque no haya Pixel. Solo lectura: nunca se
+  cambia nada en la tienda.
+</p>
+
+{% if not cifrado_ok %}
+<p class="tag-error">Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de tiendas. Ponla y reinicia para habilitar estos formularios.</p>
+{% endif %}
+
+{% if tiendas_cliente %}
+<div style="overflow-x:auto;">
+<table class="tabla-tiendas">
+  <thead><tr><th>Tipo</th><th>Tienda</th><th>Estado</th><th>Últimas sincronizaciones</th><th></th></tr></thead>
+  <tbody>
+    {% for t in tiendas_cliente %}
+    <tr>
+      <td><span class="tag-estado badge-fuente badge-fuente-{{ t.tipo }}">{{ t.tipo }}</span></td>
+      <td><strong>{{ t.nombre or t.dominio or "—" }}</strong>{% if t.nombre and t.dominio %}<br><small class="vacio" style="padding:0;">{{ t.dominio }}</small>{% endif %}</td>
+      <td>
+        {% if t.estado == "rota" %}<span class="tag-estado tag-descartado">rota</span>{% if t.error %}<br><small class="tag-error">{{ t.error }}</small>{% endif %}
+        {% else %}<span class="tag-estado tag-en-uso">{{ t.estado }}</span>{% endif %}
+      </td>
+      <td><small>productos: {{ (t.ultima_sync_productos or "nunca")[:16] }}<br>pedidos: {{ (t.ultima_sync_pedidos or "nunca")[:16] }}</small>
+        {% set trabajo_t = trabajos_prod.tiendas.get(t.id) %}
+        {% if trabajo_t %}
+        <div class="barra-progreso" id="trabajo-{{ trabajo_t.job_id }}"><div class="barra-progreso-fill"></div></div>
+        <div class="progreso-texto"></div>
+        <script>iniciarPolling({{ trabajo_t.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_t.job_id) | tojson }});</script>
+        {% endif %}
+      </td>
+      <td class="tienda-acciones">
+        <form method="post" action="{{ url_for('tienda_sync', cliente=cliente, tid=t.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_t %}disabled{% endif %}>Sincronizar</button></form>
+        <form method="post" action="{{ url_for('tienda_desconectar', cliente=cliente, tid=t.id) }}" class="inline" onsubmit="return confirm('¿Desconectar esta tienda? Sus productos quedan archivados; no se borra nada en la tienda.');"><button class="btn-rechazar btn-xs">Desconectar</button></form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<p class="vacio">Ninguna tienda conectada todavía.</p>
+{% endif %}
+
+<details class="swap-card tienda-conectar" {% if not tiendas_cliente %}open{% endif %}>
+  <summary class="swap-card-resumen">+ Conectar tienda</summary>
+  <div class="cat-tabs tienda-tipos" role="tablist">
+    {% for tipo in tipos_tienda %}
+    <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" data-tienda-tipo="{{ tipo }}">{{ {"shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
+    {% endfor %}
+  </div>
+
+  <div class="tienda-tipo-panel" data-tienda-panel="shopify">
+    <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
+      <input type="hidden" name="tipo" value="shopify">
+      <label class="campo-label">Dominio de la tienda</label>
+      <input type="text" name="dominio" placeholder="mitienda.myshopify.com" required {% if not cifrado_ok %}disabled{% endif %}>
+      <label class="campo-label">Admin API access token</label>
+      <input type="password" name="token" placeholder="shpat_…" autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}>
+      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
+        En Shopify: <em>Configuración › Apps y canales de venta › Desarrollar apps › Crear app</em>.
+        Dale los permisos <code>read_products</code> y <code>read_orders</code>, instálala y copia el
+        <em>Admin API access token</em> (se muestra una sola vez).
+      </p>
+      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>Conectar Shopify</button>
+    </form>
+  </div>
+
+  <div class="tienda-tipo-panel" data-tienda-panel="woo" hidden>
+    <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
+      <input type="hidden" name="tipo" value="woo">
+      <label class="campo-label">URL de la tienda</label>
+      <input type="url" name="url" placeholder="https://mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
+      <div class="fila-campos-idea">
+        <div><label class="campo-label">Consumer key</label><input type="password" name="ck" placeholder="ck_…" autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}></div>
+        <div><label class="campo-label">Consumer secret</label><input type="password" name="cs" placeholder="cs_…" autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}></div>
+      </div>
+      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
+        En WordPress: <em>WooCommerce › Ajustes › Avanzado › REST API › Añadir clave</em>, con
+        permisos de <em>lectura</em>. La tienda tiene que ir por <code>https://</code>.
+      </p>
+      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>Conectar WooCommerce</button>
+    </form>
+  </div>
+
+  <div class="tienda-tipo-panel" data-tienda-panel="meli" hidden>
+    {% if meli_configurado and cifrado_ok %}
+    <p class="vacio" style="padding-top:0;font-size:.8rem;">Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token.</p>
+    <a class="btn-generar btn-sm" href="{{ url_for('tienda_meli_iniciar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">Conectar con MercadoLibre</a>
+    {% elif not meli_configurado %}
+    <p class="tag-error">Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>{{ url_for('meli_callback', _external=True) }}</code>).</p>
+    {% else %}
+    <p class="tag-error">Para conectar MercadoLibre falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar cifrados los tokens que devuelve MercadoLibre.</p>
+    <a class="btn-generar btn-sm" aria-disabled="true" style="display:inline-block;text-decoration:none;opacity:.5;pointer-events:none;">Conectar con MercadoLibre</a>
+    {% endif %}
+  </div>
+</details>
+
+<script>
+  (function () {
+    var botones = document.querySelectorAll('.tienda-tipo-btn');
+    var paneles = document.querySelectorAll('.tienda-tipo-panel');
+    botones.forEach(function (b) {
+      b.addEventListener('click', function () {
+        botones.forEach(function (o) { o.classList.toggle('activo', o === b); });
+        paneles.forEach(function (p) { p.hidden = p.dataset.tiendaPanel !== b.dataset.tiendaTipo; });
+      });
+    });
+  })();
+</script>
+
+{# ---- Bloque 5: Pixel de Meta ---- #}
+<h2 id="config-pixel" style="margin-top:2rem;">Pixel de Meta</h2>
+<p class="vacio" style="padding-top:0;">
+  Con el Pixel instalado en tu tienda, Meta reporta compras y ROAS por anuncio
+  y los experimentos se deciden por ventas. Sin Pixel, se usan los pedidos de
+  la tienda conectada (Shopify/WooCommerce) o, si no hay, el tráfico.
+</p>
+{% if estado_pixel %}
+<div class="pixel-estado pixel-estado-{{ estado_pixel.estado }}">
+  {% if estado_pixel.estado == "ok" %}<span class="tag-estado tag-en-uso">Pixel activo</span>
+  {% elif estado_pixel.estado == "sin_datos" %}<span class="tag-estado tag-advertencia">Pixel sin datos</span>
+  {% elif estado_pixel.estado == "sin_pixel" %}<span class="tag-estado tag-descartado">Sin Pixel</span>
+  {% elif estado_pixel.estado == "error" %}<span class="tag-estado tag-descartado">No se pudo comprobar</span>
+  {% else %}<span class="tag-estado">{{ estado_pixel.estado }}</span>{% endif %}
+  {% if estado_pixel.nombre %}<strong>{{ estado_pixel.nombre }}</strong>{% endif %}
+  {% if estado_pixel.pixel_id %}<small class="vacio" style="padding:0;">id {{ estado_pixel.pixel_id }}</small>{% endif %}
+  {% if estado_pixel.ultimo_disparo %}<small>· último disparo {{ estado_pixel.ultimo_disparo[:16] }}</small>{% endif %}
+  {% if estado_pixel.detalle %}<small class="vacio" style="padding:0;display:block;">{{ estado_pixel.detalle }}</small>{% endif %}
+  <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Volver a comprobar</button></form>
+</div>
+{% elif meta_conectado %}
+{# Meta conectado pero nada en caché: esta página nunca va a Graph; solo el botón (POST) lo consulta. #}
+<div class="pixel-estado pixel-estado-sin_comprobar">
+  <span class="tag-estado">sin comprobar</span>
+  <small class="vacio" style="padding:0;display:block;">Todavía no consultamos el Pixel de esta cuenta. Comprobarlo tarda unos segundos y también actualiza la atribución sugerida al crear experimentos.</small>
+  <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Comprobar Pixel</button></form>
+</div>
+{% else %}
+<p class="vacio"><span class="tag-estado">sin conexión</span> Conecta Meta en <a href="#ads" onclick="document.querySelector('.sidebar-item[data-tab=ads]').click(); return false;">Campañas</a> para comprobar el Pixel.</p>
+{% endif %}
+<details class="pixel-ayuda">
+  <summary>Cómo instalar el Pixel según tu plataforma</summary>
+  <ul class="vacio" style="font-size:.8rem;">
+    <li><strong>Shopify:</strong> instala la app <em>Facebook &amp; Instagram</em> desde la tienda de apps y, en <em>Data sharing</em>, elige tu Pixel y el nivel «Máximo». Shopify manda las compras solo.</li>
+    <li><strong>WooCommerce:</strong> instala el plugin <em>Facebook for WooCommerce</em> y conéctalo con tu Business Manager; el Pixel y los eventos de compra quedan puestos.</li>
+    <li><strong>Otra tienda o landing propia:</strong> en Meta Events Manager copia el <em>código base del Pixel</em> y pégalo dentro del <code>&lt;head&gt;</code> de todas las páginas; en la página de gracias agrega el evento <code>Purchase</code>.</li>
+    <li><strong>MercadoLibre:</strong> no aplica — no se puede instalar código en una publicación. Los experimentos de MELI se deciden por tráfico.</li>
+  </ul>
+</details>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
 {% include "_seccion_marca.html" %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">

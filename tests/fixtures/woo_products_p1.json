@@ -1,0 +1,37 @@
+[
+  {
+    "id": 301,
+    "name": "Espejo redondo 60cm",
+    "slug": "espejo-redondo-60cm",
+    "permalink": "https://tienda.ejemplo.com/producto/espejo-redondo-60cm/",
+    "type": "simple",
+    "status": "publish",
+    "description": "<p>Espejo <em>biselado</em> de 60&nbsp;cm.</p>\n<p>Marco negro.</p>",
+    "short_description": "<p>Espejo biselado.</p>",
+    "sku": "ESP-60",
+    "price": "189900",
+    "regular_price": "199900",
+    "sale_price": "189900",
+    "categories": [{"id": 12, "name": "Espejos", "slug": "espejos"}, {"id": 9, "name": "Decoración", "slug": "decoracion"}],
+    "images": [
+      {"id": 91, "src": "https://tienda.ejemplo.com/wp-content/uploads/espejo-1.jpg", "alt": ""},
+      {"id": 92, "src": "https://tienda.ejemplo.com/wp-content/uploads/espejo-2.jpg", "alt": ""}
+    ]
+  },
+  {
+    "id": 302,
+    "name": "Vidrio templado 8mm",
+    "slug": "vidrio-templado-8mm",
+    "permalink": "https://tienda.ejemplo.com/producto/vidrio-templado-8mm/",
+    "type": "simple",
+    "status": "publish",
+    "description": "",
+    "short_description": "",
+    "sku": "",
+    "price": "95000",
+    "regular_price": "95000",
+    "sale_price": "",
+    "categories": [],
+    "images": []
+  }
+]

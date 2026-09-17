@@ -12,6 +12,10 @@ import db
 ESTADOS_EXPERIMENTO = ("armando", "lanzando", "pausado", "corriendo", "cerrado", "error",
                        "esperando_aprobacion", "decidido")
 ESTADOS_PIEZA = ("en_cola", "publicando", "pausado", "activo", "error")
+# Cómo se miden las ventas de un experimento: por el Pixel de Meta (insights),
+# por los pedidos de la tienda conectada (utm_content → experimento_pieza) o
+# no se miden.
+ATRIBUCIONES = ("pixel", "tienda", "ninguna")
 _EXP_COLS = ("estado", "error", "meta_campaign_id", "gasto_acumulado", "paises", "nombre", "tope_total",
              "dias", "destino_url", "edad_min", "edad_max", "extra", "modo", "reglas", "atribucion", "objetivo_meta")
 _EP_COLS = ("estado", "error", "meta_adset_id", "meta_ad_id", "meta_creative_id", "estado_meta",
@@ -27,14 +31,40 @@ def _pais_nuevo(p):
             "presupuesto_dia": float(p.get("presupuesto_dia") or 0), "meta_adset_id": None, "estado": "en_cola"}
 
 
+def atribucion_sugerida(cliente):
+    """Con qué medir ventas, según lo que el proyecto tiene conectado:
+    `pixel` si el Pixel de Meta está disparando (meta_conexion.estado_pixel
+    == ok), si no `tienda` si hay una Shopify/Woo conectada (son las que
+    exponen pedidos con utm), si no `ninguna`. El Pixel se mira solo en
+    caché (`solo_cache=True`): esto corre dentro del POST de crear
+    experimento y no puede esperar una ida a Graph; si nadie consultó el
+    Pixel hace poco (el botón «Comprobar Pixel» de Configuración es el único
+    que lo hace), se sugiere tienda/ninguna.
+    Imports tardíos: este módulo es solo datos y meta_conexion/tiendas
+    arrastran requests, cifrado, etc."""
+    import meta_conexion  # noqa: PLC0415
+    import tiendas  # noqa: PLC0415
+    if (meta_conexion.estado_pixel(cliente, solo_cache=True) or {}).get("estado") == "ok":
+        return "pixel"
+    if any(t["tipo"] in ("shopify", "woo") and t["estado"] == "conectada" for t in tiendas.listar(cliente)):
+        return "tienda"
+    return "ninguna"
+
+
 def crear(cliente, nombre, paises, objetivo_meta, dias, tope_total, destino_url, moneda,
-          edad_min=18, edad_max=65, modo="manual"):
+          edad_min=18, edad_max=65, modo="manual", atribucion=None):
+    """`atribucion` None → la sugerida para el proyecto (atribucion_sugerida);
+    un valor fuera de ATRIBUCIONES es ValueError."""
+    if atribucion is None:
+        atribucion = atribucion_sugerida(cliente)
+    if atribucion not in ATRIBUCIONES:
+        raise ValueError(f"Atribución no válida: {atribucion!r} (usa pixel, tienda o ninguna).")
     ahora = db.ahora()
     with db.conectar() as con:
         return con.execute(db.experimento.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, modo=modo, reglas={},
             paises=[_pais_nuevo(p) for p in paises], moneda=moneda, tope_total=float(tope_total), dias=int(dias),
-            objetivo_meta=objetivo_meta, atribucion="ninguna", estado="armando", gasto_acumulado=0.0,
+            objetivo_meta=objetivo_meta, atribucion=atribucion, estado="armando", gasto_acumulado=0.0,
             legado=False, destino_url=destino_url, edad_min=int(edad_min), edad_max=int(edad_max),
             extra={})).inserted_primary_key[0]
 

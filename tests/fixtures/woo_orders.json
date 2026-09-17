@@ -1,0 +1,34 @@
+[
+  {
+    "id": 7101,
+    "status": "processing",
+    "currency": "COP",
+    "date_created": "2026-09-10T14:22:05",
+    "date_created_gmt": "2026-09-10T19:22:05",
+    "total": "189900.00",
+    "line_items": [
+      {"id": 1, "name": "Espejo redondo 60cm", "product_id": 301, "quantity": 1, "sku": "ESP-60",
+       "price": 189900, "total": "189900.00"}
+    ],
+    "meta_data": [
+      {"id": 501, "key": "_wc_order_attribution_source_type", "value": "utm"},
+      {"id": 502, "key": "_wc_order_attribution_utm_source", "value": "facebook"},
+      {"id": 503, "key": "_wc_order_attribution_utm_content", "value": "pieza-7"}
+    ]
+  },
+  {
+    "id": 7102,
+    "status": "completed",
+    "currency": "COP",
+    "date_created": "2026-09-12T09:00:00",
+    "date_created_gmt": "2026-09-12T14:00:00",
+    "total": "190000.00",
+    "line_items": [
+      {"id": 2, "name": "Vidrio templado 8mm", "product_id": 302, "quantity": 2, "sku": "",
+       "price": 95000, "total": "190000.00"}
+    ],
+    "meta_data": [
+      {"id": 504, "key": "_wc_order_attribution_source_type", "value": "typein"}
+    ]
+  }
+]

@@ -18,7 +18,7 @@ import json
 import os
 import secrets
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import requests
@@ -39,6 +39,12 @@ CODIGOS_CONEXION_ROTA = {190, 10, 200}
 
 _TTL_ESTADO_SEG = 600
 _cache_estado = {}
+# estado_pixel: misma vida que estado(), en su propio dict — invalidar la
+# conexión (guardar/borrar) tira los dos; invalidar_pixel solo este.
+_cache_pixel = {}
+# Un Pixel "vivo" es uno que disparó en la última semana: con menos, las
+# compras que reporte Meta no sirven para juzgar piezas (atribución "pixel").
+_PIXEL_DIAS_VIVO = 7
 
 # Un meta.pendiente.json abandonado (el usuario cerró la pestaña en la
 # pantalla de elegir cuenta/Página) deja tokens en disco indefinidamente si
@@ -148,10 +154,12 @@ def cargar(cliente):
 def guardar(cliente, datos):
     _escribir_atomico(_path(cliente), datos)
     _cache_estado.pop(cliente, None)
+    _cache_pixel.pop(cliente, None)
 
 
 def borrar(cliente):
     _cache_estado.pop(cliente, None)
+    _cache_pixel.pop(cliente, None)
     return _borrar(_path(cliente))
 
 
@@ -319,3 +327,102 @@ def estado(cliente):
             resultado = {"estado": "conectado", "detalle": _detalle(datos), "verificado": False}
     _cache_estado[cliente] = (ahora, resultado)
     return resultado
+
+
+# ---------- Pixel ----------
+
+def _parsear_fecha_meta(texto):
+    """`last_fired_time` de Meta ('2026-09-15T10:00:00+0000') como datetime
+    con zona, o None si viene vacío o en un formato inesperado."""
+    if not texto:
+        return None
+    for formato in ("%Y-%m-%dT%H:%M:%S%z", "%Y-%m-%dT%H:%M:%S.%f%z"):
+        try:
+            return datetime.strptime(str(texto), formato)
+        except ValueError:
+            continue
+    try:
+        dt = datetime.fromisoformat(str(texto))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _pixel_mas_reciente(pixels):
+    """El pixel con el `last_fired_time` más reciente (los que nunca dispararon
+    van al final; entre iguales, el primero que devolvió Meta)."""
+    mejor, mejor_fecha = None, None
+    for p in pixels:
+        fecha = _parsear_fecha_meta(p.get("last_fired_time"))
+        if mejor is None or (fecha is not None and (mejor_fecha is None or fecha > mejor_fecha)):
+            mejor, mejor_fecha = p, fecha
+    return mejor, mejor_fecha
+
+
+def _listar_pixels_con_credenciales(cliente):
+    # Imports tardíos: tareas.meta importa meta_conexion (ciclo) y meta_ads
+    # solo se necesita acá; el lock es el mismo que usan las tareas de Meta
+    # para que configurar() -> llamar -> limpiar() no se mezcle entre proyectos.
+    from meta_ads import auth as meta_auth, pixel as meta_pixel  # noqa: PLC0415
+    from tareas.meta import _LOCK  # noqa: PLC0415
+    creds = credenciales_ads(cliente)
+    with _LOCK:
+        try:
+            meta_auth.configurar(creds["token"], creds["ad_account_id"], creds["page_id"])
+            return meta_pixel.listar_pixels()
+        finally:
+            meta_auth.limpiar()
+
+
+def estado_pixel(cliente, solo_cache=False):
+    """¿Tiene el proyecto un Pixel de Meta disparando? Cacheado 10 min por
+    proceso (como estado()). Devuelve {estado, pixel_id, nombre,
+    ultimo_disparo, detalle}:
+      sin_conexion  Meta no está conectado (no se llama a la API)
+      sin_pixel     la cuenta no tiene ningún pixel
+      sin_datos     hay pixel pero nunca disparó, o no en los últimos 7 días
+      ok            disparó en los últimos 7 días
+      error         la API falló (detalle sin token)
+    Con `solo_cache=True` nunca llama a Graph: devuelve lo cacheado o None
+    si no hay nada vigente — para rutas POST (crear experimento) que no
+    pueden esperar hasta 30 s bajo el lock de Meta — y para ver_cliente, que
+    tampoco puede. Quien llena el caché es cfg_pixel_refrescar (el botón
+    «Comprobar Pixel»/«Volver a comprobar» de Configuración, un POST)."""
+    ahora = time.time()
+    cacheado = _cache_pixel.get(cliente)
+    if cacheado and ahora - cacheado[0] < _TTL_ESTADO_SEG:
+        return cacheado[1]
+    if solo_cache:
+        return None
+
+    resultado = {"estado": "sin_conexion", "pixel_id": None, "nombre": None, "ultimo_disparo": None, "detalle": ""}
+    if estado(cliente).get("estado") != "conectado":
+        resultado["detalle"] = "Meta no está conectado."
+    else:
+        try:
+            pixels = _listar_pixels_con_credenciales(cliente)
+        except Exception as e:  # noqa: BLE001 — cualquier fallo se muestra, nunca se relanza a una ruta
+            import cola  # noqa: PLC0415
+            resultado.update(estado="error", detalle=cola.sin_token(str(e)))
+        else:
+            if not pixels:
+                resultado.update(estado="sin_pixel", detalle="La cuenta publicitaria no tiene ningún Pixel.")
+            else:
+                pixel, fecha = _pixel_mas_reciente(pixels)
+                resultado.update(pixel_id=pixel.get("id"), nombre=pixel.get("name"),
+                                 ultimo_disparo=pixel.get("last_fired_time"))
+                if fecha is None:
+                    resultado.update(estado="sin_datos", detalle="El Pixel existe pero nunca ha disparado.")
+                elif datetime.now(timezone.utc) - fecha <= timedelta(days=_PIXEL_DIAS_VIVO):
+                    resultado.update(estado="ok", detalle="El Pixel disparó en los últimos 7 días.")
+                else:
+                    resultado.update(estado="sin_datos",
+                                     detalle=f"El Pixel lleva más de {_PIXEL_DIAS_VIVO} días sin disparar.")
+    _cache_pixel[cliente] = (ahora, resultado)
+    return resultado
+
+
+def invalidar_pixel(cliente):
+    """Olvida el estado del Pixel cacheado (p. ej. tras instalarlo en la
+    tienda) para que la próxima consulta vuelva a preguntar a Meta."""
+    _cache_pixel.pop(cliente, None)

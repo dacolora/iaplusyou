@@ -1,0 +1,157 @@
+{# Productos (Bloque 5): el catálogo importado (CSV/Excel, URL) o sincronizado
+   desde una tienda conectada. Contexto de ver_cliente: productos_tienda (con
+   archivados, `activo_ok`, `n_experimentos`), tiendas_cliente, trabajos_prod
+   ({"importar": {"job_id"}|None, "tiendas": {tid: {"job_id"}},
+   "vincular": {pid: {"job_id"}}}), columnas_csv.
+   Importar, sincronizar y «Crear activo» corren en el worker; acá solo se encola. #}
+<div class="panel-cabecera">
+  <h2>Productos</h2>
+  <p class="vacio">Lo que vendes, tal como está en tu tienda o en tu archivo. Cada producto con fotos se vuelve un activo del Catálogo para generar piezas en Crear; desde aquí lo marcas «en prueba», le pones prioridad y le creas un experimento.</p>
+</div>
+
+{% set trabajo_imp = trabajos_prod.importar %}
+{% if trabajo_imp %}
+<div class="idea-block prod-importando">
+  <div class="idea-header"><div><span class="idea-label">Importando</span><div class="idea-texto">Leyendo el catálogo y creando los activos…</div></div></div>
+  <div class="barra-progreso" id="trabajo-{{ trabajo_imp.job_id }}"><div class="barra-progreso-fill"></div></div>
+  <div class="progreso-texto"></div>
+  <script>iniciarPolling({{ trabajo_imp.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_imp.job_id) | tojson }});</script>
+</div>
+{% endif %}
+
+<div class="prod-acciones">
+  <details class="swap-card prod-importar">
+    <summary class="swap-card-resumen">Importar CSV/Excel</summary>
+    <form method="post" action="{{ url_for('prod_importar_archivo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea prod-form-importar">
+      <input type="file" name="archivo" accept=".csv,.xlsx" required>
+      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">Primera fila = nombres de columna. Reconozco: <code>{{ columnas_csv }}</code>. Máximo 5 MB.</p>
+      <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>Importar archivo</button>
+    </form>
+  </details>
+  <details class="swap-card prod-importar">
+    <summary class="swap-card-resumen">Importar desde URL</summary>
+    <form method="post" action="{{ url_for('prod_importar_url', cliente=cliente) }}" class="form-nueva-idea prod-form-importar">
+      <input type="url" name="url" placeholder="https://tutienda.com/productos/cojin-azul" required>
+      <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">La página pública de UN producto: leo nombre, precio y fotos de sus datos estructurados.</p>
+      <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>Importar producto</button>
+    </form>
+  </details>
+  <a class="btn-guardar btn-sm prod-link-config" href="#settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">Conectar tienda (Configuración)</a>
+</div>
+
+{% set archivados = productos_tienda | selectattr("archivado") | list %}
+{% set n_archivados = archivados | length %}
+{% if productos_tienda %}
+<div class="prod-filtros">
+  <label><input type="checkbox" id="prod-mostrar-archivados"> Mostrar archivados ({{ n_archivados }})</label>
+  <small class="vacio">{{ productos_tienda | length - n_archivados }} producto(s) activo(s){% if tiendas_cliente %} · tiendas: {% for t in tiendas_cliente %}{{ t.nombre or t.dominio or t.tipo }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</small>
+</div>
+
+<div style="overflow-x:auto;">
+<table class="tabla-productos">
+  <thead>
+    <tr>
+      <th></th><th>Producto</th><th>Fuente</th><th>Precio</th><th>En prueba</th><th>Prioridad</th><th>Estado en el loop</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in productos_tienda %}
+    <tr class="prod-fila{% if p.archivado %} prod-archivado{% endif %}" data-archivado="{{ 1 if p.archivado else 0 }}" data-fuente="{{ p.fuente }}">
+      <td class="prod-thumb-celda">
+        {% set foto = p.url_imagen_principal or (p.fotos[0] if p.fotos else None) %}
+        {% if foto %}<img class="prod-thumb" src="{{ foto }}" alt="" loading="lazy">{% else %}<span class="prod-thumb prod-thumb-vacia"></span>{% endif %}
+      </td>
+      <td>
+        <strong>{{ p.nombre }}</strong>
+        {% if p.categoria %}<small class="vacio prod-categoria">{{ p.categoria }}</small>{% endif %}
+        {# Solo http(s) se vuelve enlace: una URL importada de un CSV puede traer cualquier esquema. #}
+        {% if p.url_compra and p.url_compra.startswith(("http://", "https://")) %}<a class="prod-url" href="{{ p.url_compra }}" target="_blank" rel="noopener">{{ p.url_compra | truncate(48, True) }}</a>{% elif p.url_compra %}<span class="prod-url">{{ p.url_compra | truncate(48, True) }}</span>{% endif %}
+      </td>
+      <td><span class="tag-estado badge-fuente badge-fuente-{{ p.fuente }}">{{ p.fuente }}</span></td>
+      <td>
+        <form method="post" action="{{ url_for('prod_marcar', cliente=cliente, pid=p.id) }}" class="prod-form-inline" id="prod-form-{{ p.id }}">
+          {% if p.en_prueba %}<input type="hidden" name="en_prueba" value="on" data-en-prueba>{% else %}<input type="hidden" name="en_prueba" value="" data-en-prueba>{% endif %}
+          <input type="number" name="precio" value="{{ p.precio if p.precio is not none else '' }}" min="0" step="any" placeholder="precio" class="prod-precio">
+          <input type="text" name="moneda" value="{{ p.moneda or '' }}" maxlength="3" placeholder="COP" class="prod-moneda">
+          <input type="url" name="url_compra" value="{{ p.url_compra or '' }}" placeholder="https://… (URL de compra)" class="prod-url-input">
+          <input type="hidden" name="prioridad" value="{{ p.prioridad or 0 }}" data-prioridad>
+          <button type="submit" class="btn-guardar btn-xs">Guardar</button>
+        </form>
+      </td>
+      <td>
+        <input type="checkbox" class="prod-en-prueba" data-form="prod-form-{{ p.id }}" {% if p.en_prueba %}checked{% endif %} title="Marcar para que entre al loop de prueba">
+      </td>
+      <td>
+        <input type="number" class="prod-prioridad" data-form="prod-form-{{ p.id }}" value="{{ p.prioridad or 0 }}" min="0" max="100" title="0–100: los de mayor prioridad van primero">
+      </td>
+      <td class="prod-estado">
+        {% if p.activo_ok %}
+          <span class="tag-estado tag-en-uso">listo para Crear</span>
+        {% else %}
+          {% set trabajo_v = trabajos_prod.vincular.get(p.id) %}
+          <span class="tag-estado tag-advertencia">sin activo</span>
+          <form method="post" action="{{ url_for('prod_vincular', cliente=cliente, pid=p.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_v %}disabled{% endif %}>{% if trabajo_v %}Creando activo…{% else %}Crear activo{% endif %}</button></form>
+          {% if trabajo_v %}
+          <div class="barra-progreso" id="trabajo-{{ trabajo_v.job_id }}"><div class="barra-progreso-fill"></div></div>
+          <div class="progreso-texto"></div>
+          <script>iniciarPolling({{ trabajo_v.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_v.job_id) | tojson }});</script>
+          {% endif %}
+        {% endif %}
+        {% if p.n_experimentos %}<span class="tag-estado">en {{ p.n_experimentos }} experimento(s)</span>{% endif %}
+      </td>
+      <td class="prod-acciones-fila">
+        <form method="post" action="{{ url_for('prod_experimento', cliente=cliente, pid=p.id) }}" class="inline"><button class="btn-generar btn-xs">Crear experimento</button></form>
+        {% if p.archivado %}
+        <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline"><input type="hidden" name="archivado" value="0"><button class="btn-guardar btn-xs">Recuperar</button></form>
+        {% else %}
+        <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline prod-form-archivar" data-nombre="{{ p.nombre }}"><button class="btn-rechazar btn-xs">Archivar</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<script>
+  (function () {
+    // «En prueba» y «Prioridad» viven fuera del formulario de la fila (celdas
+    // propias) y lo envían al cambiar, copiando el valor a su campo oculto.
+    var chk = document.getElementById('prod-mostrar-archivados');
+    function aplicarFiltro() {
+      var ver = chk && chk.checked;
+      document.querySelectorAll('.prod-fila').forEach(function (tr) {
+        tr.style.display = (tr.dataset.archivado === '1' && !ver) ? 'none' : '';
+      });
+    }
+    if (chk) { chk.addEventListener('change', aplicarFiltro); aplicarFiltro(); }
+    document.querySelectorAll('.prod-en-prueba').forEach(function (c) {
+      c.addEventListener('change', function () {
+        var f = document.getElementById(c.dataset.form);
+        if (!f) return;
+        f.querySelector('[data-en-prueba]').value = c.checked ? 'on' : '';
+        f.submit();
+      });
+    });
+    document.querySelectorAll('.prod-prioridad').forEach(function (i) {
+      i.addEventListener('change', function () {
+        var f = document.getElementById(i.dataset.form);
+        if (!f) return;
+        f.querySelector('[data-prioridad]').value = i.value;
+        f.submit();
+      });
+    });
+    // Confirmación de «Archivar»: el nombre viaja en data-nombre (atributo
+    // HTML, escapado por Jinja) y el mensaje se arma en JS — nunca texto de
+    // plantilla dentro de un literal de JS (un apóstrofo lo rompería).
+    document.querySelectorAll('.prod-form-archivar').forEach(function (f) {
+      f.addEventListener('submit', function (ev) {
+        var nombre = f.dataset.nombre || 'este producto';
+        if (!confirm('¿Archivar «' + nombre + '»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»).')) ev.preventDefault();
+      });
+    });
+  })();
+</script>
+{% else %}
+<p class="vacio">Todavía no hay productos. Importa un CSV/Excel, pega la URL de un producto o conecta tu tienda en Configuración.</p>
+{% endif %}

@@ -300,7 +300,12 @@ def test_exp_decidir_todos_encola_solo_corriendo(base_temporal, monkeypatch):
 
 def test_periodica_decidir_registrada():
     import worker
-    assert worker.PERIODICAS == [("exp_refrescar_todos", 7200), ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600)]
+    # F4 (Bloque 5): los pedidos se sincronizan/atribuyen antes de refrescar
+    # experimentos en el mismo tick, para que el snapshot por tienda no vea
+    # ventas de hace un ciclo.
+    assert worker.PERIODICAS == [("tienda_sync_pedidos_todas", 7200), ("exp_refrescar_todos", 7200),
+                                 ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600),
+                                 ("tienda_sync_productos_todas", 21600)]
 
 
 def test_semi_perdedora_se_pausa_ya_y_el_rescate_queda_propuesto(ent, monkeypatch):
