@@ -14,6 +14,12 @@ def test_presets_por_pais_con_fechas_del_anio():
     assert calendario.presets("ZZ", anio=2026) == calendario.presets("CO", anio=2026)   # país sin calendario: el de Colombia
 
 
+def test_tiene_calendario_dice_si_hubo_fallback():
+    from sprints import calendario
+    assert calendario.tiene_calendario("CO") and calendario.tiene_calendario("mx")
+    assert not calendario.tiene_calendario("US") and not calendario.tiene_calendario("") and not calendario.tiene_calendario(None)
+
+
 def test_adoptar_crea_temporada_una_sola_vez(base_temporal):
     from sprints import calendario, datos
     tid = calendario.adoptar("acme", "black_friday", pais="CO", anio=2026)

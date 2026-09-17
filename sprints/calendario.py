@@ -66,6 +66,11 @@ PRESETS = {
 }
 
 
+def tiene_calendario(pais):
+    """False cuando `presets(pais)` va a caer al calendario de Colombia."""
+    return (pais or "").upper() in PRESETS
+
+
 def presets(pais, anio=None):
     anio = int(anio or date.today().year)
     lista = PRESETS.get((pais or "").upper()) or PRESETS["CO"]

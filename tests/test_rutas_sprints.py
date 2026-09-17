@@ -88,6 +88,25 @@ def test_contexto_trae_lo_que_usa_la_pestana(app):
     assert "es_CO" in [d["codigo"] for d in ctx["destinos_sprint"]] and ctx["trabajo_sugerir"] is None
 
 
+def test_contexto_avisa_cuando_el_pais_no_tiene_calendario_propio(app):
+    from sprints import rutas
+    import proyectos
+    assert rutas.contexto("acme")["calendario_fallback"] is False          # CO por defecto
+    proyectos.guardar_pais("acme", "US")
+    ctx = rutas.contexto("acme")
+    assert ctx["calendario_fallback"] is True and ctx["pais_calendario"] == "US"
+    assert [p["clave"] for p in ctx["presets_temporadas"]] == [p["clave"] for p in rutas.calendario.presets("CO")]
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert "no tiene calendario propio" in html
+    proyectos.guardar_pais("acme", "CO")
+    assert "no tiene calendario propio" not in app["c"].get("/cliente/acme").data.decode()
+
+
+def test_contexto_fuera_de_una_peticion_no_revienta(app):
+    from sprints import rutas
+    assert rutas.contexto("acme")["sprint_recien_creado"] is False
+
+
 def test_cliente_sin_permiso_no_entra(app):
     c = app["dashboard"].app.test_client()
     with c.session_transaction() as s:
@@ -117,6 +136,41 @@ def test_crear_sprint_con_matriz(app):
     sp = datos.sprints("acme")[0]
     assert sp["destinos"] == ["es_CO", "es_MX"] and sp["campanas_total"] == 2 and sp["piezas_planeadas"] == 38
     assert sp["campanas"][0]["referencias_objetivo"] == 4 and sp["estado"] == "planeando"
+
+
+def test_crear_sprint_limpia_el_borrador_del_asistente_una_sola_vez(app):
+    from sprints import datos
+    pid, tid = _base(datos)
+    campanas = [{"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid, "n_videos": 1, "n_imagenes": 0}]
+    c = app["c"]
+    assert "sessionStorage.removeItem(KEY)" not in c.get("/cliente/acme").data.decode()
+    r = c.post("/cliente/acme/sprints/nuevo", data={"nombre": "Octubre", "inicio": "2026-10-01", "fin": "2026-10-31",
+                                                    "campanas_json": json.dumps(campanas)})
+    assert r.status_code == 302 and datos.sprints("acme")
+    html = c.get("/cliente/acme").data.decode()
+    assert "sessionStorage.removeItem(KEY)" in html and "sprint-asistente-" in html
+    assert "sessionStorage.removeItem(KEY)" not in c.get("/cliente/acme").data.decode()   # solo la primera vez
+
+
+def test_crear_sprint_fallido_no_limpia_el_borrador(app):
+    from sprints import datos
+    pid, tid = _base(datos)
+    c = app["c"]
+    c.post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": "[]"})
+    assert datos.sprints("acme") == []
+    assert "sessionStorage.removeItem(KEY)" not in c.get("/cliente/acme").data.decode()
+
+
+def test_crear_sprint_con_campanas_malformadas_no_crea_nada(app):
+    from sprints import datos, rutas
+    pid, tid = _base(datos)
+    c = app["c"]
+    for crudo in ('["x"]', '[5]', '[null]', '[[1,2]]'):
+        c.post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": crudo})
+    assert datos.sprints("acme") == [] and datos.sprints("acme", incluir_archivados=True) == []
+    with pytest.raises(datos.ErrorDatos) as exc:
+        rutas._validar_campanas("acme", ["x"])
+    assert str(exc.value) == "Campaña 1: formato inválido."
 
 
 def test_crear_sprint_rechaza_duplicados_y_productos_ajenos(app):
@@ -272,6 +326,36 @@ def test_referencia_editar_json_no_objeto_devuelve_400(app):
     rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg")
     r = app["c"].post(f"/cliente/acme/sprints/referencias/{rid}", json=["descripcion"])
     assert r.status_code == 400 and r.get_json()["ok"] is False
+
+
+def test_referencia_editar_campos_con_tipo_equivocado_devuelve_400(app):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", titulo="a.jpg")
+    c = app["c"]
+    for cuerpo in ({"descripcion": 5}, {"intencion_otro": ["x"]}, {"titulo": {"a": 1}}, {"intencion": "paleta"}):
+        r = c.post(f"/cliente/acme/sprints/referencias/{rid}", json=cuerpo)
+        assert r.status_code == 400 and r.get_json() == {"ok": False, "error": "Formato inválido."}, cuerpo
+    ref = datos.referencia("acme", rid)
+    assert ref["titulo"] == "a.jpg" and ref["descripcion"] == "" and ref["intencion"] == [] and ref["estado"] == "borrador"
+    # None sí se acepta (se guarda vacío), y el caso bueno sigue funcionando.
+    r = c.post(f"/cliente/acme/sprints/referencias/{rid}", json={"descripcion": None, "intencion_otro": None})
+    assert r.status_code == 200 and r.get_json()["ok"]
+    r = c.post(f"/cliente/acme/sprints/referencias/{rid}", json={"descripcion": "luz", "intencion": ["iluminacion"]})
+    assert r.get_json()["estado"] == "lista"
+
+
+def test_archivar_y_desarchivar_sprint_avisan_lo_que_hicieron(app):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    c = app["c"]
+    r = c.post(f"/cliente/acme/sprints/{sid}/archivar", follow_redirects=True)
+    assert "Sprint archivado." in r.data.decode() and datos.sprints("acme") == []
+    r = c.post(f"/cliente/acme/sprints/{sid}/archivar", data={"desarchivar": "1"}, follow_redirects=True)
+    assert "Sprint desarchivado." in r.data.decode() and "Sprint archivado." not in r.data.decode()
+    assert [s["id"] for s in datos.sprints("acme")] == [sid]
 
 
 def test_pestana_sprints_se_renderiza(app):

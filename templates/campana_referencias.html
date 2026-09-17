@@ -71,7 +71,7 @@
   <article class="swap-card sprint-ref" data-rid="{{ r.id }}" data-url="{{ url_for('sprints.referencia_editar', cliente=cliente, rid=r.id) }}">
     <div class="sprint-ref-media">
       {% if r.tipo == "video" %}<video src="{{ r.url }}" poster="{{ r.frame_url }}" controls muted preload="none"></video>
-      {% else %}<img src="{{ r.url }}" alt="{{ r.titulo }}">{% endif %}
+      {% else %}<img src="{{ r.url }}" alt="{{ r.titulo or '' }}">{% endif %}
       <span class="tag-estado sprint-ref-estado">{{ r.estado }}</span>
     </div>
     <div class="sprint-ref-cuerpo">

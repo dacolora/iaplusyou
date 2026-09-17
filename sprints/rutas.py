@@ -11,7 +11,8 @@ import json
 import os
 from datetime import date
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import (Blueprint, abort, flash, has_request_context, jsonify, redirect, render_template, request,
+                   session, url_for)
 
 import catalogo_productos
 import proyectos
@@ -63,6 +64,15 @@ def _productos(cliente):
              "representativa_url": p.get("representativa_url")} for p in catalogo_productos.listar(cliente, "producto")]
 
 
+def _sprint_recien_creado():
+    """True una sola vez, en la primera página después de que `crear` tuvo
+    éxito: la pestaña lo usa para descartar el borrador del asistente guardado
+    en sessionStorage. Fuera de una petición (pruebas, scripts) es False."""
+    if not has_request_context():
+        return False
+    return bool(session.pop("sprint_creado", False))
+
+
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
     prefs = proyectos.preferencias_flowplus(cliente)
@@ -78,6 +88,7 @@ def contexto(cliente):
         "temporadas_sprint": datos.temporadas(cliente),
         "presets_temporadas": calendario.presets(pais),
         "pais_calendario": pais,
+        "calendario_fallback": not calendario.tiene_calendario(pais),
         "paises_calendario": proyectos.PAISES_CALENDARIO,
         "productos_sprint": _productos(cliente),
         "destinos_sprint": [{"codigo": f"{p['idioma']}_{codigo}", "nombre": p["nombre"], "bandera": p["bandera"],
@@ -94,6 +105,7 @@ def contexto(cliente):
         "trabajo_sugerir": ({"job_id": tareas_sprints.job_id_sugerir(cliente)}
                             if trabajos.en_curso(tareas_sprints.job_id_sugerir(cliente)) else None),
         "hoy": date.today().isoformat(),
+        "sprint_recien_creado": _sprint_recien_creado(),
     }
 
 
@@ -251,6 +263,8 @@ def _validar_campanas(cliente, lista):
     ids = {p["id"] for p in catalogo_productos.listar(cliente, "producto")}
     vistas, limpias = set(), []
     for i, c in enumerate(lista, 1):
+        if not isinstance(c, dict):
+            raise datos.ErrorDatos(f"Campaña {i}: formato inválido.")
         try:
             persona_id, temporada_id = int(c.get("persona_id") or 0), int(c.get("temporada_id") or 0)
         except (TypeError, ValueError):
@@ -294,6 +308,7 @@ def crear(cliente):
             datos.archivar_sprint(cliente, sid)
             raise
         estado.recalcular(cliente, sid)
+        session["sprint_creado"] = True     # la pestaña descarta el borrador del asistente al volver (contexto)
         flash(f"Sprint creado con {len(campanas)} campaña(s). Ahora sube referencias a cada campaña.", "ok")
         return _volver(cliente, sid)
     except datos.ErrorDatos as e:
@@ -342,9 +357,10 @@ def marcar_listo(cliente, sid):
 
 @bp.post("/<int:sid>/archivar")
 def archivar(cliente, sid):
-    if not datos.archivar_sprint(cliente, sid, archivado=request.form.get("desarchivar") is None):
+    desarchivar = request.form.get("desarchivar") is not None
+    if not datos.archivar_sprint(cliente, sid, archivado=not desarchivar):
         abort(404)
-    flash("Sprint archivado.", "ok")
+    flash("Sprint desarchivado." if desarchivar else "Sprint archivado.", "ok")
     return _volver(cliente)
 
 
@@ -522,6 +538,15 @@ def referencia_editar(cliente, rid):
         campos["intencion_otro"] = fuente.get("intencion_otro")
     if "titulo" in fuente:
         campos["titulo"] = fuente.get("titulo")
+    # Un JSON con el tipo equivocado (número donde va texto, texto donde va lista)
+    # es un error de formato, no un dato inválido: se corta antes de tocar datos.
+    if (any(campos.get(k) is not None and not isinstance(campos[k], str)
+            for k in ("descripcion", "intencion_otro", "titulo") if k in campos)
+            or ("intencion" in campos and not isinstance(campos["intencion"], list))):
+        if es_json:
+            return jsonify({"ok": False, "error": "Formato inválido."}), 400
+        flash("Formato inválido.", "error")
+        return _volver(cliente, r["sprint_id"], r["campana_id"])
     try:
         datos.actualizar_referencia(cliente, rid, **campos)
     except datos.ErrorDatos as e:

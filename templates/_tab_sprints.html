@@ -1,8 +1,9 @@
 {% from "_sprint_macros.html" import anillo, chip_estado %}
 {# Pestaña Sprints. Contexto de sprints.rutas.contexto(cliente): sprints_lista,
    personas_sprint, temporadas_sprint, presets_temporadas, pais_calendario,
-   paises_calendario, productos_sprint, destinos_sprint, estimado_sprint,
-   intenciones_sprint, tipos_temporada, trabajo_sugerir, hoy. #}
+   calendario_fallback, paises_calendario, productos_sprint, destinos_sprint,
+   estimado_sprint, intenciones_sprint, tipos_temporada, trabajo_sugerir, hoy,
+   sprint_recien_creado. #}
 <div class="panel-cabecera">
   <h2>Sprints</h2>
   <p class="vacio">Un sprint planea un mes de contenido como una matriz persona × producto × temporada. Cada celda es una campaña con sus videos e imágenes; nada se genera sin tu aprobación y sin ver el costo antes.</p>
@@ -29,7 +30,7 @@
     {% if not personas_sprint %}personas{% endif %}{% if not productos_sprint %} · productos en el catálogo{% endif %}{% if not temporadas_sprint %} · temporadas{% endif %}. Créalos más abajo.</p>
   {% else %}
   <form method="post" action="{{ url_for('sprints.crear', cliente=cliente) }}" id="form-sprint"
-        data-estimado-video="{{ estimado_sprint.video }}" data-estimado-imagen="{{ estimado_sprint.imagen }}" data-cliente="{{ cliente }}">
+        data-estimado-video="{{ estimado_sprint.video }}" data-estimado-imagen="{{ estimado_sprint.imagen }}">
     <fieldset class="sprint-paso" data-paso="1">
       <legend>1. Datos del sprint</legend>
       <div class="fe-opciones">
@@ -182,6 +183,7 @@
     <label>Calendario comercial de
       <select name="pais" onchange="this.form.submit()">{% for p in paises_calendario %}<option value="{{ p }}" {% if p == pais_calendario %}selected{% endif %}>{{ p }}</option>{% endfor %}</select>
     </label>
+    {% if calendario_fallback %}<small class="vacio">(este país no tiene calendario propio; se muestra el de Colombia)</small>{% endif %}
   </form>
   <div class="sprint-presets">
     {% for pr in presets_temporadas %}
@@ -213,16 +215,22 @@
 
 <script>
   (function () {
+    var KEY = 'sprint-asistente-' + {{ cliente | tojson }};
+    {% if sprint_recien_creado %}
+    // El sprint se acaba de crear: el borrador del asistente ya no sirve. Se limpia aquí, al
+    // volver con éxito, y no en submit, para que un envío rechazado no pierda la matriz armada.
+    try { sessionStorage.removeItem(KEY); } catch (e) {}
+    {% endif %}
     var form = document.getElementById('form-sprint');
     if (!form) return;
-    var KEY = 'sprint-asistente-' + form.dataset.cliente;
     var costoV = parseFloat(form.dataset.estimadoVideo || '0'), costoI = parseFloat(form.dataset.estimadoImagen || '0');
     var campanas = {};   // "persona|producto|temporada" -> {persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, nombres}
     var selTemporada = document.getElementById('matriz-temporada');
 
     // Fechas por defecto: el mes siguiente completo.
     var hoy = new Date(), ini = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1), fin = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
-    function iso(d) { return d.toISOString().slice(0, 10); }
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }   // hora local, no UTC
     if (!form.inicio.value) form.inicio.value = iso(ini);
     if (!form.fin.value) form.fin.value = iso(fin);
     if (!form.nombre.value) form.nombre.value = 'Sprint ' + ini.toLocaleDateString('es', {month: 'long', year: 'numeric'});
@@ -284,7 +292,6 @@
         form.querySelectorAll('.sprint-paso').forEach(function (p) { p.hidden = p.dataset.paso !== destino; });
       });
     });
-    form.addEventListener('submit', function () { try { sessionStorage.removeItem(KEY); } catch (e) {} });
     pintar();
   })();
 </script>
