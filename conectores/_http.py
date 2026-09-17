@@ -8,8 +8,11 @@ de 30 s y estas reglas, iguales para las tres tiendas:
   - error de conexión: `ErrorConector` en español, sin la URL completa.
 Con `reintentar=False` NO se repite nada tras un timeout ni un 5xx (para
 POST que no son idempotentes, como el refresh de MELI, cuyo refresh token
-es de un solo uso); el timeout sale como `ErrorTiempo` (subclase de
+es de un solo uso — y para `probar()`, que corre inline en la petición del
+dashboard y tiene que contestar en ≤ 15 s: `timeout=TIMEOUT_PROBAR`,
+`reintentar=False`); el timeout sale como `ErrorTiempo` (subclase de
 `ErrorConector`) para que el conector pueda dar un mensaje más preciso.
+`timeout=` (segundos) se pasa tal cual a requests; sin él, TIMEOUT.
 Devuelve la respuesta tal cual (cualquier código): interpretar 4xx es cosa
 de cada conector, que sabe qué significa en su API. Nunca se registran
 cabeceras ni cuerpos: lo único que llega al usuario es el código HTTP.
@@ -21,6 +24,7 @@ import requests
 from .base import ErrorConector
 
 TIMEOUT = 30
+TIMEOUT_PROBAR = 10   # probar() corre inline en la petición HTTP del dashboard
 MAX_ESPERA_429 = 5
 ESPERA_5XX = 1.0
 
@@ -44,6 +48,7 @@ def _espera_429(respuesta):
 
 def pedir(sesion, metodo, url, nombre="la tienda", reintentar=True, **kw):
     kw.setdefault("timeout", TIMEOUT)
+    timeout = kw["timeout"]
     # Con reintentar=False los dos reintentos "ya gastados" desde el inicio.
     reintento_5xx = reintento_timeout = not reintentar
     reintento_429 = False
@@ -52,7 +57,7 @@ def pedir(sesion, metodo, url, nombre="la tienda", reintentar=True, **kw):
             r = sesion.request(metodo, url, **kw)
         except requests.exceptions.Timeout:
             if reintento_timeout:
-                raise ErrorTiempo(f"{nombre} no respondió a tiempo (más de {TIMEOUT} s). Intenta de nuevo.")
+                raise ErrorTiempo(f"{nombre} no respondió a tiempo (más de {timeout:g} s). Intenta de nuevo.")
             reintento_timeout = True
             continue
         except requests.exceptions.ConnectionError:

@@ -1,8 +1,9 @@
 {# Productos (Bloque 5): el catálogo importado (CSV/Excel, URL) o sincronizado
    desde una tienda conectada. Contexto de ver_cliente: productos_tienda (con
    archivados, `activo_ok`, `n_experimentos`), tiendas_cliente, trabajos_prod
-   ({"importar": {"job_id"}|None, "tiendas": {tid: {"job_id"}}}), columnas_csv.
-   Importar y sincronizar corren en el worker; acá solo se encola. #}
+   ({"importar": {"job_id"}|None, "tiendas": {tid: {"job_id"}},
+   "vincular": {pid: {"job_id"}}}), columnas_csv.
+   Importar, sincronizar y «Crear activo» corren en el worker; acá solo se encola. #}
 <div class="panel-cabecera">
   <h2>Productos</h2>
   <p class="vacio">Lo que vendes, tal como está en tu tienda o en tu archivo. Cada producto con fotos se vuelve un activo del Catálogo para generar piezas en Crear; desde aquí lo marcas «en prueba», le pones prioridad y le creas un experimento.</p>
@@ -63,7 +64,8 @@
       <td>
         <strong>{{ p.nombre }}</strong>
         {% if p.categoria %}<small class="vacio prod-categoria">{{ p.categoria }}</small>{% endif %}
-        {% if p.url_compra %}<a class="prod-url" href="{{ p.url_compra }}" target="_blank" rel="noopener">{{ p.url_compra | truncate(48, True) }}</a>{% endif %}
+        {# Solo http(s) se vuelve enlace: una URL importada de un CSV puede traer cualquier esquema. #}
+        {% if p.url_compra and p.url_compra.startswith(("http://", "https://")) %}<a class="prod-url" href="{{ p.url_compra }}" target="_blank" rel="noopener">{{ p.url_compra | truncate(48, True) }}</a>{% elif p.url_compra %}<span class="prod-url">{{ p.url_compra | truncate(48, True) }}</span>{% endif %}
       </td>
       <td><span class="tag-estado badge-fuente badge-fuente-{{ p.fuente }}">{{ p.fuente }}</span></td>
       <td>
@@ -86,8 +88,14 @@
         {% if p.activo_ok %}
           <span class="tag-estado tag-en-uso">listo para Crear</span>
         {% else %}
+          {% set trabajo_v = trabajos_prod.vincular.get(p.id) %}
           <span class="tag-estado tag-advertencia">sin activo</span>
-          <form method="post" action="{{ url_for('prod_vincular', cliente=cliente, pid=p.id) }}" class="inline"><button class="btn-guardar btn-xs">Crear activo</button></form>
+          <form method="post" action="{{ url_for('prod_vincular', cliente=cliente, pid=p.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_v %}disabled{% endif %}>{% if trabajo_v %}Creando activo…{% else %}Crear activo{% endif %}</button></form>
+          {% if trabajo_v %}
+          <div class="barra-progreso" id="trabajo-{{ trabajo_v.job_id }}"><div class="barra-progreso-fill"></div></div>
+          <div class="progreso-texto"></div>
+          <script>iniciarPolling({{ trabajo_v.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_v.job_id) | tojson }});</script>
+          {% endif %}
         {% endif %}
         {% if p.n_experimentos %}<span class="tag-estado">en {{ p.n_experimentos }} experimento(s)</span>{% endif %}
       </td>
@@ -96,7 +104,7 @@
         {% if p.archivado %}
         <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline"><input type="hidden" name="archivado" value="0"><button class="btn-guardar btn-xs">Recuperar</button></form>
         {% else %}
-        <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline" onsubmit="return confirm('¿Archivar «{{ p.nombre | e }}»? No se borra: se oculta de la lista.');"><button class="btn-rechazar btn-xs">Archivar</button></form>
+        <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline prod-form-archivar" data-nombre="{{ p.nombre }}"><button class="btn-rechazar btn-xs">Archivar</button></form>
         {% endif %}
       </td>
     </tr>
@@ -131,6 +139,15 @@
         if (!f) return;
         f.querySelector('[data-prioridad]').value = i.value;
         f.submit();
+      });
+    });
+    // Confirmación de «Archivar»: el nombre viaja en data-nombre (atributo
+    // HTML, escapado por Jinja) y el mensaje se arma en JS — nunca texto de
+    // plantilla dentro de un literal de JS (un apóstrofo lo rompería).
+    document.querySelectorAll('.prod-form-archivar').forEach(function (f) {
+      f.addEventListener('submit', function (ev) {
+        var nombre = f.dataset.nombre || 'este producto';
+        if (!confirm('¿Archivar «' + nombre + '»? No se borra: se oculta de la lista.')) ev.preventDefault();
       });
     });
   })();

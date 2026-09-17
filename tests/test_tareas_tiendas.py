@@ -89,13 +89,15 @@ def test_registro_job_ids_y_periodicas():
     import worker
     import tareas.tiendas as tt
     tareas.cargar_todas()
-    for tipo in ("tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar",
+    for tipo in ("tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar", "producto_vincular",
                  "tienda_sync_productos_todas", "tienda_sync_pedidos_todas"):
         assert tipo in tareas.REGISTRO
     assert tt.job_id_sync_productos("acme", 3) == "acme__tienda3__productos"
     assert tt.job_id_sync_pedidos("acme", 3) == "acme__tienda3__pedidos"
     assert tt.job_id_importar_archivo("acme") == "acme__importar_archivo"
     assert tt.job_id_importar_url("acme") == "acme__importar_url"
+    assert tt.job_id_vincular("acme", 7) == "acme__producto7__vincular"
+    assert [e[0] for e in tt.ETAPAS_VINCULAR] == ["Bajando fotos", "Creando el activo"]
     assert ("tienda_sync_productos_todas", 21600) in worker.PERIODICAS
     assert ("tienda_sync_pedidos_todas", 7200) in worker.PERIODICAS
     assert [e[0] for e in tt.ETAPAS_IMPORTAR] == ["Leyendo", "Guardando productos", "Creando activos"]
@@ -281,6 +283,58 @@ def test_sync_pedidos_tienda_sin_pedidos(entorno, monkeypatch):
     monkeypatch.setattr(Falso, "tiene_pedidos", False)
     msg = tareas.REGISTRO["tienda_sync_pedidos"]({"payload": {"cliente": "acme", "tienda_id": tid}})
     assert "no expone pedidos" in msg
+
+
+def test_producto_vincular_crea_el_activo_con_fotos_forzadas(entorno, monkeypatch):
+    """La tarea llama a importador.vincular_activo(forzar_fotos=True), reporta
+    etapas y devuelve el activo; sin activo (sin fotos descargables) es un
+    error de tarea con el aviso en español; producto inexistente, también."""
+    import importador
+    import tareas
+    import tiendas
+    import trabajos
+    reportes = []
+    monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: reportes.append((job_id, kw)))
+    pid = tiendas.upsert_producto("acme", "csv", "cojin", {"nombre": "Cojín Azul", "fotos": ["https://cdn.test/a.png"]})
+    llamadas = []
+
+    def _vincular(cliente, producto_id, forzar_fotos=False, errores=None):
+        llamadas.append((cliente, producto_id, forzar_fotos))
+        errores.append("una foto no bajó.")
+        return "cojin_azul"
+    monkeypatch.setattr(importador, "vincular_activo", _vincular)
+    msg = tareas.REGISTRO["producto_vincular"]({"payload": {"cliente": "acme", "producto_id": pid}})
+    assert llamadas == [("acme", pid, True)]
+    assert "cojin_azul" in msg and "una foto no bajó" in msg
+    assert [(j, kw["etapa"]) for j, kw in reportes] == [(f"acme__producto{pid}__vincular", "Bajando fotos"),
+                                                        (f"acme__producto{pid}__vincular", "Creando el activo")]
+    assert reportes[0][1]["detalle"] == "Cojín Azul"
+
+    def _sin_fotos(cliente, producto_id, forzar_fotos=False, errores=None):
+        errores.append("Cojín Azul: ninguna foto se pudo descargar.")
+        return None
+    monkeypatch.setattr(importador, "vincular_activo", _sin_fotos)
+    with pytest.raises(ErrorConector, match="ninguna foto"):
+        tareas.REGISTRO["producto_vincular"]({"payload": {"cliente": "acme", "producto_id": pid}, "job_id": "x"})
+    # cross-tenant / inexistente: no se llama al importador
+    monkeypatch.setattr(importador, "vincular_activo", lambda *a, **kw: pytest.fail("no debe vincular"))
+    with pytest.raises(ErrorConector, match="ya no existe"):
+        tareas.REGISTRO["producto_vincular"]({"payload": {"cliente": "otro", "producto_id": pid}})
+
+
+def test_producto_vincular_de_verdad_crea_el_activo(entorno, monkeypatch):
+    """Sin fakes del importador: con la foto falsa del fixture, la tarea deja
+    el producto ligado a un activo del catálogo."""
+    import catalogo_productos
+    import tareas
+    import tiendas
+    import trabajos
+    monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: None)
+    pid = tiendas.upsert_producto("acme", "csv", "espejo", {"nombre": "Espejo redondo", "fotos": ["https://cdn.test/a.png"]})
+    msg = tareas.REGISTRO["producto_vincular"]({"payload": {"cliente": "acme", "producto_id": str(pid)}})
+    activo_id = tiendas.producto("acme", pid)["activo_catalogo_id"]
+    assert activo_id and activo_id in msg
+    assert any(a["id"] == activo_id for a in catalogo_productos.listar("acme"))
 
 
 def test_periodica_productos_encola_solo_conectadas(entorno, monkeypatch):

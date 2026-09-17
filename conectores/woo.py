@@ -14,7 +14,7 @@ import re
 from urllib.parse import urlparse
 
 from . import registrar
-from ._http import error_generico, json_de, pedir, sesion
+from ._http import TIMEOUT_PROBAR, error_generico, json_de, pedir, sesion
 from .base import Conector, ErrorConector, limpiar_html, normalizar_pedido, normalizar_producto
 
 TAMANO_PAGINA = 50
@@ -55,11 +55,11 @@ class Woo(Conector):
 
     # --- transporte --------------------------------------------------------
 
-    def _get(self, ruta, params=None):
+    def _get(self, ruta, params=None, **kw_http):
         if self._s is None:
             self._s = sesion()
         r = pedir(self._s, "GET", f"{self.url}/wp-json/wc/v3/{ruta.lstrip('/')}", nombre=NOMBRE,
-                  params=params or {}, auth=self._auth, headers={"Accept": "application/json"})
+                  params=params or {}, auth=self._auth, headers={"Accept": "application/json"}, **kw_http)
         if r.status_code in (401, 403):
             raise ErrorConector("WooCommerce rechazó las claves: Consumer key/secret inválidos o sin "
                                 "permiso de lectura.")
@@ -94,8 +94,8 @@ class Woo(Conector):
                 return
             pagina += 1
 
-    def _moneda(self):
-        ajustes = json_de(self._get("settings/general"), NOMBRE)
+    def _moneda(self, **kw_http):
+        ajustes = json_de(self._get("settings/general", **kw_http), NOMBRE)
         for a in ajustes if isinstance(ajustes, list) else []:
             if isinstance(a, dict) and a.get("id") == "woocommerce_currency":
                 return a.get("value")
@@ -143,6 +143,7 @@ class Woo(Conector):
         return pedidos
 
     def probar(self):
-        moneda = self._moneda()
+        # Inline en la petición del dashboard: una sola ida, 10 s, sin reintentos.
+        moneda = self._moneda(timeout=TIMEOUT_PROBAR, reintentar=False)
         return {"ok": True, "nombre": urlparse(self.url).netloc,
                 "detalle": f"Conectado a {self.url} (moneda {moneda or '?'})."}

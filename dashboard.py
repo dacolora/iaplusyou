@@ -62,7 +62,6 @@ import modos
 import propuestas
 import cifrado
 import conectores
-import importador
 import tiendas
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
@@ -877,12 +876,18 @@ def ver_cliente(cliente):
     propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in experimentos_exp if e["propuestas_pendientes"]}
     reglas_cliente = proyectos.reglas_defecto(cliente)
     # Bloque 5: productos importados/sincronizados, tiendas conectadas y el
-    # estado del Pixel. El Pixel se consulta ANTES de atribucion_sugerida
-    # (que solo mira caché): así la sugerencia del formulario de experimento
-    # coincide con lo que Configuración muestra en la misma carga.
+    # estado del Pixel. El Pixel se lee SOLO del caché (`solo_cache=True`):
+    # la página del proyecto nunca espera una ida a Graph (hasta 30 s bajo el
+    # lock de Meta = un worker de gunicorn ocupado y un 502 en la página
+    # principal). Quien llena el caché es el botón «Comprobar Pixel»
+    # (cfg_pixel_refrescar, POST); con Meta conectado y caché vacío la
+    # plantilla muestra «sin comprobar» + el botón. atribucion_sugerida
+    # (más abajo) también mira solo caché, así que coincide con Configuración.
     capacidades_meta = meta_conexion.estado(cliente)
-    estado_pixel = meta_conexion.estado_pixel(cliente) if capacidades_meta.get("estado") == "conectado" else None
+    meta_conectado = capacidades_meta.get("estado") == "conectado"
+    estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
+    productos_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
 
     return render_template(
         "cliente.html",
@@ -943,10 +948,11 @@ def ver_cliente(cliente):
         correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
         modos_exp=modos.MODOS,
         nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
-        productos_tienda=_productos_tienda_contexto(cliente, experimentos_exp),
+        productos_tienda=productos_tienda,
         tiendas_cliente=tiendas_cliente,
-        trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
+        trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
         estado_pixel=estado_pixel,
+        meta_conectado=meta_conectado,
         atribucion_sugerida=experimentos.atribucion_sugerida(cliente),
         atribuciones_exp=experimentos.ATRIBUCIONES,
         pedidos_por_exp=tiendas.pedidos_por_experimento(cliente),
@@ -2694,9 +2700,17 @@ def _productos_tienda_contexto(cliente, experimentos_exp=None):
     return lista
 
 
-def _trabajos_productos(cliente, tiendas_cliente):
-    """{"importar": {"job_id"} | None, "tiendas": {tid: {"job_id"}}}: qué
-    importación o sincronización está corriendo, para pintar la barra."""
+def _trabajos_productos(cliente, tiendas_cliente, productos=()):
+    """{"importar": {"job_id"} | None, "tiendas": {tid: {"job_id"}},
+    "vincular": {pid: {"job_id"}}}: qué importación, sincronización o
+    «Crear activo» está corriendo, para pintar la barra. Los `vincular` salen
+    de UNA consulta a la cola (cola.job_ids_vivos), no de una por producto."""
+    vivos = cola.job_ids_vivos(cliente, "producto_vincular") if productos else set()
+    vincular = {}
+    for prod in productos:
+        jid = tareas_tiendas.job_id_vincular(cliente, prod["id"])
+        if jid in vivos:
+            vincular[prod["id"]] = {"job_id": jid}
     importar = None
     for jid in (tareas_tiendas.job_id_importar_archivo(cliente), tareas_tiendas.job_id_importar_url(cliente)):
         if trabajos.en_curso(jid):
@@ -2709,11 +2723,20 @@ def _trabajos_productos(cliente, tiendas_cliente):
             if trabajos.en_curso(jid):
                 por_tienda[t["id"]] = {"job_id": jid}
                 break
-    return {"importar": importar, "tiendas": por_tienda}
+    return {"importar": importar, "tiendas": por_tienda, "vincular": vincular}
 
 
 @app.route("/cliente/<cliente>/productos/importar/archivo", methods=["POST"])
 def prod_importar_archivo(cliente):
+    """Tope de 5 MB por ruta, no `MAX_CONTENT_LENGTH` global: personajes y
+    marca suben videos de referencia (mp4/mov) que pasan de largo cualquier
+    tope razonable para un CSV. El `Content-Length` se mira antes de leer el
+    archivo para no copiar un upload enorme que se va a rechazar igual."""
+    if request.content_length and request.content_length > IMPORTAR_MAX_BYTES * 2:
+        # x2: el multipart trae cabeceras y el resto del formulario; el tope
+        # exacto lo aplica la lectura de abajo.
+        flash("El archivo pesa más de 5 MB. Divídelo o quita columnas que no usamos.", "error")
+        return _volver_productos(cliente)
     archivo = request.files.get("archivo")
     if not archivo or not archivo.filename:
         flash("Elige un archivo .csv o .xlsx.", "error")
@@ -2735,7 +2758,9 @@ def prod_importar_archivo(cliente):
         return _volver_productos(cliente)
     carpeta = os.path.join(_client_dir(cliente), "importaciones")
     os.makedirs(carpeta, exist_ok=True)
-    ruta = os.path.join(carpeta, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{nombre}")
+    # <ts>_<micro>_<nombre>: dos subidas del mismo archivo en el mismo segundo
+    # (doble clic) no se pisan la ruta que la tarea va a leer.
+    ruta = os.path.join(carpeta, f"{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}_{nombre}")
     with open(ruta, "wb") as f:
         f.write(datos)
     # max_intentos=1: crea activos y llama a Claude por cada uno; un reintento
@@ -2832,22 +2857,22 @@ def prod_archivar(cliente, pid):
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/vincular", methods=["POST"])
 def prod_vincular(cliente, pid):
-    """Crea (o completa) el activo del catálogo para este producto, bajando
-    sus fotos otra vez. Inline: son pocas fotos pequeñas."""
+    """Encola `producto_vincular` (worker): crea o completa el activo del
+    catálogo bajando las fotos otra vez y pidiendo la regla a Claude. No va
+    inline: hasta 6 fotos × 30 s + Claude pasan de largo el timeout de
+    gunicorn. max_intentos=1 porque llama a Claude."""
     prod = tiendas.producto(cliente, pid)
     if not prod:
         flash("No encontré ese producto.", "error")
         return _volver_productos(cliente)
-    errores = []
-    try:
-        activo_id = importador.vincular_activo(cliente, pid, forzar_fotos=True, errores=errores)
-    except Exception as e:  # noqa: BLE001 — la ruta solo avisa, nunca se cae por una foto
-        flash(f"No pude crear el activo: {cola.sin_token(str(e))}", "error")
-        return _volver_productos(cliente)
-    if activo_id:
-        flash(f"Activo «{activo_id}» listo en el Catálogo." + (" " + " ".join(errores) if errores else ""), "ok")
+    job_id = tareas_tiendas.job_id_vincular(cliente, pid)
+    arranco = trabajos.encolar(
+        job_id, "producto_vincular", {"cliente": cliente, "producto_id": pid},
+        cliente=cliente, duracion_estimada=90, etapas=tareas_tiendas.ETAPAS_VINCULAR, max_intentos=1)
+    if arranco:
+        flash(f"Creando el activo de «{prod.get('nombre') or pid}»… aparece en el Catálogo cuando termine.", "ok")
     else:
-        flash("No pude crear el activo: " + (" ".join(errores) or "el producto no tiene fotos descargables."), "error")
+        flash("Ya se está creando el activo de ese producto — espera a que termine.", "warn")
     return _volver_productos(cliente)
 
 

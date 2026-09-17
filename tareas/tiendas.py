@@ -9,6 +9,9 @@ Ids de trabajo (los mismos que usa el dashboard para encolar y consultar):
   catalogo_importar     -> f"{cliente}__importar_archivo" / f"{cliente}__importar_url"
                            (max_intentos=1: crea activos y llama a Claude por
                            cada uno — un reintento a ciegas duplicaría trabajo)
+  producto_vincular     -> f"{cliente}__producto{pid}__vincular"  (max_intentos=1:
+                           baja hasta 6 fotos y llama a Claude para la regla;
+                           puede tardar minutos, por eso no va inline en la ruta)
 
 Errores de tienda: un `ErrorConector` (o credenciales ilegibles / incompletas)
 deja la tienda en `estado="rota"` con `error` mostrable y relanza, para que la
@@ -41,6 +44,7 @@ from tareas import registrar
 log = logging.getLogger("creatv.tareas.tiendas")
 
 ETAPAS_IMPORTAR = [("Leyendo", 20), ("Guardando productos", 30), ("Creando activos", 50)]
+ETAPAS_VINCULAR = [("Bajando fotos", 60), ("Creando el activo", 40)]
 CADA_SYNC_PRODUCTOS = 21600   # 6 h
 CADA_SYNC_PEDIDOS = 7200      # 2 h
 DIAS_PEDIDOS_INICIAL = 30
@@ -66,6 +70,10 @@ def job_id_importar_archivo(cliente):
 
 def job_id_importar_url(cliente):
     return f"{cliente}__importar_url"
+
+
+def job_id_vincular(cliente, producto_id):
+    return f"{cliente}__producto{producto_id}__vincular"
 
 
 # --- helpers ---------------------------------------------------------------
@@ -241,6 +249,33 @@ def catalogo_importar(tarea):
     return "Importación lista: " + importador.resumen_texto(resumen)
 
 
+# --- crear activo de un producto ---------------------------------------------
+
+@registrar("producto_vincular")
+def producto_vincular(tarea):
+    """Payload {cliente, producto_id}: crea (o completa) el activo del
+    catálogo del producto bajando sus fotos otra vez (`forzar_fotos=True`).
+    Sin activo al final (producto sin fotos descargables) es un error de
+    tarea: el mensaje en español de `importador` es lo que ve la persona."""
+    p = tarea["payload"]
+    cliente, pid = p["cliente"], int(p["producto_id"])
+    job_id = tarea.get("job_id") or job_id_vincular(cliente, pid)
+    prod = tiendas.producto(cliente, pid)
+    if prod is None:
+        raise ErrorConector("Ese producto ya no existe.")
+    trabajos.reportar(job_id, etapa="Bajando fotos", detalle=prod.get("nombre") or f"producto {pid}")
+    errores = []
+    activo_id = importador.vincular_activo(cliente, pid, forzar_fotos=True, errores=errores)
+    trabajos.reportar(job_id, etapa="Creando el activo")
+    if not activo_id:
+        raise ErrorConector("No pude crear el activo: "
+                            + (" ".join(errores) or "el producto no tiene fotos descargables."))
+    texto = f"Activo «{activo_id}» listo en el Catálogo."
+    if errores:
+        texto += " " + " ".join(errores)
+    return texto
+
+
 # --- periódicas --------------------------------------------------------------
 
 def _tiendas_conectadas(clientes=None):
@@ -296,7 +331,8 @@ def tienda_sync_pedidos_todas(tarea):
     return f"{n} tienda(s) en cola para sincronizar pedidos."
 
 
-__all__ = ["ETAPAS_IMPORTAR", "CADA_SYNC_PRODUCTOS", "CADA_SYNC_PEDIDOS", "MAX_INTENTOS_SYNC",
-           "tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar",
+__all__ = ["ETAPAS_IMPORTAR", "ETAPAS_VINCULAR", "CADA_SYNC_PRODUCTOS", "CADA_SYNC_PEDIDOS", "MAX_INTENTOS_SYNC",
+           "tienda_sync_productos", "tienda_sync_pedidos", "catalogo_importar", "producto_vincular",
            "tienda_sync_productos_todas", "tienda_sync_pedidos_todas",
-           "job_id_sync_productos", "job_id_sync_pedidos", "job_id_importar_archivo", "job_id_importar_url"]
+           "job_id_sync_productos", "job_id_sync_pedidos", "job_id_importar_archivo", "job_id_importar_url",
+           "job_id_vincular"]

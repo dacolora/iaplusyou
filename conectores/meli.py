@@ -34,7 +34,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 from . import registrar
-from ._http import ErrorTiempo, error_generico, json_de, pedir, sesion
+from ._http import TIMEOUT_PROBAR, ErrorTiempo, error_generico, json_de, pedir, sesion
 from .base import Conector, ErrorConector, normalizar_pedido, normalizar_producto
 
 API = "https://api.mercadolibre.com"
@@ -104,12 +104,13 @@ def _credenciales_de_token(cuerpo, anteriores=None):
     return base
 
 
-def _post_token(datos):
+def _post_token(datos, **kw_http):
     # Sin reintentos: el refresh token (y el code) son de un solo uso, así
     # que reenviar el POST tras un timeout/5xx solo produciría invalid_grant.
+    kw_http["reintentar"] = False
     try:
-        r = pedir(sesion(), "POST", f"{API}/oauth/token", nombre=NOMBRE, reintentar=False,
-                  data=datos, headers={"Accept": "application/json"})
+        r = pedir(sesion(), "POST", f"{API}/oauth/token", nombre=NOMBRE,
+                  data=datos, headers={"Accept": "application/json"}, **kw_http)
     except ErrorTiempo:
         raise ErrorConector("MercadoLibre no respondió a tiempo al renovar el token (es de un "
                             "solo uso y pudo quedar consumido). Vuelve a conectar la tienda.")
@@ -184,27 +185,28 @@ class Meli(Conector):
 
     # --- token ---------------------------------------------------------------
 
-    def _asegurar_token(self):
+    def _asegurar_token(self, **kw_http):
         vence = _parsear_fecha(self.credenciales.get("expira_en"))
         if vence is not None and vence > _ahora() + MARGEN_REFRESH:
             return
         app_id, secreto = _app()
         cuerpo = _post_token({"grant_type": "refresh_token", "client_id": app_id,
                               "client_secret": secreto,
-                              "refresh_token": str(self.credenciales["refresh_token"])})
+                              "refresh_token": str(self.credenciales["refresh_token"])}, **kw_http)
         self.credenciales = _credenciales_de_token(cuerpo, self.credenciales)
         self.credenciales_actualizadas = dict(self.credenciales)
 
     # --- transporte ----------------------------------------------------------
 
-    def _get(self, ruta, params=None, tolerar_404=False):
+    def _get(self, ruta, params=None, tolerar_404=False, **kw_http):
         """GET con el bearer; con `tolerar_404=True` un 404 devuelve None
-        en vez de ErrorConector (p. ej. ítem sin descripción)."""
+        en vez de ErrorConector (p. ej. ítem sin descripción). `kw_http` va
+        a `pedir` (timeout, reintentar)."""
         if self._s is None:
             self._s = sesion()
         r = pedir(self._s, "GET", f"{API}/{ruta.lstrip('/')}", nombre=NOMBRE, params=params or {},
                   headers={"Authorization": f"Bearer {self.credenciales['access_token']}",
-                           "Accept": "application/json"})
+                           "Accept": "application/json"}, **kw_http)
         if r.status_code in (401, 403):
             raise ErrorConector(_MSG_CREDENCIALES)
         if r.status_code == 404:
@@ -296,8 +298,10 @@ class Meli(Conector):
         return pedidos
 
     def probar(self):
-        self._asegurar_token()
-        yo = self._get("users/me")
+        # Inline en la petición del dashboard: 10 s por ida, sin reintentos
+        # (el refresh ya no reintenta nunca: el refresh token es de un solo uso).
+        self._asegurar_token(timeout=TIMEOUT_PROBAR)
+        yo = self._get("users/me", timeout=TIMEOUT_PROBAR, reintentar=False)
         return {"ok": True, "nombre": str(yo.get("nickname") or ""),
                 "detalle": f"Conectado como {yo.get('nickname') or self.user_id} "
                            f"({yo.get('site_id') or self.credenciales.get('site_id') or '?'})."}

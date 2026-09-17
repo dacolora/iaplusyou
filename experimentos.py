@@ -38,7 +38,8 @@ def atribucion_sugerida(cliente):
     exponen pedidos con utm), si no `ninguna`. El Pixel se mira solo en
     caché (`solo_cache=True`): esto corre dentro del POST de crear
     experimento y no puede esperar una ida a Graph; si nadie consultó el
-    Pixel hace poco (la página de ajustes lo hace), se sugiere tienda/ninguna.
+    Pixel hace poco (el botón «Comprobar Pixel» de Configuración es el único
+    que lo hace), se sugiere tienda/ninguna.
     Imports tardíos: este módulo es solo datos y meta_conexion/tiendas
     arrastran requests, cifrado, etc."""
     import meta_conexion  # noqa: PLC0415

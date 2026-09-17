@@ -5,6 +5,7 @@ refrescar el Pixel y el render de las dos pestañas. Todo lo que sale a la red
 (conectores, importador, Meta) o al worker (trabajos.encolar) va con fakes."""
 import io
 import os
+import re
 
 import pytest
 
@@ -89,6 +90,7 @@ def test_importar_archivo_guarda_y_encola_una_vez(app):
     carpeta = app["tmp"] / "clientes" / "acme" / "importaciones"
     archivos = os.listdir(carpeta)
     assert len(archivos) == 1 and archivos[0].endswith("_mi_catalogo.csv")
+    assert re.match(r"^\d{8}_\d{6}_\d{6}_mi_catalogo\.csv$", archivos[0])   # <ts>_<micro>_<nombre>
     assert len(app["encolados"]) == 1
     t = app["encolados"][0]
     assert t["tipo"] == "catalogo_importar" and t["job_id"] == "acme__importar_archivo" and t["max_intentos"] == 1
@@ -107,6 +109,30 @@ def test_importar_archivo_rechaza_extension_y_tamano(app):
     assert not (app["tmp"] / "clientes" / "acme" / "importaciones").exists()
     mensajes = _flashes(c)
     assert any(".csv o .xlsx" in m for m in mensajes) and any("5 MB" in m for m in mensajes)
+
+
+def test_importar_archivo_dos_subidas_seguidas_no_se_pisan(app):
+    c = app["c"]
+    for _ in range(2):
+        c.post("/cliente/acme/productos/importar/archivo",
+               data={"archivo": (io.BytesIO(b"nombre\nX\n"), "c.csv")}, content_type="multipart/form-data")
+    archivos = sorted(os.listdir(app["tmp"] / "clientes" / "acme" / "importaciones"))
+    assert len(archivos) == 2 and len(set(archivos)) == 2
+    assert sorted(t["payload"]["ruta"] for t in app["encolados"]) == [
+        str(app["tmp"] / "clientes" / "acme" / "importaciones" / a) for a in archivos]
+
+
+def test_importar_archivo_rechaza_por_content_length_antes_de_leer(app, monkeypatch):
+    """Un POST muy grande se rechaza mirando Content-Length, sin parsear el
+    multipart (no hay MAX_CONTENT_LENGTH global: personajes/marca suben videos)."""
+    d = app["dashboard"]
+    assert d.app.config.get("MAX_CONTENT_LENGTH") is None
+    r = app["c"].post("/cliente/acme/productos/importar/archivo",
+                      data={"archivo": (io.BytesIO(b"x" * (12 * 1024 * 1024)), "enorme.csv")},
+                      content_type="multipart/form-data")
+    assert r.status_code == 302 and app["encolados"] == []
+    assert not (app["tmp"] / "clientes" / "acme" / "importaciones").exists()
+    assert any("5 MB" in m for m in _flashes(app["c"]))
 
 
 def test_importar_archivo_borra_si_ya_habia_una_en_curso(app, monkeypatch):
@@ -172,30 +198,48 @@ def test_archivar_y_recuperar(app):
     assert tiendas.producto("acme", pid)["archivado"] is False
 
 
-def test_vincular_llama_al_importador_con_fotos_forzadas(app, monkeypatch):
+def test_vincular_encola_la_tarea_y_no_llama_al_importador(app, monkeypatch):
+    """«Crear activo» baja fotos y llama a Claude: puede tardar minutos, así
+    que la ruta solo encola `producto_vincular` (max_intentos=1)."""
     import importador
     pid = _producto()
-    llamadas = []
-
-    def _vincular(cliente, producto_id, forzar_fotos=False, errores=None):
-        llamadas.append((cliente, producto_id, forzar_fotos))
-        return "cojin_azul"
-    monkeypatch.setattr(importador, "vincular_activo", _vincular)
+    monkeypatch.setattr(importador, "vincular_activo",
+                        lambda *a, **kw: pytest.fail("la ruta no debe vincular inline"))
     r = app["c"].post(f"/cliente/acme/productos/{pid}/vincular")
-    assert r.status_code == 302 and llamadas == [("acme", pid, True)]
-    assert any("cojin_azul" in m for m in _flashes(app["c"]))
-
-    def _sin_fotos(cliente, producto_id, forzar_fotos=False, errores=None):
-        errores.append("Cojín Azul: ninguna foto se pudo descargar.")
-        return None
-    monkeypatch.setattr(importador, "vincular_activo", _sin_fotos)
+    assert r.status_code == 302 and "productos" in r.headers["Location"]
+    assert len(app["encolados"]) == 1
+    t = app["encolados"][0]
+    assert t["tipo"] == "producto_vincular" and t["job_id"] == f"acme__producto{pid}__vincular"
+    assert t["payload"] == {"cliente": "acme", "producto_id": pid} and t["max_intentos"] == 1
+    assert t["cliente"] == "acme" and [e[0] for e in t["etapas"]] == ["Bajando fotos", "Creando el activo"]
+    assert any("Creando el activo" in m and "Cojín Azul" in m for m in _flashes(app["c"]))
+    # ya en curso: no se encola dos veces
+    monkeypatch.setattr(app["dashboard"].trabajos, "encolar", lambda *a, **kw: False)
     app["c"].post(f"/cliente/acme/productos/{pid}/vincular")
-    assert any("ninguna foto" in m for m in _flashes(app["c"]))
-    # cross-tenant: ni siquiera se llama al importador
-    llamadas.clear()
-    monkeypatch.setattr(importador, "vincular_activo", _vincular)
-    app["c"].post(f"/cliente/acme/productos/{_producto(cliente='otro')}/vincular")
-    assert llamadas == []
+    assert len(app["encolados"]) == 1 and any("espera" in m for m in _flashes(app["c"]))
+    # cross-tenant: ni se encola
+    monkeypatch.setattr(app["dashboard"].trabajos, "encolar",
+                        lambda *a, **kw: pytest.fail("producto de otro cliente"))
+    r = app["c"].post(f"/cliente/acme/productos/{_producto(cliente='otro')}/vincular")
+    assert r.status_code == 302 and any("No encontré" in m for m in _flashes(app["c"]))
+
+
+def test_render_fila_con_vincular_en_curso_pinta_barra(app, monkeypatch):
+    """Con una tarea producto_vincular viva para esa fila, «Crear activo»
+    queda deshabilitado y sale la barra con su job_id (una consulta a la cola)."""
+    import cola
+    pid = _producto(nombre="Cojín Azul")
+    pid_otro = _producto(nombre="Espejo redondo")
+    cola.encolar("producto_vincular", {"cliente": "acme", "producto_id": pid}, cliente="acme",
+                 job_id=f"acme__producto{pid}__vincular", max_intentos=1)
+    # una terminada no cuenta
+    tid = cola.encolar("producto_vincular", {"cliente": "acme", "producto_id": pid_otro}, cliente="acme",
+                       job_id=f"acme__producto{pid_otro}__vincular", max_intentos=1)
+    cola.terminar(tid, "listo")
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert f'id="trabajo-acme__producto{pid}__vincular"' in html and "Creando activo…" in html
+    assert f"trabajo-acme__producto{pid_otro}__vincular" not in html
+    assert html.count("Crear activo") == 1
 
 
 def test_experimento_desde_producto_redirige_con_query(app):
@@ -385,6 +429,19 @@ def test_render_pestana_productos(app, tmp_path):
     assert 'data-tab="productos"' in html and 'id="tab-productos"' in html
 
 
+def test_render_productos_confirm_y_url_seguros(app):
+    """El nombre con apóstrofo va en data-nombre (escapado como atributo), no
+    dentro de un literal JS; y una url_compra que no es http(s) (CSV) no se
+    vuelve enlace."""
+    _producto(nombre="Cojín d'Or")
+    _producto(nombre="Raro", url_compra="javascript:alert(1)")
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'data-nombre="Cojín d&#39;Or"' in html
+    assert "confirm('¿Archivar «Cojín" not in html and "confirm(\"¿Archivar" not in html
+    assert 'href="javascript:' not in html and "javascript:alert(1)" in html
+    assert 'href="https://tienda.test/cojin"' in html
+
+
 def test_render_configuracion_tienda_y_pixel(app, monkeypatch):
     import tiendas
     d = app["dashboard"]
@@ -416,7 +473,34 @@ def test_render_pixel_sin_conexion(app, monkeypatch):
     monkeypatch.setattr(d.meta_conexion, "estado_pixel", lambda c, solo_cache=False: llamadas.append(solo_cache))
     html = app["c"].get("/cliente/acme").data.decode()
     # sin Meta no se va a Graph: la única consulta es la de atribucion_sugerida, solo caché
-    assert all(llamadas) and "sin conexión" in html
+    assert llamadas == [True] and "sin conexión" in html
+    assert "Comprobar Pixel" not in html and "sin comprobar" not in html
+
+
+def test_render_pixel_meta_conectado_sin_cache_muestra_sin_comprobar(app, monkeypatch):
+    """La página del proyecto NUNCA va a Graph: con Meta conectado y caché
+    vacío (estado_pixel(solo_cache=True) → None) muestra «sin comprobar» y
+    el botón «Comprobar Pixel» (POST cfg_pixel_refrescar), que es el único
+    que calcula."""
+    d = app["dashboard"]
+    llamadas = []
+    monkeypatch.setattr(d.meta_conexion, "estado_pixel", lambda c, solo_cache=False: (llamadas.append(solo_cache), None)[1])
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert llamadas == [True, True]      # ver_cliente + atribucion_sugerida, ambas solo caché
+    assert "sin comprobar" in html and "Comprobar Pixel" in html
+    assert "/cliente/acme/config/pixel/refrescar" in html
+    assert "Volver a comprobar" not in html and "sin conexión" not in html
+    assert "pulsa «Comprobar Pixel»" in html
+
+
+def test_render_meli_configurado_sin_cifrado_avisa(app, monkeypatch):
+    monkeypatch.setenv("MELI_APP_ID", "123")
+    monkeypatch.delenv("FLASK_SECRET_KEY")
+    html = app["c"].get("/cliente/acme").data.decode()
+    inicio = html.index('data-tienda-panel="meli"')
+    panel = html[inicio:html.index("</div>", inicio)]
+    assert "FLASK_SECRET_KEY" in panel and "MELI_APP_ID</code> y" not in panel
+    assert "/tienda/meli/iniciar" not in panel
 
 
 def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
@@ -444,6 +528,9 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
     tiendas.conectar("acme", "shopify", {"dominio": "d", "token": "t"})
     job_sync = d.tareas_tiendas.job_id_sync_productos("acme", tiendas.listar("acme")[0]["id"])
     monkeypatch.setattr(d.trabajos, "en_curso", lambda jid: jid in (job_sync, "acme__importar_url"))
+    llamadas_pixel = []
+    monkeypatch.setattr(d.meta_conexion, "estado_pixel",
+                        lambda c, solo_cache=False: (llamadas_pixel.append(solo_cache), {"estado": "sin_pixel"})[1])
     capturado = {}
 
     def _render(nombre, **ctx):
@@ -455,9 +542,12 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
     assert por_id[pid]["activo_ok"] is True and por_id[pid]["n_experimentos"] == 2
     assert por_id[pid_sin]["activo_ok"] is False and por_id[pid_sin]["n_experimentos"] == 0
     assert capturado["trabajos_prod"] == {"importar": {"job_id": "acme__importar_url"},
-                                          "tiendas": {tiendas.listar("acme")[0]["id"]: {"job_id": job_sync}}}
+                                          "tiendas": {tiendas.listar("acme")[0]["id"]: {"job_id": job_sync}},
+                                          "vincular": {}}
     assert capturado["atribucion_sugerida"] == "tienda" and capturado["cifrado_ok"] is True
     assert capturado["meli_configurado"] is False and capturado["estado_pixel"]["estado"] == "sin_pixel"
+    assert capturado["meta_conectado"] is True
+    assert llamadas_pixel == [True, True]   # ver_cliente y atribucion_sugerida: nunca a Graph
     assert capturado["pedidos_por_exp"] == {}
     assert "nombre" in capturado["columnas_csv"] and capturado["tipos_tienda"] == ("shopify", "woo", "meli")
 

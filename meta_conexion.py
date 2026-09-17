@@ -385,8 +385,9 @@ def estado_pixel(cliente, solo_cache=False):
       error         la API falló (detalle sin token)
     Con `solo_cache=True` nunca llama a Graph: devuelve lo cacheado o None
     si no hay nada vigente — para rutas POST (crear experimento) que no
-    pueden esperar hasta 30 s bajo el lock de Meta; la página de ajustes es
-    la que llena el caché."""
+    pueden esperar hasta 30 s bajo el lock de Meta — y para ver_cliente, que
+    tampoco puede. Quien llena el caché es cfg_pixel_refrescar (el botón
+    «Comprobar Pixel»/«Volver a comprobar» de Configuración, un POST)."""
     ahora = time.time()
     cacheado = _cache_pixel.get(cliente)
     if cacheado and ahora - cacheado[0] < _TTL_ESTADO_SEG:

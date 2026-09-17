@@ -22,7 +22,7 @@ import time
 from urllib.parse import parse_qs, urlparse
 
 from . import registrar
-from ._http import error_generico, json_de, pedir, sesion
+from ._http import TIMEOUT_PROBAR, error_generico, json_de, pedir, sesion
 from .base import Conector, ErrorConector, limpiar_html, normalizar_pedido, normalizar_producto
 
 VERSION_API = "2025-07"
@@ -158,25 +158,26 @@ class Shopify(Conector):
     def _url(self):
         return f"https://{self.dominio}/admin/api/{VERSION_API}/graphql.json"
 
-    def _graphql(self, query, variables=None):
+    def _graphql(self, query, variables=None, **kw_http):
         """Una query; si Shopify contesta THROTTLED (HTTP 200) espera y
-        reintenta una sola vez."""
-        reintentado = False
+        reintenta una sola vez. `kw_http` va a `pedir` (timeout, reintentar);
+        con `reintentar=False` tampoco se repite el THROTTLED."""
+        reintentado = not kw_http.get("reintentar", True)
         while True:
             try:
-                return self._graphql_una_vez(query, variables)
+                return self._graphql_una_vez(query, variables, **kw_http)
             except _Throttled as e:
                 if reintentado:
                     raise ErrorConector(_MSG_THROTTLED)
                 reintentado = True
                 time.sleep(_espera_throttled(e.extensiones))
 
-    def _graphql_una_vez(self, query, variables=None):
+    def _graphql_una_vez(self, query, variables=None, **kw_http):
         if self._s is None:
             self._s = sesion()
         r = pedir(self._s, "POST", self._url, nombre=NOMBRE,
                   headers={"X-Shopify-Access-Token": self._token, "Content-Type": "application/json"},
-                  json={"query": query, "variables": variables or {}})
+                  json={"query": query, "variables": variables or {}}, **kw_http)
         if r.status_code in (401, 403):
             raise ErrorConector(_MSG_CREDENCIALES)
         if r.status_code == 404:
@@ -219,8 +220,8 @@ class Shopify(Conector):
 
     # --- API pública -------------------------------------------------------
 
-    def _shop(self):
-        return self._graphql(_Q_SHOP).get("shop") or {}
+    def _shop(self, **kw_http):
+        return self._graphql(_Q_SHOP, **kw_http).get("shop") or {}
 
     def listar_productos(self):
         moneda = self._shop().get("currencyCode")
@@ -271,7 +272,8 @@ class Shopify(Conector):
         return pedidos
 
     def probar(self):
-        shop = self._shop()
+        # Inline en la petición del dashboard: una sola ida, 10 s, sin reintentos.
+        shop = self._shop(timeout=TIMEOUT_PROBAR, reintentar=False)
         return {"ok": True, "nombre": str(shop.get("name") or ""),
                 "detalle": f"Conectado a {shop.get('myshopifyDomain') or self.dominio} "
                            f"(moneda {shop.get('currencyCode') or '?'})."}

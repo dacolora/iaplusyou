@@ -220,6 +220,9 @@
     <a class="btn-generar btn-sm" href="{{ url_for('tienda_meli_iniciar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">Conectar con MercadoLibre</a>
     {% elif not meli_configurado %}
     <p class="tag-error">Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>{{ url_for('meli_callback', _external=True) }}</code>).</p>
+    {% else %}
+    <p class="tag-error">Para conectar MercadoLibre falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar cifrados los tokens que devuelve MercadoLibre.</p>
+    <a class="btn-generar btn-sm" aria-disabled="true" style="display:inline-block;text-decoration:none;opacity:.5;pointer-events:none;">Conectar con MercadoLibre</a>
     {% endif %}
   </div>
 </details>
@@ -256,6 +259,13 @@
   {% if estado_pixel.ultimo_disparo %}<small>· último disparo {{ estado_pixel.ultimo_disparo[:16] }}</small>{% endif %}
   {% if estado_pixel.detalle %}<small class="vacio" style="padding:0;display:block;">{{ estado_pixel.detalle }}</small>{% endif %}
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Volver a comprobar</button></form>
+</div>
+{% elif meta_conectado %}
+{# Meta conectado pero nada en caché: esta página nunca va a Graph; solo el botón (POST) lo consulta. #}
+<div class="pixel-estado pixel-estado-sin_comprobar">
+  <span class="tag-estado">sin comprobar</span>
+  <small class="vacio" style="padding:0;display:block;">Todavía no consultamos el Pixel de esta cuenta. Comprobarlo tarda unos segundos y también actualiza la atribución sugerida al crear experimentos.</small>
+  <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Comprobar Pixel</button></form>
 </div>
 {% else %}
 <p class="vacio"><span class="tag-estado">sin conexión</span> Conecta Meta en <a href="#ads" onclick="document.querySelector('.sidebar-item[data-tab=ads]').click(); return false;">Campañas</a> para comprobar el Pixel.</p>

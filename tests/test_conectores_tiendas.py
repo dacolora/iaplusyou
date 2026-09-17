@@ -239,7 +239,7 @@ def test_shopify_429_reintenta_una_vez(sesion, monkeypatch):
         return Respuesta(200, fixture("shopify_shop.json"))
 
     s = sesion(manejador)
-    assert shopify.Shopify(CRED_SHOPIFY).probar()["nombre"] == "Vidrios Demo"
+    assert shopify.Shopify(CRED_SHOPIFY)._shop()["name"] == "Vidrios Demo"
     assert len(s.llamadas) == 2 and esperas == [2.0]
 
 
@@ -248,7 +248,7 @@ def test_429_dos_veces_es_error_y_espera_tope_5s(sesion, monkeypatch):
     monkeypatch.setattr(_http.time, "sleep", esperas.append)
     s = sesion(lambda m, u, kw: Respuesta(429, {"errors": "Throttled"}, headers={"Retry-After": "120"}))
     with pytest.raises(ErrorConector) as ei:
-        shopify.Shopify(CRED_SHOPIFY).probar()
+        shopify.Shopify(CRED_SHOPIFY)._shop()
     assert "429" in ei.value.usuario and len(s.llamadas) == 2 and esperas == [5.0]
 
 
@@ -282,9 +282,15 @@ def test_shopify_throttled_dos_veces_es_error(sesion, monkeypatch):
     monkeypatch.setattr(shopify.time, "sleep", esperas.append)
     s = sesion(lambda m, u, kw: Respuesta(200, THROTTLED))
     with pytest.raises(ErrorConector) as ei:
-        shopify.Shopify(CRED_SHOPIFY).probar()
+        shopify.Shopify(CRED_SHOPIFY).listar_productos()
     assert ei.value.usuario == "Shopify limitó las llamadas; reintenta en un minuto."
     assert len(s.llamadas) == 2 and esperas == [3.0]
+    # probar() (inline en el dashboard) no espera ni reintenta el THROTTLED
+    s = sesion(lambda m, u, kw: Respuesta(200, THROTTLED))
+    esperas.clear()
+    with pytest.raises(ErrorConector) as ei:
+        shopify.Shopify(CRED_SHOPIFY).probar()
+    assert "limitó" in ei.value.usuario and len(s.llamadas) == 1 and esperas == []
 
 
 @pytest.mark.parametrize("extensiones, esperado", [
@@ -311,7 +317,7 @@ def test_5xx_reintenta_con_pausa_de_1s(sesion, monkeypatch):
         return Respuesta(200, fixture("shopify_shop.json"))
 
     s = sesion(manejador)
-    assert shopify.Shopify(CRED_SHOPIFY).probar()["ok"]
+    assert shopify.Shopify(CRED_SHOPIFY)._shop()["name"] == "Vidrios Demo"
     assert len(s.llamadas) == 2 and esperas == [_http.ESPERA_5XX] == [1.0]
 
 
@@ -337,12 +343,12 @@ def test_5xx_y_timeout_reintentan_una_vez(sesion):
         return Respuesta(200, fixture("shopify_shop.json"))
 
     s = sesion(manejador)
-    assert shopify.Shopify(CRED_SHOPIFY).probar()["ok"]
+    assert shopify.Shopify(CRED_SHOPIFY)._shop()["name"] == "Vidrios Demo"
     assert len(s.llamadas) == 2
 
     s = sesion(lambda m, u, kw: Respuesta(502, None, texto="<html>bad gateway</html>"))
     with pytest.raises(ErrorConector) as ei:
-        shopify.Shopify(CRED_SHOPIFY).probar()
+        shopify.Shopify(CRED_SHOPIFY)._shop()
     assert "502" in ei.value.usuario and "<html>" not in ei.value.usuario and len(s.llamadas) == 2
 
     contador["n"] = 0
@@ -354,17 +360,87 @@ def test_5xx_y_timeout_reintentan_una_vez(sesion):
         return Respuesta(200, fixture("shopify_shop.json"))
 
     s = sesion(con_timeout)
-    assert shopify.Shopify(CRED_SHOPIFY).probar()["ok"] and len(s.llamadas) == 2
+    assert shopify.Shopify(CRED_SHOPIFY)._shop()["name"] == "Vidrios Demo" and len(s.llamadas) == 2
 
     s = sesion(lambda m, u, kw: requests.exceptions.Timeout("lento"))
     with pytest.raises(ErrorConector) as ei:
-        shopify.Shopify(CRED_SHOPIFY).probar()
-    assert "no respondió a tiempo" in ei.value.usuario and len(s.llamadas) == 2
+        shopify.Shopify(CRED_SHOPIFY)._shop()
+    assert "no respondió a tiempo (más de 30 s)" in ei.value.usuario and len(s.llamadas) == 2
+    assert all(c["timeout"] == 30 for c in s.llamadas)
 
     sesion(lambda m, u, kw: requests.exceptions.ConnectionError("dns"))
     with pytest.raises(ErrorConector) as ei:
         shopify.Shopify(CRED_SHOPIFY).probar()
     assert "No se pudo conectar" in ei.value.usuario
+
+
+# --- probar(): inline en el dashboard -> 10 s, una sola ida ------------------
+
+def test_shopify_probar_10s_sin_reintentos(sesion, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(_http.time, "sleep", esperas.append)
+    assert _http.TIMEOUT_PROBAR == 10
+    s = sesion(manejador_shopify)
+    assert shopify.Shopify(CRED_SHOPIFY).probar()["ok"]
+    assert [c["timeout"] for c in s.llamadas] == [10]
+    s = sesion(lambda m, u, kw: requests.exceptions.Timeout("lento"))
+    with pytest.raises(_http.ErrorTiempo) as ei:
+        shopify.Shopify(CRED_SHOPIFY).probar()
+    assert len(s.llamadas) == 1 and s.llamadas[0]["timeout"] == 10 and esperas == []
+    assert "más de 10 s" in ei.value.usuario and TOKEN_SHOPIFY not in ei.value.usuario
+    s = sesion(lambda m, u, kw: Respuesta(503, None, texto="<html>x</html>"))
+    with pytest.raises(ErrorConector) as ei:
+        shopify.Shopify(CRED_SHOPIFY).probar()
+    assert "503" in ei.value.usuario and len(s.llamadas) == 1 and esperas == []
+    # el resto del conector sigue con 30 s y reintentos
+    s = sesion(manejador_shopify)
+    shopify.Shopify(CRED_SHOPIFY).listar_productos()
+    assert all(c["timeout"] == 30 for c in s.llamadas)
+
+
+def test_woo_probar_10s_sin_reintentos(sesion, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(_http.time, "sleep", esperas.append)
+    s = sesion(manejador_woo)
+    assert woo.Woo(CRED_WOO).probar()["ok"]
+    assert [c["timeout"] for c in s.llamadas] == [10]
+    s = sesion(lambda m, u, kw: requests.exceptions.Timeout("lento"))
+    with pytest.raises(_http.ErrorTiempo) as ei:
+        woo.Woo(CRED_WOO).probar()
+    assert len(s.llamadas) == 1 and s.llamadas[0]["timeout"] == 10 and esperas == []
+    assert "más de 10 s" in ei.value.usuario and "cs_prueba_secreto_222" not in ei.value.usuario
+    s = sesion(lambda m, u, kw: Respuesta(502, None, texto="<html>x</html>"))
+    with pytest.raises(ErrorConector):
+        woo.Woo(CRED_WOO).probar()
+    assert len(s.llamadas) == 1 and esperas == []
+    s = sesion(manejador_woo)
+    woo.Woo(CRED_WOO).listar_productos()
+    assert all(c["timeout"] == 30 for c in s.llamadas)
+
+
+def test_meli_probar_10s_sin_reintentos(sesion, env_meli, monkeypatch):
+    esperas = []
+    monkeypatch.setattr(_http.time, "sleep", esperas.append)
+    # token vigente: solo users/me
+    s = sesion(manejador_meli)
+    assert meli.Meli(cred_meli(minutos_para_vencer=60)).probar()["ok"]
+    assert [c["timeout"] for c in s.llamadas] == [10]
+    # token por vencer: refresh + users/me, ambos a 10 s
+    s = sesion(manejador_meli)
+    assert meli.Meli(cred_meli(minutos_para_vencer=1)).probar()["ok"]
+    assert [c["timeout"] for c in s.llamadas] == [10, 10]
+    s = sesion(lambda m, u, kw: requests.exceptions.Timeout("lento"))
+    with pytest.raises(ErrorConector) as ei:
+        meli.Meli(cred_meli(minutos_para_vencer=60)).probar()
+    assert len(s.llamadas) == 1 and s.llamadas[0]["url"].endswith("/users/me") and esperas == []
+    assert "más de 10 s" in ei.value.usuario and TOKEN_MELI not in ei.value.usuario
+    s = sesion(lambda m, u, kw: Respuesta(500, None, texto="x"))
+    with pytest.raises(ErrorConector):
+        meli.Meli(cred_meli(minutos_para_vencer=60)).probar()
+    assert len(s.llamadas) == 1 and esperas == []
+    s = sesion(manejador_meli)
+    meli.Meli(cred_meli(minutos_para_vencer=60)).listar_productos()
+    assert all(c["timeout"] == 30 for c in s.llamadas)
 
 
 # =============================================================================
