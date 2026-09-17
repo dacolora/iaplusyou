@@ -128,6 +128,17 @@ primer refresco del mes y cambia con cada uno; "Descargar CSV del mes" baja el d
 pieza. Con el Pixel comprobado y activo, los experimentos nuevos sugieren el objetivo
 "Compras" (Meta optimiza por compra); sin Pixel, "Tráfico".
 
+**Dónde está cada cosa** (desde 2026-09-17): los productos se crean y editan en **Catálogo**
+(nombre, fotos, precio, URL de compra, "en prueba", prioridad, y el botón "Crear
+experimento"); importar de Excel/CSV, de una URL o de una tienda es opcional y está ahí mismo
+en "Traer productos de…". Los anuncios se hacen en **Experimentos** (un experimento con una
+pieza y un país es un anuncio); la pestaña Campañas ya no existe y sus anuncios anteriores se
+ven dentro de Experimentos. **Configuración** empieza con "Puesta a punto": una tarjeta por
+servicio que se paga (Anthropic, fal.ai, Higgsfield, Cloudflare R2, Meta, correo, MercadoLibre)
+con el paso a paso para conseguir la llave, qué cuesta y si está puesta en el servidor, y
+después el paso a paso para conectar Shopify, WooCommerce y MercadoLibre. Las reglas del
+decisor se editan en Experimentos › "Reglas del motor".
+
 ---
 
 ## 1. Cloudflare R2 — storage propio y permanente

@@ -254,7 +254,21 @@ still resolves) and `atribucion.resolver_pendientes` links them; when an experim
 store (ROAS forced to 0 when order and account currencies differ, with one evento).
 `meta_conexion.estado_pixel` (cached 10 min, computed only by the Configuración button —
 never on page load) feeds `experimentos.atribucion_sugerida`: pixel > tienda > ninguna.
-UI: sidebar tab "Productos" (`_tab_productos.html`) and Configuración › Tienda / Pixel.
+UI: there is NO Productos tab — products live in **Catálogo › Productos** (`_tab_catalogo.html` +
+`_catalogo_lista.html`): every activo of categoría `producto` has a `producto` row (fuente
+`manual`, `fuente_id = activo id`, created on the fly by `tiendas.asegurar_manual`) that holds
+precio/moneda/url_compra/en_prueba/prioridad; importing (CSV/URL) is the "Traer productos de…"
+details, imported products without photos sit in "Importados sin fotos" until `prod_fotos_subir`
+or `prod_vincular` creates their activo. Store connections and the Pixel check are in
+Configuración, whose first section "Puesta a punto" (`dashboard._estado_llaves`) lists every
+paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
+computed from `bool(os.environ.get(...))` only, values are never rendered.
+
+There is also NO Campañas tab any more: `_tab_ads.html` is gone, `nueva_campana`/`publicar_ad`
+are no-ops that flash and redirect, and the legacy "Anuncios sueltos" (Forja's ads) render
+read-only inside Experimentos (`_anuncios_sueltos.html`: KPIs, pausar/activar, actualizar).
+The decisor's default rules (`cfg_reglas`) are edited in Experimentos ("Reglas del motor"),
+not in Configuración.
 
 **Tablero y OUTCOME_SALES** (`tablero.py`): the first tab. Every figure is a **delta of
 cumulative snapshots** (`metrica_snapshot` stores Meta's lifetime totals per ad, so a period
