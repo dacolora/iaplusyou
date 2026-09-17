@@ -94,3 +94,35 @@ def test_enlaces_y_empaquetar(base_temporal, monkeypatch, tmp_path):
     assert datos.sprint("acme", sid)["extra"]["zip"]["url"] == r["url"]
     with pytest.raises(datos.ErrorDatos):
         entrega.empaquetar("acme", 999)
+
+
+def test_rechazar_conserva_registro_de_publicacion(base_temporal, monkeypatch, tmp_path):
+    """Fix round 1, hallazgo 1: si la pieza ya se publicó (estado distinto de
+    "pendiente" en la cola de estado_videos.json), rechazarla no debe borrar
+    ese registro — no hay nada que deshacer. Solo se retira de la cola la
+    que sigue pendiente de publicar, y el evento de la ya publicada queda
+    marcado con datos["ya_publicada"]."""
+    import creative_flow
+    import estado as estado_videos
+    from sprints import datos, revision
+    sid, cid, piezas = _sprint_en_revision(datos, creative_flow, monkeypatch, tmp_path)
+    (cp0, cf0), (cp1, cf1), (cp2, cf2) = piezas
+    cola = estado_videos.cargar("acme")
+    cola[cf0] = {"estado": "publicado", "publicado_en": "x"}
+    estado_videos.guardar("acme", cola)
+    assert revision.rechazar("acme", cp0, "motivo publicada") is True
+    assert revision.rechazar("acme", cp1, "motivo pendiente") is True
+    cola = estado_videos.cargar("acme")
+    assert cola[cf0] == {"estado": "publicado", "publicado_en": "x"}
+    assert cf1 not in cola
+    eventos = {e["datos"]["cp_id"]: e for e in datos.eventos("acme", sid) if e["tipo"] == "pieza_rechazada"}
+    assert eventos[cp0]["datos"]["ya_publicada"] is True
+    assert "ya estaba publicada" in eventos[cp0]["mensaje"]
+    assert "ya_publicada" not in eventos[cp1]["datos"]
+
+
+def test_nombre_archivo_normaliza_acentos():
+    """Fold-in: _slug no debe tragarse la letra base al quitar acentos."""
+    from sprints import entrega
+    assert entrega.nombre_archivo({"campana_n": 1, "tipo": "video", "titulo": "Árbol de Año Nuevo"},
+                                  ".mp4") == "campana1_video_Arbol-de-Ano-Nuevo.mp4"

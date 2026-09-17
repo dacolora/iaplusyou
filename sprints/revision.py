@@ -38,13 +38,23 @@ def rechazar(cliente, cp_id, motivo):
     if i.get("estado") not in TERMINADAS:
         return False
     datos.actualizar_idea(cliente, cp_id, revision="rechazada", revision_motivo=motivo)
-    # Fuera de la cola de publicación: una rechazada no se publica.
+    # Fuera de la cola de publicación: una rechazada no se publica. Pero si ya
+    # se publicó (estado distinto de "pendiente" en la cola), no hay nada que
+    # deshacer — se conserva el registro (publicado_en, resultados por
+    # plataforma) y solo se marca en el evento.
     cola = estado_videos.cargar(cliente)
-    if i["cf_id"] in cola:
-        cola.pop(i["cf_id"], None)
-        estado_videos.guardar(cliente, cola)
-    datos.registrar_evento(cliente, i["sprint_id"], "pieza_rechazada", f"Rechazada «{i['titulo']}»: {motivo}",
-                           {"cp_id": cp_id, "motivo": motivo}, campana_id=i["campana_id"])
+    entry = cola.get(i["cf_id"])
+    mensaje = f"Rechazada «{i['titulo']}»: {motivo}"
+    evento_datos = {"cp_id": cp_id, "motivo": motivo}
+    if entry is not None:
+        if entry.get("estado") == "pendiente":
+            cola.pop(i["cf_id"], None)
+            estado_videos.guardar(cliente, cola)
+        else:
+            evento_datos["ya_publicada"] = True
+            mensaje += " (ya estaba publicada; se conserva el registro)"
+    datos.registrar_evento(cliente, i["sprint_id"], "pieza_rechazada", mensaje, evento_datos,
+                           campana_id=i["campana_id"])
     estado.recalcular(cliente, i["sprint_id"])
     return True
 

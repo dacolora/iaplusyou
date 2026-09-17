@@ -4,6 +4,7 @@ todas, subido a R2 y guardado en `sprint.extra["zip"]`.
 """
 import os
 import re
+import unicodedata
 import zipfile
 from datetime import datetime
 
@@ -30,7 +31,10 @@ def enlaces(cliente, sprint_id):
 
 
 def _slug(texto):
-    s = re.sub(r"[^A-Za-z0-9]+", "-", (texto or "").strip()).strip("-")
+    # Normaliza acentos (á, ñ...) a su base ascii antes de recortar lo que no
+    # es alfanumérico, para no perder "Año" -> "o" en vez de "Ano".
+    texto = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode()
+    s = re.sub(r"[^A-Za-z0-9]+", "-", texto.strip()).strip("-")
     return s[:40] or "pieza"
 
 
