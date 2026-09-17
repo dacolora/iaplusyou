@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_sprint_macros.html" import chip_estado %}
+{% block title %}Entrega · {{ sprint.nombre }}{% endblock %}
+{% block content %}
+{% include "_sprint_nav.html" %}
+
+<div class="pagina-cabecera sprint-cabecera">
+  <div>
+    <h1>Entrega de {{ sprint.nombre }}</h1>
+    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ resumen.aprobadas }} aprobadas · {{ resumen.rechazadas }} rechazadas · {{ resumen.sin_revisar }} sin revisar · USD {{ '%.2f' % resumen.costo_usd }} gastado (estimado USD {{ '%.2f' % resumen.costo_estimado_usd }}){% if resumen.dias %} · {{ resumen.dias }} días{% endif %}</p>
+  </div>
+</div>
+
+<div class="acciones sprint-acciones">
+  <button type="button" class="btn-sm" id="copiar-enlaces" {% if not enlaces %}disabled{% endif %}>Copiar enlaces</button>
+  <form method="post" action="{{ url_for('sprints.entrega_zip', cliente=cliente, sid=sprint.id) }}" class="inline">
+    <button type="submit" class="btn-generar btn-sm" {% if not enlaces or trabajo_zip %}disabled{% endif %}>Descargar aprobadas (zip)</button>
+  </form>
+  {% if zip_info %}<a class="btn-sm" href="{{ zip_info.url }}">Zip del {{ zip_info.creado_en | replace('T', ' ') }} ({{ zip_info.n }} piezas)</a>{% endif %}
+  {% if sprint.estado == "completado" %}
+  <form method="post" action="{{ url_for('sprints.reabrir', cliente=cliente, sid=sprint.id) }}" class="inline"><button type="submit" class="btn-sm">Reabrir a revisión</button></form>
+  {% endif %}
+  {% if trabajo_zip %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo_zip.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+  <script>iniciarPolling({{ trabajo_zip.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_zip.job_id) | tojson }});</script>
+  {% endif %}
+</div>
+
+<table class="sprint-entrega" id="tabla-entrega">
+  <thead><tr><th>Campaña</th><th>Pieza</th><th>Tipo</th><th>Enlace</th></tr></thead>
+  <tbody>
+    {% for e in enlaces %}
+    <tr><td>{{ e.campana_n }} · {{ e.persona }} · {{ e.temporada }}</td><td>{{ e.titulo }}</td><td>{{ e.tipo }}</td><td><a href="{{ e.url }}" class="js-enlace">{{ e.url }}</a></td></tr>
+    {% else %}
+    <tr><td colspan="4" class="vacio">Sin piezas aprobadas todavía.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+  document.getElementById('copiar-enlaces').addEventListener('click', function () {
+    var texto = Array.prototype.map.call(document.querySelectorAll('.js-enlace'), function (a) { return a.href; }).join('\n');
+    (navigator.clipboard ? navigator.clipboard.writeText(texto) : Promise.reject()).then(function () { alert('Enlaces copiados.'); }).catch(function () { prompt('Copia los enlaces:', texto); });
+  });
+</script>
+{% endblock %}

@@ -486,3 +486,83 @@ def test_estimar_y_lanzar_lote(con_ideas, monkeypatch):
     assert len(lanzados) == 3 and datos.idea("acme", iv)["cf_id"] == lanzados[-1][0]
     r = c.get("/cliente/acme")
     assert "Sprint · Campaña 1".encode() in r.data      # distintivo en la tarjeta de Crear
+
+
+def _con_piezas(con_ideas, monkeypatch, tmp_path):
+    import creative_flow
+    import estado as estado_videos
+    from sprints import datos
+    monkeypatch.setattr(estado_videos, "_path", lambda c: str(tmp_path / f"{c}_videos.json"))
+    sid, cid, iv, ii = con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
+    datos.actualizar_idea("acme", ii, estado_idea="aprobada")
+    cfs = {}
+    for cp, tipo, est, qa in ((iv, "video", "video_listo", {"veredicto": "pasa", "score": 90, "checks": {"formato": {"ok": True, "nota": "9:16"}}}),
+                              (ii, "imagen", "video_listo", {"veredicto": "revisar", "score": 55, "checks": {}})):
+        cf = creative_flow.crear("acme", [], ["E"], [], "x", 8, "", "A")
+        creative_flow.actualizar("acme", cf, tipo=tipo, estado=est, video_url=f"https://r2/{cp}.{'mp4' if tipo == 'video' else 'png'}", usd=0.4)
+        datos.actualizar_idea("acme", cp, cf_id=cf, qa=qa)
+        cfs[cp] = cf
+    return sid, cid, iv, ii, cfs
+
+
+def test_revision_pagina_y_acciones(con_ideas, monkeypatch, tmp_path):
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    r = c.get(f"/cliente/acme/sprints/{sid}/revision")
+    assert r.status_code == 200 and b"Amanecer" in r.data and b"Marco" in r.data and b"90" in r.data and "Aprobar todas las que pasaron QA".encode() in r.data
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/revision", json={"accion": "aprobar"})
+    assert r.get_json()["ok"] and r.get_json()["revision"] == "aprobada"
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}/revision", json={"accion": "rechazar", "motivo": ""})
+    assert r.status_code == 400 and not r.get_json()["ok"]
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}/revision", json={"accion": "rechazar", "motivo": "encuadre"})
+    assert r.get_json()["ok"] and datos.idea("acme", ii)["revision_motivo"] == "encuadre"
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}/revision", json={"accion": "volar"})
+    assert r.status_code == 400
+    datos.actualizar_idea("acme", iv, revision="pendiente")
+    c.post(f"/cliente/acme/sprints/{sid}/revision/aprobar_qa")
+    assert datos.idea("acme", iv)["revision"] == "aprobada"
+
+
+def test_cerrar_reabrir_y_entrega(con_ideas, monkeypatch, tmp_path):
+    from sprints import datos, revision
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    # La campaña planea 3 piezas y solo 2 tienen sesión: el sprint sigue en "generando"? No: no hay piezas pendientes/generando,
+    # y las dos terminaron → la campaña está en revisión (estado_campana mira las piezas existentes).
+    r = c.post(f"/cliente/acme/sprints/{sid}/cerrar")
+    assert r.status_code == 302 and datos.sprint("acme", sid)["estado"] in ("completado", "revision")
+    if datos.sprint("acme", sid)["estado"] != "completado":
+        revision.aprobar("acme", iv)
+        c.post(f"/cliente/acme/sprints/{sid}/cerrar")
+    assert datos.sprint("acme", sid)["estado"] == "completado"
+    revision.aprobar("acme", iv)
+    r = c.get(f"/cliente/acme/sprints/{sid}/entrega")
+    assert r.status_code == 200 and b"https://r2/" in r.data and "Descargar aprobadas".encode() in r.data
+    c.post(f"/cliente/acme/sprints/{sid}/entrega/zip")
+    assert con_ideas["encolados"][-1]["tipo"] == "sprint_empaquetar" and con_ideas["encolados"][-1]["payload"]["sprint_id"] == sid
+    c.post(f"/cliente/acme/sprints/{sid}/reabrir")
+    assert datos.sprint("acme", sid)["estado"] == "revision"
+    assert c.get("/cliente/acme/sprints/999/revision").status_code == 404
+    assert c.get("/cliente/acme/sprints/999/entrega").status_code == 404
+
+
+def test_cerrar_y_zip_se_niegan_fuera_de_estado_y_la_entrega_muestra_el_zip(con_ideas, monkeypatch, tmp_path):
+    from sprints import datos, rutas
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    vacio = datos.crear_sprint("acme", "Vacío", "2026-11-01", "2026-11-30")      # planeando: no se cierra ni se reabre
+    r = c.post(f"/cliente/acme/sprints/{vacio}/cerrar")
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{vacio}") and datos.sprint("acme", vacio)["estado"] == "planeando"
+    c.post(f"/cliente/acme/sprints/{vacio}/reabrir")
+    assert datos.sprint("acme", vacio)["estado"] == "planeando"
+    n_antes = len(con_ideas["encolados"])
+    c.post(f"/cliente/acme/sprints/{vacio}/entrega/zip")                         # sin aprobadas: no encola nada
+    assert len(con_ideas["encolados"]) == n_antes
+    html = c.get(f"/cliente/acme/sprints/{vacio}/entrega").data.decode()
+    assert "Sin piezas aprobadas todavía" in html and 'id="copiar-enlaces" disabled' in html
+    datos.actualizar_extra_sprint("acme", sid, lambda e: {**e, "zip": {"url": "https://r2/z.zip", "n": 1, "creado_en": "2026-09-17T10:00:00"}})
+    monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: True)
+    html = c.get(f"/cliente/acme/sprints/{sid}/entrega").data.decode()
+    assert "https://r2/z.zip" in html and "Zip del 2026-09-17 10:00:00 (1 piezas)" in html
+    assert "iniciarPolling" in html and rutas.tareas_sprints.job_id_zip("acme", sid) in html

@@ -1530,3 +1530,35 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 /* Experimentos › Reglas del motor */
 .exp-reglas-motor { margin-bottom: 1rem; }
+
+/* Sprints — producción */
+.sprint-ideas { display: grid; gap: .7rem; }
+.sprint-idea { padding: .8rem 1rem; display: grid; gap: .5rem; }
+.sprint-idea-descartada { opacity: .55; }
+.sprint-idea-cab { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
+.sprint-idea-titulo { flex: 1; min-width: 12rem; font-weight: 700; background: transparent; border: 1px solid transparent; border-radius: 6px; padding: .2rem .4rem; }
+.sprint-idea-titulo:focus { border-color: var(--border); background: var(--panel-2); }
+.sprint-idea textarea { width: 100%; }
+.sprint-idea-refs { display: flex; gap: .3rem; }
+.sprint-idea-acciones { display: flex; gap: .4rem; align-items: center; justify-content: flex-end; }
+.sprint-lote-modal { max-width: 34rem; }
+.sprint-lote-estimado { font-weight: 700; }
+.sprint-lote-resumen { margin: -.4rem 0 1rem; }
+.sprint-revision-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: .8rem; }
+.sprint-pieza { padding: 0; overflow: hidden; outline: 2px solid transparent; }
+.sprint-pieza.seleccionada { outline-color: var(--accent); }
+.sprint-pieza-aprobada .sprint-revision-chip { border-color: var(--ok); color: var(--ok); }
+.sprint-pieza-rechazada .sprint-revision-chip { border-color: var(--error); color: var(--error); }
+.sprint-pieza-error { margin: 1rem; }
+.sprint-qa { display: flex; gap: .3rem; align-items: center; }
+.sprint-qa-score { font-weight: 700; min-width: 2.2rem; text-align: center; border-radius: 6px; padding: .1rem .3rem; background: var(--panel-2); }
+.sprint-qa-pasa { color: var(--ok); }
+.sprint-qa-revisar { color: var(--warn); }
+.sprint-qa-falla { color: var(--error); }
+.qa-check { font-size: .8rem; cursor: help; }
+.qa-check.ok { color: var(--ok); }
+.qa-check.mal { color: var(--error); }
+.sprint-entrega { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .9rem; }
+.sprint-entrega th, .sprint-entrega td { border-bottom: 1px solid var(--border); padding: .45rem .5rem; text-align: left; vertical-align: top; word-break: break-all; }
+.generado-sprint { text-decoration: none; margin-left: .4rem; }
+kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; font-size: .8em; }

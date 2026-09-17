@@ -19,7 +19,7 @@ import proyectos
 import trabajos
 from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
-from sprints import archivos, calendario, datos, estado, ideas, produccion, progreso
+from sprints import archivos, calendario, datos, entrega, estado, ideas, produccion, progreso, revision as revision_mod
 from tareas import sprints as tareas_sprints
 
 bp = Blueprint("sprints", __name__, url_prefix="/cliente/<cliente>/sprints")
@@ -589,12 +589,6 @@ def referencia_reanalizar(cliente, rid):
     return _volver(cliente, r["sprint_id"], r["campana_id"])
 
 
-@bp.get("/<int:sid>/revision")
-def revision(cliente, sid):
-    _sprint_o_404(cliente, sid)
-    return _volver(cliente, sid)   # la Task 9 renderiza sprint_revision.html
-
-
 # -------------------------------------------------------------- ideas ---
 
 def _idea_o_404(cliente, cp_id, sid=None):
@@ -795,3 +789,124 @@ def pieza_regenerar(cliente, cp_id):
     if destino == "revision":
         return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
     return _volver(cliente, i["sprint_id"])
+
+
+# ----------------------------------------------------------- revisión ---
+
+CHECKS_QA = ("consistencia_visual", "presencia_marca", "compatibilidad_campana", "calidad_minima", "formato")
+
+
+def _piezas_revision(cliente, sp):
+    """Piezas con sesión de todas las campañas, con su costo de regeneración
+    (estimado gratis, el mismo que muestra el botón antes de gastar)."""
+    mv, mi = produccion.modelos(cliente)
+    salida = []
+    for c in sp["campanas"]:
+        for p in c["piezas"]:
+            if p["tipo"] == "video":
+                costo = (flowplus_modelos.estimate_video(mv, produccion._duracion(p)) or {}).get("usd") or 0.0
+            else:
+                costo = (flowplus_modelos.estimate_imagen(mi, n_referencias=produccion._n_referencias(cliente, c)) or {}).get("usd") or 0.0
+            salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
+                           "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
+                           "costo_regenerar": round(float(costo), 3)})
+    return salida
+
+
+@bp.get("/<int:sid>/revision")
+def revision(cliente, sid):
+    sp = _sprint_o_404(cliente, sid)
+    piezas = _piezas_revision(cliente, sp)
+    return render_template("sprint_revision.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           sprint=sp, piezas=piezas, resumen=revision_mod.resumen(cliente, sid), checks=CHECKS_QA)
+
+
+@bp.post("/ideas/<int:cp_id>/revision")
+def pieza_revision(cliente, cp_id):
+    """Aprobar o rechazar una pieza (JSON por fetch desde la bandeja, o
+    formulario clásico). Rechazar exige motivo."""
+    i = _idea_o_404(cliente, cp_id)
+    cuerpo = request.get_json(silent=True)
+    if cuerpo is not None and not isinstance(cuerpo, dict):
+        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+    es_json = cuerpo is not None or _quiere_json()
+    fuente = cuerpo if cuerpo is not None else request.form
+    accion, motivo = fuente.get("accion"), fuente.get("motivo")
+    try:
+        if accion == "aprobar":
+            ok = revision_mod.aprobar(cliente, cp_id)
+        elif accion == "rechazar":
+            ok = revision_mod.rechazar(cliente, cp_id, motivo if isinstance(motivo, str) else "")
+        else:
+            raise datos.ErrorDatos("Acción desconocida.")
+        if not ok:
+            raise datos.ErrorDatos("Esa pieza todavía no está terminada.")
+    except datos.ErrorDatos as e:
+        if es_json:
+            return jsonify({"ok": False, "error": str(e)}), 400
+        flash(str(e), "error")
+        return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
+    nueva = datos.idea(cliente, cp_id)
+    if es_json:
+        return jsonify({"ok": True, "revision": nueva["revision"],
+                        "estado_sprint": (datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}).get("estado")})
+    flash("Pieza aprobada." if accion == "aprobar" else "Pieza rechazada.", "ok")
+    return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
+
+
+@bp.post("/<int:sid>/revision/aprobar_qa")
+def revision_aprobar_qa(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    n = revision_mod.aprobar_pasaron_qa(cliente, sid)
+    flash(f"{n} pieza(s) aprobada(s) por haber pasado el QA.", "ok")
+    return redirect(url_for("sprints.revision", cliente=cliente, sid=sid))
+
+
+@bp.post("/<int:sid>/cerrar")
+def cerrar(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    try:
+        r = revision_mod.cerrar(cliente, sid)
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+        return _volver(cliente, sid)
+    flash(f"Sprint cerrado: {r['aprobadas']} aprobadas, {r['rechazadas']} rechazadas, USD {r['costo_usd']:.2f}.", "ok")
+    return redirect(url_for("sprints.entrega", cliente=cliente, sid=sid))
+
+
+@bp.post("/<int:sid>/reabrir")
+def reabrir(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    if revision_mod.reabrir(cliente, sid):
+        flash("Sprint reabierto a revisión.", "ok")
+    else:
+        flash("Solo se reabre un sprint completado.", "error")
+    return _volver(cliente, sid)
+
+
+# ------------------------------------------------------------ entrega ---
+
+def entrega_ver(cliente, sid):
+    """Se llama `entrega_ver` para no pisar el módulo `entrega` importado
+    arriba; el endpoint sigue siendo `sprints.entrega` (add_url_rule)."""
+    sp = _sprint_o_404(cliente, sid)
+    job = tareas_sprints.job_id_zip(cliente, sid)
+    return render_template("sprint_entrega.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           sprint=sp, enlaces=entrega.enlaces(cliente, sid), resumen=revision_mod.resumen(cliente, sid),
+                           zip_info=(sp.get("extra") or {}).get("zip"),
+                           trabajo_zip={"job_id": job} if trabajos.en_curso(job) else None)
+
+
+bp.add_url_rule("/<int:sid>/entrega", endpoint="entrega", view_func=entrega_ver, methods=["GET"])
+
+
+@bp.post("/<int:sid>/entrega/zip")
+def entrega_zip(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    if not entrega.enlaces(cliente, sid):
+        flash("No hay piezas aprobadas que entregar.", "error")
+    elif tareas_sprints.encolar_zip(cliente, sid):
+        flash("Armando el zip; el enlace aparecerá aquí al terminar.", "ok")
+    else:
+        flash("Ya se está armando el zip.", "warn")
+    return redirect(url_for("sprints.entrega", cliente=cliente, sid=sid))
