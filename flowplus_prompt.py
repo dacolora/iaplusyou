@@ -115,8 +115,25 @@ def _lineas_contexto(contexto):
     return lineas
 
 
+SIN_VOZ_NI_MUSICA = "Sin diálogo hablado ni música de fondo."
+SONIDO_AMBIENTE = "ambiente natural de la escena"
+
+
+def _linea_sonido(sonido, con_sonido):
+    """Línea SONIDO (spec estudio S1). Con texto lo usa tal cual; sin texto y
+    con sonido pide el ambiente natural; sin ninguno no emite nada (el prompt
+    queda idéntico al de antes). "Sin diálogo" evita las voces nativas de
+    Kling (chino/inglés): la voz en español la pone final edition."""
+    texto = (sonido or "").strip().rstrip(".")
+    if texto:
+        return f"SONIDO: {texto}. {SIN_VOZ_NI_MUSICA}"
+    if con_sonido:
+        return f"SONIDO: {SONIDO_AMBIENTE}. {SIN_VOZ_NI_MUSICA}"
+    return None
+
+
 def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None,
-          contexto=None):
+          contexto=None, sonido=None, con_sonido=False):
     """texto: lo que escribió la persona (se respeta íntegro).
     referencias: [{tipo, etiqueta, producto?}] ya numeradas.
     logos: [{etiqueta}] referencias de logo agregadas por el proyecto.
@@ -124,6 +141,8 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     contexto: opcional (Sprints): {"persona": {resumen, descripcion, tono,
     senales_visuales}, "temporada": {nombre, contexto, mood_visual}}; agrega
     las líneas AUDIENCIA y TEMPORADA. Con None el prompt es idéntico.
+    sonido / con_sonido: línea SONIDO después de la ESCENA (ver
+    _linea_sonido); con sonido=None y con_sonido=False el prompt es idéntico.
     Devuelve el prompt completo (str)."""
     partes = []
     info_enfoque = ENFOQUES.get(enfoque) if enfoque else None
@@ -205,6 +224,11 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
 
     # --- Texto de la persona, íntegro ---
     partes.append(f"ESCENA: {texto.strip()}")
+
+    # --- Sonido de la escena (solo videos con sonido) ---
+    linea_sonido = _linea_sonido(sonido, con_sonido)
+    if linea_sonido:
+        partes.append(linea_sonido)
 
     # --- Prohibiciones (los modelos no aceptan negative_prompt) ---
     prohibido = ["texto inventado", "logos inventados", "marcas de agua", "subtítulos", "deformaciones"]
