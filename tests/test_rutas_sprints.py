@@ -168,3 +168,22 @@ def test_detalle_progreso_listo_y_campanas(app):
     assert len(datos.campanas("acme", sid)) == 1
     c.post(f"/cliente/acme/sprints/{sid}/archivar")
     assert datos.sprints("acme") == [datos.sprints("acme")[0]] and datos.sprints("acme")[0]["id"] == otro_sid
+
+
+def test_crear_sprint_persona_inexistente_no_deja_sprint_a_medias(app):
+    from sprints import datos
+    pid, tid = _base(datos)
+    lista = [{"persona_id": 999, "catalogo_id": "espejo_led", "temporada_id": tid, "n_videos": 1, "n_imagenes": 0}]
+    app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31",
+                                                        "campanas_json": json.dumps(lista)})
+    assert datos.sprints("acme") == []
+    assert datos.sprints("acme", incluir_archivados=True) == []
+
+
+def test_validar_campanas_prefija_numero_de_campana_en_error_de_cantidades(app):
+    from sprints import datos, rutas
+    pid, tid = _base(datos)
+    with pytest.raises(datos.ErrorDatos) as exc:
+        rutas._validar_campanas("acme", [{"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid,
+                                          "n_videos": 0, "n_imagenes": 0}])
+    assert str(exc.value).startswith("Campaña 1:")

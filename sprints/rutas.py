@@ -254,10 +254,17 @@ def _validar_campanas(cliente, lista):
             persona_id, temporada_id = int(c.get("persona_id") or 0), int(c.get("temporada_id") or 0)
         except (TypeError, ValueError):
             raise datos.ErrorDatos(f"Campaña {i}: persona o temporada inválida.")
+        if not datos.persona(cliente, persona_id):
+            raise datos.ErrorDatos(f"Campaña {i}: esa persona no existe en este proyecto.")
+        if not datos.temporada(cliente, temporada_id):
+            raise datos.ErrorDatos(f"Campaña {i}: esa temporada no existe en este proyecto.")
         catalogo_id = (c.get("catalogo_id") or "").strip()
         if catalogo_id not in ids:
             raise datos.ErrorDatos(f"Campaña {i}: el producto «{catalogo_id}» no está en el catálogo.")
-        n_videos, n_imagenes = datos.validar_cantidades(c.get("n_videos"), c.get("n_imagenes"))
+        try:
+            n_videos, n_imagenes = datos.validar_cantidades(c.get("n_videos"), c.get("n_imagenes"))
+        except datos.ErrorDatos as e:
+            raise datos.ErrorDatos(f"Campaña {i}: {e}")
         clave = (persona_id, catalogo_id, temporada_id)
         if clave in vistas:
             raise datos.ErrorDatos(f"Campaña {i}: esa combinación de persona, producto y temporada está repetida.")
@@ -278,9 +285,13 @@ def crear(cliente):
                                  request.form.get("fin"), destinos=[d for d in request.form.getlist("destinos") if d],
                                  referencias_objetivo_defecto=request.form.get("referencias_objetivo") or 5,
                                  notas=request.form.get("notas"))
-        for c in campanas:
-            datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
-                                  c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"])
+        try:
+            for c in campanas:
+                datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
+                                      c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"])
+        except datos.ErrorDatos:
+            datos.archivar_sprint(cliente, sid)
+            raise
         estado.recalcular(cliente, sid)
         flash(f"Sprint creado con {len(campanas)} campaña(s). Ahora sube referencias a cada campaña.", "ok")
         return _volver(cliente, sid)
