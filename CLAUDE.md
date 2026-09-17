@@ -136,6 +136,23 @@ client's `marca.json` guía de estilo when present, so brand consistency doesn't
 to be repeated per idea. `analizar_marca()` uses Claude's vision input on uploaded
 brand reference images to auto-write that guía de estilo.
 
+**Sprints de contenido** (`sprints/` + `tareas/sprints.py`, spec
+`docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan
+as a matrix persona × producto × temporada. Tables `persona`, `temporada`,
+`sprint`, `campana` (UNIQUE `uq_campana_combinacion` on sprint + persona +
+catalogo_id + temporada), `referencia` (intención tags + descripción; a reference
+without descripción is `borrador` and does not count toward progress),
+`campana_pieza` (Parte 2) and `sprint_evento`. `sprints/datos.py` is the only
+writer; `sprints/estado.py::recalcular` re-derives campaign/sprint states after
+every event (states are stored but never trusted blindly); `sprints/progreso.py`
+is pure. Routes live in the Blueprint `sprints/rutas.py`
+(`/cliente/<cliente>/sprints/...`), registered from `dashboard.py`, which also
+adds `sprints_rutas.contexto(cliente)` to the project page. Uploading a
+reference enqueues `sprint_analizar_referencia` (Claude vision, cents); "Sugerir
+personas" enqueues `sprint_sugerir_personas`; a pasted link goes through
+`sprint_referencia_link` (yt-dlp via `referencias_link.descargar`). Nothing in
+Parte 1 generates images or videos.
+
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with
