@@ -21,6 +21,7 @@ from datetime import datetime
 
 import sqlalchemy as sa
 
+import bitacora
 import cola
 import creative_flow
 import db
@@ -143,21 +144,28 @@ def job_id_qa(cliente, cp_id):
 @registrar("sprint_qa_pieza")
 def ejecutar_qa_pieza(tarea):
     """QA de una pieza lista. Si falla, la tarea reintenta sola (max 3): el QA
-    no gasta en generación, solo centavos de visión."""
+    no gasta en generación, solo centavos de visión. El resultado se guarda
+    con `datos.guardar_qa` contra la sesión (`cf_id`) que se evaluó: si la
+    pieza se regeneró mientras tanto, el veredicto viejo se descarta y la
+    periódica evaluará la sesión nueva."""
     p = tarea["payload"]
     cliente, cp_id = p["cliente"], int(p["cp_id"])
     i = datos.idea(cliente, cp_id)
     if not i or not i.get("cf_id"):
         return "La pieza ya no existe."
-    entry = creative_flow.cargar(cliente).get(i["cf_id"])
+    cf_id = i["cf_id"]
+    entry = creative_flow.cargar(cliente).get(cf_id)
     campana = datos.campana(cliente, i["campana_id"])
     if not entry or not campana:
         return "La pieza ya no existe."
     sp = datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}
     umbral = (sp.get("extra") or {}).get("qa_umbral") or qa.UMBRAL_DEFECTO
     campana["marca"] = proyectos.nombre_visible(cliente)
-    resultado = qa.evaluar(cliente, i, entry, campana, umbral=umbral)
-    datos.actualizar_idea(cliente, cp_id, qa=resultado)
+    resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
+    resultado["cf_id"] = cf_id
+    if not datos.guardar_qa(cliente, cp_id, cf_id, resultado):
+        bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado", "QA descartado: la pieza fue regenerada")
+        return "QA descartado: la pieza fue regenerada mientras se evaluaba."
     datos.registrar_evento(cliente, i["sprint_id"], "qa_evaluada",
                            f"QA de «{i['titulo']}»: {resultado['veredicto']} ({resultado['score']})",
                            {"cp_id": cp_id, "score": resultado["score"], "veredicto": resultado["veredicto"]},

@@ -324,3 +324,18 @@ def test_actualizar_extra_sprint_hace_rmw_atomico(base_temporal):
     assert nuevo == {"costo_estimado_usd": 1.5, "lote_en_curso": True}
     assert datos.sprint("acme", sid)["extra"] == {"costo_estimado_usd": 1.5, "lote_en_curso": True}
     assert datos.actualizar_extra_sprint("acme", 999, lambda extra: extra) is None
+
+
+def test_guardar_qa_solo_si_la_sesion_sigue_siendo_la_evaluada(base_temporal):
+    """F2: `guardar_qa` escribe `qa` únicamente cuando `cf_id` es el que se
+    evaluó (compare-and-swap por sesión); si la idea ya apunta a otra
+    sesión, no toca nada y devuelve False."""
+    from sprints import datos
+    sid, cid = _campana(datos)
+    i1 = datos.crear_idea("acme", cid, "video", "A", "a", estado_idea="aprobada")
+    datos.actualizar_idea("acme", i1, cf_id="cf_1")
+    assert datos.guardar_qa("acme", i1, "cf_0", {"veredicto": "pasa"}) is False
+    assert datos.idea("acme", i1)["qa"] is None
+    assert datos.guardar_qa("otro", i1, "cf_1", {"veredicto": "pasa"}) is False       # otro cliente
+    assert datos.guardar_qa("acme", i1, "cf_1", {"veredicto": "pasa", "cf_id": "cf_1"}) is True
+    assert datos.idea("acme", i1)["qa"] == {"veredicto": "pasa", "cf_id": "cf_1"}

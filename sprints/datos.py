@@ -733,6 +733,18 @@ def eliminar_idea(cliente, cp_id):
     return True
 
 
+def guardar_qa(cliente, cp_id, cf_id, qa):
+    """Escribe `campana_pieza.qa` solo si la idea sigue apuntando a la sesión
+    `cf_id` que se evaluó (el WHERE lleva el cf_id): si entre encolar el QA y
+    terminarlo la pieza se regeneró, el veredicto de la sesión vieja no se le
+    pega a la nueva. Devuelve True si tocó la fila."""
+    cp = db.campana_pieza
+    with db.conectar() as con:
+        r = con.execute(cp.update().where(cp.c.id == cp_id, cp.c.cliente == cliente, cp.c.cf_id == cf_id)
+                        .values(qa=qa, actualizado_en=db.ahora()))
+        return r.rowcount == 1
+
+
 def reclamar_cf(cliente, cp_id, cf_id, esperado=None):
     """Compare-and-swap de `campana_pieza.cf_id`: un solo UPDATE con el valor
     esperado en el WHERE, así dos `produccion.lanzar_lote`/`regenerar`

@@ -145,6 +145,34 @@ def test_qa_pieza_guarda_resultado_y_error(base_temporal, monkeypatch):
     assert tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": 999}}) == "La pieza ya no existe."
 
 
+def test_qa_pieza_descarta_el_resultado_si_la_pieza_se_regenero(base_temporal, monkeypatch):
+    """F2: el QA evalúa la sesión con la que se encoló; si mientras tanto la
+    idea apunta a una sesión nueva (Regenerar), el veredicto viejo no se le
+    pega a la pieza nueva — `qa` sigue en None para que la periódica evalúe la
+    nueva, y queda rastro en la bitácora."""
+    import bitacora
+    import creative_flow
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    nuevo = creative_flow.crear("acme", [], ["E"], [], "b", 8, "", "A")
+    def evaluar_y_regenerar(c, i, e, ca, umbral=None):
+        datos.actualizar_idea("acme", cp, cf_id=nuevo, qa=None)      # el usuario pulsó Regenerar en medio
+        return {"score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x"}
+    monkeypatch.setattr(qa, "evaluar", evaluar_y_regenerar)
+    filas = []
+    monkeypatch.setattr(bitacora, "registrar", lambda *a, **k: filas.append(a))
+    tareas.cargar_todas()
+    msg = tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert datos.idea("acme", cp)["qa"] is None and datos.idea("acme", cp)["cf_id"] == nuevo
+    assert "regener" in msg.lower() and any("regenerada" in str(f) for f in filas)
+    assert not any(e["tipo"] == "qa_evaluada" for e in datos.eventos("acme", sid))
+    # sin regeneración en medio, el resultado se guarda con la sesión evaluada adentro
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {"score": 80, "checks": {}, "veredicto": "pasa"})
+    tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert datos.idea("acme", cp)["qa"]["cf_id"] == nuevo
+
+
 def test_qa_pendientes_encola_y_avisa_fin_de_lote(base_temporal, monkeypatch):
     import cola
     import creative_flow
