@@ -17,7 +17,7 @@ import bitacora
 import creative_flow
 import estado as estado_mod
 import trabajos
-from final_edition import mezcla
+from final_edition import cortes, mezcla, musica
 from providers import flowplus_modelos
 from storage import r2_uploader
 from tareas import al_interrumpir, registrar
@@ -26,12 +26,15 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 ETAPA_MODELO = "Generando con el modelo"
 ETAPA_DESCARGAR = "Descargando el resultado"
+ETAPA_MEZCLA = "Mezclando sonido"
 ETAPA_GUARDAR_VIDEO = "Guardando el video"
-# CreativeFlowPlus: Wan 3.0 se lleva casi todo el tiempo (timeout de 1200s).
+# CreativeFlowPlus: el modelo se lleva casi todo el tiempo (timeout de 1200s);
+# la mezcla (clon + música, video copiado sin recodificar) son segundos.
 ETAPAS_CREATIVE_FLOW = [
-    (ETAPA_MODELO, 85),
-    (ETAPA_DESCARGAR, 8),
-    (ETAPA_GUARDAR_VIDEO, 7),
+    (ETAPA_MODELO, 82),
+    (ETAPA_DESCARGAR, 7),
+    (ETAPA_MEZCLA, 5),
+    (ETAPA_GUARDAR_VIDEO, 6),
 ]
 
 PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
@@ -180,6 +183,11 @@ def ejecutar_video(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
     entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo = _preparar(cliente, cf_id)
+    # Sonido de la escena (spec estudio S1): lo decide la sesión; las sesiones
+    # anteriores a este campo (y las de sprints viejos) lo piden.
+    con_sonido = entry.get("con_sonido", True) is not False
+    sonido_texto = entry.get("sonido_texto") or ""
+    estilo_musica = entry.get("musica_estilo") or ""
 
     out_dir = os.path.join(BASE_DIR, "salidas", cliente)
     os.makedirs(out_dir, exist_ok=True)
@@ -193,8 +201,9 @@ def ejecutar_video(tarea):
             modelo, prompt_texto, referencias, duracion,
             aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
             videos=videos_ref if modelo == "wan3" else None,
+            con_sonido=con_sonido,
         )
-        costo = flowplus_modelos.estimate_video(modelo, duracion)
+        costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido)
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         resp = requests.get(video_url_wan, timeout=180)
         resp.raise_for_status()
@@ -206,23 +215,47 @@ def ejecutar_video(tarea):
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
         raise
 
-    # Sonido de la escena (spec estudio S1): se pidió el audio nativo; ffprobe
-    # dice si el proveedor lo entregó. Queda anotado para la tarjeta y la bitácora.
-    estado_sonido = mezcla.ESTADO_SONIDO[mezcla.tiene_audio(out_path)]
+    # --- Mezcla: ¿trajo sonido? ¿pidió música? (degradable: el video ya está pagado) ---
+    trabajos.reportar(job_id, etapa=ETAPA_MEZCLA)
+    estado_sonido = mezcla.ESTADO_SONIDO[mezcla.tiene_audio(out_path)] if con_sonido else "omitida"
     bitacora.registrar(cliente, cf_id, "sonido", estado_sonido, f"{modelo}: pista de audio {estado_sonido}")
+    capas = {"sonido": {"proveedor": modelo, "estado": estado_sonido,
+                        "parametros": {"con_sonido": con_sonido, "sonido": sonido_texto}, "costo_usd": 0.0}}
+    archivo_final = out_path
+    usd_musica = 0.0
+    if estilo_musica:
+        try:
+            pista, c = musica.obtener_pista(estilo_musica, float(duracion))
+            mezclado = os.path.join(out_dir, f"{cf_id}_musica.mp4")
+            mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, cortes.duracion(out_path))
+            archivo_final = mezclado
+            usd_musica = float(c or 0.0)
+            capas["musica"] = {"estilo": estilo_musica, "url": pista.get("url"), "costo_usd": usd_musica, "estado": "ok"}
+            capas["mezcla"] = {"loudnorm": mezcla.LOUDNORM, "volumenes": mezcla.volumenes_para()}
+            bitacora.registrar(cliente, cf_id, "musica", "ok", f"{estilo_musica} (USD {usd_musica:.2f})")
+        except Exception as e:
+            capas["musica"] = {"estilo": estilo_musica, "costo_usd": 0.0, "estado": "error", "error": str(e)[:300]}
+            bitacora.registrar(cliente, cf_id, "musica", "error", str(e))
+            archivo_final = out_path
 
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
     try:
-        video_url = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{cf_id}.mp4")
+        video_url = r2_uploader.upload_video(archivo_final, f"clientes/{cliente}/videos/{cf_id}.mp4")
     except Exception:
         video_url = video_url_wan
+    if archivo_final == out_path:
+        video_url_crudo = video_url
+    else:
+        try:
+            video_url_crudo = r2_uploader.upload_video(out_path, f"clientes/{cliente}/videos/{cf_id}_crudo.mp4")
+        except Exception:
+            video_url_crudo = video_url_wan
 
     creative_flow.actualizar(
-        cliente, cf_id, estado="video_listo", video_url=video_url, video_local=out_path,
-        credits=costo.get("credits"), usd=costo.get("usd"),
-        capas={"sonido": {"proveedor": modelo, "estado": estado_sonido,
-                          "parametros": {"con_sonido": True, "sonido": entry.get("sonido_texto") or ""},
-                          "costo_usd": 0.0}},
+        cliente, cf_id, estado="video_listo", video_url=video_url, video_local=archivo_final,
+        video_url_crudo=video_url_crudo, video_local_crudo=out_path,
+        credits=costo.get("credits"), usd=round(float(costo.get("usd") or 0.0) + usd_musica, 4),
+        capas=capas,
     )
 
     estado = estado_mod.cargar(cliente)
@@ -232,7 +265,7 @@ def ejecutar_video(tarea):
         "title": cf_id,
         "caption": entry.get("accion_central") or "",
         "platforms": platforms,
-        "video_local": out_path,
+        "video_local": archivo_final,
         "video_url": video_url,
         "estado": "pendiente",
         "generado_en": datetime.now().isoformat(),

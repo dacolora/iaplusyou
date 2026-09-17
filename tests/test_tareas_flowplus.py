@@ -21,10 +21,12 @@ def test_etapas_mismos_pesos_que_dashboard():
     import dashboard
     import tareas.flowplus as fp
     assert fp.ETAPAS_CREATIVE_FLOW == [
-        (dashboard.ETAPA_MODELO, 85),
-        (dashboard.ETAPA_DESCARGAR, 8),
-        (dashboard.ETAPA_GUARDAR_VIDEO, 7),
+        (dashboard.ETAPA_MODELO, 82),
+        (dashboard.ETAPA_DESCARGAR, 7),
+        (dashboard.ETAPA_MEZCLA, 5),
+        (dashboard.ETAPA_GUARDAR_VIDEO, 6),
     ]
+    assert sum(p for _, p in fp.ETAPAS_CREATIVE_FLOW) == 100
 
 
 def test_ejecutar_video_guarda_resultado(base_temporal, monkeypatch, tmp_path):
@@ -35,7 +37,7 @@ def test_ejecutar_video_guarda_resultado(base_temporal, monkeypatch, tmp_path):
     cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3", prompt_relleno="P", aspect_ratio="9:16")
 
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
-    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d: {"credits": None, "usd": 0.5})
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True: {"credits": None, "usd": 0.5})
     monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
@@ -105,11 +107,11 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
 
     visto = {}
 
-    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None):
+    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True):
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
-    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d: {})
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True: {})
     monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
@@ -177,3 +179,91 @@ def test_ejecutar_video_anota_si_el_video_trae_sonido(base_temporal, monkeypatch
     e = cf.cargar("acme")[cid]
     assert e["estado"] == "video_listo" and e["capas"]["sonido"]["estado"] == "desconocido"
     assert e["capas"]["sonido"]["proveedor"] == "kling_o3_pro"
+
+
+def _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, **extra):
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], ["Rose"], [], "camina", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="kling_o3_pro", prompt_relleno="P",
+                  aspect_ratio="9:16", **extra)
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.estado_mod, "cargar", lambda c: {})
+    monkeypatch.setattr(fp.estado_mod, "guardar", lambda c, d: None)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(fp.mezcla, "tiene_audio", lambda path: True)
+    return cid
+
+
+def test_ejecutar_video_respeta_con_sonido_de_la_sesion(base_temporal, monkeypatch, tmp_path):
+    """Sesión con con_sonido=False: se pide el video mudo, el estimado no
+    lleva el recargo de Kling y la capa sonido queda `omitida`."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=False, sonido_texto="", musica_estilo="")
+    vistos = {}
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: vistos.update(k) or "https://prov/v.mp4")
+    subidos = []
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: subidos.append(key) or "https://r2/" + key)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    assert vistos["con_sonido"] is False and e["usd"] == 0.56
+    assert e["capas"]["sonido"]["estado"] == "omitida" and e["capas"]["sonido"]["parametros"] == {"con_sonido": False, "sonido": ""}
+    assert "musica" not in e["capas"]
+    # sin música: crudo = mezclado, una sola subida
+    assert subidos == [f"clientes/acme/videos/{cid}.mp4"]
+    assert e["video_url_crudo"] == e["video_url"] and e["video_local_crudo"] == e["video_local"]
+
+
+def test_ejecutar_video_mezcla_musica_al_crear(base_temporal, monkeypatch, tmp_path):
+    """Con musica_estilo: obtiene la pista (caché), mezcla, sube el mezclado
+    como video_url y el crudo aparte; el costo suma la música."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=True, sonido_texto="risas", musica_estilo="calmado")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    pedidas = []
+    monkeypatch.setattr(fp.musica, "obtener_pista",
+                        lambda estilo, segundos, carpeta_cache=None, on_progreso=None: (pedidas.append((estilo, segundos)) or
+                                                                                          ({"archivo": "/tmp/p.wav", "url": "https://r2/musica/calmado_15.wav", "estilo": estilo, "generada": True}, 0.02)))
+    monkeypatch.setattr(fp.cortes, "duracion", lambda p: 5.0)
+    mezclas = []
+
+    def _mezclar(video_in, pista, salida, duracion_s, volumenes=None):
+        mezclas.append((video_in, pista, salida))
+        with open(salida, "wb") as f:
+            f.write(b"MIX")
+        return {"archivo": salida, "con_sonido": True, "duracion_s": duracion_s}
+    monkeypatch.setattr(fp.mezcla, "mezclar_musica", _mezclar)
+    subidos = []
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: subidos.append((local, key)) or "https://r2/" + key)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    crudo = str(tmp_path / "salidas" / "acme" / f"{cid}.mp4")
+    mezclado = str(tmp_path / "salidas" / "acme" / f"{cid}_musica.mp4")
+    assert pedidas == [("calmado", 5.0)] and mezclas == [(crudo, "/tmp/p.wav", mezclado)]
+    assert [k for _, k in subidos] == [f"clientes/acme/videos/{cid}.mp4", f"clientes/acme/videos/{cid}_crudo.mp4"]
+    assert e["video_url"].endswith(f"{cid}.mp4") and e["video_url_crudo"].endswith(f"{cid}_crudo.mp4")
+    assert e["video_local"] == mezclado and e["video_local_crudo"] == crudo
+    assert e["usd"] == pytest.approx(0.7 + 0.02)
+    assert e["capas"]["sonido"]["estado"] == "ok" and e["capas"]["sonido"]["parametros"]["sonido"] == "risas"
+    assert e["capas"]["musica"] == {"estilo": "calmado", "url": "https://r2/musica/calmado_15.wav", "costo_usd": 0.02, "estado": "ok"}
+    assert e["capas"]["mezcla"] == {"loudnorm": fp.mezcla.LOUDNORM, "volumenes": {"voz": 1.0, "sonido": 1.0, "musica": 0.35}}
+
+
+def test_ejecutar_video_musica_degradable(base_temporal, monkeypatch, tmp_path):
+    """Si la música falla, el video sale igual (crudo = mezclado) y la capa
+    queda en error: nunca se pierde una generación pagada por la música."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=True, sonido_texto="", musica_estilo="lujo")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+
+    def _boom(*a, **k):
+        raise RuntimeError("fal caído")
+    monkeypatch.setattr(fp.musica, "obtener_pista", _boom)
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "video_listo" and e["video_url_crudo"] == e["video_url"]
+    assert e["capas"]["musica"]["estado"] == "error" and "fal caído" in e["capas"]["musica"]["error"]
+    assert e["usd"] == 0.7

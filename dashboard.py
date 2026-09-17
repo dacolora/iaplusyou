@@ -1899,6 +1899,7 @@ NOMBRES_PROVEEDOR_SWAP = {
 # modelo es de lejos la más larga.
 ETAPA_MODELO = "Generando con el modelo"
 ETAPA_DESCARGAR = "Descargando el resultado"
+ETAPA_MEZCLA = "Mezclando sonido"
 ETAPA_GUARDAR_VIDEO = "Guardando el video"
 ETAPA_GUARDAR_IMAGEN = "Guardando la imagen"
 # Las etapas propias del swap (subir original, preparar foto, mejorar, guardar
