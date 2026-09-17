@@ -243,7 +243,17 @@ def asegurar_manual(cliente, activo_id, nombre, descripcion=""):
                            .order_by(p.c.archivado, p.c.id)).first()
     if fila:
         return fila[0]
-    pid = upsert_producto(cliente, "manual", activo_id, {"nombre": nombre, "descripcion": descripcion or ""})
+    try:
+        pid = upsert_producto(cliente, "manual", activo_id, {"nombre": nombre, "descripcion": descripcion or ""})
+    except sa.exc.IntegrityError:
+        # Dos peticiones a la vez para el mismo activo: la constraint
+        # (cliente, fuente, fuente_id) deja pasar una sola; la que pierde
+        # devuelve la fila de la que ganó en vez de un 500.
+        existente = producto_por_fuente(cliente, "manual", activo_id)
+        if existente:
+            marcar_producto(cliente, existente["id"], activo_catalogo_id=activo_id)
+            return existente["id"]
+        raise
     marcar_producto(cliente, pid, activo_catalogo_id=activo_id)
     return pid
 

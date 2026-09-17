@@ -242,3 +242,33 @@ def test_por_activo(base_temporal):
     mapa = tiendas.por_activo("acme")
     assert mapa["cojin"]["id"] == c
     assert tiendas.por_activo("nadie") == {}
+
+
+def test_asegurar_manual_tolera_carrera(base_temporal, monkeypatch):
+    """Dos peticiones a la vez: la que pierde la constraint devuelve la fila
+    de la que ganó en vez de reventar."""
+    import sqlalchemy as sa
+    import tiendas
+    original = tiendas.upsert_producto
+    llamadas = {"n": 0}
+
+    def con_carrera(cliente, fuente, fuente_id, datos):
+        llamadas["n"] += 1
+        if llamadas["n"] == 1:
+            original(cliente, fuente, fuente_id, datos)      # "la otra petición" gana primero
+            raise sa.exc.IntegrityError("INSERT", {}, Exception("UNIQUE constraint failed"))
+        return original(cliente, fuente, fuente_id, datos)
+    monkeypatch.setattr(tiendas, "upsert_producto", con_carrera)
+    pid = tiendas.asegurar_manual("acme", "cojin", "Cojín")
+    assert tiendas.producto("acme", pid)["activo_catalogo_id"] == "cojin"
+    assert tiendas.asegurar_manual("acme", "cojin", "Cojín") == pid
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
+
+
+def test_eliminar_y_recrear_conserva_una_fila(base_temporal):
+    import tiendas
+    pid = tiendas.asegurar_manual("acme", "cojin", "Cojín")
+    tiendas.marcar_producto("acme", pid, archivado=True)
+    assert tiendas.productos("acme") == []
+    assert tiendas.asegurar_manual("acme", "cojin", "Cojín") == pid
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
