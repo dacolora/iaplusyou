@@ -707,9 +707,20 @@ def idea_aprobar(cliente, cp_id):
     return _volver_ideas(i)
 
 
+MENSAJE_IDEA_CON_PIEZA = "Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión."
+
+
 @bp.post("/ideas/<int:cp_id>/descartar")
 def idea_descartar(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
+    # E3: con sesión (o reserva viva) la pieza está en marcha y descartar la
+    # idea la sacaría de los conteos; el botón está oculto, pero la petición
+    # puede fabricarse. Una reserva vencida no es sesión (`sin_sesion`).
+    if not i["sin_sesion"]:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
+        flash(MENSAJE_IDEA_CON_PIEZA, "error")
+        return _volver_ideas(i)
     datos.actualizar_idea(cliente, cp_id, estado_idea="descartada")
     estado.recalcular(cliente, i["sprint_id"])
     if _quiere_json():
@@ -719,17 +730,19 @@ def idea_descartar(cliente, cp_id):
 
 @bp.post("/ideas/<int:cp_id>/otra")
 def idea_otra(cliente, cp_id):
-    """Descarta esta idea y pide otra del mismo tipo (una sola)."""
+    """Pide otra idea del mismo tipo en lugar de esta (una sola). Descartar
+    la vieja lo hace la tarea (`ideas.proponer(reemplaza=)`) al reemplazarla:
+    si no se puede encolar (ya hay una propuesta en curso para la campaña),
+    la idea no se toca — antes se descartaba primero y quedaba sin
+    reemplazo."""
     i = _idea_o_404(cliente, cp_id)
-    if i.get("cf_id"):
-        flash("Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión.", "error")
+    if not i["sin_sesion"]:
+        flash(MENSAJE_IDEA_CON_PIEZA, "error")
         return _volver_ideas(i)
-    datos.actualizar_idea(cliente, cp_id, estado_idea="descartada")
     if tareas_sprints.encolar_ideas(cliente, i["campana_id"], reemplaza=cp_id):
-        flash("Pidiendo otra idea en su lugar.", "ok")
+        flash("Pidiendo otra idea…", "ok")
     else:
-        flash("Ya hay una propuesta de ideas en curso para esta campaña.", "error")
-    estado.recalcular(cliente, i["sprint_id"])
+        flash("Ya hay una propuesta en curso; espera a que termine.", "error")
     return _volver_ideas(i)
 
 

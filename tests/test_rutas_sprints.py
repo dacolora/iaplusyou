@@ -450,7 +450,8 @@ def test_pagina_de_ideas_y_acciones(con_ideas):
     c.post(f"/cliente/acme/sprints/ideas/{ii}/aprobar")
     assert datos.idea("acme", ii)["estado_idea"] == "aprobada"
     c.post(f"/cliente/acme/sprints/ideas/{ii}/otra")
-    assert con_ideas["encolados"][-1]["payload"]["reemplaza"] == ii and datos.idea("acme", ii)["estado_idea"] == "descartada"
+    # F4: la ruta solo encola; descartar la idea vieja lo hace la tarea (ideas.proponer(reemplaza=)) al reemplazarla
+    assert con_ideas["encolados"][-1]["payload"]["reemplaza"] == ii and datos.idea("acme", ii)["estado_idea"] == "aprobada"
     i3 = datos.crear_idea("acme", cid, "video", "Tercera", "x")
     c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/aprobar_todas")
     assert datos.idea("acme", i3)["estado_idea"] == "aprobada"
@@ -458,6 +459,39 @@ def test_pagina_de_ideas_y_acciones(con_ideas):
     assert datos.idea("acme", i3)["estado_idea"] == "descartada"
     assert c.get(f"/cliente/acme/sprints/{sid}/campanas/999/ideas").status_code == 404
     assert c.post("/cliente/acme/sprints/ideas/999/aprobar").status_code == 404
+
+
+def test_otra_idea_no_descarta_si_ya_hay_una_propuesta_en_curso(con_ideas, monkeypatch):
+    """F4: si `encolar_ideas` devuelve False (misma campaña ya proponiendo),
+    la idea no se pierde: sigue aprobada/propuesta y no cambia nada."""
+    from sprints import datos, rutas
+    c, sid, cid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_ideas", lambda *a, **k: False)
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/otra")
+    assert r.status_code == 302 and datos.idea("acme", iv)["estado_idea"] == "aprobada"
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}/otra")
+    assert r.status_code == 302 and datos.idea("acme", ii)["estado_idea"] == "propuesta"
+    with c.session_transaction() as s:
+        flashes = s.get("_flashes") or []
+    assert any("propuesta en curso" in m for _, m in flashes)
+
+
+def test_descartar_se_niega_con_una_pieza_en_marcha(con_ideas):
+    """E3: un POST a descartar sobre una idea con sesión (el botón está
+    oculto, pero la petición puede fabricarse) no la saca de los conteos;
+    con una reserva vencida (sin sesión real) sí se puede descartar."""
+    from sprints import datos
+    c, sid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["iv"]
+    datos.actualizar_idea("acme", iv, cf_id="cf_real")
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/descartar")
+    assert r.status_code == 302 and datos.idea("acme", iv)["estado_idea"] == "aprobada"
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/otra")
+    assert r.status_code == 302 and datos.idea("acme", iv)["estado_idea"] == "aprobada"
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/descartar", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 400 and not r.get_json()["ok"]
+    datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv, ahora=1))     # reserva vencida
+    c.post(f"/cliente/acme/sprints/ideas/{iv}/descartar")
+    assert datos.idea("acme", iv)["estado_idea"] == "descartada"
 
 
 def test_reserva_vencida_vuelve_a_ofrecer_generar_lote(con_ideas):
