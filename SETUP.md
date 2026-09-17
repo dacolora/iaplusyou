@@ -121,6 +121,13 @@ El Pixel de Meta se comprueba desde Configuración › Pixel (botón "Comprobar"
 activo los experimentos nuevos usan atribución `pixel`, con tienda Shopify/Woo conectada
 usan `tienda` (pedidos con `utm_content`), si no `ninguna` (solo tráfico).
 
+**Tablero** (bloque 6): la primera pestaña muestra gasto del mes, compras e ingresos
+atribuidos, ROAS, el gráfico de 30 días, las 5 piezas ganadoras y las alertas. Las cifras
+salen de los refrescos de métricas del worker (cada 2 h), así que el "mes" empieza en el
+primer refresco del mes y cambia con cada uno; "Descargar CSV del mes" baja el detalle por
+pieza. Con el Pixel comprobado y activo, los experimentos nuevos sugieren el objetivo
+"Compras" (Meta optimiza por compra); sin Pixel, "Tráfico".
+
 ---
 
 ## 1. Cloudflare R2 — storage propio y permanente

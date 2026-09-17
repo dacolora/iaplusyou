@@ -70,6 +70,26 @@ def _validar_para_lanzar(cliente, experimento_id):
     return ex
 
 
+def _promoted_object_para(cliente, ex):
+    """Bloque 6: para OUTCOME_SALES, el `promoted_object` (Pixel + evento
+    PURCHASE) que Meta exige en cada conjunto; None para los demás objetivos.
+    Se mira el Pixel en caché y, si el worker (otro proceso, caché propio)
+    no tiene nada vigente, se calcula ahí mismo (bloqueante, una ida a
+    Graph) — ANTES de crear campaña o conjuntos, así un Pixel apagado aborta
+    con un mensaje claro en vez de una campaña huérfana que Meta rechazaría."""
+    if ex["objetivo_meta"] != "OUTCOME_SALES":
+        return None
+    px = meta_conexion.estado_pixel(cliente, solo_cache=True)
+    if px is None:
+        px = meta_conexion.estado_pixel(cliente)
+    if not px or px.get("estado") != "ok" or not px.get("pixel_id"):
+        detalle = (px or {}).get("detalle") or ""
+        raise ValueError("Este experimento optimiza por compras y el Pixel no está activo"
+                         f"{' (' + detalle.rstrip('.') + ')' if detalle else ''}. "
+                         "Comprueba el Pixel en Configuración o crea el experimento con objetivo de tráfico.")
+    return {"pixel_id": px["pixel_id"], "custom_event_type": "PURCHASE"}
+
+
 def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
     """El paso "Anuncios" de lanzar(): crea creative (si falta) + ad para cada
     pieza sin meta_ad_id de ex['piezas']. Devuelve cuántos anuncios creó.
@@ -122,6 +142,7 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
 def lanzar(cliente, experimento_id, on_etapa=None):
     try:
         ex = _validar_para_lanzar(cliente, experimento_id)
+        promoted_object = _promoted_object_para(cliente, ex)
     except ValueError as e:
         actual = experimentos.obtener(cliente, experimento_id)
         if actual and actual["estado"] == "lanzando":
@@ -147,10 +168,13 @@ def lanzar(cliente, experimento_id, on_etapa=None):
             if not adset_id:
                 targeting = Targeting().edad(int(ex["edad_min"] or 18), int(ex["edad_max"] or 65)).paises([p["pais"]]).to_dict()
                 adset_id = meta_adset.crear_adset(f"{ex['nombre']} — {p['pais']}", campaign_id, ex["objetivo_meta"], targeting,
-                                                  centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7))["id"]
+                                                  centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7),
+                                                  promoted_object=promoted_object)["id"]
                 experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adset_id=adset_id, estado="pausado")
-                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", f"Conjunto {p['pais']} creado",
-                                              {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"]})
+                con_pixel = f" (optimiza compras con el Pixel {promoted_object['pixel_id']})" if promoted_object else ""
+                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", f"Conjunto {p['pais']} creado{con_pixel}",
+                                              {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"],
+                                               "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
             adsets[p["pais"]] = adset_id
         etapa(ETAPAS_LANZAR[2][0])
         _crear_anuncios(cliente, ex, creds, adsets)

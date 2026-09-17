@@ -256,6 +256,21 @@ store (ROAS forced to 0 when order and account currencies differ, with one event
 never on page load) feeds `experimentos.atribucion_sugerida`: pixel > tienda > ninguna.
 UI: sidebar tab "Productos" (`_tab_productos.html`) and Configuración › Tienda / Pixel.
 
+**Tablero y OUTCOME_SALES** (`tablero.py`): the first tab. Every figure is a **delta of
+cumulative snapshots** (`metrica_snapshot` stores Meta's lifetime totals per ad, so a period
+is `valor_en(hasta) − valor_en(desde)`, negatives truncated to 0) grouped by account
+currency; revenue only counts snapshots attributed by Meta Pixel or store. `tablero.contexto`
+loads each piece's snapshots once (bounded by `experimentos.snapshots(ep_id, desde=)`, which
+also returns the last row before the window) and derives the month tiles, the 30-day
+series, the top-5 winners and the alerts; `dashboard._contexto_tablero` caches it 60 s per
+client keyed by the latest snapshot id and the proposal count, and degrades part by part
+(never leaking exception text). The chart is inline SVG on a single axis (spend bars,
+revenue line, validated colorblind-safe pair). `csv_mes` escapes formula-leading cells.
+When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
+`OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
+`promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
+without it). The objective is fixed at creation — Meta doesn't allow changing it.
+
 ## Agent skills
 
 ### Issue tracker

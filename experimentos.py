@@ -51,6 +51,18 @@ def atribucion_sugerida(cliente):
     return "ninguna"
 
 
+def objetivo_sugerido(cliente, atribucion=None):
+    """Objetivo de Meta para un experimento nuevo (Bloque 6): OUTCOME_SALES
+    (optimiza por compras del Pixel) solo cuando la atribución sugerida es
+    `pixel`; con tienda o sin nada, OUTCOME_TRAFFIC. El objetivo se fija al
+    crear (Meta no deja cambiarlo después), por eso es sugerencia, no regla.
+    `atribucion` permite pasar la sugerida ya calculada (ver_cliente la
+    consulta una sola vez) en vez de volver a mirar Pixel y tiendas."""
+    if atribucion is None:
+        atribucion = atribucion_sugerida(cliente)
+    return "OUTCOME_SALES" if atribucion == "pixel" else "OUTCOME_TRAFFIC"
+
+
 def crear(cliente, nombre, paises, objetivo_meta, dias, tope_total, destino_url, moneda,
           edad_min=18, edad_max=65, modo="manual", atribucion=None):
     """`atribucion` None → la sugerida para el proyecto (atribucion_sugerida);
@@ -294,16 +306,28 @@ def ultima_metrica(ep_id):
         return _ultima_metrica(con, ep_id)
 
 
-def snapshots(ep_id):
-    """Todas las métricas de una pieza en orden cronológico (misma forma que
-    ultima_metrica, incluido tomado_en). Es lo que consume decisor.decidir."""
+def snapshots(ep_id, desde=None):
+    """Métricas de una pieza en orden cronológico (misma forma que
+    ultima_metrica, incluido tomado_en). Sin `desde`, todas: es lo que
+    consume decisor.decidir. Con `desde` (ISO naive), las de `tomado_en >=
+    desde` MÁS la última anterior a `desde`, que es la base del delta en el
+    arranque de la ventana (tablero): así el histórico viejo no se carga."""
+    ms = db.metrica_snapshot
     with db.conectar() as con:
-        filas = con.execute(sa.select(db.metrica_snapshot).where(db.metrica_snapshot.c.experimento_pieza_id == ep_id)
-                            .order_by(db.metrica_snapshot.c.id))
-        return [_snapshot_a_dict(f) for f in filas]
+        if desde is None:
+            filas = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id).order_by(ms.c.id))
+            return [_snapshot_a_dict(f) for f in filas]
+        base = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id, ms.c.tomado_en < desde)
+                           .order_by(ms.c.tomado_en.desc(), ms.c.id.desc()).limit(1)).first()
+        ventana = con.execute(sa.select(ms).where(ms.c.experimento_pieza_id == ep_id, ms.c.tomado_en >= desde)
+                              .order_by(ms.c.id))
+        return ([_snapshot_a_dict(base)] if base else []) + [_snapshot_a_dict(f) for f in ventana]
 
 
-def snapshot(ep_id, metricas):
+def snapshot(ep_id, metricas, tomado_en=None):
+    """Guarda una foto ACUMULADA de las métricas de una pieza. `tomado_en`
+    (ISO naive, como db.ahora()) solo lo fijan los tests y un backfill: en
+    producción siempre es «ahora»."""
     valores, extra = {}, {}
     for k, v in (metricas or {}).items():
         if k in _SNAP_COLS:
@@ -315,7 +339,8 @@ def snapshot(ep_id, metricas):
             extra[k] = v
     with db.conectar() as con:
         return con.execute(db.metrica_snapshot.insert().values(
-            experimento_pieza_id=ep_id, tomado_en=db.ahora(), extra=extra, **valores)).inserted_primary_key[0]
+            experimento_pieza_id=ep_id, tomado_en=tomado_en or db.ahora(), extra=extra,
+            **valores)).inserted_primary_key[0]
 
 
 def _piezas(con, cliente, experimento_id):

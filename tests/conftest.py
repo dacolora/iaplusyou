@@ -34,6 +34,11 @@ def _sin_cache_meta():
         if mod is not None:
             mod._cache_pixel.clear()
             mod._cache_estado.clear()
+        # El tablero cacheado (dashboard, 60 s por proyecto) tampoco: cada
+        # test trae su base y la clave (ids, cuentas) se repite entre bases.
+        dash = sys.modules.get("dashboard")
+        if dash is not None and hasattr(dash, "invalidar_tablero"):
+            dash.invalidar_tablero()
     limpiar()
     yield
     limpiar()
