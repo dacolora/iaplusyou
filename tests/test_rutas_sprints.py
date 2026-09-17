@@ -358,6 +358,53 @@ def test_archivar_y_desarchivar_sprint_avisan_lo_que_hicieron(app):
     assert [s["id"] for s in datos.sprints("acme")] == [sid]
 
 
+def _cliente_ajeno(dashboard, cliente="otro"):
+    c = dashboard.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = cliente; s["rol"] = "cliente"; s["cliente"] = cliente
+    return c
+
+
+def test_referencias_de_otro_proyecto_no_se_tocan_desde_una_sesion_de_cliente(app):
+    """Las rutas de referencia llevan solo <rid>: la sesión de un cliente
+    ajeno tiene que rebotar en _guard_por_cliente sin que se edite, quite,
+    reanalice ni reutilice nada."""
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", titulo="a.jpg", intencion=["paleta"])
+    tid2 = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
+    cid2 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid2, 1, 0)
+    antes = datos.referencia("acme", rid)
+    ajeno = _cliente_ajeno(app["dashboard"])
+    intentos = [
+        ajeno.post(f"/cliente/acme/sprints/referencias/{rid}", json={"descripcion": "hackeada", "titulo": "x"}),
+        ajeno.post(f"/cliente/acme/sprints/referencias/{rid}/quitar"),
+        ajeno.post(f"/cliente/acme/sprints/referencias/{rid}/reanalizar"),
+        ajeno.post(f"/cliente/acme/sprints/{sid}/campanas/{cid2}/referencias/reutilizar", data={"referencia_id": rid}),
+    ]
+    for r in intentos:
+        assert r.status_code == 302 and "/cliente/otro" in r.headers["Location"], r.headers.get("Location")
+    assert datos.referencia("acme", rid) == antes
+    assert datos.referencias("acme", cid2) == [] and app["encolados"] == []
+
+
+def test_referencia_editar_de_otro_cliente_da_404_aunque_sea_admin(app):
+    """<rid> es global, pero la referencia se busca siempre con el <cliente>
+    de la URL: un admin editando /cliente/acme/... no alcanza filas de otro."""
+    from sprints import datos
+    pid = datos.crear_persona("otro", "Premium")
+    tid = datos.crear_temporada("otro", "Verano", "2026-06-01", "2026-07-15")
+    sid = datos.crear_sprint("otro", "Octubre", "2026-10-01", "2026-10-31")
+    cid = datos.agregar_campana("otro", sid, pid, "espejo_led", tid, 1, 0)
+    rid = datos.agregar_referencia("otro", cid, "imagen", "https://r2/a.jpg", titulo="a.jpg")
+    r = app["c"].post(f"/cliente/acme/sprints/referencias/{rid}", json={"descripcion": "cruzada"})
+    assert r.status_code == 404
+    assert app["c"].post(f"/cliente/acme/sprints/referencias/{rid}/quitar").status_code == 404
+    assert app["c"].post(f"/cliente/acme/sprints/referencias/{rid}/reanalizar").status_code == 404
+    assert datos.referencia("otro", rid)["descripcion"] == "" and app["encolados"] == []
+
+
 def test_pestana_sprints_se_renderiza(app):
     from sprints import datos
     pid, tid = _base(datos)

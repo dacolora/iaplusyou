@@ -53,6 +53,8 @@ def test_estado_sprint_reglas():
     assert estado.estado_sprint([]) == "planeando"
     assert estado.estado_sprint([_c()]) == "planeando"
     assert estado.estado_sprint([_c(estado="referencias", referencias_listas=1)]) == "referencias"
+    # Caso mixto: basta con que UNA campaña salga de planeada para que el sprint esté en referencias.
+    assert estado.estado_sprint([_c(estado="planeada"), _c(estado="referencias", referencias_listas=1)]) == "referencias"
     listas = [_c(estado="referencias", referencias_listas=5), _c(estado="referencias", referencias_listas=6)]
     assert estado.estado_sprint(listas) == "listo_para_generar"
     assert estado.estado_sprint([_c(estado="referencias", referencias_listas=1)], listo_manual=True) == "listo_para_generar"

@@ -118,7 +118,7 @@ lote, QA, revisión), para que la interfaz nunca mienta:
   `completada` cuando cada cupo planeado (`n_videos + n_imagenes`) tiene una
   pieza aprobada, o cuando se cierra el sprint (§2.6). Una idea descartada
   libera su cupo: no cuenta como planeada hasta que se reemplace.
-- sprint = el mínimo de las campañas para las etapas previas a `generando`,
+- sprint = `referencias` en cuanto alguna campaña sale de `planeada`; `listo_para_generar` cuando todas alcanzan su objetivo de referencias (o `extra.listo_manual`),
   `generando` si alguna genera, `revision` si todas están en revisión o
   completadas y al menos una en revisión, `completado` al cerrar (§2.6).
 

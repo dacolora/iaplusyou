@@ -54,3 +54,15 @@ def test_migracion_0006_crea_las_tablas(tmp_path, monkeypatch):
               {u["name"] for u in sa.inspect(db.engine()).get_unique_constraints("campana")}
     assert "uq_campana_combinacion" in indices
     db._reset_para_tests()
+
+
+def test_alembic_tiene_una_sola_cabeza():
+    """Dos ramas que parten de la misma revisión (0005 bloque 5, 0006 sprints)
+    dejan dos cabezas y `upgrade head` deja de ser inequívoco; 0007 las une.
+    Si vuelve a pasar, este test lo dice antes que el despliegue."""
+    import os
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    heads = ScriptDirectory.from_config(Config(os.path.join(raiz, "alembic.ini"))).get_heads()
+    assert len(heads) == 1, heads
