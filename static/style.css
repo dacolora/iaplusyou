@@ -1342,7 +1342,17 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .sprint-guardado { color: var(--ok); font-size: .75rem; }
 .sprint-reutilizar ul { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .3rem; }
 
-/* ---- Productos (bloque 5): catálogo importado/sincronizado, tiendas, Pixel ---- */
+/* ---- Catálogo › Productos: lo comercial en la tarjeta, importar (secundario), importados sin fotos ---- */
+.cat-comercial-linea { display: flex; flex-wrap: wrap; gap: .3rem .4rem; align-items: center; margin-top: .2rem; }
+.cat-comercial-linea .tag-estado { margin: 0; }
+.cat-comercial select { min-width: 5.5rem; }
+.cat-en-prueba { display: flex; align-items: center; gap: .4rem; font-size: .84rem; margin-top: .6rem; }
+.cat-importar > summary { display: inline-block; }
+.cat-sin-fotos .tabla-productos { margin-top: .4rem; }
+.prod-subir-fotos { cursor: pointer; display: inline-block; }
+.prod-form-fotos { margin: 0; }
+
+/* ---- Productos (bloque 5): importar/sincronizar (ahora dentro de Catálogo), tiendas, Pixel ---- */
 .prod-acciones { display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-start; margin-bottom: 1rem; }
 .prod-acciones .prod-importar { flex: 1 1 18rem; }
 .prod-form-importar { margin-top: .5rem; }

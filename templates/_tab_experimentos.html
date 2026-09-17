@@ -4,7 +4,7 @@
    paises_fe, capacidades_meta; (Bloque 5) atribucion_sugerida, atribuciones_exp,
    pedidos_por_exp ({eid: pedidos atribuidos}); (Bloque 6) objetivo_exp_sugerido,
    nombres_objetivo_exp. Nada se lanza ni activa sin un
-   clic explícito con confirm() cuando gasta. La pestaña Productos manda acá
+   clic explícito con confirm() cuando gasta. Catálogo › Productos manda acá
    con ?exp_nombre=&exp_destino= para prellenar «Nuevo experimento». #}
 <div class="panel-cabecera">
   <h2>Experimentos</h2>
@@ -252,7 +252,7 @@
       var det = document.getElementById('exp-' + exp);
       if (det) { det.open = true; setTimeout(function () { det.scrollIntoView({ block: 'start' }); }, 0); }
     }
-    // Prellenado desde Productos («Crear experimento»): ?exp_nombre=&exp_destino=
+    // Prellenado desde Catálogo › Productos («Crear experimento»): ?exp_nombre=&exp_destino=
     var nombre = q.get('exp_nombre'), destino = q.get('exp_destino');
     if (!nombre && !destino) return;
     var det = document.getElementById('nuevo-experimento');

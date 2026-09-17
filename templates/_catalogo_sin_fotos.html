@@ -1,0 +1,95 @@
+{# Catálogo › Productos › «Importados sin fotos»: filas `producto` (tabla
+   del motor) que todavía no tienen activo en el catálogo (sin
+   `activo_catalogo_id`, o su carpeta ya no existe). Contexto de ver_cliente:
+   productos_sin_activo (con archivados: el filtro es de acá), trabajos_prod
+   ({"vincular": {pid: {"job_id"}}}), etiquetas_fuente. Salen de acá al subir
+   fotos a mano (prod_fotos_subir, inline) o al crear el activo con las fotos
+   de la tienda (prod_vincular, worker). #}
+{% set sin_activo_vivos = productos_sin_activo | rejectattr("archivado") | list %}
+{% set sin_activo_archivados = productos_sin_activo | selectattr("archivado") | list %}
+{% if productos_sin_activo %}
+<div class="cat-sin-fotos" id="cat-sin-fotos">
+  <h3 style="margin:1.4rem 0 .2rem;">Importados sin fotos ({{ sin_activo_vivos | length }})</h3>
+  <p class="vacio" style="padding-top:0;font-size:.78rem;">Llegaron de un archivo, una URL o tu tienda pero todavía no tienen fotos en el catálogo, así que Crear no puede usarlos. Súbeles fotos (o créalos con las fotos de la tienda) y pasan a la lista de productos.</p>
+  <div class="prod-filtros">
+    <label><input type="checkbox" id="prod-mostrar-archivados"> Mostrar archivados ({{ sin_activo_archivados | length }})</label>
+  </div>
+  <div style="overflow-x:auto;">
+  <table class="tabla-productos">
+    <thead>
+      <tr><th></th><th>Producto</th><th>Fuente</th><th>Precio</th><th>Fotos</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for p in productos_sin_activo %}
+      <tr class="prod-fila{% if p.archivado %} prod-archivado{% endif %}" data-archivado="{{ 1 if p.archivado else 0 }}" data-fuente="{{ p.fuente }}">
+        <td class="prod-thumb-celda">
+          {% set foto = p.url_imagen_principal or (p.fotos[0] if p.fotos else None) %}
+          {% if foto %}<img class="prod-thumb" src="{{ foto }}" alt="" loading="lazy">{% else %}<span class="prod-thumb prod-thumb-vacia"></span>{% endif %}
+        </td>
+        <td>
+          <strong>{{ p.nombre }}</strong>
+          {% if p.categoria %}<small class="vacio prod-categoria">{{ p.categoria }}</small>{% endif %}
+          {# Solo http(s) se vuelve enlace: una URL importada de un CSV puede traer cualquier esquema. #}
+          {% if p.url_compra and p.url_compra.startswith(("http://", "https://")) %}<a class="prod-url" href="{{ p.url_compra }}" target="_blank" rel="noopener">{{ p.url_compra | truncate(48, True) }}</a>{% elif p.url_compra %}<span class="prod-url">{{ p.url_compra | truncate(48, True) }}</span>{% endif %}
+          {% if p.n_experimentos %}<span class="tag-estado">en {{ p.n_experimentos }} experimento(s)</span>{% endif %}
+        </td>
+        <td><span class="tag-estado badge-fuente badge-fuente-{{ p.fuente }}">{{ etiquetas_fuente.get(p.fuente, p.fuente) }}</span></td>
+        <td>{% if p.precio is not none %}{{ p.precio | dinero(p.moneda or '') }}{% else %}<span class="vacio" style="padding:0;">sin precio</span>{% endif %}</td>
+        <td class="prod-estado">
+          {% if p.archivado %}
+            <span class="tag-estado">archivado</span>
+          {% else %}
+            {% set trabajo_v = trabajos_prod.vincular.get(p.id) %}
+            <form method="post" action="{{ url_for('prod_fotos_subir', cliente=cliente, pid=p.id) }}" enctype="multipart/form-data" class="inline prod-form-fotos" title="Elige las fotos desde tu computador: se crea el producto en el catálogo con ellas.">
+              <label class="btn-generar btn-xs prod-subir-fotos">Subir fotos
+                <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()" hidden>
+              </label>
+            </form>
+            {% if p.fotos %}
+            <form method="post" action="{{ url_for('prod_vincular', cliente=cliente, pid=p.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_v %}disabled{% endif %}>{% if trabajo_v %}Creando activo…{% else %}Crear activo desde las fotos de la tienda{% endif %}</button></form>
+            {% if trabajo_v %}
+            <div class="barra-progreso" id="trabajo-{{ trabajo_v.job_id }}"><div class="barra-progreso-fill"></div></div>
+            <div class="progreso-texto"></div>
+            <script>iniciarPolling({{ trabajo_v.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_v.job_id) | tojson }});</script>
+            {% endif %}
+            {% else %}
+            <small class="vacio" style="padding:0;">la tienda no trajo fotos</small>
+            {% endif %}
+          {% endif %}
+        </td>
+        <td class="prod-acciones-fila">
+          {% if p.archivado %}
+          <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline"><input type="hidden" name="archivado" value="0"><button class="btn-guardar btn-xs">Recuperar</button></form>
+          {% else %}
+          <form method="post" action="{{ url_for('prod_archivar', cliente=cliente, pid=p.id) }}" class="inline prod-form-archivar" data-nombre="{{ p.nombre }}"><button class="btn-rechazar btn-xs">Archivar</button></form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var chk = document.getElementById('prod-mostrar-archivados');
+    function aplicarFiltro() {
+      var ver = chk && chk.checked;
+      document.querySelectorAll('#cat-sin-fotos .prod-fila').forEach(function (tr) {
+        tr.style.display = (tr.dataset.archivado === '1' && !ver) ? 'none' : '';
+      });
+    }
+    if (chk) { chk.addEventListener('change', aplicarFiltro); aplicarFiltro(); }
+    // Confirmación de «Archivar»: el nombre viaja en data-nombre (atributo
+    // HTML, escapado por Jinja) y el mensaje se arma en JS — nunca texto de
+    // plantilla dentro de un literal de JS (un apóstrofo lo rompería).
+    document.querySelectorAll('#cat-sin-fotos .prod-form-archivar').forEach(function (f) {
+      f.addEventListener('submit', function (ev) {
+        var nombre = f.dataset.nombre || 'este producto';
+        if (!confirm('¿Archivar «' + nombre + '»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»).')) ev.preventDefault();
+      });
+    });
+  })();
+</script>
+{% endif %}

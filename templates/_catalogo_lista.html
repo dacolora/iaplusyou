@@ -1,6 +1,10 @@
 {# Lista de activos de una categoría del catálogo (productos, personajes, entornos).
-   Parámetros: productos, categoria_actual, con_mapa. #}
+   Parámetros: productos, categoria_actual, con_mapa. Para la categoría
+   producto, `producto_comercial[p.id]` (contexto de ver_cliente) es la fila
+   `producto` del motor: precio, moneda, url_compra, fuente, en_prueba,
+   prioridad, n_experimentos. #}
 {% for p in productos %}
+{% set comercial = producto_comercial.get(p.id) if categoria_actual == 'producto' else None %}
 <details class="producto-gestion" id="producto-{{ p.id }}">
   <summary class="swap-card-resumen">
     <span class="idea-chevron">▸</span>
@@ -14,6 +18,17 @@
         {% if p.mapa_etiqueta %}· <span class="badge">{{ p.mapa_etiqueta }}</span>{% endif %}
         {% if p.usos %}· {{ p.usos }} uso(s){% endif %}
       </span>
+      {% if comercial %}
+      <span class="swap-resumen-meta cat-comercial-linea">
+        {% if comercial.precio is not none %}<strong>{{ comercial.precio | dinero(comercial.moneda or '') }}</strong>{% else %}<span title="Sin precio: escríbelo abajo para que el anuncio lo muestre">sin precio</span>{% endif %}
+        {# Solo http(s) se vuelve enlace: una URL importada de un CSV puede traer cualquier esquema. #}
+        {% if comercial.url_compra and comercial.url_compra.startswith(("http://", "https://")) %}· <a class="prod-url" style="display:inline;" href="{{ comercial.url_compra }}" target="_blank" rel="noopener">{{ comercial.url_compra | truncate(40, True) }}</a>{% elif comercial.url_compra %}· <span class="prod-url" style="display:inline;">{{ comercial.url_compra | truncate(40, True) }}</span>{% else %}· <span title="Sin URL de compra: el experimento no sabrá adónde mandar el clic">sin URL de compra</span>{% endif %}
+        · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente) }}</span>
+        {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">en prueba</span>{% endif %}
+        {% if comercial.prioridad %}<span class="tag-estado">prioridad {{ comercial.prioridad }}</span>{% endif %}
+        {% if comercial.n_experimentos %}<span class="tag-estado">en {{ comercial.n_experimentos }} experimento(s)</span>{% endif %}
+      </span>
+      {% endif %}
     </span>
   </summary>
 
@@ -67,10 +82,25 @@
     </details>
     {% endif %}
 
+    {% if categoria_actual == 'producto' %}
+    {% if comercial and comercial.fuente != 'manual' %}
+    <p class="vacio cat-sincronizado" style="font-size:.76rem;margin-top:.8rem;" title="La próxima sincronización o importación puede volver a escribir el nombre y la descripción con lo que diga la tienda; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan.">
+      Sincronizado de {{ etiquetas_fuente.get(comercial.fuente, comercial.fuente) }}{% if comercial.fuente_id and comercial.fuente in ('url',) %} ({{ comercial.fuente_id | truncate(40, True) }}){% endif %}: la tienda manda sobre el nombre y la descripción.
+    </p>
+    {% endif %}
+    {% with prefijo="edit-" ~ p.id %}{% include "_catalogo_campos_comerciales.html" %}{% endwith %}
+    {% endif %}
+
     <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar cambios</button>
   </form>
 
   <div class="producto-gestion-acciones">
+    {% if comercial %}
+    <form method="post" action="{{ url_for('prod_experimento', cliente=cliente, pid=comercial.id) }}" class="inline" title="Abre Experimentos con el nombre y la URL de compra de este producto ya puestos">
+      <input type="hidden" name="pid" value="{{ comercial.id }}">
+      <button type="submit" class="btn-generar btn-sm">Crear experimento</button>
+    </form>
+    {% endif %}
     <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
       <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple onchange="this.form.submit()">
     </form>

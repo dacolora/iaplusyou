@@ -1,0 +1,38 @@
+{# Campos comerciales de un producto del catálogo (van a la fila `producto`
+   del motor por crear_producto / actualizar_producto): precio + moneda,
+   URL de compra, en prueba, prioridad. Parámetros: `comercial` (fila
+   producto o None para el alta), `prefijo` (ids únicos por formulario).
+   Contexto: monedas_catalogo, moneda_catalogo. El checkbox «en prueba» se
+   pinta SIEMPRE: si faltara, guardar el formulario lo apagaría. #}
+<div class="fila-campos-idea cat-comercial" style="margin-top:.8rem;">
+  <div>
+    <label class="campo-label" for="{{ prefijo }}-precio">Precio (opcional)</label>
+    {# 89900.0 se pinta como 89900: un entero con «.0» confunde y el navegador lo muestra con coma. #}
+    {% set precio_val = '' if not comercial or comercial.precio is none else ((comercial.precio | int) if comercial.precio == (comercial.precio | int) else comercial.precio) %}
+    <input type="number" id="{{ prefijo }}-precio" name="precio" min="0" step="any" placeholder="ej. 89900" value="{{ precio_val }}">
+  </div>
+  <div>
+    <label class="campo-label" for="{{ prefijo }}-moneda">Moneda</label>
+    {% set moneda_sel = (comercial.moneda if comercial and comercial.moneda else moneda_catalogo) %}
+    <select id="{{ prefijo }}-moneda" name="moneda">
+      {% for m in monedas_catalogo %}
+      <option value="{{ m }}" {% if m == moneda_sel %}selected{% endif %}>{{ m }}</option>
+      {% endfor %}
+      {% if moneda_sel not in monedas_catalogo %}<option value="{{ moneda_sel }}" selected>{{ moneda_sel }}</option>{% endif %}
+    </select>
+  </div>
+  <div>
+    <label class="campo-label" for="{{ prefijo }}-prioridad">Prioridad (0–100)</label>
+    <input type="number" id="{{ prefijo }}-prioridad" name="prioridad" min="0" max="100" value="{{ comercial.prioridad if comercial else 0 }}" title="Los de mayor prioridad van primero al loop de prueba">
+  </div>
+</div>
+
+<label class="campo-label" style="margin-top:.8rem;display:block;" for="{{ prefijo }}-url">URL de compra (opcional)</label>
+{# type=text y no type=url: «wa.me/57…» sin esquema es válido aquí (el servidor le pone https://) y type=url lo rechazaría en el navegador. #}
+<input type="text" inputmode="url" id="{{ prefijo }}-url" name="url_compra" placeholder="https://tutienda.com/producto o wa.me/57300…" value="{{ comercial.url_compra if comercial and comercial.url_compra else '' }}">
+<p class="vacio" style="font-size:.74rem;">Adonde llega el anuncio: tu tienda, WhatsApp (wa.me/57…) o tu landing.</p>
+
+<label class="cat-en-prueba">
+  <input type="checkbox" name="en_prueba" value="on" {% if comercial and comercial.en_prueba %}checked{% endif %}>
+  En prueba <small class="vacio" style="padding:0;">(entra al loop de experimentos)</small>
+</label>

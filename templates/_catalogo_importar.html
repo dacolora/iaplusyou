@@ -1,0 +1,40 @@
+{# Catálogo › Productos › «Traer productos de…»: importar CSV/Excel, la URL
+   de un producto, o conectar la tienda (Configuración). Es la opción
+   SECUNDARIA: lo normal es crear el producto con «+ Nuevo producto».
+   Contexto de ver_cliente: trabajos_prod.importar ({"job_id"}|None),
+   columnas_csv. Importar corre en el worker; acá solo se encola. #}
+{% set trabajo_imp = trabajos_prod.importar %}
+<details class="comparacion-modelos cat-importar" style="margin-top:.6rem;">
+  <summary class="btn-guardar btn-sm">Traer productos de… (CSV/Excel, URL o tu tienda)</summary>
+  <div class="comparacion-contenido">
+    <p class="vacio" style="padding-top:0;font-size:.78rem;">Si ya tienes los productos en un archivo o en tu tienda, no los escribas de nuevo: cada uno llega con nombre, precio, URL de compra y fotos, y aparece aquí como un producto más del catálogo. Los que vengan sin fotos quedan en «Importados sin fotos» hasta que se las subas.</p>
+    <div class="prod-acciones">
+      <details class="swap-card prod-importar">
+        <summary class="swap-card-resumen">Importar CSV/Excel</summary>
+        <form method="post" action="{{ url_for('prod_importar_archivo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea prod-form-importar">
+          <input type="file" name="archivo" accept=".csv,.xlsx" required>
+          <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">Primera fila = nombres de columna. Reconozco: <code>{{ columnas_csv }}</code>. Máximo 5 MB.</p>
+          <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>Importar archivo</button>
+        </form>
+      </details>
+      <details class="swap-card prod-importar">
+        <summary class="swap-card-resumen">Importar desde URL</summary>
+        <form method="post" action="{{ url_for('prod_importar_url', cliente=cliente) }}" class="form-nueva-idea prod-form-importar">
+          <input type="url" name="url" placeholder="https://tutienda.com/productos/cojin-azul" required>
+          <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">La página pública de UN producto: leo nombre, precio y fotos de sus datos estructurados.</p>
+          <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>Importar producto</button>
+        </form>
+      </details>
+      <a class="btn-guardar btn-sm prod-link-config" href="#settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">Conectar tienda (Configuración › Tienda)</a>
+    </div>
+  </div>
+</details>
+
+{% if trabajo_imp %}
+<div class="idea-block prod-importando" style="margin-top:.8rem;">
+  <div class="idea-header"><div><span class="idea-label">Importando</span><div class="idea-texto">Leyendo el catálogo y creando los productos…</div></div></div>
+  <div class="barra-progreso" id="trabajo-{{ trabajo_imp.job_id }}"><div class="barra-progreso-fill"></div></div>
+  <div class="progreso-texto"></div>
+  <script>iniciarPolling({{ trabajo_imp.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_imp.job_id) | tojson }});</script>
+</div>
+{% endif %}

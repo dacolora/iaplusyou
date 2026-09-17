@@ -892,7 +892,12 @@ def ver_cliente(cliente):
     meta_conectado = capacidades_meta.get("estado") == "conectado"
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
+    # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
+    # vuelo si falta) y la fila se pinta en la tarjeta del activo.
+    activos_producto = _productos_con_uso(cliente)
+    _asegurar_filas_producto(cliente, activos_producto)
     productos_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
+    producto_comercial = _producto_comercial_contexto(productos_tienda)
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
 
@@ -908,9 +913,14 @@ def ver_cliente(cliente):
         videos=videos,
         log=log,
         informe=informe.completo(cliente),
-        productos=_productos_con_uso(cliente),
+        productos=activos_producto,
         categorias=catalogo_productos.CATEGORIAS,
-        activos_por_categoria={cid: (_productos_con_uso(cliente) if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
+        activos_por_categoria={cid: (activos_producto if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
+        producto_comercial=producto_comercial,
+        productos_sin_activo=[p for p in productos_tienda if not p["activo_ok"]],
+        monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO),
+        moneda_catalogo=_moneda_por_defecto(cliente),
+        etiquetas_fuente=ETIQUETAS_FUENTE,
         tipos_producto=prompt_swap.TIPOS,
         zonas_cuerpo=mapa_corporal.ZONAS,
         presets_cuerpo=mapa_corporal.PRESETS,
@@ -2975,7 +2985,9 @@ IMPORTAR_MAX_BYTES = 5 * 1024 * 1024
 
 
 def _volver_productos(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="productos"))
+    """Las rutas `prod_*` vuelven al Catálogo: la pestaña Productos ya no
+    existe (los productos importados viven en Catálogo › Productos)."""
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="catalogo"))
 
 
 def _volver_config(cliente):
@@ -3024,6 +3036,38 @@ def _productos_tienda_contexto(cliente, experimentos_exp=None):
         ids_exp |= por_clave.get(prod.get("nombre") or "", set())
         prod["n_experimentos"] = len(ids_exp)
     return lista
+
+
+def _asegurar_filas_producto(cliente, activos):
+    """Todo activo de categoría `producto` tiene su fila comercial (fuente
+    `manual`): los anteriores a esta versión la reciben aquí, al listar
+    (`tiendas.asegurar_manual` es idempotente y nunca duplica una fila
+    importada ya enlazada). Una sola consulta para saber cuáles faltan."""
+    con_fila = tiendas.por_activo(cliente)
+    for a in activos:
+        if a["id"] not in con_fila:
+            tiendas.asegurar_manual(cliente, a["id"], a["nombre"], a.get("descripcion") or "")
+
+
+def _producto_comercial_contexto(productos_tienda):
+    """{activo_id: fila producto} para las tarjetas del Catálogo, a partir de
+    la lista ya enriquecida (`n_experimentos`, `activo_ok`). Si dos filas
+    apuntan al mismo activo (una archivada), gana la viva."""
+    mapa = {}
+    for p in productos_tienda:
+        activo_id = p.get("activo_catalogo_id")
+        if not activo_id:
+            continue
+        previa = mapa.get(activo_id)
+        if previa is None or (previa["archivado"] and not p["archivado"]):
+            mapa[activo_id] = p
+    return mapa
+
+
+# Nombre visible de cada `producto.fuente` (badge de la tarjeta y nota
+# «Sincronizado de …»).
+ETIQUETAS_FUENTE = {"manual": "manual", "csv": "CSV/Excel", "url": "URL", "shopify": "Shopify",
+                    "woo": "WooCommerce", "meli": "MercadoLibre"}
 
 
 def _trabajos_productos(cliente, tiendas_cliente, productos=()):
@@ -3199,6 +3243,56 @@ def prod_vincular(cliente, pid):
         flash(f"Creando el activo de «{prod.get('nombre') or pid}»… aparece en el Catálogo cuando termine.", "ok")
     else:
         flash("Ya se está creando el activo de ese producto — espera a que termine.", "warn")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/fotos", methods=["POST"])
+def prod_fotos_subir(cliente, pid):
+    """«Subir fotos» de un producto importado sin fotos (o cuyo activo ya no
+    existe): crea el activo del catálogo con el nombre y la descripción del
+    producto, guarda las fotos y enlaza la fila (`activo_catalogo_id`). Va
+    inline porque no baja nada de la red ni llama a Claude: son las fotos
+    que la persona acaba de elegir. Si ya hay un activo con ese id (otro
+    producto con el mismo nombre) se desambigua con `-2`, `-3`…, igual que
+    el importador, en vez de pisarle las fotos al otro."""
+    prod = tiendas.producto(cliente, pid)
+    if not prod:
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
+    if not archivos:
+        flash("No elegiste ninguna foto.", "error")
+        return _volver_productos(cliente)
+    nombre = (prod.get("nombre") or "").strip() or f"Producto {pid}"
+    enlazado = prod.get("activo_catalogo_id")
+    if enlazado and catalogo_productos.existe(cliente, enlazado, "producto"):
+        # Página vieja o doble envío: el activo ya existe. Las fotos van a
+        # ese, no a un segundo activo con el mismo nombre.
+        guardadas = _guardar_fotos_producto(cliente, enlazado, archivos)
+        flash(f"{guardadas} foto(s) añadida(s) a «{nombre}»." if guardadas
+              else "Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).",
+              "ok" if guardadas else "error")
+        return _volver_productos(cliente)
+    base = catalogo_productos.id_desde_nombre(nombre)
+    activo_id, sufijo = base, 2
+    while catalogo_productos.existe(cliente, activo_id, "producto"):
+        activo_id = f"{base}-{sufijo}"
+        sufijo += 1
+    try:
+        catalogo_productos.crear(cliente, nombre, prod.get("descripcion") or "", categoria="producto",
+                                 producto_id=activo_id)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_productos(cliente)
+    guardadas = _guardar_fotos_producto(cliente, activo_id, archivos)
+    if not guardadas:
+        # Sin foto válida el activo no aparecería en el catálogo y la fila
+        # quedaría enlazada a algo invisible: mejor deshacer.
+        catalogo_productos.eliminar(cliente, activo_id, categoria="producto")
+        flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
+        return _volver_productos(cliente)
+    tiendas.marcar_producto(cliente, pid, activo_catalogo_id=activo_id)
+    flash(f"«{nombre}» ya está en el catálogo con {guardadas} foto(s).", "ok")
     return _volver_productos(cliente)
 
 

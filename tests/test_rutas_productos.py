@@ -1,8 +1,9 @@
-"""Rutas de Productos y Configuración › Tienda / Pixel (Bloque 5, Task 6):
-importar archivo/URL, marcar/archivar/vincular, «crear experimento desde
-producto», conectar/sincronizar/desconectar tiendas, OAuth de MercadoLibre,
-refrescar el Pixel y el render de las dos pestañas. Todo lo que sale a la red
-(conectores, importador, Meta) o al worker (trabajos.encolar) va con fakes."""
+"""Rutas de productos (viven en Catálogo › Productos) y Configuración › Tienda
+/ Pixel (Bloque 5, Task 6): importar archivo/URL, marcar/archivar/vincular,
+«crear experimento desde producto», subir fotos a un importado, conectar/
+sincronizar/desconectar tiendas, OAuth de MercadoLibre, refrescar el Pixel y
+el render de Catálogo y Configuración. Todo lo que sale a la red (conectores,
+importador, Meta) o al worker (trabajos.encolar) va con fakes."""
 import io
 import os
 import re
@@ -86,7 +87,7 @@ def test_importar_archivo_guarda_y_encola_una_vez(app):
     r = c.post("/cliente/acme/productos/importar/archivo",
                data={"archivo": (io.BytesIO(b"nombre;precio\nCojin;100\n"), "mi catalogo.csv")},
                content_type="multipart/form-data")
-    assert r.status_code == 302 and "productos" in r.headers["Location"]
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
     carpeta = app["tmp"] / "clientes" / "acme" / "importaciones"
     archivos = os.listdir(carpeta)
     assert len(archivos) == 1 and archivos[0].endswith("_mi_catalogo.csv")
@@ -161,7 +162,7 @@ def test_marcar_actualiza_banderas_y_valida(app):
     c = app["c"]
     r = c.post(f"/cliente/acme/productos/{pid}/marcar",
                data={"en_prueba": "on", "prioridad": "70", "url_compra": "https://t.co/x", "precio": "120,5", "moneda": "mxn"})
-    assert r.status_code == 302 and "productos" in r.headers["Location"]
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
     p = tiendas.producto("acme", pid)
     assert p["en_prueba"] is True and p["prioridad"] == 70 and p["url_compra"] == "https://t.co/x"
     assert p["precio"] == 120.5 and p["moneda"] == "MXN"
@@ -212,7 +213,7 @@ def test_vincular_encola_la_tarea_y_no_llama_al_importador(app, monkeypatch):
     monkeypatch.setattr(importador, "vincular_activo",
                         lambda *a, **kw: pytest.fail("la ruta no debe vincular inline"))
     r = app["c"].post(f"/cliente/acme/productos/{pid}/vincular")
-    assert r.status_code == 302 and "productos" in r.headers["Location"]
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
     assert len(app["encolados"]) == 1
     t = app["encolados"][0]
     assert t["tipo"] == "producto_vincular" and t["job_id"] == f"acme__producto{pid}__vincular"
@@ -256,7 +257,7 @@ def test_experimento_desde_producto_redirige_con_query(app):
     assert "exp_nombre=Espejo+redondo" in loc and "exp_destino=https://tienda.test/espejo" in loc
     assert loc.endswith("#experimentos")
     r = app["c"].post(f"/cliente/acme/productos/{_producto(cliente='otro')}/experimento")
-    assert "exp_nombre" not in r.headers["Location"] and r.headers["Location"].endswith("#productos")
+    assert "exp_nombre" not in r.headers["Location"] and r.headers["Location"].endswith("#catalogo")
 
 
 # --- tiendas -----------------------------------------------------------------
@@ -423,21 +424,150 @@ def test_pixel_refrescar_invalida_y_consulta(app, monkeypatch):
 
 # --- render ------------------------------------------------------------------
 
-def test_render_pestana_productos(app, tmp_path):
+def _activo_con_foto(cliente, nombre, producto_id=None):
+    """Activo de categoría producto CON una foto en disco (sin foto no
+    aparece en listar())."""
     import catalogo_productos
+    aid = catalogo_productos.crear(cliente, nombre, categoria="producto", producto_id=producto_id)
+    carpeta = catalogo_productos.carpeta_de(cliente, aid, "producto")
+    with open(os.path.join(carpeta, "a.jpg"), "wb") as f:
+        f.write(b"\xff\xd8\xff\xe0fake-jpg")
+    return aid
+
+
+def test_render_productos_dentro_de_catalogo(app, tmp_path):
+    """La pestaña Productos ya no existe: importar, los importados sin fotos y
+    lo comercial de cada activo se pintan dentro de Catálogo › Productos."""
     import tiendas
     pid_ok = _producto(nombre="Cojín Azul")
     _producto(nombre="Espejo redondo", en_prueba=True)
     tiendas.marcar_producto("acme", pid_ok, activo_catalogo_id="cojin_azul", en_prueba=True, prioridad=40)
-    catalogo_productos.crear("acme", "Cojín Azul", categoria="producto", producto_id="cojin_azul")
+    _activo_con_foto("acme", "Cojín Azul", "cojin_azul")
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     html = r.data.decode()
+    # sidebar y secciones: sin Productos; Catálogo sigue
+    assert 'data-tab="productos"' not in html and 'id="tab-productos"' not in html
+    assert 'data-tab="catalogo"' in html and 'id="tab-catalogo"' in html
+    # importar como opción secundaria, dentro de Catálogo
+    assert "Traer productos de" in html
     assert "Importar CSV/Excel" in html and "Importar desde URL" in html and "Conectar tienda" in html
-    assert "Cojín Azul" in html and "Espejo redondo" in html
-    assert "En prueba" in html and "listo para Crear" in html and "sin activo" in html and "Crear activo" in html
-    assert "Mostrar archivados" in html and "Crear experimento" in html
-    assert 'data-tab="productos"' in html and 'id="tab-productos"' in html
+    # el importado sin activo va en su bloque; el enlazado va como tarjeta
+    assert "Importados sin fotos (1)" in html and "Espejo redondo" in html
+    assert "Subir fotos" in html and "Crear activo desde las fotos de la tienda" in html
+    assert "Mostrar archivados" in html
+    assert 'id="producto-cojin_azul"' in html
+    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
+    assert "89.900 COP" in tarjeta and 'href="https://tienda.test/cojin"' in tarjeta
+    assert "en prueba" in tarjeta and "prioridad 40" in tarjeta and "CSV/Excel" in tarjeta
+    assert "Crear experimento" in tarjeta and f"/productos/{pid_ok}/experimento" in tarjeta
+    assert "Sincronizado de CSV/Excel" in tarjeta
+    assert 'name="en_prueba"' in tarjeta and 'name="url_compra"' in tarjeta and 'name="precio"' in tarjeta
+    # el formulario «+ Nuevo producto» trae los campos comerciales con la moneda de la cuenta
+    nuevo = html.split('id="nuevo-moneda"', 1)[1].split("</select>", 1)[0]
+    assert 'value="COP" selected' in nuevo and 'value="USD"' in nuevo
+    assert "Adonde llega el anuncio" in html
+
+
+def test_render_activo_manual_recibe_fila_y_muestra_precio(app):
+    """Un activo creado desde Catálogo con precio/URL muestra ambos en su
+    tarjeta; un activo anterior sin fila la recibe al listar (manual)."""
+    import tiendas
+    c = app["c"]
+    _crear_activo(c, precio="25000", moneda="COP", url_compra="wa.me/573001234567", prioridad="5")
+    _activo_con_foto("acme", "Viejo")
+    assert tiendas.por_activo("acme").get("viejo") is None
+    html = c.get("/cliente/acme").data.decode()
+    fila_vieja = tiendas.por_activo("acme")["viejo"]
+    assert fila_vieja["fuente"] == "manual" and fila_vieja["nombre"] == "Viejo"
+    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
+    assert "25.000 COP" in tarjeta and 'href="https://wa.me/573001234567"' in tarjeta and "prioridad 5" in tarjeta
+    assert "Sincronizado de" not in tarjeta
+    vieja = html.split('id="producto-viejo"', 1)[1].split("</details>", 1)[0]
+    assert "sin precio" in vieja and "sin URL de compra" in vieja
+    # Nada quedó en «Importados sin fotos»
+    assert 'id="cat-sin-fotos"' not in html
+    # Listar dos veces no duplica filas
+    c.get("/cliente/acme")
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 2
+
+
+def test_render_importado_archivado_solo_con_mostrar_archivados(app):
+    import tiendas
+    pid = _producto(nombre="Lámpara")
+    tiendas.marcar_producto("acme", pid, archivado=True)
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert "Importados sin fotos (0)" in html and "Mostrar archivados (1)" in html
+    assert 'data-archivado="1"' in html and "Recuperar" in html
+
+
+# --- subir fotos a un importado -----------------------------------------------
+
+def test_fotos_subir_crea_activo_y_enlaza(app):
+    import catalogo_productos
+    import tiendas
+    pid = _producto(nombre="Espejo redondo", descripcion="marco dorado")
+    r = app["c"].post(f"/cliente/acme/productos/{pid}/fotos",
+                      data={"imagenes": [_foto("a.jpg"), _foto("b.png")]}, content_type="multipart/form-data")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
+    p = tiendas.producto("acme", pid)
+    assert p["activo_catalogo_id"] == "espejo_redondo"
+    activo = catalogo_productos.encontrar("acme", "espejo_redondo", categoria="producto")
+    assert activo and activo["nombre"] == "Espejo redondo" and activo["descripcion"] == "marco dorado"
+    assert sorted(activo["imagenes"]) == ["a.jpg", "b.png"]
+    assert any("2 foto(s)" in m for m in _flashes(app["c"]))
+    # ya no está en el bloque de sin fotos; su tarjeta muestra lo comercial de la fila importada
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'id="cat-sin-fotos"' not in html
+    tarjeta = html.split('id="producto-espejo_redondo"', 1)[1].split("</details>", 1)[0]
+    assert "89.900 COP" in tarjeta and "CSV/Excel" in tarjeta
+    assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
+
+
+def test_fotos_subir_desambigua_id_ocupado(app):
+    """Otro activo ya usa el id derivado del nombre: se crea `-2`, no se le
+    pisan las fotos al primero."""
+    import catalogo_productos
+    import tiendas
+    _activo_con_foto("acme", "Espejo redondo")
+    pid = _producto(nombre="Espejo redondo")
+    app["c"].post(f"/cliente/acme/productos/{pid}/fotos",
+                  data={"imagenes": _foto()}, content_type="multipart/form-data")
+    assert tiendas.producto("acme", pid)["activo_catalogo_id"] == "espejo_redondo-2"
+    assert catalogo_productos.encontrar("acme", "espejo_redondo", categoria="producto")["imagenes"] == ["a.jpg"]
+
+
+def test_fotos_subir_con_activo_existente_agrega_fotos_sin_duplicar(app):
+    """Doble envío o página vieja: si la fila ya apunta a un activo que
+    existe, las fotos van a ese activo y no se crea `-2`."""
+    import catalogo_productos
+    import tiendas
+    pid = _producto(nombre="Espejo redondo")
+    c = app["c"]
+    c.post(f"/cliente/acme/productos/{pid}/fotos", data={"imagenes": _foto("a.jpg")}, content_type="multipart/form-data")
+    c.post(f"/cliente/acme/productos/{pid}/fotos", data={"imagenes": _foto("b.jpg")}, content_type="multipart/form-data")
+    assert tiendas.producto("acme", pid)["activo_catalogo_id"] == "espejo_redondo"
+    assert not catalogo_productos.existe("acme", "espejo_redondo-2", "producto")
+    assert sorted(catalogo_productos.encontrar("acme", "espejo_redondo", categoria="producto")["imagenes"]) == ["a.jpg", "b.jpg"]
+    assert any("1 foto(s) añadida(s)" in m for m in _flashes(c))
+
+
+def test_fotos_subir_valida(app):
+    import catalogo_productos
+    import tiendas
+    pid = _producto(nombre="Taza")
+    c = app["c"]
+    r = c.post(f"/cliente/acme/productos/{pid}/fotos", data={}, content_type="multipart/form-data")
+    assert r.status_code == 302 and any("ninguna foto" in m for m in _flashes(c))
+    c.post(f"/cliente/acme/productos/{pid}/fotos",
+           data={"imagenes": (io.BytesIO(b"x"), "malo.exe")}, content_type="multipart/form-data")
+    assert tiendas.producto("acme", pid)["activo_catalogo_id"] is None
+    assert not catalogo_productos.existe("acme", "taza", "producto")
+    assert any("formato soportado" in m for m in _flashes(c))
+    # cross-tenant
+    r = c.post(f"/cliente/acme/productos/{_producto(cliente='otro')}/fotos",
+               data={"imagenes": _foto()}, content_type="multipart/form-data")
+    assert r.status_code == 302 and any("No encontré" in m for m in _flashes(c))
 
 
 def test_render_productos_confirm_y_url_seguros(app):
