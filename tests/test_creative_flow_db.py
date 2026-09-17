@@ -143,3 +143,14 @@ def test_piezas_finales(base_temporal):
     assert cf.eliminar("acme", cid) is True
     assert cf.final_por_legado("acme", fid) is None
     assert cf.eliminar_final("acme", fid) is False
+
+
+def test_crear_guarda_extra_sprint(base_temporal):
+    import creative_flow as cf
+    cf_id = cf.crear("acme", [], ["P"], [], "acción", 8, "", "A", extra_sprint={"sprint_id": 1, "campana_id": 2, "cp_id": 3})
+    e = cf.cargar("acme")[cf_id]
+    assert e["sprint"] == {"sprint_id": 1, "campana_id": 2, "cp_id": 3}
+    otro = cf.crear("acme", [], ["P"], [], "acción", 8, "", "A")
+    assert "sprint" not in cf.cargar("acme")[otro]
+    copia = cf.duplicar("acme", cf_id)
+    assert cf.cargar("acme")[copia]["sprint"]["cp_id"] == 3    # la regeneración conserva el vínculo

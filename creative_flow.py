@@ -87,7 +87,7 @@ def cargar(cliente):
 
 def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
           duracion_objetivo, tono, modo, referencias_urls=None, platforms=None,
-          legado_id=None, creado_en=None):
+          legado_id=None, creado_en=None, extra_sprint=None):
     if modo not in MODOS_VALIDOS:
         raise ValueError(f"Modo inválido: {modo}. Opciones: {MODOS_VALIDOS}")
     cf_id = legado_id or ("cf_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f"))
@@ -96,6 +96,9 @@ def crear(cliente, personajes_ids, productos_ids, escenas_ids, accion_central,
              "accion_central": accion_central, "duracion_objetivo": duracion_objetivo, "tono": tono, "modo": modo,
              "platforms": platforms or [], "prompt_relleno": None, "referencias_urls": referencias_urls,
              "credits": None, "estado_legado": "prompt_pendiente"}
+    if extra_sprint:
+        # Vínculo con la campaña del sprint que pidió esta pieza (Sprints, Parte 2).
+        extra["sprint"] = dict(extra_sprint)
     with db.conectar() as con:
         cid = con.execute(db.concepto.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, origen="manual",

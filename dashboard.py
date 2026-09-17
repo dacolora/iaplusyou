@@ -53,6 +53,7 @@ import ads as ads_mod
 from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
+import flowplus_lanzar
 import cola
 import db
 import experimentos
@@ -721,7 +722,7 @@ def _job_id_publicar(cliente, brief_id):
 
 
 def _job_id_creative_flow(cliente, cf_id):
-    return f"{cliente}__{cf_id}__creative_flow"
+    return flowplus_lanzar.job_id(cliente, cf_id)
 
 
 def _trabajo_de_prompt(cliente, prompt_id, item):
@@ -3978,25 +3979,10 @@ def fe_descartar(cliente, cf_id, final_id):
 
 
 def _lanzar_video_cf(cliente, cf_id, entry):
-    """Encola en el worker la generación de una sesión de FlowPlus (video o
-    imagen). Lo usan cf_crear_video (de una, al enviar el formulario) y
-    cf_generar_video (reintento tras error / sesiones viejas en prompt_listo).
-    Devuelve True si encoló, False si ya había una en curso. El cuerpo real
-    vive en tareas/flowplus.py (ejecutar_video / ejecutar_imagen)."""
-    tipo = entry.get("tipo") or "video"
-    job_id = _job_id_creative_flow(cliente, cf_id)
-    # Escribe estado="video_generando" ANTES de encolar: si el worker fallara
-    # instantáneo, podría escribir "error" y el principal pisarlo.
-    creative_flow.actualizar(cliente, cf_id, estado="video_generando")
-    # max_intentos=1: si la generación falla (p.ej. timeout al descargar) ya
-    # pudo haberse cobrado el crédito en el proveedor. No la reintentamos
-    # solos — que la persona decida con "Reintentar" en la UI.
-    return trabajos.encolar(
-        job_id, "flowplus_imagen" if tipo == "imagen" else "flowplus_video",
-        {"cliente": cliente, "cf_id": cf_id}, cliente=cliente,
-        duracion_estimada=60 if tipo == "imagen" else 180, etapas=ETAPAS_CREATIVE_FLOW,
-        max_intentos=1,
-    )
+    """Encola la generación de una sesión de FlowPlus (video o imagen). Lo usan
+    cf_crear_video y cf_generar_video. El cuerpo vive en flowplus_lanzar.py
+    (compartido con los lotes de Sprints)."""
+    return flowplus_lanzar.lanzar(cliente, cf_id, entry)
 
 
 def _job_id_link(cliente):

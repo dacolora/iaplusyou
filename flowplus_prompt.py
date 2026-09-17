@@ -87,11 +87,43 @@ def enfoques_para(n, con_persona=False, elegidos=None):
     return lista[:n]
 
 
-def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None):
+def _lineas_contexto(contexto):
+    """Líneas AUDIENCIA/TEMPORADA a partir del contexto de una campaña de
+    sprint. Solo emite lo que viene; sin contexto no emite nada."""
+    if not contexto:
+        return []
+    lineas = []
+    p = contexto.get("persona") or {}
+    partes_p = [str(p[k]).strip().rstrip(".") for k in ("resumen", "descripcion") if p.get(k)]
+    if p.get("senales_visuales"):
+        partes_p.append("Señales visuales: " + ", ".join(str(s) for s in p["senales_visuales"]))
+    if p.get("tono"):
+        partes_p.append(f"Tono: {str(p['tono']).strip().rstrip('.')}")
+    if partes_p:
+        lineas.append("AUDIENCIA: " + ". ".join(partes_p) + ".")
+    t = contexto.get("temporada") or {}
+    partes_t = [str(t[k]).strip().rstrip(".") for k in ("nombre", "contexto") if t.get(k)]
+    mood = t.get("mood_visual") or {}
+    if mood.get("paleta"):
+        partes_t.append("Paleta: " + ", ".join(str(c) for c in mood["paleta"]))
+    if mood.get("luz"):
+        partes_t.append(f"Luz: {str(mood['luz']).strip().rstrip('.')}")
+    if mood.get("elementos"):
+        partes_t.append("Elementos: " + ", ".join(str(e) for e in mood["elementos"]))
+    if partes_t:
+        lineas.append("TEMPORADA: " + ". ".join(partes_t) + ".")
+    return lineas
+
+
+def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None,
+          contexto=None):
     """texto: lo que escribió la persona (se respeta íntegro).
     referencias: [{tipo, etiqueta, producto?}] ya numeradas.
     logos: [{etiqueta}] referencias de logo agregadas por el proyecto.
     enfoque: clave de ENFOQUES (manda sobre con_persona) o None.
+    contexto: opcional (Sprints): {"persona": {resumen, descripcion, tono,
+    senales_visuales}, "temporada": {nombre, contexto, mood_visual}}; agrega
+    las líneas AUDIENCIA y TEMPORADA. Con None el prompt es idéntico.
     Devuelve el prompt completo (str)."""
     partes = []
     info_enfoque = ENFOQUES.get(enfoque) if enfoque else None
@@ -111,6 +143,9 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
             "sobre la superficie o flotando. Nadie lo lleva puesto. No hay pies, piernas, manos ni "
             "cuerpo en ningún momento del video, ni al principio ni al final."
         )
+
+    # --- Contexto de campaña (Sprints): audiencia y temporada ---
+    partes.extend(_lineas_contexto(contexto))
 
     productos = [r for r in referencias if r.get("producto")]
     imagenes = _lista(referencias, "imagen")
