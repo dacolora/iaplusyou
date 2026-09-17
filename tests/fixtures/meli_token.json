@@ -1,0 +1,8 @@
+{
+  "access_token": "APP_USR-nuevo-token-de-prueba",
+  "token_type": "Bearer",
+  "expires_in": 21600,
+  "scope": "offline_access read write",
+  "user_id": 123456,
+  "refresh_token": "TG-nuevo-refresh-de-prueba"
+}

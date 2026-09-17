@@ -1,0 +1,18 @@
+[
+  {
+    "id": 303,
+    "name": "Repisa flotante de vidrio",
+    "slug": "repisa-flotante",
+    "permalink": "https://tienda.ejemplo.com/producto/repisa-flotante/",
+    "type": "simple",
+    "status": "publish",
+    "description": "<div>Repisa de 80 cm</div>",
+    "short_description": "",
+    "sku": "REP-80",
+    "price": "120000",
+    "regular_price": "120000",
+    "sale_price": "",
+    "categories": [{"id": 13, "name": "Repisas", "slug": "repisas"}],
+    "images": [{"id": 93, "src": "https://tienda.ejemplo.com/wp-content/uploads/repisa.jpg", "alt": ""}]
+  }
+]

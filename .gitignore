@@ -49,3 +49,6 @@ clientes/*/marca/*
 !clientes/*/marca/schema.json
 
 data/
+
+# Archivos CSV/XLSX subidos para importar (precios del cliente); la tarea los borra al terminar
+clientes/*/importaciones/

@@ -1,0 +1,43 @@
+{
+  "seller_id": "123456",
+  "query": null,
+  "paging": {
+    "limit": 50,
+    "offset": 0,
+    "total": 25
+  },
+  "results": [
+    "MCO1001",
+    "MCO1002",
+    "MCO1003",
+    "MCO1004",
+    "MCO1005",
+    "MCO1006",
+    "MCO1007",
+    "MCO1008",
+    "MCO1009",
+    "MCO1010",
+    "MCO1011",
+    "MCO1012",
+    "MCO1013",
+    "MCO1014",
+    "MCO1015",
+    "MCO1016",
+    "MCO1017",
+    "MCO1018",
+    "MCO1019",
+    "MCO1020",
+    "MCO1021",
+    "MCO1022",
+    "MCO1023",
+    "MCO1024",
+    "MCO1025"
+  ],
+  "orders": [
+    {
+      "id": "start_time",
+      "name": "Fecha de creación"
+    }
+  ],
+  "available_orders": []
+}

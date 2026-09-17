@@ -1,0 +1,5 @@
+Nombre;Precio;Moneda;URL_compra;Fotos;Descripción;Categoría;SKU
+Espejo redondo 60cm;"89.900,00";cop;https://tienda.test/espejo-redondo;https://cdn.test/a.jpg|https://cdn.test/b.jpg;Espejo de pared con marco dorado;Espejos;ESP-60
+Vidrio templado 6mm;45000;COP;https://tienda.test/vidrio-6mm;https://cdn.test/c.jpg;Vidrio templado por m2;Vidrios;
+;;;;;;;
+Repisa flotante;"$ 12,50";usd;https://tienda.test/repisa;;Repisa de vidrio con soportes;Repisas;REP-01

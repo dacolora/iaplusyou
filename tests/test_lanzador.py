@@ -82,8 +82,9 @@ def test_lanzar_crea_campana_conjuntos_y_anuncios(entorno):
     assert adsets[0]["targeting"]["geo_locations"]["countries"] == ["CO"] and adsets[0]["centavos"] == 2000000
     assert adsets[1]["targeting"]["geo_locations"]["countries"] == ["MX"] and adsets[1]["centavos"] == 15000
     creativos = [kw for t, kw in meta.llamadas if t == "creative"]
-    assert all("utm_content=" in c["link"] for c in creativos)
     e = ex.obtener("acme", eid)
+    # Bloque 5: el link de cada anuncio lleva el id de la experimento_pieza (uno por país), no el de la pieza
+    assert sorted(c["link"].rsplit("utm_content=", 1)[1] for c in creativos) == sorted(str(p["id"]) for p in e["piezas"])
     assert e["estado"] == "pausado" and e["meta_campaign_id"] == "campaign_1"
     assert {p["pais"]: p["meta_adset_id"] for p in e["paises"]} == {"CO": "adset_2", "MX": "adset_3"}
     assert all(p["estado"] == "pausado" and p["meta_ad_id"] for p in e["piezas"])
@@ -131,9 +132,9 @@ def test_cambiar_estado_y_presupuesto(entorno):
     meta.llamadas.clear()
     lz.cambiar_estado("acme", eid, "PAUSED", pais="MX")
     ids = [kw["oid"] for t, kw in meta.llamadas if t == "estado"]
-    # ad_8, no ad_9: M4 comparte el creative del clon entre CO y MX, un
-    # "creative_N" menos que antes corre la numeración de todo lo posterior.
-    assert ids == ["adset_3", "ad_8"]
+    # ad_9: campaign_1, adset_2/3, y por cada pieza creative+ad (el clon
+    # tiene un creative por país desde Bloque 5: utm_content=ep id).
+    assert ids == ["adset_3", "ad_9"]
     e = ex.obtener("acme", eid)
     assert e["estado"] == "corriendo" and [p["estado"] for p in e["paises"]] == ["activo", "pausado"]
     assert [p["estado"] for p in e["piezas"]] == ["activo", "activo", "pausado"]
@@ -294,11 +295,12 @@ def test_encolar_exp_lanzar_con_etapas_reales_no_rompe_consultar(base_temporal):
     assert info["etapa"] == lanzador.ETAPAS_LANZAR[0][0]
 
 
-def test_lanzar_mismo_clon_en_dos_paises_comparte_video_y_creative(entorno):
-    """M4: el fixture ya agrega el mismo clon a CO y a MX — subir el video y
-    crear el creative para cada país duplicaría una subida que puede tardar
-    hasta 180s bajo _LOCK, sin ganar nada (utm_content=pieza_id es igual en
-    ambos, es la misma pieza)."""
+def test_lanzar_mismo_clon_en_dos_paises_comparte_video_no_creative(entorno):
+    """M4 + Bloque 5: el fixture ya agrega el mismo clon a CO y a MX — la
+    subida del video (hasta 180s bajo _LOCK) se hace una sola vez, pero el
+    creative es por país: el link lleva utm_content=<experimento_pieza.id>,
+    distinto en cada uno, para que las ventas de la tienda caigan en el
+    anuncio que las generó."""
     ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
     llamadas_subir = []
     original = lz.meta_creative.subir_video
@@ -310,13 +312,15 @@ def test_lanzar_mismo_clon_en_dos_paises_comparte_video_y_creative(entorno):
     entorno["monkeypatch"].setattr(lz.meta_creative, "subir_video", contando)
     lz.lanzar("acme", eid)
     tipos = [t for t, _ in meta.llamadas]
-    assert tipos.count("creative") == 2  # f_co + 1 creative compartido por el clon (CO y MX)
+    assert tipos.count("creative") == 3  # f_co + un creative por país del clon (CO y MX)
     assert len(llamadas_subir) == 2       # f_co sube su video, el clon sube el suyo una sola vez
     e = ex.obtener("acme", eid)
     clones = [p for p in e["piezas"] if p["tipo"] == "clon"]
     assert len(clones) == 2
-    assert clones[0]["meta_creative_id"] == clones[1]["meta_creative_id"]
-    assert clones[0]["extra"].get("meta_video_id") == clones[1]["extra"].get("meta_video_id")
+    assert clones[0]["meta_creative_id"] != clones[1]["meta_creative_id"]
+    assert clones[0]["extra"].get("meta_video_id") == clones[1]["extra"].get("meta_video_id") == "vid_1"
+    links = {kw["link"] for t, kw in meta.llamadas if t == "creative"}
+    assert all(any(link.endswith(f"utm_content={p['id']}") for link in links) for p in clones)
 
 
 def test_cambiar_presupuesto_pais_rechaza_lanzando(entorno):
@@ -494,9 +498,10 @@ def test_lanzar_autosana_si_preflight_falla_con_estado_ya_lanzando(entorno):
 def test_lanzar_piezas_nuevas_comparte_cache_entre_piezas_de_la_misma_corrida(entorno, base_temporal):
     """Fix round 1 (Important #1): dos piezas 'en_cola' nuevas con el mismo
     pieza_id (un clon regenerado atado a dos países) agregadas en la misma
-    corrida de lanzar_piezas_nuevas deben compartir el cache de video/creative
-    — antes cada llamada a _crear_anuncios recibía un cache vacío propio y
-    repetía subir_video + crear_creative_video para la segunda."""
+    corrida de lanzar_piezas_nuevas deben compartir el cache de video —
+    antes cada llamada a _crear_anuncios recibía un cache vacío propio y
+    repetía subir_video para la segunda. El creative sí es uno por país
+    (Bloque 5: utm_content por experimento_pieza)."""
     ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
     lz.lanzar("acme", eid)
     clon_nuevo = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
@@ -515,20 +520,22 @@ def test_lanzar_piezas_nuevas_comparte_cache_entre_piezas_de_la_misma_corrida(en
     assert lz.lanzar_piezas_nuevas("acme", eid) == 2
     tipos = [t for t, _ in meta.llamadas]
     assert tipos.count("ad") == 2
-    assert tipos.count("creative") == 1
+    assert tipos.count("creative") == 2
     assert len(llamadas_subir) == 1
     nuevas = [p for p in ex.piezas("acme", eid) if p["pieza_id"] == clon_nuevo]
     assert len(nuevas) == 2
     assert all(p["meta_ad_id"] for p in nuevas)
-    assert nuevas[0]["meta_creative_id"] == nuevas[1]["meta_creative_id"]
+    assert nuevas[0]["meta_creative_id"] != nuevas[1]["meta_creative_id"]
+    assert nuevas[0]["extra"]["meta_video_id"] == nuevas[1]["extra"]["meta_video_id"]
 
 
-def test_lanzar_piezas_nuevas_reusa_creative_de_pieza_vieja_con_mismo_pieza_id(entorno, base_temporal):
+def test_lanzar_piezas_nuevas_reusa_video_de_pieza_vieja_con_mismo_pieza_id(entorno, base_temporal):
     """Fix round 1 (Important #1), segundo caso: una pieza nueva cuyo
-    pieza_id YA tiene creative en otra pieza ya lanzada (de una corrida
-    anterior, en otro país) no debe volver a subir video ni crear creative —
-    solo el ad. Experimento aparte con 3 países (CO, MX, BR) para que BR ya
-    tenga su conjunto en Meta antes de agregarle la pieza reusada."""
+    pieza_id YA subió video en otra pieza ya lanzada (de una corrida
+    anterior, en otro país) no debe volver a subirlo — sí crea su propio
+    creative (link con su ep id) y su ad. Experimento aparte con 3 países
+    (CO, MX, BR) para que BR ya tenga su conjunto en Meta antes de agregarle
+    la pieza reusada."""
     ex, lz, meta = entorno["ex"], entorno["lanzador"], entorno["meta"]
     paises3 = PAISES + [{"pais": "BR", "idioma": "pt", "presupuesto_dia": 100.0}]
     eid = ex.crear("acme", "Cojín BR", paises3, "OUTCOME_TRAFFIC", 7, 500000.0, "https://tienda.co/p", "COP")
@@ -554,12 +561,14 @@ def test_lanzar_piezas_nuevas_reusa_creative_de_pieza_vieja_con_mismo_pieza_id(e
     assert lz.lanzar_piezas_nuevas("acme", eid) == 1
     tipos = [t for t, _ in meta.llamadas]
     assert tipos.count("ad") == 1
-    assert "creative" not in tipos
+    assert tipos.count("creative") == 1
     assert len(llamadas_subir) == 0
     piezas = ex.piezas("acme", eid)
     br_clon = [p for p in piezas if p["pieza_id"] == clon and p["pais"] == "BR"][0]
-    creative_original = [p for p in piezas if p["pieza_id"] == clon and p["pais"] == "CO"][0]["meta_creative_id"]
-    assert br_clon["meta_ad_id"] and br_clon["meta_creative_id"] == creative_original
+    co_clon = [p for p in piezas if p["pieza_id"] == clon and p["pais"] == "CO"][0]
+    assert br_clon["meta_ad_id"] and br_clon["meta_creative_id"] != co_clon["meta_creative_id"]
+    assert br_clon["extra"]["meta_video_id"] == co_clon["extra"]["meta_video_id"]
+    assert [kw for t, kw in meta.llamadas if t == "creative"][0]["link"].endswith(f"utm_content={br_clon['id']}")
 
 
 def test_activar_pieza_reactiva_conjunto_de_pais_pausado_individualmente(entorno):

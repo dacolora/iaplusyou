@@ -1,6 +1,6 @@
 {# Barra lateral del proyecto (referencia: DoReel). Colapsable: solo íconos o
    íconos + texto; el estado se recuerda. Las claves data-tab son las mismas de
-   siempre (calzado, creativeflowplus, experimentos, catalogo, ads, settings)
+   siempre (calzado, creativeflowplus, experimentos, productos, catalogo, ads, settings)
    para que los redirect(_anchor=...) y los enlaces guardados sigan
    funcionando. #}
 <aside class="sidebar" id="sidebar">
@@ -17,6 +17,10 @@
     <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="Experimentos">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="18" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 7v4M12 11l-6 6M12 11l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
       <span class="sidebar-texto">Experimentos</span>
+    </button>
+    <button type="button" class="sidebar-item" data-tab="productos" role="tab" title="Productos">
+      <svg viewBox="0 0 24 24"><path d="M3 4h8l10 10-7 7L3 12z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><circle cx="8" cy="9" r="1.6" fill="currentColor"/></svg>
+      <span class="sidebar-texto">Productos</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="ads" role="tab" title="Campañas">
       <svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M16 9a4 4 0 0 1 0 6M19 7a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>

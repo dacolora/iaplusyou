@@ -28,9 +28,12 @@ import tareas
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 log = logging.getLogger("creatv.worker")
 
-# (tipo, cada_segundos). Los tipos se registran en tareas/ (bloques siguientes
-# agregan sincronizar_tiendas).
-PERIODICAS = [("exp_refrescar_todos", 7200), ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600)]
+# (tipo, cada_segundos). Los tipos se registran en tareas/. El orden importa
+# dentro de un mismo tick: los pedidos de las tiendas se sincronizan (y se
+# atribuyen) ANTES de refrescar experimentos, así el snapshot por tienda ve
+# las ventas de este ciclo y no las de hace 2 h.
+PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("exp_refrescar_todos", 7200), ("exp_decidir_todos", 3600),
+              ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600)]
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el bucle termina la tarea en curso y recién ahí sale.

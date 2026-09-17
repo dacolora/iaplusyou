@@ -1,0 +1,20 @@
+{
+  "data": {
+    "products": {
+      "pageInfo": {"hasNextPage": false, "endCursor": "eyJsYXN0X2lkIjo4ODEzfQ=="},
+      "nodes": [
+        {
+          "id": "gid://shopify/Product/8813",
+          "title": "Repisa flotante de vidrio",
+          "descriptionHtml": "<div>Repisa de 80 cm</div>",
+          "handle": "repisa-flotante",
+          "onlineStoreUrl": "https://vidriosdemo.com/products/repisa-flotante",
+          "productType": "Repisas",
+          "featuredImage": {"url": "https://cdn.shopify.com/s/files/repisa.jpg"},
+          "images": {"nodes": [{"url": "https://cdn.shopify.com/s/files/repisa.jpg"}]},
+          "variants": {"nodes": [{"price": "120000.00", "sku": "REP-80"}]}
+        }
+      ]
+    }
+  }
+}

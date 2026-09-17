@@ -1,0 +1,31 @@
+{
+  "query": "",
+  "results": [
+    {
+      "id": 2000009001,
+      "date_created": "2026-09-12T09:00:00.000-05:00",
+      "status": "paid",
+      "total_amount": 190000,
+      "currency_id": "COP",
+      "buyer": {"id": 111, "nickname": "COMPRADOR1"},
+      "order_items": [
+        {"item": {"id": "MCO1002", "title": "Vidrio templado 8mm", "seller_sku": null},
+         "quantity": 2, "unit_price": 95000, "currency_id": "COP"}
+      ]
+    },
+    {
+      "id": 2000009000,
+      "date_created": "2026-09-10T14:22:05.000-05:00",
+      "status": "paid",
+      "total_amount": 189900,
+      "currency_id": "COP",
+      "buyer": {"id": 112, "nickname": "COMPRADOR2"},
+      "order_items": [
+        {"item": {"id": "MCO1001", "title": "Espejo redondo 60cm", "seller_sku": "ESP-60"},
+         "quantity": 1, "unit_price": 189900, "currency_id": "COP"}
+      ]
+    }
+  ],
+  "sort": {"id": "date_desc", "name": "Date descending"},
+  "paging": {"total": 2, "offset": 0, "limit": 50}
+}
