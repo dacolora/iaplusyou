@@ -96,6 +96,8 @@ producto = Table("producto", metadata,
     Column("prioridad", Integer, default=0),
     Column("en_prueba", Boolean, default=False),
     Column("archivado", Boolean, default=False),
+    Column("url_imagen_principal", String(500)),
+    Column("extra", JSON, default=dict),                    # campos del conector sin columna propia (bloque 5)
     sa.UniqueConstraint("cliente", "fuente", "fuente_id", name="uq_producto_fuente"),
 )
 
@@ -259,9 +261,12 @@ tienda = Table("tienda", metadata,
     *_comunes(),
     Column("tipo", String(10), nullable=False),
     Column("credenciales", Text),                           # cifrado (bloque 5)
+    Column("nombre", String(120)),
+    Column("dominio", String(200)),
     Column("ultima_sync_productos", String(19)),
     Column("ultima_sync_pedidos", String(19)),
     Column("estado", String(20), default="conectada"),
+    Column("error", Text),
 )
 
 pedido = Table("pedido", metadata,
@@ -273,7 +278,9 @@ pedido = Table("pedido", metadata,
     Column("total", Float), Column("moneda", String(3)),
     Column("items", JSON, default=list),
     Column("utm_content", String(120)),
-    Column("experimento_pieza_id", Integer, sa.ForeignKey("experimento_pieza.id")),
+    # Sin FK dura (bloque 5, migración 0005 la quita): un pedido debe sobrevivir
+    # aunque la pieza a la que se atribuye ya no exista o se resuelva desordenada.
+    Column("experimento_pieza_id", Integer),
     sa.UniqueConstraint("cliente", "fuente_id", name="uq_pedido_fuente"),
 )
 
