@@ -604,3 +604,19 @@ fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
     assert time.monotonic() - t0 >= 0.25   # esperó al hijo
     hijo.wait(timeout=5)
     assert json.load(open(os.path.join(base, "clientes", "acme", "productos.json")))["base"]["regla"] == "Del padre"
+
+
+def test_nunca_intentados_van_antes_que_en_prueba_ya_intentados(entorno):
+    """Terminación de la continuación: tres productos en prueba sin fotos ya
+    intentados no pueden monopolizar el tope corrida tras corrida; el que
+    nunca se intentó (aunque no esté en prueba) entra primero."""
+    import importador
+    import tiendas
+    sin = [_prod(nombre=f"Sin {i}", fuente_id=f"s{i}", fotos=()) for i in range(3)]
+    con = _prod(nombre="Con fotos", fuente_id="c1", fotos=("https://cdn.test/c.png",))
+    importador.importar_lista("acme", "csv", sin, max_activos=3)          # los tres quedan intentados
+    for i in range(3):
+        tiendas.marcar_producto("acme", tiendas.producto_por_fuente("acme", "csv", f"s{i}")["id"], en_prueba=True)
+    res = importador.importar_lista("acme", "csv", sin + [con], max_activos=2)
+    assert res["activos"] == 1 and res["pendientes"] == 0
+    assert tiendas.producto_por_fuente("acme", "csv", "c1")["activo_catalogo_id"] == "con_fotos"

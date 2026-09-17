@@ -428,13 +428,14 @@ def _activo_completo(cliente, prod):
 
 
 def _orden_pendientes(prod):
-    """Primero lo que está en prueba, luego por prioridad, luego lo que nunca
-    se intentó ligar (un intento anterior sin activo — sin fotos
-    descargables — va al final para no bloquear al resto corrida tras
-    corrida), y por id para que sea estable."""
+    """Primero lo que NUNCA se intentó ligar (así cada corrida hace progreso
+    real y la continuación termina aunque haya muchos productos sin fotos
+    descargables ya intentados), luego lo que está en prueba, luego por
+    prioridad, y por id para que sea estable. Los ya intentados quedan al
+    final: se reintentan solo cuando no queda nada nuevo."""
     extra = prod.get("extra") or {}
-    return (0 if prod.get("en_prueba") else 1, -int(prod.get("prioridad") or 0),
-            1 if extra.get("vinculo_intentado_en") else 0, int(prod.get("id") or 0))
+    return (1 if extra.get("vinculo_intentado_en") else 0, 0 if prod.get("en_prueba") else 1,
+            -int(prod.get("prioridad") or 0), int(prod.get("id") or 0))
 
 
 def importar_lista(cliente, fuente, productos_normalizados, on_progreso=None, max_activos=None):
