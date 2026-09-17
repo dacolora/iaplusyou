@@ -155,7 +155,7 @@ def test_ejecutar_video_anota_si_el_video_trae_sonido(base_temporal, monkeypatch
     anotado = []
     monkeypatch.setattr(fp.bitacora, "registrar", lambda c, i, paso, res, det="": anotado.append((paso, res, det)))
 
-    monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: False)
+    monkeypatch.setattr(fp.mezcla, "tiene_audio", lambda path: False)
     fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     e = cf.cargar("acme")[cid]
     assert e["capas"]["sonido"]["estado"] == "ausente"
@@ -165,29 +165,15 @@ def test_ejecutar_video_anota_si_el_video_trae_sonido(base_temporal, monkeypatch
     assert e["usd"] == 0.7
 
     cf.actualizar("acme", cid, estado="video_generando")
-    monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: True)
+    monkeypatch.setattr(fp.mezcla, "tiene_audio", lambda path: True)
     fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     assert cf.cargar("acme")[cid]["capas"]["sonido"]["estado"] == "ok"
     assert cf.cargar("acme")[cid]["capas"]["sonido"]["proveedor"] == "kling_o3_pro"
 
     # ffprobe ausente o roto: no se sabe, pero el video queda listo igual
     cf.actualizar("acme", cid, estado="video_generando")
-    monkeypatch.setattr(fp, "_tiene_pista_de_audio", lambda path: None)
+    monkeypatch.setattr(fp.mezcla, "tiene_audio", lambda path: None)
     fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     e = cf.cargar("acme")[cid]
     assert e["estado"] == "video_listo" and e["capas"]["sonido"]["estado"] == "desconocido"
     assert e["capas"]["sonido"]["proveedor"] == "kling_o3_pro"
-
-
-def test_tiene_pista_de_audio_lee_los_streams_de_ffprobe(monkeypatch):
-    import tareas.flowplus as fp
-    from final_edition import cortes
-    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video"}, {"codec_type": "audio"}]})
-    assert fp._tiene_pista_de_audio("/x.mp4") is True
-    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video"}]})
-    assert fp._tiene_pista_de_audio("/x.mp4") is False
-
-    def _boom(p):
-        raise FileNotFoundError("ffprobe")
-    monkeypatch.setattr(cortes, "ffprobe_json", _boom)
-    assert fp._tiene_pista_de_audio("/x.mp4") is None

@@ -17,23 +17,10 @@ import bitacora
 import creative_flow
 import estado as estado_mod
 import trabajos
+from final_edition import mezcla
 from providers import flowplus_modelos
 from storage import r2_uploader
 from tareas import al_interrumpir, registrar
-
-_ESTADO_SONIDO = {True: "ok", False: "ausente", None: "desconocido"}
-
-
-def _tiene_pista_de_audio(path):
-    """True/False según ffprobe encuentre una pista de audio en el archivo;
-    None si ffprobe no está o falla. Solo informa (bitácora y `sonido` de la
-    sesión): nunca bloquea ni repite una generación."""
-    try:
-        from final_edition import cortes
-        info = cortes.ffprobe_json(path)
-    except Exception:
-        return None
-    return any((st or {}).get("codec_type") == "audio" for st in (info.get("streams") or []))
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -221,7 +208,7 @@ def ejecutar_video(tarea):
 
     # Sonido de la escena (spec estudio S1): se pidió el audio nativo; ffprobe
     # dice si el proveedor lo entregó. Queda anotado para la tarjeta y la bitácora.
-    estado_sonido = _ESTADO_SONIDO[_tiene_pista_de_audio(out_path)]
+    estado_sonido = mezcla.ESTADO_SONIDO[mezcla.tiene_audio(out_path)]
     bitacora.registrar(cliente, cf_id, "sonido", estado_sonido, f"{modelo}: pista de audio {estado_sonido}")
 
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
