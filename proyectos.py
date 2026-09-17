@@ -101,3 +101,21 @@ def guardar_correo_notificaciones(cliente, correo):
     datos = cargar(cliente)
     datos["correo_notificaciones"] = (correo or "").strip()
     _json_store.guardar(_path(cliente), datos)
+
+
+PAISES_CALENDARIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE")
+
+
+def pais(cliente):
+    """País del proyecto para el calendario comercial de Sprints (ISO-3166-1
+    alfa-2). Sin dato, Colombia."""
+    return (cargar(cliente).get("pais") or "CO").upper()
+
+
+def guardar_pais(cliente, pais_nuevo):
+    pais_nuevo = (pais_nuevo or "").upper()
+    if pais_nuevo not in PAISES_CALENDARIO:
+        raise ValueError(f"País no soportado: {pais_nuevo}")
+    datos = cargar(cliente)
+    datos["pais"] = pais_nuevo
+    _json_store.guardar(_path(cliente), datos)
