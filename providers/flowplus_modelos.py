@@ -11,6 +11,15 @@ Rutas y precios verificados en wavespeed.ai/models/* el 2026-09-12:
 
 "Wan Clone" no existe en WaveSpeed (ni en fal/Replicate/Higgsfield) a esta
 fecha: cuando aparezca se agrega como una entrada más.
+
+Sonido de la escena (spec estudio S1): los tres modelos generan audio nativo y
+se pide SIEMPRE salvo que el llamador diga `con_sonido=False`. Parámetros y
+precios verificados en wavespeed.ai/models/* el 2026-09-17: Wan 3.0
+`enable_audio` (default true, sin recargo), Kling O3 Pro `sound` (default
+false, 0.112 -> 0.140 $/s; solo disponible sin video de referencia, que Kling
+nunca recibe aquí), Seedance 2.5 `generate_audio` (default true, sin recargo).
+`audio_nativo` de cada entrada guarda el nombre del parámetro y el recargo por
+segundo; `estimate_video` lo suma para que el costo se vea antes del clic.
 """
 import requests
 
@@ -24,7 +33,8 @@ VIDEO = {
         "usd_por_segundo": wan3_client.COSTO_USD_POR_SEGUNDO["720p"],
         "duraciones": (5, 8, 10, 12, 15, 20),
         "max_videos": 5,
-        "nota": "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p. El único que usa videos tal cual.",
+        "audio_nativo": {"parametro": "enable_audio", "recargo_usd_s": 0.0},
+        "nota": "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p. El único que usa videos tal cual. Sonido de la escena incluido.",
     },
     "kling_o3_pro": {
         "nombre": "Kling O3 Pro",
@@ -33,7 +43,8 @@ VIDEO = {
         "usd_por_segundo": 0.112,
         "duraciones": (5, 8, 10, 12, 15),
         "max_videos": 0,
-        "nota": "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos.",
+        "audio_nativo": {"parametro": "sound", "recargo_usd_s": 0.028},
+        "nota": "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado).",
     },
     "seedance25": {
         "nombre": "Seedance 2.5",
@@ -42,7 +53,8 @@ VIDEO = {
         "usd_por_segundo": 0.36,
         "duraciones": (5, 8, 10, 12, 15),
         "max_videos": 0,
-        "nota": "Usa SOLO la primera imagen como fotograma de arranque; el encuadre sale de esa imagen. Calidad cinematográfica, el más caro.",
+        "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
+        "nota": "Usa SOLO la primera imagen como fotograma de arranque; el encuadre sale de esa imagen. Calidad cinematográfica, el más caro. Sonido de la escena incluido.",
     },
 }
 
@@ -60,9 +72,16 @@ VIDEO_POR_DEFECTO = "wan3"
 IMAGEN_POR_DEFECTO = "seedream_v5_pro"
 
 
-def estimate_video(modelo_id, duration):
+def usd_por_segundo(modelo_id, con_sonido=True):
+    """Costo por segundo efectivo: el del modelo más el recargo del sonido
+    nativo cuando se pide (Kling O3 Pro es el único que cobra aparte)."""
     info = VIDEO[modelo_id]
-    return {"credits": None, "usd": round(info["usd_por_segundo"] * duration, 3)}
+    recargo = info["audio_nativo"]["recargo_usd_s"] if con_sonido else 0.0
+    return info["usd_por_segundo"] + recargo
+
+
+def estimate_video(modelo_id, duration, con_sonido=True):
+    return {"credits": None, "usd": round(usd_por_segundo(modelo_id, con_sonido) * duration, 3)}
 
 
 def estimate_imagen(modelo_id, n_referencias=1):
@@ -90,11 +109,13 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
 
 
 def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16", on_progreso=None,
-                  videos=None):
+                  videos=None, con_sonido=True):
     """Devuelve la URL pública del video. referencias: URLs públicas de imágenes
     (la primera es la principal; Seedance solo usa esa). videos: URLs públicas
     de videos de referencia — solo Wan 3.0 los recibe tal cual; para los demás
-    el llamador ya convirtió cada video en un fotograma dentro de `referencias`."""
+    el llamador ya convirtió cada video en un fotograma dentro de `referencias`.
+    con_sonido: pide el audio nativo del modelo (sonido de la escena); True
+    salvo que la pieza se quiera muda a propósito."""
     info = VIDEO[modelo_id]
     videos = list(videos or [])[: info.get("max_videos", 0)]
     if not referencias and not videos:
@@ -104,17 +125,18 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
         return wan3_client.generar_video(
             prompt, refs, duration=duration, resolution="720p",
             aspect_ratio=aspect_ratio, on_progreso=on_progreso, reference_videos=videos,
+            enable_audio=bool(con_sonido),
         )
     if modelo_id == "kling_o3_pro":
         payload = {
             "prompt": prompt, "images": refs, "aspect_ratio": aspect_ratio,
-            "duration": int(duration), "sound": False,
+            "duration": int(duration), "sound": bool(con_sonido),
         }
         return _lanzar(info["path"], payload, info["nombre"], on_progreso=on_progreso)
     if modelo_id == "seedance25":
         payload = {
             "prompt": prompt, "image": refs[0], "duration": int(duration),
-            "resolution": "720p", "generate_audio": False,
+            "resolution": "720p", "generate_audio": bool(con_sonido),
         }
         return _lanzar(info["path"], payload, info["nombre"], on_progreso=on_progreso)
     raise ValueError(f"Modelo de video desconocido: {modelo_id}")
