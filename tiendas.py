@@ -153,6 +153,17 @@ def producto(cliente, producto_id):
     return _producto_a_dict(fila) if fila else None
 
 
+def producto_por_fuente(cliente, fuente, fuente_id):
+    """El producto (cliente, fuente, fuente_id) tal como está guardado, o None.
+    Lo usa el importador ANTES de `upsert_producto` para saber si va a crear
+    o a actualizar (el upsert no lo distingue)."""
+    p = db.producto
+    with db.conectar() as con:
+        fila = con.execute(sa.select(p).where(
+            p.c.cliente == cliente, p.c.fuente == fuente, p.c.fuente_id == fuente_id)).first()
+    return _producto_a_dict(fila) if fila else None
+
+
 def productos(cliente, incluir_archivados=False):
     p = db.producto
     condiciones = [p.c.cliente == cliente]

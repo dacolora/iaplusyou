@@ -19,9 +19,11 @@ def test_registro_contiene_swap_generar(base_temporal):
     import tareas.swap as sw
     assert tareas.REGISTRO["swap_generar"] is sw.ejecutar
     assert sorted(tareas.REGISTRO) == [
+        "catalogo_importar",
         "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar", "exp_refrescar_todos",
         "final_guion", "final_producir",
         "flowplus_imagen", "flowplus_video", "meta_publicar", "meta_refrescar", "swap_generar",
+        "tienda_sync_pedidos", "tienda_sync_pedidos_todas", "tienda_sync_productos", "tienda_sync_productos_todas",
     ]
 
 

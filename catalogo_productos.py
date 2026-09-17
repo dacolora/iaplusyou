@@ -173,6 +173,18 @@ def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
     return destino
 
 
+def existe(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
+    """True si la carpeta del activo existe en disco (tenga o no fotos: un
+    activo recién creado sin imágenes también "existe", aunque no aparezca
+    en listar()). Un id inválido (fuga de directorio) es False, no error."""
+    if not producto_id:
+        return False
+    try:
+        return os.path.isdir(carpeta_de(cliente, producto_id, categoria))
+    except ValueError:
+        return False
+
+
 def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATEGORIA_POR_DEFECTO, regla=""):
     """Crea la carpeta del activo y guarda su metadata. Devuelve el id nuevo.
     OJO: hasta que no tenga al menos una imagen no aparece en listar(), porque
