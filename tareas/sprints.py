@@ -204,7 +204,13 @@ def ejecutar_qa_pendientes(tarea):
         sp = estado.recalcular(cliente, sid)
         if not sp:
             continue
-        vivas = [p for c in sp["campanas"] for p in c["piezas"] if p.get("estado") in ("pendiente", "generando")]
+        # Cualquier estado no terminal cuenta como viva, incluido None: una
+        # idea con un placeholder "reservando_*" (se cayó el proceso entre
+        # reservar y crear la sesión de Crear) no tiene fila en `pieza` — el
+        # LEFT JOIN de _ideas() la deja con estado None, y si solo mirábamos
+        # ("pendiente", "generando") esa pieza quedaba invisible: el lote se
+        # reportaba terminado (bandera apagada + aviso) con una pieza colgada.
+        vivas = [p for c in sp["campanas"] for p in c["piezas"] if p.get("estado") not in ("listo", "error", "degradada")]
         if vivas:
             continue
         piezas = [p for c in sp["campanas"] for p in c["piezas"]]

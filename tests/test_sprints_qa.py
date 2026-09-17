@@ -73,3 +73,24 @@ def test_evaluar_arma_prompt_y_mezcla_formato(base_temporal, monkeypatch, tmp_pa
     r2 = qa.evaluar("acme", datos.idea("acme", cp), {"tipo": "imagen", "video_url": "https://r2/i.png", "video_local": "/no/existe.png"}, datos.campana("acme", cid))
     assert r2["veredicto"] == "revisar" and r2["checks"]["formato"]["ok"] is True
     assert [b for b in capturado["c"] if b["type"] == "image"][0]["source"] == {"type": "url", "url": "https://r2/i.png"}
+
+
+def test_evaluar_borra_el_temporal_aunque_falle_la_vision(base_temporal, monkeypatch, tmp_path):
+    """Fix round 1, hallazgo 1: si `analisis._llamar` (los dos intentos)
+    falla, el archivo temporal que bajó `archivo_local` no debe quedar
+    huérfano en el temp dir — sprint_qa_pieza reintenta hasta 3 veces."""
+    from sprints import analisis, datos, qa
+    pid = datos.crear_persona("acme", "Premium")
+    tid = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
+    sid = datos.crear_sprint("acme", "S", "2026-10-01", "2026-10-31")
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 1, 0)
+    v = tmp_path / "qa_temp.mp4"; v.write_bytes(b"x")
+    monkeypatch.setattr(qa, "archivo_local", lambda entry: str(v))
+    def rompe(content, max_tokens=700):
+        raise analisis.AnalisisInvalido("Claude no devolvió JSON.")
+    monkeypatch.setattr(analisis, "_llamar", rompe)
+    entry = {"tipo": "imagen", "video_url": "https://r2/i.png"}
+    idea = {"titulo": "Amanecer", "escena": "rodea"}
+    with pytest.raises(qa.AnalisisInvalido):
+        qa.evaluar("acme", idea, entry, datos.campana("acme", cid))
+    assert not v.exists()

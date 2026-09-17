@@ -171,6 +171,28 @@ def test_qa_pendientes_encola_y_avisa_fin_de_lote(base_temporal, monkeypatch):
     assert encolados == []
 
 
+def test_qa_pendientes_no_avisa_con_idea_reservando(base_temporal, monkeypatch):
+    """Fix round 1, hallazgo 2: una idea con cf_id="reservando_*" (se cayó el
+    proceso entre reservar y crear la sesión de Crear) no tiene fila en
+    `pieza` — queda con estado None. Antes solo se contaba como "viva"
+    ("pendiente", "generando"), así que un lote con una pieza colgada así se
+    reportaba terminado igual (bandera apagada + aviso), dejándola invisible."""
+    import creative_flow
+    import notificaciones
+    import tareas
+    from sprints import datos
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)  # una pieza "listo"
+    cp2 = datos.crear_idea("acme", cid, "video", "B", "b", estado_idea="aprobada")
+    datos.actualizar_idea("acme", cp2, cf_id="reservando_9")  # sin sesión de Crear todavía
+    datos.actualizar_sprint("acme", sid, extra={"lote_en_curso": True})
+    avisos = []
+    monkeypatch.setattr(notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: avisos.append((c, tipo, asunto)) or False)
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_qa_pendientes"]({"payload": {}})
+    assert avisos == []
+    assert datos.sprint("acme", sid)["extra"]["lote_en_curso"] is True
+
+
 def test_periodica_qa_registrada():
     import worker
     assert ("sprint_qa_pendientes", 300) in worker.PERIODICAS

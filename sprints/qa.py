@@ -159,22 +159,29 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
         producto=campana.get("catalogo_id"), temporada=f"{temporada.get('nombre', '')}: {temporada.get('contexto') or ''}".strip(": "),
         titulo=idea.get("titulo") or "", escena=idea.get("escena") or "", guia=(marca.guia_efectiva(cliente) or "").strip() or "(sin guía)",
         referencias="; ".join(r["analisis"]["resumen"] for r in refs) or "(sin referencias analizadas)")
-    imagenes = _bloques_imagen(entry, ruta)
-    if not imagenes:
-        raise AnalisisInvalido("La pieza no tiene imagen ni fotograma que evaluar.")
-    content = [{"type": "text", "text": texto}] + imagenes
+    es_temporal = bool(ruta and ruta != entry.get("video_local"))
     try:
-        r = parsear(analisis._llamar(content, max_tokens=600))
-    except AnalisisInvalido as e:
-        content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
-        r = parsear(analisis._llamar(content, max_tokens=600))
-    ok, nota = formato(ruta, entry.get("tipo") or "video", entry.get("duracion_objetivo"), entry.get("aspect_ratio") or "9:16")
-    r["checks"]["formato"] = {"ok": ok, "nota": nota}
-    if ruta and ruta != entry.get("video_local"):
+        imagenes = _bloques_imagen(entry, ruta)
+        if not imagenes:
+            raise AnalisisInvalido("La pieza no tiene imagen ni fotograma que evaluar.")
+        content = [{"type": "text", "text": texto}] + imagenes
         try:
-            os.remove(ruta)
-        except OSError:
-            pass
+            r = parsear(analisis._llamar(content, max_tokens=600))
+        except AnalisisInvalido as e:
+            content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
+            r = parsear(analisis._llamar(content, max_tokens=600))
+        ok, nota = formato(ruta, entry.get("tipo") or "video", entry.get("duracion_objetivo"), entry.get("aspect_ratio") or "9:16")
+        r["checks"]["formato"] = {"ok": ok, "nota": nota}
+    finally:
+        # El archivo temporal (descargado solo para poder sacar fotogramas y
+        # correr ffprobe) se borra pase lo que pase: si la visión falla y la
+        # tarea reintenta (sprint_qa_pieza, max_intentos=3), cada intento
+        # descarga uno nuevo — sin este finally se acumulan en el temp dir.
+        if es_temporal:
+            try:
+                os.remove(ruta)
+            except OSError:
+                pass
     from generador_prompts import MODEL
     return {"score": r["score"], "checks": r["checks"], "veredicto": veredicto(r["score"], r["checks"], umbral),
             "modelo": MODEL, "costo_usd": COSTO_USD_ESTIMADO, "evaluado_en": datetime.now().isoformat(timespec="seconds"),
