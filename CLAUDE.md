@@ -156,8 +156,22 @@ is pure. Routes live in the Blueprint `sprints/rutas.py`
 adds `sprints_rutas.contexto(cliente)` to the project page. Uploading a
 reference enqueues `sprint_analizar_referencia` (Claude vision, cents); "Sugerir
 personas" enqueues `sprint_sugerir_personas`; a pasted link goes through
-`sprint_referencia_link` (yt-dlp via `referencias_link.descargar`). Nothing in
-Parte 1 generates images or videos.
+`sprint_referencia_link` (yt-dlp via `referencias_link.descargar`). Parte 2 (producción): `sprints/ideas.py` asks Claude for ideas per campaign
+(prompt maestro: persona + producto + temporada + reference analyses + brand
+guide + banco de prompts) stored as `campana_pieza` rows; "Generar lote"
+(`sprints/produccion.py`) shows the estimated cost first, then creates one
+Crear session per approved idea (`creative_flow.crear(..., extra_sprint=)`,
+prompt via `flowplus_prompt.armar(..., contexto=)`) and enqueues it through
+`flowplus_lanzar.lanzar(..., prioridad=3)` — `tarea.prioridad` makes single
+pieces from Crear (5) jump ahead of batches. `campana_pieza.cf_id` joins
+`pieza.legado_id`, so progress and states come from the real sessions. The
+worker periodic `sprint_qa_pendientes` (5 min) queues `sprint_qa_pieza`
+(`sprints/qa.py`: Claude vision + ffprobe → `campana_pieza.qa`, never
+generates) and emails when a batch finishes. `sprints/revision.py` approves or
+rejects (a rejected piece leaves `estado_videos.json`), closes and reopens the
+sprint; `sprints/entrega.py` lists approved links and builds the zip
+(`sprint_empaquetar`). Retries and regenerations always go through the cost
+gate and `max_intentos=1`.
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
