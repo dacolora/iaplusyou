@@ -21,6 +21,7 @@ MELI: si el conector renovó el token (`credenciales_actualizadas`), se guarda
 SIEMPRE, incluso si la sync falló después — el refresh token es de un solo uso.
 """
 import logging
+import os
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -219,13 +220,24 @@ def catalogo_importar(tarea):
     def avanzar(etapa, detalle=None):
         trabajos.reportar(job_id, etapa=etapa, detalle=detalle)
 
-    if url:
-        resumen = importador.desde_url(cliente, url, on_progreso=avanzar)
-    else:
-        if not p.get("ruta"):
-            raise ErrorConector("La importación no trae archivo ni URL.")
-        resumen = importador.desde_archivo(cliente, p["ruta"], p.get("nombre_archivo") or p["ruta"],
-                                           on_progreso=avanzar)
+    try:
+        if url:
+            resumen = importador.desde_url(cliente, url, on_progreso=avanzar)
+        else:
+            if not p.get("ruta"):
+                raise ErrorConector("La importación no trae archivo ni URL.")
+            resumen = importador.desde_archivo(cliente, p["ruta"], p.get("nombre_archivo") or p["ruta"],
+                                               on_progreso=avanzar)
+    finally:
+        # El dashboard sube el archivo a clientes/<c>/importaciones/ solo para
+        # esta tarea (`borrar_al_terminar`): se borra al terminar, salga bien o
+        # mal (max_intentos=1: nadie lo va a releer). Sin la bandera (una ruta
+        # ajena, p. ej. un fixture) el archivo no se toca.
+        if p.get("borrar_al_terminar") and p.get("ruta"):
+            try:
+                os.remove(p["ruta"])
+            except OSError:
+                pass
     return "Importación lista: " + importador.resumen_texto(resumen)
 
 

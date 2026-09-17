@@ -270,6 +270,20 @@ def resolver_pedido(cliente, pedido_id, ep_id):
         return True
 
 
+def pedidos_por_experimento(cliente):
+    """{experimento_id: pedidos atribuidos a alguna de sus piezas} en UNA
+    consulta — es lo que la pestaña Experimentos muestra como «ventas por
+    tienda» sin ir a la base una vez por experimento. Solo experimentos con
+    al menos un pedido aparecen en el dict."""
+    pe, ep = db.pedido, db.experimento_pieza
+    q = (sa.select(ep.c.experimento_id, sa.func.count(pe.c.id))
+         .select_from(pe.join(ep, ep.c.id == pe.c.experimento_pieza_id))
+         .where(pe.c.cliente == cliente, ep.c.cliente == cliente)
+         .group_by(ep.c.experimento_id))
+    with db.conectar() as con:
+        return {int(eid): int(n) for eid, n in con.execute(q)}
+
+
 def ventas_por_pieza(cliente, ep_id, desde_iso):
     """Compras, ingresos (suma de `total`) y `monedas` (las distintas que
     traían esos pedidos, ordenadas) de una pieza desde `desde_iso`

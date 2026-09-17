@@ -60,9 +60,17 @@ import acciones
 import decisor
 import modos
 import propuestas
+import cifrado
+import conectores
+import importador
+import tiendas
+from conectores import ErrorConector
+from conectores import csv_excel as conector_csv
+from conectores import meli as conector_meli
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 from tareas import final_edition as tareas_fe
 from tareas import experimentos as tareas_exp
+from tareas import tiendas as tareas_tiendas
 from final_edition import ETAPAS_FINAL, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
@@ -132,8 +140,11 @@ def _guard_por_cliente():
     Rutas sin <cliente> en la URL (login, /, /proyectos/nuevo, estáticos)
     no pasan por acá."""
     cliente = request.view_args.get("cliente") if request.view_args else None
-    if cliente is None or request.endpoint == "landing_cliente":
-        # la landing pública de un proyecto es, justamente, pública
+    if cliente is None or request.endpoint in ("landing_cliente", "meli_callback"):
+        # la landing pública de un proyecto es, justamente, pública; el
+        # callback de MercadoLibre no lleva <cliente> en la URL (una sola
+        # dirección registrada) y resuelve el proyecto desde la sesión, con
+        # su propio chequeo de acceso (ver meli_callback).
         return None
     sesion = _sesion()
     if not usuarios.puede_acceder(sesion, cliente):
@@ -865,6 +876,13 @@ def ver_cliente(cliente):
     # experimento con contador > 0), reglas y modos para los formularios.
     propuestas_exp = {e["id"]: propuestas.pendientes(cliente, e["id"]) for e in experimentos_exp if e["propuestas_pendientes"]}
     reglas_cliente = proyectos.reglas_defecto(cliente)
+    # Bloque 5: productos importados/sincronizados, tiendas conectadas y el
+    # estado del Pixel. El Pixel se consulta ANTES de atribucion_sugerida
+    # (que solo mira caché): así la sugerencia del formulario de experimento
+    # coincide con lo que Configuración muestra en la misma carga.
+    capacidades_meta = meta_conexion.estado(cliente)
+    estado_pixel = meta_conexion.estado_pixel(cliente) if capacidades_meta.get("estado") == "conectado" else None
+    tiendas_cliente = tiendas.listar(cliente)
 
     return render_template(
         "cliente.html",
@@ -904,7 +922,7 @@ def ver_cliente(cliente):
         proveedores_swap_imagen=PROVEEDORES_SWAP_IMAGEN,
         proveedores_swap_video=PROVEEDORES_SWAP_VIDEO,
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
-        capacidades_meta=meta_conexion.estado(cliente),
+        capacidades_meta=capacidades_meta,
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
@@ -925,6 +943,17 @@ def ver_cliente(cliente):
         correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
         modos_exp=modos.MODOS,
         nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
+        productos_tienda=_productos_tienda_contexto(cliente, experimentos_exp),
+        tiendas_cliente=tiendas_cliente,
+        trabajos_prod=_trabajos_productos(cliente, tiendas_cliente),
+        estado_pixel=estado_pixel,
+        atribucion_sugerida=experimentos.atribucion_sugerida(cliente),
+        atribuciones_exp=experimentos.ATRIBUCIONES,
+        pedidos_por_exp=tiendas.pedidos_por_experimento(cliente),
+        cifrado_ok=cifrado.disponible(),
+        meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
+        tipos_tienda=conectores.TIPOS_API,
+        columnas_csv=conector_csv.COLUMNAS_AYUDA,
     )
 
 
@@ -2601,6 +2630,397 @@ def cfg_correo(cliente):
     proyectos.guardar_correo_notificaciones(cliente, correo)
     flash("Correo guardado." if correo else "Avisos por correo desactivados.", "ok")
     return volver
+
+
+# ---------- Productos (Bloque 5): importar, marcar, vincular; tiendas y Pixel ----------
+# Todo lo que sincroniza o importa corre en el worker (trabajos.encolar): la
+# ruta solo valida, guarda el archivo si lo hay y encola. Lo único inline es
+# `probar()` de un conector (una llamada corta a la API de la tienda) y
+# `vincular_activo` (descarga unas pocas fotos).
+
+IMPORTAR_EXTENSIONES = (".csv", ".xlsx")
+IMPORTAR_MAX_BYTES = 5 * 1024 * 1024
+
+
+def _volver_productos(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="productos"))
+
+
+def _volver_config(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
+def _experimentos_por_activo(cliente, experimentos_exp=None):
+    """{clave: {experimento_id, ...}} donde clave es el NOMBRE visible del
+    activo (lo que Crear guarda en `productos_ids`) o su id. Una pasada por
+    las sesiones de Crear y otra por las piezas de cada experimento — nunca
+    una consulta por producto. La pieza de un experimento apunta a su sesión
+    de Crear por el prefijo de `legado_id` (`<cf_id>` o `<cf_id>__<idioma>_<pais>`)."""
+    if experimentos_exp is None:
+        experimentos_exp = experimentos.cargar(cliente)
+    claves_por_cf = {}
+    for cf_id, entry in creative_flow.cargar(cliente).items():
+        claves = {str(x) for x in (entry.get("productos_ids") or []) if x}
+        if claves:
+            claves_por_cf[cf_id] = claves
+    por_clave = {}
+    for e in experimentos_exp:
+        for pz in e.get("piezas") or []:
+            legado = str(pz.get("legado_id") or "")
+            if not legado:
+                continue
+            for clave in claves_por_cf.get(legado.split("__")[0], ()):
+                por_clave.setdefault(clave, set()).add(e["id"])
+    return por_clave
+
+
+def _productos_tienda_contexto(cliente, experimentos_exp=None):
+    """Productos (con archivados: el filtro «mostrar archivados» es de la
+    plantilla) enriquecidos con `activo_ok` (su activo existe en el
+    catálogo) y `n_experimentos` (cuántos experimentos tienen piezas hechas
+    con ese activo)."""
+    por_clave = _experimentos_por_activo(cliente, experimentos_exp)
+    nombre_de_activo = {a["id"]: a["nombre"] for a in catalogo_productos.listar(cliente, "producto")}
+    lista = tiendas.productos(cliente, incluir_archivados=True)
+    for prod in lista:
+        activo_id = prod.get("activo_catalogo_id")
+        prod["activo_ok"] = bool(activo_id) and catalogo_productos.existe(cliente, activo_id, "producto")
+        ids_exp = set()
+        if activo_id:
+            ids_exp |= por_clave.get(activo_id, set())
+            ids_exp |= por_clave.get(nombre_de_activo.get(activo_id, ""), set())
+        ids_exp |= por_clave.get(prod.get("nombre") or "", set())
+        prod["n_experimentos"] = len(ids_exp)
+    return lista
+
+
+def _trabajos_productos(cliente, tiendas_cliente):
+    """{"importar": {"job_id"} | None, "tiendas": {tid: {"job_id"}}}: qué
+    importación o sincronización está corriendo, para pintar la barra."""
+    importar = None
+    for jid in (tareas_tiendas.job_id_importar_archivo(cliente), tareas_tiendas.job_id_importar_url(cliente)):
+        if trabajos.en_curso(jid):
+            importar = {"job_id": jid}
+            break
+    por_tienda = {}
+    for t in tiendas_cliente:
+        for jid in (tareas_tiendas.job_id_sync_productos(cliente, t["id"]),
+                    tareas_tiendas.job_id_sync_pedidos(cliente, t["id"])):
+            if trabajos.en_curso(jid):
+                por_tienda[t["id"]] = {"job_id": jid}
+                break
+    return {"importar": importar, "tiendas": por_tienda}
+
+
+@app.route("/cliente/<cliente>/productos/importar/archivo", methods=["POST"])
+def prod_importar_archivo(cliente):
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        flash("Elige un archivo .csv o .xlsx.", "error")
+        return _volver_productos(cliente)
+    nombre = secure_filename(archivo.filename) or "catalogo"
+    if os.path.splitext(nombre.lower())[1] not in IMPORTAR_EXTENSIONES:
+        flash("Solo se aceptan archivos .csv o .xlsx.", "error")
+        return _volver_productos(cliente)
+    datos = archivo.read(IMPORTAR_MAX_BYTES + 1)
+    if not datos:
+        flash("El archivo está vacío.", "error")
+        return _volver_productos(cliente)
+    if len(datos) > IMPORTAR_MAX_BYTES:
+        flash("El archivo pesa más de 5 MB. Divídelo o quita columnas que no usamos.", "error")
+        return _volver_productos(cliente)
+    job_id = tareas_tiendas.job_id_importar_archivo(cliente)
+    if trabajos.en_curso(job_id):
+        flash("Ya hay una importación de archivo en curso — espera a que termine.", "warn")
+        return _volver_productos(cliente)
+    carpeta = os.path.join(_client_dir(cliente), "importaciones")
+    os.makedirs(carpeta, exist_ok=True)
+    ruta = os.path.join(carpeta, f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{nombre}")
+    with open(ruta, "wb") as f:
+        f.write(datos)
+    # max_intentos=1: crea activos y llama a Claude por cada uno; un reintento
+    # a ciegas duplicaría trabajo. La tarea borra el archivo al terminar.
+    arranco = trabajos.encolar(
+        job_id, "catalogo_importar",
+        {"cliente": cliente, "ruta": ruta, "nombre_archivo": nombre, "borrar_al_terminar": True},
+        cliente=cliente, duracion_estimada=120, etapas=tareas_tiendas.ETAPAS_IMPORTAR, max_intentos=1)
+    if arranco:
+        flash(f"Importando «{nombre}»… Los productos aparecen aquí cuando termine.", "ok")
+    else:
+        try:
+            os.remove(ruta)
+        except OSError:
+            pass
+        flash("Ya hay una importación de archivo en curso — espera a que termine.", "warn")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/importar/url", methods=["POST"])
+def prod_importar_url(cliente):
+    url = (request.form.get("url") or "").strip()
+    if not url.startswith(("http://", "https://")):
+        flash("Pega la URL completa de la página del producto (empieza por http:// o https://).", "error")
+        return _volver_productos(cliente)
+    job_id = tareas_tiendas.job_id_importar_url(cliente)
+    arranco = trabajos.encolar(
+        job_id, "catalogo_importar", {"cliente": cliente, "url": url},
+        cliente=cliente, duracion_estimada=90, etapas=tareas_tiendas.ETAPAS_IMPORTAR, max_intentos=1)
+    if arranco:
+        flash("Leyendo la página del producto… aparece aquí cuando termine.", "ok")
+    else:
+        flash("Ya hay una importación desde URL en curso — espera a que termine.", "warn")
+    return _volver_productos(cliente)
+
+
+_MONEDA_RE = re.compile(r"^[A-Z]{3}$")
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/marcar", methods=["POST"])
+def prod_marcar(cliente, pid):
+    """Banderas del loop: en prueba, prioridad (0–100), URL de compra, precio
+    y moneda. Solo toca los campos que vienen en el formulario; `en_prueba`
+    siempre viene (un checkbox sin marcar = apagado)."""
+    if not tiendas.producto(cliente, pid):
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    form = request.form
+    campos = {"en_prueba": form.get("en_prueba") in ("on", "1", "true")}
+    try:
+        if "prioridad" in form:
+            prioridad = int(form.get("prioridad") or 0)
+            if not (0 <= prioridad <= 100):
+                raise ValueError
+            campos["prioridad"] = prioridad
+        if "precio" in form:
+            precio_txt = (form.get("precio") or "").strip().replace(",", ".")
+            precio = float(precio_txt) if precio_txt else None
+            if precio is not None and (not math.isfinite(precio) or precio < 0):
+                raise ValueError
+            campos["precio"] = precio
+    except ValueError:
+        flash("Revisa los números: prioridad entre 0 y 100, precio positivo.", "error")
+        return _volver_productos(cliente)
+    if "url_compra" in form:
+        url = (form.get("url_compra") or "").strip()
+        if url and not url.startswith(("http://", "https://")):
+            flash("La URL de compra tiene que empezar por http:// o https://.", "error")
+            return _volver_productos(cliente)
+        campos["url_compra"] = url or None
+    if "moneda" in form:
+        moneda = (form.get("moneda") or "").strip().upper()
+        if moneda and not _MONEDA_RE.match(moneda):
+            flash("La moneda va en código de 3 letras (COP, MXN, USD…).", "error")
+            return _volver_productos(cliente)
+        campos["moneda"] = moneda or None
+    tiendas.marcar_producto(cliente, pid, **campos)
+    flash("Producto actualizado.", "ok")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/archivar", methods=["POST"])
+def prod_archivar(cliente, pid):
+    """Archiva (o, con archivado=0, recupera) un producto. No borra nada: un
+    producto archivado sigue ligado a su activo y a sus experimentos."""
+    if not tiendas.producto(cliente, pid):
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    archivar = (request.form.get("archivado") or "1") not in ("0", "false", "off")
+    tiendas.marcar_producto(cliente, pid, archivado=archivar)
+    flash("Producto archivado." if archivar else "Producto recuperado.", "ok")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/vincular", methods=["POST"])
+def prod_vincular(cliente, pid):
+    """Crea (o completa) el activo del catálogo para este producto, bajando
+    sus fotos otra vez. Inline: son pocas fotos pequeñas."""
+    prod = tiendas.producto(cliente, pid)
+    if not prod:
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    errores = []
+    try:
+        activo_id = importador.vincular_activo(cliente, pid, forzar_fotos=True, errores=errores)
+    except Exception as e:  # noqa: BLE001 — la ruta solo avisa, nunca se cae por una foto
+        flash(f"No pude crear el activo: {cola.sin_token(str(e))}", "error")
+        return _volver_productos(cliente)
+    if activo_id:
+        flash(f"Activo «{activo_id}» listo en el Catálogo." + (" " + " ".join(errores) if errores else ""), "ok")
+    else:
+        flash("No pude crear el activo: " + (" ".join(errores) or "el producto no tiene fotos descargables."), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/experimento", methods=["POST"])
+def prod_experimento(cliente, pid):
+    """Manda a Experimentos con el formulario «Nuevo experimento» prellenado
+    (nombre y URL de destino) — el JS de esa pestaña lee la query."""
+    prod = tiendas.producto(cliente, pid)
+    if not prod:
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    return redirect(url_for("ver_cliente", cliente=cliente, exp_nombre=prod["nombre"] or "",
+                            exp_destino=prod.get("url_compra") or "", _anchor="experimentos"))
+
+
+def _encolar_sync_tienda(cliente, tienda_id, tipo, con_pedidos=True):
+    """Encola la sync de productos y, si el conector sabe leer ventas, la de
+    pedidos. Devuelve cuántas tareas arrancaron."""
+    n = 0
+    if trabajos.encolar(tareas_tiendas.job_id_sync_productos(cliente, tienda_id), "tienda_sync_productos",
+                        {"cliente": cliente, "tienda_id": tienda_id}, cliente=cliente, duracion_estimada=120,
+                        etapas=tareas_tiendas.ETAPAS_IMPORTAR, max_intentos=tareas_tiendas.MAX_INTENTOS_SYNC):
+        n += 1
+    if con_pedidos:
+        try:
+            tiene_pedidos = bool(getattr(conectores.por_tipo(tipo), "tiene_pedidos", False))
+        except ValueError:
+            tiene_pedidos = False
+        if tiene_pedidos and trabajos.encolar(
+                tareas_tiendas.job_id_sync_pedidos(cliente, tienda_id), "tienda_sync_pedidos",
+                {"cliente": cliente, "tienda_id": tienda_id}, cliente=cliente, duracion_estimada=60,
+                max_intentos=tareas_tiendas.MAX_INTENTOS_SYNC):
+            n += 1
+    return n
+
+
+def _flash_sin_cifrado():
+    flash("Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar las "
+          "credenciales de una tienda.", "error")
+
+
+@app.route("/cliente/<cliente>/config/tienda/conectar", methods=["POST"])
+def tienda_conectar(cliente):
+    """Shopify/WooCommerce: prueba las credenciales contra la tienda (inline,
+    una llamada corta), las guarda cifradas y encola la primera sync."""
+    if not cifrado.disponible():
+        _flash_sin_cifrado()
+        return _volver_config(cliente)
+    tipo = (request.form.get("tipo") or "").strip()
+    if tipo == "shopify":
+        dominio = (request.form.get("dominio") or "").strip()
+        creds = {"dominio": dominio, "token": (request.form.get("token") or "").strip()}
+    elif tipo == "woo":
+        url = (request.form.get("url") or "").strip()
+        dominio = re.sub(r"^https?://", "", url).strip("/").split("/")[0]
+        creds = {"url": url, "ck": (request.form.get("ck") or "").strip(), "cs": (request.form.get("cs") or "").strip()}
+    else:
+        flash("Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón).", "error")
+        return _volver_config(cliente)
+    try:
+        resultado = conectores.por_tipo(tipo)(creds).probar()
+    except (ErrorConector, ValueError) as e:
+        flash(f"No pude conectar la tienda: {cola.sin_token(str(e))}", "error")
+        return _volver_config(cliente)
+    except Exception as e:  # noqa: BLE001 — un fallo de red/parseo también se muestra, nunca se guarda a ciegas
+        flash(f"No pude conectar la tienda: {cola.sin_token(str(e) or type(e).__name__)}", "error")
+        return _volver_config(cliente)
+    nombre = str((resultado or {}).get("nombre") or "").strip() or None
+    tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio or None)
+    n = _encolar_sync_tienda(cliente, tid, tipo)
+    detalle = str((resultado or {}).get("detalle") or "").strip()
+    flash(f"Tienda {nombre or dominio} conectada. {detalle} "
+          + ("Sincronizando el catálogo…" if n else "Ya había una sincronización en curso."), "ok")
+    return _volver_config(cliente)
+
+
+@app.route("/cliente/<cliente>/config/tienda/meli/iniciar")
+def tienda_meli_iniciar(cliente):
+    """Arranca el OAuth de MercadoLibre. El `state` queda en la sesión junto
+    con el cliente: el callback (global, sin <cliente>) lo resuelve de ahí."""
+    if not cifrado.disponible():
+        _flash_sin_cifrado()
+        return _volver_config(cliente)
+    faltan = [v for v in ("MELI_APP_ID", "MELI_SECRET") if not (os.environ.get(v) or "").strip()]
+    if faltan:
+        flash("Falta configurar " + " y ".join(faltan) + " en el .env del servidor "
+              "(app de developers.mercadolibre.com).", "error")
+        return _volver_config(cliente)
+    state = secrets.token_urlsafe(32)
+    session["meli_oauth"] = {"state": state, "cliente": cliente}
+    try:
+        return redirect(conector_meli.url_autorizacion(state, url_for("meli_callback", _external=True)))
+    except ErrorConector as e:
+        session.pop("meli_oauth", None)
+        flash(str(e), "error")
+        return _volver_config(cliente)
+
+
+@app.route("/meli/callback")
+def meli_callback():
+    """Ruta SIN <cliente> (MercadoLibre redirige a una sola dirección
+    registrada): el cliente sale de la sesión, nunca de la query, y el state
+    es de un solo uso. Mismo patrón que meta_callback."""
+    pendiente = session.pop("meli_oauth", None) or {}
+    cliente = pendiente.get("cliente")
+    state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
+    if not cliente or not state_ok:
+        flash("La autorización con MercadoLibre no coincide con esta sesión — vuelve a intentarlo desde Configuración.", "error")
+        return _volver_config(cliente) if cliente else redirect(url_for("index"))
+    if not usuarios.puede_acceder(_sesion(), cliente):
+        flash("No tienes acceso a ese proyecto.", "error")
+        return redirect(url_for("index"))
+    if request.args.get("error"):
+        detalle = request.args.get("error_description") or request.args.get("error")
+        flash(f"MercadoLibre no autorizó la conexión: {detalle}", "error")
+        return _volver_config(cliente)
+    if not cifrado.disponible():
+        _flash_sin_cifrado()
+        return _volver_config(cliente)
+    try:
+        creds = conector_meli.cambiar_code(request.args.get("code", ""), url_for("meli_callback", _external=True))
+    except ErrorConector as e:
+        flash(str(e), "error")
+        return _volver_config(cliente)
+    nombre = str(creds.get("nickname") or "").strip() or None
+    tid = tiendas.conectar(cliente, "meli", creds, nombre=nombre, dominio=None)
+    n = _encolar_sync_tienda(cliente, tid, "meli")
+    flash(f"MercadoLibre conectado{(' (' + nombre + ')') if nombre else ''}. "
+          + ("Sincronizando las publicaciones…" if n else "Ya había una sincronización en curso."), "ok")
+    return _volver_config(cliente)
+
+
+@app.route("/cliente/<cliente>/config/tienda/<int:tid>/sincronizar", methods=["POST"])
+def tienda_sync(cliente, tid):
+    """Encola productos + pedidos. También para una tienda `rota`: volver a
+    sincronizar es como la persona comprueba que ya se arregló."""
+    t = tiendas.obtener(cliente, tid)
+    if not t:
+        flash("Esa tienda no existe.", "error")
+        return _volver_config(cliente)
+    n = _encolar_sync_tienda(cliente, tid, t["tipo"])
+    flash("Sincronizando…" if n else "Ya se está sincronizando esa tienda.", "ok" if n else "warn")
+    return _volver_config(cliente)
+
+
+@app.route("/cliente/<cliente>/config/tienda/<int:tid>/desconectar", methods=["POST"])
+def tienda_desconectar(cliente, tid):
+    if tiendas.desconectar(cliente, tid):
+        flash("Tienda desconectada. Sus productos quedaron archivados (no se borró nada).", "ok")
+    else:
+        flash("Esa tienda no existe.", "error")
+    return _volver_config(cliente)
+
+
+PIXEL_ESTADOS_TEXTO = {
+    "ok": "El Pixel está disparando.",
+    "sin_datos": "El Pixel existe pero no ha disparado en los últimos días.",
+    "sin_pixel": "La cuenta publicitaria no tiene ningún Pixel.",
+    "sin_conexion": "Meta no está conectado.",
+    "error": "No pude consultar el Pixel.",
+}
+
+
+@app.route("/cliente/<cliente>/config/pixel/refrescar", methods=["POST"])
+def cfg_pixel_refrescar(cliente):
+    meta_conexion.invalidar_pixel(cliente)
+    r = meta_conexion.estado_pixel(cliente) or {}
+    estado = r.get("estado") or "error"
+    texto = PIXEL_ESTADOS_TEXTO.get(estado, estado)
+    if estado == "error" and r.get("detalle"):
+        texto += f" {r['detalle']}"
+    flash(texto, "ok" if estado == "ok" else "warn")
+    return _volver_config(cliente)
 
 
 @app.route("/cliente/<cliente>/prompt/<prompt_id>/guardar", methods=["POST"])

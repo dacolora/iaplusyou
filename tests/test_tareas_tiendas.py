@@ -372,3 +372,31 @@ def test_catalogo_importar_url_y_errores(entorno, monkeypatch):
     monkeypatch.setattr(importador.conector_url, "leer", _falla)
     with pytest.raises(ErrorConector, match="ningún producto"):
         tareas.REGISTRO["catalogo_importar"]({"payload": {"cliente": "acme", "url": "https://tienda.test/x"}})
+
+
+def test_catalogo_importar_borra_el_archivo_solo_si_se_lo_piden(entorno, monkeypatch, tmp_path):
+    """El dashboard sube el CSV a clientes/<c>/importaciones/ y encola con
+    `borrar_al_terminar`: la tarea lo borra al terminar, salga bien o mal. Sin
+    la bandera (un fixture, una ruta ajena) no se toca."""
+    import shutil
+    import tareas
+    import trabajos
+    monkeypatch.setattr(trabajos, "reportar", lambda job_id, **kw: None)
+    fixture = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "productos.csv")
+    temporal = str(tmp_path / "20260916_120000_productos.csv")
+    shutil.copy(fixture, temporal)
+    tareas.REGISTRO["catalogo_importar"]({"payload": {"cliente": "acme", "ruta": temporal, "nombre_archivo": "productos.csv",
+                                                      "borrar_al_terminar": True}})
+    assert not os.path.exists(temporal) and os.path.exists(fixture)
+    # falla (archivo ilegible) -> igual se borra
+    roto = str(tmp_path / "roto.xlsx")
+    with open(roto, "wb") as f:
+        f.write(b"no es excel")
+    with pytest.raises(ErrorConector):
+        tareas.REGISTRO["catalogo_importar"]({"payload": {"cliente": "acme", "ruta": roto, "nombre_archivo": "roto.xlsx",
+                                                          "borrar_al_terminar": True}})
+    assert not os.path.exists(roto)
+    # sin la bandera, el archivo se queda
+    shutil.copy(fixture, temporal)
+    tareas.REGISTRO["catalogo_importar"]({"payload": {"cliente": "acme", "ruta": temporal, "nombre_archivo": "productos.csv"}})
+    assert os.path.exists(temporal)

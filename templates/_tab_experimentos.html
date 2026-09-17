@@ -1,8 +1,10 @@
 {# Experimentos: árbol experimento -> país -> pieza. Contexto de ver_cliente
    (Task 4): experimentos, experimentos_armando, elegibles_exp, trabajos_exp
    ({eid: {"job_id"}}), objetivos_exp, minimo_diario_exp, moneda_exp,
-   paises_fe, capacidades_meta. Nada se lanza ni activa sin un clic explícito
-   con confirm() cuando gasta. #}
+   paises_fe, capacidades_meta; (Bloque 5) atribucion_sugerida, atribuciones_exp,
+   pedidos_por_exp ({eid: pedidos atribuidos}). Nada se lanza ni activa sin un
+   clic explícito con confirm() cuando gasta. La pestaña Productos manda acá
+   con ?exp_nombre=&exp_destino= para prellenar «Nuevo experimento». #}
 <div class="panel-cabecera">
   <h2>Experimentos</h2>
   <p class="vacio">Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Todo nace en pausa: lanzar crea los anuncios, activar empieza a gastar.</p>
@@ -35,8 +37,12 @@
       <label>Modo
         <select name="modo">{% for m in modos_exp %}<option value="{{ m }}" {% if m == "manual" %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
       </label>
+      <label>Atribución
+        <select name="atribucion">{% for a in atribuciones_exp %}<option value="{{ a }}" {% if a == atribucion_sugerida %}selected{% endif %}>{{ a }}{% if a == atribucion_sugerida %} (sugerida){% endif %}</option>{% endfor %}</select>
+      </label>
     </div>
     <p class="vacio exp-ayuda-modo">Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar (no gastan) se hacen solos; escalar, derivar, rescatar y activar esperan tu aprobación. Auto: todo se ejecuta solo, salvo cuando el tope está alcanzado.</p>
+    <p class="vacio exp-ayuda-modo">Atribución — con qué se miden las ventas: <strong>pixel</strong> (Meta reporta compras y ROAS; requiere el Pixel disparando), <strong>tienda</strong> (pedidos de tu Shopify/WooCommerce que llegan con la pieza en la URL) o <strong>ninguna</strong> (solo tráfico). La sugerida sale de lo que tienes conectado en Configuración.</p>
     <button type="submit" class="btn-generar btn-sm">Crear experimento</button>
   </form>
 </details>
@@ -49,9 +55,11 @@
     <strong>{{ e.nombre }}</strong>
     <span class="tag-estado">{{ e.estado }}</span>
     <span class="tag-estado tag-modo">modo {{ e.modo }}</span>
+    <span class="tag-estado tag-atribucion tag-atribucion-{{ e.atribucion }}" title="Con qué se miden las ventas de este experimento">atribución {{ e.atribucion }}</span>
     {% if e.propuestas_pendientes %}<span class="tag-propuestas">{{ e.propuestas_pendientes }} propuesta(s)</span>{% endif %}
     <small>{{ e.resumen.activos }}/{{ e.resumen.total }} activos · gasto {{ "%.2f"|format(e.gasto_acumulado) }} / {{ e.tope_total }} {{ e.moneda }}
-      {% if e.resumen.mejor_cpc %}· mejor CPC {{ "%.2f"|format(e.resumen.mejor_cpc) }}{% endif %}</small>
+      {% if e.resumen.mejor_cpc %}· mejor CPC {{ "%.2f"|format(e.resumen.mejor_cpc) }}{% endif %}
+      {% if e.atribucion == "tienda" %}· ventas por tienda: {{ pedidos_por_exp.get(e.id, 0) }} pedido(s){% endif %}</small>
   </summary>
   {% if e.error %}<p class="tag-error">{{ e.error }}</p>{% endif %}
   {% set trabajo = trabajos_exp.get(e.id) %}
@@ -230,3 +238,19 @@
 {% else %}
 <p class="vacio">Todavía no hay experimentos. Crea uno, agrega piezas desde Crear («Meter en experimento») y lánzalo.</p>
 {% endfor %}
+
+<script>
+  (function () {
+    // Prellenado desde Productos («Crear experimento»): ?exp_nombre=&exp_destino=
+    var q = new URLSearchParams(location.search);
+    var nombre = q.get('exp_nombre'), destino = q.get('exp_destino');
+    if (!nombre && !destino) return;
+    var det = document.getElementById('nuevo-experimento');
+    if (!det) return;
+    var f = det.querySelector('form');
+    if (nombre && f.elements.nombre) f.elements.nombre.value = nombre;
+    if (destino && f.elements.destino_url) f.elements.destino_url.value = destino;
+    det.open = true;
+    det.scrollIntoView({ block: 'start' });
+  })();
+</script>
