@@ -150,3 +150,25 @@ def test_reutilizar_referencia_copia_con_analisis(base_temporal):
     assert b["estado"] == "lista" and b["analisis_estado"] == "listo"
     with pytest.raises(datos.ErrorDatos):
         datos.reutilizar_referencia("acme", r1, cid)      # ya está en esa campaña
+
+
+def test_actualizar_referencia_ignora_estado_directo(base_temporal):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 2)
+    r1 = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg")
+    datos.actualizar_referencia("acme", r1, estado="lista")
+    assert datos.referencia("acme", r1)["estado"] == "borrador"   # estado se deriva, no se fija a mano
+
+
+def test_reutilizar_referencia_sin_analisis_conserva_intencion_otro_y_estado(base_temporal):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 2)
+    tid2 = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
+    cid2 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid2, 1, 1)
+    r1 = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", intencion=["otro"])
+    datos.actualizar_referencia("acme", r1, intencion_otro="textura", analisis_estado="error")
+    r2 = datos.reutilizar_referencia("acme", r1, cid2)
+    b = datos.referencia("acme", r2)
+    assert b["intencion_otro"] == "textura" and b["analisis_estado"] == "error" and b["analisis"] is None

@@ -444,6 +444,7 @@ def agregar_referencia(cliente, campana_id, tipo, url, frame_url=None, ruta_loca
 
 
 def actualizar_referencia(cliente, referencia_id, /, **campos):
+    campos.pop("estado", None)   # se deriva de descripcion; nunca lo fija quien llama
     if "intencion" in campos:
         campos["intencion"] = intencion_valida(campos["intencion"])
     if "descripcion" in campos:
@@ -504,7 +505,7 @@ def reutilizar_referencia(cliente, referencia_id, campana_destino_id):
     rid = agregar_referencia(cliente, campana_destino_id, origen["tipo"], origen["url"], frame_url=origen["frame_url"],
                              ruta_local=origen["ruta_local"], origen="reutilizada", titulo=origen["titulo"],
                              intencion=origen["intencion"], descripcion=origen["descripcion"])
-    if origen.get("analisis"):
-        actualizar_referencia(cliente, rid, analisis=origen["analisis"], analisis_estado=origen["analisis_estado"],
-                              intencion_otro=origen.get("intencion_otro"))
+    actualizar_referencia(cliente, rid, analisis=origen.get("analisis"),
+                          analisis_estado=origen.get("analisis_estado") or "pendiente",
+                          intencion_otro=origen.get("intencion_otro"))
     return rid
