@@ -173,6 +173,20 @@ sprint; `sprints/entrega.py` lists approved links and builds the zip
 (`sprint_empaquetar`). Retries and regenerations always go through the cost
 gate and `max_intentos=1`.
 
+**Crear (FlowPlus)** (`flowplus_prompt.armar` -> `flowplus_lanzar.lanzar` -> worker
+`tareas/flowplus.py` -> `providers/flowplus_modelos.py`, all via WaveSpeed): `VIDEO` /
+`IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`). Videos
+ALWAYS ask for the model's native scene sound (`generar_video(..., con_sonido=True)`: Wan 3.0
+`enable_audio`, Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
+`usd_por_segundo_efectivo` the templates show —, Seedance 2.5 `generate_audio`), and the
+prompt carries a `SONIDO:` line ("Sin diálogo hablado ni música de fondo" keeps Kling's
+Chinese/English voices out; the Spanish voice comes from final edition). Images never get
+that line. After the download the worker runs ffprobe and stores
+`sonido {proveedor, estado: ok | ausente | desconocido}` on the session (🔊 / 🔇 on the
+card, plus a bitácora row) — it only reports, never regenerates. Spec:
+`docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1; only its core is
+implemented (no "sonido" toggle, no music at creation, no mezcla step, no `capas` yet).
+
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with

@@ -43,6 +43,18 @@ prueba al implementar.
 
 ## S1. Sonido de la escena al crear (Crear)
 
+> Estado 2026-09-17: **núcleo implementado** (rama `worktree-sonido-crear`):
+> `audio_nativo` por modelo con parámetros verificados en WaveSpeed (Wan 3.0
+> `enable_audio` sin recargo, Kling O3 Pro `sound` +0,028 USD/s, Seedance 2.5
+> `generate_audio` sin recargo), `generar_video(..., con_sonido=True)` y
+> `estimate_video(..., con_sonido=True)` por defecto, `usd_por_segundo_efectivo`
+> en las plantillas, `flowplus_prompt.armar(..., sonido=, con_sonido=)` con la
+> línea SONIDO (regresión: sin sonido el prompt es idéntico), y el worker anota
+> con ffprobe `sonido {proveedor, estado}` en la sesión (🔊/🔇 en la tarjeta).
+> Pendiente de S1: check "Sonido de la escena", campo con "Sugerir"
+> (`fp_sugerir_sonido`), preferencias por proyecto, música al crear, paso
+> Mezcla, `video_url_crudo` y `pieza.capas`.
+
 - `flowplus_modelos.VIDEO[modelo]["audio_nativo"] = {"parametro": ...,
   "recargo_usd_s": ...}`: Wan 3.0 (`audio`/`enable_audio` según proveedor, 0),
   Kling O3 Pro (`generate_audio`, 0.028), Seedance 2.5 (`generate_audio`, 0).
