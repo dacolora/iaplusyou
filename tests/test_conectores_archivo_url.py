@@ -191,11 +191,21 @@ def test_columnas_ayuda():
 
 # --- url -------------------------------------------------------------------
 
+@pytest.fixture(autouse=True)
+def _dns_publica(monkeypatch):
+    """Por defecto todo host resuelve a una IP pública (93.184.216.34), para
+    que los tests que no ejercitan el bloqueo SSRF no tengan que fingir DNS
+    a mano. Los tests de SSRF pisan esto con su propio monkeypatch."""
+    def falso_getaddrinfo(host, *a, **kw):
+        return [(2, 1, 6, "", ("93.184.216.34", 0))]
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo", falso_getaddrinfo)
+
+
 class _Respuesta:
-    def __init__(self, texto, status=200):
+    def __init__(self, texto, status=200, headers=None):
         self._bytes = texto.encode("utf-8") if isinstance(texto, str) else texto
         self.status_code = status
-        self.headers = {}
+        self.headers = headers or {}
         self.encoding = "utf-8"
 
     def iter_content(self, chunk_size=65536):
@@ -316,3 +326,107 @@ def test_url_jsonld_roto_cae_a_og(monkeypatch):
     _fingir(monkeypatch, _Respuesta(html))
     p = conector_url.leer("https://tienda.test/roto")
     assert p["nombre"] == "Desde OG" and p["extra"]["metodo"] == "og"
+
+
+# --- url: SSRF (host_permitido, redirecciones) ------------------------------
+
+@pytest.mark.parametrize("url", [
+    "http://localhost/x",
+    "http://LOCALHOST/x",
+    "http://impresora.local/x",
+    "http://servicio.internal/x",
+    "http://169.254.169.254/latest/meta-data/",
+    "ftp://tienda.test/x",
+    "http:///x",
+    "no-es-una-url",
+])
+def test_host_permitido_rechaza_literales(url):
+    assert conector_url.host_permitido(url) is False
+
+
+@pytest.mark.parametrize("ip", [
+    "127.0.0.1", "10.1.2.3", "172.16.0.5", "192.168.1.1",
+    "169.254.1.1", "224.0.0.1", "0.0.0.0", "::1", "fc00::1",
+])
+def test_host_permitido_rechaza_ip_resuelta(monkeypatch, ip):
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo",
+                         lambda host, *a, **kw: [(2, 1, 6, "", (ip, 0))])
+    assert conector_url.host_permitido("http://ejemplo.test/x") is False
+
+
+def test_host_permitido_acepta_ip_publica(monkeypatch):
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo",
+                         lambda host, *a, **kw: [(2, 1, 6, "", ("93.184.216.34", 0))])
+    assert conector_url.host_permitido("https://ejemplo.test/x") is True
+
+
+def test_host_permitido_dns_falla_es_error(monkeypatch):
+    def falla(host, *a, **kw):
+        raise conector_url.socket.gaierror("no address associated with hostname")
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo", falla)
+    with pytest.raises(ErrorConector) as ei:
+        conector_url.host_permitido("https://no-existe.test/x")
+    assert "resolver" in ei.value.usuario.lower()
+
+
+def test_url_ip_privada_es_rechazada(monkeypatch):
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo",
+                         lambda host, *a, **kw: [(2, 1, 6, "", ("127.0.0.1", 0))])
+    llamadas = {"n": 0}
+
+    def falso_get(url, **kw):
+        llamadas["n"] += 1
+        return _Respuesta("no debería llegar aquí")
+    monkeypatch.setattr(conector_url.requests, "get", falso_get)
+    with pytest.raises(ErrorConector) as ei:
+        conector_url.leer("http://interno.test/x")
+    assert llamadas["n"] == 0
+    assert ei.value.usuario
+
+
+def test_url_redirige_a_ip_privada_es_rechazado(monkeypatch):
+    def getaddrinfo(host, *a, **kw):
+        ip = "93.184.216.34" if host == "tienda.test" else "10.0.0.5"
+        return [(2, 1, 6, "", (ip, 0))]
+    monkeypatch.setattr(conector_url.socket, "getaddrinfo", getaddrinfo)
+    llamadas = {"n": 0}
+
+    def falso_get(url, **kw):
+        llamadas["n"] += 1
+        return _Respuesta("", status=302, headers={"Location": "http://interno.test/secreto"})
+    monkeypatch.setattr(conector_url.requests, "get", falso_get)
+    with pytest.raises(ErrorConector) as ei:
+        conector_url.leer("https://tienda.test/a")
+    assert llamadas["n"] == 1
+    assert ei.value.usuario
+
+
+def test_url_mas_de_3_redirecciones_es_rechazado(monkeypatch):
+    pasos = ["/paso1", "/paso2", "/paso3", "/paso4"]
+    llamadas = {"n": 0}
+
+    def falso_get(url, **kw):
+        i = llamadas["n"]
+        llamadas["n"] += 1
+        if i < len(pasos):
+            return _Respuesta("", status=302, headers={"Location": pasos[i]})
+        return _Respuesta("<html><head><title>Final</title></head></html>")
+    monkeypatch.setattr(conector_url.requests, "get", falso_get)
+    with pytest.raises(ErrorConector) as ei:
+        conector_url.leer("https://tienda.test/inicio")
+    assert llamadas["n"] == 4
+    assert "redirig" in ei.value.usuario.lower() or "redirec" in ei.value.usuario.lower()
+
+
+def test_url_location_relativa_es_seguida(monkeypatch):
+    llamadas = []
+
+    def falso_get(url, **kw):
+        llamadas.append(url)
+        if len(llamadas) == 1:
+            return _Respuesta("", status=302, headers={"Location": "/otra-pagina"})
+        return _Respuesta("<html><head><title>Destino</title></head></html>")
+    monkeypatch.setattr(conector_url.requests, "get", falso_get)
+    p = conector_url.leer("https://tienda.test/origen")
+    assert llamadas == ["https://tienda.test/origen", "https://tienda.test/otra-pagina"]
+    assert p["nombre"] == "Destino"

@@ -11,23 +11,37 @@ saca el producto en este orden de confianza:
 `extra["metodo"]` dice cuál ganó. Solo regex + `html.unescape` + `json`:
 sin dependencias nuevas. Cualquier problema sale como `ErrorConector` con el
 código HTTP, nunca con el HTML de la página.
+
+Antes de pedir cualquier URL (la original o una redirección) se valida con
+`host_permitido`: resuelve el host por DNS y rechaza direcciones internas
+(loopback, RFC1918, link-local, multicast, reservadas, `0.0.0.0`), además de
+`localhost`, `*.local`, `*.internal` y `169.254.169.254` — para que este
+conector no sirva de oráculo hacia metadata de nube o servicios internos
+cuando la URL la escribe un usuario. Las redirecciones se siguen a mano
+(`allow_redirects=False`, máximo 3 saltos) re-validando el host en cada una.
 """
 import hashlib
 import html
+import ipaddress
 import json
 import re
+import socket
 
 import requests
+from urllib.parse import urljoin, urlparse
 
 from .base import ErrorConector, normalizar_producto
 
 MAX_BYTES = 3 * 1024 * 1024
 TIMEOUT = 20
+MAX_REDIRECCIONES = 3
 _CABECERAS = {
     "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
     "Accept-Language": "es,en",
 }
+_CODIGOS_REDIRECCION = (301, 302, 303, 307, 308)
+_HOSTS_PROHIBIDOS = {"localhost", "169.254.169.254"}
 
 _RE_JSONLD = re.compile(r"<script[^>]*type\s*=\s*[\"']application/ld\+json[\"'][^>]*>(.*?)</script>",
                         re.IGNORECASE | re.DOTALL)
@@ -39,13 +53,67 @@ _RE_ETIQUETAS = re.compile(r"<[^>]+>")
 _RE_ESPACIOS = re.compile(r"\s+")
 
 
+# --- SSRF: solo hosts públicos -------------------------------------------------
+
+def host_permitido(url):
+    """True si `url` es http(s), tiene host, y ese host no resuelve (por DNS)
+    a ninguna dirección loopback/privada/link-local/multicast/reservada —
+    protección contra SSRF hacia metadata de nube o servicios internos.
+    Lanza `ErrorConector` si el DNS no resuelve el dominio en absoluto."""
+    try:
+        partes = urlparse(url)
+    except ValueError:
+        return False
+    if partes.scheme not in ("http", "https"):
+        return False
+    host = partes.hostname
+    if not host:
+        return False
+    host = host.lower().rstrip(".")
+    if host in _HOSTS_PROHIBIDOS or host.endswith(".local") or host.endswith(".internal"):
+        return False
+    try:
+        direcciones = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        raise ErrorConector("No se pudo resolver el dominio.")
+    for direccion in direcciones:
+        ip_bruta = direccion[4][0].split("%")[0]  # sin scope id de IPv6
+        try:
+            ip = ipaddress.ip_address(ip_bruta)
+        except ValueError:
+            return False
+        if (ip.is_loopback or ip.is_private or ip.is_link_local or ip.is_multicast
+                or ip.is_reserved or ip.is_unspecified):
+            return False
+    return True
+
+
 # --- descarga -----------------------------------------------------------------
 
 def _descargar(url):
-    try:
-        respuesta = requests.get(url, headers=_CABECERAS, timeout=TIMEOUT, stream=True)
-    except requests.RequestException as e:
-        raise ErrorConector(f"No se pudo abrir la URL ({type(e).__name__}). Revisa que sea pública y esté bien escrita.")
+    if not host_permitido(url):
+        raise ErrorConector("Esa URL no está permitida (apunta a una red interna o local).")
+    redirecciones = 0
+    while True:
+        try:
+            respuesta = requests.get(url, headers=_CABECERAS, timeout=TIMEOUT, stream=True, allow_redirects=False)
+        except requests.RequestException as e:
+            raise ErrorConector(f"No se pudo abrir la URL ({type(e).__name__}). Revisa que sea pública y esté bien escrita.")
+        if respuesta.status_code in _CODIGOS_REDIRECCION:
+            cerrar = getattr(respuesta, "close", None)
+            if cerrar:
+                cerrar()
+            if redirecciones >= MAX_REDIRECCIONES:
+                raise ErrorConector("La página redirige demasiadas veces.")
+            ubicacion = respuesta.headers.get("Location")
+            if not ubicacion:
+                raise ErrorConector("La página redirigió sin indicar destino.")
+            redirecciones += 1
+            url = urljoin(url, ubicacion)
+            if not host_permitido(url):
+                raise ErrorConector("Esa URL no está permitida (apunta a una red interna o local).")
+            continue
+        break
     try:
         if respuesta.status_code >= 400:
             raise ErrorConector(f"La página respondió con error HTTP {respuesta.status_code}.")
