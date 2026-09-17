@@ -84,7 +84,7 @@ def _texto(v, largo=None):
 
 # ----------------------------------------------------------- personas ---
 
-def crear_persona(cliente, nombre, /, resumen="", descripcion="", edad_rango="", tono="", senales_visuales=None,
+def crear_persona(cliente, nombre, resumen="", descripcion="", edad_rango="", tono="", senales_visuales=None,
                   palabras_clave=None, color=None, origen="manual"):
     nombre = _texto(nombre, 120)
     if not nombre:
@@ -111,11 +111,11 @@ def actualizar_persona(cliente, persona_id, /, **campos):
         return _actualizar(con, db.persona, persona_id, cliente, _PERSONA_COLS, campos)
 
 
-def archivar_persona(cliente, persona_id, /, archivada=True):
+def archivar_persona(cliente, persona_id, archivada=True):
     return actualizar_persona(cliente, persona_id, archivada=bool(archivada))
 
 
-def personas(cliente, /, incluir_archivadas=False):
+def personas(cliente, incluir_archivadas=False):
     p = db.persona
     q = sa.select(p).where(p.c.cliente == cliente)
     if not incluir_archivadas:
@@ -124,7 +124,7 @@ def personas(cliente, /, incluir_archivadas=False):
         return [_a_dict(f) for f in con.execute(q.order_by(p.c.nombre))]
 
 
-def persona(cliente, /, persona_id):
+def persona(cliente, persona_id):
     with db.conectar() as con:
         f = _fila(con, db.persona, persona_id, cliente)
     return _a_dict(f) if f else None
@@ -132,7 +132,7 @@ def persona(cliente, /, persona_id):
 
 # --------------------------------------------------------- temporadas ---
 
-def crear_temporada(cliente, nombre, /, inicio, fin, contexto="", mood_visual=None, tipo="propia"):
+def crear_temporada(cliente, nombre, inicio, fin, contexto="", mood_visual=None, tipo="propia"):
     nombre = _texto(nombre, 120)
     if not nombre:
         raise ErrorDatos("La temporada necesita un nombre.")
@@ -162,11 +162,11 @@ def actualizar_temporada(cliente, temporada_id, /, **campos):
         return _actualizar(con, db.temporada, temporada_id, cliente, _TEMPORADA_COLS, campos)
 
 
-def archivar_temporada(cliente, temporada_id, /, archivada=True):
+def archivar_temporada(cliente, temporada_id, archivada=True):
     return actualizar_temporada(cliente, temporada_id, archivada=bool(archivada))
 
 
-def temporadas(cliente, /, incluir_archivadas=False):
+def temporadas(cliente, incluir_archivadas=False):
     t = db.temporada
     q = sa.select(t).where(t.c.cliente == cliente)
     if not incluir_archivadas:
@@ -175,7 +175,7 @@ def temporadas(cliente, /, incluir_archivadas=False):
         return [_a_dict(f) for f in con.execute(q.order_by(t.c.inicio, t.c.nombre))]
 
 
-def temporada(cliente, /, temporada_id):
+def temporada(cliente, temporada_id):
     with db.conectar() as con:
         f = _fila(con, db.temporada, temporada_id, cliente)
     return _a_dict(f) if f else None
