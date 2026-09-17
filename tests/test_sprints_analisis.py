@@ -21,6 +21,13 @@ def test_parsear_json_tolera_bloques_de_codigo():
     assert analisis._parsear_json(json.dumps(sucio))["paleta"] == ["#FFF", "#000", "#111", "#222", "#333"]
 
 
+def test_parsear_json_descarta_hex_malformado_de_la_paleta():
+    from sprints import analisis
+    # Empieza por # pero no es un color: se descarta, no llega a un style="background: #zz".
+    sucio = dict(JSON_OK, paleta=["#zz", "#C9A227", "#", "# fff", "#ggg", 12])
+    assert analisis._parsear_json(json.dumps(sucio))["paleta"] == ["#C9A227"]
+
+
 def test_analizar_imagen_manda_url_y_reintenta(monkeypatch):
     from sprints import analisis
     llamadas = []

@@ -6,11 +6,16 @@ data/creatv.db; nada de proveedores ni de Flask. Las validaciones de negocio
 de productos la hace la ruta, para que este módulo se pruebe sin carpetas de
 clientes.
 """
+import re
 from datetime import date
 
 import sqlalchemy as sa
 
 import db
+
+# Un color CSS hexadecimal (#rgb, #rrggbb, #rrggbbaa…). Todo lo que se pinta con
+# style="background: …" en las plantillas pasa por aquí antes de guardarse.
+COLOR_HEX = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 
 INTENCIONES = ("estilo_visual", "composicion", "paleta", "movimiento_camara", "tipografia",
                "transiciones", "storytelling", "iluminacion", "angulo_producto", "otro")
@@ -82,6 +87,25 @@ def _texto(v, largo=None):
     return v[:largo] if largo else v
 
 
+def _color(v):
+    """None/"" -> None; hexadecimal válido -> tal cual; otra cosa -> ErrorDatos."""
+    v = (v or "").strip() if isinstance(v, str) else v
+    if not v:
+        return None
+    if not isinstance(v, str) or not COLOR_HEX.match(v):
+        raise ErrorDatos("El color debe ser hexadecimal, como #4d8dff.")
+    return v
+
+
+def _mood(mood_visual):
+    """Copia del mood con la paleta filtrada a colores hexadecimales (lo que
+    no cumple se descarta en silencio: viene de un campo libre o de Claude)."""
+    m = dict(mood_visual or {})
+    if "paleta" in m:
+        m["paleta"] = [c for c in (m.get("paleta") or []) if isinstance(c, str) and COLOR_HEX.match(c)]
+    return m
+
+
 # ----------------------------------------------------------- personas ---
 
 def crear_persona(cliente, nombre, resumen="", descripcion="", edad_rango="", tono="", senales_visuales=None,
@@ -97,7 +121,7 @@ def crear_persona(cliente, nombre, resumen="", descripcion="", edad_rango="", to
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, resumen=_texto(resumen, 200),
             descripcion=_texto(descripcion), edad_rango=_texto(edad_rango, 20), tono=_texto(tono),
             senales_visuales=list(senales_visuales or []), palabras_clave=list(palabras_clave or []),
-            color=color, origen=origen, archivada=False, extra={})).inserted_primary_key[0]
+            color=_color(color), origen=origen, archivada=False, extra={})).inserted_primary_key[0]
 
 
 def actualizar_persona(cliente, persona_id, /, **campos):
@@ -107,6 +131,8 @@ def actualizar_persona(cliente, persona_id, /, **campos):
             raise ErrorDatos("La persona necesita un nombre.")
     if "origen" in campos and campos["origen"] not in ORIGENES_PERSONA:
         raise ErrorDatos(f"Origen de persona inválido: {campos['origen']}")
+    if "color" in campos:
+        campos["color"] = _color(campos["color"])
     with db.conectar() as con:
         return _actualizar(con, db.persona, persona_id, cliente, _PERSONA_COLS, campos)
 
@@ -143,7 +169,7 @@ def crear_temporada(cliente, nombre, inicio, fin, contexto="", mood_visual=None,
     with db.conectar() as con:
         return con.execute(db.temporada.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, inicio=inicio, fin=fin,
-            contexto=_texto(contexto), mood_visual=dict(mood_visual or {}), tipo=tipo, archivada=False,
+            contexto=_texto(contexto), mood_visual=_mood(mood_visual), tipo=tipo, archivada=False,
             extra={})).inserted_primary_key[0]
 
 
@@ -154,6 +180,8 @@ def actualizar_temporada(cliente, temporada_id, /, **campos):
             raise ErrorDatos("La temporada necesita un nombre.")
     if "tipo" in campos and campos["tipo"] not in TIPOS_TEMPORADA:
         raise ErrorDatos(f"Tipo de temporada inválido: {campos['tipo']}")
+    if "mood_visual" in campos:
+        campos["mood_visual"] = _mood(campos["mood_visual"])
     if "inicio" in campos or "fin" in campos:
         actual = temporada(cliente, temporada_id) or {}
         campos["inicio"], campos["fin"] = _rango(campos.get("inicio", actual.get("inicio")),
@@ -346,7 +374,9 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n
         if repetida is not None:
             raise CampanaDuplicada(
                 f"Esa combinación de persona, producto y temporada ya existe en la campaña {int(repetida) + 1}.")
-        orden = con.execute(sa.select(sa.func.count()).select_from(c).where(c.c.sprint_id == sprint_id)).scalar() or 0
+        # max+1 y no count: si se borró una campaña intermedia, count repetiría un número ya usado.
+        orden = con.execute(sa.select(sa.func.coalesce(sa.func.max(c.c.orden), -1) + 1)
+                            .where(c.c.sprint_id == sprint_id)).scalar()
         try:
             objetivo = int(referencias_objetivo or sp.referencias_objetivo_defecto or 5)
         except (TypeError, ValueError):

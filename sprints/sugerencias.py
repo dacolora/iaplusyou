@@ -40,7 +40,7 @@ def _parsear(texto):
     for p in personas:
         if not isinstance(p, dict) or any(k not in p for k in _CLAVES):
             continue
-        # Coerce nombre to string, but only accept if originally a string
+        # Solo se acepta si nombre es un string no vacío; si no, se descarta.
         nombre_raw = p.get("nombre")
         if not isinstance(nombre_raw, str):
             continue

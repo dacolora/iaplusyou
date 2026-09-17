@@ -172,3 +172,47 @@ def test_reutilizar_referencia_sin_analisis_conserva_intencion_otro_y_estado(bas
     r2 = datos.reutilizar_referencia("acme", r1, cid2)
     b = datos.referencia("acme", r2)
     assert b["intencion_otro"] == "textura" and b["analisis_estado"] == "error" and b["analisis"] is None
+
+
+def test_orden_de_campana_no_se_repite_tras_borrar_una_intermedia(base_temporal):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    t2 = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
+    t3 = datos.crear_temporada("acme", "Padre", "2026-06-05", "2026-06-20")
+    c1 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 1, 0)
+    c2 = datos.agregar_campana("acme", sid, pid, "espejo_led", t2, 1, 0)
+    c3 = datos.agregar_campana("acme", sid, pid, "espejo_led", t3, 1, 0)
+    assert [datos.campana("acme", c)["orden"] for c in (c1, c2, c3)] == [0, 1, 2]
+    datos.eliminar_campana("acme", c2)
+    c4 = datos.agregar_campana("acme", sid, pid, "division_bano", tid, 1, 0)
+    assert datos.campana("acme", c4)["orden"] == 3
+    ordenes = [c["orden"] for c in datos.campanas("acme", sid)]
+    assert len(ordenes) == len(set(ordenes))
+
+
+def test_persona_color_hexadecimal_o_nada(base_temporal):
+    from sprints import datos
+    with pytest.raises(datos.ErrorDatos) as e:
+        datos.crear_persona("acme", "X", color="rojo")
+    assert "hexadecimal" in str(e.value)
+    pid = datos.crear_persona("acme", "X", color="#4d8dff")
+    assert datos.persona("acme", pid)["color"] == "#4d8dff"
+    assert datos.crear_persona("acme", "Y", color="") and datos.personas("acme")[1]["color"] is None
+    assert datos.crear_persona("acme", "Z", color=None) and datos.personas("acme")[2]["color"] is None
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_persona("acme", pid, color="4d8dff")      # sin #
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_persona("acme", pid, color="#zz")         # empieza por # pero no es hex
+    assert datos.actualizar_persona("acme", pid, color="#000") and datos.persona("acme", pid)["color"] == "#000"
+    assert datos.actualizar_persona("acme", pid, color="") and datos.persona("acme", pid)["color"] is None
+
+
+def test_temporada_paleta_descarta_lo_que_no_es_hex(base_temporal):
+    from sprints import datos
+    tid = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31",
+                                mood_visual={"paleta": ["#000", "rojo"], "luz": "cálida"})
+    assert datos.temporada("acme", tid)["mood_visual"] == {"paleta": ["#000"], "luz": "cálida"}
+    datos.actualizar_temporada("acme", tid, mood_visual={"paleta": ["#FFFFFF", "blanco", "#zz1122", 7]})
+    assert datos.temporada("acme", tid)["mood_visual"]["paleta"] == ["#FFFFFF"]
+    tid2 = datos.crear_temporada("acme", "Sin", "2026-01-01", "2026-02-01", mood_visual={"luz": "x"})
+    assert datos.temporada("acme", tid2)["mood_visual"] == {"luz": "x"}

@@ -65,7 +65,7 @@ def _parsear_json(texto):
     faltan = [k for k in CLAVES if k not in data]
     if faltan:
         raise AnalisisInvalido(f"Faltan claves: {', '.join(faltan)}")
-    data["paleta"] = [str(c) for c in (data.get("paleta") or []) if str(c).startswith("#")][:5]
+    data["paleta"] = [c for c in (data.get("paleta") or []) if isinstance(c, str) and datos.COLOR_HEX.match(c)][:5]
     data["elementos"] = [str(e) for e in (data.get("elementos") or [])][:8]
     return {k: data[k] for k in CLAVES}
 
