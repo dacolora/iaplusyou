@@ -268,7 +268,7 @@
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Comprobar Pixel</button></form>
 </div>
 {% else %}
-<p class="vacio"><span class="tag-estado">sin conexión</span> Conecta Meta en <a href="#ads" onclick="document.querySelector('.sidebar-item[data-tab=ads]').click(); return false;">Campañas</a> para comprobar el Pixel.</p>
+<p class="vacio"><span class="tag-estado">sin conexión</span> Conecta Meta en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;">Experimentos</a> para comprobar el Pixel.</p>
 {% endif %}
 <details class="pixel-ayuda">
   <summary>Cómo instalar el Pixel según tu plataforma</summary>

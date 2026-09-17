@@ -227,36 +227,10 @@ def _cliente_admin(dashboard):
     return c
 
 
-def test_ruta_publicar_ad_encola_sin_reintentos(base_temporal, monkeypatch):
-    import ads
-    import dashboard
-    aid = ads.crear("acme", "flowplus", "cf", "https://r2/f.png", "foto", "Pieza")
-    monkeypatch.setattr(dashboard.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
-    capturado = {}
-
-    def _encolar(job_id, tipo, payload, **kw):
-        capturado.update(job_id=job_id, tipo=tipo, payload=payload, **kw)
-        return True
-    monkeypatch.setattr(dashboard.trabajos, "encolar", _encolar)
-    c = _cliente_admin(dashboard)
-    r = c.post("/cliente/acme/ads/publicar", data={
-        "ad_id": aid, "objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": "20000", "dias": "3",
-        "pais": "CO", "edad_min": "18", "edad_max": "45", "destino_url": "https://tienda.com/p",
-    })
-    assert r.status_code == 302
-    assert capturado["tipo"] == "meta_publicar"
-    assert capturado["job_id"] == f"acme__{aid}__ads_publicar"
-    assert capturado["max_intentos"] == 1
-    assert capturado["cliente"] == "acme"
-    p = capturado["payload"]
-    assert p["cliente"] == "acme" and p["ad_id"] == aid and p["objetivo"] == "OUTCOME_TRAFFIC"
-    assert p["presupuesto_diario"] == 20000.0 and p["dias"] == 3 and p["pais"] == "CO"
-    assert p["edad_min"] == 18 and p["edad_max"] == 45 and p["destino_url"] == "https://tienda.com/p"
-    e = ads.cargar("acme")[aid]
-    assert e["estado"] == "publicando" and not e.get("error")
-
-
-def test_ruta_publicar_ad_rechaza_objetivo_invalido(base_temporal, monkeypatch):
+def test_ruta_publicar_ad_ya_no_publica(base_temporal, monkeypatch):
+    """Campañas se fundió en Experimentos: la ruta se conserva para formularios
+    viejos pero no toca el anuncio ni encola meta_publicar (la tarea del worker
+    sigue probada arriba)."""
     import ads
     import dashboard
     aid = ads.crear("acme", "flowplus", "cf", "https://r2/f.png", "foto", "Pieza")
@@ -267,11 +241,27 @@ def test_ruta_publicar_ad_rechaza_objetivo_invalido(base_temporal, monkeypatch):
     monkeypatch.setattr(dashboard.trabajos, "encolar", _no)
     c = _cliente_admin(dashboard)
     r = c.post("/cliente/acme/ads/publicar", data={
-        "ad_id": aid, "objetivo": "OUTCOME_APP_PROMOTION", "presupuesto_diario": "20000", "dias": "3",
+        "ad_id": aid, "objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": "20000", "dias": "3",
         "pais": "CO", "edad_min": "18", "edad_max": "45", "destino_url": "https://tienda.com/p",
     })
-    assert r.status_code == 302
-    assert ads.cargar("acme")[aid]["estado"] == "en_cola"
+    assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
+    e = ads.cargar("acme")[aid]
+    assert e["estado"] == "en_cola" and e.get("objetivo") is None and not e.get("error")
+    with c.session_transaction() as s:
+        flashes = s.get("_flashes") or []
+    assert any("Campañas ya no existe" in msg for _, msg in flashes)
+
+
+def test_ruta_nueva_campana_ya_no_crea(base_temporal, monkeypatch):
+    import ads
+    import dashboard
+    c = _cliente_admin(dashboard)
+    r = c.post("/cliente/acme/ads/nueva_campana", data={"piezas": ["flowplus:cf_1"], "nombre_campana": "X"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
+    assert ads.cargar("acme") == {}
+    with c.session_transaction() as s:
+        flashes = s.get("_flashes") or []
+    assert any("Campañas ya no existe" in msg for _, msg in flashes)
 
 
 def test_ruta_actualizar_resultados_encola_refrescar(base_temporal, monkeypatch):
@@ -294,10 +284,11 @@ def test_ruta_actualizar_resultados_encola_refrescar(base_temporal, monkeypatch)
     assert capturado["max_intentos"] == 1  # el error de Meta se ve ya, no tras 30 min de reintentos
 
 
-def test_plantilla_ads_compila():
+def test_plantilla_anuncios_sueltos_compila():
     import jinja2
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")))
-    src = env.loader.get_source(env, "_tab_ads.html")[0]
+    src = env.loader.get_source(env, "_anuncios_sueltos.html")[0]
     env.parse(src)
     assert "trabajos_ads" in src and "iniciarPolling" in src
+    assert not os.path.exists(os.path.join(raiz, "templates", "_tab_ads.html"))

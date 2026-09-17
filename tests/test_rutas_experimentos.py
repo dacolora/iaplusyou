@@ -299,3 +299,99 @@ def test_tab_experimentos_render_estados(app, base_temporal, estado, con_campana
         assert texto in cuerpo, f"esperaba '{texto}' en estado {estado}"
     for texto in no_esperados:
         assert texto not in cuerpo, f"no esperaba '{texto}' en estado {estado}"
+
+
+# ---------- Campañas se fundió en Experimentos (anuncios sueltos) ----------
+
+def test_sidebar_sin_campanas_y_sin_tab_ads(app, base_temporal):
+    r = app["c"].get("/cliente/acme")
+    cuerpo = r.data.decode("utf-8")
+    assert r.status_code == 200
+    assert 'data-tab="ads"' not in cuerpo and 'id="tab-ads"' not in cuerpo
+    assert "+ Nueva campaña" not in cuerpo and "Listos para publicar" not in cuerpo
+    # Sin anuncios sueltos, el bloque ni se pinta.
+    assert "Anuncios sueltos (anteriores)" not in cuerpo
+    assert "Un experimento con una pieza y un país es un anuncio" in cuerpo
+
+
+def test_experimentos_muestra_anuncio_suelto_con_kpis_y_botones(app, base_temporal):
+    import ads
+    aid = ads.crear("acme", "flowplus", "cf_9", "https://r2/suelto.mp4", "video", "Anuncio viejo")
+    ads.actualizar("acme", aid, estado="activo",
+                   meta_ids={"campaign_id": "c1", "adset_id": "s1", "ad_id": "a1", "creative_id": "cr1"},
+                   metricas={"impresiones": 1234, "clics": 56, "ctr": 4.54, "cpc": 321.0, "gasto_usd": 18000.0,
+                             "estado_meta_texto": "Activo", "motivo_rechazo": "Texto con demasiadas mayúsculas"})
+    r = app["c"].get("/cliente/acme")
+    cuerpo = r.data.decode("utf-8")
+    assert r.status_code == 200
+    assert "Anuncios sueltos (anteriores)" in cuerpo
+    assert "Venían de la pestaña Campañas" in cuerpo
+    assert "Anuncio viejo" in cuerpo and "flowplus" in cuerpo
+    assert "<strong>1234</strong>" in cuerpo and "<strong>56</strong>" in cuerpo
+    assert "4.54%" in cuerpo and "18.000" in cuerpo and "321" in cuerpo
+    assert "Estado en Meta: <strong>Activo</strong>" in cuerpo
+    assert "Meta no lo está mostrando: Texto con demasiadas mayúsculas" in cuerpo
+    assert f"/cliente/acme/ads/{aid}/actualizar" in cuerpo and "Actualizar métricas" in cuerpo
+    assert f"/cliente/acme/ads/{aid}/estado" in cuerpo and ">Pausar</button>" in cuerpo
+    assert f"/cliente/acme/ads/{aid}/eliminar" in cuerpo and "Quitar de la lista" in cuerpo
+    assert "Volver a intentar" not in cuerpo
+
+
+def test_anuncio_suelto_pausado_activa_con_confirm_y_error_reintenta(app, base_temporal):
+    import ads
+    pausado = ads.crear("acme", "swap", "sw_1", "https://r2/p.mp4", "video", "Pausado")
+    ads.actualizar("acme", pausado, estado="pausado", meta_ids={"campaign_id": "c1", "adset_id": "s1", "ad_id": "a1"})
+    roto = ads.crear("acme", "idea_visual", "b_1", "https://r2/e.mp4", "video", "Roto")
+    ads.actualizar("acme", roto, estado="error", error="Meta dijo que no.")
+    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    assert ">Activar</button>" in cuerpo and "empieza a gastar presupuesto real" in cuerpo
+    assert f"/cliente/acme/ads/{roto}/reintentar" in cuerpo and "Volver a intentar" in cuerpo
+    assert "Meta dijo que no." in cuerpo
+
+
+def test_anuncio_suelto_en_cola_ofrece_meter_en_experimento(app, base_temporal):
+    """Un en_cola que venía de Campañas ya no tiene formulario de publicar: si la
+    pieza sigue en Crear (elegibles_exp, por url_video) y hay un experimento en
+    armado, ofrece el mismo «Meter en experimento» que Crear."""
+    import ads
+    import experimentos as ex
+    _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_7", url="https://r2/cola.mp4")
+    aid = ads.crear("acme", "flowplus", "cf_7", "https://r2/cola.mp4", "video", "En cola")
+    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    assert "Piezas que estaban listas para publicar (1)" in cuerpo
+    assert "Ahora esto se hace con un experimento" in cuerpo
+    assert ">Meter en experimento</button>" not in cuerpo  # sin experimento en armado no hay adónde meterla
+    assert "Crea un experimento arriba" in cuerpo
+    assert "/cliente/acme/ads/publicar" not in cuerpo
+    assert f"/cliente/acme/ads/{aid}/eliminar" in cuerpo
+
+    eid = ex.crear("acme", "Armando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    assert ">Meter en experimento</button>" in cuerpo
+    assert 'name="legado_id" value="cf_7"' in cuerpo and 'name="volver" value="experimentos"' in cuerpo
+    assert f'<option value="{eid}">Armando</option>' in cuerpo
+
+    # Y el formulario de verdad mete la pieza, volviendo a Experimentos.
+    r = app["c"].post("/cliente/acme/experimentos/meter",
+                      data={"legado_id": "cf_7", "experimento_id": str(eid), "pais": "CO", "volver": "experimentos"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
+    assert len(ex.piezas("acme", eid)) == 1
+
+
+def test_anuncio_suelto_en_cola_sin_pieza_en_crear(app, base_temporal):
+    import ads
+    import experimentos as ex
+    ex.crear("acme", "Armando", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ads.crear("acme", "flowplus", "cf_x", "https://r2/no-existe.mp4", "video", "Huérfano")
+    cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
+    assert "Huérfano" in cuerpo and ">Meter en experimento</button>" not in cuerpo
+    assert "Esta pieza ya no está en Crear" in cuerpo
+
+
+def test_rutas_ads_redirigen_a_experimentos(app, base_temporal):
+    import ads
+    aid = ads.crear("acme", "flowplus", "cf_1", "https://r2/x.mp4", "video", "X")
+    for ruta, data in ((f"/cliente/acme/ads/{aid}/actualizar", {}), (f"/cliente/acme/ads/{aid}/estado", {"estado": "PAUSED"}),
+                       (f"/cliente/acme/ads/{aid}/reintentar", {}), (f"/cliente/acme/ads/{aid}/eliminar", {})):
+        r = app["c"].post(ruta, data=data)
+        assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos"), ruta

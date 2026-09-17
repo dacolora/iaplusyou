@@ -850,8 +850,9 @@ def ver_cliente(cliente):
 
     log = bitacora.leer(cliente=cliente, limit=100)
 
-    # Campañas: qué tarjetas tienen un trabajo del worker en curso (publicar o
-    # refrescar métricas), para que la tarjeta muestre la barra y se recargue sola.
+    # Anuncios sueltos (lo que quedó de Campañas, dentro de Experimentos): qué
+    # tarjetas tienen un trabajo del worker en curso (publicar o refrescar
+    # métricas), para que la tarjeta muestre la barra y se recargue sola.
     ads_dict = ads_mod.cargar(cliente)
     trabajos_ads = {}
     for ad_id in ads_dict:
@@ -930,7 +931,6 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
-        piezas_generadas=_piezas_generadas(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         fp_prefill=session.pop("fp_prefill", None),
         logos=_logos(cliente),
@@ -1898,92 +1898,13 @@ def eliminar_swap(cliente, swap_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
-def _fecha_corta(iso):
-    """'2026-09-12T16:05:50' -> '12 sep 16:05' (para nombrar piezas sin mostrar el prompt)."""
-    try:
-        d = datetime.fromisoformat(iso)
-    except (TypeError, ValueError):
-        return ""
-    meses = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
-    return f"{d.day} {meses[d.month - 1]} {d:%H:%M}"
-
-
-def _piezas_generadas(cliente):
-    """Todo lo que ya salió listo de Crear (videos e imágenes de FlowPlus, cambios
-    de producto, ideas en texto) con URL pública, para armar una campaña desde
-    Campañas. Se nombra por tipo/enfoque/modelo/fecha, nunca por el prompt. Los
-    videos de FlowPlus también quedan copiados en estado_videos.json (para la
-    revisión), así que se deduplica por URL. Lo que ya está en la lista de
-    anuncios se marca para no repetirlo."""
-    ya = {(a.get("fuente"), a.get("fuente_id")) for a in ads_mod.cargar(cliente).values()}
-    piezas, urls = [], set()
-
-    def agregar(pieza):
-        if pieza["url"] in urls:
-            return
-        urls.add(pieza["url"])
-        piezas.append(pieza)
-
-    for cf_id, e in creative_flow.cargar(cliente).items():
-        if e.get("estado") == "video_listo" and e.get("video_url"):
-            tipo = "imagen" if e.get("tipo") == "imagen" else "video"
-            modelo = (flowplus_modelos.IMAGEN.get(e.get("modelo")) or flowplus_modelos.VIDEO.get(e.get("modelo")) or {}).get("nombre", "")
-            nombre = ("Imagen" if tipo == "imagen" else "Video") + (f" · {e['enfoque_nombre']}" if e.get("enfoque_nombre") else "")
-            agregar({
-                "clave": f"flowplus:{cf_id}", "url": e["video_url"], "tipo": tipo,
-                "nombre": nombre,
-                "detalle": " · ".join(x for x in (modelo, _fecha_corta(e.get("creado_en"))) if x),
-                "creado_en": e.get("creado_en", ""), "en_lista": ("flowplus", cf_id) in ya,
-            })
-    for swap_id, e in swaps_mod.cargar(cliente).items():
-        if e.get("estado") == "listo" and e.get("resultado_url"):
-            producto = catalogo_productos.encontrar(cliente, e.get("producto_id"))
-            agregar({
-                "clave": f"swap:{swap_id}", "url": e["resultado_url"],
-                "tipo": "video" if e.get("tipo") == "video" else "imagen",
-                "nombre": producto["nombre"] if producto else "Cambio de producto",
-                "detalle": " · ".join(x for x in ("Cambio de producto", _fecha_corta(e.get("creado_en"))) if x),
-                "creado_en": e.get("creado_en", ""), "en_lista": ("swap", swap_id) in ya,
-            })
-    for brief_id, e in estado_mod.cargar(cliente).items():
-        if e.get("video_url"):
-            titulo = e.get("title") or ""
-            creado = e.get("generado_en") or e.get("creado_en") or ""
-            agregar({
-                "clave": f"idea_visual:{brief_id}", "url": e["video_url"], "tipo": "video",
-                "nombre": titulo if titulo and titulo != brief_id else "Video · Idea en texto",
-                "detalle": " · ".join(x for x in ("Idea en texto", _fecha_corta(creado)) if x),
-                "creado_en": creado, "en_lista": ("idea_visual", brief_id) in ya,
-            })
-    piezas.sort(key=lambda p: p["creado_en"], reverse=True)
-    return piezas
-
-
 @app.route("/cliente/<cliente>/ads/nueva_campana", methods=["POST"])
 def nueva_campana(cliente):
-    """"+ Nueva campaña" en Campañas: las piezas marcadas pasan a "Listos para
-    publicar", una por anuncio, con el nombre de campaña que escribió la persona
-    por delante. Publicar sigue siendo un paso aparte, siempre pausado."""
-    claves = [c for c in request.form.getlist("piezas") if c]
-    nombre_campana = (request.form.get("nombre_campana") or "").strip()
-    if not claves:
-        flash("Marca al menos una pieza para la campaña.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    disponibles = {p["clave"]: p for p in _piezas_generadas(cliente)}
-    agregadas = 0
-    for clave in claves:
-        p = disponibles.get(clave)
-        if not p:
-            continue
-        fuente, fuente_id = clave.split(":", 1)
-        nombre = f"{nombre_campana} — {p['nombre']}" if nombre_campana else p["nombre"]
-        ads_mod.crear(cliente, fuente, fuente_id, p["url"], p["tipo"], nombre)
-        agregadas += 1
-    if agregadas:
-        flash(f"{agregadas} pieza(s) listas para publicar — define objetivo y presupuesto en cada una.", "ok")
-    else:
-        flash("Esas piezas ya no están disponibles.", "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    """Campañas ya no existe como pestaña (se fundió en Experimentos). La ruta
+    se conserva para enlaces/formularios viejos, pero no crea nada: avisa y
+    manda a Experimentos, donde una pieza se mete en un experimento."""
+    flash("Campañas ya no existe: crea un experimento con esa pieza.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/enviar_a_publicidad", methods=["POST"])
@@ -1997,7 +1918,7 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
     nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
     ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
-    flash("Enviado a Publicidad — revísalo en esa pestaña.", "ok")
+    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -2011,13 +1932,14 @@ def enviar_video_a_publicidad(cliente, brief_id):
 
     nombre = entry.get("title") or brief_id
     ads_mod.crear(cliente, "idea_visual", brief_id, entry["video_url"], "video", nombre)
-    flash("Enviado a Publicidad — revísalo en esa pestaña.", "ok")
+    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
-# ---------- Publicidad (Meta Ads) — publicar, actualizar resultados, pausar/activar,
-# eliminar de la lista local. Nunca borra una campaña real de Meta: eso queda para
-# Meta Ads Manager a propósito (ver eliminar_ad más abajo). ----------
+# ---------- Anuncios sueltos (Meta Ads, lo que quedó de Campañas; se ven dentro
+# de Experimentos) — actualizar resultados, pausar/activar, eliminar de la lista
+# local. Nunca borra una campaña real de Meta: eso queda para Meta Ads Manager a
+# propósito (ver eliminar_ad más abajo). ----------
 
 # ---------- Conexión con Meta (Facebook Login for Business) ----------
 # La autorización es una ruta de la app (ya no un script de terminal), así
@@ -2025,7 +1947,8 @@ def enviar_video_a_publicidad(cliente, brief_id):
 # clientes/<cliente>/meta.json (meta_conexion.py).
 
 def _ir_a_flowmarketing(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    # La conexión con Meta se muestra en Experimentos (_meta_conectar.html).
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/meta/conectar")
@@ -2157,69 +2080,12 @@ def meta_desconectar(cliente):
 
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
 def publicar_ad(cliente):
-    """Toma un anuncio en cola (creado por otro módulo vía ads.crear) y lo
-    publica de verdad en Meta: Campaign -> AdSet -> AdCreative -> Ad, todo
-    PAUSED. La ruta solo valida el formulario y encola; la cadena de 4
-    llamadas HTTP la ejecuta el worker (tareas/meta.py, meta_publicar)."""
-    ad_id = request.form.get("ad_id", "").strip()
-    objetivo = request.form.get("objetivo", "").strip()
-    # El presupuesto se escribe en la MONEDA DE LA CUENTA (meta.json -> moneda):
-    # Meta interpreta daily_budget en esa divisa. Antes se asumía USD y con una
-    # cuenta en COP "5" terminaba siendo 500 pesos diarios.
-    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
-    try:
-        presupuesto_diario = float(request.form.get("presupuesto_diario") or request.form.get("presupuesto_diario_usd") or 0)
-        dias = int(request.form.get("dias", "0") or 0)
-        edad_min = int(request.form.get("edad_min", "18") or 18)
-        edad_max = int(request.form.get("edad_max", "65") or 65)
-    except ValueError:
-        flash("Presupuesto, días y edades deben ser números.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    pais = request.form.get("pais", "").strip()
-    destino_url = request.form.get("destino_url", "").strip()
-
-    data = ads_mod.cargar(cliente)
-    entry = data.get(ad_id)
-    if not entry:
-        flash("No encontré ese anuncio en la cola.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1:
-        flash("Elige un objetivo válido para el anuncio.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if not presupuesto_diario or not dias or not pais or not destino_url:
-        flash("Faltan presupuesto, días, país o URL de destino.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if not (13 <= edad_min <= edad_max <= 65):
-        flash("Las edades deben estar entre 13 y 65, y la mínima no puede superar la máxima.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if not destino_url.startswith(("http://", "https://")):
-        flash("La URL de destino debe empezar por http:// o https://.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
-    if presupuesto_diario < minimo:
-        flash(f"Meta exige al menos {minimo:,.0f} {moneda} por día en esta cuenta.".replace(",", "."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-
-    ads_mod.actualizar(
-        cliente, ad_id, estado="publicando", error=None, objetivo=objetivo,
-        presupuesto_diario=presupuesto_diario, moneda=moneda,
-        presupuesto_diario_usd=presupuesto_diario if moneda == "USD" else None, dias=dias,
-        audiencia={"edad_min": edad_min, "edad_max": edad_max, "paises": [pais]},
-        destino_url=destino_url,
-    )
-    job_id = f"{cliente}__{ad_id}__ads_publicar"
-
-    # max_intentos=1: un reintento automático a mitad de la cadena crearía
-    # campañas huérfanas en Meta; la persona reintenta con "Volver a intentar".
-    arranco = trabajos.encolar(job_id, "meta_publicar", {
-        "cliente": cliente, "ad_id": ad_id, "objetivo": objetivo, "presupuesto_diario": presupuesto_diario,
-        "dias": dias, "pais": pais, "edad_min": edad_min, "edad_max": edad_max, "destino_url": destino_url,
-    }, cliente=cliente, duracion_estimada=90, max_intentos=1)
-    if arranco:
-        flash("Publicando el anuncio…", "ok")
-    else:
-        flash("Ya se está publicando ese anuncio — espera a que termine.", "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    """Publicar un anuncio suelto ya no tiene UI: Campañas se fundió en
+    Experimentos y publicar es lanzar un experimento (exp_lanzar). La ruta se
+    conserva para formularios viejos, pero no toca el anuncio ni encola nada
+    (la tarea del worker `meta_publicar` sigue existiendo en tareas/meta.py)."""
+    flash("Campañas ya no existe: crea un experimento con esa pieza.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/actualizar", methods=["POST"])
@@ -2228,7 +2094,7 @@ def actualizar_resultados_ad(cliente, ad_id):
     entry = data.get(ad_id)
     if not entry or not entry.get("meta_ids", {}).get("ad_id"):
         flash("Ese anuncio todavía no está publicado en Meta.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     # El snapshot lo trae el worker (tareas/meta.py, meta_refrescar); la
     # tarjeta se recarga sola por el polling.
     # max_intentos=1: si Meta falla, la persona tiene que ver el error ya, no
@@ -2241,7 +2107,7 @@ def actualizar_resultados_ad(cliente, ad_id):
         flash("Actualizando resultados…", "ok")
     else:
         flash("Ya se están actualizando.", "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/estado", methods=["POST"])
@@ -2251,14 +2117,14 @@ def cambiar_estado_ad(cliente, ad_id):
     nuevo_estado = request.form.get("estado", "").strip()
     if nuevo_estado not in ("ACTIVE", "PAUSED"):
         flash("Estado inválido.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
     data = ads_mod.cargar(cliente)
     entry = data.get(ad_id)
     campaign_id = (entry or {}).get("meta_ids", {}).get("campaign_id")
     if not campaign_id:
         flash("Ese anuncio todavía no está publicado en Meta.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
     # Serializado: meta_auth.configurar() escribe credenciales globales del
     # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
@@ -2279,7 +2145,7 @@ def cambiar_estado_ad(cliente, ad_id):
             flash(f"No pude cambiar el estado: {e}", "error")
         finally:
             meta_auth.limpiar()
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/reintentar", methods=["POST"])
@@ -2289,10 +2155,10 @@ def reintentar_ad(cliente, ad_id):
     entry = ads_mod.cargar(cliente).get(ad_id)
     if not entry or entry.get("estado") != "error":
         flash("Ese anuncio no está en error.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     ads_mod.actualizar(cliente, ad_id, estado="en_cola", error=None)
     flash("Listo para volver a publicar.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/eliminar", methods=["POST"])
@@ -2302,7 +2168,7 @@ def eliminar_ad(cliente, ad_id):
     borra algo que ya está corriendo en la plataforma de otro)."""
     ads_mod.eliminar(cliente, ad_id)
     flash("Eliminado de la lista.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 # ---------- Tablero (Bloque 6) ----------
@@ -2644,8 +2510,11 @@ def exp_quitar_pieza(cliente, eid, ep_id):
 @app.route("/cliente/<cliente>/experimentos/meter", methods=["POST"])
 def exp_meter_pieza(cliente):
     """Desde la pestaña Crear: manda una pieza recién generada directo a un
-    experimento existente, sin tener que ir a la pestaña Experimentos."""
+    experimento existente, sin tener que ir a la pestaña Experimentos. Los
+    anuncios sueltos en cola (Experimentos › Anuncios sueltos) usan el mismo
+    formulario con volver=experimentos para quedarse en esa pestaña."""
     legado_id = (request.form.get("legado_id") or "").strip()
+    volver = "experimentos" if request.form.get("volver") == "experimentos" else "creativeflowplus"
     try:
         experimento_id = int(request.form.get("experimento_id") or 0)
     except ValueError:
@@ -2657,7 +2526,7 @@ def exp_meter_pieza(cliente):
     else:
         error = _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais)
         flash(error, "error") if error else flash("Pieza enviada al experimento.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/lanzar", methods=["POST"])

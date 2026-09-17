@@ -1,10 +1,11 @@
 {# Barra lateral del proyecto (referencia: DoReel). Colapsable: solo íconos o
    íconos + texto; el estado se recuerda. Las claves data-tab son las mismas de
-   siempre (calzado, creativeflowplus, experimentos, catalogo, ads, settings)
+   siempre (calzado, creativeflowplus, experimentos, catalogo, settings)
    para que los redirect(_anchor=...) y los enlaces guardados sigan
    funcionando; `tablero` (Bloque 6) va primero y es la pestaña por defecto.
-   `productos` ya no es pestaña: vive dentro de Catálogo (cliente.html
-   resuelve el hash viejo). #}
+   `productos` ya no es pestaña: vive dentro de Catálogo; `ads` (Campañas)
+   tampoco: sus anuncios sueltos viven dentro de Experimentos (cliente.html
+   resuelve los hashes viejos). #}
 <aside class="sidebar" id="sidebar">
   <a class="sidebar-marca" href="{{ url_for('index') }}" title="Creatv Machine">
     <span class="marca-mark"></span>
@@ -27,10 +28,6 @@
     <button type="button" class="sidebar-item" data-tab="experimentos" role="tab" title="Experimentos">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="6" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><circle cx="18" cy="19" r="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M12 7v4M12 11l-6 6M12 11l6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
       <span class="sidebar-texto">Experimentos</span>
-    </button>
-    <button type="button" class="sidebar-item" data-tab="ads" role="tab" title="Campañas">
-      <svg viewBox="0 0 24 24"><path d="M3 11v2a1 1 0 0 0 1 1h3l5 4V6L7 10H4a1 1 0 0 0-1 1z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M16 9a4 4 0 0 1 0 6M19 7a7 7 0 0 1 0 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
-      <span class="sidebar-texto">Campañas</span>
     </button>
     <button type="button" class="sidebar-item" data-tab="catalogo" role="tab" title="Catálogo">
       <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><path d="M3 10h18M9 4v16" stroke="currentColor" stroke-width="2"/></svg>

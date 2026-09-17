@@ -1,0 +1,145 @@
+{# Anuncios sueltos (anteriores): lo que quedó de la pestaña Campañas, pintado
+   al final de Experimentos solo cuando `ads` no está vacío. Solo lectura +
+   pausar/activar/actualizar métricas/quitar de la lista: acá ya no se publica
+   nada nuevo (nueva_campana/publicar_ad no tienen UI). Contexto de ver_cliente:
+   ads (ads.cargar), trabajos_ads ({ad_id: {"job_id"}}), capacidades_meta,
+   experimentos_armando, elegibles_exp (para «Meter en experimento» en los
+   en_cola), paises_fe. #}
+{% set en_cola_sueltos = ads.values() | selectattr("estado", "equalto", "en_cola") | list %}
+{% set mon_sueltos = capacidades_meta.detalle.moneda or "USD" %}
+
+<div class="panel-cabecera anuncios-sueltos" id="anuncios-sueltos" style="margin-top:2.5rem;">
+  <h2>Anuncios sueltos (anteriores)</h2>
+  <p class="vacio">Venían de la pestaña Campañas. Se siguen midiendo y se pueden pausar/activar; para lanzar algo nuevo crea un experimento.</p>
+</div>
+
+<div class="swaps-lista">
+  {% for ad_id, entry in ads.items() if entry.estado != "en_cola" %}
+  {% set m = entry.metricas or {} %}
+  <details class="swap-card anuncio-suelto anuncio-suelto-{{ entry.estado }}" id="ad-{{ ad_id }}">
+    <summary class="swap-card-resumen">
+      <span class="idea-chevron">▸</span>
+      <span class="swap-thumb">
+        {% if entry.contenido_tipo == "video" %}
+        <video src="{{ entry.contenido_url }}" muted></video>
+        {% else %}
+        <img src="{{ entry.contenido_url }}" alt="{{ entry.nombre }}">
+        {% endif %}
+      </span>
+      <span class="swap-resumen-texto">
+        <strong>{{ entry.nombre }}</strong>
+        <span class="swap-resumen-meta">
+          {{ entry.fuente }} · <span class="tag-estado">{{ entry.estado }}</span>
+          {% if m.estado_meta_texto %}· {{ m.estado_meta_texto }}{% endif %}
+        </span>
+      </span>
+    </summary>
+
+    {% if entry.error %}
+    <p class="tag-error">{{ entry.error }}</p>
+    {% endif %}
+
+    {% if entry.meta_ids and entry.meta_ids.ad_id %}
+    <div class="ad-resultados">
+      <div class="ad-resultados-cab">
+        <strong>Resultados</strong>
+        <span class="vacio" style="padding:0;font-size:.76rem;">
+          {% if m.estado_meta_texto %}Estado en Meta: <strong>{{ m.estado_meta_texto }}</strong> · {% endif %}
+          {% if m.actualizado_en %}actualizado {{ m.actualizado_en[:16].replace("T", " ") }}{% else %}todavía no se han traído resultados{% endif %}
+        </span>
+      </div>
+      {% if m.motivo_rechazo %}<p class="tag-error">Meta no lo está mostrando: {{ m.motivo_rechazo }}</p>{% endif %}
+      <div class="kpis">
+        <div class="kpi"><span>Impresiones</span><strong>{{ m.impresiones or 0 }}</strong><small>{% if m.cpm %}CPM {{ "{:,.0f}".format(m.cpm).replace(",", ".") }} {{ mon_sueltos }}{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>Clics</span><strong>{{ m.clics or 0 }}</strong><small>{% if m.resultado_nombre and m.resultado %}{{ m.resultado }} {{ m.resultado_nombre | lower }}{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>CTR</span><strong>{{ "%.2f"|format(m.ctr or 0) }}%</strong><small>{% if m.reach %}{{ m.reach }} personas{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>CPC</span><strong>{% if m.cpc %}{{ "{:,.0f}".format(m.cpc).replace(",", ".") }} {{ mon_sueltos }}{% else %}—{% endif %}</strong><small>{% if m.costo_por_resultado %}{{ "{:,.0f}".format(m.costo_por_resultado).replace(",", ".") }} {{ mon_sueltos }} por resultado{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>Gasto</span><strong>{{ "{:,.0f}".format(m.gasto_usd or 0).replace(",", ".") }} {{ mon_sueltos }}</strong><small>{% if entry.presupuesto_diario %}de {{ "{:,.0f}".format(entry.presupuesto_diario).replace(",", ".") }}/día{% elif entry.presupuesto_diario_usd %}de {{ "{:,.0f}".format(entry.presupuesto_diario_usd).replace(",", ".") }}/día{% else %}—{% endif %}</small></div>
+      </div>
+      {% if not m.impresiones %}
+      <p class="vacio" style="font-size:.76rem;">
+        {% if m.estado_meta == "PENDING_REVIEW" or not m.estado_meta %}Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras.{% elif entry.estado == "pausado" %}El anuncio está pausado: no se muestra ni gasta. Actívalo para que empiece a circular.{% else %}Todavía sin impresiones — dale a «Actualizar métricas» en unas horas.{% endif %}
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% set trabajo_ad = trabajos_ads.get(ad_id) if trabajos_ads else none %}
+    {% if trabajo_ad %}
+    {# El worker está publicando o trayendo métricas: barra + recarga sola al terminar. #}
+    <div class="barra-progreso" id="trabajo-{{ trabajo_ad.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+    <div class="progreso-texto">{% if entry.estado == "publicando" %}Publicando en Meta…{% else %}Actualizando métricas…{% endif %} 0% · 0s</div>
+    <script>iniciarPolling({{ trabajo_ad.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_ad.job_id) | tojson }});</script>
+    {% endif %}
+
+    <div class="exp-acciones">
+      {% if entry.meta_ids and entry.meta_ids.ad_id %}
+      <form method="post" action="{{ url_for('actualizar_resultados_ad', cliente=cliente, ad_id=ad_id) }}" class="inline">
+        <button type="submit" class="btn-guardar btn-sm">Actualizar métricas</button>
+      </form>
+      {% if entry.estado == "activo" %}
+      <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" class="inline">
+        <input type="hidden" name="estado" value="PAUSED">
+        {% if capacidades_meta.estado == "conectado" %}
+        <button type="submit" class="btn-rechazar btn-sm">Pausar</button>
+        {% else %}
+        <span class="vacio">Reconecta Meta para pausar.</span>
+        {% endif %}
+      </form>
+      {% elif entry.estado == "pausado" %}
+      <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit="return confirm('Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?');">
+        <input type="hidden" name="estado" value="ACTIVE">
+        {% if capacidades_meta.estado == "conectado" %}
+        <button type="submit" class="btn-aprobar btn-sm">Activar</button>
+        {% else %}
+        <span class="vacio">Reconecta Meta para activar.</span>
+        {% endif %}
+      </form>
+      {% endif %}
+      {% endif %}
+      {% if entry.estado == "error" %}
+      <form method="post" action="{{ url_for('reintentar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline">
+        <button type="submit" class="btn-generar btn-sm">Volver a intentar</button>
+      </form>
+      {% endif %}
+      <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit="return confirm('¿Quitar de la lista? Esto NO borra el anuncio en Meta si ya se publicó.');">
+        <button type="submit" class="btn-rechazar btn-sm">Quitar de la lista</button>
+      </form>
+    </div>
+  </details>
+  {% endfor %}
+</div>
+
+{% if en_cola_sueltos %}
+<div class="anuncios-sueltos-cola" style="margin-top:1.2rem;">
+  <h3>Piezas que estaban listas para publicar ({{ en_cola_sueltos | length }})</h3>
+  <p class="vacio">Ahora esto se hace con un experimento: crea uno (o usa uno en armado) y mete la pieza.</p>
+  <ul class="exp-piezas">
+    {% for ad_id, entry in ads.items() if entry.estado == "en_cola" %}
+    {% set elegible = (elegibles_exp | selectattr("url_video", "equalto", entry.contenido_url) | list | first) if elegibles_exp else none %}
+    <li class="exp-pieza anuncio-suelto-en-cola" id="ad-{{ ad_id }}">
+      <span class="exp-pieza-mini">
+        {% if entry.contenido_tipo == "video" %}<video src="{{ entry.contenido_url }}" muted></video>{% else %}<img src="{{ entry.contenido_url }}" alt="">{% endif %}
+      </span>
+      <span class="exp-pieza-nombre">{{ entry.nombre }} <small>({{ entry.fuente }})</small> <span class="tag-estado">en cola</span></span>
+      {% if elegible and experimentos_armando %}
+      <form method="post" action="{{ url_for('exp_meter_pieza', cliente=cliente) }}" class="inline exp-meter">
+        <input type="hidden" name="legado_id" value="{{ elegible.legado_id }}">
+        <input type="hidden" name="volver" value="experimentos">
+        <select name="experimento_id">{% for e in experimentos_armando %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}</select>
+        <select name="pais">{% for codigo in paises_fe %}<option value="{{ codigo }}"{% if elegible.pais == codigo %} selected{% endif %}>{{ codigo }}</option>{% endfor %}</select>
+        <button type="submit" class="btn-guardar btn-sm">Meter en experimento</button>
+      </form>
+      {% elif elegible %}
+      <small class="vacio">Crea un experimento arriba y aparecerá «Meter en experimento».</small>
+      {% else %}
+      <small class="vacio">Esta pieza ya no está en Crear: genera una nueva y métela en un experimento.</small>
+      {% endif %}
+      <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit="return confirm('¿Quitar de la lista?');">
+        <button type="submit" class="btn-rechazar btn-xs">Quitar de la lista</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
