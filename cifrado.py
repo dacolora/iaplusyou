@@ -34,6 +34,8 @@ def cifrar(texto):
 
 def descifrar(token):
     try:
-        return _fernet().decrypt(token.encode("ascii")).decode("utf-8")
-    except InvalidToken as e:
+        return _fernet().decrypt((token or "").encode("ascii")).decode("utf-8")
+    except (InvalidToken, UnicodeEncodeError, TypeError) as e:
+        # Un valor corrupto o no-ASCII en la columna se trata igual que un
+        # token de otra clave: credenciales ilegibles, hay que reconectar.
         raise ErrorCifrado("No se pudieron leer las credenciales guardadas (¿cambió FLASK_SECRET_KEY?). Vuelve a conectar la tienda.") from e

@@ -25,3 +25,11 @@ def test_clave_distinta_no_descifra(monkeypatch):
     monkeypatch.setenv("FLASK_SECRET_KEY", "b" * 32)
     with pytest.raises(cifrado.ErrorCifrado):
         cifrado.descifrar(t)
+
+
+def test_token_corrupto_o_no_ascii(monkeypatch):
+    import cifrado
+    monkeypatch.setenv("FLASK_SECRET_KEY", "a" * 32)
+    for malo in ("ñandú", "basura", ""):
+        with pytest.raises(cifrado.ErrorCifrado):
+            cifrado.descifrar(malo)
