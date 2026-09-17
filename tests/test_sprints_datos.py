@@ -284,3 +284,43 @@ def test_ideas_se_unen_con_la_sesion_de_crear(base_temporal):
     assert datos.idea("acme", i1)["estado"] == "listo"
     with pytest.raises(datos.ErrorDatos):
         datos.eliminar_idea("acme", i1)     # ya tiene sesión
+
+
+def test_reclamar_cf_es_compare_and_swap(base_temporal):
+    """El primer `reclamar_cf` gana el `cf_id`; el segundo, sobre la misma
+    idea todavía sin sesión (`cf_id IS NULL`), ya no puede ganar (evita que
+    dos lotes concurrentes generen dos sesiones para la misma idea)."""
+    from sprints import datos
+    sid, cid = _campana(datos)
+    i1 = datos.crear_idea("acme", cid, "video", "A", "a", estado_idea="aprobada")
+    assert datos.reclamar_cf("acme", i1, "reservando_1") is True
+    assert datos.idea("acme", i1)["cf_id"] == "reservando_1"
+    assert datos.reclamar_cf("acme", i1, "reservando_2") is False        # ya no está en None
+    assert datos.idea("acme", i1)["cf_id"] == "reservando_1"             # no se pisó
+
+
+def test_reclamar_cf_con_esperado_solo_cambia_si_coincide(base_temporal):
+    """Con `esperado`, el swap solo ocurre si el valor actual es exactamente
+    ese (el caso de `regenerar`: reemplazar una sesión conocida por otra)."""
+    from sprints import datos
+    sid, cid = _campana(datos)
+    i1 = datos.crear_idea("acme", cid, "video", "A", "a", estado_idea="aprobada")
+    datos.actualizar_idea("acme", i1, cf_id="cf_viejo")
+    assert datos.reclamar_cf("acme", i1, "cf_nuevo", esperado="cf_otro") is False
+    assert datos.idea("acme", i1)["cf_id"] == "cf_viejo"
+    assert datos.reclamar_cf("acme", i1, "cf_nuevo", esperado="cf_viejo") is True
+    assert datos.idea("acme", i1)["cf_id"] == "cf_nuevo"
+    assert datos.reclamar_cf("acme", i1, "cf_nuevo_2", esperado="cf_viejo") is False   # ya cambió, no coincide más
+
+
+def test_actualizar_extra_sprint_hace_rmw_atomico(base_temporal):
+    """`fn` recibe el `extra` actual y lo que agrega convive con lo que ya
+    había (no reemplaza el dict completo como `actualizar_sprint(extra=...)`)."""
+    from sprints import datos
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31")
+    datos.actualizar_extra_sprint("acme", sid, lambda extra: {**extra, "costo_estimado_usd": 1.5})
+    assert datos.sprint("acme", sid)["extra"] == {"costo_estimado_usd": 1.5}
+    nuevo = datos.actualizar_extra_sprint("acme", sid, lambda extra: {**extra, "lote_en_curso": True})
+    assert nuevo == {"costo_estimado_usd": 1.5, "lote_en_curso": True}
+    assert datos.sprint("acme", sid)["extra"] == {"costo_estimado_usd": 1.5, "lote_en_curso": True}
+    assert datos.actualizar_extra_sprint("acme", 999, lambda extra: extra) is None

@@ -105,6 +105,98 @@ def test_reintentar_y_regenerar(escenario, monkeypatch):
     assert i["extra"]["cf_anteriores"] == [cf]
 
 
+def test_lanzar_lote_no_duplica_una_idea_ya_reservada(escenario, monkeypatch):
+    """Simula la carrera: dos llamadas a `lanzar_lote` leyeron la misma lista
+    de `pendientes` (una idea sin `cf_id` todavía), pero para cuando esta
+    llamada procesa esa idea, otra ya se le adelantó y la reservó. El
+    compare-and-swap de `reclamar_cf` dentro del lote debe verla omitida y no
+    generar una segunda sesión (double spend) ni pisar la reserva ajena."""
+    import flowplus_lanzar
+    from sprints import datos, produccion
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append(cf) or True)
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    idea_iv = datos.idea("acme", escenario["iv"])
+    idea_ii = datos.idea("acme", escenario["ii"])
+    datos.actualizar_idea("acme", escenario["iv"], cf_id="reservando_99")   # "otra llamada" ya se adelantó
+    monkeypatch.setattr(produccion, "pendientes",
+                        lambda cliente, sprint_id, campana_id=None: [(c, idea_iv), (c, idea_ii)])
+    r = produccion.lanzar_lote("acme", escenario["sid"])
+    assert r["omitidas"] == 1 and r["encoladas"] == 1 and len(r["cf_ids"]) == 1
+    assert datos.idea("acme", escenario["iv"])["cf_id"] == "reservando_99"   # sin tocar, sin sesión nueva
+    assert datos.idea("acme", escenario["ii"])["cf_id"] is not None
+
+
+def test_regenerar_falla_si_la_reserva_ya_no_es_valida(escenario, monkeypatch):
+    """Cuando `reclamar_cf` no puede ganar el swap (otra regeneración se
+    adelantó entre el `duplicar` y este punto), `regenerar` archiva la sesión
+    duplicada de más y nunca la encola."""
+    import creative_flow
+    import flowplus_lanzar
+    from sprints import datos, produccion
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: True)
+    produccion.lanzar_lote("acme", escenario["sid"], campana_id=escenario["cid"])
+    archivados = []
+    monkeypatch.setattr(creative_flow, "archivar_concepto",
+                        lambda c, cf, motivo: archivados.append((c, cf, motivo)) or True)
+    monkeypatch.setattr(datos, "reclamar_cf", lambda cliente, cp_id, cf_id, esperado=None: False)
+    with pytest.raises(datos.ErrorDatos):
+        produccion.regenerar("acme", escenario["iv"])
+    assert len(archivados) == 1 and archivados[0][2] == "regeneración duplicada"
+
+
+def test_referencias_sesion_exige_foto_de_producto(escenario, monkeypatch):
+    import catalogo_productos
+    from sprints import datos, produccion
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    idea = datos.idea("acme", escenario["iv"])
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda cl, pid, categoria=None: None)
+    with pytest.raises(datos.ErrorDatos):
+        produccion.referencias_sesion("acme", c, idea)
+
+
+def test_lanzar_lote_omite_y_libera_reserva_si_falla_la_subida_del_producto(escenario, monkeypatch):
+    """`referencias_sesion` ahora exige la foto del producto: si subirla
+    falla, la idea no se queda a medio reservar ni gasta un lanzamiento —
+    `lanzar_lote` la cuenta como omitida, no crea sesión y deja `cf_id` en
+    None otra vez para un reintento posterior."""
+    import flowplus_lanzar
+    from sprints import datos, produccion
+    from storage import r2_uploader
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append(cf) or True)
+    def _falla(ruta, key):
+        raise RuntimeError("R2 no responde")
+    monkeypatch.setattr(r2_uploader, "upload_image", _falla)
+    r = produccion.lanzar_lote("acme", escenario["sid"])
+    assert r["omitidas"] == 2 and r["encoladas"] == 0 and r["cf_ids"] == [] and lanzados == []
+    assert datos.idea("acme", escenario["iv"])["cf_id"] is None
+    assert datos.idea("acme", escenario["ii"])["cf_id"] is None
+    sp = datos.sprint("acme", escenario["sid"])
+    tipos = [e["tipo"] for e in sp["eventos"]]
+    assert tipos.count("pieza_omitida") == 2 and "lote_encolado" not in tipos
+
+
+def test_estimar_cuenta_los_logos_en_n_referencias_de_imagen(escenario, monkeypatch):
+    """`_n_referencias` debe sumar los logos que `referencias_sesion` agrega
+    (tope 2) a lo que le llega al modelo de imagen, si no el estimado del
+    lote sale corto frente a lo que realmente se manda a generar."""
+    from sprints import produccion
+    from providers import flowplus_modelos
+    monkeypatch.setattr(produccion, "_logos",
+                        lambda cliente: [{"url": "https://r2/l1.png"}, {"url": "https://r2/l2.png"}])
+    vistos = []
+    original = flowplus_modelos.estimate_imagen
+    def _espia(modelo, n_referencias=1):
+        vistos.append(n_referencias)
+        return original(modelo, n_referencias=n_referencias)
+    monkeypatch.setattr(flowplus_modelos, "estimate_imagen", _espia)
+    produccion.estimar("acme", escenario["sid"])
+    assert vistos == [1 + 2 + 2]      # 1 producto + 2 referencias de campaña (fixture) + 2 logos (tope)
+
+
 def test_progreso_agregado(escenario, monkeypatch):
     import cola
     import creative_flow

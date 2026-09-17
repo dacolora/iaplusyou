@@ -8,6 +8,7 @@ estado de todas las piezas de un sprint para el tablero.
 """
 import os
 
+import bitacora
 import catalogo_productos
 import cola
 import creative_flow
@@ -68,8 +69,12 @@ def _duracion(idea):
         return DURACION_DEFECTO_S
 
 
-def _n_referencias(campana):
-    return max(1, min(MAX_IMAGENES_MODELO, 1 + int(campana.get("referencias_total") or 0)))
+def _n_referencias(cliente, campana):
+    """Referencias que le llegan al modelo de imagen: el producto (1) + las de
+    la campaña + los logos que `referencias_sesion` agrega (tope 2), así el
+    estimado no se queda corto cuando el proyecto tiene logo."""
+    return max(1, min(MAX_IMAGENES_MODELO,
+                      1 + int(campana.get("referencias_total") or 0) + min(2, len(_logos(cliente)))))
 
 
 def _texto_tiempo(segundos):
@@ -88,7 +93,7 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
             usd += float((flowplus_modelos.estimate_video(mv, _duracion(i)) or {}).get("usd") or 0.0)
         else:
             imagenes += 1
-            usd += float((flowplus_modelos.estimate_imagen(mi, n_referencias=_n_referencias(c)) or {}).get("usd") or 0.0)
+            usd += float((flowplus_modelos.estimate_imagen(mi, n_referencias=_n_referencias(cliente, c)) or {}).get("usd") or 0.0)
     segundos = videos * SEGUNDOS_VIDEO + imagenes * SEGUNDOS_IMAGEN
     acumulado = float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0)
     nombre_v, nombre_i = flowplus_modelos.VIDEO[mv]["nombre"], flowplus_modelos.IMAGEN[mi]["nombre"]
@@ -119,21 +124,28 @@ def referencias_sesion(cliente, campana, idea):
     """Referencias de la sesión como las arma Crear: el producto del catálogo
     (con regla de fidelidad), luego las referencias de la campaña (primero las
     que inspiran la idea) y los logos del proyecto. Devuelve
-    (referencias, referencias_urls, productos_sel)."""
+    (referencias, referencias_urls, productos_sel).
+
+    El producto es obligatorio: sin su foto de referencia no hay
+    `PRODUCTO EXACTO` en el prompt y el modelo puede inventar cualquier cosa,
+    así que ni el catálogo sin foto ni un fallo al subirla se tragan en
+    silencio — ambos paran la sesión con `ErrorDatos` para que
+    `lanzar_lote` la cuente como omitida en vez de generar a ciegas."""
     referencias, productos_sel = [], []
     activo = catalogo_productos.encontrar(cliente, campana["catalogo_id"], categoria="producto")
-    if activo:
-        info_cat = catalogo_productos.CATEGORIAS["producto"]
-        ruta = (activo.get("referencias") or [None])[0]
-        if ruta:
-            try:
-                url = r2_uploader.upload_image(ruta, f"clientes/{cliente}/{info_cat['carpeta']}/{activo['id']}/{os.path.basename(ruta)}")
-                referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": "@Producto 1",
-                                    "categoria": "producto", "activo": activo["nombre"], "regla": activo.get("regla") or "",
-                                    "producto": activo["nombre"]})
-            except Exception:
-                pass
-        productos_sel.append(activo["nombre"])
+    ruta = (activo.get("referencias") or [None])[0] if activo else None
+    if not activo or not ruta:
+        raise datos.ErrorDatos("El producto de la campaña no está en el catálogo o no tiene foto.")
+    info_cat = catalogo_productos.CATEGORIAS["producto"]
+    try:
+        url = r2_uploader.upload_image(ruta, f"clientes/{cliente}/{info_cat['carpeta']}/{activo['id']}/{os.path.basename(ruta)}")
+    except Exception as e:
+        bitacora.registrar(cliente, activo["id"], "sprint_producto", "error", str(e))
+        raise datos.ErrorDatos(f"No se pudo subir la foto del producto: {e}")
+    referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": "@Producto 1",
+                        "categoria": "producto", "activo": activo["nombre"], "regla": activo.get("regla") or "",
+                        "producto": activo["nombre"]})
+    productos_sel.append(activo["nombre"])
     refs = datos.referencias(cliente, campana["id"])
     primero = [int(x) for x in (idea.get("referencias_ids") or [])]
     ordenadas = [r for r in refs if r["id"] in primero] + [r for r in refs if r["id"] not in primero]
@@ -191,20 +203,44 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen):
     creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt, aspect_ratio=_aspect_ratio(plataformas), tipo=idea["tipo"],
                              modelo=modelo_video if idea["tipo"] == "video" else modelo_imagen, referencias=referencias,
                              con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"])
-    datos.actualizar_idea(cliente, idea["id"], cf_id=cf_id)
+    # `lanzar_lote` ya reservó cf_id="reservando_<id>" antes de llamar acá, así
+    # que el vínculo final es el mismo compare-and-swap (evita que una idea
+    # tenga dos sesiones si dos lotes corrieron a la vez). Llamada directa
+    # (sin reserva previa, como en las pruebas) cae al `actualizar_idea` de
+    # siempre.
+    if not datos.reclamar_cf(cliente, idea["id"], cf_id, esperado=f"reservando_{idea['id']}"):
+        datos.actualizar_idea(cliente, idea["id"], cf_id=cf_id)
     return cf_id
 
 
 def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_imagen=None):
     """Crea y encola una sesión por idea aprobada sin sesión. Devuelve
     {encoladas, omitidas, cf_ids, usd}. La puerta de costo es de la ruta: aquí
-    ya se decidió gastar."""
+    ya se decidió gastar.
+
+    Cada idea se reserva (`datos.reclamar_cf` con un `cf_id` placeholder
+    "reservando_<id>") ANTES de armar su sesión: si dos llamadas a
+    `lanzar_lote` corren a la vez (dos clics, el worker y un cron) y las dos
+    leyeron la misma lista de `pendientes`, solo la primera gana la reserva
+    de cada idea — la segunda la ve omitida en vez de generar dos sesiones
+    para la misma pieza (double spend). Un fallo al armar la sesión (p. ej.
+    el producto no tiene foto, §referencias_sesion) libera la reserva."""
     sp = _sprint(cliente, sprint_id)
     mv, mi = modelos(cliente, modelo_video, modelo_imagen)
     est = estimar(cliente, sprint_id, campana_id, mv, mi)
     encoladas, omitidas, cf_ids = 0, 0, []
     for c, i in pendientes(cliente, sprint_id, campana_id):
-        cf_id = crear_sesion(cliente, sp, c, i, mv, mi)
+        if not datos.reclamar_cf(cliente, i["id"], f"reservando_{i['id']}"):
+            omitidas += 1
+            continue
+        try:
+            cf_id = crear_sesion(cliente, sp, c, i, mv, mi)
+        except Exception as e:
+            datos.actualizar_idea(cliente, i["id"], cf_id=None)
+            omitidas += 1
+            datos.registrar_evento(cliente, sprint_id, "pieza_omitida", f"«{i['titulo']}» no se pudo preparar: {e}",
+                                   {"cp_id": i["id"], "error": str(e)}, campana_id=c["id"])
+            continue
         entry = creative_flow.cargar(cliente)[cf_id]
         if flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_LOTE):
             encoladas += 1
@@ -212,11 +248,12 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
         else:
             omitidas += 1
     if encoladas:
-        extra = dict(sp.get("extra") or {})
-        extra["costo_estimado_usd"] = round(float(extra.get("costo_estimado_usd") or 0.0) + est["usd"], 4)
-        extra["lote_en_curso"] = True
-        extra["modelos_lote"] = {"video": mv, "imagen": mi}
-        datos.actualizar_sprint(cliente, sprint_id, extra=extra)
+        def _sumar(extra):
+            extra["costo_estimado_usd"] = round(float(extra.get("costo_estimado_usd") or 0.0) + est["usd"], 4)
+            extra["lote_en_curso"] = True
+            extra["modelos_lote"] = {"video": mv, "imagen": mi}
+            return extra
+        datos.actualizar_extra_sprint(cliente, sprint_id, _sumar)
         datos.registrar_evento(cliente, sprint_id, "lote_encolado",
                                f"Lote de {encoladas} pieza(s) encolado: {est['videos']} video(s), {est['imagenes']} imagen(es), USD {est['usd']:.2f} estimado",
                                {"encoladas": encoladas, "omitidas": omitidas, "usd": est["usd"], "campana_id": campana_id,
@@ -248,21 +285,28 @@ def reintentar(cliente, cp_id):
 
 def regenerar(cliente, cp_id):
     """Sesión nueva a partir de la actual (misma idea y prompt), QA y revisión
-    en blanco; la sesión anterior queda en `extra.cf_anteriores`. Gasta."""
+    en blanco; la sesión anterior queda en `extra.cf_anteriores`. Gasta.
+
+    El vínculo `cf_id` viejo -> nuevo es un compare-and-swap
+    (`datos.reclamar_cf(..., esperado=i["cf_id"])`): si entre el `duplicar` y
+    este punto otra llamada (doble clic, dos pestañas) ya regeneró la misma
+    idea, el `cf_id` actual ya no es el que leímos y el swap falla — la
+    sesión duplicada de acá se archiva sin encolarse nunca, en vez de dejar
+    dos regeneraciones corriendo para la misma idea (double spend)."""
     i = _idea_con_sesion(cliente, cp_id)
     nuevo = creative_flow.duplicar(cliente, i["cf_id"])
+    if not datos.reclamar_cf(cliente, cp_id, nuevo, esperado=i["cf_id"]):
+        creative_flow.archivar_concepto(cliente, nuevo, "regeneración duplicada")
+        raise datos.ErrorDatos("Esa pieza ya se está regenerando.")
     extra = dict(i.get("extra") or {})
     extra["cf_anteriores"] = list(extra.get("cf_anteriores") or []) + [i["cf_id"]]
-    datos.actualizar_idea(cliente, cp_id, cf_id=nuevo, qa=None, revision="pendiente", revision_motivo=None, extra=extra)
+    datos.actualizar_idea(cliente, cp_id, qa=None, revision="pendiente", revision_motivo=None, extra=extra)
     entry = creative_flow.cargar(cliente)[nuevo]
-    flowplus_lanzar.lanzar(cliente, nuevo, entry, prioridad=PRIORIDAD_LOTE)
+    if not flowplus_lanzar.lanzar(cliente, nuevo, entry, prioridad=PRIORIDAD_LOTE):
+        raise datos.ErrorDatos("No se pudo encolar la regeneración.")
     datos.registrar_evento(cliente, i["sprint_id"], "pieza_regenerada", f"Regeneración de «{i['titulo']}»",
                            {"cp_id": cp_id, "cf_id": nuevo, "anterior": i["cf_id"]}, campana_id=i["campana_id"])
-    sp = datos.sprint(cliente, i["sprint_id"], con_eventos=False)
-    if sp:
-        extra_sp = dict(sp.get("extra") or {})
-        extra_sp["lote_en_curso"] = True
-        datos.actualizar_sprint(cliente, i["sprint_id"], extra=extra_sp)
+    datos.actualizar_extra_sprint(cliente, i["sprint_id"], lambda extra: {**extra, "lote_en_curso": True})
     estado.recalcular(cliente, i["sprint_id"])
     return nuevo
 

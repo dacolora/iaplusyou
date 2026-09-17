@@ -89,6 +89,19 @@ def _actualizar(con, tabla, fila_id, cliente, permitidas, campos):
     return r.rowcount == 1
 
 
+def _bloquear(con, tabla, fila_id, cliente):
+    """Toma el lock de escritura de SQLite ANTES de leer (semántica de
+    `BEGIN IMMEDIATE`), igual que `experimentos._bloquear`: un UPDATE sin
+    efecto sobre la fila objetivo obliga al driver a abrir la transacción y
+    tomar el lock ya, así el SELECT que sigue dentro de la misma transacción
+    ve lo que dejó el último escritor en vez de perder su actualización
+    (lost update: gunicorn y el worker leen y escriben `extra` a la vez).
+    Devuelve True si la fila existe."""
+    r = con.execute(tabla.update().where(tabla.c.id == fila_id, tabla.c.cliente == cliente)
+                    .values(actualizado_en=tabla.c.actualizado_en))
+    return r.rowcount == 1
+
+
 def _texto(v, largo=None):
     v = (v or "").strip()
     return v[:largo] if largo else v
@@ -278,6 +291,26 @@ def actualizar_sprint(cliente, sprint_id, /, **campos):
 
 def archivar_sprint(cliente, sprint_id, archivado=True):
     return actualizar_sprint(cliente, sprint_id, archivado=bool(archivado))
+
+
+def actualizar_extra_sprint(cliente, sprint_id, fn):
+    """Read-modify-write atómico de `sprint.extra`: toma el lock de escritura
+    (`_bloquear`) antes de leer, todo en UNA transacción, igual que
+    `experimentos.actualizar_extra`. Dos lotes (`produccion.lanzar_lote`) o una
+    regeneración corriendo a la vez sobre el mismo sprint ya no se pisan el
+    `costo_estimado_usd` acumulado ni `lote_en_curso`: cada llamada ve el
+    `extra` que dejó la anterior, no una foto vieja. `fn(extra) -> extra`.
+    Devuelve el `extra` escrito, o None si el sprint no existe."""
+    with db.conectar() as con:
+        if not _bloquear(con, db.sprint, sprint_id, cliente):
+            return None
+        f = _fila(con, db.sprint, sprint_id, cliente)
+        if not f:
+            return None
+        extra = fn(dict(f.extra or {}))
+        con.execute(db.sprint.update().where(db.sprint.c.id == sprint_id)
+                    .values(actualizado_en=db.ahora(), extra=extra))
+        return extra
 
 
 def _campanas(con, cliente, sprint_id=None, campana_id=None):
@@ -662,3 +695,21 @@ def eliminar_idea(cliente, cp_id):
         if c:
             _evento(con, cliente, c.sprint_id, f.campana_id, "idea_eliminada", f"Idea «{f.titulo}» eliminada", {"cp_id": cp_id})
     return True
+
+
+def reclamar_cf(cliente, cp_id, cf_id, esperado=None):
+    """Compare-and-swap de `campana_pieza.cf_id`: un solo UPDATE con el valor
+    esperado en el WHERE, así dos `produccion.lanzar_lote`/`regenerar`
+    concurrentes sobre la misma idea no generan dos sesiones (double spend).
+    `esperado=None` (defecto) exige que la idea todavía no tenga sesión
+    (`cf_id IS NULL`, el caso de una reserva antes de generar); si se pasa
+    `esperado`, el swap solo ocurre cuando el valor actual es exactamente
+    ese (el caso de `regenerar`, que reemplaza una sesión ya conocida por
+    otra nueva). Devuelve True si el UPDATE tocó la fila (ganó la carrera),
+    False si otra llamada ya se adelantó."""
+    cp = db.campana_pieza
+    condicion = cp.c.cf_id.is_(None) if esperado is None else (cp.c.cf_id == esperado)
+    with db.conectar() as con:
+        r = con.execute(cp.update().where(cp.c.id == cp_id, cp.c.cliente == cliente, condicion)
+                        .values(cf_id=cf_id, actualizado_en=db.ahora()))
+        return r.rowcount == 1
