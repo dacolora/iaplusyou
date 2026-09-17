@@ -154,3 +154,22 @@ def test_crear_guarda_extra_sprint(base_temporal):
     assert "sprint" not in cf.cargar("acme")[otro]
     copia = cf.duplicar("acme", cf_id)
     assert cf.cargar("acme")[copia]["sprint"]["cp_id"] == 3    # la regeneración conserva el vínculo
+
+
+def test_duplicar_rearma_el_prompt_con_sonido_solo_para_videos(base_temporal, monkeypatch):
+    """Al cambiar el enfoque, la copia vuelve a armar el prompt como Crear:
+    un video pide el sonido de la escena; una imagen no lleva línea SONIDO."""
+    import creative_flow as cf
+    import marca as marca_mod
+    monkeypatch.setattr(marca_mod, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(marca_mod, "negative_prompt_efectivo", lambda c: None)
+    refs = [{"tipo": "imagen", "url": "https://x/1.png", "frame_url": "https://x/1.png", "etiqueta": "@Imagen 1"}]
+    vid = cf.crear("acme", [], ["P"], [], "gira despacio", 8, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", vid, prompt_relleno="viejo", referencias=refs, enfoque="producto", tipo="video")
+    img = cf.crear("acme", [], ["P"], [], "gira despacio", 0, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", img, prompt_relleno="viejo", referencias=refs, enfoque="producto", tipo="imagen")
+    copia_v = cf.duplicar("acme", vid, enfoque="unboxing")
+    copia_i = cf.duplicar("acme", img, enfoque="unboxing")
+    todo = cf.cargar("acme")
+    assert "SONIDO: ambiente natural de la escena." in todo[copia_v]["prompt_relleno"]
+    assert "SONIDO" not in todo[copia_i]["prompt_relleno"] and "ESCENA: gira despacio" in todo[copia_i]["prompt_relleno"]

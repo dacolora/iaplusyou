@@ -4250,6 +4250,7 @@ def cf_crear_video(cliente):
             accion_central, referencias, con_persona=info["con_persona"],
             guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
             logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
+            con_sonido=(tipo == "video"),
         )
         cf_id = creative_flow.crear(
             cliente, [], productos_sel, [],

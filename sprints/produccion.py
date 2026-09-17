@@ -200,12 +200,11 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     contexto, persona = _contexto(cliente, campana)
     enfoque = idea.get("enfoque") if idea.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
     info = flowplus_prompt.ENFOQUES[enfoque]
-    escena = idea["escena"]
-    if idea["tipo"] == "video" and idea.get("sonido"):
-        escena = f"{escena}\nSONIDO: {idea['sonido']}. Sin diálogo hablado ni música de fondo."
-    prompt = flowplus_prompt.armar(escena, referencias, con_persona=info["con_persona"],
+    es_video = idea["tipo"] == "video"
+    prompt = flowplus_prompt.armar(idea["escena"], referencias, con_persona=info["con_persona"],
                                    guia_marca=marca.guia_efectiva(cliente), negative_marca=marca.negative_prompt_efectivo(cliente),
-                                   logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, contexto=contexto)
+                                   logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, contexto=contexto,
+                                   sonido=idea.get("sonido") if es_video else None, con_sonido=es_video)
     plataformas = list(idea.get("plataformas") or [])
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [], idea["escena"], _duracion(idea) if idea["tipo"] == "video" else 0,

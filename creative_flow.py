@@ -195,19 +195,23 @@ def guardar(cliente, data):
         eliminar(cliente, cf_id)
 
 
-def armar_prompt_sesion(cliente, extra, enfoque):
+def armar_prompt_sesion(cliente, extra, enfoque, con_sonido=None):
     """Arma `prompt_relleno` para una sesión de Crear exactamente como lo hace
     la ruta `cf_crear_video` del dashboard: acción central + referencias (con
-    sus logos) + guía y negative de la marca + bloque del enfoque. Devuelve
-    (prompt, info_enfoque). No llama a ningún modelo: es texto puro."""
+    sus logos) + guía y negative de la marca + bloque del enfoque + línea
+    SONIDO para los videos (spec estudio S1). con_sonido: None = según el
+    `tipo` del extra (video sí, imagen no). Devuelve (prompt, info_enfoque).
+    No llama a ningún modelo: es texto puro."""
     import flowplus_prompt
     import marca as marca_mod
     info = flowplus_prompt.ENFOQUES[enfoque]
     referencias = list(extra.get("referencias") or [])
+    if con_sonido is None:
+        con_sonido = (extra.get("tipo") or "video") == "video"
     prompt = flowplus_prompt.armar(
         extra.get("accion_central") or "", referencias, con_persona=info["con_persona"],
         guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
-        logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
+        logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, con_sonido=bool(con_sonido),
     )
     return prompt, info
 
@@ -244,7 +248,7 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None):
         enfoque_final = enfoque if enfoque is not None else enfoque_orig
         cambia_enfoque = enfoque is not None and enfoque != enfoque_orig
         if (cambia_enfoque or not extra.get("prompt_relleno")) and enfoque_final in flowplus_prompt.ENFOQUES:
-            prompt, info = armar_prompt_sesion(cliente, extra, enfoque_final)
+            prompt, info = armar_prompt_sesion(cliente, extra, enfoque_final, con_sonido=(tipo == "video"))
             extra["prompt_relleno"] = prompt
             extra["enfoque_nombre"] = info["nombre"]
             extra["con_persona"] = info["con_persona"]
