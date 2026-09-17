@@ -4,15 +4,23 @@
    paises_fe, capacidades_meta; (Bloque 5) atribucion_sugerida, atribuciones_exp,
    pedidos_por_exp ({eid: pedidos atribuidos}); (Bloque 6) objetivo_exp_sugerido,
    nombres_objetivo_exp. Nada se lanza ni activa sin un
-   clic explícito con confirm() cuando gasta. La pestaña Productos manda acá
-   con ?exp_nombre=&exp_destino= para prellenar «Nuevo experimento». #}
+   clic explícito con confirm() cuando gasta. Catálogo › Productos manda acá
+   con ?exp_nombre=&exp_destino= para prellenar «Nuevo experimento». Campañas
+   ya no es pestaña: la conexión con Meta (_meta_conectar.html) vive acá y los
+   anuncios sueltos que quedaron de esa pestaña se pintan al final
+   (_anuncios_sueltos.html, solo si `ads` no está vacío). Las reglas por
+   defecto del decisor (reglas_cliente, ruta cfg_reglas) también viven acá,
+   en «Reglas del motor», arriba de la lista. #}
 <div class="panel-cabecera">
   <h2>Experimentos</h2>
+  <p class="vacio">Un experimento con una pieza y un país es un anuncio; con varias piezas y países, el motor decide cuál gana.</p>
   <p class="vacio">Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Todo nace en pausa: lanzar crea los anuncios, activar empieza a gastar.</p>
 </div>
 
+{% include "_meta_conectar.html" %}
+
 {% if capacidades_meta.estado != "conectado" %}
-<p class="tag-error">Conecta Meta en Configuración para crear experimentos.</p>
+<p class="tag-error">Conecta Meta (arriba) para crear experimentos.</p>
 {% else %}
 <details class="swap-card" id="nuevo-experimento">
   <summary class="swap-card-resumen">+ Nuevo experimento</summary>
@@ -49,6 +57,22 @@
   </form>
 </details>
 {% endif %}
+
+{# Reglas del motor (antes «Reglas por defecto» en Configuración): valen para
+   todos los experimentos del proyecto; cada experimento puede sobreescribir
+   una regla en su propio panel. Mismo formulario y misma ruta (cfg_reglas). #}
+<details class="swap-card exp-reglas-motor" id="reglas-motor">
+  <summary class="swap-card-resumen">Reglas del motor (valen para todos los experimentos)</summary>
+  <p class="vacio" style="padding-top:0;">
+    Con estas reglas el motor decide ganadores y perdedores en todos los
+    experimentos del proyecto. Cada experimento puede sobreescribir una regla en
+    su propio panel. Vacío = valor de fábrica (en gris). «Sin umbral» apaga esa comparación.
+  </p>
+  <form method="post" action="{{ url_for('cfg_reglas', cliente=cliente) }}" class="form-nueva-idea exp-reglas-form">
+    {% with reglas_valores=reglas_cliente, reglas_placeholder=reglas_defecto_exp, prefijo="cfg" %}{% include "_form_reglas.html" %}{% endwith %}
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar reglas del motor</button>
+  </form>
+</details>
 
 {% for e in experimentos %}
 <details class="swap-card experimento experimento-{{ e.estado }}" id="exp-{{ e.id }}" {% if loop.first %}open{% endif %}>
@@ -241,6 +265,8 @@
 <p class="vacio">Todavía no hay experimentos. Crea uno, agrega piezas desde Crear («Meter en experimento») y lánzalo.</p>
 {% endfor %}
 
+{% if ads %}{% include "_anuncios_sueltos.html" %}{% endif %}
+
 <script>
   (function () {
     var q = new URLSearchParams(location.search);
@@ -252,7 +278,7 @@
       var det = document.getElementById('exp-' + exp);
       if (det) { det.open = true; setTimeout(function () { det.scrollIntoView({ block: 'start' }); }, 0); }
     }
-    // Prellenado desde Productos («Crear experimento»): ?exp_nombre=&exp_destino=
+    // Prellenado desde Catálogo › Productos («Crear experimento»): ?exp_nombre=&exp_destino=
     var nombre = q.get('exp_nombre'), destino = q.get('exp_destino');
     if (!nombre && !destino) return;
     var det = document.getElementById('nuevo-experimento');

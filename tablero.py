@@ -451,13 +451,14 @@ def alertas(cliente, ahora_iso=None, datos=None):
                                f"La cuenta {que}: {_plural(len(con_pixel), 'experimento mide', 'experimentos miden')} "
                                "ventas por Pixel y no verán compras. Compruébalo en Configuración.", "settings"))
 
-    # 8. Productos en prueba sin experimento (baja, productos).
+    # 8. Productos en prueba sin experimento (baja, catalogo — los productos
+    # viven en Catálogo › Productos).
     sueltos = _productos_en_prueba_sin_experimento(cliente, exps)
     if sueltos:
         n = len(sueltos)
         out.append(_alerta("productos_sin_experimento", "baja",
                            f"{_plural(n, 'producto marcado', 'productos marcados')} «en prueba» "
-                           f"{'no está' if n == 1 else 'no están'} en ningún experimento abierto.", "productos"))
+                           f"{'no está' if n == 1 else 'no están'} en ningún experimento abierto.", "catalogo"))
 
     # 9. Experimentos corriendo sin métricas nuevas en 6 h (baja).
     for ex in exps:

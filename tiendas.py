@@ -31,7 +31,7 @@ _PRODUCTO_CAMPOS_TODOS = ("id", "cliente", "creado_en", "actualizado_en", "fuent
                           "activo_catalogo_id", "prioridad", "en_prueba", "archivado",
                           "url_imagen_principal", "extra")
 _PRODUCTO_CAMPOS_MARCA = ("en_prueba", "prioridad", "archivado", "activo_catalogo_id", "url_compra",
-                          "precio", "moneda")
+                          "precio", "moneda", "nombre", "descripcion")
 # Claves de `producto.extra` que son del motor, no de la fuente: una sync
 # reemplaza `extra` con lo que trae el conector (handle, sku, gid…) pero
 # estas se conservan. `archivado_por` ("manual" | "sync") distingue un
@@ -210,8 +210,57 @@ def productos(cliente, incluir_archivados=False):
         return [_producto_a_dict(f) for f in filas]
 
 
+def por_activo(cliente):
+    """{activo_catalogo_id: producto} de todas las filas del cliente que
+    apuntan a un activo del catálogo, en UNA consulta — es lo que la pestaña
+    Catálogo necesita para pintar precio/url/en prueba al lado de cada
+    activo. Incluye archivadas (un activo cuya fila se archivó sigue siendo
+    el mismo activo), pero si dos filas apuntan al mismo activo gana la que
+    no está archivada."""
+    p = db.producto
+    mapa = {}
+    with db.conectar() as con:
+        filas = con.execute(sa.select(p).where(p.c.cliente == cliente, p.c.activo_catalogo_id.isnot(None))
+                            .order_by(p.c.archivado.desc(), p.c.id))
+        for f in filas:
+            d = _producto_a_dict(f)
+            actual = mapa.get(d["activo_catalogo_id"])
+            if actual is None or (actual["archivado"] and not d["archivado"]):
+                mapa[d["activo_catalogo_id"]] = d
+    return mapa
+
+
+def asegurar_manual(cliente, activo_id, nombre, descripcion=""):
+    """La fila `producto` de un activo del catálogo de categoría producto,
+    creándola si no existe (fuente `manual`, `fuente_id = activo_id`).
+    Idempotente: si ya hay una fila con `activo_catalogo_id == activo_id`
+    — la manual de antes, o una importada (csv/shopify…) que el importador
+    enlazó al activo — se devuelve esa, sin tocarle nombre ni datos. Nunca
+    dos filas para el mismo activo."""
+    p = db.producto
+    with db.conectar() as con:
+        fila = con.execute(sa.select(p.c.id).where(p.c.cliente == cliente, p.c.activo_catalogo_id == activo_id)
+                           .order_by(p.c.archivado, p.c.id)).first()
+    if fila:
+        return fila[0]
+    try:
+        pid = upsert_producto(cliente, "manual", activo_id, {"nombre": nombre, "descripcion": descripcion or ""})
+    except sa.exc.IntegrityError:
+        # Dos peticiones a la vez para el mismo activo: la constraint
+        # (cliente, fuente, fuente_id) deja pasar una sola; la que pierde
+        # devuelve la fila de la que ganó en vez de un 500.
+        existente = producto_por_fuente(cliente, "manual", activo_id)
+        if existente:
+            marcar_producto(cliente, existente["id"], activo_catalogo_id=activo_id)
+            return existente["id"]
+        raise
+    marcar_producto(cliente, pid, activo_catalogo_id=activo_id)
+    return pid
+
+
 def marcar_producto(cliente, producto_id, **campos):
-    """Banderas del catálogo. `archivado=True` es un archivado MANUAL
+    """Banderas del catálogo (y, desde Catálogo, `nombre`/`descripcion` del
+    activo). `archivado=True` es un archivado MANUAL
     (`extra.archivado_por = "manual"`: la sync no lo deshace);
     `archivado=False` lo recupera y limpia la marca."""
     malos = set(campos) - set(_PRODUCTO_CAMPOS_MARCA)

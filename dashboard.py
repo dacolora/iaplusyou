@@ -850,8 +850,9 @@ def ver_cliente(cliente):
 
     log = bitacora.leer(cliente=cliente, limit=100)
 
-    # Campañas: qué tarjetas tienen un trabajo del worker en curso (publicar o
-    # refrescar métricas), para que la tarjeta muestre la barra y se recargue sola.
+    # Anuncios sueltos (lo que quedó de Campañas, dentro de Experimentos): qué
+    # tarjetas tienen un trabajo del worker en curso (publicar o refrescar
+    # métricas), para que la tarjeta muestre la barra y se recargue sola.
     ads_dict = ads_mod.cargar(cliente)
     trabajos_ads = {}
     for ad_id in ads_dict:
@@ -893,7 +894,12 @@ def ver_cliente(cliente):
     meta_conectado = capacidades_meta.get("estado") == "conectado"
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
+    # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
+    # vuelo si falta) y la fila se pinta en la tarjeta del activo.
+    activos_producto = _productos_con_uso(cliente)
+    _asegurar_filas_producto(cliente, activos_producto)
     productos_tienda = _productos_tienda_contexto(cliente, experimentos_exp)
+    producto_comercial = _producto_comercial_contexto(productos_tienda)
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
 
@@ -909,9 +915,14 @@ def ver_cliente(cliente):
         videos=videos,
         log=log,
         informe=informe.completo(cliente),
-        productos=_productos_con_uso(cliente),
+        productos=activos_producto,
         categorias=catalogo_productos.CATEGORIAS,
-        activos_por_categoria={cid: (_productos_con_uso(cliente) if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
+        activos_por_categoria={cid: (activos_producto if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
+        producto_comercial=producto_comercial,
+        productos_sin_activo=[p for p in productos_tienda if not p["activo_ok"]],
+        monedas_catalogo=sorted(PRESUPUESTO_MINIMO_DIARIO),
+        moneda_catalogo=_moneda_por_defecto(cliente),
+        etiquetas_fuente=ETIQUETAS_FUENTE,
         tipos_producto=prompt_swap.TIPOS,
         zonas_cuerpo=mapa_corporal.ZONAS,
         presets_cuerpo=mapa_corporal.PRESETS,
@@ -921,7 +932,6 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
-        piezas_generadas=_piezas_generadas(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         fp_prefill=session.pop("fp_prefill", None),
         logos=_logos(cliente),
@@ -971,10 +981,174 @@ def ver_cliente(cliente):
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
+        llaves=_estado_llaves(url_for("meli_callback", _external=True)),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=_contexto_tablero(cliente),
         **sprints_rutas.contexto(cliente),
     )
+
+
+# Configuración › Puesta a punto: una tarjeta por servicio externo. Cada
+# entrada dice para qué sirve, cómo se paga, dónde se consigue y qué variables
+# van en el .env del servidor. El estado se calcula SOLO con
+# bool(os.environ.get(var)) — el valor de una llave nunca sale de aquí ni
+# llega a la plantilla. `{callback_meli}` en un paso se reemplaza por la URL
+# real del callback cuando hay request (ver _estado_llaves).
+SERVICIOS_LLAVES = (
+    {
+        "id": "anthropic",
+        "nombre": "Anthropic (guiones y prompts)",
+        "para_que": "Escribe los 5 prompts por idea y los guiones de las finales.",
+        "costo": "Se paga por uso: centavos por guion.",
+        "url": "https://console.anthropic.com/settings/keys",
+        "url_texto": "console.anthropic.com › API keys",
+        "variables": ["ANTHROPIC_API_KEY"],
+        "nota": "Sin ella no hay prompts ni guiones.",
+        "pasos": [
+            "Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa).",
+            "En «Billing» carga saldo o pon una tarjeta: sin saldo la llave existe pero no responde.",
+            "Ve a «API keys» › «Create key», ponle un nombre (por ejemplo «creatv») y cópiala: solo se muestra una vez.",
+            "Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios.",
+        ],
+    },
+    {
+        "id": "fal",
+        "nombre": "fal.ai (voz y música)",
+        "para_que": "Voz en off (ElevenLabs), subtítulos por palabra (Whisper) y música (Stable Audio) de las finales.",
+        "costo": "Se paga por uso: alrededor de $0.05 por final.",
+        "url": "https://fal.ai/dashboard/keys",
+        "url_texto": "fal.ai › Dashboard › Keys",
+        "variables": ["FAL_KEY"],
+        "nota": "Sin ella las finales salen sin voz ni música.",
+        "pasos": [
+            "Regístrate en fal.ai (con Google o GitHub; no pide verificación de negocio).",
+            "En «Billing» agrega una tarjeta o saldo prepago.",
+            "Ve a «Keys» › «Add key», elige alcance «API» y copia la llave.",
+            "Pégala como FAL_KEY en el .env del servidor y reinicia.",
+        ],
+    },
+    {
+        "id": "higgsfield",
+        "nombre": "Higgsfield (video e imagen)",
+        "para_que": "Genera la imagen candidata y el video de cada pieza.",
+        "costo": "Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes.",
+        "url": "https://higgsfield.ai/",
+        "url_texto": "higgsfield.ai › API",
+        "variables": ["HF_API_KEY_ID", "HF_API_KEY_SECRET"],
+        "nota": "Sin ella no se generan piezas.",
+        "pasos": [
+            "Inicia sesión en higgsfield.ai y compra un paquete de créditos en «Billing».",
+            "Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva.",
+            "Copia los dos valores: el Key ID y el Key Secret (el secreto solo se muestra una vez).",
+            "Pégalos como HF_API_KEY_ID y HF_API_KEY_SECRET en el .env del servidor y reinicia.",
+        ],
+    },
+    {
+        "id": "r2",
+        "nombre": "Cloudflare R2 (almacenamiento)",
+        "para_que": "Guarda cada imagen y video generado y les da una URL pública permanente.",
+        "costo": "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga.",
+        "url": "https://dash.cloudflare.com/?to=/:account/r2",
+        "url_texto": "dash.cloudflare.com › R2 › Manage API tokens",
+        "variables": ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL"],
+        "nota": "Sin ella los videos no tienen URL pública y Meta no puede usarlos.",
+        "pasos": [
+            "En dash.cloudflare.com entra a «R2» y crea un bucket (ese nombre es R2_BUCKET_NAME).",
+            "En «Settings» del bucket activa «Public access» (r2.dev o un dominio propio): esa URL es R2_PUBLIC_BASE_URL.",
+            "Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write».",
+            "Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2.",
+            "Pega las cinco variables en el .env del servidor y reinicia.",
+        ],
+    },
+    {
+        "id": "meta",
+        "nombre": "Meta (anuncios)",
+        "para_que": "Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas.",
+        "costo": "La pauta se cobra en tu cuenta publicitaria; la API no cuesta.",
+        "url": "https://business.facebook.com/settings/payment-methods",
+        "url_texto": "business.facebook.com › Facturación",
+        "variables": ["META_APP_ID", "META_APP_SECRET"],
+        "nota": "La app la pone el administrador; el proyecto se conecta con el botón «Conectar con Meta» de abajo.",
+        "pasos": [
+            "Administrador: en developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; copia el App ID y el App Secret al .env.",
+            "En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio.",
+            "Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página.",
+            "Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app.",
+        ],
+    },
+    {
+        "id": "smtp",
+        "nombre": "Correo de avisos (opcional)",
+        "para_que": "Manda un correo cuando hay propuestas pendientes, un ganador, un rechazo de Meta o un lanzamiento fallido.",
+        "costo": "Depende del proveedor de correo; con una cuenta normal no cuesta.",
+        "url": "https://support.google.com/accounts/answer/185833",
+        "url_texto": "Google › Contraseñas de aplicación",
+        "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"],
+        "nota": "Sin esto los avisos solo quedan en la bitácora.",
+        "opcional": True,
+        "pasos": [
+            "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio).",
+            "Si es Gmail, activa la verificación en dos pasos y crea una «Contraseña de aplicación»: esa es SMTP_PASS.",
+            "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS).",
+            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor y reinicia.",
+            "Abajo, en «Correo de avisos», escribe a qué dirección deben llegar los avisos de este proyecto.",
+        ],
+    },
+    {
+        "id": "meli",
+        "nombre": "MercadoLibre (opcional)",
+        "para_que": "Trae las publicaciones activas de una tienda de MercadoLibre al catálogo.",
+        "costo": "Gratis: solo lectura de tus publicaciones.",
+        "url": "https://developers.mercadolibre.com/",
+        "url_texto": "developers.mercadolibre.com",
+        "variables": ["MELI_APP_ID", "MELI_SECRET"],
+        "nota": "Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda.",
+        "opcional": True,
+        "pasos": [
+            "En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación».",
+            "Marca los permisos de lectura y «offline_access» (para renovar el token solo).",
+            "En «URI de redirect» pon exactamente {callback_meli}.",
+            "Copia el App ID y la Secret Key y pégalos como MELI_APP_ID y MELI_SECRET en el .env del servidor; reinicia.",
+            "Luego, en «Conectar tu tienda» › MercadoLibre, pulsa «Conectar con MercadoLibre».",
+        ],
+    },
+)
+
+
+def _estado_llaves(callback_meli=None):
+    """Tarjetas de Configuración › Puesta a punto. Devuelve una lista de dicts
+    {id, nombre, para_que, costo, estado, url, url_texto, variables, faltan,
+    nota, pasos, opcional} donde `estado` es «configurada» (todas las
+    variables presentes), «falta» (ninguna) o «parcial» (algunas). Solo mira
+    bool(os.environ.get(var)): ningún valor sale de aquí. `callback_meli` es
+    la URL real del callback de MercadoLibre para el paso de la app (fuera de
+    un request se deja el texto genérico)."""
+    callback = callback_meli or "<url del sitio>/meli/callback"
+    tarjetas = []
+    for s in SERVICIOS_LLAVES:
+        presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
+        faltan = [v for v in s["variables"] if v not in presentes]
+        if not faltan:
+            estado = "configurada"
+        elif not presentes:
+            estado = "falta"
+        else:
+            estado = "parcial"
+        tarjetas.append({
+            "id": s["id"],
+            "nombre": s["nombre"],
+            "para_que": s["para_que"],
+            "costo": s["costo"],
+            "estado": estado,
+            "url": s["url"],
+            "url_texto": s["url_texto"],
+            "variables": list(s["variables"]),
+            "faltan": faltan,
+            "nota": s["nota"],
+            "opcional": bool(s.get("opcional")),
+            "pasos": [p.replace("{callback_meli}", callback) for p in s["pasos"]],
+        })
+    return tarjetas
 
 
 PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
@@ -1374,12 +1548,93 @@ def guardar_preferencias_flowplus(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
+_MONEDA_RE = re.compile(r"^[A-Z]{3}$")
+
+
+def _moneda_por_defecto(cliente):
+    """La moneda de la cuenta publicitaria de Meta del proyecto, o COP si
+    todavía no conectó Meta — es la que hereda un producto del catálogo al
+    que no se le escribió moneda."""
+    return ((meta_conexion.cargar(cliente) or {}).get("moneda") or "COP").upper()
+
+
+def _campos_comerciales(form):
+    """Lee del formulario de Catálogo lo comercial de un producto (precio,
+    moneda, url_compra, en_prueba, prioridad) para `tiendas.marcar_producto`.
+    Solo devuelve las claves que venían en el formulario, salvo `en_prueba`
+    (un checkbox sin marcar no viaja: siempre se resuelve). Un valor
+    inválido NO frena el alta ni la edición del activo: se avisa con flash
+    y esa clave se omite (queda como estaba, o vacía si es nueva).
+    `wa.me/…` se normaliza a `https://wa.me/…` — es la URL de compra más
+    común de quien vende por WhatsApp y nadie la escribe con https."""
+    campos = {"en_prueba": form.get("en_prueba") in ("on", "1", "true")}
+    if "precio" in form:
+        precio_txt = (form.get("precio") or "").strip().replace(",", ".")
+        try:
+            precio = float(precio_txt) if precio_txt else None
+            if precio is not None and (not math.isfinite(precio) or precio < 0):
+                raise ValueError
+            campos["precio"] = precio
+        except ValueError:
+            flash("El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé.", "error")
+    if "prioridad" in form:
+        try:
+            prioridad = int(form.get("prioridad") or 0)
+            if not (0 <= prioridad <= 100):
+                raise ValueError
+            campos["prioridad"] = prioridad
+        except ValueError:
+            flash("La prioridad va de 0 a 100; no la guardé.", "error")
+    if "moneda" in form:
+        moneda = (form.get("moneda") or "").strip().upper()
+        if moneda and not _MONEDA_RE.match(moneda):
+            flash("La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé.", "error")
+        else:
+            campos["moneda"] = moneda or None
+    if "url_compra" in form:
+        url = (form.get("url_compra") or "").strip()
+        if url.lower().startswith("wa.me/"):
+            url = "https://" + url
+        if url and not url.startswith(("http://", "https://")):
+            flash("La URL de compra tiene que empezar por http:// o https:// (o ser wa.me/…); no la guardé.", "error")
+        else:
+            campos["url_compra"] = url or None
+    return campos
+
+
+def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False):
+    """Escribe lo comercial del activo `producto_id` en su fila `producto`
+    (`tiendas.asegurar_manual` la crea si no existe). Una fila sin moneda
+    hereda la de la cuenta de Meta (o COP). `desarchivar`: al CREAR el
+    activo, si su fila estaba archivada (se eliminó y se volvió a crear con
+    el mismo nombre) vuelve a la lista."""
+    nombre = (nombre or "").strip()
+    if not nombre:
+        # Editar sin nombre (el formulario no lo trae) no debe dejar una
+        # fila nueva sin nombre: el del activo, o su id.
+        nombre = (catalogo_productos.cargar_meta(cliente).get(producto_id) or {}).get("nombre") or producto_id
+    pid = tiendas.asegurar_manual(cliente, producto_id, nombre, descripcion)
+    fila = tiendas.producto(cliente, pid)
+    valores = dict(campos)
+    if nombre:
+        valores["nombre"] = nombre
+    if descripcion is not None:
+        valores["descripcion"] = descripcion.strip()
+    if not valores.get("moneda") and not (fila or {}).get("moneda"):
+        valores["moneda"] = _moneda_por_defecto(cliente)
+    if desarchivar and (fila or {}).get("archivado"):
+        valores["archivado"] = False
+    tiendas.marcar_producto(cliente, pid, **valores)
+    return pid
+
+
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
 def crear_producto(cliente):
     # "volver": pestaña que abrió el alta rápida (FlowClone, FlowPlus o FlowCatálogo).
     volver = request.form.get("volver") or "cambiar"
     nombre = (request.form.get("nombre") or "").strip()
     descripcion = (request.form.get("descripcion") or "").strip()
+    categoria = _cat(request.form.get("categoria"))
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not nombre:
         flash("Ponle un nombre.", "error")
@@ -1390,20 +1645,25 @@ def crear_producto(cliente):
     try:
         producto_id = catalogo_productos.crear(
             cliente, nombre, descripcion, tipo=request.form.get("tipo"),
-            zonas=request.form.getlist("zonas"), categoria=_cat(request.form.get("categoria")),
+            zonas=request.form.getlist("zonas"), categoria=categoria,
             regla=request.form.get("regla", ""))
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
-    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
+    guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=categoria)
     if not guardadas:
         # Sin ninguna foto válida el producto no aparecería en el catálogo:
         # mejor deshacer que dejar una carpeta fantasma.
-        catalogo_productos.eliminar(cliente, producto_id, categoria=_cat(request.form.get("categoria")))
+        catalogo_productos.eliminar(cliente, producto_id, categoria=categoria)
         flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
-    else:
-        flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
+    if categoria == "producto":
+        # Solo lo que se vende tiene fila comercial (precio, url de compra,
+        # en prueba): un personaje o un entorno no van a un experimento.
+        _guardar_fila_producto(cliente, producto_id, nombre, descripcion,
+                               _campos_comerciales(request.form), desarchivar=True)
+    flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
@@ -1433,6 +1693,7 @@ def _guardar_fotos_producto(cliente, producto_id, archivos, categoria="producto"
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/actualizar", methods=["POST"])
 def actualizar_producto(cliente, producto_id):
+    categoria = _cat(request.form.get("categoria"))
     try:
         catalogo_productos.actualizar(
             cliente, producto_id,
@@ -1440,11 +1701,16 @@ def actualizar_producto(cliente, producto_id):
             descripcion=request.form.get("descripcion"),
             tipo=request.form.get("tipo"),
             zonas=request.form.getlist("zonas"),
-            categoria=_cat(request.form.get("categoria")), regla=request.form.get("regla"),
+            categoria=categoria, regla=request.form.get("regla"),
         )
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if categoria == "producto":
+        # La fila comercial se crea aquí si el activo es anterior a que
+        # existiera (no hay migración: se enlaza al primer uso).
+        _guardar_fila_producto(cliente, producto_id, request.form.get("nombre"),
+                               request.form.get("descripcion"), _campos_comerciales(request.form))
     flash("Producto actualizado.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
@@ -1482,13 +1748,21 @@ def eliminar_producto(cliente, producto_id):
     """Borra el producto y TODAS sus fotos del disco. Irreversible — por eso la
     plantilla lo pide con un modal que nombra el producto y avisa cuántos swaps
     ya generados lo referencian."""
+    categoria = _cat(request.form.get("categoria"))
     producto = catalogo_productos.encontrar(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
     nombre = producto["nombre"] if producto else producto_id
     try:
-        catalogo_productos.eliminar(cliente, producto_id, categoria=_cat(request.form.get("categoria")))
+        catalogo_productos.eliminar(cliente, producto_id, categoria=categoria)
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
+    if categoria == "producto":
+        # La fila comercial NO se borra: se archiva (a mano, como en
+        # prod_archivar) para que un experimento que ya la use no se quede
+        # sin producto y para no perder precio/url si se vuelve a crear.
+        fila = tiendas.por_activo(cliente).get(producto_id)
+        if fila and not fila["archivado"]:
+            tiendas.marcar_producto(cliente, fila["id"], archivado=True)
     flash(f"Producto eliminado: {nombre}", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
@@ -1791,92 +2065,13 @@ def eliminar_swap(cliente, swap_id):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
-def _fecha_corta(iso):
-    """'2026-09-12T16:05:50' -> '12 sep 16:05' (para nombrar piezas sin mostrar el prompt)."""
-    try:
-        d = datetime.fromisoformat(iso)
-    except (TypeError, ValueError):
-        return ""
-    meses = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
-    return f"{d.day} {meses[d.month - 1]} {d:%H:%M}"
-
-
-def _piezas_generadas(cliente):
-    """Todo lo que ya salió listo de Crear (videos e imágenes de FlowPlus, cambios
-    de producto, ideas en texto) con URL pública, para armar una campaña desde
-    Campañas. Se nombra por tipo/enfoque/modelo/fecha, nunca por el prompt. Los
-    videos de FlowPlus también quedan copiados en estado_videos.json (para la
-    revisión), así que se deduplica por URL. Lo que ya está en la lista de
-    anuncios se marca para no repetirlo."""
-    ya = {(a.get("fuente"), a.get("fuente_id")) for a in ads_mod.cargar(cliente).values()}
-    piezas, urls = [], set()
-
-    def agregar(pieza):
-        if pieza["url"] in urls:
-            return
-        urls.add(pieza["url"])
-        piezas.append(pieza)
-
-    for cf_id, e in creative_flow.cargar(cliente).items():
-        if e.get("estado") == "video_listo" and e.get("video_url"):
-            tipo = "imagen" if e.get("tipo") == "imagen" else "video"
-            modelo = (flowplus_modelos.IMAGEN.get(e.get("modelo")) or flowplus_modelos.VIDEO.get(e.get("modelo")) or {}).get("nombre", "")
-            nombre = ("Imagen" if tipo == "imagen" else "Video") + (f" · {e['enfoque_nombre']}" if e.get("enfoque_nombre") else "")
-            agregar({
-                "clave": f"flowplus:{cf_id}", "url": e["video_url"], "tipo": tipo,
-                "nombre": nombre,
-                "detalle": " · ".join(x for x in (modelo, _fecha_corta(e.get("creado_en"))) if x),
-                "creado_en": e.get("creado_en", ""), "en_lista": ("flowplus", cf_id) in ya,
-            })
-    for swap_id, e in swaps_mod.cargar(cliente).items():
-        if e.get("estado") == "listo" and e.get("resultado_url"):
-            producto = catalogo_productos.encontrar(cliente, e.get("producto_id"))
-            agregar({
-                "clave": f"swap:{swap_id}", "url": e["resultado_url"],
-                "tipo": "video" if e.get("tipo") == "video" else "imagen",
-                "nombre": producto["nombre"] if producto else "Cambio de producto",
-                "detalle": " · ".join(x for x in ("Cambio de producto", _fecha_corta(e.get("creado_en"))) if x),
-                "creado_en": e.get("creado_en", ""), "en_lista": ("swap", swap_id) in ya,
-            })
-    for brief_id, e in estado_mod.cargar(cliente).items():
-        if e.get("video_url"):
-            titulo = e.get("title") or ""
-            creado = e.get("generado_en") or e.get("creado_en") or ""
-            agregar({
-                "clave": f"idea_visual:{brief_id}", "url": e["video_url"], "tipo": "video",
-                "nombre": titulo if titulo and titulo != brief_id else "Video · Idea en texto",
-                "detalle": " · ".join(x for x in ("Idea en texto", _fecha_corta(creado)) if x),
-                "creado_en": creado, "en_lista": ("idea_visual", brief_id) in ya,
-            })
-    piezas.sort(key=lambda p: p["creado_en"], reverse=True)
-    return piezas
-
-
 @app.route("/cliente/<cliente>/ads/nueva_campana", methods=["POST"])
 def nueva_campana(cliente):
-    """"+ Nueva campaña" en Campañas: las piezas marcadas pasan a "Listos para
-    publicar", una por anuncio, con el nombre de campaña que escribió la persona
-    por delante. Publicar sigue siendo un paso aparte, siempre pausado."""
-    claves = [c for c in request.form.getlist("piezas") if c]
-    nombre_campana = (request.form.get("nombre_campana") or "").strip()
-    if not claves:
-        flash("Marca al menos una pieza para la campaña.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    disponibles = {p["clave"]: p for p in _piezas_generadas(cliente)}
-    agregadas = 0
-    for clave in claves:
-        p = disponibles.get(clave)
-        if not p:
-            continue
-        fuente, fuente_id = clave.split(":", 1)
-        nombre = f"{nombre_campana} — {p['nombre']}" if nombre_campana else p["nombre"]
-        ads_mod.crear(cliente, fuente, fuente_id, p["url"], p["tipo"], nombre)
-        agregadas += 1
-    if agregadas:
-        flash(f"{agregadas} pieza(s) listas para publicar — define objetivo y presupuesto en cada una.", "ok")
-    else:
-        flash("Esas piezas ya no están disponibles.", "error")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    """Campañas ya no existe como pestaña (se fundió en Experimentos). La ruta
+    se conserva para enlaces/formularios viejos, pero no crea nada: avisa y
+    manda a Experimentos, donde una pieza se mete en un experimento."""
+    flash("Campañas ya no existe: crea un experimento con esa pieza.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/swap/<swap_id>/enviar_a_publicidad", methods=["POST"])
@@ -1890,7 +2085,7 @@ def enviar_swap_a_publicidad(cliente, swap_id):
     producto = catalogo_productos.encontrar(cliente, entry.get("producto_id"))
     nombre = producto["nombre"] if producto else entry.get("producto_id", "Swap")
     ads_mod.crear(cliente, "swap", swap_id, entry["resultado_url"], entry.get("tipo", "foto"), nombre)
-    flash("Enviado a Publicidad — revísalo en esa pestaña.", "ok")
+    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -1904,13 +2099,14 @@ def enviar_video_a_publicidad(cliente, brief_id):
 
     nombre = entry.get("title") or brief_id
     ads_mod.crear(cliente, "idea_visual", brief_id, entry["video_url"], "video", nombre)
-    flash("Enviado a Publicidad — revísalo en esa pestaña.", "ok")
+    flash("Quedó en Experimentos › Anuncios sueltos — crea un experimento con esa pieza.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
-# ---------- Publicidad (Meta Ads) — publicar, actualizar resultados, pausar/activar,
-# eliminar de la lista local. Nunca borra una campaña real de Meta: eso queda para
-# Meta Ads Manager a propósito (ver eliminar_ad más abajo). ----------
+# ---------- Anuncios sueltos (Meta Ads, lo que quedó de Campañas; se ven dentro
+# de Experimentos) — actualizar resultados, pausar/activar, eliminar de la lista
+# local. Nunca borra una campaña real de Meta: eso queda para Meta Ads Manager a
+# propósito (ver eliminar_ad más abajo). ----------
 
 # ---------- Conexión con Meta (Facebook Login for Business) ----------
 # La autorización es una ruta de la app (ya no un script de terminal), así
@@ -1918,7 +2114,8 @@ def enviar_video_a_publicidad(cliente, brief_id):
 # clientes/<cliente>/meta.json (meta_conexion.py).
 
 def _ir_a_flowmarketing(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    # La conexión con Meta se muestra en Experimentos (_meta_conectar.html).
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/meta/app", methods=["POST"])
@@ -2076,69 +2273,12 @@ def meta_desconectar(cliente):
 
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
 def publicar_ad(cliente):
-    """Toma un anuncio en cola (creado por otro módulo vía ads.crear) y lo
-    publica de verdad en Meta: Campaign -> AdSet -> AdCreative -> Ad, todo
-    PAUSED. La ruta solo valida el formulario y encola; la cadena de 4
-    llamadas HTTP la ejecuta el worker (tareas/meta.py, meta_publicar)."""
-    ad_id = request.form.get("ad_id", "").strip()
-    objetivo = request.form.get("objetivo", "").strip()
-    # El presupuesto se escribe en la MONEDA DE LA CUENTA (meta.json -> moneda):
-    # Meta interpreta daily_budget en esa divisa. Antes se asumía USD y con una
-    # cuenta en COP "5" terminaba siendo 500 pesos diarios.
-    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
-    try:
-        presupuesto_diario = float(request.form.get("presupuesto_diario") or request.form.get("presupuesto_diario_usd") or 0)
-        dias = int(request.form.get("dias", "0") or 0)
-        edad_min = int(request.form.get("edad_min", "18") or 18)
-        edad_max = int(request.form.get("edad_max", "65") or 65)
-    except ValueError:
-        flash("Presupuesto, días y edades deben ser números.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    pais = request.form.get("pais", "").strip()
-    destino_url = request.form.get("destino_url", "").strip()
-
-    data = ads_mod.cargar(cliente)
-    entry = data.get(ad_id)
-    if not entry:
-        flash("No encontré ese anuncio en la cola.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1:
-        flash("Elige un objetivo válido para el anuncio.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if not presupuesto_diario or not dias or not pais or not destino_url:
-        flash("Faltan presupuesto, días, país o URL de destino.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if not (13 <= edad_min <= edad_max <= 65):
-        flash("Las edades deben estar entre 13 y 65, y la mínima no puede superar la máxima.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    if not destino_url.startswith(("http://", "https://")):
-        flash("La URL de destino debe empezar por http:// o https://.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
-    if presupuesto_diario < minimo:
-        flash(f"Meta exige al menos {minimo:,.0f} {moneda} por día en esta cuenta.".replace(",", "."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
-
-    ads_mod.actualizar(
-        cliente, ad_id, estado="publicando", error=None, objetivo=objetivo,
-        presupuesto_diario=presupuesto_diario, moneda=moneda,
-        presupuesto_diario_usd=presupuesto_diario if moneda == "USD" else None, dias=dias,
-        audiencia={"edad_min": edad_min, "edad_max": edad_max, "paises": [pais]},
-        destino_url=destino_url,
-    )
-    job_id = f"{cliente}__{ad_id}__ads_publicar"
-
-    # max_intentos=1: un reintento automático a mitad de la cadena crearía
-    # campañas huérfanas en Meta; la persona reintenta con "Volver a intentar".
-    arranco = trabajos.encolar(job_id, "meta_publicar", {
-        "cliente": cliente, "ad_id": ad_id, "objetivo": objetivo, "presupuesto_diario": presupuesto_diario,
-        "dias": dias, "pais": pais, "edad_min": edad_min, "edad_max": edad_max, "destino_url": destino_url,
-    }, cliente=cliente, duracion_estimada=90, max_intentos=1)
-    if arranco:
-        flash("Publicando el anuncio…", "ok")
-    else:
-        flash("Ya se está publicando ese anuncio — espera a que termine.", "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    """Publicar un anuncio suelto ya no tiene UI: Campañas se fundió en
+    Experimentos y publicar es lanzar un experimento (exp_lanzar). La ruta se
+    conserva para formularios viejos, pero no toca el anuncio ni encola nada
+    (la tarea del worker `meta_publicar` sigue existiendo en tareas/meta.py)."""
+    flash("Campañas ya no existe: crea un experimento con esa pieza.", "warn")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/actualizar", methods=["POST"])
@@ -2147,7 +2287,7 @@ def actualizar_resultados_ad(cliente, ad_id):
     entry = data.get(ad_id)
     if not entry or not entry.get("meta_ids", {}).get("ad_id"):
         flash("Ese anuncio todavía no está publicado en Meta.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     # El snapshot lo trae el worker (tareas/meta.py, meta_refrescar); la
     # tarjeta se recarga sola por el polling.
     # max_intentos=1: si Meta falla, la persona tiene que ver el error ya, no
@@ -2160,7 +2300,7 @@ def actualizar_resultados_ad(cliente, ad_id):
         flash("Actualizando resultados…", "ok")
     else:
         flash("Ya se están actualizando.", "warn")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/estado", methods=["POST"])
@@ -2170,14 +2310,14 @@ def cambiar_estado_ad(cliente, ad_id):
     nuevo_estado = request.form.get("estado", "").strip()
     if nuevo_estado not in ("ACTIVE", "PAUSED"):
         flash("Estado inválido.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
     data = ads_mod.cargar(cliente)
     entry = data.get(ad_id)
     campaign_id = (entry or {}).get("meta_ids", {}).get("campaign_id")
     if not campaign_id:
         flash("Ese anuncio todavía no está publicado en Meta.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
     # Serializado: meta_auth.configurar() escribe credenciales globales del
     # proceso (meta_ads/auth._CREDENCIALES); el lock cubre configurar ->
@@ -2198,7 +2338,7 @@ def cambiar_estado_ad(cliente, ad_id):
             flash(f"No pude cambiar el estado: {e}", "error")
         finally:
             meta_auth.limpiar()
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/reintentar", methods=["POST"])
@@ -2208,10 +2348,10 @@ def reintentar_ad(cliente, ad_id):
     entry = ads_mod.cargar(cliente).get(ad_id)
     if not entry or entry.get("estado") != "error":
         flash("Ese anuncio no está en error.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     ads_mod.actualizar(cliente, ad_id, estado="en_cola", error=None)
     flash("Listo para volver a publicar.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/ads/<ad_id>/eliminar", methods=["POST"])
@@ -2221,7 +2361,7 @@ def eliminar_ad(cliente, ad_id):
     borra algo que ya está corriendo en la plataforma de otro)."""
     ads_mod.eliminar(cliente, ad_id)
     flash("Eliminado de la lista.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="ads"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 # ---------- Tablero (Bloque 6) ----------
@@ -2563,8 +2703,11 @@ def exp_quitar_pieza(cliente, eid, ep_id):
 @app.route("/cliente/<cliente>/experimentos/meter", methods=["POST"])
 def exp_meter_pieza(cliente):
     """Desde la pestaña Crear: manda una pieza recién generada directo a un
-    experimento existente, sin tener que ir a la pestaña Experimentos."""
+    experimento existente, sin tener que ir a la pestaña Experimentos. Los
+    anuncios sueltos en cola (Experimentos › Anuncios sueltos) usan el mismo
+    formulario con volver=experimentos para quedarse en esa pestaña."""
     legado_id = (request.form.get("legado_id") or "").strip()
+    volver = "experimentos" if request.form.get("volver") == "experimentos" else "creativeflowplus"
     try:
         experimento_id = int(request.form.get("experimento_id") or 0)
     except ValueError:
@@ -2576,7 +2719,7 @@ def exp_meter_pieza(cliente):
     else:
         error = _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais)
         flash(error, "error") if error else flash("Pieza enviada al experimento.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/lanzar", methods=["POST"])
@@ -2868,7 +3011,8 @@ def prop_aprobar_todas(cliente, eid):
 
 @app.route("/cliente/<cliente>/config/reglas", methods=["POST"])
 def cfg_reglas(cliente):
-    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+    # Las reglas del motor viven en Experimentos, no en Configuración.
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     reglas, errores = decisor.reglas_desde_formulario(request.form)
     if errores:
         _flash_reglas_invalidas(errores)
@@ -2904,7 +3048,9 @@ IMPORTAR_MAX_BYTES = 5 * 1024 * 1024
 
 
 def _volver_productos(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="productos"))
+    """Las rutas `prod_*` vuelven al Catálogo: la pestaña Productos ya no
+    existe (los productos importados viven en Catálogo › Productos)."""
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="catalogo"))
 
 
 def _volver_config(cliente):
@@ -2953,6 +3099,38 @@ def _productos_tienda_contexto(cliente, experimentos_exp=None):
         ids_exp |= por_clave.get(prod.get("nombre") or "", set())
         prod["n_experimentos"] = len(ids_exp)
     return lista
+
+
+def _asegurar_filas_producto(cliente, activos):
+    """Todo activo de categoría `producto` tiene su fila comercial (fuente
+    `manual`): los anteriores a esta versión la reciben aquí, al listar
+    (`tiendas.asegurar_manual` es idempotente y nunca duplica una fila
+    importada ya enlazada). Una sola consulta para saber cuáles faltan."""
+    con_fila = tiendas.por_activo(cliente)
+    for a in activos:
+        if a["id"] not in con_fila:
+            tiendas.asegurar_manual(cliente, a["id"], a["nombre"], a.get("descripcion") or "")
+
+
+def _producto_comercial_contexto(productos_tienda):
+    """{activo_id: fila producto} para las tarjetas del Catálogo, a partir de
+    la lista ya enriquecida (`n_experimentos`, `activo_ok`). Si dos filas
+    apuntan al mismo activo (una archivada), gana la viva."""
+    mapa = {}
+    for p in productos_tienda:
+        activo_id = p.get("activo_catalogo_id")
+        if not activo_id:
+            continue
+        previa = mapa.get(activo_id)
+        if previa is None or (previa["archivado"] and not p["archivado"]):
+            mapa[activo_id] = p
+    return mapa
+
+
+# Nombre visible de cada `producto.fuente` (badge de la tarjeta y nota
+# «Sincronizado de …»).
+ETIQUETAS_FUENTE = {"manual": "manual", "csv": "CSV/Excel", "url": "URL", "shopify": "Shopify",
+                    "woo": "WooCommerce", "meli": "MercadoLibre"}
 
 
 def _trabajos_productos(cliente, tiendas_cliente, productos=()):
@@ -3052,9 +3230,6 @@ def prod_importar_url(cliente):
     return _volver_productos(cliente)
 
 
-_MONEDA_RE = re.compile(r"^[A-Z]{3}$")
-
-
 @app.route("/cliente/<cliente>/productos/<int:pid>/marcar", methods=["POST"])
 def prod_marcar(cliente, pid):
     """Banderas del loop: en prueba, prioridad (0–100), URL de compra, precio
@@ -3131,6 +3306,56 @@ def prod_vincular(cliente, pid):
         flash(f"Creando el activo de «{prod.get('nombre') or pid}»… aparece en el Catálogo cuando termine.", "ok")
     else:
         flash("Ya se está creando el activo de ese producto — espera a que termine.", "warn")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/fotos", methods=["POST"])
+def prod_fotos_subir(cliente, pid):
+    """«Subir fotos» de un producto importado sin fotos (o cuyo activo ya no
+    existe): crea el activo del catálogo con el nombre y la descripción del
+    producto, guarda las fotos y enlaza la fila (`activo_catalogo_id`). Va
+    inline porque no baja nada de la red ni llama a Claude: son las fotos
+    que la persona acaba de elegir. Si ya hay un activo con ese id (otro
+    producto con el mismo nombre) se desambigua con `-2`, `-3`…, igual que
+    el importador, en vez de pisarle las fotos al otro."""
+    prod = tiendas.producto(cliente, pid)
+    if not prod:
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
+    if not archivos:
+        flash("No elegiste ninguna foto.", "error")
+        return _volver_productos(cliente)
+    nombre = (prod.get("nombre") or "").strip() or f"Producto {pid}"
+    enlazado = prod.get("activo_catalogo_id")
+    if enlazado and catalogo_productos.existe(cliente, enlazado, "producto"):
+        # Página vieja o doble envío: el activo ya existe. Las fotos van a
+        # ese, no a un segundo activo con el mismo nombre.
+        guardadas = _guardar_fotos_producto(cliente, enlazado, archivos)
+        flash(f"{guardadas} foto(s) añadida(s) a «{nombre}»." if guardadas
+              else "Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).",
+              "ok" if guardadas else "error")
+        return _volver_productos(cliente)
+    base = catalogo_productos.id_desde_nombre(nombre)
+    activo_id, sufijo = base, 2
+    while catalogo_productos.existe(cliente, activo_id, "producto"):
+        activo_id = f"{base}-{sufijo}"
+        sufijo += 1
+    try:
+        catalogo_productos.crear(cliente, nombre, prod.get("descripcion") or "", categoria="producto",
+                                 producto_id=activo_id)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_productos(cliente)
+    guardadas = _guardar_fotos_producto(cliente, activo_id, archivos)
+    if not guardadas:
+        # Sin foto válida el activo no aparecería en el catálogo y la fila
+        # quedaría enlazada a algo invisible: mejor deshacer.
+        catalogo_productos.eliminar(cliente, activo_id, categoria="producto")
+        flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
+        return _volver_productos(cliente)
+    tiendas.marcar_producto(cliente, pid, activo_catalogo_id=activo_id)
+    flash(f"«{nombre}» ya está en el catálogo con {guardadas} foto(s).", "ok")
     return _volver_productos(cliente)
 
 

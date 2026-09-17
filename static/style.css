@@ -1342,7 +1342,17 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .sprint-guardado { color: var(--ok); font-size: .75rem; }
 .sprint-reutilizar ul { list-style: none; padding: 0; margin: .4rem 0 0; display: grid; gap: .3rem; }
 
-/* ---- Productos (bloque 5): catálogo importado/sincronizado, tiendas, Pixel ---- */
+/* ---- Catálogo › Productos: lo comercial en la tarjeta, importar (secundario), importados sin fotos ---- */
+.cat-comercial-linea { display: flex; flex-wrap: wrap; gap: .3rem .4rem; align-items: center; margin-top: .2rem; }
+.cat-comercial-linea .tag-estado { margin: 0; }
+.cat-comercial select { min-width: 5.5rem; }
+.cat-en-prueba { display: flex; align-items: center; gap: .4rem; font-size: .84rem; margin-top: .6rem; }
+.cat-importar > summary { display: inline-block; }
+.cat-sin-fotos .tabla-productos { margin-top: .4rem; }
+.prod-subir-fotos { cursor: pointer; display: inline-block; }
+.prod-form-fotos { margin: 0; }
+
+/* ---- Productos (bloque 5): importar/sincronizar (ahora dentro de Catálogo), tiendas, Pixel ---- */
 .prod-acciones { display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-start; margin-bottom: 1rem; }
 .prod-acciones .prod-importar { flex: 1 1 18rem; }
 .prod-form-importar { margin-top: .5rem; }
@@ -1479,3 +1489,44 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
   .tb-tiles { grid-template-columns: repeat(2, 1fr); }
   .tb-top { grid-template-columns: 1fr; }
 }
+
+/* ---- Configuración › Puesta a punto (tarjetas por servicio) ---- */
+.llaves-tarjetas {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: .9rem;
+  margin-top: 1rem;
+}
+.llave-tarjeta {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius);
+  padding: .9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
+  font-size: .84rem;
+}
+.llave-configurada { border-left-color: var(--ok); }
+.llave-cabecera { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
+.llave-cabecera h3 { margin: 0; font-size: .98rem; }
+.llave-para-que { margin: 0; }
+.llave-var { font-size: .72rem; }
+.llave-var-falta { color: var(--warn); }
+.llave-enlace { font-size: .8rem; align-self: flex-start; }
+.llave-pasos summary { cursor: pointer; font-size: .82rem; }
+.llave-pasos ol { padding-left: 1.2rem; margin: .4rem 0 0; font-size: .78rem; }
+.llave-pasos li { margin-bottom: .3rem; }
+.llave-meta-conexion { margin-top: .5rem; }
+.llave-meta-conexion .idea-block { margin: 0; }
+
+/* Conectar tu tienda: paso a paso por plataforma */
+.tienda-pasos { display: grid; gap: .4rem; margin: .6rem 0 1rem; }
+.tienda-paso-a-paso { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: .5rem .9rem; }
+.tienda-paso-a-paso summary { cursor: pointer; font-size: .86rem; font-weight: 600; }
+.tienda-paso-a-paso ol { padding-left: 1.2rem; margin: .5rem 0; font-size: .8rem; }
+.tienda-paso-a-paso li { margin-bottom: .3rem; }
+
+/* Experimentos › Reglas del motor */
+.exp-reglas-motor { margin-bottom: 1rem; }

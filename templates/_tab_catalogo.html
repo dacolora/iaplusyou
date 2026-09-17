@@ -1,6 +1,7 @@
 <p class="vacio" style="padding-top:0;">
   Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos, la cara de tu marca y tus
   espacios. Cada activo lleva fotos de referencia y una regla de consistencia que va en cada generación.
+  Un producto lleva además su precio y su URL de compra, se marca «en prueba» y desde aquí se le crea un experimento.
 </p>
 
 <div class="cat-tabs" id="cat-tabs">
@@ -44,6 +45,12 @@
         <input type="text" name="regla" placeholder="{% if cid == 'producto' %}ej. el logo va siempre en el lateral derecho{% elif cid == 'personaje' %}ej. siempre lleva la gorra roja y nunca sonríe con dientes{% else %}ej. el espejo va en la pared del fondo, nunca en el piso{% endif %}">
         <p class="vacio" style="font-size:.74rem;">Se suma a la regla base de la categoría: <em>{{ c.regla }}</em></p>
 
+        {% if cid == 'producto' %}
+        {# Lo comercial va a la fila `producto` del motor (precio, url de
+           compra, en prueba, prioridad): es lo que usa un experimento. #}
+        {% with comercial=None, prefijo="nuevo" %}{% include "_catalogo_campos_comerciales.html" %}{% endwith %}
+        {% endif %}
+
         {% if c.con_mapa %}
         <label class="campo-label" style="margin-top:.8rem;display:block;">Mapa corporal (solo si va sobre una persona)</label>
         {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=[] %}
@@ -59,9 +66,17 @@
     </div>
   </details>
 
+  {% if cid == 'producto' %}
+  {# Importar (CSV/Excel, URL, tienda) es la opción secundaria: lo normal es
+     crear el producto arriba con sus fotos. Los importados que llegaron sin
+     fotos esperan en su bloque hasta que se las suban. #}
+  {% include "_catalogo_importar.html" %}
+  {% include "_catalogo_sin_fotos.html" %}
+  {% endif %}
+
   <h2 style="margin-top:1.4rem;">{{ c.plural }} ({{ activos_por_categoria[cid] | length }})</h2>
   {% if not activos_por_categoria[cid] %}
-  <p class="vacio">Todavía no hay {{ c.plural | lower }}. Crea el primero arriba.</p>
+  <p class="vacio">Todavía no hay {{ c.plural | lower }}. Crea el primero arriba{% if cid == 'producto' %} o tráelos de un archivo, una URL o tu tienda{% endif %}.</p>
   {% endif %}
   {% with productos=activos_por_categoria[cid], categoria_actual=cid, con_mapa=c.con_mapa %}
   {% include "_catalogo_lista.html" %}

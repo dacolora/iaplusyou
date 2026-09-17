@@ -373,7 +373,7 @@ def test_alertas_tienda_rota_pixel_y_productos(base_temporal, sin_red):
     assert [(x["tipo"], x["nivel"], x["tab"]) for x in a] == [
         ("tienda_rota", "media", "settings"),
         ("pixel_sin_datos", "media", "settings"),
-        ("productos_sin_experimento", "baja", "productos"),
+        ("productos_sin_experimento", "baja", "catalogo"),
     ]
     assert "shopify" in a[0]["texto"] and "Mi tienda" in a[0]["texto"] and "token vencido" in a[0]["texto"]
     assert "1 experimento mide" in a[1]["texto"]

@@ -21,16 +21,8 @@
   {% include "_tab_sprints.html" %}
 </section>
 
-<section id="tab-productos" class="tab-panel" role="tabpanel">
-  {% include "_tab_productos.html" %}
-</section>
-
 <section id="tab-catalogo" class="tab-panel" role="tabpanel">
   {% include "_tab_catalogo.html" %}
-</section>
-
-<section id="tab-ads" class="tab-panel" role="tabpanel">
-  {% include "_tab_ads.html" %}
 </section>
 
 <section id="tab-settings" class="tab-panel" role="tabpanel">
@@ -45,11 +37,9 @@
     // están guardadas en el localStorage de la gente. Solo cambió la etiqueta.
     var paneles = {
       tablero: document.getElementById('tab-tablero'),
-      ads: document.getElementById('tab-ads'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
       experimentos: document.getElementById('tab-experimentos'),
       sprints: document.getElementById('tab-sprints'),
-      productos: document.getElementById('tab-productos'),
       catalogo: document.getElementById('tab-catalogo'),
       settings: document.getElementById('tab-settings')
     };
@@ -76,8 +66,14 @@
     // ninguna pestaña activa.
     // 'calzado' (Cambiar producto) ahora es un modo dentro de Crear: el hash
     // #cambiar (o el viejo #calzado) abre Crear con ese modo activo.
+    // 'productos' fue pestaña propia y ahora es Catálogo › Productos: el
+    // hash viejo (o el guardado) abre Catálogo.
+    // 'ads' (Campañas) se fundió en Experimentos: el hash viejo (o el
+    // guardado) abre Experimentos, donde quedan los anuncios sueltos.
     function resolver(t) {
       if (t === 'idea') return 'creativeflowplus';
+      if (t === 'productos') return 'catalogo';
+      if (t === 'ads') return 'experimentos';
       if (t === 'calzado' || t === 'cambiar') {
         try { localStorage.setItem('crear-modo-{{ cliente }}', 'cambiar'); } catch (e) {}
         return 'creativeflowplus';
