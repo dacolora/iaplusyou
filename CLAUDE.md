@@ -181,6 +181,35 @@ states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a 
 launch (resumable). UI: sidebar tab "Experimentos" (`_tab_experimentos.html`, tree
 experiment -> country -> piece) and "Meter en experimento" in Crear's detail modal.
 
+**Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
+`derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.
+`decisor.decidir(snapshots, reglas, contexto)` is a pure function — traffic gate first
+(impressions/spend/hours evidence, then CPC/CTR/ThruPlay thresholds; zero impressions is
+never a loser), sales gate second only with attribution (ROAS/CPA after
+`ventana_ventas_horas`), top-third ranking per country when ≥ 3 ads — returning
+`ganador | perdedor | inconcluso | pendiente` plus an action. Rules layer
+`REGLAS_DEFECTO ← proyecto.json["reglas_experimentos"] ← experimento.reglas`. The worker
+periodic `exp_decidir_todos` (1 h) runs `exp_decidir` per `corriendo` experiment: verdicts
+are persisted once per piece, and every action goes through `acciones.pedir`, which
+consults `modos.resolver(modo, accion)` — manual proposes everything, semi executes
+`pausar`/`archivar` and proposes `escalar`/`derivar`/`rescatar`/`activar`, auto executes
+all — and downgrades to a `propuesta` whenever the experiment's tope is reached or the
+derivation depth hits 2. Winners: `escalar_pais` (+`escalar_pct_dia` up to
+`escalar_tope_dia`) and `derivar` (a child experiment with `n_reediciones` guion variants
+via `final_edition.producir(opciones.variante/variante_tipo)` and `n_regeneraciones` new
+clones via `creative_flow.duplicar`). Losers: `rescatar` climbs `escalon_rescate` 1 → 2 → 3
+(hook re-edit, structure re-edit, regeneration; each pauses the previous piece) and
+`archivar` marks the concepto at step 3. `derivaciones.py` is the async state machine
+(`experimento.extra["derivaciones"]`, advanced by the periodic `exp_avanzar_todos` every
+10 min) that produces the pieces, attaches them, creates their ads with
+`lanzador.lanzar_piezas_nuevas` and asks `activar` per the mode. Every RMW on
+`experimento.extra`/`paises`/`experimento_pieza.extra` goes through `experimentos.actualizar_extra`,
+`actualizar_pais`, `marcar_pieza`, which take SQLite's write lock BEFORE reading
+(`_bloquear`) — pysqlite otherwise runs the SELECT in autocommit and two processes lose
+updates. Notifications (`notificaciones.avisar`: propuesta, ganador, rechazo_meta,
+error_lanzamiento) go by SMTP when `SMTP_HOST` is set and the project has a
+`correo_notificaciones`; otherwise they are only eventos.
+
 ## Agent skills
 
 ### Issue tracker

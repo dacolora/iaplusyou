@@ -89,6 +89,16 @@ Meta). La actualización periódica de métricas corre dentro de `creatv-worker`
 refrescan solos. La migración `0004` agrega columnas a `experimento`: correr
 `venv/bin/alembic upgrade head` en cada despliegue como siempre.
 
+**Decisor y avisos por correo** (bloque 4): el worker evalúa cada experimento que corre
+cada hora (`exp_decidir_todos`) y avanza las derivaciones cada 10 minutos
+(`exp_avanzar_todos`) — sin `creatv-worker` nada de esto pasa. Los avisos por correo
+(propuestas pendientes, ganador nuevo, anuncio rechazado por Meta, lanzamiento fallido)
+son opcionales: se activan poniendo `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` y
+`SMTP_FROM` en `.env` (ver `.env.example`) y el "Correo para avisos" del proyecto en
+Configuración. Sin SMTP todo queda igualmente en la bitácora del experimento. Las
+reglas por defecto del decisor se editan en Configuración y se pueden afinar por
+experimento.
+
 ---
 
 ## 1. Cloudflare R2 — storage propio y permanente
