@@ -179,3 +179,224 @@ def temporada(cliente, temporada_id):
     with db.conectar() as con:
         f = _fila(con, db.temporada, temporada_id, cliente)
     return _a_dict(f) if f else None
+
+
+# ------------------------------------------------------------ eventos ---
+
+def _evento(con, cliente, sprint_id, campana_id, tipo, mensaje, datos_=None):
+    return con.execute(db.sprint_evento.insert().values(
+        cliente=cliente, sprint_id=sprint_id, campana_id=campana_id, tipo=tipo, mensaje=mensaje,
+        datos=datos_ or {}, creado_en=db.ahora())).inserted_primary_key[0]
+
+
+def registrar_evento(cliente, sprint_id, tipo, mensaje, datos=None, campana_id=None):
+    with db.conectar() as con:
+        return _evento(con, cliente, sprint_id, campana_id, tipo, mensaje, datos)
+
+
+def _eventos(con, cliente, sprint_id, limite):
+    e = db.sprint_evento
+    q = sa.select(e).where(e.c.cliente == cliente, e.c.sprint_id == sprint_id).order_by(e.c.id.desc())
+    if limite:
+        q = q.limit(limite)
+    return [_a_dict(f) for f in con.execute(q)]
+
+
+def eventos(cliente, sprint_id, limite=50):
+    with db.conectar() as con:
+        return _eventos(con, cliente, sprint_id, limite)
+
+
+# ------------------------------------------------------------ sprints ---
+
+def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objetivo_defecto=5, notas=""):
+    nombre = _texto(nombre, 200)
+    if not nombre:
+        raise ErrorDatos("El sprint necesita un nombre.")
+    inicio, fin = _rango(inicio, fin, "el sprint")
+    try:
+        objetivo = int(referencias_objetivo_defecto if referencias_objetivo_defecto is not None else 5)
+    except (TypeError, ValueError):
+        raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+    if objetivo < 1:
+        raise ErrorDatos("El objetivo de referencias debe ser al menos 1.")
+    ahora = db.ahora()
+    with db.conectar() as con:
+        sid = con.execute(db.sprint.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, inicio=inicio, fin=fin,
+            estado="planeando", destinos=list(destinos or []), referencias_objetivo_defecto=objetivo,
+            notas=_texto(notas), archivado=False, extra={})).inserted_primary_key[0]
+        _evento(con, cliente, sid, None, "sprint_creado", f"Sprint «{nombre}» creado", {"inicio": inicio, "fin": fin})
+    return sid
+
+
+def actualizar_sprint(cliente, sprint_id, /, **campos):
+    if "estado" in campos and campos["estado"] not in ESTADOS_SPRINT:
+        raise ErrorDatos(f"Estado de sprint inválido: {campos['estado']}")
+    if "inicio" in campos or "fin" in campos:
+        actual = sprint(cliente, sprint_id, con_eventos=False) or {}
+        campos["inicio"], campos["fin"] = _rango(campos.get("inicio", actual.get("inicio")),
+                                                 campos.get("fin", actual.get("fin")), "el sprint")
+    with db.conectar() as con:
+        return _actualizar(con, db.sprint, sprint_id, cliente, _SPRINT_COLS, campos)
+
+
+def archivar_sprint(cliente, sprint_id, archivado=True):
+    return actualizar_sprint(cliente, sprint_id, archivado=bool(archivado))
+
+
+def _campanas(con, cliente, sprint_id=None, campana_id=None):
+    c, p, t, r = db.campana, db.persona, db.temporada, db.referencia
+    conteo = (sa.select(r.c.campana_id, sa.func.count().label("total"),
+                        sa.func.sum(sa.case((r.c.estado == "lista", 1), else_=0)).label("listas"))
+              .where(r.c.cliente == cliente).group_by(r.c.campana_id).subquery())
+    q = (sa.select(c, p.c.nombre.label("persona_nombre"), p.c.color.label("persona_color"),
+                   t.c.nombre.label("temporada_nombre"), t.c.inicio.label("temporada_inicio"),
+                   t.c.fin.label("temporada_fin"),
+                   sa.func.coalesce(conteo.c.total, 0).label("referencias_total"),
+                   sa.func.coalesce(conteo.c.listas, 0).label("referencias_listas"))
+         .select_from(c.join(p, p.c.id == c.c.persona_id).join(t, t.c.id == c.c.temporada_id)
+                      .outerjoin(conteo, conteo.c.campana_id == c.c.id))
+         .where(c.c.cliente == cliente))
+    if sprint_id is not None:
+        q = q.where(c.c.sprint_id == sprint_id)
+    if campana_id is not None:
+        q = q.where(c.c.id == campana_id)
+    salida = []
+    for f in con.execute(q.order_by(c.c.orden, c.c.id)):
+        d = _a_dict(f)
+        d.update({"ideas": [], "piezas": [], "piezas_listas": 0, "piezas_aprobadas": 0,
+                  "referencias_total": int(d["referencias_total"] or 0),
+                  "referencias_listas": int(d["referencias_listas"] or 0)})
+        salida.append(d)
+    return salida
+
+
+def _sprint_dict(con, cliente, f, con_eventos):
+    d = _a_dict(f)
+    d["campanas"] = _campanas(con, cliente, sprint_id=d["id"])
+    d["campanas_total"] = len(d["campanas"])
+    d["piezas_planeadas"] = sum(int(c["n_videos"] or 0) + int(c["n_imagenes"] or 0) for c in d["campanas"])
+    d["eventos"] = _eventos(con, cliente, d["id"], 50) if con_eventos else []
+    d["extra"] = d.get("extra") or {}
+    return d
+
+
+def sprints(cliente, incluir_archivados=False):
+    s = db.sprint
+    q = sa.select(s).where(s.c.cliente == cliente)
+    if not incluir_archivados:
+        q = q.where(s.c.archivado.is_(False))
+    with db.conectar() as con:
+        return [_sprint_dict(con, cliente, f, con_eventos=False) for f in con.execute(q.order_by(s.c.inicio.desc(), s.c.id.desc()))]
+
+
+def sprint(cliente, sprint_id, con_eventos=True):
+    with db.conectar() as con:
+        f = _fila(con, db.sprint, sprint_id, cliente)
+        return _sprint_dict(con, cliente, f, con_eventos) if f else None
+
+
+# ----------------------------------------------------------- campañas ---
+
+def combinaciones(cliente, sprint_id):
+    c = db.campana
+    with db.conectar() as con:
+        return {(f.persona_id, f.catalogo_id, f.temporada_id) for f in con.execute(
+            sa.select(c.c.persona_id, c.c.catalogo_id, c.c.temporada_id)
+            .where(c.c.cliente == cliente, c.c.sprint_id == sprint_id))}
+
+
+def _cantidades(n_videos, n_imagenes):
+    try:
+        n_videos, n_imagenes = int(n_videos or 0), int(n_imagenes or 0)
+    except (TypeError, ValueError):
+        raise ErrorDatos("Las cantidades de videos e imágenes deben ser números enteros.")
+    if n_videos < 0 or n_imagenes < 0:
+        raise ErrorDatos("Las cantidades no pueden ser negativas.")
+    if n_videos + n_imagenes < 1:
+        raise ErrorDatos("Una campaña necesita al menos un video o una imagen.")
+    return n_videos, n_imagenes
+
+
+def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n_videos, n_imagenes,
+                    referencias_objetivo=None):
+    n_videos, n_imagenes = _cantidades(n_videos, n_imagenes)
+    catalogo_id = _texto(catalogo_id, 120)
+    if not catalogo_id:
+        raise ErrorDatos("Elige un producto.")
+    ahora = db.ahora()
+    with db.conectar() as con:
+        sp = _fila(con, db.sprint, sprint_id, cliente)
+        if not sp:
+            raise ErrorDatos("Ese sprint no existe.")
+        if not _fila(con, db.persona, persona_id, cliente):
+            raise ErrorDatos("Esa persona no existe en este proyecto.")
+        if not _fila(con, db.temporada, temporada_id, cliente):
+            raise ErrorDatos("Esa temporada no existe en este proyecto.")
+        c = db.campana
+        repetida = con.execute(sa.select(c.c.orden).where(
+            c.c.sprint_id == sprint_id, c.c.persona_id == persona_id, c.c.catalogo_id == catalogo_id,
+            c.c.temporada_id == temporada_id)).scalar()
+        if repetida is not None:
+            raise CampanaDuplicada(
+                f"Esa combinación de persona, producto y temporada ya existe en la campaña {int(repetida) + 1}.")
+        orden = con.execute(sa.select(sa.func.count()).select_from(c).where(c.c.sprint_id == sprint_id)).scalar() or 0
+        try:
+            objetivo = int(referencias_objetivo or sp.referencias_objetivo_defecto or 5)
+        except (TypeError, ValueError):
+            raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+        try:
+            cid = con.execute(c.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, sprint_id=sprint_id, persona_id=persona_id,
+                catalogo_id=catalogo_id, producto_id=None, temporada_id=temporada_id, n_videos=n_videos,
+                n_imagenes=n_imagenes, referencias_objetivo=max(1, objetivo), estado="planeada", orden=orden,
+                extra={})).inserted_primary_key[0]
+        except sa.exc.IntegrityError:
+            raise CampanaDuplicada("Esa combinación de persona, producto y temporada ya existe en este sprint.")
+        _evento(con, cliente, sprint_id, cid, "campana_agregada", "Campaña agregada",
+                {"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id,
+                 "n_videos": n_videos, "n_imagenes": n_imagenes})
+        con.execute(db.sprint.update().where(db.sprint.c.id == sprint_id).values(actualizado_en=ahora))
+    return cid
+
+
+def actualizar_campana(cliente, campana_id, /, **campos):
+    if "n_videos" in campos or "n_imagenes" in campos:
+        actual = campana(cliente, campana_id) or {}
+        campos["n_videos"], campos["n_imagenes"] = _cantidades(campos.get("n_videos", actual.get("n_videos")),
+                                                               campos.get("n_imagenes", actual.get("n_imagenes")))
+    if "estado" in campos and campos["estado"] not in ESTADOS_CAMPANA:
+        raise ErrorDatos(f"Estado de campaña inválido: {campos['estado']}")
+    if "referencias_objetivo" in campos:
+        try:
+            campos["referencias_objetivo"] = max(1, int(campos["referencias_objetivo"]))
+        except (TypeError, ValueError):
+            raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+    with db.conectar() as con:
+        return _actualizar(con, db.campana, campana_id, cliente, _CAMPANA_COLS, campos)
+
+
+def eliminar_campana(cliente, campana_id):
+    with db.conectar() as con:
+        f = _fila(con, db.campana, campana_id, cliente)
+        if not f:
+            return False
+        con.execute(db.referencia.delete().where(db.referencia.c.campana_id == campana_id))
+        con.execute(db.campana_pieza.delete().where(db.campana_pieza.c.campana_id == campana_id))
+        con.execute(db.sprint_evento.update().where(db.sprint_evento.c.campana_id == campana_id).values(campana_id=None))
+        con.execute(db.campana.delete().where(db.campana.c.id == campana_id))
+        _evento(con, cliente, f.sprint_id, None, "campana_eliminada", "Campaña eliminada",
+                {"campana_id": campana_id, "catalogo_id": f.catalogo_id})
+    return True
+
+
+def campana(cliente, campana_id):
+    with db.conectar() as con:
+        lista = _campanas(con, cliente, campana_id=campana_id)
+    return lista[0] if lista else None
+
+
+def campanas(cliente, sprint_id):
+    with db.conectar() as con:
+        return _campanas(con, cliente, sprint_id=sprint_id)
