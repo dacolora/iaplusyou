@@ -224,19 +224,27 @@ def ejecutar_video(tarea):
     archivo_final = out_path
     usd_musica = 0.0
     if estilo_musica:
+        pista = None
+        mezclado = None
         try:
             pista, c = musica.obtener_pista(estilo_musica, float(duracion))
+            usd_musica = float(c or 0.0)  # ya se cobró al obtener la pista, se cuenta aunque falle la mezcla
             mezclado = os.path.join(out_dir, f"{cf_id}_musica.mp4")
             mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, cortes.duracion(out_path))
             archivo_final = mezclado
-            usd_musica = float(c or 0.0)
             capas["musica"] = {"estilo": estilo_musica, "url": pista.get("url"), "costo_usd": usd_musica, "estado": "ok"}
             capas["mezcla"] = {"loudnorm": mezcla.LOUDNORM, "volumenes": mezcla.volumenes_para()}
             bitacora.registrar(cliente, cf_id, "musica", "ok", f"{estilo_musica} (USD {usd_musica:.2f})")
         except Exception as e:
-            capas["musica"] = {"estilo": estilo_musica, "costo_usd": 0.0, "estado": "error", "error": str(e)[:300]}
+            capas["musica"] = {"estilo": estilo_musica, "url": (pista or {}).get("url"),
+                               "costo_usd": usd_musica, "estado": "error", "error": str(e)[:300]}
             bitacora.registrar(cliente, cf_id, "musica", "error", str(e))
             archivo_final = out_path
+            if mezclado:
+                try:
+                    os.remove(mezclado)
+                except OSError:
+                    pass
 
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
     try:

@@ -267,3 +267,31 @@ def test_ejecutar_video_musica_degradable(base_temporal, monkeypatch, tmp_path):
     assert e["estado"] == "video_listo" and e["video_url_crudo"] == e["video_url"]
     assert e["capas"]["musica"]["estado"] == "error" and "fal caído" in e["capas"]["musica"]["error"]
     assert e["usd"] == 0.7
+
+
+def test_ejecutar_video_cobra_la_musica_aunque_falle_la_mezcla(base_temporal, monkeypatch, tmp_path):
+    """La pista de música ya se generó (y se cobró) cuando obtener_pista
+    vuelve; si el ffmpeg de la mezcla revienta después, ese gasto no
+    desaparece de `usd` ni de la capa, y el .mp4 parcial no queda huérfano."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=True, sonido_texto="", musica_estilo="lujo")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.musica, "obtener_pista",
+                        lambda estilo, segundos, carpeta_cache=None, on_progreso=None:
+                            ({"archivo": "/tmp/p.wav", "url": "https://r2/musica/lujo_15.wav", "estilo": estilo, "generada": True}, 0.02))
+    monkeypatch.setattr(fp.cortes, "duracion", lambda p: 5.0)
+
+    def _mezclar_roto(video_in, pista, salida, duracion_s, volumenes=None):
+        with open(salida, "wb") as f:
+            f.write(b"PARCIAL")
+        raise RuntimeError("ffmpeg murió")
+    monkeypatch.setattr(fp.mezcla, "mezclar_musica", _mezclar_roto)
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    assert e["usd"] == pytest.approx(0.72)
+    assert e["capas"]["musica"]["estado"] == "error" and e["capas"]["musica"]["costo_usd"] == 0.02
+    assert e["video_url_crudo"] == e["video_url"]
+    assert not (tmp_path / "salidas" / "acme" / f"{cid}_musica.mp4").exists()
