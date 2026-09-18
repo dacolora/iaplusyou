@@ -24,7 +24,9 @@ manual/semi siempre es propuesta — y `pedir` la deja con el texto YA
 redactado (`payload["captions"]`) para que la persona lo lea/edite antes de
 aprobar. Idempotente por la unicidad viva de `publicacion` (una plataforma
 con publicación en cola/publicándose/publicada se salta) y por
-`extra.publicado_organico`.
+`trabajos.en_curso`. `extra.publicado_organico` es solo una marca informativa
+("ya salió orgánica alguna vez"), escrita apenas se encoló algo de verdad;
+hoy nadie la lee para decidir nada.
 """
 import cola
 import creative_flow
@@ -235,7 +237,6 @@ def _publicar_organico(cliente, ex, payload):
                     raise
                 saltadas.append(p)
     aviso_saltadas = f" Ya estaba publicada (o en cola) en {_nombres(saltadas)}." if saltadas else ""
-    experimentos.marcar_pieza(cliente, ep_id, publicado_organico=True)
     if not pub_ids:
         return f"{pz['nombre']} no tiene nada nuevo que publicar.{aviso_saltadas}{aviso_sin_canal}"
 
@@ -249,7 +250,21 @@ def _publicar_organico(cliente, ex, payload):
             organico.actualizar(cliente, pub_id, estado="error",
                                 error="Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
         return f"Ya hay una publicación orgánica de {pz['nombre']} en curso; las nuevas quedaron para reintentar."
+    # M-1: la bandera solo cuenta lo que de verdad quedó encolado — nadie más
+    # la lee hoy (la idempotencia real es la unicidad viva + trabajos.en_curso),
+    # pero que mienta sería peor que no existir.
+    experimentos.marcar_pieza(cliente, ep_id, publicado_organico=True)
     return (f"Publicación orgánica de {pz['nombre']} en cola: {_nombres(creadas)}.{aviso_saltadas}{aviso_sin_canal}")
+
+
+def _propuesta_organica_pendiente(cliente, experimento_id, payload):
+    """M-2: True si ya hay una propuesta `publicar_organico` pendiente para
+    el mismo ep_id. `propuestas.crear` ya dedupe por (ep_id, pais, pieza_id,
+    ep_ids) y descarta el payload nuevo devolviendo la propuesta vieja — pero
+    eso pasa DESPUÉS de pagar una llamada a Claude en
+    `_completar_propuesta_organica`. Chequear acá evita ese gasto evitable."""
+    return any(p["accion"] == "publicar_organico" and p["payload"].get("ep_id") == payload.get("ep_id")
+               for p in propuestas.pendientes(cliente, experimento_id))
 
 
 def _completar_propuesta_organica(cliente, ex, payload):
@@ -303,7 +318,7 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
                                       f"{mensaje} Motivo: {motivo}.", datos=datos, ep_id=ep_id)
         return "ejecutada", mensaje
 
-    if accion == "publicar_organico":
+    if accion == "publicar_organico" and not _propuesta_organica_pendiente(cliente, experimento_id, payload):
         payload = _completar_propuesta_organica(cliente, ex, payload)
     pid = propuestas.crear(cliente, experimento_id, accion, payload, motivo_prop)
     mensaje = f"Propuesta pendiente: {accion} ({motivo_prop})."

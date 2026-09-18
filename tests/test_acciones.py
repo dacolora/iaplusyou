@@ -306,6 +306,25 @@ def test_ejecutar_publicar_organico_crea_publicaciones_y_encola(org):
     assert _pieza_ep(org)["extra"]["publicado_organico"] is True
 
 
+def test_ejecutar_publicar_organico_si_encolar_falla_filas_quedan_en_error_y_no_marca_publicado(org, monkeypatch):
+    """M-3: la carrera entre `trabajos.en_curso()` y `trabajos.encolar()`
+    (alguien encoló la misma pieza justo en el medio) deja las filas recién
+    creadas en `error` con mensaje en español, sin encolar tarea y sin
+    marcar `extra.publicado_organico` (M-1: la bandera es solo para lo que
+    de verdad quedó en cola)."""
+    import cola
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    monkeypatch.setattr(ac.trabajos, "encolar", lambda *a, **k: False)
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "Ya hay una publicación orgánica" in msg and "en curso" in msg and "reintentar" in msg
+    pubs = org["organico"].listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("instagram", "error"), ("facebook", "error")]
+    assert all("Ya había una publicación de esta pieza en curso; reintenta cuando termine." == p["error"]
+               for p in pubs)
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    assert "publicado_organico" not in _pieza_ep(org)["extra"]
+
+
 def test_ejecutar_publicar_organico_respeta_captions_y_plataformas_del_payload(org):
     """Lo que la persona editó en la propuesta se publica tal cual; redactar
     solo se llama para las plataformas sin texto. Una plataforma pedida sin
@@ -370,12 +389,15 @@ def test_pedir_publicar_organico_en_semi_propone_con_textos_y_en_auto_publica(or
     assert payload["captions"]["facebook"]["titulo"] == "T facebook"
     assert org["organico"].listar("acme", pieza_id=pid) == []          # nada publicado sin aprobar
     assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
-    # Misma propuesta otra vez: no duplica.
+    # Misma propuesta otra vez: no duplica y (M-2) no vuelve a redactar —
+    # sería una llamada a Claude cuyo texto propuestas.crear descartaría igual.
     ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep, "plataformas": ["instagram", "facebook"]}, "ganador")
     assert len(pr.pendientes("acme", eid)) == 1
+    assert org["redactadas"] == [["instagram", "facebook"]]
     # Manual también propone; auto ejecuta.
     ex.actualizar("acme", eid, modo="manual")
     assert ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep}, "ganador")[0] == "propuesta"
+    assert org["redactadas"] == [["instagram", "facebook"]]   # sigue sin redactar de nuevo
     ex.actualizar("acme", eid, modo="auto")
     estado, msg = ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep}, "ganador")
     assert estado == "ejecutada" and "en cola" in msg

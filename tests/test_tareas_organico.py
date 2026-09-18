@@ -96,6 +96,30 @@ def test_tarea_sin_publicaciones_no_hace_nada(ent, monkeypatch):
     assert ent["avisos"] == [] and ent["etapas"] == []
 
 
+def test_tarea_limpia_lo_vivo_si_organico_publicar_revienta(ent, monkeypatch):
+    """I-1: una excepción de organico.publicar que no sea un fallo por
+    plataforma (p.ej. "database is locked" al actualizar una fila) no debe
+    dejar las publicaciones atascadas en `publicando`/`en_cola` para
+    siempre — la tarea corre la misma limpieza que `interrumpida` antes de
+    re-lanzar."""
+    organico, to, ids = ent["organico"], ent["to"], ent["ids"]
+    organico.actualizar("acme", ids["instagram"], estado="publicando")
+
+    def publicar(cliente, pub_ids, on_etapa=None):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr(to.organico, "publicar", publicar)
+    with pytest.raises(RuntimeError, match="database is locked"):
+        to.publicar({"payload": {"cliente": "acme", "pub_ids": list(ids.values())}})
+    pubs = {p["plataforma"]: p for p in organico.listar("acme", pieza_id=ent["pid"])}
+    assert pubs["instagram"]["estado"] == "error" and "interrumpió" in pubs["instagram"]["error"]
+    assert pubs["facebook"]["estado"] == "error" and "antes de llegar a esta plataforma" in pubs["facebook"]["error"]
+    assert ent["avisos"] == []   # revienta antes de poder avisar nada
+    # La unicidad viva ya no bloquea: se puede volver a crear/publicar.
+    nuevo = organico.crear("acme", ent["pid"], "instagram", "reintento #a #b #c")
+    assert nuevo
+
+
 def test_interrumpida_deja_en_error_lo_publicando_y_lo_en_cola_sin_tocar_lo_publicado(ent):
     organico, to, ids, pid = ent["organico"], ent["to"], ent["ids"], ent["pid"]
     ids["youtube"] = organico.crear("acme", pid, "youtube", "texto yt #a #b #c")

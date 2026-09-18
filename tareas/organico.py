@@ -69,7 +69,17 @@ def publicar(tarea):
     if not pubs:
         return "No había publicaciones pendientes."
     job_id = tarea.get("job_id") or job_id_publicar(cliente, pubs[0]["pieza_id"])
-    resultado = organico.publicar(cliente, pub_ids, on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    try:
+        resultado = organico.publicar(cliente, pub_ids, on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+    except Exception:
+        # I-1: un fallo fuera de organico.publicar (p.ej. "database is locked" al
+        # actualizar una fila o al reportar la etapa) deja filas `publicando`/
+        # `en_cola` vivas para siempre (la unicidad viva bloquearía cualquier
+        # reintento). El worker igual marca la tarea `error` (max_intentos=1),
+        # pero `al_interrumpir` solo corre en recuperar_colgadas — acá se hace
+        # la misma limpieza a mano antes de dejar que la excepción suba.
+        interrumpida(tarea, "La publicación falló a mitad; revisa la plataforma antes de reintentar.")
+        raise
     pubs = [pub for pub in (organico.obtener(cliente, i) for i in pub_ids) if pub]
     corto, cuerpo = _resumen(pubs, resultado)
     if resultado["ok"] or resultado["error"]:
