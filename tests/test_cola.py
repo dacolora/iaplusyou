@@ -83,6 +83,9 @@ def test_reportar_y_consultar_por_job(base_temporal):
 def test_sin_token():
     import cola
     assert cola.sin_token("x?access_token=EAAB123&y=1") == "x?access_token=***&y=1"
+    # Minor #8: la upload_url de TikTok trae upload_token=…
+    assert cola.sin_token("413 for url: https://open-upload.tiktokapis.com/video/?upload_id=7&upload_token=ABC.def") == \
+        "413 for url: https://open-upload.tiktokapis.com/video/?upload_id=7&upload_token=***"
 
 
 def test_sin_token_no_recorta_y_recortar_si():

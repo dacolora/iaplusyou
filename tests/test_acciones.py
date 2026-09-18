@@ -325,6 +325,28 @@ def test_ejecutar_publicar_organico_si_encolar_falla_filas_quedan_en_error_y_no_
     assert "publicado_organico" not in _pieza_ep(org)["extra"]
 
 
+def test_ejecutar_publicar_organico_creacion_parcial_deja_lo_creado_en_error(org, monkeypatch):
+    """Minor #5: si `organico.crear` falla en la 2.ª plataforma con algo que
+    no sea «ya está publicada», la 1.ª no queda `en_cola` sin tarea
+    (bloquearía la plataforma por unicidad): pasa a `error` y la excepción sube."""
+    import cola
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    real = org["organico"].crear
+
+    def crear_fragil(cliente, pieza_id, plataforma, *a, **kw):
+        if plataforma == "facebook":
+            raise ValueError("El texto de la publicación no puede estar vacío.")
+        return real(cliente, pieza_id, plataforma, *a, **kw)
+    monkeypatch.setattr(ac.organico, "crear", crear_fragil)
+    with pytest.raises(ValueError, match="no puede estar vacío"):
+        ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    pubs = org["organico"].listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("instagram", "error")]
+    assert "No se creó la publicación en Facebook (Página)" in pubs[0]["error"]
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    assert "publicado_organico" not in _pieza_ep(org)["extra"]
+
+
 def test_ejecutar_publicar_organico_respeta_captions_y_plataformas_del_payload(org):
     """Lo que la persona editó en la propuesta se publica (normalizado por
     organico.ajustar: hashtags aparte, «Link en bio.» en IG porque el

@@ -283,6 +283,7 @@
         <li>Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto.</li>
         <li>Copia el <code>token_tiktok.json</code> resultante a <code>clientes/{{ cliente }}/</code> en el servidor.</li>
         <li>Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»).</li>
+        <li><strong>Mientras la app de TikTok no pase la auditoría de la Content Posting API</strong>, el video sale como <strong>«Solo yo»</strong> (privado) en la cuenta autorizada aunque acá diga «conectado» y «publicada». TikTok tampoco devuelve enlace, solo un id; se confirma que terminó de procesar y, si TikTok lo rechaza, la fila queda en error con el motivo. Ver SETUP.md › TikTok.</li>
         {% endif %}
       </ol>
     </details>

@@ -236,9 +236,16 @@ def _publicar_organico(cliente, ex, payload):
                 creadas.append(p)
             except ValueError as error:
                 # Carrera con otra creación (índice único parcial): ya hay una viva.
-                if "ya está publicada" not in str(error):
-                    raise
-                saltadas.append(p)
+                if "ya está publicada" in str(error):
+                    saltadas.append(p)
+                    continue
+                # Creación parcial (mismo criterio que org_publicar): lo ya
+                # creado no puede quedar `en_cola` sin tarea bloqueando la
+                # plataforma por unicidad; en `error` se reintenta desde el panel.
+                for pub_id in pub_ids:
+                    organico.actualizar(cliente, pub_id, estado="error",
+                                        error=f"No se creó la publicación en {_nombres([p])}: {error}")
+                raise
     aviso_saltadas = f" Ya estaba publicada (o en cola) en {_nombres(saltadas)}." if saltadas else ""
     if not pub_ids:
         return f"{pz['nombre']} no tiene nada nuevo que publicar.{aviso_saltadas}{aviso_sin_canal}"

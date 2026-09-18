@@ -256,6 +256,26 @@ enviar la app a **auditoría de la Content Posting API** desde el panel de devel
 explicando el caso de uso. Esto puede tardar varios días y es un proceso manual de TikTok,
 no algo que se pueda automatizar.
 
+### 4.1 Canales orgánicos en el dashboard
+
+Con lo anterior configurado, cada proyecto ve en **Configuración › Canales orgánicos**
+qué plataformas puede usar para publicar una pieza como contenido orgánico (sin pauta):
+
+- **Facebook (Página)** e **Instagram Reels**: salen del `meta.json` que se guarda al
+  «Conectar con Meta» desde el dashboard (Página con token de página; Instagram además
+  necesita la cuenta profesional vinculada y el permiso `instagram_content_publish`).
+- **YouTube Shorts** y **TikTok**: `clientes/<empresa>/token_youtube.json` y
+  `token_tiktok.json`, generados en tu Mac con `auth/auth_youtube.py --cliente <empresa>`
+  y `auth/auth_tiktok.py --cliente <empresa>` y copiados al servidor.
+
+Publicar es público e irreversible: nada sale sin un clic («Publicar orgánico» en
+Experimentos o en Crear, o aprobar la propuesta que el motor arma al declarar una
+ganadora; solo en modo `auto` se publica sola). Nunca se publica dos veces la misma pieza
+en la misma plataforma mientras haya una publicación viva. TikTok procesa el video
+después de subirlo: la fila queda «subida, confirmando» hasta que TikTok confirma; si lo
+rechaza, queda en error con el motivo y se puede reintentar. Mientras la app de TikTok no
+esté auditada, el video sale como «Solo yo» y TikTok no devuelve enlace, solo un id.
+
 ---
 
 ## 5. Correr el pipeline completo
