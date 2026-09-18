@@ -9,9 +9,9 @@ por segmento + voz + música). Reglas:
   - volúmenes por preset (`PRESETS`) o explícitos (`volumenes` manda);
   - sin voz, la música baja a VOL_MUSICA_CON_SONIDO si hay sonido, o a
     VOL_MUSICA_SOLA si va sola;
-  - `amix ... duration=first`: la primera entrada es la de duración exacta
-    (el sonido recortado); voz lleva `apad` y la música entra con
-    `-stream_loop -1`, así ninguna corta antes del `-t` de la salida;
+  - `amix ... duration=first`: voz y sonido llevan `apad` (para que una pista
+    de audio más corta que su video no corte antes) y la música entra con
+    `-stream_loop -1`; `-t` en la salida acota todo al final;
   - `loudnorm` de una pasada al final (±1 LU, suficiente para redes).
 """
 from final_edition import cortes
@@ -47,6 +47,18 @@ def volumenes_para(preset=None, volumenes=None):
     return v
 
 
+def volumenes_efectivos(voz=None, sonido=None, musica=None, volumenes=None):
+    """{voz, sonido, musica} con el volumen de música REALMENTE aplicado (no
+    el preset crudo de `volumenes_para`): sin voz, la música baja a
+    VOL_MUSICA_CON_SONIDO si hay sonido o a VOL_MUSICA_SOLA si va sola; con
+    voz, manda el preset/`volumenes` tal cual. Misma regla que `filtro_mezcla`
+    — esto es lo que va en `capas.mezcla.volumenes`."""
+    v = volumenes_para(None, volumenes)
+    if musica and not voz:
+        v["musica"] = VOL_MUSICA_CON_SONIDO if sonido else VOL_MUSICA_SOLA
+    return v
+
+
 def tiene_audio(path):
     """True/False según ffprobe encuentre una pista de audio; None si ffprobe
     no está o falla. Solo informa: nunca bloquea una generación."""
@@ -62,7 +74,7 @@ def filtro_mezcla(voz=None, sonido=None, musica=None, volumenes=None, salida="[a
     `voz="[3:a]"`, `sonido="[ac]"`, `musica="[4:a]"`) y produce `salida`.
     Devuelve "" si no hay ninguna capa. `volumenes` es un dict parcial o total
     de `volumenes_para` (None = preset por defecto para lo que falte)."""
-    v = volumenes_para(None, volumenes)
+    v = volumenes_efectivos(voz, sonido, musica, volumenes)
     partes, mezclar = [], []
     n_sc = (1 if sonido else 0) + (1 if musica else 0)
     if voz:
@@ -74,7 +86,7 @@ def filtro_mezcla(voz=None, sonido=None, musica=None, volumenes=None, salida="[a
         mezclar.append("[voz_mix]")
     sc = 0
     if sonido:
-        partes.append(f"{sonido}{NORM},volume={v['sonido']}[son]")
+        partes.append(f"{sonido}{NORM},apad,volume={v['sonido']}[son]")
         if voz:
             partes.append(f"[son][voz_sc{sc}]sidechaincompress={DUCKING_VOZ_SOBRE_SONIDO}[son_d]")
             sc += 1
@@ -82,8 +94,7 @@ def filtro_mezcla(voz=None, sonido=None, musica=None, volumenes=None, salida="[a
         else:
             mezclar.insert(0, "[son]")
     if musica:
-        vol = v["musica"] if voz else (VOL_MUSICA_CON_SONIDO if sonido else VOL_MUSICA_SOLA)
-        partes.append(f"{musica}{NORM},volume={vol}[mus]")
+        partes.append(f"{musica}{NORM},volume={v['musica']}[mus]")
         if voz:
             partes.append(f"[mus][voz_sc{sc}]sidechaincompress={DUCKING_VOZ_SOBRE_MUSICA}[mus_d]")
             sc += 1
@@ -102,10 +113,12 @@ def filtro_mezcla(voz=None, sonido=None, musica=None, volumenes=None, salida="[a
 def mezclar_musica(video_in, pista_musica, salida_mp4, duracion_s, volumenes=None):
     """Clon + música (paso "Mezclando sonido" de Crear): el video se copia sin
     recodificar; el audio es el sonido nativo (si lo hay) con la música
-    debajo, `loudnorm` al final. Devuelve {"archivo", "con_sonido", "duracion_s"}."""
+    debajo, `loudnorm` al final. Devuelve {"archivo", "con_sonido",
+    "duracion_s", "volumenes"} — `volumenes` son los EFECTIVOS (el de música
+    ya resuelto), listos para guardar en `capas.mezcla.volumenes`."""
     con_sonido = tiene_audio(video_in) is True
-    fg = filtro_mezcla(sonido="[0:a]" if con_sonido else None, musica="[1:a]",
-                       volumenes=volumenes or volumenes_para())
+    v = volumenes_efectivos(sonido=con_sonido, musica=True, volumenes=volumenes)
+    fg = filtro_mezcla(sonido="[0:a]" if con_sonido else None, musica="[1:a]", volumenes=v)
     duracion_s = float(duracion_s)
     cortes.ffmpeg([
         "-i", video_in, "-stream_loop", "-1", "-i", pista_musica,
@@ -113,4 +126,5 @@ def mezclar_musica(video_in, pista_musica, salida_mp4, duracion_s, volumenes=Non
         "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-ar", "48000",
         "-t", f"{duracion_s:.3f}", "-movflags", "+faststart", salida_mp4,
     ], timeout=max(300, int(duracion_s * 10)))
-    return {"archivo": salida_mp4, "con_sonido": con_sonido, "duracion_s": round(cortes.duracion(salida_mp4), 3)}
+    return {"archivo": salida_mp4, "con_sonido": con_sonido,
+            "duracion_s": round(cortes.duracion(salida_mp4), 3), "volumenes": v}

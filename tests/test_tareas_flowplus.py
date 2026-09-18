@@ -232,7 +232,8 @@ def test_ejecutar_video_mezcla_musica_al_crear(base_temporal, monkeypatch, tmp_p
         mezclas.append((video_in, pista, salida))
         with open(salida, "wb") as f:
             f.write(b"MIX")
-        return {"archivo": salida, "con_sonido": True, "duracion_s": duracion_s}
+        return {"archivo": salida, "con_sonido": True, "duracion_s": duracion_s,
+                "volumenes": {"voz": 1.0, "sonido": 1.0, "musica": 0.45}}
     monkeypatch.setattr(fp.mezcla, "mezclar_musica", _mezclar)
     subidos = []
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: subidos.append((local, key)) or "https://r2/" + key)
@@ -247,7 +248,7 @@ def test_ejecutar_video_mezcla_musica_al_crear(base_temporal, monkeypatch, tmp_p
     assert e["usd"] == pytest.approx(0.7 + 0.02)
     assert e["capas"]["sonido"]["estado"] == "ok" and e["capas"]["sonido"]["parametros"]["sonido"] == "risas"
     assert e["capas"]["musica"] == {"estilo": "calmado", "url": "https://r2/musica/calmado_15.wav", "costo_usd": 0.02, "estado": "ok"}
-    assert e["capas"]["mezcla"] == {"loudnorm": fp.mezcla.LOUDNORM, "volumenes": {"voz": 1.0, "sonido": 1.0, "musica": 0.35}}
+    assert e["capas"]["mezcla"] == {"loudnorm": fp.mezcla.LOUDNORM, "volumenes": {"voz": 1.0, "sonido": 1.0, "musica": 0.45}}
 
 
 def test_ejecutar_video_musica_degradable(base_temporal, monkeypatch, tmp_path):
@@ -257,6 +258,7 @@ def test_ejecutar_video_musica_degradable(base_temporal, monkeypatch, tmp_path):
     import tareas.flowplus as fp
     cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=True, sonido_texto="", musica_estilo="lujo")
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.cortes, "duracion", lambda p: 5.0)
 
     def _boom(*a, **k):
         raise RuntimeError("fal caído")
@@ -295,3 +297,28 @@ def test_ejecutar_video_cobra_la_musica_aunque_falle_la_mezcla(base_temporal, mo
     assert e["capas"]["musica"]["estado"] == "error" and e["capas"]["musica"]["costo_usd"] == 0.02
     assert e["video_url_crudo"] == e["video_url"]
     assert not (tmp_path / "salidas" / "acme" / f"{cid}_musica.mp4").exists()
+
+
+def test_ejecutar_video_prueba_la_duracion_antes_de_pagar_la_musica(base_temporal, monkeypatch, tmp_path):
+    """F3: `cortes.duracion` (gratis) se prueba ANTES de `obtener_pista`
+    (paga); si la descarga está corrupta y duracion revienta, obtener_pista
+    nunca se llama — no se paga nada por música y el video sigue listo."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=True, sonido_texto="", musica_estilo="lujo")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+
+    def _duracion_rota(p):
+        raise RuntimeError("archivo corrupto")
+    monkeypatch.setattr(fp.cortes, "duracion", _duracion_rota)
+    llamadas = []
+    monkeypatch.setattr(fp.musica, "obtener_pista",
+                        lambda estilo, segundos, carpeta_cache=None, on_progreso=None: llamadas.append((estilo, segundos)))
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    assert llamadas == []  # obtener_pista nunca se llegó a pedir
+    assert e["estado"] == "video_listo"
+    assert e["capas"]["musica"]["estado"] == "error" and "archivo corrupto" in e["capas"]["musica"]["error"]
+    assert e["usd"] == 0.7  # sin el 0.02 de la música: nunca se pagó

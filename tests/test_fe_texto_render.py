@@ -342,7 +342,7 @@ def test_filtergraph_con_sonido_recorta_por_segmento_y_mezcla():
     for seg in SEGMENTOS:
         assert f"[0:a]atrim=start={seg['inicio']:.3f}:end={seg['fin']:.3f},asetpts=PTS-STARTPTS" in fg
     assert "[a0][a1][a2]concat=n=3:v=0:a=1[ac]" in fg
-    assert "[ac]" + mezcla.NORM + ",volume=0.6[son]" in fg
+    assert "[ac]" + mezcla.NORM + ",apad,volume=0.6[son]" in fg
     assert "sidechaincompress" in fg and fg.rstrip().endswith(mezcla.LOUDNORM + "[aout]")
     # sin sonido, el filtro de audio es el de siempre (voz + música) y no toca [0:a]
     sin = render.construir_filtergraph(SEGMENTOS, {}, True, True, 1080, 1920)

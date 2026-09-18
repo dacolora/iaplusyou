@@ -82,3 +82,20 @@ def test_sugerir_sonido_ruta(app, monkeypatch):
     assert r.status_code == 200 and r.get_json() == {"sonido": "persona: pasos y risas"}
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": ""}).status_code == 400
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json=[1]).status_code == 400
+
+
+def test_sugerir_sonido_ruta_hardening(app, monkeypatch):
+    """F4: un `enfoque` que no es texto (lista, dict...) no debe tumbar la
+    ruta con un 500 — cae a "producto". Y un 502 nunca repite el texto de la
+    excepción en el body (puede traer detalles internos)."""
+    from final_edition import sonido
+    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None: f"{enfoque}: pasos y risas")
+    r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": ["a"]})
+    assert r.status_code == 200 and r.get_json() == {"sonido": "producto: pasos y risas"}
+
+    def _boom(escena, enfoque, persona=None):
+        raise RuntimeError("secreto")
+    monkeypatch.setattr(sonido, "sugerir_descripcion", _boom)
+    r2 = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": "producto"})
+    assert r2.status_code == 502
+    assert "secreto" not in r2.get_data(as_text=True)

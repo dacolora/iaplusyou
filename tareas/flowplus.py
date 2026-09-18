@@ -227,13 +227,16 @@ def ejecutar_video(tarea):
         pista = None
         mezclado = None
         try:
+            # cortes.duracion es gratis y puede reventar con una descarga corrupta —
+            # se prueba antes de pagar por obtener_pista, nunca después.
+            duracion_real = cortes.duracion(out_path)
             pista, c = musica.obtener_pista(estilo_musica, float(duracion))
             usd_musica = float(c or 0.0)  # ya se cobró al obtener la pista, se cuenta aunque falle la mezcla
             mezclado = os.path.join(out_dir, f"{cf_id}_musica.mp4")
-            mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, cortes.duracion(out_path))
+            resultado = mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, duracion_real)
             archivo_final = mezclado
             capas["musica"] = {"estilo": estilo_musica, "url": pista.get("url"), "costo_usd": usd_musica, "estado": "ok"}
-            capas["mezcla"] = {"loudnorm": mezcla.LOUDNORM, "volumenes": mezcla.volumenes_para()}
+            capas["mezcla"] = {"loudnorm": mezcla.LOUDNORM, "volumenes": resultado["volumenes"]}
             bitacora.registrar(cliente, cf_id, "musica", "ok", f"{estilo_musica} (USD {usd_musica:.2f})")
         except Exception as e:
             capas["musica"] = {"estilo": estilo_musica, "url": (pista or {}).get("url"),

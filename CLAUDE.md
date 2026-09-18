@@ -181,9 +181,7 @@ ALWAYS ask for the model's native scene sound (`generar_video(..., con_sonido=Tr
 `usd_por_segundo_efectivo` the templates show —, Seedance 2.5 `generate_audio`), and the
 prompt carries a `SONIDO:` line ("Sin diálogo hablado ni música de fondo" keeps Kling's
 Chinese/English voices out; the Spanish voice comes from final edition). Images never get
-that line. After the download the worker runs ffprobe and stores
-`sonido {proveedor, estado: ok | ausente | desconocido}` on the session (🔊 / 🔇 on the
-card, plus a bitácora row) — it only reports, never regenerates. The session carries `con_sonido` (the "Sonido de la escena" check, default from
+that line. The session carries `con_sonido` (the "Sonido de la escena" check, default from
 `proyectos.preferencias_sonido`), `sonido_texto` (the described sound, "Sugerir" asks
 Claude through `final_edition/sonido.py`) and `musica_estilo` ("" = none). After the
 download the worker's **Mezclando sonido** step (`ETAPAS_CREATIVE_FLOW`, 4 stages) probes
@@ -192,7 +190,7 @@ the audio track, mixes the chosen music underneath with `final_edition/mezcla.py
 (`sonido {proveedor, estado: ok|ausente|desconocido|omitida}`, `musica`, `mezcla`),
 `video_url` (mixed: what is seen, published and delivered) and `extra.video_url_crudo` /
 `video_local_crudo` (native sound only: the source of final edition). Music failure is
-degradable (the paid video is never lost). Spec:
+degradable (the paid video is never lost) — it only reports, never regenerates. Spec:
 `docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1 (done except
 `proveedor_v2a` and style previews, which belong to S3/S5).
 
@@ -202,7 +200,8 @@ subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base
 Anthropic; `fe_producir` queues one `final_producir` task per destino ticked, each
 worth its own approval). `final_edition/__init__.py` orchestrates the layers in order
 — `guion` (Anthropic: base guion, then localize per destino) -> `cortes` (ffmpeg: cut
-detection on the source clip) -> `voz` (fal/ElevenLabs TTS per block, degradable
+detection on the source clip) -> sonido (the clon's native track, `ausente` when it has
+none) -> `voz` (fal/ElevenLabs TTS per block, degradable
 except a failure on the FIRST block, which is fatal and never reaches música) ->
 `musica` (fal/Stable Audio, degradable, cached) -> `texto` (Pillow: overlay PNGs for
 hook/subtitles/price badge/CTA) -> `render` (ffmpeg: one filtergraph, `MAX_OVERLAYS_TOTAL`

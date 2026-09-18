@@ -4315,11 +4315,12 @@ def fp_sugerir_sonido(cliente):
     escena = " ".join(str(cuerpo.get("escena") or "").split())
     if not escena:
         return jsonify({"error": "Escribe primero qué tiene que pasar en el video."}), 400
-    enfoque = cuerpo.get("enfoque") if cuerpo.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
+    e = cuerpo.get("enfoque")
+    enfoque = e if isinstance(e, str) and e in flowplus_prompt.ENFOQUES else "producto"
     try:
         texto = sonido_mod.sugerir_descripcion(escena, enfoque)
     except Exception as e:
-        return jsonify({"error": f"No se pudo sugerir: {e}"}), 502
+        return jsonify({"error": f"No se pudo sugerir ({type(e).__name__})."}), 502
     return jsonify({"sonido": texto})
 
 
