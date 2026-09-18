@@ -940,6 +940,8 @@ def ver_cliente(cliente):
         referencias_bandeja=referencias_flowplus.listar(cliente),
         trabajo_link={"job_id": _job_id_link(cliente)} if trabajos.en_curso(_job_id_link(cliente)) else None,
         modelos_flowplus_video=flowplus_modelos.VIDEO,
+        duraciones_crear=flowplus_modelos.DURACIONES_CREAR,
+        formatos_nombres=flowplus_modelos.FORMATOS_NOMBRES,
         modelos_flowplus_imagen=flowplus_modelos.IMAGEN,
         ads=ads_dict,
         trabajos_ads=trabajos_ads,
@@ -4184,14 +4186,6 @@ def cf_crear_video(cliente):
     """FlowPlus de una: referencias (imágenes subidas + productos del catálogo)
     + texto → video con Wan 3.0 en el mismo POST. Sin paso de prompt."""
     accion_central = (request.form.get("accion_central") or "").strip()
-    try:
-        duracion_objetivo = int(request.form.get("duracion_objetivo", 12))
-    except ValueError:
-        duracion_objetivo = 12
-    duracion_objetivo = max(5, min(30, duracion_objetivo))
-    aspect_ratio = request.form.get("aspect_ratio") or "9:16"
-    if aspect_ratio not in ("9:16", "16:9", "1:1"):
-        aspect_ratio = "9:16"
     tipo = "imagen" if request.form.get("tipo") == "imagen" else "video"
     # Sonido de la escena y música al crear (spec estudio S1): solo para videos.
     con_sonido = tipo == "video" and request.form.get("con_sonido") == "si"
@@ -4207,6 +4201,21 @@ def cf_crear_video(cliente):
     else:
         if modelo not in flowplus_modelos.VIDEO:
             modelo = prefs["modelo_video"]
+    # Duración y formato: lo que el modelo admite manda (Kling llega a 15 s;
+    # Seedance no elige formato; la imagen tiene su propio selector).
+    duracion_objetivo = 0
+    aviso_duracion = None
+    if tipo == "imagen":
+        aspect_ratio = flowplus_modelos.ajustar_formato(modelo, request.form.get("aspect_ratio_imagen") or "", tipo="imagen")
+    else:
+        pedida = request.form.get("duracion_objetivo")
+        duracion_objetivo = flowplus_modelos.ajustar_duracion(modelo, pedida)
+        try:
+            if int(float(pedida)) != duracion_objetivo:
+                aviso_duracion = duracion_objetivo
+        except (TypeError, ValueError):
+            pass
+        aspect_ratio = flowplus_modelos.ajustar_formato(modelo, request.form.get("aspect_ratio") or "")
 
     # Las referencias vienen de la bandeja (archivos subidos y links ya
     # descargados), en el orden en que se agregaron, con sus etiquetas.
@@ -4255,7 +4264,6 @@ def cf_crear_video(cliente):
     # referencias_urls sigue siendo la lista plana de IMÁGENES (los videos van por
     # su fotograma) — es lo que consumen los modelos que no aceptan video.
     referencias_urls = [r["frame_url"] for r in referencias][:10]
-    con_persona = request.form.get("con_persona") == "si"
     if not referencias:
         flash("Sube al menos una imagen o un video, o elige un producto del catálogo: el modelo necesita una referencia.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
@@ -4263,14 +4271,12 @@ def cf_crear_video(cliente):
         flash("Escribe qué tiene que pasar en el video.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
-    try:
-        n_versiones = int(request.form.get("n_versiones", 1))
-    except ValueError:
-        n_versiones = 1
-    enfoques = flowplus_prompt.enfoques_para(n_versiones, con_persona=con_persona, elegidos=request.form.getlist("enfoques"))
+    # Una pieza por clic. El enfoque es automático: solo producto, salvo que
+    # entre un personaje del catálogo (entonces la escena lleva a esa persona).
+    enfoque = "persona" if any(r.get("categoria") == "personaje" for r in referencias) else "producto"
 
     lanzados = 0
-    for enfoque in enfoques:
+    for enfoque in (enfoque,):
         info = flowplus_prompt.ENFOQUES[enfoque]
         prompt_final = flowplus_prompt.armar(
             accion_central, referencias, con_persona=info["con_persona"],
@@ -4295,11 +4301,13 @@ def cf_crear_video(cliente):
         referencias_flowplus.vaciar(cliente)
     nombre_modelo = (flowplus_modelos.IMAGEN if tipo == "imagen" else flowplus_modelos.VIDEO)[modelo]["nombre"]
     que = "imagen" if tipo == "imagen" else "video"
-    if lanzados == 1:
-        flash(f"Generando {'la' if que == 'imagen' else 'el'} {que} con {nombre_modelo} ({flowplus_prompt.ENFOQUES[enfoques[0]]['nombre']})…", "ok")
-    elif lanzados > 1:
-        etiquetas = " · ".join(flowplus_prompt.ENFOQUES[e]["nombre"] for e in enfoques)
-        flash(f"Generando {lanzados} versiones con {nombre_modelo}: {etiquetas}.", "ok")
+    if lanzados:
+        detalle = f" · {aspect_ratio}" if aspect_ratio else ""
+        if que == "video":
+            detalle += f" · {duracion_objetivo} s"
+        flash(f"Generando {'la' if que == 'imagen' else 'el'} {que} con {nombre_modelo}{detalle}…", "ok")
+        if aviso_duracion is not None:
+            flash(f"{nombre_modelo} llega a {aviso_duracion} s: se generará de {aviso_duracion} s.", "warn")
     else:
         flash("Ya se estaba generando eso — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))

@@ -175,7 +175,15 @@ gate and `max_intentos=1`.
 
 **Crear (FlowPlus)** (`flowplus_prompt.armar` -> `flowplus_lanzar.lanzar` -> worker
 `tareas/flowplus.py` -> `providers/flowplus_modelos.py`, all via WaveSpeed): `VIDEO` /
-`IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`). Videos
+`IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`,
+`min_duracion`/`max_duracion`, `formatos`). Crear makes ONE piece per click (the enfoque is
+automatic: `producto`, or `persona` when a catalog personaje is among the references),
+offers 5–30 s and the formats each model admits (verified on WaveSpeed 2026-09-18: Wan 3.0
+2–30 s and 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3–15 s and 9:16/16:9/1:1; Seedance 2.5 4–30 s
+and follows the reference image, `aspect_ratio` None; Seedream V5 Pro takes `aspect_ratio`
+for images). `ajustar_duracion`/`ajustar_formato` run in the route AND again in the worker's
+`_preparar` (last barrier before spending), so nothing outside a model's range is ever
+requested. Videos
 ALWAYS ask for the model's native scene sound (`generar_video(..., con_sonido=True)`: Wan 3.0
 `enable_audio`, Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
 `usd_por_segundo_efectivo` the templates show —, Seedance 2.5 `generate_audio`), and the

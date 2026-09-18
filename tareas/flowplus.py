@@ -137,8 +137,14 @@ def _preparar(cliente, cf_id):
     tipo = entry.get("tipo") or "video"
     if tipo == "imagen":
         modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.IMAGEN else flowplus_modelos.IMAGEN_POR_DEFECTO
+        # Sin formato en la sesión, Seedream sigue a la primera imagen (None).
+        aspect_ratio = flowplus_modelos.ajustar_formato(modelo, entry.get("aspect_ratio"), tipo="imagen") if entry.get("aspect_ratio") else None
     else:
         modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
+        # Última barrera antes de gastar: nunca se pide una duración o un formato
+        # que el modelo rechaza (Kling llega a 15 s; Seedance no elige formato).
+        duracion = flowplus_modelos.ajustar_duracion(modelo, duracion)
+        aspect_ratio = flowplus_modelos.ajustar_formato(modelo, aspect_ratio)
     return entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo
 
 
@@ -146,7 +152,7 @@ def _preparar(cliente, cf_id):
 def ejecutar_imagen(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
-    entry, referencias, _, _, prompt_texto, _, _, modelo = _preparar(cliente, cf_id)
+    entry, referencias, _, _, prompt_texto, _, aspect_ratio, modelo = _preparar(cliente, cf_id)
 
     out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
     os.makedirs(out_dir, exist_ok=True)
@@ -154,7 +160,8 @@ def ejecutar_imagen(tarea):
     avisar_fase = _avisar_fase_de(job_id)
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-        url_prov = flowplus_modelos.generar_imagen(modelo, prompt_texto, referencias, on_progreso=avisar_fase)
+        url_prov = flowplus_modelos.generar_imagen(modelo, prompt_texto, referencias, on_progreso=avisar_fase,
+                                                   aspect_ratio=aspect_ratio)
         costo = flowplus_modelos.estimate_imagen(modelo, n_referencias=len(referencias))
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         resp = requests.get(url_prov, timeout=120)

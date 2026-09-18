@@ -347,3 +347,21 @@ def test_crear_sesion_no_pisa_una_reserva_que_ya_no_es_suya(escenario, monkeypat
     monkeypatch.setattr(produccion, "crear_sesion", _pisa)
     r = produccion.lanzar_lote("acme", escenario["sid"], campana_id=escenario["cid"])
     assert r["omitidas"] >= 1 and datos.idea("acme", escenario["iv"])["cf_id"].startswith("reservando_")
+
+
+def test_crear_sesion_recorta_la_duracion_de_la_idea_al_modelo(escenario):
+    """Una idea de 30 s cabe en Wan pero Kling llega a 15: el estimado y la
+    sesión usan la duración recortada (nunca se pide algo que el modelo rechaza)."""
+    import creative_flow
+    from providers import flowplus_modelos
+    from sprints import datos, produccion
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    datos.actualizar_idea("acme", escenario["iv"], duracion_s=30)
+    e_wan = produccion.estimar("acme", escenario["sid"], modelo_video="wan3")
+    e_kling = produccion.estimar("acme", escenario["sid"], modelo_video="kling_o3_pro")
+    imagen = flowplus_modelos.estimate_imagen("seedream_v5_pro", 3)["usd"]
+    assert abs(e_wan["usd"] - (flowplus_modelos.estimate_video("wan3", 30)["usd"] + imagen)) < 1e-6
+    assert abs(e_kling["usd"] - (flowplus_modelos.estimate_video("kling_o3_pro", 15)["usd"] + imagen)) < 1e-6
+    cf_id = produccion.crear_sesion("acme", sp, c, datos.idea("acme", escenario["iv"]), "kling_o3_pro", "seedream_v5_pro")
+    assert creative_flow.cargar("acme")[cf_id]["duracion_objetivo"] == 15

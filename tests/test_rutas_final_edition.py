@@ -366,6 +366,7 @@ def _contexto_minimo(items):
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
         paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
         presets_mezcla=["equilibrada", "voz_protagonista", "ambiente_protagonista"],
+        duraciones_crear=(5, 8, 10, 12, 15, 20, 25, 30), formatos_nombres={"9:16": "Vertical 9:16"},
     )
 
 

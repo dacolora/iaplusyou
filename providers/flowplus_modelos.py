@@ -20,6 +20,14 @@ false, 0.112 -> 0.140 $/s; solo disponible sin video de referencia, que Kling
 nunca recibe aquí), Seedance 2.5 `generate_audio` (default true, sin recargo).
 `audio_nativo` de cada entrada guarda el nombre del parámetro y el recargo por
 segundo; `estimate_video` lo suma para que el costo se vea antes del clic.
+
+Duraciones y formatos (verificados en wavespeed.ai el 2026-09-18): Wan 3.0
+2-30 s (con videos de referencia, sus segundos más los de la salida no pasan
+de 30) y 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3-15 s y 9:16/16:9/1:1; Seedance
+2.5 4-30 s y el formato sigue a la imagen de referencia (no se elige);
+Seedream V5 Pro acepta `aspect_ratio` (sin él sigue a la primera imagen).
+`min_duracion`/`max_duracion` y `formatos` de cada entrada son lo que la UI
+ofrece y lo que `ajustar_duracion`/`ajustar_formato` imponen antes de gastar.
 """
 import requests
 
@@ -31,10 +39,13 @@ VIDEO = {
         "path": wan3_client.MODEL_PATH,
         "max_referencias": 10,
         "usd_por_segundo": wan3_client.COSTO_USD_POR_SEGUNDO["720p"],
-        "duraciones": (5, 8, 10, 12, 15, 20),
+        "duraciones": (5, 8, 10, 12, 15, 20, 25, 30),
+        "min_duracion": 2,
+        "max_duracion": 30,
+        "formatos": ("9:16", "16:9", "1:1", "4:3", "3:4"),
         "max_videos": 5,
         "audio_nativo": {"parametro": "enable_audio", "recargo_usd_s": 0.0},
-        "nota": "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p. El único que usa videos tal cual. Sonido de la escena incluido.",
+        "nota": "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido.",
     },
     "kling_o3_pro": {
         "nombre": "Kling O3 Pro",
@@ -42,19 +53,25 @@ VIDEO = {
         "max_referencias": 7,
         "usd_por_segundo": 0.112,
         "duraciones": (5, 8, 10, 12, 15),
+        "min_duracion": 3,
+        "max_duracion": 15,
+        "formatos": ("9:16", "16:9", "1:1"),
         "max_videos": 0,
         "audio_nativo": {"parametro": "sound", "recargo_usd_s": 0.028},
-        "nota": "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado).",
+        "nota": "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado).",
     },
     "seedance25": {
         "nombre": "Seedance 2.5",
         "path": "bytedance/seedance-2.5/image-to-video",
         "max_referencias": 1,
         "usd_por_segundo": 0.36,
-        "duraciones": (5, 8, 10, 12, 15),
+        "duraciones": (5, 8, 10, 12, 15, 20, 25, 30),
+        "min_duracion": 4,
+        "max_duracion": 30,
+        "formatos": (),   # el formato sigue a la imagen de referencia: no se elige
         "max_videos": 0,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
-        "nota": "Usa SOLO la primera imagen como fotograma de arranque; el encuadre sale de esa imagen. Calidad cinematográfica, el más caro. Sonido de la escena incluido.",
+        "nota": "Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido.",
     },
 }
 
@@ -64,9 +81,47 @@ IMAGEN = {
         "path": wavespeed_imagen.MODELO_SEEDREAM,
         "max_referencias": wavespeed_imagen.MAX_IMAGENES_SEEDREAM,
         "usd": wavespeed_imagen.COSTO_USD_SEEDREAM["2k"],
-        "nota": "Imagen 2k a partir de tus referencias y el texto. Realismo fotográfico.",
+        "formatos": ("9:16", "1:1", "4:5", "16:9", "3:4", "4:3"),
+        "nota": "Imagen 2k a partir de tus referencias y el texto, en el formato que elijas. Realismo fotográfico.",
     },
 }
+
+# Lo que ofrece el selector de duración de Crear; cada modelo recorta a su rango.
+DURACIONES_CREAR = (5, 8, 10, 12, 15, 20, 25, 30)
+DURACION_DEFECTO = 10
+FORMATO_DEFECTO = "9:16"
+FORMATOS_NOMBRES = {
+    "9:16": "Vertical 9:16 (Reels, TikTok, Shorts)",
+    "4:5": "Retrato 4:5 (feed de Instagram)",
+    "1:1": "Cuadrado 1:1",
+    "3:4": "Retrato 3:4",
+    "4:3": "Horizontal 4:3",
+    "16:9": "Horizontal 16:9 (YouTube)",
+}
+
+
+def ajustar_duracion(modelo_id, duracion):
+    """Duración (int, segundos) dentro del rango del modelo; sin valor o con
+    basura, la de defecto (también recortada)."""
+    info = VIDEO[modelo_id]
+    try:
+        d = int(float(duracion))
+    except (TypeError, ValueError):
+        d = DURACION_DEFECTO
+    return max(int(info["min_duracion"]), min(int(info["max_duracion"]), d))
+
+
+def ajustar_formato(modelo_id, formato, tipo="video"):
+    """Formato que se le pide al modelo: el elegido si lo admite; si no, el
+    vertical (o el primero que admita). None cuando el modelo no elige formato
+    (Seedance: sigue a la imagen de referencia)."""
+    info = (IMAGEN if tipo == "imagen" else VIDEO)[modelo_id]
+    formatos = tuple(info.get("formatos") or ())
+    if not formatos:
+        return None
+    if formato in formatos:
+        return formato
+    return FORMATO_DEFECTO if FORMATO_DEFECTO in formatos else formatos[0]
 
 # Tarifa que ve la persona antes del clic: la del modelo más el recargo del
 # sonido (siempre se pide). Las plantillas la muestran y el estimado en vivo
@@ -147,14 +202,15 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
     raise ValueError(f"Modelo de video desconocido: {modelo_id}")
 
 
-def generar_imagen(modelo_id, prompt, referencias, on_progreso=None):
-    """Devuelve la URL pública de la imagen generada."""
+def generar_imagen(modelo_id, prompt, referencias, on_progreso=None, aspect_ratio=None):
+    """Devuelve la URL pública de la imagen generada. aspect_ratio: uno de
+    `IMAGEN[modelo]["formatos"]` o None (el modelo sigue a la primera imagen)."""
     info = IMAGEN[modelo_id]
     if not referencias:
         raise ValueError(f"{info['nombre']} necesita al menos una imagen de referencia.")
     if modelo_id == "seedream_v5_pro":
         return wavespeed_imagen.editar_imagen_seedream(
             referencias[0], prompt, referencias_urls=list(referencias[1:]),
-            resolution="2k", on_progreso=on_progreso,
+            resolution="2k", on_progreso=on_progreso, aspect_ratio=aspect_ratio,
         )
     raise ValueError(f"Modelo de imagen desconocido: {modelo_id}")

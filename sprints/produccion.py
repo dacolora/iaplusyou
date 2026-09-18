@@ -72,11 +72,16 @@ def pendientes(cliente, sprint_id, campana_id=None):
     return salida
 
 
-def _duracion(idea):
+def _duracion(idea, modelo_video=None):
+    """Duración de la idea en segundos; con `modelo_video`, recortada al rango
+    que ese modelo admite (Kling llega a 15 s, Wan y Seedance a 30)."""
     try:
-        return int(float(idea.get("duracion_s") or DURACION_DEFECTO_S))
+        d = int(float(idea.get("duracion_s") or DURACION_DEFECTO_S))
     except (TypeError, ValueError):
-        return DURACION_DEFECTO_S
+        d = DURACION_DEFECTO_S
+    if modelo_video in flowplus_modelos.VIDEO:
+        d = flowplus_modelos.ajustar_duracion(modelo_video, d)
+    return d
 
 
 def _n_referencias(cliente, campana):
@@ -101,7 +106,7 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
     for c, i in pendientes(cliente, sprint_id, campana_id):
         if i["tipo"] == "video":
             videos += 1
-            usd += float((flowplus_modelos.estimate_video(mv, _duracion(i), con_sonido=con_sonido) or {}).get("usd") or 0.0)
+            usd += float((flowplus_modelos.estimate_video(mv, _duracion(i, mv), con_sonido=con_sonido) or {}).get("usd") or 0.0)
         else:
             imagenes += 1
             usd += float((flowplus_modelos.estimate_imagen(mi, n_referencias=_n_referencias(cliente, c)) or {}).get("usd") or 0.0)
@@ -211,7 +216,7 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
                                    sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido)
     plataformas = list(idea.get("plataformas") or [])
     cf_id = creative_flow.crear(
-        cliente, [], productos_sel, [], idea["escena"], _duracion(idea) if idea["tipo"] == "video" else 0,
+        cliente, [], productos_sel, [], idea["escena"], _duracion(idea, modelo_video) if idea["tipo"] == "video" else 0,
         persona.get("tono") or "", "A", referencias_urls=referencias_urls, platforms=plataformas,
         extra_sprint={"sprint_id": sprint["id"], "sprint_nombre": sprint["nombre"], "campana_id": campana["id"],
                       "campana_n": int(campana["orden"]) + 1, "cp_id": idea["id"]})
