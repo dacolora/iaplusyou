@@ -97,10 +97,11 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
     mv, mi = modelos(cliente, modelo_video, modelo_imagen)
     videos = imagenes = 0
     usd = 0.0
+    con_sonido = bool(proyectos.preferencias_sonido(cliente)["con_sonido"])
     for c, i in pendientes(cliente, sprint_id, campana_id):
         if i["tipo"] == "video":
             videos += 1
-            usd += float((flowplus_modelos.estimate_video(mv, _duracion(i)) or {}).get("usd") or 0.0)
+            usd += float((flowplus_modelos.estimate_video(mv, _duracion(i), con_sonido=con_sonido) or {}).get("usd") or 0.0)
         else:
             imagenes += 1
             usd += float((flowplus_modelos.estimate_imagen(mi, n_referencias=_n_referencias(cliente, c)) or {}).get("usd") or 0.0)
@@ -201,10 +202,13 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     enfoque = idea.get("enfoque") if idea.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
     info = flowplus_prompt.ENFOQUES[enfoque]
     es_video = idea["tipo"] == "video"
+    prefs_sonido = proyectos.preferencias_sonido(cliente)
+    con_sonido = es_video and bool(prefs_sonido["con_sonido"])
+    sonido_texto = (idea.get("sonido") or "") if es_video else ""
     prompt = flowplus_prompt.armar(idea["escena"], referencias, con_persona=info["con_persona"],
                                    guia_marca=marca.guia_efectiva(cliente), negative_marca=marca.negative_prompt_efectivo(cliente),
                                    logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, contexto=contexto,
-                                   sonido=idea.get("sonido") if es_video else None, con_sonido=es_video)
+                                   sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido)
     plataformas = list(idea.get("plataformas") or [])
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [], idea["escena"], _duracion(idea) if idea["tipo"] == "video" else 0,
@@ -213,7 +217,9 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
                       "campana_n": int(campana["orden"]) + 1, "cp_id": idea["id"]})
     creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt, aspect_ratio=_aspect_ratio(plataformas), tipo=idea["tipo"],
                              modelo=modelo_video if idea["tipo"] == "video" else modelo_imagen, referencias=referencias,
-                             con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"])
+                             con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
+                             con_sonido=con_sonido, sonido_texto=sonido_texto,
+                             musica_estilo=(prefs_sonido["musica_al_crear"] if es_video else ""))
     # `lanzar_lote` ya reservó cf_id con un placeholder antes de llamar acá,
     # así que el vínculo final es el mismo compare-and-swap (evita que una
     # idea tenga dos sesiones si dos lotes corrieron a la vez). Si la reserva

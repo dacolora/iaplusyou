@@ -355,6 +355,7 @@ def _contexto_minimo(items):
     return dict(
         creative_flow_items=items, cliente="acme", banco_prompts=[], logos=[],
         modelos_flowplus_video={}, modelos_flowplus_imagen={}, preferencias_flowplus={},
+        preferencias_sonido={"con_sonido": True, "musica_al_crear": ""},
         fp_prefill=None, activos_por_categoria={}, categorias={}, productos=[],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
         paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),

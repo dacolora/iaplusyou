@@ -28,3 +28,57 @@ def test_crear_muestra_tarifa_con_sonido_e_indicador(app):
     assert 'data-usd-seg="0.14"' in html and "$0.140/s con sonido" in html
     assert 'data-usd-seg="0.1"' in html
     assert "🔊" in html and "🔇 sin sonido" in html
+
+
+def test_crear_video_guarda_sonido_y_musica_en_la_sesion(app, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import proyectos
+    import referencias_flowplus
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    monkeypatch.setattr(referencias_flowplus, "listar",
+                        lambda c: [{"tipo": "imagen", "url": "https://x/1.png", "frame_url": "https://x/1.png", "etiqueta": "@Imagen 1"}])
+    monkeypatch.setattr(referencias_flowplus, "vaciar", lambda c: None)
+    lanzadas = []
+    monkeypatch.setattr(app["dashboard"], "_lanzar_video_cf", lambda c, cf_id, entry: lanzadas.append(cf_id) or True)
+    r = app["c"].post("/cliente/acme/creative_flow/crear", data={
+        "accion_central": "gira despacio", "duracion_objetivo": "5", "aspect_ratio": "9:16", "tipo": "video",
+        "modelo": "kling_o3_pro", "n_versiones": "1", "enfoques": "producto",
+        "con_sonido": "si", "sonido": "  risas de niños  ", "musica_estilo": "calmado",
+    })
+    assert r.status_code == 302 and len(lanzadas) == 1
+    e = cf.cargar("acme")[lanzadas[0]]
+    assert e["con_sonido"] is True and e["sonido_texto"] == "risas de niños" and e["musica_estilo"] == "calmado"
+    assert "SONIDO: risas de niños. Sin diálogo hablado ni música de fondo." in e["prompt_relleno"]
+    # sin el check y con estilo inválido: mudo, sin música, prompt sin SONIDO
+    r = app["c"].post("/cliente/acme/creative_flow/crear", data={
+        "accion_central": "gira despacio", "duracion_objetivo": "5", "tipo": "video", "modelo": "wan3",
+        "n_versiones": "1", "enfoques": "producto", "musica_estilo": "reguetón",
+    })
+    e2 = cf.cargar("acme")[lanzadas[1]]
+    assert e2["con_sonido"] is False and e2["musica_estilo"] == "" and "SONIDO" not in e2["prompt_relleno"]
+    # una imagen nunca lleva sonido ni música aunque el formulario lo mande
+    app["c"].post("/cliente/acme/creative_flow/crear", data={
+        "accion_central": "gira", "tipo": "imagen", "modelo": "seedream_v5_pro", "n_versiones": "1",
+        "enfoques": "producto", "con_sonido": "si", "musica_estilo": "calmado",
+    })
+    e3 = cf.cargar("acme")[lanzadas[2]]
+    assert e3["con_sonido"] is False and e3["musica_estilo"] == "" and "SONIDO" not in e3["prompt_relleno"]
+
+
+def test_formulario_de_crear_trae_sonido_musica_y_sugerir(app, monkeypatch, tmp_path):
+    import proyectos
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    proyectos.guardar_preferencias_sonido("acme", True, "lujo")
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert 'id="fp-con-sonido"' in html and ' checked> Sonido de la escena' in html
+    assert 'name="musica_estilo"' in html and '<option value="lujo" selected>' in html
+    assert 'id="fp-sugerir-sonido"' in html and 'data-recargo="0.028"' in html
+
+
+def test_sugerir_sonido_ruta(app, monkeypatch):
+    from final_edition import sonido
+    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None: f"{enfoque}: pasos y risas")
+    r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "una niña salta", "enfoque": "persona"})
+    assert r.status_code == 200 and r.get_json() == {"sonido": "persona: pasos y risas"}
+    assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": ""}).status_code == 400
+    assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json=[1]).status_code == 400

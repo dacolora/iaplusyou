@@ -59,11 +59,25 @@ def test_crear_sesion_arma_referencias_prompt_y_vinculo(escenario):
     assert e["platforms"] == ["instagram"] and e["aspect_ratio"] == "9:16" and e["enfoque"] == "producto"
     assert "AUDIENCIA: Busca calidad" in e["prompt_relleno"] and "TEMPORADA: Navidad" in e["prompt_relleno"]
     assert "SONIDO: pájaros" in e["prompt_relleno"] and "ESCENA: Rodea el espejo" in e["prompt_relleno"]
+    assert e["con_sonido"] is True and e["sonido_texto"] == "pájaros" and e["musica_estilo"] == ""
     assert datos.idea("acme", escenario["iv"])["cf_id"] == cf_id
     idea_img = datos.idea("acme", escenario["ii"])
     cf2 = produccion.crear_sesion("acme", sp, c, idea_img, "wan3", "seedream_v5_pro")
     e2 = creative_flow.cargar("acme")[cf2]
     assert e2["tipo"] == "imagen" and e2["modelo"] == "seedream_v5_pro" and "SONIDO" not in e2["prompt_relleno"]
+
+
+def test_crear_sesion_sigue_la_preferencia_de_sonido_del_proyecto(escenario, monkeypatch, tmp_path):
+    import creative_flow
+    import proyectos
+    from sprints import datos, produccion
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    proyectos.guardar_preferencias_sonido("acme", False, "urbano")
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    cf_id = produccion.crear_sesion("acme", sp, c, datos.idea("acme", escenario["iv"]), "wan3", "seedream_v5_pro")
+    e = creative_flow.cargar("acme")[cf_id]
+    assert e["con_sonido"] is False and e["musica_estilo"] == "urbano" and "SONIDO" not in e["prompt_relleno"]
 
 
 def test_lanzar_lote_encola_con_prioridad_y_registra(escenario, monkeypatch):

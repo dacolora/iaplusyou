@@ -1828,7 +1828,8 @@ def _creative_flow_items(cliente):
                     n_referencias=len(entry.get("referencias_urls") or []))
             else:
                 mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
-                item["costo_estimado"] = flowplus_modelos.estimate_video(mid, entry["duracion_objetivo"])
+                item["costo_estimado"] = flowplus_modelos.estimate_video(
+                    mid, entry["duracion_objetivo"], con_sonido=entry.get("con_sonido", True) is not False)
         item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
         # Final edition: solo tiene sentido sobre un video ya listo. Cada final
         # y el guion llevan su propio trabajo del worker para la barra de la UI.
@@ -4186,6 +4187,12 @@ def cf_crear_video(cliente):
     if aspect_ratio not in ("9:16", "16:9", "1:1"):
         aspect_ratio = "9:16"
     tipo = "imagen" if request.form.get("tipo") == "imagen" else "video"
+    # Sonido de la escena y música al crear (spec estudio S1): solo para videos.
+    con_sonido = tipo == "video" and request.form.get("con_sonido") == "si"
+    sonido_texto = " ".join((request.form.get("sonido") or "").split())[:200] if tipo == "video" else ""
+    musica_estilo = (request.form.get("musica_estilo") or "").strip() if tipo == "video" else ""
+    if musica_estilo not in fe_tipos.ESTILOS_MUSICA:
+        musica_estilo = ""
     prefs = proyectos.preferencias_flowplus(cliente)
     modelo = (request.form.get("modelo") or "").strip()
     if tipo == "imagen":
@@ -4263,7 +4270,7 @@ def cf_crear_video(cliente):
             accion_central, referencias, con_persona=info["con_persona"],
             guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
             logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
-            con_sonido=(tipo == "video"),
+            sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido,
         )
         cf_id = creative_flow.crear(
             cliente, [], productos_sel, [],
@@ -4273,6 +4280,7 @@ def cf_crear_video(cliente):
         creative_flow.actualizar(
             cliente, cf_id, prompt_relleno=prompt_final, aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo,
             referencias=referencias, con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
+            con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo,
         )
         entry = creative_flow.cargar(cliente)[cf_id]
         if _lanzar_video_cf(cliente, cf_id, entry):
@@ -4289,6 +4297,24 @@ def cf_crear_video(cliente):
     else:
         flash("Ya se estaba generando eso — espera a que termine.", "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/creative_flow/sugerir_sonido", methods=["POST"])
+def fp_sugerir_sonido(cliente):
+    """Claude sugiere qué se oye en la escena (centavos). Solo texto: no genera nada."""
+    from final_edition import sonido as sonido_mod
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        return jsonify({"error": "Cuerpo inválido."}), 400
+    escena = " ".join(str(cuerpo.get("escena") or "").split())
+    if not escena:
+        return jsonify({"error": "Escribe primero qué tiene que pasar en el video."}), 400
+    enfoque = cuerpo.get("enfoque") if cuerpo.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
+    try:
+        texto = sonido_mod.sugerir_descripcion(escena, enfoque)
+    except Exception as e:
+        return jsonify({"error": f"No se pudo sugerir: {e}"}), 502
+    return jsonify({"sonido": texto})
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar_video", methods=["POST"])

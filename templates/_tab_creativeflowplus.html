@@ -83,7 +83,7 @@
     <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de video</label>
     <div class="checks-plataformas">
       {% for id, m in modelos_flowplus_video.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
+      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
       {% endfor %}
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
@@ -102,6 +102,24 @@
           <option value="16:9">Horizontal 16:9 (YouTube)</option>
           <option value="1:1">Cuadrado 1:1</option>
         </select>
+      </div>
+    </div>
+    <div class="fila-campos-idea" style="margin-top:.8rem;">
+      <div>
+        <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" id="fp-con-sonido" {% if preferencias_sonido.con_sonido %}checked{% endif %}> Sonido de la escena</label>
+        <div style="display:flex;gap:.4rem;align-items:center;margin-top:.4rem;">
+          <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="ej. risas de niños, pasos sobre baldosa, respiración agitada al final" style="flex:1;">
+          <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">Sugerir</button>
+        </div>
+        <p class="vacio" style="font-size:.74rem;padding:0;">Audio nativo del modelo, sin diálogo ni música. Vacío = ambiente natural de la escena.</p>
+      </div>
+      <div>
+        <label class="campo-label">Música al crear</label>
+        <select name="musica_estilo" id="fp-musica">
+          <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>ninguna</option>
+          {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+        </select>
+        <p class="vacio" style="font-size:.74rem;padding:0;">Se mezcla debajo del sonido (USD 0,02 la primera vez por estilo y duración).</p>
       </div>
     </div>
   </div>
@@ -173,7 +191,7 @@
       <div class="generado-pie">
         <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
         {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">Sprint · Campaña {{ item.sprint.campana_n }}</a>{% endif %}
-        <small>{{ item.modelo_nombre }}{% if item.usd %} · ${{ item.usd }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="El video trae el sonido de la escena">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="El proveedor entregó el video sin pista de audio">🔇 sin sonido</span>{% endif %}</small>
+        <small>{{ item.modelo_nombre }}{% if item.usd %} · ${{ item.usd }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="El video trae el sonido de la escena">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="El proveedor entregó el video sin pista de audio">🔇 sin sonido</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="Música al crear: {{ item.capas.musica.estilo }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
       </div>
       <template class="generado-detalle">
         <div class="detalle-media">
@@ -591,18 +609,47 @@
       }
       conPersona.value = (ordenMarcado.length === 1 && ordenMarcado[0] !== 'producto') ? 'si' : 'no';
       var usd = 0;
-      if (m) usd = esImagen ? parseFloat(m.dataset.usd) : parseFloat(m.dataset.usdSeg) * parseInt(duracion.value, 10);
+      var conSonido = document.getElementById('fp-con-sonido');
+      var musicaSel = document.getElementById('fp-musica');
+      if (m) {
+        if (esImagen) {
+          usd = parseFloat(m.dataset.usd);
+        } else {
+          var seg = parseFloat(m.dataset.usdSeg);
+          if (conSonido && !conSonido.checked) seg -= parseFloat(m.dataset.recargo || '0');
+          usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value) ? 0.02 : 0);
+        }
+      }
       usd = usd * n;
       var que = (esImagen ? 'imagen' : 'video') + (n > 1 ? ' × ' + n : '');
       botonGenerar.textContent = 'Generar ' + que + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen], input[name=n_versiones]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
+    ['fp-con-sonido', 'fp-musica'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('change', refrescar);
+    });
     refrescar();
 
     // Chips @Imagen N / @Video N de la bandeja: insertan la etiqueta en el texto.
     var chips = document.getElementById('fp-etiquetas');
     var texto = document.getElementById('fp-texto');
+    // «Sugerir» sonido de la escena: Claude describe qué se oye (centavos, solo texto).
+    var btnSugerir = document.getElementById('fp-sugerir-sonido');
+    if (btnSugerir) btnSugerir.addEventListener('click', function () {
+      var enfoque = (form.querySelector('input[name=enfoques]:checked') || {}).value || 'producto';
+      btnSugerir.disabled = true; btnSugerir.textContent = 'Pensando…';
+      fetch(btnSugerir.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+                                     body: JSON.stringify({escena: texto.value, enfoque: enfoque})})
+        .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, j: j}; }); })
+        .then(function (res) {
+          if (res.ok && res.j.sonido) document.getElementById('fp-sonido').value = res.j.sonido;
+          else alert(res.j.error || 'No se pudo sugerir.');
+        })
+        .catch(function () { alert('No se pudo sugerir.'); })
+        .finally(function () { btnSugerir.disabled = false; btnSugerir.textContent = 'Sugerir'; });
+    });
     function insertar(etiqueta) {
       var v = texto.value, ini = texto.selectionStart || v.length;
       var sep = (ini > 0 && !/\s$/.test(v.slice(0, ini))) ? ' ' : '';
