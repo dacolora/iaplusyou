@@ -1,3 +1,6 @@
+{# Bloque 7: «Publicar orgánico» en el detalle de una final lista (macro
+   compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
+{% from "_organico_publicar.html" import bloque_organico with context %}
 <p class="vacio" style="padding-top:0;">
   Sube las imágenes de referencia (producto, persona, lugar — las que quieras),
   elige qué buscas y escribe lo que tiene que pasar. Se genera de una un video
@@ -459,6 +462,11 @@
             </form>
             {% endif %}
           </div>
+          {% if f.estado in ("listo", "degradada") and f.video_url and f.pieza_id %}
+          {# Bloque 7: mismo bloque que en Experimentos (sin ep_id: sale de Crear). #}
+          <p class="campo-label" style="margin-top:.8rem;">Publicación orgánica</p>
+          {{ bloque_organico(f.pieza_id, "creativeflowplus") }}
+          {% endif %}
         </div>
       </template>
     </div>
@@ -509,6 +517,11 @@
       if (!tpl) return;
       cuerpo.innerHTML = '';
       cuerpo.appendChild(tpl.content.cloneNode(true));
+      // Los <script> clonados no corren: una barra de trabajo dentro del
+      // detalle (publicación orgánica en curso) arranca su polling acá.
+      cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
+        if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
+      });
       modal.showModal();
     }
     document.querySelectorAll('.generado').forEach(function (card) {

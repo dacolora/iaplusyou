@@ -29,6 +29,10 @@
   {% include "_tab_settings.html" %}
 </section>
 
+{# Bloque 7: JS de «Publicar orgánico» (Experimentos y Crear), una sola vez. #}
+{% from "_organico_publicar.html" import org_scripts with context %}
+{{ org_scripts() }}
+
 <script>
   (function () {
     var botones = document.querySelectorAll('.sidebar-item[data-tab], .tab-btn');

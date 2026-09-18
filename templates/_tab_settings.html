@@ -1,6 +1,6 @@
 {# Configuración = puesta a punto del proyecto. Orden: Puesta a punto (llaves
    por servicio, `llaves` de dashboard._estado_llaves: solo estado, nunca el
-   valor) → Conectar tu tienda → Pixel → Correo de avisos → Nombre → Modelos →
+   valor) → Conectar tu tienda → Pixel → Canales orgánicos → Correo de avisos → Nombre → Modelos →
    Logos → Marca → informe (admin). Las reglas del decisor ya no están aquí:
    viven en Experimentos › «Reglas del motor» (ruta cfg_reglas). #}
 
@@ -247,6 +247,48 @@
     <li><strong>MercadoLibre:</strong> no aplica — no se puede instalar código en una publicación. Los experimentos de MELI se deciden por tráfico.</li>
   </ul>
 </details>
+
+{# ---- Bloque 7: canales orgánicos ---- #}
+<h2 id="config-canales-organicos" style="margin-top:2rem;">Canales orgánicos</h2>
+<p class="vacio" style="padding-top:0;">
+  Dónde sale la ganadora de un experimento (o cualquier final que elijas) como
+  contenido orgánico, sin pauta: Instagram Reels, Facebook (Página), TikTok y
+  YouTube Shorts. Solo se ofrecen los canales conectados; publicar siempre
+  pide tu clic (o la propuesta del motor, con el texto a la vista).
+</p>
+<ul class="org-canales-config">
+  {% for c in canales_org %}
+  <li class="org-canal-config{% if c.disponible %} org-canal-config-ok{% endif %}" id="canal-{{ c.plataforma }}">
+    <div class="org-canal-cab">
+      <strong>{{ c.nombre }}</strong>
+      {% if c.disponible %}<span class="tag-estado tag-en-uso">conectado</span>
+      {% else %}<span class="tag-estado tag-advertencia">falta</span> <small class="vacio" style="padding:0;">{{ c.motivo }}</small>{% endif %}
+    </div>
+    <details class="llave-pasos">
+      <summary>Cómo activarlo</summary>
+      <ol>
+        {% if c.plataforma == "facebook" %}
+        <li>Conecta Meta en <a href="#llave-meta">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica.</li>
+        <li>Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro.</li>
+        {% elif c.plataforma == "instagram" %}
+        <li>Primero Facebook (arriba): Instagram publica a través de la Página.</li>
+        <li>En Instagram, pasa la cuenta a <strong>profesional</strong> (creador o empresa) y vincúlala a esa Página (Configuración › Cuenta › Compartir en otras apps / Business Suite).</li>
+        <li>La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación.</li>
+        <li>Vuelve a conectar Meta para que se guarde el <code>ig_user_id</code> de la cuenta vinculada.</li>
+        {% elif c.plataforma == "youtube" %}
+        <li>La autorización se hace <strong>en tu Mac</strong> (abre un navegador y escucha en localhost; no funciona en el servidor): <code>venv/bin/python auth/auth_youtube.py</code> con la cuenta dueña del canal.</li>
+        <li>Copia el <code>token_youtube.json</code> que genera a <code>clientes/{{ cliente }}/</code> en el servidor (por ejemplo con <code>scp</code>).</li>
+        <li>Recarga esta página: el canal pasa a «conectado». Los Shorts salen con el título y la descripción que redactes.</li>
+        {% elif c.plataforma == "tiktok" %}
+        <li>Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto.</li>
+        <li>Copia el <code>token_tiktok.json</code> resultante a <code>clientes/{{ cliente }}/</code> en el servidor.</li>
+        <li>Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»).</li>
+        {% endif %}
+      </ol>
+    </details>
+  </li>
+  {% endfor %}
+</ul>
 
 {# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor». #}
 <p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;">Experimentos →</a></p>

@@ -30,6 +30,8 @@ import csv
 import io
 from datetime import datetime, timedelta
 
+import sqlalchemy as sa
+
 import db
 import experimentos
 import propuestas
@@ -220,16 +222,40 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso):
     }
 
 
+def _pieza_ids_ganadoras(exps):
+    """pieza_id de toda pieza con veredicto `ganador`, cerrado o no: una
+    ganadora publicada sigue contando aunque su experimento ya se cerró."""
+    return {pz["pieza_id"] for ex in exps for pz in ex.get("piezas") or []
+            if pz.get("veredicto") == "ganador" and pz.get("pieza_id")}
+
+
+def _ganadoras_publicadas(cliente, exps, desde_iso, hasta_iso):
+    """Publicaciones orgánicas `publicada` (una por plataforma) de piezas
+    ganadoras con `publicado_en` en [desde, hasta). Consulta directa a la
+    tabla: el tablero es solo datos y `publicado_en` es ISO de 19 chars,
+    comparable como texto."""
+    ids = _pieza_ids_ganadoras(exps)
+    if not ids:
+        return 0
+    p = db.publicacion
+    with db.conectar() as con:
+        return con.execute(sa.select(sa.func.count()).select_from(p).where(
+            p.c.cliente == cliente, p.c.estado == "publicada", p.c.pieza_id.in_(list(ids)),
+            p.c.publicado_en >= desde_iso, p.c.publicado_en < hasta_iso)).scalar() or 0
+
+
 def resumen_periodo(cliente, desde_iso, hasta_iso, datos=None):
     """Gasto, compras, ingresos (solo medidos), ROAS, clics al enlace,
     impresiones y anuncios con actividad en [desde, hasta), agrupados por
-    moneda; más experimentos corriendo, propuestas pendientes y piezas
-    activas (estado actual, no del período). `datos` (cargar_datos) evita
+    moneda; más experimentos corriendo, propuestas pendientes, piezas
+    activas (estado actual, no del período) y ganadoras publicadas
+    orgánicamente en el período (Bloque 7). `datos` (cargar_datos) evita
     releer la base cuando ya se cargó para otra parte."""
     desde_iso, hasta_iso = desde_iso[:19], hasta_iso[:19]
     d = _datos(cliente, hasta_iso, datos, desde_necesario=desde_iso)
     out = _resumen_periodo(d.exps, d.filas, desde_iso, hasta_iso)
     out["propuestas_pendientes"] = len(propuestas.pendientes(cliente))
+    out["ganadoras_publicadas"] = _ganadoras_publicadas(cliente, d.exps, desde_iso, hasta_iso)
     return out
 
 
@@ -374,6 +400,34 @@ def _productos_en_prueba_sin_experimento(cliente, exps):
             and str(p.get("nombre") or "") not in referenciados]
 
 
+def _alertas_ganadoras_sin_publicar(cliente, exps, out):
+    import organico  # noqa: PLC0415 — arrastra requests/publicador; el tablero es solo datos
+
+    if not organico.disponibles(cliente):
+        # organico.ganadoras_sin_publicar devuelve [] sin canales: acá se
+        # cuentan a mano las ganadoras de experimentos abiertos sin ninguna
+        # publicación viva, para decir que falta el canal.
+        pubs = organico.por_pieza(cliente)
+        n = sum(1 for ex in exps if ex["estado"] != "cerrado"
+                for pz in ex.get("piezas") or []
+                if pz.get("veredicto") == "ganador" and pz.get("pieza_id")
+                and not any(pub["estado"] in organico.ESTADOS_VIVOS for pub in pubs.get(pz["pieza_id"], [])))
+        if n:
+            out.append(_alerta("ganador_sin_publicar", "media",
+                               f"{_plural(n, 'ganadora', 'ganadoras')} sin publicar orgánicamente y ningún canal "
+                               "conectado: configura un canal orgánico en Configuración.", "settings"))
+        return
+    por_exp = {}
+    for pz in organico.ganadoras_sin_publicar(cliente):
+        por_exp.setdefault((pz["experimento_id"], pz["experimento_nombre"]), []).append(pz)
+    for (eid, nombre), pzs in por_exp.items():
+        n = len(pzs)
+        que = f"la ganadora «{pzs[0]['nombre']}»" if n == 1 else f"{n} ganadoras"
+        out.append(_alerta("ganador_sin_publicar", "media",
+                           f"«{nombre}» tiene {que} sin publicar orgánicamente: publícala desde la pieza "
+                           "(Publicar orgánico).", "experimentos", eid))
+
+
 def alertas(cliente, ahora_iso=None, datos=None):
     """Lista ordenada por lo que más urge (ver el orden en el cuerpo): cada
     una con `tipo`, `nivel` (alta/media/baja), `texto` en español con los
@@ -431,6 +485,11 @@ def alertas(cliente, ahora_iso=None, datos=None):
                                f"«{ex['nombre']}» alcanzó su tope: {_dinero(gasto, _moneda(ex))} gastados de "
                                f"{_dinero(tope, _moneda(ex))}. Ciérralo o súbele el tope.",
                                "experimentos", ex["id"]))
+
+    # 5b. Ganadoras sin publicar orgánicamente (media). Con canales
+    # conectados → una alerta por experimento (se publica desde la pieza);
+    # sin ningún canal → una sola alerta que manda a Configuración.
+    _alertas_ganadoras_sin_publicar(cliente, exps, out)
 
     # 6. Tiendas rotas (media, settings).
     for t in tiendas.listar(cliente):

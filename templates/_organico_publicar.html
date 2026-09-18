@@ -1,0 +1,188 @@
+{# Bloque 7: publicación orgánica de una pieza (Experimentos y Crear).
+   Macros — se importan `with context` para ver canales_org,
+   publicaciones_por_pieza, trabajos_org, plataformas_org y cliente:
+
+     {% from "_organico_publicar.html" import bloque_organico with context %}
+     {{ bloque_organico(pieza_id, "experimentos", ep_id=pz.id) }}
+
+   El bloque pinta: la lista de publicaciones de la pieza (badge de estado,
+   plataforma, enlace, error, «Reintentar»), la barra de progreso si el worker
+   la está publicando, y si no, un <details> «Publicar orgánico» con los
+   canales (los no disponibles, deshabilitados con el motivo), el botón
+   «Escribir texto con IA» (fetch a org_redactar) y un textarea por plataforma.
+   Publicar es público e irreversible: el submit pide confirm() y nada se
+   publica sin ese clic.
+
+   En Crear el bloque vive dentro de un <template> clonado: sus <script>
+   no corren, así que TODO el JS está en window.* (org_scripts, pintado una
+   sola vez en cliente.html) y se llama por atributos onXXX; la barra lleva
+   data-poll-job para que el modal arranque el polling al clonar. #}
+
+{% macro bloque_organico(pieza_id, volver, ep_id=none) %}
+{% set pubs = publicaciones_por_pieza.get(pieza_id, []) %}
+{% set trabajo = trabajos_org.get(pieza_id) %}
+{% set vivas = pubs | selectattr("estado", "in", ["en_cola", "publicando", "publicada"]) | map(attribute="plataforma") | list %}
+<div class="org-bloque" data-pieza="{{ pieza_id }}">
+  {% if pubs %}
+  <ul class="org-lista">
+    {% for pub in pubs %}
+    <li class="org-pub org-pub-{{ pub.estado }}">
+      <span class="tag-estado org-estado org-estado-{{ pub.estado }}">{{ {"en_cola": "en cola", "publicando": "publicando", "publicada": "publicada", "error": "error"}.get(pub.estado, pub.estado) }}</span>
+      <span class="org-pub-plataforma">{{ pub.nombre_plataforma }}</span>
+      {% if pub.url %}<a href="{{ pub.url }}" target="_blank" rel="noopener">Ver publicación →</a>
+      {% elif pub.estado == "publicada" and pub.id_externo %}<small class="vacio" style="padding:0;">id {{ pub.id_externo }}</small>{% endif %}
+      {% if pub.publicado_en %}<small class="vacio" style="padding:0;">{{ pub.publicado_en[:16] }}</small>{% endif %}
+      {% if pub.origen == "ganador" %}<small class="vacio" style="padding:0;" title="La encoló el motor al declararla ganadora">motor</small>{% endif %}
+      {% if pub.estado == "error" %}
+      <span class="tag-error">{{ pub.error or "No se pudo publicar." }}</span>
+      {% if not trabajo %}
+      <form method="post" action="{{ url_for('org_reintentar', cliente=cliente, pub_id=pub.id) }}" class="inline" onsubmit="return confirm('Se vuelve a publicar en {{ pub.nombre_plataforma }}. Revisa antes que no haya salido ya allá. ¿Reintentar?');">
+        <input type="hidden" name="volver" value="{{ volver }}">
+        <button class="btn-guardar btn-xs">Reintentar</button>
+      </form>
+      {% endif %}
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if trabajo %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+  <div class="progreso-texto">Publicando… 0% · 0s</div>
+  <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ ("trabajo-" ~ trabajo.job_id) | tojson }});</script>
+  {% else %}
+  <details class="org-publicar">
+    <summary>Publicar orgánico</summary>
+    <form method="post" action="{{ url_for('org_publicar', cliente=cliente) }}" class="org-form"
+          data-url-redactar="{{ url_for('org_redactar', cliente=cliente) }}"
+          onsubmit="return window.orgConfirmar(this);">
+      <input type="hidden" name="pieza_id" value="{{ pieza_id }}">
+      {% if ep_id %}<input type="hidden" name="ep_id" value="{{ ep_id }}">{% endif %}
+      <input type="hidden" name="volver" value="{{ volver }}">
+      <div class="org-canales">
+        {% for c in canales_org %}
+        {% set ya = c.plataforma in vivas %}
+        <label class="org-canal{% if not c.disponible or ya %} org-canal-no{% endif %}"{% if c.motivo %} title="{{ c.motivo }}"{% endif %}>
+          <input type="checkbox" name="plataformas" value="{{ c.plataforma }}" data-nombre="{{ c.nombre }}"
+                 {% if not c.disponible or ya %}disabled{% endif %} onchange="window.orgToggle(this)">
+          {{ c.nombre }}
+          {% if ya %}<small>ya publicada</small>{% elif not c.disponible %}<small>{{ c.motivo }}</small>{% endif %}
+        </label>
+        {% endfor %}
+      </div>
+      {% set disponibles = canales_org | selectattr("disponible") | rejectattr("plataforma", "in", vivas) | list %}
+      {% if disponibles %}
+      <div class="org-herramientas">
+        <button type="button" class="btn-guardar btn-xs" onclick="window.orgRedactar(this)">Escribir texto con IA</button>
+        <span class="org-aviso vacio" style="padding:0;"></span>
+      </div>
+      {% for c in disponibles %}
+      {% set conf = plataformas_org[c.plataforma] %}
+      <div class="org-texto" data-plataforma="{{ c.plataforma }}" hidden>
+        <label class="campo-label">{{ c.nombre }}</label>
+        {% if c.plataforma in ("youtube", "facebook") %}
+        <input type="text" name="titulo_{{ c.plataforma }}" placeholder="Título" maxlength="{{ conf.max_titulo or 150 }}">
+        {% endif %}
+        <textarea name="caption_{{ c.plataforma }}" rows="4" maxlength="{{ conf.max_caption }}" placeholder="{% if c.plataforma == 'tiktok' %}Texto de la publicación (TikTok no tiene título aparte){% else %}Texto de la publicación{% endif %}"></textarea>
+      </div>
+      {% endfor %}
+      <div class="org-pie">
+        <button type="submit" class="btn-aprobar btn-sm">Publicar</button>
+        <small class="vacio" style="padding:0;">Público e irreversible: revisa el texto antes.</small>
+      </div>
+      {% else %}
+      <p class="vacio" style="padding:.3rem 0 0;">Sin canales para publicar: {% if vivas %}ya está en los conectados; {% endif %}conecta más en <a href="#settings" data-ir-tab="settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">Configuración › Canales orgánicos</a>.</p>
+      {% endif %}
+    </form>
+  </details>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# Propuesta `publicar_organico` del motor: el texto ya redactado, editable,
+   dentro del form de aprobar (names caption_<p>/titulo_<p> + plataformas
+   marcadas; `org_form=1` le dice a prop_aprobar que lea los overrides). #}
+{% macro propuesta_organica(pr, pl) %}
+<form method="post" action="{{ url_for('prop_aprobar', cliente=cliente, pid=pr.id) }}" class="org-form org-propuesta" onsubmit="return window.orgConfirmar(this);">
+  <input type="hidden" name="org_form" value="1">
+  {% if pl.captions_error %}<p class="tag-error">No se pudo redactar el texto ({{ pl.captions_error }}); al aprobar se redacta de nuevo.</p>{% endif %}
+  {% for p in pl.plataformas or [] %}
+  {% set conf = plataformas_org.get(p, {}) %}
+  {% set t = (pl.captions or {}).get(p) or {} %}
+  <label class="org-canal">
+    <input type="checkbox" name="plataformas" value="{{ p }}" data-nombre="{{ conf.nombre or p }}" checked onchange="window.orgToggle(this)"> {{ conf.nombre or p }}
+  </label>
+  <div class="org-texto" data-plataforma="{{ p }}">
+    {% if p in ("youtube", "facebook") %}
+    <input type="text" name="titulo_{{ p }}" value="{{ t.titulo or '' }}" placeholder="Título" maxlength="{{ conf.max_titulo or 150 }}">
+    {% endif %}
+    <textarea name="caption_{{ p }}" rows="4" maxlength="{{ conf.max_caption or 2200 }}" placeholder="Texto de la publicación">{{ t.caption or '' }}</textarea>
+  </div>
+  {% else %}
+  <p class="vacio" style="padding:0;">Sin canal orgánico disponible: al aprobar no se publica nada.</p>
+  {% endfor %}
+  <div class="org-pie">
+    <button class="btn-aprobar btn-xs">Aprobar y publicar</button>
+    <small class="vacio" style="padding:0;">Público e irreversible.</small>
+  </div>
+</form>
+{% endmacro %}
+
+{# Una sola vez por página (cliente.html). Todo en window.* porque en Crear
+   el bloque se clona desde un <template>. #}
+{% macro org_scripts() %}
+<script>
+  window.orgToggle = function (cb) {
+    var form = cb.closest('form');
+    var caja = form && form.querySelector('.org-texto[data-plataforma="' + cb.value + '"]');
+    if (caja) caja.hidden = !cb.checked;
+  };
+  window.orgRedactar = function (btn) {
+    var form = btn.closest('form');
+    var aviso = form.querySelector('.org-aviso');
+    var marcadas = [];
+    form.querySelectorAll('input[name="plataformas"]:checked').forEach(function (cb) { marcadas.push(cb.value); });
+    if (!marcadas.length) { if (aviso) aviso.textContent = 'Marca al menos una plataforma.'; return; }
+    var body = new FormData();
+    body.append('pieza_id', form.querySelector('input[name="pieza_id"]').value);
+    marcadas.forEach(function (p) { body.append('plataformas', p); });
+    btn.disabled = true;
+    if (aviso) aviso.textContent = 'Escribiendo…';
+    fetch(form.dataset.urlRedactar, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { if (aviso) aviso.textContent = res.j.error || 'No pude redactar el texto.'; return; }
+        var fallback = false;
+        Object.keys(res.j).forEach(function (p) {
+          var ta = form.querySelector('textarea[name="caption_' + p + '"]');
+          if (ta) ta.value = res.j[p].caption || '';
+          var ti = form.querySelector('input[name="titulo_' + p + '"]');
+          if (ti) ti.value = res.j[p].titulo || '';
+          if (res.j[p].fallback) fallback = true;
+        });
+        if (aviso) aviso.textContent = fallback
+          ? 'Texto listo, pero sin IA en alguna plataforma: revísalo bien.'
+          : 'Texto listo: revísalo y edítalo si quieres.';
+      })
+      .catch(function () { if (aviso) aviso.textContent = 'No pude redactar el texto.'; })
+      .finally(function () { btn.disabled = false; });
+  };
+  window.orgConfirmar = function (form) {
+    var marcadas = form.querySelectorAll('input[name="plataformas"]:checked');
+    if (!marcadas.length) { alert('Marca al menos una plataforma.'); return false; }
+    var vacias = [], nombres = [];
+    marcadas.forEach(function (cb) {
+      var nombre = cb.dataset.nombre || cb.value;
+      nombres.push(nombre);
+      var ta = form.querySelector('textarea[name="caption_' + cb.value + '"]');
+      if (ta && !ta.value.trim()) vacias.push(nombre);
+    });
+    if (vacias.length) {
+      alert('Falta el texto para: ' + vacias.join(', ') + '. Escríbelo o pulsa «Escribir texto con IA».');
+      return false;
+    }
+    return confirm('Se publica el video en ' + nombres.join(', ') + '. Es público y no se puede deshacer desde aquí. ¿Publicar?');
+  };
+</script>
+{% endmacro %}

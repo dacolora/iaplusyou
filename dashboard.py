@@ -61,6 +61,7 @@ import lanzador
 import acciones
 import decisor
 import modos
+import organico
 import propuestas
 import cifrado
 import conectores
@@ -72,6 +73,7 @@ from conectores import meli as conector_meli
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 from tareas import final_edition as tareas_fe
 from tareas import experimentos as tareas_exp
+from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
@@ -903,6 +905,12 @@ def ver_cliente(cliente):
     producto_comercial = _producto_comercial_contexto(productos_tienda)
     # Una sola consulta (solo caché) para atribución y objetivo sugeridos.
     atribucion_sug = experimentos.atribucion_sugerida(cliente)
+    # Bloque 7: canales orgánicos del proyecto, publicaciones por pieza (UNA
+    # consulta) y qué piezas tienen una publicación orgánica corriendo en el
+    # worker (UNA consulta a la cola, como _trabajos_productos).
+    canales_org = organico.canales(cliente)
+    publicaciones_por_pieza = organico.por_pieza(cliente)
+    trabajos_org = _trabajos_organico(cliente, publicaciones_por_pieza)
 
     return render_template(
         "cliente.html",
@@ -987,6 +995,10 @@ def ver_cliente(cliente):
         llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app)),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=_contexto_tablero(cliente),
+        canales_org=canales_org,
+        plataformas_org=organico.PLATAFORMAS,
+        publicaciones_por_pieza=publicaciones_por_pieza,
+        trabajos_org=trabajos_org,
         **sprints_rutas.contexto(cliente),
     )
 
@@ -2529,11 +2541,12 @@ _TABLERO_LOCK = threading.Lock()
 
 def _clave_tablero(cliente):
     """(último id de metrica_snapshot, propuestas pendientes, nº de
-    experimentos y su último actualizado_en, último actualizado_en de pieza)
-    del proyecto: cuatro consultas baratas con índice. Cualquier cambio que
+    experimentos y su último actualizado_en, último actualizado_en de pieza,
+    nº y último actualizado_en de publicación orgánica) del proyecto: cinco
+    consultas baratas con índice. Cualquier cambio que
     el tablero pinte (snapshot del worker, propuesta del motor, estado o
-    veredicto tocado por el dueño) mueve la clave."""
-    ms, ep, pr, ex = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento
+    veredicto tocado por el dueño, publicación orgánica) mueve la clave."""
+    ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -2542,7 +2555,10 @@ def _clave_tablero(cliente):
         exps = con.execute(sa.select(sa.func.count(), sa.func.max(ex.c.actualizado_en)).select_from(ex).where(
             ex.c.cliente == cliente, ex.c.legado.is_(False))).first()
         piezas = con.execute(sa.select(sa.func.max(ep.c.actualizado_en)).where(ep.c.cliente == cliente)).scalar()
-    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas)
+        # Bloque 7: una publicación orgánica nueva o que cambió de estado
+        # mueve el tile «Ganadoras publicadas» y la alerta de ganadora sin publicar.
+        publicaciones = con.execute(sa.select(sa.func.count(), sa.func.max(pub.c.actualizado_en)).where(pub.c.cliente == cliente)).first()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1])
 
 
 def invalidar_tablero(cliente=None):
@@ -2976,14 +2992,49 @@ def _ejecutar_propuesta(cliente, pr):
     return None
 
 
+def _overrides_organico(form, payload):
+    """Bloque 7: lo que la persona editó en la propuesta `publicar_organico`
+    antes de aprobar (`caption_<p>`/`titulo_<p>` y las plataformas que dejó
+    marcadas) pisa el `payload["captions"]`/`["plataformas"]` redactados por
+    el motor. Solo cuando el form trae `org_form` (la propuesta se pintó con
+    los textos); aprobar todo o un POST sin campos deja el payload tal cual.
+    Devuelve (payload, error): error si no quedó ninguna plataforma marcada —
+    con lista vacía acciones publicaría en TODAS las disponibles."""
+    if not form.get("org_form"):
+        return payload, None
+    payload = dict(payload)
+    plataformas = [p for p in form.getlist("plataformas") if p in organico.PLATAFORMAS]
+    if not plataformas:
+        return payload, "Marca al menos una plataforma para publicar."
+    captions = {p: dict(v) for p, v in (payload.get("captions") or {}).items() if isinstance(v, dict)}
+    for p in plataformas:
+        caption = (form.get(f"caption_{p}") or "").strip()
+        if caption:
+            captions.setdefault(p, {})["caption"] = caption
+        if f"titulo_{p}" in form:
+            captions.setdefault(p, {})["titulo"] = (form.get(f"titulo_{p}") or "").strip()
+    payload["plataformas"] = plataformas
+    payload["captions"] = {p: captions[p] for p in plataformas if p in captions}
+    return payload, None
+
+
 @app.route("/cliente/<cliente>/propuestas/<int:pid>/aprobar", methods=["POST"])
 def prop_aprobar(cliente, pid):
-    # propuestas.resolver filtra por cliente: una propuesta de otro proyecto
-    # devuelve None y no se ejecuta nada.
+    # propuestas.obtener/resolver filtran por cliente: una propuesta de otro
+    # proyecto devuelve None y no se ejecuta nada.
+    pr = propuestas.obtener(cliente, pid)
+    if not pr or pr["estado"] != "pendiente":
+        flash("Esa propuesta no existe o ya estaba resuelta.", "error")
+        return _volver_exp(cliente)
+    payload, error = _overrides_organico(request.form, pr["payload"]) if pr["accion"] == "publicar_organico" else (pr["payload"], None)
+    if error:
+        flash(error, "error")
+        return _volver_exp(cliente)
     pr = propuestas.resolver(cliente, pid, "aprobada")
     if not pr:
         flash("Esa propuesta no existe o ya estaba resuelta.", "error")
         return _volver_exp(cliente)
+    pr = dict(pr, payload=payload)
     error = _ejecutar_propuesta(cliente, pr)
     if error:
         flash(error, "error")
@@ -3030,6 +3081,176 @@ def prop_aprobar_todas(cliente, eid):
     if hechas:
         flash(f"{hechas} propuesta(s) ejecutada(s).", "ok")
     return _volver_exp(cliente)
+
+
+# ---------- Bloque 7: publicación orgánica ----------
+# Publicar es público e irreversible: ninguna de estas rutas publica sola —
+# org_publicar/org_reintentar solo dejan filas `en_cola` y encolan la tarea
+# organico_publicar (max_intentos=1) con el clic de la persona; org_redactar
+# es de solo lectura (texto con Claude para que lo vea antes).
+
+def _trabajos_organico(cliente, publicaciones_por_pieza):
+    """{pieza_id: {"job_id"}} de las publicaciones orgánicas que el worker
+    tiene pendientes o en curso — UNA consulta a la cola (cola.job_ids_vivos)
+    y no una por pieza. Solo piezas con alguna fila `publicacion`: la tarea
+    se encola siempre después de crearlas."""
+    if not publicaciones_por_pieza:
+        return {}
+    vivos = cola.job_ids_vivos(cliente, "organico_publicar")
+    out = {}
+    for pieza_id in publicaciones_por_pieza:
+        jid = tareas_org.job_id_publicar(cliente, pieza_id)
+        if jid in vivos:
+            out[pieza_id] = {"job_id": jid}
+    return out
+
+
+def _volver_org(cliente):
+    """Vuelve a la pestaña de donde salió el clic (`volver` en el form):
+    Crear (creativeflowplus) o Experimentos (por defecto)."""
+    anchor = "creativeflowplus" if request.form.get("volver") == "creativeflowplus" else "experimentos"
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor=anchor))
+
+
+def _int_form(nombre):
+    try:
+        return int(request.form.get(nombre) or 0) or None
+    except ValueError:
+        return None
+
+
+def _pieza_de_ep(cliente, ep_id):
+    ep = db.experimento_pieza
+    with db.conectar() as con:
+        return con.execute(sa.select(ep.c.pieza_id).where(ep.c.id == ep_id, ep.c.cliente == cliente)).scalar()
+
+
+def _nombres_org(plataformas):
+    return ", ".join(organico.PLATAFORMAS.get(p, {}).get("nombre", p) for p in plataformas)
+
+
+def _encolar_organico(cliente, pieza_id, pub_ids):
+    """Encola organico_publicar para esas filas. Si la cola ya tenía un
+    trabajo vivo de la pieza (carrera entre en_curso y encolar), las filas
+    quedan en `error` con mensaje para reintentar desde el panel (mismo
+    criterio que acciones._publicar_organico). Devuelve True si se encoló."""
+    job_id = tareas_org.job_id_publicar(cliente, pieza_id)
+    encolada = trabajos.encolar(job_id, "organico_publicar", {"cliente": cliente, "pub_ids": pub_ids},
+                                cliente=cliente, duracion_estimada=tareas_org.DURACION_PUBLICAR,
+                                etapas=tareas_org.ETAPAS_PUBLICAR, max_intentos=1)
+    if not encolada:
+        for pub_id in pub_ids:
+            organico.actualizar(cliente, pub_id, estado="error",
+                                error="Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
+    return encolada
+
+
+@app.route("/cliente/<cliente>/organico/redactar", methods=["POST"])
+def org_redactar(cliente):
+    """JSON {plataforma: {titulo, caption, fallback}} para la pieza y las
+    plataformas del form. Solo lectura: el texto vuelve al formulario para
+    que la persona lo lea y edite antes de publicar. Sin Claude igual hay
+    texto (organico.redactar usa el fallback y lo marca)."""
+    pieza_id = _int_form("pieza_id")
+    plataformas = [p for p in request.form.getlist("plataformas") if p in organico.PLATAFORMAS]
+    if not pieza_id or not plataformas:
+        return jsonify({"error": "Elige la pieza y al menos una plataforma."}), 400
+    try:
+        textos = organico.redactar(cliente, pieza_id, plataformas)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:  # noqa: BLE001 — el error vuelve al form, nunca un token
+        return jsonify({"error": f"No pude redactar el texto: {cola.sin_token(str(e))}"}), 500
+    return jsonify({p: {"titulo": t.get("titulo") or "", "caption": t.get("caption") or "",
+                        "fallback": bool((t.get("extra") or {}).get("fallback"))} for p, t in textos.items()})
+
+
+@app.route("/cliente/<cliente>/organico/publicar", methods=["POST"])
+def org_publicar(cliente):
+    """Con el clic de la persona: crea una `publicacion` (origen manual, con
+    `ep_id` si vino de un experimento) por plataforma marcada y encola UNA
+    tarea organico_publicar (max_intentos=1). Valida TODO antes de crear
+    nada: plataformas sin canal disponible o sin texto → flash y nada se
+    publica (publicar a medias sin avisar sería peor). Las plataformas con
+    publicación viva se saltan con aviso (unicidad: nunca dos veces)."""
+    ep_id = _int_form("ep_id")
+    pieza_id = _int_form("pieza_id") or (_pieza_de_ep(cliente, ep_id) if ep_id else None)
+    if not pieza_id:
+        flash("No encontré esa pieza.", "error")
+        return _volver_org(cliente)
+    pedidas = [p for p in organico.ORDEN if p in request.form.getlist("plataformas")]
+    if not pedidas:
+        flash("Marca al menos una plataforma para publicar.", "error")
+        return _volver_org(cliente)
+    canales = {c["plataforma"]: c for c in organico.canales(cliente)}
+    sin_canal = [p for p in pedidas if not canales[p]["disponible"]]
+    if sin_canal:
+        flash("Sin canal conectado: " + "; ".join(f"{canales[p]['nombre']} ({canales[p]['motivo']})" for p in sin_canal)
+              + ". Actívalo en Configuración › Canales orgánicos. No se publicó nada.", "error")
+        return _volver_org(cliente)
+    textos = {p: {"caption": (request.form.get(f"caption_{p}") or "").strip(),
+                  "titulo": (request.form.get(f"titulo_{p}") or "").strip() or None} for p in pedidas}
+    sin_texto = [p for p in pedidas if not textos[p]["caption"]]
+    if sin_texto:
+        flash(f"Falta el texto para {_nombres_org(sin_texto)}: escríbelo o pulsa «Escribir texto con IA». "
+              "No se publicó nada.", "error")
+        return _volver_org(cliente)
+    if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pieza_id)):
+        flash("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine.", "warn")
+        return _volver_org(cliente)
+
+    pub_ids, creadas, saltadas = [], [], []
+    for p in pedidas:
+        try:
+            pub_ids.append(organico.crear(cliente, pieza_id, p, textos[p]["caption"], titulo=textos[p]["titulo"],
+                                          origen="manual", ep_id=ep_id))
+            creadas.append(p)
+        except ValueError as e:
+            if "ya está publicada" in str(e):
+                saltadas.append(p)
+                continue
+            flash(str(e), "error")
+            return _volver_org(cliente)
+    if saltadas:
+        flash(f"Ya estaba publicada (o en cola) en {_nombres_org(saltadas)}: no se publica dos veces.", "warn")
+    if not pub_ids:
+        return _volver_org(cliente)
+    if not _encolar_organico(cliente, pieza_id, pub_ids):
+        flash("Ya había una publicación de esta pieza en curso; las nuevas quedaron para reintentar.", "error")
+        return _volver_org(cliente)
+    if ep_id:
+        eid = experimentos.experimento_de_pieza(cliente, ep_id)
+        if eid:
+            experimentos.marcar_pieza(cliente, ep_id, publicado_organico=True)
+            experimentos.registrar_evento(cliente, eid, "accion",
+                                          f"Publicación orgánica en cola a mano: {_nombres_org(creadas)}.",
+                                          {"accion": "publicar_organico", "plataformas": creadas,
+                                           "publicaciones": pub_ids}, ep_id=ep_id)
+    flash(f"Publicación orgánica en cola: {_nombres_org(creadas)}. Te avisamos cuando salga.", "ok")
+    return _volver_org(cliente)
+
+
+@app.route("/cliente/<cliente>/organico/<int:pub_id>/reintentar", methods=["POST"])
+def org_reintentar(cliente, pub_id):
+    """Solo una publicación en `error`: vuelve a `en_cola` (misma fila, así
+    la unicidad viva sigue bloqueando un duplicado) y se encola de nuevo con
+    el clic. Nada automático: max_intentos=1 en la tarea."""
+    pub = organico.obtener(cliente, pub_id)
+    if not pub:
+        flash("Esa publicación no existe.", "error")
+        return _volver_org(cliente)
+    if pub["estado"] != "error":
+        flash("Solo se reintenta una publicación que falló.", "error")
+        return _volver_org(cliente)
+    if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pub["pieza_id"])):
+        flash("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine.", "warn")
+        return _volver_org(cliente)
+    organico.actualizar(cliente, pub_id, estado="en_cola", error=None)
+    if not _encolar_organico(cliente, pub["pieza_id"], [pub_id]):
+        flash("Ya había una publicación de esta pieza en curso; vuelve a intentarlo cuando termine.", "error")
+        return _volver_org(cliente)
+    flash(f"Reintentando en {pub['nombre_plataforma']}.", "ok")
+    return _volver_org(cliente)
 
 
 @app.route("/cliente/<cliente>/config/reglas", methods=["POST"])
