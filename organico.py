@@ -23,6 +23,7 @@ en eventos (`cola.sin_token`).
 import logging
 import os
 import re
+from datetime import datetime, timedelta
 
 import requests
 import sqlalchemy as sa
@@ -33,6 +34,7 @@ import experimentos
 import meta_conexion
 import publicador
 import tiendas
+from uploaders import tiktok_uploader
 
 log = logging.getLogger("creatv.organico")
 
@@ -50,6 +52,13 @@ ESTADOS_VIVOS = ("en_cola", "publicando", "publicada")
 ORIGENES = ("manual", "ganador")
 HASHTAGS_MIN, HASHTAGS_MAX = 3, 8
 MAX_TITULO_COLUMNA = 150
+# TikTok procesa el video después de subirlo y puede terminar FAILED: la
+# tarea espera hasta esto por la confirmación; si sigue procesando, la fila
+# queda `publicando` con el publish_id y reconciliar_subidas la cierra después
+# (con una espera corta para no colgar a quien la llama).
+TIKTOK_ESPERA_CONFIRMACION = 120
+TIKTOK_ESPERA_RECONCILIAR = 15
+RECONCILIAR_MINUTOS = 10
 
 _COLS_ACTUALIZABLES = ("estado", "caption", "titulo", "id_externo", "url", "error", "publicado_en",
                        "origen", "extra", "experimento_pieza_id")
@@ -190,8 +199,13 @@ def actualizar(cliente, pub_id, **campos):
         campos["error"] = cola.recortar(cola.sin_token(campos["error"]), 1000)
     p = db.publicacion
     with db.conectar() as con:
-        r = con.execute(p.update().where(p.c.id == pub_id, p.c.cliente == cliente)
-                        .values(actualizado_en=db.ahora(), **campos))
+        try:
+            r = con.execute(p.update().where(p.c.id == pub_id, p.c.cliente == cliente)
+                            .values(actualizado_en=db.ahora(), **campos))
+        except sa.exc.IntegrityError:
+            # Volver a `en_cola` una fila cuando ya hay otra viva de la misma
+            # (pieza, plataforma): gana el índice único parcial.
+            raise ValueError("Ya hay una publicación en curso o publicada para esa plataforma.") from None
         return r.rowcount > 0
 
 
@@ -418,7 +432,8 @@ def ajustar(plataforma, titulo, caption, contexto):
     cuerpo, cola_tags = _separar_cola(caption)
     cta = ""
     if not conf["links"]:
-        if (habia_url or contexto.get("url_compra")) and copy["link_bio"].lower() not in cuerpo.lower():
+        # Sin el punto final: si Claude ya escribió «Link en bio» no se repite.
+        if (habia_url or contexto.get("url_compra")) and copy["link_bio"].rstrip(".").lower() not in cuerpo.lower():
             cta = copy["link_bio"]
     elif contexto.get("url_compra") and contexto["url_compra"] not in cuerpo:
         cta = contexto["url_compra"]
@@ -549,12 +564,17 @@ def publicar(cliente, pub_ids, on_etapa=None):
     salidas/<c>/organico/<pieza_id>.mp4, llama a publicador._publicar_una
     por plataforma, guarda id_externo/url y borra el mp4 al terminar. Una
     falla en una plataforma no frena las demás. Devuelve {"ok": [ids],
-    "error": [ids]}. `on_etapa(nombre)` se llama al descargar y antes de
-    cada plataforma (nombres "Descargando" y "Publicando", los mismos que las
-    etapas de la tarea del worker)."""
+    "error": [ids]} — en `ok` va todo lo que la plataforma recibió, aunque
+    la fila quede `publicando` a la espera de confirmación (ver
+    _marcar_publicada / TikTok). `on_etapa(nombre)` se llama al descargar y
+    antes de cada plataforma (nombres "Descargando" y "Publicando", los
+    mismos que las etapas de la tarea del worker).
+
+    Nunca dos veces: lo `publicada` y lo que ya tiene `id_externo` (subió,
+    falta contabilidad) se salta sin tocar la plataforma."""
     avisar = on_etapa or (lambda nombre: None)
     pubs = [obtener(cliente, i) for i in pub_ids]
-    pubs = [p for p in pubs if p and p["estado"] != "publicada"]
+    pubs = [p for p in pubs if p and p["estado"] != "publicada" and not p["id_externo"]]
     resultado = {"ok": [], "error": []}
     if not pubs:
         return resultado
@@ -580,7 +600,6 @@ def publicar(cliente, pub_ids, on_etapa=None):
                 continue
             for pub in grupo:
                 p = pub["plataforma"]
-                nombre = PLATAFORMAS.get(p, {}).get("nombre", p)
                 avisar("Publicando")
                 actualizar(cliente, pub["id"], estado="publicando", error=None)
                 # TikTok no tiene un campo de caption separado: `title` ES el
@@ -592,14 +611,22 @@ def publicar(cliente, pub_ids, on_etapa=None):
                          "caption": pub["caption"] or "", "platforms": [p]}
                 try:
                     devuelto = publicador._publicar_una(p, entry, cliente, token_paths)
-                    id_externo, url = url_publica(p, devuelto)
-                    actualizar(cliente, pub["id"], estado="publicada", id_externo=id_externo, url=url,
-                               error=None, publicado_en=db.ahora())
-                    resultado["ok"].append(pub["id"])
-                    _evento(cliente, pub, "publicacion", f"Publicada en {nombre}" + (f": {url}" if url else ""),
-                            {"plataforma": p, "id_externo": id_externo, "url": url, "publicacion_id": pub["id"]})
                 except Exception as e:  # noqa: BLE001 — una plataforma no frena a las demás
                     _fallar(cliente, pub, str(e), resultado)
+                    continue
+                # Ya está en la plataforma: el id se guarda PRIMERO, en su
+                # propia transacción, fuera de cualquier try que termine en
+                # `error`. Si esto revienta (base bloqueada) la excepción sube
+                # y el hook de la tarea deja la fila en `error` con «revisa la
+                # plataforma»; desde acá ningún fallo nuestro vuelve a subir.
+                id_externo, url = url_publica(p, devuelto)
+                actualizar(cliente, pub["id"], id_externo=id_externo, url=url)
+                if p == "tiktok":
+                    estado_tk = _confirmar_tiktok(cliente, pub, id_externo, token_paths.get("tiktok"),
+                                                  TIKTOK_ESPERA_CONFIRMACION, resultado)
+                    if estado_tk != "publicada":
+                        continue
+                _marcar_publicada(cliente, pub, id_externo, url, resultado)
         finally:
             if os.path.exists(local):
                 try:
@@ -607,6 +634,53 @@ def publicar(cliente, pub_ids, on_etapa=None):
                 except OSError:
                     pass
     return resultado
+
+
+def _confirmar_tiktok(cliente, pub, publish_id, token_path, espera, resultado):
+    """Pregunta a TikTok cómo va el publish_id. Devuelve "publicada"
+    (PUBLISH_COMPLETE), "pendiente" (sigue procesando o no se pudo
+    preguntar: la fila queda `publicando` con el id, se cuenta en
+    resultado["ok"] y reconciliar_subidas la cierra) o "error" (FAILED: no
+    hay nada publicado, el publish_id ya no sirve y la fila queda `error`
+    sin id, reintentable)."""
+    try:
+        tiktok_uploader.check_status(publish_id, token_path=token_path, timeout_seconds=espera)
+    except TimeoutError:
+        log.info("TikTok sigue procesando %s (publicación %s); queda publicando.", publish_id, pub["id"])
+    except tiktok_uploader.PublicacionFallida as e:
+        # Solo cuando TikTok respondió FAILED (un token ausente o la red caída
+        # levantan otra cosa y NO significan que el video no salió).
+        actualizar(cliente, pub["id"], id_externo=None, url=None)
+        _fallar(cliente, pub, f"TikTok rechazó el video: {e}", resultado)
+        return "error"
+    except Exception as e:  # noqa: BLE001 — red/token: no sabemos, no es un FAILED
+        log.warning("No pude consultar el estado en TikTok de %s (publicación %s): %s", publish_id, pub["id"],
+                    cola.sin_token(e))
+    else:
+        return "publicada"
+    resultado["ok"].append(pub["id"])
+    try:
+        actualizar(cliente, pub["id"], extra={**(pub.get("extra") or {}), "confirmacion": "pendiente"})
+    except Exception:  # noqa: BLE001 — la fila ya tiene el id; con eso basta para reconciliar
+        log.exception("No pude anotar la confirmación pendiente de la publicación %s", pub["id"])
+    return "pendiente"
+
+
+def _marcar_publicada(cliente, pub, id_externo, url, resultado):
+    """Contabilidad DESPUÉS de subir: el video ya está en la plataforma, así
+    que un fallo acá (p.ej. «database is locked» con el dashboard escribiendo)
+    NO vuelve la fila a `error` — queda `publicando` con id_externo, se
+    cuenta en `ok`, y reconciliar_subidas la marca `publicada` después."""
+    resultado["ok"].append(pub["id"])
+    p = pub["plataforma"]
+    nombre = PLATAFORMAS.get(p, {}).get("nombre", p)
+    try:
+        actualizar(cliente, pub["id"], estado="publicada", error=None, publicado_en=db.ahora())
+        _evento(cliente, pub, "publicacion", f"Publicada en {nombre}" + (f": {url}" if url else ""),
+                {"plataforma": p, "id_externo": id_externo, "url": url, "publicacion_id": pub["id"]})
+    except Exception:  # noqa: BLE001 — nunca `error` después de subir
+        log.exception("Publicación %s subida a %s (id %s) pero no pude marcarla publicada; queda publicando.",
+                      pub["id"], nombre, id_externo)
 
 
 def _fallar(cliente, pub, error, resultado):
@@ -618,11 +692,45 @@ def _fallar(cliente, pub, error, resultado):
             {"plataforma": pub["plataforma"], "publicacion_id": pub["id"]})
 
 
+def reconciliar_subidas(cliente, minutos=RECONCILIAR_MINUTOS, espera_tiktok=TIKTOK_ESPERA_RECONCILIAR):
+    """Cierra las filas `publicando` que ya tienen `id_externo` (subieron,
+    pero la contabilidad falló o TikTok seguía procesando) y llevan más de
+    `minutos` sin cambios — el margen evita pisar una tarea en curso. Las
+    de TikTok se consultan antes con check_status (espera corta): FAILED →
+    `error` sin id (reintentable); si sigue sin responder, se deja como
+    está. Devuelve {"publicada": [ids], "error": [ids]}. La llama la tarea
+    del worker antes de publicar una tanda nueva; no sube nada."""
+    p = db.publicacion
+    limite = (datetime.now() - timedelta(minutes=minutos)).isoformat(timespec="seconds")
+    with db.conectar() as con:
+        filas = [_a_dict(f) for f in con.execute(sa.select(p).where(
+            p.c.cliente == cliente, p.c.estado == "publicando", p.c.id_externo.isnot(None),
+            p.c.actualizado_en <= limite).order_by(p.c.id))]
+    out = {"publicada": [], "error": []}
+    for pub in filas:
+        if pub["plataforma"] == "tiktok":
+            estado = _confirmar_tiktok(cliente, pub, pub["id_externo"], _token_paths(cliente).get("tiktok"),
+                                       espera_tiktok, {"ok": [], "error": []})
+            if estado == "error":
+                out["error"].append(pub["id"])
+                continue
+            if estado != "publicada":
+                continue
+        _marcar_publicada(cliente, pub, pub["id_externo"], pub["url"], {"ok": []})
+        if obtener(cliente, pub["id"])["estado"] == "publicada":
+            out["publicada"].append(pub["id"])
+    return out
+
+
 def interrumpir(cliente, pub_ids):
     """Hook `al_interrumpir` de la tarea del worker: lo que quedó
-    `publicando` pasa a `error` (no sabemos si la plataforma lo recibió)."""
+    `publicando` SIN id_externo pasa a `error` (no sabemos si la plataforma
+    lo recibió). Lo que ya tiene id sí subió: se deja `publicando` para que
+    reconciliar_subidas lo cierre, nunca `error` (habilitaría un segundo
+    upload)."""
     p = db.publicacion
     with db.conectar() as con:
-        con.execute(p.update().where(p.c.cliente == cliente, p.c.id.in_(list(pub_ids)), p.c.estado == "publicando")
+        con.execute(p.update().where(p.c.cliente == cliente, p.c.id.in_(list(pub_ids)), p.c.estado == "publicando",
+                                     p.c.id_externo.is_(None))
                     .values(actualizado_en=db.ahora(), estado="error",
                             error="La publicación se interrumpió antes de terminar; revisa la plataforma antes de reintentar."))

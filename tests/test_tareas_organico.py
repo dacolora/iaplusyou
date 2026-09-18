@@ -130,3 +130,47 @@ def test_interrumpida_deja_en_error_lo_publicando_y_lo_en_cola_sin_tocar_lo_publ
     assert pubs["instagram"]["estado"] == "error" and "se interrumpió" in pubs["instagram"]["error"]
     assert pubs["youtube"]["estado"] == "error" and "antes de llegar a esta plataforma" in pubs["youtube"]["error"]
     assert pubs["facebook"]["estado"] == "publicada" and pubs["facebook"]["url"] == "https://www.facebook.com/1"
+
+
+def test_tarea_reconcilia_antes_de_publicar_y_resume_lo_pendiente(ent, monkeypatch):
+    """I1/I3: la tarea llama organico.reconciliar_subidas ANTES de la tanda
+    (cierra lo que subió en tandas anteriores), y una fila que quedó
+    `publicando` con id (TikTok procesando / contabilidad fallida) se resume
+    como «subida, confirmación pendiente», no como publicada ni como error.
+    Si reconciliar revienta, la publicación pedida igual corre."""
+    organico, to, ids = ent["organico"], ent["to"], ent["ids"]
+    orden = []
+    monkeypatch.setattr(to.organico, "reconciliar_subidas",
+                        lambda cliente: orden.append(("reconciliar", cliente)) or {"publicada": [], "error": []})
+
+    def publicar(cliente, pub_ids, on_etapa=None):
+        orden.append(("publicar", cliente))
+        organico.actualizar(cliente, ids["instagram"], estado="publicando", id_externo="v_pub.9",
+                            extra={"confirmacion": "pendiente"})
+        organico.actualizar(cliente, ids["facebook"], estado="publicada", url="https://www.facebook.com/1")
+        return {"ok": [ids["instagram"], ids["facebook"]], "error": []}
+    monkeypatch.setattr(to.organico, "publicar", publicar)
+    msg = to.publicar({"payload": {"cliente": "acme", "pub_ids": list(ids.values())}})
+    assert orden == [("reconciliar", "acme"), ("publicar", "acme")]
+    assert msg == "Publicada en Instagram Reels, Facebook (Página)."
+    cuerpo = ent["avisos"][0][2]
+    assert "Instagram Reels: subida, confirmación pendiente (id v_pub.9)" in cuerpo
+    assert "Facebook (Página): publicada — https://www.facebook.com/1" in cuerpo
+
+    def revienta(cliente):
+        raise RuntimeError("database is locked")
+    monkeypatch.setattr(to.organico, "reconciliar_subidas", revienta)
+    orden.clear()
+    to.publicar({"payload": {"cliente": "acme", "pub_ids": list(ids.values())}})
+    assert orden == [("publicar", "acme")]
+
+
+def test_interrumpida_no_toca_lo_publicando_con_id(ent):
+    """Lo que ya tiene id_externo subió: el hook lo deja `publicando` para
+    que reconciliar_subidas lo cierre; nunca `error` (habilitaría otro upload)."""
+    organico, to, ids = ent["organico"], ent["to"], ent["ids"]
+    organico.actualizar("acme", ids["instagram"], estado="publicando", id_externo="179")
+    to.interrumpida({"payload": {"cliente": "acme", "pub_ids": list(ids.values())}}, "Se interrumpió.")
+    pubs = {p["plataforma"]: p for p in organico.listar("acme", pieza_id=ent["pid"])}
+    assert pubs["instagram"]["estado"] == "publicando" and pubs["instagram"]["id_externo"] == "179"
+    assert pubs["facebook"]["estado"] == "error"

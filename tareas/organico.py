@@ -15,10 +15,14 @@ worker muere a mitad, `al_interrumpir` deja lo que estaba `publicando` en
 `error` (no sabemos si la plataforma lo recibió) y la persona decide desde
 el panel si reintenta esa plataforma.
 """
+import logging
+
 import notificaciones
 import organico
 import trabajos
 from tareas import al_interrumpir, registrar
+
+log = logging.getLogger("creatv.tareas.organico")
 
 ETAPAS_PUBLICAR = [("Descargando", 15), ("Publicando", 85)]
 DURACION_PUBLICAR = 180
@@ -39,6 +43,11 @@ def _resumen(pubs, resultado):
     mal = [p for p in pubs if p["id"] in resultado["error"]]
     lineas = []
     for p in ok:
+        if p["estado"] == "publicando":
+            # Subió (tiene id) pero falta la confirmación: TikTok procesando o
+            # la contabilidad falló; organico.reconciliar_subidas la cierra.
+            lineas.append(f"- {p['nombre_plataforma']}: subida, confirmación pendiente (id {p['id_externo']})")
+            continue
         lineas.append(f"- {p['nombre_plataforma']}: publicada" + (f" — {p['url']}" if p.get("url") else
                                                                   (f" (id {p['id_externo']})" if p.get("id_externo") else "")))
     for p in mal:
@@ -69,6 +78,12 @@ def publicar(tarea):
     if not pubs:
         return "No había publicaciones pendientes."
     job_id = tarea.get("job_id") or job_id_publicar(cliente, pubs[0]["pieza_id"])
+    # Antes de la tanda nueva: cerrar lo que subió en tandas anteriores y quedó
+    # `publicando` con id (contabilidad fallida o TikTok procesando). Nunca sube.
+    try:
+        organico.reconciliar_subidas(cliente)
+    except Exception:  # noqa: BLE001 — no frena la publicación que sí se pidió
+        log.exception("No pude reconciliar subidas pendientes de %s", cliente)
     try:
         resultado = organico.publicar(cliente, pub_ids, on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
     except Exception:
@@ -100,7 +115,9 @@ def interrumpida(tarea, mensaje):
     seguía `en_cola` sin empezar también pasa a `error` — la tarea ya no
     existe y, como la unicidad viva impide crear otra publicación de esa
     pieza en esa plataforma, quedaría atascado para siempre; en `error` la
-    persona puede reintentarlo desde el panel. Lo ya `publicada` no se toca."""
+    persona puede reintentarlo desde el panel. Lo ya `publicada` no se toca,
+    ni lo `publicando` que ya tiene `id_externo` (subió: reconciliar_subidas
+    lo cierra; en `error` habilitaría un segundo upload)."""
     p = tarea["payload"]
     cliente, pub_ids = p["cliente"], _ids(p)
     organico.interrumpir(cliente, pub_ids)

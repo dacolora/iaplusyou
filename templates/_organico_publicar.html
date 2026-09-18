@@ -31,11 +31,14 @@
       <span class="org-pub-plataforma">{{ pub.nombre_plataforma }}</span>
       {% if pub.url %}<a href="{{ pub.url }}" target="_blank" rel="noopener">Ver publicación →</a>
       {% elif pub.estado == "publicada" and pub.id_externo %}<small class="vacio" style="padding:0;">id {{ pub.id_externo }}</small>{% endif %}
+      {% if pub.estado == "publicando" and pub.id_externo %}<small class="vacio" style="padding:0;" title="La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo.">subida, confirmando (id {{ pub.id_externo }})</small>{% endif %}
       {% if pub.publicado_en %}<small class="vacio" style="padding:0;">{{ pub.publicado_en[:16] }}</small>{% endif %}
       {% if pub.origen == "ganador" %}<small class="vacio" style="padding:0;" title="La encoló el motor al declararla ganadora">motor</small>{% endif %}
       {% if pub.estado == "error" %}
       <span class="tag-error">{{ pub.error or "No se pudo publicar." }}</span>
-      {% if not trabajo %}
+      {# Sin «Reintentar» si ya subió (tiene id: sería un segundo upload) o si
+         otra fila viva de la misma plataforma la reemplazó (unicidad viva). #}
+      {% if not trabajo and not pub.id_externo and pub.plataforma not in vivas %}
       <form method="post" action="{{ url_for('org_reintentar', cliente=cliente, pub_id=pub.id) }}" class="inline" onsubmit="return confirm('Se vuelve a publicar en {{ pub.nombre_plataforma }}. Revisa antes que no haya salido ya allá. ¿Reintentar?');">
         <input type="hidden" name="volver" value="{{ volver }}">
         <button class="btn-guardar btn-xs">Reintentar</button>

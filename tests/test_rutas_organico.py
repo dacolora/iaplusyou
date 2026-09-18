@@ -282,6 +282,68 @@ def test_org_reintentar_solo_en_error(app, base_temporal):
     assert any("no existe" in m for m in _flashes(app["c"]))
 
 
+def test_org_reintentar_con_otra_viva_avisa_y_no_da_500(app, base_temporal):
+    """I2: IG falló (fila A `error`), la persona publicó de nuevo (fila B
+    viva) y pulsa «Reintentar» en A → flash, A sigue `error`, nada encolado,
+    y el bloque ya no ofrece «Reintentar» para A."""
+    eid = _experimento()
+    pid, ep = _pieza_en(base_temporal, eid)
+    org = app["organico"]
+    a = org.crear("acme", pid, "instagram", "falló #a #b #c")
+    org.actualizar("acme", a, estado="error", error="IG dijo que no")
+    b = org.crear("acme", pid, "instagram", "salió #a #b #c")
+    org.actualizar("acme", b, estado="publicada", id_externo="17900")
+    r = app["c"].post(f"/cliente/acme/organico/{a}/reintentar", data={"volver": "experimentos"})
+    assert r.status_code == 302
+    assert any("Ya hay una publicación en curso o publicada" in m for m in _flashes(app["c"]))
+    assert org.obtener("acme", a)["estado"] == "error" and app["encolados"] == []
+    html = _seccion(_html(app), "experimentos")
+    assert f"/organico/{a}/reintentar" not in html and "IG dijo que no" in html
+    # Carrera: la viva aparece entre el chequeo y el UPDATE → ValueError de
+    # organico.actualizar, no IntegrityError/500.
+    org.actualizar("acme", b, estado="error")
+    real = org.listar
+    app["dashboard"].organico.listar = lambda cliente, **kw: [p for p in real(cliente, **kw) if p["id"] != b]
+    try:
+        org.actualizar("acme", b, estado="publicada")
+        r = app["c"].post(f"/cliente/acme/organico/{a}/reintentar")
+        assert r.status_code == 302 and org.obtener("acme", a)["estado"] == "error" and app["encolados"] == []
+        assert any("en curso o publicada" in m for m in _flashes(app["c"]))
+    finally:
+        app["dashboard"].organico.listar = real
+
+
+def test_org_reintentar_rechaza_fila_que_ya_subio(app, base_temporal):
+    """I1: una fila `error` con id_externo ya está en la plataforma: no se
+    reintenta (sería un segundo upload) y el bloque no ofrece «Reintentar»."""
+    eid = _experimento()
+    pid, ep = _pieza_en(base_temporal, eid)
+    org = app["organico"]
+    a = org.crear("acme", pid, "facebook", "x #a #b #c")
+    org.actualizar("acme", a, estado="error", error="se cortó", id_externo="555")
+    r = app["c"].post(f"/cliente/acme/organico/{a}/reintentar")
+    assert r.status_code == 302 and org.obtener("acme", a)["estado"] == "error" and app["encolados"] == []
+    assert any("ya se subió" in m and "revisa la plataforma" in m for m in _flashes(app["c"]))
+    html = _seccion(_html(app), "experimentos")
+    assert f"/organico/{a}/reintentar" not in html and "se cortó" in html
+    # Y una `publicando` con id se pinta como subida en confirmación.
+    b = org.crear("acme", pid, "tiktok", "x #a #b #c")
+    org.actualizar("acme", b, estado="publicando", id_externo="v_pub.7")
+    html = _seccion(_html(app), "experimentos")
+    assert "subida, confirmando (id v_pub.7)" in html
+
+
+def test_propuesta_escapa_el_caption_en_el_textarea(app, base_temporal):
+    """Un caption con </textarea><script> no rompe el HTML ni ejecuta nada:
+    la macro va bajo autoescape."""
+    malo = "Hola </textarea><script>alert(1)</script> #a #b #c"
+    _propuesta_organica(base_temporal, captions={"instagram": {"titulo": "T", "caption": malo},
+                                                 "facebook": {"titulo": 'x" onfocus="alert(1)', "caption": malo}})
+    html = _seccion(_html(app), "experimentos")
+    assert "</textarea><script>" not in html and "&lt;/textarea&gt;&lt;script&gt;" in html
+    assert 'onfocus="alert' not in html and "onfocus=&#34;alert" in html
+
+
 # ---- propuesta publicar_organico --------------------------------------------
 
 def _propuesta_organica(base_temporal, captions=None):

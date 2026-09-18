@@ -3256,9 +3256,11 @@ def org_publicar(cliente):
 
 @app.route("/cliente/<cliente>/organico/<int:pub_id>/reintentar", methods=["POST"])
 def org_reintentar(cliente, pub_id):
-    """Solo una publicación en `error`: vuelve a `en_cola` (misma fila, así
-    la unicidad viva sigue bloqueando un duplicado) y se encola de nuevo con
-    el clic. Nada automático: max_intentos=1 en la tarea."""
+    """Solo una publicación en `error` SIN id_externo (con id ya subió: un
+    reintento sería un segundo upload) y sin otra fila viva de la misma
+    (pieza, plataforma): vuelve a `en_cola` (misma fila, así la unicidad viva
+    sigue bloqueando un duplicado) y se encola de nuevo con el clic. Nada
+    automático: max_intentos=1 en la tarea."""
     pub = organico.obtener(cliente, pub_id)
     if not pub:
         flash("Esa publicación no existe.", "error")
@@ -3266,10 +3268,24 @@ def org_reintentar(cliente, pub_id):
     if pub["estado"] != "error":
         flash("Solo se reintenta una publicación que falló.", "error")
         return _volver_org(cliente)
+    if pub["id_externo"]:
+        flash(f"Esa publicación ya se subió a {pub['nombre_plataforma']} (id {pub['id_externo']}); "
+              "revisa la plataforma antes de volver a publicarla.", "warn")
+        return _volver_org(cliente)
+    vivas = {p["plataforma"] for p in organico.listar(cliente, pieza_id=pub["pieza_id"])
+             if p["estado"] in organico.ESTADOS_VIVOS}
+    if pub["plataforma"] in vivas:
+        flash(f"Ya hay una publicación en curso o publicada para {pub['nombre_plataforma']}; no se reintenta.", "warn")
+        return _volver_org(cliente)
     if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pub["pieza_id"])):
         flash("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine.", "warn")
         return _volver_org(cliente)
-    organico.actualizar(cliente, pub_id, estado="en_cola", error=None)
+    try:
+        organico.actualizar(cliente, pub_id, estado="en_cola", error=None)
+    except ValueError as e:
+        # Carrera con otra creación entre el chequeo y el UPDATE: gana el índice.
+        flash(str(e), "warn")
+        return _volver_org(cliente)
     if not _encolar_organico(cliente, pub["pieza_id"], [pub_id]):
         flash("Ya había una publicación de esta pieza en curso; vuelve a intentarlo cuando termine.", "error")
         return _volver_org(cliente)
