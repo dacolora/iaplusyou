@@ -175,6 +175,50 @@ def test_duplicar_rearma_el_prompt_con_sonido_solo_para_videos(base_temporal, mo
     assert "SONIDO" not in todo[copia_i]["prompt_relleno"] and "ESCENA: gira despacio" in todo[copia_i]["prompt_relleno"]
 
 
+def test_duplicar_respeta_el_sonido_de_la_sesion_original(base_temporal, monkeypatch):
+    """La copia rearma el prompt con el sonido que guardó la sesión (spec
+    estudio S1, check «Sonido de la escena»): una sesión muda sigue muda y sin
+    línea SONIDO aunque tenga texto guardado; una con sonido conserva su texto
+    en la línea SONIDO. Los tres campos viajan tal cual a la copia."""
+    import creative_flow as cf
+    import marca as marca_mod
+    monkeypatch.setattr(marca_mod, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(marca_mod, "negative_prompt_efectivo", lambda c: None)
+    refs = [{"tipo": "imagen", "url": "https://x/1.png", "frame_url": "https://x/1.png", "etiqueta": "@Imagen 1"}]
+    muda = cf.crear("acme", [], ["P"], [], "gira despacio", 8, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", muda, prompt_relleno="viejo", referencias=refs, enfoque="producto", tipo="video",
+                  con_sonido=False, sonido_texto="risas", musica_estilo="")
+    sonora = cf.crear("acme", [], ["P"], [], "gira despacio", 8, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", sonora, prompt_relleno="viejo", referencias=refs, enfoque="producto", tipo="video",
+                  con_sonido=True, sonido_texto="risas de niños", musica_estilo="calmado")
+    copia_m = cf.duplicar("acme", muda, enfoque="unboxing")
+    copia_s = cf.duplicar("acme", sonora, enfoque="unboxing")
+    todo = cf.cargar("acme")
+    assert todo[copia_m]["con_sonido"] is False and todo[copia_m]["sonido_texto"] == "risas"
+    assert "SONIDO" not in todo[copia_m]["prompt_relleno"] and "ESCENA: gira despacio" in todo[copia_m]["prompt_relleno"]
+    assert todo[copia_s]["con_sonido"] is True and todo[copia_s]["musica_estilo"] == "calmado"
+    assert "SONIDO: risas de niños. Sin diálogo hablado ni música de fondo." in todo[copia_s]["prompt_relleno"]
+    assert "ambiente natural" not in todo[copia_s]["prompt_relleno"]
+
+
+def test_armar_prompt_sesion_toma_el_sonido_del_extra(base_temporal, monkeypatch):
+    """Sin `con_sonido` explícito: manda `extra["con_sonido"]`; si la sesión es
+    anterior a ese campo, el tipo (video sí, imagen no). El texto solo entra
+    con sonido; un `con_sonido` explícito manda sobre el extra."""
+    import creative_flow as cf
+    import marca as marca_mod
+    monkeypatch.setattr(marca_mod, "guia_efectiva", lambda c: "")
+    monkeypatch.setattr(marca_mod, "negative_prompt_efectivo", lambda c: None)
+    base = {"accion_central": "gira", "referencias": []}
+    assert "SONIDO" not in cf.armar_prompt_sesion("acme", {**base, "con_sonido": False, "sonido_texto": "risas"}, "producto")[0]
+    p, _ = cf.armar_prompt_sesion("acme", {**base, "con_sonido": True, "sonido_texto": "risas"}, "producto")
+    assert "SONIDO: risas. Sin diálogo hablado ni música de fondo." in p
+    assert "SONIDO: ambiente natural de la escena." in cf.armar_prompt_sesion("acme", {**base, "con_sonido": True}, "producto")[0]
+    assert "SONIDO: ambiente natural" in cf.armar_prompt_sesion("acme", {**base, "tipo": "video"}, "producto")[0]
+    assert "SONIDO" not in cf.armar_prompt_sesion("acme", {**base, "tipo": "imagen"}, "producto")[0]
+    assert "SONIDO" not in cf.armar_prompt_sesion("acme", {**base, "con_sonido": True, "sonido_texto": "risas"}, "producto", con_sonido=False)[0]
+
+
 def test_capas_del_clon_y_duplicar_no_arrastra_lo_generado(base_temporal, monkeypatch):
     """`capas` es columna de la pieza (como en las finales) y sale en cargar();
     el video crudo vive en extra. Una copia empieza sin nada del video generado."""

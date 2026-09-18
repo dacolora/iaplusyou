@@ -204,7 +204,7 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     es_video = idea["tipo"] == "video"
     prefs_sonido = proyectos.preferencias_sonido(cliente)
     con_sonido = es_video and bool(prefs_sonido["con_sonido"])
-    sonido_texto = (idea.get("sonido") or "") if es_video else ""
+    sonido_texto = " ".join((idea.get("sonido") or "").split())[:200] if es_video else ""
     prompt = flowplus_prompt.armar(idea["escena"], referencias, con_persona=info["con_persona"],
                                    guia_marca=marca.guia_efectiva(cliente), negative_marca=marca.negative_prompt_efectivo(cliente),
                                    logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, contexto=contexto,

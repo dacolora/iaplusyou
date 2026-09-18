@@ -2,10 +2,13 @@ import pytest
 
 
 @pytest.fixture()
-def escenario(base_temporal, monkeypatch):
+def escenario(base_temporal, monkeypatch, tmp_path):
     import catalogo_productos, marca, proyectos
     from sprints import datos
     from storage import r2_uploader
+    # proyecto.json en un archivo temporal: estimar / crear_sesion leen las
+    # preferencias de sonido de ahí y nunca el clientes/acme/ real del equipo.
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Luz natural.")
     monkeypatch.setattr(marca, "negative_prompt_efectivo", lambda c: None)
     monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None: {
@@ -67,17 +70,34 @@ def test_crear_sesion_arma_referencias_prompt_y_vinculo(escenario):
     assert e2["tipo"] == "imagen" and e2["modelo"] == "seedream_v5_pro" and "SONIDO" not in e2["prompt_relleno"]
 
 
-def test_crear_sesion_sigue_la_preferencia_de_sonido_del_proyecto(escenario, monkeypatch, tmp_path):
+def test_crear_sesion_sigue_la_preferencia_de_sonido_del_proyecto(escenario):
     import creative_flow
     import proyectos
     from sprints import datos, produccion
-    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     proyectos.guardar_preferencias_sonido("acme", False, "urbano")
     sp = datos.sprint("acme", escenario["sid"])
     c = sp["campanas"][0]
     cf_id = produccion.crear_sesion("acme", sp, c, datos.idea("acme", escenario["iv"]), "wan3", "seedream_v5_pro")
     e = creative_flow.cargar("acme")[cf_id]
     assert e["con_sonido"] is False and e["musica_estilo"] == "urbano" and "SONIDO" not in e["prompt_relleno"]
+
+
+def test_crear_sesion_normaliza_y_recorta_el_sonido_de_la_idea(escenario):
+    """El sonido de la idea entra a la sesión como en Crear: espacios
+    colapsados y máximo 200 caracteres, tanto en `sonido_texto` como en la
+    línea SONIDO del prompt."""
+    import creative_flow
+    from sprints import datos, produccion
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    largo = "  risas   de\nniños " + "x" * 300
+    idea = datos.crear_idea("acme", c["id"], "video", "Ruido", "Gira el espejo", sonido=largo, enfoque="producto",
+                            duracion_s=5, plataformas=["instagram"], estado_idea="aprobada")
+    cf_id = produccion.crear_sesion("acme", sp, c, datos.idea("acme", idea), "wan3", "seedream_v5_pro")
+    e = creative_flow.cargar("acme")[cf_id]
+    assert e["sonido_texto"].startswith("risas de niños x") and len(e["sonido_texto"]) == 200
+    assert "SONIDO: " + e["sonido_texto"] + ". Sin diálogo" in e["prompt_relleno"]
+    assert "\n" not in e["sonido_texto"] and "  " not in e["sonido_texto"]
 
 
 def test_lanzar_lote_encola_con_prioridad_y_registra(escenario, monkeypatch):

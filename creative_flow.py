@@ -201,19 +201,28 @@ def armar_prompt_sesion(cliente, extra, enfoque, con_sonido=None):
     """Arma `prompt_relleno` para una sesión de Crear exactamente como lo hace
     la ruta `cf_crear_video` del dashboard: acción central + referencias (con
     sus logos) + guía y negative de la marca + bloque del enfoque + línea
-    SONIDO para los videos (spec estudio S1). con_sonido: None = según el
-    `tipo` del extra (video sí, imagen no). Devuelve (prompt, info_enfoque).
-    No llama a ningún modelo: es texto puro."""
+    SONIDO (spec estudio S1). con_sonido: None = lo que guardó la sesión en
+    `extra["con_sonido"]` (el check «Sonido de la escena») y, si la sesión es
+    anterior a ese campo, según el `tipo` del extra (video sí, imagen no). El
+    texto `extra["sonido_texto"]` solo entra en la línea SONIDO cuando el
+    video se pide con sonido — misma regla que `cf_crear_video`: una sesión
+    muda no lleva línea SONIDO aunque tenga texto guardado. Devuelve
+    (prompt, info_enfoque). No llama a ningún modelo: es texto puro."""
     import flowplus_prompt
     import marca as marca_mod
     info = flowplus_prompt.ENFOQUES[enfoque]
     referencias = list(extra.get("referencias") or [])
     if con_sonido is None:
-        con_sonido = (extra.get("tipo") or "video") == "video"
+        if "con_sonido" in extra:
+            con_sonido = bool(extra["con_sonido"])
+        else:
+            con_sonido = (extra.get("tipo") or "video") == "video"
+    con_sonido = bool(con_sonido)
     prompt = flowplus_prompt.armar(
         extra.get("accion_central") or "", referencias, con_persona=info["con_persona"],
         guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
-        logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, con_sonido=bool(con_sonido),
+        logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
+        sonido=(extra.get("sonido_texto") or None) if con_sonido else None, con_sonido=con_sonido,
     )
     return prompt, info
 
@@ -230,7 +239,11 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None):
     cual cuando el enfoque no cambia; si cambia (o el original no lo tenía),
     se vuelve a armar con `armar_prompt_sesion` — igual que una sesión nueva —
     y `enfoque_nombre`/`con_persona` se actualizan al enfoque nuevo. Así la
-    copia genera exactamente lo que generaría Crear, no la acción cruda."""
+    copia genera exactamente lo que generaría Crear, no la acción cruda. El
+    sonido sigue a la sesión original: `con_sonido` y `sonido_texto` viajan
+    en el extra y el prompt rearmado los respeta (una copia de una sesión
+    muda sigue muda y sin línea SONIDO; una con sonido conserva su texto);
+    una sesión anterior a ese campo pide sonido solo si es video."""
     import flowplus_prompt
     if enfoque is not None and enfoque not in flowplus_prompt.ENFOQUES:
         raise ValueError(f"Enfoque desconocido: {enfoque}. Opciones: {list(flowplus_prompt.ENFOQUES)}")
@@ -252,7 +265,9 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None):
         enfoque_final = enfoque if enfoque is not None else enfoque_orig
         cambia_enfoque = enfoque is not None and enfoque != enfoque_orig
         if (cambia_enfoque or not extra.get("prompt_relleno")) and enfoque_final in flowplus_prompt.ENFOQUES:
-            prompt, info = armar_prompt_sesion(cliente, extra, enfoque_final, con_sonido=(tipo == "video"))
+            prompt, info = armar_prompt_sesion(
+                cliente, extra, enfoque_final,
+                con_sonido=extra["con_sonido"] if "con_sonido" in extra else (tipo == "video"))
             extra["prompt_relleno"] = prompt
             extra["enfoque_nombre"] = info["nombre"]
             extra["con_persona"] = info["con_persona"]
