@@ -230,16 +230,17 @@ def _pieza_ids_ganadoras(exps):
 
 
 def _ganadoras_publicadas(cliente, exps, desde_iso, hasta_iso):
-    """Publicaciones orgánicas `publicada` (una por plataforma) de piezas
-    ganadoras con `publicado_en` en [desde, hasta). Consulta directa a la
-    tabla: el tablero es solo datos y `publicado_en` es ISO de 19 chars,
-    comparable como texto."""
+    """Piezas ganadoras DISTINTAS con al menos una publicación orgánica
+    `publicada` con `publicado_en` en [desde, hasta): una ganadora en FB+IG+YT
+    cuenta 1 (el tile dice «ganadoras», no «publicaciones»). Consulta
+    directa a la tabla: el tablero es solo datos y `publicado_en` es ISO de
+    19 chars, comparable como texto."""
     ids = _pieza_ids_ganadoras(exps)
     if not ids:
         return 0
     p = db.publicacion
     with db.conectar() as con:
-        return con.execute(sa.select(sa.func.count()).select_from(p).where(
+        return con.execute(sa.select(sa.func.count(sa.distinct(p.c.pieza_id))).select_from(p).where(
             p.c.cliente == cliente, p.c.estado == "publicada", p.c.pieza_id.in_(list(ids)),
             p.c.publicado_en >= desde_iso, p.c.publicado_en < hasta_iso)).scalar() or 0
 

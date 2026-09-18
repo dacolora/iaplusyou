@@ -270,6 +270,44 @@ def test_ajustar_traduce_link_en_bio_segun_idioma():
     assert "Link in bio." in out["caption"]
 
 
+def test_ajustar_texto_larguisimo_conserva_cta_y_hashtags():
+    """Un caption de 3 000 chars con URL: el recorte se come cuerpo, nunca el
+    «Link en bio.» (IG/TikTok) ni la url de compra (FB/YT) ni los hashtags."""
+    import organico as org
+    contexto = {"nombre_producto": "Pantufla Nube", "url_compra": "https://tienda.co/p/x", "idioma": "es"}
+    largo = ("palabra " * 375).strip() + " https://otra.com/q " + ("otra " * 220).strip() + " #a #b #c"
+    ig = org.ajustar("instagram", None, largo, contexto)["caption"]
+    assert len(ig) <= org.PLATAFORMAS["instagram"]["max_caption"]
+    assert "https://" not in ig and ig.endswith("Link en bio.\n\n#a #b #c")
+    fb = org.ajustar("facebook", None, ("palabra " * 700).strip() + " #a #b #c", contexto)["caption"]
+    assert len(fb) <= org.PLATAFORMAS["facebook"]["max_caption"]
+    assert fb.endswith("https://tienda.co/p/x\n\n#a #b #c")
+
+
+def test_normalizar_captions_ajusta_todo_y_deja_pasar_lo_vacio(proyecto):
+    """Important #1 (Task 3): la misma forma de entrada y salida; cada
+    caption no vacío pasa por ajustar con el contexto de la pieza, las
+    claves extra se conservan, las entradas sin caption y las plataformas
+    desconocidas salen tal cual; pieza ajena → ValueError."""
+    import pytest
+    from tests.test_experimentos_db import _pieza
+    org = proyecto["organico"]
+    pid = _pieza(proyecto["db"])
+    entrada = {"instagram": {"titulo": "", "caption": "Mira esto https://x.com/p #a #b #c", "extra": {"fallback": True}},
+               "facebook": {"titulo": "T", "caption": ""},
+               "twitter": {"caption": "no existe"}}
+    out = org.normalizar_captions("acme", pid, entrada)
+    assert set(out) == {"instagram", "facebook", "twitter"}
+    assert out["instagram"]["caption"] == "Mira esto\n\nLink en bio.\n\n#a #b #c"
+    assert out["instagram"]["titulo"] == f"Pieza {pid}" and out["instagram"]["extra"] == {"fallback": True}
+    assert out["facebook"] == {"titulo": "T", "caption": ""} and out["twitter"] == {"caption": "no existe"}
+    assert entrada["instagram"]["caption"].startswith("Mira esto https")   # no muta la entrada
+    # Idempotente sobre texto ya ajustado.
+    assert org.normalizar_captions("acme", pid, out)["instagram"] == out["instagram"]
+    with pytest.raises(ValueError, match="no existe en este proyecto"):
+        org.normalizar_captions("acme", 999999, entrada)
+
+
 def test_caption_organico_arma_el_mensaje_y_parsea_json(monkeypatch):
     """La función real: arma el mensaje delimitado y parsea el JSON de Claude
     (cliente falso, sin red)."""

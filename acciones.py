@@ -191,12 +191,15 @@ def _plataformas_pedidas(cliente, payload):
 
 def _captions_completos(cliente, pieza_id, plataformas, captions):
     """`captions` del payload (lo que la persona vio/editó) completado con
-    organico.redactar SOLO para las plataformas sin texto."""
+    organico.redactar SOLO para las plataformas sin texto, y TODO pasado por
+    organico.normalizar_captions: el texto editado a mano también se recorta
+    y se le quitan los enlaces donde no van (redactar ya lo hace con el
+    suyo; sobre texto ya ajustado es idempotente)."""
     out = {p: dict(v) for p, v in (captions or {}).items() if isinstance(v, dict)}
     faltantes = [p for p in plataformas if not ((out.get(p) or {}).get("caption") or "").strip()]
     if faltantes:
         out.update(organico.redactar(cliente, pieza_id, faltantes))
-    return out
+    return organico.normalizar_captions(cliente, pieza_id, out)
 
 
 def _publicar_organico(cliente, ex, payload):

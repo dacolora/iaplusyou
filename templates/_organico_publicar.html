@@ -48,9 +48,13 @@
   {% endif %}
 
   {% if trabajo %}
-  <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+  {# El id lleva el sitio (experimentos/creativeflowplus): la misma pieza
+     puede pintarse en Experimentos y en Crear a la vez, y con ids iguales
+     getElementById solo actualizaría la primera barra. #}
+  {% set contenedor_id = "trabajo-" ~ trabajo.job_id ~ "-" ~ volver %}
+  <div class="barra-progreso" id="{{ contenedor_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
   <div class="progreso-texto">Publicando… 0% · 0s</div>
-  <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ ("trabajo-" ~ trabajo.job_id) | tojson }});</script>
+  <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ contenedor_id | tojson }});</script>
   {% else %}
   <details class="org-publicar">
     <summary>Publicar orgánico</summary>
@@ -102,25 +106,34 @@
 
 {# Propuesta `publicar_organico` del motor: el texto ya redactado, editable,
    dentro del form de aprobar (names caption_<p>/titulo_<p> + plataformas
-   marcadas; `org_form=1` le dice a prop_aprobar que lea los overrides). #}
+   marcadas; `org_form=1` le dice a prop_aprobar que lea los overrides).
+   Se pintan las plataformas de la propuesta (marcadas) MÁS los canales que
+   hoy están disponibles y no estaban (sin marcar, texto oculto hasta que
+   se marquen; sin texto, acciones lo redacta al aprobar): si el motor la
+   creó sin canales y la persona conectó uno después, puede elegirlo. Sin
+   nada que marcar no se puede aprobar — se dice cómo salir de ahí. #}
 {% macro propuesta_organica(pr, pl) %}
-<form method="post" action="{{ url_for('prop_aprobar', cliente=cliente, pid=pr.id) }}" class="org-form org-propuesta" onsubmit="return window.orgConfirmar(this);">
+{% set props = pl.plataformas or [] %}
+{% set nuevas = canales_org | selectattr("disponible") | map(attribute="plataforma") | reject("in", props) | list %}
+<form method="post" action="{{ url_for('prop_aprobar', cliente=cliente, pid=pr.id) }}" class="org-form org-propuesta" data-redacta-al-aprobar="1" onsubmit="return window.orgConfirmar(this);">
   <input type="hidden" name="org_form" value="1">
   {% if pl.captions_error %}<p class="tag-error">No se pudo redactar el texto ({{ pl.captions_error }}); al aprobar se redacta de nuevo.</p>{% endif %}
-  {% for p in pl.plataformas or [] %}
+  {% for p in props + nuevas %}
   {% set conf = plataformas_org.get(p, {}) %}
   {% set t = (pl.captions or {}).get(p) or {} %}
+  {% set marcada = p in props %}
   <label class="org-canal">
-    <input type="checkbox" name="plataformas" value="{{ p }}" data-nombre="{{ conf.nombre or p }}" checked onchange="window.orgToggle(this)"> {{ conf.nombre or p }}
+    <input type="checkbox" name="plataformas" value="{{ p }}" data-nombre="{{ conf.nombre or p }}"{% if marcada %} checked{% endif %} onchange="window.orgToggle(this)"> {{ conf.nombre or p }}
+    {% if not marcada %}<small>canal nuevo: sin texto, se redacta al aprobar</small>{% endif %}
   </label>
-  <div class="org-texto" data-plataforma="{{ p }}">
+  <div class="org-texto" data-plataforma="{{ p }}"{% if not marcada %} hidden{% endif %}>
     {% if p in ("youtube", "facebook") %}
     <input type="text" name="titulo_{{ p }}" value="{{ t.titulo or '' }}" placeholder="Título" maxlength="{{ conf.max_titulo or 150 }}">
     {% endif %}
-    <textarea name="caption_{{ p }}" rows="4" maxlength="{{ conf.max_caption or 2200 }}" placeholder="Texto de la publicación">{{ t.caption or '' }}</textarea>
+    <textarea name="caption_{{ p }}" rows="4" maxlength="{{ conf.max_caption or 2200 }}" placeholder="{% if marcada %}Texto de la publicación{% else %}Sin texto: se redacta con IA al aprobar (o escríbelo aquí){% endif %}">{{ t.caption or '' }}</textarea>
   </div>
   {% else %}
-  <p class="vacio" style="padding:0;">Sin canal orgánico disponible: al aprobar no se publica nada.</p>
+  <p class="vacio" style="padding:0;">Sin canal orgánico disponible: conecta un canal en <a href="#settings" data-ir-tab="settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">Configuración › Canales orgánicos</a> para poder aprobarla.</p>
   {% endfor %}
   <div class="org-pie">
     <button class="btn-aprobar btn-xs">Aprobar y publicar</button>
@@ -172,11 +185,13 @@
     var marcadas = form.querySelectorAll('input[name="plataformas"]:checked');
     if (!marcadas.length) { alert('Marca al menos una plataforma.'); return false; }
     var vacias = [], nombres = [];
+    // En la propuesta un texto vacío no frena: acciones lo redacta al aprobar.
+    var redacta = form.dataset.redactaAlAprobar === '1';
     marcadas.forEach(function (cb) {
       var nombre = cb.dataset.nombre || cb.value;
       nombres.push(nombre);
       var ta = form.querySelector('textarea[name="caption_' + cb.value + '"]');
-      if (ta && !ta.value.trim()) vacias.push(nombre);
+      if (ta && !ta.value.trim() && !redacta) vacias.push(nombre);
     });
     if (vacias.length) {
       alert('Falta el texto para: ' + vacias.join(', ') + '. Escríbelo o pulsa «Escribir texto con IA».');

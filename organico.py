@@ -403,7 +403,9 @@ def ajustar(plataforma, titulo, caption, contexto):
     """Reglas duras por plataforma sobre un texto (de Claude o de la
     persona): sin URLs donde `links=False` (+ "Link en bio."), con
     `url_compra` donde `links=True` si existe y no está, hashtags entre 3 y
-    8, recortes a los máximos (el cuerpo, nunca el bloque de hashtags)."""
+    8, recortes a los máximos (el cuerpo, nunca el bloque de hashtags ni el
+    CTA que este ajuste añade: un texto larguísimo pierde cola de cuerpo,
+    no el «Link en bio.» / la url de compra)."""
     conf = PLATAFORMAS[plataforma]
     copy = _copy(contexto.get("idioma"))
     caption = (caption or "").strip()
@@ -414,11 +416,12 @@ def ajustar(plataforma, titulo, caption, contexto):
         caption = _RE_URL.sub("", caption)
         caption = re.sub(r"[ \t]+\n", "\n", re.sub(r"[ \t]{2,}", " ", caption)).strip()
     cuerpo, cola_tags = _separar_cola(caption)
+    cta = ""
     if not conf["links"]:
         if (habia_url or contexto.get("url_compra")) and copy["link_bio"].lower() not in cuerpo.lower():
-            cuerpo = f"{cuerpo}\n\n{copy['link_bio']}" if cuerpo else copy["link_bio"]
+            cta = copy["link_bio"]
     elif contexto.get("url_compra") and contexto["url_compra"] not in cuerpo:
-        cuerpo = f"{cuerpo}\n\n{contexto['url_compra']}" if cuerpo else contexto["url_compra"]
+        cta = contexto["url_compra"]
 
     en_cuerpo = _sin_repetidos(_RE_HASHTAG.findall(cuerpo))
     cola_tags = _sin_repetidos(cola_tags, ya=en_cuerpo)
@@ -433,17 +436,41 @@ def ajustar(plataforma, titulo, caption, contexto):
 
     tags_str = " ".join(cola_tags)
     tope = conf["max_caption"]
-    if tags_str and len(cuerpo) + len(tags_str) + 2 > tope:
-        cuerpo = _recortar_en_palabra(cuerpo, max(tope - len(tags_str) - 2, 0))
-    elif not tags_str and len(cuerpo) > tope:
-        cuerpo = _recortar_en_palabra(cuerpo, tope)
-    caption = f"{cuerpo}\n\n{tags_str}" if (cuerpo and tags_str) else (cuerpo or tags_str)
+    # El CTA y el bloque de hashtags van después del cuerpo y se reservan
+    # enteros: solo el cuerpo se recorta.
+    reservado = sum(len(x) + 2 for x in (cta, tags_str) if x)
+    if cuerpo and len(cuerpo) + reservado > tope:
+        cuerpo = _recortar_en_palabra(cuerpo, max(tope - reservado, 0))
+    caption = "\n\n".join(x for x in (cuerpo, cta, tags_str) if x)
     caption = _recortar_en_palabra(caption.strip(), tope)
 
     if not titulo:
         titulo = _hook(contexto) or contexto.get("nombre_producto") or ""
     titulo = titulo[:conf.get("max_titulo", MAX_TITULO_COLUMNA)].strip()
     return {"titulo": titulo, "caption": caption}
+
+
+def normalizar_captions(cliente, pieza_id, captions):
+    """`ajustar` sobre CUALQUIER texto que vaya a publicarse — el que la
+    persona escribió o editó a mano en el form/la propuesta, no solo el que
+    redactó Claude — con el contexto de la pieza. Entra y sale la misma
+    forma, {plataforma: {"titulo", "caption", ...}}: cada entrada con
+    caption no vacío vuelve recortada al máximo de la plataforma, sin
+    enlaces (+ "Link en bio.") en Instagram/TikTok, con la url de compra en
+    Facebook/YouTube y entre 3 y 8 hashtags; las claves extra (`extra`,
+    `fallback`) se conservan. Las entradas sin caption y las plataformas
+    desconocidas pasan tal cual (quien llama decide si eso es error o si
+    hay que redactarlas). `maxlength` en el textarea es solo cliente: esta
+    es la garantía en servidor de que Graph/TikTok no rechazan el texto
+    DESPUÉS de subir el video. ValueError si la pieza no es del cliente."""
+    contexto = contexto_pieza(cliente, pieza_id)
+    out = {}
+    for p, t in (captions or {}).items():
+        if p in PLATAFORMAS and isinstance(t, dict) and (t.get("caption") or "").strip():
+            out[p] = dict(t, **ajustar(p, t.get("titulo"), t.get("caption"), contexto))
+        else:
+            out[p] = t
+    return out
 
 
 def redactar(cliente, pieza_id, plataformas):

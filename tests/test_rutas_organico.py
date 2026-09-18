@@ -135,9 +135,11 @@ def test_org_publicar_crea_publicaciones_y_encola_con_max_intentos_1(app, base_t
     r = app["c"].post("/cliente/acme/organico/publicar", data=dict(FORM_OK, pieza_id=str(pid)))
     assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
     pubs = app["organico"].listar("acme", pieza_id=pid)
+    # Todo pasa por organico.ajustar en servidor: el título vacío se rellena
+    # con el gancho/nombre y el bloque de hashtags va aparte.
     assert [(p["plataforma"], p["estado"], p["origen"], p["experimento_pieza_id"], p["titulo"]) for p in pubs] == \
-        [("instagram", "en_cola", "manual", None, None), ("facebook", "en_cola", "manual", None, "Título FB")]
-    assert pubs[0]["caption"] == "Hola IG #a #b #c"
+        [("instagram", "en_cola", "manual", None, f"Pieza {pid}"), ("facebook", "en_cola", "manual", None, "Título FB")]
+    assert pubs[0]["caption"] == "Hola IG\n\n#a #b #c"
     assert len(app["encolados"]) == 1
     t = app["encolados"][0]
     assert t["tipo"] == "organico_publicar" and t["job_id"] == f"acme__pieza{pid}__organico"
@@ -211,6 +213,54 @@ def test_org_publicar_si_encolar_falla_filas_quedan_en_error(app, base_temporal,
     assert all("reintenta" in p["error"] for p in pubs)
 
 
+def test_org_publicar_normaliza_el_texto_en_servidor(app, base_temporal):
+    """Important #1: `maxlength` del textarea es solo cliente. Un caption de
+    3 000 chars con URL en Instagram queda guardado recortado (≤ 2200), sin
+    enlace y con «Link en bio.»; en Facebook el enlace se conserva."""
+    import organico
+    pid = _pieza(base_temporal)
+    largo = ("palabra " * 375).strip() + " https://tienda.com/p " + ("otra " * 220).strip()
+    assert len(largo) > 2900
+    app["c"].post("/cliente/acme/organico/publicar", data={
+        "pieza_id": str(pid), "plataformas": ["instagram", "facebook"],
+        "caption_instagram": largo + " #a #b #c", "caption_facebook": "Corto https://tienda.com/p #a #b #c"})
+    pubs = {p["plataforma"]: p for p in app["organico"].listar("acme", pieza_id=pid)}
+    ig = pubs["instagram"]["caption"]
+    assert len(ig) <= organico.PLATAFORMAS["instagram"]["max_caption"]
+    assert "https://" not in ig and "tienda.com" not in ig and "Link en bio." in ig
+    assert ig.endswith("#a #b #c") and pubs["instagram"]["estado"] == "en_cola"
+    assert "https://tienda.com/p" in pubs["facebook"]["caption"]
+    assert len(app["encolados"]) == 1
+
+
+def test_org_publicar_creacion_parcial_deja_lo_creado_en_error(app, base_temporal, monkeypatch):
+    """Minor #5: si `crear` falla en la 2.ª plataforma con un error que no es
+    «ya está publicada», la fila creada en la 1.ª no queda `en_cola` sin tarea
+    (bloquearía la plataforma por unicidad): pasa a `error` y no se encola."""
+    import organico
+    pid = _pieza(base_temporal)
+    crear_real = organico.crear
+    llamadas = []
+
+    def crear(cliente, pieza_id, plataforma, *a, **kw):
+        llamadas.append(plataforma)
+        if len(llamadas) == 2:
+            raise ValueError("Se cayó la base.")
+        return crear_real(cliente, pieza_id, plataforma, *a, **kw)
+    monkeypatch.setattr(app["dashboard"].organico, "crear", crear)
+    app["c"].post("/cliente/acme/organico/publicar", data=dict(FORM_OK, pieza_id=str(pid)))
+    pubs = app["organico"].listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("instagram", "error")]
+    assert "Se cayó la base." in pubs[0]["error"] and "Facebook" in pubs[0]["error"]
+    assert app["encolados"] == []
+    assert any("Se cayó la base." in m and "No se publicó nada" in m for m in _flashes(app["c"]))
+    # La plataforma no quedó bloqueada: se puede volver a crear.
+    monkeypatch.setattr(app["dashboard"].organico, "crear", crear_real)
+    app["c"].post("/cliente/acme/organico/publicar", data=dict(FORM_OK, pieza_id=str(pid)))
+    assert [(p["plataforma"], p["estado"]) for p in app["organico"].listar("acme", pieza_id=pid)] == \
+        [("instagram", "error"), ("instagram", "en_cola"), ("facebook", "en_cola")]
+
+
 # ---- org_reintentar ----------------------------------------------------------
 
 def test_org_reintentar_solo_en_error(app, base_temporal):
@@ -266,9 +316,27 @@ def test_prop_aprobar_manda_el_texto_editado(app, base_temporal):
     cliente, e, accion, payload = app["ejecutadas"][0]
     assert (cliente, e, accion) == ("acme", eid, "publicar_organico")
     assert payload["plataformas"] == ["instagram", "facebook"]
-    assert payload["captions"]["instagram"] == {"titulo": "", "caption": "Mi texto editado #x #y #z"}
-    assert payload["captions"]["facebook"] == {"titulo": "Mi título", "caption": "Texto FB del motor #a #b #c"}
+    # El texto editado va normalizado (organico.ajustar): «Link en bio.» en
+    # IG porque el experimento tiene destino_url, título vacío → gancho/nombre;
+    # en FB entra la url de compra.
+    assert payload["captions"]["instagram"] == {"titulo": f"Pieza {pid}",
+                                                "caption": "Mi texto editado\n\nLink en bio.\n\n#x #y #z"}
+    assert payload["captions"]["facebook"] == {"titulo": "Mi título",
+                                               "caption": "Texto FB del motor\n\nhttps://t\n\n#a #b #c"}
     assert propuestas.obtener("acme", prid)["estado"] == "ejecutada"
+
+
+def test_prop_aprobar_normaliza_caption_largo_con_url(app, base_temporal):
+    """Important #1 en la propuesta: 3 000 chars + URL en Instagram llegan a
+    acciones recortados y sin enlace."""
+    import organico
+    eid, pid, ep, prid = _propuesta_organica(base_temporal)
+    largo = ("palabra " * 375).strip() + " https://tienda.com/p " + ("otra " * 220).strip() + " #a #b #c"
+    app["c"].post(f"/cliente/acme/propuestas/{prid}/aprobar", data={
+        "org_form": "1", "plataformas": ["instagram"], "caption_instagram": largo})
+    ig = app["ejecutadas"][0][3]["captions"]["instagram"]["caption"]
+    assert len(ig) <= organico.PLATAFORMAS["instagram"]["max_caption"]
+    assert "https://" not in ig and "Link en bio." in ig and ig.endswith("#a #b #c")
 
 
 def test_prop_aprobar_respeta_plataformas_desmarcadas_y_exige_una(app, base_temporal):
@@ -283,8 +351,53 @@ def test_prop_aprobar_respeta_plataformas_desmarcadas_y_exige_una(app, base_temp
                   data={"org_form": "1", "plataformas": ["facebook"], "caption_facebook": "Solo FB #a #b #c"})
     payload = app["ejecutadas"][0][3]
     assert payload["plataformas"] == ["facebook"] and set(payload["captions"]) == {"facebook"}
-    assert payload["captions"]["facebook"]["caption"] == "Solo FB #a #b #c"
+    assert payload["captions"]["facebook"]["caption"] == "Solo FB\n\nhttps://t\n\n#a #b #c"
     assert payload["captions"]["facebook"]["titulo"] == "Título FB"   # sin campo titulo en el form: se conserva
+
+
+def test_propuesta_sin_plataformas_ofrece_los_canales_disponibles(app, base_temporal):
+    """Minor #3: una propuesta que el motor creó sin canales pinta los que
+    hoy están disponibles (sin marcar, texto oculto) y aprobar manda los que
+    la persona marcó; sin caption, acciones redacta al aprobar."""
+    import propuestas
+    eid = _experimento()
+    pid, ep = _pieza_en(base_temporal, eid)
+    prid = propuestas.crear("acme", eid, "publicar_organico", {"ep_id": ep, "plataformas": [], "captions": {}}, "ganador")
+    html = _seccion(_html(app), "experimentos")
+    form = html[html.index(f"/propuestas/{prid}/aprobar"):html.index("Aprobar y publicar")]
+    assert 'value="instagram"' in form and 'value="facebook"' in form and 'value="youtube"' in form
+    assert 'value="tiktok"' not in form   # sin token: no disponible
+    assert "checked" not in form and form.count("canal nuevo") == 3
+    assert 'data-redacta-al-aprobar="1"' in form
+    assert "al aprobar no se publica nada" not in form
+    r = app["c"].post(f"/cliente/acme/propuestas/{prid}/aprobar",
+                      data={"org_form": "1", "plataformas": ["youtube"], "caption_youtube": "", "titulo_youtube": ""})
+    assert r.status_code == 302
+    payload = app["ejecutadas"][0][3]
+    assert payload["plataformas"] == ["youtube"] and payload["captions"] == {"youtube": {"titulo": ""}}
+
+
+def test_propuesta_con_plataformas_suma_los_canales_nuevos_sin_marcar(app, base_temporal):
+    eid, pid, ep, prid = _propuesta_organica(base_temporal)   # instagram + facebook
+    html = _seccion(_html(app), "experimentos")
+    form = html[html.index(f"/propuestas/{prid}/aprobar"):html.index("Aprobar y publicar")]
+    ig = form[form.index('value="instagram"'):form.index('value="facebook"')]
+    yt = form[form.index('value="youtube"'):]
+    assert "checked" in ig and "checked" not in yt and "canal nuevo" in yt
+    assert 'data-plataforma="youtube" hidden' in yt
+
+
+def test_propuesta_sin_ningun_canal_dice_como_salir(app, base_temporal):
+    import propuestas
+    app["meta"].clear()
+    os.remove(app["tmp"] / "clientes" / "acme" / "token_youtube.json")
+    eid = _experimento()
+    pid, ep = _pieza_en(base_temporal, eid)
+    prid = propuestas.crear("acme", eid, "publicar_organico", {"ep_id": ep, "plataformas": [], "captions": {}}, "ganador")
+    html = _seccion(_html(app), "experimentos")
+    form = html[html.index(f"/propuestas/{prid}/aprobar"):html.index("Aprobar y publicar")]
+    assert 'name="plataformas"' not in form
+    assert "conecta un canal en" in form and "Canales orgánicos" in form and "para poder aprobarla" in form
 
 
 def test_prop_aprobar_sin_form_organico_deja_el_payload_tal_cual(app, base_temporal):
@@ -350,7 +463,10 @@ def test_experimentos_muestra_barra_si_hay_trabajo(app, base_temporal, monkeypat
     app["organico"].crear("acme", pid, "facebook", "x #a #b #c")
     monkeypatch.setattr(app["dashboard"].cola, "job_ids_vivos", lambda c, tipo: {f"acme__pieza{pid}__organico"} if tipo == "organico_publicar" else set())
     html = _seccion(_html(app), "experimentos")
-    assert f'id="trabajo-acme__pieza{pid}__organico"' in html and "iniciarPolling(" in html
+    # Minor #4: el id lleva el sitio para no chocar con la misma barra en Crear.
+    assert f'id="trabajo-acme__pieza{pid}__organico-experimentos"' in html
+    assert f'iniciarPolling("acme__pieza{pid}__organico", "trabajo-acme__pieza{pid}__organico-experimentos")' in html
+    assert f'id="trabajo-acme__pieza{pid}__organico"' not in html
     assert 'name="caption_facebook"' not in html   # mientras publica no hay formulario
 
 
@@ -410,8 +526,13 @@ def test_tablero_alerta_ganadora_sin_publicar_y_tile(app, base_temporal, monkeyp
     assert "sin publicar orgánicamente" not in html
     tile = html[html.index("Ganadoras publicadas"):]
     assert "<strong>1</strong>" in tile[:200]
+    # Minor #2: la misma ganadora en otra plataforma sigue contando 1 (ganadoras, no publicaciones).
+    pub_fb = org.crear("acme", pid, "facebook", "x #a #b #c")
+    org.actualizar("acme", pub_fb, estado="publicada", publicado_en="2026-09-17T10:00:00")
+    assert tablero.contexto("acme")["resumen"]["ganadoras_publicadas"] == 1
     # Fuera del mes no cuenta.
     org.actualizar("acme", pub, publicado_en="2026-08-17T09:00:00")
+    org.actualizar("acme", pub_fb, publicado_en="2026-08-17T10:00:00")
     assert tablero.contexto("acme")["resumen"]["ganadoras_publicadas"] == 0
 
 

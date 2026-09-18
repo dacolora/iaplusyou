@@ -326,18 +326,36 @@ def test_ejecutar_publicar_organico_si_encolar_falla_filas_quedan_en_error_y_no_
 
 
 def test_ejecutar_publicar_organico_respeta_captions_y_plataformas_del_payload(org):
-    """Lo que la persona editó en la propuesta se publica tal cual; redactar
-    solo se llama para las plataformas sin texto. Una plataforma pedida sin
-    canal conectado se avisa y no se crea."""
+    """Lo que la persona editó en la propuesta se publica (normalizado por
+    organico.ajustar: hashtags aparte, «Link en bio.» en IG porque el
+    experimento tiene destino_url); redactar solo se llama para las
+    plataformas sin texto. Una plataforma pedida sin canal conectado se
+    avisa y no se crea."""
     ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
     msg = ac.ejecutar("acme", eid, "publicar_organico", {
         "ep_id": ep, "plataformas": ["facebook", "instagram", "tiktok"],
         "captions": {"instagram": {"titulo": "Mío", "caption": "Mi texto editado #x #y #z"}}})
     pubs = {p["plataforma"]: p for p in org["organico"].listar("acme", pieza_id=pid)}
     assert set(pubs) == {"instagram", "facebook"}
-    assert pubs["instagram"]["caption"] == "Mi texto editado #x #y #z" and pubs["instagram"]["titulo"] == "Mío"
+    assert pubs["instagram"]["caption"] == "Mi texto editado\n\nLink en bio.\n\n#x #y #z"
+    assert pubs["instagram"]["titulo"] == "Mío"
     assert org["redactadas"] == [["facebook"]]
     assert "Sin canal conectado: TikTok" in msg
+
+
+def test_ejecutar_publicar_organico_normaliza_el_caption_editado(org):
+    """Important #1: un caption editado a mano de 3 000 chars con URL en
+    Instagram se guarda recortado y sin enlace — no se manda crudo a Graph."""
+    import organico
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    largo = ("palabra " * 375).strip() + " https://tienda.com/p " + ("otra " * 220).strip() + " #a #b #c"
+    assert len(largo) > 2900
+    ac.ejecutar("acme", eid, "publicar_organico", {
+        "ep_id": ep, "plataformas": ["instagram"], "captions": {"instagram": {"titulo": "T", "caption": largo}}})
+    ig = org["organico"].listar("acme", pieza_id=pid)[0]
+    assert ig["estado"] == "en_cola" and len(ig["caption"]) <= organico.PLATAFORMAS["instagram"]["max_caption"]
+    assert "https://" not in ig["caption"] and "Link en bio." in ig["caption"] and ig["caption"].endswith("#a #b #c")
+    assert org["redactadas"] == []
 
 
 def test_ejecutar_publicar_organico_salta_vivas_y_no_encola_dos_veces(org):

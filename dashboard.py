@@ -2992,12 +2992,14 @@ def _ejecutar_propuesta(cliente, pr):
     return None
 
 
-def _overrides_organico(form, payload):
+def _overrides_organico(cliente, form, payload):
     """Bloque 7: lo que la persona editó en la propuesta `publicar_organico`
     antes de aprobar (`caption_<p>`/`titulo_<p>` y las plataformas que dejó
     marcadas) pisa el `payload["captions"]`/`["plataformas"]` redactados por
     el motor. Solo cuando el form trae `org_form` (la propuesta se pintó con
     los textos); aprobar todo o un POST sin campos deja el payload tal cual.
+    El texto editado pasa por `organico.normalizar_captions` (máximos, sin
+    enlaces en IG/TikTok, hashtags): `maxlength` del textarea es solo cliente.
     Devuelve (payload, error): error si no quedó ninguna plataforma marcada —
     con lista vacía acciones publicaría en TODAS las disponibles."""
     if not form.get("org_form"):
@@ -3013,8 +3015,15 @@ def _overrides_organico(form, payload):
             captions.setdefault(p, {})["caption"] = caption
         if f"titulo_{p}" in form:
             captions.setdefault(p, {})["titulo"] = (form.get(f"titulo_{p}") or "").strip()
+    captions = {p: captions[p] for p in plataformas if p in captions}
+    pieza_id = _pieza_de_ep(cliente, payload.get("ep_id")) if payload.get("ep_id") else None
+    if captions and pieza_id:
+        try:
+            captions = organico.normalizar_captions(cliente, pieza_id, captions)
+        except ValueError as e:
+            return payload, str(e)
     payload["plataformas"] = plataformas
-    payload["captions"] = {p: captions[p] for p in plataformas if p in captions}
+    payload["captions"] = captions
     return payload, None
 
 
@@ -3026,7 +3035,8 @@ def prop_aprobar(cliente, pid):
     if not pr or pr["estado"] != "pendiente":
         flash("Esa propuesta no existe o ya estaba resuelta.", "error")
         return _volver_exp(cliente)
-    payload, error = _overrides_organico(request.form, pr["payload"]) if pr["accion"] == "publicar_organico" else (pr["payload"], None)
+    payload, error = (_overrides_organico(cliente, request.form, pr["payload"]) if pr["accion"] == "publicar_organico"
+                      else (pr["payload"], None))
     if error:
         flash(error, "error")
         return _volver_exp(cliente)
@@ -3171,8 +3181,12 @@ def org_publicar(cliente):
     `ep_id` si vino de un experimento) por plataforma marcada y encola UNA
     tarea organico_publicar (max_intentos=1). Valida TODO antes de crear
     nada: plataformas sin canal disponible o sin texto → flash y nada se
-    publica (publicar a medias sin avisar sería peor). Las plataformas con
-    publicación viva se saltan con aviso (unicidad: nunca dos veces)."""
+    publica (publicar a medias sin avisar sería peor). El texto pasa por
+    `organico.normalizar_captions` en servidor (máximos, sin enlaces en
+    IG/TikTok, hashtags): el `maxlength` del textarea no es garantía. Las
+    plataformas con publicación viva se saltan con aviso (unicidad: nunca
+    dos veces). Si aun así `crear` falla a mitad, las filas ya creadas
+    quedan en `error` (nunca `en_cola` sin tarea bloqueando la plataforma)."""
     ep_id = _int_form("ep_id")
     pieza_id = _int_form("pieza_id") or (_pieza_de_ep(cliente, ep_id) if ep_id else None)
     if not pieza_id:
@@ -3195,6 +3209,11 @@ def org_publicar(cliente):
         flash(f"Falta el texto para {_nombres_org(sin_texto)}: escríbelo o pulsa «Escribir texto con IA». "
               "No se publicó nada.", "error")
         return _volver_org(cliente)
+    try:
+        textos = organico.normalizar_captions(cliente, pieza_id, textos)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_org(cliente)
     if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pieza_id)):
         flash("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine.", "warn")
         return _volver_org(cliente)
@@ -3209,7 +3228,12 @@ def org_publicar(cliente):
             if "ya está publicada" in str(e):
                 saltadas.append(p)
                 continue
-            flash(str(e), "error")
+            # Creación parcial: lo ya creado no puede quedar `en_cola` sin tarea
+            # (bloquearía la plataforma por unicidad); en `error` se reintenta.
+            for pub_id in pub_ids:
+                organico.actualizar(cliente, pub_id, estado="error",
+                                    error=f"No se creó la publicación en {_nombres_org([p])}: {e}")
+            flash(f"{e} No se publicó nada.", "error")
             return _volver_org(cliente)
     if saltadas:
         flash(f"Ya estaba publicada (o en cola) en {_nombres_org(saltadas)}: no se publica dos veces.", "warn")
