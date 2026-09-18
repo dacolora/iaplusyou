@@ -158,7 +158,7 @@
         {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
         {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
         {% endif %}
-        <span class="generado-tipo">{% if item.tipo == "imagen" %}Imagen{% else %}Video · {{ item.duracion_objetivo }}s{% endif %}</span>
+        <span class="generado-tipo">{% if item.tipo == "imagen" %}Imagen{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}{% endif %}</span>
         {% if item.estado == "video_generando" %}
         <div class="generado-velo">
           {% if item.trabajo %}
@@ -203,7 +203,7 @@
           <p class="campo-label">Qué tenía que pasar</p>
           <p class="detalle-texto">{{ item.accion_central or "(sin texto)" }}</p>
           <p class="vacio" style="padding:0;font-size:.78rem;">
-            {% if item.tipo == "imagen" %}Imagen{% else %}Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "9:16" }}{% endif %}
+            {% if item.tipo == "imagen" %}Imagen{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}{% endif %}
             · {{ item.modelo_nombre }}
             {% if item.enfoque_nombre %} · {{ item.enfoque_nombre }}{% endif %}
             {% if item.usd %} · costó ${{ item.usd }}{% endif %}
