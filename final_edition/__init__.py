@@ -1,8 +1,8 @@
 """Final edition: localización, producción y render de piezas finales por
 idioma/país a partir de un clon de creative flow.
 
-Orquestador de las capas (`guion` -> `cortes` -> `voz` -> `musica` -> `texto`
--> `render`) y del estado en la base (`creative_flow.crear_final` /
+Orquestador de las capas (`guion` -> `cortes` -> `sonido` -> `voz` -> `musica`
+-> `texto` -> `render`) y del estado en la base (`creative_flow.crear_final` /
 `actualizar_final`). Dos entradas:
 
   preparar_guion(cliente, cf_id, opciones) -> (guion_base, costo_usd)
@@ -14,6 +14,12 @@ Orquestador de las capas (`guion` -> `cortes` -> `voz` -> `musica` -> `texto`
       Produce una pieza final. Voz y música son degradables: si fallan la
       pieza sale igual sin esa capa (`estado="degradada"`). Guion, cortes,
       texto y render no: la pieza queda en `error` y la excepción se relanza.
+      La capa `sonido` (spec estudio S2) es el audio nativo del clon: gratis,
+      se conserva desde el clon CRUDO (`video_local_crudo`/`video_url_crudo`,
+      nunca el mezclado con música, que la pondría dos veces) y se mezcla con
+      voz y música según `opciones["mezcla"]` (preset de `mezcla.PRESETS`) y
+      `opciones["volumenes"]`; un clon mudo deja la capa `ausente` sin
+      degradar la pieza, `con_sonido=False` o `sonido="ninguno"` la omiten.
 
 Las capas se invocan siempre como atributo de su módulo (`voz.sintetizar`,
 `render.componer`, ...) para que las pruebas puedan sustituirlas una a una.
@@ -27,7 +33,7 @@ import catalogo_productos
 import creative_flow
 import marca
 import proyectos
-from final_edition import cortes, guion as guion_mod, musica, render, texto, tipos, voz
+from final_edition import cortes, guion as guion_mod, mezcla, musica, render, texto, tipos, voz
 from providers import fal_audio
 from storage import r2_uploader
 
@@ -48,7 +54,10 @@ IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _TAMANOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
 _OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "precios": None, "con_voz": True,
                      "con_musica": True, "idioma_base": "es", "duracion_s": None,
-                     "variante": None, "variante_tipo": None}
+                     "variante": None, "variante_tipo": None,
+                     # Capa "sonido" (spec estudio S2): el audio nativo del clon.
+                     "con_sonido": True, "sonido": "nativo", "mezcla": mezcla.PRESET_DEFECTO, "volumenes": None}
+SONIDOS_VALIDOS = ("nativo", "ninguno")
 
 
 # ------------------------------------------------------------------ rutas ---
@@ -62,15 +71,23 @@ def _carpeta_final(cliente, final_id):
 
 
 def _clon_local(cliente, cf_id, entry):
-    """Ruta local del clon: `video_local` si existe; si no, descarga
-    `video_url` una vez a salidas/<cliente>/finales/clones/<cf_id>.mp4."""
+    """Ruta local del clon CRUDO (solo sonido nativo): `video_local_crudo` si
+    existe; si no, descarga `video_url_crudo` una vez a
+    salidas/<cliente>/finales/clones/<cf_id>_crudo.mp4; clones anteriores a la
+    capa de sonido usan `video_local`/`video_url` (que en ellos es el mismo
+    archivo). El clon mezclado con música NO sirve de fuente: la música se
+    pondría dos veces."""
+    crudo = entry.get("video_local_crudo")
+    if crudo and os.path.exists(crudo):
+        return crudo
     local = entry.get("video_local")
-    if local and os.path.exists(local):
+    if not entry.get("video_url_crudo") and local and os.path.exists(local):
         return local
-    url = entry.get("video_url")
+    url = entry.get("video_url_crudo") or entry.get("video_url")
     if not url:
         raise ValueError(f"La sesión {cf_id} no tiene video listo para producir.")
-    destino = os.path.join(_carpeta_salidas(), cliente, "finales", "clones", f"{cf_id}.mp4")
+    sufijo = "_crudo" if entry.get("video_url_crudo") else ""
+    destino = os.path.join(_carpeta_salidas(), cliente, "finales", "clones", f"{cf_id}{sufijo}.mp4")
     if os.path.exists(destino):
         return destino
     os.makedirs(os.path.dirname(destino), exist_ok=True)
@@ -262,6 +279,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
     if variante_tipo and variante_tipo not in guion_mod.VARIANTES_GUION:
         raise ValueError(
             f"Tipo de variante no soportado: {variante_tipo}. Opciones: {sorted(guion_mod.VARIANTES_GUION)}")
+    # Capa sonido (S2): se valida ANTES de crear la fila final para que un
+    # preset o modo desconocido no deje una pieza a medias en la base.
+    if o.get("sonido") not in SONIDOS_VALIDOS:
+        raise ValueError(f"Capa de sonido no soportada: {o.get('sonido')}. Opciones: {SONIDOS_VALIDOS}")
+    volumenes = mezcla.volumenes_para(o.get("mezcla"), o.get("volumenes"))   # ValueError si el preset no existe
+    pedir_sonido = bool(o.get("con_sonido", True)) and o.get("sonido") == "nativo"
 
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=o.get("variante"))
     costo = 0.0
@@ -340,6 +363,19 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
             raise
         capa("cortes", "ffmpeg", {"cortes": cortes_t, "segmentos": len(segmentos)})
 
+        # 1b. Sonido de la escena (S2): capa gratis; el clon mudo no degrada la pieza.
+        params_sonido = {"sonido": o.get("sonido"), "mezcla": o.get("mezcla") or mezcla.PRESET_DEFECTO,
+                         "volumenes": volumenes}
+        if not pedir_sonido:
+            capa("sonido", "nativo", params_sonido, estado="omitida")
+            con_sonido_render = False
+        elif mezcla.tiene_audio(clon) is True:
+            capa("sonido", "nativo", params_sonido, estado="ok")
+            con_sonido_render = True
+        else:
+            capa("sonido", "nativo", params_sonido, estado="ausente")
+            con_sonido_render = False
+
         # 2. Voz (degradable)
         avisar(ETAPAS_FINAL[2][0])
         archivo_voz, palabras = None, []
@@ -412,7 +448,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         salida_mp4 = os.path.join(carpeta, f"{final_id}.mp4")
         try:
             resultado = render.componer(clon, segmentos, overlays, archivo_voz, pista_musica, salida_mp4,
-                                        duracion_final, ancho, alto)
+                                        duracion_final, ancho, alto, con_sonido=con_sonido_render, volumenes=volumenes)
             key = f"clientes/{cliente}/finales/{final_id}"
             url_video = r2_uploader.upload_video(resultado["archivo"], key + ".mp4")
             url_miniatura = r2_uploader.upload_image(resultado["miniatura"], key + ".png")
@@ -420,7 +456,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
             capa("render", "ffmpeg", {"ancho": ancho, "alto": alto}, estado="error", error=str(e))
             raise
         capa("render", "ffmpeg", {"ancho": ancho, "alto": alto, "con_voz": bool(archivo_voz),
-                                  "con_musica": bool(pista_musica)})
+                                  "con_musica": bool(pista_musica), "con_sonido": bool(resultado.get("con_sonido")),
+                                  "mezcla": o.get("mezcla") or mezcla.PRESET_DEFECTO})
     except Exception as e:
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas,
                                        costo_usd=round(costo, 4), guion=guion)

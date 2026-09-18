@@ -37,6 +37,17 @@ def clip(tmp_path_factory):
     return ruta
 
 
+@pytest.fixture(scope="module")
+def clip_con_audio(tmp_path_factory):
+    """Igual que `clip` pero con una pista de audio (tono de 440 Hz)."""
+    ruta = str(tmp_path_factory.mktemp("clip") / "clon_audio.mp4")
+    subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y",
+                    "-f", "lavfi", "-i", "testsrc2=size=540x960:rate=25",
+                    "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100",
+                    "-t", "8", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", ruta], check=True)
+    return ruta
+
+
 def _wav(ruta, segundos=1.0):
     with wave.open(ruta, "wb") as w:
         w.setnchannels(2); w.setsampwidth(2); w.setframerate(44100)
@@ -101,15 +112,16 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
     monkeypatch.setattr(texto, "generar_overlays", fake_overlays)
 
     def fake_componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_mp4, duracion_s,
-                      ancho=1080, alto=1920, preset="veryfast"):
+                      ancho=1080, alto=1920, preset="veryfast", con_sonido=False, volumenes=None):
         llamadas["render"] = dict(clon=clon_path, segmentos=segmentos, voz=archivo_voz, musica=pista_musica,
-                                  duracion_s=duracion_s)
+                                  duracion_s=duracion_s, con_sonido=con_sonido, volumenes=volumenes)
         os.makedirs(os.path.dirname(salida_mp4), exist_ok=True)
         shutil.copy(clon_path, salida_mp4)
         mini = os.path.splitext(salida_mp4)[0] + "_miniatura.png"
         with open(mini, "wb") as f:
             f.write(b"png")
-        return {"archivo": salida_mp4, "miniatura": mini, "duracion_s": duracion_s}
+        return {"archivo": salida_mp4, "miniatura": mini, "duracion_s": duracion_s,
+                "con_sonido": con_sonido and llamadas.get("clon_con_audio", False)}
     monkeypatch.setattr(render, "componer", fake_componer)
 
     from storage import r2_uploader
@@ -194,8 +206,12 @@ def test_producir_ok(entorno):
     assert f["video_url"] == f"https://r2/clientes/acme/finales/{final_id}.mp4"
     assert f["url_miniatura"].endswith(f"{final_id}.png")
     assert f["duracion_s"] == pytest.approx(8.0, abs=0.1)
-    assert sorted(f["capas"]) == ["cortes", "guion", "musica", "render", "texto", "voz"]
-    assert all(c["estado"] == "ok" for c in f["capas"].values())
+    assert sorted(f["capas"]) == ["cortes", "guion", "musica", "render", "sonido", "texto", "voz"]
+    # El clon de la fixture no trae pista: la capa sonido queda "ausente" (gratis, no degrada).
+    assert all(c["estado"] == "ok" for n, c in f["capas"].items() if n != "sonido")
+    assert f["capas"]["sonido"]["estado"] == "ausente" and f["capas"]["sonido"]["costo_usd"] == 0.0
+    assert f["capas"]["render"]["parametros"]["con_sonido"] is False
+    assert f["capas"]["render"]["parametros"]["mezcla"] == "equilibrada"
     assert f["costo_usd"] == pytest.approx(0.011 + 0.02 + 0.3)
     assert f["guion"]["idioma"] == "en" and f["error"] is None
     assert resumen["estado"] == "listo" and resumen["video_url"] == f["video_url"]
@@ -308,3 +324,34 @@ def test_producir_usa_precio_base_guardado_al_preparar(entorno):
     assert entorno["localizar"] == ("en", "US", None)
     final_edition.producir("acme", cf_id, "es", "CO", {"precios": {"es_CO": 99900}})
     assert entorno["localizar"] == ("es", "CO", 99900)
+
+
+def test_producir_conserva_el_sonido_del_clon_desde_el_crudo(entorno, clip_con_audio, monkeypatch):
+    import creative_flow as cf
+    cf.actualizar("acme", entorno["cf_id"], video_local_crudo=clip_con_audio, video_url_crudo="https://r2/crudo.mp4",
+                  capas={"sonido": {"proveedor": "wan3", "estado": "ok"}})
+    entorno["clon_con_audio"] = True
+    final_id, resumen = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"mezcla": "voz_protagonista"})
+    r = entorno["render"]
+    assert r["clon"] == clip_con_audio and r["con_sonido"] is True
+    assert r["volumenes"] == {"voz": 1.0, "sonido": 0.6, "musica": 0.25}
+    assert resumen["capas"]["sonido"] == {"proveedor": "nativo", "parametros": {"sonido": "nativo", "mezcla": "voz_protagonista",
+                                          "volumenes": {"voz": 1.0, "sonido": 0.6, "musica": 0.25}}, "costo_usd": 0.0,
+                                          "estado": "ok", "error": None}
+    assert resumen["capas"]["render"]["parametros"]["con_sonido"] is True
+
+
+def test_producir_sin_sonido_o_clon_mudo(entorno):
+    # el clon de la fixture no tiene pista: pedido pero ausente
+    _, resumen = final_edition.producir("acme", entorno["cf_id"], "es", "CO")
+    assert resumen["capas"]["sonido"]["estado"] == "ausente" and entorno["render"]["con_sonido"] is False
+    assert resumen["estado"] == "listo"   # un clon mudo no degrada la pieza
+    _, resumen2 = final_edition.producir("acme", entorno["cf_id"], "en", "US", {"con_sonido": False})
+    assert resumen2["capas"]["sonido"]["estado"] == "omitida" and entorno["render"]["con_sonido"] is False
+    _, resumen3 = final_edition.producir("acme", entorno["cf_id"], "pt", "BR", {"sonido": "ninguno"})
+    assert resumen3["capas"]["sonido"]["estado"] == "omitida"
+
+
+def test_producir_rechaza_preset_desconocido(entorno):
+    with pytest.raises(ValueError):
+        final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"mezcla": "reguetón"})

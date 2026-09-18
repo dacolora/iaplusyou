@@ -108,7 +108,7 @@ def test_producir_encola_una_tarea_por_destino(base_temporal, monkeypatch):
     c = _cliente_admin(dashboard)
     r = c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
         "destinos": ["es_CO", "en_US"], "voz": "Daniel", "estilo_musica": "lujo",
-        "con_voz": "si", "precio": "89900",
+        "con_voz": "si", "precio": "89900", "con_sonido": "si", "mezcla": "ambiente_protagonista",
     })
     assert r.status_code == 302
     assert [t["tipo"] for t in llamadas] == ["final_producir", "final_producir"]
@@ -120,7 +120,8 @@ def test_producir_encola_una_tarea_por_destino(base_temporal, monkeypatch):
     assert (p0["cliente"], p0["cf_id"], p0["idioma"], p0["pais"]) == ("acme", cf_id, "es", "CO")
     assert (p1["idioma"], p1["pais"]) == ("en", "US")
     assert p0["opciones"] == {"voz": "Daniel", "estilo_musica": "lujo", "con_voz": True, "con_musica": False,
-                              "precio": 89900.0, "precios": {}, "idioma_base": "es"}
+                              "precio": 89900.0, "precios": {}, "idioma_base": "es",
+                              "con_sonido": True, "sonido": "nativo", "mezcla": "ambiente_protagonista"}
     assert any("2 finales" in m for m in _flashes(c))
     # Las filas finales existen en `generando` desde que se encola, no desde
     # que el worker arranca: la cuadrícula las muestra de una con su barra.
@@ -223,9 +224,12 @@ def test_producir_voz_o_estilo_invalidos_usan_defecto(base_temporal, monkeypatch
     llamadas = _capturar_encolar(monkeypatch, dashboard)
     c = _cliente_admin(dashboard)
     c.post(f"/cliente/acme/creative_flow/{cf_id}/final/producir",
-           data={"destinos": ["pt_BR"], "voz": "NoExiste", "estilo_musica": "rarísimo", "con_voz": "si", "con_musica": "si"})
+           data={"destinos": ["pt_BR"], "voz": "NoExiste", "estilo_musica": "rarísimo", "con_voz": "si", "con_musica": "si",
+                 "mezcla": "x"})
     o = llamadas[0]["payload"]["opciones"]
     assert o["voz"] == "Rachel" and o["estilo_musica"] == "energetico" and o["precio"] is None
+    # Sin `con_sonido` en el form el check está desmarcado; un preset inválido cae al de defecto.
+    assert o["con_sonido"] is False and o["mezcla"] == "equilibrada" and o["sonido"] == "nativo"
 
 
 # ---------- guardar guion ----------
@@ -339,6 +343,8 @@ def test_ver_cliente_pasa_contexto_fe(base_temporal, monkeypatch):
     assert capturado["paises_fe"] is tipos.PAISES
     assert capturado["voces_fe"] is fal_audio.VOCES
     assert capturado["estilos_fe"] == list(tipos.ESTILOS_MUSICA)
+    from final_edition import mezcla
+    assert capturado["presets_mezcla"] == list(mezcla.PRESETS)
 
 
 def _entorno_plantilla():
@@ -359,6 +365,7 @@ def _contexto_minimo(items):
         fp_prefill=None, activos_por_categoria={}, categorias={}, productos=[],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
         paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
+        presets_mezcla=["equilibrada", "voz_protagonista", "ambiente_protagonista"],
     )
 
 
@@ -441,6 +448,21 @@ def test_plantilla_con_guion_y_finales_renderiza():
     # precio por destino (I1): un input propio por país, con su moneda.
     assert 'name="precio_es_CO"' in html and 'data-moneda="COP"' in html
     assert 'name="precio_en_US"' in html and 'data-moneda="USD"' in html
+    # S2: capa sonido — check marcado (el clon no dice que sea mudo) y presets de mezcla.
+    assert 'name="con_sonido" value="si" checked' in html and "con sonido de la escena" in html
+    assert 'name="mezcla"' in html and 'value="voz_protagonista"' in html and "voz protagonista" in html
+    assert "este clon no trae sonido" not in html
+
+
+def test_plantilla_clon_mudo_desmarca_el_sonido():
+    """Si Crear anotó que el clon vino sin pista, el check «con sonido» sale
+    desmarcado y se avisa; no se ofrece pedir lo que no existe."""
+    env = _entorno_plantilla()
+    html = env.get_template("_tab_creativeflowplus.html").render(
+        **_contexto_minimo([_item_video_listo(guion_base=GUION_BASE,
+                                              capas={"sonido": {"proveedor": "wan3", "estado": "ausente"}})]))
+    assert 'name="con_sonido" value="si" checked' not in html and 'name="con_sonido" value="si"' in html
+    assert "este clon no trae sonido" in html
 
 
 def test_plantilla_imagen_no_muestra_final_edition():

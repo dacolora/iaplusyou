@@ -315,6 +315,12 @@
                          placeholder="opcional, país base" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
                   <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> con voz</label>
                   <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> con música</label>
+                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> con sonido de la escena{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">(este clon no trae sonido)</small>{% endif %}</label>
+                  <label>Mezcla
+                    <select name="mezcla">
+                      {% for p in presets_mezcla %}<option value="{{ p }}">{{ p | replace("_", " ") }}</option>{% endfor %}
+                    </select>
+                  </label>
                 </div>
                 <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales">Producir finales</button>
               </form>

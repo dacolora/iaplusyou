@@ -73,7 +73,7 @@ from tareas.flowplus import ETAPAS_CREATIVE_FLOW
 from tareas import final_edition as tareas_fe
 from tareas import experimentos as tareas_exp
 from tareas import tiendas as tareas_tiendas
-from final_edition import ETAPAS_FINAL, tipos as fe_tipos
+from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
 from publicador import publicar_brief
@@ -953,6 +953,7 @@ def ver_cliente(cliente):
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
+        presets_mezcla=list(fe_mezcla.PRESETS),
         experimentos=experimentos_exp,
         experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
         elegibles_exp=experimentos.elegibles(cliente),
@@ -3953,6 +3954,11 @@ def fe_producir(cliente, cf_id):
         "precio": _precio_form(request.form.get("precio")),
         "precios": precios,
         "idioma_base": idioma_base,
+        # Capa sonido (S2): el audio nativo del clon crudo; un preset de mezcla
+        # que no existe cae al de defecto en vez de tumbar la tarea.
+        "con_sonido": bool(request.form.get("con_sonido")),
+        "sonido": "nativo",
+        "mezcla": request.form.get("mezcla") if request.form.get("mezcla") in fe_mezcla.PRESETS else fe_mezcla.PRESET_DEFECTO,
     }
     encolados = 0
     for idioma, pais in destinos:
