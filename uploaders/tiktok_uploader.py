@@ -22,6 +22,12 @@ API_BASE = "https://open.tiktokapis.com/v2"
 MIN_CHUNK_SIZE = 5 * 1024 * 1024  # 5MB
 
 
+class PublicacionFallida(RuntimeError):
+    """TikTok procesó el publish_id y respondió FAILED: no hay nada publicado.
+    Subclase de RuntimeError para no cambiar lo que ven los llamadores
+    viejos; organico la distingue de un token ausente o un fallo de red."""
+
+
 def _load_token(token_path):
     if not os.path.exists(token_path):
         raise RuntimeError(
@@ -169,6 +175,6 @@ def check_status(publish_id, poll_interval=5, timeout_seconds=300, token_path=No
         if status in ("PUBLISH_COMPLETE",):
             return status
         if status in ("FAILED",):
-            raise RuntimeError(f"La publicación en TikTok falló: {resp.json()}")
+            raise PublicacionFallida(f"La publicación en TikTok falló: {resp.json()}")
         time.sleep(poll_interval)
     raise TimeoutError("TikTok no confirmó la publicación a tiempo.")

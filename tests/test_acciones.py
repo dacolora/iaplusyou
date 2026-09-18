@@ -261,3 +261,200 @@ def test_rescatar_tolera_la_marca_que_planificar_ya_dejo(ent, monkeypatch):
     msg = ac.ejecutar("acme", eid, "rescatar", {"ep_id": ep})
     assert "ya rescatada" in msg
     assert [l for l in ent["llamadas"] if l[0] == "planificar"] == [("planificar", "rescatar", ep)]
+
+
+# --- Bloque 7: publicar_organico ---------------------------------------------
+
+@pytest.fixture()
+def org(ent, monkeypatch):
+    """Canales y redacción falsos: `disponibles` devuelve lo que el test ponga
+    en `canales`; `redactar` no llama a Claude y anota qué plataformas le
+    pidieron."""
+    import acciones
+    import organico
+    canales = ["instagram", "facebook"]
+    redactadas = []
+
+    def redactar(cliente, pieza_id, plataformas):
+        redactadas.append(list(plataformas))
+        return {p: {"titulo": f"T {p}", "caption": f"Texto {p}\n\n#a #b #c", "extra": {"fallback": False}}
+                for p in plataformas}
+
+    monkeypatch.setattr(acciones.organico, "disponibles", lambda cliente: list(canales))
+    monkeypatch.setattr(acciones.organico, "redactar", redactar)
+    return {**ent, "organico": organico, "canales": canales, "redactadas": redactadas}
+
+
+def _pieza_ep(ent):
+    return [p for p in ent["ex"].piezas("acme", ent["eid"]) if p["id"] == ent["ep"]][0]
+
+
+def test_ejecutar_publicar_organico_crea_publicaciones_y_encola(org):
+    import cola
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "Instagram Reels" in msg and "Facebook" in msg
+    pubs = org["organico"].listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"], p["origen"], p["experimento_pieza_id"]) for p in pubs] == \
+        [("instagram", "en_cola", "ganador", ep), ("facebook", "en_cola", "ganador", ep)]
+    assert pubs[0]["caption"].startswith("Texto instagram") and pubs[0]["titulo"] == "T instagram"
+    assert org["redactadas"] == [["instagram", "facebook"]]
+    tarea = cola.consultar_por_job(f"acme__pieza{pid}__organico")
+    assert tarea["tipo"] == "organico_publicar" and tarea["estado"] == "pendiente" and tarea["max_intentos"] == 1
+    assert tarea["payload"] == {"cliente": "acme", "pub_ids": [p["id"] for p in pubs]}
+    assert tarea["etapas"] == [["Descargando", 15], ["Publicando", 85]] and tarea["cliente"] == "acme"
+    assert _pieza_ep(org)["extra"]["publicado_organico"] is True
+
+
+def test_ejecutar_publicar_organico_si_encolar_falla_filas_quedan_en_error_y_no_marca_publicado(org, monkeypatch):
+    """M-3: la carrera entre `trabajos.en_curso()` y `trabajos.encolar()`
+    (alguien encoló la misma pieza justo en el medio) deja las filas recién
+    creadas en `error` con mensaje en español, sin encolar tarea y sin
+    marcar `extra.publicado_organico` (M-1: la bandera es solo para lo que
+    de verdad quedó en cola)."""
+    import cola
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    monkeypatch.setattr(ac.trabajos, "encolar", lambda *a, **k: False)
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "Ya hay una publicación orgánica" in msg and "en curso" in msg and "reintentar" in msg
+    pubs = org["organico"].listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("instagram", "error"), ("facebook", "error")]
+    assert all("Ya había una publicación de esta pieza en curso; reintenta cuando termine." == p["error"]
+               for p in pubs)
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    assert "publicado_organico" not in _pieza_ep(org)["extra"]
+
+
+def test_ejecutar_publicar_organico_creacion_parcial_deja_lo_creado_en_error(org, monkeypatch):
+    """Minor #5: si `organico.crear` falla en la 2.ª plataforma con algo que
+    no sea «ya está publicada», la 1.ª no queda `en_cola` sin tarea
+    (bloquearía la plataforma por unicidad): pasa a `error` y la excepción sube."""
+    import cola
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    real = org["organico"].crear
+
+    def crear_fragil(cliente, pieza_id, plataforma, *a, **kw):
+        if plataforma == "facebook":
+            raise ValueError("El texto de la publicación no puede estar vacío.")
+        return real(cliente, pieza_id, plataforma, *a, **kw)
+    monkeypatch.setattr(ac.organico, "crear", crear_fragil)
+    with pytest.raises(ValueError, match="no puede estar vacío"):
+        ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    pubs = org["organico"].listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("instagram", "error")]
+    assert "No se creó la publicación en Facebook (Página)" in pubs[0]["error"]
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    assert "publicado_organico" not in _pieza_ep(org)["extra"]
+
+
+def test_ejecutar_publicar_organico_respeta_captions_y_plataformas_del_payload(org):
+    """Lo que la persona editó en la propuesta se publica (normalizado por
+    organico.ajustar: hashtags aparte, «Link en bio.» en IG porque el
+    experimento tiene destino_url); redactar solo se llama para las
+    plataformas sin texto. Una plataforma pedida sin canal conectado se
+    avisa y no se crea."""
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {
+        "ep_id": ep, "plataformas": ["facebook", "instagram", "tiktok"],
+        "captions": {"instagram": {"titulo": "Mío", "caption": "Mi texto editado #x #y #z"}}})
+    pubs = {p["plataforma"]: p for p in org["organico"].listar("acme", pieza_id=pid)}
+    assert set(pubs) == {"instagram", "facebook"}
+    assert pubs["instagram"]["caption"] == "Mi texto editado\n\nLink en bio.\n\n#x #y #z"
+    assert pubs["instagram"]["titulo"] == "Mío"
+    assert org["redactadas"] == [["facebook"]]
+    assert "Sin canal conectado: TikTok" in msg
+
+
+def test_ejecutar_publicar_organico_normaliza_el_caption_editado(org):
+    """Important #1: un caption editado a mano de 3 000 chars con URL en
+    Instagram se guarda recortado y sin enlace — no se manda crudo a Graph."""
+    import organico
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    largo = ("palabra " * 375).strip() + " https://tienda.com/p " + ("otra " * 220).strip() + " #a #b #c"
+    assert len(largo) > 2900
+    ac.ejecutar("acme", eid, "publicar_organico", {
+        "ep_id": ep, "plataformas": ["instagram"], "captions": {"instagram": {"titulo": "T", "caption": largo}}})
+    ig = org["organico"].listar("acme", pieza_id=pid)[0]
+    assert ig["estado"] == "en_cola" and len(ig["caption"]) <= organico.PLATAFORMAS["instagram"]["max_caption"]
+    assert "https://" not in ig["caption"] and "Link en bio." in ig["caption"] and ig["caption"].endswith("#a #b #c")
+    assert org["redactadas"] == []
+
+
+def test_ejecutar_publicar_organico_salta_vivas_y_no_encola_dos_veces(org):
+    import cola
+    ac, eid, ep, pid, organico = org["ac"], org["eid"], org["ep"], org["pid"], org["organico"]
+    ya = organico.crear("acme", pid, "instagram", "ya publicada #a #b #c", origen="manual")
+    organico.actualizar("acme", ya, estado="publicada", url="https://www.instagram.com/p/abc")
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "Ya estaba publicada (o en cola) en Instagram Reels" in msg and "Facebook" in msg
+    pubs = organico.listar("acme", pieza_id=pid)
+    assert [(p["plataforma"], p["estado"]) for p in pubs] == [("instagram", "publicada"), ("facebook", "en_cola")]
+    assert org["redactadas"] == [["facebook"]]
+    tarea = cola.consultar_por_job(f"acme__pieza{pid}__organico")
+    assert tarea["payload"]["pub_ids"] == [pubs[1]["id"]]
+    # Segunda vez con la tarea viva: no crea nada ni encola otra.
+    msg2 = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "en curso" in msg2
+    assert len(organico.listar("acme", pieza_id=pid)) == 2 and len(org["redactadas"]) == 1
+    # Con la tarea terminada y todo vivo: nada nuevo, sin error.
+    cola.terminar(tarea["id"], "ok")
+    msg3 = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "no tiene nada nuevo que publicar" in msg3
+    assert len(organico.listar("acme", pieza_id=pid)) == 2
+
+
+def test_ejecutar_publicar_organico_sin_canales_no_es_error(org):
+    import cola
+    ac, eid, ep, pid = org["ac"], org["eid"], org["ep"], org["pid"]
+    org["canales"].clear()
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert msg.startswith("No hay canales orgánicos disponibles")
+    assert org["organico"].listar("acme", pieza_id=pid) == [] and org["redactadas"] == []
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    assert "publicado_organico" not in _pieza_ep(org)["extra"]
+
+
+def test_pedir_publicar_organico_en_semi_propone_con_textos_y_en_auto_publica(org):
+    import cola
+    import propuestas as pr
+    ac, ex, eid, ep, pid = org["ac"], org["ex"], org["eid"], org["ep"], org["pid"]
+    estado, msg = ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep, "plataformas": ["instagram", "facebook"]},
+                           "ganador")
+    assert estado == "propuesta" and "publicar_organico" in msg
+    pend = pr.pendientes("acme", eid)
+    assert len(pend) == 1 and pend[0]["accion"] == "publicar_organico"
+    payload = pend[0]["payload"]
+    assert payload["ep_id"] == ep and payload["plataformas"] == ["instagram", "facebook"]
+    assert payload["captions"]["instagram"]["caption"].startswith("Texto instagram")
+    assert payload["captions"]["facebook"]["titulo"] == "T facebook"
+    assert org["organico"].listar("acme", pieza_id=pid) == []          # nada publicado sin aprobar
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    # Misma propuesta otra vez: no duplica y (M-2) no vuelve a redactar —
+    # sería una llamada a Claude cuyo texto propuestas.crear descartaría igual.
+    ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep, "plataformas": ["instagram", "facebook"]}, "ganador")
+    assert len(pr.pendientes("acme", eid)) == 1
+    assert org["redactadas"] == [["instagram", "facebook"]]
+    # Manual también propone; auto ejecuta.
+    ex.actualizar("acme", eid, modo="manual")
+    assert ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep}, "ganador")[0] == "propuesta"
+    assert org["redactadas"] == [["instagram", "facebook"]]   # sigue sin redactar de nuevo
+    ex.actualizar("acme", eid, modo="auto")
+    estado, msg = ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep}, "ganador")
+    assert estado == "ejecutada" and "en cola" in msg
+    assert [p["plataforma"] for p in org["organico"].listar("acme", pieza_id=pid)] == ["instagram", "facebook"]
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico")["max_intentos"] == 1
+    tipos = [e["tipo"] for e in ex.eventos("acme", eid)]
+    assert "propuesta" in tipos and "accion" in tipos
+
+
+def test_pedir_publicar_organico_propone_aunque_redactar_falle(org, monkeypatch):
+    """Sin texto previo la propuesta igual existe (con `captions_error`); al
+    aprobarla, ejecutar vuelve a redactar."""
+    import propuestas as pr
+    ac, eid, ep = org["ac"], org["eid"], org["ep"]
+    monkeypatch.setattr(ac.organico, "redactar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("sin base")))
+    estado, _ = ac.pedir("acme", eid, "publicar_organico", {"ep_id": ep}, "ganador")
+    assert estado == "propuesta"
+    payload = pr.pendientes("acme", eid)[0]["payload"]
+    assert "captions" not in payload and payload["captions_error"] == "sin base"
+    assert payload["plataformas"] == ["instagram", "facebook"]

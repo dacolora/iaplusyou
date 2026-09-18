@@ -12,7 +12,12 @@ db.asegurar_carpeta()  # checkout limpio: data/ todavía no existe
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: por defecto fileConfig APAGA todo logger
+    # que ya exista (creatv.organico, creatv.tareas.*…). En el worker, alembic
+    # corre antes de importar la app, pero en los tests la migración corre en
+    # el mismo proceso que el resto de la suite y dejaba mudos los loggers de
+    # los módulos ya importados (caplog vacío).
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 config.set_main_option("sqlalchemy.url", db.url())
 target_metadata = db.metadata
 

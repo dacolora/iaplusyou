@@ -22,12 +22,16 @@ def ent(base_temporal, monkeypatch):
     tareas.cargar_todas()
     llamadas, avisos = [], []
     pedir_real = te.acciones.pedir
+    # Bloque 7: canales orgánicos del proyecto (ninguno por defecto; el test
+    # que los necesita mete plataformas en la lista).
+    canales = []
 
     def pedir(cliente, eid, accion, payload, motivo):
         llamadas.append((accion, payload))
-        return ("propuesta" if accion in ("escalar", "derivar") else "ejecutada"), f"{accion} ok"
+        return ("propuesta" if accion in ("escalar", "derivar", "publicar_organico") else "ejecutada"), f"{accion} ok"
 
     monkeypatch.setattr(te.acciones, "pedir", pedir)
+    monkeypatch.setattr(te.organico, "disponibles", lambda cliente: list(canales))
     monkeypatch.setattr(te.lanzador, "cambiar_estado", lambda c, e, s, pais=None: llamadas.append(("estado", e, s)))
     monkeypatch.setattr(te.notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: (avisos.append((tipo, asunto, cuerpo)), True)[1])
     eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP", modo="semi")
@@ -43,6 +47,7 @@ def ent(base_temporal, monkeypatch):
         return ep
 
     return {"ex": ex, "te": te, "eid": eid, "pieza": pieza, "llamadas": llamadas, "avisos": avisos, "pedir_real": pedir_real,
+            "canales": canales, "db": base_temporal,
             "decidir": lambda: te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})}
 
 
@@ -75,6 +80,47 @@ def test_ganador_escala_deriva_y_avisa(ent):
     assert tipos == ["ganador", "propuesta"]  # escalar/derivar quedaron como propuesta (modo semi): un solo correo
     assert "2 propuesta" in ent["avisos"][1][1]
     assert "1 ganador" in msg and "2 propuesta" in msg
+
+
+def test_ganador_con_canales_organicos_pide_publicar_y_lo_dice_en_el_aviso(ent):
+    """Bloque 7: con algún canal orgánico conectado, el ganador además pide
+    `publicar_organico` (después de escalar y derivar) con las plataformas
+    disponibles; el correo de ganador menciona la propuesta."""
+    ent["canales"].extend(["facebook", "youtube"])
+    ep = ent["pieza"](metricas=GANADOR)
+    msg = ent["decidir"]()
+    assert ent["llamadas"] == [("escalar", {"pais": "CO", "ep_id": ep}), ("derivar", {"ep_id": ep}),
+                               ("publicar_organico", {"ep_id": ep, "plataformas": ["facebook", "youtube"]})]
+    tipos = [a[0] for a in ent["avisos"]]
+    assert tipos == ["ganador", "propuesta"]
+    assert "una propuesta para publicarla orgánica" in ent["avisos"][0][2]
+    assert "3 propuesta" in ent["avisos"][1][1] and "3 propuesta" in msg
+
+
+def test_ganador_sin_canales_no_pide_publicar(ent):
+    ep = ent["pieza"](metricas=GANADOR)
+    ent["decidir"]()
+    assert [l[0] for l in ent["llamadas"]] == ["escalar", "derivar"]
+    assert "publicarla orgánica" not in ent["avisos"][0][2]
+
+
+def test_ganador_ya_publicado_en_todos_los_canales_no_vuelve_a_pedir(ent):
+    """Publicada a mano antes del veredicto (o en cola): no se propone otra
+    vez en esa plataforma; sí en las que faltan."""
+    import organico
+    ent["canales"].extend(["facebook", "instagram"])
+    ep = ent["pieza"](metricas=GANADOR)
+    pieza_id = _pz(ent, ep)["pieza_id"]
+    organico.crear("acme", pieza_id, "facebook", "ya salió #a #b #c")
+    ent["decidir"]()
+    assert ent["llamadas"][-1] == ("publicar_organico", {"ep_id": ep, "plataformas": ["instagram"]})
+    # Y con las dos vivas, nada.
+    organico.crear("acme", pieza_id, "instagram", "ya salió #a #b #c")
+    ent["ex"].actualizar("acme", ent["eid"], estado="corriendo")
+    ent["ex"].actualizar_pieza("acme", ep, veredicto="pendiente")
+    ent["llamadas"].clear()
+    ent["decidir"]()
+    assert [l[0] for l in ent["llamadas"]] == ["escalar", "derivar"]
 
 
 def test_perdedora_pide_pausar_y_luego_rescate(ent):

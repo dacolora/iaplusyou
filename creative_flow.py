@@ -333,6 +333,9 @@ def _final_a_dict(p):
         "video_url": p.url_video, "url_miniatura": p.url_miniatura, "url_local": p.url_local,
         "duracion_s": p.duracion_s, "costo_usd": p.costo_usd, "capas": p.capas or {},
         "guion": p.guion, "error": p.error, "creado_en": p.creado_en,
+        # Id numérico de la fila `pieza`: Crear lo usa para publicar orgánico
+        # (organico.py trabaja por pieza_id, no por legado_id).
+        "pieza_id": p.id,
     }
 
 

@@ -285,6 +285,23 @@ updates. Notifications (`notificaciones.avisar`: propuesta, ganador, rechazo_met
 error_lanzamiento) go by SMTP when `SMTP_HOST` is set and the project has a
 `correo_notificaciones`; otherwise they are only eventos.
 
+**Publicación orgánica** (`organico.py`, `tareas/organico.py`, `_organico_publicar.html`):
+a winning piece (or any final) goes out as organic content on Instagram Reels, Facebook
+Page, TikTok and YouTube Shorts, reusing `publicador._publicar_una` + `uploaders/`. One
+`publicacion` row per (pieza, plataforma), `en_cola -> publicando -> publicada | error`,
+and the partial unique index `uq_publicacion_viva` guarantees "never twice" while a row is
+alive. Publishing is public and irreversible, so nothing here decides *when*: only the
+`organico_publicar` task (`max_intentos=1`, queued by a click in `org_publicar` /
+`org_reintentar`, or by `acciones.ejecutar("publicar_organico")` in modo `auto` / on
+approving the proposal) touches a platform; `redactar` (Claude captions with a
+deterministic fallback, always normalized server-side by `organico.normalizar_captions`)
+is read-only. Once an uploader returns an id, `id_externo` is persisted FIRST in its own
+transaction; a later bookkeeping failure leaves the row `publicando` with the id (never
+`error`, which would enable a second upload) and `reconciliar_subidas` (run by the task
+before each batch) closes it later. TikTok is asynchronous: `check_status` decides
+`publicada` / `error` (FAILED, id cleared, retryable) / still `publicando`. Rows with an
+`id_externo` are never retried. Tokens never reach `error`/eventos (`cola.sin_token`).
+
 **Catálogo ecommerce y conectores** (`tiendas.py`, `conectores/`, `importador.py`,
 `atribucion.py`, `cifrado.py`): the `producto` table is the normalized catalog (unique per
 `(cliente, fuente, fuente_id)`; sync = upsert, disappearing products are archived, never

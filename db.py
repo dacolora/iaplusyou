@@ -283,6 +283,31 @@ pedido = Table("pedido", metadata,
     sa.UniqueConstraint("cliente", "fuente_id", name="uq_pedido_fuente"),
 )
 
+# --- Publicación orgánica (bloque 7) ---
+
+publicacion = Table("publicacion", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("pieza_id", Integer, sa.ForeignKey("pieza.id"), nullable=False),
+    Column("experimento_pieza_id", Integer, sa.ForeignKey("experimento_pieza.id")),
+    Column("plataforma", String(12), nullable=False),          # facebook|instagram|youtube|tiktok
+    Column("estado", String(12), nullable=False, default="en_cola"),  # en_cola|publicando|publicada|error
+    Column("caption", Text),
+    Column("titulo", String(150)),
+    Column("id_externo", String(120)),
+    Column("url", String(500)),
+    Column("error", Text),
+    Column("publicado_en", String(19)),
+    Column("origen", String(10), nullable=False, default="manual"),   # manual|ganador
+    Column("extra", JSON, default=dict),
+    sa.Index("ix_publicacion_cliente_pieza", "cliente", "pieza_id"),
+    # Nunca dos veces la misma pieza en la misma plataforma mientras la
+    # publicación esté viva (en cola, publicándose o publicada); una en
+    # `error` sí se puede volver a encolar (migración 0009).
+    sa.Index("uq_publicacion_viva", "cliente", "pieza_id", "plataforma", unique=True,
+             sqlite_where=sa.text("estado IN ('en_cola','publicando','publicada')")),
+)
+
 kv = Table("kv", metadata,
     Column("clave", String(120), primary_key=True),
     Column("valor", Text),

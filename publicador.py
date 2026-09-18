@@ -28,6 +28,10 @@ def publicar_brief(brief_id, entry, cliente, token_paths):
 
 
 def _publicar_una(platform, entry, cliente, token_paths):
+    """Publica en UNA plataforma y devuelve el id que devolvió el uploader
+    (video_id de Facebook/YouTube, media_id de Instagram, publish_id de
+    TikTok) — organico.py lo guarda para armar la URL pública. publicar_brief
+    lo ignora."""
     video_path = entry["video_local"]
     video_url = entry["video_url"]
     title = entry.get("title", "")
@@ -36,20 +40,20 @@ def _publicar_una(platform, entry, cliente, token_paths):
     if platform == "youtube":
         from uploaders import youtube_uploader
 
-        youtube_uploader.upload_video(
+        return youtube_uploader.upload_video(
             video_path, title=title, description=caption, token_path=token_paths.get("youtube")
         )
     elif platform == "facebook":
         from uploaders import meta_uploader
 
-        meta_uploader.upload_to_facebook_page(video_path, cliente, description=caption, title=title)
+        return meta_uploader.upload_to_facebook_page(video_path, cliente, description=caption, title=title)
     elif platform == "instagram":
         from uploaders import meta_uploader
 
-        meta_uploader.upload_to_instagram_reel(video_url, cliente, caption=caption)
+        return meta_uploader.upload_to_instagram_reel(video_url, cliente, caption=caption)
     elif platform == "tiktok":
         from uploaders import tiktok_uploader
 
-        tiktok_uploader.upload_video(video_path, title=title, token_path=token_paths.get("tiktok"))
+        return tiktok_uploader.upload_video(video_path, title=title, token_path=token_paths.get("tiktok"))
     else:
         raise ValueError(f"Plataforma desconocida: {platform}")

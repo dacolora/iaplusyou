@@ -12,8 +12,24 @@ def test_tabla_de_puertas():
     assert modos.resolver("auto", "derivar") == "ejecutar"
     assert modos.resolver("auto", "activar") == "ejecutar"
     assert modos.resolver("manual", "archivar") == "propuesta" and modos.resolver("semi", "archivar") == "ejecutar"
+    # Bloque 7: publicar es público e irreversible — solo en auto sale sola.
+    assert modos.resolver("manual", "publicar_organico") == "propuesta"
+    assert modos.resolver("semi", "publicar_organico") == "propuesta"
+    assert modos.resolver("auto", "publicar_organico") == "ejecutar"
+    assert "publicar_organico" in modos.ACCIONES
     with pytest.raises(ValueError):
         modos.resolver("otro", "pausar")
+
+
+def test_propuestas_dedupe_por_pieza_id(base_temporal):
+    """Bloque 7: `pieza_id` entra en la clave de dedupe (None en el resto de
+    acciones, así que no les cambia nada)."""
+    import experimentos as ex
+    import propuestas as pr
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    a = pr.crear("acme", eid, "publicar_organico", {"ep_id": 5, "pieza_id": 1}, "ganador")
+    assert pr.crear("acme", eid, "publicar_organico", {"ep_id": 5, "pieza_id": 1}, "ganador") == a
+    assert pr.crear("acme", eid, "publicar_organico", {"ep_id": 5, "pieza_id": 2}, "ganador") != a
 
 
 def test_propuestas_crud(base_temporal):

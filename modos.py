@@ -7,11 +7,15 @@ decisor recomienda se ejecuta sola o queda como propuesta esperando al humano.
     auto    → todo se ejecuta (acciones.pedir igual propone si el tope está
               alcanzado — ver acciones.py).
 
+`publicar_organico` (Bloque 7) no gasta crédito pero es público e
+irreversible: en manual y semi es SIEMPRE propuesta (con el texto ya
+redactado para revisarlo); solo en auto se publica sola.
+
 Nada se activa solo fuera de acciones.ejecutar("activar").
 """
 
 MODOS = ("manual", "semi", "auto")
-ACCIONES = ("pausar", "escalar", "derivar", "rescatar", "activar", "archivar")
+ACCIONES = ("pausar", "escalar", "derivar", "rescatar", "activar", "archivar", "publicar_organico")
 
 # Acciones que no gastan crédito: en semi se ejecutan sin preguntar.
 _SIN_GASTO = ("pausar", "archivar")

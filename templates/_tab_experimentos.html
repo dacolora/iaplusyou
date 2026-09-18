@@ -10,7 +10,11 @@
    anuncios sueltos que quedaron de esa pestaña se pintan al final
    (_anuncios_sueltos.html, solo si `ads` no está vacío). Las reglas por
    defecto del decisor (reglas_cliente, ruta cfg_reglas) también viven acá,
-   en «Reglas del motor», arriba de la lista. #}
+   en «Reglas del motor», arriba de la lista. (Bloque 7) cada pieza con
+   video lleva «Publicar orgánico» (_organico_publicar.html: canales_org,
+   publicaciones_por_pieza, trabajos_org) y las propuestas `publicar_organico`
+   muestran el texto redactado, editable, antes de aprobar. #}
+{% from "_organico_publicar.html" import bloque_organico, propuesta_organica with context %}
 <div class="panel-cabecera">
   <h2>Experimentos</h2>
   <p class="vacio">Un experimento con una pieza y un país es un anuncio; con varias piezas y países, el motor decide cuál gana.</p>
@@ -117,7 +121,7 @@
   <div class="exp-propuestas">
     <div class="exp-propuestas-cab">
       <strong>Propuestas pendientes ({{ props|length }})</strong>
-      <form method="post" action="{{ url_for('prop_aprobar_todas', cliente=cliente, eid=e.id) }}" class="inline" onsubmit="return confirm('Se ejecutan las {{ props|length }} propuestas en orden. Las que escalan, derivan, rescatan o activan gastan. ¿Seguimos?');"><button class="btn-aprobar btn-xs">Aprobar todo lo pendiente</button></form>
+      <form method="post" action="{{ url_for('prop_aprobar_todas', cliente=cliente, eid=e.id) }}" class="inline" onsubmit="return confirm('Se ejecutan las {{ props|length }} propuestas en orden. Las que escalan, derivan, rescatan o activan gastan; las de publicar orgánico publican en tus redes con el texto tal como está. ¿Seguimos?');"><button class="btn-aprobar btn-xs">Aprobar todo lo pendiente</button></form>
     </div>
     <ul>
       {% for pr in props %}
@@ -131,8 +135,13 @@
           {% if pzs_prop %}{% for p in pzs_prop %}{{ p.nombre }} ({{ p.pais }}){% if not loop.last %}, {% endif %}{% endfor %}{% elif pl.ep_ids %}{{ pl.ep_ids|length }} pieza(s){% endif %}
           {% if pl.motivo %}<small>— {{ pl.motivo }}</small>{% endif %}
         </span>
+        {% if pr.accion == "publicar_organico" %}
+        <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">Rechazar</button></form>
+        {{ propuesta_organica(pr, pl) }}
+        {% else %}
         <form method="post" action="{{ url_for('prop_aprobar', cliente=cliente, pid=pr.id) }}" class="inline"{% if pr.accion in ("escalar", "activar", "derivar", "rescatar") %} onsubmit="return confirm('«{{ pr.accion }}» gasta en Meta o en generación. ¿Aprobar?');"{% endif %}><button class="btn-aprobar btn-xs">Aprobar</button></form>
         <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">Rechazar</button></form>
+        {% endif %}
       </li>
       {% endfor %}
     </ul>
@@ -201,6 +210,9 @@
           {% endif %}
           {% if pz.estado == "en_cola" and not e.meta_campaign_id %}
           <form method="post" action="{{ url_for('exp_quitar_pieza', cliente=cliente, eid=e.id, ep_id=pz.id) }}" class="inline"><button class="btn-rechazar btn-xs">Quitar</button></form>
+          {% endif %}
+          {% if pz.url_video and pz.pieza_id %}
+          {{ bloque_organico(pz.pieza_id, "experimentos", ep_id=pz.id) }}
           {% endif %}
         </li>
         {% else %}
