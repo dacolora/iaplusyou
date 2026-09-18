@@ -219,10 +219,55 @@ def test_redactar_recorta_maximos_y_hashtags(proyecto, monkeypatch):
     assert len(out["tiktok"]["titulo"]) == 150 and len(out["facebook"]["titulo"]) <= 150
     tags = [t for t in out["facebook"]["caption"].split() if t.startswith("#")]
     assert len(tags) == 8 and "#tag11" not in tags
+    # El recorte cae en un límite de palabra: la última palabra del cuerpo (todas
+    # son "palabra" en el texto de prueba) nunca queda a medias.
+    for p in ("instagram", "facebook", "tiktok"):
+        cuerpo = out[p]["caption"].split("\n\n")[0]
+        ultima = cuerpo.split()[-1]
+        assert ultima == "palabra", (p, ultima)
     with pytest.raises(ValueError):
         org.redactar("acme", pid, ["twitter"])
     with pytest.raises(ValueError):
         org.redactar("otro", pid, ["instagram"])
+
+
+def test_recortar_en_palabra_nunca_corta_a_mitad_de_palabra_ni_de_hashtag():
+    import organico as org
+    assert org._recortar_en_palabra("hola mundo", 20) == "hola mundo"
+    assert org._recortar_en_palabra("hola mundo bonito", 8) == "hola"
+    # tope=9 cae a mitad de "#mundo": se descarta entero, no queda "#mun".
+    assert org._recortar_en_palabra("hola #mundo bonito", 9) == "hola"
+    # tope=11 cae justo tras "#mundo" completo: se conserva.
+    assert org._recortar_en_palabra("hola #mundo bonito", 11) == "hola #mundo"
+    # Sin ningún espacio antes del tope no hay dónde cortar: corte duro.
+    assert org._recortar_en_palabra("palabragigante", 4) == "pala"
+
+
+def test_hashtags_de_excluye_numeros_puros():
+    import organico as org
+    tags = org._hashtags_de("Pack 100 Bolsas 2024", org.HASHTAGS_MAX)
+    assert "#100" not in tags and "#2024" not in tags
+    assert "#pack" in tags and "#bolsas" in tags
+
+
+def test_ajustar_agrega_link_en_bio_si_hay_url_compra_aunque_el_texto_no_traiga_link():
+    import organico as org
+    contexto = {"nombre_producto": "Pantufla Nube", "url_compra": "https://tienda.co/p/x", "idioma": "es"}
+    out = org.ajustar("instagram", None, "Un texto sin ningún link. #pantufla #nube #algo", contexto)
+    assert "Link en bio." in out["caption"]
+    # Sin url_compra y sin link en el texto original, no se fuerza el CTA.
+    sin_url = org.ajustar("instagram", None, "Otro texto sin link. #a #b #c", {"nombre_producto": "X", "idioma": "es"})
+    assert "Link en bio." not in sin_url["caption"]
+    # No se duplica si el texto ya trae la frase.
+    con_frase = org.ajustar("instagram", None, "Texto. Link en bio. #a #b #c", contexto)
+    assert con_frase["caption"].lower().count("link en bio") == 1
+
+
+def test_ajustar_traduce_link_en_bio_segun_idioma():
+    import organico as org
+    contexto = {"nombre_producto": "X", "url_compra": "https://t.co/x", "idioma": "en"}
+    out = org.ajustar("tiktok", None, "Just a caption without any link. #a #b #c", contexto)
+    assert "Link in bio." in out["caption"]
 
 
 def test_caption_organico_arma_el_mensaje_y_parsea_json(monkeypatch):
@@ -257,6 +302,71 @@ def test_caption_organico_arma_el_mensaje_y_parsea_json(monkeypatch):
     _Msgs.create = lambda self, **kw: type("R", (), {"content": [_Bloque("no es json")]})()
     with pytest.raises(Exception):
         gp.caption_organico({"nombre_producto": "P"}, ["instagram"])
+
+
+def test_redactar_registra_el_fallo_de_claude_y_marca_fallback(proyecto, monkeypatch, caplog):
+    """Si Claude falla, `redactar` no lo traga en silencio: queda logueado
+    (`creatv.organico`) y cada plataforma que salió por el fallback lo dice
+    en `extra.fallback`."""
+    import logging
+    import generador_prompts
+    org = proyecto["organico"]
+    db = proyecto["db"]
+    _producto()
+    pid = _pieza(db)
+
+    def explota(contexto, plataformas):
+        raise RuntimeError("Falta ANTHROPIC_API_KEY")
+    monkeypatch.setattr(generador_prompts, "caption_organico", explota)
+
+    with caplog.at_level(logging.WARNING, logger="creatv.organico"):
+        out = org.redactar("acme", pid, ["instagram", "facebook"])
+    assert "creatv.organico" in caplog.text and "Claude falló" in caplog.text
+    assert out["instagram"]["extra"] == {"fallback": True}
+    assert out["facebook"]["extra"] == {"fallback": True}
+
+
+def test_redactar_marca_fallback_solo_en_la_plataforma_que_claude_no_devolvio(proyecto, monkeypatch):
+    import generador_prompts
+    org = proyecto["organico"]
+    db = proyecto["db"]
+    _producto()
+    pid = _pieza(db)
+
+    def parcial(contexto, plataformas):
+        return {"instagram": {"titulo": "T", "caption": "Texto real de Claude. #a #b #c"}}
+    monkeypatch.setattr(generador_prompts, "caption_organico", parcial)
+
+    out = org.redactar("acme", pid, ["instagram", "facebook"])
+    assert out["instagram"]["extra"] == {"fallback": False}
+    assert out["facebook"]["extra"] == {"fallback": True}
+
+
+def test_redactar_copy_en_el_idioma_de_la_pieza(proyecto, monkeypatch):
+    """Fallback y CTA salen en español/inglés/portugués según `pieza.idioma`;
+    un idioma sin traducción cae a español."""
+    import generador_prompts
+    org = proyecto["organico"]
+    db = proyecto["db"]
+    _producto()
+
+    def explota(contexto, plataformas):
+        raise RuntimeError("no")
+    monkeypatch.setattr(generador_prompts, "caption_organico", explota)
+
+    pid_en = _pieza(db, idioma="en")
+    out_en = org.redactar("acme", pid_en, ["instagram", "facebook"])
+    assert "Link in bio." in out_en["instagram"]["caption"]
+    assert "Get it here: https://tienda.co/p/pantufla-nube" in out_en["facebook"]["caption"]
+
+    pid_pt = _pieza(db, idioma="pt")
+    out_pt = org.redactar("acme", pid_pt, ["instagram", "facebook"])
+    assert "Link na bio." in out_pt["instagram"]["caption"]
+    assert "Garanta o seu: https://tienda.co/p/pantufla-nube" in out_pt["facebook"]["caption"]
+
+    pid_fr = _pieza(db, idioma="fr")  # sin traducción -> español por defecto
+    out_fr = org.redactar("acme", pid_fr, ["instagram"])
+    assert "Link en bio." in out_fr["instagram"]["caption"]
 
 
 # ---------- crear / listar ----------
@@ -373,6 +483,10 @@ def test_publicar_por_plataforma_guarda_estados_y_no_filtra_tokens(proyecto, mon
     assert e_fb["video_local"] == os.path.join(str(proyecto["tmp"]), "salidas", "acme", "organico", f"{pid}.mp4")
     assert llamadas[0][3]["youtube"].endswith(os.path.join("clientes", "acme", "token_youtube.json"))
     assert not os.path.exists(e_fb["video_local"])  # borrado al terminar
+    # TikTok no tiene campo de caption separado: `title` es el texto completo
+    # de la publicación, así que recibe el caption, no el título corto.
+    e_tk = llamadas[3][1]
+    assert e_tk["platforms"] == ["tiktok"] and e_tk["title"] == "Texto TK" and e_tk["caption"] == "Texto TK"
 
     pubs = {p["id"]: p for p in org.listar("acme", pieza_id=pid)}
     assert pubs[fb]["estado"] == "publicada" and pubs[fb]["id_externo"] == "1234567890"

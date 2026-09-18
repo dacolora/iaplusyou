@@ -20,6 +20,7 @@ Reutiliza `publicador._publicar_una` + `uploaders/` tal cual: una falla en
 una plataforma no frena las demás y nunca se guarda un token en `error` ni
 en eventos (`cola.sin_token`).
 """
+import logging
 import os
 import re
 
@@ -32,6 +33,8 @@ import experimentos
 import meta_conexion
 import publicador
 import tiendas
+
+log = logging.getLogger("creatv.organico")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -57,6 +60,18 @@ _RE_SHORTCODE_IG = re.compile(r"^[A-Za-z0-9_-]{5,20}$")
 _RE_PALABRA = re.compile(r"[A-Za-zÀ-ɏ0-9]+")
 _STOPWORDS = {"de", "del", "la", "el", "los", "las", "con", "para", "por", "sin", "the", "and", "of", "for",
               "un", "una", "unos", "unas", "en", "y", "o", "a", "al", "lo", "que", "se", "su", "sus"}
+
+# Copy fija que `fallback`/`ajustar` inyectan, en el idioma de la pieza
+# (`contexto["idioma"]`); español por defecto si no hay traducción.
+_COPY = {
+    "es": {"link_bio": "Link en bio.", "cta": "Consíguelo aquí"},
+    "en": {"link_bio": "Link in bio.", "cta": "Get it here"},
+    "pt": {"link_bio": "Link na bio.", "cta": "Garanta o seu"},
+}
+
+
+def _copy(idioma):
+    return _COPY.get((idioma or "es").strip().lower(), _COPY["es"])
 
 
 # ---------- carpetas del proyecto ----------
@@ -255,7 +270,8 @@ def _hashtags_de(nombre, n=HASHTAGS_MIN):
     """Hasta n hashtags a partir de las palabras del nombre del producto
     (sin stopwords, sin acentos ni espacios, en minúscula) + uno con el
     nombre completo pegado si tiene más de una palabra."""
-    palabras = [w for w in _RE_PALABRA.findall(nombre or "") if w.lower() not in _STOPWORDS and len(w) >= 3]
+    palabras = [w for w in _RE_PALABRA.findall(nombre or "")
+                if w.lower() not in _STOPWORDS and len(w) >= 3 and not w.isdigit()]
     tags = []
     for w in palabras:
         t = "#" + _sin_acentos(w).lower()
@@ -337,14 +353,15 @@ def fallback(contexto, plataforma):
     """Texto determinista sin Claude: gancho del guion + CTA + hashtags
     del nombre del producto."""
     conf = PLATAFORMAS[plataforma]
+    copy = _copy(contexto.get("idioma"))
     nombre = contexto.get("nombre_producto") or ""
     hook = _hook(contexto) or nombre
     if conf["links"] and contexto.get("url_compra"):
-        cta = f"Consíguelo aquí: {contexto['url_compra']}"
+        cta = f"{copy['cta']}: {contexto['url_compra']}"
     elif conf["links"]:
         cta = "Escríbenos para conseguirlo."
     else:
-        cta = "Link en bio."
+        cta = copy["link_bio"]
     tags = " ".join(_hashtags_de(nombre) or ["#reels", "#tiktok", "#shorts"][:HASHTAGS_MIN])
     caption = f"{hook}\n\n{cta}\n\n{tags}"
     return {"titulo": (nombre or hook), "caption": caption}
@@ -369,12 +386,26 @@ def _sin_repetidos(tags, ya=()):
     return out
 
 
+def _recortar_en_palabra(texto, tope):
+    """Corta `texto` a lo sumo `tope` caracteres, nunca a mitad de palabra ni
+    de #hashtag: si el corte cae dentro de una palabra (o un hashtag), esa
+    palabra/hashtag parcial se descarta entera en vez de quedar truncada."""
+    if len(texto) <= tope:
+        return texto
+    corte = texto[:tope]
+    if tope < len(texto) and texto[tope] not in (" ", "\n") and (" " in corte or "\n" in corte):
+        ultimo = max(corte.rfind(" "), corte.rfind("\n"))
+        corte = corte[:ultimo]
+    return corte.rstrip()
+
+
 def ajustar(plataforma, titulo, caption, contexto):
     """Reglas duras por plataforma sobre un texto (de Claude o de la
     persona): sin URLs donde `links=False` (+ "Link en bio."), con
     `url_compra` donde `links=True` si existe y no está, hashtags entre 3 y
     8, recortes a los máximos (el cuerpo, nunca el bloque de hashtags)."""
     conf = PLATAFORMAS[plataforma]
+    copy = _copy(contexto.get("idioma"))
     caption = (caption or "").strip()
     titulo = (titulo or "").strip()
     habia_url = False
@@ -384,8 +415,8 @@ def ajustar(plataforma, titulo, caption, contexto):
         caption = re.sub(r"[ \t]+\n", "\n", re.sub(r"[ \t]{2,}", " ", caption)).strip()
     cuerpo, cola_tags = _separar_cola(caption)
     if not conf["links"]:
-        if habia_url and "link en bio" not in cuerpo.lower():
-            cuerpo = f"{cuerpo}\n\nLink en bio." if cuerpo else "Link en bio."
+        if (habia_url or contexto.get("url_compra")) and copy["link_bio"].lower() not in cuerpo.lower():
+            cuerpo = f"{cuerpo}\n\n{copy['link_bio']}" if cuerpo else copy["link_bio"]
     elif contexto.get("url_compra") and contexto["url_compra"] not in cuerpo:
         cuerpo = f"{cuerpo}\n\n{contexto['url_compra']}" if cuerpo else contexto["url_compra"]
 
@@ -403,11 +434,11 @@ def ajustar(plataforma, titulo, caption, contexto):
     tags_str = " ".join(cola_tags)
     tope = conf["max_caption"]
     if tags_str and len(cuerpo) + len(tags_str) + 2 > tope:
-        cuerpo = cuerpo[:max(tope - len(tags_str) - 2, 0)].rstrip()
+        cuerpo = _recortar_en_palabra(cuerpo, max(tope - len(tags_str) - 2, 0))
     elif not tags_str and len(cuerpo) > tope:
-        cuerpo = cuerpo[:tope].rstrip()
+        cuerpo = _recortar_en_palabra(cuerpo, tope)
     caption = f"{cuerpo}\n\n{tags_str}" if (cuerpo and tags_str) else (cuerpo or tags_str)
-    caption = caption.strip()[:tope].rstrip()
+    caption = _recortar_en_palabra(caption.strip(), tope)
 
     if not titulo:
         titulo = _hook(contexto) or contexto.get("nombre_producto") or ""
@@ -416,10 +447,12 @@ def ajustar(plataforma, titulo, caption, contexto):
 
 
 def redactar(cliente, pieza_id, plataformas):
-    """{plataforma: {"titulo", "caption"}} para la pieza: UNA llamada a
-    Claude (generador_prompts.caption_organico) y, ante cualquier fallo o
-    plataforma que Claude no devolvió, el fallback determinista. Todo pasa
-    por `ajustar` (URLs, hashtags, máximos). No escribe nada."""
+    """{plataforma: {"titulo", "caption", "extra": {"fallback": bool}}} para
+    la pieza: UNA llamada a Claude (generador_prompts.caption_organico) y,
+    ante cualquier fallo (se registra con logging, nunca se traga en
+    silencio) o plataforma que Claude no devolvió, el fallback determinista
+    — marcado con `extra.fallback=True` en esa plataforma. Todo pasa por
+    `ajustar` (URLs, hashtags, máximos). No escribe nada."""
     plataformas = [p for p in plataformas if p in PLATAFORMAS]
     if not plataformas:
         raise ValueError("Elige al menos una plataforma.")
@@ -429,14 +462,19 @@ def redactar(cliente, pieza_id, plataformas):
         textos = generador_prompts.caption_organico(contexto, plataformas)
         if not isinstance(textos, dict):
             textos = {}
-    except Exception:  # noqa: BLE001 — sin Claude igual hay texto (fallback)
+    except Exception as e:  # noqa: BLE001 — sin Claude igual hay texto (fallback)
+        log.warning("redactar %s/%s: Claude falló, uso el fallback determinista: %s",
+                    cliente, pieza_id, e, exc_info=True)
         textos = {}
     out = {}
     for p in plataformas:
         t = textos.get(p) if isinstance(textos.get(p), dict) else None
-        if not t or not (t.get("caption") or "").strip():
+        uso_fallback = not t or not (t.get("caption") or "").strip()
+        if uso_fallback:
             t = fallback(contexto, p)
-        out[p] = ajustar(p, t.get("titulo"), t.get("caption"), contexto)
+        ajustado = ajustar(p, t.get("titulo"), t.get("caption"), contexto)
+        ajustado["extra"] = {"fallback": uso_fallback}
+        out[p] = ajustado
     return out
 
 
@@ -518,7 +556,12 @@ def publicar(cliente, pub_ids, on_etapa=None):
                 nombre = PLATAFORMAS.get(p, {}).get("nombre", p)
                 avisar("Publicando")
                 actualizar(cliente, pub["id"], estado="publicando", error=None)
-                entry = {"video_local": local, "video_url": video_url, "title": pub["titulo"] or "",
+                # TikTok no tiene un campo de caption separado: `title` ES el
+                # texto de la publicación (post_info.title), así que ahí va
+                # el caption completo (gancho + Link en bio. + hashtags), no
+                # el `titulo` corto que sí usan YouTube/Facebook.
+                titulo_envio = pub["caption"] if p == "tiktok" else (pub["titulo"] or "")
+                entry = {"video_local": local, "video_url": video_url, "title": titulo_envio,
                          "caption": pub["caption"] or "", "platforms": [p]}
                 try:
                     devuelto = publicador._publicar_una(p, entry, cliente, token_paths)
