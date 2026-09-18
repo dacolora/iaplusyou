@@ -6,9 +6,10 @@ Filtergraph:
   [v_0]..[v_n]concat[vc]
   [vc][1:v]overlay=x:y:eof_action=repeat:enable='gte(t,a)*lt(t,b)'[o1] ...
   [oK]format=yuv420p[vout]
-  audio:  voz+música -> música volume=0.35 + sidechaincompress (ducking por la
-          voz) + amix; solo música -> volume=0.5; solo voz -> tal cual; nada ->
-          sin stream de audio.
+  audio: mezcla.filtro_mezcla — sonido del clon recortado por segmento
+         ([0:a]atrim + concat a=1), voz (apad) y música (-stream_loop -1),
+         ducking por la voz, presets y loudnorm (ver final_edition/mezcla.py).
+         Sin ninguna capa no hay stream de audio.
 
 Cada PNG de overlay (recortado a su contenido por texto.py, con `x`/`y` en
 coordenadas del frame) entra como `-i png` a secas: un solo frame decodificado
@@ -19,7 +20,10 @@ de CPU). La ventana `enable` es semiabierta (`gte*lt`) para que dos overlays
 consecutivos no coincidan en el frame de frontera. `-t duracion_s` cierra la
 salida. La música entra con `-stream_loop -1` y la voz lleva `apad` para que
 ninguna de las dos corte el audio antes de la duración objetivo (una voz corta
-terminaría el `sidechaincompress` y con él la música).
+terminaría el `sidechaincompress` y con él la música). `loudnorm` (último
+filtro de la mezcla) emite a 192 kHz y el codificador AAC lo dejaría en 96 kHz,
+por encima del tope de 48 kHz de Instagram Reels: la salida lleva `-ar 48000`
+como opción de salida (no se remuestrea dentro del filtro).
 
 El filtergraph se escribe SIEMPRE a `<salida>.filtergraph.txt` y se pasa con
 `-/filter_complex <archivo>` (sintaxis de ffmpeg ≥ 7; `-filter_complex_script`
@@ -37,13 +41,10 @@ en vez de dejar que ffmpeg reviente por OOM a mitad de un render ya pagado.
 """
 import os
 
-from final_edition import cortes
+from final_edition import cortes, mezcla
 
 FPS = 30
 ZOOM_MAX = 1.08
-VOL_MUSICA_CON_VOZ = 0.35
-VOL_MUSICA_SOLA = 0.5
-DUCKING = "threshold=0.05:ratio=8:attack=20:release=300"
 TOLERANCIA_DURACION_S = 0.2
 # ~8 MB de RSS de ffmpeg por overlay encadenado (medido, ver docstring del
 # módulo); 80 overlays ≈ 640 MB, deja margen en el VPS de 2 GB compartido con
@@ -52,18 +53,21 @@ MAX_OVERLAYS_TOTAL = 80
 
 
 def componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_mp4,
-             duracion_s, ancho=1080, alto=1920, preset="veryfast"):
-    """Renderiza `salida_mp4` (H.264 + AAC, faststart) y una miniatura PNG
-    del segundo 1. Valida el resultado con ffprobe (duración ± 0.2 s, tamaño,
-    audio presente si y solo si hay voz o música). Devuelve
-    `{"archivo", "miniatura", "duracion_s"}`. Lanza `ValueError` si el número
-    total de overlays supera `MAX_OVERLAYS_TOTAL` (ver presupuesto de memoria
-    en el docstring del módulo) en vez de arriesgar un OOM de ffmpeg."""
+             duracion_s, ancho=1080, alto=1920, preset="veryfast", con_sonido=False, volumenes=None):
+    """Renderiza `salida_mp4` (H.264 + AAC, faststart) y una miniatura PNG.
+    `con_sonido`: conservar el audio nativo del clon (recortado con los mismos
+    segmentos que el video); si el clon no trae pista, sale sin esa capa y
+    `con_sonido` vuelve False en el resultado. `volumenes`: dict de
+    `mezcla.volumenes_para` (None = preset por defecto). Valida con ffprobe
+    (duración ± 0.2 s, tamaño, audio presente si y solo si hay alguna capa).
+    Devuelve `{"archivo", "miniatura", "duracion_s", "con_sonido"}`. Lanza
+    `ValueError` si los overlays superan `MAX_OVERLAYS_TOTAL`."""
     if not segmentos:
         raise ValueError("componer: no hay segmentos que renderizar")
     duracion_s = float(duracion_s)
     hay_voz = bool(archivo_voz)
     hay_musica = bool(pista_musica)
+    hay_sonido = bool(con_sonido) and mezcla.tiene_audio(clon_path) is True
     lista_overlays = _lista_overlays(overlays)
     if len(lista_overlays) > MAX_OVERLAYS_TOTAL:
         raise ValueError(
@@ -79,15 +83,17 @@ def componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_m
         args += ["-stream_loop", "-1", "-i", pista_musica]
 
     os.makedirs(os.path.dirname(os.path.abspath(salida_mp4)), exist_ok=True)
-    fg = construir_filtergraph(segmentos, overlays, hay_voz, hay_musica, ancho, alto)
+    fg = construir_filtergraph(segmentos, overlays, hay_voz, hay_musica, ancho, alto,
+                               hay_sonido=hay_sonido, volumenes=volumenes)
     archivo_fg = salida_mp4 + ".filtergraph.txt"
     with open(archivo_fg, "w", encoding="utf-8") as f:
         f.write(fg)
     args += ["-/filter_complex", archivo_fg]
 
+    con_audio = hay_voz or hay_musica or hay_sonido
     args += ["-map", "[vout]"]
-    if hay_voz or hay_musica:
-        args += ["-map", "[aout]", "-c:a", "aac", "-b:a", "128k"]
+    if con_audio:
+        args += ["-map", "[aout]", "-c:a", "aac", "-b:a", "128k", "-ar", "48000"]
     args += [
         "-c:v", "libx264", "-preset", preset, "-crf", "22", "-pix_fmt", "yuv420p",
         "-r", str(FPS), "-movflags", "+faststart", "-t", f"{duracion_s:.3f}",
@@ -97,16 +103,19 @@ def componer(clon_path, segmentos, overlays, archivo_voz, pista_musica, salida_m
     if os.path.exists(archivo_fg):
         os.remove(archivo_fg)
 
-    real = _validar(salida_mp4, duracion_s, ancho, alto, hay_voz or hay_musica)
+    real = _validar(salida_mp4, duracion_s, ancho, alto, con_audio)
     miniatura = os.path.splitext(salida_mp4)[0] + "_miniatura.png"
     _miniatura(salida_mp4, miniatura, real)
-    return {"archivo": salida_mp4, "miniatura": miniatura, "duracion_s": real}
+    return {"archivo": salida_mp4, "miniatura": miniatura, "duracion_s": real, "con_sonido": hay_sonido}
 
 
-def construir_filtergraph(segmentos, overlays, hay_voz, hay_musica, ancho, alto):
+def construir_filtergraph(segmentos, overlays, hay_voz, hay_musica, ancho, alto, hay_sonido=False, volumenes=None):
     """Texto del `-filter_complex`. Los índices de entrada siguen el orden en
     que `componer` añade los `-i`: 0 clon, 1..K overlays, luego voz, luego
-    música. Salidas etiquetadas `[vout]` y, si hay audio, `[aout]`."""
+    música. `hay_sonido`: el audio del clon (`[0:a]`) se recorta con los mismos
+    segmentos que el video y entra como capa "sonido" de `mezcla.filtro_mezcla`;
+    `volumenes` es el dict de `mezcla.volumenes_para` (None = preset por
+    defecto). Salidas etiquetadas `[vout]` y, si hay alguna capa, `[aout]`."""
     lista_overlays = _lista_overlays(overlays)
     partes = []
 
@@ -135,16 +144,24 @@ def construir_filtergraph(segmentos, overlays, hay_voz, hay_musica, ancho, alto)
 
     idx_voz = 1 + len(lista_overlays)
     idx_musica = idx_voz + (1 if hay_voz else 0)
-    norm = "aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo"
-    if hay_voz and hay_musica:
-        partes.append(f"[{idx_voz}:a]{norm},apad,asplit=2[voz_sc][voz_mix]")
-        partes.append(f"[{idx_musica}:a]{norm},volume={VOL_MUSICA_CON_VOZ}[mus]")
-        partes.append(f"[mus][voz_sc]sidechaincompress={DUCKING}[mduck]")
-        partes.append("[mduck][voz_mix]amix=inputs=2:duration=first:normalize=0[aout]")
-    elif hay_musica:
-        partes.append(f"[{idx_musica}:a]{norm},volume={VOL_MUSICA_SOLA}[aout]")
-    elif hay_voz:
-        partes.append(f"[{idx_voz}:a]{norm},apad[aout]")
+    etiqueta_sonido = None
+    if hay_sonido:
+        # El audio del clon se recorta con los MISMOS inicio/fin que el video:
+        # sincronía por construcción, sin desfases acumulados.
+        for i, seg in enumerate(segmentos):
+            ini, fin = float(seg["inicio"]), float(seg["fin"])
+            partes.append(f"[0:a]atrim=start={ini:.3f}:end={fin:.3f},asetpts=PTS-STARTPTS[a{i}]")
+        entradas_a = "".join(f"[a{i}]" for i in range(len(segmentos)))
+        partes.append(f"{entradas_a}concat=n={len(segmentos)}:v=0:a=1[ac]")
+        etiqueta_sonido = "[ac]"
+    audio = mezcla.filtro_mezcla(
+        voz=f"[{idx_voz}:a]" if hay_voz else None,
+        sonido=etiqueta_sonido,
+        musica=f"[{idx_musica}:a]" if hay_musica else None,
+        volumenes=volumenes or mezcla.volumenes_para(),
+    )
+    if audio:
+        partes.append(audio)
     return ";".join(partes)
 
 

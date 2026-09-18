@@ -1,4 +1,5 @@
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -197,7 +198,11 @@ def medios(tmp_path_factory):
                            "-pix_fmt", "yuv420p", clip20], check=True)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100", "-t", "10", voz], check=True)
     subprocess.run(base + ["-f", "lavfi", "-i", "sine=frequency=220:sample_rate=44100", "-t", "15", musica], check=True)
-    return {"clip": clip, "clip20": clip20, "voz": voz, "musica": musica}
+    clip_clics = str(carpeta / "clip_clics.mp4")
+    subprocess.run(base + ["-f", "lavfi", "-i", "testsrc2=size=540x960:rate=25",
+                           "-f", "lavfi", "-i", "aevalsrc=sin(2*PI*880*t)*gt(mod(t\\,1)\\,0.85):s=44100:c=stereo",
+                           "-t", "10", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", clip_clics], check=True)
+    return {"clip": clip, "clip20": clip20, "voz": voz, "musica": musica, "clip_clics": clip_clics}
 
 
 SEGMENTOS = [
@@ -328,3 +333,62 @@ def test_componer_siempre_pasa_el_filtergraph_por_archivo(tmp_path, overlays, me
     assert os.path.exists(args[idx + 1])  # se conserva si ffmpeg falla
     with open(args[idx + 1], encoding="utf-8") as f:
         assert "[vout]" in f.read()
+
+
+def test_filtergraph_con_sonido_recorta_por_segmento_y_mezcla():
+    from final_edition import mezcla
+    fg = render.construir_filtergraph(SEGMENTOS, {}, True, True, 1080, 1920, hay_sonido=True,
+                                      volumenes=mezcla.volumenes_para("voz_protagonista"))
+    for seg in SEGMENTOS:
+        assert f"[0:a]atrim=start={seg['inicio']:.3f}:end={seg['fin']:.3f},asetpts=PTS-STARTPTS" in fg
+    assert "[a0][a1][a2]concat=n=3:v=0:a=1[ac]" in fg
+    assert "[ac]" + mezcla.NORM + ",volume=0.6[son]" in fg
+    assert "sidechaincompress" in fg and fg.rstrip().endswith(mezcla.LOUDNORM + "[aout]")
+    # sin sonido, el filtro de audio es el de siempre (voz + música) y no toca [0:a]
+    sin = render.construir_filtergraph(SEGMENTOS, {}, True, True, 1080, 1920)
+    assert "[0:a]" not in sin and "amix=inputs=2" in sin
+    # solo sonido: sin voz ni música, igual hay [aout]
+    solo = render.construir_filtergraph(SEGMENTOS, {}, False, False, 1080, 1920, hay_sonido=True)
+    assert "[aout]" in solo and "amix" not in solo
+
+
+@pytest.mark.slow
+def test_componer_con_sonido_del_clon_sincronizado(tmp_path, overlays, medios):
+    """Segmentos que saltan trozos del clon: los pitidos del audio recortado
+    caen exactamente donde caen los frames (sincronía por construcción)."""
+    segmentos = [{"inicio": 0.0, "fin": 2.0, "zoom": None}, {"inicio": 5.0, "fin": 7.0, "zoom": None},
+                 {"inicio": 8.0, "fin": 10.0, "zoom": None}]
+    salida = str(tmp_path / "sync.mp4")
+    res = render.componer(medios["clip_clics"], segmentos, overlays, None, None, salida, 6.0,
+                          preset="ultrafast", con_sonido=True)
+    assert res["con_sonido"] is True
+    streams, dur = _streams(salida)
+    assert "audio" in streams and dur == pytest.approx(6.0, abs=0.2)
+    assert int(streams["audio"]["sample_rate"]) == 48000  # tope de Instagram Reels (loudnorm emite 192 kHz)
+    proc = subprocess.run([cortes.FFMPEG, "-hide_banner", "-i", salida, "-af", "silencedetect=n=-30dB:d=0.3",
+                           "-f", "null", "-"], capture_output=True, text=True)
+    fines = sorted(float(x) for x in re.findall(r"silence_end: (\d+(?:\.\d+)?)", proc.stderr))
+    esperados = [0.85, 1.85, 2.85, 3.85, 4.85, 5.85]
+    assert len(fines) == len(esperados), proc.stderr[-600:]
+    for real, esp in zip(fines, esperados):
+        assert real == pytest.approx(esp, abs=0.1)
+
+
+@pytest.mark.slow
+def test_componer_con_sonido_pedido_pero_clon_mudo(tmp_path, overlays, medios):
+    """con_sonido=True sobre un clon sin pista: no revienta, sale sin audio y
+    lo dice en el resultado."""
+    salida = str(tmp_path / "mudo2.mp4")
+    res = render.componer(medios["clip"], SEGMENTOS, overlays, None, None, salida, 10.0, preset="ultrafast", con_sonido=True)
+    assert res["con_sonido"] is False and "audio" not in _streams(salida)[0]
+
+
+@pytest.mark.slow
+def test_componer_loudness_cerca_de_menos_14(tmp_path, overlays, medios):
+    salida = str(tmp_path / "loud.mp4")
+    render.componer(medios["clip_clics"], SEGMENTOS, overlays, medios["voz"], medios["musica"], salida, 10.0,
+                    preset="ultrafast", con_sonido=True)
+    proc = subprocess.run([cortes.FFMPEG, "-hide_banner", "-i", salida, "-af", "ebur128", "-f", "null", "-"],
+                          capture_output=True, text=True)
+    m = re.findall(r"I:\s+(-?\d+(?:\.\d+)?) LUFS", proc.stderr)
+    assert m and -14 - 2.5 <= float(m[-1]) <= -14 + 2.5, proc.stderr[-600:]
