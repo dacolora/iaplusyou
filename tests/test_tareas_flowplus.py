@@ -79,8 +79,8 @@ def test_ejecutar_imagen_guarda_resultado(base_temporal, monkeypatch, tmp_path):
 
     llamadas = {}
 
-    def _gen(modelo, prompt, referencias, on_progreso=None):
-        llamadas["modelo"], llamadas["refs"] = modelo, referencias
+    def _gen(modelo, prompt, referencias, on_progreso=None, aspect_ratio=None):
+        llamadas["modelo"], llamadas["refs"], llamadas["aspect_ratio"] = modelo, referencias, aspect_ratio
         return "https://prov/i.png"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", _gen)
     monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": 2, "usd": 0.1})
@@ -92,7 +92,7 @@ def test_ejecutar_imagen_guarda_resultado(base_temporal, monkeypatch, tmp_path):
     e = cf.cargar("acme")[cid]
     assert e["estado"] == "video_listo" and e["video_url"] == "https://r2/clientes/acme/flowplus/%s.png" % cid
     assert e["usd"] == 0.1 and "lista" in msg
-    assert llamadas == {"modelo": "seedream_v5_pro", "refs": ["https://x/1.png"]}
+    assert llamadas == {"modelo": "seedream_v5_pro", "refs": ["https://x/1.png"], "aspect_ratio": None}
     assert (tmp_path / "salidas" / "acme" / "flowplus" / f"{cid}.png").exists()
 
 
@@ -322,3 +322,40 @@ def test_ejecutar_video_prueba_la_duracion_antes_de_pagar_la_musica(base_tempora
     assert e["estado"] == "video_listo"
     assert e["capas"]["musica"]["estado"] == "error" and "archivo corrupto" in e["capas"]["musica"]["error"]
     assert e["usd"] == 0.7  # sin el 0.02 de la música: nunca se pagó
+
+
+def test_ejecutar_imagen_pasa_el_formato_de_la_sesion(base_temporal, monkeypatch, tmp_path):
+    """La imagen se pide en el formato que eligió la persona (Seedream acepta
+    aspect_ratio); sin formato en la sesión no se manda nada (sigue a la imagen)."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    vistos = []
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen",
+                        lambda modelo, prompt, referencias, on_progreso=None, aspect_ratio=None: vistos.append(aspect_ratio) or "https://prov/i.png")
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    for ar in ("4:5", None):
+        cid = cf.crear("acme", [], [], [], "posa", 0, "", "A", referencias_urls=["https://x/1.png"])
+        cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P",
+                      aspect_ratio=ar)
+        fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": f"j{ar}"})
+    assert vistos == ["4:5", None]
+
+
+def test_preparar_recorta_duracion_y_formato_al_modelo(base_temporal, monkeypatch, tmp_path):
+    """Última barrera antes de gastar: una sesión con 30 s y 4:3 en Kling sale
+    con 15 s y 9:16; con Seedance el formato no se pide (sigue a la imagen)."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = cf.crear("acme", [], ["Rose"], [], "camina", 30, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="kling_o3_pro", prompt_relleno="P", aspect_ratio="4:3")
+    _, _, _, duracion, _, _, aspect_ratio, modelo = fp._preparar("acme", cid)
+    assert (duracion, aspect_ratio, modelo) == (15, "9:16", "kling_o3_pro")
+    cf.actualizar("acme", cid, modelo="seedance25", aspect_ratio="16:9")
+    _, _, _, duracion, _, _, aspect_ratio, _ = fp._preparar("acme", cid)
+    assert (duracion, aspect_ratio) == (30, None)
+    cf.actualizar("acme", cid, modelo="wan3", aspect_ratio="4:3")
+    _, _, _, duracion, _, _, aspect_ratio, _ = fp._preparar("acme", cid)
+    assert (duracion, aspect_ratio) == (30, "4:3")
