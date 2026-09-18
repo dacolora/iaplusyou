@@ -43,17 +43,12 @@ prueba al implementar.
 
 ## S1. Sonido de la escena al crear (Crear)
 
-> Estado 2026-09-17: **núcleo implementado** (rama `worktree-sonido-crear`):
-> `audio_nativo` por modelo con parámetros verificados en WaveSpeed (Wan 3.0
-> `enable_audio` sin recargo, Kling O3 Pro `sound` +0,028 USD/s, Seedance 2.5
-> `generate_audio` sin recargo), `generar_video(..., con_sonido=True)` y
-> `estimate_video(..., con_sonido=True)` por defecto, `usd_por_segundo_efectivo`
-> en las plantillas, `flowplus_prompt.armar(..., sonido=, con_sonido=)` con la
-> línea SONIDO (regresión: sin sonido el prompt es idéntico), y el worker anota
-> con ffprobe `sonido {proveedor, estado}` en la sesión (🔊/🔇 en la tarjeta).
-> Pendiente de S1: check "Sonido de la escena", campo con "Sugerir"
-> (`fp_sugerir_sonido`), preferencias por proyecto, música al crear, paso
-> Mezcla, `video_url_crudo` y `pieza.capas`.
+> Estado: **S1 implementado** (núcleo 2026-09-17 en 4f93594; resto en el plan
+> `docs/superpowers/plans/2026-09-17-sonido-s1-s2.md`): check, campo con "Sugerir"
+> (`final_edition/sonido.py`, ruta `fp_sugerir_sonido`), preferencias
+> `proyectos.preferencias_sonido` (`con_sonido`, `musica_al_crear`), música al crear
+> con paso Mezcla (`final_edition/mezcla.py`), `pieza.capas` y `video_url_crudo`.
+> Fuera: `proveedor_v2a` (S3) y el botón de reproducir por estilo (S5).
 
 - `flowplus_modelos.VIDEO[modelo]["audio_nativo"] = {"parametro": ...,
   "recargo_usd_s": ...}`: Wan 3.0 (`audio`/`enable_audio` según proveedor, 0),
@@ -94,6 +89,10 @@ prueba al implementar.
 - Las ideas del sprint ganan el campo `sonido` (spec de sprints §2.1).
 
 ## S2. Capa "sonido" en final edition
+
+> Estado: **implementado** con el mismo plan (render con `[0:a]atrim` por segmento,
+> `filtro_mezcla` compartido, presets y `loudnorm`; `capas.sonido` sin `url` de stem,
+> que llega con S4).
 
 - Fuente: `extra.video_url_crudo`, o `video_url` en clones anteriores.
 - `cortes.py`: `planificar_segmentos` no cambia; `render.construir_filtergraph`

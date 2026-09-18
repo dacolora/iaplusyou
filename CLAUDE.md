@@ -183,9 +183,18 @@ prompt carries a `SONIDO:` line ("Sin diálogo hablado ni música de fondo" keep
 Chinese/English voices out; the Spanish voice comes from final edition). Images never get
 that line. After the download the worker runs ffprobe and stores
 `sonido {proveedor, estado: ok | ausente | desconocido}` on the session (🔊 / 🔇 on the
-card, plus a bitácora row) — it only reports, never regenerates. Spec:
-`docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1; only its core is
-implemented (no "sonido" toggle, no music at creation, no mezcla step, no `capas` yet).
+card, plus a bitácora row) — it only reports, never regenerates. The session carries `con_sonido` (the "Sonido de la escena" check, default from
+`proyectos.preferencias_sonido`), `sonido_texto` (the described sound, "Sugerir" asks
+Claude through `final_edition/sonido.py`) and `musica_estilo` ("" = none). After the
+download the worker's **Mezclando sonido** step (`ETAPAS_CREATIVE_FLOW`, 4 stages) probes
+the audio track, mixes the chosen music underneath with `final_edition/mezcla.py`
+(`mezclar_musica`: video copied, `loudnorm`) and stores `pieza.capas`
+(`sonido {proveedor, estado: ok|ausente|desconocido|omitida}`, `musica`, `mezcla`),
+`video_url` (mixed: what is seen, published and delivered) and `extra.video_url_crudo` /
+`video_local_crudo` (native sound only: the source of final edition). Music failure is
+degradable (the paid video is never lost). Spec:
+`docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1 (done except
+`proveedor_v2a` and style previews, which belong to S3/S5).
 
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
@@ -197,7 +206,15 @@ detection on the source clip) -> `voz` (fal/ElevenLabs TTS per block, degradable
 except a failure on the FIRST block, which is fatal and never reaches música) ->
 `musica` (fal/Stable Audio, degradable, cached) -> `texto` (Pillow: overlay PNGs for
 hook/subtitles/price badge/CTA) -> `render` (ffmpeg: one filtergraph, `MAX_OVERLAYS_TOTAL`
-caps the overlay count so a long guion can't OOM the box). State lives on
+caps the overlay count so a long guion can't OOM the box). Since S2 the clon's native sound is a layer: `producir` reads the RAW clon
+(`video_local_crudo`/`video_url_crudo`, never the music-mixed file), `render` trims `[0:a]`
+with the very same segment `inicio`/`fin` as the video (sync by construction) and
+`final_edition/mezcla.py::filtro_mezcla` mixes sound + voice + music (voice ducks sound at
+ratio 4 and music at ratio 8, presets `equilibrada` / `voz_protagonista` /
+`ambiente_protagonista`, explicit `volumenes` win, `loudnorm=I=-14:TP=-1.5:LRA=11` last), AAC forced to 48 kHz on output (`-ar 48000`: `loudnorm` emits 192 kHz).
+Options `con_sonido`, `sonido` (`nativo|ninguno`), `mezcla`, `volumenes`; `capas.sonido`
+is `ok | omitida | ausente` (a mute clon never degrades the piece). Stems and "Remezclar"
+are S4, video→audio fallback is S3. State lives on
 `creative_flow.crear_final`/`actualizar_final` (`data/creatv.db`), one row per
 idioma/país keyed `<cf_id>__<idioma>_<pais>`; re-producing a destino that already has
 a final keeps its `url_video`/`url_miniatura` until the new attempt succeeds, so a
