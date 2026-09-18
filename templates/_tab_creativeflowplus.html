@@ -50,22 +50,8 @@
   <textarea name="accion_central" id="fp-texto" rows="3" placeholder="ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
   <p class="campo-error" id="fp-texto-error" hidden>Escribe qué tiene que pasar en el video.</p>
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">¿Cuántas versiones?</label>
-  <div class="checks-plataformas" id="fp-versiones">
-    <label><input type="radio" name="n_versiones" value="1" checked> 1</label>
-    <label><input type="radio" name="n_versiones" value="2"> 2</label>
-    <label><input type="radio" name="n_versiones" value="3"> 3</label>
-  </div>
-  <label class="campo-label" style="margin-top:.8rem;display:block;">Enfoque de cada versión</label>
-  <div id="fp-enfoques" class="checks-plataformas">
-    <label><input type="checkbox" name="enfoques" value="producto" checked> Solo producto — vacío, sin nadie</label>
-    <label><input type="checkbox" name="enfoques" value="persona"> Con persona — alguien real usándolo</label>
-    <label><input type="checkbox" name="enfoques" value="unboxing"> Unboxing — abre la caja y descubre el producto</label>
-  </div>
-  <input type="hidden" name="con_persona" id="fp-con-persona" value="no">
-  <p class="vacio" id="fp-versiones-nota" style="font-size:.78rem;">
-    Con el mismo texto, cada versión usa un enfoque distinto y se cobra aparte. Marca tantos como versiones;
-    si marcas menos, se completa en este orden: solo producto, con persona, unboxing.
+  <p class="vacio" style="font-size:.78rem;">
+    Una pieza por clic. Sale solo el producto; si eliges un personaje del catálogo, la escena lo lleva a él.
   </p>
   {% if logos %}
   <p class="vacio" style="font-size:.76rem;">Se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
@@ -83,25 +69,27 @@
     <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de video</label>
     <div class="checks-plataformas">
       {% for id, m in modelos_flowplus_video.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
+      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
       {% endfor %}
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
       <div>
         <label class="campo-label">Duración</label>
         <select name="duracion_objetivo" id="fp-duracion">
-          {% for d in [5, 8, 10, 12, 15] %}
-          <option value="{{ d }}" {% if d == 10 %}selected{% endif %}>{{ d }} s</option>
+          {% for d in duraciones_crear %}
+          <option value="{{ d }}"{% if d == 10 %} selected{% endif %}>{{ d }} s</option>
           {% endfor %}
         </select>
+        <p class="vacio" id="fp-duracion-nota" style="font-size:.74rem;padding:0;">Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.</p>
       </div>
       <div>
         <label class="campo-label">Formato</label>
-        <select name="aspect_ratio">
-          <option value="9:16" selected>Vertical 9:16 (Reels, TikTok)</option>
-          <option value="16:9">Horizontal 16:9 (YouTube)</option>
-          <option value="1:1">Cuadrado 1:1</option>
+        <select name="aspect_ratio" id="fp-formato-video">
+          {% for f, nombre in formatos_nombres.items() %}
+          <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
+          {% endfor %}
         </select>
+        <p class="vacio" id="fp-formato-nota" style="font-size:.74rem;padding:0;" hidden>Este modelo no elige formato: sigue el de la imagen de referencia.</p>
       </div>
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
@@ -128,8 +116,16 @@
     <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de imagen</label>
     <div class="checks-plataformas">
       {% for id, m in modelos_flowplus_imagen.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }} · 2k</span></label>
+      <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }} · 2k</span></label>
       {% endfor %}
+    </div>
+    <div style="margin-top:.8rem;">
+      <label class="campo-label">Formato</label>
+      <select name="aspect_ratio_imagen" id="fp-formato-imagen">
+        {% for f, nombre in formatos_nombres.items() %}
+        <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
+        {% endfor %}
+      </select>
     </div>
   </div>
   <input type="hidden" name="modelo" id="fp-modelo">
@@ -567,8 +563,10 @@
       var n = tipoActual() === 'imagen' ? 'modelo_imagen' : 'modelo_video';
       return form.querySelector('input[name=' + n + ']:checked');
     }
-    var enfoques = Array.prototype.slice.call(form.querySelectorAll('input[name=enfoques]'));
-    var conPersona = document.getElementById('fp-con-persona');
+    var formatoVideo = document.getElementById('fp-formato-video');
+    var formatoImagen = document.getElementById('fp-formato-imagen');
+    var notaFormato = document.getElementById('fp-formato-nota');
+    var notaDuracion = document.getElementById('fp-duracion-nota');
 
     // "Editar y crear otra a partir de esta": el servidor deja el texto y los
     // ajustes de la pieza original; acá se cargan en el formulario.
@@ -582,38 +580,43 @@
       if (duracion && prefill.duracion) duracion.value = String(prefill.duracion);
       var selAr = form.querySelector('select[name=aspect_ratio]');
       if (selAr && prefill.aspect_ratio) selAr.value = prefill.aspect_ratio;
-      if (prefill.enfoque) {
-        enfoques.forEach(function (c) { c.checked = c.value === prefill.enfoque; });
-      }
+      if (formatoImagen && prefill.tipo === 'imagen' && prefill.aspect_ratio) formatoImagen.value = prefill.aspect_ratio;
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
-    function nVersiones() { return parseInt(form.querySelector('input[name=n_versiones]:checked').value, 10); }
-    // No más enfoques marcados que versiones: al marcar uno de más, se desmarca el más antiguo.
-    var ordenMarcado = enfoques.filter(function (e) { return e.checked; }).map(function (e) { return e.value; });
-    enfoques.forEach(function (e) {
-      e.addEventListener('change', function () {
-        if (e.checked) { ordenMarcado.push(e.value); }
-        else { ordenMarcado = ordenMarcado.filter(function (v) { return v !== e.value; }); }
-        while (ordenMarcado.length > nVersiones()) {
-          var viejo = ordenMarcado.shift();
-          var inp = enfoques.filter(function (x) { return x.value === viejo; })[0];
-          if (inp) inp.checked = false;
-        }
-        refrescar();
-      });
-    });
+    // Lo que el modelo admite manda: duraciones fuera de su rango y formatos que
+    // no soporta se deshabilitan; la selección salta a la opción válida más cercana.
+    function limitarSelect(sel, permitido, valorDefecto) {
+      var opciones = Array.prototype.slice.call(sel.options);
+      opciones.forEach(function (o) { o.disabled = !permitido(o.value); });
+      if (sel.selectedOptions.length && sel.selectedOptions[0].disabled) {
+        var validas = opciones.filter(function (o) { return !o.disabled; });
+        var candidata = validas.filter(function (o) { return o.value === valorDefecto; })[0] || validas[validas.length - 1] || validas[0];
+        if (candidata) sel.value = candidata.value;
+      }
+    }
+    function ajustarSegunModelo(m, esImagen) {
+      if (!m) return;
+      var formatos = (m.dataset.formatos || '').split(',').filter(Boolean);
+      if (esImagen) {
+        if (formatoImagen) limitarSelect(formatoImagen, function (v) { return formatos.indexOf(v) !== -1; }, '9:16');
+        return;
+      }
+      var min = parseInt(m.dataset.minDuracion || '2', 10), max = parseInt(m.dataset.maxDuracion || '30', 10);
+      limitarSelect(duracion, function (v) { var d = parseInt(v, 10); return d >= min && d <= max; }, '10');
+      var sigueImagen = formatos.length === 0;
+      if (formatoVideo) {
+        formatoVideo.disabled = sigueImagen;
+        if (!sigueImagen) limitarSelect(formatoVideo, function (v) { return formatos.indexOf(v) !== -1; }, '9:16');
+      }
+      if (notaFormato) notaFormato.hidden = !sigueImagen;
+      if (notaDuracion) notaDuracion.hidden = m.value !== 'wan3';
+    }
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
       bloqueVideo.hidden = esImagen; bloqueImagen.hidden = !esImagen;
       var m = modeloActual();
       campoModelo.value = m ? m.value : '';
-      var n = nVersiones();
-      while (ordenMarcado.length > n) {
-        var viejo = ordenMarcado.shift();
-        var inp = enfoques.filter(function (x) { return x.value === viejo; })[0];
-        if (inp) inp.checked = false;
-      }
-      conPersona.value = (ordenMarcado.length === 1 && ordenMarcado[0] !== 'producto') ? 'si' : 'no';
+      ajustarSegunModelo(m, esImagen);
       var usd = 0;
       var conSonido = document.getElementById('fp-con-sonido');
       var musicaSel = document.getElementById('fp-musica');
@@ -626,11 +629,10 @@
           usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value) ? 0.02 : 0);
         }
       }
-      usd = usd * n;
-      var que = (esImagen ? 'imagen' : 'video') + (n > 1 ? ' × ' + n : '');
+      var que = esImagen ? 'imagen' : 'video';
       botonGenerar.textContent = 'Generar ' + que + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
     }
-    form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen], input[name=n_versiones]').forEach(function (i) { i.addEventListener('change', refrescar); });
+    form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
     ['fp-con-sonido', 'fp-musica'].forEach(function (id) {
       var el = document.getElementById(id);
@@ -644,7 +646,7 @@
     // «Sugerir» sonido de la escena: Claude describe qué se oye (centavos, solo texto).
     var btnSugerir = document.getElementById('fp-sugerir-sonido');
     if (btnSugerir) btnSugerir.addEventListener('click', function () {
-      var enfoque = (form.querySelector('input[name=enfoques]:checked') || {}).value || 'producto';
+      var enfoque = form.querySelector('input[name=productos_catalogo][value^="personaje:"]:checked') ? 'persona' : 'producto';
       btnSugerir.disabled = true; btnSugerir.textContent = 'Pensando…';
       fetch(btnSugerir.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
                                      body: JSON.stringify({escena: texto.value, enfoque: enfoque})})
