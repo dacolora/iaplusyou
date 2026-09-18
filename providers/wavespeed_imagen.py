@@ -128,15 +128,16 @@ def estimate_mejora():
 
 
 def editar_imagen_seedream(foto_url, prompt, referencias_urls=None, resolution="2k",
-                           on_progreso=None):
+                           on_progreso=None, aspect_ratio=None):
     """Seedream V5.0 Pro Edit. Es el único del catálogo cuya doc oficial habla de
     "photographic realism", y el más barato de los de alta calidad.
 
     Dos diferencias con Ultra que importan:
-      - `aspect_ratio` se omite a propósito: la doc dice que sin ese campo usa
-        automáticamente el ratio soportado más cercano al de la PRIMERA imagen de
-        entrada, que es exactamente lo que se quiere (conservar el encuadre) y
-        evita el mapeo manual que hubo que escribir para los otros proveedores.
+      - `aspect_ratio` solo va cuando se pide (Crear lo elige desde 2026-09-18;
+        valores admitidos: 1:1, 1:2, 2:1, 1:3, 3:1, 2:3, 3:2, 3:4, 4:3, 4:5,
+        5:4, 9:16, 16:9, 9:21, 21:9): sin ese campo el modelo usa el ratio
+        soportado más cercano al de la PRIMERA imagen de entrada (conserva el
+        encuadre), que sigue siendo el comportamiento de FlowClone.
       - ADVERTENCIA: `prompt_optimization_mode` hace que el modelo REESCRIBA el
         prompt antes de generar, y no hay valor documentado para desactivarlo.
         Nuestro prompt depende de instrucciones muy específicas (el mapa corporal,
@@ -150,6 +151,8 @@ def editar_imagen_seedream(foto_url, prompt, referencias_urls=None, resolution="
         "resolution": resolution,
         "prompt_optimization_mode": "standard",
     }
+    if aspect_ratio:
+        payload["aspect_ratio"] = aspect_ratio
     prediction_id = _lanzar(MODELO_SEEDREAM, payload)
     data = wavespeed_common.poll_hasta_listo(
         prediction_id, "Seedream V5.0 Pro Edit", on_progreso=on_progreso,
