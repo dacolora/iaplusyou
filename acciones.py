@@ -17,6 +17,14 @@ aquí. Dos puertas:
 
 Nada se activa solo: la única vía es `ejecutar(..., "activar", ...)`, que en
 los modos manual/semi solo llega tras aprobar la propuesta.
+
+`publicar_organico` (Bloque 7): la ganadora sale como contenido orgánico
+(organico.py). No gasta crédito pero es público e irreversible, así que en
+manual/semi siempre es propuesta — y `pedir` la deja con el texto YA
+redactado (`payload["captions"]`) para que la persona lo lea/edite antes de
+aprobar. Idempotente por la unicidad viva de `publicacion` (una plataforma
+con publicación en cola/publicándose/publicada se salta) y por
+`extra.publicado_organico`.
 """
 import cola
 import creative_flow
@@ -25,8 +33,11 @@ import derivaciones
 import experimentos
 import lanzador
 import modos
+import organico
 import propuestas
 import proyectos
+import trabajos
+from tareas import organico as tareas_organico
 
 # Acciones que pueden aumentar el gasto: chequean el tope antes de ejecutarse.
 _ACCIONES_CON_GASTO = ("escalar", "activar", "derivar")
@@ -157,7 +168,107 @@ def ejecutar(cliente, experimento_id, accion, payload):
         experimentos.marcar_pieza(cliente, pz["id"], archivado=True)
         return f"Archivado el concepto de {pz['nombre']}: {motivo or 'sin motivo'}."
 
+    if accion == "publicar_organico":
+        return _publicar_organico(cliente, ex, payload)
+
     raise ValueError(f"Acción desconocida: {accion!r}.")
+
+
+def _nombres(plataformas):
+    return ", ".join(organico.PLATAFORMAS.get(p, {}).get("nombre", p) for p in plataformas)
+
+
+def _plataformas_pedidas(cliente, payload):
+    """Las plataformas del payload (o todas) que HOY tienen canal disponible,
+    en el orden de organico.ORDEN, y las pedidas que ya no lo tienen."""
+    disponibles = organico.disponibles(cliente)
+    pedidas = [p for p in (payload.get("plataformas") or disponibles) if p in organico.PLATAFORMAS]
+    return ([p for p in organico.ORDEN if p in pedidas and p in disponibles],
+            [p for p in pedidas if p not in disponibles])
+
+
+def _captions_completos(cliente, pieza_id, plataformas, captions):
+    """`captions` del payload (lo que la persona vio/editó) completado con
+    organico.redactar SOLO para las plataformas sin texto."""
+    out = {p: dict(v) for p, v in (captions or {}).items() if isinstance(v, dict)}
+    faltantes = [p for p in plataformas if not ((out.get(p) or {}).get("caption") or "").strip()]
+    if faltantes:
+        out.update(organico.redactar(cliente, pieza_id, faltantes))
+    return out
+
+
+def _publicar_organico(cliente, ex, payload):
+    """Crea una `publicacion` (origen ganador) por plataforma disponible y
+    encola UNA tarea organico_publicar (max_intentos=1) con todas. Sin canal
+    disponible no es error: mensaje y nada más. Las plataformas con
+    publicación viva se saltan (unicidad) — repetir la acción no publica dos
+    veces."""
+    pz = _pieza(ex, payload["ep_id"])
+    ep_id, pieza_id = pz["id"], pz.get("pieza_id")
+    if not pieza_id or not pz.get("url_video"):
+        raise ValueError(f"{pz['nombre']} no tiene video para publicar.")
+    plataformas, sin_canal = _plataformas_pedidas(cliente, payload)
+    aviso_sin_canal = f" Sin canal conectado: {_nombres(sin_canal)}." if sin_canal else ""
+    if not plataformas:
+        return f"No hay canales orgánicos disponibles para publicar {pz['nombre']}.{aviso_sin_canal}"
+
+    job_id = tareas_organico.job_id_publicar(cliente, pieza_id)
+    if trabajos.en_curso(job_id):
+        return f"Ya hay una publicación orgánica de {pz['nombre']} en curso; no se vuelve a encolar."
+
+    vivas = {pub["plataforma"] for pub in organico.listar(cliente, pieza_id=pieza_id)
+             if pub["estado"] in organico.ESTADOS_VIVOS}
+    nuevas = [p for p in plataformas if p not in vivas]
+    saltadas = [p for p in plataformas if p in vivas]
+    pub_ids, creadas = [], []
+    if nuevas:
+        captions = _captions_completos(cliente, pieza_id, nuevas, payload.get("captions"))
+        for p in nuevas:
+            t = captions.get(p) or {}
+            try:
+                pub_ids.append(organico.crear(cliente, pieza_id, p, t.get("caption"), titulo=t.get("titulo"),
+                                              origen="ganador", ep_id=ep_id))
+                creadas.append(p)
+            except ValueError as error:
+                # Carrera con otra creación (índice único parcial): ya hay una viva.
+                if "ya está publicada" not in str(error):
+                    raise
+                saltadas.append(p)
+    aviso_saltadas = f" Ya estaba publicada (o en cola) en {_nombres(saltadas)}." if saltadas else ""
+    experimentos.marcar_pieza(cliente, ep_id, publicado_organico=True)
+    if not pub_ids:
+        return f"{pz['nombre']} no tiene nada nuevo que publicar.{aviso_saltadas}{aviso_sin_canal}"
+
+    encolada = trabajos.encolar(job_id, "organico_publicar", {"cliente": cliente, "pub_ids": pub_ids},
+                                cliente=cliente, duracion_estimada=tareas_organico.DURACION_PUBLICAR,
+                                etapas=tareas_organico.ETAPAS_PUBLICAR, max_intentos=1)
+    if not encolada:
+        # Entre en_curso() y encolar() alguien encoló la misma pieza: las filas
+        # nuevas no tienen tarea; en `error` la persona las reintenta desde el panel.
+        for pub_id in pub_ids:
+            organico.actualizar(cliente, pub_id, estado="error",
+                                error="Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
+        return f"Ya hay una publicación orgánica de {pz['nombre']} en curso; las nuevas quedaron para reintentar."
+    return (f"Publicación orgánica de {pz['nombre']} en cola: {_nombres(creadas)}.{aviso_saltadas}{aviso_sin_canal}")
+
+
+def _completar_propuesta_organica(cliente, ex, payload):
+    """La propuesta `publicar_organico` lleva las plataformas disponibles y
+    el texto ya redactado por plataforma, para que la persona lo lea/edite
+    antes de aprobar. Si redactar falla (Claude caído y sin contexto), la
+    propuesta igual se crea con `captions_error`: al aprobarla, ejecutar
+    vuelve a redactar. Una pieza que no está en el experimento sí es error."""
+    payload = dict(payload)
+    pz = _pieza(ex, payload["ep_id"])
+    try:
+        plataformas, _ = _plataformas_pedidas(cliente, payload)
+        payload["plataformas"] = plataformas
+        if plataformas and pz.get("pieza_id"):
+            captions = _captions_completos(cliente, pz["pieza_id"], plataformas, payload.get("captions"))
+            payload["captions"] = {p: captions[p] for p in plataformas if p in captions}
+    except Exception as error:  # noqa: BLE001 — la propuesta vale más que el texto previo
+        payload["captions_error"] = cola.sin_token(str(error))
+    return payload
 
 
 def pedir(cliente, experimento_id, accion, payload, motivo):
@@ -192,6 +303,8 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
                                       f"{mensaje} Motivo: {motivo}.", datos=datos, ep_id=ep_id)
         return "ejecutada", mensaje
 
+    if accion == "publicar_organico":
+        payload = _completar_propuesta_organica(cliente, ex, payload)
     pid = propuestas.crear(cliente, experimento_id, accion, payload, motivo_prop)
     mensaje = f"Propuesta pendiente: {accion} ({motivo_prop})."
     experimentos.registrar_evento(cliente, experimento_id, "propuesta", mensaje,

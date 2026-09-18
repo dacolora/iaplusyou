@@ -1,7 +1,8 @@
 """
 Avisos por correo del motor (Bloque 4): propuestas pendientes, ganadores,
-rechazos de Meta, errores de lanzamiento y tiendas que dejaron de sincronizar
-(Bloque 5, tipo "tienda"). SMTP con STARTTLS leído del entorno
+rechazos de Meta, errores de lanzamiento, tiendas que dejaron de sincronizar
+(Bloque 5, tipo "tienda") y publicaciones orgánicas terminadas (Bloque 7,
+tipo "publicado": qué salió, con sus URLs, y qué falló). SMTP con STARTTLS leído del entorno
 (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM); el destinatario es el
 correo de notificaciones del proyecto (proyectos.correo_notificaciones).
 
@@ -21,7 +22,7 @@ import proyectos
 
 log = logging.getLogger("creatv.notificaciones")
 
-TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "tienda", "sprint_lote")
+TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "tienda", "sprint_lote", "publicado")
 
 
 def _config():

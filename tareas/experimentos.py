@@ -5,7 +5,12 @@ de un experimento, decidir (Bloque 4: el decisor dicta un veredicto por pieza
 y pide la acción a acciones.pedir, que respeta el modo y el tope), y las
 periódicas: refrescar todos los que corren, decidir todos los que corren y
 hacer avanzar las derivaciones que están produciendo.
+
+Bloque 7: un ganador, además de escalar y derivar, pide `publicar_organico`
+(propuesta en manual/semi, sola en auto) — solo si el proyecto tiene algún
+canal orgánico conectado y la pieza no tiene ya una publicación viva.
 """
+import logging
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -18,10 +23,13 @@ import derivaciones
 import experimentos
 import lanzador
 import notificaciones
+import organico
 import propuestas
 import proyectos
 import trabajos
 from tareas import al_interrumpir, registrar
+
+log = logging.getLogger("creatv.tareas.experimentos")
 
 
 def job_id_lanzar(cliente, experimento_id):
@@ -176,6 +184,7 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
             _pedir(cliente, ex["id"], "escalar", {"pais": pz["pais"], "ep_id": ep_id}, v["motivo"], resultado)
         _pedir(cliente, ex["id"], "derivar", {"ep_id": ep_id}, v["motivo"], resultado)
         resultado["ganadores"].append(pz)
+        _pedir_publicacion_organica(cliente, ex, pz, v["motivo"], resultado)
     elif accion == "rescatar":
         # I-2 (spec §7): la pausa del perdedor es una acción aparte y sin
         # gasto — en semi/auto se ejecuta ya, en manual se propone. Así el
@@ -188,6 +197,36 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
                v["motivo"], resultado)
     elif accion == "pausar":
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
+
+
+def _canales_organicos(cliente):
+    """Plataformas con canal orgánico disponible; [] si no se puede saber
+    (meta.json ilegible, etc.): la pasada del decisor no se frena por eso."""
+    try:
+        return organico.disponibles(cliente)
+    except Exception as error:  # noqa: BLE001
+        log.warning("no pude leer los canales orgánicos de %s: %s", cliente, type(error).__name__)
+        return []
+
+
+def _pedir_publicacion_organica(cliente, ex, pz, motivo, resultado):
+    """Bloque 7: la ganadora sale como contenido orgánico — propuesta en
+    manual/semi (acciones.pedir la deja con el texto ya redactado), sola en
+    auto. Solo con algún canal conectado y si la pieza no tiene ya una
+    publicación viva en ninguno de ellos (ganador re-evaluado, o publicada
+    a mano desde el panel)."""
+    canales = _canales_organicos(cliente)
+    if not canales or not pz.get("pieza_id") or not pz.get("url_video"):
+        return
+    vivas = {pub["plataforma"] for pub in organico.listar(cliente, pieza_id=pz["pieza_id"])
+             if pub["estado"] in organico.ESTADOS_VIVOS}
+    pendientes = [p for p in canales if p not in vivas]
+    if not pendientes:
+        return
+    estado = _pedir(cliente, ex["id"], "publicar_organico", {"ep_id": pz["id"], "plataformas": pendientes},
+                    motivo, resultado)
+    if estado == "propuesta":
+        resultado["organico_propuesto"].add(pz["id"])
 
 
 def _rechazada_por_meta(cliente, ex, pz):
@@ -241,8 +280,11 @@ def _pausar_por_tope(cliente, ex):
 def _avisar_resultado(cliente, ex, resultado):
     for pz in resultado["ganadores"]:
         v = next(v for p, v in resultado["veredictos"] if p["id"] == pz["id"])
-        notificaciones.avisar(cliente, "ganador", f"Ganador en «{ex['nombre']}»: {pz['nombre']} ({pz['pais']})",
-                              f"{v['motivo']}\n\nExperimento #{ex['id']}, país {pz['pais']}.")
+        cuerpo = f"{v['motivo']}\n\nExperimento #{ex['id']}, país {pz['pais']}."
+        if pz["id"] in resultado["organico_propuesto"]:
+            cuerpo += ("\n\nAdemás quedó una propuesta para publicarla orgánica (Reels, Página, TikTok o Shorts, "
+                       "según lo que tengas conectado) con el texto ya redactado: revísalo y apruébala en el panel.")
+        notificaciones.avisar(cliente, "ganador", f"Ganador en «{ex['nombre']}»: {pz['nombre']} ({pz['pais']})", cuerpo)
     if resultado["propuestas"]:
         lineas = "\n".join(f"- {m}" for m in resultado["propuestas"])
         notificaciones.avisar(cliente, "propuesta",
@@ -298,7 +340,8 @@ def exp_decidir(tarea):
 
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
     ahora = datetime.now()
-    resultado = {"veredictos": [], "ganadores": [], "propuestas": [], "errores": [], "escalados": set()}
+    resultado = {"veredictos": [], "ganadores": [], "propuestas": [], "errores": [], "escalados": set(),
+                 "organico_propuesto": set()}
     snaps_por_pieza = {}
     for pais in ex["paises"]:
         piezas_pais = [pz for pz in ex["piezas"] if pz["pais"] == pais["pais"]]

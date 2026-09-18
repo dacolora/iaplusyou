@@ -11,7 +11,9 @@ import sqlalchemy as sa
 import db
 
 ESTADOS = ("pendiente", "aprobada", "rechazada", "ejecutada")
-_CLAVES_DEDUPE = ("ep_id", "pais")
+# `pieza_id` (Bloque 7, publicar_organico desde una final sin experimento) es
+# None en el resto de acciones: no cambia sus claves.
+_CLAVES_DEDUPE = ("ep_id", "pais", "pieza_id")
 
 
 def _a_dict(f):
@@ -23,7 +25,7 @@ def _a_dict(f):
 
 
 def _clave(payload):
-    """(ep_id, pais, ep_ids ordenados): dos propuestas `activar` con listas
+    """(ep_id, pais, pieza_id, ep_ids ordenados): dos propuestas `activar` con listas
     de piezas distintas son cosas distintas (I-4) — antes None == None las
     fundía y la segunda derivación lista nunca pedía activarse."""
     return tuple(payload.get(k) for k in _CLAVES_DEDUPE) + (tuple(sorted(payload.get("ep_ids") or [])),)
