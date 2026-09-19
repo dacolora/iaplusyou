@@ -269,3 +269,25 @@ def test_tab_lista_las_piezas_de_una_propuesta_activar(app, base_temporal):
     html = app["c"].get("/cliente/acme").data.decode()
     assert "Final es_CO (CO), Final es_MX (MX)" in html
     assert "derivación d1 lista" in html
+
+
+def test_propuesta_muestra_precio_estimado(app, base_temporal):
+    """Task 3: una propuesta de derivar/rescatar pinta «≈ US$ X» (lo que
+    dejó acciones.pedir en payload.precio_estimado); sin tarifa, el texto
+    «precio no disponible»; las demás propuestas no llevan precio."""
+    import experimentos as ex
+    import propuestas
+    eid = _experimento()
+    ex.agregar_pieza("acme", eid, _pieza(base_temporal), "CO")
+    ep = ex.piezas("acme", eid)[0]["id"]
+    propuestas.crear("acme", eid, "derivar", {"ep_id": ep, "precio_estimado": {"usd": 1.234, "texto": "US$ 1,23 aprox."}}, "ganador")
+    propuestas.crear("acme", eid, "rescatar", {"ep_id": ep, "precio_estimado": {"usd": None, "texto": "precio no disponible"}}, "perdedor")
+    propuestas.crear("acme", eid, "pausar", {"ep_id": ep}, "CTR bajo")
+    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "experimentos")
+    props = html[html.index("Propuestas pendientes (3)"):]
+    derivar = props[props.index('exp-propuesta-derivar'):props.index("</li>", props.index('exp-propuesta-derivar'))]
+    assert 'class="exp-propuesta-precio"' in derivar and "≈ US$ 1,23" in derivar and "aprox." not in derivar
+    rescatar = props[props.index('exp-propuesta-rescatar'):props.index("</li>", props.index('exp-propuesta-rescatar'))]
+    assert "precio no disponible" in rescatar and "≈" not in rescatar
+    pausar = props[props.index('exp-propuesta-pausar'):props.index("</li>", props.index('exp-propuesta-pausar'))]
+    assert "exp-propuesta-precio" not in pausar

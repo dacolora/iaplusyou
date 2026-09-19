@@ -62,6 +62,7 @@
         <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple required>
 
         <button class="btn-generar btn-sm" type="submit" style="margin-top:.8rem;">Crear {{ c.nombre | lower }}</button>
+        <small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">no gasta: la regla la escribes tú{% if precios and precios.regla_producto and precios.regla_producto.usd is not none %} (al importar, ≈ {{ precios.regla_producto.usd | usd }} la regla con IA){% endif %}</small>
       </form>
     </div>
   </details>

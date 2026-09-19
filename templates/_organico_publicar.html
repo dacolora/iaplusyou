@@ -81,7 +81,7 @@
       {% set disponibles = canales_org | selectattr("disponible") | rejectattr("plataforma", "in", vivas) | list %}
       {% if disponibles %}
       <div class="org-herramientas">
-        <button type="button" class="btn-guardar btn-xs" onclick="window.orgRedactar(this)">Escribir texto con IA</button>
+        <button type="button" class="btn-guardar btn-xs" onclick="window.orgRedactar(this)">Escribir texto con IA{% if precios and precios.caption_organico and precios.caption_organico.usd is not none %} ≈ {{ precios.caption_organico.usd | usd }}{% endif %}</button>
         <span class="org-aviso vacio" style="padding:0;"></span>
       </div>
       {% for c in disponibles %}

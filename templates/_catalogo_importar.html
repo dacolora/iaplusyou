@@ -15,6 +15,7 @@
           <input type="file" name="archivo" accept=".csv,.xlsx" required>
           <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">Primera fila = nombres de columna. Reconozco: <code>{{ columnas_csv }}</code>. Máximo 5 MB.</p>
           <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>Importar archivo</button>
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">≈ {{ precios.regla_producto.usd | usd }} la regla con IA por producto</small>{% endif %}
         </form>
       </details>
       <details class="swap-card prod-importar">
@@ -23,6 +24,7 @@
           <input type="url" name="url" placeholder="https://tutienda.com/productos/cojin-azul" required>
           <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">La página pública de UN producto: leo nombre, precio y fotos de sus datos estructurados.</p>
           <button type="submit" class="btn-generar btn-sm" {% if trabajo_imp %}disabled{% endif %}>Importar producto</button>
+          {% if precios and precios.regla_producto and precios.regla_producto.usd is not none %}<small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">≈ {{ precios.regla_producto.usd | usd }} la regla con IA</small>{% endif %}
         </form>
       </details>
       <a class="btn-guardar btn-sm prod-link-config" href="#settings" onclick="document.querySelector('.sidebar-item[data-tab=settings]').click(); return false;">Conectar tienda (Configuración › Tienda)</a>

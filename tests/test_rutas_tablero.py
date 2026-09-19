@@ -286,3 +286,28 @@ def test_contexto_tablero_tolera_grafico_roto(app, base_temporal, monkeypatch):
     assert "grafico: ZeroDivisionError" in ctx["errores"]
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200 and "250 COP" in r.get_data(as_text=True)
+
+
+def test_tile_generacion_este_mes(app, base_temporal, monkeypatch):
+    """Task 3: junto al gasto de pauta va lo pagado en generación (tabla
+    `gasto`, USD) este mes; fuera del mes no cuenta. Lleva a Configuración."""
+    import gastos
+    _sembrar(base_temporal)
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", detalle="wan3 · 8 s", creado_en="2026-09-10T09:00:00")
+    gastos.registrar("acme", "guion", 0.02, "guion:cf_1", creado_en="2026-09-11T09:00:00")
+    gastos.registrar("acme", "video", 5.0, "video:viejo", creado_en="2026-08-20T09:00:00")
+    _reloj(monkeypatch)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
+    ini = tb.index("Generación este mes")
+    tile = tb[tb.rindex("<a", 0, ini):tb.index("</a>", ini)]
+    assert "US$ 0,87" in tile and "2 cobro(s) a proveedores" in tile
+    assert 'data-ir-tab="settings"' in tile
+    assert "250 COP" in tb   # la pauta sigue en su moneda, al lado
+
+
+def test_tile_generacion_sin_gasto(app, base_temporal, monkeypatch):
+    _reloj(monkeypatch)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
+    assert "Generación este mes" in tb and "US$ 0,00" in tb and "sin generación pagada" in tb

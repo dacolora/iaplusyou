@@ -33,6 +33,7 @@ import creative_flow
 import decisor
 import derivaciones
 import experimentos
+import gastos
 import lanzador
 import modos
 import organico
@@ -296,13 +297,52 @@ def _completar_propuesta_organica(cliente, ex, payload):
     return payload
 
 
+def _precio_estimado(cliente, ex, accion, payload):
+    """{"usd", "texto"} de lo que costaría producir lo que pide `derivar` o
+    `rescatar`, con `gastos.estimar` (precio a la vista antes de aprobar):
+
+    - derivar: n_reediciones × final (todos los países del experimento) +
+      n_regeneraciones × (video del modelo y duración de la pieza original
+      + sus finales por país — una regeneración también produce finales).
+    - rescatar: por escalón (1 y 2 → una re-edición = final del país de la
+      pieza; 3 → una regeneración = video + final).
+
+    Nunca lanza: sin sesión/modelo conocidos el texto es «precio no
+    disponible» (`usd` None). No bloquea nada: solo informa."""
+    try:
+        pz = _pieza(ex, payload.get("ep_id"))
+        cf_id = derivaciones._cf_id_de(pz)
+        sesion = creative_flow.cargar(cliente).get(cf_id) or {}
+        n_paises = max(1, len(ex.get("paises") or []))
+        reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
+        if accion == "derivar":
+            n_re, n_rg = int(reglas.get("n_reediciones") or 0), int(reglas.get("n_regeneraciones") or 0)
+        else:
+            escalon = int(pz.get("escalon_rescate") or 0) + 1
+            n_re, n_rg = (1, 0) if escalon in (1, 2) else (0, 1)
+            n_paises = 1
+        final = gastos.estimar("final", paises=n_paises)
+        video = gastos.estimar("video", modelo=sesion.get("modelo"), duracion=sesion.get("duracion_objetivo"),
+                               con_sonido=sesion.get("con_sonido", True) is not False) if n_rg else {"usd": 0.0}
+        if final["usd"] is None or video["usd"] is None:
+            return {"usd": None, "texto": gastos.SIN_PRECIO}
+        usd = n_re * final["usd"] + n_rg * (video["usd"] + final["usd"])
+        return {"usd": round(usd, 4), "texto": f"{gastos.formatear(usd)} aprox."}
+    except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la acción
+        return {"usd": None, "texto": gastos.SIN_PRECIO}
+
+
 def pedir(cliente, experimento_id, accion, payload, motivo):
     """Puerta del decisor. Devuelve ("ejecutada", mensaje) o
     ("propuesta", mensaje) según el modo del experimento y el tope; en ambos
-    casos queda un evento (tipo `accion` o `propuesta`)."""
+    casos queda un evento (tipo `accion` o `propuesta`). Para derivar y
+    rescatar deja en `payload["precio_estimado"]` lo que costaría producir
+    (se muestra en la propuesta)."""
     payload = dict(payload or {})
     payload.setdefault("motivo", motivo)
     ex = _experimento(cliente, experimento_id)
+    if accion in ("derivar", "rescatar") and "precio_estimado" not in payload:
+        payload["precio_estimado"] = _precio_estimado(cliente, ex, accion, payload)
     puerta = modos.resolver(ex["modo"], accion)
     motivo_prop = motivo
     if accion in _ACCIONES_CON_GASTO and tope_alcanzado(ex):

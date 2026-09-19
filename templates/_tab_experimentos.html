@@ -134,6 +134,9 @@
           {% if pz_prop %}{{ pz_prop.nombre }}{% endif %}{% if pl.pais %} · {{ pl.pais }}{% endif %}
           {% if pzs_prop %}{% for p in pzs_prop %}{{ p.nombre }} ({{ p.pais }}){% if not loop.last %}, {% endif %}{% endfor %}{% elif pl.ep_ids %}{{ pl.ep_ids|length }} pieza(s){% endif %}
           {% if pl.motivo %}<small>— {{ pl.motivo }}</small>{% endif %}
+          {# Precio a la vista (acciones.pedir → payload.precio_estimado): lo que
+             costaría producir lo que pide derivar/rescatar, aproximado. #}
+          {% if pl.precio_estimado and pl.precio_estimado.texto %}<small class="exp-propuesta-precio" title="Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)">{% if pl.precio_estimado.usd is not none %}≈ {{ pl.precio_estimado.usd | usd }}{% else %}{{ pl.precio_estimado.texto }}{% endif %}</small>{% endif %}
         </span>
         {% if pr.accion == "publicar_organico" %}
         <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">Rechazar</button></form>

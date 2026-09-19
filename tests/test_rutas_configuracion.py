@@ -202,3 +202,155 @@ def test_guardar_preferencias_sonido(app, monkeypatch, tmp_path):
     assert proyectos.preferencias_sonido("acme") == {"con_sonido": False, "musica_al_crear": ""}
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert 'name="musica_al_crear"' in html and "Sonido al crear" in html
+
+
+# ---- Gasto real (Task 3): Configuración › Gasto, CSV, sidebar, precios, panel ----
+
+AHORA_GASTO = "2026-09-18T12:00:00"
+
+
+def _sembrar_gasto(monkeypatch):
+    """Tres cobros del mes (video 0,85 + guion 0,02 + final 0,07 = 0,94) y uno
+    del mes pasado que NO debe contar. El reloj se fija después."""
+    import db
+    import gastos
+    gastos.registrar("acme", "video", 0.85, "video:cf_1", detalle="wan3 · 8 s", proveedor="wavespeed",
+                     creado_en="2026-09-10T09:00:00")
+    gastos.registrar("acme", "guion", 0.02, "guion:cf_1", detalle="guion base", proveedor="anthropic",
+                     creado_en="2026-09-11T09:00:00")
+    gastos.registrar("acme", "final", 0.07, "final:cf_1__es_CO", detalle="final es_CO", proveedor="fal",
+                     creado_en="2026-09-12T09:00:00")
+    gastos.registrar("acme", "video", 5.0, "video:cf_viejo", detalle="del mes pasado", creado_en="2026-08-20T09:00:00")
+    gastos.registrar("otro", "video", 9.0, "video:cf_ajeno", detalle="de otro proyecto", creado_en="2026-09-10T09:00:00")
+    monkeypatch.setattr(db, "ahora", lambda: AHORA_GASTO)
+
+
+def _seccion_gasto(html):
+    cfg = _config(html)
+    return cfg[cfg.index('id="config-gasto"'):cfg.index('id="config-tienda"')]
+
+
+def _sidebar(html):
+    ini = html.index('<aside class="sidebar"')
+    return html[ini:html.index("</aside>", ini)]
+
+
+def test_gasto_seccion_render(app, monkeypatch):
+    _sembrar_gasto(monkeypatch)
+    html = app["c"].get("/cliente/acme").data.decode()
+    cfg = _config(html)
+    # Va justo después de Puesta a punto y antes de Conectar tu tienda.
+    assert cfg.index("Puesta a punto") < cfg.index('id="config-gasto"') < cfg.index('id="config-tienda"')
+    gasto = _seccion_gasto(html)
+    # Tiles: generación del mes (sin el cobro de agosto ni el de «otro») y pauta.
+    assert "Generación este mes" in gasto and "US$ 0,94" in gasto and "3 cobro(s)" in gasto
+    assert "Pauta este mes" in gasto and "sin pauta corriendo" in gasto
+    # Tabla por tipo con cantidad y US$, ordenada de mayor a menor.
+    assert gasto.index("Videos") < gasto.index("Finales") < gasto.index("Guiones")
+    assert "US$ 0,85" in gasto and "US$ 0,07" in gasto and "US$ 0,02" in gasto
+    # Historial: fecha, tipo, detalle y US$; el más nuevo primero; nada ajeno.
+    assert gasto.index("final es_CO") < gasto.index("guion base") < gasto.index("wan3 · 8 s")
+    assert "2026-09-12 09:00" in gasto and "del mes pasado" in gasto   # el historial no se limita al mes
+    assert "de otro proyecto" not in gasto and "US$ 9,00" not in gasto
+    # Botón CSV y nota.
+    assert "/cliente/acme/gasto/mes.csv" in gasto and "Descargar CSV del mes" in gasto
+    assert "precios reales de los proveedores" in gasto and "se cobra en tu cuenta de Meta" in gasto
+
+
+def test_gasto_seccion_vacia(app, monkeypatch):
+    import db
+    monkeypatch.setattr(db, "ahora", lambda: AHORA_GASTO)
+    gasto = _seccion_gasto(app["c"].get("/cliente/acme").data.decode())
+    assert "US$ 0,00" in gasto and "sin generación pagada" in gasto
+    assert "Todavía no hay cobros registrados" in gasto
+
+
+def test_gasto_csv(app, monkeypatch):
+    _sembrar_gasto(monkeypatch)
+    r = app["c"].get("/cliente/acme/gasto/mes.csv")
+    assert r.status_code == 200
+    assert r.headers["Content-Type"].startswith("text/csv") and "charset=utf-8" in r.headers["Content-Type"]
+    assert r.headers["Content-Disposition"] == 'attachment; filename="gasto_acme_2026-09.csv"'
+    texto = r.get_data(as_text=True)
+    assert texto.startswith("﻿")
+    lineas = texto.lstrip("﻿").splitlines()
+    assert lineas[0] == "fecha;tipo;proveedor;referencia;detalle;usd"
+    assert lineas[1] == "2026-09-10T09:00:00;video;wavespeed;video:cf_1;wan3 · 8 s;0.8500"
+    assert len(lineas) == 4 and "del mes pasado" not in texto and "cf_ajeno" not in texto
+
+
+def test_gasto_csv_rechaza_cliente_cruzado(app):
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    r = c.get("/cliente/otro/gasto/mes.csv")
+    assert r.status_code == 302 and "/cliente/acme" in r.headers["Location"]
+    assert c.get("/cliente/acme/gasto/mes.csv").status_code == 200
+
+
+def test_sidebar_chip_generacion_sin_pauta(app, monkeypatch):
+    _sembrar_gasto(monkeypatch)
+    sb = _sidebar(app["c"].get("/cliente/acme").data.decode())
+    assert 'class="sidebar-gasto"' in sb
+    chip = sb[sb.index("Este mes:"):sb.index("</a>", sb.index("Este mes:"))]
+    assert chip == "Este mes: US$ 0,94 generación"   # sin pauta no se menciona
+    assert "/cliente/acme#settings" in sb
+
+
+def test_sidebar_chip_con_pauta(app, monkeypatch):
+    import tablero
+    _sembrar_gasto(monkeypatch)
+    resumen = {"por_moneda": {"COP": {"gasto": 1405157.0, "compras": 0, "ingresos": 0.0, "roas": 0.0}},
+               "experimentos_corriendo": 0, "piezas_activas": 0, "propuestas_pendientes": 0, "ganadoras_publicadas": 0}
+    monkeypatch.setattr(tablero, "resumen_mes", lambda c, ahora_iso=None, datos=None: resumen)
+    app["dashboard"].invalidar_tablero()
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert "Este mes: US$ 0,94 generación · 1.405.157 COP pauta" in _sidebar(html)
+    # Configuración › Gasto muestra la misma pauta, en su moneda.
+    gasto = _seccion_gasto(html)
+    assert "1.405.157 COP" in gasto and "se cobra en tu cuenta de Meta" in gasto
+
+
+def test_precios_en_botones_crear_y_catalogo(app, monkeypatch):
+    """Precio a la vista ANTES de gastar: Crear (guion, finales, Generar por
+    JS), Catálogo (regla con IA al importar)."""
+    import creative_flow as cf
+    from tests.test_rutas_final_edition import GUION_BASE
+    monkeypatch.setattr(app["dashboard"].trabajos, "encolar", lambda *a, **k: True)
+    cf_id = cf.crear("acme", [], ["Chancla"], [], "camina", 8, "", "A")
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", enfoque="producto", usd=0.85)
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert "Preparar guion con IA ≈ US$ 0,02" in html
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'data-plantilla="Producir {n} finales ≈ US$ 0,10 c/u"' in html
+    assert ">Producir finales ≈ US$ 0,10 c/u</button>" in html
+    # Costo real de la pieza, con el mismo formato.
+    assert "costó US$ 0,85" in html
+    # Generar video/imagen: el estimado se calcula en JS con el formato «≈ US$ 1,00».
+    assert "function formatearUSD" in html and "' ≈ ' + formatearUSD(usd)" in html
+    assert "(~$" not in html
+    # Catálogo: la regla con IA se cobra al importar; crear a mano no gasta.
+    cat = html[html.index('<section id="tab-catalogo"'):html.index('<section id="tab-settings"')]
+    assert "≈ US$ 0,01 la regla con IA" in cat and "no gasta: la regla la escribes tú" in cat
+
+
+def test_panel_admin_columna_gasto_del_mes(app, monkeypatch):
+    import estado as estado_mod
+    import gastos
+    d = app["dashboard"]
+    _sembrar_gasto(monkeypatch)
+    gastos.registrar("otro", "guion", 0.02, "guion:x", creado_en="2026-09-10T09:00:00")
+    monkeypatch.setattr(estado_mod, "listar_clientes", lambda: ["acme", "otro", "vacio"])
+    monkeypatch.setattr(d, "_resumen_cliente", lambda c: {"pendiente": 0, "publicado": 0, "rechazado": 0})
+    html = app["c"].get("/panel").data.decode()
+    assert html.count("Gasto del mes (US$)") >= 3
+
+    def tarjeta(cid):
+        ini = html.index(f'href="/cliente/{cid}"')
+        return html[ini:html.index("</a>", ini)]
+    assert "US$ 0,94" in tarjeta("acme")
+    assert "US$ 9,02" in tarjeta("otro")
+    assert "US$ 0,00" in tarjeta("vacio")
+    # Total en la cabecera: 0,94 + 9,02.
+    assert "US$ 9,96" in html and "generación este mes" in html

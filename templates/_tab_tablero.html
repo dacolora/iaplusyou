@@ -51,6 +51,13 @@
     {% endif %}
   </div>
   {% if loop.last %}
+  {# Gasto real de generación (tabla `gasto`, USD): al lado de la pauta, en
+     su propia moneda. Lleva a Configuración › Gasto, donde está el detalle. #}
+  <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto">
+    <span>Generación este mes</span>
+    <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores →{% else %}sin generación pagada{% endif %}</small>
+  </a>
   <div class="kpi-tile">
     <span>Experimentos corriendo</span>
     <strong>{{ r.experimentos_corriendo }}</strong>

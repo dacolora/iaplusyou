@@ -190,7 +190,7 @@
       <div class="generado-pie">
         <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
         {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">Sprint · Campaña {{ item.sprint.campana_n }}</a>{% endif %}
-        <small>{{ item.modelo_nombre }}{% if item.usd %} · ${{ item.usd }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="El video trae el sonido de la escena">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="El proveedor entregó el video sin pista de audio">🔇 sin sonido</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="Música al crear: {{ item.capas.musica.estilo }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
+        <small>{{ item.modelo_nombre }}{% if item.usd %} · costó {{ item.usd | usd }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="El video trae el sonido de la escena">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="El proveedor entregó el video sin pista de audio">🔇 sin sonido</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="Música al crear: {{ item.capas.musica.estilo }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
       </div>
       <template class="generado-detalle">
         <div class="detalle-media">
@@ -209,7 +209,7 @@
             {% if item.tipo == "imagen" %}Imagen{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}{% endif %}
             · {{ item.modelo_nombre }}
             {% if item.enfoque_nombre %} · {{ item.enfoque_nombre }}{% endif %}
-            {% if item.usd %} · costó ${{ item.usd }}{% endif %}
+            {% if item.usd %} · costó {{ item.usd | usd }}{% endif %}
             · <span class="tag-estado">{{ item.estado }}</span>
           </p>
           {% if item.referencias %}
@@ -249,7 +249,7 @@
                     <option value="pt">Português</option>
                   </select>
                 </label>
-                <button type="submit" class="btn-guardar btn-sm">Preparar guion con IA</button>
+                <button type="submit" class="btn-guardar btn-sm">Preparar guion con IA{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
               </form>
               {% endif %}
             {% else %}
@@ -321,7 +321,8 @@
                     </select>
                   </label>
                 </div>
-                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales">Producir finales</button>
+                {% set _cu = (" ≈ " ~ (precios.final_por_pais.usd | usd) ~ " c/u") if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
+                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales{{ _cu }}">Producir finales{{ _cu }}</button>
               </form>
             {% endif %}
 
@@ -363,7 +364,7 @@
             {% endif %}
             {% if item.estado in ("prompt_listo", "error") %}
             <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-guardar btn-sm">{% if item.estado == "error" %}Reintentar{% else %}Generar{% endif %}{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }}){% endif %}</button>
+              <button type="submit" class="btn-guardar btn-sm">{% if item.estado == "error" %}Reintentar{% else %}Generar{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
             </form>
             {% endif %}
             <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar esta pieza?');" style="display:inline;">
@@ -411,7 +412,7 @@
       </div>
       <div class="generado-pie">
         <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
-        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · ${{ f.costo_usd }}{% endif %}</small>
+        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}</small>
       </div>
       <template class="generado-detalle">
         <div class="detalle-media">
@@ -429,14 +430,14 @@
           <p class="vacio" style="padding:0;font-size:.78rem;">
             Final de: {{ item.accion_central or item.id }}
             {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
-            {% if f.costo_usd %} · costó ${{ f.costo_usd }}{% endif %}
+            {% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}
             · <span class="tag-estado">{{ f.estado }}</span>
           </p>
           {% if f.capas %}
           <p class="campo-label" style="margin-top:.8rem;">Capas</p>
           <ul class="fe-capas">
             {% for nombre, capa in f.capas.items() %}
-            <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · ${{ capa.costo_usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
+            <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
             {% endfor %}
           </ul>
           {% endif %}
@@ -537,7 +538,7 @@
       var btn = form && form.querySelector('.fe-producir-btn');
       if (!btn) return;
       var n = form.querySelectorAll('input[name="destinos"]:checked').length;
-      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : 'Producir finales';
+      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.plantilla.replace('Producir {n} finales', 'Producir finales');
     });
     cuerpo.addEventListener('submit', function (e) {
       var form = e.target;
@@ -565,6 +566,12 @@
     });
 
     // Tipo (video/imagen), modelo elegido y costo en el botón.
+    // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear).
+    function formatearUSD(usd) {
+      if (usd > 0 && usd < 0.01) return 'US$ <0,01';
+      var partes = usd.toFixed(2).split('.');
+      return 'US$ ' + partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + partes[1];
+    }
     var form = document.getElementById('form-flowplus');
     var bloqueVideo = document.getElementById('fp-bloque-video');
     var bloqueImagen = document.getElementById('fp-bloque-imagen');
@@ -643,7 +650,8 @@
         }
       }
       var que = esImagen ? 'imagen' : 'video';
-      botonGenerar.textContent = 'Generar ' + que + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
+      // Mismo formato que gastos.formatear en el servidor: «≈ US$ 1,00».
+      botonGenerar.textContent = 'Generar ' + que + (usd ? ' ≈ ' + formatearUSD(usd) : '');
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);

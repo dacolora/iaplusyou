@@ -1591,3 +1591,29 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .org-canal-config { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: var(--radius); padding: .6rem .9rem; font-size: .84rem; }
 .org-canal-config-ok { border-left-color: var(--ok); }
 .org-canal-cab { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+/* ---------- Gasto real (Task 3): precio a la vista ---------- */
+/* Chip del sidebar bajo el nombre del proyecto: generación en USD (+ pauta en su moneda). */
+.sidebar-gasto { display: block; margin-top: .3rem; font-size: .68rem; line-height: 1.25; color: var(--muted); text-decoration: none; white-space: normal; border: 1px solid var(--border); border-radius: 999px; padding: .15rem .5rem; transition: border-color .15s, color .15s; }
+.sidebar-gasto:hover { color: var(--text); border-color: var(--accent); }
+/* Configuración › Gasto: tiles reutilizan .kpi-tile; tablas por tipo e historial. */
+.gasto-tiles { margin-top: .4rem; }
+.gasto-tabla { margin-top: .4rem; }
+.gasto-tabla th, .gasto-tabla td { padding: .4rem .6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.gasto-tabla th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.gasto-tabla .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gasto-tabla .gasto-total td { font-weight: 700; border-bottom: 0; }
+.gasto-historial { max-height: 28rem; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.gasto-historial .gasto-tabla { margin-top: 0; }
+.gasto-historial thead th { position: sticky; top: 0; background: var(--panel); }
+.gasto-fecha { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gasto-detalle { word-break: break-word; }
+.gasto-nota { padding-top: .6rem; }
+/* Nota de precio junto a un botón («≈ US$ 0,01 la regla con IA»). */
+.precio-nota { font-size: .74rem; }
+/* Propuesta del motor: precio estimado de derivar/rescatar. */
+.exp-propuesta-precio { color: var(--muted); white-space: nowrap; margin-left: .35rem; }
+/* Panel admin: gasto de generación del mes por proyecto. */
+.card-cliente-gasto { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; margin-top: .7rem; padding-top: .6rem; border-top: 1px dashed var(--border); }
+.card-cliente-gasto span { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.card-cliente-gasto strong { font-variant-numeric: tabular-nums; font-size: .92rem; }

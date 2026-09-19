@@ -458,3 +458,47 @@ def test_pedir_publicar_organico_propone_aunque_redactar_falle(org, monkeypatch)
     payload = pr.pendientes("acme", eid)[0]["payload"]
     assert "captions" not in payload and payload["captions_error"] == "sin base"
     assert payload["plataformas"] == ["instagram", "facebook"]
+
+
+# ---- Task 3: precio a la vista en las propuestas de derivar / rescatar ----
+
+def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
+    """`pedir` deja en payload["precio_estimado"] {"usd", "texto"} con
+    gastos.estimar: derivar = n_reediciones × final (todos los países) +
+    n_regeneraciones × (video del modelo/duración de la sesión original +
+    final); rescatar escalón 1 = una re-edición = final de un país."""
+    import creative_flow as cf
+    import gastos
+    import propuestas as pr
+    ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
+    # La pieza del fixture viene de la sesión cf_1 (legado "cf_1__es_CO").
+    cf.crear("acme", [], ["Chancla"], [], "camina", 8, "", "A", legado_id="cf_1")
+    cf.actualizar("acme", "cf_1", modelo="wan3", estado="video_listo")
+
+    assert ac.pedir("acme", eid, "derivar", {"ep_id": ep}, "ganador")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "derivar"][0]
+    precio = prop["payload"]["precio_estimado"]
+    final_2 = gastos.estimar("final", paises=2)["usd"]          # el experimento tiene CO y MX
+    video = gastos.estimar("video", modelo="wan3", duracion=8)["usd"]
+    esperado = round(3 * final_2 + 2 * (video + final_2), 4)   # reglas por defecto: 3 re-ediciones, 2 regeneraciones
+    assert precio["usd"] == esperado and precio["usd"] > 0
+    assert precio["texto"] == f"{gastos.formatear(esperado)} aprox."
+
+    assert ac.pedir("acme", eid, "rescatar", {"ep_id": ep}, "perdedor")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "rescatar"][0]
+    precio = prop["payload"]["precio_estimado"]
+    assert precio["usd"] == gastos.TARIFAS["final"] and precio["texto"] == "US$ 0,10 aprox."
+
+
+def test_pedir_precio_no_disponible_no_bloquea(ent):
+    """Sin sesión de Crear detrás de la pieza (o sin modelo con tarifa) el
+    precio es «precio no disponible» y la propuesta se crea igual. Las
+    acciones que no producen no llevan precio."""
+    import propuestas as pr
+    ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
+    assert ac.pedir("acme", eid, "derivar", {"ep_id": ep}, "ganador")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "derivar"][0]
+    assert prop["payload"]["precio_estimado"] == {"usd": None, "texto": "precio no disponible"}
+    assert ac.pedir("acme", eid, "escalar", {"pais": "CO", "ep_id": ep}, "ganador")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "escalar"][0]
+    assert "precio_estimado" not in prop["payload"]
