@@ -81,6 +81,35 @@ def test_auto_lanzar_encola_la_generacion_con_la_prioridad_del_payload(base_temp
     assert lanzados == [(cid, 3, "PROMPT A")]
 
 
+def test_interrumpida_deja_el_prompt_basico_con_aviso(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import tareas
+    import tareas.director as td
+    assert tareas.AL_INTERRUMPIR["flowplus_director"] is td.interrumpida
+    cid = _sesion(cf)
+    lanzados = []
+    monkeypatch.setattr(td.flowplus_lanzar, "lanzar", lambda c, cf_id, entry, prioridad=5: lanzados.append((cf_id, prioridad)) or True)
+    td.interrumpida({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": True}},
+                     "Se interrumpió por un reinicio del servidor.")
+    e = cf.cargar("acme")[cid]
+    assert e["estado"] == "prompt_listo"
+    assert "ESCENA: Image 1 gira despacio" in e["prompt_relleno"]
+    assert e["director"]["estado"] == "fallback"
+    assert "reinicio" in e["director"]["aviso"]
+    assert lanzados == []
+
+
+def test_interrumpida_no_pisa_una_sesion_que_ya_avanzo(base_temporal, monkeypatch):
+    import creative_flow as cf
+    import tareas.director as td
+    cid = _sesion(cf)
+    cf.actualizar("acme", cid, estado="prompt_listo", prompt_relleno="A")
+    td.interrumpida({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": False}}, "motivo")
+    e = cf.cargar("acme")[cid]
+    assert e["prompt_relleno"] == "A"
+    assert not e.get("director")
+
+
 @pytest.mark.skip(reason="Task 6")
 def test_idioma_viene_de_la_preferencia_del_proyecto(base_temporal, monkeypatch, tmp_path):
     import creative_flow as cf

@@ -14,7 +14,7 @@ import flowplus_prompt
 import proyectos
 import trabajos
 from providers import flowplus_modelos
-from tareas import registrar
+from tareas import al_interrumpir, registrar
 
 ETAPA_LEER = "Leyendo referencias"
 ETAPA_PLANOS = "Escribiendo planos"
@@ -69,3 +69,19 @@ def ejecutar(tarea):
         entry = creative_flow.cargar(cliente)[cf_id]
         flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))
     return mensaje
+
+
+@al_interrumpir("flowplus_director")
+def interrumpida(tarea, mensaje):
+    """El worker murió a mitad de la compilación (dos veces: max_intentos=2).
+    La sesión quedaría en `prompt_pendiente` sin trabajo y sin botón: se le
+    deja el prompt determinista con el aviso, en `prompt_listo`, para que la
+    persona lo edite, rearme o genere. Si ya salió de `prompt_pendiente` por
+    otro camino, no se pisa."""
+    p = tarea["payload"]
+    cliente, cf_id = p["cliente"], p["cf_id"]
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if entry is None or entry.get("estado") != "prompt_pendiente":
+        return
+    prompt, datos = _fallback(cliente, entry, mensaje)
+    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
