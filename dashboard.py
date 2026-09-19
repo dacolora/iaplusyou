@@ -1837,6 +1837,10 @@ def _creative_flow_items(cliente):
             "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
             "trabajo_director": {"job_id": tareas_director.job_id(cliente, cf_id)} if trabajos.en_curso(tareas_director.job_id(cliente, cf_id)) else None,
         }
+        # Si ya existe una hija de versión B (creative_flow.duplicar la crea con
+        # derivado_de=cf_id, variante="B"), no tiene sentido ofrecer generarla de
+        # nuevo desde la tarjeta del padre: la plantilla oculta la casilla.
+        item["tiene_hija_b"] = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
         # Estimado real vía wan3_client.estimate_video() en vez de un número
         # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
         # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,

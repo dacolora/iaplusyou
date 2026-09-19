@@ -172,3 +172,52 @@ def test_reusar_precarga_sonido_musica_y_calidad(app):
         p = s["fp_prefill"]
     assert p["texto"] == "@Imagen 1 gira despacio" and p["con_sonido"] is True and p["sonido_texto"] == "brisa"
     assert p["musica_estilo"] == "lujo" and p["calidad"] == "borrador" and p["preset_camara"] is None and p["plantilla"] is None
+
+
+def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app):
+    import proyectos
+    proyectos.guardar_preferencias_flowplus("acme", "wan3", "seedream_v5_pro", idioma_prompt="es", duracion_defecto=8)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "Armar prompt (gratis)" in html and 'id="fp-calidad"' in html and 'name="calidad" value="borrador"' in html
+    assert '<option value="8" selected>8 s</option>' in html and 'id="fp-duracion-larga"' in html
+    assert "exactamente lo que recibe el modelo" not in html
+
+
+def test_tarjeta_pendiente_muestra_la_barra_del_director(app, monkeypatch):
+    import creative_flow as cf
+    _crear(app)
+    (cf_id, _), = cf.cargar("acme").items()
+    monkeypatch.setattr(app["dashboard"].trabajos, "en_curso", lambda job_id: job_id.endswith("__director"))
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert f'id="trabajo-acme__{cf_id}__director"' in html and "Armando el prompt" in html
+
+
+def test_tarjeta_lista_trae_el_editor_rearmar_y_version_b(app):
+    import creative_flow as cf
+    cf_id = _lista(app)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert f'action="/cliente/acme/creative_flow/{cf_id}/prompt"' in html and 'name="prompt_a"' in html and 'name="prompt_b"' in html
+    assert f'action="/cliente/acme/creative_flow/{cf_id}/rearmar"' in html
+    assert 'name="version_b" value="si"' in html and "otro" in html      # diferencia_b visible
+    assert "Generar (~$0.8)" in html or "Generar (~$0.80)" in html          # 8 s x 0,10
+    cf.actualizar("acme", cf_id, director={"estado": "fallback", "aviso": "Anthropic caído", "prompt_b": None})
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "no pudo armar los planos" in html and "Anthropic caído" in html and 'name="version_b"' not in html
+
+
+def test_tarjeta_de_la_hija_muestra_version_b(app):
+    import creative_flow as cf
+    cf_id = _lista(app)
+    hija = cf.duplicar("acme", cf_id, prompt_relleno="B", variante="B")
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "Versión B" in html and "Versión A" in html
+
+
+def test_version_b_checkbox_se_oculta_si_ya_existe_hija(app):
+    """Decisión de controlador: si la sesión ya tiene una hija de versión B,
+    no tiene sentido ofrecer generarla de nuevo — se oculta la casilla."""
+    import creative_flow as cf
+    cf_id = _lista(app)
+    cf.duplicar("acme", cf_id, prompt_relleno="B", variante="B")
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert 'name="version_b"' not in html
