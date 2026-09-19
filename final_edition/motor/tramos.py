@@ -55,7 +55,9 @@ def _intervalos_transicion(doc):
 
 
 def _fuera_de_transicion(punto, intervalos):
-    """Corre `punto` al final de la transición que lo contiene, si la hay."""
+    """Corre `punto` al final de la transición que lo contiene, si la hay.
+    En la práctica el punto empujado coincide con el fin del tramo, porque
+    cada fin de transición es una frontera; el tramo se acepta entero."""
     for a, b in intervalos:
         if a <= punto < b:
             return b

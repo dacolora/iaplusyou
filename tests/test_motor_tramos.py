@@ -63,6 +63,28 @@ def test_no_corta_dentro_de_una_transicion():
     assert cortes[-1][1] == 7000
 
 
+def test_punto_medio_dentro_de_transicion_se_empuja_y_acepta_el_tramo():
+    # clip 1: 0–1500 con transición de 1500 ms → ocupa [1500, 3000); clip 2: 1500–7000.
+    # 40 textos en [0,1500) y 40 en [1500,7000): el tramo (0,3000) toca 80 capas (> 60),
+    # su punto medio 0 + max(2000, 1500) = 2000 cae dentro de la transición y se empuja
+    # a 3000 = fin del tramo, así que el tramo se acepta entero en vez de cortarse en 2000.
+    doc = _con_textos(40, 0, 1500)
+    extra = _con_textos(40, 1500, 5500)["pistas"][1]["clips"]
+    for c in extra:
+        c["id"] += "b"
+    doc["pistas"][1]["clips"].extend(extra)
+    principal = doc["pistas"][0]
+    principal["clips"][0]["duracion_ms"] = 1500
+    principal["clips"][0]["recorte"] = {"desde_ms": 0, "hasta_ms": 1500}
+    principal["clips"][0]["transicion"] = {"tipo": "fundido", "duracion_ms": 1500}
+    principal["clips"][1]["inicio_ms"] = 1500
+    principal["clips"][1]["duracion_ms"] = 5500
+    principal["clips"][1]["recorte"] = {"desde_ms": 1500, "hasta_ms": 7000}
+    cortes = tr.partir(doc)
+    assert cortes == [(0, 3000), (3000, 7000)]
+    assert tr.contar(doc, 0, 3000) == 80  # aceptado por encima del presupuesto a propósito
+
+
 def test_clip_largo_se_parte_por_tiempo():
     doc = _con_textos(50, 0, 2000)
     extra = _con_textos(50, 2000, 5000)["pistas"][1]["clips"]
