@@ -184,6 +184,12 @@ def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app)
     # La imagen se cobra al instante (nunca pasa por el director): su botón en
     # refrescar() debe seguir diciendo "Generar imagen", nunca "gratis".
     assert "'Generar imagen'" in html
+    # El costo A+B se delega sobre el cuerpo del modal (el formulario de generar
+    # vive en el <template> clonado, igual que "Producir N finales"): un
+    # querySelectorAll('.fp-generar-form') en la carga de la página nunca vería
+    # el checkbox, así que ese patrón no puede volver.
+    assert "'.fp-version-b'" in html
+    assert "querySelectorAll('.fp-generar-form')" not in html
 
 
 def test_tarjeta_pendiente_muestra_la_barra_del_director(app, monkeypatch):

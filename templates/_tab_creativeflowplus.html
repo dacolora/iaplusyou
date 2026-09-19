@@ -138,7 +138,7 @@
   <input type="hidden" name="modelo" id="fp-modelo">
 
   <button class="btn-generar" type="submit" id="fp-generar" style="margin-top:1.2rem;">Armar prompt (gratis)</button>
-  <p class="vacio" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Armar el prompt no cuesta; se cobra al generar desde la tarjeta.</p>
+  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Armar el prompt no cuesta; se cobra al generar desde la tarjeta.</p>
 </form>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
@@ -582,6 +582,18 @@
       var n = form.querySelectorAll('input[name="destinos"]:checked').length;
       btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : 'Producir finales';
     });
+    // Costo A+B: el formulario de generar también vive en el <template> clonado,
+    // así que el checkbox "Generar también la versión B" se delega igual que
+    // "Producir N finales" arriba — un listener en la carga de la página nunca
+    // vería el checkbox (no existe hasta que se clona el detalle).
+    cuerpo.addEventListener('change', function (e) {
+      if (!e.target.matches || !e.target.matches('.fp-version-b')) return;
+      var f = e.target.closest('.fp-generar-form');
+      var btn = f && f.querySelector('.fp-generar-btn');
+      var usd = f ? parseFloat(f.dataset.usd || '0') : 0;
+      if (!btn || !usd) return;
+      btn.textContent = btn.textContent.replace(/\s*\(~\$[^)]*\)/, '') + ' (~$' + (e.target.checked ? usd * 2 : usd).toFixed(2) + ')';
+    });
     cuerpo.addEventListener('submit', function (e) {
       var form = e.target;
       if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
@@ -613,6 +625,7 @@
     var bloqueImagen = document.getElementById('fp-bloque-imagen');
     var campoModelo = document.getElementById('fp-modelo');
     var botonGenerar = document.getElementById('fp-generar');
+    var ayudaBoton = document.getElementById('fp-ayuda-boton');
     var duracion = document.getElementById('fp-duracion');
     function tipoActual() { return form.querySelector('input[name=tipo]:checked').value; }
     function modeloActual() {
@@ -659,6 +672,9 @@
       var formatos = (m.dataset.formatos || '').split(',').filter(Boolean);
       if (esImagen) {
         if (formatoImagen) limitarSelect(formatoImagen, function (v) { return formatos.indexOf(v) !== -1; }, '9:16');
+        // Borrador es solo de Wan 3.0 video: no debe sobrevivir a un cambio a Imagen.
+        var calidadImagen = document.getElementById('fp-calidad');
+        if (calidadImagen) { calidadImagen.checked = false; calidadImagen.disabled = true; }
         return;
       }
       var min = parseInt(m.dataset.minDuracion || '2', 10), max = parseInt(m.dataset.maxDuracion || '30', 10);
@@ -695,11 +711,14 @@
         }
       }
       // La imagen se genera y se cobra al instante (nunca pasa por el director):
-      // su botón sigue diciendo "Generar imagen", nunca "gratis".
+      // su botón sigue diciendo "Generar imagen", nunca "gratis", y la ayuda de
+      // debajo no debe prometer una tarjeta pendiente que nunca aparece.
       if (esImagen) {
         botonGenerar.textContent = 'Generar imagen' + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
+        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.';
       } else {
         botonGenerar.textContent = 'Armar prompt (gratis)' + (usd ? ' · generar costará ~$' + usd.toFixed(2) : '');
+        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. Armar el prompt no cuesta; se cobra al generar desde la tarjeta.';
       }
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
@@ -846,15 +865,6 @@
     });
     texto.addEventListener('input', function () {
       if (texto.value.trim()) { texto.classList.remove('con-error'); textoError.hidden = true; }
-    });
-
-    // Costo A+B en las tarjetas: al marcar "Generar también la versión B" el
-    // botón muestra el doble (dos videos = doble costo).
-    document.querySelectorAll('.fp-generar-form').forEach(function (f) {
-      var chk = f.querySelector('.fp-version-b'), btn = f.querySelector('.fp-generar-btn'), usd = parseFloat(f.dataset.usd || '0');
-      if (!chk || !btn || !usd) return;
-      var base = btn.textContent.replace(/\s*\(~\$[^)]*\)/, '');
-      chk.addEventListener('change', function () { btn.textContent = base + ' (~$' + (chk.checked ? usd * 2 : usd).toFixed(2) + ')'; });
     });
   })();
 </script>
