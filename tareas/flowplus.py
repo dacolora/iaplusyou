@@ -16,6 +16,7 @@ import requests
 import bitacora
 import creative_flow
 import estado as estado_mod
+import gastos
 import trabajos
 from final_edition import cortes, mezcla, musica
 from providers import flowplus_modelos
@@ -61,6 +62,19 @@ _FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
 
 def _job_id(cliente, cf_id):
     return f"{cliente}__{cf_id}__creative_flow"
+
+
+def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musica=0.0):
+    """Anota el cobro real de la sesión (`video:<cf_id>` / `imagen:<cf_id>`):
+    el `usd` del estimate del modelo más la música de fal si la hubo. Nunca
+    lanza (gastos.registrar_seguro): el gasto es un registro, no la pieza."""
+    usd_modelo = float((costo or {}).get("usd") or 0.0)
+    gastos.registrar_seguro(
+        cliente, tipo, round(usd_modelo + float(usd_musica or 0.0), 4), referencia, detalle=detalle,
+        proveedor=modelo,
+        extra={"usd_modelo": round(usd_modelo, 4), "usd_musica": round(float(usd_musica or 0.0), 4),
+               "credits": (costo or {}).get("credits")},
+    )
 
 
 @al_interrumpir("flowplus_video")
@@ -158,6 +172,7 @@ def ejecutar_imagen(tarea):
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.png")
     avisar_fase = _avisar_fase_de(job_id)
+    costo = None
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
         url_prov = flowplus_modelos.generar_imagen(modelo, prompt_texto, referencias, on_progreso=avisar_fase,
@@ -172,7 +187,12 @@ def ejecutar_imagen(tarea):
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+        if costo is not None:
+            # El modelo ya cobró aunque la descarga fallara: queda registrado.
+            _registrar_gasto(cliente, "imagen", costo, f"imagen:{cf_id}", modelo,
+                             f"{modelo} · {len(referencias)} referencia(s) · falló al descargar; el modelo ya cobró")
         raise
+    _registrar_gasto(cliente, "imagen", costo, f"imagen:{cf_id}", modelo, f"{modelo} · {len(referencias)} referencia(s)")
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
     try:
         imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
@@ -201,6 +221,8 @@ def ejecutar_video(tarea):
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
     avisar_fase = _avisar_fase_de(job_id)
+    costo = None
+    detalle_gasto = f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido")
 
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
@@ -220,6 +242,10 @@ def ejecutar_video(tarea):
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+        if costo is not None:
+            # El modelo ya cobró aunque la descarga fallara: queda registrado.
+            _registrar_gasto(cliente, "video", costo, f"video:{cf_id}", modelo,
+                             detalle_gasto + " · falló al descargar; el modelo ya cobró")
         raise
 
     # --- Mezcla: ¿trajo sonido? ¿pidió música? (degradable: el video ya está pagado) ---
@@ -275,6 +301,11 @@ def ejecutar_video(tarea):
         credits=costo.get("credits"), usd=round(float(costo.get("usd") or 0.0) + usd_musica, 4),
         capas=capas,
     )
+    if estilo_musica:
+        estado_musica = (capas.get("musica") or {}).get("estado")
+        detalle_gasto += f" + música {estilo_musica}" + (" (falló la mezcla; la pista ya se cobró)"
+                                                          if estado_musica == "error" else "")
+    _registrar_gasto(cliente, "video", costo, f"video:{cf_id}", modelo, detalle_gasto, usd_musica=usd_musica)
 
     estado = estado_mod.cargar(cliente)
     estado[cf_id] = {

@@ -31,6 +31,7 @@ import sqlalchemy as sa
 import cola
 import db
 import experimentos
+import gastos
 import meta_conexion
 import publicador
 import tiendas
@@ -504,6 +505,12 @@ def redactar(cliente, pieza_id, plataformas):
         textos = generador_prompts.caption_organico(contexto, plataformas)
         if not isinstance(textos, dict):
             textos = {}
+        # Claude respondió: se cobró la llamada (tarifa fija). La referencia
+        # lleva la hora porque cada "Escribir con IA" es una llamada nueva.
+        gastos.registrar_seguro(
+            cliente, "caption_organico", gastos.TARIFAS["caption_organico"],
+            f"caption_organico:{pieza_id}:{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            proveedor="anthropic", detalle=f"texto para {', '.join(plataformas)} de la pieza {pieza_id}")
     except Exception as e:  # noqa: BLE001 — sin Claude igual hay texto (fallback)
         log.warning("redactar %s/%s: Claude falló, uso el fallback determinista: %s",
                     cliente, pieza_id, e, exc_info=True)

@@ -19,6 +19,7 @@ import requests
 
 import bitacora
 import catalogo_productos
+import gastos
 import generador_prompts
 import marca as marca_mod
 import prompt_swap
@@ -188,6 +189,9 @@ def ejecutar(tarea):
     # Cada etapa se anuncia con trabajos.reportar(job_id, ...) para que la barra
     # deje de ser un número inventado: el usuario ve en qué paso real va.
     avisar_fase = _avisar_fase_de(job_id)
+    # None hasta que el proveedor cobró: si algo falla después, el gasto se
+    # registra igual (el cobro ya ocurrió).
+    costo = None
 
     try:
         # os.makedirs y negative_prompt_efectivo estaban FUERA del try:
@@ -380,6 +384,7 @@ def ejecutar(tarea):
             credits=costo.get("credits"), usd=costo.get("usd"), error_storage=error_storage,
         )
         bitacora.registrar(cliente, swap_id, "swap", "ok", local_path)
+        _registrar_gasto(cliente, swap_id, proveedor, tipo, costo, mejorar_calidad)
 
         if url:
             if tipo == "video":
@@ -397,4 +402,19 @@ def ejecutar(tarea):
     except Exception as e:
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e))
         bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
+        if costo is not None:
+            _registrar_gasto(cliente, swap_id, proveedor, tipo, costo, mejorar_calidad,
+                             sufijo=" · falló después de generar; el proveedor ya cobró")
         raise
+
+
+def _registrar_gasto(cliente, swap_id, proveedor, tipo, costo, mejorar_calidad, sufijo=""):
+    """`swap:<swap_id>` con el `usd` del estimate del proveedor (ya incluye
+    la mejora de calidad si la hubo). Un proveedor sin tarifa (usd None) se
+    registra en 0 con "sin tarifa" para que quede constancia del cobro."""
+    usd = (costo or {}).get("usd")
+    detalle = f"{proveedor} · {'video' if tipo == 'video' else 'foto'}" + (" · con mejora" if mejorar_calidad else "")
+    if usd is None:
+        detalle += " · sin tarifa"
+    gastos.registrar_seguro(cliente, "swap", usd, f"swap:{swap_id}", detalle=detalle + sufijo, proveedor=proveedor,
+                            extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None})

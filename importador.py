@@ -42,6 +42,7 @@ import requests
 
 import catalogo_productos
 import db
+import gastos
 import generador_prompts
 import prompt_swap
 import tiendas
@@ -365,6 +366,13 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
         if fallidas:
             errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
         regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "")
+        if regla:
+            # Claude respondió (una regla vacía es el fallback sin llamada o
+            # con error, que no cobra). Tarifa fija: el SDK no devuelve el
+            # precio y una llamada de ~600 tokens cuesta menos que ese tope.
+            gastos.registrar_seguro(cliente, "regla_producto", gastos.TARIFAS["regla_producto"],
+                                    f"regla_producto:{producto_id}", proveedor="anthropic",
+                                    detalle=f"regla de fidelidad de «{nombre}»"[:300])
         tipo = inferir_tipo(nombre, descripcion, prod.get("categoria") or "")
         try:
             activo_id = catalogo_productos.crear(cliente, nombre, descripcion, tipo=tipo,

@@ -156,3 +156,77 @@ def test_ejecutar_foto_nano_banana_con_proveedor_falso(base_temporal, monkeypatc
     assert (tmp_path / "salidas" / "acme" / "swaps" / "swap_x.png").read_bytes() == b"png"
     assert [k for sid, k in actualizaciones if k.get("evaluacion_estado")] == [{"evaluacion_estado": "sin_matriz"}]
     assert [r["etapa"] for r in reportes if "etapa" in r] == [sw.ETAPA_PREPARAR_FOTO, sw.ETAPA_MODELO, sw.ETAPA_GUARDAR]
+
+
+# ---------- gasto real (swap:<swap_id>) ----------
+
+def _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_x"):
+    monkeypatch.setattr(sw, "BASE_DIR", str(tmp_path))
+    foto = tmp_path / "orig.jpg"
+    foto.write_bytes(b"jpg")
+    monkeypatch.setattr(sw.swaps_mod, "cargar", lambda c: {
+        swap_id: {"foto_original_local": str(foto), "aspect_ratio": "9:16", "tipo": "foto"},
+    })
+    monkeypatch.setattr(sw.catalogo_productos, "encontrar",
+                        lambda c, pid: {"id": pid, "tipo": "calzado", "mapa_texto": None,
+                                        "referencias": ["/r/a.jpg"], "descripcion": "zapato"})
+    monkeypatch.setattr(sw.marca_mod, "negative_prompt_efectivo", lambda c: "")
+    monkeypatch.setattr(sw.nano_banana_client, "swap_producto", lambda *a, **k: b"png")
+    monkeypatch.setattr(sw.nano_banana_client, "estimate_image", lambda: {"credits": None, "usd": 0.039})
+    monkeypatch.setattr(sw.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(sw.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(sw.marca_mod, "cargar_root", lambda c: {"invariants": []})
+    monkeypatch.setattr(sw.trabajos, "reportar", lambda job_id, **k: None)
+    return {"cliente": "acme", "swap_id": swap_id, "producto_id": "p1",
+            "proveedor": "nano_banana", "tipo": "foto", "mejorar_calidad": False}
+
+
+def test_ejecutar_registra_el_gasto_real_del_swap(base_temporal, monkeypatch, tmp_path):
+    """`swap:<swap_id>` con el usd del estimate del proveedor; un proveedor
+    sin tarifa queda en 0 con "sin tarifa" (constancia del cobro)."""
+    import gastos
+    import tareas.swap as sw
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path)
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: None)
+
+    sw.ejecutar({"job_id": "acme__swap_x__swap", "payload": payload})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == "swap:swap_x" and g["tipo"] == "swap" and g["usd"] == 0.039
+    assert g["proveedor"] == "nano_banana" and g["detalle"] == "nano_banana · foto"
+    assert g["extra"]["sin_tarifa"] is False
+
+    # sin tarifa: 0 con constancia; misma referencia -> misma fila
+    monkeypatch.setattr(sw.nano_banana_client, "estimate_image", lambda: {"credits": None, "usd": None})
+    sw.ejecutar({"job_id": "acme__swap_x__swap", "payload": payload})
+    filas = gastos.historial("acme")
+    assert len(filas) == 1 and filas[0]["usd"] == 0.0 and "sin tarifa" in filas[0]["detalle"]
+    assert filas[0]["extra"]["sin_tarifa"] is True
+
+
+def test_ejecutar_registra_el_gasto_si_falla_despues_de_cobrar(base_temporal, monkeypatch, tmp_path):
+    """El proveedor devolvió la imagen (cobró) y guardar el estado explotó:
+    el swap queda en error pero el gasto se anota con el motivo. Si el
+    proveedor falló antes de cobrar, no hay gasto."""
+    import gastos
+    import tareas.swap as sw
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_y")
+
+    def _actualizar(c, sid, **k):
+        if k.get("estado") == "listo":
+            raise RuntimeError("disco lleno")
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", _actualizar)
+    with pytest.raises(RuntimeError, match="disco lleno"):
+        sw.ejecutar({"job_id": "acme__swap_y__swap", "payload": payload})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == "swap:swap_y" and g["usd"] == 0.039
+    assert "el proveedor ya cobró" in g["detalle"]
+
+    def _boom(*a, **k):
+        raise RuntimeError("proveedor caído")
+    monkeypatch.setattr(sw.nano_banana_client, "swap_producto", _boom)
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: None)
+    with pytest.raises(RuntimeError, match="proveedor caído"):
+        sw.ejecutar({"job_id": "acme__swap_y__swap", "payload": payload})
+    # nada nuevo: la fila anterior sigue igual (no se pisa con un cobro que no hubo)
+    filas = gastos.historial("acme")
+    assert len(filas) == 1 and filas[0]["detalle"] == g["detalle"]

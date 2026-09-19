@@ -218,6 +218,18 @@ def registrar(cliente, tipo, usd, referencia, detalle="", proveedor=None, extra=
             return int(fila.id)
 
 
+def registrar_seguro(cliente, tipo, usd, referencia, **kw):
+    """`registrar` que NUNCA lanza: lo llaman las tareas justo después de
+    que el proveedor cobró, y un fallo anotando el gasto (base bloqueada,
+    disco lleno) no puede tumbar una generación ya pagada. Devuelve el id o
+    None si falló (queda en el log)."""
+    try:
+        return registrar(cliente, tipo, usd, referencia, **kw)
+    except Exception:  # noqa: BLE001 — ver docstring
+        log.exception("No se pudo registrar el gasto %s de %s (US$ %s)", referencia, cliente, usd)
+        return None
+
+
 # ------------------------------------------------------------ lecturas ---
 
 def _ahora(ahora_iso):

@@ -355,3 +355,68 @@ def test_producir_sin_sonido_o_clon_mudo(entorno):
 def test_producir_rechaza_preset_desconocido(entorno):
     with pytest.raises(ValueError):
         final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"mezcla": "reguetón"})
+
+
+# ---------- gasto real (guion:<cf_id> / final:<final_id>) ----------
+
+def test_preparar_guion_registra_el_gasto(entorno):
+    import gastos
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == f"guion:{entorno['cf_id']}" and g["tipo"] == "guion"
+    assert g["usd"] == pytest.approx(0.011) and g["proveedor"] == "anthropic"
+    assert g["extra"] == {"usd_guion": 0.01, "usd_whisper": 0.001}
+    assert "transcripción" in g["detalle"]
+    # volver a preparar: misma fila
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    assert len(gastos.historial("acme")) == 1
+
+
+def test_producir_registra_el_gasto_de_la_final_sin_contar_el_guion_base_dos_veces(entorno):
+    """El guion base preparado dentro de `producir` queda como `guion:<cf_id>`;
+    la final registra solo sus capas (guion localizado + voz + música), con el
+    desglose por capa en `extra`. Una segunda final del mismo destino
+    actualiza su fila."""
+    import gastos
+    cf_id = entorno["cf_id"]
+    final_id, _ = final_edition.producir("acme", cf_id, "en", "US", {"precios": {"en_US": 19.9}})
+    filas = {f["referencia"]: f for f in gastos.historial("acme")}
+    assert set(filas) == {f"guion:{cf_id}", f"final:{final_id}"}
+    assert filas[f"guion:{cf_id}"]["usd"] == pytest.approx(0.011)
+    g = filas[f"final:{final_id}"]
+    assert g["tipo"] == "final" and g["usd"] == pytest.approx(0.02 + 0.3)
+    assert g["extra"]["capas"]["guion"] == 0.02 and g["extra"]["capas"]["voz"] == 0.3
+    assert g["extra"]["capas"]["musica"] == 0.0 and g["extra"]["fallo"] is False
+    assert g["detalle"] == "en_US · guion, voz"
+    assert gastos.resumen_mes("acme")["total"] == pytest.approx(0.011 + 0.02 + 0.3)
+
+    final_edition.producir("acme", cf_id, "en", "US", {"precios": {"en_US": 19.9}})
+    assert len(gastos.historial("acme")) == 2
+
+    # otro destino: otra final, el guion base ya existía (no se vuelve a cobrar)
+    final_es, _ = final_edition.producir("acme", cf_id, "es", "CO")
+    assert {f["referencia"] for f in gastos.historial("acme")} == {f"guion:{cf_id}", f"final:{final_id}", f"final:{final_es}"}
+
+
+def test_producir_registra_lo_cobrado_si_falla_el_render(entorno, monkeypatch):
+    """Voz (y música) ya se pagaron cuando ffmpeg revienta: el gasto queda
+    con el detalle de qué falló y qué se cobró."""
+    import gastos
+
+    def falla(*a, **k):
+        raise RuntimeError("ffmpeg explotó")
+    monkeypatch.setattr(render, "componer", falla)
+    with pytest.raises(RuntimeError, match="ffmpeg explotó"):
+        final_edition.producir("acme", entorno["cf_id"], "es", "CO")
+    g = [f for f in gastos.historial("acme") if f["tipo"] == "final"][0]
+    assert g["referencia"] == f"final:{entorno['cf_id']}__es_CO"
+    assert g["usd"] == pytest.approx(0.02 + 0.3) and g["extra"]["fallo"] is True
+    assert g["detalle"] == "es_CO · falló en render; guion y voz cobradas"
+
+
+def test_producir_no_registra_gasto_si_falla_antes_de_cobrar(entorno, monkeypatch):
+    import gastos
+    monkeypatch.setattr(guion_mod, "localizar_guion", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("claude caído")))
+    with pytest.raises(RuntimeError, match="claude caído"):
+        final_edition.producir("acme", entorno["cf_id"], "es", "CO")
+    assert [f["tipo"] for f in gastos.historial("acme")] == ["guion"]

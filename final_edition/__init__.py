@@ -31,6 +31,7 @@ import requests
 
 import catalogo_productos
 import creative_flow
+import gastos
 import marca
 import proyectos
 from final_edition import cortes, guion as guion_mod, mezcla, musica, render, texto, tipos, voz
@@ -224,6 +225,7 @@ def preparar_guion(cliente, cf_id, opciones=None):
     duracion_s = o.get("duracion_s") or cortes.duracion(_clon_local(cliente, cf_id, entry))
     enfoque = entry.get("enfoque") or "producto"
 
+    costo_whisper = costo
     guion_base, costo_guion = guion_mod.generar_guion_base(
         producto, referencia, enfoque, float(duracion_s), idioma_base,
         _guia_marca(cliente), entry.get("tono") or "")
@@ -232,6 +234,12 @@ def preparar_guion(cliente, cf_id, opciones=None):
     # destino del país base al producir (los demás países piden el suyo).
     guion_base["precio_base"] = o.get("precio")
     creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
+    # Cobro real del guion base (Claude + whisper de la referencia si la hubo).
+    # Referencia única por sesión: volver a preparar actualiza, no duplica.
+    gastos.registrar_seguro(
+        cliente, "guion", round(costo, 4), f"guion:{cf_id}", proveedor="anthropic",
+        detalle=f"guion base {idioma_base}" + (" + transcripción de la referencia" if costo_whisper else ""),
+        extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
     return guion_base, round(costo, 4)
 
 
@@ -288,6 +296,9 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
 
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=o.get("variante"))
     costo = 0.0
+    # Lo que preparar_guion cobró acá adentro ya quedó como `guion:<cf_id>`;
+    # se descuenta del gasto de la final para no contarlo dos veces.
+    costo_base = 0.0
     guion_base = None
     guion = None
     capas = {}
@@ -461,6 +472,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
     except Exception as e:
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas,
                                        costo_usd=round(costo, 4), guion=guion)
+        _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, fallo=True)
         raise
 
     creative_flow.actualizar_final(
@@ -468,4 +480,25 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         url_miniatura=url_miniatura, url_local=resultado["archivo"],
         duracion_s=float(resultado.get("duracion_s") or duracion_final), capas=capas,
         costo_usd=round(costo, 4), guion=guion, error=None)
+    _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas)
     return final_id, creative_flow.final_por_legado(cliente, final_id)
+
+
+def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=False):
+    """`final:<final_id>`: el total que cobraron las capas (por capa en
+    `extra`). Si la pieza falló solo se registra cuando algo se cobró — con
+    el detalle de qué capa falló y cuáles ya estaban pagadas (p. ej. "falló
+    en render; voz y música cobradas")."""
+    por_capa = {n: round(float(c.get("costo_usd") or 0.0), 4) for n, c in (capas or {}).items()}
+    cobradas = [n for n, v in por_capa.items() if v > 0]
+    usd = round(max(0.0, float(usd or 0.0)), 4)
+    if fallo:
+        if usd <= 0:
+            return
+        fallida = next((n for n in reversed(list(capas or {})) if (capas[n] or {}).get("estado") == "error"), None)
+        detalle = f"{idioma}_{pais} · falló en {fallida or 'la producción'}; " + (
+            " y ".join(cobradas) + (" cobradas" if len(cobradas) > 1 else " cobrada") if cobradas else "nada cobrado")
+    else:
+        detalle = f"{idioma}_{pais} · " + (", ".join(cobradas) if cobradas else "sin cobros (todo cacheado u omitido)")
+    gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}", detalle=detalle, proveedor="fal/anthropic",
+                            extra={"capas": por_capa, "fallo": bool(fallo)})
