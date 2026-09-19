@@ -4399,7 +4399,7 @@ def fp_vaciar_referencias(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
-@app.route("/cliente/<cliente>/creative_flow/<cf_id>/reusar", methods=["POST"])
+@app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
 def fp_reusar(cliente, cf_id):
     """"Editar y crear otra a partir de esta": las referencias de esa pieza (sin
     los logos, que se adjuntan solos) vuelven a la bandeja y el texto, tipo,
@@ -4664,7 +4664,7 @@ def fp_sugerir_sonido(cliente):
     return jsonify({"sonido": texto})
 
 
-@app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar", methods=["POST"])
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar_video", methods=["POST"])
 def cf_generar_video(cliente, cf_id):
     """Reintento tras error, o sesiones viejas que quedaron en prompt_listo.
     Con `version_b=si` (solo video, y solo si el director dejó `prompt_b`) crea

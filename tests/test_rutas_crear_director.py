@@ -133,7 +133,7 @@ def _lista(app):
 def test_generar_solo_a(app):
     import creative_flow as cf
     cf_id = _lista(app)
-    r = app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar")
+    r = app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar_video")
     assert r.status_code == 302
     assert [t["tipo"] for t in app["encolados"]] == ["flowplus_video"] and app["encolados"][0]["payload"]["cf_id"] == cf_id
     assert len(cf.cargar("acme")) == 1
@@ -144,7 +144,7 @@ def test_generar_solo_a(app):
 def test_generar_a_y_b_crea_la_hija_y_encola_dos(app):
     import creative_flow as cf
     cf_id = _lista(app)
-    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar", data={"version_b": "si"})
+    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar_video", data={"version_b": "si"})
     sesiones = cf.cargar("acme")
     assert len(sesiones) == 2
     hija = next(e for k, e in sesiones.items() if k != cf_id)
@@ -157,7 +157,7 @@ def test_generar_b_sin_prompt_b_ignora_la_casilla(app):
     import creative_flow as cf
     cf_id = _lista(app)
     cf.actualizar("acme", cf_id, director={"estado": "fallback", "prompt_b": None})
-    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar", data={"version_b": "si"})
+    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar_video", data={"version_b": "si"})
     assert len(cf.cargar("acme")) == 1 and len(app["encolados"]) == 1
 
 
@@ -167,7 +167,7 @@ def test_reusar_precarga_sonido_musica_y_calidad(app):
     cf.actualizar("acme", cf_id, sonido_texto="brisa", musica_estilo="lujo", calidad="borrador")
     with app["c"].session_transaction() as s:
         s["fp_prefill"] = None
-    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/reusar")
+    app["c"].post(f"/cliente/acme/flowplus/reusar/{cf_id}")
     with app["c"].session_transaction() as s:
         p = s["fp_prefill"]
     assert p["texto"] == "@Imagen 1 gira despacio" and p["con_sonido"] is True and p["sonido_texto"] == "brisa"
