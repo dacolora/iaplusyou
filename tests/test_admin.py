@@ -171,3 +171,23 @@ def test_hace_en_espanol(admin):
     assert admin.hace("2026-09-19T07:00:00", AHORA) == "hace 3 h"
     assert admin.hace("2026-09-16T10:00:00", AHORA) == "hace 3 días"
     assert admin.hace(None, AHORA) is None
+
+
+def test_pauta_toma_la_moneda_de_la_pieza_o_de_meta_json_cuando_el_experimento_no_la_tiene(admin, base_temporal, monkeypatch):
+    import meta_conexion
+    monkeypatch.setattr(meta_conexion, "cargar", lambda c: {"token": "x", "moneda": "MXN"} if c == "beta" else None)
+    # Anuncios sueltos legado: el experimento no guarda moneda, la pieza sí (extra.moneda).
+    _, ep_legado = _exp(base_temporal, "acme", moneda=None, legado=True)
+    with base_temporal.conectar() as con:
+        con.execute(sa.update(base_temporal.experimento_pieza).where(base_temporal.experimento_pieza.c.id == ep_legado)
+                    .values(extra={"nombre": "Lanzamiento", "moneda": "COP"}))
+    _snap(base_temporal, ep_legado, "2026-09-14T02:08:14", 37246)
+    # Sin moneda en ninguna parte: la de la cuenta publicitaria conectada (meta.json).
+    _, ep_beta = _exp(base_temporal, "beta", moneda=None)
+    _snap(base_temporal, ep_beta, "2026-09-10T00:00:00", 80)
+
+    r = admin.resumen(["acme", "beta"], ahora_iso=AHORA)
+
+    acme, beta = r["proyectos"]
+    assert acme["pauta"] == {"COP": 37246.0}
+    assert beta["pauta"] == {"MXN": 80.0}

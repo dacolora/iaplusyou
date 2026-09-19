@@ -105,19 +105,24 @@ def pauta_mes(clientes, ahora_iso=None):
     if not clientes:
         return out
     ex, ep = db.experimento, db.experimento_pieza
-    q = (sa.select(ep.c.id, ex.c.cliente, ex.c.moneda)
+    q = (sa.select(ep.c.id, ex.c.cliente, ex.c.moneda, ep.c.extra)
          .select_from(ep.join(ex, ep.c.experimento_id == ex.c.id))
          .where(ex.c.cliente.in_(list(clientes))))
     with db.conectar() as con:
         piezas = con.execute(q).fetchall()
-    for ep_id, cliente, moneda in piezas:
+    moneda_cuenta = {}
+    for ep_id, cliente, moneda, extra in piezas:
         snaps = experimentos.snapshots(ep_id, desde=desde)
         if not snaps:
             continue
         gasto = tablero.delta(snaps, desde, hasta, "gasto")
         if gasto <= 0:
             continue
-        m = moneda or tablero.MONEDA_POR_DEFECTO
+        if cliente not in moneda_cuenta:
+            moneda_cuenta[cliente] = (meta_conexion.cargar(cliente) or {}).get("moneda")
+        # Los anuncios sueltos legado no guardan moneda en el experimento pero sí
+        # en la pieza (extra.moneda); si tampoco, la de la cuenta conectada.
+        m = moneda or (extra or {}).get("moneda") or moneda_cuenta[cliente] or tablero.MONEDA_POR_DEFECTO
         out[cliente][m] = round(out[cliente].get(m, 0.0) + gasto, 2)
     return out
 
