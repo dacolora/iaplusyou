@@ -86,3 +86,32 @@ def test_nuevo_video_es_valido_y_vacio():
     assert doc["esquema"] == d.ESQUEMA_ACTUAL
     assert [p["tipo"] for p in doc["pistas"]] == ["video"]
     assert d.duracion_ms(doc) == 0
+
+
+def test_velocidad_no_numerica_es_documento_invalido():
+    doc = cargar("video_basico.json")
+    doc["pistas"][0]["clips"][0]["velocidad"] = "rapido"
+    with pytest.raises(d.DocumentoInvalido, match="velocidad"):
+        d.validar(doc)
+
+
+def test_fps_distinto_de_30_es_invalido_y_se_normaliza():
+    doc = cargar("video_basico.json")
+    doc["fps"] = 24
+    with pytest.raises(d.DocumentoInvalido, match="fps"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    del doc["fps"]
+    validated = d.validar(doc)
+    assert validated["fps"] == 30
+
+
+def test_estilo_se_normaliza_con_defaults():
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["estilo"] = {"fuente": "Inter-Bold"}
+    validated = d.validar(doc)
+    estilo = validated["pistas"][1]["clips"][0]["estilo"]
+    assert estilo["tamano"] == 0.04
+    assert estilo["alineacion"] == "centro"
+    assert estilo["peso"] == 700
+    assert estilo["color"] == "#FFFFFF"

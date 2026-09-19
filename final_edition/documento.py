@@ -17,6 +17,7 @@ TRANSICIONES = ("corte", "fundido", "deslizar", "zoom", "desenfoque")
 ANIMACIONES = ("ninguna", "aparecer", "deslizar", "rebote", "zoom", "maquina")
 _TRANSFORM_DEFECTO = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
 _AUDIO_DEFECTO = {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}
+_ESTILO_DEFECTO = {"fuente": None, "peso": 700, "tamano": 0.04, "color": "#FFFFFF", "contorno": None, "sombra": None, "fondo": None, "alineacion": "centro", "interlineado": 1.1}
 
 
 class DocumentoInvalido(ValueError):
@@ -65,12 +66,13 @@ def _validar_texto(clip, ruta):
     tiene_var = "variable" in texto
     if tiene_lit == tiene_var:
         _fallar(f"{ruta}.texto debe ser literal o variable, no ambos ni ninguno.")
-    estilo = clip.get("estilo") or {}
+    estilo = {**_ESTILO_DEFECTO, **(clip.get("estilo") or {})}
     if not estilo.get("fuente"):
         _fallar(f"{ruta}.estilo.fuente es obligatoria.")
-    _fraccion(estilo.get("tamano", 0.04), f"{ruta}.estilo.tamano")
+    estilo["tamano"] = _fraccion(estilo.get("tamano", 0.04), f"{ruta}.estilo.tamano")
     if estilo.get("alineacion", "centro") not in ("izquierda", "centro", "derecha"):
         _fallar(f"{ruta}.estilo.alineacion inválida.")
+    clip["estilo"] = estilo
 
 
 def _validar_clip(clip, pista, i):
@@ -88,7 +90,10 @@ def _validar_clip(clip, pista, i):
         _entero_no_negativo(r.get("hasta_ms", 0), f"{ruta}.recorte.hasta_ms")
         if r.get("hasta_ms", 0) < r.get("desde_ms", 0):
             _fallar(f"{ruta}.recorte.hasta_ms < desde_ms.")
-        v = float(clip.get("velocidad", 1.0))
+        try:
+            v = float(clip.get("velocidad", 1.0))
+        except (TypeError, ValueError):
+            _fallar(f"{ruta}.velocidad debe ser un número entre 0.5 y 2.0.")
         if not 0.5 <= v <= 2.0:
             _fallar(f"{ruta}.velocidad debe estar entre 0.5 y 2.0.")
         clip["velocidad"] = v
@@ -142,7 +147,10 @@ def validar(doc):
         _fallar(f"esquema {doc.get('esquema')!r} no soportado; se esperaba {ESQUEMA_ACTUAL}.")
     if doc.get("formato") not in FORMATOS:
         _fallar(f"formato desconocido: {doc.get('formato')!r}. Válidos: {', '.join(FORMATOS)}.")
-    doc["fps"] = int(doc.get("fps") or 30)
+    fps = doc.get("fps", 30)
+    if isinstance(fps, bool) or not isinstance(fps, int) or fps != 30:
+        _fallar(f"fps debe ser 30 en este esquema (vino {fps!r}).")
+    doc["fps"] = 30
     doc.setdefault("idioma_base", "es")
     doc.setdefault("paginas", [])
     pistas = doc.get("pistas") or []
