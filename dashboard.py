@@ -41,6 +41,7 @@ import prompt_swap
 import proyectos
 import trabajos
 import usuarios
+import cuentas
 import meta_conexion
 import flowplus_prompt
 import referencias_flowplus
@@ -162,6 +163,113 @@ def _guard_por_cliente():
         flash("No tienes acceso a ese proyecto.", "error")
         return redirect(url_for("ver_cliente", cliente=sesion["cliente"])) if sesion["rol"] == "cliente" else redirect(url_for("index"))
     return None
+
+
+# Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
+# usuario ya no exista (verificar el correo o restablecer la contraseña se
+# abren desde un enlace, muchas veces sin sesión): el guard de sesión no las
+# cierra.
+ENDPOINTS_SIN_GUARD_SESION = frozenset((
+    "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
+    "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
+))
+
+
+def _abrir_sesion(usuario, entry):
+    """Escribe la sesión de Flask tras un login o un alta. `sv` es la
+    session_version del usuario: cambiar la contraseña la sube y el guard
+    (_verificar_sesion) cierra cualquier sesión que traiga otra."""
+    session["usuario"] = usuario
+    session["rol"] = entry["rol"]
+    session["cliente"] = entry.get("cliente")
+    session["sv"] = int(entry.get("session_version") or 1)
+
+
+@app.before_request
+def _verificar_sesion():
+    """Sesión con `sv` (emitida por este código): si el usuario ya no existe o
+    su session_version cambió (restableció la contraseña), la sesión se
+    cierra y se pide entrar de nuevo. Una sesión sin `sv` (cookie anterior a
+    esta versión) se sella con la versión actual del usuario la primera vez
+    que se ve, para que desde ahí también cuente; si el usuario no está en
+    usuarios.json se deja pasar (sesiones de prueba y cookies viejas —
+    rotar FLASK_SECRET_KEY las cierra todas)."""
+    if request.endpoint in ENDPOINTS_SIN_GUARD_SESION or "usuario" not in session:
+        return None
+    entry = usuarios.obtener(session["usuario"])
+    if "sv" not in session:
+        if entry is not None:
+            session["sv"] = int(entry.get("session_version") or 1)
+        return None
+    if entry is None or int(entry.get("session_version") or 1) != int(session.get("sv") or 0):
+        session.clear()
+        flash("Tu sesión se cerró; entra de nuevo.", "error")
+        return redirect(url_for("login"))
+    return None
+
+
+@app.context_processor
+def _cuenta_en_plantillas():
+    """`cuenta_actual` (registro del usuario de la sesión, sin contraseña) y
+    `smtp_ok` para el banner de base.html y Configuración › Cuenta. Lectura
+    de un JSON pequeño; los parciales por fetch no lo necesitan."""
+    if "usuario" not in session or _quiere_json():
+        return {}
+    return {"cuenta_actual": usuarios.obtener(session["usuario"]), "smtp_ok": cuentas.smtp_configurado()}
+
+
+def _url_base():
+    """Base pública de los enlaces que van por correo. PLATAFORMA_URL (si está)
+    gana; si no, la URL de la petición, respetando X-Forwarded-Proto cuando
+    nginx está delante (gunicorn ve http aunque el sitio sea https)."""
+    fijo = (os.environ.get("PLATAFORMA_URL") or "").strip().rstrip("/")
+    if fijo:
+        return fijo
+    base = request.url_root.rstrip("/")
+    proto = (request.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
+    if proto == "https" and base.startswith("http://"):
+        base = "https://" + base[len("http://"):]
+    return base
+
+
+def _ip_cliente():
+    """IP real de quien pide (primer valor de X-Forwarded-For detrás de nginx)."""
+    xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
+    return xff or request.remote_addr or None
+
+
+def _limite_correo(prefijo, correo):
+    """True si todavía cabe otro correo de ese tipo para ese correo Y desde
+    esta IP (5 por hora cada uno, cuentas.limite_ok)."""
+    ip = _ip_cliente() or "desconocida"
+    return cuentas.limite_ok(f"{prefijo}:{correo}") and cuentas.limite_ok(f"{prefijo}:ip:{ip}")
+
+
+def _requiere_correo_verificado():
+    """None si la sesión puede seguir (admin, o cliente con correo
+    verificado); si no, un redirect a Configuración › Cuenta con el aviso.
+    Se aplica en lo que conecta cuentas de terceros (Meta, tiendas)."""
+    sesion = _sesion()
+    if not sesion or sesion["rol"] == "admin":
+        return None
+    entry = usuarios.obtener(sesion["usuario"])
+    if entry and entry.get("correo_verificado"):
+        return None
+    flash("Confirma tu correo primero (Configuración › Cuenta).", "error")
+    if sesion.get("cliente"):
+        return redirect(url_for("ver_cliente", cliente=sesion["cliente"], _anchor="settings"))
+    return redirect(url_for("index"))
+
+
+def _volver_cuenta():
+    """Adónde vuelve un formulario de cuenta: la Configuración del proyecto
+    (rol cliente) o el panel (admin)."""
+    sesion = _sesion()
+    if sesion and sesion["rol"] == "cliente" and sesion.get("cliente"):
+        return redirect(url_for("ver_cliente", cliente=sesion["cliente"], _anchor="settings"))
+    if sesion and sesion["rol"] == "admin":
+        return redirect(url_for("panel"))
+    return redirect(url_for("login"))
 
 
 @app.after_request
@@ -651,7 +759,25 @@ def panel():
         "rechazado": total_rechazado,
         "gasto_mes": round(sum(gasto_por_proyecto.values()), 4) if gasto_por_proyecto else None,
     }
-    return render_template("panel.html", clientes=clientes, totales=totales)
+    return render_template("panel.html", clientes=clientes, totales=totales,
+                           usuarios_lista=_usuarios_panel(), smtp_ok=cuentas.smtp_configurado())
+
+
+def _usuarios_panel():
+    """Usuarios para la tabla del panel: nombre, rol, proyecto, correo y si
+    está verificado. Sin contraseña (usuarios.obtener la quita)."""
+    lista = []
+    for nombre in sorted(usuarios.cargar(), key=str.lower):
+        entry = usuarios.obtener(nombre) or {}
+        lista.append({
+            "usuario": nombre,
+            "rol": entry.get("rol"),
+            "cliente": entry.get("cliente"),
+            "correo": entry.get("correo"),
+            "correo_verificado": bool(entry.get("correo_verificado")),
+            "creado_en": entry.get("creado_en"),
+        })
+    return lista
 
 
 @app.route("/mapa")
@@ -678,9 +804,7 @@ def login():
         flash("Usuario o contraseña incorrectos.", "error")
         return render_template("login.html"), 401
 
-    session["usuario"] = usuario
-    session["rol"] = entry["rol"]
-    session["cliente"] = entry.get("cliente")
+    _abrir_sesion(usuario, entry)
     if entry["rol"] == "admin":
         return redirect(url_for("panel"))
     return redirect(url_for("ver_cliente", cliente=entry["cliente"]))
@@ -697,37 +821,244 @@ def logout():
 def crear_proyecto():
     nombre = (request.form.get("nombre") or "").strip()
     usuario = (request.form.get("usuario") or "").strip()
+    correo_crudo = (request.form.get("correo") or "").strip()
     password = request.form.get("password") or ""
+    form = {"nombre": nombre, "usuario": usuario, "correo": correo_crudo}
+
+    def _error(mensaje):
+        # Se vuelve a pintar la portada con lo escrito (menos la contraseña)
+        # para que no haya que llenar todo otra vez.
+        flash(mensaje, "error")
+        return render_template("index.html", form=form), 400
+
     if not nombre:
-        flash("Ponle un nombre a la empresa.", "error")
-        return redirect(url_for("index"))
+        return _error("Ponle un nombre a la empresa.")
     if not usuario or not password:
-        flash("Elige un usuario y una contraseña para entrar a tu proyecto.", "error")
-        return redirect(url_for("index"))
+        return _error("Elige un usuario y una contraseña para entrar a tu proyecto.")
+    error_usuario = usuarios.validar_usuario(usuario)
+    if error_usuario:
+        return _error(error_usuario)
+    correo = usuarios.validar_correo(correo_crudo)
+    if not correo:
+        return _error("Escribe un correo válido: ahí te llega el enlace para confirmar la cuenta y recuperar la contraseña.")
+    error_password = usuarios.validar_password(password)
+    if error_password:
+        return _error(error_password)
     if usuarios.existe(usuario):
-        flash(f"Ya existe un usuario '{usuario}' — elige otro.", "error")
-        return redirect(url_for("index"))
+        return _error(f"Ya existe un usuario '{usuario}' — elige otro.")
+    if usuarios.por_correo(correo):
+        return _error("Ese correo ya tiene una cuenta. Entra con ella o recupera la contraseña.")
 
     cid = secure_filename(nombre.lower().replace(" ", "_"))
     if not cid:
-        flash("Ese nombre no genera un identificador de proyecto válido.", "error")
-        return redirect(url_for("index"))
+        return _error("Ese nombre no genera un identificador de proyecto válido.")
     if cid in estado_mod.listar_clientes():
-        flash(f"Ya existe un proyecto con el identificador '{cid}' — elige otro nombre.", "error")
-        return redirect(url_for("index"))
+        return _error(f"Ya existe un proyecto con el identificador '{cid}' — elige otro nombre.")
 
+    try:
+        usuarios.crear(usuario, password, "cliente", cliente=cid, correo=correo)
+    except ValueError as e:
+        return _error(str(e))
     os.makedirs(os.path.join(BASE_DIR, "clientes", cid), exist_ok=True)
     proyectos.guardar_nombre(cid, nombre)
-    usuarios.crear(usuario, password, "cliente", cliente=cid)
 
     # Alta con sesión inmediata: quien crea el proyecto queda logueado en su
     # propio proyecto de una vez, sin tener que ir a /login aparte.
-    session["usuario"] = usuario
-    session["rol"] = "cliente"
-    session["cliente"] = cid
+    _abrir_sesion(usuario, usuarios.obtener(usuario) or {"rol": "cliente", "cliente": cid})
 
-    flash(f"Proyecto '{nombre}' creado.", "ok")
+    if not cuentas.smtp_configurado():
+        flash(f"Proyecto '{nombre}' creado. El servidor no tiene correo configurado, así que no pudimos "
+              "enviarte el enlace de confirmación: avisa al administrador.", "warn")
+    elif cuentas.enviar_verificacion(usuario, correo, _url_base(), ip=_ip_cliente()):
+        flash(f"Proyecto '{nombre}' creado. Te mandamos un correo a {correo} para confirmar tu cuenta.", "ok")
+    else:
+        flash(f"Proyecto '{nombre}' creado, pero no pudimos enviar el correo de confirmación. "
+              "Reenvíalo desde el aviso de arriba en un momento.", "warn")
     return redirect(url_for("ver_cliente", cliente=cid))
+
+
+# --- Cuentas: verificar correo, recuperar y restablecer contraseña, cuenta ---
+# Plan: docs/superpowers/plans/2026-09-19-cuentas-correo-verificado.md. Los
+# tokens y los correos viven en cuentas.py; acá solo las rutas. Ninguna de
+# estas respuestas dice si un correo o usuario existe.
+
+@app.route("/verificar/<token>")
+def verificar_correo(token):
+    """Enlace del correo de verificación. Funciona con o sin sesión: consume
+    el token (un solo uso) y marca el correo como verificado; si el token
+    trae un correo distinto al actual (cambio de correo), lo actualiza."""
+    resultado = cuentas.consumir("verificacion", token)
+    sesion = _sesion()
+    if resultado is None:
+        flash("Ese enlace de verificación no sirve: ya se usó o venció. Pide uno nuevo desde tu cuenta.", "error")
+        return _volver_cuenta() if sesion else redirect(url_for("login"))
+    usuario = resultado["usuario"]
+    try:
+        usuarios.actualizar(usuario, correo=resultado["correo"], correo_verificado=True)
+    except ValueError as e:
+        flash(f"No pude confirmar el correo: {e}", "error")
+        return _volver_cuenta() if sesion else redirect(url_for("login"))
+    flash("Correo confirmado. ¡Gracias!", "ok")
+    # Con sesión abierta (la suya o la de otro usuario en este navegador) se
+    # vuelve a su cuenta; sin sesión, al login.
+    return _volver_cuenta() if sesion else redirect(url_for("login"))
+
+
+@app.route("/reenviar-verificacion", methods=["POST"])
+def reenviar_verificacion():
+    sesion = _sesion()
+    if not sesion:
+        flash("Inicia sesión para reenviar la verificación.", "error")
+        return redirect(url_for("login"))
+    entry = usuarios.obtener(sesion["usuario"])
+    if not entry or not entry.get("correo"):
+        flash("Primero escribe tu correo en Configuración › Cuenta.", "error")
+        return _volver_cuenta()
+    if entry.get("correo_verificado"):
+        flash("Tu correo ya está confirmado.", "ok")
+        return _volver_cuenta()
+    if not cuentas.smtp_configurado():
+        flash("El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.", "warn")
+        return _volver_cuenta()
+    if not _limite_correo("verif", entry["correo"]):
+        flash("Espera un momento antes de pedir otro correo de verificación.", "warn")
+        return _volver_cuenta()
+    cuentas.enviar_verificacion(sesion["usuario"], entry["correo"], _url_base(), ip=_ip_cliente())
+    flash(f"Si {entry['correo']} es correcto, te llega el enlace en unos minutos (revisa también el spam).", "ok")
+    return _volver_cuenta()
+
+
+@app.route("/recuperar", methods=["GET", "POST"])
+def recuperar():
+    """Pide el correo y, si corresponde a un usuario, manda el enlace de
+    restablecimiento. La respuesta es la misma exista o no el correo."""
+    if request.method == "GET":
+        return render_template("recuperar.html")
+    correo = usuarios.validar_correo(request.form.get("correo") or "")
+    encontrado = usuarios.por_correo(correo) if correo else None
+    if encontrado and cuentas.smtp_configurado() and _limite_correo("reset", correo):
+        usuario, _entry = encontrado
+        cuentas.enviar_restablecer(usuario, correo, _url_base(), ip=_ip_cliente())
+    flash("Si ese correo está registrado, te llegará un enlace para restablecer la contraseña "
+          "(vence en 1 hora; revisa también el spam).", "ok")
+    return redirect(url_for("login"))
+
+
+@app.route("/restablecer/<token>", methods=["GET", "POST"])
+def restablecer(token):
+    """GET: valida el token sin gastarlo y muestra el formulario (o «enlace
+    vencido»). POST: valida la contraseña nueva, consume el token, la cambia
+    (sube session_version → se cierran las demás sesiones) y manda al login."""
+    if request.method == "GET":
+        if cuentas.validar("restablecer", token) is None:
+            return render_template("restablecer.html", vencido=True), 400
+        return render_template("restablecer.html", vencido=False, token=token)
+    nueva = request.form.get("password") or ""
+    confirmacion = request.form.get("confirmacion") or ""
+    error = usuarios.validar_password(nueva)
+    if not error and nueva != confirmacion:
+        error = "Las dos contraseñas no coinciden."
+    if error:
+        if cuentas.validar("restablecer", token) is None:
+            return render_template("restablecer.html", vencido=True), 400
+        flash(error, "error")
+        return render_template("restablecer.html", vencido=False, token=token), 400
+    resultado = cuentas.consumir("restablecer", token)
+    if resultado is None:
+        return render_template("restablecer.html", vencido=True), 400
+    usuario = resultado["usuario"]
+    try:
+        usuarios.cambiar_password(usuario, nueva)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("login"))
+    # Abrir el enlace que llegó a ese correo demuestra que es suyo: si sigue
+    # siendo el correo de la cuenta, queda confirmado de paso.
+    entry = usuarios.obtener(usuario) or {}
+    if entry.get("correo") == resultado["correo"] and not entry.get("correo_verificado"):
+        usuarios.actualizar(usuario, correo_verificado=True)
+    session.clear()
+    flash("Contraseña cambiada. Entra con la nueva.", "ok")
+    return redirect(url_for("login"))
+
+
+@app.route("/cuenta/correo", methods=["POST"])
+def cuenta_correo():
+    """Pone o cambia el correo de la cuenta (pide la contraseña actual). El
+    correo nuevo queda sin verificar hasta abrir el enlace."""
+    sesion = _sesion()
+    if not sesion:
+        flash("Inicia sesión para cambiar tu correo.", "error")
+        return redirect(url_for("login"))
+    usuario = sesion["usuario"]
+    if not usuarios.verificar(usuario, request.form.get("password") or ""):
+        flash("La contraseña actual no es correcta.", "error")
+        return _volver_cuenta()
+    correo = usuarios.validar_correo(request.form.get("correo") or "")
+    if not correo:
+        flash("Escribe un correo válido.", "error")
+        return _volver_cuenta()
+    actual = usuarios.obtener(usuario) or {}
+    if actual.get("correo") == correo and actual.get("correo_verificado"):
+        flash("Ese ya es tu correo y está confirmado.", "ok")
+        return _volver_cuenta()
+    try:
+        usuarios.actualizar(usuario, correo=correo, correo_verificado=False)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_cuenta()
+    if not cuentas.smtp_configurado():
+        flash(f"Correo guardado: {correo}. El servidor no tiene correo configurado, así que no pudimos "
+              "enviarte el enlace de confirmación: avisa al administrador.", "warn")
+    elif not _limite_correo("verif", correo):
+        flash(f"Correo guardado: {correo}. Espera un momento antes de pedir el enlace de confirmación.", "warn")
+    else:
+        cuentas.enviar_verificacion(usuario, correo, _url_base(), ip=_ip_cliente())
+        flash(f"Correo guardado. Si {correo} es correcto, te llega el enlace de confirmación en unos minutos.", "ok")
+    return _volver_cuenta()
+
+
+@app.route("/cuenta/password", methods=["POST"])
+def cuenta_password():
+    """Cambia la contraseña con la actual + nueva + confirmación. Sube
+    session_version (las demás sesiones se cierran) y refresca la de este
+    navegador para que siga abierta."""
+    sesion = _sesion()
+    if not sesion:
+        flash("Inicia sesión para cambiar tu contraseña.", "error")
+        return redirect(url_for("login"))
+    usuario = sesion["usuario"]
+    if not usuarios.verificar(usuario, request.form.get("password_actual") or ""):
+        flash("La contraseña actual no es correcta.", "error")
+        return _volver_cuenta()
+    nueva = request.form.get("password") or ""
+    error = usuarios.validar_password(nueva)
+    if not error and nueva != (request.form.get("confirmacion") or ""):
+        error = "Las dos contraseñas no coinciden."
+    if error:
+        flash(error, "error")
+        return _volver_cuenta()
+    try:
+        session["sv"] = usuarios.cambiar_password(usuario, nueva)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_cuenta()
+    flash("Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron.", "ok")
+    return _volver_cuenta()
+
+
+@app.route("/admin/usuarios/<usuario>/verificar", methods=["POST"])
+@requiere_admin
+def admin_usuario_verificar(usuario):
+    """El admin confirma a mano un correo (cuando no hay SMTP o el correo no
+    llega). Solo marca; no cambia el correo."""
+    try:
+        usuarios.actualizar(usuario, correo_verificado=True)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("panel"))
+    flash(f"Usuario '{usuario}' marcado como verificado.", "ok")
+    return redirect(url_for("panel"))
 
 
 def _job_id_imagen(cliente, prompt_id):
@@ -1121,20 +1452,25 @@ SERVICIOS_LLAVES = (
     },
     {
         "id": "smtp",
-        "nombre": "Correo de avisos (opcional)",
-        "para_que": "Manda un correo cuando hay propuestas pendientes, un ganador, un rechazo de Meta o un lanzamiento fallido.",
+        "nombre": "Correo de la plataforma (cuentas y avisos)",
+        "para_que": "Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; "
+                    "también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos).",
         "costo": "Depende del proveedor de correo; con una cuenta normal no cuesta.",
         "url": "https://support.google.com/accounts/answer/185833",
         "url_texto": "Google › Contraseñas de aplicación",
         "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"],
-        "nota": "Sin esto los avisos solo quedan en la bitácora.",
+        "nota": "Sin esto nadie puede confirmar su correo ni recuperar la contraseña solo (el administrador "
+                "tiene que marcar las cuentas a mano en el panel) y los avisos solo quedan en la bitácora.",
         "opcional": True,
         "pasos": [
             "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio).",
-            "Si es Gmail, activa la verificación en dos pasos y crea una «Contraseña de aplicación»: esa es SMTP_PASS.",
+            "Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, "
+            "en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS "
+            "(no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma.",
             "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS).",
-            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor y reinicia.",
-            "Abajo, en «Correo de avisos», escribe a qué dirección deben llegar los avisos de este proyecto.",
+            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor y reinicia los dos servicios.",
+            "Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. "
+            "Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto.",
         ],
     },
     {
@@ -2183,6 +2519,9 @@ def _ir_a_flowmarketing(cliente):
 def meta_app_guardar(cliente):
     """El proyecto registra SU app de Meta (id, secret, config de login).
     El secret va a disco (meta_app.json, 0600) y nunca vuelve a pantalla."""
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     try:
         meta_conexion.guardar_app(cliente, {
             "app_id": request.form.get("app_id"),
@@ -2207,6 +2546,9 @@ def meta_app_borrar(cliente):
 
 @app.route("/cliente/<cliente>/meta/conectar")
 def meta_conectar(cliente):
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     state = meta_conexion.nuevo_state()
     session["meta_oauth"] = {"state": state, "cliente": cliente}
     try:
@@ -3820,6 +4162,9 @@ def _flash_sin_cifrado():
 def tienda_conectar(cliente):
     """Shopify/WooCommerce: prueba las credenciales contra la tienda (inline,
     una llamada corta), las guarda cifradas y encola la primera sync."""
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     if not cifrado.disponible():
         _flash_sin_cifrado()
         return _volver_config(cliente)
@@ -3855,6 +4200,9 @@ def tienda_conectar(cliente):
 def tienda_meli_iniciar(cliente):
     """Arranca el OAuth de MercadoLibre. El `state` queda en la sesión junto
     con el cliente: el callback (global, sin <cliente>) lo resuelve de ahí."""
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     if not cifrado.disponible():
         _flash_sin_cifrado()
         return _volver_config(cliente)

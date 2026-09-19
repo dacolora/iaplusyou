@@ -64,4 +64,45 @@
 {% else %}
 <p class="vacio">Todavía no hay proyectos.</p>
 {% endif %}
+
+{# ---- Usuarios: correo y verificación (plan cuentas 2026-09-19). Sin SMTP
+   nadie puede confirmar solo: el admin marca a mano desde aquí. ---- #}
+<section class="aparece" id="panel-usuarios" style="margin-top:2.5rem;">
+  <h2>Usuarios</h2>
+  {% if not smtp_ok %}
+  <div class="flash warn" id="aviso-smtp">
+    <strong>SMTP sin configurar.</strong> Nadie puede confirmar su correo ni recuperar la contraseña por su cuenta:
+    pon SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el <code>.env</code> del servidor (ver «Correo de la
+    plataforma» en la Configuración de cualquier proyecto) o marca las cuentas como verificadas a mano.
+  </div>
+  {% endif %}
+  {% if usuarios_lista %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-tiendas">
+    <thead><tr><th>Usuario</th><th>Rol</th><th>Proyecto</th><th>Correo</th><th>Verificado</th><th></th></tr></thead>
+    <tbody>
+      {% for u in usuarios_lista %}
+      <tr>
+        <td><strong>{{ u.usuario }}</strong></td>
+        <td>{{ u.rol }}</td>
+        <td>{% if u.cliente %}<a href="{{ url_for('ver_cliente', cliente=u.cliente) }}">{{ u.cliente }}</a>{% else %}—{% endif %}</td>
+        <td>{{ u.correo or "—" }}</td>
+        <td>{% if u.correo_verificado %}<span class="tag-estado tag-en-uso">sí</span>{% else %}<span class="tag-estado tag-advertencia">no</span>{% endif %}</td>
+        <td>
+          {% if not u.correo_verificado %}
+          <form method="post" action="{{ url_for('admin_usuario_verificar', usuario=u.usuario) }}" class="inline"
+                onsubmit="return confirm('¿Marcar a {{ u.usuario }} como verificado sin que abra el enlace del correo?');">
+            <button type="submit" class="btn-guardar btn-xs">Marcar verificado</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="vacio">Todavía no hay usuarios.</p>
+  {% endif %}
+</section>
 {% endblock %}
