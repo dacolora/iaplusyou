@@ -4399,12 +4399,13 @@ def fp_vaciar_referencias(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
-@app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/reusar", methods=["POST"])
 def fp_reusar(cliente, cf_id):
     """"Editar y crear otra a partir de esta": las referencias de esa pieza (sin
     los logos, que se adjuntan solos) vuelven a la bandeja y el texto, tipo,
-    modelo, duración y formato quedan precargados en el formulario de Crear.
-    Si la pieza es una imagen generada, ella misma puede entrar como referencia."""
+    modelo, duración, formato, sonido, música y calidad quedan precargados en
+    el formulario de Crear. Si la pieza es una imagen generada, ella misma
+    puede entrar como referencia."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry:
         flash("No encontré esa pieza.", "error")
@@ -4421,12 +4422,18 @@ def fp_reusar(cliente, cf_id):
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
         referencias_flowplus.agregar(cliente, "imagen", entry["video_url"], origen="generada", titulo="Imagen generada")
     session["fp_prefill"] = {
-        "texto": entry.get("accion_central") or "",
+        "texto": entry.get("prompt_fuente") or entry.get("accion_central") or "",
         "tipo": entry.get("tipo") or "video",
         "modelo": entry.get("modelo") or "",
-        "duracion": entry.get("duracion_objetivo") or 10,
+        "duracion": entry.get("duracion_objetivo") or proyectos.preferencias_flowplus(cliente)["duracion_defecto"],
         "aspect_ratio": entry.get("aspect_ratio") or "9:16",
         "enfoque": entry.get("enfoque") or "",
+        "con_sonido": entry.get("con_sonido", True) is not False,
+        "sonido_texto": entry.get("sonido_texto") or "",
+        "musica_estilo": entry.get("musica_estilo") or "",
+        "calidad": entry.get("calidad") or "final",
+        "preset_camara": entry.get("preset_camara"),
+        "plantilla": entry.get("plantilla"),
     }
     flash("Referencias y texto cargados — ajusta lo que quieras y genera.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
@@ -4657,9 +4664,11 @@ def fp_sugerir_sonido(cliente):
     return jsonify({"sonido": texto})
 
 
-@app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar_video", methods=["POST"])
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/generar", methods=["POST"])
 def cf_generar_video(cliente, cf_id):
-    """Reintento tras error, o sesiones viejas que quedaron en prompt_listo."""
+    """Reintento tras error, o sesiones viejas que quedaron en prompt_listo.
+    Con `version_b=si` (solo video, y solo si el director dejó `prompt_b`) crea
+    una sesión hija con esa versión (`creative_flow.duplicar`) y encola las dos."""
     data = creative_flow.cargar(cliente)
     entry = data.get(cf_id)
     if not entry:
@@ -4673,10 +4682,25 @@ def cf_generar_video(cliente, cf_id):
     if not (entry.get("referencias_urls") or []):
         flash("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    if _lanzar_video_cf(cliente, cf_id, entry):
-        flash("Generando el video con Wan 3.0…", "ok")
+    nombre_modelo = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "el modelo")
+    que = "la imagen" if (entry.get("tipo") or "video") == "imagen" else "el video"
+    prompt_b = (entry.get("director") or {}).get("prompt_b")
+    quiere_b = request.form.get("version_b") == "si" and bool(prompt_b) and que == "el video"
+    hija = None
+    if quiere_b:
+        try:
+            hija = creative_flow.duplicar(cliente, cf_id, prompt_relleno=prompt_b, variante="B")
+        except Exception as e:
+            flash(f"No se pudo crear la versión B: {e}. No se generó nada.", "error")
+            return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if not _lanzar_video_cf(cliente, cf_id, entry):
+        flash(f"Ya se está generando {que} — espera a que termine.", "warn")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    if hija:
+        _lanzar_video_cf(cliente, hija, creative_flow.cargar(cliente)[hija])
+        flash(f"Generando las versiones A y B con {nombre_modelo}…", "ok")
     else:
-        flash("Ya se está generando ese video — espera a que termine.", "warn")
+        flash(f"Generando {que} con {nombre_modelo}…", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 _MENSAJE_INTERRUMPIDO = (

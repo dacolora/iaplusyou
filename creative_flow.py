@@ -253,7 +253,7 @@ def datos_para_director(cliente, entry):
     }
 
 
-def duplicar(cliente, cf_id, modelo=None, enfoque=None):
+def duplicar(cliente, cf_id, modelo=None, enfoque=None, prompt_relleno=None, variante=None):
     """Nueva sesión a partir de `cf_id`: copia la idea del concepto (acción
     central, referencias, productos, tono, modo, platforms...) y crea la pieza
     clon en `prompt_listo` (pendiente) para que Crear la genere de nuevo —
@@ -269,7 +269,12 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None):
     sonido sigue a la sesión original: `con_sonido` y `sonido_texto` viajan
     en el extra y el prompt rearmado los respeta (una copia de una sesión
     muda sigue muda y sin línea SONIDO; una con sonido conserva su texto);
-    una sesión anterior a ese campo pide sonido solo si es video."""
+    una sesión anterior a ese campo pide sonido solo si es video.
+
+    prompt_relleno: si viene, es el prompt de la copia tal cual (versión B
+    del director) y no se rearma; variante: etiqueta ('B') que la tarjeta
+    muestra. `extra['director']` del padre no viaja (los planos son del
+    padre)."""
     import flowplus_prompt
     if enfoque is not None and enfoque not in flowplus_prompt.ENFOQUES:
         raise ValueError(f"Enfoque desconocido: {enfoque}. Opciones: {list(flowplus_prompt.ENFOQUES)}")
@@ -288,9 +293,14 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None):
         # (`capas` es columna de la pieza nueva: nace vacía).
         for k in ("credits", "sonido", "video_url_crudo", "video_local_crudo"):
             extra.pop(k, None)
+        extra.pop("director", None)
+        if prompt_relleno:
+            extra["prompt_relleno"] = prompt_relleno
+        if variante:
+            extra["variante"] = variante
         enfoque_final = enfoque if enfoque is not None else enfoque_orig
         cambia_enfoque = enfoque is not None and enfoque != enfoque_orig
-        if (cambia_enfoque or not extra.get("prompt_relleno")) and enfoque_final in flowplus_prompt.ENFOQUES:
+        if prompt_relleno is None and (cambia_enfoque or not extra.get("prompt_relleno")) and enfoque_final in flowplus_prompt.ENFOQUES:
             prompt, info = armar_prompt_sesion(
                 cliente, extra, enfoque_final,
                 con_sonido=extra["con_sonido"] if "con_sonido" in extra else (tipo == "video"))

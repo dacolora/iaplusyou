@@ -119,3 +119,56 @@ def test_items_traen_trabajo_del_director_y_costo_con_calidad(app, monkeypatch):
     cf.actualizar("acme", cf_id, estado="prompt_listo", prompt_relleno="A")
     item = app["dashboard"]._creative_flow_items("acme")[0]
     assert item["costo_estimado"]["usd"] == 0.4      # 8 s x 0,05 (480p)
+
+
+def _lista(app):
+    import creative_flow as cf
+    _crear(app)
+    (cf_id, _), = cf.cargar("acme").items()
+    cf.actualizar("acme", cf_id, estado="prompt_listo", prompt_relleno="A", director={"estado": "ok", "prompt_b": "B", "diferencia_b": "otro"})
+    app["encolados"].clear()
+    return cf_id
+
+
+def test_generar_solo_a(app):
+    import creative_flow as cf
+    cf_id = _lista(app)
+    r = app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar")
+    assert r.status_code == 302
+    assert [t["tipo"] for t in app["encolados"]] == ["flowplus_video"] and app["encolados"][0]["payload"]["cf_id"] == cf_id
+    assert len(cf.cargar("acme")) == 1
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "Generando el video con Wan 3.0" in html
+
+
+def test_generar_a_y_b_crea_la_hija_y_encola_dos(app):
+    import creative_flow as cf
+    cf_id = _lista(app)
+    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar", data={"version_b": "si"})
+    sesiones = cf.cargar("acme")
+    assert len(sesiones) == 2
+    hija = next(e for k, e in sesiones.items() if k != cf_id)
+    assert hija["variante"] == "B" and hija["prompt_relleno"] == "B" and hija["derivado_de"] == cf_id
+    assert sorted(t["payload"]["cf_id"] for t in app["encolados"]) == sorted(sesiones)
+    assert all(t["tipo"] == "flowplus_video" for t in app["encolados"])
+
+
+def test_generar_b_sin_prompt_b_ignora_la_casilla(app):
+    import creative_flow as cf
+    cf_id = _lista(app)
+    cf.actualizar("acme", cf_id, director={"estado": "fallback", "prompt_b": None})
+    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar", data={"version_b": "si"})
+    assert len(cf.cargar("acme")) == 1 and len(app["encolados"]) == 1
+
+
+def test_reusar_precarga_sonido_musica_y_calidad(app):
+    import creative_flow as cf
+    cf_id = _lista(app)
+    cf.actualizar("acme", cf_id, sonido_texto="brisa", musica_estilo="lujo", calidad="borrador")
+    with app["c"].session_transaction() as s:
+        s["fp_prefill"] = None
+    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/reusar")
+    with app["c"].session_transaction() as s:
+        p = s["fp_prefill"]
+    assert p["texto"] == "@Imagen 1 gira despacio" and p["con_sonido"] is True and p["sonido_texto"] == "brisa"
+    assert p["musica_estilo"] == "lujo" and p["calidad"] == "borrador" and p["preset_camara"] is None and p["plantilla"] is None
