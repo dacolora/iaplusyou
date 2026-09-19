@@ -352,3 +352,68 @@ def csv_mes(cliente, ahora_iso=None):
             w.writerow([_celda(f["creado_en"]), _celda(f["tipo"]), _celda(f.get("proveedor")),
                         _celda(f["referencia"]), _celda(f.get("detalle")), f"{f['usd']:.4f}".replace(".", ",")])
     return "﻿" + buf.getvalue()
+
+
+# ------------------------------------------------------- relleno histórico ---
+
+# Estados de `pieza` que significan "el proveedor cobró": listo y degradada
+# (una final con capas caídas también se pagó). `error` no: no se sabe si el
+# cobro alcanzó a ocurrir; `pendiente`/`generando` lo registrará su tarea.
+ESTADOS_PIEZA_COBRADA = ("listo", "degradada")
+_TIPOS_PIEZA = {"video": "video", "imagen": "imagen", "final": "final"}
+_PROVEEDOR_PIEZA = {"video": "wavespeed", "imagen": "wavespeed", "final": "fal/anthropic"}
+
+
+def _ya_registrado(referencias, ref):
+    """La tarea registra `ref` o `ref:<tarea_id>` (su ref_sufijo): cualquiera
+    de las dos significa que ese cobro ya está en la tabla."""
+    return any(r == ref or r.startswith(ref + ":") for r in referencias)
+
+
+def importar_historico(cliente, swaps=None):
+    """Copia a `gasto`, UNA vez, los cobros anteriores a la tabla (nació el
+    2026-09-18): el `costo_usd` de cada `pieza` cobrada y el `usd` de cada
+    swap listo de swaps.json. Misma referencia que usan las tareas
+    (`video:<cf_id>`, `final:<final_id>`, `swap:<swap_id>`) y la fecha
+    original de la pieza, así cae en su mes. Idempotente: lo que ya está
+    (importado o registrado por su tarea) se salta. `swaps` es el dict de
+    swaps.json; sin él se lee el del proyecto. Devuelve el resumen."""
+    if swaps is None:
+        import swaps as swaps_mod
+        swaps = swaps_mod.cargar(cliente) or {}
+    g = db.gasto
+    with db.conectar() as con:
+        existentes = [r[0] for r in con.execute(sa.select(g.c.referencia).where(g.c.cliente == cliente))]
+        piezas = [dict(r._mapping) for r in con.execute(
+            sa.select(db.pieza).where(db.pieza.c.cliente == cliente).order_by(db.pieza.c.id))]
+    n_piezas = n_swaps = 0
+    total = 0.0
+    for p in piezas:
+        usd = float(p.get("costo_usd") or 0.0)
+        if p.get("estado") not in ESTADOS_PIEZA_COBRADA or usd <= 0 or not p.get("legado_id"):
+            continue
+        tipo = _TIPOS_PIEZA.get(p.get("tipo"), "otro")
+        ref = f"{tipo}:{p['legado_id']}"
+        if _ya_registrado(existentes, ref):
+            continue
+        registrar(cliente, tipo, usd, ref, detalle="importado del historial de piezas",
+                  proveedor=_PROVEEDOR_PIEZA.get(tipo), creado_en=p.get("creado_en"),
+                  extra={"modelo": p.get("modelo"), "importado": True})
+        existentes.append(ref)
+        n_piezas += 1
+        total += usd
+    for swap_id, s in (swaps or {}).items():
+        s = s or {}
+        usd = float(s.get("usd") or 0.0)
+        if s.get("estado") != "listo" or usd <= 0:
+            continue
+        ref = f"swap:{swap_id}"
+        if _ya_registrado(existentes, ref):
+            continue
+        detalle = " · ".join(x for x in ("importado del historial de swaps", s.get("proveedor"), s.get("tipo")) if x)
+        registrar(cliente, "swap", usd, ref, detalle=detalle, proveedor=s.get("proveedor"),
+                  creado_en=s.get("creado_en"), extra={"credits": s.get("credits"), "importado": True})
+        existentes.append(ref)
+        n_swaps += 1
+        total += usd
+    return {"piezas": n_piezas, "swaps": n_swaps, "usd": round(total, 4)}
