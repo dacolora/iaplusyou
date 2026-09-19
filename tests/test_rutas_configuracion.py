@@ -347,7 +347,8 @@ def test_panel_admin_columna_gasto_del_mes(app, monkeypatch):
     assert html.count("Gasto del mes (US$)") >= 3
 
     def tarjeta(cid):
-        ini = html.index(f'href="/cliente/{cid}"')
+        # La tarjeta (no la fila de la tabla comparativa, que también enlaza al proyecto).
+        ini = html.index(f'class="card-cliente" href="/cliente/{cid}"')
         return html[ini:html.index("</a>", ini)]
     assert "US$ 0,94" in tarjeta("acme")
     assert "US$ 9,02" in tarjeta("otro")

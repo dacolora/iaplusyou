@@ -67,6 +67,7 @@ import cifrado
 import conectores
 import tiendas
 import tablero
+import admin
 import gastos
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
@@ -620,38 +621,27 @@ def landing_cliente(cliente):
 @app.route("/panel")
 @requiere_admin
 def panel():
+    """Tablero de operación del admin: todos los proyectos con su gasto del
+    mes (generación y pauta), piezas, aprobaciones, experimentos y
+    conexiones; salud del worker; historial y CSV. Cálculos en admin.py."""
     ids = estado_mod.listar_clientes()
-    clientes = []
-    total_pendiente = total_publicado = total_rechazado = 0
-    # Gasto de generación del mes por proyecto: UNA consulta para todos.
+    nombres = {cid: proyectos.nombre_visible(cid) for cid in ids}
     try:
-        gasto_por_proyecto = gastos.por_proyecto_mes(ids)
-    except Exception as e:  # noqa: BLE001 — el gasto es informativo: el panel se pinta igual
-        print(f"[aviso] Panel: no pude leer el gasto del mes: {type(e).__name__}")
-        gasto_por_proyecto = {}
-    for cid in ids:
-        resumen = _resumen_cliente(cid)
-        clientes.append({
-            "id": cid,
-            "nombre": proyectos.nombre_visible(cid),
-            "pendiente": resumen["pendiente"],
-            "publicado": resumen["publicado"],
-            "rechazado": resumen["rechazado"],
-            "portada": None,
-            "gasto_mes": gasto_por_proyecto.get(cid),
-        })
-        total_pendiente += resumen["pendiente"]
-        total_publicado += resumen["publicado"]
-        total_rechazado += resumen["rechazado"]
+        datos = admin.resumen(ids, nombres)
+    except Exception as e:  # noqa: BLE001 — el panel se pinta igual, sin números, y avisa
+        print(f"[aviso] Panel: no pude calcular el resumen: {type(e).__name__}: {e}")
+        datos = None
+    return render_template("panel.html", datos=datos, nombres=nombres, nombres_tipo=NOMBRES_TIPO_GASTO)
 
-    totales = {
-        "clientes": len(clientes),
-        "pendiente": total_pendiente,
-        "publicado": total_publicado,
-        "rechazado": total_rechazado,
-        "gasto_mes": round(sum(gasto_por_proyecto.values()), 4) if gasto_por_proyecto else None,
-    }
-    return render_template("panel.html", clientes=clientes, totales=totales)
+
+@app.route("/panel/gasto.csv")
+@requiere_admin
+def panel_gasto_csv():
+    """CSV del mes con los cobros de generación de TODOS los proyectos (admin.csv_mes)."""
+    ids = estado_mod.listar_clientes()
+    resp = app.response_class(admin.csv_mes(ids), mimetype="text/csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="gasto-{db.ahora()[:7]}.csv"'
+    return resp
 
 
 @app.route("/mapa")
