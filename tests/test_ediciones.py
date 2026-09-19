@@ -58,6 +58,44 @@ def test_versionar_y_restaurar(base_temporal):
     assert [v["n"] for v in e.versiones("acme", ed["id"])] == [1]
 
 
+def test_versionar_concurrente_no_repite_n(base_temporal):
+    import threading
+    ed = e.crear("acme", "video", "e", _doc())
+    errores = []
+
+    def _trabajo():
+        for _ in range(5):
+            try:
+                e.versionar("acme", ed["id"], "manual")
+            except Exception as exc:
+                errores.append(exc)
+
+    hilos = [threading.Thread(target=_trabajo) for _ in range(2)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    assert errores == []
+    assert sorted(v["n"] for v in e.versiones("acme", ed["id"])) == list(range(1, 11))
+
+
+def test_restaurar_migra_el_documento_congelado(base_temporal, monkeypatch):
+    ed = e.crear("acme", "video", "e", _doc())
+    v = e.versionar("acme", ed["id"], "producir")
+    llamadas = []
+    original = e.documento_mod.migrar
+
+    def _wrapper(doc):
+        llamadas.append(doc)
+        return original(doc)
+
+    monkeypatch.setattr(e.documento_mod, "migrar", _wrapper)
+    e.restaurar("acme", ed["id"], v["n"])
+    assert len(llamadas) == 1
+    assert llamadas[0] == v["documento"]
+
+
 def test_no_cruza_clientes(base_temporal):
     ed = e.crear("acme", "video", "e", _doc())
     assert e.cargar("otro", ed["id"]) is None

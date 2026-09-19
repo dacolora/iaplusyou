@@ -68,10 +68,20 @@ def versionar(cliente, edicion_id, motivo):
     if motivo not in ("producir", "manual"):
         raise ValueError("motivo debe ser producir o manual")
     with db.conectar() as con:
+        # Toma el lock de escritura ANTES de leer el MAX(n) (mismo problema y
+        # misma solución que experimentos._bloquear: pysqlite deja un SELECT
+        # suelto en autocommit, así que dos `versionar` concurrentes pueden
+        # leer el mismo MAX y el segundo INSERT choca contra
+        # uq_edicion_version_n con un IntegrityError crudo). Un UPDATE sin
+        # efecto sobre la fila obliga a abrir la transacción y tomar el lock
+        # RESERVED ya; con busy_timeout=5000 el segundo escritor espera en
+        # vez de fallar.
+        r = con.execute(db.edicion.update().where(db.edicion.c.id == int(edicion_id), db.edicion.c.cliente == cliente)
+                        .values(actualizado_en=db.edicion.c.actualizado_en))
+        if r.rowcount != 1:
+            raise Conflicto("No existe esa edición.")
         ed = _dict(con.execute(sa.select(db.edicion).where(
             db.edicion.c.cliente == cliente, db.edicion.c.id == int(edicion_id))).first())
-        if not ed:
-            raise Conflicto("No existe esa edición.")
         n = int(con.execute(sa.select(sa.func.coalesce(sa.func.max(db.edicion_version.c.n), 0))
                             .where(db.edicion_version.c.edicion_id == ed["id"])).scalar() or 0) + 1
         r = con.execute(db.edicion_version.insert().values(
@@ -105,7 +115,7 @@ def restaurar(cliente, edicion_id, n):
         if not v:
             raise Conflicto("No existe esa versión.")
         actual = int(con.execute(sa.select(db.edicion.c.version_n).where(db.edicion.c.id == int(edicion_id))).scalar())
-    return guardar(cliente, edicion_id, v["documento"], actual)
+    return guardar(cliente, edicion_id, documento_mod.migrar(v["documento"]), actual)
 
 
 def apuntar_final(cliente, final_legado_id, version_id):
