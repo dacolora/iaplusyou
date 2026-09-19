@@ -1,10 +1,7 @@
 """
 Banco de recetas para la acción central de FlowPlus.
 
-No son prompts finales: son puntos de partida editables. El prompt
-cinematográfico completo lo sigue armando Claude con la plantilla maestra
-(generador_prompts.PLANTILLA_MAESTRA_CREATIVE_FLOW); esto solo evita escribir
-la idea desde cero cada vez.
+No son prompts finales: son puntos de partida editables. El prompt por planos lo arma el director (`director.py`) a partir de la idea; estas recetas solo evitan escribir la idea desde cero (la Etapa 3 del spec las sustituye por plantillas de anuncio).
 
 Están pensadas para lo que se pidió — variedad de escenarios, cambios de
 posición, acercamientos — dentro del límite real del proveedor: Wan 3.0 y

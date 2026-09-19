@@ -1,7 +1,6 @@
 # Crear: director de prompts por planos, presets de cámara y plantillas de anuncio — diseño
 
-Fecha: 2026-09-18. Estado: aprobado por secciones en conversación; pendiente de
-revisión escrita. Cambia el paso de prompt de Crear (FlowPlus) y deja intactos el
+Fecha: 2026-09-18. Estado: aprobado; Etapa 1 implementada (plan `docs/superpowers/plans/2026-09-18-director-prompts-etapa1.md`), Etapas 2 y 3 pendientes. Cambia el paso de prompt de Crear (FlowPlus) y deja intactos el
 worker de generación (`tareas/flowplus.py`), los proveedores (`providers/`), Final
 edition, Sprints (salvo el punto de encolado) y el motor de experimentos.
 
