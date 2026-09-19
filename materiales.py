@@ -128,12 +128,12 @@ def borrar(cliente, material_id):
         return False
     if en_uso(cliente, material_id):
         raise MaterialEnUso("Ese material está en una edición; quítalo de ahí primero.")
+    # La fila es el único handle al objeto en R2: si el borrado ahí falla,
+    # propaga y no toca la base — mejor un material huérfano en la base
+    # (reintentable) que uno huérfano en R2 (sin ninguna fila que lo recuerde).
     for url in (mat["url"], mat.get("url_proxy")):
         if url and url.startswith("http"):
-            try:
-                r2_uploader.delete_file(_key_de_url(url))
-            except Exception:
-                pass
+            r2_uploader.delete_file(_key_de_url(url))
     with db.conectar() as con:
         con.execute(db.material.delete().where(db.material.c.id == mat["id"]))
     return True
@@ -153,6 +153,11 @@ def limpiar_sin_uso(cliente=None, dias=30):
                 n += 1
         except MaterialEnUso:
             marcar_uso([f["id"]])
+        except Exception:
+            # Un R2 caído en esta fila no debe cortar el barrido de las demás;
+            # la fila sigue existiendo (borrar no la tocó) y se reintenta la
+            # próxima vez que corra limpiar_sin_uso.
+            continue
     return n
 
 

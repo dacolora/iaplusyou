@@ -35,6 +35,37 @@ def test_obtener_o_crear_solo_produce_una_vez(base_temporal, r2_falso):
     assert mat1["id"] == mat2["id"] and llamadas == [1]
 
 
+def test_obtener_o_crear_sobrevive_insert_concurrente(base_temporal, monkeypatch):
+    """Simula que otro escritor insertó la fila justo entre el chequeo y el
+    INSERT de este proceso: la primera llamada a buscar_hash miente que no
+    existe, así que obtener_o_crear sigue de largo, produce, e intenta el
+    INSERT propio — que choca contra uq_material_hash de verdad y cae en el
+    except sa.exc.IntegrityError."""
+    h = m.hash_clave("carrera")
+    previo = m.registrar("acme", tipo="audio", origen="voz", url="https://r2/previo.mp3", hash=h, bytes=1)
+
+    original = m.buscar_hash
+    llamadas_buscar = []
+
+    def buscar_hash_con_carrera(cliente, hash_):
+        llamadas_buscar.append(1)
+        if len(llamadas_buscar) == 1:
+            return None
+        return original(cliente, hash_)
+    monkeypatch.setattr(m, "buscar_hash", buscar_hash_con_carrera)
+
+    llamadas_producir = []
+
+    def producir():
+        llamadas_producir.append(1)
+        return {"tipo": "audio", "origen": "voz", "url": "https://r2/perdedor.mp3", "bytes": 2}
+
+    mat, creado = m.obtener_o_crear("acme", h, producir)
+    assert creado is False
+    assert mat["id"] == previo["id"]
+    assert llamadas_producir == [1]
+
+
 def test_subir_deduplica_por_contenido(base_temporal, r2_falso, tmp_path):
     f = tmp_path / "a.png"
     f.write_bytes(b"\x89PNG-contenido")
@@ -81,6 +112,18 @@ def test_borrar_libre_quita_de_r2_y_de_la_base(base_temporal, r2_falso):
     assert r2_falso["borrados"] == ["clientes/acme/x.png"]
 
 
+def test_borrar_no_toca_la_fila_si_r2_falla(base_temporal, r2_falso, monkeypatch):
+    from storage import r2_uploader
+    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/acme/z.png", hash="h3", bytes=5)
+
+    def _falla(k):
+        raise RuntimeError("r2 caído")
+    monkeypatch.setattr(r2_uploader, "delete_file", _falla)
+    with pytest.raises(RuntimeError):
+        m.borrar("acme", mat["id"])
+    assert m.buscar_hash("acme", "h3") is not None
+
+
 def test_limpiar_sin_uso_solo_efimeros_viejos(base_temporal, r2_falso, monkeypatch):
     import db
     viejo = "2020-01-01T00:00:00"
@@ -91,6 +134,24 @@ def test_limpiar_sin_uso_solo_efimeros_viejos(base_temporal, r2_falso, monkeypat
     assert m.limpiar_sin_uso(dias=30) == 1
     assert m.buscar_hash("acme", "p1") is None
     assert m.buscar_hash("acme", "v1") is not None
+
+
+def test_limpiar_sigue_si_r2_falla_en_una_fila(base_temporal, r2_falso, monkeypatch):
+    import db
+    from storage import r2_uploader
+    viejo = "2020-01-01T00:00:00"
+    m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/a.png", hash="pa", bytes=1)
+    m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/b.png", hash="pb", bytes=1)
+    with db.conectar() as con:
+        con.execute(db.material.update().values(usado_en=viejo, creado_en=viejo))
+
+    def _falla_solo_a(k):
+        if k.endswith("a.png"):
+            raise RuntimeError("r2 caído")
+    monkeypatch.setattr(r2_uploader, "delete_file", _falla_solo_a)
+    assert m.limpiar_sin_uso(dias=30) == 1
+    assert m.buscar_hash("acme", "pa") is not None
+    assert m.buscar_hash("acme", "pb") is None
 
 
 def test_bytes_usados_suma_por_cliente(base_temporal, r2_falso):
