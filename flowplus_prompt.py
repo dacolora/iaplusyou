@@ -15,13 +15,71 @@ que se vieron en los primeros videos de Happy Flops:
 
 Ningún modelo de FlowPlus acepta negative_prompt (verificado en WaveSpeed para
 Wan 3.0), así que las prohibiciones van dentro del prompt como frases negativas
-explícitas. Las referencias se nombran @Imagen N / @Video N / @Logo N en el
-texto — los modelos las leen en lenguaje natural, no hay sintaxis oficial.
+explícitas. Las referencias se nombran con los tokens que documentan los
+fabricantes (`Image N` / `Video N`, por orden de subida; spec director §5):
+`asignar_tokens` los calcula por modelo y `sustituir_tokens` cambia las
+menciones `@Imagen N` / `@Video N` / `@Logo N` del texto de la persona.
 """
+import re
 
 
 def _lista(refs, tipo):
     return [r for r in refs if r.get("tipo") == tipo]
+
+
+_MENCION = re.compile(r"@(Imagen|Video|Logo) (\d+)")
+
+
+def asignar_tokens(referencias, modelo_id):
+    """Escribe `token` en cada referencia (en su lugar) según lo que ve el
+    modelo: con Wan 3.0 los videos viajan aparte (`Video N`) y las imágenes
+    (activos, vistas y logos incluidos) se numeran `Image N`; con los demás
+    modelos el video entra por su fotograma, así que cuenta como una imagen
+    más. Devuelve la misma lista."""
+    from providers import flowplus_modelos
+    videos_aparte = flowplus_modelos.VIDEO.get(modelo_id, {}).get("max_videos", 0) > 0
+    n_img = n_vid = 0
+    for r in referencias:
+        if r.get("tipo") == "video" and videos_aparte:
+            n_vid += 1
+            r["token"] = f"Video {n_vid}"
+        else:
+            n_img += 1
+            r["token"] = f"Image {n_img}"
+    return referencias
+
+
+def sustituir_tokens(texto, referencias):
+    """Cambia las menciones `@Imagen N` / `@Video N` / `@Logo N` que escribió
+    la persona —numeradas por orden de subida dentro de cada tipo, igual que
+    se le mostraron al escribir el texto, sin importar si esa referencia es
+    también un activo del catálogo con su propia etiqueta— por el token final
+    que le tocó en `asignar_tokens`. Una mención sin referencia correspondiente
+    se deja tal cual: no se inventan imágenes que el modelo no va a recibir."""
+    n_img = n_vid = n_logo = 0
+    por_mencion = {}
+    for r in referencias:
+        if r.get("logo"):
+            n_logo += 1
+            clave = f"@Logo {n_logo}"
+        elif r.get("tipo") == "video":
+            n_vid += 1
+            clave = f"@Video {n_vid}"
+        else:
+            n_img += 1
+            clave = f"@Imagen {n_img}"
+        if r.get("token"):
+            por_mencion[clave] = r["token"]
+
+    def _cambiar(m):
+        return por_mencion.get(m.group(0), m.group(0))
+
+    return _MENCION.sub(_cambiar, texto or "")
+
+
+def _nombre(r):
+    """Token si la referencia lo tiene; si no (sesiones anteriores), su etiqueta."""
+    return r.get("token") or r["etiqueta"].replace(" (vista 1)", "")
 
 
 _PALABRAS_PERSONA = ("people", "person", "feet", "foot", "toes", "hands", "skin", "nails",
@@ -176,8 +234,13 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         if not r.get("activo") or r["activo"] in vistos:
             continue
         vistos.add(r["activo"])
-        et = r["etiqueta"].replace(" (vista 1)", "")
         cat = r.get("categoria", "producto")
+        vistas = [x for x in referencias if x.get("activo") == r["activo"]]
+        et = _nombre(r)
+        if cat == "personaje" and len(vistas) > 1 and all(x.get("token") for x in vistas):
+            et = f"{r['activo']} ({', '.join(x['token'] for x in vistas)}: la misma persona)"
+            partes.append(f"PERSONAJE: {et}. {r.get('regla') or ''}".strip())
+            continue
         if cat == "producto":
             partes.append(f"PRODUCTO EXACTO: {et} es el producto \"{r['activo']}\". {r.get('regla') or ''}".strip())
         elif cat == "personaje":
@@ -191,13 +254,13 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
             "cambies letras, logos, etiquetas ni textos."
         )
     if logos:
-        et = ", ".join(l["etiqueta"] for l in logos)
+        et = ", ".join(_nombre(l) for l in logos)
         partes.append(
             f"LOGO OFICIAL: {et} muestra el logotipo real de la marca. Si el logo se ve en el video, "
             "es exactamente ese; nunca otro."
         )
     if videos:
-        et = ", ".join(v["etiqueta"] for v in videos)
+        et = ", ".join(_nombre(v) for v in videos)
         partes.append(f"{et}: referencia de movimiento, ritmo y encuadre de cámara; no copies sus objetos ni personas.")
 
     # --- Personas ---
@@ -223,7 +286,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         partes.append(info_enfoque["bloque"])
 
     # --- Texto de la persona, íntegro ---
-    partes.append(f"ESCENA: {texto.strip()}")
+    partes.append(f"ESCENA: {sustituir_tokens(texto.strip(), referencias)}")
 
     # --- Sonido de la escena (solo videos con sonido) ---
     linea_sonido = _linea_sonido(sonido, con_sonido)
@@ -231,7 +294,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         partes.append(linea_sonido)
 
     # --- Prohibiciones (los modelos no aceptan negative_prompt) ---
-    prohibido = ["texto inventado", "logos inventados", "marcas de agua", "subtítulos", "deformaciones"]
+    prohibido = ["texto inventado", "logos inventados", "marcas de agua", "subtítulos"]
     if not con_persona:
         prohibido = ["personas", "pies", "manos"] + prohibido
     if negative_marca:
