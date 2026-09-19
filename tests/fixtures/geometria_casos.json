@@ -10,5 +10,11 @@
    "capa": [300, 100], "esperado": {"x": 108, "y": 108, "w": 300, "h": 100, "rot": 0.0, "opacidad": 1.0}},
   {"nombre": "ancla inf_der 16:9 rotado", "formato": "16:9",
    "transform": {"x": 0.95, "y": 0.9, "escala": 0.5, "rotacion": 12.5, "opacidad": 1.0, "ancla": "inf_der"},
-   "capa": [800, 400], "esperado": {"x": 1424, "y": 772, "w": 400, "h": 200, "rot": 12.5, "opacidad": 1.0}}
+   "capa": [800, 400], "esperado": {"x": 1424, "y": 772, "w": 400, "h": 200, "rot": 12.5, "opacidad": 1.0}},
+  {"nombre": "4:5 sup_der escala 2", "formato": "4:5",
+   "transform": {"x": 0.9, "y": 0.2, "escala": 2.0, "rotacion": 0, "opacidad": 1.0, "ancla": "sup_der"},
+   "capa": [100, 50], "esperado": {"x": 772, "y": 270, "w": 200, "h": 100, "rot": 0.0, "opacidad": 1.0}},
+  {"nombre": "medio pixel centro 9:16", "formato": "9:16",
+   "transform": {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+   "capa": [399, 201], "esperado": {"x": 341, "y": 860, "w": 399, "h": 201, "rot": 0.0, "opacidad": 1.0}}
 ]

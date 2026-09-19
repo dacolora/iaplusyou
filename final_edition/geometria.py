@@ -1,8 +1,10 @@
 """Geometría compartida navegador/servidor (spec editor §1.2 y §3): de
 fracciones del lienzo a píxeles. La tabla `CASOS` (tests/fixtures/
 geometria_casos.json) es la misma que corre la prueba de JS en la capa 3:
-si un motor cambia, el otro lo nota."""
+si un motor cambia, el otro lo nota. Redondeo: medio hacia arriba en ambos
+motores."""
 import json
+import math
 import os
 
 from final_edition.documento import FORMATOS
@@ -22,14 +24,20 @@ def _cargar_casos():
 CASOS = _cargar_casos()
 
 
+def _redondear(v):
+    """Medio hacia arriba, igual que Math.round en el navegador (round() de
+    Python redondea al par y desviaría 1 px en .5)."""
+    return int(math.floor(v + 0.5))
+
+
 def caja(transform, ancho_capa_px, alto_capa_px, formato):
     """Esquina superior izquierda, tamaño, rotación y opacidad en píxeles del
     lienzo. `x`/`y` son la posición del ANCLA en fracción; la escala
     multiplica el tamaño natural de la capa."""
     ancho_l, alto_l = FORMATOS[formato]
     escala = float(transform.get("escala", 1.0))
-    w = int(round(ancho_capa_px * escala))
-    h = int(round(alto_capa_px * escala))
+    w = _redondear(ancho_capa_px * escala)
+    h = _redondear(alto_capa_px * escala)
     px = float(transform.get("x", 0.5)) * ancho_l
     py = float(transform.get("y", 0.5)) * alto_l
     ancla = transform.get("ancla", "centro")
@@ -45,7 +53,7 @@ def caja(transform, ancho_capa_px, alto_capa_px, formato):
         x, y = px - w, py - h
     else:
         raise ValueError(f"ancla desconocida: {ancla!r}")
-    return {"x": int(round(x)), "y": int(round(y)), "w": w, "h": h,
+    return {"x": _redondear(x), "y": _redondear(y), "w": w, "h": h,
             "rot": float(transform.get("rotacion", 0)), "opacidad": float(transform.get("opacidad", 1.0))}
 
 
