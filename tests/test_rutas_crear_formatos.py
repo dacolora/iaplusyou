@@ -63,7 +63,7 @@ def test_duracion_hasta_30_recortada_al_modelo(app):
     e = _post(app, modelo="kling_o3_pro", duracion_objetivo="30")
     assert e["duracion_objetivo"] == 15
     assert any("15 s" in m for m in _flashes(app["c"]))
-    assert _post(app, duracion_objetivo="abc")["duracion_objetivo"] == 10
+    assert _post(app, duracion_objetivo="abc")["duracion_objetivo"] == 8
 
 
 def test_formato_de_video_segun_el_modelo(app):

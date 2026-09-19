@@ -36,6 +36,7 @@ from providers import wavespeed_common, wan3_client, wavespeed_imagen
 VIDEO = {
     "wan3": {
         "nombre": "Wan 3.0",
+        "familia": "wan",
         "path": wan3_client.MODEL_PATH,
         "max_referencias": 10,
         "usd_por_segundo": wan3_client.COSTO_USD_POR_SEGUNDO["720p"],
@@ -49,6 +50,7 @@ VIDEO = {
     },
     "kling_o3_pro": {
         "nombre": "Kling O3 Pro",
+        "familia": "kling",
         "path": "kwaivgi/kling-video-o3-pro/reference-to-video",
         "max_referencias": 7,
         "usd_por_segundo": 0.112,
@@ -62,6 +64,7 @@ VIDEO = {
     },
     "seedance25": {
         "nombre": "Seedance 2.5",
+        "familia": "seedance",
         "path": "bytedance/seedance-2.5/image-to-video",
         "max_referencias": 1,
         "usd_por_segundo": 0.36,
@@ -88,7 +91,7 @@ IMAGEN = {
 
 # Lo que ofrece el selector de duración de Crear; cada modelo recorta a su rango.
 DURACIONES_CREAR = (5, 8, 10, 12, 15, 20, 25, 30)
-DURACION_DEFECTO = 10
+DURACION_DEFECTO = 8
 FORMATO_DEFECTO = "9:16"
 FORMATOS_NOMBRES = {
     "9:16": "Vertical 9:16 (Reels, TikTok, Shorts)",
@@ -132,16 +135,42 @@ for _info in VIDEO.values():
 VIDEO_POR_DEFECTO = "wan3"
 IMAGEN_POR_DEFECTO = "seedream_v5_pro"
 
+# Frase de cierre del bloque de sonido, literal de cada fabricante (guías
+# oficiales de Wan 3.0, Kling y Seedance 2.5): así se apagan la voz y la
+# música nativas sin depender de cómo entienda el modelo una frase en español.
+CIERRE_SONIDO = {
+    "wan": "No dialogue. No background music.",
+    "kling": "No dialogue. No music.",
+    "seedance": "No BGM; generate only environmental sounds and action sounds. No dialogue.",
+}
 
-def usd_por_segundo(modelo_id, con_sonido=True):
+# Calidad de la generación: "borrador" pide a Wan 3.0 480p (mitad de precio)
+# para probar un prompt antes de la versión final; los demás modelos no tienen
+# tarifa de borrador y la ignoran.
+CALIDADES = ("final", "borrador")
+
+
+def cierre_sonido(modelo_id):
+    return CIERRE_SONIDO[VIDEO[modelo_id]["familia"]]
+
+
+def _resolucion_wan(calidad):
+    return "480p" if calidad == "borrador" else "720p"
+
+
+def usd_por_segundo(modelo_id, con_sonido=True, calidad="final"):
     """Costo por segundo efectivo: el del modelo más el recargo del sonido
-    nativo cuando se pide (Kling O3 Pro es el único que cobra aparte)."""
+    nativo cuando se pide (Kling O3 Pro es el único que cobra aparte). Con
+    calidad "borrador" Wan 3.0 cobra su tarifa de 480p; los demás, la misma."""
     info = VIDEO[modelo_id]
-    return info["usd_por_segundo_efectivo"] if con_sonido else info["usd_por_segundo"]
+    base = info["usd_por_segundo"]
+    if modelo_id == "wan3" and calidad == "borrador":
+        base = wan3_client.COSTO_USD_POR_SEGUNDO["480p"]
+    return round(base + (info["audio_nativo"]["recargo_usd_s"] if con_sonido else 0.0), 4)
 
 
-def estimate_video(modelo_id, duration, con_sonido=True):
-    return {"credits": None, "usd": round(usd_por_segundo(modelo_id, con_sonido) * duration, 3)}
+def estimate_video(modelo_id, duration, con_sonido=True, calidad="final"):
+    return {"credits": None, "usd": round(usd_por_segundo(modelo_id, con_sonido, calidad) * duration, 3)}
 
 
 def estimate_imagen(modelo_id, n_referencias=1):
@@ -169,7 +198,7 @@ def _lanzar(path, payload, nombre, timeout_seconds=1200, on_progreso=None):
 
 
 def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16", on_progreso=None,
-                  videos=None, con_sonido=True):
+                  videos=None, con_sonido=True, calidad="final"):
     """Devuelve la URL pública del video. referencias: URLs públicas de imágenes
     (la primera es la principal; Seedance solo usa esa). videos: URLs públicas
     de videos de referencia — solo Wan 3.0 los recibe tal cual; para los demás
@@ -183,7 +212,7 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
     refs = list(referencias)[: info["max_referencias"]]
     if modelo_id == "wan3":
         return wan3_client.generar_video(
-            prompt, refs, duration=duration, resolution="720p",
+            prompt, refs, duration=duration, resolution=_resolucion_wan(calidad),
             aspect_ratio=aspect_ratio, on_progreso=on_progreso, reference_videos=videos,
             enable_audio=bool(con_sonido),
         )

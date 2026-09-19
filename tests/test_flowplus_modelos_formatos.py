@@ -72,3 +72,35 @@ def test_seedream_solo_manda_aspect_ratio_cuando_se_pide(monkeypatch):
     wavespeed_imagen.editar_imagen_seedream("https://x/1.png", "p")
     wavespeed_imagen.editar_imagen_seedream("https://x/1.png", "p", aspect_ratio="4:5")
     assert "aspect_ratio" not in payloads[0] and payloads[1]["aspect_ratio"] == "4:5"
+
+
+def test_cada_modelo_de_video_declara_familia_y_cierre_de_sonido():
+    from providers import flowplus_modelos as fm
+    assert {m["familia"] for m in fm.VIDEO.values()} == {"wan", "kling", "seedance"}
+    assert fm.cierre_sonido("wan3") == "No dialogue. No background music."
+    assert fm.cierre_sonido("kling_o3_pro") == "No dialogue. No music."
+    assert fm.cierre_sonido("seedance25") == "No BGM; generate only environmental sounds and action sounds. No dialogue."
+
+
+def test_duracion_por_defecto_es_8_y_sigue_en_las_opciones():
+    from providers import flowplus_modelos as fm
+    assert fm.DURACION_DEFECTO == 8 and 8 in fm.DURACIONES_CREAR
+    assert fm.ajustar_duracion("wan3", "basura") == 8
+
+
+def test_estimado_borrador_usa_la_tarifa_480p_solo_en_wan():
+    from providers import flowplus_modelos as fm, wan3_client
+    assert fm.estimate_video("wan3", 10, calidad="borrador")["usd"] == round(wan3_client.COSTO_USD_POR_SEGUNDO["480p"] * 10, 3)
+    assert fm.estimate_video("wan3", 10, calidad="final") == fm.estimate_video("wan3", 10)
+    # Kling y Seedance ignoran la calidad: no tienen tarifa de borrador
+    assert fm.estimate_video("kling_o3_pro", 10, calidad="borrador") == fm.estimate_video("kling_o3_pro", 10)
+    assert fm.estimate_video("seedance25", 5, calidad="borrador") == fm.estimate_video("seedance25", 5)
+
+
+def test_generar_video_borrador_pide_480p_a_wan(monkeypatch):
+    from providers import flowplus_modelos as fm
+    llamadas = []
+    monkeypatch.setattr(fm.wan3_client, "generar_video", lambda *a, **k: llamadas.append(k) or "https://v")
+    fm.generar_video("wan3", "p", ["https://x/1.png"], 8, calidad="borrador")
+    fm.generar_video("wan3", "p", ["https://x/1.png"], 8)
+    assert llamadas[0]["resolution"] == "480p" and llamadas[1]["resolution"] == "720p"
