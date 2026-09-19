@@ -31,6 +31,7 @@ from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
 import notificaciones
+import usuarios
 
 log = logging.getLogger("creatv.cuentas")
 
@@ -225,7 +226,11 @@ def _armar_correo(tipo, usuario, enlace):
 
 
 def _enviar(tipo, ruta, usuario, correo, url_base, ip=None):
-    correo = (correo or "").strip().lower()
+    # Defensa en profundidad (M7 de la revisión): hoy todo caller ya trae un
+    # correo validado por usuarios.py, pero pasarlo también por
+    # validar_correo acá evita que un llamador nuevo emita un token o lo
+    # meta en las cabeceras de EmailMessage sin haberlo validado antes.
+    correo = usuarios.validar_correo(correo) or ""
     if not usuario or not correo:
         return False
     if not smtp_configurado():

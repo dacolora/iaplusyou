@@ -53,6 +53,19 @@ def test_crear_sin_correo_deja_none_y_correo_invalido_falla(usuarios_tmp):
         u.crear("mal", "secreta123", "cliente", cliente="acme", correo="no-es-correo")
 
 
+def test_crear_rechaza_correo_ya_usado_por_otro_case_insensitive(usuarios_tmp):
+    # I1: el correo es único entre usuarios, comparado sin importar mayúsculas.
+    u = usuarios_tmp
+    u.crear("ana", "secreta123", "cliente", cliente="acme", correo="ana@ejemplo.com")
+    with pytest.raises(ValueError):
+        u.crear("bob", "secreta123", "cliente", cliente="acme", correo="ANA@Ejemplo.com")
+    assert u.obtener("bob") is None
+    # Dos usuarios sin correo (None) no chocan entre sí.
+    u.crear("sin1", "secreta123", "cliente", cliente="acme")
+    u.crear("sin2", "secreta123", "cliente", cliente="acme")
+    assert u.obtener("sin1")["correo"] is None and u.obtener("sin2")["correo"] is None
+
+
 def test_registro_viejo_sin_llaves_se_completa_al_leer(usuarios_tmp):
     u = usuarios_tmp
     u.guardar({"viejo": {"password_hash": u._hash("secreta123"), "rol": "cliente", "cliente": "acme"}})
@@ -93,6 +106,39 @@ def test_validar_password():
     assert usuarios.validar_password(None)
 
 
+@pytest.mark.parametrize("entrada,valido", [
+    ("ana", True),
+    ("ana.perez", True),
+    ("ana_perez-2", True),
+    ("abc", True),
+    ("a" * 40, True),
+    ("ab", False),  # muy corto
+    ("a" * 41, False),  # muy largo
+    ("Ana", False),  # mayúsculas
+    ("ana perez", False),  # espacio: el vector de M3 (inyección en el correo)
+    ("ana\nperez", False),  # salto de línea
+    ("ana@perez", False),
+    ("", False),
+    (None, False),
+])
+def test_validar_usuario(entrada, valido):
+    import usuarios
+    resultado = usuarios.validar_usuario(entrada)
+    assert (resultado is None) == valido
+    if not valido:
+        assert isinstance(resultado, str) and resultado
+
+
+def test_crear_rechaza_usuario_con_formato_invalido(usuarios_tmp):
+    # M3: un usuario mal formado (espacios, mayúsculas, saltos de línea) no
+    # puede colarse — es el texto que después va crudo en el correo a un
+    # tercero (email-body injection vía "Hola {usuario},").
+    u = usuarios_tmp
+    with pytest.raises(ValueError):
+        u.crear("Ana Perez\nhackeada", "secreta123", "cliente", cliente="acme")
+    assert u.obtener("Ana Perez\nhackeada") is None
+
+
 def test_por_correo_compara_en_minusculas(usuarios_tmp):
     u = usuarios_tmp
     u.crear("ana", "secreta123", "cliente", cliente="acme", correo="Ana@Ejemplo.com")
@@ -119,6 +165,46 @@ def test_actualizar_correo_y_verificado(usuarios_tmp):
         u.actualizar("ana", rol="admin")
     with pytest.raises(ValueError):
         u.actualizar("nadie", correo_verificado=True)
+
+
+def test_actualizar_rechaza_correo_ya_usado_por_otro_pero_permite_repetir_el_propio(usuarios_tmp):
+    # I1: mismo chequeo de unicidad, ahora en actualizar().
+    u = usuarios_tmp
+    u.crear("ana", "secreta123", "cliente", cliente="acme", correo="ana@ejemplo.com")
+    u.crear("bob", "secreta123", "cliente", cliente="acme", correo="bob@ejemplo.com")
+    with pytest.raises(ValueError):
+        u.actualizar("bob", correo="ANA@Ejemplo.com")
+    assert u.obtener("bob")["correo"] == "bob@ejemplo.com"
+    # Ana repitiendo su propio correo (quizás con otra capitalización) no
+    # debe chocar con ella misma.
+    entry = u.actualizar("ana", correo="Ana@Ejemplo.com")
+    assert entry["correo"] == "ana@ejemplo.com"
+
+
+def test_actualizar_rechaza_password_hash_solo_cambiar_password_lo_escribe(usuarios_tmp):
+    # M4: password_hash salió de CAMPOS_ACTUALIZABLES — la única puerta para
+    # cambiar la contraseña es cambiar_password (que sube session_version).
+    u = usuarios_tmp
+    u.crear("ana", "secreta123", "cliente", cliente="acme")
+    with pytest.raises(ValueError):
+        u.actualizar("ana", password_hash=u._hash("otra-clave"))
+    # La contraseña original sigue funcionando: el intento no tocó nada.
+    assert u.verificar("ana", "secreta123") is not None
+
+
+def test_obtener_no_expone_password_hash_pero_obtener_hash_si(usuarios_tmp):
+    # M5: obtener() es lo que puede llegar a session/templates; no debe
+    # traer el hash. obtener_hash() es el lector interno que sí lo necesita.
+    u = usuarios_tmp
+    u.crear("ana", "secreta123", "cliente", cliente="acme", correo="ana@ejemplo.com")
+    entry = u.obtener("ana")
+    assert "password_hash" not in entry
+    assert entry["correo"] == "ana@ejemplo.com"
+    con_hash = u.obtener_hash("ana")
+    assert "password_hash" in con_hash and con_hash["password_hash"]
+    # verificar sigue funcionando con la contraseña real (no depende de obtener).
+    assert u.verificar("ana", "secreta123") is not None
+    assert u.obtener_hash("nadie") is None
 
 
 def test_cambiar_password_sube_session_version(usuarios_tmp):
@@ -327,6 +413,24 @@ def test_sin_smtp_devuelve_false_sin_excepcion_ni_token(base_temporal, monkeypat
     assert _filas(base_temporal) == []
 
 
+def test_sin_smtp_no_invalida_el_token_anterior(base_temporal, envios, monkeypatch):
+    # M2: smtp_configurado() se comprueba ANTES de emitir. Si ya había un
+    # token vivo (mandado cuando sí había SMTP) y después el servidor queda
+    # sin SMTP_HOST, ese token sigue vivo — no se emite ni se invalida nada.
+    import cuentas
+    assert cuentas.enviar_verificacion("ana", "ana@ejemplo.com", "https://app.ejemplo.com") is True
+    prefijo = "https://app.ejemplo.com/verificar/"
+    linea = next(l for l in envios[0]["cuerpo"].splitlines() if l.startswith(prefijo))
+    token = linea[len(prefijo):]
+    assert cuentas.validar("verificacion", token) is not None
+
+    monkeypatch.delenv("SMTP_HOST", raising=False)
+    assert cuentas.enviar_verificacion("ana", "ana@ejemplo.com", "https://app.ejemplo.com") is False
+
+    assert len(_filas(base_temporal)) == 1  # no se creó una fila nueva
+    assert cuentas.validar("verificacion", token) is not None  # el viejo sigue vivo
+
+
 def test_envio_fallido_devuelve_false(base_temporal, monkeypatch):
     import cuentas
     import notificaciones
@@ -336,6 +440,22 @@ def test_envio_fallido_devuelve_false(base_temporal, monkeypatch):
     monkeypatch.setattr(notificaciones, "enviar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x")))
     assert cuentas.enviar_restablecer("ana", "ana@ejemplo.com", "https://app.ejemplo.com") is False
     assert cuentas.enviar_verificacion("ana", "", "https://app.ejemplo.com") is False
+
+
+@pytest.mark.parametrize("correo_malo", [
+    "ana @ejemplo.com",  # espacio
+    "ana@sinpunto",      # dominio sin punto
+    "no-es-correo",
+    "dos@@ejemplo.com",
+])
+def test_enviar_valida_el_correo_antes_de_emitir(base_temporal, envios, correo_malo):
+    # M7: _enviar pasa el correo por validar_correo (defensa en profundidad)
+    # antes de emitir nada, aunque hoy todo caller ya llegue validado.
+    import cuentas
+    assert cuentas.enviar_verificacion("ana", correo_malo, "https://app.ejemplo.com") is False
+    assert cuentas.enviar_restablecer("ana", correo_malo, "https://app.ejemplo.com") is False
+    assert envios == []
+    assert _filas(base_temporal) == []
 
 
 def test_notificaciones_enviar_con_html_manda_multipart(monkeypatch):

@@ -26,6 +26,7 @@ Los registros viejos no traen esas llaves: todo lector pasa por `_completar`,
 que rellena correo=None, correo_verificado=False, session_version=1.
 """
 import os
+import re
 from datetime import datetime
 
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -36,10 +37,13 @@ BASE_DIR = os.path.dirname(__file__)
 ROLES_VALIDOS = ("admin", "cliente")
 PASSWORD_MINIMO = 8
 CORREO_MAXIMO = 254
+USUARIO_REGEX = re.compile(r"^[a-z0-9._-]{3,40}$")
 # Lo único que actualizar() acepta tocar; el rol y el proyecto no se cambian
-# por acá (y la contraseña solo a través de cambiar_password, que sube la
-# versión de sesión).
-CAMPOS_ACTUALIZABLES = ("correo", "correo_verificado", "password_hash", "session_version")
+# por acá. La contraseña NO está acá a propósito: solo cambiar_password
+# puede escribir password_hash, porque es la única que sube session_version
+# (si actualizar() pudiera tocarla, una ruta podría cambiar la contraseña sin
+# cerrar las sesiones abiertas con la vieja).
+CAMPOS_ACTUALIZABLES = ("correo", "correo_verificado", "session_version")
 
 
 def _path():
@@ -102,7 +106,36 @@ def validar_password(password):
     return None
 
 
+def validar_usuario(usuario):
+    """None si el nombre de usuario sirve; si no, el mensaje (en español)
+    para el formulario. Solo minúsculas, dígitos, punto, guion y guion bajo,
+    entre 3 y 40 caracteres — así el usuario nunca puede meter texto libre
+    (saltos de línea, frases) en un correo que lo cita (ver M3 de la
+    revisión de la Task 1: email-body injection vía nombre de usuario).
+    Solo se exige al crear: los usuarios ya existentes con otro formato
+    siguen funcionando igual, esto no los toca."""
+    if not isinstance(usuario, str) or not USUARIO_REGEX.match(usuario):
+        return ("El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, "
+                "números, puntos, guiones y guiones bajos.")
+    return None
+
+
+def _correo_en_uso(data, correo_norm, salvo_usuario=None):
+    """True si algún usuario (≠ salvo_usuario) ya tiene ese correo (ya
+    normalizado)."""
+    for nombre, entry in data.items():
+        if nombre == salvo_usuario:
+            continue
+        actual = (entry.get("correo") or "").strip().lower()
+        if actual and actual == correo_norm:
+            return True
+    return False
+
+
 def crear(usuario, password, rol, cliente=None, correo=None):
+    error_usuario = validar_usuario(usuario)
+    if error_usuario:
+        raise ValueError(error_usuario)
     if rol not in ROLES_VALIDOS:
         raise ValueError(f"Rol inválido: {rol}. Opciones: {ROLES_VALIDOS}")
     if rol == "cliente" and not cliente:
@@ -115,6 +148,8 @@ def crear(usuario, password, rol, cliente=None, correo=None):
     data = cargar()
     if usuario in data:
         raise ValueError(f"Ya existe un usuario '{usuario}'.")
+    if correo_norm is not None and _correo_en_uso(data, correo_norm):
+        raise ValueError("Ese correo ya está en uso.")
     data[usuario] = {
         "password_hash": _hash(password),
         "rol": rol,
@@ -128,12 +163,26 @@ def crear(usuario, password, rol, cliente=None, correo=None):
 
 
 def obtener(usuario):
-    """El registro del usuario (con defaults rellenados) o None. No valida
-    nada: úsalo para leer correo/verificado/session_version."""
+    """Copia del registro del usuario (con defaults rellenados) SIN
+    password_hash, o None. Es lo que puede llegar a session/templates sin
+    riesgo; para lo que sí necesita el hash (verificar la contraseña) usa
+    obtener_hash."""
     entry = cargar().get(usuario)
     if not entry:
         return None
-    return _completar(entry)
+    entry = _completar(dict(entry))
+    entry.pop("password_hash", None)
+    return entry
+
+
+def obtener_hash(usuario):
+    """Como obtener(), pero con password_hash incluido — solo para el lector
+    interno que de verdad lo necesita (verificar ya lee directo de cargar()
+    y no pasa por acá; esto es para otros casos internos que lo requieran)."""
+    entry = cargar().get(usuario)
+    if not entry:
+        return None
+    return _completar(dict(entry))
 
 
 def verificar(usuario, password):
@@ -147,10 +196,11 @@ def verificar(usuario, password):
 
 
 def actualizar(usuario, **campos):
-    """Cambia campos de un usuario existente (solo CAMPOS_ACTUALIZABLES).
-    `correo` se normaliza (None o "" lo borra); cambiar la contraseña por
-    aquí exige pasar ya el hash — para el flujo normal usa cambiar_password.
-    Devuelve el registro actualizado."""
+    """Cambia campos de un usuario existente (solo CAMPOS_ACTUALIZABLES:
+    correo, correo_verificado, session_version — la contraseña no se toca
+    por acá, solo cambiar_password la cambia). `correo` se normaliza (None
+    o "" lo borra) y se rechaza si ya lo tiene otro usuario. Devuelve el
+    registro actualizado."""
     desconocidos = [k for k in campos if k not in CAMPOS_ACTUALIZABLES]
     if desconocidos:
         raise ValueError(f"Campos no actualizables: {desconocidos}")
@@ -167,13 +217,13 @@ def actualizar(usuario, **campos):
             norm = validar_correo(nuevo)
             if norm is None:
                 raise ValueError("El correo no es válido.")
+            if _correo_en_uso(data, norm, salvo_usuario=usuario):
+                raise ValueError("Ese correo ya está en uso.")
             entry["correo"] = norm
     if "correo_verificado" in campos:
         entry["correo_verificado"] = bool(campos.pop("correo_verificado"))
     if "session_version" in campos:
         entry["session_version"] = int(campos.pop("session_version"))
-    if "password_hash" in campos:
-        entry["password_hash"] = campos.pop("password_hash")
     guardar(data)
     return entry
 
