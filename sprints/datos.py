@@ -30,7 +30,7 @@ ESTADOS_SPRINT = ("planeando", "referencias", "listo_para_generar", "generando",
 ESTADOS_CAMPANA = ("planeada", "referencias", "ideas_propuestas", "ideas_aprobadas", "generando", "revision", "completada")
 TIPOS_TEMPORADA = ("comercial", "estacional", "propia")
 ORIGENES_REFERENCIA = ("archivo", "link", "catalogo", "reutilizada")
-ORIGENES_PERSONA = ("manual", "sugerida_ia")
+ORIGENES_PERSONA = ("manual", "sugerida_ia", "investigada")
 TIPOS_PIEZA = ("video", "imagen")
 ESTADOS_IDEA = ("propuesta", "aprobada", "descartada")
 REVISIONES = ("pendiente", "aprobada", "rechazada")
@@ -161,7 +161,7 @@ def _mood(mood_visual):
 # ----------------------------------------------------------- personas ---
 
 def crear_persona(cliente, nombre, resumen="", descripcion="", edad_rango="", tono="", senales_visuales=None,
-                  palabras_clave=None, color=None, origen="manual"):
+                  palabras_clave=None, color=None, origen="manual", extra=None):
     nombre = _texto(nombre, 120)
     if not nombre:
         raise ErrorDatos("La persona necesita un nombre.")
@@ -173,7 +173,8 @@ def crear_persona(cliente, nombre, resumen="", descripcion="", edad_rango="", to
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=nombre, resumen=_texto(resumen, 200),
             descripcion=_texto(descripcion), edad_rango=_texto(edad_rango, 20), tono=_texto(tono),
             senales_visuales=list(senales_visuales or []), palabras_clave=list(palabras_clave or []),
-            color=_color(color), origen=origen, archivada=False, extra={})).inserted_primary_key[0]
+            color=_color(color), origen=origen, archivada=False,
+            extra=dict(extra) if isinstance(extra, dict) else {})).inserted_primary_key[0]
 
 
 def actualizar_persona(cliente, persona_id, /, **campos):
