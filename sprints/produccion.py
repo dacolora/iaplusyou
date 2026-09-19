@@ -16,6 +16,8 @@ import flowplus_lanzar
 import flowplus_prompt
 import marca
 import proyectos
+import tareas.director as tareas_director
+import trabajos
 from providers import flowplus_modelos
 from sprints import datos, estado
 from storage import r2_uploader
@@ -136,7 +138,7 @@ def _logos(cliente):
     return salida
 
 
-def referencias_sesion(cliente, campana, idea):
+def referencias_sesion(cliente, campana, idea, modelo_video="wan3"):
     """Referencias de la sesión como las arma Crear: el producto del catálogo
     (con regla de fidelidad), luego las referencias de la campaña (primero las
     que inspiran la idea) y los logos del proyecto. Devuelve
@@ -178,6 +180,7 @@ def referencias_sesion(cliente, campana, idea):
     logos = [{"tipo": "imagen", "url": l["url"], "frame_url": l["url"], "etiqueta": f"@Logo {i}", "logo": True}
              for i, l in enumerate(_logos(cliente)[:2], start=1)]
     referencias = (referencias + logos)[:MAX_REFERENCIAS]
+    flowplus_prompt.asignar_tokens(referencias, modelo_video)
     referencias_urls = [r["frame_url"] for r in referencias][:MAX_IMAGENES_MODELO]
     return referencias, referencias_urls, productos_sel
 
@@ -202,7 +205,7 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     vincula (idea.cf_id y extra["sprint"]). No encola nada. `reserva`: el
     placeholder que `lanzar_lote` puso en `cf_id`; el vínculo final solo se
     escribe si sigue ahí."""
-    referencias, referencias_urls, productos_sel = referencias_sesion(cliente, campana, idea)
+    referencias, referencias_urls, productos_sel = referencias_sesion(cliente, campana, idea, modelo_video)
     contexto, persona = _contexto(cliente, campana)
     enfoque = idea.get("enfoque") if idea.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
     info = flowplus_prompt.ENFOQUES[enfoque]
@@ -238,6 +241,25 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     return cf_id
 
 
+def encolar_director(cliente, cf_id, prioridad=PRIORIDAD_LOTE):
+    """Compila el prompt por planos y, al terminar, la propia tarea lanza la
+    generación (`auto_lanzar`): el costo del lote ya se aprobó en la ruta."""
+    creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente")
+    return trabajos.encolar(
+        tareas_director.job_id(cliente, cf_id), "flowplus_director",
+        {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": True, "prioridad": int(prioridad)},
+        cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
+        max_intentos=2, prioridad=prioridad,
+    )
+
+
+def _encolar_pieza(cliente, cf_id, entry):
+    """Video → director (que lanza al terminar); imagen → generación directa."""
+    if (entry.get("tipo") or "video") == "video":
+        return encolar_director(cliente, cf_id)
+    return flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_LOTE)
+
+
 def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_imagen=None):
     """Crea y encola una sesión por idea aprobada sin sesión. Devuelve
     {encoladas, omitidas, cf_ids, usd}. La puerta de costo es de la ruta: aquí
@@ -271,7 +293,7 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
                                    {"cp_id": i["id"], "error": str(e)}, campana_id=c["id"])
             continue
         entry = creative_flow.cargar(cliente)[cf_id]
-        if flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=PRIORIDAD_LOTE):
+        if _encolar_pieza(cliente, cf_id, entry):
             encoladas += 1
             cf_ids.append(cf_id)
         else:
@@ -334,7 +356,7 @@ def regenerar(cliente, cp_id):
     extra["cf_anteriores"] = list(extra.get("cf_anteriores") or []) + [i["cf_id"]]
     datos.actualizar_idea(cliente, cp_id, qa=None, revision="pendiente", revision_motivo=None, extra=extra)
     entry = creative_flow.cargar(cliente)[nuevo]
-    if not flowplus_lanzar.lanzar(cliente, nuevo, entry, prioridad=PRIORIDAD_LOTE):
+    if not _encolar_pieza(cliente, nuevo, entry):
         raise datos.ErrorDatos("No se pudo encolar la regeneración.")
     datos.registrar_evento(cliente, i["sprint_id"], "pieza_regenerada", f"Regeneración de «{i['titulo']}»",
                            {"cp_id": cp_id, "cf_id": nuevo, "anterior": i["cf_id"]}, campana_id=i["campana_id"])

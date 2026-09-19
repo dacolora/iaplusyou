@@ -512,28 +512,32 @@ def test_reserva_vencida_vuelve_a_ofrecer_generar_lote(con_ideas):
 
 def test_estimar_y_lanzar_lote(con_ideas, monkeypatch):
     import flowplus_lanzar
+    import trabajos
     from sprints import datos
     c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
     j = c.get(f"/cliente/acme/sprints/{sid}/lote/estimar?campana_id={cid}").get_json()
     assert j["videos"] == 1 and j["imagenes"] == 0 and j["usd"] > 0 and "USD" in j["texto"] and j["modelo_video"] == "wan3"
     j2 = c.get(f"/cliente/acme/sprints/{sid}/lote/estimar?modelo_video=kling_o3_pro").get_json()
     assert j2["modelo_video"] == "kling_o3_pro" and j2["usd"] > j["usd"]
-    lanzados = []
+    lanzados, encolados = [], []
     monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cl, cf, e, prioridad=5: lanzados.append((cf, prioridad)) or True)
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((tipo, payload, kw.get("prioridad"))) or True)
     r = c.post(f"/cliente/acme/sprints/{sid}/lote", data={"campana_id": cid, "modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro"})
     assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}")
-    assert len(lanzados) == 1 and lanzados[0][1] == 3
+    # la única pendiente es un video: el lote la manda al director, no a flowplus_lanzar directo
+    assert lanzados == [] and len(encolados) == 1 and encolados[0][0] == "flowplus_director" and encolados[0][2] == 3
     i = datos.idea("acme", iv)
-    assert i["cf_id"] == lanzados[0][0]
+    assert i["cf_id"] == encolados[0][1]["cf_id"]
     j = c.get(f"/cliente/acme/sprints/{sid}/progreso").get_json()
     assert j["lote"]["planeadas"] == 3 and j["lote"]["encoladas"] + j["lote"]["generando"] == 1 and j["campanas"][0]["lote"]["planeadas"] == 3
     import creative_flow
     creative_flow.actualizar("acme", i["cf_id"], estado="error", error="x")
     c.post(f"/cliente/acme/sprints/ideas/{iv}/reintentar")
-    assert lanzados[-1][0] == i["cf_id"] and len(lanzados) == 2
+    assert lanzados == [(i["cf_id"], 3)]                                # reintentar no cambia: sigue directo
     creative_flow.actualizar("acme", i["cf_id"], estado="video_listo", video_url="https://r2/v.mp4")
     c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar")
-    assert len(lanzados) == 3 and datos.idea("acme", iv)["cf_id"] == lanzados[-1][0]
+    assert len(encolados) == 2 and encolados[-1][0] == "flowplus_director"
+    assert datos.idea("acme", iv)["cf_id"] == encolados[-1][1]["cf_id"]
     r = c.get("/cliente/acme")
     assert "Sprint · Campaña 1".encode() in r.data      # distintivo en la tarjeta de Crear
 
