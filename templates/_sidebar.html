@@ -48,6 +48,10 @@
       <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="3" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="3" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="13" y="13" width="8" height="8" rx="2" stroke="currentColor" stroke-width="2" fill="none"/></svg>
       <span class="sidebar-texto">Proyectos</span>
     </a>
+    <a class="sidebar-item sidebar-link" href="{{ url_for('mapa_codigo') }}" title="Mapa del código">
+      <svg viewBox="0 0 24 24"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/><path d="M9 4v14M15 6v14" stroke="currentColor" stroke-width="2"/></svg>
+      <span class="sidebar-texto">Mapa del código</span>
+    </a>
     {% endif %}
     <div class="sidebar-usuario">
       <span class="sidebar-avatar">{{ (session.get('usuario') or '?')[0] | upper }}</span>

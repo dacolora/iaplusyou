@@ -9,7 +9,10 @@ técnico la primera vez que aparece.
 Regenerado el 18 de septiembre de 2026 desde el commit `5e3f40d`. La versión anterior
 (1 de septiembre) describía una arquitectura sin base de datos que ya no existe. Cuando
 la estructura cambie mucho, vale más regenerarlo que confiar en él. La referencia
-técnica que manda sigue siendo `CLAUDE.md`; este mapa es la puerta de entrada.
+técnica que manda sigue siendo `CLAUDE.md`; este mapa es la puerta de entrada. La
+misma información, con el diagrama interactivo y el inventario con buscador, está
+dentro de la app en `/mapa` (plantilla `templates/mapa_codigo.html`, solo admin):
+al regenerar uno, regenerar el otro.
 
 ## Si solo vas a leer una cosa
 
@@ -443,9 +446,9 @@ los dos leyendo `data/creatv.db`. Para publicar cambios: `git pull`, `pip instal
 
 ## Cosas sueltas que vale la pena ordenar (al 18 sep 2026)
 
-- `.env.bak_creatvmachine_20260916` está en la carpeta del repo sin versionar, pero
-  tampoco ignorado: `.gitignore` cubre `.env`, no `.env.*`. Un `git add .` lo subiría
-  con llaves reales. Sacarlo de la carpeta o ignorar `.env.*`.
+- Los respaldos del `.env` no están ignorados: `.gitignore` cubre `.env`, no `.env.*`.
+  Una copia como `.env.bak_…` dejada en la carpeta se subiría con un `git add .` con
+  llaves reales (el 18 de septiembre había una; ya no está). Conviene ignorar `.env.*`.
 - `clientes/happyflops/swaps.json.respaldo_*` y `docs/propuestas/` (propuesta comercial
   con precios) tampoco están ignorados.
 - Las fotos de producto de Happy Flops en `clientes/happyflops/productos/` y el

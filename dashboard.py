@@ -645,6 +645,16 @@ def panel():
     return render_template("panel.html", clientes=clientes, totales=totales)
 
 
+@app.route("/mapa")
+@requiere_admin
+def mapa_codigo():
+    """Mapa conceptual del código: la versión interactiva de ESTRUCTURA.md
+    (diagrama web/worker, recorrido de un clic, inventario con buscador,
+    llaves por nombre, riesgos del repo). Solo admin: es documentación
+    interna de la plataforma, no algo que un proyecto deba ver."""
+    return render_template("mapa_codigo.html")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":
