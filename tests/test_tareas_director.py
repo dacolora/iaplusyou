@@ -1,7 +1,6 @@
 """Tarea flowplus_director (spec §4): compila con Claude, guarda A/B en la
 sesión, cae al prompt determinista si el director falla y lanza la
 generación solo cuando el payload lo pide (lotes de sprints)."""
-import pytest
 
 
 def _sesion(cf, cliente="acme"):
@@ -110,7 +109,6 @@ def test_interrumpida_no_pisa_una_sesion_que_ya_avanzo(base_temporal, monkeypatc
     assert not e.get("director")
 
 
-@pytest.mark.skip(reason="Task 6")
 def test_idioma_viene_de_la_preferencia_del_proyecto(base_temporal, monkeypatch, tmp_path):
     import creative_flow as cf
     import proyectos

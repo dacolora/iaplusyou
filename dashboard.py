@@ -1567,7 +1567,10 @@ def guardar_preferencias_flowplus(cliente):
     if modelo_video not in flowplus_modelos.VIDEO or modelo_imagen not in flowplus_modelos.IMAGEN:
         flash("Modelo inválido.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
-    proyectos.guardar_preferencias_flowplus(cliente, modelo_video, modelo_imagen)
+    proyectos.guardar_preferencias_flowplus(
+        cliente, modelo_video, modelo_imagen,
+        idioma_prompt=(request.form.get("idioma_prompt") or "es").strip(),
+        duracion_defecto=request.form.get("duracion_defecto") or 8)
     flash("Modelos por defecto de FlowPlus actualizados.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
