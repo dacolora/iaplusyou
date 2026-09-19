@@ -1,0 +1,156 @@
+"""Director de prompts (spec 2026-09-18 §2): Claude escribe los planos, el
+módulo los valida y compone los prompts A y B con flowplus_prompt.armar."""
+import json
+
+import pytest
+
+
+class _Bloque:
+    def __init__(self, texto):
+        self.type = "text"
+        self.text = texto
+
+
+class _Resp:
+    def __init__(self, texto):
+        self.content = [_Bloque(texto)]
+
+
+class _Llamadas:
+    def __init__(self, respuestas):
+        self.respuestas = list(respuestas)
+        self.kwargs = []
+
+
+def _instalar_fake(monkeypatch, respuestas):
+    import director as mod
+    registro = _Llamadas(respuestas)
+
+    class _Messages:
+        def create(self, **kw):
+            registro.kwargs.append(kw)
+            if not registro.respuestas:
+                raise AssertionError("Claude recibió más llamadas de las esperadas")
+            return _Resp(registro.respuestas.pop(0))
+
+    class FakeAnthropic:
+        def __init__(self, api_key=None):
+            self.messages = _Messages()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "clave-test")
+    monkeypatch.setattr(mod.anthropic, "Anthropic", FakeAnthropic)
+    return registro
+
+
+def _planos(dur=8, cams=("dolly_in", "orbita_corta")):
+    n = len(cams)
+    paso = dur // n
+    out = []
+    for i, cam in enumerate(cams):
+        out.append({"n": i + 1, "inicio_s": i * paso, "fin_s": dur if i == n - 1 else (i + 1) * paso,
+                    "plano": "plano medio", "camara": cam, "accion": f"acción {i + 1} con Image 1", "sonido": "brisa"})
+    return out
+
+
+def _respuesta(dur=8, cams_a=("dolly_in", "orbita_corta"), cams_b=("macro_a_abierto", "travelling_lateral"), **extra):
+    r = {"planos": _planos(dur, cams_a), "planos_b": _planos(dur, cams_b), "diferencia_b": "Arranca en macro y sigue de lado."}
+    r.update(extra)
+    return json.dumps(r)
+
+
+def _sesion(**kw):
+    s = {"accion_central": "@Imagen 1 gira sobre la piedra", "modelo": "wan3", "duracion_objetivo": 8,
+         "con_sonido": True, "sonido_texto": "", "enfoque": "producto", "guia_marca": "Luz natural.", "negative_marca": None,
+         "referencias": [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1", "url": "https://x/1.png", "frame_url": "https://x/1.png"}]}
+    s.update(kw)
+    return s
+
+
+def test_n_planos_por_duracion():
+    import director
+    assert [director.n_planos(d) for d in (5, 6, 10, 11, 15, 16, 20, 21, 30)] == [1, 2, 2, 3, 3, 4, 4, 5, 5]
+
+
+def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert reg.kwargs[0]["model"] == director.MODEL and reg.kwargs[0]["max_tokens"] == director.MAX_TOKENS
+    assert "Wan 3.0" in reg.kwargs[0]["system"] and "No dialogue. No background music." in reg.kwargs[0]["system"]
+    assert "IDEA: Image 1 gira sobre la piedra" in reg.kwargs[0]["messages"][0]["content"]
+    assert r["prompt_a"].count("Shot ") == 2 and "Shot 1 (0-4s)" in r["prompt_a"] and "Shot 2 (4-8s)" in r["prompt_a"]
+    assert r["prompt_a"].endswith("Recordatorio final: el producto permanece solo y sin nadie durante todo el video.")
+    assert "No dialogue. No background music." in r["prompt_a"] and "ESTILO DE MARCA: Luz natural." in r["prompt_a"]
+    assert "macro" in r["prompt_b"] and r["prompt_b"] != r["prompt_a"] and r["diferencia_b"].startswith("Arranca")
+    assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.01 and r["version"] == 1
+
+
+def test_rechaza_planos_que_no_suman_y_pide_correccion_una_vez(monkeypatch):
+    import director
+    con_hueco = _planos(8)
+    con_hueco[1]["inicio_s"] = 5
+    reg = _instalar_fake(monkeypatch, [json.dumps({"planos": con_hueco, "planos_b": _planos(8), "diferencia_b": "x"}), _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 2 and "no sirvió" in reg.kwargs[1]["messages"][-1]["content"]
+    assert r["prompt_a"].count("Shot ") == 2
+
+
+@pytest.mark.parametrize("cambio", [
+    lambda p: p.__setitem__("camara", "grua_lunar"),
+    lambda p: p.__setitem__("accion", "acción con Image 7"),
+    lambda p: p.__setitem__("accion", "video vertical 9:16 de 8 segundos a 720p"),
+    lambda p: p.__setitem__("accion", "x" * 2600),
+])
+def test_dos_respuestas_invalidas_lanzan_director_error(monkeypatch, cambio):
+    import director
+    malos = _planos(8)
+    cambio(malos[0])
+    malo = json.dumps({"planos": malos, "planos_b": _planos(8), "diferencia_b": "x"})
+    _instalar_fake(monkeypatch, [malo, malo])
+    with pytest.raises(director.DirectorError) as e:
+        director.compilar("acme", _sesion())
+    assert e.value.motivo
+
+
+def test_numero_de_planos_debe_coincidir_con_la_duracion(monkeypatch):
+    import director
+    tres = json.dumps({"planos": _planos(8, ("dolly_in", "orbita_corta", "estatico")), "planos_b": _planos(8), "diferencia_b": "x"})
+    _instalar_fake(monkeypatch, [tres, tres])
+    with pytest.raises(director.DirectorError):
+        director.compilar("acme", _sesion())
+
+
+def test_json_invalido_cuenta_como_intento(monkeypatch):
+    import director
+    _instalar_fake(monkeypatch, ["esto no es json", _respuesta()])
+    assert director.compilar("acme", _sesion())["prompt_a"]
+
+
+def test_familia_kling_y_seedance_cambian_plantilla_y_cierre(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta(), _respuesta()])
+    k = director.compilar("acme", _sesion(modelo="kling_o3_pro"))
+    s = director.compilar("acme", _sesion(modelo="seedance25"))
+    assert "Kling" in reg.kwargs[0]["system"] and "No dialogue. No music." in k["prompt_a"]
+    assert "movimiento y cámara" in reg.kwargs[1]["system"].lower() and "No BGM" in s["prompt_a"]
+
+
+def test_idioma_en_cambia_la_instruccion_de_idioma(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    director.compilar("acme", _sesion(), idioma="en")
+    assert "IDIOMA: en" in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_sesion_muda_no_lleva_sonido(monkeypatch):
+    import director
+    _instalar_fake(monkeypatch, [_respuesta()])
+    r = director.compilar("acme", _sesion(con_sonido=False))
+    assert "Sonido:" not in r["prompt_a"] and "No dialogue" not in r["prompt_a"]
+
+
+def test_modelo_sin_familia_lanza(monkeypatch):
+    import director
+    _instalar_fake(monkeypatch, [])
+    with pytest.raises(director.DirectorError):
+        director.compilar("acme", _sesion(modelo="inexistente"))
