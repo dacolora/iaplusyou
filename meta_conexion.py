@@ -320,7 +320,18 @@ def cambiar_code_por_token(cliente, code):
 
 
 def obtener_perfil(token):
-    return _graph_get("me", token, {"fields": "id,name,client_business_id"})
+    """id y nombre de quien autorizó. `client_business_id` solo existe con un
+    token de usuario del sistema (Business Integration): con un token de
+    usuario Meta responde (#190), así que se pide aparte y se tolera que no
+    venga — el negocio es informativo, no hace falta para operar."""
+    perfil = _graph_get("me", token, {"fields": "id,name"})
+    perfil["client_business_id"] = None
+    try:
+        extra = _graph_get("me", token, {"fields": "client_business_id"})
+        perfil["client_business_id"] = extra.get("client_business_id")
+    except MetaConexionError:
+        pass
+    return perfil
 
 
 def listar_activos(token):

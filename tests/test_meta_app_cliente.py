@@ -95,3 +95,26 @@ def test_meta_app_json_esta_en_gitignore():
         reglas = [l.strip() for l in f]
     assert "clientes/*/meta_app.json" in reglas
     assert "clientes/*/meta_app.json.tmp" in reglas
+
+
+def test_obtener_perfil_no_exige_client_business_id(monkeypatch):
+    """Con un token de usuario (no de usuario del sistema) Meta responde
+    (#190) al pedir client_business_id: el perfil sale igual, sin negocio."""
+    import meta_conexion as mc
+    llamadas = []
+
+    def _graph(edge, token, params=None, timeout=30):
+        llamadas.append(params["fields"])
+        if "client_business_id" in params["fields"]:
+            raise mc.MetaConexionError("Meta respondió: (#190) The client_business_id field can only be accessed "
+                                       "using a Business Integration System User access token.", codigo=190)
+        return {"id": "1", "name": "Forja"}
+    monkeypatch.setattr(mc, "_graph_get", _graph)
+    assert mc.obtener_perfil("tok") == {"id": "1", "name": "Forja", "client_business_id": None}
+    assert llamadas == ["id,name", "client_business_id"]
+
+    # con token de usuario del sistema el negocio sí llega
+    monkeypatch.setattr(mc, "_graph_get", lambda edge, token, params=None, timeout=30:
+                        {"id": "1", "name": "Forja", "client_business_id": "999"} if "client_business_id" in params["fields"]
+                        else {"id": "1", "name": "Forja"})
+    assert mc.obtener_perfil("tok")["client_business_id"] == "999"
