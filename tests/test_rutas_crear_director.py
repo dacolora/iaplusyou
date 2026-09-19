@@ -181,6 +181,9 @@ def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app)
     assert "Armar prompt (gratis)" in html and 'id="fp-calidad"' in html and 'name="calidad" value="borrador"' in html
     assert '<option value="8" selected>8 s</option>' in html and 'id="fp-duracion-larga"' in html
     assert "exactamente lo que recibe el modelo" not in html
+    # La imagen se cobra al instante (nunca pasa por el director): su botón en
+    # refrescar() debe seguir diciendo "Generar imagen", nunca "gratis".
+    assert "'Generar imagen'" in html
 
 
 def test_tarjeta_pendiente_muestra_la_barra_del_director(app, monkeypatch):

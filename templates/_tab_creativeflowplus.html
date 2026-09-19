@@ -694,8 +694,13 @@
           usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value) ? 0.02 : 0);
         }
       }
-      var que = esImagen ? 'imagen' : 'video';
-      botonGenerar.textContent = 'Armar prompt (gratis)' + (usd ? ' · generar costará ~$' + usd.toFixed(2) : '');
+      // La imagen se genera y se cobra al instante (nunca pasa por el director):
+      // su botón sigue diciendo "Generar imagen", nunca "gratis".
+      if (esImagen) {
+        botonGenerar.textContent = 'Generar imagen' + (usd ? ' (~$' + usd.toFixed(2) + ')' : '');
+      } else {
+        botonGenerar.textContent = 'Armar prompt (gratis)' + (usd ? ' · generar costará ~$' + usd.toFixed(2) : '');
+      }
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
