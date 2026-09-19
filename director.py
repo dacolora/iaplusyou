@@ -153,6 +153,8 @@ def _validar_planos(planos, n_esperado, duracion, tokens_validos, nombre):
         esperado_inicio = fin
         if p.get("camara") not in flowplus_prompt.CAMARAS:
             raise ValueError(f"{nombre}: cámara desconocida {p.get('camara')!r} en el plano {i}")
+        if not isinstance(p.get("plano"), str) or not p["plano"].strip():
+            raise ValueError(f"{nombre}: el plano {i} no tiene tamaño de plano")
         texto = " ".join(str(p.get(k) or "") for k in ("plano", "accion", "sonido"))
         for m in _TOKEN.finditer(texto):
             if m.group(0) not in tokens_validos:

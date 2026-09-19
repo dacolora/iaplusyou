@@ -95,21 +95,47 @@ def test_rechaza_planos_que_no_suman_y_pide_correccion_una_vez(monkeypatch):
     assert r["prompt_a"].count("Shot ") == 2
 
 
-@pytest.mark.parametrize("cambio", [
-    lambda p: p.__setitem__("camara", "grua_lunar"),
-    lambda p: p.__setitem__("accion", "acción con Image 7"),
-    lambda p: p.__setitem__("accion", "video vertical 9:16 de 8 segundos a 720p"),
-    lambda p: p.__setitem__("accion", "x" * 2600),
+@pytest.mark.parametrize("cambio,motivo_esperado", [
+    (lambda p: p.__setitem__("camara", "grua_lunar"), "cámara desconocida"),
+    (lambda p: p.__setitem__("accion", "acción con Image 7"), "cita Image 7"),
+    (lambda p: p.__setitem__("accion", "video vertical 9:16 de 8 segundos a 720p"), "escribe duración"),
+    (lambda p: p.__setitem__("accion", "x" * 2600), "pasa de 2500"),
 ])
-def test_dos_respuestas_invalidas_lanzan_director_error(monkeypatch, cambio):
+def test_dos_respuestas_invalidas_lanzan_director_error(monkeypatch, cambio, motivo_esperado):
     import director
     malos = _planos(8)
     cambio(malos[0])
-    malo = json.dumps({"planos": malos, "planos_b": _planos(8), "diferencia_b": "x"})
+    # planos_b con cámaras distintas a las de "planos" (que cambio() no toca,
+    # salvo en el primer caso): si compartieran la primera cámara por defecto,
+    # la regla "B repite la cámara de A" dispararía antes que la regla que
+    # este caso quiere ejercitar y el test pasaría por la razón equivocada.
+    malo = json.dumps({"planos": malos, "planos_b": _planos(8, ("macro_a_abierto", "travelling_lateral")), "diferencia_b": "x"})
     _instalar_fake(monkeypatch, [malo, malo])
     with pytest.raises(director.DirectorError) as e:
         director.compilar("acme", _sesion())
-    assert e.value.motivo
+    assert motivo_esperado in e.value.motivo
+
+
+def test_plano_nulo_en_ambos_intentos_lanza_director_error(monkeypatch):
+    import director
+    malos = _planos(8)
+    malos[0]["plano"] = None
+    malo = json.dumps({"planos": malos, "planos_b": _planos(8, ("macro_a_abierto", "travelling_lateral")), "diferencia_b": "x"})
+    _instalar_fake(monkeypatch, [malo, malo])
+    with pytest.raises(director.DirectorError) as e:
+        director.compilar("acme", _sesion())
+    assert "tamaño de plano" in e.value.motivo
+
+
+def test_plano_no_string_en_el_primer_intento_permite_correccion(monkeypatch):
+    import director
+    malos = _planos(8)
+    malos[0]["plano"] = 3
+    malo = json.dumps({"planos": malos, "planos_b": _planos(8, ("macro_a_abierto", "travelling_lateral")), "diferencia_b": "x"})
+    reg = _instalar_fake(monkeypatch, [malo, _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 2 and "tamaño de plano" in reg.kwargs[1]["messages"][-1]["content"]
+    assert r["prompt_a"].count("Shot ") == 2
 
 
 def test_numero_de_planos_debe_coincidir_con_la_duracion(monkeypatch):
