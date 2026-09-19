@@ -1,0 +1,52 @@
+{
+  "esquema": 1,
+  "formato": "9:16",
+  "fps": 30,
+  "idioma_base": "es",
+  "paginas": [],
+  "pistas": [
+    {"id": "p_video", "tipo": "video", "bloqueada": false, "silenciada": false, "oculta": false,
+     "clips": [
+       {"id": "c1", "inicio_ms": 0, "duracion_ms": 3500, "material_id": 1,
+        "recorte": {"desde_ms": 0, "hasta_ms": 3500}, "velocidad": 1.0,
+        "transform": {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+        "keyframes": [], "animacion": null, "transicion": {"tipo": "fundido", "duracion_ms": 500},
+        "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": true}},
+       {"id": "c2", "inicio_ms": 3500, "duracion_ms": 3500, "material_id": 1,
+        "recorte": {"desde_ms": 3500, "hasta_ms": 7000}, "velocidad": 1.0,
+        "transform": {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+        "keyframes": [], "animacion": null, "transicion": null,
+        "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": true}}
+     ]},
+    {"id": "p_texto", "tipo": "texto", "bloqueada": false, "silenciada": false, "oculta": false,
+     "clips": [
+       {"id": "t1", "inicio_ms": 200, "duracion_ms": 2500, "material_id": null,
+        "texto": {"variable": "hook"},
+        "estilo": {"fuente": "SpaceGrotesk-Bold", "peso": 700, "tamano": 0.046, "color": "#FFFFFF",
+                   "contorno": {"color": "#000000", "grosor": 0.003}, "sombra": null, "fondo": null,
+                   "alineacion": "centro", "interlineado": 1.1},
+        "transform": {"x": 0.5, "y": 0.17, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"},
+        "keyframes": [], "animacion": {"entrada": "deslizar", "salida": "aparecer", "duracion_ms": 300}}
+     ]},
+    {"id": "p_voz", "tipo": "audio", "bloqueada": false, "silenciada": false, "oculta": false,
+     "clips": [
+       {"id": "a1", "inicio_ms": 0, "duracion_ms": 7000, "material_id": 2, "rol_audio": "voz",
+        "recorte": {"desde_ms": 0, "hasta_ms": 7000}, "velocidad": 1.0,
+        "audio": {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 200, "ducking": false}}
+     ]},
+    {"id": "p_musica", "tipo": "audio", "bloqueada": false, "silenciada": false, "oculta": false,
+     "clips": [
+       {"id": "m1", "inicio_ms": 0, "duracion_ms": 7000, "material_id": 3, "rol_audio": "musica",
+        "recorte": {"desde_ms": 0, "hasta_ms": 7000}, "velocidad": 1.0,
+        "audio": {"volumen": 0.35, "fundido_entrada_ms": 0, "fundido_salida_ms": 500, "ducking": true}}
+     ]}
+  ],
+  "subtitulos": {"estilo_id": "karaoke", "posicion": 0.78,
+                 "palabras": {"es": [{"t_ms": 0, "dur_ms": 400, "texto": "Hola"}, {"t_ms": 400, "dur_ms": 500, "texto": "mundo"}]}},
+  "variables": {"textos": {"hook": {"es": "Tu piel, en 7 días", "en": "Your skin, in 7 days"}},
+                "precios": {"es_CO": 89900, "en_US": 24.99}},
+  "marca": {"color": "#7c3aed", "logo_material_id": null, "marca_de_agua": null},
+  "mezcla": {"preset": "equilibrada", "volumenes": null},
+  "materiales": [1, 2, 3],
+  "miniatura_ms": 3000
+}
