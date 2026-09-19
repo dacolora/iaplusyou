@@ -70,3 +70,46 @@ def test_evitar_ya_no_lleva_deformaciones():
     p = flowplus_prompt.armar("gira", [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1"}], enfoque="producto")
     linea = next(l for l in p.split("\n") if l.startswith("EVITAR: "))
     assert linea == "EVITAR: personas, pies, manos, texto inventado, logos inventados, marcas de agua, subtítulos."
+
+
+PLANOS = [
+    {"n": 1, "inicio_s": 0, "fin_s": 4, "plano": "primer plano", "camara": "dolly_in",
+     "accion": "la sandalia (Image 1) reposa sobre la piedra; una brisa mueve la correa", "sonido": "brisa, roce de la correa"},
+    {"n": 2, "inicio_s": 4, "fin_s": 8, "plano": "plano medio", "camara": "orbita_corta",
+     "accion": "la cámara rodea la sandalia y revela la playa", "sonido": "olas lejanas"},
+]
+REF = [{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1"}]
+
+
+def test_con_planos_el_bloque_shot_reemplaza_a_escena_y_cierra_con_la_frase_oficial():
+    p = flowplus_prompt.armar("gira", REF, enfoque="producto", con_sonido=True, planos=PLANOS,
+                              cierre_sonido="No dialogue. No background music.")
+    lineas = p.split("\n")
+    assert not any(l.startswith("ESCENA: ") for l in lineas) and not any(l.startswith("SONIDO: ") for l in lineas)
+    i1 = lineas.index("Shot 1 (0-4s): primer plano, la cámara avanza en línea recta hacia el sujeto, despacio y a velocidad constante, sin zoom. "
+                      "La sandalia (Image 1) reposa sobre la piedra; una brisa mueve la correa. Sonido: brisa, roce de la correa.")
+    i2 = lineas.index("Shot 2 (4-8s): plano medio, la cámara rodea al sujeto en un arco corto de menos de 45 grados. "
+                      "La cámara rodea la sandalia y revela la playa. Sonido: olas lejanas.")
+    i_cierre = lineas.index("No dialogue. No background music.")
+    i_evitar = next(i for i, l in enumerate(lineas) if l.startswith("EVITAR: "))
+    assert i1 < i2 < i_cierre < i_evitar
+
+
+def test_sesion_muda_con_planos_no_lleva_sonido_ni_cierre():
+    p = flowplus_prompt.armar("gira", REF, enfoque="producto", con_sonido=False, planos=PLANOS,
+                              cierre_sonido="No dialogue. No background music.")
+    assert "Sonido:" not in p and "No dialogue" not in p and "Shot 1 (0-4s)" in p
+
+
+def test_sin_planos_la_linea_sonido_de_siempre_gana_el_cierre_oficial():
+    p = flowplus_prompt.armar("gira", REF, enfoque="producto", con_sonido=True, cierre_sonido="No dialogue. No music.")
+    assert "SONIDO: ambiente natural de la escena. Sin diálogo hablado ni música de fondo. No dialogue. No music." in p
+    # sin cierre, el prompt es exactamente el de antes (sesiones viejas)
+    assert "No dialogue" not in flowplus_prompt.armar("gira", REF, enfoque="producto", con_sonido=True)
+
+
+def test_camara_desconocida_en_un_plano_lanza():
+    import pytest
+    malo = [dict(PLANOS[0], camara="grua_lunar")]
+    with pytest.raises(ValueError):
+        flowplus_prompt.armar("gira", REF, enfoque="producto", planos=malo)

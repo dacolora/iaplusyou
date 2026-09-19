@@ -165,25 +165,75 @@ def _lineas_contexto(contexto):
     return lineas
 
 
+# Vocabulario cerrado de cámara de la Etapa 1 (spec director §2.1.5): id ->
+# cómo se escribe el movimiento en el prompt (verbo + velocidad + punto final,
+# como piden las guías de cámara de Kling y Alibaba). La Etapa 2 lo sustituye
+# por presets_camara.
+CAMARAS = {
+    "estatico": "cámara fija sobre trípode, horizonte nivelado, sin movimiento",
+    "dolly_in": "la cámara avanza en línea recta hacia el sujeto, despacio y a velocidad constante, sin zoom",
+    "dolly_out": "la cámara retrocede en línea recta alejándose del sujeto, despacio y a velocidad constante, sin zoom",
+    "paneo_izq": "paneo suave de derecha a izquierda desde un punto fijo, horizonte nivelado",
+    "paneo_der": "paneo suave de izquierda a derecha desde un punto fijo, horizonte nivelado",
+    "tilt_arriba": "la cámara inclina lentamente hacia arriba desde un punto fijo",
+    "tilt_abajo": "la cámara inclina lentamente hacia abajo desde un punto fijo",
+    "travelling_lateral": "la cámara se desplaza de lado acompañando al sujeto, a su misma velocidad",
+    "seguimiento_mano": "cámara en mano que sigue al sujeto con un ligero temblor natural",
+    "orbita_corta": "la cámara rodea al sujeto en un arco corto de menos de 45 grados",
+    "orbita_360": "la cámara da una vuelta completa alrededor del sujeto a velocidad constante",
+    "grua_arriba": "la cámara se eleva verticalmente mientras mantiene al sujeto en cuadro",
+    "cenital": "vista cenital fija, la cámara mira al sujeto desde arriba en vertical",
+    "macro_a_abierto": "empieza en un macro de la textura y se aleja de forma continua hasta un plano abierto",
+    "zoom_in": "zoom óptico lento hacia el sujeto sin mover la cámara",
+    "crash_zoom": "zoom brusco y rápido hacia el sujeto en menos de un segundo",
+    "dolly_zoom": "la cámara retrocede mientras hace zoom hacia el sujeto, el fondo se deforma y el sujeto no",
+    "bullet_time": "el movimiento se congela y la cámara orbita alrededor de la escena detenida",
+    "whip_pan": "paneo rapidísimo con desenfoque de movimiento que corta a la siguiente acción",
+    "pov_objeto": "punto de vista desde el propio objeto, la cámara va pegada a él",
+}
+
+
+def _bloque_planos(planos, con_sonido):
+    """Líneas `Shot N (a-bs): plano, cámara. Acción. Sonido: ...` (el sonido
+    solo cuando la sesión lo pide). Un id de cámara desconocido es un error
+    de programación (el director ya lo validó): se lanza, no se disimula."""
+    lineas = []
+    for p in planos:
+        cam = CAMARAS.get(p.get("camara"))
+        if cam is None:
+            raise ValueError(f"Movimiento de cámara desconocido: {p.get('camara')!r}")
+        accion = str(p.get("accion") or "").strip().rstrip(".")
+        accion = accion[:1].upper() + accion[1:]
+        linea = f"Shot {int(p['n'])} ({int(p['inicio_s'])}-{int(p['fin_s'])}s): {p.get('plano', '').strip()}, {cam}. {accion}."
+        sonido = str(p.get("sonido") or "").strip().rstrip(".")
+        if con_sonido and sonido:
+            linea += f" Sonido: {sonido}."
+        lineas.append(linea)
+    return lineas
+
+
 SIN_VOZ_NI_MUSICA = "Sin diálogo hablado ni música de fondo."
 SONIDO_AMBIENTE = "ambiente natural de la escena"
 
 
-def _linea_sonido(sonido, con_sonido):
+def _linea_sonido(sonido, con_sonido, cierre=None):
     """Línea SONIDO (spec estudio S1). Con texto lo usa tal cual; sin texto y
     con sonido pide el ambiente natural; sin ninguno no emite nada (el prompt
     queda idéntico al de antes). "Sin diálogo" evita las voces nativas de
-    Kling (chino/inglés): la voz en español la pone final edition."""
+    Kling (chino/inglés): la voz en español la pone final edition. `cierre`
+    agrega la frase literal del fabricante (flowplus_modelos.cierre_sonido)
+    al final de la línea."""
     texto = (sonido or "").strip().rstrip(".")
+    sufijo = f" {cierre}" if cierre else ""
     if texto:
-        return f"SONIDO: {texto}. {SIN_VOZ_NI_MUSICA}"
+        return f"SONIDO: {texto}. {SIN_VOZ_NI_MUSICA}{sufijo}"
     if con_sonido:
-        return f"SONIDO: {SONIDO_AMBIENTE}. {SIN_VOZ_NI_MUSICA}"
+        return f"SONIDO: {SONIDO_AMBIENTE}. {SIN_VOZ_NI_MUSICA}{sufijo}"
     return None
 
 
 def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None,
-          contexto=None, sonido=None, con_sonido=False):
+          contexto=None, sonido=None, con_sonido=False, planos=None, cierre_sonido=None):
     """texto: lo que escribió la persona (se respeta íntegro).
     referencias: [{tipo, etiqueta, producto?}] ya numeradas.
     logos: [{etiqueta}] referencias de logo agregadas por el proyecto.
@@ -193,6 +243,10 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     las líneas AUDIENCIA y TEMPORADA. Con None el prompt es idéntico.
     sonido / con_sonido: línea SONIDO después de la ESCENA (ver
     _linea_sonido); con sonido=None y con_sonido=False el prompt es idéntico.
+    planos: lista de planos del director (spec §2); con planos el bloque
+    `Shot N` sustituye a `ESCENA:` y a la línea `SONIDO:`.
+    cierre_sonido: frase literal del fabricante (`flowplus_modelos.cierre_sonido`)
+    que cierra el sonido; None = sin cierre (prompt idéntico al anterior).
     Devuelve el prompt completo (str)."""
     partes = []
     info_enfoque = ENFOQUES.get(enfoque) if enfoque else None
@@ -277,13 +331,16 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     if info_enfoque and info_enfoque["bloque"]:
         partes.append(info_enfoque["bloque"])
 
-    # --- Texto de la persona, íntegro ---
-    partes.append(f"ESCENA: {sustituir_tokens(texto.strip(), referencias)}")
-
-    # --- Sonido de la escena (solo videos con sonido) ---
-    linea_sonido = _linea_sonido(sonido, con_sonido)
-    if linea_sonido:
-        partes.append(linea_sonido)
+    # --- Escena: los planos del director, o el texto de la persona íntegro ---
+    if planos:
+        partes.extend(_bloque_planos(planos, con_sonido))
+        if con_sonido and cierre_sonido:
+            partes.append(cierre_sonido)
+    else:
+        partes.append(f"ESCENA: {sustituir_tokens(texto.strip(), referencias)}")
+        linea_sonido = _linea_sonido(sonido, con_sonido, cierre=cierre_sonido)
+        if linea_sonido:
+            partes.append(linea_sonido)
 
     # --- Prohibiciones (los modelos no aceptan negative_prompt) ---
     prohibido = ["texto inventado", "logos inventados", "marcas de agua", "subtítulos"]
