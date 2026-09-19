@@ -157,6 +157,28 @@ def test_regenerar_pasa_por_el_director(escenario, monkeypatch):
     assert creative_flow.cargar("acme")[nuevo]["estado"] == "prompt_pendiente"
 
 
+def test_encolar_director_deja_la_sesion_en_error_si_la_cola_rechaza(escenario, monkeypatch):
+    """Si `trabajos.encolar` rechaza la tarea (job_id duplicado, lo que no
+    debería pasar con uno recién armado, pero por si acaso), la sesión no se
+    queda colgada en `prompt_pendiente` sin tarea viva ni forma de
+    recuperarse: `encolar_director` la deja en `error` con motivo, así
+    `reintentar` (que exige `estado == "error"`) la puede relanzar con el
+    prompt determinista que ya tiene guardado."""
+    import creative_flow
+    import trabajos
+    from sprints import datos, produccion
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: True)
+    r = produccion.lanzar_lote("acme", escenario["sid"])
+    assert r["encoladas"] == 2
+    cf_video = datos.idea("acme", escenario["iv"])["cf_id"]
+    prompt_previo = creative_flow.cargar("acme")[cf_video]["prompt_relleno"]
+    assert creative_flow.cargar("acme")[cf_video]["estado"] == "prompt_pendiente"   # ya cubierto arriba: reuso de una línea
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: False)
+    assert produccion.encolar_director("acme", cf_video) is False
+    e = creative_flow.cargar("acme")[cf_video]
+    assert e["estado"] == "error" and "encolar" in e["error"] and e["prompt_relleno"] == prompt_previo and prompt_previo
+
+
 def test_reintentar_y_regenerar(escenario, monkeypatch):
     import creative_flow
     import flowplus_lanzar

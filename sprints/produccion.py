@@ -243,14 +243,21 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
 
 def encolar_director(cliente, cf_id, prioridad=PRIORIDAD_LOTE):
     """Compila el prompt por planos y, al terminar, la propia tarea lanza la
-    generación (`auto_lanzar`): el costo del lote ya se aprobó en la ruta."""
+    generación (`auto_lanzar`): el costo del lote ya se aprobó en la ruta.
+    Si la cola rechaza la tarea (no debería: el job_id es nuevo), la sesión
+    queda en `error` con el motivo, así el «Reintentar» de siempre la relanza
+    con el prompt determinista que ya tiene guardado en vez de quedar colgada
+    en prompt_pendiente."""
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente")
-    return trabajos.encolar(
+    ok = trabajos.encolar(
         tareas_director.job_id(cliente, cf_id), "flowplus_director",
         {"cliente": cliente, "cf_id": cf_id, "auto_lanzar": True, "prioridad": int(prioridad)},
         cliente=cliente, duracion_estimada=tareas_director.DURACION_ESTIMADA, etapas=tareas_director.ETAPAS_DIRECTOR,
         max_intentos=2, prioridad=prioridad,
     )
+    if not ok:
+        creative_flow.actualizar(cliente, cf_id, estado="error", error="No se pudo encolar la compilación del prompt.")
+    return ok
 
 
 def _encolar_pieza(cliente, cf_id, entry):
