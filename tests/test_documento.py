@@ -115,3 +115,36 @@ def test_estilo_se_normaliza_con_defaults():
     assert estilo["alineacion"] == "centro"
     assert estilo["peso"] == 700
     assert estilo["color"] == "#FFFFFF"
+
+
+def test_resolver_sustituye_variables_por_idioma():
+    doc = d.validar(cargar("video_basico.json"))
+    res = d.resolver(doc, "en", "US")
+    assert res["pistas"][1]["clips"][0]["texto"] == {"literal": "Your skin, in 7 days"}
+    assert res["subtitulos"]["palabras"] == []
+    assert res["destino"] == {"idioma": "en", "pais": "US", "precio": 24.99}
+
+
+def test_resolver_precio_ausente_es_none_nunca_convertido():
+    doc = d.validar(cargar("video_basico.json"))
+    res = d.resolver(doc, "es", "MX")
+    assert res["destino"]["precio"] is None
+
+
+def test_resolver_falla_si_falta_el_texto_en_ese_idioma():
+    doc = d.validar(cargar("video_basico.json"))
+    with pytest.raises(d.VariableSinValor, match="hook.*pt"):
+        d.resolver(doc, "pt", "BR")
+
+
+def test_resolver_no_toca_el_original():
+    doc = d.validar(cargar("video_basico.json"))
+    d.resolver(doc, "es", "CO")
+    assert doc["pistas"][1]["clips"][0]["texto"] == {"variable": "hook"}
+
+
+def test_migrar_identidad_en_esquema_actual_y_error_en_desconocido():
+    doc = d.validar(cargar("video_basico.json"))
+    assert d.migrar(doc) == doc
+    with pytest.raises(d.DocumentoInvalido, match="esquema"):
+        d.migrar({**doc, "esquema": 99})

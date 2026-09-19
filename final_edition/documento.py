@@ -215,3 +215,41 @@ def nuevo_imagen(formato, idioma_base="es"):
     doc["pistas"] = [{"id": "p_imagen", "tipo": "imagen", "bloqueada": False, "silenciada": False, "oculta": False, "clips": []}]
     doc["paginas"] = [{"id": "pag1"}]
     return doc
+
+
+class VariableSinValor(DocumentoInvalido):
+    """Un texto variable no tiene valor en el idioma pedido."""
+
+
+def resolver(doc, idioma, pais):
+    """Copia del documento con las variables sustituidas para ese destino.
+    El precio es el número escrito para `<idioma>_<pais>` o None: nunca se
+    convierte desde otro país."""
+    res = copy.deepcopy(doc)
+    textos = (res.get("variables") or {}).get("textos") or {}
+    for p in res["pistas"]:
+        if p["tipo"] != "texto":
+            continue
+        for c in p["clips"]:
+            t = c.get("texto") or {}
+            if "variable" in t:
+                rol = t["variable"]
+                valor = (textos.get(rol) or {}).get(idioma)
+                if valor is None:
+                    raise VariableSinValor(f"El texto '{rol}' no tiene valor en {idioma}.")
+                c["texto"] = {"literal": valor}
+    palabras = ((res.get("subtitulos") or {}).get("palabras") or {}).get(idioma) or []
+    res["subtitulos"] = {**res.get("subtitulos", {}), "palabras": list(palabras)}
+    precios = (res.get("variables") or {}).get("precios") or {}
+    precio = precios.get(f"{idioma}_{pais}")
+    res["destino"] = {"idioma": idioma, "pais": pais, "precio": precio}
+    return res
+
+
+def migrar(doc):
+    """Lleva un documento de un esquema anterior al actual. Hoy solo existe
+    el 1; cada esquema nuevo agrega aquí su paso."""
+    esquema = doc.get("esquema")
+    if esquema == ESQUEMA_ACTUAL:
+        return doc
+    _fallar(f"No sé migrar el esquema {esquema!r} (actual: {ESQUEMA_ACTUAL}).")
