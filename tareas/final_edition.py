@@ -17,7 +17,7 @@ import creative_flow
 import final_edition
 import trabajos
 from final_edition import ETAPAS_FINAL
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, ref_sufijo, registrar
 
 
 def job_id_guion(cliente, cf_id):
@@ -42,9 +42,11 @@ def _variante(payload):
 @registrar("final_guion")
 def ejecutar_guion(tarea):
     """Escribe el guion base (capa 0) y lo deja guardado en la sesión. Es
-    idempotente (sobrescribe el guion), así que puede reintentarse."""
+    idempotente por tarea (sobrescribe el guion de LA MISMA tarea si se
+    reintenta), pero cada tarea nueva ("Volver a escribir con IA") deja su
+    propio cobro."""
     p = tarea["payload"]
-    final_edition.preparar_guion(p["cliente"], p["cf_id"], p.get("opciones") or {})
+    final_edition.preparar_guion(p["cliente"], p["cf_id"], p.get("opciones") or {}, ref_sufijo=ref_sufijo(tarea))
     return "Guion listo — revísalo y produce las finales."
 
 
@@ -58,7 +60,7 @@ def ejecutar_producir(tarea):
     job_id = tarea.get("job_id") or job_id_final(cliente, cf_id, idioma, pais, variante=_variante(p))
     _, resumen = final_edition.producir(
         cliente, cf_id, idioma, pais, p.get("opciones") or {},
-        on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre))
+        on_etapa=lambda nombre: trabajos.reportar(job_id, etapa=nombre), ref_sufijo=ref_sufijo(tarea))
     nombre = f"Final {idioma}_{pais}"
     if _variante(p) is not None:
         nombre = f"Variante {_variante(p)} de la final {idioma}_{pais}"

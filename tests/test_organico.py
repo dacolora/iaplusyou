@@ -862,3 +862,26 @@ def test_redactar_registra_el_gasto_solo_cuando_claude_respondio(proyecto, monke
     monkeypatch.setattr(generador_prompts, "caption_organico", explota)
     org.redactar("acme", pid, ["instagram"])
     assert len(gastos.historial("acme")) == 1
+
+
+def test_redactar_registra_el_gasto_si_claude_respondio_con_json_invalido(proyecto, monkeypatch):
+    """M3: Claude SÍ contestó (la llamada ya se cobró) pero el texto no vino
+    en el formato pedido — `caption_organico` lo señala con
+    `RespuestaInvalida` en vez de una excepción cualquiera, y `redactar`
+    igual usa el fallback determinista PERO no pierde el cobro real."""
+    import gastos
+    import generador_prompts
+    org = proyecto["organico"]
+    _producto()
+    pid = _pieza(proyecto["db"])
+
+    def responde_mal(contexto, plataformas):
+        raise generador_prompts.RespuestaInvalida("Claude no devolvió un objeto JSON por plataforma.")
+    monkeypatch.setattr(generador_prompts, "caption_organico", responde_mal)
+
+    out = org.redactar("acme", pid, ["instagram"])
+    assert out["instagram"]["extra"] == {"fallback": True}
+    filas = gastos.historial("acme")
+    assert len(filas) == 1
+    assert filas[0]["tipo"] == "caption_organico" and filas[0]["usd"] == gastos.TARIFAS["caption_organico"]
+    assert filas[0]["proveedor"] == "anthropic"

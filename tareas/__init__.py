@@ -28,6 +28,17 @@ def al_interrumpir(tipo):
     return _dec
 
 
+def ref_sufijo(tarea):
+    """Marcador de intento (`:t<tarea_id>`) para la referencia de un gasto:
+    el id de la fila `tarea` (nuevo por clic, estable en reintentos del
+    mismo intento) — sin él, reproducir una final, un video/imagen o un
+    swap pisaría el cobro real del intento anterior en vez de dejar su
+    propia fila. Las llamadas fuera del worker (tests/scripts, sin
+    `tarea["id"]`) caen a `t0`."""
+    tarea_id = tarea.get("id")
+    return f":t{tarea_id}" if tarea_id is not None else ":t0"
+
+
 def cargar_todas():
     """Importa los módulos con tareas reales. Se llama desde worker.main(), no
     al importar el paquete, para que los tests puedan registrar tareas falsas

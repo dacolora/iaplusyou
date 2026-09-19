@@ -384,20 +384,29 @@ def test_ejecutar_video_registra_el_gasto_real_con_musica(base_temporal, monkeyp
     monkeypatch.setattr(fp.mezcla, "mezclar_musica", _mezclar)
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
 
-    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    fp.ejecutar_video({"id": 1, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     filas = gastos.historial("acme")
     assert len(filas) == 1
     g = filas[0]
-    assert g["referencia"] == f"video:{cid}" and g["tipo"] == "video" and g["proveedor"] == "kling_o3_pro"
+    assert g["referencia"] == f"video:{cid}:t1" and g["tipo"] == "video" and g["proveedor"] == "wavespeed"
     assert g["usd"] == pytest.approx(0.72)
+    assert g["extra"]["modelo"] == "kling_o3_pro"
     assert g["extra"]["usd_modelo"] == pytest.approx(0.7) and g["extra"]["usd_musica"] == 0.02
     assert g["detalle"] == "kling_o3_pro · 5 s + música lujo"
     assert gastos.resumen_mes("acme")["total"] == pytest.approx(0.72)
 
-    # repetir la generación: misma referencia, una sola fila
+    # reintento de LA MISMA tarea (mismo id): misma referencia, una sola fila
     cf.actualizar("acme", cid, estado="video_generando")
-    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    fp.ejecutar_video({"id": 1, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     assert len(gastos.historial("acme")) == 1
+
+    # una tarea NUEVA (otro clic en "Generar" tras un error, id distinto):
+    # deja su propia fila — no pisa el cobro de la tarea anterior.
+    cf.actualizar("acme", cid, estado="video_generando")
+    fp.ejecutar_video({"id": 2, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    filas = gastos.historial("acme")
+    assert {f["referencia"] for f in filas} == {f"video:{cid}:t1", f"video:{cid}:t2"}
+    assert len(filas) == 2
 
 
 def test_ejecutar_video_registra_el_gasto_aunque_falle_la_descarga(base_temporal, monkeypatch, tmp_path):
@@ -415,7 +424,7 @@ def test_ejecutar_video_registra_el_gasto_aunque_falle_la_descarga(base_temporal
     with pytest.raises(RuntimeError):
         fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
     g = gastos.historial("acme")[0]
-    assert g["referencia"] == f"video:{cid}" and g["usd"] > 0
+    assert g["referencia"] == f"video:{cid}:t0" and g["usd"] > 0
     assert "falló al descargar; el modelo ya cobró" in g["detalle"] and "sin sonido" in g["detalle"]
 
     cid2 = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=False, musica_estilo="")
@@ -425,7 +434,7 @@ def test_ejecutar_video_registra_el_gasto_aunque_falle_la_descarga(base_temporal
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _boom)
     with pytest.raises(RuntimeError):
         fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid2}, "job_id": "j2"})
-    assert [f["referencia"] for f in gastos.historial("acme")] == [f"video:{cid}"]
+    assert [f["referencia"] for f in gastos.historial("acme")] == [f"video:{cid}:t0"]
 
 
 def test_ejecutar_video_no_se_cae_si_falla_el_registro_del_gasto(base_temporal, monkeypatch, tmp_path):
@@ -456,8 +465,8 @@ def test_ejecutar_imagen_registra_el_gasto_real(base_temporal, monkeypatch, tmp_
     monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
 
-    fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    fp.ejecutar_imagen({"id": 3, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
     g = gastos.historial("acme")[0]
-    assert g["referencia"] == f"imagen:{cid}" and g["tipo"] == "imagen" and g["usd"] == 0.093
-    assert g["proveedor"] == "seedream_v5_pro" and g["detalle"] == "seedream_v5_pro · 2 referencia(s)"
-    assert g["extra"] == {"usd_modelo": 0.093, "usd_musica": 0.0, "credits": 2}
+    assert g["referencia"] == f"imagen:{cid}:t3" and g["tipo"] == "imagen" and g["usd"] == 0.093
+    assert g["proveedor"] == "wavespeed" and g["detalle"] == "seedream_v5_pro · 2 referencia(s)"
+    assert g["extra"] == {"modelo": "seedream_v5_pro", "usd_modelo": 0.093, "usd_musica": 0.0, "credits": 2}

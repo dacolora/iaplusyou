@@ -214,9 +214,15 @@ def _opciones(opciones):
 
 # ------------------------------------------------------------------- API ---
 
-def preparar_guion(cliente, cf_id, opciones=None):
+def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     """Guion base de la sesión (capa 0). Devuelve `(guion_base, costo_usd)` y
-    lo deja guardado en el concepto (`creative_flow.guardar_guion_base`)."""
+    lo deja guardado en el concepto (`creative_flow.guardar_guion_base`).
+
+    `ref_sufijo` (p. ej. `:t123`, el id de la tarea que paga) va al final de
+    la referencia del gasto para que cada llamada real (una tarea nueva por
+    clic) deje su propia fila — sin él, "Volver a escribir con IA" pisaría
+    el cobro de la escritura anterior. Vacío por defecto: llamadas directas
+    (tests/CLI) siguen siendo idempotentes entre sí, como antes."""
     o = _opciones(opciones)
     entry = _sesion(cliente, cf_id)
     idioma_base = o.get("idioma_base") or "es"
@@ -235,9 +241,11 @@ def preparar_guion(cliente, cf_id, opciones=None):
     guion_base["precio_base"] = o.get("precio")
     creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
     # Cobro real del guion base (Claude + whisper de la referencia si la hubo).
-    # Referencia única por sesión: volver a preparar actualiza, no duplica.
+    # Referencia por sesión + tarea (`ref_sufijo`): dos escrituras de la MISMA
+    # tarea (retries) actualizan la misma fila; una tarea nueva (otro clic en
+    # "Volver a escribir con IA") deja la suya, sin pisar la anterior.
     gastos.registrar_seguro(
-        cliente, "guion", round(costo, 4), f"guion:{cf_id}", proveedor="anthropic",
+        cliente, "guion", round(costo, 4), f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
         detalle=f"guion base {idioma_base}" + (" + transcripción de la referencia" if costo_whisper else ""),
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
     return guion_base, round(costo, 4)
@@ -264,10 +272,16 @@ def _parametro_capa_original(cliente, cf_id, idioma, pais, capa, clave):
     return (((original.get("capas") or {}).get(capa) or {}).get("parametros") or {}).get(clave)
 
 
-def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
+def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_sufijo=""):
     """Produce la pieza final `idioma`/`pais` de la sesión. Devuelve
     `(final_id, resumen)`; `resumen` es el dict de `creative_flow.finales`.
     `on_etapa(nombre)` se llama antes de cada etapa de `ETAPAS_FINAL`.
+
+    `ref_sufijo` (el id de la tarea que paga, p. ej. `:t123`) se agrega a la
+    referencia del gasto (`final:<final_id><ref_sufijo>`) y se pasa también
+    al `preparar_guion` que corre adentro si el guion base todavía no
+    existía: cada producción real (una tarea nueva) deja su propia fila en
+    vez de pisar la de un intento anterior del mismo destino.
 
     Variantes: si `opciones` trae `variante` (int >= 1) y `variante_tipo`
     ("hook" | "estructura"), la pieza sale como `<cf_id>__<idioma>_<pais>__v<n>`
@@ -309,7 +323,7 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         # Guion base (una vez por sesión) — si aún no existe se escribe aquí.
         guion_base = creative_flow.guion_base(cliente, cf_id)
         if not guion_base:
-            guion_base, costo_base = preparar_guion(cliente, cf_id, o)
+            guion_base, costo_base = preparar_guion(cliente, cf_id, o, ref_sufijo=ref_sufijo)
             costo += costo_base
         # Variante: el guion variado reemplaza al base SOLO para esta pieza;
         # `concepto.guion_base` sigue intacto para las demás finales.
@@ -472,7 +486,8 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
     except Exception as e:
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=str(e), capas=capas,
                                        costo_usd=round(costo, 4), guion=guion)
-        _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, fallo=True)
+        _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, fallo=True,
+                               ref_sufijo=ref_sufijo)
         raise
 
     creative_flow.actualizar_final(
@@ -480,15 +495,17 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
         url_miniatura=url_miniatura, url_local=resultado["archivo"],
         duracion_s=float(resultado.get("duracion_s") or duracion_final), capas=capas,
         costo_usd=round(costo, 4), guion=guion, error=None)
-    _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas)
+    _registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
     return final_id, creative_flow.final_por_legado(cliente, final_id)
 
 
-def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=False):
-    """`final:<final_id>`: el total que cobraron las capas (por capa en
-    `extra`). Si la pieza falló solo se registra cuando algo se cobró — con
-    el detalle de qué capa falló y cuáles ya estaban pagadas (p. ej. "falló
-    en render; voz y música cobradas")."""
+def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=False, ref_sufijo=""):
+    """`final:<final_id><ref_sufijo>`: el total que cobraron las capas (por
+    capa en `extra`). Si la pieza falló solo se registra cuando algo se
+    cobró — con el detalle de qué capa falló y cuáles ya estaban pagadas
+    (p. ej. "falló en render; voz y música cobradas"). `ref_sufijo` es el id
+    de la tarea que pagó: sin él, reproducir el mismo destino (un cobro real
+    nuevo, tarea nueva) pisaría el gasto del intento anterior."""
     por_capa = {n: round(float(c.get("costo_usd") or 0.0), 4) for n, c in (capas or {}).items()}
     cobradas = [n for n, v in por_capa.items() if v > 0]
     usd = round(max(0.0, float(usd or 0.0)), 4)
@@ -500,5 +517,5 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
             " y ".join(cobradas) + (" cobradas" if len(cobradas) > 1 else " cobrada") if cobradas else "nada cobrado")
     else:
         detalle = f"{idioma}_{pais} · " + (", ".join(cobradas) if cobradas else "sin cobros (todo cacheado u omitido)")
-    gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}", detalle=detalle, proveedor="fal/anthropic",
-                            extra={"capas": por_capa, "fallo": bool(fallo)})
+    gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}{ref_sufijo}", detalle=detalle,
+                            proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)})

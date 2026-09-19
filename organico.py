@@ -32,6 +32,7 @@ import cola
 import db
 import experimentos
 import gastos
+import generador_prompts
 import meta_conexion
 import publicador
 import tiendas
@@ -501,20 +502,30 @@ def redactar(cliente, pieza_id, plataformas):
         raise ValueError("Elige al menos una plataforma.")
     contexto = contexto_pieza(cliente, pieza_id)
     try:
-        import generador_prompts
         textos = generador_prompts.caption_organico(contexto, plataformas)
         if not isinstance(textos, dict):
             textos = {}
-        # Claude respondió: se cobró la llamada (tarifa fija). La referencia
-        # lleva la hora porque cada "Escribir con IA" es una llamada nueva.
-        gastos.registrar_seguro(
-            cliente, "caption_organico", gastos.TARIFAS["caption_organico"],
-            f"caption_organico:{pieza_id}:{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            proveedor="anthropic", detalle=f"texto para {', '.join(plataformas)} de la pieza {pieza_id}")
+        cobrar = True
+    except generador_prompts.RespuestaInvalida as e:
+        # Claude SÍ contestó (la llamada ya se cobró) pero el JSON no vino
+        # bien: se usa el fallback determinista igual, pero el cobro real
+        # queda registrado — no desaparece solo porque el parseo falló.
+        log.warning("redactar %s/%s: Claude respondió pero el texto vino mal, uso el fallback determinista: %s",
+                    cliente, pieza_id, e, exc_info=True)
+        textos = {}
+        cobrar = True
     except Exception as e:  # noqa: BLE001 — sin Claude igual hay texto (fallback)
         log.warning("redactar %s/%s: Claude falló, uso el fallback determinista: %s",
                     cliente, pieza_id, e, exc_info=True)
         textos = {}
+        cobrar = False
+    if cobrar:
+        # Se cobró la llamada (tarifa fija). La referencia lleva la hora
+        # porque cada "Escribir con IA" es una llamada nueva.
+        gastos.registrar_seguro(
+            cliente, "caption_organico", gastos.TARIFAS["caption_organico"],
+            f"caption_organico:{pieza_id}:{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            proveedor="anthropic", detalle=f"texto para {', '.join(plataformas)} de la pieza {pieza_id}")
     out = {}
     for p in plataformas:
         t = textos.get(p) if isinstance(textos.get(p), dict) else None
