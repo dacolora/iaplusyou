@@ -464,10 +464,14 @@ def test_pedir_publicar_organico_propone_aunque_redactar_falle(org, monkeypatch)
 
 def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
     """`pedir` deja en payload["precio_estimado"] {"usd", "texto"} con
-    gastos.estimar: derivar = n_reediciones × final (todos los países) +
-    n_regeneraciones × (video del modelo/duración de la sesión original +
-    final); rescatar escalón 1 = una re-edición = final de un país."""
+    gastos.estimar: derivar = n_reediciones × final (n_paises × el precio de
+    un país, sin descuento por país extra — I2) + n_regeneraciones × (video
+    + final), valorando CADA regeneración k con el modelo que esa
+    regeneración de verdad usa (`derivaciones.modelo_regeneracion`: nunca el
+    modelo de la sesión original, que las reglas por defecto ni siquiera
+    repiten — I1); rescatar escalón 1 = una re-edición = final de un país."""
     import creative_flow as cf
+    import derivaciones as dv
     import gastos
     import propuestas as pr
     ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
@@ -478,9 +482,13 @@ def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
     assert ac.pedir("acme", eid, "derivar", {"ep_id": ep}, "ganador")[0] == "propuesta"
     prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "derivar"][0]
     precio = prop["payload"]["precio_estimado"]
-    final_2 = gastos.estimar("final", paises=2)["usd"]          # el experimento tiene CO y MX
-    video = gastos.estimar("video", modelo="wan3", duracion=8)["usd"]
-    esperado = round(3 * final_2 + 2 * (video + final_2), 4)   # reglas por defecto: 3 re-ediciones, 2 regeneraciones
+    final_2 = 2 * gastos.estimar("final", paises=1)["usd"]      # el experimento tiene CO y MX
+    # Reglas por defecto: 2 regeneraciones desde "wan3" — la 1.ª va a
+    # "kling_o3_pro" y la 2.ª a "seedance25" (nunca "wan3", el original).
+    modelos_regen = [dv.modelo_regeneracion({"modelo": "wan3"}, k) for k in range(2)]
+    assert modelos_regen == ["kling_o3_pro", "seedance25"]
+    videos = [gastos.estimar("video", modelo=m, duracion=8)["usd"] for m in modelos_regen]
+    esperado = round(3 * final_2 + sum(v + final_2 for v in videos), 4)   # reglas por defecto: 3 re-ediciones, 2 regeneraciones
     assert precio["usd"] == esperado and precio["usd"] > 0
     assert precio["texto"] == f"{gastos.formatear(esperado)} aprox."
 

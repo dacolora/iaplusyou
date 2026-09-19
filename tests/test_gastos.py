@@ -110,8 +110,8 @@ def test_csv_mes_con_bom_punto_y_coma_y_escape_de_formulas(base_temporal):
     lineas = texto.lstrip("﻿").splitlines()
     assert lineas[0] == "fecha;tipo;proveedor;referencia;detalle;usd"
     # csv entrecomilla la celda porque trae comillas; lo importante es el `'` inicial
-    assert lineas[1] == '2026-09-02T10:00:00;video;wavespeed;video:1;"\'=HYPERLINK(""x"")";0.5000'
-    assert lineas[2] == "2026-09-03T10:00:00;guion;;guion:1;'-guion;0.0200"
+    assert lineas[1] == '2026-09-02T10:00:00;video;wavespeed;video:1;"\'=HYPERLINK(""x"")";0,5000'
+    assert lineas[2] == "2026-09-03T10:00:00;guion;;guion:1;'-guion;0,0200"
     assert len(lineas) == 3
 
 
@@ -152,9 +152,9 @@ def test_estimar_tarifas_fijas_y_final_por_pais():
     assert gastos.estimar("regla_producto")["usd"] == 0.01
     assert gastos.estimar("caption_organico")["usd"] == 0.01
     assert gastos.estimar("final")["usd"] == 0.10
-    assert gastos.estimar("final", paises=3)["usd"] == 0.14
-    assert gastos.estimar("reedicion", paises=2)["usd"] == 0.12
-    assert gastos.TARIFAS["final"] == 0.10 and gastos.TARIFAS["final_pais_extra"] == 0.02
+    assert gastos.estimar("final", paises=3)["usd"] == 0.30
+    assert gastos.estimar("reedicion", paises=2)["usd"] == 0.20
+    assert gastos.TARIFAS["final"] == 0.10 and "final_pais_extra" not in gastos.TARIFAS
 
 
 def test_estimar_swap_por_proveedor():

@@ -301,11 +301,15 @@ def _precio_estimado(cliente, ex, accion, payload):
     """{"usd", "texto"} de lo que costaría producir lo que pide `derivar` o
     `rescatar`, con `gastos.estimar` (precio a la vista antes de aprobar):
 
-    - derivar: n_reediciones × final (todos los países del experimento) +
-      n_regeneraciones × (video del modelo y duración de la pieza original
-      + sus finales por país — una regeneración también produce finales).
+    - derivar: n_reediciones × final (un país, multiplicado por país — I2:
+      cada país produce su propia final, no hay descuento por país extra)
+      + n_regeneraciones × (video + final); cada regeneración k (0, 1, …)
+      se valora con el modelo que ESA regeneración va a usar de verdad
+      (`derivaciones.modelo_regeneracion`, el mismo que elige
+      `_item_regeneracion`) — nunca con el modelo de la pieza original, que
+      normalmente ni siquiera es el que se repite (I1).
     - rescatar: por escalón (1 y 2 → una re-edición = final del país de la
-      pieza; 3 → una regeneración = video + final).
+      pieza; 3 → una regeneración, siempre k=0 igual que `_planificar_rescatar`).
 
     Nunca lanza: sin sesión/modelo conocidos el texto es «precio no
     disponible» (`usd` None). No bloquea nada: solo informa."""
@@ -321,12 +325,19 @@ def _precio_estimado(cliente, ex, accion, payload):
             escalon = int(pz.get("escalon_rescate") or 0) + 1
             n_re, n_rg = (1, 0) if escalon in (1, 2) else (0, 1)
             n_paises = 1
-        final = gastos.estimar("final", paises=n_paises)
-        video = gastos.estimar("video", modelo=sesion.get("modelo"), duracion=sesion.get("duracion_objetivo"),
-                               con_sonido=sesion.get("con_sonido", True) is not False) if n_rg else {"usd": 0.0}
-        if final["usd"] is None or video["usd"] is None:
+        final_1 = gastos.estimar("final", paises=1)
+        if final_1["usd"] is None:
             return {"usd": None, "texto": gastos.SIN_PRECIO}
-        usd = n_re * final["usd"] + n_rg * (video["usd"] + final["usd"])
+        final = n_paises * final_1["usd"]
+        usd = n_re * final
+        duracion = sesion.get("duracion_objetivo")
+        con_sonido = sesion.get("con_sonido", True) is not False
+        for k in range(n_rg):
+            modelo = derivaciones.modelo_regeneracion(sesion, k)
+            video = gastos.estimar("video", modelo=modelo, duracion=duracion, con_sonido=con_sonido)
+            if video["usd"] is None:
+                return {"usd": None, "texto": gastos.SIN_PRECIO}
+            usd += video["usd"] + final
         return {"usd": round(usd, 4), "texto": f"{gastos.formatear(usd)} aprox."}
     except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la acción
         return {"usd": None, "texto": gastos.SIN_PRECIO}

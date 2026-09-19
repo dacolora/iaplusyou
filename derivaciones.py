@@ -140,11 +140,22 @@ def _item_reedicion(cf_id, variante, variante_tipo, idiomas):
             "finales": {}, "ep_ids": [], "error": None}
 
 
+def modelo_regeneracion(sesion, k):
+    """Modelo de video que usaría la k-ésima regeneración (k >= 0) de
+    `sesion` (dict con `modelo`, como lo guarda `creative_flow`): el mismo
+    que elige `_item_regeneracion` (`_otro` sobre `flowplus_modelos.VIDEO`,
+    nunca el modelo original). Expuesto para que `acciones._precio_estimado`
+    valore cada regeneración con el modelo que de verdad se va a pagar, en
+    vez del modelo de la pieza original (I1: sin esto el estimado podía
+    quedar 2,5× por debajo del real)."""
+    return _otro(flowplus_modelos.VIDEO, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, k)
+
+
 def _item_regeneracion(cliente, cf_id, k, idiomas):
     """Sesión nueva (k-ésima regeneración, k >= 0) con otro modelo de video y
     otro enfoque que el original; el clon se genera en `avanzar`."""
     sesion = creative_flow.cargar(cliente).get(cf_id) or {}
-    modelo = _otro(flowplus_modelos.VIDEO, sesion.get("modelo") or flowplus_modelos.VIDEO_POR_DEFECTO, k)
+    modelo = modelo_regeneracion(sesion, k)
     enfoque = _otro(ENFOQUES, sesion.get("enfoque") or ENFOQUES[0], k)
     nuevo = creative_flow.duplicar(cliente, cf_id, modelo=modelo, enfoque=enfoque)
     return {"clase": "regeneracion", "variante": None, "variante_tipo": None, "cf_id": nuevo,

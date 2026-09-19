@@ -2705,9 +2705,12 @@ def _chip_gasto_sidebar():
     """El sidebar (base.html) se pinta en toda página con <cliente> en la URL
     — también las de Sprints, que no pasan por ver_cliente. Acá se calcula
     el chip para esas; ver_cliente ya lo trae en su contexto (y lo explícito
-    gana sobre el context processor), así que no se repite el trabajo."""
+    gana sobre el context processor), así que no se repite el trabajo.
+    M1: los parciales JSON (`_respuesta_bandeja` y similares, sin sidebar)
+    no lo necesitan — salir temprano evita recalcular el tablero entero
+    (1 + 5 consultas) solo para un chip que nadie va a ver."""
     cliente = request.view_args.get("cliente") if request.view_args else None
-    if not cliente or request.endpoint == "ver_cliente":
+    if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
         return {}
     try:
         return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(_contexto_tablero(cliente)))}

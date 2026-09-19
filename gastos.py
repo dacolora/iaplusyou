@@ -41,9 +41,12 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #  - fal.ai: ElevenLabs multilingual-v2 ~US$ 0,05 por pieza de 15-20 s de
 #    voz (por carácter); Stable Audio ~US$ 0,02 por pista (cacheada por
 #    estilo+duración, así que suele salir 0); whisper ~US$ 0,01 por clip.
-#  - final = guion localizado + voz + música + whisper ≈ US$ 0,10 por país;
-#    cada país adicional solo repite guion localizado (US$ 0,02) porque la
-#    música se reutiliza y la voz se estima dentro del primero.
+#  - final = guion localizado + voz + música + whisper ≈ US$ 0,10 por país.
+#    `derivaciones._avanzar_finales` encola un `final_producir` POR país
+#    (guion localizado, voz vía fal/ElevenLabs y whisper propios; solo la
+#    música se cachea y a veces sale gratis) — no hay descuento por país
+#    extra: cada país adicional cuesta lo mismo que el primero, no solo el
+#    guion. `estimar("final", paises=n)` es n × esta tarifa.
 TARIFAS = {
     "guion": 0.02,
     "regla_producto": 0.01,
@@ -52,7 +55,6 @@ TARIFAS = {
     "musica": 0.02,
     "whisper": 0.01,
     "final": 0.10,
-    "final_pais_extra": 0.02,
 }
 
 SIN_PRECIO = "precio no disponible"
@@ -139,8 +141,11 @@ def _estimar_swap(proveedor=None, formato="foto", mejorar_calidad=False, duracio
 
 
 def _estimar_final(paises=1, **_):
+    """n × `TARIFAS["final"]`: cada país es su propia tarea `final_producir`
+    con guion localizado, voz y whisper propios (I2) — no hay descuento por
+    país adicional."""
     n = max(1, int(paises or 1))
-    usd = TARIFAS["final"] + TARIFAS["final_pais_extra"] * (n - 1)
+    usd = TARIFAS["final"] * n
     return usd, f"{n} país(es): guion localizado, voz, música y whisper"
 
 
@@ -331,7 +336,8 @@ def _celda(v):
 
 def csv_mes(cliente, ahora_iso=None):
     """CSV (`;`) con una fila por cobro del mes en curso, con BOM para que
-    Excel lo abra en UTF-8. `usd` con punto decimal y 4 decimales."""
+    Excel lo abra en UTF-8. `usd` con coma decimal y 4 decimales (M5: mismo
+    separador que `tablero.csv_mes`, coherente con el `;` de delimitador)."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
@@ -344,5 +350,5 @@ def csv_mes(cliente, ahora_iso=None):
         for r in con.execute(q):
             f = _fila(r)
             w.writerow([_celda(f["creado_en"]), _celda(f["tipo"]), _celda(f.get("proveedor")),
-                        _celda(f["referencia"]), _celda(f.get("detalle")), f"{f['usd']:.4f}"])
+                        _celda(f["referencia"]), _celda(f.get("detalle")), f"{f['usd']:.4f}".replace(".", ",")])
     return "﻿" + buf.getvalue()

@@ -275,7 +275,7 @@ def test_gasto_csv(app, monkeypatch):
     assert texto.startswith("﻿")
     lineas = texto.lstrip("﻿").splitlines()
     assert lineas[0] == "fecha;tipo;proveedor;referencia;detalle;usd"
-    assert lineas[1] == "2026-09-10T09:00:00;video;wavespeed;video:cf_1;wan3 · 8 s;0.8500"
+    assert lineas[1] == "2026-09-10T09:00:00;video;wavespeed;video:cf_1;wan3 · 8 s;0,8500"
     assert len(lineas) == 4 and "del mes pasado" not in texto and "cf_ajeno" not in texto
 
 

@@ -102,6 +102,9 @@
 </table>
 {% endif %}
 
+{# M6: el límite de 200 es fijo (sin paginación real); el scroll + la nota
+   de abajo alcanzan para el brief de hoy, pero si el volumen de cobros
+   crece, una Task futura debería paginar de verdad en vez de solo recortar. #}
 <h3 style="margin-top:1.2rem;">Historial</h3>
 {% if gastos_historial %}
 <div class="gasto-historial">
