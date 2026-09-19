@@ -835,3 +835,53 @@ def test_ganadoras_sin_publicar(proyecto):
     ex.actualizar("acme", eid, estado="cerrado")
     assert org.ganadoras_sin_publicar("acme") == []
     assert org.ganadoras_sin_publicar("otro") == []
+
+
+# ---------- gasto real (caption_organico:<pieza_id>:<fecha_hora>) ----------
+
+def test_redactar_registra_el_gasto_solo_cuando_claude_respondio(proyecto, monkeypatch):
+    import re
+    import gastos
+    import generador_prompts
+    org = proyecto["organico"]
+    _producto()
+    pid = _pieza(proyecto["db"])
+    monkeypatch.setattr(generador_prompts, "caption_organico",
+                        lambda contexto, plataformas: {p: {"titulo": "T", "caption": "Hola #pantufla"} for p in plataformas})
+    org.redactar("acme", pid, ["instagram", "facebook"])
+    filas = gastos.historial("acme")
+    assert len(filas) == 1
+    g = filas[0]
+    assert g["tipo"] == "caption_organico" and g["usd"] == gastos.TARIFAS["caption_organico"] == 0.01
+    assert re.fullmatch(rf"caption_organico:{pid}:\d{{14}}", g["referencia"])
+    assert g["proveedor"] == "anthropic" and "instagram, facebook" in g["detalle"]
+
+    # el fallback (Claude falló) no cobra
+    def explota(contexto, plataformas):
+        raise RuntimeError("Falta ANTHROPIC_API_KEY")
+    monkeypatch.setattr(generador_prompts, "caption_organico", explota)
+    org.redactar("acme", pid, ["instagram"])
+    assert len(gastos.historial("acme")) == 1
+
+
+def test_redactar_registra_el_gasto_si_claude_respondio_con_json_invalido(proyecto, monkeypatch):
+    """M3: Claude SÍ contestó (la llamada ya se cobró) pero el texto no vino
+    en el formato pedido — `caption_organico` lo señala con
+    `RespuestaInvalida` en vez de una excepción cualquiera, y `redactar`
+    igual usa el fallback determinista PERO no pierde el cobro real."""
+    import gastos
+    import generador_prompts
+    org = proyecto["organico"]
+    _producto()
+    pid = _pieza(proyecto["db"])
+
+    def responde_mal(contexto, plataformas):
+        raise generador_prompts.RespuestaInvalida("Claude no devolvió un objeto JSON por plataforma.")
+    monkeypatch.setattr(generador_prompts, "caption_organico", responde_mal)
+
+    out = org.redactar("acme", pid, ["instagram"])
+    assert out["instagram"]["extra"] == {"fallback": True}
+    filas = gastos.historial("acme")
+    assert len(filas) == 1
+    assert filas[0]["tipo"] == "caption_organico" and filas[0]["usd"] == gastos.TARIFAS["caption_organico"]
+    assert filas[0]["proveedor"] == "anthropic"

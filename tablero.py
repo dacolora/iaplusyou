@@ -540,12 +540,13 @@ def alertas(cliente, ahora_iso=None, datos=None):
 # ---------- CSV ----------
 
 def _num(v):
-    """Número para CSV: entero sin decimales, flotante con punto y hasta 2
-    decimales, nunca separador de miles."""
+    """Número para CSV: entero sin decimales, flotante con coma decimal y
+    hasta 2 decimales (M5: mismo separador que espera Excel es-CO con `;`
+    de delimitador, igual que `gastos.csv_mes`), nunca separador de miles."""
     v = float(v or 0)
     if v == int(v):
         return str(int(v))
-    return f"{v:.2f}"
+    return f"{v:.2f}".replace(".", ",")
 
 
 _INICIOS_FORMULA = ("=", "+", "-", "@", "\t", "\r")

@@ -350,8 +350,10 @@ def test_ver_cliente_pasa_contexto_fe(base_temporal, monkeypatch):
 def _entorno_plantilla():
     import jinja2
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    import gastos
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")))
     env.globals["url_for"] = lambda *a, **k: "#"
+    env.filters["usd"] = gastos.formatear   # mismo filtro que registra dashboard (costos «US$ 0,07»)
     return env
 
 

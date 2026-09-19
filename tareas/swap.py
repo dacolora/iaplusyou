@@ -19,6 +19,7 @@ import requests
 
 import bitacora
 import catalogo_productos
+import gastos
 import generador_prompts
 import marca as marca_mod
 import prompt_swap
@@ -28,7 +29,7 @@ from providers import aspect_ratio as aspect_ratio_mod
 from providers import nano_banana_client, kling_o1_client, comparador_modelos, wavespeed_client
 from providers import wavespeed_video_edit, wavespeed_imagen
 from storage import r2_uploader
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, ref_sufijo, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -170,6 +171,12 @@ def ejecutar(tarea):
     tipo = payload["tipo"]
     mejorar_calidad = bool(payload.get("mejorar_calidad"))
     job_id = tarea["job_id"]
+    ref = f"swap:{swap_id}{ref_sufijo(tarea)}"
+    # Distinto de `mejorar_calidad` (lo que se pidió): esto es si el upscale
+    # de verdad corrió y se cobró — si revienta, el swap sale igual sin la
+    # mejora y el detalle del gasto no puede decir "con mejora" de algo que
+    # no se pagó.
+    mejora_ok = False
 
     entry = swaps_mod.cargar(cliente)[swap_id]
     foto_local = entry["foto_original_local"]
@@ -188,6 +195,9 @@ def ejecutar(tarea):
     # Cada etapa se anuncia con trabajos.reportar(job_id, ...) para que la barra
     # deje de ser un número inventado: el usuario ve en qué paso real va.
     avisar_fase = _avisar_fase_de(job_id)
+    # None hasta que el proveedor cobró: si algo falla después, el gasto se
+    # registra igual (el cobro ya ocurrió).
+    costo = None
 
     try:
         # os.makedirs y negative_prompt_efectivo estaban FUERA del try:
@@ -358,6 +368,7 @@ def ejecutar(tarea):
                         "credits": costo.get("credits"),
                         "usd": round((costo.get("usd") or 0) + wavespeed_imagen.COSTO_USD_UPSCALE, 3),
                     }
+                    mejora_ok = True
                 except Exception as e:
                     # La mejora es un extra: si falla, el swap YA está hecho y
                     # se entrega igual. Perder el resultado por el paso opcional
@@ -380,6 +391,7 @@ def ejecutar(tarea):
             credits=costo.get("credits"), usd=costo.get("usd"), error_storage=error_storage,
         )
         bitacora.registrar(cliente, swap_id, "swap", "ok", local_path)
+        _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok)
 
         if url:
             if tipo == "video":
@@ -397,4 +409,20 @@ def ejecutar(tarea):
     except Exception as e:
         swaps_mod.actualizar(cliente, swap_id, estado="error", error=str(e))
         bitacora.registrar(cliente, swap_id, "swap", "error", str(e))
+        if costo is not None:
+            _registrar_gasto(cliente, ref, proveedor, tipo, costo, mejora_ok,
+                             sufijo=" · falló después de generar; el proveedor ya cobró")
         raise
+
+
+def _registrar_gasto(cliente, referencia, proveedor, tipo, costo, mejora_ok, sufijo=""):
+    """`swap:<swap_id><ref_sufijo>` con el `usd` del estimate del proveedor
+    (ya incluye la mejora de calidad si de verdad corrió). Un proveedor sin
+    tarifa (usd None) se registra en 0 con "sin tarifa" para que quede
+    constancia del cobro."""
+    usd = (costo or {}).get("usd")
+    detalle = f"{proveedor} · {'video' if tipo == 'video' else 'foto'}" + (" · con mejora" if mejora_ok else "")
+    if usd is None:
+        detalle += " · sin tarifa"
+    gastos.registrar_seguro(cliente, "swap", usd, referencia, detalle=detalle + sufijo, proveedor=proveedor,
+                            extra={"credits": (costo or {}).get("credits"), "sin_tarifa": usd is None})

@@ -16,11 +16,12 @@ import requests
 import bitacora
 import creative_flow
 import estado as estado_mod
+import gastos
 import trabajos
 from final_edition import cortes, mezcla, musica
 from providers import flowplus_modelos
 from storage import r2_uploader
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, ref_sufijo, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -61,6 +62,28 @@ _FASES_TERMINALES = ("COMPLETED", "completed", "succeeded", "success", "done")
 
 def _job_id(cliente, cf_id):
     return f"{cliente}__{cf_id}__creative_flow"
+
+
+# Todos los modelos de FlowPlus (video e imagen) van vía WaveSpeed
+# (providers/flowplus_modelos.py) — un solo proveedor real. El `proveedor`
+# de `gasto` guarda eso (agrupable en Task 3, igual que "anthropic" o
+# "fal/anthropic" en los demás tipos); el modelo elegido ("wan3",
+# "kling_o3_pro", ...) va en `extra.modelo`.
+PROVEEDOR = "wavespeed"
+
+
+def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musica=0.0):
+    """Anota el cobro real de la sesión (`video:<cf_id><ref_sufijo>` /
+    `imagen:<cf_id><ref_sufijo>`): el `usd` del estimate del modelo más la
+    música de fal si la hubo. Nunca lanza (gastos.registrar_seguro): el
+    gasto es un registro, no la pieza."""
+    usd_modelo = float((costo or {}).get("usd") or 0.0)
+    gastos.registrar_seguro(
+        cliente, tipo, round(usd_modelo + float(usd_musica or 0.0), 4), referencia, detalle=detalle,
+        proveedor=PROVEEDOR,
+        extra={"modelo": modelo, "usd_modelo": round(usd_modelo, 4), "usd_musica": round(float(usd_musica or 0.0), 4),
+               "credits": (costo or {}).get("credits")},
+    )
 
 
 @al_interrumpir("flowplus_video")
@@ -152,12 +175,14 @@ def _preparar(cliente, cf_id):
 def ejecutar_imagen(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
+    ref = f"imagen:{cf_id}{ref_sufijo(tarea)}"
     entry, referencias, _, _, prompt_texto, _, aspect_ratio, modelo = _preparar(cliente, cf_id)
 
     out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.png")
     avisar_fase = _avisar_fase_de(job_id)
+    costo = None
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
         url_prov = flowplus_modelos.generar_imagen(modelo, prompt_texto, referencias, on_progreso=avisar_fase,
@@ -172,7 +197,12 @@ def ejecutar_imagen(tarea):
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+        if costo is not None:
+            # El modelo ya cobró aunque la descarga fallara: queda registrado.
+            _registrar_gasto(cliente, "imagen", costo, ref, modelo,
+                             f"{modelo} · {len(referencias)} referencia(s) · falló al descargar; el modelo ya cobró")
         raise
+    _registrar_gasto(cliente, "imagen", costo, ref, modelo, f"{modelo} · {len(referencias)} referencia(s)")
     trabajos.reportar(job_id, etapa=ETAPA_GUARDAR_VIDEO)
     try:
         imagen_url = r2_uploader.upload_image(out_path, f"clientes/{cliente}/flowplus/{cf_id}.png")
@@ -189,6 +219,7 @@ def ejecutar_imagen(tarea):
 def ejecutar_video(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
+    ref = f"video:{cf_id}{ref_sufijo(tarea)}"
     entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo = _preparar(cliente, cf_id)
     # Sonido de la escena (spec estudio S1): lo decide la sesión; las sesiones
     # anteriores a este campo (y las de sprints viejos) lo piden.
@@ -201,6 +232,8 @@ def ejecutar_video(tarea):
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
     avisar_fase = _avisar_fase_de(job_id)
+    costo = None
+    detalle_gasto = f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido")
 
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
@@ -220,6 +253,10 @@ def ejecutar_video(tarea):
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         creative_flow.actualizar(cliente, cf_id, estado="error", error=str(e))
+        if costo is not None:
+            # El modelo ya cobró aunque la descarga fallara: queda registrado.
+            _registrar_gasto(cliente, "video", costo, ref, modelo,
+                             detalle_gasto + " · falló al descargar; el modelo ya cobró")
         raise
 
     # --- Mezcla: ¿trajo sonido? ¿pidió música? (degradable: el video ya está pagado) ---
@@ -275,6 +312,11 @@ def ejecutar_video(tarea):
         credits=costo.get("credits"), usd=round(float(costo.get("usd") or 0.0) + usd_musica, 4),
         capas=capas,
     )
+    if estilo_musica:
+        estado_musica = (capas.get("musica") or {}).get("estado")
+        detalle_gasto += f" + música {estilo_musica}" + (" (falló la mezcla; la pista ya se cobró)"
+                                                          if estado_musica == "error" else "")
+    _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 
     estado = estado_mod.cargar(cliente)
     estado[cf_id] = {

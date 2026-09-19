@@ -308,6 +308,24 @@ publicacion = Table("publicacion", metadata,
              sqlite_where=sa.text("estado IN ('en_cola','publicando','publicada')")),
 )
 
+# --- Gasto real por proyecto (docs/superpowers/plans/2026-09-18-gasto-real-por-proyecto.md) ---
+
+gasto = Table("gasto", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("creado_en", String(19), nullable=False),
+    Column("tipo", String(20), nullable=False),               # video|imagen|swap|guion|final|regla_producto|caption_organico|musica|otro
+    Column("usd", Float, nullable=False, default=0.0),
+    Column("proveedor", String(30)),
+    Column("referencia", String(160), nullable=False),        # f"{tipo}:{id}" — un cobro real, una fila
+    Column("detalle", String(300)),
+    Column("extra", JSON),
+    # Idempotencia de gastos.registrar: la segunda llamada con la misma
+    # referencia actualiza usd/detalle, nunca duplica (migración 0010).
+    sa.UniqueConstraint("cliente", "referencia", name="uq_gasto_referencia"),
+    sa.Index("ix_gasto_cliente_creado", "cliente", "creado_en"),
+)
+
 kv = Table("kv", metadata,
     Column("clave", String(120), primary_key=True),
     Column("valor", Text),

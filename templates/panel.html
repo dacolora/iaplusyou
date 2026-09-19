@@ -22,6 +22,12 @@
       <span class="stat-num">{{ totales.publicado }}</span>
       <span class="stat-label">publicados</span>
     </div>
+    {% if totales.gasto_mes is not none %}
+    <div class="stat">
+      <span class="stat-num">{{ totales.gasto_mes | usd }}</span>
+      <span class="stat-label">generación este mes</span>
+    </div>
+    {% endif %}
   </div>
   {% endif %}
 </section>
@@ -44,6 +50,12 @@
         {% if c.pendiente %}<span class="badge pendiente">{{ c.pendiente }} por revisar</span>{% endif %}
         <span class="badge publicado">{{ c.publicado }} publicado{{ 's' if c.publicado != 1 }}</span>
         {% if c.rechazado %}<span class="badge rechazado">{{ c.rechazado }} rechazado{{ 's' if c.rechazado != 1 }}</span>{% endif %}
+      </div>
+      {# Gasto real de generación del mes (tabla `gasto`, en USD) — la pauta
+         de Meta va aparte, en cada proyecto. #}
+      <div class="card-cliente-gasto" title="Gasto del mes (US$): lo pagado a los proveedores de generación este mes">
+        <span>Gasto del mes (US$)</span>
+        <strong>{{ c.gasto_mes | usd }}</strong>
       </div>
     </div>
   </a>

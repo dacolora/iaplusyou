@@ -139,6 +139,12 @@ con el paso a paso para conseguir la llave, qué cuesta y si está puesta en el 
 después el paso a paso para conectar Shopify, WooCommerce y MercadoLibre. Las reglas del
 decisor se editan en Experimentos › "Reglas del motor".
 
+**Precios a la vista** (sin créditos): cada botón que gasta muestra "≈ US$" antes de
+lanzar, cada pieza/final muestra lo que costó, y Configuración › **Gasto** tiene el total del
+mes por tipo, el historial y un CSV. Son los precios reales de los proveedores (Higgsfield,
+fal.ai, Anthropic); la pauta de Meta se cobra en la cuenta publicitaria del cliente y se
+muestra aparte, en su moneda.
+
 ---
 
 ## 1. Cloudflare R2 — storage propio y permanente

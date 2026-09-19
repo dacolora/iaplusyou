@@ -83,6 +83,25 @@ def test_importar_lista_crea_producto_y_activo_con_fotos_y_regla(entorno):
     assert not os.path.exists(os.path.join(os.path.dirname(FIXTURES), "..", "clientes", "acme", "productos", "cojin_azul"))
 
 
+def test_importar_registra_el_gasto_de_la_regla_solo_si_claude_respondio(entorno, monkeypatch):
+    """`regla_producto:<producto_id>` con la tarifa fija cuando hubo regla;
+    una regla vacía (fallback de regla_fidelidad, sin cobro) no registra."""
+    import gastos
+    import importador
+    import tiendas
+    importador.importar_lista("acme", "shopify", [_prod()])
+    prod = tiendas.productos("acme")[0]
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == f"regla_producto:{prod['id']}" and g["tipo"] == "regla_producto"
+    assert g["usd"] == gastos.TARIFAS["regla_producto"] == 0.01 and g["proveedor"] == "anthropic"
+    assert "Cojín Azul" in g["detalle"]
+    assert len(gastos.historial("acme")) == 1
+
+    monkeypatch.setattr(importador.generador_prompts, "regla_fidelidad", lambda *a: "")
+    importador.importar_lista("acme", "shopify", [_prod(nombre="Manta Gris", fuente_id="p2")])
+    assert len(gastos.historial("acme")) == 1
+
+
 def test_segunda_importacion_no_redescarga_ni_pisa_regla_editada(entorno):
     import catalogo_productos
     import importador

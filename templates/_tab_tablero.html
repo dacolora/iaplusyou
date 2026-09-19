@@ -18,6 +18,15 @@
 {# ---------- tiles ---------- #}
 {% if tb.resumen is none %}
 <p class="tag-error">No se pudo calcular el resumen del mes. El resto del tablero sigue abajo.</p>
+{# M2: el gasto de generación no depende de la pauta/Meta, así que se pinta
+   igual aunque el resumen de pauta haya fallado. #}
+<div class="tb-tiles">
+  <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto">
+    <span>Generación este mes</span>
+    <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores →{% else %}sin generación pagada{% endif %}</small>
+  </a>
+</div>
 {% else %}
 {% set r = tb.resumen %}
 {% set grupos = r.por_moneda if r.por_moneda else {moneda_exp: {"gasto": 0, "compras": 0, "ingresos": 0, "roas": 0}} %}
@@ -51,6 +60,13 @@
     {% endif %}
   </div>
   {% if loop.last %}
+  {# Gasto real de generación (tabla `gasto`, USD): al lado de la pauta, en
+     su propia moneda. Lleva a Configuración › Gasto, donde está el detalle. #}
+  <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto">
+    <span>Generación este mes</span>
+    <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores →{% else %}sin generación pagada{% endif %}</small>
+  </a>
   <div class="kpi-tile">
     <span>Experimentos corriendo</span>
     <strong>{{ r.experimentos_corriendo }}</strong>

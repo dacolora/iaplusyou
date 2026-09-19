@@ -360,6 +360,21 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
 
+**Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): there are no
+credits or balances — the product shows the real provider price. Every paying task registers
+one row per charge through `gastos.registrar_seguro(cliente, tipo, usd, referencia, ...)`
+(never raises), with a reference that includes the task id (`final:<id>:t<tarea_id>`,
+`video:<cf_id>:t<tarea_id>`, …) so re-runs add history instead of overwriting it; the
+reference is unique per cliente, so registering is idempotent. **Any new task that pays a
+provider must call it** where the real figure is known (on failure after paying, register what
+was paid with a detalle). `gastos.estimar(tipo, **params)` gives the "≈ US$" shown next to
+buttons from `gastos.TARIFAS` (video/imagen from `flowplus_modelos`, `final` per country,
+guion, regla_producto, caption_organico) and returns "precio no disponible" rather than
+guessing. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
+shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
+generación · Y pauta" (context processor, template renders only, cached), Configuración ›
+Gasto (by type, history, CSV), Tablero tile, admin panel column.
+
 ## Agent skills
 
 ### Issue tracker

@@ -359,3 +359,114 @@ def test_preparar_recorta_duracion_y_formato_al_modelo(base_temporal, monkeypatc
     cf.actualizar("acme", cid, modelo="wan3", aspect_ratio="4:3")
     _, _, _, duracion, _, _, aspect_ratio, _ = fp._preparar("acme", cid)
     assert (duracion, aspect_ratio) == (30, "4:3")
+
+
+# ---------- gasto real (video:<cf_id> / imagen:<cf_id>) ----------
+
+def test_ejecutar_video_registra_el_gasto_real_con_musica(base_temporal, monkeypatch, tmp_path):
+    """Una sola fila `video:<cf_id>`: el usd del modelo más la música de fal,
+    con el desglose en `extra`. Volver a generar la misma sesión actualiza
+    la fila, no duplica."""
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=True, sonido_texto="", musica_estilo="lujo")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.musica, "obtener_pista",
+                        lambda estilo, segundos, carpeta_cache=None, on_progreso=None:
+                            ({"archivo": "/tmp/p.wav", "url": "https://r2/musica/lujo_15.wav", "estilo": estilo, "generada": True}, 0.02))
+    monkeypatch.setattr(fp.cortes, "duracion", lambda p: 5.0)
+
+    def _mezclar(video_in, pista, salida, duracion_s, volumenes=None):
+        with open(salida, "wb") as f:
+            f.write(b"MEZCLADO")
+        return {"volumenes": {"voz": 1.0, "sonido": 1.0, "musica": 0.45}}
+    monkeypatch.setattr(fp.mezcla, "mezclar_musica", _mezclar)
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+
+    fp.ejecutar_video({"id": 1, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    filas = gastos.historial("acme")
+    assert len(filas) == 1
+    g = filas[0]
+    assert g["referencia"] == f"video:{cid}:t1" and g["tipo"] == "video" and g["proveedor"] == "wavespeed"
+    assert g["usd"] == pytest.approx(0.72)
+    assert g["extra"]["modelo"] == "kling_o3_pro"
+    assert g["extra"]["usd_modelo"] == pytest.approx(0.7) and g["extra"]["usd_musica"] == 0.02
+    assert g["detalle"] == "kling_o3_pro · 5 s + música lujo"
+    assert gastos.resumen_mes("acme")["total"] == pytest.approx(0.72)
+
+    # reintento de LA MISMA tarea (mismo id): misma referencia, una sola fila
+    cf.actualizar("acme", cid, estado="video_generando")
+    fp.ejecutar_video({"id": 1, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    assert len(gastos.historial("acme")) == 1
+
+    # una tarea NUEVA (otro clic en "Generar" tras un error, id distinto):
+    # deja su propia fila — no pisa el cobro de la tarea anterior.
+    cf.actualizar("acme", cid, estado="video_generando")
+    fp.ejecutar_video({"id": 2, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    filas = gastos.historial("acme")
+    assert {f["referencia"] for f in filas} == {f"video:{cid}:t1", f"video:{cid}:t2"}
+    assert len(filas) == 2
+
+
+def test_ejecutar_video_registra_el_gasto_aunque_falle_la_descarga(base_temporal, monkeypatch, tmp_path):
+    """Si el modelo terminó (ya cobró) y la descarga revienta, el gasto queda
+    registrado con el motivo; si el modelo ni arrancó, no hay gasto."""
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=False, musica_estilo="")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+
+    def _get_roto(*a, **k):
+        raise RuntimeError("descarga caída")
+    monkeypatch.setattr(fp.requests, "get", _get_roto)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == f"video:{cid}:t0" and g["usd"] > 0
+    assert "falló al descargar; el modelo ya cobró" in g["detalle"] and "sin sonido" in g["detalle"]
+
+    cid2 = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=False, musica_estilo="")
+
+    def _boom(*a, **k):
+        raise RuntimeError("proveedor caído")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _boom)
+    with pytest.raises(RuntimeError):
+        fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid2}, "job_id": "j2"})
+    assert [f["referencia"] for f in gastos.historial("acme")] == [f"video:{cid}:t0"]
+
+
+def test_ejecutar_video_no_se_cae_si_falla_el_registro_del_gasto(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=False, musica_estilo="")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+
+    def _boom(*a, **k):
+        raise RuntimeError("base bloqueada")
+    monkeypatch.setattr(gastos, "registrar", _boom)
+    msg = fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    assert "listo" in msg and cf.cargar("acme")[cid]["estado"] == "video_listo"
+
+
+def test_ejecutar_imagen_registra_el_gasto_real(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import gastos
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png", "https://x/2.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P")
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", lambda *a, **k: "https://prov/i.png")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": 2, "usd": 0.093})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+
+    fp.ejecutar_imagen({"id": 3, "payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == f"imagen:{cid}:t3" and g["tipo"] == "imagen" and g["usd"] == 0.093
+    assert g["proveedor"] == "wavespeed" and g["detalle"] == "seedream_v5_pro · 2 referencia(s)"
+    assert g["extra"] == {"modelo": "seedream_v5_pro", "usd_modelo": 0.093, "usd_musica": 0.0, "credits": 2}

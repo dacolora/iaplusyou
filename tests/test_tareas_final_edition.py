@@ -25,14 +25,18 @@ def test_final_guion_llama_preparar_guion(monkeypatch):
     import tareas.final_edition as tfe
     llamadas = {}
 
-    def _preparar(cliente, cf_id, opciones=None):
-        llamadas.update(cliente=cliente, cf_id=cf_id, opciones=opciones)
+    def _preparar(cliente, cf_id, opciones=None, ref_sufijo=""):
+        llamadas.update(cliente=cliente, cf_id=cf_id, opciones=opciones, ref_sufijo=ref_sufijo)
         return {"bloques": []}, 0.01
     monkeypatch.setattr(tfe.final_edition, "preparar_guion", _preparar)
-    msg = tfe.ejecutar_guion({"payload": {"cliente": "acme", "cf_id": "cf_1", "opciones": {"precio": 89900.0}},
+    msg = tfe.ejecutar_guion({"id": 7, "payload": {"cliente": "acme", "cf_id": "cf_1", "opciones": {"precio": 89900.0}},
                               "job_id": "acme__cf_1__final_guion"})
-    assert llamadas == {"cliente": "acme", "cf_id": "cf_1", "opciones": {"precio": 89900.0}}
+    assert llamadas == {"cliente": "acme", "cf_id": "cf_1", "opciones": {"precio": 89900.0}, "ref_sufijo": ":t7"}
     assert "Guion listo" in msg
+    # sin "id" (tests/scripts fuera del worker): cae a t0, no revienta.
+    tfe.ejecutar_guion({"payload": {"cliente": "acme", "cf_id": "cf_1", "opciones": {}},
+                        "job_id": "acme__cf_1__final_guion"})
+    assert llamadas["ref_sufijo"] == ":t0"
 
 
 def test_final_producir_devuelve_mensaje_y_reporta_etapas(monkeypatch):
@@ -40,17 +44,18 @@ def test_final_producir_devuelve_mensaje_y_reporta_etapas(monkeypatch):
     llamadas = {}
     reportes = []
 
-    def _producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None):
-        llamadas.update(cliente=cliente, cf_id=cf_id, idioma=idioma, pais=pais, opciones=opciones)
+    def _producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_sufijo=""):
+        llamadas.update(cliente=cliente, cf_id=cf_id, idioma=idioma, pais=pais, opciones=opciones,
+                        ref_sufijo=ref_sufijo)
         on_etapa("Voz")
         return f"{cf_id}__{idioma}_{pais}", {"estado": "listo"}
     monkeypatch.setattr(tfe.final_edition, "producir", _producir)
     monkeypatch.setattr(tfe.trabajos, "reportar", lambda job_id, **kw: reportes.append((job_id, kw)))
-    tarea = {"payload": {"cliente": "acme", "cf_id": "cf_1", "idioma": "es", "pais": "CO",
+    tarea = {"id": 9, "payload": {"cliente": "acme", "cf_id": "cf_1", "idioma": "es", "pais": "CO",
                          "opciones": {"con_voz": True}}, "job_id": "acme__cf_1__es_CO__final"}
     msg = tfe.ejecutar_producir(tarea)
     assert llamadas == {"cliente": "acme", "cf_id": "cf_1", "idioma": "es", "pais": "CO",
-                        "opciones": {"con_voz": True}}
+                        "opciones": {"con_voz": True}, "ref_sufijo": ":t9"}
     assert reportes == [("acme__cf_1__es_CO__final", {"etapa": "Voz"})]
     assert msg == "Final es_CO lista."
 

@@ -67,6 +67,7 @@ import cifrado
 import conectores
 import tiendas
 import tablero
+import gastos
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
@@ -622,6 +623,12 @@ def panel():
     ids = estado_mod.listar_clientes()
     clientes = []
     total_pendiente = total_publicado = total_rechazado = 0
+    # Gasto de generación del mes por proyecto: UNA consulta para todos.
+    try:
+        gasto_por_proyecto = gastos.por_proyecto_mes(ids)
+    except Exception as e:  # noqa: BLE001 — el gasto es informativo: el panel se pinta igual
+        print(f"[aviso] Panel: no pude leer el gasto del mes: {type(e).__name__}")
+        gasto_por_proyecto = {}
     for cid in ids:
         resumen = _resumen_cliente(cid)
         clientes.append({
@@ -631,6 +638,7 @@ def panel():
             "publicado": resumen["publicado"],
             "rechazado": resumen["rechazado"],
             "portada": None,
+            "gasto_mes": gasto_por_proyecto.get(cid),
         })
         total_pendiente += resumen["pendiente"]
         total_publicado += resumen["publicado"]
@@ -641,6 +649,7 @@ def panel():
         "pendiente": total_pendiente,
         "publicado": total_publicado,
         "rechazado": total_rechazado,
+        "gasto_mes": round(sum(gasto_por_proyecto.values()), 4) if gasto_por_proyecto else None,
     }
     return render_template("panel.html", clientes=clientes, totales=totales)
 
@@ -921,6 +930,10 @@ def ver_cliente(cliente):
     canales_org = organico.canales(cliente)
     publicaciones_por_pieza = organico.por_pieza(cliente)
     trabajos_org = _trabajos_organico(cliente, publicaciones_por_pieza)
+    # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
+    # sale la pauta por moneda; la generación viene de la tabla `gasto`.
+    tablero_ctx = _contexto_tablero(cliente)
+    gasto_ctx = _contexto_gasto(cliente, tablero_ctx)
 
     return render_template(
         "cliente.html",
@@ -1006,8 +1019,9 @@ def ver_cliente(cliente):
         tipos_tienda=conectores.TIPOS_API,
         llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app)),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
-        tablero=_contexto_tablero(cliente),
+        tablero=tablero_ctx,
         canales_org=canales_org,
+        **gasto_ctx,
         plataformas_org=organico.PLATAFORMAS,
         publicaciones_por_pieza=publicaciones_por_pieza,
         trabajos_org=trabajos_org,
@@ -2614,6 +2628,115 @@ def tab_descargar_csv(cliente):
         texto = tablero.csv_mes(cliente, ahora)
     resp = Response(texto, content_type="text/csv; charset=utf-8")
     nombre = secure_filename(f"tablero_{cliente}_{ahora[:7]}.csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return resp
+
+
+# ---------- Gasto real (Task 3): precio antes y después ----------
+
+# Rótulos en español de cada `tipo` de la tabla `gasto` (gastos.TIPOS).
+NOMBRES_TIPO_GASTO = {
+    "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
+    "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
+    "musica": "Música", "otro": "Otros",
+}
+
+
+@app.template_filter("usd")
+def _filtro_usd(valor):
+    """«US$ 0,07» (gastos.formatear): coma decimal, dos decimales, «—» si no hay."""
+    return gastos.formatear(valor)
+
+
+def _pauta_mes(tablero_ctx):
+    """[{"moneda", "gasto"}] con la pauta del mes por moneda (solo > 0), del
+    resumen ya calculado por el tablero. Sin resumen (parte rota) → []."""
+    resumen = (tablero_ctx or {}).get("resumen") or {}
+    salida = []
+    for moneda, g in sorted((resumen.get("por_moneda") or {}).items()):
+        gasto = float((g or {}).get("gasto") or 0)
+        if gasto > 0:
+            salida.append({"moneda": moneda, "gasto": gasto})
+    return salida
+
+
+def _precios_pagina():
+    """Estimados fijos para los botones de la página (guion, final por país,
+    regla de producto, texto orgánico). Video/imagen los calcula Crear con
+    las tarifas del modelo elegido (data-usd-* en el formulario)."""
+    return {
+        "guion": gastos.estimar("guion"),
+        "final_por_pais": gastos.estimar("final", paises=1),
+        "regla_producto": gastos.estimar("regla_producto"),
+        "caption_organico": gastos.estimar("caption_organico"),
+    }
+
+
+def _chip_gasto(gasto_mes, pauta_mes):
+    """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
+    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0)."""
+    partes = [f"{gastos.formatear((gasto_mes or {}).get('total') or 0)} generación"]
+    for p in pauta_mes or []:
+        partes.append(f"{tablero.dinero(p['gasto'], p['moneda'])} pauta")
+    return " · ".join(partes)
+
+
+def _contexto_gasto(cliente, tablero_ctx):
+    """gasto_mes (gastos.resumen_mes), pauta_mes (por moneda, del tablero),
+    precios (estimados de los botones), gastos_historial (200 últimos),
+    gastos_por_tipo (tabla) y gasto_chip (sidebar). Cada parte en su
+    try/except: el gasto informa, nunca tumba la página."""
+    try:
+        gasto_mes = gastos.resumen_mes(cliente)
+    except Exception as e:  # noqa: BLE001 — informativo
+        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen del mes: {type(e).__name__}")
+        gasto_mes = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
+    try:
+        historial = gastos.historial(cliente, limite=200)
+    except Exception as e:  # noqa: BLE001 — informativo
+        print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
+        historial = []
+    pauta = _pauta_mes(tablero_ctx)
+    por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
+                for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
+    return {
+        "gasto_mes": gasto_mes,
+        "pauta_mes": pauta,
+        "precios": _precios_pagina(),
+        "gastos_historial": historial,
+        "gastos_por_tipo": por_tipo,
+        "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
+        "gasto_chip": _chip_gasto(gasto_mes, pauta),
+    }
+
+
+@app.context_processor
+def _chip_gasto_sidebar():
+    """El sidebar (base.html) se pinta en toda página con <cliente> en la URL
+    — también las de Sprints, que no pasan por ver_cliente. Acá se calcula
+    el chip para esas; ver_cliente ya lo trae en su contexto (y lo explícito
+    gana sobre el context processor), así que no se repite el trabajo.
+    M1: los parciales JSON (`_respuesta_bandeja` y similares, sin sidebar)
+    no lo necesitan — salir temprano evita recalcular el tablero entero
+    (1 + 5 consultas) solo para un chip que nadie va a ver."""
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
+        return {}
+    try:
+        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(_contexto_tablero(cliente)))}
+    except Exception as e:  # noqa: BLE001 — sin chip, pero con página
+        print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
+        return {}
+
+
+@app.route("/cliente/<cliente>/gasto/mes.csv")
+def gasto_csv(cliente):
+    """CSV del gasto de generación del mes en curso (una fila por cobro,
+    `;`, BOM) para abrir en Excel. Mismos headers que tab_descargar_csv."""
+    ahora = db.ahora()
+    texto = gastos.csv_mes(cliente, ahora)
+    resp = Response(texto, content_type="text/csv; charset=utf-8")
+    nombre = secure_filename(f"gasto_{cliente}_{ahora[:7]}.csv")
     resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
     return resp
 

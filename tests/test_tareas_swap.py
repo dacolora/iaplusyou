@@ -156,3 +156,136 @@ def test_ejecutar_foto_nano_banana_con_proveedor_falso(base_temporal, monkeypatc
     assert (tmp_path / "salidas" / "acme" / "swaps" / "swap_x.png").read_bytes() == b"png"
     assert [k for sid, k in actualizaciones if k.get("evaluacion_estado")] == [{"evaluacion_estado": "sin_matriz"}]
     assert [r["etapa"] for r in reportes if "etapa" in r] == [sw.ETAPA_PREPARAR_FOTO, sw.ETAPA_MODELO, sw.ETAPA_GUARDAR]
+
+
+# ---------- gasto real (swap:<swap_id>) ----------
+
+def _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_x"):
+    monkeypatch.setattr(sw, "BASE_DIR", str(tmp_path))
+    foto = tmp_path / "orig.jpg"
+    foto.write_bytes(b"jpg")
+    monkeypatch.setattr(sw.swaps_mod, "cargar", lambda c: {
+        swap_id: {"foto_original_local": str(foto), "aspect_ratio": "9:16", "tipo": "foto"},
+    })
+    monkeypatch.setattr(sw.catalogo_productos, "encontrar",
+                        lambda c, pid: {"id": pid, "tipo": "calzado", "mapa_texto": None,
+                                        "referencias": ["/r/a.jpg"], "descripcion": "zapato"})
+    monkeypatch.setattr(sw.marca_mod, "negative_prompt_efectivo", lambda c: "")
+    monkeypatch.setattr(sw.nano_banana_client, "swap_producto", lambda *a, **k: b"png")
+    monkeypatch.setattr(sw.nano_banana_client, "estimate_image", lambda: {"credits": None, "usd": 0.039})
+    monkeypatch.setattr(sw.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(sw.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(sw.marca_mod, "cargar_root", lambda c: {"invariants": []})
+    monkeypatch.setattr(sw.trabajos, "reportar", lambda job_id, **k: None)
+    return {"cliente": "acme", "swap_id": swap_id, "producto_id": "p1",
+            "proveedor": "nano_banana", "tipo": "foto", "mejorar_calidad": False}
+
+
+def test_ejecutar_registra_el_gasto_real_del_swap(base_temporal, monkeypatch, tmp_path):
+    """`swap:<swap_id>` con el usd del estimate del proveedor; un proveedor
+    sin tarifa queda en 0 con "sin tarifa" (constancia del cobro)."""
+    import gastos
+    import tareas.swap as sw
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path)
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: None)
+
+    sw.ejecutar({"id": 1, "job_id": "acme__swap_x__swap", "payload": payload})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == "swap:swap_x:t1" and g["tipo"] == "swap" and g["usd"] == 0.039
+    assert g["proveedor"] == "nano_banana" and g["detalle"] == "nano_banana · foto"
+    assert g["extra"]["sin_tarifa"] is False
+
+    # reintento de LA MISMA tarea (mismo id): sin tarifa esta vez, 0 con
+    # constancia; misma referencia -> misma fila
+    monkeypatch.setattr(sw.nano_banana_client, "estimate_image", lambda: {"credits": None, "usd": None})
+    sw.ejecutar({"id": 1, "job_id": "acme__swap_x__swap", "payload": payload})
+    filas = gastos.historial("acme")
+    assert len(filas) == 1 and filas[0]["usd"] == 0.0 and "sin tarifa" in filas[0]["detalle"]
+    assert filas[0]["extra"]["sin_tarifa"] is True
+
+    # una tarea NUEVA (otro clic, id distinto) del MISMO swap: fila propia,
+    # no pisa el historial del intento anterior.
+    monkeypatch.setattr(sw.nano_banana_client, "estimate_image", lambda: {"credits": None, "usd": 0.039})
+    sw.ejecutar({"id": 2, "job_id": "acme__swap_x__swap", "payload": payload})
+    filas = gastos.historial("acme")
+    assert {f["referencia"] for f in filas} == {"swap:swap_x:t1", "swap:swap_x:t2"}
+    assert len(filas) == 2
+
+
+def test_ejecutar_registra_el_gasto_si_falla_despues_de_cobrar(base_temporal, monkeypatch, tmp_path):
+    """El proveedor devolvió la imagen (cobró) y guardar el estado explotó:
+    el swap queda en error pero el gasto se anota con el motivo. Si el
+    proveedor falló antes de cobrar, no hay gasto."""
+    import gastos
+    import tareas.swap as sw
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_y")
+
+    def _actualizar(c, sid, **k):
+        if k.get("estado") == "listo":
+            raise RuntimeError("disco lleno")
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", _actualizar)
+    with pytest.raises(RuntimeError, match="disco lleno"):
+        sw.ejecutar({"id": 5, "job_id": "acme__swap_y__swap", "payload": payload})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == "swap:swap_y:t5" and g["usd"] == 0.039
+    assert "el proveedor ya cobró" in g["detalle"]
+
+    def _boom(*a, **k):
+        raise RuntimeError("proveedor caído")
+    monkeypatch.setattr(sw.nano_banana_client, "swap_producto", _boom)
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: None)
+    with pytest.raises(RuntimeError, match="proveedor caído"):
+        sw.ejecutar({"id": 5, "job_id": "acme__swap_y__swap", "payload": payload})
+    # nada nuevo: la fila anterior sigue igual (no se pisa con un cobro que no hubo)
+    filas = gastos.historial("acme")
+    assert len(filas) == 1 and filas[0]["detalle"] == g["detalle"]
+
+
+class _RespMejorada:
+    content = b"mejor.png"
+
+    def raise_for_status(self):
+        pass
+
+
+def test_ejecutar_foto_con_mejora_exitosa_dice_con_mejora(base_temporal, monkeypatch, tmp_path):
+    """M5: "con mejora" en el detalle solo si el upscale de verdad corrió y
+    se cobró (no solo porque se pidió `mejorar_calidad`)."""
+    import gastos
+    import tareas.swap as sw
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_m1")
+    payload["mejorar_calidad"] = True
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: None)
+    monkeypatch.setattr(sw.aspect_ratio_mod, "dimensiones", lambda path: (1024, 1024))
+    monkeypatch.setattr(sw.wavespeed_imagen, "factor_seguro", lambda ancho, alto: 2)
+    monkeypatch.setattr(sw.wavespeed_imagen, "mejorar_calidad",
+                        lambda url, factor=2, on_progreso=None: "https://prov/mejorada.png")
+    monkeypatch.setattr(sw.requests, "get", lambda *a, **k: _RespMejorada())
+
+    sw.ejecutar({"id": 1, "job_id": "acme__swap_m1__swap", "payload": payload})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == "swap:swap_m1:t1"
+    assert "con mejora" in g["detalle"]
+    assert g["usd"] == pytest.approx(0.039 + sw.wavespeed_imagen.COSTO_USD_UPSCALE)
+
+
+def test_ejecutar_foto_con_mejora_fallida_no_dice_con_mejora(base_temporal, monkeypatch, tmp_path):
+    """La mejora es un extra: si Bria revienta, el swap sale igual (sin
+    upscale) y el detalle del gasto no puede anunciar algo que no se pagó."""
+    import gastos
+    import tareas.swap as sw
+    payload = _swap_foto_listo(sw, monkeypatch, tmp_path, swap_id="swap_m2")
+    payload["mejorar_calidad"] = True
+    monkeypatch.setattr(sw.swaps_mod, "actualizar", lambda c, sid, **k: None)
+    monkeypatch.setattr(sw.aspect_ratio_mod, "dimensiones", lambda path: (1024, 1024))
+    monkeypatch.setattr(sw.wavespeed_imagen, "factor_seguro", lambda ancho, alto: 2)
+
+    def _boom(*a, **k):
+        raise RuntimeError("bria caído")
+    monkeypatch.setattr(sw.wavespeed_imagen, "mejorar_calidad", _boom)
+
+    sw.ejecutar({"id": 1, "job_id": "acme__swap_m2__swap", "payload": payload})
+    g = gastos.historial("acme")[0]
+    assert g["referencia"] == "swap:swap_m2:t1"
+    assert "con mejora" not in g["detalle"]
+    assert g["usd"] == pytest.approx(0.039)  # el upscale nunca se cobró
