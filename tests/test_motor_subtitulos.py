@@ -54,3 +54,10 @@ def test_escapa_llaves_y_saltos_en_el_texto(tmp_path):
     ruta = tmp_path / "s.ass"
     s.escribir_ass(ass, str(ruta))
     assert ruta.read_text(encoding="utf-8").startswith("[Script Info]")
+
+
+def test_color_secundario_del_karaoke_es_naranja_en_bgr():
+    # ASS es &HAABBGGRR&: el naranja RGB (237,174,124) se escribe 7CAEED.
+    ass = s.generar_ass({"estilo_id": "karaoke", "posicion": 0.78, "palabras": PAL[:1]}, "9:16")
+    assert "&H007CAEED&" in ass
+    assert "&H00EDAE7C&" not in ass

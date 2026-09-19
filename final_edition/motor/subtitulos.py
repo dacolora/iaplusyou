@@ -14,10 +14,11 @@ HUECO_MAX_MS = 600
 
 # Fuente, tamaño (px sobre PlayResY 1920; libass escala con PlayRes), colores
 # ASS en &HAABBGGRR&, contorno, sombra, BorderStyle (1 = contorno, 3 = caja).
+# Naranja de resaltado RGB (237,174,124) → BGR 7CAEED.
 _ESTILOS = {
-    "karaoke":        {"tam": 64, "primario": "&H00FFFFFF&", "secundario": "&H00EDAE7C&", "contorno": "&H00000000&", "fondo": "&H99000000&", "borde": 3, "grosor": 0, "sombra": 0, "negrita": -1},
+    "karaoke":        {"tam": 64, "primario": "&H00FFFFFF&", "secundario": "&H007CAEED&", "contorno": "&H00000000&", "fondo": "&H99000000&", "borde": 3, "grosor": 0, "sombra": 0, "negrita": -1},
     "caja":           {"tam": 60, "primario": "&H00FFFFFF&", "secundario": "&H00FFFFFF&", "contorno": "&H00000000&", "fondo": "&HB3000000&", "borde": 3, "grosor": 0, "sombra": 0, "negrita": -1},
-    "palabra_grande": {"tam": 96, "primario": "&H00FFFFFF&", "secundario": "&H00EDAE7C&", "contorno": "&H00000000&", "fondo": "&H00000000&", "borde": 1, "grosor": 4, "sombra": 2, "negrita": -1},
+    "palabra_grande": {"tam": 96, "primario": "&H00FFFFFF&", "secundario": "&H007CAEED&", "contorno": "&H00000000&", "fondo": "&H00000000&", "borde": 1, "grosor": 4, "sombra": 2, "negrita": -1},
     "minimal":        {"tam": 52, "primario": "&H00FFFFFF&", "secundario": "&H00FFFFFF&", "contorno": "&H00000000&", "fondo": "&H00000000&", "borde": 1, "grosor": 2, "sombra": 0, "negrita": 0},
 }
 
