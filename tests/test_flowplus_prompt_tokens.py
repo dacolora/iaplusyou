@@ -28,11 +28,26 @@ def test_otros_modelos_cuentan_el_fotograma_del_video_como_imagen():
 
 def test_sustituir_tokens_en_el_texto_de_la_persona():
     refs = flowplus_prompt.asignar_tokens(_refs(), "wan3")
-    texto = "@Imagen 1 es el producto; Ana (@Imagen 2) lo toma como en @Video 1, con @Logo 1 al fondo"
+    texto = "@Imagen 1 es el producto; Ana lo toma como en @Video 1, con @Logo 1 al fondo"
     assert flowplus_prompt.sustituir_tokens(texto, refs) == \
-        "Image 1 es el producto; Ana (Image 2) lo toma como en Video 1, con Image 4 al fondo"
+        "Image 1 es el producto; Ana lo toma como en Video 1, con Image 4 al fondo"
     # menciones que no existen se dejan tal cual (no se inventan referencias)
     assert flowplus_prompt.sustituir_tokens("@Imagen 9 gira", refs) == "@Imagen 9 gira"
+    # un activo del catálogo (etiqueta "Personaje 1") nunca se mostró como @Imagen N en la UI: esa mención no le pertenece
+    assert flowplus_prompt.sustituir_tokens("@Imagen 2 sonríe", refs) == "@Imagen 2 sonríe"
+
+
+def test_sustituir_tokens_respeta_la_etiqueta_no_el_orden_en_sprints():
+    """En Sprints el producto del catálogo va primero en `referencias` pero se
+    menciona `@Producto 1`; la imagen de campaña que sigue es `@Imagen 1`. Si
+    se numerara por posición dentro de `referencias` en vez de por etiqueta,
+    `@Imagen 1` apuntaría al producto en lugar de a la imagen de campaña."""
+    refs = [
+        {"tipo": "imagen", "etiqueta": "@Producto 1", "categoria": "producto", "activo": "Espejo", "producto": "Espejo"},
+        {"tipo": "imagen", "etiqueta": "@Imagen 1"},
+    ]
+    flowplus_prompt.asignar_tokens(refs, "wan3")
+    assert flowplus_prompt.sustituir_tokens("@Imagen 1 al fondo", refs) == "Image 2 al fondo"
 
 
 def test_armar_usa_los_tokens_en_activos_logos_y_videos():

@@ -51,28 +51,20 @@ def asignar_tokens(referencias, modelo_id):
 
 def sustituir_tokens(texto, referencias):
     """Cambia las menciones `@Imagen N` / `@Video N` / `@Logo N` que escribió
-    la persona —numeradas por orden de subida dentro de cada tipo, igual que
-    se le mostraron al escribir el texto, sin importar si esa referencia es
-    también un activo del catálogo con su propia etiqueta— por el token final
-    que le tocó en `asignar_tokens`. Una mención sin referencia correspondiente
-    se deja tal cual: no se inventan imágenes que el modelo no va a recibir."""
-    n_img = n_vid = n_logo = 0
-    por_mencion = {}
-    for r in referencias:
-        if r.get("logo"):
-            n_logo += 1
-            clave = f"@Logo {n_logo}"
-        elif r.get("tipo") == "video":
-            n_vid += 1
-            clave = f"@Video {n_vid}"
-        else:
-            n_img += 1
-            clave = f"@Imagen {n_img}"
-        if r.get("token"):
-            por_mencion[clave] = r["token"]
+    la persona por el token final de esa referencia. Mapea por la `etiqueta`
+    visible — el chip que la persona (o "Describir con IA") vio y usó para
+    mencionarla —, no por su posición: en Sprints el producto del catálogo va
+    primero en `referencias` pero se menciona `@Producto 1`, y las imágenes de
+    campaña que vienen después son `@Imagen 1..`; numerar por posición
+    correría esos números y apuntaría al producto. Un activo del catálogo con
+    una etiqueta propia (p. ej. "Personaje 1") nunca es `@Imagen N` en la UI,
+    así que esa mención no existe para él. Una mención sin referencia
+    correspondiente se deja tal cual: no se inventan imágenes que el modelo no
+    va a recibir."""
+    por_etiqueta = {r.get("etiqueta"): r.get("token") for r in referencias if r.get("token")}
 
     def _cambiar(m):
-        return por_mencion.get(m.group(0), m.group(0))
+        return por_etiqueta.get(m.group(0), m.group(0))
 
     return _MENCION.sub(_cambiar, texto or "")
 
