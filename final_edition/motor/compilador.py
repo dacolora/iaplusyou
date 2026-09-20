@@ -17,7 +17,14 @@ transición).
 
 Keyframes: solo x/y se interpretan aquí (expresiones lineales por tramos en
 t); escala, opacidad y rotación por keyframe quedan para cuando las
-animaciones predefinidas lleguen con alfa en PNG."""
+animaciones predefinidas lleguen con alfa en PNG.
+
+Audio por tramo: la presencia de audio es una decisión de TODO el documento,
+no de la ventana — si el documento tiene algún clip de audio activo pero esta
+ventana no tiene ninguno (p. ej. la voz termina antes de este tramo),
+`compilar` rellena con `anullsrc` en vez de dejar el tramo sin stream de
+audio, porque `concat -c copy` (el renderer) no tolera streams heterogéneos
+entre segmentos y cortaría el audio del video entero en esa frontera."""
 from dataclasses import dataclass, field
 
 from final_edition import geometria, mezcla
@@ -235,6 +242,9 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
     partes.append(f"{actual}format=yuv420p[vout]")
 
     # ---- audio ------------------------------------------------------------
+    # Presencia de audio: decisión de TODO el documento (no de la ventana) —
+    # ver el `elif hay_audio_doc` más abajo y el docstring del módulo.
+    hay_audio_doc = any(clip for p in doc["pistas"] if p["tipo"] == "audio" and not p.get("silenciada") and not p.get("oculta") for clip in p.get("clips") or [])
     # Primera pasada: agrupar los clips de audio por rol_audio, en orden de
     # pista/clip (así se decide, ya con el conteo real por rol, si el rol usa
     # su etiqueta simple `[au_<rol>]` o si varios clips necesitan mezclarse).
@@ -303,6 +313,13 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
     audio = mezcla.filtro_mezcla(voz=voz, sonido=sonido, musica=musica, volumenes=vol)
     if audio:
         partes.append(audio)
+        plan.salida_audio = True
+    elif hay_audio_doc:
+        # Esta ventana no tiene ningún clip de audio activo aunque el
+        # documento sí tiene audio en general: sin esto el tramo saldría sin
+        # stream de audio y rompería la concatenación (ver docstring).
+        # anullsrc no necesita entrada; `-t` en `ejecutar` la acota.
+        partes.append("anullsrc=r=48000:cl=stereo[aout]")
         plan.salida_audio = True
     plan.filtergraph = ";".join(partes)
     return plan

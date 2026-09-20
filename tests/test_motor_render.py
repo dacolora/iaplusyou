@@ -73,9 +73,42 @@ def test_render_por_tramos_concatena_sin_recodificar(tmp_path, medios, monkeypat
     monkeypatch.setattr(tramos, "partir", lambda doc, presupuesto=None: [(0, 3500), (3500, 7000)])
     doc = _doc()
     doc["pistas"][0]["clips"][0]["transicion"] = None
+    # La voz y la música terminan con el primer tramo: el segundo no tiene
+    # ningún clip de audio activo, así que ejercita el relleno de silencio
+    # (homogeneidad de streams entre tramos para `concat -c copy`).
+    doc["pistas"][2]["clips"][0]["duracion_ms"] = 3500
+    doc["pistas"][2]["clips"][0]["recorte"]["hasta_ms"] = 3500
+    doc["pistas"][3]["clips"][0]["duracion_ms"] = 3500
+    doc["pistas"][3]["clips"][0]["recorte"]["hasta_ms"] = 3500
     out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
     streams, dur = _streams(out["archivo"])
     assert out["tramos"] == 2 and abs(dur - 7.0) <= 0.3 and "audio" in streams
+    assert abs(float(streams["audio"]["duration"]) - 7.0) <= 0.3
+
+
+def test_fallo_a_mitad_de_tramos_no_deja_parciales(tmp_path, monkeypatch):
+    from final_edition.motor import tramos
+    monkeypatch.setattr(tramos, "partir", lambda doc, presupuesto=None: [(0, 3500), (3500, 7000)])
+
+    llamadas = []
+
+    def _ejecutar_falso(plan, salida, ass_ruta=None, timeout=None):
+        llamadas.append(salida)
+        if len(llamadas) == 1:
+            with open(salida, "w", encoding="utf-8") as f:
+                f.write("x")
+            return salida
+        raise RuntimeError("ffmpeg murió")
+
+    monkeypatch.setattr(r, "ejecutar", _ejecutar_falso)
+    # ejecutar() está mockeado (nunca toca ffmpeg ni disco salvo el archivo
+    # falso de arriba), así que las rutas no necesitan existir de verdad.
+    rutas = {1: "/fake/clon.mp4", 2: "/fake/voz.wav", 3: "/fake/musica.wav", "png:t1": "/fake/t1.png"}
+    salida = str(tmp_path / "f.mp4")
+    with pytest.raises(RuntimeError, match="ffmpeg murió"):
+        motor.renderizar(_doc(), rutas, salida)
+    assert not list(tmp_path.glob("f.mp4.tramo*.mp4"))
+    assert not os.path.exists(salida)
 
 
 @pytest.mark.slow

@@ -154,6 +154,29 @@ def test_fundidos_de_audio_solo_en_bordes_reales():
     assert "afade=t=out" not in plan.filtergraph
 
 
+def test_ventana_sin_clips_de_audio_emite_silencio_si_el_documento_tiene_audio():
+    # La voz y la música terminan con el primer tramo (3500): la ventana
+    # (3500, 7000) no tiene ningún clip de audio activo, pero el documento sí
+    # tiene audio en general — sin relleno, ese tramo saldría sin stream de
+    # audio y `concat -c copy` cortaría el audio del video entero ahí.
+    doc = _doc()
+    doc["pistas"][2]["clips"][0]["duracion_ms"] = 3500
+    doc["pistas"][2]["clips"][0]["recorte"]["hasta_ms"] = 3500
+    doc["pistas"][3]["clips"][0]["duracion_ms"] = 3500
+    doc["pistas"][3]["clips"][0]["recorte"]["hasta_ms"] = 3500
+    plan = c.compilar(doc, RUTAS, ventana=(3500, 7000), con_ass=False)
+    assert "anullsrc=r=48000:cl=stereo[aout]" in plan.filtergraph
+    assert plan.salida_audio is True
+
+
+def test_documento_sin_audio_no_inventa_silencio():
+    doc = _doc()
+    doc["pistas"] = doc["pistas"][:2]  # solo video y texto, sin pistas de audio
+    plan = c.compilar(doc, RUTAS, con_ass=False)
+    assert "anullsrc" not in plan.filtergraph
+    assert plan.salida_audio is False
+
+
 def test_dos_fuentes_en_la_principal_es_error():
     doc = _doc()
     doc["pistas"][0]["clips"][1]["material_id"] = 99

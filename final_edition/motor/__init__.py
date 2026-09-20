@@ -27,17 +27,28 @@ def renderizar(doc, rutas, salida, on_etapa=None, nucleos=1):
         render_mod.ejecutar(plan, salida, ass_ruta=rutas.get("ass"))
     else:
         parciales = []
-        for i, v in enumerate(ventanas):
-            avisar(f"Renderizando tramo {i + 1}/{len(ventanas)}")
-            plan_i = compilador.compilar(doc, rutas, ventana=v, con_ass=con_ass)
-            parcial = f"{salida}.tramo{i}.mp4"
-            # compilador hornea `subtitles='{rutas['ass']}'` igual en todos los tramos (no lo varía por ventana), y cada ejecutar() es síncrono, así que reescribir ese mismo archivo en cada vuelta es seguro.
-            render_mod.ejecutar(plan_i, parcial, ass_ruta=rutas.get("ass"))
-            parciales.append(parcial)
-        avisar("Uniendo tramos")
-        render_mod.concatenar(parciales, salida)
-        for p in parciales:
-            os.remove(p)
+        try:
+            for i, v in enumerate(ventanas):
+                avisar(f"Renderizando tramo {i + 1}/{len(ventanas)}")
+                plan_i = compilador.compilar(doc, rutas, ventana=v, con_ass=con_ass)
+                parcial = f"{salida}.tramo{i}.mp4"
+                # compilador hornea `subtitles='{rutas['ass']}'` igual en todos los tramos (no lo varía por ventana), y cada ejecutar() es síncrono, así que reescribir ese mismo archivo en cada vuelta es seguro.
+                render_mod.ejecutar(plan_i, parcial, ass_ruta=rutas.get("ass"))
+                parciales.append(parcial)
+            avisar("Uniendo tramos")
+            render_mod.concatenar(parciales, salida)
+        finally:
+            # Si un tramo (o la concatenación) falla a mitad de camino, esto
+            # limpia cualquier .mp4 parcial que haya llegado a escribirse —
+            # incluido el del tramo que falló, si ffmpeg alcanzó a crear el
+            # archivo antes de morir — para no dejar basura de un render que
+            # no llegó a completarse. El `.filtergraph.txt` del tramo que
+            # falló NO se toca aquí: `ejecutar` lo conserva a propósito para
+            # depurar.
+            for i in range(len(ventanas)):
+                p = f"{salida}.tramo{i}.mp4"
+                if os.path.exists(p):
+                    os.remove(p)
         plan = compilador.compilar(doc, rutas, con_ass=con_ass)
     dur = render_mod.validar(salida, plan, tolerancia_s=0.3 if len(ventanas) > 1 else 0.2)
     mini = os.path.splitext(salida)[0] + "_miniatura.png"
