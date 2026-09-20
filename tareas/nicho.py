@@ -13,7 +13,10 @@ referencia `avatares:<estudio_id>:<generacion>`; un intento fallido, con lo que
 Claude alcanzó a cobrar). La recolección guarda en lotes de LOTE comentarios
 (idempotente por la unicidad estudio + fuente + fuente_id), anota la
 recolección en `estudio.extra.recolecciones` y, para Apify, el gasto
-(`recoleccion:<estudio_id>:t<tarea>`, resultados × precio del actor, aprox.).
+(`recoleccion:<estudio_id>:t<tarea>`, ítems crudos del dataset × precio del
+actor, aprox.). Cuando la fuente dejó un id de corrida, ese id viaja en el
+registro y en el extra del gasto: un cobro sin resultados tiene que poder
+rastrearse en console.apify.com.
 Nada corre solo: no hay periódicas.
 """
 import logging
@@ -119,8 +122,16 @@ def encolar_recolectar(cliente, estudio_id, fuente, params):
                             max_intentos=1 if de_pago else 2)
 
 
+def _corrida(fuente):
+    """`{"corrida": <id>}` cuando la fuente dejó un id de corrida de Apify (o
+    vacío). Va en el registro de la recolección y en el extra del gasto: sin él
+    un cobro sin resultados no se puede rastrear en console.apify.com."""
+    rid = getattr(fuente, "run_id", None)
+    return {"corrida": rid} if rid else {}
+
+
 def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
-    """Solo Apify: resultados entregados × precio del actor ("aprox.": Apify
+    """Solo Apify: ítems crudos del dataset × precio del actor ("aprox.": Apify
     suma cómputo). Las fuentes gratis no registran nada. Nunca lanza."""
     n = int(getattr(fuente, "resultados", 0) or 0)
     if getattr(fuente, "tipo", "") != "apify" or n <= 0:
@@ -132,7 +143,7 @@ def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
     gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}{ref_sufijo(tarea)}",
                             detalle=f"Apify {actor['nombre']}: {n} resultado(s) aprox." + (f" — {nota}" if nota else ""),
                             proveedor="apify",
-                            extra={"actor": actor["actor"], "resultados": n, "usd_por_resultado": actor["usd_por_resultado"]})
+                            extra={"actor": actor["actor"], "resultados": n, "usd_por_resultado": actor["usd_por_resultado"], **_corrida(fuente)})
 
 
 @registrar("nicho_recolectar")
@@ -173,12 +184,12 @@ def ejecutar_recolectar(tarea):
         except Exception:  # noqa: BLE001 — si la base también falla, manda el error original
             log.exception("No se pudo guardar el lote pendiente de %s", tipo)
         mensaje = cola.recortar(cola.sin_token(e), 300)
-        datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": f"falló: {mensaje}"})
+        datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": f"falló: {mensaje}", **_corrida(fuente)})
         _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota="intento fallido")
         datos.recalcular(cliente, eid)
         raise
     aviso = getattr(fuente, "aviso", "") or ""
-    datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso})
+    datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso, **_corrida(fuente)})
     _gasto_recoleccion(cliente, eid, tarea, fuente, params)
     datos.recalcular(cliente, eid)
     texto = f"{totales['nuevos']} comentario(s) nuevo(s) de {fuentes_registro.NOMBRES.get(tipo, tipo)}; {totales['repetidos']} repetido(s)."

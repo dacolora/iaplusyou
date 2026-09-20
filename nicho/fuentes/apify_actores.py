@@ -14,6 +14,10 @@ que cobran por cómputo no se pueden estimar antes del clic). Verificado
     `maxRepliesPerComment`. Salida `text`, `diggCount`, `createTimeISO`,
     `cid`, `videoWebUrl`.
 
+Los dos topes de entrada (`maxReviews`, `commentsPerPost`) son POR LINK, no
+por corrida: se reparten con `_por_link` para que 4 links no cobren cuatro
+veces el tope aprobado en la puerta.
+
 Si Apify cambia la forma de la entrada, `armar_entrada` de cada actor es el
 único sitio que tocar: un 400 de Apify llega al usuario con su mensaje.
 El estimado es max_resultados × precio (Apify suma cómputo: "aprox.").
@@ -44,8 +48,15 @@ def _fecha_resena(texto):
         return None
 
 
+def _por_link(links, max_resultados):
+    """Reparte el tope aprobado entre los links: el tope de los dos actores es
+    por URL de producto/video, así que mandarlo entero multiplicaría el cobro
+    por la cantidad de links (y el estimado de la puerta sería mentira)."""
+    return max(1, math.ceil(max_resultados / max(1, len(links))))
+
+
 def _entrada_amazon(links, max_resultados):
-    return {"productUrls": [{"url": u} for u in links], "maxReviews": max_resultados, "includeGdprSensitive": False}
+    return {"productUrls": [{"url": u} for u in links], "maxReviews": _por_link(links, max_resultados), "includeGdprSensitive": False}
 
 
 def _item_amazon(item):
@@ -60,8 +71,7 @@ def _item_amazon(item):
 
 
 def _entrada_tiktok(links, max_resultados):
-    por_post = max(1, math.ceil(max_resultados / max(1, len(links))))
-    return {"postURLs": list(links), "commentsPerPost": por_post, "maxRepliesPerComment": 0}
+    return {"postURLs": list(links), "commentsPerPost": _por_link(links, max_resultados), "maxRepliesPerComment": 0}
 
 
 def _item_tiktok(item):

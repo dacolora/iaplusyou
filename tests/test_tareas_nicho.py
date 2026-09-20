@@ -145,20 +145,25 @@ def test_cadena_completa_generar_guardar_y_gasto(base_temporal, monkeypatch):
 
 class _FuenteFalsa:
     """Fuente programable: entrega `programa`, deja `aviso_final`, y si `fallo_en`
-    no es None lanza `fallo_exc` después de entregar esa cantidad."""
+    no es None lanza `fallo_exc` después de entregar esa cantidad. `corrida` imita
+    el `run_id` que la fuente de Apify fija en cuanto arranca la corrida (antes de
+    que haya resultados), y `resultados` crece antes de cada entrega, como la real."""
     tipo = "reddit"
     de_pago = False
     programa = ()
     aviso_final = ""
     fallo_en = None
     fallo_exc = None
+    corrida = None
 
     def __init__(self):
         self.aviso = ""
         self.resultados = 0
+        self.run_id = None
 
     def recolectar(self, params, avanzar=None):
         avanzar("Buscando")
+        self.run_id = self.corrida
         for i, c in enumerate(self.programa):
             if self.fallo_en is not None and i == self.fallo_en:
                 raise self.fallo_exc
@@ -173,12 +178,13 @@ def _comentarios_falsos(n):
              "puntuacion": i, "fecha": None, "extra": {}} for i in range(n)]
 
 
-def _fuente_falsa(monkeypatch, tipo="reddit", programa=(), aviso_final="", fallo_en=None, fallo_exc=None, de_pago=False):
+def _fuente_falsa(monkeypatch, tipo="reddit", programa=(), aviso_final="", fallo_en=None, fallo_exc=None, de_pago=False, corrida=None):
     from tareas import nicho as tareas_nicho
 
     class F(_FuenteFalsa):
         pass
     F.tipo, F.de_pago, F.programa, F.aviso_final, F.fallo_en, F.fallo_exc = tipo, de_pago, list(programa), aviso_final, fallo_en, fallo_exc
+    F.corrida = corrida
     monkeypatch.setattr(tareas_nicho.fuentes_registro, "por_tipo", lambda t: F)
     return F
 
@@ -256,14 +262,17 @@ def test_ejecutar_recolectar_apify_registra_gasto(base_temporal, monkeypatch):
     from nicho import datos
     from tareas import nicho as tareas_nicho
     eid = datos.crear_estudio("acme", "X")
-    _fuente_falsa(monkeypatch, tipo="apify", programa=_comentarios_falsos(30), de_pago=True)
+    _fuente_falsa(monkeypatch, tipo="apify", programa=_comentarios_falsos(30), de_pago=True, corrida="run_ok")
     tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "apify", {"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 50}, tid=11))
     g = gastos.historial("acme")[0]
     assert g["tipo"] == "recoleccion" and g["usd"] == 0.09 and g["proveedor"] == "apify" and g["referencia"] == f"recoleccion:{eid}:t11"
     assert "30 resultado(s) aprox." in g["detalle"] and g["extra"]["actor"] == "junglee~amazon-reviews-scraper"
+    assert g["extra"]["corrida"] == "run_ok"                                   # se puede rastrear en console.apify.com
+    assert datos.estudio("acme", eid)["extra"]["recolecciones"][-1]["corrida"] == "run_ok"
     _fuente_falsa(monkeypatch, tipo="reddit", programa=_comentarios_falsos(3))
     tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "reddit", tid=12))
     assert len(gastos.historial("acme")) == 1                                   # las gratis no registran gasto
+    assert "corrida" not in datos.estudio("acme", eid)["extra"]["recolecciones"][-1]   # sin corrida no se inventa la clave
 
 
 def test_ejecutar_recolectar_apify_fallido_registra_lo_cobrado(base_temporal, monkeypatch):
@@ -272,11 +281,15 @@ def test_ejecutar_recolectar_apify_fallido_registra_lo_cobrado(base_temporal, mo
     from nicho.fuentes.base import ErrorFuente
     from tareas import nicho as tareas_nicho
     eid = datos.crear_estudio("acme", "X")
-    _fuente_falsa(monkeypatch, tipo="apify", programa=_comentarios_falsos(10), de_pago=True, fallo_en=4, fallo_exc=ErrorFuente("La corrida de Apify terminó en ABORTED."))
+    _fuente_falsa(monkeypatch, tipo="apify", programa=_comentarios_falsos(10), de_pago=True, corrida="run_13",
+                  fallo_en=4, fallo_exc=ErrorFuente("La corrida de Apify terminó en ABORTED (corrida run_13); revísala en console.apify.com."))
     with pytest.raises(ErrorFuente):
         tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "apify", {"actor": "tiktok_comentarios"}, tid=13))
     g = gastos.historial("acme")[0]
     assert g["usd"] == 0.01 and "intento fallido" in g["detalle"] and g["extra"]["resultados"] == 4
+    assert g["extra"]["corrida"] == "run_13"                                    # un cobro sin resultados también se rastrea
+    r = datos.estudio("acme", eid)["extra"]["recolecciones"][-1]
+    assert r["corrida"] == "run_13" and r["aviso"].startswith("falló: La corrida de Apify")
     assert datos.estudio("acme", eid)["comentarios_total"] == 4
 
 

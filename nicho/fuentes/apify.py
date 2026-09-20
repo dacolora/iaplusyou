@@ -3,14 +3,24 @@ Fuente `apify` (spec §3.5): reseñas de Amazon y comentarios de TikTok a travé
 de los actores de `apify_actores` (de pago, por resultado). Llave APIFY_TOKEN
 SIEMPRE como cabecera `Authorization: Bearer …`, nunca en la URL (los logs de
 gunicorn y del worker guardan URLs). API v2 verificada 2026-09-20:
-  POST /v2/actors/<usuario~actor>/runs (entrada JSON; ?timeout= segundos)
+  POST /v2/actors/<usuario~actor>/runs (entrada JSON; ?timeout= segundos,
+       ?maxItems= ítems cobrados, ?maxTotalChargeUsd= tope de cobro)
        -> data.id, data.status, data.defaultDatasetId
   GET  /v2/actor-runs/<id> -> data.status (READY, RUNNING, SUCCEEDED, FAILED,
        TIMING-OUT, TIMED-OUT, ABORTING, ABORTED)
   GET  /v2/datasets/<id>/items?clean=true&format=json&limit=N -> lista de ítems
-Se sondea cada PAUSA_SONDEO s hasta MAX_ESPERA_S. Corrida FAILED / TIMED-OUT /
-ABORTED -> ErrorFuente con el estado. `resultados` cuenta los ítems entregados:
-el worker anota el gasto como resultados × precio del actor ("aprox.").
+  GET  /v2/datasets/<id> -> data.itemCount
+Una corrida se paga aunque termine mal, así que después del POST nada se
+abandona: se sondea cada PAUSA_SONDEO s hasta MAX_ESPERA_S tolerando hasta
+MAX_FALLOS_SONDEO lecturas malas seguidas, y al llegar a CUALQUIER estado
+terminal (o al vencer el reloj local) se lee el dataset igual, hasta
+INTENTOS_DATASET veces. `resultados` es el número de ítems CRUDOS que devolvió
+el dataset (no solo los que traen texto): el worker anota el gasto como
+resultados × precio del actor ("aprox."). Si el dataset no se puede leer,
+`resultados` cae al `itemCount` del dataset y, en último caso, al tope
+aprobado — registrar de más es mejor que perder el registro de un cobro.
+`run_id`/`dataset_id` quedan en la fuente y en todo mensaje posterior al POST
+para poder rastrear la corrida en console.apify.com.
 """
 import os
 
@@ -21,6 +31,9 @@ URL_API = "https://api.apify.com/v2"
 PAUSA_SONDEO = 10.0
 MAX_ESPERA_S = 1200
 TERMINALES = ("SUCCEEDED", "FAILED", "TIMED-OUT", "ABORTED")
+MAX_FALLOS_SONDEO = 6          # lecturas de estado malas SEGUIDAS antes de rendirse
+INTENTOS_DATASET = 3           # lecturas del dataset antes de caer al itemCount
+ESTADO_SIN_TERMINAR = "sin terminar"   # estado ficticio: venció el reloj local
 
 
 def normalizar_params(params):
@@ -48,6 +61,14 @@ def _mensaje_apify(r):
         return ""
 
 
+def _frase_estado(estado):
+    """«terminó en FAILED» / «no terminó en 20 min»: el sujeto de los mensajes
+    del final, con el estado terminal real o el reloj local vencido."""
+    if estado == ESTADO_SIN_TERMINAR:
+        return f"no terminó en {int(MAX_ESPERA_S / 60)} min"
+    return f"terminó en {estado}"
+
+
 class FuenteApify(Fuente):
     tipo = "apify"
     de_pago = True
@@ -55,6 +76,8 @@ class FuenteApify(Fuente):
     def __init__(self):
         self.resultados = 0
         self.aviso = ""
+        self.run_id = None
+        self.dataset_id = None
 
     def estimar(self, params):
         p = normalizar_params(params)
@@ -69,16 +92,17 @@ class FuenteApify(Fuente):
             return {"ok": False, "detalle": f"Apify no aceptó el token ({r.status_code})."}
         return {"ok": True, "detalle": "Apify aceptó el token."}
 
-    def recolectar(self, params, avanzar=None):
-        p = normalizar_params(params)
-        token = _token()
-        avanzar = avanzar or (lambda etapa, detalle=None: None)
-        self.resultados, self.aviso = 0, ""
+    def _arrancar(self, sesion, token, p, avanzar):
+        """POST de la corrida. Deja `run_id`/`dataset_id` fijados: desde acá
+        cualquier error tiene que decir cuál corrida se pagó."""
         actor = apify_actores.ACTORES[p["actor"]]
-        sesion = _http.sesion()
+        estimado = apify_actores.estimar(p["actor"], p["max_resultados"])
         avanzar("Buscando", actor["nombre"])
+        # maxItems (actores por resultado) y maxTotalChargeUsd (por evento) son
+        # el tope de cobro del lado de Apify: lo que la puerta mostró y nada más.
         r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor['actor']}/runs", "Apify", headers=_cabeceras(token),
-                        params={"timeout": MAX_ESPERA_S}, json=apify_actores.entrada(p["actor"], p["links"], p["max_resultados"]))
+                        params={"timeout": MAX_ESPERA_S, "maxItems": p["max_resultados"], "maxTotalChargeUsd": estimado["usd"]},
+                        json=apify_actores.entrada(p["actor"], p["links"], p["max_resultados"]))
         if r.status_code in (401, 403):
             raise ErrorFuente("Apify no aceptó el token (APIFY_TOKEN).")
         if r.status_code == 400:
@@ -86,30 +110,96 @@ class FuenteApify(Fuente):
         if r.status_code not in (200, 201):
             raise ErrorFuente(f"Apify no arrancó la corrida ({r.status_code}).")
         corrida = (r.json() or {}).get("data") or {}
-        run_id, dataset_id = corrida.get("id"), corrida.get("defaultDatasetId")
-        if not run_id or not dataset_id:
+        if not corrida.get("id") or not corrida.get("defaultDatasetId"):
             raise ErrorFuente("Apify no devolvió el id de la corrida.")
-        estado = corrida.get("status") or "READY"
-        esperado = 0.0
+        self.run_id, self.dataset_id = corrida["id"], corrida["defaultDatasetId"]
+        return corrida.get("status") or "READY"
+
+    def _sondear(self, sesion, token, estado, avanzar):
+        """Sondea hasta un estado terminal y lo devuelve, o ESTADO_SIN_TERMINAR
+        si venció MAX_ESPERA_S. Un fallo pasajero no abandona la corrida: se
+        toleran MAX_FALLOS_SONDEO lecturas malas SEGUIDAS (una buena reinicia el
+        contador) y la espera total sigue acotada."""
+        esperado, fallos, ultimo = 0.0, 0, ""
         while estado not in TERMINALES:
             if esperado >= MAX_ESPERA_S:
-                raise ErrorFuente(f"La corrida de Apify no terminó en {int(MAX_ESPERA_S / 60)} min (id {run_id}); revísala en console.apify.com.")
+                return ESTADO_SIN_TERMINAR
             _http.dormir(PAUSA_SONDEO)
             esperado += PAUSA_SONDEO
-            r = _http.pedir(sesion, "GET", f"{URL_API}/actor-runs/{run_id}", "Apify", headers=_cabeceras(token))
-            if r.status_code != 200:
-                raise ErrorFuente(f"Apify no respondió el estado de la corrida ({r.status_code}).")
+            try:
+                r = _http.pedir(sesion, "GET", f"{URL_API}/actor-runs/{self.run_id}", "Apify", headers=_cabeceras(token))
+                malo = "" if r.status_code == 200 else f"HTTP {r.status_code}"
+            except ErrorFuente as e:                            # sin URL ni cabeceras: nunca lleva el token
+                r, malo = None, e.usuario or "sin respuesta"
+            if malo:
+                fallos, ultimo = fallos + 1, malo
+                if fallos >= MAX_FALLOS_SONDEO:
+                    raise ErrorFuente(f"Apify no respondió el estado {MAX_FALLOS_SONDEO} veces seguidas ({ultimo}); "
+                                      f"corrida {self.run_id}: revísala en console.apify.com.")
+                continue
+            fallos = 0
             estado = ((r.json() or {}).get("data") or {}).get("status") or estado
-            avanzar("Leyendo comentarios", f"Apify: {estado}")
-        if estado != "SUCCEEDED":
-            raise ErrorFuente(f"La corrida de Apify terminó en {estado} (id {run_id}); revísala en console.apify.com.")
-        r = _http.pedir(sesion, "GET", f"{URL_API}/datasets/{dataset_id}/items", "Apify", headers=_cabeceras(token),
-                        params={"clean": "true", "format": "json", "limit": p["max_resultados"]})
+            avanzar("Leyendo comentarios", f"Apify: {estado} · corrida {self.run_id}")
+        return estado
+
+    def _leer_dataset(self, sesion, token, limite):
+        """Ítems crudos del dataset, hasta INTENTOS_DATASET intentos. Devuelve
+        `(lista, "")` cuando se pudo leer (la lista puede venir vacía) y
+        `(None, motivo)` cuando no."""
+        motivo = ""
+        for intento in range(INTENTOS_DATASET):
+            if intento:
+                _http.dormir(PAUSA_SONDEO)
+            try:
+                r = _http.pedir(sesion, "GET", f"{URL_API}/datasets/{self.dataset_id}/items", "Apify", headers=_cabeceras(token),
+                                params={"clean": "true", "format": "json", "limit": limite})
+            except ErrorFuente as e:
+                motivo = e.usuario
+                continue
+            if r.status_code != 200:
+                motivo = f"HTTP {r.status_code}"
+                continue
+            datos = r.json()
+            return (datos if isinstance(datos, list) else []), ""
+        return None, motivo
+
+    def _contar_dataset(self, sesion, token):
+        """`itemCount` del dataset cuando no se pudieron leer los ítems: sirve
+        para registrar el gasto de todos modos. None si tampoco se puede."""
+        try:
+            r = _http.pedir(sesion, "GET", f"{URL_API}/datasets/{self.dataset_id}", "Apify", headers=_cabeceras(token))
+        except ErrorFuente:
+            return None
         if r.status_code != 200:
-            raise ErrorFuente(f"Apify no entregó los resultados ({r.status_code}).")
-        for item in (r.json() or []):
+            return None
+        try:
+            return max(0, int(((r.json() or {}).get("data") or {}).get("itemCount")))
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    def recolectar(self, params, avanzar=None):
+        p = normalizar_params(params)
+        token = _token()
+        avanzar = avanzar or (lambda etapa, detalle=None: None)
+        self.resultados, self.aviso = 0, ""
+        self.run_id, self.dataset_id = None, None
+        sesion = _http.sesion()
+        estado = self._arrancar(sesion, token, p, avanzar)
+        estado = self._sondear(sesion, token, estado, avanzar)
+        crudos, motivo = self._leer_dataset(sesion, token, p["max_resultados"])   # la corrida ya se pagó: se lee pase lo que pase
+        if crudos is None:
+            contados = self._contar_dataset(sesion, token)
+            self.resultados = p["max_resultados"] if contados is None else contados
+            raise ErrorFuente(f"Apify no entregó los resultados ({motivo}); corrida {self.run_id}, "
+                              f"dataset {self.dataset_id}: revísalos en console.apify.com.")
+        self.resultados = len(crudos)                            # ítems CRUDOS: es lo que Apify cobra
+        for item in crudos:
             crudo = apify_actores.leer_item(p["actor"], item if isinstance(item, dict) else {})
             c = normalizar_comentario(crudo) if crudo else None
             if c:
-                self.resultados += 1
                 yield c
+        if estado != "SUCCEEDED":
+            if not self.resultados:
+                raise ErrorFuente(f"La corrida de Apify {_frase_estado(estado)} sin resultados (corrida {self.run_id}); "
+                                  "revísala en console.apify.com.")
+            self.aviso = f"Apify {_frase_estado(estado)} (corrida {self.run_id}); se guardaron {self.resultados} resultados."
