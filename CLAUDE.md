@@ -237,6 +237,42 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 `tareas/final_edition.py`; the dashboard routes are `fe_preparar`, `fe_guardar_guion`,
 `fe_producir`, `fe_descartar`.
 
+**Editor (capa 1, 2026-09):** the editor's source of truth is a JSON document
+(`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
+schema) stored in `edicion` with CAS autosave (`ediciones.guardar`: `version_n` must match
+or `Conflicto`) and frozen copies in `edicion_version` (`versionar` takes SQLite's write
+lock before `MAX(n)`, same trick as `experimentos._bloquear`; `restaurar` migrates the
+frozen document before reusing it). Every file that costs money or time is a `material`
+row keyed by `UNIQUE(cliente, hash)` (`materiales.py`: never pay twice; `borrar` now
+propagates a failed R2 delete instead of swallowing it, so the row survives for retry —
+`limpiar_sin_uso` skips those rows too; `obtener_o_crear`'s `producir()` can still run
+twice in a true race, accepted). `final_edition/motor/` compiles a resolved document into
+one ffmpeg filtergraph (`compilador.py`, pure): a `transicion` of `d` ms on clip A
+occupies output `[fin_A, fin_A + d)` while B keeps its timeline position — the extra
+frames come from A's tail (`recorte.hasta_ms + d × velocidad`), and a hard cut is
+`concat,settb=1/fps`. Audio chains one filter per clip
+(`atrim`/`asetpts`/`volume`/`afade` at real clip edges, `adelay` past the window start),
+`amix`ed per role at ≥ 2 clips into `mezcla.filtro_mezcla`, with `anullsrc` covering a
+window with no audio clip so `concat -c copy` never breaks on a stream mismatch; only x/y
+keyframes are interpreted (piecewise-linear in `t` — escala/opacidad/rotación wait for
+PNG-alpha layers). Free texts are browser-rendered PNGs (`rutas["png:<clip_id>"]`,
+`ancho_px`/`alto_px` per clip, 400×200 fallback) placed via `final_edition/geometria.py`'s
+fraction→pixel math (round-half-up; `tests/fixtures/geometria_casos.json` is the parity
+table the browser must match too). `motor/tramos.py` splits into windows past
+`PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
+exceeding budget at one instant is the only hard error — and `motor.renderizar` cleans
+partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
+(`motor/subtitulos.py`) only when the host ffmpeg has libass (`render.tiene_libass()`,
+cached: the VPS does, the dev Mac doesn't — `renderizar` reports the omission via
+`on_etapa`). Worker tasks in `tareas/edicion.py`: `edicion_producir` renders the FROZEN
+version (`max_intentos=1`, no gasto yet — capa 2 adds voice/music via
+`gastos.registrar_seguro`), uploads to versioned keys
+`clientes/<c>/finales/<final_id>__v<version_id>.mp4`/`.png` (thumbnail first), errors go
+through `cola.sin_token`/`cola.recortar`, and wipes its work folder at start and on
+success (kept on failure, for the `.filtergraph.txt`); `edicion_proxy` (540p, frame strip,
+scene cuts, `aresample=48000`-first waveform peaks) wipes its folder in `finally`; the
+daily `materiales_limpiar` (`worker.PERIODICAS`) is what deletes efímero materials.
+
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
 sueltos" is the one `legado=True` row per client and is untouched) names countries with

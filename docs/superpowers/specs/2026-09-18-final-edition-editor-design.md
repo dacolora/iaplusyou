@@ -108,6 +108,31 @@ Reglas que hacen que el mismo documento sirva para todo:
 
 ## 2. Motor de render (servidor)
 
+> Estado: **capa 1 implementada** (plan
+> `docs/superpowers/plans/2026-09-18-editor-capa1-documento-motor.md`). Subtítulos
+> por ASS solo donde ffmpeg trae libass (VPS); sin libass se omiten y el render lo
+> avisa. Pendiente de la capa 2: el borrador automático produce una `edicion`.
+>
+> Decisiones de implementación que ajustan la letra de este capítulo:
+> - **Transición** (§2.1): una `transicion` de `d` ms en el clip A ocupa el
+>   intervalo de SALIDA `[fin_A, fin_A + d)`; B conserva su posición exacta y los
+>   cuadros extra salen de la cola de A (`recorte.hasta_ms + d × velocidad`), nunca
+>   de un recorte de B.
+> - **Keyframes solo x/y**: interpolación lineal por tramos en `t`; escala,
+>   opacidad y rotación por keyframe quedan para las animaciones con alfa en PNG.
+> - **`anullsrc` en tramos sin audio**: si el documento tiene audio pero la
+>   ventana no tiene ningún clip activo, el filtergraph rellena con `anullsrc`
+>   para que `concat -c copy` no rompa por streams heterogéneos entre tramos.
+> - **Claves de la final, versionadas**: `edicion_producir` sube a
+>   `clientes/<c>/finales/<final_id>__v<version_id>.mp4`/`.png` (miniatura
+>   primero) en vez de una clave fija, así un reintento nunca pisa el archivo que
+>   la fila todavía enlaza.
+> - **Migración `0011`**, no `0010`: `0010` quedó tomada por `gasto.py` en el
+>   ínterin (ver nota en §5).
+> - **Caja por defecto 400×200**: una capa sin `ancho_px`/`alto_px` (la capa 3
+>   aún no los manda) usa 400×200 px como tamaño de referencia para
+>   `geometria.caja`.
+
 `final_edition/motor/` recibe un documento resuelto (variables ya sustituidas)
 y devuelve mp4 o png. Reemplaza `render.py`.
 
@@ -280,6 +305,8 @@ iguales); estado central inmutable con historial para deshacer.
 ## 5. Modelo de datos y persistencia
 
 Migración nueva encadenada a la última existente al implementar (hoy `0009`).
+
+> Nota: la migración que llegó fue la `0011` (`migrations/versions/0011_editor.py`); `0010` la tomó `gasto.py` en el ínterin.
 
 - **`edicion`**: `id`, `cliente`, `cf_id` (nullable), `tipo` (`video|imagen`),
   `nombre`, `documento` JSON, `version_n` int, `estado` (`borrador|producida`),

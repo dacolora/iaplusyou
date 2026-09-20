@@ -1,6 +1,7 @@
 """Final Edition, capa 4a: texto en pantalla rasterizado con Pillow.
 
-ffmpeg local/VPS no trae `drawtext` ni `subtitles` (sin libfreetype/libass),
+El ffmpeg de desarrollo (Mac) no trae `drawtext` ni `subtitles`; el del VPS sí
+(ffmpeg 8 con libass). Este módulo no depende de ninguno de los dos:
 así que cada elemento de texto se dibuja como un PNG RGBA con fondo
 transparente, **recortado a su contenido** (más PAD_RECORTE px), y el render lo
 sobreimprime con `overlay=x:y:enable='gte(t,ini)*lt(t,fin)'`. Cada entrada
