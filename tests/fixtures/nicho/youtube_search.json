@@ -1,0 +1,5 @@
+{"items": [
+  {"id": {"kind": "youtube#video", "videoId": "vid00000001"}, "snippet": {"title": "Best slippers for foot pain"}},
+  {"id": {"kind": "youtube#channel", "channelId": "UCxyz"}, "snippet": {"title": "un canal, no un video"}},
+  {"id": {"kind": "youtube#video", "videoId": "vid00000002"}, "snippet": {"title": "Cheap vs premium slippers"}}
+]}

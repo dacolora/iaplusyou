@@ -12,6 +12,7 @@ REGISTRO = {
     "texto": ("nicho.fuentes.texto", "FuenteTexto"),
     "csv": ("nicho.fuentes.archivo", "FuenteArchivo"),
     "reddit": ("nicho.fuentes.reddit", "FuenteReddit"),
+    "youtube": ("nicho.fuentes.youtube", "FuenteYouTube"),
 }
 NOMBRES = {"texto": "Texto pegado", "csv": "CSV o Excel", "reddit": "Reddit", "youtube": "YouTube",
            "apify": "Amazon / TikTok (Apify)"}
