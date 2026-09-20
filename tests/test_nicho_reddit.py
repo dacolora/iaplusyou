@@ -79,7 +79,7 @@ def test_parsear_busqueda_y_comentarios():
 
 def test_recolectar_busca_y_lee_con_token(entorno, monkeypatch):
     from nicho.fuentes import _http, reddit
-    s = _Sesion({"api/v1/access_token": _Resp(200, {"access_token": "tok", "expires_in": 86400}),
+    s = _Sesion({"api/v1/access_token": _Resp(200, {"access_token": "sec-777", "expires_in": 86400}),
                  "/r/Sneakers/search": _Resp(200, _fixture("reddit_search.json")),
                  "/comments/abc123": _Resp(200, _fixture("reddit_comments.json")),
                  "/comments/def456": _Resp(404)})
@@ -95,9 +95,9 @@ def test_recolectar_busca_y_lee_con_token(entorno, monkeypatch):
     assert kw["headers"]["User-Agent"] == "creatv-machine/1.0 (by u/prueba)"
     _, url_busqueda, kw_b = s.llamadas[1]
     assert url_busqueda == reddit.URL_API + "/r/Sneakers/search" and kw_b["params"]["q"] == "foot pain" and kw_b["params"]["restrict_sr"] == 1
-    assert kw_b["params"]["raw_json"] == 1 and kw_b["headers"]["Authorization"] == "bearer tok"
+    assert kw_b["params"]["raw_json"] == 1 and kw_b["headers"]["Authorization"] == "bearer sec-777"
     assert etapas[0] == "Buscando" and "Leyendo comentarios" in etapas
-    assert all("tok" not in u for _, u, _ in s.llamadas)      # el token va en cabecera, nunca en la URL
+    assert all("sec-777" not in u for _, u, _ in s.llamadas)      # el token va en cabecera, nunca en la URL
 
 
 def test_recolectar_links_y_busqueda_global(entorno, monkeypatch):
