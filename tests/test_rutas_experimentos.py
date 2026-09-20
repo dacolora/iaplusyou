@@ -360,13 +360,14 @@ def test_anuncio_suelto_en_cola_ofrece_meter_en_experimento(app, base_temporal):
     armado, ofrece el mismo «Meter en experimento» que Crear."""
     import ads
     import experimentos as ex
-    _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_7", url="https://r2/cola.mp4")
+    pid = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_7", url="https://r2/cola.mp4")
     aid = ads.crear("acme", "flowplus", "cf_7", "https://r2/cola.mp4", "video", "En cola")
     cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
     assert "Piezas que estaban listas para publicar (1)" in cuerpo
     assert "Ahora esto se hace con un experimento" in cuerpo
     assert ">Meter en experimento</button>" not in cuerpo  # sin experimento en armado no hay adónde meterla
-    assert "Crea un experimento arriba" in cuerpo
+    # M6: sin experimento en armado, el mismo «Probar en Meta» de Crear (galería con la pieza marcada).
+    assert f'href="#experimentos?piezas={pid}"' in cuerpo and "Crea un experimento arriba" not in cuerpo
     assert "/cliente/acme/ads/publicar" not in cuerpo
     assert f"/cliente/acme/ads/{aid}/eliminar" in cuerpo
 
@@ -442,6 +443,20 @@ def test_probar_no_deja_nada_si_algo_falla(app, base_temporal):
     c.post("/cliente/acme/experimentos/probar",
            data=dict(FORM_PROBAR, piezas=[str(clon)], paises=["CO", "MX"], combinaciones=[f"{clon}:CO"]))
     assert ex.cargar("acme") == [] and app["encolados"] == []
+
+
+def test_probar_sin_paises_avisa_del_pais(app, base_temporal):
+    """M2: sin ningún país marcado el aviso habla del país, no de la
+    cuadrícula (las combinaciones se filtran por país y quedarían vacías)."""
+    import experimentos as ex
+    from tests.test_rutas_bloque4 import _flashes
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    data = dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"])
+    data.pop("paises")
+    app["c"].post("/cliente/acme/experimentos/probar", data=data)
+    assert ex.cargar("acme") == [] and app["encolados"] == []
+    mensajes = _flashes(app["c"])
+    assert any("Marca al menos un país" in m for m in mensajes) and not any("combinación" in m for m in mensajes)
 
 
 def test_probar_exige_meta_conectado(app, monkeypatch, base_temporal):

@@ -172,6 +172,11 @@ def test_elegibles_incluye_imagenes_origen_y_en_experimentos(base_temporal):
     assert lista[img]["es_imagen"] is True and lista[img]["tipo"] == "clon" and lista[img]["formato"] == "4:5"
     assert lista[img]["origen"] == "sprint" and lista[img]["sprint"]["sprint_nombre"] == "Octubre" and lista[img]["en_experimentos"] == []
     assert lista[img]["nombre"] == "producto sobre mesa" and lista[img]["creado_en"]
+    # M1: `decidido` sigue vivo (los ganadores siguen entregando y
+    # exp_refrescar_todos lo sigue refrescando); cerrado ya no cuenta.
+    ex.actualizar("acme", eid, estado="decidido")
+    assert {e["pieza_id"]: e["en_experimentos"] for e in ex.elegibles("acme")}[clon] == [{"id": eid, "nombre": "Prueba", "estado": "decidido"}]
+    assert "decidido" in ex.ESTADOS_VIVOS
     ex.actualizar("acme", eid, estado="cerrado")
     assert all(e["en_experimentos"] == [] for e in ex.elegibles("acme"))   # cerrado ya no cuenta
 

@@ -63,3 +63,35 @@ def test_crear_enlaza_a_la_galeria_con_la_pieza(app, base_temporal):
     pieza_id = cf.pieza_id_por_legado("acme", cid)
     html = _html(app)
     assert f'href="#experimentos?piezas={pieza_id}"' in html and 'action="/cliente/acme/experimentos/meter"' not in html
+
+
+def test_arbol_oculta_thruplay_en_imagenes(app, base_temporal):
+    """M9: ThruPlay es una métrica de video; en la fila de KPIs de una
+    imagen no se pinta (en la del clon sí)."""
+    import re
+    import experimentos as ex
+    img = _pieza_imagen(base_temporal)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    eid = ex.crear("acme", "Prueba", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    m = {"impresiones": 1000, "clics_enlace": 20, "ctr": 2.0, "cpc": 500.0, "gasto": 10000.0, "thruplay_rate": 0.3}
+    for pid in (img, clon):
+        ep = ex.agregar_pieza("acme", eid, pid, "CO")
+        ex.actualizar_pieza("acme", ep, meta_ad_id=f"ad{ep}", estado="activo")
+        ex.snapshot(ep, m)
+    html = _html(app)
+    filas = re.findall(r'<li class="exp-pieza exp-pieza-activo">(.*?)</li>', html, re.S)
+    assert len(filas) == 2
+    fila_img = next(f for f in filas if 'src="https://r2/i.png"' in f)
+    fila_clon = next(f for f in filas if 'src="https://r2/f.mp4"' in f)
+    assert "ThruPlay" not in fila_img and "impr." in fila_img
+    assert "ThruPlay" in fila_clon
+
+
+def test_boton_lanzar_se_bloquea_tras_confirmar(app, base_temporal):
+    """M4: tras el confirm() el botón se deshabilita y dice «Lanzando…»
+    para que un doble clic no cree dos experimentos."""
+    _pieza(base_temporal)
+    html = _html(app)
+    inicio = html.index("EN PAUSA (no gasta hasta que actives)")
+    handler = html[inicio:html.index("// El setTimeout", inicio)]
+    assert "ev.submitter" in handler and "disabled = true" in handler and "Lanzando…" in handler

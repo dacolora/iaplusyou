@@ -24,7 +24,9 @@ _SNAP_COLS = ("impresiones", "alcance", "frecuencia", "clics", "clics_enlace", "
               "thruplay_rate", "gasto", "compras", "ingresos", "roas", "cpa", "fuente_ventas")
 _SNAP_INT = {"impresiones", "alcance", "clics", "clics_enlace", "thruplay", "compras"}
 _TIPOS_CLON = ("video", "clon_limpio")
-ESTADOS_VIVOS = ("armando", "lanzando", "pausado", "corriendo")
+# Experimentos "vivos" para la galería (etiqueta «en prueba»): `decidido`
+# cuenta — los ganadores siguen entregando y exp_refrescar_todos lo refresca.
+ESTADOS_VIVOS = ("armando", "lanzando", "pausado", "corriendo", "decidido")
 
 
 def _pais_nuevo(p):

@@ -274,7 +274,7 @@
             <span class="kpi"><b>{{ pz.metricas.clics_enlace }}</b> clics</span>
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.ctr or 0) }}%</b> CTR</span>
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.cpc or 0) }}</b> CPC</span>
-            <span class="kpi"><b>{{ "%.0f"|format((pz.metricas.thruplay_rate or 0) * 100) }}%</b> ThruPlay</span>
+            {% if not pz.es_imagen %}<span class="kpi"><b>{{ "%.0f"|format((pz.metricas.thruplay_rate or 0) * 100) }}%</b> ThruPlay</span>{% endif %}
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.gasto or 0) }}</b> gasto</span>
             {% if pz.metricas.compras %}<span class="kpi"><b>{{ pz.metricas.compras }}</b> compras · ROAS {{ "%.1f"|format(pz.metricas.roas or 0) }}</span>{% endif %}
             {% if pz.metricas.motivo_rechazo %}<span class="tag-error">{{ pz.metricas.motivo_rechazo }}</span>{% endif %}
@@ -517,6 +517,11 @@
       // Los países deshabilitados por una final igual deben viajar: se
       // rehabilitan solo cuando el envío sigue adelante.
       paises.forEach(function (p) { p.disabled = false; });
+      // Un doble clic no crea dos experimentos: el botón se bloquea ya
+      // confirmado (después de preventDefault: un botón disabled no viaja,
+      // pero ya no hace falta que viaje).
+      var lanzar = ev.submitter || document.getElementById('exp-lanzar');
+      if (lanzar) { lanzar.disabled = true; lanzar.textContent = 'Lanzando…'; }
     });
     // El setTimeout deja que cliente.html active la pestaña antes del scroll (como el ?exp= de arriba).
     if (q && q.get('piezas') && marcadas().length) {

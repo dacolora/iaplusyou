@@ -2854,6 +2854,11 @@ def exp_probar(cliente):
     if not piezas_ids:
         flash("Marca al menos una pieza en la galería.", "error")
         return volver
+    if not codigos:
+        # Antes de filtrar las combinaciones por país: sin país quedarían
+        # vacías y el aviso hablaría de la cuadrícula, no del país.
+        flash("Marca al menos un país.", "error")
+        return volver
     combinaciones = [(pid, pais) for pid, pais in combinaciones if pid in piezas_ids and pais in codigos]
     if not combinaciones:
         flash("Marca al menos una combinación pieza × país en el paso de revisar.", "error")
