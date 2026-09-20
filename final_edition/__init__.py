@@ -519,3 +519,6 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
         detalle = f"{idioma}_{pais} · " + (", ".join(cobradas) if cobradas else "sin cobros (todo cacheado u omitido)")
     gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}{ref_sufijo}", detalle=detalle,
                             proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)})
+
+
+registrar_gasto_final = _registrar_gasto_final   # lo usa final_edition.produccion (vía del editor)

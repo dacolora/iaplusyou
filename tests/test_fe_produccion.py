@@ -18,11 +18,17 @@ def entorno(base_temporal, tmp_path, monkeypatch):
     import creative_flow as cf
     import materiales
     import tareas.edicion as te
-    from final_edition import guion as guion_mod, insumos
+    from final_edition import cortes, guion as guion_mod, insumos
     monkeypatch.setattr(final_edition, "BASE_DIR", str(tmp_path))
     monkeypatch.setenv("CREATV_SALIDAS", str(tmp_path / "salidas"))
     clip = str(tmp_path / "clon.mp4")
     open(clip, "wb").write(b"video")
+    # `clip` no es un video real (nada aquí necesita ffmpeg: el clon, sus
+    # cortes y su duración vienen del material falso de `insumos.clon`) salvo
+    # `preparar_guion`, que sigue siendo el módulo legado y calcula la
+    # duración del guion con `cortes.duracion` cuando `opciones["duracion_s"]`
+    # no viene — se finge en 8 s (la de GUION_BASE) para no depender de ffprobe.
+    monkeypatch.setattr(cortes, "duracion", lambda ruta: 8.0)
     cf_id = cf.crear("acme", [], ["Chancla Rose"], [], "la persona camina con las chanclas", 8, "", "A")
     cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", video_local=clip,
                   enfoque="producto", aspect_ratio="9:16")
@@ -237,3 +243,183 @@ def test_musica_que_falla_degrada_el_borrador(entorno, monkeypatch):
     ed2, capas2, costo2, creada2 = produccion.asegurar_borrador(
         "acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
     assert creada2 and ed2["id"] != ed["id"]
+
+
+def test_producir_crea_borrador_traduce_y_deja_la_final_lista(entorno):
+    import sqlalchemy as sa
+    import db
+    import ediciones
+    import gastos
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    etapas = []
+    final_id, resumen = produccion.producir("acme", cf_id, "es", "CO", {"precio": 89900}, on_etapa=etapas.append, ref_sufijo=":t1")
+    assert final_id == f"{cf_id}__es_CO" and resumen["estado"] == "listo"
+    assert [e for e in etapas if e in NOMBRES] == NOMBRES                 # las 5 de siempre, en orden
+    assert resumen["video_url"].endswith(".mp4") and resumen["url_miniatura"].endswith(".png") and resumen["duracion_s"] == 8.0
+    assert list(resumen["capas"]) == ["guion", "cortes", "sonido", "voz", "musica", "texto", "render"]
+    assert resumen["capas"]["guion"] == {"proveedor": "anthropic", "parametros": {"idioma": "es", "pais": "CO", "precio": 89900},
+                                         "costo_usd": 0.0, "estado": "ok", "error": None}
+    assert resumen["capas"]["voz"]["parametros"] == {"voz": "Rachel"} and resumen["capas"]["musica"]["parametros"]["estilo"] == "urbano"
+    assert resumen["capas"]["render"]["parametros"]["tramos"] == 1 and resumen["capas"]["render"]["estado"] == "ok"
+    assert resumen["costo_usd"] == pytest.approx(0.01 + 0.25 + 0.02)      # guion base + voz + música
+    assert resumen["guion"]["bloques"][0]["texto_pantalla"] == "Hola" and resumen["guion"]["precio_texto"] == "$ 89.900"
+    eds = ediciones.listar("acme", cf_id=cf_id)
+    assert len(eds) == 1
+    versiones = ediciones.versiones("acme", eds[0]["id"])
+    assert [v["n"] for v in versiones] == [1] and versiones[0]["motivo"] == "producir"
+    with db.conectar() as con:
+        assert con.execute(sa.select(db.pieza.c.edicion_version_id).where(db.pieza.c.legado_id == final_id)).scalar() == versiones[0]["id"]
+    assert entorno["render"] == [(final_id, versiones[0]["id"], "es", "CO")]
+    assert resumen["capas"]["render"]["parametros"]["edicion_version_id"] == versiones[0]["id"]
+    filas = {f["referencia"]: f for f in gastos.historial("acme")}
+    assert set(filas) == {f"guion:{cf_id}:t1", f"final:{final_id}:t1"}
+    assert filas[f"final:{final_id}:t1"]["usd"] == pytest.approx(0.27) and filas[f"final:{final_id}:t1"]["detalle"] == "es_CO · voz, musica"
+    assert entorno["localizar"] == [] and entorno["generar"] == 1          # destino base: sin Claude para localizar
+
+
+def test_segundo_destino_reutiliza_el_borrador_y_solo_paga_su_traduccion(entorno):
+    import ediciones
+    import gastos
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"precio": 89900}, ref_sufijo=":t1")
+    n_voz = len(entorno["voz"])
+    final_en, resumen = produccion.producir("acme", cf_id, "en", "US", {"precios": {"en_US": 24.99}}, ref_sufijo=":t2")
+    assert resumen["estado"] == "listo" and entorno["localizar"] == [("en", "US", 24.99)]
+    assert len(entorno["voz"]) == n_voz + 5 and all(v[2] == "en" for v in entorno["voz"][n_voz:])
+    assert entorno["musica"] == [("urbano", 8.0)] and entorno["clon"] == 1
+    eds = ediciones.listar("acme", cf_id=cf_id)
+    assert len(eds) == 1
+    doc = ediciones.cargar("acme", eds[0]["id"])["documento"]
+    assert borrador.tiene_destino(doc, "en", "US") and doc["variables"]["precios"] == {"es_CO": 89900.0, "en_US": 24.99}
+    assert [v["n"] for v in ediciones.versiones("acme", eds[0]["id"])] == [1, 2]
+    assert resumen["costo_usd"] == pytest.approx(0.02 + 0.25)
+    assert resumen["capas"]["guion"]["costo_usd"] == 0.02 and resumen["capas"]["voz"]["costo_usd"] == 0.25
+    assert resumen["capas"]["musica"]["costo_usd"] == 0.0 and resumen["capas"]["musica"]["estado"] == "ok"
+    g = {f["referencia"]: f for f in gastos.historial("acme")}[f"final:{final_en}:t2"]
+    assert g["usd"] == pytest.approx(0.27) and g["detalle"] == "en_US · guion, voz"
+    # reproducir el mismo destino: todo cacheado, gasto 0 con su detalle, versión nueva
+    _, r3 = produccion.producir("acme", cf_id, "en", "US", {"precios": {"en_US": 24.99}}, ref_sufijo=":t3")
+    assert r3["costo_usd"] == 0.0 and r3["estado"] == "listo" and len(entorno["localizar"]) == 1
+    g3 = {f["referencia"]: f for f in gastos.historial("acme")}[f"final:{final_en}:t3"]
+    assert g3["usd"] == 0.0 and "sin cobros" in g3["detalle"]
+    assert [v["n"] for v in ediciones.versiones("acme", eds[0]["id"])] == [1, 2, 3]
+
+
+def test_el_precio_es_por_destino_y_nunca_se_convierte(entorno):
+    import ediciones
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"precio": 89900}, ref_sufijo=":t1")
+    produccion.producir("acme", cf_id, "es", "MX", {}, ref_sufijo=":t2")       # mismo idioma, otro país: se localiza, sin precio
+    assert entorno["localizar"] == [("es", "MX", None)]
+    doc = ediciones.cargar("acme", ediciones.listar("acme", cf_id=cf_id)[0]["id"])["documento"]
+    assert doc["variables"]["precios"] == {"es_CO": 89900.0} and doc["variables"]["textos"]["hook"]["es_MX"] == "Hola es"
+    assert "t_precio" not in [c["id"] for c in d.resolver(doc, "es", "MX")["pistas"][1]["clips"]]
+    assert "t_precio" in [c["id"] for c in d.resolver(doc, "es", "CO")["pistas"][1]["clips"]]
+    # el precio_base guardado al preparar solo aplica al país base
+    import creative_flow as cf
+    base = cf.guion_base("acme", cf_id)
+    base["precio_base"] = 50000
+    cf.guardar_guion_base("acme", cf_id, base)
+    produccion.producir("acme", cf_id, "es", "CO", {}, ref_sufijo=":t3")
+    produccion.producir("acme", cf_id, "es", "AR", {}, ref_sufijo=":t4")
+    doc = ediciones.cargar("acme", ediciones.listar("acme", cf_id=cf_id)[0]["id"])["documento"]
+    assert doc["variables"]["precios"] == {"es_CO": 50000.0}
+
+
+def test_cambiar_el_guion_crea_otro_borrador(entorno):
+    import creative_flow as cf
+    import ediciones
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {}, ref_sufijo=":t1")
+    base = cf.guion_base("acme", cf_id)
+    base["bloques"][0]["texto_pantalla"] = "Otro hook"
+    cf.guardar_guion_base("acme", cf_id, base)
+    _, r = produccion.producir("acme", cf_id, "es", "CO", {}, ref_sufijo=":t2")
+    assert len(ediciones.listar("acme", cf_id=cf_id)) == 2 and r["guion"]["bloques"][0]["texto_pantalla"] == "Otro hook"
+    assert r["costo_usd"] == 0.0                # misma voz y música: todo cacheado (el texto de voz no cambió)
+
+
+def test_variante_escribe_el_guion_variado_una_vez_para_todos_sus_destinos(entorno):
+    import creative_flow as cf
+    import ediciones
+    from final_edition import produccion
+    from providers import fal_audio
+    cf_id = entorno["cf_id"]
+    cf.guardar_guion_base("acme", cf_id, copy.deepcopy(GUION_BASE))
+    fid, r = produccion.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"}, ref_sufijo=":t1")
+    assert fid == f"{cf_id}__es_CO__v1" and entorno["variar"] == 1
+    assert r["capas"]["guion"]["parametros"]["variante_tipo"] == "hook" and r["capas"]["guion"]["costo_usd"] == 0.02
+    assert r["guion"]["bloques"][0]["texto_pantalla"] == "HOOK2"
+    assert cf.guion_base("acme", cf_id)["bloques"][0]["texto_pantalla"] == "Hola"     # el base no se toca
+    assert r["capas"]["voz"]["parametros"]["voz"] == fal_audio.VOCES["es"][1]         # "otra" voz que la de defecto
+    produccion.producir("acme", cf_id, "en", "US", {"variante": 1, "variante_tipo": "hook"}, ref_sufijo=":t2")
+    assert entorno["variar"] == 1 and len(ediciones.listar("acme", cf_id=cf_id)) == 1
+    ed = ediciones.cargar("acme", ediciones.listar("acme", cf_id=cf_id)[0]["id"])
+    assert ed["nombre"].startswith("Variante 1 (hook)") and ed["documento"]["origen"]["variante"] == 1
+    assert ed["documento"]["guion"]["bloques"][0]["texto_pantalla"] == "HOOK2"
+
+
+def test_opciones_invalidas_fallan_antes_de_crear_la_final(entorno):
+    import creative_flow as cf
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    for opciones in ({"variante_tipo": "hook"}, {"variante": 1}, {"mezcla": "no_existe"}, {"sonido": "raro"},
+                     {"variante": 1, "variante_tipo": "otra"}):
+        with pytest.raises(ValueError):
+            produccion.producir("acme", cf_id, "es", "CO", opciones)
+    with pytest.raises(ValueError, match="País"):
+        produccion.producir("acme", cf_id, "es", "XX", {})
+    assert cf.finales("acme", cf_id) == [] and entorno["clon"] == 0
+
+
+def test_voz_degradada_deja_la_final_degradada(entorno):
+    import creative_flow as cf
+    from final_edition import produccion
+    entorno["fallar_voz_en"] = 4
+    final_id, resumen = produccion.producir("acme", entorno["cf_id"], "es", "CO", {}, ref_sufijo=":t1")
+    assert resumen["estado"] == "degradada" and resumen["capas"]["voz"]["estado"] == "error"
+    assert resumen["capas"]["musica"]["estado"] == "ok" and resumen["video_url"]
+    assert cf.final_por_legado("acme", final_id)["estado"] == "degradada"
+
+
+def test_primer_bloque_fatal_deja_error_sin_musica(entorno):
+    import creative_flow as cf
+    from final_edition import produccion
+    entorno["fallar_voz_en"] = 1
+    with pytest.raises(ValueError, match="No se pudo generar la voz"):
+        produccion.producir("acme", entorno["cf_id"], "es", "CO", {}, ref_sufijo=":t1")
+    f = cf.finales("acme", entorno["cf_id"])[0]
+    assert f["estado"] == "error" and "no se pudo generar la voz" in f["error"].lower()
+    assert f["capas"]["voz"]["estado"] == "error" and "musica" not in f["capas"] and f["video_url"] is None
+    assert entorno["musica"] == [] and entorno["render"] == []
+
+
+def test_fallo_del_render_deja_error_y_registra_lo_cobrado(entorno, monkeypatch):
+    import creative_flow as cf
+    import gastos
+    import tareas.edicion as te
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+
+    def _revienta(*a, **k):
+        raise RuntimeError("ffmpeg murió (access_token=abc123)")
+    monkeypatch.setattr(te, "renderizar_final", _revienta)
+    with pytest.raises(RuntimeError):
+        produccion.producir("acme", cf_id, "es", "CO", {}, ref_sufijo=":t1")
+    f = cf.final_por_legado("acme", f"{cf_id}__es_CO")
+    assert f["estado"] == "error" and "ffmpeg murió" in f["error"] and "abc123" not in f["error"]
+    assert list(f["capas"]) == ["guion", "cortes", "sonido", "voz", "musica", "texto"] and f["costo_usd"] == pytest.approx(0.28)
+    assert f["guion"]["bloques"][0]["texto_pantalla"] == "Hola"
+    g = {x["referencia"]: x for x in gastos.historial("acme")}[f"final:{cf_id}__es_CO:t1"]
+    assert g["usd"] == pytest.approx(0.27) and g["extra"]["fallo"] is True and "voz y musica cobradas" in g["detalle"]
+    # el borrador quedó: reintentar no vuelve a pagar nada (solo renderiza)
+    renders = []
+    monkeypatch.setattr(te, "renderizar_final", lambda c, fid, vid, i, p, avisar=None: renders.append(vid) or {
+        "url_video": "https://r2/v.mp4", "url_miniatura": "https://r2/v.png", "duracion_s": 8.0, "tramos": 1,
+        "con_ass": True, "version_id": vid, "es_imagen": False})
+    _, r = produccion.producir("acme", cf_id, "es", "CO", {}, ref_sufijo=":t2")
+    assert r["estado"] == "listo" and r["costo_usd"] == 0.0 and len(renders) == 1 and entorno["clon"] == 1
