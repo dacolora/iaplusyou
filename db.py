@@ -140,6 +140,49 @@ pieza = Table("pieza", metadata,
     Column("guion", JSON),
     Column("legado_id", String(60), index=True),
     Column("extra", JSON, default=dict),
+    Column("edicion_version_id", Integer),
+)
+
+# --- editor (spec 2026-09-18-final-edition-editor-design.md §5) ---------------
+edicion = Table("edicion", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("cf_id", String(60), index=True),                # sesión de Crear de la que nació (nullable)
+    Column("tipo", String(8), nullable=False),              # video|imagen
+    Column("nombre", String(120), nullable=False),
+    Column("documento", JSON, nullable=False),
+    Column("version_n", Integer, nullable=False, default=0),  # CAS del autoguardado
+    Column("estado", String(12), nullable=False, default="borrador"),  # borrador|producida
+    Column("creada_por", String(80)),
+)
+
+edicion_version = Table("edicion_version", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("edicion_id", Integer, sa.ForeignKey("edicion.id"), nullable=False),
+    Column("n", Integer, nullable=False),
+    Column("documento", JSON, nullable=False),
+    Column("motivo", String(10), nullable=False),           # producir|manual
+    Column("creada_en", String(19), nullable=False),
+    sa.UniqueConstraint("edicion_id", "n", name="uq_edicion_version_n"),
+)
+
+material = Table("material", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("tipo", String(12), nullable=False),             # video|imagen|audio|png_texto|proxy|tira|forma_onda
+    Column("origen", String(12), nullable=False),           # crear|subida|catalogo|marca|voz|musica|sonido|efecto|grabacion|texto|traduccion
+    Column("url", Text, nullable=False),
+    Column("url_proxy", Text),
+    Column("hash", String(64), nullable=False),
+    Column("duracion_ms", Integer),
+    Column("ancho", Integer),
+    Column("alto", Integer),
+    Column("bytes", Integer, nullable=False, default=0),
+    Column("costo_usd", Float, default=0.0),
+    Column("padre_id", Integer),
+    Column("extra", JSON, default=dict),                    # palabras con tiempos, picos, cortes detectados
+    Column("usado_en", String(19)),
+    sa.UniqueConstraint("cliente", "hash", name="uq_material_hash"),
 )
 
 experimento = Table("experimento", metadata,
