@@ -304,6 +304,15 @@ def borrar_fuente(cliente, estudio_id, fuente):
     return int(r.rowcount or 0)
 
 
+def urls_comentarios(cliente, estudio_id):
+    """{id: url} de todos los comentarios del estudio (para enlazar las citas
+    en la revisión y en las exportaciones), incluidos los excluidos."""
+    c = db.comentario
+    with db.conectar() as con:
+        return {int(f.id): f.url for f in con.execute(sa.select(c.c.id, c.c.url).where(
+            c.c.cliente == cliente, c.c.estudio_id == estudio_id))}
+
+
 # ----------------------------------------------------------- avatares ---
 
 def _lista_textos(v, n=8, largo=300):
