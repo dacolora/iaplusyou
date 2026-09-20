@@ -71,6 +71,12 @@ proyectos.
    panel de admin. Anota en este archivo cuál de las dudas de la sección 7 del spec se
    resolvió y cómo.
 
+Recorrido del 2026-09-20 (antes del piloto): los ocho estados de la tarjeta Meta (elección,
+agencia con y sin resultados, guía propia, modo agencia conectado) y la sección de
+solicitudes del panel del admin se renderizaron con la app y los datos de prueba de la
+suite, sin errores de plantilla; queda pendiente lo que solo se ve con Meta real (listado
+de socios en el nivel Limited, `business` en las Páginas, acceso del usuario del sistema).
+
 ## 6. Subir a Full Access
 
 Cuando la app lleve 500 llamadas exitosas a la Marketing API en 15 días con menos de 15 %
