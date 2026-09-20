@@ -34,6 +34,30 @@ def test_job_ids(entorno):
     assert entorno.job_id_proxy("acme", 3) == "acme__mat3__proxy"
 
 
+def test_renderizar_final_devuelve_urls_versionadas_y_limpia_la_carpeta(entorno, monkeypatch, tmp_path):
+    import ediciones
+    from final_edition import motor
+    ed = ediciones.crear("acme", "video", "e", _doc(), cf_id="cf_1")
+    v = ediciones.versionar("acme", ed["id"], "producir")
+
+    def fake_render(doc, rutas, salida, on_etapa=None, nucleos=1):
+        open(salida, "wb").write(b"mp4")
+        mini = salida.replace(".mp4", "_miniatura.png"); open(mini, "wb").write(b"png")
+        return {"archivo": salida, "miniatura": mini, "duracion_s": 7.0, "tramos": 1, "con_ass": False}
+    monkeypatch.setattr(motor, "renderizar", fake_render)
+    etapas = []
+    res = entorno.renderizar_final("acme", "cf_1__es_CO", v["id"], "es", "CO", etapas.append)
+    assert res["url_video"].endswith(f"/finales/cf_1__es_CO__v{v['id']}.mp4")
+    assert res["url_miniatura"].endswith(f"/finales/cf_1__es_CO__v{v['id']}.png")
+    assert res["version_id"] == v["id"] and res["duracion_s"] == 7.0 and res["es_imagen"] is False
+    assert etapas[0] == "Preparando materiales" and etapas[-1] == "Subiendo"
+    assert not os.path.exists(str(tmp_path / "salidas" / "acme" / "ediciones" / f"{ed['id']}_es_CO"))
+    with pytest.raises(ValueError, match="idioma"):
+        entorno.renderizar_final("acme", "cf_1__es_CO", v["id"], "../x", "CO")
+    with pytest.raises(RuntimeError, match="versión"):
+        entorno.renderizar_final("acme", "cf_1__es_CO", 999, "es", "CO")
+
+
 def test_producir_renderiza_con_el_documento_de_la_version_y_actualiza_la_final(entorno, monkeypatch):
     import creative_flow, ediciones, db
     from final_edition import motor
