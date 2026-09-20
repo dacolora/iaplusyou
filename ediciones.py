@@ -119,7 +119,10 @@ def restaurar(cliente, edicion_id, n):
 
 
 def apuntar_final(cliente, final_legado_id, version_id):
+    """Enlaza la pieza final con la versión congelada que la produjo.
+    Devuelve las filas tocadas (0 = esa final no existe para este cliente)."""
     with db.conectar() as con:
-        con.execute(db.pieza.update().where(
+        r = con.execute(db.pieza.update().where(
             db.pieza.c.cliente == cliente, db.pieza.c.tipo == "final", db.pieza.c.legado_id == final_legado_id)
             .values(edicion_version_id=int(version_id), actualizado_en=db.ahora()))
+        return r.rowcount

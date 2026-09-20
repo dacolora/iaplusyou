@@ -83,5 +83,10 @@ def validar(salida, plan, tolerancia_s=TOLERANCIA_S):
 
 
 def miniatura(video, salida_png, t_ms):
+    """Un PNG del cuadro en `t_ms`. Si `-ss` cae más allá del último cuadro,
+    ffmpeg termina bien SIN escribir nada: por eso se comprueba el archivo
+    aquí, y no recién al subirlo."""
     cortes.ffmpeg(["-ss", f"{max(0, t_ms) / 1000.0:.3f}", "-i", video, "-frames:v", "1", salida_png], timeout=120)
+    if not os.path.exists(salida_png):
+        raise RuntimeError(f"miniatura: ffmpeg no dejó {os.path.basename(salida_png)} (t={t_ms} ms, ¿más allá del final?)")
     return salida_png

@@ -142,6 +142,37 @@ def test_renderiza_sonido_mas_efecto_y_capa_translucida(tmp_path, medios):
     assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
 
 
+@pytest.mark.slow
+def test_pista_principal_corta_se_rellena_y_la_miniatura_se_acota(tmp_path, medios, monkeypatch):
+    # I6 con ffmpeg real: la principal termina en 6000 y la voz sigue hasta
+    # 7000 — el video sale de 7,0 s (tpad clona el último cuadro) y la
+    # miniatura pedida en 6500 se acota al fin de la principal (5999) en vez
+    # de pedirle a ffmpeg un cuadro que la pista no tiene.
+    doc = _doc()
+    doc["pistas"][0]["clips"][1]["duracion_ms"] = 2500
+    doc["miniatura_ms"] = 6500
+    pedidos = []
+    original = r.miniatura
+
+    def _miniatura(video, salida_png, t_ms):
+        pedidos.append(t_ms)
+        return original(video, salida_png, t_ms)
+    monkeypatch.setattr(r, "miniatura", _miniatura)
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert abs(dur - 7.0) <= 0.2 and "audio" in streams
+    assert os.path.exists(out["miniatura"]) and Image.open(out["miniatura"]).size == (1080, 1920)
+    assert pedidos == [5999]
+
+
+def test_miniatura_lanza_si_ffmpeg_no_deja_el_png(tmp_path, monkeypatch):
+    # antes, un `-ss` más allá del final terminaba "bien" sin archivo y el
+    # error aparecía recién al subir a R2.
+    monkeypatch.setattr(cortes, "ffmpeg", lambda args, timeout=300: None)
+    with pytest.raises(RuntimeError, match="miniatura"):
+        r.miniatura(str(tmp_path / "v.mp4"), str(tmp_path / "m.png"), 1000)
+
+
 def test_validar_detecta_tamano_incorrecto(tmp_path, medios):
     from final_edition.motor.compilador import Plan
     plan = Plan(ancho=1080, alto=1920, duracion_ms=8000, salida_audio=False)

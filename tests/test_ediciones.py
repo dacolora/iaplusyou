@@ -112,7 +112,10 @@ def test_apuntar_final_escribe_edicion_version_id(base_temporal):
     _pieza(db, "acme", legado="cf_1__es_CO")
     ed = e.crear("acme", "video", "e", _doc(), cf_id="cf_1")
     v = e.versionar("acme", ed["id"], "producir")
-    e.apuntar_final("acme", "cf_1__es_CO", v["id"])
+    assert e.apuntar_final("acme", "cf_1__es_CO", v["id"]) == 1
     with db.conectar() as con:
         val = con.execute(sa.select(db.pieza.c.edicion_version_id).where(db.pieza.c.legado_id == "cf_1__es_CO")).scalar()
     assert val == v["id"]
+    # I12: devuelve las filas tocadas para que la tarea note una final ausente
+    assert e.apuntar_final("acme", "cf_9__es_CO", v["id"]) == 0
+    assert e.apuntar_final("otro", "cf_1__es_CO", v["id"]) == 0

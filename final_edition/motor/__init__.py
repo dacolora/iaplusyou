@@ -2,8 +2,16 @@
 a un plan de ffmpeg y lo ejecuta, por tramos si hace falta."""
 import os
 
-from final_edition.documento import duracion_ms
+from final_edition.documento import duracion_ms, pista_principal
 from final_edition.motor import compilador, render as render_mod, tramos
+
+
+def _fin_pista_principal(doc, total):
+    """Fin del último clip de la pista principal (la voz puede seguir más
+    allá; el video de ahí en adelante es el último cuadro clonado por tpad)."""
+    principal = pista_principal(doc)
+    clips = (principal or {}).get("clips") or []
+    return max((int(c["inicio_ms"]) + int(c["duracion_ms"]) for c in clips), default=total)
 
 
 def renderizar(doc, rutas, salida, on_etapa=None, nucleos=1):
@@ -52,6 +60,9 @@ def renderizar(doc, rutas, salida, on_etapa=None, nucleos=1):
         plan = compilador.compilar(doc, rutas, con_ass=con_ass)
     dur = render_mod.validar(salida, plan, tolerancia_s=0.3 if len(ventanas) > 1 else 0.2)
     mini = os.path.splitext(salida)[0] + "_miniatura.png"
-    render_mod.miniatura(salida, mini, min(doc.get("miniatura_ms") or 0, total - 1))
+    # acotada al fin de la pista principal: más allá solo hay el último
+    # cuadro clonado, y pedir un cuadro pasado el final deja a ffmpeg sin
+    # escribir el PNG.
+    render_mod.miniatura(salida, mini, max(0, min(doc.get("miniatura_ms") or 0, _fin_pista_principal(doc, total) - 1)))
     return {"archivo": salida, "miniatura": mini, "duracion_s": dur, "tramos": len(ventanas),
             "con_ass": con_ass and bool(plan.ass_texto)}
