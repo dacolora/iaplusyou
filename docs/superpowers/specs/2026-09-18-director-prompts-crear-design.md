@@ -130,7 +130,7 @@ persona ve y edita en la tarjeta. Las validaciones de abajo se aplican al bloque
 de planos que escribió Claude.
 
 **Entrada que se le da a Claude** (un solo turno `system` + `user`, modelo
-`generador_prompts.MODEL`, `max_tokens=2000`, sin temperatura, JSON estricto):
+`generador_prompts.MODEL`, `max_tokens=4000` (2000 no cabía para 2×5 planos en español; una respuesta cortada por longitud cuenta como inválida y se reintenta), sin temperatura, JSON estricto):
 
 - `system`: la plantilla de la **familia** del modelo (§2.2) + las reglas comunes
   (§2.1).
