@@ -21,7 +21,7 @@ import creative_flow
 import ediciones
 import materiales
 import trabajos
-from final_edition import cortes, motor
+from final_edition import cortes, motor, rasterizar
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from storage import r2_uploader
@@ -59,7 +59,8 @@ def preparar_rutas(cliente, doc, carpeta):
     """Baja los materiales del documento a `carpeta` y devuelve `rutas`
     ({material_id: ruta, "png:<clip_id>": ruta, "ass": ruta}). De paso, con
     las filas ya en mano: estampa `ancho_px`/`alto_px` en los clips `imagen`
-    que no los traen (tamaño natural medido al subir) y pasa los recortes por
+    que no los traen (tamaño natural medido al subir), rasteriza con Pillow
+    los clips de texto sin `pngs` y pasa los recortes por
     `compilador.verificar_recortes` con las duraciones reales (`duracion_ms`
     de la fila, cuando el proxy ya la midió) — modifica `doc` en el sitio."""
     rutas = {"ass": os.path.join(carpeta, "subtitulos.ass")}
@@ -80,6 +81,23 @@ def preparar_rutas(cliente, doc, carpeta):
         mat = materiales.obtener(cliente, mid)
         if mat:
             rutas[f"png:{clip_id}"] = materiales.descargar(mat, os.path.join(carpeta, f"png_{clip_id}.png"))
+    # Textos sin PNG del navegador (la vía automática no tiene navegador):
+    # el servidor los rasteriza con las mismas TTF. El doc ya está resuelto
+    # (literal); un clip variable aquí es un error de quien llama.
+    for p in doc.get("pistas") or []:
+        if p.get("tipo") != "texto":
+            continue
+        for cl in p.get("clips") or []:
+            clave = f"png:{cl['id']}"
+            if clave in rutas:
+                continue
+            literal = (cl.get("texto") or {}).get("literal")
+            if literal is None:
+                raise RuntimeError(f"El clip de texto {cl['id']} no está resuelto (¿falta documento.resolver?).")
+            medidas = rasterizar.png_texto(literal, cl.get("estilo") or {}, doc["formato"],
+                                           os.path.join(carpeta, f"png_{cl['id']}.png"))
+            rutas[clave] = os.path.join(carpeta, f"png_{cl['id']}.png")
+            cl["ancho_px"], cl["alto_px"] = medidas["ancho_px"], medidas["alto_px"]
     for p in doc.get("pistas") or []:
         if p.get("tipo") != "imagen":
             continue

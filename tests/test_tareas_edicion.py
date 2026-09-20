@@ -19,7 +19,11 @@ def entorno(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(r2_uploader, "upload_file", lambda p, k, ct: f"https://r2/{k}")
     monkeypatch.setattr(r2_uploader, "upload_video", lambda p, k: f"https://r2/{k}")
     monkeypatch.setattr(r2_uploader, "upload_image", lambda p, k: f"https://r2/{k}")
-    monkeypatch.setattr(materiales, "descargar", lambda mat, destino: (open(destino, "wb").write(b"x"), destino)[1])
+    def _descargar(mat, destino):
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        open(destino, "wb").write(b"x")
+        return destino
+    monkeypatch.setattr(materiales, "descargar", _descargar)
     for i, (tipo, origen) in enumerate([("video", "crear"), ("audio", "voz"), ("audio", "musica")], start=1):
         materiales.registrar("acme", tipo=tipo, origen=origen, url=f"https://r2/m{i}", hash=f"h{i}", bytes=1)
     return te
@@ -97,6 +101,30 @@ def test_producir_no_deja_tokens_en_el_error(entorno, monkeypatch):
         entorno.ejecutar_producir({"payload": {"cliente": "acme", "edicion_id": ed["id"], "version_id": v["id"],
                                                "final_id": "cf_1__es_CO", "idioma": "es", "pais": "CO"}, "job_id": "j"})
     assert "abc123" not in actualizado["error"] and "fallo" in actualizado["error"]
+
+
+def test_preparar_rutas_rasteriza_los_textos_sin_png_del_navegador(entorno, tmp_path):
+    from final_edition import documento as d
+    doc = d.resolver(d.validar(_doc()), "es", "CO")
+    rutas = entorno.preparar_rutas("acme", doc, str(tmp_path / "w"))
+    assert os.path.exists(rutas["png:t1"]) and rutas["png:t1"].endswith("png_t1.png")
+    clip = doc["pistas"][1]["clips"][0]
+    assert clip["ancho_px"] > 0 and clip["alto_px"] > 0
+
+
+def test_preparar_rutas_respeta_el_png_del_navegador(entorno, tmp_path, monkeypatch):
+    import materiales
+    from final_edition import documento as d, rasterizar
+    png = materiales.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/png", hash="hp", bytes=1)
+    base = _doc()
+    base["pngs"] = {"t1": png["id"]}
+    doc = d.resolver(d.validar(base), "es", "CO")
+
+    def _no(*a, **k):
+        raise AssertionError("no debía rasterizar: el navegador ya mandó el PNG")
+    monkeypatch.setattr(rasterizar, "png_texto", _no)
+    rutas = entorno.preparar_rutas("acme", doc, str(tmp_path / "w"))
+    assert rutas["png:t1"].endswith("png_t1.png") and "ancho_px" not in doc["pistas"][1]["clips"][0]
 
 
 def test_producir_falla_si_la_final_no_existe(entorno, monkeypatch):
