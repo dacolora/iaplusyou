@@ -54,6 +54,34 @@ def test_exp_refrescar_todos_encola_los_corriendo(base_temporal, monkeypatch):
     assert all(x[0] == "exp_refrescar" for x in encolados)
 
 
+def test_ctx_lleva_es_imagen_segun_la_pieza(base_temporal, monkeypatch):
+    import experimentos as ex
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import _pieza, _pieza_imagen
+    tareas.cargar_todas()
+    contextos = []
+
+    def fake_decidir(snaps, reglas, contexto):
+        contextos.append(contexto)
+        return {"veredicto": "pendiente", "motivo": "", "accion": None, "puerta": 0, "numeros": {}}
+    monkeypatch.setattr(te.decisor, "decidir", fake_decidir)
+
+    def _decidir_con(pid):
+        eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+        ex.actualizar("acme", eid, estado="corriendo")
+        ep = ex.agregar_pieza("acme", eid, pid, "CO")
+        ex.actualizar_pieza("acme", ep, meta_ad_id=f"ad{ep}", estado="activo")
+        te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+
+    _decidir_con(_pieza(base_temporal))
+    _decidir_con(_pieza_imagen(base_temporal))
+
+    assert len(contextos) == 2
+    assert contextos[0]["es_imagen"] is False
+    assert contextos[1]["es_imagen"] is True
+
+
 def test_periodica_registrada():
     import worker
     assert ("exp_refrescar_todos", 7200) in worker.PERIODICAS

@@ -356,7 +356,8 @@ def exp_decidir(tarea):
             ctx = {"horas_activo": _horas_activo(pz, snaps, ahora), "presupuesto_dia": pais.get("presupuesto_dia"),
                    "dias_experimento": ex.get("dias"), "dias_transcurridos": dias_transcurridos,
                    "escalon_rescate": pz.get("escalon_rescate") or 0, "atribucion": ex.get("atribucion"),
-                   "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden)}
+                   "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden),
+                   "es_imagen": bool(pz.get("es_imagen"))}
             v = decisor.decidir(snaps, reglas, ctx)
             if v["veredicto"] == "pendiente":
                 continue
