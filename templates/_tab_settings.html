@@ -1,6 +1,6 @@
 {# Configuración = puesta a punto del proyecto. Orden: Puesta a punto (llaves
    por servicio, `llaves` de dashboard._estado_llaves: solo estado, nunca el
-   valor) → Gasto (real del mes + historial) → Conectar tu tienda → Pixel → Canales orgánicos → Correo de avisos → Nombre → Modelos →
+   valor) → Cuenta (correo/contraseña del usuario) → Gasto (real del mes + historial) → Conectar tu tienda → Pixel → Canales orgánicos → Correo de avisos → Nombre → Modelos →
    Logos → Marca → informe (admin). Las reglas del decisor ya no están aquí:
    viven en Experimentos › «Reglas del motor» (ruta cfg_reglas). #}
 
@@ -50,6 +50,59 @@
   </article>
   {% endfor %}
 </div>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
+{# ---- Cuenta: correo (verificado o no) y contraseña del usuario de la
+   sesión. cuenta_actual/smtp_ok vienen del context processor
+   _cuenta_en_plantillas; el admin ve el bloque con su propia cuenta. ---- #}
+<h2 id="config-cuenta">Cuenta</h2>
+{% if cuenta_actual is defined and cuenta_actual %}
+<p class="vacio" style="padding-top:0;">
+  Usuario <strong>{{ session['usuario'] }}</strong>
+  {% if cuenta_actual.correo %}
+  · correo <strong>{{ cuenta_actual.correo }}</strong>
+  {% if cuenta_actual.correo_verificado %}<span class="tag-estado tag-en-uso">confirmado</span>
+  {% else %}<span class="tag-estado tag-advertencia">sin confirmar</span>{% endif %}
+  {% else %}
+  · <span class="tag-estado tag-advertencia">sin correo</span>
+  {% endif %}
+</p>
+{% if cuenta_actual.correo and not cuenta_actual.correo_verificado %}
+<p class="vacio" style="padding-top:0;">
+  Abre el enlace que te mandamos a {{ cuenta_actual.correo }} para confirmarlo.
+  {% if smtp_ok %}
+  <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="inline"><button type="submit" class="btn-guardar btn-xs">Reenviar el correo</button></form>
+  {% else %}
+  <span class="tag-error">El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.</span>
+  {% endif %}
+</p>
+{% endif %}
+<div class="fila-campos-idea" style="align-items:flex-start;">
+  <form method="post" action="{{ url_for('cuenta_correo') }}" class="form-nueva-idea" id="form-cuenta-correo">
+    <h3 style="margin-top:0;">{% if cuenta_actual.correo %}Cambiar correo{% else %}Poner correo{% endif %}</h3>
+    <label class="campo-label">Correo nuevo</label>
+    <input type="email" name="correo" autocomplete="email" placeholder="tu@empresa.com" required>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Contraseña actual</label>
+    <input type="password" name="password" autocomplete="current-password" required>
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">El correo nuevo queda sin confirmar hasta que abras el enlace que le mandamos.</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+  </form>
+  <form method="post" action="{{ url_for('cuenta_password') }}" class="form-nueva-idea" id="form-cuenta-password">
+    <h3 style="margin-top:0;">Cambiar contraseña</h3>
+    <label class="campo-label">Contraseña actual</label>
+    <input type="password" name="password_actual" autocomplete="current-password" required>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Nueva (mínimo 8 caracteres)</label>
+    <input type="password" name="password" autocomplete="new-password" required minlength="8">
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Repítela</label>
+    <input type="password" name="confirmacion" autocomplete="new-password" required minlength="8">
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue.</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Cambiar contraseña</button>
+  </form>
+</div>
+{% else %}
+<p class="vacio">No hay una cuenta en esta sesión.</p>
+{% endif %}
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 

@@ -59,15 +59,18 @@
   </div>
   <form method="post" action="{{ url_for('crear_proyecto') }}" class="form-nueva-idea landing-form">
     <label class="campo-label">Nombre de tu empresa o marca</label>
-    <input type="text" name="nombre" placeholder="ej. Happy Flops" required>
+    <input type="text" name="nombre" placeholder="ej. Happy Flops" required value="{{ form.nombre if form else '' }}">
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Tu correo</label>
+    <input type="email" name="correo" autocomplete="email" placeholder="tu@empresa.com" required value="{{ form.correo if form else '' }}">
+    <p class="vacio" style="font-size:.74rem;padding:.2rem 0 0;">Te mandamos un enlace para confirmarlo; con él también recuperas la contraseña si la olvidas.</p>
     <div class="fila-campos-idea">
       <div>
         <label class="campo-label">Usuario</label>
-        <input type="text" name="usuario" autocomplete="username" required>
+        <input type="text" name="usuario" autocomplete="username" required pattern="[a-z0-9._-]{3,40}" title="Entre 3 y 40 caracteres: minúsculas, números, puntos, guiones y guiones bajos." value="{{ form.usuario if form else '' }}">
       </div>
       <div>
         <label class="campo-label">Contraseña</label>
-        <input type="password" name="password" autocomplete="new-password" required>
+        <input type="password" name="password" autocomplete="new-password" required minlength="8">
       </div>
     </div>
     <button type="submit" class="btn-generar" style="margin-top:.6rem;">Crear mi proyecto →</button>

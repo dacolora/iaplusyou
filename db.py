@@ -332,6 +332,24 @@ kv = Table("kv", metadata,
     Column("actualizado_en", String(19), nullable=False),
 )
 
+# --- Cuentas (docs/superpowers/plans/2026-09-19-cuentas-correo-verificado.md) ---
+# Tokens de verificación de correo y de restablecimiento de contraseña. El
+# usuario sigue viviendo en usuarios.json; acá solo va el sha256 del token
+# (nunca el token crudo), su tipo, para quién es, a qué correo se mandó,
+# cuándo vence y cuándo se usó — de un solo uso (migración 0011).
+
+token_cuenta = Table("token_cuenta", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("usuario", String(80), nullable=False, index=True),
+    Column("tipo", String(12), nullable=False),               # verificacion|restablecer
+    Column("correo", String(254), nullable=False),
+    Column("token_hash", String(64), nullable=False, unique=True),
+    Column("creado_en", String(19), nullable=False),
+    Column("vence_en", String(19), nullable=False),
+    Column("usado_en", String(19)),
+    Column("ip", String(45)),
+)
+
 # --- Sprints de contenido (docs/superpowers/specs/2026-09-16-sprints-design.md, Parte 1) ---
 
 persona = Table("persona", metadata,
