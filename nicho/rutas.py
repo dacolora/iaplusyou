@@ -10,7 +10,7 @@ cliente.html para la pestaña; el estudio abre en su propia página
 """
 import io
 
-from flask import Blueprint, Response, abort, flash, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
 
 import catalogo_productos
 import gastos
@@ -18,8 +18,12 @@ import proyectos
 import trabajos
 from nicho import avatares, datos, exportar
 from nicho import fuentes as fuentes_registro
+from nicho.fuentes import apify as fuente_apify
+from nicho.fuentes import apify_actores
 from nicho.fuentes import archivo as fuente_archivo
+from nicho.fuentes import reddit as fuente_reddit
 from nicho.fuentes import texto as fuente_texto
+from nicho.fuentes import youtube as fuente_youtube
 from nicho.fuentes.base import ErrorFuente
 from tareas import nicho as tareas_nicho
 
@@ -63,6 +67,40 @@ def _productos(cliente):
             for p in catalogo_productos.listar(cliente, "producto")]
 
 
+_NORMALIZAR = {"reddit": fuente_reddit.normalizar_params, "youtube": fuente_youtube.normalizar_params,
+               "apify": fuente_apify.normalizar_params}
+
+
+def _entero(campo, defecto):
+    try:
+        return int(request.form.get(campo) or defecto)
+    except ValueError:
+        raise datos.ErrorDatos(f"«{campo}» debe ser un número entero.")
+
+
+def _fuentes_conectadas(cliente, eid):
+    """Tarjetas de Reddit, YouTube y Apify: qué llave falta y si hay una recolección viva."""
+    salida = []
+    for tipo in fuentes_registro.CONECTADAS:
+        job = datos.job_id_recolectar(cliente, eid, tipo)
+        salida.append({"tipo": tipo, "nombre": fuentes_registro.NOMBRES[tipo], "faltan": fuentes_registro.llaves_faltantes(tipo),
+                       "job_id": job, "en_curso": trabajos.en_curso(job)})
+    return salida
+
+
+def _params_desde_form(fuente, est, cliente):
+    f = request.form
+    if fuente == "reddit":
+        return {"palabras_clave": f.get("palabras_clave") or "", "subreddits": _partir(f.get("subreddits")), "links": _lineas(f.get("links")),
+                "max_posts": _entero("max_posts", 10), "max_comentarios_por_post": _entero("max_comentarios_por_post", 50),
+                "periodo": f.get("periodo") or "year"}
+    if fuente == "youtube":
+        return {"palabras_clave": f.get("palabras_clave") or "", "links": _lineas(f.get("links")), "max_videos": _entero("max_videos", 5),
+                "max_comentarios_por_video": _entero("max_comentarios_por_video", 100),
+                "idioma": f.get("idioma") or est.get("idioma") or "es", "region": f.get("region") or proyectos.pais(cliente) or ""}
+    return {"actor": f.get("actor") or "", "links": _lineas(f.get("links")), "max_resultados": _entero("max_resultados", 200)}
+
+
 def contexto(cliente):
     """Lo que necesita _tab_nicho.html. Se llama desde dashboard.ver_cliente."""
     return {"estudios_nicho": datos.estudios(cliente), "productos_nicho": _productos(cliente),
@@ -104,7 +142,12 @@ def ver(cliente, eid):
         estimado=estimado, precio_texto=gastos.formatear(estimado["usd"]), min_comentarios=avatares.MIN_COMENTARIOS,
         trabajo_generar=({"job_id": job} if trabajos.en_curso(job) else None),
         modos_texto=fuente_texto.NOMBRES_MODO, fuentes_nombre=fuentes_registro.NOMBRES, idiomas=avatares.IDIOMAS,
-        niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, productos_nicho=_productos(cliente))
+        niveles_conciencia=datos.NIVELES_CONCIENCIA, bases=datos.BASES, productos_nicho=_productos(cliente),
+        fuentes_conectadas=_fuentes_conectadas(cliente, eid),
+        actores_apify=[{"clave": k, "nombre": a["nombre"], "usd_por_resultado": a["usd_por_resultado"], "ayuda": a["ayuda"]}
+                       for k, a in apify_actores.ACTORES.items()],
+        recolecciones=list(reversed((est["extra"].get("recolecciones") or [])[-5:])),
+        periodos_reddit=fuente_reddit.PERIODOS, max_apify=apify_actores.MAX_RESULTADOS, region_defecto=proyectos.pais(cliente) or "")
 
 
 @bp.post("/<int:eid>/editar")
@@ -195,6 +238,41 @@ def comentarios_borrar(cliente, eid, fuente):
     datos.recalcular(cliente, eid)
     flash(f"Se quitaron {n} comentario(s) de {fuentes_registro.NOMBRES.get(fuente, fuente)}.", "ok")
     return _volver(cliente, eid)
+
+
+@bp.post("/<int:eid>/recolectar/<fuente>")
+def recolectar(cliente, eid, fuente):
+    est = _estudio_o_404(cliente, eid)
+    if fuente not in fuentes_registro.CONECTADAS:
+        abort(404)
+    if est["archivado"]:
+        flash("El estudio está archivado.", "error")
+        return _volver(cliente, eid)
+    faltan = fuentes_registro.llaves_faltantes(fuente)
+    if faltan:
+        flash(f"Falta {', '.join(faltan)} en el .env del servidor (Configuración › Puesta a punto).", "error")
+        return _volver(cliente, eid)
+    try:
+        params = _params_desde_form(fuente, est, cliente)
+        _NORMALIZAR[fuente](params)                     # valida el formulario sin tocar la red
+    except (ErrorFuente, datos.ErrorDatos) as e:
+        flash(str(e), "error")
+        return _volver(cliente, eid)
+    if tareas_nicho.encolar_recolectar(cliente, eid, fuente, params):
+        flash(f"Recolectando de {fuentes_registro.NOMBRES[fuente]}; la página se recarga sola al terminar.", "ok")
+    else:
+        flash(f"Ya hay una recolección de {fuentes_registro.NOMBRES[fuente]} en curso.", "error")
+    return _volver(cliente, eid)
+
+
+@bp.get("/<int:eid>/recolectar/apify/estimar")
+def apify_estimar(cliente, eid):
+    _estudio_o_404(cliente, eid)
+    try:
+        est = apify_actores.estimar(request.args.get("actor") or "", request.args.get("max") or 1)
+    except ErrorFuente as e:
+        return jsonify({"error": str(e)}), 400
+    return jsonify({**est, "texto": gastos.formatear(est["usd"])})
 
 
 # ----------------------------------------------------------- avatares ---
