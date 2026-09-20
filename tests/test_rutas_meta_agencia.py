@@ -309,7 +309,9 @@ def test_asignar_ok_con_avisos(app, monkeypatch):
     assert any("ahora lo gestiona Creatv en Meta: Cuenta Uno · Página Cliente" in m for m in flashes)
     assert any("experimentos anteriores" in m for m in flashes)          # cambio_cuenta
     assert any("no tiene Instagram vinculado" in m for m in flashes)     # Página sin IG
-    assert app["registros"] == [("acme", "meta", "agencia", "ok", "asignado por admin: Cuenta Uno · Página Cliente")]
+    assert app["registros"][0] == ("acme", "meta", "agencia", "ok", "asignado por admin: Cuenta Uno · Página Cliente")
+    # Al asignar se avisa al cliente (spec 2026-09-20 §2.4): sin SMTP queda solo en bitácora.
+    assert ("acme", "motor", "meta_conectado", "sin_correo", "Meta quedó conectado en Creatv") in app["registros"]
 
 
 def test_asignar_sin_pagina_y_sin_cuenta(app, monkeypatch):
@@ -456,3 +458,40 @@ def test_nombre_de_proyecto_no_entra_en_el_js_del_confirm(app, monkeypatch):
     html = app["admin"].get("/admin/meta").get_data(as_text=True)
     assert "alert(1)" not in html.split("confirm('")[1].split("')")[0]
     assert "this.dataset.nombre" in html and "data-nombre=\"x&#39;); alert(1); (&#39;\"" in html
+
+
+# ---- solicitudes de clientes (spec §2.4) ----
+
+def test_panel_lista_solicitudes_y_preselecciona(app, monkeypatch):
+    _fake_conectada(app, monkeypatch)
+    app["ma"].solicitar("acme", "77700077700", ad_account_id="act_9", page_id="p2", nota="no veo nada", usuario="alguien")
+    html = app["admin"].get("/admin/meta").get_data(as_text=True)
+    assert "Solicitudes de clientes" in html and 'id="agencia-solicitud-acme"' in html
+    assert "77700077700" in html and "no veo nada" in html and 'action="/admin/meta/solicitud/acme/descartar"' in html
+    # El formulario de asignar de acme viene con la cuenta y la Página que el cliente escribió.
+    inicio = html.index('action="/admin/meta/asignar/acme"')
+    bloque = html[inicio:inicio + 2500]
+    assert '<option value="act_9" selected>' in bloque and '<option value="p2" selected>' in bloque
+
+
+def test_descartar_solicitud(app, monkeypatch):
+    _fake_conectada(app, monkeypatch)
+    app["ma"].solicitar("acme", "77700077700")
+    r = app["admin"].post("/admin/meta/solicitud/acme/descartar", headers=SAME_ORIGIN)
+    assert r.status_code == 302 and app["ma"].solicitud("acme") is None
+    assert any("Solicitud descartada" in m for m in _flashes(app["admin"]))
+    r = app["admin"].post("/admin/meta/solicitud/acme/descartar", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    r = _cliente_rol_cliente(app["dashboard"]).post("/admin/meta/solicitud/acme/descartar", headers=SAME_ORIGIN)
+    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+
+
+def test_asignar_cierra_la_solicitud_y_avisa_al_cliente(app, monkeypatch):
+    _fake_conectada(app, monkeypatch)
+    app["ma"].solicitar("acme", "77700077700")
+    monkeypatch.setattr(app["ma"], "asignar", lambda *a, **k: {"ad_account_id": "act_1", "ad_account_nombre": "Cuenta Uno",
+                                                                  "page_id": "p1", "page_nombre": "Página Propia", "ig_username": "propia_ig"})
+    avisos = []
+    monkeypatch.setattr(app["dashboard"].notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: avisos.append((c, tipo)) or True)
+    app["admin"].post("/admin/meta/asignar/acme", data={"ad_account_id": "act_1", "page_id": "p1"}, headers=SAME_ORIGIN)
+    assert app["ma"].solicitud("acme") is None and avisos == [("acme", "meta_conectado")]

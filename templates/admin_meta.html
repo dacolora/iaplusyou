@@ -148,6 +148,34 @@
 </section>
 {% endif %}
 
+{# ---- Solicitudes de clientes: forma «agencia» que no vio sus activos ---- #}
+{% if solicitudes %}
+<section class="admin-bloque aparece" id="agencia-solicitudes">
+  <div class="admin-cabecera">
+    <h2>Solicitudes de clientes</h2>
+    <span class="vacio">compartieron sus activos con Creatv pero no los vieron desde Configuración: asígnalos en la tabla de proyectos (el formulario ya trae lo que escribieron) y la solicitud se cierra sola</span>
+  </div>
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>Proyecto</th><th>Portafolio</th><th>Cuenta</th><th>Página</th><th>Nota</th><th>Fecha</th><th></th></tr></thead>
+      <tbody>
+      {% for s in solicitudes %}
+      <tr id="agencia-solicitud-{{ s.cliente }}">
+        <td><a href="#agencia-proyecto-{{ s.cliente }}">{{ s.nombre }}</a></td>
+        <td>{{ s.portafolio_id }}</td>
+        <td>{{ s.ad_account_id or '—' }}</td>
+        <td>{{ s.page_id or '—' }}</td>
+        <td>{{ s.nota or '' }}</td>
+        <td>{{ (s.creado_en or '')[:16] }}</td>
+        <td><form method="post" action="{{ url_for('admin_meta_solicitud_descartar', cliente=s.cliente) }}" onsubmit="return confirm('¿Descartar la solicitud? El cliente no recibe aviso.');"><button type="submit" class="btn-rechazar btn-sm">Descartar</button></form></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 {# ---- Proyectos: modo y asignación ---- #}
 <section class="admin-bloque aparece" id="agencia-proyectos">
   <div class="admin-cabecera">
@@ -166,6 +194,7 @@
       <tbody>
       {% for f in proyectos_meta %}
       {% set d = f.detalle or {} %}
+      {% set sol = solicitudes_por_cliente.get(f.id) if solicitudes_por_cliente is defined else none %}
       <tr id="agencia-proyecto-{{ f.id }}">
         <td><a href="{{ url_for('ver_cliente', cliente=f.id, _anchor='settings') }}">{{ f.nombre }}</a><br><code class="vacio" style="padding:0;font-size:.72rem;">{{ f.id }}</code></td>
         <td>{% if f.modo == "agencia" %}<span class="tag-estado tag-en-uso">agencia</span>{% else %}<span class="tag-estado">propia</span>{% endif %}</td>
@@ -189,13 +218,13 @@
             <select name="ad_account_id" required>
               <option value="">— cuenta publicitaria —</option>
               {% for a in activos.ad_accounts %}
-              <option value="{{ a.id }}"{% if d.ad_account_id == a.id %} selected{% endif %}>{{ a.name }} · {{ a.currency or '?' }} · {% if a.activa %}activa{% else %}inactiva{% endif %} · {% if a.origen == "propia" %}propia{% else %}cliente{% endif %}</option>
+              <option value="{{ a.id }}"{% if d.ad_account_id == a.id or (sol and sol.ad_account_id == a.id) %} selected{% endif %}>{{ a.name }} · {{ a.currency or '?' }} · {% if a.activa %}activa{% else %}inactiva{% endif %} · {% if a.origen == "propia" %}propia{% else %}cliente{% endif %}</option>
               {% endfor %}
             </select>
             <select name="page_id">
               <option value="">— sin Página (solo anuncios) —</option>
               {% for p in activos.pages %}
-              <option value="{{ p.id }}"{% if d.page_id == p.id %} selected{% endif %}>{{ p.name }}{% if p.ig_username %} (@{{ p.ig_username }}){% endif %} · {% if p.origen == "propia" %}propia{% else %}cliente{% endif %}</option>
+              <option value="{{ p.id }}"{% if d.page_id == p.id or (sol and sol.page_id == p.id) %} selected{% endif %}>{{ p.name }}{% if p.ig_username %} (@{{ p.ig_username }}){% endif %} · {% if p.origen == "propia" %}propia{% else %}cliente{% endif %}</option>
               {% endfor %}
             </select>
             <button type="submit" class="btn-generar btn-sm"{% if not activos.ad_accounts %} disabled{% endif %}>Asignar</button>

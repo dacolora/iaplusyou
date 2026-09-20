@@ -3180,9 +3180,14 @@ def admin_meta():
         except meta_conexion.MetaConexionError as e:
             error_activos = cola.sin_token(str(e))
     filas = _proyectos_meta_admin(conectada)
+    # Solicitudes de clientes en forma «agencia» que no vieron sus activos (spec 2026-09-20 §2.4).
+    solicitudes = meta_agencia.solicitudes()
+    for s in solicitudes:
+        s["nombre"] = proyectos.nombre_visible(s["cliente"])
     return render_template(
         "admin_meta.html",
         agencia=estado_ag, conectada=conectada, activos=activos, error_activos=error_activos,
+        solicitudes=solicitudes, solicitudes_por_cliente={s["cliente"]: s for s in solicitudes},
         proyectos_meta=filas, asignados=sum(1 for f in filas if f["modo"] == meta_conexion.MODO_AGENCIA),
         cifrado_ok=cifrado.disponible(), permisos_agencia=", ".join(PERMISOS_AGENCIA),
         registro_ilegible=meta_agencia._registro_ilegible() if not conectada else False,
@@ -3269,6 +3274,10 @@ def admin_meta_asignar(cliente):
     cuenta = detalle.get("ad_account_nombre") or detalle.get("ad_account_id")
     pagina = detalle.get("page_nombre") or detalle.get("page_id") or "sin Página"
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"asignado por {session.get('usuario')}: {cuenta} · {pagina}")
+    meta_agencia.borrar_solicitud(cliente)  # asignar() ya la borra; acá también por si asignar fue reemplazado o falló a medias
+    notificaciones.avisar(cliente, "meta_conectado", "Meta quedó conectado en Creatv",
+                          f"Tu proyecto {proyectos.nombre_visible(cliente)} ya está conectado a Meta: cuenta {cuenta} · Página {pagina}. "
+                          "Ya puedes probar piezas en Experimentos y publicar contenido.")
     ig = f" · Instagram @{detalle['ig_username']}" if detalle.get("ig_username") else ""
     flash(f"{proyectos.nombre_visible(cliente)} ahora lo gestiona Creatv en Meta: {cuenta} · {pagina}{ig}.", "ok")
     if detalle.get("cambio_cuenta"):
@@ -3292,6 +3301,20 @@ def admin_meta_desasignar(cliente):
     bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
     flash(f"{proyectos.nombre_visible(cliente)} volvió a modo propia: si tenía su propia conexión se restauró; "
           "si no, tendrá que registrar su app y conectar con Meta.", "ok")
+    return _volver_admin_meta()
+
+
+@app.route("/admin/meta/solicitud/<cliente>/descartar", methods=["POST"])
+@requiere_admin
+def admin_meta_solicitud_descartar(cliente):
+    if not _mismo_origen():
+        abort(403)
+    _cliente_o_404(cliente)
+    if meta_agencia.borrar_solicitud(cliente):
+        bitacora.registrar(cliente, "meta", "agencia", "ok", f"solicitud descartada por {session.get('usuario')}")
+        flash(f"Solicitud descartada. {proyectos.nombre_visible(cliente)} no recibe aviso.", "ok")
+    else:
+        flash("Ese proyecto no tenía solicitud pendiente.", "warn")
     return _volver_admin_meta()
 
 
