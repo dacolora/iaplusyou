@@ -294,6 +294,7 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None, prompt_relleno=None, var
         for k in ("credits", "sonido", "video_url_crudo", "video_local_crudo"):
             extra.pop(k, None)
         extra.pop("director", None)
+        extra.pop("variante", None)
         if prompt_relleno:
             extra["prompt_relleno"] = prompt_relleno
         if variante:
