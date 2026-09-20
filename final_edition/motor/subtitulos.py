@@ -1,9 +1,10 @@
 """Subtítulos como un solo archivo ASS (spec §2.1 punto 5): un filtro
 `subtitles` en vez de un `overlay` por palabra. Sin límite por cantidad.
 
-En una máquina cuyo ffmpeg no trae libass (la Mac de desarrollo), el
-compilador cae a PNG por ventana (Task 9); este módulo es puro y se prueba
-en todas partes."""
+Si el ffmpeg de la máquina no trae libass (la Mac de desarrollo), el render
+omite los subtítulos y lo avisa por `on_etapa` (`motor/render.tiene_libass`);
+en el VPS (ffmpeg 8 con libass) entran por el filtro `subtitles`. Este módulo
+es puro y se prueba en todas partes."""
 import re
 
 from final_edition.documento import FORMATOS

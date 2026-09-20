@@ -253,10 +253,11 @@ frames come from A's tail (`recorte.hasta_ms + d × velocidad`), and a hard cut 
 `concat,settb=1/fps`. Audio chains one filter per clip
 (`atrim`/`asetpts`/`volume`/`afade` at real clip edges, `adelay` past the window start),
 `amix`ed per role at ≥ 2 clips into `mezcla.filtro_mezcla`, with `anullsrc` covering a
-window with no audio clip so `concat -c copy` never breaks on a stream mismatch; only x/y
-keyframes are interpreted (piecewise-linear in `t` — escala/opacidad/rotación wait for
-PNG-alpha layers). Free texts are browser-rendered PNGs (`rutas["png:<clip_id>"]`,
-`ancho_px`/`alto_px` per clip, 400×200 fallback) placed via `final_edition/geometria.py`'s
+window with no audio clip so `concat -c copy` never breaks on a stream mismatch, and `-t`
+always closes the output (the mix carries `apad` too); only x/y keyframes are interpreted
+(piecewise-linear in `t` — escala/opacidad/rotación wait for PNG-alpha layers). Free
+texts are browser-rendered PNGs (`rutas["png:<clip_id>"]`, `ancho_px`/`alto_px` per clip,
+400×200 fallback) placed via `final_edition/geometria.py`'s
 fraction→pixel math (round-half-up; `tests/fixtures/geometria_casos.json` is the parity
 table the browser must match too). `motor/tramos.py` splits into windows past
 `PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
