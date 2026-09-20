@@ -19,6 +19,10 @@ def test_migracion_0011_crea_las_tablas(tmp_path, monkeypatch):
     cols = {c["name"] for c in insp.get_columns("avatar")}
     assert {"padre_id", "tipo", "base", "identidad", "soluciones_previas", "conciencia", "evidencia", "sin_evidencia",
             "persona_id", "generacion"} <= cols
+    command.downgrade(Config(os.path.join(raiz, "alembic.ini")), "0010")
+    insp = sa.inspect(db.engine())
+    assert not ({"estudio", "comentario", "avatar"} & set(insp.get_table_names()))
+    assert "persona" in insp.get_table_names()
     db._reset_para_tests()
 
 
