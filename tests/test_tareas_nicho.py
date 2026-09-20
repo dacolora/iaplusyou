@@ -242,7 +242,7 @@ def test_ejecutar_recolectar_fallo_guarda_lo_leido_y_relanza(base_temporal, monk
     from nicho.fuentes.base import ErrorFuente
     from tareas import nicho as tareas_nicho
     eid = datos.crear_estudio("acme", "X")
-    _fuente_falsa(monkeypatch, programa=_comentarios_falsos(5), fallo_en=3, fallo_exc=ErrorFuente("Reddit rechazó la llamada (token=abc)."))
+    _fuente_falsa(monkeypatch, programa=_comentarios_falsos(5), fallo_en=3, fallo_exc=ErrorFuente("Reddit rechazó la llamada (access_token=abc)."))
     with pytest.raises(ErrorFuente):
         tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "reddit"))
     e = datos.estudio("acme", eid)
