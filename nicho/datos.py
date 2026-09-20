@@ -302,3 +302,191 @@ def borrar_fuente(cliente, estudio_id, fuente):
         r = con.execute(db.comentario.delete().where(
             db.comentario.c.cliente == cliente, db.comentario.c.estudio_id == estudio_id, db.comentario.c.fuente == fuente))
     return int(r.rowcount or 0)
+
+
+# ----------------------------------------------------------- avatares ---
+
+def _lista_textos(v, n=8, largo=300):
+    """Solo listas: un texto suelto (formulario mal armado, Claude) se ignora."""
+    if not isinstance(v, list):
+        return []
+    return [str(x).strip()[:largo] for x in v if str(x).strip()][:n]
+
+
+def validar_campos_avatar(campos):
+    """Normaliza los campos editables de un sub-avatar (formulario o Claude):
+    recorta largos, castea listas, deja `base` en BASES, `conciencia.nivel`
+    en NIVELES_CONCIENCIA o vacío (no se inventa), `identidad` con sus tres
+    claves. Solo acepta claves de AVATAR_EDITABLES + evidencia/sin_evidencia."""
+    permitidas = set(AVATAR_EDITABLES) | {"evidencia", "sin_evidencia"}
+    malos = set(campos) - permitidas
+    if malos:
+        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+    c = dict(campos)
+    if "nombre" in c:
+        c["nombre"] = _texto(c["nombre"], 120)
+        if not c["nombre"]:
+            raise ErrorDatos("El avatar necesita un nombre.")
+    if "deseo" in c:
+        c["deseo"] = _texto(c["deseo"], 300)
+    for k in ("demografia", "emocion", "comportamiento", "encaje_producto", "tono"):
+        if k in c:
+            c[k] = _texto(c[k], 1500)
+    if "edad_rango" in c:
+        c["edad_rango"] = _texto(c["edad_rango"], 20)
+    if "base" in c:
+        c["base"] = c["base"] if c["base"] in BASES else "emocion"
+    if "identidad" in c:
+        ident = c["identidad"] if isinstance(c["identidad"], dict) else {}
+        c["identidad"] = {k: _texto(ident.get(k), 1500) for k in CLAVES_IDENTIDAD}
+    if "soluciones_previas" in c:
+        limpias = []
+        for s in (c["soluciones_previas"] if isinstance(c["soluciones_previas"], list) else [])[:8]:
+            if isinstance(s, dict) and _texto(s.get("que")):
+                limpias.append({"que": _texto(s.get("que"), 300), "por_que_fallo": _lista_textos(s.get("por_que_fallo"))})
+        c["soluciones_previas"] = limpias
+    if "situaciones" in c:
+        c["situaciones"] = _lista_textos(c["situaciones"])
+    if "palabras_clave" in c:
+        c["palabras_clave"] = _lista_textos(c["palabras_clave"], n=8, largo=60)
+    if "conciencia" in c:
+        con_ = c["conciencia"] if isinstance(c["conciencia"], dict) else {}
+        nivel = con_.get("nivel") if con_.get("nivel") in NIVELES_CONCIENCIA else ""
+        c["conciencia"] = {"nivel": nivel, "detalle": _texto(con_.get("detalle"), 1500)}
+    if "evidencia" in c:
+        ev = []
+        for e in (c["evidencia"] if isinstance(c["evidencia"], list) else [])[:8]:
+            if isinstance(e, dict) and _texto(e.get("cita")):
+                try:
+                    ev.append({"comentario_id": int(e.get("comentario_id")), "cita": _texto(e.get("cita"), 500)})
+                except (TypeError, ValueError):
+                    continue
+        c["evidencia"] = ev
+    if "sin_evidencia" in c:
+        c["sin_evidencia"] = bool(c["sin_evidencia"])
+    return c
+
+
+_SUB_VACIO = {"demografia": "", "edad_rango": "", "emocion": "", "identidad": {}, "soluciones_previas": [],
+              "situaciones": [], "comportamiento": "", "conciencia": {}, "encaje_producto": "", "tono": "",
+              "palabras_clave": [], "evidencia": [], "sin_evidencia": False}
+
+
+def guardar_generacion(cliente, estudio_id, nucleos, resumen=None):
+    """Una sola transacción (spec §4.6): sube `generacion`, borra los
+    sub-avatares propuesto/descartado de corridas anteriores y los núcleos que
+    quedan sin ningún aprobado, inserta lo nuevo con la generación actual,
+    deja el estudio en `revisando` y guarda el resumen en extra."""
+    ahora = db.ahora()
+    a = db.avatar
+    with db.conectar() as con:
+        if not _bloquear(con, db.estudio, estudio_id, cliente):
+            raise ErrorDatos("Ese estudio no existe.")
+        f = _fila(con, db.estudio, estudio_id, cliente)
+        g = int(f.generacion or 0) + 1
+        con.execute(a.delete().where(a.c.estudio_id == estudio_id, a.c.cliente == cliente, a.c.tipo == "sub",
+                                     a.c.estado.in_(("propuesto", "descartado"))))
+        con_hijos = sa.select(a.c.padre_id).where(a.c.estudio_id == estudio_id, a.c.padre_id.isnot(None))
+        con.execute(a.delete().where(a.c.estudio_id == estudio_id, a.c.cliente == cliente, a.c.tipo == "nucleo",
+                                     a.c.id.notin_(con_hijos)))
+        n_subs = 0
+        for i, n in enumerate(nucleos or []):
+            nid = con.execute(a.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id, padre_id=None,
+                tipo="nucleo", base=None, orden=i, generacion=g, nombre=_texto(n.get("nombre"), 120) or "Sin nombre",
+                deseo=_texto(n.get("deseo"), 300), resumen=_texto(n.get("resumen")), estado="propuesto", persona_id=None,
+                extra={"error": _texto(n.get("error"), 500)} if n.get("error") else {}, **_SUB_VACIO)).inserted_primary_key[0]
+            for j, s in enumerate(n.get("sub_avatares") or []):
+                campos = {**_SUB_VACIO, "base": "emocion", **validar_campos_avatar(
+                    {k: v for k, v in dict(s).items() if k in AVATAR_EDITABLES or k in ("evidencia", "sin_evidencia")})}
+                campos["resumen"] = ""
+                con.execute(a.insert().values(cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id,
+                                              padre_id=nid, tipo="sub", orden=j, generacion=g, estado="propuesto",
+                                              persona_id=None, extra={}, **campos))
+                n_subs += 1
+        extra = dict(f.extra or {})
+        extra["ultima_generacion"] = {**dict(resumen or {}), "generacion": g, "fecha": ahora}
+        extra.pop("ultimo_error", None)
+        con.execute(db.estudio.update().where(db.estudio.c.id == estudio_id)
+                    .values(actualizado_en=ahora, generacion=g, estado="revisando", extra=extra))
+    return {"generacion": g, "nucleos": len(nucleos or []), "subs": n_subs}
+
+
+def avatares(cliente, estudio_id):
+    """Núcleos con sus `subs` anidados, en orden (generación, orden, id)."""
+    a = db.avatar
+    with db.conectar() as con:
+        filas = [_a_dict(f) for f in con.execute(sa.select(a).where(
+            a.c.estudio_id == estudio_id, a.c.cliente == cliente).order_by(a.c.generacion, a.c.orden, a.c.id))]
+    nucleos = [dict(f, subs=[]) for f in filas if f["tipo"] == "nucleo"]
+    por_id = {n["id"]: n for n in nucleos}
+    for f in filas:
+        if f["tipo"] == "sub" and f["padre_id"] in por_id:
+            por_id[f["padre_id"]]["subs"].append(f)
+    return nucleos
+
+
+def avatar(cliente, avatar_id):
+    with db.conectar() as con:
+        f = _fila(con, db.avatar, avatar_id, cliente)
+    return _a_dict(f) if f else None
+
+
+def actualizar_avatar(cliente, avatar_id, /, **campos):
+    campos = validar_campos_avatar({k: v for k, v in campos.items()})
+    if "evidencia" in campos or "sin_evidencia" in campos:
+        raise ErrorDatos("La evidencia no se edita a mano.")
+    with db.conectar() as con:
+        return _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, campos)
+
+
+def persona_desde_avatar(a):
+    """Mapeo del spec §5: nombre, resumen ← deseo, descripción ← demografía +
+    emoción + comportamiento + soluciones previas, edad, tono, señales
+    visuales ← situaciones, palabras clave."""
+    soluciones = []
+    for s in a.get("soluciones_previas") or []:
+        que = (s.get("que") or "").strip()
+        if not que:
+            continue
+        fallas = ", ".join(x for x in (s.get("por_que_fallo") or []) if x)
+        soluciones.append(f"Usó {que}" + (f": {fallas}" if fallas else ""))
+    partes = [a.get("demografia"), a.get("emocion"), a.get("comportamiento"), ". ".join(soluciones)]
+    descripcion = ". ".join(p.strip().rstrip(".") for p in partes if p and p.strip())
+    return {"nombre": a["nombre"], "resumen": (a.get("deseo") or "")[:200], "descripcion": descripcion,
+            "edad_rango": a.get("edad_rango") or "", "tono": a.get("tono") or "",
+            "senales_visuales": list(a.get("situaciones") or []), "palabras_clave": list(a.get("palabras_clave") or [])}
+
+
+def aprobar_avatar(cliente, avatar_id):
+    """Crea la persona (origen `investigada`) o, si el avatar ya tiene una,
+    la actualiza y la desarchiva. Solo sub-avatares. Devuelve persona_id."""
+    a = avatar(cliente, avatar_id)
+    if not a:
+        raise ErrorDatos("Ese avatar no existe.")
+    if a["tipo"] != "sub":
+        raise ErrorDatos("Solo se aprueban los sub-avatares; el núcleo es una agrupación.")
+    campos = persona_desde_avatar(a)
+    extra = {"avatar_id": a["id"], "estudio_id": a["estudio_id"], "identidad": dict(a.get("identidad") or {}),
+             "conciencia": dict(a.get("conciencia") or {}), "encaje_producto": a.get("encaje_producto") or "",
+             "evidencia": list(a.get("evidencia") or [])}
+    pid = a.get("persona_id")
+    if pid and sprints_datos.persona(cliente, pid):
+        sprints_datos.actualizar_persona(cliente, pid, archivada=False, extra=extra, **campos)
+    else:
+        n = len(sprints_datos.personas(cliente, incluir_archivadas=True))
+        pid = sprints_datos.crear_persona(cliente, origen="investigada", color=COLORES[n % len(COLORES)], extra=extra, **campos)
+    with db.conectar() as con:
+        _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, {"estado": "aprobado", "persona_id": pid})
+    return pid
+
+
+def descartar_avatar(cliente, avatar_id):
+    """Marca `descartado`; si ya tenía persona, la archiva (reversible)."""
+    a = avatar(cliente, avatar_id)
+    if not a or a["tipo"] != "sub":
+        return False
+    if a.get("persona_id"):
+        sprints_datos.archivar_persona(cliente, a["persona_id"])
+    with db.conectar() as con:
+        return _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, {"estado": "descartado"})

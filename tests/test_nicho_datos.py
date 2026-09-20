@@ -87,3 +87,107 @@ def test_recalcular(base_temporal, monkeypatch):
     assert datos.recalcular("acme", eid, tarea_viva=False) == "armando"
     assert datos.recalcular("acme", 999) is None
     assert datos.job_id_generar("acme", eid) == f"nicho:acme:{eid}:generar"
+
+
+SUB = {
+    "base": "emocion", "nombre": "Melissa / La que regala con cabeza", "deseo": "Quiero regalar algo útil y personal",
+    "demografia": "Mujer de 30 a 50, ciudad", "edad_rango": "30-50", "emocion": "Presión por no quedar mal",
+    "identidad": {"quiere_que_vean": "detallista", "cree_de_si": "generosa", "quiere_lograr": "ser la que acierta"},
+    "soluciones_previas": [{"que": "Tarjetas de regalo", "por_que_fallo": ["impersonales", "sin valor duradero"]}],
+    "situaciones": ["Comprando a última hora", "Buscando en el centro comercial"],
+    "comportamiento": "Compra lo seguro aunque no emocione",
+    "conciencia": {"nivel": "inconsciente", "detalle": "No sabe que existe algo mejor"},
+    "encaje_producto": "Pantuflas con soporte: útil y personal", "tono": "Cálido, con culpa leve",
+    "palabras_clave": ["regalo", "detalle"], "evidencia": [{"comentario_id": 1, "cita": "la garrafa pesa demasiado"}],
+    "sin_evidencia": False,
+}
+
+
+def _estudio_con_generacion(datos, n_subs=2):
+    eid = datos.crear_estudio("acme", "X", producto="Pantuflas")
+    datos.agregar_comentarios("acme", eid, "texto", [_c(i) for i in range(1, 4)])
+    nucleos = [{"nombre": "Regalo con cabeza", "deseo": "Quiero regalar bien", "resumen": "Quienes regalan",
+                "sub_avatares": [dict(SUB, nombre=f"Sub {i}") for i in range(n_subs)]},
+               {"nombre": "Pies cansados", "deseo": "Quiero descansar los pies", "resumen": "", "sub_avatares": [], "error": "JSON inválido"}]
+    return eid, datos.guardar_generacion("acme", eid, nucleos, {"comentarios": 3, "usd": 0.04})
+
+
+def test_guardar_generacion_y_listar(base_temporal):
+    from nicho import datos
+    eid, r = _estudio_con_generacion(datos)
+    assert r == {"generacion": 1, "nucleos": 2, "subs": 2}
+    e = datos.estudio("acme", eid)
+    assert e["estado"] == "revisando" and e["generacion"] == 1 and e["extra"]["ultima_generacion"]["usd"] == 0.04
+    assert e["extra"]["ultima_generacion"]["generacion"] == 1 and e["avatares_total"] == 2 and e["avatares_aprobados"] == 0
+    nucleos = datos.avatares("acme", eid)
+    assert [n["nombre"] for n in nucleos] == ["Regalo con cabeza", "Pies cansados"]
+    assert nucleos[1]["extra"] == {"error": "JSON inválido"} and nucleos[1]["subs"] == []
+    s = nucleos[0]["subs"][0]
+    assert s["tipo"] == "sub" and s["padre_id"] == nucleos[0]["id"] and s["estado"] == "propuesto" and s["generacion"] == 1
+    assert s["identidad"]["cree_de_si"] == "generosa" and s["soluciones_previas"][0]["por_que_fallo"] == ["impersonales", "sin valor duradero"]
+    assert s["conciencia"] == {"nivel": "inconsciente", "detalle": "No sabe que existe algo mejor"} and s["sin_evidencia"] is False
+    assert datos.avatar("acme", s["id"])["nombre"] == "Sub 0" and datos.avatar("otro", s["id"]) is None
+    assert datos.avatares("otro", eid) == []
+
+
+def test_regenerar_conserva_aprobados(base_temporal):
+    from nicho import datos
+    eid, _ = _estudio_con_generacion(datos)
+    nucleos = datos.avatares("acme", eid)
+    aprobado = nucleos[0]["subs"][0]
+    pid = datos.aprobar_avatar("acme", aprobado["id"])
+    datos.descartar_avatar("acme", nucleos[0]["subs"][1]["id"])
+    r = datos.guardar_generacion("acme", eid, [{"nombre": "Nuevo", "deseo": "Quiero lo nuevo", "resumen": "", "sub_avatares": [SUB]}])
+    assert r["generacion"] == 2
+    lista = datos.avatares("acme", eid)
+    assert [n["nombre"] for n in lista] == ["Regalo con cabeza", "Nuevo"]            # "Pies cansados" (sin aprobados) se fue
+    assert [s["estado"] for s in lista[0]["subs"]] == ["aprobado"] and lista[0]["subs"][0]["persona_id"] == pid
+    assert lista[1]["subs"][0]["generacion"] == 2 and lista[1]["generacion"] == 2
+    assert datos.estudio("acme", eid)["generacion"] == 2
+
+
+def test_aprobar_crea_actualiza_y_descartar_archiva(base_temporal):
+    from nicho import datos
+    from sprints import datos as sd
+    eid, _ = _estudio_con_generacion(datos)
+    sub = datos.avatares("acme", eid)[0]["subs"][0]
+    pid = datos.aprobar_avatar("acme", sub["id"])
+    p = sd.persona("acme", pid)
+    assert p["origen"] == "investigada" and p["nombre"] == "Sub 0" and p["resumen"] == "Quiero regalar algo útil y personal"
+    assert p["edad_rango"] == "30-50" and p["tono"] == "Cálido, con culpa leve" and p["senales_visuales"] == SUB["situaciones"]
+    assert p["palabras_clave"] == ["regalo", "detalle"] and p["color"] in datos.COLORES
+    assert "Mujer de 30 a 50" in p["descripcion"] and "Usó Tarjetas de regalo: impersonales, sin valor duradero" in p["descripcion"]
+    assert p["extra"]["avatar_id"] == sub["id"] and p["extra"]["conciencia"]["nivel"] == "inconsciente" and p["extra"]["identidad"]["quiere_lograr"] == "ser la que acierta"
+    a = datos.avatar("acme", sub["id"])
+    assert a["estado"] == "aprobado" and a["persona_id"] == pid
+    datos.actualizar_avatar("acme", sub["id"], nombre="Melissa", tono="Directo")
+    assert sd.persona("acme", pid)["nombre"] == "Sub 0"                 # editar no toca la persona...
+    assert datos.aprobar_avatar("acme", sub["id"]) == pid               # ...hasta volver a aprobar: misma persona
+    assert sd.persona("acme", pid)["nombre"] == "Melissa" and sd.persona("acme", pid)["tono"] == "Directo"
+    assert len(sd.personas("acme", incluir_archivadas=True)) == 1
+    assert datos.descartar_avatar("acme", sub["id"]) and datos.avatar("acme", sub["id"])["estado"] == "descartado"
+    assert sd.persona("acme", pid)["archivada"] is True
+    assert datos.aprobar_avatar("acme", sub["id"]) == pid and sd.persona("acme", pid)["archivada"] is False
+    nucleo = datos.avatares("acme", eid)[0]
+    with pytest.raises(datos.ErrorDatos):
+        datos.aprobar_avatar("acme", nucleo["id"])                      # el núcleo no se aprueba
+    with pytest.raises(datos.ErrorDatos):
+        datos.aprobar_avatar("acme", 999)
+
+
+def test_actualizar_avatar_valida(base_temporal):
+    from nicho import datos
+    eid, _ = _estudio_con_generacion(datos)
+    sid = datos.avatares("acme", eid)[0]["subs"][0]["id"]
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_avatar("acme", sid, estado="aprobado")          # no editable por acá
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_avatar("acme", sid, nombre="  ")
+    assert datos.actualizar_avatar("acme", sid, base="rara", conciencia={"nivel": "x", "detalle": "d"},
+                                   soluciones_previas=[{"que": "", "por_que_fallo": ["a"]}, {"que": "Pods", "por_que_fallo": "no lista"}],
+                                   identidad={"cree_de_si": "fuerte", "otra": "x"}, palabras_clave="no lista")
+    a = datos.avatar("acme", sid)
+    assert a["base"] == "emocion" and a["conciencia"] == {"nivel": "", "detalle": "d"}
+    assert a["soluciones_previas"] == [{"que": "Pods", "por_que_fallo": []}]
+    assert a["identidad"] == {"quiere_que_vean": "", "cree_de_si": "fuerte", "quiere_lograr": ""} and a["palabras_clave"] == []
+    assert datos.actualizar_avatar("otro", sid, nombre="X") is False
