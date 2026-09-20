@@ -61,3 +61,61 @@ def test_fuente_texto_recolecta_normalizado():
     lista = list(fuentes.por_tipo("texto")().recolectar({"texto": "Muy pesada la garrafa\nok\n\nGotea en el estante", "modo": "lineas"}))
     assert [c["texto"] for c in lista] == ["Muy pesada la garrafa", "Gotea en el estante"]     # "ok" no llega a MIN_TEXTO
     assert lista[0]["fuente_id"] and lista[0]["url"] is None and lista[0]["extra"] == {}
+
+
+def _xlsx(filas):
+    import io
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    for f in filas:
+        ws.append(f)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_leer_csv_detecta_columnas():
+    from nicho.fuentes import archivo
+    csv = "Review;Rating;Date;Link\nLa garrafa pesa y gotea;4;2026-01-02;https://a.com/1\nab;5;;\nSe pega la tapa;;;\n"
+    lista = archivo.leer_archivo("resenas.csv", csv.encode("utf-8"))
+    assert [c["texto"] for c in lista] == ["La garrafa pesa y gotea", "Se pega la tapa"]
+    assert lista[0]["puntuacion"] == 4 and lista[0]["fecha"] == "2026-01-02T00:00:00" and lista[0]["url"] == "https://a.com/1"
+    assert lista[1]["puntuacion"] is None and lista[1]["url"] is None
+
+
+def test_leer_csv_sin_encabezado_conocido_usa_columna_mas_larga():
+    from nicho.fuentes import archivo
+    csv = "id,cosa,otra\n1,Un comentario bastante largo sobre la garrafa que pesa,x\n2,Otro comentario igual de largo sobre la tapa pegajosa,y\n"
+    assert [c["texto"] for c in archivo.leer_archivo("x.csv", csv.encode())] == [
+        "Un comentario bastante largo sobre la garrafa que pesa", "Otro comentario igual de largo sobre la tapa pegajosa"]
+
+
+def test_leer_xlsx():
+    from nicho.fuentes import archivo
+    contenido = _xlsx([["texto", "likes"], ["Muy pesada, no la vuelvo a comprar", 12], [None, 3], ["Gotea en el estante", "7"]])
+    lista = archivo.leer_archivo("r.xlsx", contenido)
+    assert [(c["texto"], c["puntuacion"]) for c in lista] == [("Muy pesada, no la vuelvo a comprar", 12), ("Gotea en el estante", 7)]
+
+
+def test_leer_archivo_errores():
+    from nicho.fuentes import archivo, base
+    with pytest.raises(base.ErrorFuente):
+        archivo.leer_archivo("x.txt", b"hola")
+    with pytest.raises(base.ErrorFuente):
+        archivo.leer_archivo("x.csv", b"a" * (archivo.MAX_BYTES + 1))
+    with pytest.raises(base.ErrorFuente):
+        archivo.leer_archivo("x.csv", b"")
+    with pytest.raises(base.ErrorFuente):
+        archivo.leer_archivo("x.csv", b"a,b\n1,2\n3,4\n")            # sin columna de texto
+    muchas = "texto\n" + "\n".join(f"comentario {i} largo de verdad" for i in range(archivo.MAX_FILAS + 1))
+    with pytest.raises(base.ErrorFuente):
+        archivo.leer_archivo("x.csv", muchas.encode())
+    with pytest.raises(base.ErrorFuente):
+        archivo.leer_archivo("x.xlsx", b"no es un excel")
+
+
+def test_fuente_archivo_recolecta():
+    from nicho import fuentes
+    lista = list(fuentes.por_tipo("csv")().recolectar({"nombre": "r.csv", "contenido": b"comentario\nLa tapa se pega siempre\n"}))
+    assert lista[0]["texto"] == "La tapa se pega siempre"
