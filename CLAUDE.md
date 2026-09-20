@@ -194,8 +194,17 @@ cliente: identidad, soluciones previas, situaciones, conciencia, encaje del
 producto, evidencia). `nicho/datos.py` es el único escritor; `recalcular` deriva
 `armando | generando | revisando`. Las fuentes entran por `nicho/fuentes/base.py`
 (`normalizar_comentario`, `ErrorFuente.usuario`) y el registro perezoso
-`nicho.fuentes.por_tipo`; Parte 1 trae `texto` y `csv` (corren en la ruta), Parte 2
-agrega Reddit, YouTube y Apify con la tarea `nicho_recolectar`.
+`nicho.fuentes.por_tipo`; `texto` y `csv` corren en la ruta; `reddit`, `youtube`
+y `apify` corren en el worker con la tarea `nicho_recolectar`
+(`tareas/nicho.py`: lotes de 100, `aviso` de entrega parcial, lo leído nunca se
+pierde; Apify `max_intentos=1` con el estimado por resultado a la vista y su
+gasto como tipo `recoleccion`; Reddit/YouTube `max_intentos=2`). Reddit usa el
+token de solo lectura (`client_credentials`, 100 llamadas/min, solo uso no
+comercial); YouTube una llave simple (`search.list` tiene cupo de 100
+llamadas/día, una por recolección); Apify solo actores con precio por resultado
+(`nicho/fuentes/apify_actores.py`) y el token siempre en cabecera. Las llaves
+(`REDDIT_*`, `YOUTUBE_API_KEY`, `APIFY_TOKEN`) viven en el `.env` raíz y se
+muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada.
 `nicho/avatares.py` hace dos pasadas con Claude (`generador_prompts.MODEL`):
 núcleos, luego sub-avatares por núcleo; cada cita se verifica literal contra el
 comentario (`verificar_evidencia`) y la que no aparece se descarta — un

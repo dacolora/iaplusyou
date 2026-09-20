@@ -252,13 +252,16 @@ Parámetros: `palabras_clave`, `links` (videos concretos: `watch?v=`,
 y `proyectos.pais`).
 
 1. `search().list(part="id,snippet", q=…, type="video", maxResults=max_videos,
-   relevanceLanguage=idioma, regionCode=region)`: 100 unidades de las 10 000
-   diarias. El título viene en `snippet.title` (contexto).
+   relevanceLanguage=idioma, regionCode=region)`: `search.list` tiene su
+   **propio cupo de 100 llamadas por día** por proyecto (verificado 2026-09-20),
+   así que cada recolección hace una sola búsqueda. El título viene en
+   `snippet.title` (contexto). Los links de video se resuelven con `videos.list`
+   (1 unidad).
 2. `commentThreads().list(part="snippet", videoId=…, maxResults=100,
    order="relevance", textFormat="plainText", pageToken=…)`: 1 unidad por
-   página, hasta el tope. `texto` = `textOriginal`, `puntuacion` = `likeCount`,
-   `fecha` = `publishedAt`, `url` = `https://www.youtube.com/watch?v=<vid>&lc=<id>`,
-   `extra.video_id`.
+   página de las 10 000 diarias, hasta el tope. `texto` = `textOriginal`,
+   `puntuacion` = `likeCount`, `fecha` = `publishedAt`, `url` =
+   `https://www.youtube.com/watch?v=<vid>&lc=<id>`, `extra.video_id`.
 3. `HttpError` 403 `commentsDisabled` → se salta el video; `quotaExceeded` →
    entrega lo recogido y avisa; 400 `keyInvalid` → `ErrorFuente`.
 
@@ -507,9 +510,10 @@ Se suma a `tareas.cargar_todas`. Dos tipos:
 
 - `nicho_recolectar`, payload `{cliente, estudio_id, fuente, params}`,
   `job_id = "nicho:<cliente>:<estudio_id>:recolectar:<fuente>"`,
-  `duracion_estimada=120`, etapas "Buscando", "Leyendo comentarios",
-  "Guardando". `max_intentos=1` para `apify`; el valor por defecto para
-  `reddit` y `youtube`, porque la dedup hace seguro el reintento. Al terminar,
+  `duracion_estimada=120` (300 para Apify), etapas "Buscando", "Leyendo
+  comentarios", "Guardando". `max_intentos=1` para `apify`; `max_intentos=2`
+  para `reddit` y `youtube`, porque la dedup hace seguro el reintento. Al
+  terminar,
   `datos.registrar_recoleccion` deja `{fuente, nuevos, repetidos, aviso,
   fecha}` en `estudio.extra.recolecciones`. Guarda en lotes de 100 por si la
   fuente corta a medias.
