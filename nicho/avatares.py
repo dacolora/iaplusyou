@@ -304,3 +304,73 @@ def verificar_evidencia(sub, comentarios_por_id):
         if c and len(cita) >= MIN_CITA and cita in _plano(c.get("texto")):
             validas.append({"comentario_id": c["id"], "cita": _str(e.get("cita"), 500)})
     return {**sub, "evidencia": validas, "sin_evidencia": not validas}
+
+
+# ------------------------------------------------------------ generar ---
+
+ETAPA_NUCLEOS = "Agrupando deseos"
+ETAPA_SUBS = "Armando sub-avatares"
+
+
+def _llamar(texto, max_tokens):
+    """Una llamada a Claude (modelo del proyecto). Devuelve (texto, tokens de
+    entrada, tokens de salida) — los tokens alimentan el gasto real. Las
+    pruebas reemplazan esta función."""
+    import anthropic
+    from generador_prompts import MODEL, _api_key
+    client = anthropic.Anthropic(api_key=_api_key())
+    resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
+                                  messages=[{"role": "user", "content": texto}])
+    if resp.stop_reason == "refusal":
+        raise AnalisisInvalido("Claude rechazó la solicitud.")
+    salida = "".join(b.text for b in resp.content if b.type == "text").strip()
+    if resp.stop_reason == "max_tokens":
+        raise AnalisisInvalido("La respuesta de Claude se cortó por largo (max_tokens).")
+    uso = getattr(resp, "usage", None)
+    return salida, int(getattr(uso, "input_tokens", 0) or 0), int(getattr(uso, "output_tokens", 0) or 0)
+
+
+def generar(cliente, estudio_id, avanzar=None):
+    """Las dos pasadas (spec §4.2, §4.5). Pasada 1 inválida: sube la excepción
+    y no se guarda nada. Pasada 2: un núcleo que falla queda con `error` y sin
+    sub-avatares; si TODOS fallan, sube AnalisisInvalido. No escribe en la
+    base: el llamador (la tarea) guarda con datos.guardar_generacion."""
+    avanzar = avanzar or (lambda etapa, detalle=None: None)
+    est = datos.estudio(cliente, estudio_id)
+    if not est:
+        raise datos.ErrorDatos("Ese estudio no existe.")
+    todos = datos.comentarios_para_generar(cliente, estudio_id)
+    if len(todos) < MIN_COMENTARIOS:
+        raise datos.ErrorDatos(f"Hacen falta al menos {MIN_COMENTARIOS} comentarios no excluidos (hay {len(todos)}).")
+    seleccion = seleccionar(todos)
+    por_id = {c["id"]: c for c in seleccion}
+    marca_nombre = proyectos.nombre_visible(cliente)
+    avanzar(ETAPA_NUCLEOS)
+    texto, entrada, salida = _llamar(armar_prompt_nucleos(est, seleccion, marca_nombre), MAX_TOKENS_NUCLEOS)
+    tokens = [entrada, salida]
+    nucleos = parsear_nucleos(texto, set(por_id))
+    guia = marca.guia_efectiva(cliente) or ""
+    resultado, errores = [], []
+    for i, n in enumerate(nucleos):
+        avanzar(ETAPA_SUBS, f"{i + 1}/{len(nucleos)}: {n['nombre']}")
+        propios = [por_id[cid] for cid in n["comentarios"]]
+        try:
+            t2, e2, s2 = _llamar(armar_prompt_subs(est, n, propios, guia, marca_nombre), MAX_TOKENS_SUBS)
+            tokens[0] += e2
+            tokens[1] += s2
+            subs = [verificar_evidencia(s, por_id) for s in parsear_subs(t2)]
+            resultado.append({**n, "sub_avatares": subs})
+        except Exception as e:  # noqa: BLE001 — un núcleo que falla no pierde a los demás (spec §4.5)
+            errores.append(f"{n['nombre']}: {e}")
+            resultado.append({**n, "sub_avatares": [], "error": str(e)[:300]})
+    if errores and len(errores) == len(nucleos):
+        raise AnalisisInvalido("Ningún núcleo produjo sub-avatares: " + " | ".join(errores)[:400])
+    subs_todos = [s for n in resultado for s in n["sub_avatares"]]
+    resumen = {
+        "comentarios": len(seleccion), "nucleos": len(resultado), "subs": len(subs_todos),
+        "con_evidencia": sum(1 for s in subs_todos if not s.get("sin_evidencia")),
+        "sin_evidencia": sum(1 for s in subs_todos if s.get("sin_evidencia")),
+        "errores": len(errores), "tokens_entrada": tokens[0], "tokens_salida": tokens[1],
+        "usd": costo_real(tokens[0], tokens[1]), "modelo": modelo_actual(),
+    }
+    return {"nucleos": resultado, "resumen": resumen}

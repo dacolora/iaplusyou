@@ -107,3 +107,58 @@ def test_prompts_incluyen_contexto():
         assert frag in p2, frag
     assert "[2]" not in p2
     assert avatares.nombre_idioma("xx") == "xx" and avatares.nombre_idioma("es") == "español"
+
+
+def _estudio_listo(datos, n=25):
+    eid = datos.crear_estudio("acme", "Detergente", producto="Cápsulas", tema="lavar sin cargar", idioma="es")
+    datos.agregar_comentarios("acme", eid, "texto", [
+        {"fuente_id": f"c{i}", "texto": f"Comentario {i}: la garrafa pesa demasiado y gotea en el estante."} for i in range(1, n + 1)])
+    return eid
+
+
+def test_generar_dos_pasadas_con_fallo_parcial(base_temporal, monkeypatch):
+    from nicho import avatares, datos
+    import marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Tono cercano")
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Happy Wash")
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    nucleos = {"nucleos": [{"nombre": "Sin peso", "deseo": "Quiero lavar sin cargar", "resumen": "r", "comentarios": ids[:10]},
+                           {"nombre": "Sin goteo", "deseo": "Quiero que no gotee", "resumen": "r2", "comentarios": ids[10:20]}]}
+    sub = dict(SUB_JSON["sub_avatares"][0], evidencia=[{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}])
+    respuestas = [(json.dumps(nucleos), 1000, 200), (json.dumps({"sub_avatares": [sub]}), 700, 300), ("esto no es json", 500, 10)]
+    prompts, etapas = [], []
+    def _llamar_falso(texto, max_tokens):
+        prompts.append((texto, max_tokens))
+        return respuestas.pop(0)
+    monkeypatch.setattr(avatares, "_llamar", _llamar_falso)
+    r = avatares.generar("acme", eid, avanzar=lambda etapa, detalle=None: etapas.append((etapa, detalle)))
+    assert [n["nombre"] for n in r["nucleos"]] == ["Sin peso", "Sin goteo"]
+    assert len(r["nucleos"][0]["sub_avatares"]) == 1 and r["nucleos"][0]["sub_avatares"][0]["sin_evidencia"] is False
+    assert r["nucleos"][0]["sub_avatares"][0]["evidencia"][0]["comentario_id"] == ids[0]
+    assert r["nucleos"][1]["sub_avatares"] == [] and "JSON" in r["nucleos"][1]["error"]
+    res = r["resumen"]
+    assert res["comentarios"] == 25 and res["nucleos"] == 2 and res["subs"] == 1 and res["errores"] == 1
+    assert res["con_evidencia"] == 1 and res["sin_evidencia"] == 0
+    assert res["tokens_entrada"] == 2200 and res["tokens_salida"] == 510 and res["usd"] == avatares.costo_real(2200, 510)
+    assert prompts[0][1] == avatares.MAX_TOKENS_NUCLEOS and prompts[1][1] == avatares.MAX_TOKENS_SUBS
+    assert "Happy Wash" in prompts[0][0] and "Tono cercano" in prompts[1][0] and f"[{ids[10]}]" in prompts[2][0] and f"[{ids[0]}]" not in prompts[2][0]
+    assert etapas[0] == (avatares.ETAPA_NUCLEOS, None) and etapas[1][0] == avatares.ETAPA_SUBS and "1/2" in etapas[1][1]
+
+
+def test_generar_falla_limpio(base_temporal, monkeypatch):
+    from nicho import avatares, datos
+    eid = _estudio_listo(datos, n=5)
+    with pytest.raises(datos.ErrorDatos):
+        avatares.generar("acme", eid)                                     # menos de MIN_COMENTARIOS
+    with pytest.raises(datos.ErrorDatos):
+        avatares.generar("acme", 999)
+    eid = _estudio_listo(datos)
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: ("{}", 10, 10))
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.generar("acme", eid)                                     # pasada 1 inválida: sube tal cual
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    respuestas = [(json.dumps({"nucleos": [{"nombre": "N", "deseo": "Quiero", "comentarios": ids[:3]}]}), 10, 10), ("roto", 1, 1)]
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: respuestas.pop(0))
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.generar("acme", eid)                                     # TODOS los núcleos fallaron en la pasada 2
