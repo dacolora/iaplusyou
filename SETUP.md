@@ -221,6 +221,24 @@ Listo, YouTube queda funcionando.
 
 ## 3. Facebook + Instagram (Meta)
 
+### 3.0 Dos modos: propia o agencia
+
+- **Propia** (por defecto para quien quiere control total): el cliente crea su app de Meta y
+  conecta desde Configuración, como se explica abajo.
+- **Agencia** (para los proyectos que gestiona Creatv): el administrador conecta UNA vez el
+  Business Manager de Creatv en `/admin/meta` y le asigna a cada proyecto su cuenta
+  publicitaria y su Página. Pasos: en business.facebook.com › Configuración del negocio ›
+  Usuarios › Usuarios del sistema › crear uno (rol administrador) › "Asignar activos"
+  (las cuentas publicitarias y Páginas propias, y las de clientes que te dieron acceso de
+  socio) › "Generar nuevo token" con la app de agencia y los permisos `ads_management`,
+  `ads_read`, `business_management`, `pages_read_engagement`, `pages_manage_posts`,
+  `pages_manage_ads`, `instagram_basic`, `instagram_content_publish` › pegar el token y el
+  id del negocio en `/admin/meta`. Requiere `FLASK_SECRET_KEY` en el `.env` (el token se
+  guarda cifrado). El cliente ve "Gestionado por Creatv" y no tiene que hacer nada.
+  Para que un cliente te dé acceso: él, en su Business Manager › Configuración del negocio ›
+  Socios › "Agregar" › tu id de negocio › elige qué cuenta y Página comparte.
+
+
 Requisito previo: necesitas una **Página de Facebook** y una cuenta de **Instagram
 Business o Creator vinculada a esa Página** (se vincula desde Configuración de la Página
 de Facebook > Instagram > Conectar cuenta).

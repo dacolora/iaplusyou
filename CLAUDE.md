@@ -130,11 +130,23 @@ for Business config id), registered from the dashboard (FlowMarketing › "Regis
 Meta") into `clientes/<cliente>/meta_app.json` (git-ignored, 0600); only then does
 "Conectar con Meta" (routes in `dashboard.py`, logic in `meta_conexion.py`) open that
 app's login dialog, and the resulting tokens/ad account/Page live in
-`clientes/<cliente>/meta.json` (also git-ignored, 0600). There is NO shared Meta app and
-no `META_APP_ID`/`META_APP_SECRET` in the root `.env` — only `META_REDIRECT_URI`, the same
-public callback URL every client registers in their own app. Never reintroduce a global
-Meta credential: a client's data must only ever flow through that client's app. `meta_ads/`
-receives them via `auth.configurar(...)` — the submodule never reads the environment.
+`clientes/<cliente>/meta.json` (also git-ignored, 0600). There is no Meta credential in the
+root `.env` — only `META_REDIRECT_URI`, the public callback URL every client registers in
+their own app. That is the **propia** mode (ADR 0001). Since 2026-09-20 there is a second,
+admin-only mode per project, **agencia** (ADR 0002, `meta_agencia.py`): the admin connects
+Creatv's Business Manager ONCE with a system-user token (Fernet-encrypted in `kv` under
+`meta_agencia`, never in any `meta.json`, template, flash or log) and assigns each project an
+ad account + Page from the assets that Business owns or was granted as a partner
+(`/admin/meta`). An agencia project's `meta.json` has `modo: "agencia"`, the assigned ids,
+the resolved `page_access_token` and NO user token — `meta_conexion.cargar()` injects the
+agency token on read, so `credenciales_ads`, `estado`, `estado_pixel`, `lanzador`,
+`meta_uploader` and everything else are mode-agnostic. `guardar`/`borrar`/`url_dialogo`/
+`cambiar_code_por_token`/`guardar_app` raise `ModoAgenciaError` for agencia projects (only
+`meta_agencia.asignar/desasignar` may write them); the previous propia data is kept in
+`propia_respaldo` so "Volver a propia" restores it. The rule: an agency credential only ever
+operates assets the client granted in Business Manager or the agency owns; a client's own
+data still never flows through another client's app. `meta_ads/` receives credentials via
+`auth.configurar(...)` — the submodule never reads the environment.
 
 **Prompt generation** (`generador_prompts.py`): calls Anthropic directly (not through
 Higgsfield). `generar_prompts()` writes the 5 candidate prompts and folds in a
