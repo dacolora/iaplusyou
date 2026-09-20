@@ -58,6 +58,21 @@ def test_ejecutar_generar_falla_deja_error_y_estado(base_temporal, monkeypatch):
     assert tareas_nicho.ejecutar_generar({"payload": {"cliente": "acme", "estudio_id": 999}, "job_id": "x"}) == "El estudio ya no existe."
 
 
+def test_ejecutar_generar_falla_al_guardar_deja_error_y_estado(base_temporal, monkeypatch):
+    from nicho import avatares, datos
+    from tareas import nicho as tareas_nicho
+    eid = _estudio(datos)
+    resultado = {"nucleos": [{"nombre": "N", "deseo": "Quiero", "resumen": "", "comentarios": [1], "sub_avatares": [SUB]}],
+                 "resumen": {"comentarios": 25, "nucleos": 1, "subs": 1, "con_evidencia": 1, "sin_evidencia": 0, "errores": 0,
+                             "tokens_entrada": 10, "tokens_salida": 5, "usd": 0.001, "modelo": "claude-sonnet-5"}}
+    monkeypatch.setattr(avatares, "generar", lambda *a, **k: resultado)
+    monkeypatch.setattr(datos, "guardar_generacion", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("disco lleno")))
+    with pytest.raises(RuntimeError):
+        tareas_nicho.ejecutar_generar({"payload": {"cliente": "acme", "estudio_id": eid}, "job_id": datos.job_id_generar("acme", eid)})
+    e = datos.estudio("acme", eid)
+    assert e["estado"] == "armando" and "disco lleno" in e["extra"]["ultimo_error"]
+
+
 def test_interrumpida_generar(base_temporal):
     from nicho import datos
     from tareas import nicho as tareas_nicho

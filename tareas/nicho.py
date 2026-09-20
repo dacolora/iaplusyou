@@ -49,12 +49,12 @@ def ejecutar_generar(tarea):
     datos.recalcular(cliente, eid, tarea_viva=True)
     try:
         r = avatares.generar(cliente, eid, avanzar)
+        avanzar(ETAPA_GUARDAR)
+        res = datos.guardar_generacion(cliente, eid, r["nucleos"], r["resumen"])
     except Exception as e:
         # Si Claude alcanzó a responder, ese intento ya se cobró: se dice tal cual.
         _anotar_error(cliente, eid, f"{cola.sin_token(e)} (si Claude alcanzó a responder, este intento sí se cobró)")
         raise
-    avanzar(ETAPA_GUARDAR)
-    res = datos.guardar_generacion(cliente, eid, r["nucleos"], r["resumen"])
     resumen = r["resumen"]
     gastos.registrar_seguro(cliente, "avatares", resumen.get("usd"), f"avatares:{eid}:{res['generacion']}",
                             detalle=f"{res['nucleos']} núcleo(s), {res['subs']} sub-avatar(es), {resumen.get('comentarios')} comentarios",
