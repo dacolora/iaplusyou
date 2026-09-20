@@ -283,7 +283,8 @@
           {% if pz.estado == "en_cola" and not e.meta_campaign_id %}
           <form method="post" action="{{ url_for('exp_quitar_pieza', cliente=cliente, eid=e.id, ep_id=pz.id) }}" class="inline"><button class="btn-rechazar btn-xs">Quitar</button></form>
           {% endif %}
-          {% if pz.url_video and pz.pieza_id %}
+          {# Orgánico es solo de video (para una imagen url_video ES la imagen). #}
+          {% if pz.url_video and pz.pieza_id and not pz.es_imagen %}
           {{ bloque_organico(pz.pieza_id, "experimentos", ep_id=pz.id) }}
           {% endif %}
         </li>

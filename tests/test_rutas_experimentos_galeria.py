@@ -50,6 +50,10 @@ def test_arbol_pinta_miniatura_o_video(app, base_temporal):
     minis = re.findall(r'<span class="exp-pieza-mini">(.*?)</span>', html, re.S)
     assert any('<img src="https://r2/i.png"' in m for m in minis)
     assert any('<video src="https://r2/f.mp4" muted' in m for m in minis)
+    # F1: el bloque de publicación orgánica (solo video) sale para el clon y
+    # no para la imagen.
+    assert f'class="org-bloque" data-pieza="{clon}"' in html
+    assert f'class="org-bloque" data-pieza="{img}"' not in html
 
 
 def test_crear_enlaza_a_la_galeria_con_la_pieza(app, base_temporal):
