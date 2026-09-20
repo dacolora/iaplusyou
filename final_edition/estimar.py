@@ -1,6 +1,8 @@
 """Tiempo estimado de render (spec §2.2), para mostrarlo en el botón Producir.
-Constantes calibradas a mano el 2026-09 con el VPS de 1 núcleo; recalibrar
-con `tests/test_motor_render.py` (slow) cuando cambie la máquina."""
+Las constantes son las del plan de la capa 1 (orden de magnitud para un VPS
+de 1 núcleo), NO mediciones: nadie las ha contrastado con renders reales
+todavía. Cuando haya finales producidas en el VPS, comparar `segundos(doc)`
+con la duración real de las tareas `edicion_producir` y ajustar aquí."""
 import math
 
 from final_edition.documento import duracion_ms

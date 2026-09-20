@@ -59,7 +59,7 @@ _DESPLAZ_ANIM_PX = 60
 _CAPA_ANCHO_DEFECTO = 400
 _CAPA_ALTO_DEFECTO = 200
 # Fuentes del repo para libass (`subtitles=...:fontsdir=`): las mismas que usa
-# `final_edition/texto.py`; sin esto libass cae a la fuente que encuentre el
+# `final_edition/tipos.py`; sin esto libass cae a la fuente que encuentre el
 # sistema y el VPS no tiene Inter instalada.
 FONTSDIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(final_edition.__file__))), "static", "fonts")
 

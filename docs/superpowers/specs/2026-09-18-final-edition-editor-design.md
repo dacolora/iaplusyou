@@ -131,7 +131,33 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   ínterin (ver nota en §5).
 > - **Caja por defecto 400×200**: una capa sin `ancho_px`/`alto_px` (la capa 3
 >   aún no los manda) usa 400×200 px como tamaño de referencia para
->   `geometria.caja`.
+>   `geometria.caja`; `preparar_rutas` estampa el tamaño natural del material
+>   en los clips `imagen` que no lo traen. Cada capa se escala a su caja
+>   (`scale=w:h`) y su `opacidad` se aplica por clip (`colorchannelmixer`).
+> - **Sonido nativo de la escena** (§2.1 punto 5): se modela como una pista
+>   `audio` con `rol_audio: sonido` sobre el MISMO material que la pista
+>   principal; el compilador nunca lee `[0:a]` del clon por su cuenta. Todos
+>   los roles distintos de `voz`/`musica` se suman con `amix` en la entrada
+>   "sonido" de `mezcla.filtro_mezcla`.
+> - **No se renderiza en la capa 1**: `superpuesto` (PIP; `compilar` lo
+>   rechaza con un error explícito si trae clips), `rotacion` y
+>   `marca.marca_de_agua`. Llegan con la capa 4.
+> - **Subtítulos**: `subtitles='<ass>':fontsdir='<static/fonts>'` (las mismas
+>   fuentes del repo que usa `tipos.py`); ambas rutas escapadas para el doble
+>   parseo de ffmpeg (`compilador._ruta_filtro`).
+> - **Contrato de la ruta que encola `edicion_producir`** (capa 3):
+>   `ediciones.versionar(motivo="producir")` → `creative_flow.crear_final`
+>   (la fila final DEBE existir: la tarea falla con mensaje si
+>   `actualizar_final`/`apuntar_final` no la encuentran) →
+>   `trabajos.encolar("edicion_producir", ..., max_intentos=1,
+>   duracion_estimada=estimar.segundos(doc), etapas=ETAPAS_EDICION)`;
+>   `edicion_proxy` va con `max_intentos=3`. Abierto: qué final se crea para
+>   una edición sin `cf_id` (hoy `crear_final` exige una sesión de Crear).
+> - **Pendiente antes de la capa 3**: una entrada `-ss/-t` por clip de la
+>   pista principal (hoy el clon entra una sola vez y cada clip hace `trim`
+>   sobre él): con clips reordenados ffmpeg decodifica y retiene todo lo que
+>   hay entre recortes — medido 1,39 GB de RSS en un reorden de 10 s. Cambia
+>   `Plan.entradas`, así que va en una tarea propia.
 
 `final_edition/motor/` recibe un documento resuelto (variables ya sustituidas)
 y devuelve mp4 o png. Reemplaza `render.py`.

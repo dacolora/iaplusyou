@@ -239,14 +239,22 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 
 **Editor (capa 1, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
-schema) stored in `edicion` with CAS autosave (`ediciones.guardar`: `version_n` must match
+schema). `validar` is the contract everything else leans on: the principal `video` track
+must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
+`imagen` tracks have no timeline), every pista/clip id matches `^[A-Za-z0-9_-]{1,40}$`
+with clip ids unique across the document, `pngs` is `{text clip id: material id}`,
+keyframes have strictly increasing `t_ms`, audio clips keep `velocidad` 1.0 (no `atempo`
+yet), and `materiales` is DERIVED (given list ∪ clip `material_id`s ∪ `pngs` values), so
+`en_uso`/`marcar_uso` never trust the browser's list. The document is stored in `edicion` with CAS autosave (`ediciones.guardar`: `version_n` must match
 or `Conflicto`) and frozen copies in `edicion_version` (`versionar` takes SQLite's write
 lock before `MAX(n)`, same trick as `experimentos._bloquear`; `restaurar` migrates the
 frozen document before reusing it). Every file that costs money or time is a `material`
-row keyed by `UNIQUE(cliente, hash)` (`materiales.py`: never pay twice; `borrar` now
-propagates a failed R2 delete instead of swallowing it, so the row survives for retry —
-`limpiar_sin_uso` skips those rows too; `obtener_o_crear`'s `producir()` can still run
-twice in a true race, accepted). `final_edition/motor/` compiles a resolved document into
+row keyed by `UNIQUE(cliente, hash)` (`materiales.py`: never pay twice; `borrar` only
+deletes R2 objects under `clientes/<cliente>/materiales/` — any other key, e.g. a Crear
+piece's video with origen `crear`, loses just its row — and propagates a failed R2 delete
+instead of swallowing it, so the row survives for retry — `limpiar_sin_uso` skips those
+rows too; `en_uso` scans live documents AND frozen `edicion_version`s;
+`obtener_o_crear`'s `producir()` can still run twice in a true race, accepted). `final_edition/motor/` compiles a resolved document into
 one ffmpeg filtergraph (`compilador.py`, pure): a `transicion` of `d` ms on clip A
 occupies output `[fin_A, fin_A + d)` while B keeps its timeline position — the extra
 frames come from A's tail (`recorte.hasta_ms + d × velocidad`), and a hard cut is
@@ -259,7 +267,15 @@ always closes the output (the mix carries `apad` too); only x/y keyframes are in
 texts are browser-rendered PNGs (`rutas["png:<clip_id>"]`, `ancho_px`/`alto_px` per clip,
 400×200 fallback) placed via `final_edition/geometria.py`'s
 fraction→pixel math (round-half-up; `tests/fixtures/geometria_casos.json` is the parity
-table the browser must match too). `motor/tramos.py` splits into windows past
+table the browser must match too), scaled to that box (`scale=w:h`) with per-clip
+`opacidad` (`colorchannelmixer`); the native scene sound is just an `audio` pista with
+`rol_audio: sonido` over the same material (all non-voz/musica roles `amix` into
+`filtro_mezcla`'s sonido input); `tpad=stop_mode=clone` pads the main track when the audio
+outlasts it; subtitles get `fontsdir=static/fonts` and every path inside the graph goes
+through `_ruta_filtro` (two-level ffmpeg escaping — `'` becomes `\'\''`). NOT rendered in
+capa 1: `superpuesto` (PIP — `compilar` raises if it has clips), `rotacion` and
+`marca.marca_de_agua`; and one `-ss/-t` input per principal clip (memory bound for
+reordered clips) is due before capa 3. `motor/tramos.py` splits into windows past
 `PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
 exceeding budget at one instant is the only hard error — and `motor.renderizar` cleans
 partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
@@ -267,7 +283,11 @@ partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
 cached: the VPS does, the dev Mac doesn't — `renderizar` reports the omission via
 `on_etapa`). Worker tasks in `tareas/edicion.py`: `edicion_producir` renders the FROZEN
 version (`max_intentos=1`, no gasto yet — capa 2 adds voice/music via
-`gastos.registrar_seguro`), uploads to versioned keys
+`gastos.registrar_seguro`; the route must `crear_final` BEFORE enqueuing — the task
+raises if `actualizar_final`/`apuntar_final` find no row — and `idioma`/`pais` are
+shape-checked before the work folder exists; `preparar_rutas` stamps `imagen` clip sizes
+from the material row and runs `compilador.verificar_recortes` with the known
+`duracion_ms`), uploads to versioned keys
 `clientes/<c>/finales/<final_id>__v<version_id>.mp4`/`.png` (thumbnail first), errors go
 through `cola.sin_token`/`cola.recortar`, and wipes its work folder at start and on
 success (kept on failure, for the `.filtergraph.txt`); `edicion_proxy` (540p, frame strip,
