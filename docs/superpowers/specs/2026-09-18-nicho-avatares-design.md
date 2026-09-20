@@ -514,7 +514,7 @@ Se suma a `tareas.cargar_todas`. Dos tipos:
   fecha}` en `estudio.extra.recolecciones`. Guarda en lotes de 100 por si la
   fuente corta a medias.
 - `nicho_generar_avatares`, payload `{cliente, estudio_id}`,
-  `job_id = "nicho:<cliente>:<estudio_id>:generar"`, `duracion_estimada=180`,
+  `job_id = "nicho:<cliente>:<estudio_id>:generar"`, `duracion_estimada=200`,
   etapas "Agrupando deseos", "Armando sub-avatares", "Guardando",
   `max_intentos=1`. Pone el estudio en `generando` al arrancar.
 
