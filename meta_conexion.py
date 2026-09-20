@@ -17,6 +17,16 @@ configuración de Facebook Login for Business) en clientes/<cliente>/meta_app.js
 El .env raíz ya no tiene credenciales de Meta; solo META_REDIRECT_URI, que es
 la misma URL pública para todos los proyectos.
 
+Dos modos por proyecto (meta.json["modo"], "propia" cuando falta):
+  - propia: lo de arriba (ADR 0001).
+  - agencia: el admin conectó el Business de Creatv (meta_agencia.py) y le
+    asignó a este proyecto una cuenta y una Página. meta.json guarda ids y
+    page_access_token pero NO el token de usuario: cargar() lo inyecta desde
+    meta_agencia al leer, así el resto del sistema no distingue modos. Las
+    funciones de la app propia (url_dialogo, cambiar_code_por_token,
+    guardar_app) rechazan en ese modo; revocar() no revoca nada (el token no
+    es del proyecto) y borrar() solo desasigna.
+
 Ver docs/superpowers/specs/2026-09-11-conexion-meta-design.md.
 """
 import json
@@ -92,6 +102,7 @@ def cargar_app(cliente):
 
 def guardar_app(cliente, datos):
     """Valida y guarda las tres credenciales de la app del proyecto (0600)."""
+    _rechazar_si_agencia(cliente, "registrar una app propia")
     limpio = {}
     for campo in CAMPOS_APP:
         valor = str((datos or {}).get(campo) or "").strip()
@@ -141,6 +152,7 @@ def url_dialogo(cliente, state):
     panel de esa app) define el tipo de token y los permisos.
     override_default_response_type va por si la configuración pide token de
     usuario del sistema."""
+    _rechazar_si_agencia(cliente, "conectar con una app propia")
     app = _app_obligatoria(cliente, "abrir el diálogo de Meta")
     params = {
         "client_id": app["app_id"],
@@ -203,8 +215,42 @@ def _borrar(ruta):
     return True
 
 
-def cargar(cliente):
+MODO_AGENCIA = "agencia"
+
+
+def _cargar_crudo(cliente):
+    """meta.json tal cual está en disco (sin inyectar el token de agencia y
+    con `propia_respaldo`). Solo para meta_agencia y para saber el modo."""
     return _leer(_path(cliente))
+
+
+def modo(cliente):
+    """'propia' (por defecto) o 'agencia'."""
+    datos = _cargar_crudo(cliente) or {}
+    return MODO_AGENCIA if datos.get("modo") == MODO_AGENCIA else "propia"
+
+
+def _rechazar_si_agencia(cliente, para_que):
+    if modo(cliente) == MODO_AGENCIA:
+        raise ValueError(
+            f"Este proyecto está gestionado por Creatv (modo agencia): no se puede {para_que}. "
+            "Un admin tiene que volverlo a modo propia primero.")
+
+
+def cargar(cliente):
+    """Credenciales del proyecto. En modo agencia devuelve una copia con el
+    `token` de la agencia (si está conectada; si no, sin token) y sin
+    `propia_respaldo` (que guarda el token propio anterior)."""
+    datos = _cargar_crudo(cliente)
+    if not datos or datos.get("modo") != MODO_AGENCIA:
+        return datos
+    import meta_agencia  # noqa: PLC0415 — meta_agencia importa este módulo
+    copia = {k: v for k, v in datos.items() if k not in ("token", "propia_respaldo")}
+    try:
+        copia["token"] = meta_agencia.token()
+    except MetaConexionError:
+        pass
+    return copia
 
 
 def guardar(cliente, datos):
@@ -213,10 +259,19 @@ def guardar(cliente, datos):
     _cache_pixel.pop(cliente, None)
 
 
-def borrar(cliente):
+def _borrar_crudo(cliente):
     _cache_estado.pop(cliente, None)
     _cache_pixel.pop(cliente, None)
     return _borrar(_path(cliente))
+
+
+def borrar(cliente):
+    """Desconecta el proyecto. En modo agencia solo lo desasigna (vuelve a
+    propia restaurando lo que tenía); la conexión de la agencia no se toca."""
+    if modo(cliente) == MODO_AGENCIA:
+        import meta_agencia  # noqa: PLC0415
+        return meta_agencia.desasignar(cliente)
+    return _borrar_crudo(cliente)
 
 
 def cargar_pendiente(cliente):
@@ -243,7 +298,11 @@ def borrar_pendiente(cliente):
 
 def revocar(cliente):
     """DELETE /me/permissions con el token guardado: Meta invalida ese token y
-    los de Página derivados. Devuelve True si Meta confirmó; nunca lanza."""
+    los de Página derivados. Devuelve True si Meta confirmó; nunca lanza.
+    En modo agencia no hay nada del proyecto que revocar (el token es de la
+    agencia y sirve a otros proyectos): devuelve False sin tocar nada."""
+    if modo(cliente) == MODO_AGENCIA:
+        return False
     datos = cargar(cliente)
     token = (datos or {}).get("token")
     if not token:
@@ -260,6 +319,8 @@ def credenciales_ads(cliente):
     proyecto no está conectado. ad_account_id se guarda tal cual lo devuelve
     Meta (con el prefijo act_); meta_ads/auth lo normaliza."""
     datos = cargar(cliente)
+    if datos and datos.get("modo") == MODO_AGENCIA and not datos.get("token"):
+        raise MetaConexionError("La agencia no está conectada — un admin tiene que conectar el Business de Creatv.")
     if not datos or not datos.get("token") or not datos.get("ad_account_id"):
         raise MetaConexionError("Este proyecto no tiene Meta conectado — conéctalo en FlowMarketing.")
     return {
@@ -294,6 +355,7 @@ def _graph_get(edge, token, params=None, timeout=30):
 
 def cambiar_code_por_token(cliente, code):
     """Servidor a servidor: el único lugar donde se usa el app_secret del proyecto."""
+    _rechazar_si_agencia(cliente, "cambiar un código de autorización por un token")
     app = _app_obligatoria(cliente, "cambiar el código por un token")
     params = {
         "client_id": app["app_id"],
@@ -362,6 +424,8 @@ def _detalle(datos):
         "page_id": datos.get("page_id"), "page_nombre": datos.get("page_nombre"),
         "ig_username": datos.get("ig_username"), "conectado_en": datos.get("conectado_en"),
         "moneda": datos.get("moneda"),
+        "modo": MODO_AGENCIA if datos.get("modo") == MODO_AGENCIA else "propia",
+        "asignado_en": datos.get("asignado_en"), "asignado_por": datos.get("asignado_por"),
     }
 
 
@@ -370,6 +434,12 @@ def estado(cliente):
     10 min por proceso. Solo un error de token/permiso (190/10/200) marca
     'roto'; un fallo de red devuelve lo último conocido con verificado=False."""
     datos = cargar(cliente)
+    if datos and datos.get("modo") == MODO_AGENCIA and not datos.get("token"):
+        # Asignado pero la agencia no tiene token (nunca se conectó, se
+        # desconectó o su registro es ilegible). No se cachea: es barato y
+        # se arregla en cuanto el admin conecte.
+        return {"estado": "roto", "detalle": _detalle(datos), "verificado": True,
+                "motivo": "La agencia no está conectada"}
     if not datos or not datos.get("token"):
         return {"estado": "sin_conectar", "detalle": {}, "verificado": True}
 
