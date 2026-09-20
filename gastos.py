@@ -30,7 +30,7 @@ import db
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -49,6 +49,8 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    guion. `estimar("final", paises=n)` es n × esta tarifa.
 #  - avatares (Claude, dos pasadas): el estimado lo calcula
 #    nicho/avatares.estimar_costo por tokens; el real sale de usage.
+#  - recoleccion (Apify): resultados × precio por resultado del actor
+#    (nicho/fuentes/apify_actores.py), "aprox." porque Apify suma cómputo.
 TARIFAS = {
     "guion": 0.02,
     "regla_producto": 0.01,

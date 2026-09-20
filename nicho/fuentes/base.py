@@ -105,9 +105,14 @@ class Fuente:
     """Base de toda fuente. Las subclases fijan `tipo` (clave del registro en
     `nicho.fuentes.REGISTRO`) y `de_pago` (True muestra la puerta de costo).
     `recolectar(params, avanzar)` ITERA dicts ya normalizados; `avanzar(etapa,
-    detalle)` es el callback de progreso que el worker traduce a `cola.reportar`."""
+    detalle)` es el callback de progreso que el worker traduce a `cola.reportar`.
+    `aviso` queda vacío salvo entrega parcial."""
     tipo = None
     de_pago = False
+
+    # Texto que el worker guarda en la recolección cuando la fuente entregó
+    # parcial (429 persistente, cuota agotada): la tarea termina bien, con aviso.
+    aviso = ""
 
     def probar(self):
         """Verifica llaves sin gastar. {"ok", "detalle"}."""
