@@ -4,10 +4,30 @@ proyecto del editor. Puro: sin base, sin ffmpeg, sin red.
 Reglas: tiempos en milisegundos enteros; posiciones en fracción del lienzo
 (0–1) y tamaños de texto en fracción de la altura; un texto es literal o
 variable; el precio de un país es el número escrito para ese país o no
-existe (nunca se convierte); máximo 8 pistas."""
+existe (nunca se convierte); máximo 8 pistas.
+
+Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
+  - la pista principal `video` es contigua desde 0 (el primer clip arranca en
+    0 y cada clip empieza donde termina el anterior): el compilador concatena
+    los clips uno tras otro, así que un hueco no tiene render posible; una
+    pista `imagen` (clips de duración 0) no tiene línea de tiempo;
+  - ids de pista y de clip con `^[A-Za-z0-9_-]{1,40}$` (terminan en nombres
+    de archivo y etiquetas del filtergraph) y clip ids únicos en TODO el
+    documento (`pngs` y `rutas["png:<id>"]` los usan como clave global);
+  - `pngs` (opcional) es `{id_de_clip_de_texto: material_id}`;
+  - `keyframes` con `t_ms` enteros ≥ 0 estrictamente crecientes (dos en el
+    mismo instante dividirían por cero en el compilador);
+  - `ancho_px`/`alto_px`, si vienen, enteros > 0;
+  - `velocidad` solo en video/superpuesto: en audio debe ser 1.0 hasta que
+    el compilador aplique `atempo`;
+  - `materiales` se DERIVA: unión de la lista recibida, los `material_id`
+    de todos los clips y los valores de `pngs`, ordenada — la lista que
+    manda el navegador nunca es la única fuente."""
 import copy
+import re
 
 ESQUEMA_ACTUAL = 1
+_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
 FORMATOS = {"9:16": (1080, 1920), "4:5": (1080, 1350), "1:1": (1080, 1080), "16:9": (1920, 1080)}
 TIPOS_PISTA = ("video", "superpuesto", "imagen", "texto", "subtitulos", "audio")
 MAX_PISTAS = 8
@@ -32,6 +52,37 @@ def _entero_no_negativo(valor, nombre):
     if not isinstance(valor, int) or isinstance(valor, bool) or valor < 0:
         _fallar(f"{nombre} debe ser un entero de milisegundos ≥ 0 (vino {valor!r}).")
     return valor
+
+
+def _entero_positivo(valor, nombre):
+    if not isinstance(valor, int) or isinstance(valor, bool) or valor <= 0:
+        _fallar(f"{nombre} debe ser un entero > 0 (vino {valor!r}).")
+    return valor
+
+
+def _validar_id(valor, nombre):
+    if not isinstance(valor, str) or not _ID_RE.match(valor):
+        _fallar(f"{nombre} debe ser un id de 1 a 40 caracteres [A-Za-z0-9_-] (vino {valor!r}).")
+    return valor
+
+
+def _validar_keyframes(clip, ruta):
+    kfs = clip.get("keyframes") or []
+    if not isinstance(kfs, list):
+        _fallar(f"{ruta}.keyframes debe ser una lista.")
+    anterior = None
+    for k, kf in enumerate(kfs):
+        if not isinstance(kf, dict):
+            _fallar(f"{ruta}.keyframes[{k}] debe ser un objeto.")
+        t = _entero_no_negativo(kf.get("t_ms"), f"{ruta}.keyframes[{k}].t_ms")
+        if anterior is not None and t <= anterior:
+            _fallar(f"{ruta}.keyframes: t_ms debe ser estrictamente creciente ({anterior} y luego {t}).")
+        anterior = t
+        if kf.get("transform") is None:
+            kf["transform"] = {}
+        elif not isinstance(kf["transform"], dict):
+            _fallar(f"{ruta}.keyframes[{k}].transform debe ser un objeto.")
+    clip["keyframes"] = kfs
 
 
 def _fraccion(valor, nombre):
@@ -79,11 +130,14 @@ def _validar_clip(clip, pista, i):
     ruta = f"pistas[{pista['id']}].clips[{i}]"
     if not clip.get("id"):
         _fallar(f"{ruta}.id es obligatorio.")
+    _validar_id(clip["id"], f"{ruta}.id")
     _entero_no_negativo(clip.get("inicio_ms"), f"{ruta}.inicio_ms")
     _entero_no_negativo(clip.get("duracion_ms"), f"{ruta}.duracion_ms")
     tipo = pista["tipo"]
-    if tipo in ("video", "superpuesto", "imagen", "audio") and not clip.get("material_id"):
+    if tipo in ("video", "superpuesto", "imagen", "audio") and clip.get("material_id") is None:
         _fallar(f"{ruta}.material_id es obligatorio en pistas de {tipo}.")
+    if clip.get("material_id") is not None:
+        _entero_positivo(clip["material_id"], f"{ruta}.material_id")
     if tipo in ("video", "superpuesto", "audio"):
         r = clip.get("recorte") or {}
         _entero_no_negativo(r.get("desde_ms", 0), f"{ruta}.recorte.desde_ms")
@@ -96,6 +150,10 @@ def _validar_clip(clip, pista, i):
             _fallar(f"{ruta}.velocidad debe ser un número entre 0.5 y 2.0.")
         if not 0.5 <= v <= 2.0:
             _fallar(f"{ruta}.velocidad debe estar entre 0.5 y 2.0.")
+        if tipo == "audio" and v != 1.0:
+            # el compilador no aplica `atempo` todavía: aceptar otra velocidad
+            # daría un audio a ritmo normal con la duración de otro.
+            _fallar(f"{ruta}.velocidad debe ser 1.0 en pistas de audio (atempo llega después).")
         clip["velocidad"] = v
         clip["audio"] = {**_AUDIO_DEFECTO, **(clip.get("audio") or {})}
         clip["audio"]["volumen"] = _fraccion(clip["audio"]["volumen"], f"{ruta}.audio.volumen")
@@ -103,6 +161,9 @@ def _validar_clip(clip, pista, i):
         _fallar(f"{ruta}.rol_audio desconocido.")
     if tipo != "audio":
         clip["transform"] = _validar_transform(clip.get("transform"), ruta)
+        for k in ("ancho_px", "alto_px"):
+            if clip.get(k) is not None:
+                _entero_positivo(clip[k], f"{ruta}.{k}")
     if tipo == "texto":
         _validar_texto(clip, ruta)
     tr = clip.get("transicion")
@@ -116,7 +177,7 @@ def _validar_clip(clip, pista, i):
             if an.get(k, "ninguna") not in ANIMACIONES:
                 _fallar(f"{ruta}.animacion.{k} desconocida.")
         _entero_no_negativo(an.get("duracion_ms", 0), f"{ruta}.animacion.duracion_ms")
-    clip.setdefault("keyframes", [])
+    _validar_keyframes(clip, ruta)
     return clip
 
 
@@ -125,6 +186,7 @@ def _validar_pista(pista, i):
         _fallar(f"pistas[{i}].tipo desconocido: {pista.get('tipo')!r}.")
     if not pista.get("id"):
         _fallar(f"pistas[{i}].id es obligatorio.")
+    _validar_id(pista["id"], f"pistas[{i}].id")
     for k in ("bloqueada", "silenciada", "oculta"):
         pista[k] = bool(pista.get(k, False))
     clips = pista.get("clips") or []
@@ -134,6 +196,16 @@ def _validar_pista(pista, i):
         for a, b in zip(ordenados, ordenados[1:]):
             if a["inicio_ms"] + a["duracion_ms"] > b["inicio_ms"]:
                 _fallar(f"pistas[{pista['id']}]: el clip {a['id']} se solapa con {b['id']} en la pista principal.")
+        # Contigua desde 0: el compilador concatena los clips uno tras otro,
+        # así que un hueco (o un arranque tardío) no tiene render posible.
+        if ordenados and ordenados[0]["inicio_ms"] != 0:
+            _fallar(f"pistas[{pista['id']}]: la pista principal debe ser contigua desde 0 "
+                    f"(el clip {ordenados[0]['id']} arranca en {ordenados[0]['inicio_ms']}).")
+        for a, b in zip(ordenados, ordenados[1:]):
+            fin_a = a["inicio_ms"] + a["duracion_ms"]
+            if b["inicio_ms"] != fin_a:
+                _fallar(f"pistas[{pista['id']}]: la pista principal debe ser contigua "
+                        f"(el clip {a['id']} termina en {fin_a} y {b['id']} arranca en {b['inicio_ms']}).")
         pista["clips"] = ordenados
     return pista
 
@@ -160,6 +232,23 @@ def validar(doc):
     if len(set(ids)) != len(ids):
         _fallar("Hay pistas con el mismo id.")
     doc["pistas"] = [_validar_pista(p, i) for i, p in enumerate(pistas)]
+    # ids de clip únicos en TODO el documento: `pngs` y `rutas["png:<id>"]`
+    # los usan como clave global, sin la pista.
+    vistos = set()
+    for p in doc["pistas"]:
+        for c in p["clips"]:
+            if c["id"] in vistos:
+                _fallar(f"El id de clip {c['id']!r} está repetido en el documento.")
+            vistos.add(c["id"])
+    pngs = doc.get("pngs")
+    if pngs is not None:
+        if not isinstance(pngs, dict):
+            _fallar("pngs debe ser un objeto {id_de_clip_de_texto: material_id}.")
+        ids_texto = {c["id"] for p in doc["pistas"] if p["tipo"] == "texto" for c in p["clips"]}
+        for cid, mid in pngs.items():
+            if cid not in ids_texto:
+                _fallar(f"pngs[{cid!r}] no es un clip de texto del documento.")
+            _entero_positivo(mid, f"pngs[{cid!r}]")
     sub = doc.get("subtitulos") or {}
     sub.setdefault("estilo_id", "karaoke")
     sub["posicion"] = _fraccion(sub.get("posicion", 0.78), "subtitulos.posicion")
@@ -178,7 +267,16 @@ def validar(doc):
     doc["variables"] = var
     doc.setdefault("marca", {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None})
     doc.setdefault("mezcla", {"preset": "equilibrada", "volumenes": None})
-    doc.setdefault("materiales", [])
+    # `materiales` se deriva: lo que mandó el navegador ∪ material_id de los
+    # clips de todas las pistas ∪ valores de pngs. Así `en_uso` y
+    # `marcar_uso` nunca dependen de que la lista venga completa.
+    mats = {_entero_positivo(x, "materiales[]") for x in (doc.get("materiales") or [])}
+    for p in doc["pistas"]:
+        for c in p["clips"]:
+            if c.get("material_id") is not None:
+                mats.add(c["material_id"])
+    mats.update((doc.get("pngs") or {}).values())
+    doc["materiales"] = sorted(mats)
     doc["miniatura_ms"] = _entero_no_negativo(doc.get("miniatura_ms", 0), "miniatura_ms")
     return doc
 

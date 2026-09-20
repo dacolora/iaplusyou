@@ -148,3 +148,131 @@ def test_migrar_identidad_en_esquema_actual_y_error_en_desconocido():
     assert d.migrar(doc) == doc
     with pytest.raises(d.DocumentoInvalido, match="esquema"):
         d.migrar({**doc, "esquema": 99})
+
+
+# ---- contrato del validador (final review, grupo A) -----------------------
+
+def test_pista_principal_debe_ser_contigua_desde_cero():
+    # C2: un hueco entre clips de la pista principal (c2 arranca en 4000 y c1
+    # termina en 3500) no es un solape pero tampoco es una línea de tiempo
+    # renderizable: el compilador concatena los clips uno tras otro.
+    doc = cargar("video_basico.json")
+    doc["pistas"][0]["clips"][1]["inicio_ms"] = 4000
+    with pytest.raises(d.DocumentoInvalido, match="contigua"):
+        d.validar(doc)
+    # el primer clip tiene que arrancar en 0
+    doc = cargar("video_basico.json")
+    doc["pistas"][0]["clips"][0]["inicio_ms"] = 500
+    doc["pistas"][0]["clips"][1]["inicio_ms"] = 4000
+    with pytest.raises(d.DocumentoInvalido, match="contigua"):
+        d.validar(doc)
+
+
+def test_pista_video_vacia_sigue_siendo_valida():
+    doc = d.nuevo_video("9:16")
+    assert d.validar(doc)["pistas"][0]["clips"] == []
+
+
+def test_imagen_no_exige_contiguidad():
+    doc = d.nuevo_imagen("1:1")
+    doc["pistas"][0]["clips"] = [{"id": "i1", "inicio_ms": 0, "duracion_ms": 0, "material_id": 9}]
+    assert d.duracion_ms(d.validar(doc)) == 0
+
+
+def test_rechaza_ids_fuera_del_patron():
+    # C3: los ids terminan en nombres de archivo (png_<clip_id>.png) y en
+    # etiquetas del filtergraph; solo [A-Za-z0-9_-]{1,40}.
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["id"] = "../x"
+    with pytest.raises(d.DocumentoInvalido, match="id"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["id"] = "../x"
+    with pytest.raises(d.DocumentoInvalido, match="id"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["id"] = "a" * 41
+    with pytest.raises(d.DocumentoInvalido, match="id"):
+        d.validar(doc)
+
+
+def test_rechaza_ids_de_clip_repetidos_en_todo_el_documento():
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["id"] = "c1"  # ya existe en la pista de video
+    with pytest.raises(d.DocumentoInvalido, match="c1"):
+        d.validar(doc)
+
+
+def test_pngs_debe_apuntar_a_clips_de_texto_conocidos_con_material_positivo():
+    doc = cargar("video_basico.json")
+    doc["pngs"] = {"no_existe": 7}
+    with pytest.raises(d.DocumentoInvalido, match="pngs"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pngs"] = {"c1": 7}  # c1 es un clip de video, no de texto
+    with pytest.raises(d.DocumentoInvalido, match="pngs"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pngs"] = {"t1": 0}
+    with pytest.raises(d.DocumentoInvalido, match="pngs"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pngs"] = {"t1": 7}
+    assert d.validar(doc)["pngs"] == {"t1": 7}
+
+
+def test_keyframes_con_t_ms_repetido_o_invalido_se_rechazan():
+    # cierra la división por cero de _expr_piecewise (dos keyframes en el
+    # mismo t_ms).
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["keyframes"] = [{"t_ms": 0, "transform": {"x": 0.2}}, {"t_ms": 0, "transform": {"x": 0.8}}]
+    with pytest.raises(d.DocumentoInvalido, match="keyframes"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["keyframes"] = [{"t_ms": 500, "transform": {}}, {"t_ms": 200, "transform": {}}]
+    with pytest.raises(d.DocumentoInvalido, match="keyframes"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["keyframes"] = [{"t_ms": -1, "transform": {}}]
+    with pytest.raises(d.DocumentoInvalido, match="keyframes"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["keyframes"] = [{"t_ms": 0, "transform": {"x": 0.2}}, {"t_ms": 2000, "transform": {"x": 0.8}}]
+    assert len(d.validar(doc)["pistas"][1]["clips"][0]["keyframes"]) == 2
+
+
+def test_ancho_px_y_alto_px_deben_ser_enteros_positivos():
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["ancho_px"] = 0
+    with pytest.raises(d.DocumentoInvalido, match="ancho_px"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["alto_px"] = 12.5
+    with pytest.raises(d.DocumentoInvalido, match="alto_px"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["pistas"][1]["clips"][0]["ancho_px"] = 600
+    doc["pistas"][1]["clips"][0]["alto_px"] = 300
+    cl = d.validar(doc)["pistas"][1]["clips"][0]
+    assert (cl["ancho_px"], cl["alto_px"]) == (600, 300)
+
+
+def test_velocidad_distinta_de_1_en_audio_se_rechaza():
+    # I4: el compilador no aplica atempo todavía; aceptar 1.5 en un clip de
+    # audio produciría un audio a velocidad normal con la duración de otro.
+    doc = cargar("video_basico.json")
+    doc["pistas"][2]["clips"][0]["velocidad"] = 1.5
+    with pytest.raises(d.DocumentoInvalido, match="velocidad"):
+        d.validar(doc)
+
+
+def test_materiales_se_deriva_de_clips_y_pngs():
+    # I9: la lista guardada no es de fiar (el navegador puede olvidarla);
+    # validar la deriva de los clips (todas las pistas) y de los PNG.
+    doc = cargar("video_basico.json")
+    doc["materiales"] = []
+    assert d.validar(doc)["materiales"] == [1, 2, 3]
+    doc = cargar("video_basico.json")
+    doc["materiales"] = [3, 42]
+    doc["pngs"] = {"t1": 7}
+    assert d.validar(doc)["materiales"] == [1, 2, 3, 7, 42]
