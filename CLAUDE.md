@@ -253,14 +253,25 @@ appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
-launch (resumable). UI: sidebar tab "Experimentos" (`_tab_experimentos.html`, tree
-experiment -> country -> piece) and "Meter en experimento" in Crear's detail modal.
+launch (resumable). UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
+every piece with a public URL (`experimentos.elegibles`: Crear videos AND images, sprint
+pieces, finals; `origen`, `formato`, `en_experimentos`), the user ticks pieces and a 3-step
+form appears (where: countries + daily budget; how much: cap + days with a live count;
+review: piece × country grid, auto name «Prueba 20 sep · 3 piezas · CO, MX», "Avanzado"
+with objective/attribution/mode/URL). One `POST exp_probar` runs
+`experimentos.crear_con_piezas` (experiment + `experimento_pieza` rows in ONE transaction,
+`validar_combinacion`: a final only in its country, clones/images only in the experiment's
+countries) and enqueues `exp_lanzar` — activating is still a separate click. The old
+"+ Nuevo experimento" form is gone; `exp_crear`/`exp_agregar_pieza`/`exp_meter_pieza` remain
+for editing an `armando` experiment from its card. Crear and Catálogo link to
+`#experimentos?piezas=<pieza_id>`. Images are real Meta ads (`crear_creative_imagen`, no
+video upload) and the decisor skips ThruPlay for them (`contexto["es_imagen"]`).
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.
 `decisor.decidir(snapshots, reglas, contexto)` is a pure function — traffic gate first
 (impressions/spend/hours evidence, then CPC/CTR/ThruPlay thresholds; zero impressions is
-never a loser), sales gate second only with attribution (ROAS/CPA after
+never a loser; ThruPlay is skipped when `contexto["es_imagen"]`), sales gate second only with attribution (ROAS/CPA after
 `ventana_ventas_horas`), top-third ranking per country when ≥ 3 ads — returning
 `ganador | perdedor | inconcluso | pendiente` plus an action. Rules layer
 `REGLAS_DEFECTO ← proyecto.json["reglas_experimentos"] ← experimento.reglas`. The worker
