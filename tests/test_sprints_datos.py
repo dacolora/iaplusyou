@@ -339,3 +339,11 @@ def test_guardar_qa_solo_si_la_sesion_sigue_siendo_la_evaluada(base_temporal):
     assert datos.guardar_qa("otro", i1, "cf_1", {"veredicto": "pasa"}) is False       # otro cliente
     assert datos.guardar_qa("acme", i1, "cf_1", {"veredicto": "pasa", "cf_id": "cf_1"}) is True
     assert datos.idea("acme", i1)["qa"] == {"veredicto": "pasa", "cf_id": "cf_1"}
+
+
+def test_persona_investigada_con_extra(base_temporal):
+    from sprints import datos
+    pid = datos.crear_persona("acme", "Melissa / La que regala", origen="investigada", extra={"avatar_id": 7})
+    p = datos.persona("acme", pid)
+    assert p["origen"] == "investigada" and p["extra"] == {"avatar_id": 7}
+    assert datos.crear_persona("acme", "Sin extra") and datos.persona("acme", pid + 1)["extra"] == {}

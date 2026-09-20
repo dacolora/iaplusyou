@@ -1,0 +1,60 @@
+{# Sección Comentarios de la página del estudio. Contexto: estudio, conteos,
+   fuente_filtro, pagina_comentarios, modos_texto, fuentes_nombre. La Parte 2
+   agrega aquí las tarjetas de Reddit, YouTube y Apify. #}
+<h3 class="sprint-subtitulo">Comentarios</h3>
+<div class="nicho-fuentes">
+  <details class="swap-card" {% if not estudio.comentarios_total %}open{% endif %}>
+    <summary class="swap-card-resumen">Pegar texto</summary>
+    <form method="post" action="{{ url_for('nicho.comentarios_texto', cliente=cliente, eid=estudio.id) }}" class="form-experimento">
+      <label>Comentarios <textarea name="texto" rows="8" required placeholder="Pega aquí los comentarios copiados de Amazon, Facebook, reseñas…"></textarea></label>
+      <div class="fe-opciones">
+        {% for codigo, nombre in modos_texto.items() %}
+        <label class="fe-destino"><input type="radio" name="modo" value="{{ codigo }}" {% if loop.first %}checked{% endif %}> {{ nombre }}</label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn-generar btn-sm" {% if estudio.archivado %}disabled{% endif %}>Agregar comentarios</button>
+    </form>
+  </details>
+  <details class="swap-card">
+    <summary class="swap-card-resumen">Subir CSV o Excel</summary>
+    <form method="post" action="{{ url_for('nicho.comentarios_archivo', cliente=cliente, eid=estudio.id) }}" enctype="multipart/form-data" class="form-experimento">
+      <label>Archivo .csv o .xlsx (primera fila con encabezados; columna «texto» o «comentario»; opcionales «url», «likes», «fecha») <input type="file" name="archivo" accept=".csv,.xlsx" required></label>
+      <button type="submit" class="btn-generar btn-sm" {% if estudio.archivado %}disabled{% endif %}>Subir</button>
+    </form>
+  </details>
+</div>
+
+{% if conteos %}
+<p class="nicho-conteos">
+  {% for fuente, n in conteos.items() %}
+  <a class="tag-estado" href="{{ url_for('nicho.ver', cliente=cliente, eid=estudio.id, fuente=fuente) }}">{{ fuentes_nombre.get(fuente, fuente) }}: {{ n.total }}{% if n.excluidos %} ({{ n.excluidos }} excluidos){% endif %}</a>
+  <form method="post" action="{{ url_for('nicho.comentarios_borrar', cliente=cliente, eid=estudio.id, fuente=fuente) }}" class="inline"
+        onsubmit="return confirm('¿Quitar los {{ n.total }} comentarios de {{ fuentes_nombre.get(fuente, fuente) }}?');">
+    <button type="submit" class="btn-sm btn-peligro" title="Quitar todos los de esta fuente">×</button>
+  </form>
+  {% endfor %}
+  {% if fuente_filtro %}<a class="btn-sm" href="{{ url_for('nicho.ver', cliente=cliente, eid=estudio.id) }}">Ver todas las fuentes</a>{% endif %}
+</p>
+{% endif %}
+
+<div class="nicho-comentarios">
+  {% for c in pagina_comentarios["items"] %}
+  <div class="nicho-comentario{% if c.excluido %} excluido{% endif %}">
+    <small class="vacio">{{ fuentes_nombre.get(c.fuente, c.fuente) }}{% if c.puntuacion is not none %} · {{ c.puntuacion }}{% endif %}{% if c.contexto %} · {{ c.contexto }}{% endif %}{% if c.url %} · <a href="{{ c.url }}" target="_blank" rel="noopener">ver original</a>{% endif %}</small>
+    <p>{{ c.texto }}</p>
+    <form method="post" action="{{ url_for('nicho.comentario_excluir', cliente=cliente, cid=c.id) }}" class="inline">
+      {% if c.excluido %}<input type="hidden" name="incluir" value="1">{% endif %}
+      <button type="submit" class="btn-sm">{{ 'Incluir' if c.excluido else 'Excluir' }}</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="vacio">Todavía no hay comentarios. Pega texto o sube un archivo arriba.</p>
+  {% endfor %}
+</div>
+{% if pagina_comentarios.paginas > 1 %}
+<p class="nicho-paginas">
+  {% for p in range(1, pagina_comentarios.paginas + 1) %}
+  {% if p == pagina_comentarios.pagina %}<strong>{{ p }}</strong>{% else %}<a href="{{ url_for('nicho.ver', cliente=cliente, eid=estudio.id, pagina=p, fuente=fuente_filtro) }}">{{ p }}</a>{% endif %}
+  {% endfor %}
+</p>
+{% endif %}

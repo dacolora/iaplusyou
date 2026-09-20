@@ -153,6 +153,9 @@ if _detras_de_proxy():
 from sprints import rutas as sprints_rutas  # noqa: E402  (Blueprint de la pestaña Sprints)
 app.register_blueprint(sprints_rutas.bp)
 
+from nicho import rutas as nicho_rutas  # noqa: E402  (Blueprint de la pestaña Nicho)
+app.register_blueprint(nicho_rutas.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -1454,6 +1457,7 @@ def ver_cliente(cliente):
         publicaciones_por_pieza=publicaciones_por_pieza,
         trabajos_org=trabajos_org,
         **sprints_rutas.contexto(cliente),
+        **nicho_rutas.contexto(cliente),
     )
 
 

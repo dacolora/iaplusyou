@@ -509,6 +509,68 @@ sprint_evento = Table("sprint_evento", metadata,
     Column("creado_en", String(19), nullable=False),
 )
 
+# --- Nicho y avatares (docs/superpowers/specs/2026-09-18-nicho-avatares-design.md §2, migración 0011) ---
+
+estudio = Table("estudio", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("nombre", String(120), nullable=False),
+    Column("producto", Text),                                   # qué vendemos (texto libre, prellenado desde el catálogo)
+    Column("catalogo_id", String(80)),
+    Column("tema", Text),                                       # qué investigar: nicho, mercado, dolores
+    Column("idioma", String(5), nullable=False, default="es"),  # idioma de salida de los avatares
+    Column("estado", String(12), nullable=False, default="armando"),   # armando|generando|revisando
+    Column("archivado", Boolean, default=False),
+    Column("generacion", Integer, nullable=False, default=0),   # corridas de Claude
+    Column("extra", JSON, default=dict),                        # recolecciones, ultima_generacion, ultimo_error
+)
+
+comentario = Table("comentario", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("estudio_id", Integer, sa.ForeignKey("estudio.id"), nullable=False, index=True),
+    Column("fuente", String(12), nullable=False),               # texto|csv|reddit|youtube|apify
+    Column("fuente_id", String(120), nullable=False),           # id en la fuente; hash del texto para texto/csv
+    Column("texto", Text, nullable=False),
+    Column("url", String(500)),
+    Column("contexto", String(300)),                            # título del post / video / producto
+    Column("puntuacion", Integer),                              # votos, likes o estrellas
+    Column("fecha", String(19)),
+    Column("excluido", Boolean, default=False),                 # nunca entra a la generación
+    Column("extra", JSON, default=dict),
+    sa.UniqueConstraint("estudio_id", "fuente", "fuente_id", name="uq_comentario_fuente"),
+)
+
+avatar = Table("avatar", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("estudio_id", Integer, sa.ForeignKey("estudio.id"), nullable=False, index=True),
+    Column("padre_id", Integer, sa.ForeignKey("avatar.id")),    # NULL = núcleo; id del núcleo = sub-avatar
+    Column("tipo", String(8), nullable=False),                  # nucleo|sub
+    Column("base", String(24)),                                 # emocion|experiencia_producto (solo sub)
+    Column("orden", Integer, nullable=False, default=0),
+    Column("generacion", Integer, nullable=False, default=0),
+    Column("nombre", String(120), nullable=False),
+    Column("deseo", String(300)),
+    Column("resumen", Text),                                    # solo núcleo
+    Column("demografia", Text),
+    Column("edad_rango", String(20)),
+    Column("emocion", Text),
+    Column("identidad", JSON, default=dict),                    # {quiere_que_vean, cree_de_si, quiere_lograr}
+    Column("soluciones_previas", JSON, default=list),           # [{que, por_que_fallo: [..]}]
+    Column("situaciones", JSON, default=list),
+    Column("comportamiento", Text),
+    Column("conciencia", JSON, default=dict),                   # {nivel, detalle}
+    Column("encaje_producto", Text),
+    Column("tono", Text),
+    Column("palabras_clave", JSON, default=list),
+    Column("evidencia", JSON, default=list),                    # [{comentario_id, cita}] verificadas
+    Column("sin_evidencia", Boolean, default=False),
+    Column("estado", String(12), nullable=False, default="propuesto"),   # propuesto|aprobado|descartado
+    Column("persona_id", Integer, sa.ForeignKey("persona.id")),
+    Column("extra", JSON, default=dict),
+)
+
 
 def crear_todo():
     """Solo para tests y scripts locales. En producción manda Alembic."""

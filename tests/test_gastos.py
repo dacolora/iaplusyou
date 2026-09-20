@@ -177,3 +177,10 @@ def test_estimar_swap_por_proveedor():
 def test_formatear(usd, esperado):
     import gastos
     assert gastos.formatear(usd) == esperado
+
+
+def test_tipo_avatares_es_conocido(base_temporal):
+    import gastos
+    gid = gastos.registrar("acme", "avatares", 0.12, "avatares:3:1", detalle="2 núcleos", proveedor="anthropic")
+    fila = gastos.historial("acme")[0]
+    assert fila["id"] == gid and fila["tipo"] == "avatares" and fila["usd"] == 0.12

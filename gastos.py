@@ -30,7 +30,7 @@ import db
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -47,6 +47,8 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    música se cachea y a veces sale gratis) — no hay descuento por país
 #    extra: cada país adicional cuesta lo mismo que el primero, no solo el
 #    guion. `estimar("final", paises=n)` es n × esta tarifa.
+#  - avatares (Claude, dos pasadas): el estimado lo calcula
+#    nicho/avatares.estimar_costo por tokens; el real sale de usage.
 TARIFAS = {
     "guion": 0.02,
     "regla_producto": 0.01,

@@ -104,7 +104,7 @@
   {% for p in personas_sprint %}
   <details class="swap-card sprint-persona">
     <summary class="swap-card-resumen"><span class="sprint-punto" style="background: {{ p.color or 'var(--accent)' }}"></span> <strong>{{ p.nombre }}</strong>
-      <small class="vacio">{{ p.resumen }}{% if p.edad_rango %} · {{ p.edad_rango }}{% endif %}{% if p.origen == "sugerida_ia" %} · sugerida por IA{% endif %}</small></summary>
+      <small class="vacio">{{ p.resumen }}{% if p.edad_rango %} · {{ p.edad_rango }}{% endif %}{% if p.origen == "sugerida_ia" %} · sugerida por IA{% endif %}{% if p.origen == "investigada" %} · investigada (con evidencia){% endif %}</small></summary>
     <form method="post" action="{{ url_for('sprints.persona_editar', cliente=cliente, pid=p.id) }}" class="form-experimento">
       <div class="fe-opciones">
         <label>Nombre <input name="nombre" value="{{ p.nombre }}" required></label>
