@@ -295,10 +295,15 @@ def test_tab_experimentos_render_estados(app, base_temporal, estado, con_campana
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     cuerpo = r.data.decode("utf-8")
+    # La galería primero: la pestaña abre con las piezas, sin «+ Nuevo experimento».
+    assert 'id="exp-galeria"' in cuerpo and "+ Nuevo experimento" not in cuerpo
+    # Los botones se miran en las acciones de ESA tarjeta: el «Lanzar a Meta
+    # (en pausa)» del paso 3 de la galería está siempre en la página.
+    acciones = cuerpo.split(f'id="exp-{eid}"')[1].split('<div class="exp-acciones">')[1].split("</div>")[0]
     for texto in esperados:
-        assert texto in cuerpo, f"esperaba '{texto}' en estado {estado}"
+        assert texto in acciones, f"esperaba '{texto}' en estado {estado}"
     for texto in no_esperados:
-        assert texto not in cuerpo, f"no esperaba '{texto}' en estado {estado}"
+        assert texto not in acciones, f"no esperaba '{texto}' en estado {estado}"
 
 
 # ---------- Campañas se fundió en Experimentos (anuncios sueltos) ----------
@@ -355,13 +360,14 @@ def test_anuncio_suelto_en_cola_ofrece_meter_en_experimento(app, base_temporal):
     armado, ofrece el mismo «Meter en experimento» que Crear."""
     import ads
     import experimentos as ex
-    _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_7", url="https://r2/cola.mp4")
+    pid = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_7", url="https://r2/cola.mp4")
     aid = ads.crear("acme", "flowplus", "cf_7", "https://r2/cola.mp4", "video", "En cola")
     cuerpo = app["c"].get("/cliente/acme").data.decode("utf-8")
     assert "Piezas que estaban listas para publicar (1)" in cuerpo
     assert "Ahora esto se hace con un experimento" in cuerpo
     assert ">Meter en experimento</button>" not in cuerpo  # sin experimento en armado no hay adónde meterla
-    assert "Crea un experimento arriba" in cuerpo
+    # M6: sin experimento en armado, el mismo «Probar en Meta» de Crear (galería con la pieza marcada).
+    assert f'href="#experimentos?piezas={pid}"' in cuerpo and "Crea un experimento arriba" not in cuerpo
     assert "/cliente/acme/ads/publicar" not in cuerpo
     assert f"/cliente/acme/ads/{aid}/eliminar" in cuerpo
 
@@ -395,3 +401,74 @@ def test_rutas_ads_redirigen_a_experimentos(app, base_temporal):
                        (f"/cliente/acme/ads/{aid}/reintentar", {}), (f"/cliente/acme/ads/{aid}/eliminar", {})):
         r = app["c"].post(ruta, data=data)
         assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos"), ruta
+
+
+FORM_PROBAR = {"paises": ["CO", "MX"], "presupuesto_CO": "20000", "presupuesto_MX": "20000", "dias": "7",
+               "tope_total": "500000", "destino_url": "https://tienda.co/p", "edad_min": "18", "edad_max": "55",
+               "objetivo": "OUTCOME_TRAFFIC", "atribucion": "ninguna", "modo": "manual"}
+
+
+def test_probar_crea_reparte_y_encola_en_un_post(app, base_temporal):
+    import experimentos as ex
+    from tests.test_experimentos_db import _pieza_imagen
+    f_co = _pieza(base_temporal)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    img = _pieza_imagen(base_temporal)
+    data = dict(FORM_PROBAR, piezas=[str(f_co), str(clon), str(img)],
+                combinaciones=[f"{f_co}:CO", f"{f_co}:MX", f"{clon}:CO", f"{clon}:MX", f"{img}:MX"])
+    r = app["c"].post("/cliente/acme/experimentos/probar", data=data)
+    assert r.status_code == 302 and "experimentos" in r.headers["Location"]
+    (e,) = ex.cargar("acme")
+    assert e["estado"] == "lanzando" and e["nombre"].startswith("Prueba ") and "3 piezas" in e["nombre"] and "CO, MX" in e["nombre"]
+    assert sorted((p["pieza_id"], p["pais"]) for p in e["piezas"]) == sorted([(f_co, "CO"), (clon, "CO"), (clon, "MX"), (img, "MX")])
+    assert [t["tipo"] for t in app["encolados"]] == ["exp_lanzar"] and app["encolados"][0]["max_intentos"] == 1
+    assert app["encolados"][0]["payload"] == {"cliente": "acme", "experimento_id": e["id"]}
+
+
+def test_probar_no_deja_nada_si_algo_falla(app, base_temporal):
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    c = app["c"]
+    # sin piezas
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[], combinaciones=[]))
+    # presupuesto bajo el mínimo
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"], presupuesto_CO="1"))
+    # país fuera del experimento
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:US"]))
+    # compras sin pixel
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"], objetivo="OUTCOME_SALES"))
+    # pieza ajena
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=["999999"], combinaciones=["999999:CO"]))
+    # un país del formulario (MX) se queda sin ninguna pieza en el reparto
+    c.post("/cliente/acme/experimentos/probar",
+           data=dict(FORM_PROBAR, piezas=[str(clon)], paises=["CO", "MX"], combinaciones=[f"{clon}:CO"]))
+    assert ex.cargar("acme") == [] and app["encolados"] == []
+
+
+def test_probar_sin_paises_avisa_del_pais(app, base_temporal):
+    """M2: sin ningún país marcado el aviso habla del país, no de la
+    cuadrícula (las combinaciones se filtran por país y quedarían vacías)."""
+    import experimentos as ex
+    from tests.test_rutas_bloque4 import _flashes
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    data = dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"])
+    data.pop("paises")
+    app["c"].post("/cliente/acme/experimentos/probar", data=data)
+    assert ex.cargar("acme") == [] and app["encolados"] == []
+    mensajes = _flashes(app["c"])
+    assert any("Marca al menos un país" in m for m in mensajes) and not any("combinación" in m for m in mensajes)
+
+
+def test_probar_exige_meta_conectado(app, monkeypatch, base_temporal):
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
+    app["c"].post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"]))
+    assert ex.cargar("acme") == []
+
+
+def test_nombre_experimento_automatico():
+    import datetime
+    import dashboard
+    assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Prueba 20 sep · 3 piezas · CO, MX"
+    assert dashboard.nombre_experimento_automatico(1, ["CO"], datetime.date(2026, 1, 5)) == "Prueba 5 ene · 1 pieza · CO"

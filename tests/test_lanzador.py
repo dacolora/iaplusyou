@@ -30,7 +30,9 @@ class MetaFalsa:
                                       actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         creative = types.SimpleNamespace(subir_video=lambda url, titulo="", dry_run=False, esperar_seg=180: "vid_1",
                                          crear_creative_video=lambda nombre, vid, mini, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False:
-                                         self._id("creative", link=link))
+                                         self._id("creative", link=link),
+                                         crear_creative_imagen=lambda nombre, imagen_url, msg, link, cta_type="LEARN_MORE", instagram_user_id=None, dry_run=False:
+                                         self._id("creative_imagen", link=link, imagen_url=imagen_url))
         ad = types.SimpleNamespace(crear_ad=lambda nombre, adset_id, creative_id, dry_run=False: self._id("ad", adset_id=adset_id),
                                    actualizar_estado=lambda oid, status, dry_run=False: self._id("estado", oid=oid, status=status))
         insights = types.SimpleNamespace(obtener_resultados=lambda ad_id, objetivo=None:
@@ -91,6 +93,22 @@ def test_lanzar_crea_campana_conjuntos_y_anuncios(entorno):
     assert all(p["estado"] == "pausado" and p["meta_ad_id"] for p in e["piezas"])
     assert etapas == [nombre for nombre, _peso in lz.ETAPAS_LANZAR]
     assert any(ev["tipo"] == "lanzamiento" for ev in e["eventos"])
+
+
+def test_lanzar_con_imagen_usa_creative_de_imagen(entorno):
+    import db
+    from tests.test_experimentos_db import _pieza_imagen
+    ex, lz, meta, eid = entorno["ex"], entorno["lanzador"], entorno["meta"], entorno["eid"]
+    img = _pieza_imagen(db)
+    ex.agregar_pieza("acme", eid, img, "CO")
+    lz.lanzar("acme", eid)
+    tipos = [t for t, _ in meta.llamadas]
+    assert tipos.count("creative_imagen") == 1 and tipos.count("creative") == 3 and tipos.count("ad") == 4
+    kw = next(kw for t, kw in meta.llamadas if t == "creative_imagen")
+    assert kw["imagen_url"] == "https://r2/i.png" and "utm_content=" in kw["link"]
+    e = ex.obtener("acme", eid)
+    pz = next(p for p in e["piezas"] if p["pieza_id"] == img)
+    assert pz["estado"] == "pausado" and pz["meta_ad_id"] and (pz.get("extra") or {}).get("meta_video_id") is None
 
 
 def test_lanzar_retoma_sin_duplicar(entorno):

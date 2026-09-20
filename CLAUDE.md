@@ -253,14 +253,32 @@ appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
-launch (resumable). UI: sidebar tab "Experimentos" (`_tab_experimentos.html`, tree
-experiment -> country -> piece) and "Meter en experimento" in Crear's detail modal.
+launch (resumable). UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
+every piece with a public URL (`experimentos.elegibles`: Crear videos AND images, sprint
+pieces, finals; `origen`, `formato`, `en_experimentos`), the user ticks pieces and a 3-step
+form appears (where: countries + daily budget; how much: cap + days with a live count;
+review: piece × country grid, auto name «Prueba 20 sep · 3 piezas · CO, MX», "Avanzado"
+with objective/attribution/mode/URL). One `POST exp_probar` runs
+`experimentos.crear_con_piezas` (experiment + `experimento_pieza` rows in ONE transaction,
+`validar_combinacion`: a final only in its country, clones/images only in the experiment's
+countries) and enqueues `exp_lanzar` — activating is still a separate click. The old
+"+ Nuevo experimento" form is gone: `exp_crear` has no UI any more and is kept for
+tests/scripts; `exp_agregar_pieza`/`exp_meter_pieza` remain for an `armando` experiment's
+card. Crear (and the legacy "Anuncios sueltos" queue) link to `#experimentos?piezas=<pieza_id>`
+(the gallery opens with that piece ticked); Catálogo does NOT — "Crear experimento" on a
+product redirects with `?exp_nombre=&exp_destino=`, which step 3 prefills. Images are real
+Meta ads (`crear_creative_imagen`, no video upload); the decisor skips ThruPlay for them
+(`contexto["es_imagen"]`), never asks `derivar`/`rescatar` on one (a winner only scales, a
+loser is only paused — `derivaciones` refuses image sessions), and they never enter the
+organic publish path (`organico`/`publicador` are video-only; for an image piece `url_video`
+IS the image URL, so every gate also checks `es_imagen`). `experimentos.ESTADOS_VIVOS`
+(the gallery's «en prueba» label) includes `decidido`: winners keep delivering there.
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.
 `decisor.decidir(snapshots, reglas, contexto)` is a pure function — traffic gate first
 (impressions/spend/hours evidence, then CPC/CTR/ThruPlay thresholds; zero impressions is
-never a loser), sales gate second only with attribution (ROAS/CPA after
+never a loser; ThruPlay is skipped when `contexto["es_imagen"]`), sales gate second only with attribution (ROAS/CPA after
 `ventana_ventas_horas`), top-third ranking per country when ≥ 3 ads — returning
 `ganador | perdedor | inconcluso | pendiente` plus an action. Rules layer
 `REGLAS_DEFECTO ← proyecto.json["reglas_experimentos"] ← experimento.reglas`. The worker

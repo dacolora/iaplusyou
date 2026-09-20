@@ -98,7 +98,9 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
     es un parámetro: lanzar_piezas_nuevas construye un solo dict, sembrado
     con TODAS las piezas del experimento (no solo las nuevas), y lo pasa
     igual en cada llamada, así la segunda pieza nueva con el mismo pieza_id
-    ve el video que subió la primera en la misma corrida."""
+    ve el video que subió la primera en la misma corrida. Las imágenes
+    (`pz["es_imagen"]`) usan `crear_creative_imagen` (sin subida ni
+    miniatura): el creative lleva directo la URL pública de la imagen."""
     experimento_id = ex["id"]
     # M4 + Bloque 5: la misma pieza (mismo pieza_id) clonada a dos países
     # comparte la SUBIDA del video (hasta 180s bajo _LOCK) pero NO el
@@ -118,17 +120,23 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
         experimentos.actualizar_pieza(cliente, pz["id"], estado="publicando", meta_adset_id=adsets[pz["pais"]])
         creative_id = pz["meta_creative_id"]
         if not creative_id:
-            video_id = (pz.get("extra") or {}).get("meta_video_id")
-            if not video_id:
-                video_id = videos_por_pieza.get(pz["pieza_id"])
+            if pz.get("es_imagen"):
+                # Imagen: ni subida de video ni miniatura; el creative lleva la URL pública.
+                creative_id = meta_creative.crear_creative_imagen(
+                    f"{pz['nombre']} — {pz['pais']}", pz["url_imagen"], ex["nombre"],
+                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+            else:
+                video_id = (pz.get("extra") or {}).get("meta_video_id")
                 if not video_id:
-                    video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
-                    videos_por_pieza[pz["pieza_id"]] = video_id
-                experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
-            mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
-            creative_id = meta_creative.crear_creative_video(
-                f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
-                url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
+                    video_id = videos_por_pieza.get(pz["pieza_id"])
+                    if not video_id:
+                        video_id = meta_creative.subir_video(pz["url_video"], titulo=pz["nombre"])
+                        videos_por_pieza[pz["pieza_id"]] = video_id
+                    experimentos.marcar_pieza(cliente, pz["id"], meta_video_id=video_id)
+                mini = pz["url_miniatura"] or _miniatura_para_ad(cliente, f"exp{experimento_id}_{pz['id']}", pz["url_video"])
+                creative_id = meta_creative.crear_creative_video(
+                    f"{pz['nombre']} — {pz['pais']}", video_id, mini, ex["nombre"],
+                    url_destino(ex["destino_url"], pz["id"]), instagram_user_id=creds.get("ig_user_id"))["id"]
             experimentos.actualizar_pieza(cliente, pz["id"], meta_creative_id=creative_id)
         ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",

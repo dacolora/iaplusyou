@@ -103,6 +103,7 @@ def _resultado(veredicto, motivo, accion, puerta, numeros):
 
 
 def decidir(snapshots, reglas, contexto):
+    """`contexto["es_imagen"]`: la pieza es una imagen, ThruPlay no aplica."""
     r = dict(REGLAS_DEFECTO, **(reglas or {}))
     c = contexto or {}
     if not snapshots:
@@ -136,7 +137,7 @@ def decidir(snapshots, reglas, contexto):
         fallas.append(f"CPC {numeros['cpc']:.2f} > {r['cpc_max']:.2f}")
     if r["ctr_min"] is not None and numeros["ctr"] < r["ctr_min"]:
         fallas.append(f"CTR {numeros['ctr']:.2f}% < {r['ctr_min']:.2f}%")
-    if r["thruplay_min"] is not None and numeros["thruplay_rate"] < r["thruplay_min"]:
+    if r["thruplay_min"] is not None and not c.get("es_imagen") and numeros["thruplay_rate"] < r["thruplay_min"]:
         fallas.append(f"ThruPlay {numeros['thruplay_rate'] * 100:.0f}% < {r['thruplay_min'] * 100:.0f}%")
     escalon = int(c.get("escalon_rescate") or 0)
     if fallas:
@@ -172,5 +173,6 @@ def decidir(snapshots, reglas, contexto):
     if total >= 3 and pos is not None and pos > max(1, total // 3):
         return _resultado("pendiente", f"Pasa umbrales pero no está en el tercio superior de su país "
                           f"(posición {pos} de {total}).", None, puerta, numeros)
+    thruplay_txt = "" if c.get("es_imagen") else f"ThruPlay {numeros['thruplay_rate'] * 100:.0f}% — "
     return _resultado("ganador", f"Ganador: CTR {numeros['ctr']:.2f}%, CPC {numeros['cpc']:.2f}, "
-                      f"ThruPlay {numeros['thruplay_rate'] * 100:.0f}% — {motivo_ventas}.", "escalar_y_derivar", puerta, numeros)
+                      f"{thruplay_txt}{motivo_ventas}.", "escalar_y_derivar", puerta, numeros)

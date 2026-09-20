@@ -208,11 +208,14 @@ def _publicar_organico(cliente, ex, payload):
     encola UNA tarea organico_publicar (max_intentos=1) con todas. Sin canal
     disponible no es error: mensaje y nada más. Las plataformas con
     publicación viva se saltan (unicidad) — repetir la acción no publica dos
-    veces."""
+    veces. Una pieza de imagen no aplica (organico/publicador son solo de
+    video; su `url_video` ES la imagen): mensaje y nada más, como sin canal."""
     pz = _pieza(ex, payload["ep_id"])
     ep_id, pieza_id = pz["id"], pz.get("pieza_id")
     if not pieza_id or not pz.get("url_video"):
         raise ValueError(f"{pz['nombre']} no tiene video para publicar.")
+    if pz.get("es_imagen"):
+        return f"{pz['nombre']}: Las imágenes no se publican en orgánico todavía."
     plataformas, sin_canal = _plataformas_pedidas(cliente, payload)
     aviso_sin_canal = f" Sin canal conectado: {_nombres(sin_canal)}." if sin_canal else ""
     if not plataformas:

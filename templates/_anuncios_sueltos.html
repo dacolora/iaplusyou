@@ -130,9 +130,10 @@
         <select name="pais">{% for codigo in paises_fe %}<option value="{{ codigo }}"{% if elegible.pais == codigo %} selected{% endif %}>{{ codigo }}</option>{% endfor %}</select>
         <button type="submit" class="btn-guardar btn-sm">Meter en experimento</button>
       </form>
-      {% elif elegible %}
-      <small class="vacio">Crea un experimento arriba y aparecerá «Meter en experimento».</small>
-      {% else %}
+      {% elif elegible and elegible.pieza_id %}
+      {# Sin experimento en armado: el mismo «Probar en Meta» de Crear (galería con la pieza marcada). #}
+      <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ elegible.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
+      {% elif not elegible %}
       <small class="vacio">Esta pieza ya no está en Crear: genera una nueva y métela en un experimento.</small>
       {% endif %}
       <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit="return confirm('¿Quitar de la lista?');">

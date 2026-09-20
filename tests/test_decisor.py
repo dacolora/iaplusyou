@@ -42,6 +42,16 @@ def test_perdedor_por_ctr_y_rescate():
     assert v3["veredicto"] == "perdedor" and v3["accion"] == "archivar"
 
 
+def test_imagen_no_cae_por_thruplay():
+    import decisor
+    r = dict(decisor.REGLAS_DEFECTO)
+    ok_sin_thruplay = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=27.0, thruplay_rate=0.0)]
+    video = decisor.decidir(ok_sin_thruplay, r, CTX)
+    assert video["veredicto"] == "perdedor" and "ThruPlay" in video["motivo"]
+    imagen = decisor.decidir(ok_sin_thruplay, r, dict(CTX, es_imagen=True))
+    assert imagen["veredicto"] != "perdedor" and "ThruPlay" not in imagen["motivo"]
+
+
 def test_ganador_sin_atribucion_por_trafico_y_ranking():
     r = decisor.reglas_efectivas(None, {"cpc_max": 0.5})
     ok = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=27.0, thruplay_rate=0.25)]

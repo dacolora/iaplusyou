@@ -28,7 +28,8 @@ casa: nada gasta sin clic explícito).
 - Filtros (chips, sin recarga): Todo · Videos · Imágenes · Finales · Sprints. Buscador
   por texto opcional.
 - Etiqueta «en prueba: <experimento>» cuando la pieza está en un experimento vivo
-  (`armando`, `lanzando`, `pausado`, `corriendo`); se puede volver a marcar.
+  (`armando`, `lanzando`, `pausado`, `corriendo`, `decidido` — ahí los ganadores siguen
+  entregando); se puede volver a marcar.
 - Barra fija inferior: «N piezas marcadas → **Probar en Meta**». Sin piezas marcadas no
   aparece nada más. Sin Meta conectada, la galería se ve igual pero la barra dice
   «Conecta Meta en Configuración para probar».

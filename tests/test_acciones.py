@@ -18,7 +18,7 @@ def ent(base_temporal, monkeypatch):
     ep = ex.agregar_pieza("acme", eid, pid, "CO")
     ex.actualizar_pieza("acme", ep, meta_ad_id="ad1", estado="activo")
     ex.actualizar("acme", eid, estado="corriendo", meta_campaign_id="c1")
-    return {"ac": acciones, "ex": ex, "eid": eid, "ep": ep, "pid": pid, "llamadas": llamadas}
+    return {"ac": acciones, "ex": ex, "eid": eid, "ep": ep, "pid": pid, "llamadas": llamadas, "db": base_temporal}
 
 
 def test_pedir_respeta_modo(ent):
@@ -412,6 +412,23 @@ def test_ejecutar_publicar_organico_sin_canales_no_es_error(org):
     assert org["organico"].listar("acme", pieza_id=pid) == [] and org["redactadas"] == []
     assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
     assert "publicado_organico" not in _pieza_ep(org)["extra"]
+
+
+def test_ejecutar_publicar_organico_salta_las_imagenes(org):
+    """F1: organico/publicador son solo de video. Una pieza de imagen no
+    crea publicaciones, no redacta (Claude) ni encola; el mensaje lo dice."""
+    import cola
+    from tests.test_experimentos_db import _pieza_imagen
+    ac, ex, eid = org["ac"], org["ex"], org["eid"]
+    pid = _pieza_imagen(org["db"])
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.actualizar_pieza("acme", ep, meta_ad_id="ad_img", estado="activo")
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "Las imágenes no se publican en orgánico todavía." in msg
+    assert org["organico"].listar("acme", pieza_id=pid) == [] and org["redactadas"] == []
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    pz = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert "publicado_organico" not in (pz["extra"] or {})
 
 
 def test_pedir_publicar_organico_en_semi_propone_con_textos_y_en_auto_publica(org):

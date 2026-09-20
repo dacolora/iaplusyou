@@ -171,6 +171,14 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
                                    "numeros": v["numeros"]}, ep_id=ep_id)
     resultado["veredictos"].append((pz, v))
     accion = v["accion"]
+    # Una pieza de imagen no se deriva ni se rescata (derivaciones rechaza
+    # las sesiones de imagen: sería un evento `error`, o una propuesta que
+    # falla al aprobarla). Ganadora: solo escala. Perdedora: solo se pausa.
+    es_imagen = bool(pz.get("es_imagen"))
+    if es_imagen and accion in ("escalar_y_derivar", "rescatar"):
+        experimentos.registrar_evento(cliente, ex["id"], "imagen",
+                                      f"{pz['nombre']} ({pz['pais']}): Pieza de imagen: sin rescate/derivación "
+                                      f"(solo videos).", {"accion": accion}, ep_id=ep_id)
     if accion == "escalar_y_derivar":
         # "escalar" es una acción por país (sube el presupuesto del conjunto
         # en Meta), no por pieza: con varios ganadores del mismo país en una
@@ -182,7 +190,8 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
         else:
             resultado["escalados"].add(pz["pais"])
             _pedir(cliente, ex["id"], "escalar", {"pais": pz["pais"], "ep_id": ep_id}, v["motivo"], resultado)
-        _pedir(cliente, ex["id"], "derivar", {"ep_id": ep_id}, v["motivo"], resultado)
+        if not es_imagen:
+            _pedir(cliente, ex["id"], "derivar", {"ep_id": ep_id}, v["motivo"], resultado)
         resultado["ganadores"].append(pz)
         _pedir_publicacion_organica(cliente, ex, pz, v["motivo"], resultado)
     elif accion == "rescatar":
@@ -190,7 +199,8 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
         # gasto — en semi/auto se ejecuta ya, en manual se propone. Así el
         # anuncio deja de gastar aunque el rescate espere aprobación.
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
-        _pedir(cliente, ex["id"], "rescatar", {"ep_id": ep_id}, v["motivo"], resultado)
+        if not es_imagen:
+            _pedir(cliente, ex["id"], "rescatar", {"ep_id": ep_id}, v["motivo"], resultado)
     elif accion == "archivar":
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
         _pedir(cliente, ex["id"], "archivar", {"ep_id": ep_id, "cf_id": _cf_id(pz), "motivo": v["motivo"]},
@@ -214,9 +224,10 @@ def _pedir_publicacion_organica(cliente, ex, pz, motivo, resultado):
     manual/semi (acciones.pedir la deja con el texto ya redactado), sola en
     auto. Solo con algún canal conectado y si la pieza no tiene ya una
     publicación viva en ninguno de ellos (ganador re-evaluado, o publicada
-    a mano desde el panel)."""
+    a mano desde el panel). Solo videos: organico/publicador no saben de
+    imágenes (para una imagen `url_video` ES la URL de la imagen)."""
     canales = _canales_organicos(cliente)
-    if not canales or not pz.get("pieza_id") or not pz.get("url_video"):
+    if not canales or not pz.get("pieza_id") or not pz.get("url_video") or pz.get("es_imagen"):
         return
     vivas = {pub["plataforma"] for pub in organico.listar(cliente, pieza_id=pz["pieza_id"])
              if pub["estado"] in organico.ESTADOS_VIVOS}
@@ -356,7 +367,8 @@ def exp_decidir(tarea):
             ctx = {"horas_activo": _horas_activo(pz, snaps, ahora), "presupuesto_dia": pais.get("presupuesto_dia"),
                    "dias_experimento": ex.get("dias"), "dias_transcurridos": dias_transcurridos,
                    "escalon_rescate": pz.get("escalon_rescate") or 0, "atribucion": ex.get("atribucion"),
-                   "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden)}
+                   "posicion": (orden.index(pz["id"]) + 1) if pz["id"] in orden else None, "total_pais": len(orden),
+                   "es_imagen": bool(pz.get("es_imagen"))}
             v = decisor.decidir(snaps, reglas, ctx)
             if v["veredicto"] == "pendiente":
                 continue
