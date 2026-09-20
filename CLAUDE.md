@@ -147,6 +147,21 @@ agency token on read, so `credenciales_ads`, `estado`, `estado_pixel`, `lanzador
 operates assets the client granted in Business Manager or the agency owns; a client's own
 data still never flows through another client's app. `meta_ads/` receives credentials via
 `auth.configurar(...)` — the submodule never reads the environment.
+Since 2026-09-20 (ADR 0003) **the client chooses the form** in Configuración › Meta:
+`proyectos.meta_forma` (`agencia | propia | None`, in `proyecto.json`) is the client's intention,
+`meta_conexion.modo` (meta.json) is the real state (with a connection or a registered app and no
+form, the form is inferred). «Que Creatv lo gestione» is self-service: the client shares assets
+with Creatv's Business ID, pastes their portfolio id, the routes `meta_agencia_buscar/conectar`
+show ONLY assets whose owner is that portfolio (`meta_agencia.activos_de_portafolio`:
+`client_ad_accounts`/`client_pages` with `business{id}`) and
+`asignar(..., asignado_por="cliente:<u>", portafolio_id=)` connects — one ad account per project,
+enforced there. Fallback «Avisar a Creatv» stores a `kv` row `meta_solicitud:<cliente>`
+(`meta_agencia.solicitar/solicitudes`) shown in `/admin/meta`; `notificaciones.avisar_admin` mails
+verified admins. The client may switch forms (including leaving agencia via `meta_agencia_salir`)
+only with nothing running (`_bloqueo_cambio_forma`: no experiment in `ESTADOS_VIVOS`, no organic
+publication `en_cola`/`publicando`). Creatv's one-time Meta work is in
+`docs/meta/puesta-en-marcha-agencia.md`; the glossary for these terms (forma, modo, agencia,
+activo, portafolio, asignación, solicitud) is `CONTEXT.md`.
 
 **Prompt generation** (`generador_prompts.py`): calls Anthropic directly (not through
 Higgsfield). `generar_prompts()` writes the 5 candidate prompts and folds in a

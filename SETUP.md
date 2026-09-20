@@ -221,60 +221,49 @@ Listo, YouTube queda funcionando.
 
 ## 3. Facebook + Instagram (Meta)
 
-### 3.0 Dos modos: propia o agencia
+### 3.0 El cliente elige la forma
 
-- **Propia** (por defecto para quien quiere control total): el cliente crea su app de Meta y
-  conecta desde Configuración, como se explica abajo.
-- **Agencia** (para los proyectos que gestiona Creatv): el administrador conecta UNA vez el
-  Business Manager de Creatv en `/admin/meta` y le asigna a cada proyecto su cuenta
-  publicitaria y su Página. Pasos: en business.facebook.com › Configuración del negocio ›
-  Usuarios › Usuarios del sistema › crear uno (rol administrador) › "Asignar activos"
-  (las cuentas publicitarias y Páginas propias, y las de clientes que te dieron acceso de
-  socio) › "Generar nuevo token" con la app de agencia y los permisos `ads_management`,
-  `ads_read`, `business_management`, `pages_read_engagement`, `pages_manage_posts`,
-  `pages_manage_ads`, `instagram_basic`, `instagram_content_publish` › pegar el token y el
-  id del negocio en `/admin/meta`. Requiere `FLASK_SECRET_KEY` en el `.env` (el token se
-  guarda cifrado). El cliente ve "Gestionado por Creatv" y no tiene que hacer nada.
-  Para que un cliente te dé acceso: él, en su Business Manager › Configuración del negocio ›
-  Socios › "Agregar" › tu id de negocio › elige qué cuenta y Página comparte.
+En Configuración › Meta cada proyecto elige cómo conectar (ADR 0003):
 
+- **Que Creatv lo gestione** (recomendada). El cliente comparte su cuenta publicitaria, su
+  Página y su Instagram con el ID del Business de Creatv desde Business Suite (Configuración
+  del negocio › Socios › Agregar › «Dar acceso a un socio a tus activos»), pega el ID de su
+  portafolio comercial en Creatv, ve sus activos y conecta. No toca developers.facebook.com y
+  el acceso no caduca. Si no ve sus activos, «Avisar a Creatv» deja una solicitud en
+  `/admin/meta`. Requisitos del lado de Creatv (una sola vez): `docs/meta/puesta-en-marcha-agencia.md`
+  y `FLASK_SECRET_KEY` en el `.env` (el token de agencia se guarda cifrado).
+- **Con mi propia app de Meta**. El cliente crea su app y conecta él; pasos abajo.
 
-Requisito previo: necesitas una **Página de Facebook** y una cuenta de **Instagram
-Business o Creator vinculada a esa Página** (se vincula desde Configuración de la Página
-de Facebook > Instagram > Conectar cuenta).
+Requisito previo en ambos casos: una **Página de Facebook** y, para Reels, una cuenta de
+**Instagram Business o Creator vinculada a esa Página**.
 
-Cada proyecto es un mundo aparte: **el cliente crea su propia app de Meta** y la registra en
-el dashboard. CreatvMachine no tiene una app propia en medio; solo comparte la URL de vuelta
+### 3.1 Con mi propia app (pasos del cliente)
+
+CreatvMachine no pone una app propia en medio: solo comparte la URL de vuelta
 (`META_REDIRECT_URI` en el `.env`), que el cliente pega tal cual en su app.
 
-1. Ve a [developers.facebook.com/apps/creation](https://developers.facebook.com/apps/creation/), crea una app
-   (nombre libre) y elige tu **portafolio comercial**.
-2. Casos de uso: **Crear y administrar anuncios con la API de marketing**, **Medir datos de rendimiento**,
-   **Administrar todos los aspectos de tu página** y, si vas a publicar Reels, **Administrar mensajes y
-   contenido en Instagram**. (El "inicio de sesión con Facebook" normal se desactiva solo: las apps de
-   negocio usan *Facebook Login for Business*, que se agrega automáticamente.)
-3. En **Inicio de sesión con Facebook para empresas › Configurar**, agrega en "URI de redireccionamiento
-   de OAuth válidos" la URL de producción (`https://<tu-dominio>/meta/callback`). Tiene que coincidir
-   EXACTAMENTE con `META_REDIRECT_URI`. Con "Aplicar HTTPS" activo, Meta rechaza `http://localhost`.
-4. En **Casos de uso › Personalizar** de cada caso, agrega los permisos que falten: `pages_manage_ads`
-   (Marketing API), `pages_manage_posts` (Página), `instagram_basic` e `instagram_content_publish` (Instagram).
-5. En **Inicio de sesión con Facebook para empresas › Configuraciones**, crea una configuración con tipo de
-   token **usuario del sistema**, caducidad **Nunca**, activos Páginas y Cuentas publicitarias (requeridos) e
-   Instagram, y los permisos `ads_management`, `ads_read`, `business_management`, `pages_show_list`,
-   `pages_read_engagement`, `pages_manage_ads`, `pages_manage_posts`, `instagram_basic`,
-   `instagram_content_publish`. Copia el **identificador de configuración**.
-6. En **Configuración de la app › Básica**, copia el **identificador de la app** y la **clave secreta**.
-7. En el dashboard, pestaña **FlowMarketing** › "Registra tu app de Meta": pega los tres valores. Quedan en
-   `clientes/<cliente>/meta_app.json` (0600, fuera de git). Mientras la app esté en modo Desarrollo, solo
-   los usuarios con rol en ella (Roles de la app) pueden autorizarla; el administrador del portafolio ya lo tiene.
-8. La autorización ya no es un script: entra al proyecto en el dashboard, pestaña **FlowMarketing**,
-   botón **"Conectar con Meta"**, inicia sesión con el Facebook que administra la cuenta publicitaria
-   y la Página, y elige una de cada. Queda guardado en `clientes/<cliente>/meta.json`.
-
-**Nota sobre permisos**: mientras la app esté en modo Desarrollo, solo pueden conectar los usuarios
-con rol en la app (Administrador/Desarrollador/Tester en "Roles de la app"). Para que un cliente
-conecte su cuenta, agrégalo como **Tester** y que acepte la invitación en Facebook. Para que cualquiera
-conecte sin ese paso, hay que pasar **App Review** de esos permisos y la **Verificación de negocio**.
+1. Ve a [developers.facebook.com/apps/creation](https://developers.facebook.com/apps/creation/), crea una
+   app del tipo **Negocio** y elige tu **portafolio comercial**.
+2. Casos de uso: **Crear y administrar anuncios (API de marketing)**, **Medir datos de rendimiento**,
+   **Administrar todos los aspectos de tu Página** y, si vas a publicar Reels, **Administrar mensajes y
+   contenido en Instagram**. En **Casos de uso › Personalizar**, agrega los permisos que falten.
+3. **Inicio de sesión con Facebook para empresas › Configuraciones**: crea una configuración con
+   **token de usuario** (el de usuario del sistema no sirve: Meta lo excluye para el portafolio dueño de la
+   app), activos Páginas y Cuentas publicitarias (e Instagram si aplica) y los permisos `ads_management`,
+   `ads_read`, `business_management`, `pages_show_list`, `pages_read_engagement`, `pages_manage_ads`,
+   `pages_manage_posts`, `instagram_basic`, `instagram_content_publish`. Copia el **identificador de
+   configuración**.
+4. **Inicio de sesión con Facebook para empresas › Configurar**: en «URI de redireccionamiento de OAuth
+   válidos» pega `https://<tu-dominio>/meta/callback` (igual a `META_REDIRECT_URI`; con «Aplicar HTTPS»
+   Meta rechaza `http://localhost`).
+5. **Configuración › Básica**: nombre, correo de contacto, URL de términos, URL de política de privacidad,
+   ícono 1024×1024 sin logos de Meta, categoría, propósito y «Eliminación de datos». Copia el
+   **identificador de la app** y la **clave secreta**.
+6. **Modo de la app: Live** (arriba del panel). Sin esto Meta rechaza cada anuncio con el subcódigo 1885183.
+   En Live sin App Review solo pueden usar la app las personas con rol en ella (Roles de la app).
+7. En Creatv, Configuración › Meta › «Con mi propia app» › pega los tres datos › **Guardar** › **Conectar
+   con Meta** con el Facebook que administra la app, y elige cuenta y Página. Queda en
+   `clientes/<cliente>/meta.json`. El token caduca a los 60 días: la tarjeta avisa y «Volver a conectar» basta.
 
 ---
 
