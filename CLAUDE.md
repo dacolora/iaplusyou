@@ -173,6 +173,30 @@ sprint; `sprints/entrega.py` lists approved links and builds the zip
 (`sprint_empaquetar`). Retries and regenerations always go through the cost
 gate and `max_intentos=1`.
 
+**Nicho y avatares** (`nicho/` + `tareas/nicho.py`, spec
+`docs/superpowers/specs/2026-09-18-nicho-avatares-design.md`): personas nacidas de
+comentarios reales. Tablas `estudio`, `comentario` (única por estudio + fuente +
+fuente_id, nunca guarda el autor) y `avatar` (núcleos por deseo con `padre_id`
+NULL; sub-avatares colgando de ellos con los campos de las dos plantillas del
+cliente: identidad, soluciones previas, situaciones, conciencia, encaje del
+producto, evidencia). `nicho/datos.py` es el único escritor; `recalcular` deriva
+`armando | generando | revisando`. Las fuentes entran por `nicho/fuentes/base.py`
+(`normalizar_comentario`, `ErrorFuente.usuario`) y el registro perezoso
+`nicho.fuentes.por_tipo`; Parte 1 trae `texto` y `csv` (corren en la ruta), Parte 2
+agrega Reddit, YouTube y Apify con la tarea `nicho_recolectar`.
+`nicho/avatares.py` hace dos pasadas con Claude (`generador_prompts.MODEL`):
+núcleos, luego sub-avatares por núcleo; cada cita se verifica literal contra el
+comentario (`verificar_evidencia`) y la que no aparece se descarta — un
+sub-avatar sin citas queda `sin_evidencia`, no se borra. `estimar_costo` (tokens ×
+`PRECIOS_USD_POR_MILLON`) se muestra en el botón antes de encolar
+`nicho_generar_avatares` (`max_intentos=1`; el gasto real va a `gastos` como tipo
+`avatares`). Regenerar borra `propuesto`/`descartado` y conserva los `aprobado`.
+Aprobar un sub-avatar crea (o actualiza) una `persona` con origen `investigada`
+(`persona_desde_avatar`); descartar la archiva. Exportación `.md` y `.xlsx` con la
+plantilla de la hoja "Personas" (`nicho/exportar.py`). UI: pestaña **Nicho**
+(`_tab_nicho.html`) y página propia del estudio (`nicho_estudio.html`), Blueprint
+`nicho/rutas.py` bajo `/cliente/<cliente>/nicho/...`.
+
 **Crear (FlowPlus)** (`flowplus_prompt.armar` -> `flowplus_lanzar.lanzar` -> worker
 `tareas/flowplus.py` -> `providers/flowplus_modelos.py`, all via WaveSpeed): `VIDEO` /
 `IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`,

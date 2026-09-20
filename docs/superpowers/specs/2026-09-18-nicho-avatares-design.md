@@ -79,7 +79,7 @@ avatar; si no, `armando`. Regenerar vuelve a pasar por `generando`.
 
 ## 2. Modelo de datos
 
-Migración `0009_nicho` (`down_revision = '0008'`), tablas declaradas también en
+Migración `0011_nicho` (`down_revision = '0010'`), tablas declaradas también en
 `db.py`. Columnas comunes como en sprints: `cliente` (String 80),
 `creado_en`, `actualizado_en` (String 19). Índice por `cliente` en las tres.
 
@@ -183,11 +183,12 @@ class Fuente:
 
 `normalizar_comentario(d)` es el único camino: quita caracteres de control,
 colapsa espacios, recorta a 2 000 caracteres, descarta textos de menos de 3
-caracteres, exige `fuente_id`, valida `url` http(s), castea `puntuacion` a
-entero y `fecha` a ISO de 19 caracteres. `ErrorFuente(usuario)` es el único
-error que sale al dashboard o al worker: mensaje en español, nunca llaves ni
-HTML ajeno (pasar por `cola.sin_token` antes de guardar). `avanzar(etapa,
-detalle)` es el callback de progreso que el worker traduce a `cola.reportar`.
+caracteres, cae al hash del texto como `fuente_id` cuando la fuente no trae
+uno, valida `url` http(s), castea `puntuacion` a entero y `fecha` a ISO de 19
+caracteres. `ErrorFuente(usuario)` es el único error que sale al dashboard o
+al worker: mensaje en español, nunca llaves ni HTML ajeno (pasar por
+`cola.sin_token` antes de guardar). `avanzar(etapa, detalle)` es el callback
+de progreso que el worker traduce a `cola.reportar`.
 `nicho/fuentes/__init__.py` registra por `tipo` y carga perezosamente
 (`por_tipo`), como `conectores`.
 
@@ -358,8 +359,9 @@ señales** (si no, vacío), `deseo` en primera persona, 3 a 5 problemas por
 solución previa, 2 a 4 situaciones, 2 a 5 citas **literales** por sub-avatar,
 todo en `estudio.idioma` salvo las citas, que se conservan en el idioma en que
 la gente escribió. Modelo: `generador_prompts.MODEL`; llamada con el mismo
-patrón de `sprints/analisis._llamar` (`max_tokens` 2 000 en la pasada 1,
-4 000 en la 2).
+patrón de `sprints/analisis._llamar` (`max_tokens` 4 000 en la pasada 1 y
+8 000 en la 2 (tope de corte, no de costo; el estimado usa 1 500 y 3 000 por
+núcleo de salida esperada)).
 
 ### 4.3 Validación y evidencia
 
@@ -381,7 +383,7 @@ sería inventado, y toda la gracia es que no lo sea.
 `estimar_costo(comentarios, modelo)` → `{"comentarios", "tokens", "usd"}`.
 Tokens de entrada ≈ caracteres / 3.5 (conservador para español); la entrada
 se cuenta dos veces (pasada 1 y de nuevo repartida en la pasada 2) más 800 de
-prompt por llamada; salida ≈ 2 000 (pasada 1) + 4 000 × 5 núcleos (peor caso).
+prompt por llamada; salida ≈ 1 500 (pasada 1) + 3 000 × 5 núcleos (peor caso).
 USD = entrada × precio de entrada + salida × precio de salida, redondeado hacia
 arriba al centavo y mostrado con "≈". Precios en `PRECIOS_USD_POR_MILLON` del
 módulo; si el modelo configurado no está en la tabla se estima con el precio
@@ -454,7 +456,9 @@ Pestaña **Nicho** en `_sidebar.html` (`data-tab="nicho"`, después de Tablero) 
 Blueprint `nicho/rutas.py` (`bp = Blueprint("nicho", __name__,
 url_prefix="/cliente/<cliente>/nicho")`) registrado en `dashboard.py`, con el
 mismo guard por cliente que sprints; `nicho_rutas.contexto(cliente)` entra a
-la página del proyecto y elige el estudio abierto con `?nicho=<estudio_id>`.
+la página del proyecto y la pestaña lista los estudios; cada estudio abre en
+su propia página `nicho_estudio.html` (`GET /cliente/<cliente>/nicho/<id>`),
+como `sprint_detalle.html`.
 
 - **Lista de estudios**: nombre, producto, chip de estado, "N comentarios de
   M fuentes", "K avatares aprobados". "Nuevo estudio": nombre, producto (con
@@ -566,7 +570,7 @@ función falsa como en `test_sprints_ideas.py`.
   visible, botones apagados sin llaves, job_id que no duplica, flashes.
 - `test_tareas_nicho.py`: las dos tareas con fuente falsa y Claude falso,
   guardado por lotes, `al_interrumpir` deja el estudio consistente.
-- `test_migracion.py`: `0009` sube y baja.
+- `test_migracion.py`: `0011` sube y baja.
 
 ## 12. Fuera de esta versión
 
