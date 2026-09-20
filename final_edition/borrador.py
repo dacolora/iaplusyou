@@ -213,13 +213,22 @@ def armar_documento(guion, segmentos, clon, voces, musica, marca, formato, opcio
     return documento_mod.validar(doc)
 
 
-def tiene_destino(doc, idioma, pais):
-    """True si todos los textos tienen la clave del destino y, si hay pista
-    de voz, cada clip de voz trae su material para ese destino."""
+def tiene_textos(doc, idioma, pais):
+    """True si todos los roles de `variables.textos` tienen la clave de ese
+    destino, sin mirar la voz: un destino cuyo guion ya se localizó pero
+    cuya voz degradó (`VozIncompleta`) sigue contando aquí — sirve para no
+    volver a pagarle Claude a una retraducción."""
     clave = f"{idioma}_{pais}"
     textos = (doc.get("variables") or {}).get("textos") or {}
-    if not textos or any(clave not in (v or {}) for v in textos.values()):
+    return bool(textos) and not any(clave not in (v or {}) for v in textos.values())
+
+
+def tiene_destino(doc, idioma, pais):
+    """True si `tiene_textos` para ese destino y, si hay pista de voz, cada
+    clip de voz trae su material para ese destino."""
+    if not tiene_textos(doc, idioma, pais):
         return False
+    clave = f"{idioma}_{pais}"
     for p in doc.get("pistas") or []:
         if p.get("tipo") != "audio":
             continue

@@ -124,6 +124,15 @@ def test_agregar_destino_traduce_textos_voz_subtitulos_y_precio():
     assert b.fijar_precio(doc2, "en", "US", None)["variables"]["precios"] == {}
 
 
+def test_tiene_textos_no_exige_voz():
+    doc = b.armar_documento(GUION, SEGMENTOS, CLON, _voces(), {"id": 20}, MARCA, "9:16", OPCIONES)
+    assert b.tiene_textos(doc, "es", "CO") and not b.tiene_textos(doc, "en", "US")
+    g_en = {**GUION, "idioma": "en", "pais": "US",
+            "bloques": [{**bl, "texto_pantalla": bl["texto_pantalla"] + " EN", "texto_voz": bl["texto_voz"] + " EN"} for bl in GUION["bloques"]]}
+    doc3 = b.agregar_destino(doc, g_en, None, None)      # voz degradada: sin voces para ese destino
+    assert b.tiene_textos(doc3, "en", "US") is True and b.tiene_destino(doc3, "en", "US") is False
+
+
 def test_receta_cambia_con_guion_voz_musica_o_formato_y_no_con_el_precio():
     o = {"variante": None, "variante_tipo": None, "voz": "Rachel", "estilo_musica": "energetico", "con_voz": True,
          "con_musica": True, "con_sonido": True, "sonido": "nativo", "mezcla": "equilibrada", "volumenes": None}

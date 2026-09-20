@@ -179,3 +179,61 @@ def test_traducir_agrega_el_destino_una_vez_y_fija_el_precio(entorno):
     ed4, capas4, costo4 = produccion.traducir("acme", ed3, "es", "CO", 89900, "Rachel", True)   # destino base: solo el precio
     assert costo4 == 0.0 and len(entorno["localizar"]) == 1 and ed4["documento"]["variables"]["precios"] == {"es_CO": 89900.0}
     assert d.resolver(ed4["documento"], "es", "CO")["pistas"][1]["clips"][1]["texto"] == {"literal": "$ 89.900"}
+
+
+def test_traducir_voz_fatal_lleva_lo_pagado_en_la_excepcion(entorno):
+    import ediciones
+    from final_edition import produccion
+    ed, *_ = produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    entorno["fallar_voz_en"] = len(entorno["voz"]) + 1
+    with pytest.raises(produccion.VozFatal) as exc:
+        produccion.traducir("acme", ed, "en", "US", None, "Rachel", True)
+    assert exc.value.costo == pytest.approx(0.02)
+    assert exc.value.capas["guion"]["costo_usd"] == 0.02
+    assert exc.value.capas["voz"]["estado"] == "error"
+    assert "No se pudo generar la voz" in str(exc.value)
+    assert ediciones.cargar("acme", ed["id"])["version_n"] == ed["version_n"]
+
+
+def test_asegurar_borrador_voz_fatal_lleva_las_capas(entorno):
+    from final_edition import produccion
+    entorno["fallar_voz_en"] = 1
+    with pytest.raises(produccion.VozFatal) as exc:
+        produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    assert exc.value.costo == 0.0
+    assert set(exc.value.capas) == {"cortes", "sonido", "voz"}
+    assert exc.value.capas["voz"]["estado"] == "error"
+
+
+def test_traducir_voz_incompleta_degrada_el_destino_y_la_retraduccion_no_paga_claude(entorno):
+    from final_edition import produccion
+    ed, *_ = produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    entorno["fallar_voz_en"] = len(entorno["voz"]) + 3
+    ed2, capas, costo = produccion.traducir("acme", ed, "en", "US", 24.99, "Rachel", True)
+    assert capas["voz"]["estado"] == "error"
+    assert costo == pytest.approx(0.02 + 2 * 0.05)
+    assert ed2["documento"]["variables"]["textos"]["hook"]["en_US"] == "Hola en"
+    assert borrador.tiene_textos(ed2["documento"], "en", "US") is True
+    assert borrador.tiene_destino(ed2["documento"], "en", "US") is False
+    entorno["fallar_voz_en"] = None
+    ed3, capas3, costo3 = produccion.traducir("acme", ed2, "en", "US", 24.99, "Rachel", True)
+    assert len(entorno["localizar"]) == 1                        # Claude no se vuelve a llamar
+    assert costo3 == pytest.approx(3 * 0.05)                     # los dos bloques ya pagados vienen de la caché
+    assert borrador.tiene_destino(ed3["documento"], "en", "US") is True
+    assert "voz" in capas3 and capas3["voz"]["estado"] == "ok"
+
+
+def test_musica_que_falla_degrada_el_borrador(entorno, monkeypatch):
+    from final_edition import insumos, produccion
+
+    def fallar(*a, **k):
+        raise RuntimeError("stable audio caído")
+    monkeypatch.setattr(insumos, "musica", fallar)
+    ed, capas, costo, creada = produccion.asegurar_borrador(
+        "acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    assert capas["musica"]["estado"] == "error" and "stable audio" in capas["musica"]["error"]
+    assert "p_musica" not in {p["id"] for p in ed["documento"]["pistas"]}
+    assert ed["documento"]["origen"]["degradada"] is True
+    ed2, capas2, costo2, creada2 = produccion.asegurar_borrador(
+        "acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    assert creada2 and ed2["id"] != ed["id"]

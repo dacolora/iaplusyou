@@ -35,6 +35,17 @@ class VozIncompleta(Exception):
         self.costo = costo
 
 
+class VozFatal(ValueError):
+    """Falló la voz del PRIMER bloque (voz.ErrorPrimerBloque): fatal, pero lo
+    que ya se pagó y las capas ya construidas viajan con la excepción para
+    que quien produce las registre (gasto y `capas` de la final)."""
+
+    def __init__(self, mensaje, costo, capas):
+        super().__init__(mensaje)
+        self.costo = costo
+        self.capas = capas
+
+
 def _mensaje(e):
     return cola.recortar(cola.sin_token(str(e)), 500)
 
@@ -129,7 +140,8 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
             _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, c)
         except voz_mod.ErrorPrimerBloque as e:
             _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
-            raise ValueError(f"No se pudo generar la voz (revisa la voz elegida, '{o.get('voz')}'): {e}") from e
+            raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{o.get('voz')}'): {e}",
+                          round(costo, 4), capas) from e
         except VozIncompleta as e:
             degradada, voces = True, None
             costo += e.costo
@@ -168,12 +180,18 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
 
 
 def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
-    """Asegura el destino en la edición: localiza el guion (Claude; nada si
-    el destino ya está — el base siempre lo está), sintetiza la voz de cada
-    bloque (caché) y fija el precio del destino (None = sin badge). Guarda
-    con CAS (sin reintento: en esta capa solo el worker escribe borradores).
-    Devuelve (edicion recargada, capas, costo_nuevo). `capas["guion"]`
-    siempre; `capas["voz"]` solo si sintetizó (o falló) voz nueva."""
+    """Asegura el destino en la edición: localiza el guion (Claude) SOLO si
+    ese destino no tiene textos todavía (`borrador.tiene_textos`) — un
+    destino cuyos textos ya se localizaron pero cuya voz degradó
+    (`VozIncompleta`) reusa esos textos (`borrador.guion_destino`) en vez de
+    volver a pagarle a Claude; nada si el destino ya está completo del todo
+    (`borrador.tiene_destino`) — el base siempre lo está. Sintetiza la voz
+    de cada bloque (caché) y fija el precio del destino (None = sin badge).
+    Guarda con CAS (sin reintento: en esta capa solo el worker escribe
+    borradores). Devuelve (edicion recargada, capas, costo_nuevo).
+    `capas["guion"]` siempre; `capas["voz"]` solo si sintetizó (o falló) voz
+    nueva. Un fallo en el bloque 0 de la voz es fatal (`VozFatal`, con lo ya
+    pagado y las capas construidas hasta ahí) y la edición no se guarda."""
     doc = edicion["documento"]
     capas, costo = {}, 0.0
     params = {"idioma": idioma, "pais": pais, "precio": precio}
@@ -181,7 +199,10 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
         _capa(capas, "guion", "anthropic", params, 0.0)
         nuevo = borrador.fijar_precio(doc, idioma, pais, precio)
     else:
-        g, c = guion_mod.localizar_guion(doc.get("guion") or {}, idioma, pais, precio)
+        if borrador.tiene_textos(doc, idioma, pais):
+            g, c = borrador.guion_destino(doc, idioma, pais), 0.0
+        else:
+            g, c = guion_mod.localizar_guion(doc.get("guion") or {}, idioma, pais, precio)
         costo += float(c or 0.0)
         _capa(capas, "guion", "anthropic", params, c)
         voces = None
@@ -194,7 +215,8 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
                 _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, cv)
             except voz_mod.ErrorPrimerBloque as e:
                 _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=_mensaje(e))
-                raise ValueError(f"No se pudo generar la voz (revisa la voz elegida, '{nombre_voz}'): {e}") from e
+                raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{nombre_voz}'): {e}",
+                              round(costo, 4), capas) from e
             except VozIncompleta as e:
                 costo += e.costo
                 _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
