@@ -1,7 +1,6 @@
 # Crear: director de prompts por planos, presets de cámara y plantillas de anuncio — diseño
 
-Fecha: 2026-09-18. Estado: aprobado por secciones en conversación; pendiente de
-revisión escrita. Cambia el paso de prompt de Crear (FlowPlus) y deja intactos el
+Fecha: 2026-09-18. Estado: aprobado; Etapa 1 implementada (plan `docs/superpowers/plans/2026-09-18-director-prompts-etapa1.md`), Etapas 2 y 3 pendientes. Cambia el paso de prompt de Crear (FlowPlus) y deja intactos el
 worker de generación (`tareas/flowplus.py`), los proveedores (`providers/`), Final
 edition, Sprints (salvo el punto de encolado) y el motor de experimentos.
 
@@ -155,7 +154,10 @@ de planos que escribió Claude.
    activos (no se inventan referencias).
 5. Los prompts no contienen duración total, formato ni resolución escritos
    ("9:16", "720p", "8 segundos de video"): eso va por API.
-6. Longitud de cada prompt ≤ 2 500 caracteres.
+6. Longitud del bloque de planos de cada versión (lo que escribe Claude, ya
+   renderizado como líneas `Shot N`) ≤ 2 500 caracteres. Los bloques fijos
+   (marca, reglas de activos, EVITAR) no cuentan: son los mismos del prompt
+   determinista, que no tiene tope (decisión de la revisión final, 2026-09-20).
 
 Fallo de validación o JSON inválido → **un** reintento con el patrón del repo (se
 añade "Tu respuesta anterior no sirvió ({motivo}). Responde solo el JSON pedido.")

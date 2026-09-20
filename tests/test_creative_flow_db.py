@@ -239,3 +239,29 @@ def test_capas_del_clon_y_duplicar_no_arrastra_lo_generado(base_temporal, monkey
     assert copia["capas"] == {} and copia["video_url"] is None
     for k in ("video_url_crudo", "video_local_crudo", "sonido", "credits"):
         assert k not in copia, k
+
+
+def test_duplicar_con_prompt_y_variante_b(base_temporal):
+    import creative_flow as cf
+    cid = cf.crear("acme", [], ["P"], [], "gira", 8, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="prompt_listo", tipo="video", modelo="wan3", prompt_relleno="A", con_sonido=True,
+                  musica_estilo="calmado", calidad="borrador", director={"estado": "ok", "prompt_b": "B", "diferencia_b": "otro"})
+    hijo = cf.duplicar("acme", cid, prompt_relleno="B", variante="B")
+    e = cf.cargar("acme")[hijo]
+    assert e["prompt_relleno"] == "B" and e["variante"] == "B" and e["derivado_de"] == cid and e["estado"] == "prompt_listo"
+    assert e["musica_estilo"] == "calmado" and e["calidad"] == "borrador" and e["con_sonido"] is True
+    assert "director" not in e     # los planos/B del padre no viajan al hijo
+
+
+def test_duplicar_un_hijo_b_sin_variante_no_hereda_la_etiqueta(base_temporal):
+    """F5: 'Editar y crear otra a partir de esta' sobre una hija de versión B
+    no debe producir OTRA sesión etiquetada 'B' — variante solo se pone cuando
+    quien llama a duplicar la pide explícitamente."""
+    import creative_flow as cf
+    cid = cf.crear("acme", [], ["P"], [], "gira", 8, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="prompt_listo", tipo="video", modelo="wan3", prompt_relleno="A", con_sonido=True,
+                  director={"estado": "ok", "prompt_b": "B", "diferencia_b": "otro"})
+    hijo_b = cf.duplicar("acme", cid, prompt_relleno="B", variante="B")
+    copia = cf.duplicar("acme", hijo_b)
+    e = cf.cargar("acme")[copia]
+    assert "variante" not in e

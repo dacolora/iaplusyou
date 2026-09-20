@@ -37,7 +37,7 @@ def test_ejecutar_video_guarda_resultado(base_temporal, monkeypatch, tmp_path):
     cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3", prompt_relleno="P", aspect_ratio="9:16")
 
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
-    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True: {"credits": None, "usd": 0.5})
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": {"credits": None, "usd": 0.5})
     monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
@@ -68,6 +68,24 @@ def test_ejecutar_video_marca_error(base_temporal, monkeypatch, tmp_path):
     with pytest.raises(RuntimeError):
         fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
     assert cf.cargar("acme")[cid]["estado"] == "error"
+
+
+def test_ejecutar_video_pasa_la_calidad_al_modelo_y_al_estimado(base_temporal, monkeypatch, tmp_path):
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "gira", 8, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3", prompt_relleno="P", aspect_ratio="9:16", calidad="borrador")
+    visto = {}
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: visto.update(k) or "https://prov/v.mp4")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": visto.update(est=calidad) or {"credits": None, "usd": 0.4})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(fp.estado_mod, "cargar", lambda c: {})
+    monkeypatch.setattr(fp.estado_mod, "guardar", lambda c, d: None)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    assert visto["calidad"] == "borrador" and visto["est"] == "borrador"
 
 
 def test_ejecutar_imagen_guarda_resultado(base_temporal, monkeypatch, tmp_path):
@@ -107,11 +125,11 @@ def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monke
 
     visto = {}
 
-    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True):
+    def _gen(modelo, prompt, referencias, duracion, aspect_ratio="9:16", on_progreso=None, videos=None, con_sonido=True, calidad="final"):
         visto.update(refs=referencias, videos=videos, ar=aspect_ratio)
         return "https://prov/v.mp4"
     monkeypatch.setattr(fp.flowplus_modelos, "generar_video", _gen)
-    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True: {})
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": {})
     monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
     monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
     monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
@@ -351,13 +369,13 @@ def test_preparar_recorta_duracion_y_formato_al_modelo(base_temporal, monkeypatc
     import tareas.flowplus as fp
     cid = cf.crear("acme", [], ["Rose"], [], "camina", 30, "", "A", referencias_urls=["https://x/1.png"])
     cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="kling_o3_pro", prompt_relleno="P", aspect_ratio="4:3")
-    _, _, _, duracion, _, _, aspect_ratio, modelo = fp._preparar("acme", cid)
+    _, _, _, duracion, _, _, aspect_ratio, modelo, _ = fp._preparar("acme", cid)
     assert (duracion, aspect_ratio, modelo) == (15, "9:16", "kling_o3_pro")
     cf.actualizar("acme", cid, modelo="seedance25", aspect_ratio="16:9")
-    _, _, _, duracion, _, _, aspect_ratio, _ = fp._preparar("acme", cid)
+    _, _, _, duracion, _, _, aspect_ratio, _, _ = fp._preparar("acme", cid)
     assert (duracion, aspect_ratio) == (30, None)
     cf.actualizar("acme", cid, modelo="wan3", aspect_ratio="4:3")
-    _, _, _, duracion, _, _, aspect_ratio, _ = fp._preparar("acme", cid)
+    _, _, _, duracion, _, _, aspect_ratio, _, _ = fp._preparar("acme", cid)
     assert (duracion, aspect_ratio) == (30, "4:3")
 
 

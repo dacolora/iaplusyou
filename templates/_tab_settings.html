@@ -514,6 +514,22 @@
       </div>
     </div>
   </div>
+  <div class="fila-campos-idea" style="margin-top:.8rem;">
+    <div>
+      <label class="campo-label">Idioma del prompt que arma la IA</label>
+      <select name="idioma_prompt">
+        <option value="es" {% if preferencias_flowplus.idioma_prompt != "en" %}selected{% endif %}>Español (los tokens Image N y el cierre de sonido van en inglés)</option>
+        <option value="en" {% if preferencias_flowplus.idioma_prompt == "en" %}selected{% endif %}>Inglés completo (para la prueba A/B)</option>
+      </select>
+    </div>
+    <div>
+      <label class="campo-label">Duración que sale marcada en Crear</label>
+      <select name="duracion_defecto">
+        {% for d in duraciones_crear %}<option value="{{ d }}" {% if preferencias_flowplus.duracion_defecto == d %}selected{% endif %}>{{ d }} s</option>{% endfor %}
+      </select>
+      <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· los modelos rinden mejor hasta 15 s</span>
+    </div>
+  </div>
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos de FlowPlus</button>
 </form>
 

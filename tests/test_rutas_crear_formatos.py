@@ -19,7 +19,12 @@ def app(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(referencias_flowplus, "vaciar", lambda c: None)
     lanzadas = []
     monkeypatch.setattr(dashboard, "_lanzar_video_cf", lambda c, cf_id, entry: lanzadas.append(cf_id) or True)
-    return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "lanzadas": lanzadas}
+    # Video: ya no se lanza al crear (spec director §1) — se encola el director.
+    # La imagen sigue lanzando directo con _lanzar_video_cf.
+    encolados = []
+    monkeypatch.setattr(dashboard.trabajos, "encolar",
+                        lambda job_id, tipo, payload, **kw: (encolados.append(payload["cf_id"]), True)[1])
+    return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "lanzadas": lanzadas, "encolados": encolados}
 
 
 def _flashes(c):
@@ -33,14 +38,16 @@ def _post(app, **campos):
     r = app["c"].post("/cliente/acme/creative_flow/crear", data=datos)
     assert r.status_code == 302
     import creative_flow as cf
-    return cf.cargar("acme")[app["lanzadas"][-1]]
+    cf_id = app["lanzadas"][-1] if datos["tipo"] == "imagen" else app["encolados"][-1]
+    return cf.cargar("acme")[cf_id]
 
 
 def test_una_pieza_por_clic_y_enfoque_automatico(app):
     e = _post(app, n_versiones="3", enfoques="unboxing")     # campos viejos: se ignoran
-    assert len(app["lanzadas"]) == 1
+    assert len(app["encolados"]) == 1 and len(app["lanzadas"]) == 0
     assert e["enfoque"] == "producto" and e["con_persona"] is False
-    assert "VIDEO DE PRODUCTO SOLO" in e["prompt_relleno"] and "Unboxing" not in e["prompt_relleno"]
+    assert e["estado"] == "prompt_pendiente" and e["prompt_relleno"] is None
+    assert e["referencias"][0]["token"] == "Image 1"    # el armado del texto (armar()) vive en test_flowplus_prompt_tokens.py
 
 
 def test_con_personaje_del_catalogo_el_enfoque_es_persona(app, monkeypatch, tmp_path):
@@ -54,7 +61,8 @@ def test_con_personaje_del_catalogo_el_enfoque_es_persona(app, monkeypatch, tmp_
     monkeypatch.setattr(r2_uploader, "upload_image", lambda ruta, key: "https://r2/" + key)
     e = _post(app, productos_catalogo="personaje:vale")
     assert e["enfoque"] == "persona" and e["con_persona"] is True
-    assert 'PERSONAJE: @Personaje 1 es "Vale"' in e["prompt_relleno"]
+    assert e["referencias"][1]["etiqueta"] == "@Personaje 1" and e["referencias"][1]["activo"] == "Vale"
+    assert e["referencias"][1]["token"] == "Image 2"
 
 
 def test_duracion_hasta_30_recortada_al_modelo(app):
@@ -63,7 +71,7 @@ def test_duracion_hasta_30_recortada_al_modelo(app):
     e = _post(app, modelo="kling_o3_pro", duracion_objetivo="30")
     assert e["duracion_objetivo"] == 15
     assert any("15 s" in m for m in _flashes(app["c"]))
-    assert _post(app, duracion_objetivo="abc")["duracion_objetivo"] == 10
+    assert _post(app, duracion_objetivo="abc")["duracion_objetivo"] == 8
 
 
 def test_formato_de_video_segun_el_modelo(app):

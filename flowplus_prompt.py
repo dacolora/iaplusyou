@@ -1,8 +1,7 @@
 """
 Arma el prompt final de FlowPlus a partir de lo que escribió la persona.
 
-El texto de la persona se manda TAL CUAL (esa fue la decisión: sin plantilla
-maestra de 11 secciones). Lo que sí se antepone es lo que evita los dos fallos
+Con el director (`director.py`, spec 2026-09-18) el texto de la persona se convierte en planos `Shot N`; sin director (fallback y sesiones anteriores) se manda TAL CUAL. Lo que sí se antepone es lo que evita los dos fallos
 que se vieron en los primeros videos de Happy Flops:
 
   1. El modelo inventó un logo cursivo en la sandalia. -> Bloque de fidelidad:
@@ -15,13 +14,63 @@ que se vieron en los primeros videos de Happy Flops:
 
 Ningún modelo de FlowPlus acepta negative_prompt (verificado en WaveSpeed para
 Wan 3.0), así que las prohibiciones van dentro del prompt como frases negativas
-explícitas. Las referencias se nombran @Imagen N / @Video N / @Logo N en el
-texto — los modelos las leen en lenguaje natural, no hay sintaxis oficial.
+explícitas. Las referencias se nombran con los tokens que documentan los
+fabricantes (`Image N` / `Video N`, por orden de subida; spec director §5):
+`asignar_tokens` los calcula por modelo y `sustituir_tokens` cambia las
+menciones `@Imagen N` / `@Video N` / `@Logo N` del texto de la persona.
 """
+import re
 
 
 def _lista(refs, tipo):
     return [r for r in refs if r.get("tipo") == tipo]
+
+
+_MENCION = re.compile(r"@(Imagen|Video|Logo) (\d+)")
+
+
+def asignar_tokens(referencias, modelo_id):
+    """Escribe `token` en cada referencia (en su lugar) según lo que ve el
+    modelo: con Wan 3.0 los videos viajan aparte (`Video N`) y las imágenes
+    (activos, vistas y logos incluidos) se numeran `Image N`; con los demás
+    modelos el video entra por su fotograma, así que cuenta como una imagen
+    más. Devuelve la misma lista."""
+    from providers import flowplus_modelos
+    videos_aparte = flowplus_modelos.VIDEO.get(modelo_id, {}).get("max_videos", 0) > 0
+    n_img = n_vid = 0
+    for r in referencias:
+        if r.get("tipo") == "video" and videos_aparte:
+            n_vid += 1
+            r["token"] = f"Video {n_vid}"
+        else:
+            n_img += 1
+            r["token"] = f"Image {n_img}"
+    return referencias
+
+
+def sustituir_tokens(texto, referencias):
+    """Cambia las menciones `@Imagen N` / `@Video N` / `@Logo N` que escribió
+    la persona por el token final de esa referencia. Mapea por la `etiqueta`
+    visible — el chip que la persona (o "Describir con IA") vio y usó para
+    mencionarla —, no por su posición: en Sprints el producto del catálogo va
+    primero en `referencias` pero se menciona `@Producto 1`, y las imágenes de
+    campaña que vienen después son `@Imagen 1..`; numerar por posición
+    correría esos números y apuntaría al producto. Un activo del catálogo con
+    una etiqueta propia (p. ej. "Personaje 1") nunca es `@Imagen N` en la UI,
+    así que esa mención no existe para él. Una mención sin referencia
+    correspondiente se deja tal cual: no se inventan imágenes que el modelo no
+    va a recibir."""
+    por_etiqueta = {r.get("etiqueta"): r.get("token") for r in referencias if r.get("token")}
+
+    def _cambiar(m):
+        return por_etiqueta.get(m.group(0), m.group(0))
+
+    return _MENCION.sub(_cambiar, texto or "")
+
+
+def _nombre(r):
+    """Token si la referencia lo tiene; si no (sesiones anteriores), su etiqueta."""
+    return r.get("token") or r["etiqueta"].replace(" (vista 1)", "")
 
 
 _PALABRAS_PERSONA = ("people", "person", "feet", "foot", "toes", "hands", "skin", "nails",
@@ -115,25 +164,75 @@ def _lineas_contexto(contexto):
     return lineas
 
 
+# Vocabulario cerrado de cámara de la Etapa 1 (spec director §2.1.5): id ->
+# cómo se escribe el movimiento en el prompt (verbo + velocidad + punto final,
+# como piden las guías de cámara de Kling y Alibaba). La Etapa 2 lo sustituye
+# por presets_camara.
+CAMARAS = {
+    "estatico": "cámara fija sobre trípode, horizonte nivelado, sin movimiento",
+    "dolly_in": "la cámara avanza en línea recta hacia el sujeto, despacio y a velocidad constante, sin zoom",
+    "dolly_out": "la cámara retrocede en línea recta alejándose del sujeto, despacio y a velocidad constante, sin zoom",
+    "paneo_izq": "paneo suave de derecha a izquierda desde un punto fijo, horizonte nivelado",
+    "paneo_der": "paneo suave de izquierda a derecha desde un punto fijo, horizonte nivelado",
+    "tilt_arriba": "la cámara inclina lentamente hacia arriba desde un punto fijo",
+    "tilt_abajo": "la cámara inclina lentamente hacia abajo desde un punto fijo",
+    "travelling_lateral": "la cámara se desplaza de lado acompañando al sujeto, a su misma velocidad",
+    "seguimiento_mano": "cámara en mano que sigue al sujeto con un ligero temblor natural",
+    "orbita_corta": "la cámara rodea al sujeto en un arco corto de menos de 45 grados",
+    "orbita_360": "la cámara da una vuelta completa alrededor del sujeto a velocidad constante",
+    "grua_arriba": "la cámara se eleva verticalmente mientras mantiene al sujeto en cuadro",
+    "cenital": "vista cenital fija, la cámara mira al sujeto desde arriba en vertical",
+    "macro_a_abierto": "empieza en un macro de la textura y se aleja de forma continua hasta un plano abierto",
+    "zoom_in": "zoom óptico lento hacia el sujeto sin mover la cámara",
+    "crash_zoom": "zoom brusco y rápido hacia el sujeto en menos de un segundo",
+    "dolly_zoom": "la cámara retrocede mientras hace zoom hacia el sujeto, el fondo se deforma y el sujeto no",
+    "bullet_time": "el movimiento se congela y la cámara orbita alrededor de la escena detenida",
+    "whip_pan": "paneo rapidísimo con desenfoque de movimiento que corta a la siguiente acción",
+    "pov_objeto": "punto de vista desde el propio objeto, la cámara va pegada a él",
+}
+
+
+def _bloque_planos(planos, con_sonido):
+    """Líneas `Shot N (a-bs): plano, cámara. Acción. Sonido: ...` (el sonido
+    solo cuando la sesión lo pide). Un id de cámara desconocido es un error
+    de programación (el director ya lo validó): se lanza, no se disimula."""
+    lineas = []
+    for p in planos:
+        cam = CAMARAS.get(p.get("camara"))
+        if cam is None:
+            raise ValueError(f"Movimiento de cámara desconocido: {p.get('camara')!r}")
+        accion = str(p.get("accion") or "").strip().rstrip(".")
+        accion = accion[:1].upper() + accion[1:]
+        linea = f"Shot {int(p['n'])} ({int(p['inicio_s'])}-{int(p['fin_s'])}s): {p.get('plano', '').strip()}, {cam}. {accion}."
+        sonido = str(p.get("sonido") or "").strip().rstrip(".")
+        if con_sonido and sonido:
+            linea += f" Sonido: {sonido}."
+        lineas.append(linea)
+    return lineas
+
+
 SIN_VOZ_NI_MUSICA = "Sin diálogo hablado ni música de fondo."
 SONIDO_AMBIENTE = "ambiente natural de la escena"
 
 
-def _linea_sonido(sonido, con_sonido):
+def _linea_sonido(sonido, con_sonido, cierre=None):
     """Línea SONIDO (spec estudio S1). Con texto lo usa tal cual; sin texto y
     con sonido pide el ambiente natural; sin ninguno no emite nada (el prompt
     queda idéntico al de antes). "Sin diálogo" evita las voces nativas de
-    Kling (chino/inglés): la voz en español la pone final edition."""
+    Kling (chino/inglés): la voz en español la pone final edition. `cierre`
+    agrega la frase literal del fabricante (flowplus_modelos.cierre_sonido)
+    al final de la línea."""
     texto = (sonido or "").strip().rstrip(".")
+    sufijo = f" {cierre}" if cierre else ""
     if texto:
-        return f"SONIDO: {texto}. {SIN_VOZ_NI_MUSICA}"
+        return f"SONIDO: {texto}. {SIN_VOZ_NI_MUSICA}{sufijo}"
     if con_sonido:
-        return f"SONIDO: {SONIDO_AMBIENTE}. {SIN_VOZ_NI_MUSICA}"
+        return f"SONIDO: {SONIDO_AMBIENTE}. {SIN_VOZ_NI_MUSICA}{sufijo}"
     return None
 
 
 def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None,
-          contexto=None, sonido=None, con_sonido=False):
+          contexto=None, sonido=None, con_sonido=False, planos=None, cierre_sonido=None):
     """texto: lo que escribió la persona (se respeta íntegro).
     referencias: [{tipo, etiqueta, producto?}] ya numeradas.
     logos: [{etiqueta}] referencias de logo agregadas por el proyecto.
@@ -143,6 +242,10 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     las líneas AUDIENCIA y TEMPORADA. Con None el prompt es idéntico.
     sonido / con_sonido: línea SONIDO después de la ESCENA (ver
     _linea_sonido); con sonido=None y con_sonido=False el prompt es idéntico.
+    planos: lista de planos del director (spec §2); con planos el bloque
+    `Shot N` sustituye a `ESCENA:` y a la línea `SONIDO:`.
+    cierre_sonido: frase literal del fabricante (`flowplus_modelos.cierre_sonido`)
+    que cierra el sonido; None = sin cierre (prompt idéntico al anterior).
     Devuelve el prompt completo (str)."""
     partes = []
     info_enfoque = ENFOQUES.get(enfoque) if enfoque else None
@@ -176,8 +279,13 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         if not r.get("activo") or r["activo"] in vistos:
             continue
         vistos.add(r["activo"])
-        et = r["etiqueta"].replace(" (vista 1)", "")
         cat = r.get("categoria", "producto")
+        vistas = [x for x in referencias if x.get("activo") == r["activo"]]
+        et = _nombre(r)
+        if cat == "personaje" and len(vistas) > 1 and all(x.get("token") for x in vistas):
+            et = f"{r['activo']} ({', '.join(x['token'] for x in vistas)}: la misma persona)"
+            partes.append(f"PERSONAJE: {et}. {r.get('regla') or ''}".strip())
+            continue
         if cat == "producto":
             partes.append(f"PRODUCTO EXACTO: {et} es el producto \"{r['activo']}\". {r.get('regla') or ''}".strip())
         elif cat == "personaje":
@@ -191,13 +299,13 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
             "cambies letras, logos, etiquetas ni textos."
         )
     if logos:
-        et = ", ".join(l["etiqueta"] for l in logos)
+        et = ", ".join(_nombre(l) for l in logos)
         partes.append(
             f"LOGO OFICIAL: {et} muestra el logotipo real de la marca. Si el logo se ve en el video, "
             "es exactamente ese; nunca otro."
         )
     if videos:
-        et = ", ".join(v["etiqueta"] for v in videos)
+        et = ", ".join(_nombre(v) for v in videos)
         partes.append(f"{et}: referencia de movimiento, ritmo y encuadre de cámara; no copies sus objetos ni personas.")
 
     # --- Personas ---
@@ -222,16 +330,19 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     if info_enfoque and info_enfoque["bloque"]:
         partes.append(info_enfoque["bloque"])
 
-    # --- Texto de la persona, íntegro ---
-    partes.append(f"ESCENA: {texto.strip()}")
-
-    # --- Sonido de la escena (solo videos con sonido) ---
-    linea_sonido = _linea_sonido(sonido, con_sonido)
-    if linea_sonido:
-        partes.append(linea_sonido)
+    # --- Escena: los planos del director, o el texto de la persona íntegro ---
+    if planos:
+        partes.extend(_bloque_planos(planos, con_sonido))
+        if con_sonido and cierre_sonido:
+            partes.append(cierre_sonido)
+    else:
+        partes.append(f"ESCENA: {sustituir_tokens(texto.strip(), referencias)}")
+        linea_sonido = _linea_sonido(sonido, con_sonido, cierre=cierre_sonido)
+        if linea_sonido:
+            partes.append(linea_sonido)
 
     # --- Prohibiciones (los modelos no aceptan negative_prompt) ---
-    prohibido = ["texto inventado", "logos inventados", "marcas de agua", "subtítulos", "deformaciones"]
+    prohibido = ["texto inventado", "logos inventados", "marcas de agua", "subtítulos"]
     if not con_persona:
         prohibido = ["personas", "pies", "manos"] + prohibido
     if negative_marca:

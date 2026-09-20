@@ -197,12 +197,23 @@ plantilla de la hoja "Personas" (`nicho/exportar.py`). UI: pestaña **Nicho**
 (`_tab_nicho.html`) y página propia del estudio (`nicho_estudio.html`), Blueprint
 `nicho/rutas.py` bajo `/cliente/<cliente>/nicho/...`.
 
-**Crear (FlowPlus)** (`flowplus_prompt.armar` -> `flowplus_lanzar.lanzar` -> worker
-`tareas/flowplus.py` -> `providers/flowplus_modelos.py`, all via WaveSpeed): `VIDEO` /
+**Crear (FlowPlus)** (`cf_crear_video` -> sesión en `prompt_pendiente` -> worker
+`tareas/director.py` (`director.compilar`: Claude escribe los planos por familia de
+modelo, valida y compone A/B con `flowplus_prompt.armar(..., planos=)`; fallback al
+prompt determinista, nunca bloquea) -> `prompt_listo` (la persona edita con
+`cf_guardar_prompt` o rearma con `cf_rearmar`) -> `cf_generar_video` (A, o A+B vía
+`creative_flow.duplicar(prompt_relleno=, variante="B")`) -> `flowplus_lanzar.lanzar`
+-> worker `tareas/flowplus.py` -> `providers/flowplus_modelos.py`, todo vía WaveSpeed).
+Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
+por modelo: Wan recibe los videos aparte). Spec:
+`docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
+presets de cámara y plantillas de anuncio son las Etapas 2 y 3). Los lotes de
+Sprints encolan el director con `auto_lanzar` (el costo ya se aprobó). `calidad`
+`borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). `VIDEO` /
 `IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`,
-`min_duracion`/`max_duracion`, `formatos`). Crear makes ONE piece per click (the enfoque is
+`familia`, `min_duracion`/`max_duracion`, `formatos`). Crear makes ONE piece per click (the enfoque is
 automatic: `producto`, or `persona` when a catalog personaje is among the references),
-offers 5–30 s and the formats each model admits (verified on WaveSpeed 2026-09-18: Wan 3.0
+offers 5–30 s (default 8 s) and the formats each model admits (verified on WaveSpeed 2026-09-18: Wan 3.0
 2–30 s and 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3–15 s and 9:16/16:9/1:1; Seedance 2.5 4–30 s
 and follows the reference image, `aspect_ratio` None; Seedream V5 Pro takes `aspect_ratio`
 for images). `ajustar_duracion`/`ajustar_formato` run in the route AND again in the worker's

@@ -102,12 +102,16 @@ def test_crear_sesion_normaliza_y_recorta_el_sonido_de_la_idea(escenario):
 
 def test_lanzar_lote_encola_con_prioridad_y_registra(escenario, monkeypatch):
     import flowplus_lanzar
+    import trabajos
     from sprints import datos, produccion
-    lanzados = []
+    lanzados, encolados = [], []
     monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append((cf, e["tipo"], prioridad)) or True)
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((tipo, payload, kw.get("prioridad"))) or True)
     r = produccion.lanzar_lote("acme", escenario["sid"])
     assert r["encoladas"] == 2 and r["omitidas"] == 0 and len(r["cf_ids"]) == 2 and r["usd"] > 0
-    assert sorted(t for _, t, _ in lanzados) == ["imagen", "video"] and all(p == 3 for _, _, p in lanzados)
+    # el video ahora pasa por el director (trabajos.encolar); solo la imagen usa flowplus_lanzar.lanzar directo
+    assert sorted(t for _, t, _ in lanzados) == ["imagen"] and all(p == 3 for _, _, p in lanzados)
+    assert len(encolados) == 1 and encolados[0][0] == "flowplus_director" and encolados[0][2] == 3
     sp = datos.sprint("acme", escenario["sid"])
     assert sp["extra"]["lote_en_curso"] is True and abs(sp["extra"]["costo_estimado_usd"] - r["usd"]) < 1e-6
     assert sp["eventos"][0]["tipo"] == "lote_encolado" and sp["eventos"][0]["datos"]["encoladas"] == 2
@@ -118,14 +122,74 @@ def test_lanzar_lote_encola_con_prioridad_y_registra(escenario, monkeypatch):
         produccion.lanzar_lote("acme", 999)
 
 
+def test_lanzar_lote_encola_el_director_para_videos_y_genera_directo_las_imagenes(escenario, monkeypatch):
+    import flowplus_lanzar
+    import trabajos
+    from sprints import datos, produccion
+    lanzados, encolados = [], []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append((cf, e["tipo"], prioridad)) or True)
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((tipo, payload, kw.get("prioridad"))) or True)
+    r = produccion.lanzar_lote("acme", escenario["sid"])
+    assert r["encoladas"] == 2
+    assert [t for _, t, _ in lanzados] == ["imagen"]
+    assert len(encolados) == 1 and encolados[0][0] == "flowplus_director"
+    assert encolados[0][1]["auto_lanzar"] is True and encolados[0][1]["prioridad"] == 3 and encolados[0][2] == 3
+    cf_video = encolados[0][1]["cf_id"]
+    import creative_flow
+    e = creative_flow.cargar("acme")[cf_video]
+    assert e["estado"] == "prompt_pendiente" and e["referencias"][0]["token"] == "Image 1" and e["prompt_relleno"]   # determinista de respaldo
+
+
+def test_regenerar_pasa_por_el_director(escenario, monkeypatch):
+    import creative_flow
+    import flowplus_lanzar
+    import trabajos
+    from sprints import datos, produccion
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: True)
+    encolados = []
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((tipo, payload)) or True)
+    produccion.lanzar_lote("acme", escenario["sid"], campana_id=escenario["cid"])
+    cf = datos.idea("acme", escenario["iv"])["cf_id"]
+    creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2/v.mp4")
+    encolados.clear()
+    nuevo = produccion.regenerar("acme", escenario["iv"])
+    assert encolados == [("flowplus_director", {"cliente": "acme", "cf_id": nuevo, "auto_lanzar": True, "prioridad": 3})]
+    assert creative_flow.cargar("acme")[nuevo]["estado"] == "prompt_pendiente"
+
+
+def test_encolar_director_deja_la_sesion_en_error_si_la_cola_rechaza(escenario, monkeypatch):
+    """Si `trabajos.encolar` rechaza la tarea (job_id duplicado, lo que no
+    debería pasar con uno recién armado, pero por si acaso), la sesión no se
+    queda colgada en `prompt_pendiente` sin tarea viva ni forma de
+    recuperarse: `encolar_director` la deja en `error` con motivo, así
+    `reintentar` (que exige `estado == "error"`) la puede relanzar con el
+    prompt determinista que ya tiene guardado."""
+    import creative_flow
+    import trabajos
+    from sprints import datos, produccion
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: True)
+    r = produccion.lanzar_lote("acme", escenario["sid"])
+    assert r["encoladas"] == 2
+    cf_video = datos.idea("acme", escenario["iv"])["cf_id"]
+    prompt_previo = creative_flow.cargar("acme")[cf_video]["prompt_relleno"]
+    assert creative_flow.cargar("acme")[cf_video]["estado"] == "prompt_pendiente"   # ya cubierto arriba: reuso de una línea
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: False)
+    assert produccion.encolar_director("acme", cf_video) is False
+    e = creative_flow.cargar("acme")[cf_video]
+    assert e["estado"] == "error" and "encolar" in e["error"] and e["prompt_relleno"] == prompt_previo and prompt_previo
+
+
 def test_reintentar_y_regenerar(escenario, monkeypatch):
     import creative_flow
     import flowplus_lanzar
+    import trabajos
     from sprints import datos, produccion
-    lanzados = []
+    lanzados, encolados = [], []
     monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append(cf) or True)
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append(payload["cf_id"]) or True)
     produccion.lanzar_lote("acme", escenario["sid"], campana_id=escenario["cid"])
     cf = datos.idea("acme", escenario["iv"])["cf_id"]
+    assert encolados[-1] == cf                                           # video: el lote lo mandó al director
     assert produccion.reintentar("acme", escenario["iv"]) is False       # no está en error
     creative_flow.actualizar("acme", cf, estado="error", error="timeout")
     datos.actualizar_extra_sprint("acme", escenario["sid"], lambda e: {**e, "lote_en_curso": False})   # el lote ya "terminó"
@@ -135,7 +199,7 @@ def test_reintentar_y_regenerar(escenario, monkeypatch):
     creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2/v.mp4")
     datos.actualizar_idea("acme", escenario["iv"], qa={"score": 40}, revision="rechazada", revision_motivo="feo")
     nuevo = produccion.regenerar("acme", escenario["iv"])
-    assert nuevo != cf and lanzados[-1] == nuevo
+    assert nuevo != cf and encolados[-1] == nuevo                        # regenerar: también video, también director
     i = datos.idea("acme", escenario["iv"])
     assert i["cf_id"] == nuevo and i["qa"] is None and i["revision"] == "pendiente" and i["revision_motivo"] is None
     assert creative_flow.cargar("acme")[nuevo]["sprint"]["cp_id"] == escenario["iv"]
@@ -275,9 +339,11 @@ def test_lanzar_lote_recupera_una_reserva_vencida(escenario, monkeypatch):
     proceso entre reservar y crear la sesión) vuelve a `pendientes()` y
     `lanzar_lote` la reclama atómicamente y le crea la sesión."""
     import flowplus_lanzar
+    import trabajos
     from sprints import datos, produccion
-    lanzados = []
+    lanzados, encolados = [], []
     monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda c, cf, e, prioridad=5: lanzados.append(cf) or True)
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append(payload["cf_id"]) or True)
     vieja = produccion.reserva_placeholder(escenario["iv"], ahora=1)      # hace mucho: vencida
     datos.actualizar_idea("acme", escenario["iv"], cf_id=vieja)
     ids = [i["id"] for _, i in produccion.pendientes("acme", escenario["sid"])]
@@ -285,8 +351,8 @@ def test_lanzar_lote_recupera_una_reserva_vencida(escenario, monkeypatch):
     assert datos.idea("acme", escenario["iv"])["sin_sesion"] is True
     r = produccion.lanzar_lote("acme", escenario["sid"])
     assert r["encoladas"] == 2 and r["omitidas"] == 0
-    cf = datos.idea("acme", escenario["iv"])["cf_id"]
-    assert cf in lanzados and not produccion.es_reserva(cf)
+    cf = datos.idea("acme", escenario["iv"])["cf_id"]      # es un video: pasó por el director, no por flowplus_lanzar
+    assert cf in encolados and not produccion.es_reserva(cf)
 
 
 def test_lanzar_lote_no_roba_una_reserva_viva(escenario, monkeypatch):

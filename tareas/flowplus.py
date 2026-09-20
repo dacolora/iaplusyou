@@ -168,7 +168,8 @@ def _preparar(cliente, cf_id):
         # que el modelo rechaza (Kling llega a 15 s; Seedance no elige formato).
         duracion = flowplus_modelos.ajustar_duracion(modelo, duracion)
         aspect_ratio = flowplus_modelos.ajustar_formato(modelo, aspect_ratio)
-    return entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo
+    calidad = entry.get("calidad") if entry.get("calidad") in flowplus_modelos.CALIDADES else "final"
+    return entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo, calidad
 
 
 @registrar("flowplus_imagen")
@@ -176,7 +177,7 @@ def ejecutar_imagen(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
     ref = f"imagen:{cf_id}{ref_sufijo(tarea)}"
-    entry, referencias, _, _, prompt_texto, _, aspect_ratio, modelo = _preparar(cliente, cf_id)
+    entry, referencias, _, _, prompt_texto, _, aspect_ratio, modelo, _ = _preparar(cliente, cf_id)
 
     out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
     os.makedirs(out_dir, exist_ok=True)
@@ -220,7 +221,7 @@ def ejecutar_video(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
     ref = f"video:{cf_id}{ref_sufijo(tarea)}"
-    entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo = _preparar(cliente, cf_id)
+    entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo, calidad = _preparar(cliente, cf_id)
     # Sonido de la escena (spec estudio S1): lo decide la sesión; las sesiones
     # anteriores a este campo (y las de sprints viejos) lo piden.
     con_sonido = entry.get("con_sonido", True) is not False
@@ -233,7 +234,7 @@ def ejecutar_video(tarea):
 
     avisar_fase = _avisar_fase_de(job_id)
     costo = None
-    detalle_gasto = f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido")
+    detalle_gasto = f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido") + (" · borrador 480p" if calidad == "borrador" else "")
 
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
@@ -241,9 +242,9 @@ def ejecutar_video(tarea):
             modelo, prompt_texto, referencias, duracion,
             aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
             videos=videos_ref if modelo == "wan3" else None,
-            con_sonido=con_sonido,
+            con_sonido=con_sonido, calidad=calidad,
         )
-        costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido)
+        costo = flowplus_modelos.estimate_video(modelo, duracion, con_sonido=con_sonido, calidad=calidad)
         trabajos.reportar(job_id, etapa=ETAPA_DESCARGAR)
         resp = requests.get(video_url_wan, timeout=180)
         resp.raise_for_status()

@@ -2,10 +2,10 @@
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 <p class="vacio" style="padding-top:0;">
-  Sube las imágenes de referencia (producto, persona, lugar — las que quieras),
-  elige qué buscas y escribe lo que tiene que pasar. Se genera de una un video
-  (Wan 3.0, Kling O3 Pro o Seedance 2.5) o una imagen (Seedream V5 Pro); el texto
-  que escribas es exactamente lo que recibe el modelo, sin plantillas de por medio.
+  Sube las imágenes de referencia (producto, persona, lugar — las que quieras), escribe en una o dos frases
+  qué tiene que pasar y pulsa <strong>Armar prompt</strong>: la IA lo convierte, gratis, en un plan por planos
+  con la fórmula del modelo elegido (Wan 3.0, Kling O3 Pro o Seedance 2.5). Lo revisas, lo editas si quieres y
+  ahí sí generas. Las imágenes van solas a Seedream V5 Pro.
 </p>
 
 <div class="form-nueva-idea" style="margin-top:1rem;">
@@ -80,10 +80,11 @@
         <label class="campo-label">Duración</label>
         <select name="duracion_objetivo" id="fp-duracion">
           {% for d in duraciones_crear %}
-          <option value="{{ d }}"{% if d == 10 %} selected{% endif %}>{{ d }} s</option>
+          <option value="{{ d }}"{% if d == preferencias_flowplus.duracion_defecto %} selected{% endif %}>{{ d }} s</option>
           {% endfor %}
         </select>
         <p class="vacio" id="fp-duracion-nota" style="font-size:.74rem;padding:0;">Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.</p>
+        <p class="vacio" id="fp-duracion-larga" style="font-size:.74rem;padding:0;color:var(--warn, #b26a00);" hidden>Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.</p>
       </div>
       <div>
         <label class="campo-label">Formato</label>
@@ -113,6 +114,9 @@
         <p class="vacio" style="font-size:.74rem;padding:0;">Se mezcla debajo del sonido (USD 0,02 la primera vez por estilo y duración).</p>
       </div>
     </div>
+    <div style="margin-top:.8rem;" id="fp-calidad-wrap">
+      <label class="fe-check"><input type="checkbox" name="calidad" value="borrador" id="fp-calidad"> Borrador a 480p (solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final)</label>
+    </div>
   </div>
 
   <div id="fp-bloque-imagen" hidden>
@@ -133,8 +137,8 @@
   </div>
   <input type="hidden" name="modelo" id="fp-modelo">
 
-  <button class="btn-generar" type="submit" id="fp-generar" style="margin-top:1.2rem;">Generar video</button>
-  <p class="vacio" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes. Los modelos por defecto se cambian en FlowSettings.</p>
+  <button class="btn-generar" type="submit" id="fp-generar" style="margin-top:1.2rem;">Armar prompt (gratis)</button>
+  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Armar el prompt no cuesta; se cobra al generar desde la tarjeta.</p>
 </form>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
@@ -174,8 +178,18 @@
         </div>
         {% elif item.estado == "error" %}
         <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        {% elif item.estado == "prompt_pendiente" %}
+        <div class="generado-velo">
+          {% if item.trabajo_director %}
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_director.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto">Armando el prompt con IA…</div>
+          <script>iniciarPolling({{ item.trabajo_director.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_director.job_id) | tojson }});</script>
+          {% else %}
+          <span class="generado-estado">Interrumpido — rearma el prompt</span>
+          {% endif %}
+        </div>
         {% elif item.estado == "prompt_listo" %}
-        <div class="generado-velo"><span class="generado-estado">Sin generar</span></div>
+        <div class="generado-velo"><span class="generado-estado">Prompt listo — revísalo</span></div>
         {% elif item.trabajo_guion %}
         {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
            <template> del detalle, cuyos <script> clonados nunca corren) para
@@ -189,6 +203,7 @@
       </div>
       <div class="generado-pie">
         <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
+        {% if item.variante %}<span class="generado-badge">Versión {{ item.variante }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">Versión A</span>{% endif %}
         {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">Sprint · Campaña {{ item.sprint.campana_n }}</a>{% endif %}
         <small>{{ item.modelo_nombre }}{% if item.usd %} · costó {{ item.usd | usd }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="El video trae el sonido de la escena">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="El proveedor entregó el video sin pista de audio">🔇 sin sonido</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="Música al crear: {{ item.capas.musica.estilo }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
       </div>
@@ -223,7 +238,27 @@
             {% endfor %}
           </div>
           {% endif %}
-          {% if item.prompt_relleno and item.prompt_relleno != item.accion_central %}
+          {% if item.estado == "prompt_listo" and item.tipo != "imagen" %}
+          <section class="fe-seccion">
+            <h4 class="fe-titulo">Prompt por planos</h4>
+            {% if item.director and item.director.estado == "fallback" %}
+            <p class="tag-error">La IA no pudo armar los planos ({{ item.director.aviso }}); este es el prompt básico. Puedes editarlo o rearmar.</p>
+            {% endif %}
+            <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}">
+              <label class="campo-label">Versión A (lo que recibe el modelo)</label>
+              <textarea name="prompt_a" rows="10" style="width:100%;font-size:.8rem;">{{ item.prompt_relleno }}</textarea>
+              {% if item.director and item.director.prompt_b %}
+              <details style="margin-top:.5rem;"><summary class="vacio" style="cursor:pointer;padding:0;font-size:.78rem;">Versión B — {{ item.director.diferencia_b }}</summary>
+                <textarea name="prompt_b" rows="10" style="width:100%;font-size:.8rem;">{{ item.director.prompt_b }}</textarea>
+              </details>
+              {% endif %}
+              <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">Guardar cambios</button>
+            </form>
+            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit="return confirm('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?');">
+              <button type="submit" class="btn-sm">Rearmar con IA</button>
+            </form>
+          </section>
+          {% elif item.prompt_relleno and item.prompt_relleno != item.accion_central %}
           <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">Ver el prompt completo que recibió el modelo</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
           {% endif %}
           {% if item.estado == "error" %}
@@ -363,8 +398,16 @@
             </form>
             {% endif %}
             {% if item.estado in ("prompt_listo", "error") %}
-            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-guardar btn-sm">{% if item.estado == "error" %}Reintentar{% else %}Generar{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
+            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd if item.costo_estimado else '' }}">
+              {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> Generar también la versión B (dos videos)</label>
+              {% endif %}
+              <button type="submit" class="btn-guardar btn-sm fp-generar-btn">{% if item.estado == "error" %}Reintentar{% else %}Generar{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
+            </form>
+            {% endif %}
+            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
+            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+              <button type="submit" class="btn-sm">Rearmar el prompt</button>
             </form>
             {% endif %}
             <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar esta pieza?');" style="display:inline;">
@@ -497,6 +540,14 @@
     if (!reemplaza) return true;
     return confirm('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).');
   };
+  // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear). Declarada
+  // en este script sin envoltorio, así es global: la usan dos scripts, el estimado del formulario y el botón A+B del
+  // modal (el formulario de generar vive en un <template> clonado).
+  function formatearUSD(usd) {
+    if (usd > 0 && usd < 0.01) return 'US$ <0,01';
+    var partes = usd.toFixed(2).split('.');
+    return 'US$ ' + partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + partes[1];
+  }
 </script>
 <script>
   (function () {
@@ -534,6 +585,18 @@
       var n = form.querySelectorAll('input[name="destinos"]:checked').length;
       btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.plantilla.replace('Producir {n} finales', 'Producir finales');
     });
+    // Costo A+B: el formulario de generar también vive en el <template> clonado,
+    // así que el checkbox "Generar también la versión B" se delega igual que
+    // "Producir N finales" arriba — un listener en la carga de la página nunca
+    // vería el checkbox (no existe hasta que se clona el detalle).
+    cuerpo.addEventListener('change', function (e) {
+      if (!e.target.matches || !e.target.matches('.fp-version-b')) return;
+      var f = e.target.closest('.fp-generar-form');
+      var btn = f && f.querySelector('.fp-generar-btn');
+      var usd = f ? parseFloat(f.dataset.usd || '0') : 0;
+      if (!btn || !usd) return;
+      btn.textContent = btn.textContent.replace(/\s*≈ US\$ [^ ]*$/, '') + ' ≈ ' + formatearUSD(e.target.checked ? usd * 2 : usd);
+    });
     cuerpo.addEventListener('submit', function (e) {
       var form = e.target;
       if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
@@ -560,17 +623,13 @@
     });
 
     // Tipo (video/imagen), modelo elegido y costo en el botón.
-    // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear).
-    function formatearUSD(usd) {
-      if (usd > 0 && usd < 0.01) return 'US$ <0,01';
-      var partes = usd.toFixed(2).split('.');
-      return 'US$ ' + partes[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.') + ',' + partes[1];
-    }
+    // formatearUSD es global (window.formatearUSD, script de arriba).
     var form = document.getElementById('form-flowplus');
     var bloqueVideo = document.getElementById('fp-bloque-video');
     var bloqueImagen = document.getElementById('fp-bloque-imagen');
     var campoModelo = document.getElementById('fp-modelo');
     var botonGenerar = document.getElementById('fp-generar');
+    var ayudaBoton = document.getElementById('fp-ayuda-boton');
     var duracion = document.getElementById('fp-duracion');
     function tipoActual() { return form.querySelector('input[name=tipo]:checked').value; }
     function modeloActual() {
@@ -595,6 +654,10 @@
       var selAr = form.querySelector('select[name=aspect_ratio]');
       if (selAr && prefill.aspect_ratio) selAr.value = prefill.aspect_ratio;
       if (formatoImagen && prefill.tipo === 'imagen' && prefill.aspect_ratio) formatoImagen.value = prefill.aspect_ratio;
+      var cs = document.getElementById('fp-con-sonido'); if (cs && typeof prefill.con_sonido === 'boolean') cs.checked = prefill.con_sonido;
+      var st = document.getElementById('fp-sonido'); if (st && prefill.sonido_texto) st.value = prefill.sonido_texto;
+      var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
+      var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
     // Lo que el modelo admite manda: duraciones fuera de su rango y formatos que
@@ -613,6 +676,9 @@
       var formatos = (m.dataset.formatos || '').split(',').filter(Boolean);
       if (esImagen) {
         if (formatoImagen) limitarSelect(formatoImagen, function (v) { return formatos.indexOf(v) !== -1; }, '9:16');
+        // Borrador es solo de Wan 3.0 video: no debe sobrevivir a un cambio a Imagen.
+        var calidadImagen = document.getElementById('fp-calidad');
+        if (calidadImagen) { calidadImagen.checked = false; calidadImagen.disabled = true; }
         return;
       }
       var min = parseInt(m.dataset.minDuracion || '2', 10), max = parseInt(m.dataset.maxDuracion || '30', 10);
@@ -624,6 +690,10 @@
       }
       if (notaFormato) notaFormato.hidden = !sigueImagen;
       if (notaDuracion) notaDuracion.hidden = m.value !== 'wan3';
+      var calidad = document.getElementById('fp-calidad');
+      if (calidad) { calidad.disabled = m.value !== 'wan3'; if (calidad.disabled) calidad.checked = false; }
+      var larga = document.getElementById('fp-duracion-larga');
+      if (larga) larga.hidden = parseInt(duracion.value, 10) <= 15;
     }
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
@@ -639,17 +709,26 @@
           usd = parseFloat(m.dataset.usd);
         } else {
           var seg = parseFloat(m.dataset.usdSeg);
+          var calidad = document.getElementById('fp-calidad'); if (calidad && calidad.checked && m.value === 'wan3') seg = seg - parseFloat(m.dataset.usdSeg) + 0.05; // tarifa 480p de Wan (wan3_client.COSTO_USD_POR_SEGUNDO)
           if (conSonido && !conSonido.checked) seg -= parseFloat(m.dataset.recargo || '0');
           usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value) ? 0.02 : 0);
         }
       }
-      var que = esImagen ? 'imagen' : 'video';
-      // Mismo formato que gastos.formatear en el servidor: «≈ US$ 1,00».
-      botonGenerar.textContent = 'Generar ' + que + (usd ? ' ≈ ' + formatearUSD(usd) : '');
+      // La imagen se genera y se cobra al instante (nunca pasa por el director):
+      // su botón sigue diciendo "Generar imagen", nunca "gratis", y la ayuda de
+      // debajo no debe prometer una tarjeta pendiente que nunca aparece. Mismo
+      // formato que gastos.formatear en el servidor: «≈ US$ 1,00».
+      if (esImagen) {
+        botonGenerar.textContent = 'Generar imagen' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
+        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.';
+      } else {
+        botonGenerar.textContent = 'Armar prompt (gratis)' + (usd ? ' · generar costará ≈ ' + formatearUSD(usd) : '');
+        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. Armar el prompt no cuesta; se cobra al generar desde la tarjeta.';
+      }
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
-    ['fp-con-sonido', 'fp-musica'].forEach(function (id) {
+    ['fp-con-sonido', 'fp-musica', 'fp-calidad'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });

@@ -38,30 +38,36 @@ def test_crear_video_guarda_sonido_y_musica_en_la_sesion(app, monkeypatch, tmp_p
     monkeypatch.setattr(referencias_flowplus, "listar",
                         lambda c: [{"tipo": "imagen", "url": "https://x/1.png", "frame_url": "https://x/1.png", "etiqueta": "@Imagen 1"}])
     monkeypatch.setattr(referencias_flowplus, "vaciar", lambda c: None)
+    # Video: ya no se lanza al crear (spec director §1) — se encola el director
+    # y el prompt lo arma el worker. La imagen sigue lanzando directo.
     lanzadas = []
     monkeypatch.setattr(app["dashboard"], "_lanzar_video_cf", lambda c, cf_id, entry: lanzadas.append(cf_id) or True)
+    encolados = []
+    monkeypatch.setattr(app["dashboard"].trabajos, "encolar",
+                        lambda job_id, tipo, payload, **kw: (encolados.append(payload["cf_id"]), True)[1])
     r = app["c"].post("/cliente/acme/creative_flow/crear", data={
         "accion_central": "gira despacio", "duracion_objetivo": "5", "aspect_ratio": "9:16", "tipo": "video",
         "modelo": "kling_o3_pro", "n_versiones": "1", "enfoques": "producto",
         "con_sonido": "si", "sonido": "  risas de niños  ", "musica_estilo": "calmado",
     })
-    assert r.status_code == 302 and len(lanzadas) == 1
-    e = cf.cargar("acme")[lanzadas[0]]
+    assert r.status_code == 302 and len(encolados) == 1 and len(lanzadas) == 0
+    e = cf.cargar("acme")[encolados[0]]
     assert e["con_sonido"] is True and e["sonido_texto"] == "risas de niños" and e["musica_estilo"] == "calmado"
-    assert "SONIDO: risas de niños. Sin diálogo hablado ni música de fondo." in e["prompt_relleno"]
-    # sin el check y con estilo inválido: mudo, sin música, prompt sin SONIDO
+    assert e["estado"] == "prompt_pendiente"    # el prompt lo arma el worker ahora
+    # sin el check y con estilo inválido: mudo, sin música
     r = app["c"].post("/cliente/acme/creative_flow/crear", data={
         "accion_central": "gira despacio", "duracion_objetivo": "5", "tipo": "video", "modelo": "wan3",
         "n_versiones": "1", "enfoques": "producto", "musica_estilo": "reguetón",
     })
-    e2 = cf.cargar("acme")[lanzadas[1]]
-    assert e2["con_sonido"] is False and e2["musica_estilo"] == "" and "SONIDO" not in e2["prompt_relleno"]
-    # una imagen nunca lleva sonido ni música aunque el formulario lo mande
+    e2 = cf.cargar("acme")[encolados[1]]
+    assert e2["con_sonido"] is False and e2["musica_estilo"] == "" and e2["estado"] == "prompt_pendiente"
+    # una imagen nunca lleva sonido ni música aunque el formulario lo mande, y sigue lanzando directo
     app["c"].post("/cliente/acme/creative_flow/crear", data={
         "accion_central": "gira", "tipo": "imagen", "modelo": "seedream_v5_pro", "n_versiones": "1",
         "enfoques": "producto", "con_sonido": "si", "musica_estilo": "calmado",
     })
-    e3 = cf.cargar("acme")[lanzadas[2]]
+    assert len(lanzadas) == 1
+    e3 = cf.cargar("acme")[lanzadas[0]]
     assert e3["con_sonido"] is False and e3["musica_estilo"] == "" and "SONIDO" not in e3["prompt_relleno"]
 
 
