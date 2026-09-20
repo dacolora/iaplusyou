@@ -24,6 +24,7 @@ _SNAP_COLS = ("impresiones", "alcance", "frecuencia", "clics", "clics_enlace", "
               "thruplay_rate", "gasto", "compras", "ingresos", "roas", "cpa", "fuente_ventas")
 _SNAP_INT = {"impresiones", "alcance", "clics", "clics_enlace", "thruplay", "compras"}
 _TIPOS_CLON = ("video", "clon_limpio")
+ESTADOS_VIVOS = ("armando", "lanzando", "pausado", "corriendo")
 
 
 def _pais_nuevo(p):
@@ -362,6 +363,7 @@ def _piezas(con, cliente, experimento_id):
             "presupuesto_dia_actual": m[ep.c.presupuesto_dia_actual], "veredicto": m[ep.c.veredicto],
             "veredicto_motivo": m[ep.c.veredicto_motivo], "veredicto_en": m[ep.c.veredicto_en],
             "nombre": nombre[:80], "url_video": m["url_video"], "url_miniatura": m["url_miniatura"], "tipo": tipo,
+            "es_imagen": m["tipo"] == "imagen", "url_imagen": m["url_video"] if m["tipo"] == "imagen" else None,
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
             "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
             "extra": m[ep.c.extra] or {}, "escalon_rescate": m[ep.c.escalon_rescate] or 0,
@@ -455,25 +457,50 @@ def eventos(cliente, experimento_id, limite=None):
 
 
 def elegibles(cliente):
-    """Finales listas/degradadas (para su país) y clones de video listos (para
-    cualquier país). Imágenes y piezas sin url_video no entran."""
+    """Todo lo que se puede probar en Meta: finales listas/degradadas (van a su
+    país), clones de video listos e imágenes listas (van a cualquier país).
+    Piezas sin URL pública no entran. Cada elemento trae de dónde viene
+    (`origen`, `sprint`), su formato y en qué experimentos vivos está."""
     pz, cp = db.pieza, db.concepto
     q = (sa.select(pz, cp.c.extra.label("c_extra"))
          .select_from(pz.outerjoin(cp, cp.c.id == pz.c.concepto_id))
          .where(pz.c.cliente == cliente, pz.c.url_video.isnot(None),
                 cp.c.archivado.isnot(True),
                 sa.or_(sa.and_(pz.c.tipo == "final", pz.c.estado.in_(("listo", "degradada"))),
-                       sa.and_(pz.c.tipo.in_(_TIPOS_CLON), pz.c.estado == "listo")))
+                       sa.and_(pz.c.tipo.in_(_TIPOS_CLON + ("imagen",)), pz.c.estado == "listo")))
          .order_by(pz.c.id.desc()))
     out = []
     with db.conectar() as con:
+        vivos = _experimentos_vivos_por_pieza(con, cliente)
         for f in con.execute(q):
             m = f._mapping
+            es_imagen = m[pz.c.tipo] == "imagen"
             tipo = "final" if m[pz.c.tipo] == "final" else "clon"
+            extra_c = m["c_extra"] or {}
             nombre = (f"Final {m[pz.c.idioma]}_{m[pz.c.pais]} · {m[pz.c.legado_id] or ''}" if tipo == "final"
-                      else ((m["c_extra"] or {}).get("accion_central") or m[pz.c.legado_id] or f"Pieza {m[pz.c.id]}"))
-            out.append({"pieza_id": m[pz.c.id], "legado_id": m[pz.c.legado_id], "tipo": tipo, "nombre": nombre[:80],
-                        "url_video": m[pz.c.url_video], "url_miniatura": m[pz.c.url_miniatura],
+                      else (extra_c.get("accion_central") or m[pz.c.legado_id] or f"Pieza {m[pz.c.id]}"))
+            sprint = extra_c.get("sprint") if isinstance(extra_c.get("sprint"), dict) else None
+            origen = "final" if tipo == "final" else ("sprint" if sprint else "crear")
+            out.append({"pieza_id": m[pz.c.id], "legado_id": m[pz.c.legado_id], "tipo": tipo, "es_imagen": es_imagen,
+                        "nombre": nombre[:80], "url_video": m[pz.c.url_video], "url_miniatura": m[pz.c.url_miniatura],
                         "idioma": m[pz.c.idioma], "pais": m[pz.c.pais] if tipo == "final" else None,
-                        "duracion_s": m[pz.c.duracion_s]})
+                        "duracion_s": m[pz.c.duracion_s], "formato": m[pz.c.aspect_ratio],
+                        "origen": origen, "sprint": sprint, "creado_en": m[pz.c.creado_en],
+                        "en_experimentos": vivos.get(m[pz.c.id], [])})
+    return out
+
+
+def _experimentos_vivos_por_pieza(con, cliente):
+    """{pieza_id: [{id, nombre, estado}, ...]} de los experimentos vivos que
+    contienen cada pieza (sin duplicar un experimento que la tenga en dos países)."""
+    ep, e = db.experimento_pieza, db.experimento
+    q = (sa.select(ep.c.pieza_id, e.c.id, e.c.nombre, e.c.estado)
+         .select_from(ep.join(e, e.c.id == ep.c.experimento_id))
+         .where(ep.c.cliente == cliente, e.c.cliente == cliente, e.c.legado.is_(False), e.c.estado.in_(ESTADOS_VIVOS))
+         .order_by(e.c.id))
+    out = {}
+    for pieza_id, eid, nombre, estado in con.execute(q):
+        lista = out.setdefault(pieza_id, [])
+        if not any(x["id"] == eid for x in lista):
+            lista.append({"id": eid, "nombre": nombre, "estado": estado})
     return out

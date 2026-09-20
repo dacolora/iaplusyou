@@ -15,6 +15,19 @@ def _pieza(db, cliente="acme", tipo="final", estado="listo", pais="CO", idioma="
             pais=pais, idioma=idioma, url_video=url, legado_id=legado, extra={})).inserted_primary_key[0]
 
 
+def _pieza_imagen(db, legado="cf_img", aspect="4:5", sprint=None):
+    with db.conectar() as con:
+        ahora = db.ahora()
+        extra = {"accion_central": "producto sobre mesa"}
+        if sprint:
+            extra["sprint"] = sprint
+        cid = con.execute(db.concepto.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, origen="manual", legado_id=legado, extra=extra)).inserted_primary_key[0]
+        return con.execute(db.pieza.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo="imagen", estado="listo",
+            url_video="https://r2/i.png", aspect_ratio=aspect, legado_id=legado, extra={})).inserted_primary_key[0]
+
+
 def test_crear_y_cargar_experimento(base_temporal):
     import experimentos as ex
     eid = ex.crear("acme", "Cojín abrazable", PAISES, "OUTCOME_TRAFFIC", 7, 500000.0, "https://tienda.co/p", "COP")
@@ -130,12 +143,49 @@ def test_elegibles(base_temporal):
     f_ok = _pieza(db)                                                   # final lista CO
     _pieza(db, estado="generando", legado="cf_1__es_MX", pais="MX")     # final generando: no
     clon = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_1")
-    _pieza(db, tipo="imagen", estado="listo", pais=None, idioma=None, legado="cf_2")   # imagen: no
+    img = _pieza(db, tipo="imagen", estado="listo", pais=None, idioma=None, legado="cf_2")   # imagen lista: entra
     _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_3", url=None)  # sin url: no
     _pieza(db, cliente="otro", legado="cf_7__es_CO")
     el = ex.elegibles("acme")
-    assert {(p["pieza_id"], p["tipo"], p["pais"]) for p in el} == {(f_ok, "final", "CO"), (clon, "clon", None)}
+    assert {(p["pieza_id"], p["tipo"], p["pais"]) for p in el} == {(f_ok, "final", "CO"), (clon, "clon", None), (img, "clon", None)}
     assert all(p["nombre"] for p in el)
+
+
+def test_elegibles_incluye_imagenes_origen_y_en_experimentos(base_temporal):
+    import experimentos as ex
+    f_co = _pieza(base_temporal)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    img = _pieza_imagen(base_temporal, sprint={"sprint_id": 1, "sprint_nombre": "Octubre", "campana_id": 3, "campana_n": 2})
+    img2 = _pieza_imagen(base_temporal, legado="cf_pend")   # otra imagen lista: entra
+    with base_temporal.conectar() as con:              # imagen sin URL: no entra
+        ahora = base_temporal.ahora()
+        cid = con.execute(base_temporal.concepto.insert().values(cliente="acme", creado_en=ahora, actualizado_en=ahora,
+                                                                   origen="manual", legado_id="cf_x", extra={})).inserted_primary_key[0]
+        con.execute(base_temporal.pieza.insert().values(cliente="acme", creado_en=ahora, actualizado_en=ahora, concepto_id=cid,
+                                                       tipo="imagen", estado="listo", url_video=None, legado_id="cf_x", extra={}))
+    eid = ex.crear("acme", "Prueba", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, clon, "CO")
+    lista = {e["pieza_id"]: e for e in ex.elegibles("acme")}
+    assert set(lista) == {f_co, clon, img, img2}
+    assert lista[f_co]["origen"] == "final" and lista[f_co]["es_imagen"] is False and lista[f_co]["tipo"] == "final"
+    assert lista[clon]["origen"] == "crear" and lista[clon]["tipo"] == "clon" and lista[clon]["en_experimentos"] == [{"id": eid, "nombre": "Prueba", "estado": "armando"}]
+    assert lista[img]["es_imagen"] is True and lista[img]["tipo"] == "clon" and lista[img]["formato"] == "4:5"
+    assert lista[img]["origen"] == "sprint" and lista[img]["sprint"]["sprint_nombre"] == "Octubre" and lista[img]["en_experimentos"] == []
+    assert lista[img]["nombre"] == "producto sobre mesa" and lista[img]["creado_en"]
+    ex.actualizar("acme", eid, estado="cerrado")
+    assert all(e["en_experimentos"] == [] for e in ex.elegibles("acme"))   # cerrado ya no cuenta
+
+
+def test_piezas_de_experimento_marcan_imagen(base_temporal):
+    import experimentos as ex
+    img = _pieza_imagen(base_temporal)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    eid = ex.crear("acme", "Prueba", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, img, "CO")
+    ex.agregar_pieza("acme", eid, clon, "CO")
+    por_id = {p["pieza_id"]: p for p in ex.piezas("acme", eid)}
+    assert por_id[img]["es_imagen"] is True and por_id[img]["url_imagen"] == "https://r2/i.png"
+    assert por_id[clon]["es_imagen"] is False and por_id[clon]["url_imagen"] is None
 
 
 def test_pieza_id_por_legado(base_temporal):
