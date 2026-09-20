@@ -46,6 +46,7 @@ import trabajos
 import usuarios
 import cuentas
 import meta_conexion
+import meta_agencia
 import flowplus_prompt
 import referencias_flowplus
 import referencias_link
@@ -1346,6 +1347,13 @@ def ver_cliente(cliente):
     capacidades_meta = meta_conexion.estado(cliente)
     meta_app = meta_conexion.app_publica(cliente)
     meta_conectado = capacidades_meta.get("estado") == "conectado"
+    # Modo de la conexión con Meta (propia / agencia): en agencia la tarjeta
+    # de _meta_conectar.html es «Gestionado por Creatv» (sin app ni botón de
+    # conectar) y Puesta a punto mira que la agencia esté conectada, no la app.
+    datos_meta = meta_conexion.cargar(cliente) or {}
+    modo_meta = meta_conexion.MODO_AGENCIA if datos_meta.get("modo") == meta_conexion.MODO_AGENCIA else "propia"
+    agencia_conectada = meta_agencia.conectada() if modo_meta == meta_conexion.MODO_AGENCIA else False
+    meta_detalle = meta_conexion._detalle(datos_meta)
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
     # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
@@ -1414,6 +1422,9 @@ def ver_cliente(cliente):
         nombres_proveedor_swap=NOMBRES_PROVEEDOR_SWAP,
         capacidades_meta=capacidades_meta,
         meta_app=meta_app,
+        modo_meta=modo_meta,
+        agencia_conectada=agencia_conectada,
+        meta_detalle=meta_detalle,
         meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
@@ -1449,7 +1460,8 @@ def ver_cliente(cliente):
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
-        llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app)),
+        llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app),
+                              modo_meta=modo_meta, agencia_conectada=agencia_conectada),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
         canales_org=canales_org,
@@ -1598,18 +1610,38 @@ SERVICIOS_LLAVES = (
 )
 
 
-def _estado_llaves(callback_meli=None, meta_app_registrada=False):
+# Tarjeta Meta cuando el proyecto está en modo agencia: no hay app ni llave
+# que conseguir; lo único que cuenta es que la agencia esté conectada.
+NOTA_META_AGENCIA = ("Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta "
+                     "nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el "
+                     "panel; pídele a él cualquier cambio.")
+PASOS_META_AGENCIA = [
+    "No tienes que conseguir ninguna llave: Creatv conecta su Business Manager una sola vez y te asigna la cuenta y la Página.",
+    "Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador.",
+    "Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio.",
+]
+
+
+def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="propia", agencia_conectada=False):
     """Tarjetas de Configuración › Puesta a punto. Devuelve una lista de dicts
     {id, nombre, para_que, costo, estado, url, url_texto, variables, faltan,
     nota, pasos, opcional} donde `estado` es «configurada» (todas las
     variables presentes), «falta» (ninguna) o «parcial» (algunas). Solo mira
     bool(os.environ.get(var)): ningún valor sale de aquí. `callback_meli` es
     la URL real del callback de MercadoLibre para el paso de la app (fuera de
-    un request se deja el texto genérico)."""
+    un request se deja el texto genérico). La tarjeta Meta depende del modo
+    del proyecto: en «propia» cuenta la app registrada; en «agencia» cuenta
+    que la agencia esté conectada (`agencia_conectada`), y nota/pasos cambian."""
     callback = callback_meli or "<url del sitio>/meli/callback"
     tarjetas = []
     for s in SERVICIOS_LLAVES:
-        if s.get("por_proyecto"):
+        nota, pasos = s["nota"], s["pasos"]
+        if s.get("por_proyecto") and modo_meta == meta_conexion.MODO_AGENCIA:
+            # Meta en modo agencia: la conexión es de Creatv, no del proyecto.
+            presentes = ["conexión de agencia de Creatv"] if agencia_conectada else []
+            faltan = [] if agencia_conectada else ["conexión de agencia de Creatv (la conecta el administrador)"]
+            nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
+        elif s.get("por_proyecto"):
             # Meta: la app es del proyecto (clientes/<c>/meta_app.json), no del .env.
             presentes = ["app de Meta del proyecto"] if meta_app_registrada else []
             faltan = [] if meta_app_registrada else ["app de Meta del proyecto"]
@@ -1632,9 +1664,9 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False):
             "url_texto": s["url_texto"],
             "variables": list(s["variables"]),
             "faltan": faltan,
-            "nota": s["nota"],
+            "nota": nota,
             "opcional": bool(s.get("opcional")),
-            "pasos": [p.replace("{callback_meli}", callback) for p in s["pasos"]],
+            "pasos": [p.replace("{callback_meli}", callback) for p in pasos],
         })
     return tarjetas
 
@@ -2640,11 +2672,27 @@ def _ir_a_flowmarketing(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
+MENSAJE_MODO_AGENCIA = "Este proyecto lo gestiona Creatv en Meta; pídele al administrador cualquier cambio."
+
+
+def _bloqueo_modo_agencia(cliente):
+    """Redirect con aviso si el proyecto está en modo agencia: las rutas de la
+    app propia (registrar app, conectar, elegir, desconectar) no le aplican —
+    la cuenta y la Página se las asigna el admin desde /admin/meta. Va ANTES
+    del guard de correo verificado: un cliente en modo agencia no conecta
+    nada, así que no tiene sentido pedirle que confirme el correo para
+    decirle que no puede. None si el proyecto está en modo propia."""
+    if meta_conexion.modo(cliente) != meta_conexion.MODO_AGENCIA:
+        return None
+    flash(MENSAJE_MODO_AGENCIA, "error")
+    return _ir_a_flowmarketing(cliente)
+
+
 @app.route("/cliente/<cliente>/meta/app", methods=["POST"])
 def meta_app_guardar(cliente):
     """El proyecto registra SU app de Meta (id, secret, config de login).
     El secret va a disco (meta_app.json, 0600) y nunca vuelve a pantalla."""
-    bloqueo = _requiere_correo_verificado()
+    bloqueo = _bloqueo_modo_agencia(cliente) or _requiere_correo_verificado()
     if bloqueo:
         return bloqueo
     try:
@@ -2653,6 +2701,9 @@ def meta_app_guardar(cliente):
             "app_secret": request.form.get("app_secret"),
             "login_config_id": request.form.get("login_config_id"),
         })
+    except meta_conexion.ModoAgenciaError:
+        flash(MENSAJE_MODO_AGENCIA, "error")
+        return _ir_a_flowmarketing(cliente)
     except meta_conexion.MetaConexionError as e:
         flash(str(e), "error")
         return _ir_a_flowmarketing(cliente)
@@ -2663,6 +2714,9 @@ def meta_app_guardar(cliente):
 
 @app.route("/cliente/<cliente>/meta/app/borrar", methods=["POST"])
 def meta_app_borrar(cliente):
+    bloqueo = _bloqueo_modo_agencia(cliente)
+    if bloqueo:
+        return bloqueo
     meta_conexion.borrar_app(cliente)
     bitacora.registrar(cliente, "meta", "app", "ok", "app de Meta quitada")
     flash("App de Meta quitada de este proyecto. La conexión existente sigue hasta que la desconectes.", "ok")
@@ -2671,13 +2725,17 @@ def meta_app_borrar(cliente):
 
 @app.route("/cliente/<cliente>/meta/conectar")
 def meta_conectar(cliente):
-    bloqueo = _requiere_correo_verificado()
+    bloqueo = _bloqueo_modo_agencia(cliente) or _requiere_correo_verificado()
     if bloqueo:
         return bloqueo
     state = meta_conexion.nuevo_state()
     session["meta_oauth"] = {"state": state, "cliente": cliente}
     try:
         return redirect(meta_conexion.url_dialogo(cliente, state))
+    except meta_conexion.ModoAgenciaError:
+        session.pop("meta_oauth", None)
+        flash(MENSAJE_MODO_AGENCIA, "error")
+        return _ir_a_flowmarketing(cliente)
     except meta_conexion.MetaConexionError as e:
         session.pop("meta_oauth", None)
         flash(str(e), "error")
@@ -2728,6 +2786,9 @@ def meta_callback():
 
 @app.route("/cliente/<cliente>/meta/elegir", methods=["GET", "POST"])
 def meta_elegir(cliente):
+    bloqueo = _bloqueo_modo_agencia(cliente)
+    if bloqueo:
+        return bloqueo
     pendiente = meta_conexion.cargar_pendiente(cliente)
     if not pendiente:
         flash("No hay una autorización de Meta en curso — empieza de nuevo con \"Conectar con Meta\".", "error")
@@ -2751,6 +2812,22 @@ def meta_elegir(cliente):
         flash("Elige una cuenta publicitaria y una Página de la lista.", "error")
         return redirect(url_for("meta_elegir", cliente=cliente))
 
+    try:
+        _guardar_conexion_propia(cliente, pendiente, cuenta, pagina)
+    except meta_conexion.ModoAgenciaError:
+        # Un admin asignó el proyecto a la agencia mientras el cliente elegía:
+        # la asignación manda; la autorización a medias se descarta.
+        meta_conexion.borrar_pendiente(cliente)
+        flash(MENSAJE_MODO_AGENCIA, "error")
+        return _ir_a_flowmarketing(cliente)
+    meta_conexion.borrar_pendiente(cliente)
+    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
+    aviso = "" if pagina.get("ig_user_id") else " Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
+    flash(f"Meta conectado: {cuenta.get('name')} · {pagina.get('name')}.{aviso}", "ok")
+    return _ir_a_flowmarketing(cliente)
+
+
+def _guardar_conexion_propia(cliente, pendiente, cuenta, pagina):
     meta_conexion.guardar(cliente, {
         "token": pendiente["token"],
         "tipo_token": pendiente.get("tipo_token", ""),
@@ -2768,11 +2845,6 @@ def meta_elegir(cliente):
         "conectado_por": session.get("usuario"),
         "graph_version": meta_conexion.GRAPH_VERSION,
     })
-    meta_conexion.borrar_pendiente(cliente)
-    bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
-    aviso = "" if pagina.get("ig_user_id") else " Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
-    flash(f"Meta conectado: {cuenta.get('name')} · {pagina.get('name')}.{aviso}", "ok")
-    return _ir_a_flowmarketing(cliente)
 
 
 @app.route("/cliente/<cliente>/meta/cancelar", methods=["POST"])
@@ -2786,10 +2858,17 @@ def meta_cancelar(cliente):
 
 @app.route("/cliente/<cliente>/meta/desconectar", methods=["POST"])
 def meta_desconectar(cliente):
+    bloqueo = _bloqueo_modo_agencia(cliente)
+    if bloqueo:
+        return bloqueo
     # Revocar la autorización en Meta invalida el token (y los de Página que
     # derivan de él); si falla, igual se borra localmente.
     revocado = meta_conexion.revocar(cliente)
-    meta_conexion.borrar(cliente)
+    try:
+        meta_conexion.borrar(cliente)
+    except meta_conexion.ModoAgenciaError:
+        flash(MENSAJE_MODO_AGENCIA, "error")
+        return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado" + (" y revocado en Meta" if revocado else ""))
     if revocado:
@@ -2797,6 +2876,168 @@ def meta_desconectar(cliente):
     else:
         flash("Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio.", "ok")
     return _ir_a_flowmarketing(cliente)
+
+
+# ---------- Meta en modo agencia: panel del admin (/admin/meta) ----------
+# El admin conecta UNA vez el Business Manager de Creatv con un token de
+# usuario del sistema (meta_agencia lo guarda cifrado en kv) y a cada proyecto
+# le asigna una cuenta publicitaria y una Página de las que ese Business ve.
+# Todo es @requiere_admin; los POST exigen _mismo_origen (403 si no). El
+# token solo viaja en el POST de conectar (campo type=password) y jamás
+# vuelve a pantalla: ni en flashes (cola.sin_token por si Meta lo mete en un
+# mensaje), ni en la plantilla (meta_agencia.publica()/estado() no lo traen).
+
+PERMISOS_AGENCIA = ("ads_management", "ads_read", "business_management", "pages_show_list",
+                    "pages_read_engagement", "pages_manage_posts", "pages_manage_ads",
+                    "instagram_basic", "instagram_content_publish")
+
+
+def _proyectos_meta_admin(conectada):
+    """Una fila por proyecto para la tabla de /admin/meta: modo, asignación
+    actual (nunca tokens) y, en modo propia, si tiene su propia conexión."""
+    filas = []
+    for cid in estado_mod.listar_clientes():
+        crudo = meta_conexion._cargar_crudo(cid) or {}
+        modo = meta_conexion.MODO_AGENCIA if crudo.get("modo") == meta_conexion.MODO_AGENCIA else "propia"
+        filas.append({
+            "id": cid,
+            "nombre": proyectos.nombre_visible(cid),
+            "modo": modo,
+            "detalle": meta_conexion._detalle(crudo) if crudo else None,
+            "propia_conectada": modo == "propia" and bool(crudo.get("token")),
+            "app_propia": bool(meta_conexion.cargar_app(cid)),
+        })
+    return filas
+
+
+@app.route("/admin/meta")
+@requiere_admin
+def admin_meta():
+    """Estado de la agencia, formulario para conectar (o reconectar), activos
+    del Business y la tabla de proyectos con su modo y asignación."""
+    estado_ag = meta_agencia.estado()
+    conectada = estado_ag["estado"] != "sin_conectar"
+    activos = {"ad_accounts": [], "pages": []}
+    error_activos = None
+    if conectada:
+        try:
+            activos = meta_agencia.listar_activos()
+        except meta_conexion.MetaConexionError as e:
+            error_activos = cola.sin_token(str(e))
+    filas = _proyectos_meta_admin(conectada)
+    return render_template(
+        "admin_meta.html",
+        agencia=estado_ag, conectada=conectada, activos=activos, error_activos=error_activos,
+        proyectos_meta=filas, asignados=sum(1 for f in filas if f["modo"] == meta_conexion.MODO_AGENCIA),
+        cifrado_ok=cifrado.disponible(), permisos_agencia=", ".join(PERMISOS_AGENCIA),
+        registro_ilegible=meta_agencia._registro_ilegible() if not conectada else False,
+    )
+
+
+def _volver_admin_meta():
+    return redirect(url_for("admin_meta"))
+
+
+@app.route("/admin/meta/conectar", methods=["POST"])
+@requiere_admin
+def admin_meta_conectar():
+    if not _mismo_origen():
+        abort(403)
+    token = request.form.get("token", "")
+    business_id = request.form.get("business_id", "")
+    try:
+        registro = meta_agencia.conectar(token, business_id)
+    except meta_conexion.MetaConexionError as e:
+        flash(f"No pude conectar la agencia: {cola.sin_token(str(e))}", "error")
+        return _volver_admin_meta()
+    bitacora.registrar("", "meta", "agencia", "ok", f"Business {registro.get('business_id')} conectado por {session.get('usuario')}")
+    flash(f"Agencia conectada: {registro.get('business_nombre')} (usuario del sistema "
+          f"{registro.get('usuario_nombre') or 'sin nombre'}). Ahora asigna cuenta y Página a cada proyecto.", "ok")
+    return _volver_admin_meta()
+
+
+@app.route("/admin/meta/desconectar", methods=["POST"])
+@requiere_admin
+def admin_meta_desconectar():
+    if not _mismo_origen():
+        abort(403)
+    asignados = list(meta_agencia.proyectos_asignados())
+    resultado = meta_agencia.desconectar()
+    for cid in asignados:
+        bitacora.registrar(cid, "meta", "agencia", "ok", "vuelve a modo propia: la agencia se desconectó")
+    n = resultado.get("desasignados", 0)
+    if not resultado.get("habia") and not n:
+        flash("La agencia no estaba conectada.", "warn")
+    elif n:
+        flash(f"Agencia desconectada. {n} proyecto{'s' if n != 1 else ''} volvi{'eron' if n != 1 else 'ó'} a modo propia "
+              "y se quedan sin conexión con Meta hasta que registren su app o vuelvas a asignarlos.", "ok")
+    else:
+        flash("Agencia desconectada. Ningún proyecto estaba asignado.", "ok")
+    return _volver_admin_meta()
+
+
+@app.route("/admin/meta/activos/actualizar", methods=["POST"])
+@requiere_admin
+def admin_meta_activos_actualizar():
+    if not _mismo_origen():
+        abort(403)
+    try:
+        activos = meta_agencia.listar_activos(forzar=True)
+    except meta_conexion.MetaConexionError as e:
+        flash(f"No pude leer los activos del Business: {cola.sin_token(str(e))}", "error")
+        return _volver_admin_meta()
+    flash(f"Activos actualizados: {len(activos['ad_accounts'])} cuenta(s) publicitaria(s) y {len(activos['pages'])} Página(s).", "ok")
+    return _volver_admin_meta()
+
+
+def _cliente_o_404(cliente):
+    if cliente not in estado_mod.listar_clientes():
+        abort(404)
+
+
+@app.route("/admin/meta/asignar/<cliente>", methods=["POST"])
+@requiere_admin
+def admin_meta_asignar(cliente):
+    if not _mismo_origen():
+        abort(403)
+    _cliente_o_404(cliente)
+    ad_account_id = (request.form.get("ad_account_id") or "").strip()
+    page_id = (request.form.get("page_id") or "").strip() or None
+    if not ad_account_id:
+        flash("Elige una cuenta publicitaria para asignar.", "error")
+        return _volver_admin_meta()
+    try:
+        detalle = meta_agencia.asignar(cliente, ad_account_id, page_id, asignado_por=session.get("usuario"))
+    except meta_conexion.MetaConexionError as e:
+        flash(f"No pude asignar {proyectos.nombre_visible(cliente)}: {cola.sin_token(str(e))}", "error")
+        return _volver_admin_meta()
+    cuenta = detalle.get("ad_account_nombre") or detalle.get("ad_account_id")
+    pagina = detalle.get("page_nombre") or detalle.get("page_id") or "sin Página"
+    bitacora.registrar(cliente, "meta", "agencia", "ok", f"asignado por {session.get('usuario')}: {cuenta} · {pagina}")
+    ig = f" · Instagram @{detalle['ig_username']}" if detalle.get("ig_username") else ""
+    flash(f"{proyectos.nombre_visible(cliente)} ahora lo gestiona Creatv en Meta: {cuenta} · {pagina}{ig}.", "ok")
+    if detalle.get("cambio_cuenta"):
+        flash("La cuenta publicitaria cambió: los experimentos anteriores de ese proyecto dejan de refrescarse.", "warn")
+    if page_id and not detalle.get("ig_username"):
+        flash("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincule en Facebook.", "warn")
+    if not page_id:
+        flash("Sin Página asignada solo se pueden pautar anuncios; la publicación orgánica queda apagada para ese proyecto.", "warn")
+    return _volver_admin_meta()
+
+
+@app.route("/admin/meta/desasignar/<cliente>", methods=["POST"])
+@requiere_admin
+def admin_meta_desasignar(cliente):
+    if not _mismo_origen():
+        abort(403)
+    _cliente_o_404(cliente)
+    if not meta_agencia.desasignar(cliente):
+        flash(f"{proyectos.nombre_visible(cliente)} no estaba en modo agencia.", "warn")
+        return _volver_admin_meta()
+    bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por {session.get('usuario')})")
+    flash(f"{proyectos.nombre_visible(cliente)} volvió a modo propia: si tenía su propia conexión se restauró; "
+          "si no, tendrá que registrar su app y conectar con Meta.", "ok")
+    return _volver_admin_meta()
 
 
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])

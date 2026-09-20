@@ -6,7 +6,7 @@
     <form
       method="post"
       action="{{ url_for('eliminar_personaje', cliente=cliente, nombre=p.nombre) }}"
-      onsubmit="return confirm('¿Eliminar {{ p.nombre }}? Esto no afecta ideas ya generadas con él, pero no podrás volver a usarlo.');"
+      data-nombre="{{ p.nombre }}" onsubmit="return confirm('¿Eliminar ' + this.dataset.nombre + '? Esto no afecta ideas ya generadas con él, pero no podrás volver a usarlo.');"
       class="personaje-eliminar"
     >
       <button type="submit" title="Eliminar">✕</button>
