@@ -36,6 +36,17 @@ def test_validar_links_y_entradas():
     assert aa.entrada("amazon_resenas", amazon, 150) == {"productUrls": [{"url": amazon[0]}, {"url": amazon[1]}], "maxReviews": 150, "includeGdprSensitive": False}
     assert aa.entrada("tiktok_comentarios", tiktok, 150) == {"postURLs": tiktok, "commentsPerPost": 75, "maxRepliesPerComment": 0}
     assert aa.entrada("tiktok_comentarios", tiktok[:1], 7)["commentsPerPost"] == 7
+    # Extensión: URLs de Amazon que deben aceptarse
+    assert aa.validar_links("amazon_resenas", ["https://www.amazon.com/dp/B0TEST1234"]) == ["https://www.amazon.com/dp/B0TEST1234"]
+    assert aa.validar_links("amazon_resenas", ["https://www.amazon.co.uk/dp/B0TEST1234?ref=x"]) == ["https://www.amazon.co.uk/dp/B0TEST1234?ref=x"]
+    assert aa.validar_links("amazon_resenas", ["https://amazon.de/Marca/Nombre-largo/dp/B0TEST1234/"]) == ["https://amazon.de/Marca/Nombre-largo/dp/B0TEST1234/"]
+    # URLs que deben rechazarse
+    with pytest.raises(base.ErrorFuente):
+        aa.validar_links("amazon_resenas", ["https://www.amazon.com/s?k=dp/B0TEST1234"])
+    with pytest.raises(base.ErrorFuente):
+        aa.validar_links("amazon_resenas", ["https://www.amazon.com/dp/B0TEST12345"])  # 11 caracteres
+    with pytest.raises(base.ErrorFuente):
+        aa.validar_links("amazon_resenas", ["https://www.amazon.com/gp/help/customer"])
 
 
 def test_leer_items():
@@ -114,6 +125,33 @@ def test_recolectar_corre_sondea_y_baja_el_dataset(entorno_apify, monkeypatch):
     assert entorno_apify == [apify.PAUSA_SONDEO, apify.PAUSA_SONDEO]
     assert etapas[0][0] == "Buscando" and any(e == "Leyendo comentarios" and "RUNNING" in (d or "") for e, d in etapas)
     assert f.estimar({"actor": "tiktok_comentarios", "links": links, "max_resultados": 100}) == {"actor": "clockworks~tiktok-comments-scraper", "max_resultados": 100, "usd": 0.05}
+
+
+def test_recolectar_amazon_exito_salta_basura_y_vacios(entorno_apify, monkeypatch):
+    from nicho.fuentes import _http, apify
+    # Escenario 1: éxito con Amazon, datos + basura
+    s = _Sesion({"/actors/junglee~amazon-reviews-scraper/runs": _Resp(201, {"data": {"id": "run_a", "status": "READY", "defaultDatasetId": "ds_a"}}),
+                 "/actor-runs/run_a": [_Resp(200, {"data": {"id": "run_a", "status": "RUNNING", "defaultDatasetId": "ds_a"}}),
+                                       _Resp(200, {"data": {"id": "run_a", "status": "SUCCEEDED", "defaultDatasetId": "ds_a"}})],
+                 "/datasets/ds_a/items": _Resp(200, _fixture("apify_amazon_items.json") + ["basura", 42])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = apify.FuenteApify()
+    lista = list(f.recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 100}))
+    assert len(lista) == 2
+    assert lista[0]["fuente_id"] == "R1ABCDEFG"
+    assert lista[0]["puntuacion"] == 5
+    assert lista[0]["fecha"] == "2022-02-03T00:00:00"
+    assert lista[1]["texto"] == "Meh. Sole flattened in a month"
+    assert f.resultados == 2
+    # Escenario 2: dataset vacío
+    s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_b", "status": "READY", "defaultDatasetId": "ds_b"}}),
+                 "/actor-runs/run_b": [_Resp(200, {"data": {"id": "run_b", "status": "SUCCEEDED", "defaultDatasetId": "ds_b"}})],
+                 "/datasets/ds_b/items": _Resp(200, [])})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = apify.FuenteApify()
+    lista = list(f.recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 100}))
+    assert lista == []
+    assert f.resultados == 0
 
 
 def test_recolectar_corrida_fallida_y_llave_rechazada(entorno_apify, monkeypatch):

@@ -25,7 +25,9 @@ from datetime import datetime
 from nicho.fuentes.base import ErrorFuente
 
 MAX_RESULTADOS = 1000
-_RE_AMAZON = re.compile(r"^https?://(www\.)?amazon\.[a-z.]+/.*(/dp/|gp/product/)[A-Z0-9]{10}", re.IGNORECASE)
+# Cualquier TLD de Amazon, cero o más segmentos antes de /dp/ o /gp/product/, ASIN de 10
+# caracteres y luego fin, «/», «?» o «#». Rechaza búsquedas y categorías (amazon.com/s?k=…).
+_RE_AMAZON = re.compile(r"^https?://(www\.)?amazon\.[a-z.]+/(?:[^?#]*/)?(?:dp|gp/product)/[A-Z0-9]{10}(?:[/?#]|$)", re.IGNORECASE)
 _RE_TIKTOK = re.compile(r"^https?://(www\.|vm\.|vt\.|m\.)?tiktok\.com/", re.IGNORECASE)
 _RE_ID_RESENA = re.compile(r"/customer-reviews/([A-Z0-9]+)", re.IGNORECASE)
 _RE_FECHA_RESENA = re.compile(r" on ([A-Za-z]+ \d{1,2}, \d{4})$")
