@@ -57,3 +57,4 @@ clientes/*/importaciones/
 
 # Referencias subidas a los sprints (imágenes/videos + fotogramas); viven en R2, la copia local es caché
 clientes/*/sprints/
+.superpowers/
