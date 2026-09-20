@@ -1,0 +1,14 @@
+{# Migas y comportamiento de la barra lateral fuera de cliente.html (igual que
+   _sprint_nav.html): los botones de pestaña no tienen paneles en esta página,
+   así que llevan de vuelta al proyecto con el hash de la pestaña. #}
+<p class="sprint-migas">
+  <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='nicho') }}">← Nicho</a>
+  {% if estudio %} · {{ estudio.nombre }}{% endif %}
+</p>
+<script>
+  document.querySelectorAll('.sidebar-item[data-tab]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      location.href = {{ url_for('ver_cliente', cliente=cliente) | tojson }} + '#' + b.dataset.tab;
+    });
+  });
+</script>

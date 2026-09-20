@@ -1,0 +1,92 @@
+{# Sección Avatares. Contexto: estudio, nucleos, urls_comentarios, estimado,
+   precio_texto, min_comentarios, trabajo_generar, niveles_conciencia, bases. #}
+<h3 class="sprint-subtitulo">Avatares</h3>
+<div class="acciones sprint-acciones">
+  <form method="post" action="{{ url_for('nicho.generar', cliente=cliente, eid=estudio.id) }}" class="inline"
+        onsubmit="return confirm('Generar avatares con Claude cuesta aprox. {{ precio_texto }} ({{ estimado.comentarios }} comentarios). ¿Seguimos?');">
+    <button type="submit" class="btn-generar btn-sm" {% if not estimado.suficientes or trabajo_generar or estudio.archivado %}disabled{% endif %}>
+      {{ 'Regenerar avatares' if nucleos else 'Generar avatares' }} · ≈ {{ precio_texto }} · {{ estimado.comentarios }} comentario(s)
+    </button>
+  </form>
+  {% if not estimado.suficientes %}<small class="vacio">Hacen falta al menos {{ min_comentarios }} comentarios no excluidos.</small>{% endif %}
+  {% if estimado.referencia %}<small class="vacio">Estimado con precio de referencia: el modelo {{ estimado.modelo }} no está en la tabla de precios.</small>{% endif %}
+  {% if nucleos %}
+  <a class="btn-sm" href="{{ url_for('nicho.exportar_md', cliente=cliente, eid=estudio.id) }}">Exportar .md</a>
+  <a class="btn-sm" href="{{ url_for('nicho.exportar_xlsx', cliente=cliente, eid=estudio.id) }}">Exportar Excel</a>
+  {% endif %}
+</div>
+{% if trabajo_generar %}
+<div class="barra-progreso" id="trabajo-{{ trabajo_generar.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto">Agrupando deseos… 0% · 0s</span></div>
+<script>iniciarPolling({{ trabajo_generar.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_generar.job_id) | tojson }});</script>
+{% endif %}
+{% if estudio.extra.ultima_generacion %}
+{% set ug = estudio.extra.ultima_generacion %}
+<p class="vacio">Última generación: {{ ug.nucleos }} núcleo(s), {{ ug.subs }} sub-avatar(es), {{ ug.con_evidencia }} con evidencia y {{ ug.sin_evidencia }} sin evidencia, {{ ug.comentarios }} comentarios · {{ ug.fecha }}{% if ug.errores %} · {{ ug.errores }} núcleo(s) con error{% endif %}</p>
+{% endif %}
+
+{% for n in nucleos %}
+<div class="swap-card nicho-nucleo">
+  <h4>Núcleo {{ loop.index }}: {{ n.nombre }}</h4>
+  <p><strong>Deseo:</strong> {{ n.deseo }}</p>
+  {% if n.resumen %}<p class="vacio">{{ n.resumen }}</p>{% endif %}
+  {% if n.extra.error %}<p class="tag-estado sprint-aviso">Este núcleo quedó sin sub-avatares: {{ n.extra.error }}</p>{% endif %}
+  {% for s in n.subs %}
+  <details class="nicho-sub estado-{{ s.estado }}">
+    <summary>
+      <strong>{{ s.nombre }}</strong>
+      <span class="tag-estado">{{ 'emoción' if s.base == 'emocion' else 'experiencia con el producto' }}</span>
+      <span class="tag-estado estado-nicho estado-nicho-{{ s.estado }}">{{ s.estado }}</span>
+      {% if s.sin_evidencia %}<span class="tag-estado sprint-aviso">sin evidencia</span>{% endif %}
+      {% if s.persona_id %}<small class="vacio">Persona #{{ s.persona_id }} · <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='sprints') }}">ver en Sprints</a></small>{% endif %}
+      <br><small class="vacio">{{ s.deseo }}</small>
+    </summary>
+    <form method="post" action="{{ url_for('nicho.avatar_editar', cliente=cliente, aid=s.id) }}" class="form-experimento">
+      <div class="fe-opciones">
+        <label>Nombre / arquetipo <input name="nombre" value="{{ s.nombre }}" required></label>
+        <label>Base <select name="base">{% for b in bases %}<option value="{{ b }}" {% if b == s.base %}selected{% endif %}>{{ 'emoción' if b == 'emocion' else 'experiencia con el producto' }}</option>{% endfor %}</select></label>
+        <label>Edad <input name="edad_rango" value="{{ s.edad_rango or '' }}" placeholder="30-45" class="mini-input"></label>
+      </div>
+      <label>Deseo (frase de cabecera) <input name="deseo" value="{{ s.deseo or '' }}" maxlength="300"></label>
+      <label>Demographics (ASL) <textarea name="demografia" rows="2">{{ s.demografia or '' }}</textarea></label>
+      <label>Emoción <input name="emocion" value="{{ s.emocion or '' }}"></label>
+      <label>Qué quiere que los demás vean en ella <textarea name="identidad_quiere_que_vean" rows="2">{{ s.identidad.quiere_que_vean or '' }}</textarea></label>
+      <label>Beliefs about self <textarea name="identidad_cree_de_si" rows="2">{{ s.identidad.cree_de_si or '' }}</textarea></label>
+      <label>Qué quiere lograr en la sociedad <textarea name="identidad_quiere_lograr" rows="2">{{ s.identidad.quiere_lograr or '' }}</textarea></label>
+      <label>Cómo nuestro producto la ayuda a lograrlo <textarea name="encaje_producto" rows="2">{{ s.encaje_producto or '' }}</textarea></label>
+      <label>Soluciones que probó y por qué fallaron (una por línea: «qué usó :: problema; problema») <textarea name="soluciones_previas" rows="3">{{ s.soluciones_previas | soluciones_texto }}</textarea></label>
+      <label>Su día a día (una situación por línea) <textarea name="situaciones" rows="3">{{ (s.situaciones or []) | join('\n') }}</textarea></label>
+      <label>Comportamiento <textarea name="comportamiento" rows="2">{{ s.comportamiento or '' }}</textarea></label>
+      <div class="fe-opciones">
+        <label>Nivel de conciencia <select name="conciencia_nivel"><option value="">(sin señales)</option>{% for niv in niveles_conciencia %}<option value="{{ niv }}" {% if niv == s.conciencia.nivel %}selected{% endif %}>{{ niv | replace('_', ' ') }}</option>{% endfor %}</select></label>
+        <label>Por qué <input name="conciencia_detalle" value="{{ s.conciencia.detalle or '' }}"></label>
+      </div>
+      <label>Tono de voz <input name="tono" value="{{ s.tono or '' }}"></label>
+      <label>Palabras clave (coma) <input name="palabras_clave" value="{{ (s.palabras_clave or []) | join(', ') }}"></label>
+      <div class="acciones"><button type="submit" class="btn-generar btn-sm">Guardar</button></div>
+    </form>
+    <div class="nicho-evidencia">
+      <strong>Citas textuales</strong>
+      {% for e in s.evidencia %}
+      <blockquote class="nicho-cita">«{{ e.cita }}»{% if urls_comentarios.get(e.comentario_id) %} <a href="{{ urls_comentarios.get(e.comentario_id) }}" target="_blank" rel="noopener">ver original</a>{% endif %}</blockquote>
+      {% else %}
+      <p class="vacio">Ninguna cita sobrevivió a la verificación: decide tú si este avatar vale.</p>
+      {% endfor %}
+    </div>
+    <div class="acciones">
+      {% if s.estado != 'aprobado' %}
+      <form method="post" action="{{ url_for('nicho.avatar_aprobar', cliente=cliente, aid=s.id) }}" class="inline"><button type="submit" class="btn-generar btn-sm">Aprobar → persona</button></form>
+      {% else %}
+      <form method="post" action="{{ url_for('nicho.avatar_aprobar', cliente=cliente, aid=s.id) }}" class="inline"><button type="submit" class="btn-sm">Volver a aprobar (actualiza la persona)</button></form>
+      {% endif %}
+      {% if s.estado != 'descartado' %}
+      <form method="post" action="{{ url_for('nicho.avatar_descartar', cliente=cliente, aid=s.id) }}" class="inline"><button type="submit" class="btn-sm btn-peligro">Descartar</button></form>
+      {% endif %}
+    </div>
+  </details>
+  {% else %}
+  <p class="vacio">Sin sub-avatares en este núcleo.</p>
+  {% endfor %}
+</div>
+{% else %}
+{% if not trabajo_generar %}<p class="vacio">Todavía no hay avatares. Con {{ min_comentarios }} comentarios o más, el botón de arriba los genera.</p>{% endif %}
+{% endfor %}

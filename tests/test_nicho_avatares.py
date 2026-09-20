@@ -1,0 +1,216 @@
+import json
+
+import pytest
+
+
+def _c(i, fuente="texto", puntuacion=None, fecha=None, texto=None, excluido=False):
+    return {"id": i, "fuente": fuente, "puntuacion": puntuacion, "fecha": fecha, "excluido": excluido,
+            "contexto": None, "texto": texto or f"Comentario {i} sobre la garrafa que pesa y gotea en el estante."}
+
+
+def test_seleccionar_excluye_ordena_y_alterna_fuentes():
+    from nicho import avatares
+    lista = [_c(1, "texto", puntuacion=1), _c(2, "texto", puntuacion=9), _c(3, "reddit", puntuacion=5),
+             _c(4, "reddit", puntuacion=5, fecha="2026-02-01"), _c(5, "youtube", excluido=True), _c(6, "youtube")]
+    sel = avatares.seleccionar(lista)
+    assert [c["id"] for c in sel] == [4, 2, 6, 3, 1]      # ronda reddit/texto/youtube; dentro: puntuación desc, fecha desc, id
+    assert [c["id"] for c in avatares.seleccionar(lista, max_n=2)] == [4, 2]
+    corto = avatares.seleccionar(lista, max_caracteres=len(lista[0]["texto"]) * 2 + 1)
+    assert len(corto) == 2
+    assert avatares.seleccionar([]) == []
+
+
+def test_estimar_costo_y_costo_real(monkeypatch):
+    from nicho import avatares
+    lista = [_c(i, texto="x" * 350) for i in range(1, 21)]           # 20 comentarios × 350 caracteres = 7 000 chars
+    e = avatares.estimar_costo(lista, modelo="claude-sonnet-5")
+    tokens_texto = int(7000 * avatares.TOKENS_POR_CARACTER)
+    assert e["comentarios"] == 20 and e["suficientes"] is True and e["referencia"] is False and e["modelo"] == "claude-sonnet-5"
+    assert e["tokens_entrada"] == tokens_texto * 2 + avatares.TOKENS_PROMPT * (1 + avatares.MAX_NUCLEOS)
+    assert e["tokens_salida"] == avatares.TOKENS_SALIDA_ESTIMADO_NUCLEOS + avatares.TOKENS_SALIDA_ESTIMADO_SUBS * avatares.MAX_NUCLEOS
+    esperado = (e["tokens_entrada"] * 2.0 + e["tokens_salida"] * 10.0) / 1e6
+    assert e["usd"] >= esperado and e["usd"] - esperado < 0.01           # redondeado hacia arriba al centavo
+    assert avatares.estimar_costo(lista[:5], modelo="claude-sonnet-5")["suficientes"] is False
+    raro = avatares.estimar_costo(lista, modelo="claude-desconocido-9")
+    assert raro["referencia"] is True and raro["usd"] >= e["usd"]         # precio de referencia = el más caro
+    assert avatares.costo_real(1_000_000, 100_000, modelo="claude-sonnet-5") == pytest.approx(3.0)
+    monkeypatch.setattr(avatares, "modelo_actual", lambda: "claude-haiku-4-5")
+    assert avatares.costo_real(1_000_000, 0) == pytest.approx(1.0) and avatares.estimar_costo(lista)["modelo"] == "claude-haiku-4-5"
+
+
+NUCLEOS_JSON = {"nucleos": [
+    {"nombre": "Lavar sin cargar peso", "deseo": "Quiero que lavar sea fácil y que limpie bien", "resumen": "Gente cansada de garrafas", "comentarios": [1, 2, 2, 99, "3"]},
+    {"nombre": "Repetido", "deseo": "Quiero lo mismo", "resumen": "", "comentarios": [1]},
+    {"nombre": "", "deseo": "sin nombre", "comentarios": [4]},
+    {"nombre": "Sin comentarios válidos", "deseo": "Quiero", "comentarios": [77]},
+]}
+SUB_JSON = {"sub_avatares": [
+    {"base": "experiencia_producto", "nombre": "Ana / La que carga la garrafa", "deseo": "Quiero lavar sin cargar",
+     "demografia": "", "edad_rango": "", "emocion": "Frustración cada semana",
+     "identidad": {"quiere_que_vean": "organizada", "cree_de_si": "práctica", "quiere_lograr": "una casa que funcione"},
+     "soluciones_previas": [{"que": "Detergente líquido de marca", "por_que_fallo": ["Pesado de cargar", "Gotea en el estante"]}],
+     "situaciones": ["Cargando garrafas de 2 litros desde el súper"], "comportamiento": "Sigue comprando líquido porque es lo probado",
+     "conciencia": {"nivel": "consciente_del_problema", "detalle": "Sabe que pesa, no sabe que hay otra cosa"},
+     "encaje_producto": "Cápsulas: nada que cargar", "tono": "Directo, con humor cansado", "palabras_clave": ["garrafa", "peso"],
+     "evidencia": [{"comentario_id": 1, "cita": "la garrafa PESA demasiado"}, {"comentario_id": 2, "cita": "esto no lo dijo nadie"},
+                   {"comentario_id": 1, "cita": "corta"}, {"comentario_id": 5, "cita": "la garrafa pesa demasiado"}]},
+    {"base": "otra", "nombre": "Sin deseo", "deseo": ""},
+    {"base": "emocion", "nombre": "Sin evidencia", "deseo": "Quiero algo", "conciencia": {"nivel": "inventado"}, "evidencia": []},
+]}
+
+
+def test_parsear_nucleos():
+    from nicho import avatares
+    n = avatares.parsear_nucleos("```json\n" + json.dumps(NUCLEOS_JSON) + "\n```", ids_validos={1, 2, 3, 4})
+    assert [x["nombre"] for x in n] == ["Lavar sin cargar peso"]
+    assert n[0]["comentarios"] == [1, 2, 3] and n[0]["resumen"] == "Gente cansada de garrafas"
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.parsear_nucleos("no es json", {1})
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.parsear_nucleos(json.dumps({"nucleos": []}), {1})
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.parsear_nucleos(json.dumps({"otra": 1}), {1})
+    assert len(avatares.parsear_nucleos(json.dumps({"nucleos": [{"nombre": f"N{i}", "deseo": "Q", "comentarios": [i]} for i in range(9)]}), set(range(9)))) == avatares.MAX_NUCLEOS
+
+
+def test_parsear_subs_y_verificar_evidencia():
+    from nicho import avatares
+    subs = avatares.parsear_subs(json.dumps(SUB_JSON))
+    assert [s["nombre"] for s in subs] == ["Ana / La que carga la garrafa", "Sin evidencia"]
+    s = subs[0]
+    assert s["base"] == "experiencia_producto" and s["conciencia"]["nivel"] == "consciente_del_problema"
+    assert s["soluciones_previas"][0]["por_que_fallo"] == ["Pesado de cargar", "Gotea en el estante"] and s["palabras_clave"] == ["garrafa", "peso"]
+    assert len(s["evidencia"]) == 4
+    assert subs[1]["base"] == "emocion" and subs[1]["conciencia"] == {"nivel": "", "detalle": ""} and subs[1]["identidad"] == {"quiere_que_vean": "", "cree_de_si": "", "quiere_lograr": ""}
+    por_id = {1: _c(1, texto="Sí, la garrafa   pesa demasiado, gotea y la tapa se pega."), 2: _c(2, texto="Otro comentario cualquiera.")}
+    v = avatares.verificar_evidencia(s, por_id)
+    assert v["evidencia"] == [{"comentario_id": 1, "cita": "la garrafa PESA demasiado"}] and v["sin_evidencia"] is False
+    v2 = avatares.verificar_evidencia(subs[1], por_id)
+    assert v2["evidencia"] == [] and v2["sin_evidencia"] is True
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.parsear_subs(json.dumps({"sub_avatares": [{"nombre": "", "deseo": ""}]}))
+
+
+def test_parsear_subs_topa_despues_de_filtrar():
+    """3 inválidos primero, 5 válidos después: el tope se aplica sobre los
+    válidos, no sobre la lista cruda (si no, los inválidos del principio se
+    comerían el cupo y se perderían válidos reales)."""
+    from nicho import avatares
+    invalidos = [{"nombre": "", "deseo": ""} for _ in range(3)]
+    validos = [dict(SUB_JSON["sub_avatares"][0], nombre=f"Válido {i}") for i in range(5)]
+    subs = avatares.parsear_subs(json.dumps({"sub_avatares": invalidos + validos}))
+    assert len(subs) == avatares.MAX_SUBS_POR_NUCLEO == 4
+    assert [s["nombre"] for s in subs] == [f"Válido {i}" for i in range(4)]
+
+
+def test_prompts_incluyen_contexto():
+    from nicho import avatares
+    estudio = {"nombre": "Detergente", "producto": "Cápsulas sin plástico", "tema": "lavar en casa, Suecia", "idioma": "sv"}
+    comentarios = [_c(1, "reddit", puntuacion=34, texto="La garrafa pesa demasiado"), _c(2, texto="Gotea")]
+    comentarios[0]["contexto"] = "Foot pains thread"
+    p1 = avatares.armar_prompt_nucleos(estudio, comentarios, marca_nombre="Happy Wash")
+    for frag in ("Happy Wash", "Cápsulas sin plástico", "lavar en casa, Suecia", "[1] (reddit · 34 · Foot pains thread) La garrafa pesa demasiado",
+                 "[2] (texto) Gotea", "sueco", str(avatares.MAX_NUCLEOS), '"nucleos"'):
+        assert frag in p1, frag
+    nucleo = {"nombre": "Lavar sin cargar", "deseo": "Quiero lavar sin cargar", "resumen": "Gente cansada"}
+    p2 = avatares.armar_prompt_subs(estudio, nucleo, comentarios[:1], guia="Luz natural, tono cercano", marca_nombre="Happy Wash")
+    for frag in ("Lavar sin cargar", "Quiero lavar sin cargar", "Gente cansada", "Luz natural, tono cercano", "Beliefs about self",
+                 "consciente_del_problema", '"sub_avatares"', "[1] (reddit · 34 · Foot pains thread) La garrafa pesa demasiado", "sueco"):
+        assert frag in p2, frag
+    assert "[2]" not in p2
+    assert avatares.nombre_idioma("xx") == "xx" and avatares.nombre_idioma("es") == "español"
+
+
+def _estudio_listo(datos, n=25):
+    eid = datos.crear_estudio("acme", "Detergente", producto="Cápsulas", tema="lavar sin cargar", idioma="es")
+    datos.agregar_comentarios("acme", eid, "texto", [
+        {"fuente_id": f"c{i}", "texto": f"Comentario {i}: la garrafa pesa demasiado y gotea en el estante."} for i in range(1, n + 1)])
+    return eid
+
+
+def test_generar_dos_pasadas_con_fallo_parcial(base_temporal, monkeypatch):
+    from nicho import avatares, datos
+    import marca, proyectos
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "Tono cercano")
+    monkeypatch.setattr(proyectos, "nombre_visible", lambda c: "Happy Wash")
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    nucleos = {"nucleos": [{"nombre": "Sin peso", "deseo": "Quiero lavar sin cargar", "resumen": "r", "comentarios": ids[:10]},
+                           {"nombre": "Sin goteo", "deseo": "Quiero que no gotee", "resumen": "r2", "comentarios": ids[10:20]}]}
+    sub = dict(SUB_JSON["sub_avatares"][0], evidencia=[{"comentario_id": ids[0], "cita": "la garrafa pesa demasiado"}])
+    respuestas = [(json.dumps(nucleos), 1000, 200), (json.dumps({"sub_avatares": [sub]}), 700, 300), ("esto no es json", 500, 10)]
+    prompts, etapas = [], []
+    def _llamar_falso(texto, max_tokens):
+        prompts.append((texto, max_tokens))
+        return respuestas.pop(0)
+    monkeypatch.setattr(avatares, "_llamar", _llamar_falso)
+    r = avatares.generar("acme", eid, avanzar=lambda etapa, detalle=None: etapas.append((etapa, detalle)))
+    assert [n["nombre"] for n in r["nucleos"]] == ["Sin peso", "Sin goteo"]
+    assert len(r["nucleos"][0]["sub_avatares"]) == 1 and r["nucleos"][0]["sub_avatares"][0]["sin_evidencia"] is False
+    assert r["nucleos"][0]["sub_avatares"][0]["evidencia"][0]["comentario_id"] == ids[0]
+    assert r["nucleos"][1]["sub_avatares"] == [] and "JSON" in r["nucleos"][1]["error"]
+    res = r["resumen"]
+    assert res["comentarios"] == 25 and res["nucleos"] == 2 and res["subs"] == 1 and res["errores"] == 1
+    assert res["con_evidencia"] == 1 and res["sin_evidencia"] == 0
+    assert res["tokens_entrada"] == 2200 and res["tokens_salida"] == 510 and res["usd"] == avatares.costo_real(2200, 510)
+    assert prompts[0][1] == avatares.MAX_TOKENS_NUCLEOS and prompts[1][1] == avatares.MAX_TOKENS_SUBS
+    assert "Happy Wash" in prompts[0][0] and "Tono cercano" in prompts[1][0] and f"[{ids[10]}]" in prompts[2][0] and f"[{ids[0]}]" not in prompts[2][0]
+    assert etapas[0] == (avatares.ETAPA_NUCLEOS, None) and etapas[1][0] == avatares.ETAPA_SUBS and "1/2" in etapas[1][1]
+
+
+def test_generar_falla_limpio(base_temporal, monkeypatch):
+    from nicho import avatares, datos
+    eid = _estudio_listo(datos, n=5)
+    with pytest.raises(datos.ErrorDatos):
+        avatares.generar("acme", eid)                                     # menos de MIN_COMENTARIOS
+    with pytest.raises(datos.ErrorDatos):
+        avatares.generar("acme", 999)
+    eid = _estudio_listo(datos)
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: ("{}", 10, 10))
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.generar("acme", eid)                                     # pasada 1 inválida: sube tal cual
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    respuestas = [(json.dumps({"nucleos": [{"nombre": "N", "deseo": "Quiero", "comentarios": ids[:3]}]}), 10, 10), ("roto", 1, 1)]
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: respuestas.pop(0))
+    with pytest.raises(avatares.AnalisisInvalido):
+        avatares.generar("acme", eid)                                     # TODOS los núcleos fallaron en la pasada 2
+
+
+def test_generar_pasada_1_invalida_carga_los_tokens_en_el_error(base_temporal, monkeypatch):
+    """I1: el intento se cobró aunque la pasada 1 no sirviera — la
+    AnalisisInvalido que sale de generar() debe traer esos tokens."""
+    from nicho import avatares, datos
+    eid = _estudio_listo(datos)
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: ("{}", 1000, 20))
+    with pytest.raises(avatares.AnalisisInvalido) as exc:
+        avatares.generar("acme", eid)
+    assert exc.value.tokens_entrada == 1000 and exc.value.tokens_salida == 20
+
+
+def test_generar_nucleo_cortado_por_llamar_cuenta_sus_tokens(base_temporal, monkeypatch):
+    """I1: un núcleo que revienta dentro de `_llamar` (rechazo/max_tokens en
+    la vida real) no pierde sus tokens: quedan en el resumen final aunque ese
+    núcleo se descarte, y los demás núcleos siguen su curso."""
+    from nicho import avatares, datos
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    nucleos = {"nucleos": [{"nombre": "Sin peso", "deseo": "Quiero lavar sin cargar", "resumen": "r", "comentarios": ids[:10]},
+                           {"nombre": "Sin goteo", "deseo": "Quiero que no gotee", "resumen": "r2", "comentarios": ids[10:20]}]}
+    sub = dict(SUB_JSON["sub_avatares"][0], evidencia=[{"comentario_id": ids[10], "cita": "la garrafa pesa demasiado"}])
+    llamadas = []
+
+    def _llamar_falso(texto, max_tokens):
+        llamadas.append(texto)
+        if len(llamadas) == 1:
+            return json.dumps(nucleos), 1000, 200
+        if len(llamadas) == 2:
+            e = avatares.AnalisisInvalido("cortado")
+            e.tokens_entrada, e.tokens_salida = 500, 8000
+            raise e
+        return json.dumps({"sub_avatares": [sub]}), 700, 300
+    monkeypatch.setattr(avatares, "_llamar", _llamar_falso)
+    r = avatares.generar("acme", eid)
+    assert r["nucleos"][0]["sub_avatares"] == [] and "cortado" in r["nucleos"][0]["error"]
+    assert len(r["nucleos"][1]["sub_avatares"]) == 1
+    res = r["resumen"]
+    assert res["tokens_entrada"] == 1000 + 500 + 700 and res["tokens_salida"] == 200 + 8000 + 300
