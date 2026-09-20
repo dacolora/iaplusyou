@@ -375,6 +375,25 @@ shown next to generation spend in its own currency. UI: sidebar chip "Este mes: 
 generación · Y pauta" (context processor, template renders only, cached), Configuración ›
 Gasto (by type, history, CSV), Tablero tile, admin panel column.
 
+**Cuentas** (`usuarios.py`, `cuentas.py`, table `token_cuenta`, migration 0011): users still
+live in `usuarios.json` (now with `correo`, `correo_verificado`, `session_version`,
+`creado_en`; correo unique across users, usuario validated `[a-z0-9._-]{3,40}`), while
+one-time tokens (verification 24 h, password reset 1 h) live in SQLite as sha256 hashes —
+emitting a new token invalidates the previous ones of that type, `consumir` marks it used.
+Flows: registration asks for correo and sends a verification link; `/verificar/<token>`;
+`/reenviar-verificacion`; `/recuperar` (always the same neutral answer) →
+`/restablecer/<token>` (GET validates without consuming, POST consumes, changes the password
+and bumps `session_version` so every other session dies — `_verificar_sesion` compares the
+cookie's `sv` on each request and rejects sessions whose usuario no longer exists);
+Configuración › Cuenta (change correo → re-verify; change password → current required).
+Without a verified correo a cliente cannot connect Meta or a store (`_requiere_correo_verificado`;
+admins exempt); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
+`kv`, 5/h) per correo and per IP on registration, resend and recovery. Links are built from
+`PLATAFORMA_URL` (never from the `Host` header) and the app 404s requests whose host isn't that
+one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
+Lax, Secure when the platform URL is https. Emails go through `notificaciones.enviar(html=)` —
+if SMTP is missing the flows still work and the admin panel shows the warning.
+
 ## Agent skills
 
 ### Issue tracker
