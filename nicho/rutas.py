@@ -275,8 +275,10 @@ def avatar_aprobar(cliente, aid):
 @bp.post("/avatar/<int:aid>/descartar")
 def avatar_descartar(cliente, aid):
     a = _avatar_o_404(cliente, aid)
-    datos.descartar_avatar(cliente, aid)
-    flash("Avatar descartado.", "ok")
+    if datos.descartar_avatar(cliente, aid):
+        flash("Avatar descartado.", "ok")
+    else:
+        flash("Solo se descartan los sub-avatares; el núcleo es una agrupación.", "error")
     return _volver(cliente, a["estudio_id"])
 
 

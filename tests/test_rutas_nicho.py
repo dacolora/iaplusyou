@@ -146,4 +146,45 @@ def test_avatar_editar_aprobar_descartar(app):
     nucleo_id = datos.avatares("acme", eid)[0]["id"]
     c.post(f"/cliente/acme/nicho/avatar/{nucleo_id}/aprobar")              # flash de error, no revienta
     assert datos.avatar("acme", nucleo_id)["estado"] == "propuesto"
+    c.post(f"/cliente/acme/nicho/avatar/{nucleo_id}/descartar")            # ídem: el núcleo tampoco se descarta
+    assert datos.avatar("acme", nucleo_id)["estado"] == "propuesto"
     assert c.post("/cliente/otro/nicho/avatar/999/aprobar").status_code == 404
+
+
+def test_pagina_del_estudio(app):
+    from nicho import datos
+    eid, sid = _con_avatares(datos)
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    for frag in ("Detergente", "Regenerar avatares", "US$", "25 comentario(s)", "Núcleo 1: Sin peso", "Ana / La que carga",
+                 "«la garrafa pesa demasiado»", "Aprobar → persona", "Exportar Excel", "Pegar texto", "Subir CSV o Excel", "Excluir",
+                 "Beliefs about self"):
+        assert frag in html, frag
+    assert app["c"].get("/cliente/acme/nicho/999").status_code == 404
+    assert app["c"].get(f"/cliente/acme/nicho/{eid}?fuente=texto&pagina=abc").status_code == 200
+
+
+def test_pagina_sin_comentarios_apaga_el_boton(app):
+    from nicho import datos
+    eid = _estudio(datos, n=3)
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "Hacen falta al menos 20" in html and "disabled" in html and "Todavía no hay avatares" in html
+
+
+def test_pagina_con_trabajo_en_curso_muestra_progreso(app, monkeypatch):
+    from nicho import datos, rutas
+    eid = _estudio(datos)
+    monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: job_id == datos.job_id_generar("acme", eid))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "iniciarPolling" in html and datos.job_id_generar("acme", eid) in html
+
+
+def test_exportar(app):
+    from nicho import datos
+    eid, sid = _con_avatares(datos)
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}/exportar.md")
+    assert r.status_code == 200 and "text/markdown" in r.content_type and "## Núcleo 1: Sin peso" in r.data.decode()
+    assert "attachment" in r.headers["Content-Disposition"] and ".md" in r.headers["Content-Disposition"]
+    r = app["c"].get(f"/cliente/acme/nicho/{eid}/exportar.xlsx")
+    assert r.status_code == 200 and "spreadsheetml" in r.content_type and r.data[:2] == b"PK"
+    assert app["c"].get(f"/cliente/otro/nicho/{eid}/exportar.md").status_code == 404
+    assert app["c"].get(f"/cliente/otro/nicho/{eid}/exportar.xlsx").status_code == 404

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}{{ estudio.nombre }} · Nicho{% endblock %}
+{% block content %}
+{% include "_nicho_nav.html" %}
+
+<div class="pagina-cabecera">
+  <div>
+    <h1>{{ estudio.nombre }}</h1>
+    <p class="vacio"><span class="tag-estado estado-nicho estado-nicho-{{ estudio.estado }}">{{ estudio.estado }}</span>
+      · {{ estudio.producto or 'sin producto' }} · avatares en {{ idiomas.get(estudio.idioma, estudio.idioma) }}
+      · generación {{ estudio.generacion }}{% if estudio.archivado %} · archivado{% endif %}</p>
+    {% if estudio.extra.ultimo_error %}<p class="tag-estado sprint-aviso">Último error: {{ estudio.extra.ultimo_error }}</p>{% endif %}
+  </div>
+</div>
+
+<details class="swap-card">
+  <summary class="swap-card-resumen">Editar estudio</summary>
+  <form method="post" action="{{ url_for('nicho.editar', cliente=cliente, eid=estudio.id) }}" class="form-experimento">
+    <div class="fe-opciones">
+      <label>Nombre <input name="nombre" value="{{ estudio.nombre }}" required maxlength="120"></label>
+      <label>Producto del catálogo
+        <select name="catalogo_id"><option value="">(escribir a mano)</option>
+          {% for p in productos_nicho %}<option value="{{ p.id }}" {% if p.id == estudio.catalogo_id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
+        </select></label>
+      <label>Idioma <select name="idioma">{% for codigo, nombre in idiomas.items() %}<option value="{{ codigo }}" {% if codigo == estudio.idioma %}selected{% endif %}>{{ nombre }}</option>{% endfor %}</select></label>
+    </div>
+    <label>Qué vendemos <textarea name="producto" rows="2">{{ estudio.producto or '' }}</textarea></label>
+    <label>Qué investigar <textarea name="tema" rows="3">{{ estudio.tema or '' }}</textarea></label>
+    <div class="acciones"><button type="submit" class="btn-generar btn-sm">Guardar</button></div>
+  </form>
+  <form method="post" action="{{ url_for('nicho.archivar', cliente=cliente, eid=estudio.id) }}" class="inline"
+        onsubmit="return confirm('{{ '¿Desarchivar este estudio?' if estudio.archivado else '¿Archivar este estudio? Se puede desarchivar después.' }}');">
+    {% if estudio.archivado %}<input type="hidden" name="desarchivar" value="1">{% endif %}
+    <button type="submit" class="btn-sm btn-peligro">{{ 'Desarchivar' if estudio.archivado else 'Archivar' }}</button>
+  </form>
+</details>
+
+{% include "_nicho_comentarios.html" %}
+{% include "_nicho_avatares.html" %}
+{% endblock %}
