@@ -441,3 +441,16 @@ def test_panel_enlaza_al_panel_de_agencia(app, monkeypatch):
     monkeypatch.setattr(app["dashboard"].estado_mod, "listar_clientes", lambda: [])
     html = app["admin"].get("/panel").get_data(as_text=True)
     assert 'href="/admin/meta"' in html and "Meta (agencia)" in html
+
+
+def test_nombre_de_proyecto_no_entra_en_el_js_del_confirm(app, monkeypatch):
+    """Un nombre de proyecto con comilla y paréntesis (lo pone el cliente) no
+    puede romper el literal JS del confirm() de "Volver a propia": va en
+    data-nombre escapado y el JS lo lee de ahí."""
+    import proyectos
+    _fake_conectada(app, monkeypatch)
+    _asignar_en_disco("acme")
+    proyectos.guardar_nombre("acme", "x'); alert(1); ('")
+    html = app["admin"].get("/admin/meta").get_data(as_text=True)
+    assert "alert(1)" not in html.split("confirm('")[1].split("')")[0]
+    assert "this.dataset.nombre" in html and "data-nombre=\"x&#39;); alert(1); (&#39;\"" in html
