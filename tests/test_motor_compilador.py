@@ -75,6 +75,17 @@ def test_velocidad_aplica_setpts_y_atempo():
     assert "setpts=(PTS-STARTPTS)/2.0" in plan.filtergraph
 
 
+def test_transicion_con_velocidad_escala_la_cola():
+    doc = _doc()
+    doc["pistas"][0]["clips"][0]["velocidad"] = 2.0
+    plan = c.compilar(doc, RUTAS, con_ass=False)
+    # 3500 ms de salida a 2x = 7000 ms de fuente, más la cola de transición
+    # (500 ms de salida) también a 2x = 1000 ms de fuente -> 8000.
+    assert "trim=start=0.000:end=8.000" in plan.filtergraph
+    # el offset del xfade es tiempo de SALIDA: no lo toca la velocidad.
+    assert "xfade=transition=fade:duration=0.500:offset=3.500" in plan.filtergraph
+
+
 def test_pista_oculta_y_silenciada_se_ignoran():
     doc = _doc()
     doc["pistas"][1]["oculta"] = True

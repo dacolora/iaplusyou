@@ -22,11 +22,9 @@ from final_edition.motor import subtitulos as sub_mod
 
 _XFADE = {"fundido": "fade", "deslizar": "slideleft", "zoom": "zoomin", "desenfoque": "fadeblack"}
 _DESPLAZ_ANIM_PX = 60
-# Tamaño de la capa cuando el clip todavía no trae su propio ancho_px/alto_px
-# (el PNG real lo rasteriza el navegador a su resolución final; esto es solo
-# el valor de reserva para poder calcular la caja del overlay).
+# Respaldo: el navegador manda ancho_px/alto_px con cada PNG (capa 3).
 _CAPA_ANCHO_DEFECTO = 400
-_CAPA_ALTO_DEFECTO = 300
+_CAPA_ALTO_DEFECTO = 200
 
 # Orden en el que `compilar` agrega entradas (`-i`) al plan: la fuente
 # principal primero, luego los PNG de capas (superpuesto/imagen/texto) en
@@ -118,11 +116,14 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
         hasta = rec["desde_ms"] + int(corte_fin * vel)
         # Modelo de transición: si este clip tiene una transición real hacia
         # el siguiente Y ese siguiente cae dentro del tramo, la cola se
-        # extiende `duracion_ms` más allá del recorte normal — de ahí sale
-        # el crossfade sin robarle tiempo a B (ruling A de la Task 9).
+        # extiende `duracion_ms` (de SALIDA) más allá del recorte normal —
+        # de ahí sale el crossfade sin robarle tiempo a B (ruling A de la
+        # Task 9). Esos ms de salida se escalan por `vel` igual que el resto
+        # del recorte: a 2x hacen falta el doble de cuadros de fuente para
+        # cubrir la misma duración de salida.
         tr_siguiente = _transicion_real(cl) if i + 1 < len(clips_v) else None
         if tr_siguiente:
-            hasta += int(tr_siguiente.get("duracion_ms", 0))
+            hasta += int(tr_siguiente.get("duracion_ms", 0) * vel)
         if principal["tipo"] == "imagen":
             partes.append(f"[0:v]scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},format=yuv420p[v{i}]")
         else:
