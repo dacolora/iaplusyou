@@ -155,27 +155,40 @@ def test_conectar_exige_datos(entorno):
         ma.conectar(TOKEN, "")
 
 
-def test_desconectar_borra_kv_y_deja_proyectos_rotos(entorno, base_temporal):
+def test_desconectar_borra_kv_y_desasigna_los_proyectos(entorno, base_temporal):
+    """M4: desconectar() ya no deja proyectos en modo agencia sin token (con
+    su page_access_token todavía sirviendo) — los desasigna, así
+    organico/meta_uploader dejan de poder publicar con Páginas del Business
+    que ya no está conectado."""
     ma = entorno["ma"]
     ma.conectar(TOKEN, BID)
     ma.asignar("acme", "act_1", "p1")
     assert mc.estado("acme")["estado"] == "conectado"
-    assert ma.desconectar() is True
+    r = ma.desconectar()
+    assert r == {"habia": True, "desasignados": 1}
     assert _kv_crudo(base_temporal) is None
     assert not ma.conectada() and ma.publica() is None
-    assert ma.desconectar() is False
-    # el proyecto sigue asignado (modo agencia) pero sin token: roto, sin cachear
-    assert mc.modo("acme") == "agencia"
-    assert "token" not in mc.cargar("acme")
-    r = mc.estado("acme")
-    assert r["estado"] == "roto" and r["motivo"] == "La agencia no está conectada"
-    assert r["detalle"]["modo"] == "agencia"
-    with pytest.raises(mc.MetaConexionError, match="agencia no está conectada"):
+    # el proyecto vuelve a modo propia (sin respaldo previo: sin meta.json)
+    assert mc.modo("acme") == "propia"
+    assert mc.cargar("acme") is None
+    assert mc.estado("acme") == {"estado": "sin_conectar", "detalle": {}, "verificado": True}
+    with pytest.raises(mc.MetaConexionError, match="no tiene Meta conectado"):
         mc.credenciales_ads("acme")
-    # se vuelve a conectar y todo vuelve a servir sin reasignar
+    assert ma.proyectos_asignados() == {}
+    # segunda vez: no había nada que borrar ni nadie que desasignar
+    assert ma.desconectar() == {"habia": False, "desasignados": 0}
+
+
+def test_desconectar_restaura_el_respaldo_propio_de_cada_proyecto(entorno):
+    ma = entorno["ma"]
+    propia = {"token": "TOKEN-PROPIO", "ad_account_id": "act_propia", "page_id": "pp"}
+    mc.guardar("acme", propia)
     ma.conectar(TOKEN, BID)
-    assert mc.estado("acme")["estado"] == "conectado"
-    assert mc.credenciales_ads("acme")["token"] == TOKEN
+    ma.asignar("acme", "act_1", "p1")
+    ma.asignar("otro", "act_2")
+    assert ma.desconectar() == {"habia": True, "desasignados": 2}
+    assert mc.modo("acme") == "propia" and mc.cargar("acme") == propia
+    assert mc.modo("otro") == "propia" and mc.cargar("otro") is None
 
 
 def test_registro_ilegible_cuenta_como_sin_conectar(entorno, base_temporal, monkeypatch, caplog):
@@ -188,6 +201,48 @@ def test_registro_ilegible_cuenta_como_sin_conectar(entorno, base_temporal, monk
     assert TOKEN not in caplog.text
     with pytest.raises(ma.MetaAgenciaError):
         ma.token()
+
+
+def test_registro_ilegible_se_cachea_y_avisa_una_sola_vez(entorno, monkeypatch, caplog):
+    """M2: cada cargar() de un proyecto en modo agencia (uno por render) no
+    debe volver a descifrar ni a loguear mientras el registro siga
+    ilegible."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    monkeypatch.setenv("FLASK_SECRET_KEY", "otra-clave")   # rotó la clave
+    ma._cache_registro = None
+    with caplog.at_level(logging.WARNING):
+        for _ in range(5):
+            assert ma.conectada() is False
+    avisos = [r for r in caplog.records if "no se puede leer" in r.message]
+    assert len(avisos) == 1
+
+
+def test_estado_del_proyecto_agencia_con_registro_ilegible(entorno, monkeypatch):
+    """M3: distinto motivo cuando el registro de la agencia existe pero no
+    se puede leer (rotó FLASK_SECRET_KEY) frente a cuando nadie la conectó."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    ma.asignar("acme", "act_1", "p1")
+    monkeypatch.setenv("FLASK_SECRET_KEY", "otra-clave")
+    ma._cache_registro = None
+    r = mc.estado("acme")
+    assert r["estado"] == "roto"
+    assert "ilegible" in r["motivo"] and "FLASK_SECRET_KEY" in r["motivo"]
+    assert TOKEN not in r["motivo"]
+
+
+def test_estado_del_proyecto_agencia_realmente_sin_conectar(entorno, base_temporal):
+    """Caso distinto del anterior: la fila de kv desapareció (no rotó la
+    clave) — el motivo sigue siendo el genérico de siempre."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    ma.asignar("acme", "act_1", "p1")
+    with base_temporal.conectar() as con:
+        con.execute(base_temporal.kv.delete().where(base_temporal.kv.c.clave == "meta_agencia"))
+    ma._cache_registro = None
+    r = mc.estado("acme")
+    assert r["estado"] == "roto" and r["motivo"] == "La agencia no está conectada"
 
 
 def test_estado_agencia_conectada_rota_y_cache(entorno, monkeypatch):
@@ -218,6 +273,58 @@ def test_estado_agencia_fallo_de_red_conserva_lo_ultimo(entorno, monkeypatch):
 
 
 # ---------- activos ----------
+
+def test_listar_activos_marca_activa_segun_account_status(entorno):
+    """M7: no se filtran cuentas por estado, pero se marca cuál está activa
+    (account_status == 1) para que Task 2 pueda avisar en el <select>."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    activos = ma.listar_activos()
+    por_id = {a["id"]: a for a in activos["ad_accounts"]}
+    assert por_id["act_1"]["activa"] is True and por_id["act_1"]["account_status"] == 1
+    assert por_id["act_2"]["activa"] is False and por_id["act_2"]["account_status"] == 2
+    assert por_id["act_9"]["activa"] is True and por_id["act_9"]["account_status"] == 1
+
+
+def test_paginar_corta_si_el_cursor_no_avanza(entorno):
+    """M1: un Graph que devuelve `next` con el mismo cursor `after` de
+    siempre (visto en una sonda manual) no debe colgar el proceso."""
+    ma, graph = entorno["ma"], entorno["graph"]
+    ma.conectar(TOKEN, BID)
+    edge = f"{BID}/owned_ad_accounts"
+    graph["respuestas"][edge] = {
+        "data": [{"id": "act_1", "name": "Cuenta 1", "currency": "COP", "account_status": 1}],
+        "paging": {"cursors": {"after": "CUR-FIJO"},
+                   "next": f"https://graph.facebook.com/x?access_token={TOKEN}&after=CUR-FIJO"},
+    }
+    graph["llamadas"].clear()
+    activos = ma.listar_activos()
+    llamadas_edge = [ll for ll in graph["llamadas"] if ll[0] == edge]
+    assert len(llamadas_edge) == 2   # primera página + la que repite el cursor, y corta ahí
+    assert any(a["id"] == "act_1" for a in activos["ad_accounts"])
+
+
+def test_paginar_corta_con_tope_si_el_cursor_nunca_termina(entorno, monkeypatch):
+    """M1: si el cursor sí avanza pero Graph jamás deja de traer `next`
+    (bucle real contra un tercero), corta a las 50 páginas con un error
+    claro en vez de colgar el proceso."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    edge = f"{BID}/owned_ad_accounts"
+    original = mc._graph_get
+    contador = {"n": 0}
+
+    def _graph_get(e, token, params=None, timeout=30):
+        if e != edge:
+            return original(e, token, params, timeout)
+        contador["n"] += 1
+        return {"data": [{"id": f"act_pag{contador['n']}", "name": "x", "currency": "COP", "account_status": 1}],
+                "paging": {"cursors": {"after": f"CUR{contador['n']}"}, "next": "https://x"}}
+    monkeypatch.setattr(mc, "_graph_get", _graph_get)
+    with pytest.raises(ma.MetaAgenciaError, match="no termina de paginar"):
+        ma.listar_activos()
+    assert contador["n"] == ma._TOPE_PAGINAS
+
 
 def test_listar_activos_origen_paginacion_y_cache(entorno):
     ma, graph = entorno["ma"], entorno["graph"]
@@ -263,7 +370,9 @@ def test_asignar_escribe_meta_json_sin_token_de_usuario(entorno, monkeypatch):
     detalle = ma.asignar("acme", "act_1", "p1", asignado_por="admin")
     assert detalle["modo"] == "agencia" and detalle["ad_account_id"] == "act_1"
     assert detalle["page_id"] == "p1" and detalle["ig_username"] == "propia_ig"
-    assert detalle["asignado_por"] == "admin" and detalle["cambio_cuenta"] is False
+    assert detalle["cambio_cuenta"] is False
+    # M6: asignado_por (correo/usuario del admin) no sale en el detalle público
+    assert "asignado_por" not in detalle
     assert "token" not in detalle and "page_access_token" not in detalle
 
     ruta = entorno["raiz"] / "clientes" / "acme" / "meta.json"
@@ -374,16 +483,28 @@ def test_desasignar_sin_respaldo_borra_meta_json(entorno):
     assert ma.proyectos_asignados() == {}
 
 
-def test_borrar_y_revocar_en_agencia_solo_desasignan(entorno):
-    ma, graph = entorno["ma"], entorno["graph"]
+def test_revocar_en_agencia_no_toca_nada(entorno):
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    ma.asignar("acme", "act_1", "p1")
+    assert mc.revocar("acme") is False        # nada que revocar: el token es de la agencia
+    assert mc.modo("acme") == "agencia" and mc.cargar("acme")["token"] == TOKEN
+
+
+def test_borrar_en_agencia_rechaza_hay_que_desasignar(entorno):
+    """I2: borrar() ya no desasigna por su cuenta — un botón "desconectar"
+    pensado para modo propia no puede sacar de agencia a un proyecto sin que
+    un admin lo decida explícitamente (meta_agencia.desasignar)."""
+    ma = entorno["ma"]
     ma.conectar(TOKEN, BID)
     ma.asignar("acme", "act_1", "p1")
     ma.asignar("otro", "act_2")
-    # la secuencia de la ruta de desconectar: revocar() y luego borrar()
-    assert mc.revocar("acme") is False        # nada que revocar: el token es de la agencia
-    assert mc.borrar("acme") is True
-    assert _meta_json(entorno, "acme") is None
-    assert ma.conectada() and ma.token() == TOKEN
+    with pytest.raises(mc.ModoAgenciaError, match="modo agencia"):
+        mc.borrar("acme")
+    assert mc.modo("acme") == "agencia" and mc.cargar("acme")["token"] == TOKEN
+    # el camino correcto (Task 2 lo expone en una ruta admin) sigue andando
+    assert ma.desasignar("acme") is True
+    assert mc.modo("acme") == "propia"
     assert ma.proyectos_asignados().keys() == {"otro"}
     assert mc.cargar("otro")["token"] == TOKEN
 
@@ -403,6 +524,57 @@ def test_url_dialogo_y_app_propia_rechazan_en_agencia(entorno, monkeypatch):
     # el otro proyecto (propia) sigue igual
     mc.guardar_app("otro", {"app_id": "1", "app_secret": "s", "login_config_id": "2"})
     assert "client_id=1" in mc.url_dialogo("otro", "st")
+
+
+def test_modo_agencia_error_es_value_error_y_meta_conexion_error(entorno):
+    """I1: sigue siendo un ValueError (lo que pedía el brief) pero también
+    un MetaConexionError, así las rutas de hoy (meta_conectar, meta_app_guardar,
+    meta_callback) que solo capturan `except meta_conexion.MetaConexionError`
+    la atrapan y hacen flash en vez de un 500, sin tocar dashboard.py."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    ma.asignar("acme", "act_1", "p1")
+    with pytest.raises(ValueError):
+        mc.url_dialogo("acme", "st")
+    with pytest.raises(mc.MetaConexionError):
+        mc.url_dialogo("acme", "st")
+    try:
+        mc.url_dialogo("acme", "st")
+        pytest.fail("esperaba ModoAgenciaError")
+    except mc.ModoAgenciaError as e:
+        assert isinstance(e, ValueError) and isinstance(e, mc.MetaConexionError)
+
+
+def test_guardar_en_modo_agencia_rechaza_sin_permitir_agencia(entorno):
+    """I2: nadie fuera de asignar/desasignar puede pisar meta.json de un
+    proyecto en modo agencia — ni siquiera con datos "de buena fe" (p. ej.
+    una ruta que complete un meta.pendiente.json viejo)."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    ma.asignar("acme", "act_1", "p1")
+    with pytest.raises(mc.ModoAgenciaError, match="modo agencia"):
+        mc.guardar("acme", {"token": "otro-token-propio"})
+    assert mc.cargar("acme")["token"] == TOKEN   # no se pisó nada
+    # permitir_agencia=True es lo que usan asignar/desasignar por dentro
+    mc.guardar("acme", {"modo": "agencia", "ad_account_id": "act_9"}, permitir_agencia=True)
+    assert mc._cargar_crudo("acme")["ad_account_id"] == "act_9"
+    # en modo propia sigue sin exigir nada
+    mc.guardar("otro", {"token": "T"})
+    assert mc.cargar("otro")["token"] == "T"
+
+
+def test_cargar_pendiente_no_sirve_en_modo_agencia(entorno):
+    """I2: un meta.pendiente.json de una autorización propia vieja (de
+    antes de que el admin asignara el proyecto) no debe poder completarse y
+    pisar la asignación."""
+    ma = entorno["ma"]
+    ma.conectar(TOKEN, BID)
+    ma.asignar("acme", "act_1", "p1")
+    mc.guardar_pendiente("acme", {"token": "T", "tipo_token": "", "activos": {}})
+    assert mc.cargar_pendiente("acme") is None
+    # el otro proyecto (propia) no se ve afectado
+    mc.guardar_pendiente("otro", {"token": "T", "tipo_token": "", "activos": {}})
+    assert mc.cargar_pendiente("otro") is not None
 
 
 def test_estado_del_proyecto_en_agencia_usa_el_token_de_agencia(entorno):

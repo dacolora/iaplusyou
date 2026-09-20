@@ -24,8 +24,12 @@ Dos modos por proyecto (meta.json["modo"], "propia" cuando falta):
     page_access_token pero NO el token de usuario: cargar() lo inyecta desde
     meta_agencia al leer, así el resto del sistema no distingue modos. Las
     funciones de la app propia (url_dialogo, cambiar_code_por_token,
-    guardar_app) rechazan en ese modo; revocar() no revoca nada (el token no
-    es del proyecto) y borrar() solo desasigna.
+    guardar_app), guardar() sin permitir_agencia=True y cargar_pendiente()
+    rechazan/vacían en ese modo (ModoAgenciaError, subclase de ValueError y
+    MetaConexionError); revocar() no revoca nada (el token no es del
+    proyecto) y borrar() tampoco desasigna — lanza ModoAgenciaError, porque
+    salir del modo agencia es una decisión explícita de un admin
+    (meta_agencia.desasignar), nunca un efecto secundario de "desconectar".
 
 Ver docs/superpowers/specs/2026-09-11-conexion-meta-design.md.
 """
@@ -73,6 +77,14 @@ class MetaConexionError(RuntimeError):
     def __init__(self, mensaje, codigo=None):
         super().__init__(mensaje)
         self.codigo = codigo
+
+
+class ModoAgenciaError(MetaConexionError, ValueError):
+    """Un proyecto en modo agencia rechazó una operación de la app propia
+    (o una escritura directa de meta.json). Sigue siendo un ValueError (lo
+    que pedía el brief) pero las rutas de hoy que solo capturan
+    MetaConexionError también la atrapan sin tocarlas — I1 del review de
+    Task 1."""
 
 
 # ---------- configuración compartida (solo la URL de vuelta) ----------
@@ -232,7 +244,7 @@ def modo(cliente):
 
 def _rechazar_si_agencia(cliente, para_que):
     if modo(cliente) == MODO_AGENCIA:
-        raise ValueError(
+        raise ModoAgenciaError(
             f"Este proyecto está gestionado por Creatv (modo agencia): no se puede {para_que}. "
             "Un admin tiene que volverlo a modo propia primero.")
 
@@ -253,7 +265,16 @@ def cargar(cliente):
     return copia
 
 
-def guardar(cliente, datos):
+def guardar(cliente, datos, permitir_agencia=False):
+    """Escribe meta.json tal cual. Un proyecto en modo agencia solo puede
+    escribirse desde meta_agencia (asignar/desasignar, `permitir_agencia=True`):
+    cualquier otro escritor (p. ej. una ruta que complete un
+    meta.pendiente.json viejo) pisaría la asignación del admin — I2 del
+    review de Task 1."""
+    if not permitir_agencia and modo(cliente) == MODO_AGENCIA:
+        raise ModoAgenciaError(
+            "Este proyecto está gestionado por Creatv (modo agencia): no se puede guardar una "
+            "conexión propia encima. Un admin tiene que desasignarlo primero.")
     _escribir_atomico(_path(cliente), datos)
     _cache_estado.pop(cliente, None)
     _cache_pixel.pop(cliente, None)
@@ -266,15 +287,23 @@ def _borrar_crudo(cliente):
 
 
 def borrar(cliente):
-    """Desconecta el proyecto. En modo agencia solo lo desasigna (vuelve a
-    propia restaurando lo que tenía); la conexión de la agencia no se toca."""
+    """Desconecta el proyecto. En modo agencia esta función NO desasigna:
+    lanza ModoAgenciaError, porque salir del modo agencia es una decisión
+    explícita (meta_agencia.desasignar, gateada a admin en Task 2), no un
+    efecto secundario de un botón "desconectar" pensado para modo propia."""
     if modo(cliente) == MODO_AGENCIA:
-        import meta_agencia  # noqa: PLC0415
-        return meta_agencia.desasignar(cliente)
+        raise ModoAgenciaError(
+            "Este proyecto está gestionado por Creatv (modo agencia): no se puede desconectar así. "
+            "Un admin tiene que desasignarlo (Volver a modo propia).")
     return _borrar_crudo(cliente)
 
 
 def cargar_pendiente(cliente):
+    if modo(cliente) == MODO_AGENCIA:
+        # Un meta.pendiente.json de una autorización propia vieja (antes de
+        # que el admin asignara el proyecto) no debe poder completarse y
+        # pisar la asignación — mismo I2.
+        return None
     ruta = _path_pendiente(cliente)
     try:
         mtime = os.path.getmtime(ruta)
@@ -418,14 +447,17 @@ def listar_activos(token):
 
 
 def _detalle(datos):
-    """Lo que se puede mostrar en pantalla: nunca tokens."""
+    """Lo que se puede mostrar en pantalla: nunca tokens. `asignado_por`
+    (correo/usuario del admin) se queda afuera a propósito — dato personal
+    innecesario para el rol cliente (M6 del review de Task 1); quien
+    necesite saber quién asignó puede leer meta.json crudo (solo admin)."""
     return {
         "ad_account_id": datos.get("ad_account_id"), "ad_account_nombre": datos.get("ad_account_nombre"),
         "page_id": datos.get("page_id"), "page_nombre": datos.get("page_nombre"),
         "ig_username": datos.get("ig_username"), "conectado_en": datos.get("conectado_en"),
         "moneda": datos.get("moneda"),
         "modo": MODO_AGENCIA if datos.get("modo") == MODO_AGENCIA else "propia",
-        "asignado_en": datos.get("asignado_en"), "asignado_por": datos.get("asignado_por"),
+        "asignado_en": datos.get("asignado_en"),
     }
 
 
@@ -437,9 +469,16 @@ def estado(cliente):
     if datos and datos.get("modo") == MODO_AGENCIA and not datos.get("token"):
         # Asignado pero la agencia no tiene token (nunca se conectó, se
         # desconectó o su registro es ilegible). No se cachea: es barato y
-        # se arregla en cuanto el admin conecte.
-        return {"estado": "roto", "detalle": _detalle(datos), "verificado": True,
-                "motivo": "La agencia no está conectada"}
+        # se arregla en cuanto el admin conecte. M3 del review de Task 1:
+        # un registro ilegible (rotó FLASK_SECRET_KEY) es un motivo distinto
+        # de "nadie conectó la agencia todavía" — el admin necesita saber
+        # cuál es para no reconectar en vano.
+        import meta_agencia  # noqa: PLC0415
+        if meta_agencia._registro_ilegible():
+            motivo = "La credencial de agencia es ilegible (¿cambió FLASK_SECRET_KEY?): un admin tiene que volver a conectarla."
+        else:
+            motivo = "La agencia no está conectada"
+        return {"estado": "roto", "detalle": _detalle(datos), "verificado": True, "motivo": motivo}
     if not datos or not datos.get("token"):
         return {"estado": "sin_conectar", "detalle": {}, "verificado": True}
 

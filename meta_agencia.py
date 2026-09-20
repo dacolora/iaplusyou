@@ -77,23 +77,44 @@ def _borrar_kv():
 def _cargar():
     """Registro completo (con token) o None. Un valor ilegible (cambió
     FLASK_SECRET_KEY, fila corrupta) cuenta como 'sin conectar': hay que
-    volver a conectar la agencia."""
+    volver a conectar la agencia.
+
+    `_cache_registro` guarda (crudo, registro_o_None): un fallo de lectura
+    también se cachea atado al mismo texto cifrado (M2 del review de Task 1)
+    — sin esto, cada cargar() de cada proyecto en modo agencia (uno por
+    render: moneda, estado, canales…) volvía a pagar el PBKDF2 de
+    cifrado.descifrar (~0.1 s) y a loguear el warning mientras el admin no
+    reconectaba."""
     global _cache_registro
     crudo = _leer_kv()
     if not crudo:
         _cache_registro = None
         return None
     if _cache_registro and _cache_registro[0] == crudo:
-        return dict(_cache_registro[1])
+        registro = _cache_registro[1]
+        return dict(registro) if registro else None
     try:
         registro = json.loads(cifrado.descifrar(crudo))
     except (cifrado.ErrorCifrado, ValueError):
         log.warning("meta_agencia: el registro guardado en kv no se puede leer (¿cambió FLASK_SECRET_KEY?)")
+        _cache_registro = (crudo, None)
         return None
     if not isinstance(registro, dict) or not registro.get("token"):
+        _cache_registro = (crudo, None)
         return None
     _cache_registro = (crudo, registro)
     return dict(registro)
+
+
+def _registro_ilegible():
+    """True si hay algo guardado en kv pero no se puede leer (rotó
+    FLASK_SECRET_KEY, fila corrupta) — distinto de "nadie conectó la
+    agencia todavía". Usa la misma caché que _cargar(): no vuelve a
+    descifrar ni a loguear (M2/M3 del review de Task 1)."""
+    crudo = _leer_kv()
+    if not crudo:
+        return False
+    return _cargar() is None
 
 
 def _sin_token(registro):
@@ -163,17 +184,30 @@ def conectar(token_usuario, business_id):
 
 
 def desconectar():
-    """Borra la conexión de la agencia. No toca los proyectos asignados: quedan
-    en modo agencia sin token (estado 'roto') hasta que se vuelva a conectar o
-    se desasignen. Devuelve True si había algo que borrar."""
+    """Borra la conexión de la agencia y desasigna todos los proyectos que
+    estaban en modo agencia (vuelven a modo propia, restaurando su
+    `propia_respaldo` si lo tenían, o se quedan sin meta.json si no).
+
+    M4 del review de Task 1: la alternativa (dejar los proyectos asignados
+    con `page_access_token`s de un Business ya desconectado) permitía que
+    `organico`/`meta_uploader` siguieran publicando en esas Páginas hasta que
+    alguien desasignara cada proyecto a mano — un "desconectar" que no
+    desconecta nada visible para el cliente. Se eligió la opción simple:
+    desasignar todo de una. Devuelve {"habia": bool (si había una conexión
+    que borrar), "desasignados": int (cuántos proyectos volvieron a propia)}."""
     global _cache_registro
     habia = _leer_kv() is not None
+    clientes = _clientes_en_modo_agencia()
+    desasignados = sum(1 for cliente in clientes if desasignar(cliente))
     _borrar_kv()
     _cache_registro = None
-    _invalidar_caches()
-    if habia:
-        log.info("meta_agencia: Business desconectado")
-    return habia
+    # Los proyectos ya se desasignaron arriba (cada desasignar() invalida su
+    # propia caché en meta_conexion); no hace falta que _invalidar_caches
+    # los vuelva a recorrer.
+    _invalidar_caches(incluir_proyectos=False)
+    if habia or desasignados:
+        log.info("meta_agencia: Business desconectado (%d proyecto(s) desasignado(s))", desasignados)
+    return {"habia": habia, "desasignados": desasignados}
 
 
 def estado():
@@ -205,27 +239,42 @@ def estado():
 
 # ---------- activos del Business ----------
 
+_TOPE_PAGINAS = 50  # 50 * limit(100) = 5 000 activos por edge; ver M1 abajo.
+
+
 def _paginar(edge, token_usuario, params):
     """Recorre todas las páginas de un edge siguiendo el cursor `after`.
-    `paging.next` trae el token en la URL: no se usa ni se registra."""
+    `paging.next` trae el token en la URL: no se usa ni se registra.
+
+    M1 del review de Task 1: sin tope, un Graph que repitiera el mismo
+    cursor (o no lo avanzara nunca) dejaba esto en un `while True` contra un
+    tercero. Corta si el cursor no avanza y, por si Meta sí avanza el cursor
+    pero jamás termina de paginar, a los 50 páginas (5 000 activos — nadie
+    real tiene tantas cuentas/Páginas en un Business) con un error claro en
+    vez de colgar el proceso."""
     filas = []
     cursor = None
-    while True:
+    for _ in range(_TOPE_PAGINAS):
         p = {**params, "limit": 100}
         if cursor:
             p["after"] = cursor
         datos = meta_conexion._graph_get(edge, token_usuario, p)
         filas.extend(datos.get("data") or [])
         paging = datos.get("paging") or {}
-        cursor = (paging.get("cursors") or {}).get("after")
-        if not paging.get("next") or not cursor:
+        siguiente = (paging.get("cursors") or {}).get("after")
+        if not paging.get("next") or not siguiente or siguiente == cursor:
             return filas
+        cursor = siguiente
+    raise MetaAgenciaError(
+        f"Meta no termina de paginar {edge} después de {_TOPE_PAGINAS} páginas — parece un bucle; "
+        "revisa el Business o avisa a soporte.")
 
 
 def _cuenta(fila, origen):
     return {
         "id": fila["id"], "name": fila.get("name") or fila["id"],
         "currency": fila.get("currency"), "account_status": fila.get("account_status"),
+        "activa": fila.get("account_status") == 1,
         "origen": origen,
     }
 
@@ -343,7 +392,7 @@ def asignar(cliente, ad_account_id, page_id=None, asignado_por=None):
     if respaldo:
         datos["propia_respaldo"] = respaldo
     assert "token" not in datos  # el token de usuario nunca se escribe en meta.json
-    meta_conexion.guardar(cliente, datos)
+    meta_conexion.guardar(cliente, datos, permitir_agencia=True)
     log.info("meta_agencia: proyecto %s asignado a la cuenta %s", cliente, cuenta["id"])
     detalle = meta_conexion._detalle(datos)
     detalle["cambio_cuenta"] = bool(cuenta_previa and cuenta_previa != cuenta["id"])
@@ -360,7 +409,7 @@ def desasignar(cliente):
     respaldo = previo.get("propia_respaldo")
     if isinstance(respaldo, dict) and respaldo:
         respaldo = {k: v for k, v in respaldo.items() if k not in ("modo", "propia_respaldo")}
-        meta_conexion.guardar(cliente, respaldo)
+        meta_conexion.guardar(cliente, respaldo, permitir_agencia=True)
     else:
         meta_conexion._borrar_crudo(cliente)
     log.info("meta_agencia: proyecto %s vuelve a modo propia", cliente)
