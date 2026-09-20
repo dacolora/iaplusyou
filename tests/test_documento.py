@@ -391,3 +391,18 @@ def test_origen_y_guion_se_conservan_y_deben_ser_objetos():
     doc["origen"] = "no"
     with pytest.raises(d.DocumentoInvalido, match="origen"):
         d.validar(doc)
+
+
+def test_resolver_quita_el_png_del_clip_de_precio_que_desaparece():
+    doc = _doc_texto({"variable": "precio"})
+    doc["variables"]["precios"] = {"es_CO": 89900, "en_US": 24.99}
+    doc["pngs"] = {"t1": 55}
+    v = d.validar(doc)
+    assert v["materiales"] == [1, 2, 3, 55]
+    sin_precio = d.resolver(v, "pt", "BR")
+    assert sin_precio["pistas"][1]["clips"] == []
+    assert "t1" not in sin_precio["pngs"]
+    assert sin_precio["materiales"] == [1, 2, 3]
+    con_precio = d.resolver(v, "es", "CO")
+    assert con_precio["pngs"] == {"t1": 55}
+    assert 55 in con_precio["materiales"]

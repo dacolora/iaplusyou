@@ -489,6 +489,10 @@ def resolver(doc, idioma, pais):
                     rol = t["variable"]
                     if rol == VARIABLE_PRECIO:
                         if precio is None:
+                            # el clip desaparece: su png (si lo tenía) también,
+                            # para que ni `materiales` ni la descarga de pngs
+                            # sigan contando un clip que ya no existe.
+                            (res.get("pngs") or {}).pop(c["id"], None)
                             continue
                         if pais not in tipos.PAISES:
                             raise DocumentoInvalido(f"No sé formatear precios de {pais}.")
