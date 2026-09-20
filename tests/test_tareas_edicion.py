@@ -51,9 +51,16 @@ def test_producir_renderiza_con_el_documento_de_la_version_y_actualiza_la_final(
                                      "job_id": "acme__ed1__es_CO__producir"})
     assert visto["doc"]["destino"] == {"idioma": "es", "pais": "CO", "precio": 89900}
     assert set(visto["rutas"]) >= {1, 2, 3, "ass"}
-    assert actualizado["estado"] == "listo" and actualizado["url_video"].startswith("https://r2/clientes/acme/finales/")
+    assert actualizado["estado"] == "listo"
+    # I1 (review): claves versionadas — un reintento nunca pisa el archivo
+    # que la fila ya enlaza.
+    assert actualizado["url_video"].endswith(f"/finales/cf_1__es_CO__v{v['id']}.mp4")
+    assert actualizado["url_miniatura"].endswith(f"__v{v['id']}.png")
     assert actualizado["capas"]["render"]["edicion_version_id"] == v["id"]
     assert "lista" in msg.lower()
+    # I2 (review): la carpeta de trabajo se borra al terminar con éxito.
+    carpeta = os.path.join(os.environ["CREATV_SALIDAS"], "acme", "ediciones", f"{ed['id']}_es_CO")
+    assert not os.path.exists(carpeta)
 
 
 def test_producir_deja_error_si_el_render_falla(entorno, monkeypatch):
@@ -72,6 +79,26 @@ def test_producir_deja_error_si_el_render_falla(entorno, monkeypatch):
     assert actualizado["estado"] == "error" and "ffmpeg" in actualizado["error"]
 
 
+def test_producir_no_deja_tokens_en_el_error(entorno, monkeypatch):
+    """I3 (review): el error que queda en la final nunca lleva el token
+    crudo, aunque la excepción original lo traiga (Meta/TikTok los meten en
+    mensajes de error reales)."""
+    import creative_flow, ediciones, db
+    from final_edition import motor
+    from tests.test_experimentos_db import _pieza
+    _pieza(db, "acme", legado="cf_1__es_CO", estado="generando")
+    ed = ediciones.crear("acme", "video", "e", _doc(), cf_id="cf_1")
+    v = ediciones.versionar("acme", ed["id"], "producir")
+    monkeypatch.setattr(motor, "renderizar",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("fallo access_token=abc123 en la subida")))
+    actualizado = {}
+    monkeypatch.setattr(creative_flow, "actualizar_final", lambda c, fid, **k: actualizado.update(k) or True)
+    with pytest.raises(RuntimeError):
+        entorno.ejecutar_producir({"payload": {"cliente": "acme", "edicion_id": ed["id"], "version_id": v["id"],
+                                               "final_id": "cf_1__es_CO", "idioma": "es", "pais": "CO"}, "job_id": "j"})
+    assert "abc123" not in actualizado["error"] and "fallo" in actualizado["error"]
+
+
 def test_proxy_genera_540p_tira_y_cortes_y_los_guarda(entorno, monkeypatch, tmp_path):
     import materiales
     from final_edition import cortes
@@ -85,6 +112,9 @@ def test_proxy_genera_540p_tira_y_cortes_y_los_guarda(entorno, monkeypatch, tmp_
     assert m2["url_proxy"].endswith(f"/materiales/{mat['id']}_proxy.mp4")
     assert m2["extra"]["cortes_ms"] == [3500] and m2["extra"]["tira_url"].endswith("_tira.jpg")
     assert m2["duracion_ms"] == 8000 and (m2["ancho"], m2["alto"]) == (540, 960)
+    # I2 (review): la carpeta de trabajo se borra siempre (éxito o no) en edicion_proxy.
+    carpeta = os.path.join(os.environ["CREATV_SALIDAS"], "acme", "ediciones", f"proxy_{mat['id']}")
+    assert not os.path.exists(carpeta)
 
 
 def test_proxy_de_audio_calcula_forma_de_onda(entorno, monkeypatch):
@@ -130,3 +160,25 @@ def test_cargar_todas_registra_las_tareas_del_editor():
     import tareas
     tareas.cargar_todas()
     assert {"edicion_producir", "edicion_proxy", "materiales_limpiar"} <= set(tareas.REGISTRO)
+
+
+@pytest.mark.slow
+def test_picos_real_sobre_un_seno_de_44100(tmp_path):
+    """I4 (review): `_picos` fuerza `aresample=48000` antes de `asetnsamples`,
+    así la ventana en ms es correcta sin importar la frecuencia de muestreo
+    real del archivo (una voz/música a 44100 Hz, no solo el 48000 que
+    asumía `n=int(48000 * ventana_ms / 1000)`)."""
+    import tareas.edicion as te
+    from final_edition import cortes
+    ruta = str(tmp_path / "seno.wav")
+    # `volume=8` compensa el headroom fijo (~-18 dB, factor 1/8) con el que
+    # este build de ffmpeg genera la fuente `sine` en cualquier frecuencia/
+    # sample_rate (confirmado a mano con `astats`: sin este ajuste el pico
+    # medido da -18.06 dB siempre, sin importar duración ni frecuencia) —
+    # así el seno realmente llega cerca de escala completa, que es lo que la
+    # aserción de abajo necesita para tener sentido.
+    cortes.ffmpeg(["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=44100:duration=1", "-af", "volume=8", ruta])
+    picos = te._picos(ruta)
+    assert 18 <= len(picos) <= 22
+    assert all(0.0 <= p <= 1.0 for p in picos)
+    assert max(picos) > 0.5
