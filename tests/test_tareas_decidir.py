@@ -351,7 +351,8 @@ def test_periodica_decidir_registrada():
     # ventas de hace un ciclo.
     assert worker.PERIODICAS == [("tienda_sync_pedidos_todas", 7200), ("exp_refrescar_todos", 7200),
                                  ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600),
-                                 ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300)]
+                                 ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
+                                 ("materiales_limpiar", 86400)]
 
 
 def test_semi_perdedora_se_pausa_ya_y_el_rescate_queda_propuesto(ent, monkeypatch):
