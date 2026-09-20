@@ -52,8 +52,20 @@ def _filas_xlsx(contenido):
         wb = load_workbook(io.BytesIO(contenido), read_only=True, data_only=True)
     except Exception:  # noqa: BLE001 — openpyxl lanza de todo con un archivo dañado
         raise ErrorFuente("No pude abrir el Excel (¿está dañado o protegido?).") from None
-    hoja = wb.worksheets[0]
-    filas = _sin_vacias([["" if v is None else str(v) for v in fila] for fila in hoja.iter_rows(values_only=True)])
+    try:
+        hoja = wb.worksheets[0]
+        filas = []
+        for cruda in hoja.iter_rows(values_only=True):
+            fila = ["" if v is None else str(v) for v in cruda]
+            if not any(c.strip() for c in fila):
+                continue
+            filas.append(fila)
+            # Corta apenas se pasa (encabezado + MAX_FILAS): una hoja enorme
+            # nunca se termina de traer a memoria solo para descartarla después.
+            if len(filas) > MAX_FILAS + 1:
+                raise ErrorFuente(f"El archivo tiene más de {MAX_FILAS} filas; pártelo.")
+    finally:
+        wb.close()
     if not filas:
         raise ErrorFuente("El Excel está vacío.")
     return [c.strip() for c in filas[0]], filas[1:]

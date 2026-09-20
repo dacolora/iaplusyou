@@ -98,6 +98,16 @@ def test_leer_xlsx():
     assert [(c["texto"], c["puntuacion"]) for c in lista] == [("Muy pesada, no la vuelvo a comprar", 12), ("Gotea en el estante", 7)]
 
 
+def test_leer_xlsx_corta_apenas_pasa_max_filas_sin_cargar_todo():
+    """I2: con más de MAX_FILAS filas, _filas_xlsx debe cortar apenas se pasa
+    (no materializar la hoja completa antes de recién ahí quejarse)."""
+    from nicho.fuentes import archivo, base
+    filas = [["texto"]] + [[f"comentario {i} bien corto"] for i in range(archivo.MAX_FILAS + 2)]
+    contenido = _xlsx(filas)
+    with pytest.raises(base.ErrorFuente):
+        archivo.leer_archivo("grande.xlsx", contenido)
+
+
 def test_leer_archivo_errores():
     from nicho.fuentes import archivo, base
     with pytest.raises(base.ErrorFuente):
