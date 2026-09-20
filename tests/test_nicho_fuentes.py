@@ -40,7 +40,7 @@ def test_error_fuente_y_fuente_base():
 
 def test_registro_por_tipo():
     from nicho import fuentes
-    assert fuentes.tipos() == ("texto", "csv")
+    assert fuentes.tipos()[:2] == ("texto", "csv") and "reddit" in fuentes.tipos()
     assert fuentes.por_tipo("texto").tipo == "texto" and fuentes.por_tipo("csv").tipo == "csv"
     with pytest.raises(KeyError):
         fuentes.por_tipo("magia")
