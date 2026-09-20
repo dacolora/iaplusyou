@@ -135,6 +135,12 @@
     max.addEventListener('input', pintar);
     pintar();
     form.addEventListener('submit', function (ev) {
+      if (out.textContent.indexOf('US$') < 0) {
+        ev.preventDefault();
+        pintar();
+        alert('Todavía no hay estimado de Apify; espera un momento y vuelve a intentar.');
+        return;
+      }
       if (!confirm('Traer resultados de Apify se cobra: ' + out.textContent + '. ¿Seguimos?')) ev.preventDefault();
     });
   })();
