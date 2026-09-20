@@ -45,3 +45,19 @@ def test_registro_por_tipo():
     with pytest.raises(KeyError):
         fuentes.por_tipo("magia")
     assert fuentes.NOMBRES["apify"].startswith("Amazon")
+
+
+def test_partir_texto_modos():
+    from nicho.fuentes import texto
+    pegado = "Primer comentario\n\nSegundo, que sigue\nen dos líneas\n\n\n  \nTercero"
+    assert texto.partir_texto(pegado, "lineas") == ["Primer comentario", "Segundo, que sigue", "en dos líneas", "Tercero"]
+    assert texto.partir_texto(pegado, "parrafos") == ["Primer comentario", "Segundo, que sigue en dos líneas", "Tercero"]
+    assert texto.partir_texto("", "lineas") == [] and texto.partir_texto(None, "parrafos") == []
+    assert texto.partir_texto("a\nb", "modo raro") == ["a", "b"]         # modo desconocido -> lineas
+
+
+def test_fuente_texto_recolecta_normalizado():
+    from nicho import fuentes
+    lista = list(fuentes.por_tipo("texto")().recolectar({"texto": "Muy pesada la garrafa\nok\n\nGotea en el estante", "modo": "lineas"}))
+    assert [c["texto"] for c in lista] == ["Muy pesada la garrafa", "Gotea en el estante"]     # "ok" no llega a MIN_TEXTO
+    assert lista[0]["fuente_id"] and lista[0]["url"] is None and lista[0]["extra"] == {}
