@@ -1,6 +1,6 @@
 # Alertas: una pestaña con todo lo que necesita atención — diseño
 
-Fecha: 2026-09-20. Estado: aprobado (Daniel, 2026-09-20), pendiente de plan.
+Fecha: 2026-09-20. Estado: aprobado (Daniel, 2026-09-20); plan `docs/superpowers/plans/2026-09-20-alertas.md`.
 Agrega una pestaña **Alertas** al proyecto y un módulo de solo lectura que la
 alimenta. No toca el worker de generación, los proveedores, el motor de
 experimentos ni las tablas existentes: solo agrega una tabla pequeña para los
@@ -117,7 +117,7 @@ no se pueden publicar en Instagram, Facebook, TikTok ni YouTube»).
 |---|---|---|---|---|
 | `tablero:propuestas_pendientes:<exp>`, `tablero:tope_alcanzado:<exp>`, `tablero:ganador_sin_publicar:<exp o ->` | las mismas del Tablero | media→`atencion` | texto | `?exp=<id>#experimentos` o `settings` |
 | `crear:prompt_listo` | sesiones de Crear en `prompt_listo` cuyo `creado_en` tiene más de 60 min (una sola alerta con el conteo; las recién armadas no molestan mientras la persona trabaja) | `atencion` | ids ordenados | `creativeflowplus` / `cf-<primer id>` |
-| `sprint:ideas:<sid>` | sprint no completado con campañas en `ideas_propuestas` | `atencion` | ids de campañas | página del sprint |
+| `sprint:ideas:<sid>` | sprint no completado con campañas en `ideas_propuestas` (cuenta sus ideas en `propuesta`) | `atencion` | ids de las ideas | página del sprint |
 | `sprint:revision:<sid>` | sprint con piezas terminadas y `revision == "pendiente"` (`sprints.revision.resumen` → `sin_revisar > 0`) | `atencion` | conteo | página del sprint |
 | `nicho:avatares:<eid>` | estudio en `revisando` con sub-avatares propuestos (`avatares_total − avatares_aprobados > 0`) | `atencion` | conteo | página del estudio |
 
