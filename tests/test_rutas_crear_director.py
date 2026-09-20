@@ -109,6 +109,46 @@ def test_rearmar_nunca_una_imagen_aunque_este_en_prompt_listo(app):
     assert cf.cargar("acme")[cf_id]["estado"] == "prompt_listo"
 
 
+def test_rearmar_desde_prompt_pendiente_huerfano_encola(app):
+    """F4: una sesión que quedó en prompt_pendiente sin trabajo vivo (el worker
+    murió antes de que interrumpida() la rescatara) también se puede rearmar —
+    no solo prompt_listo/error."""
+    import creative_flow as cf
+    _crear(app)
+    (cf_id, _), = cf.cargar("acme").items()
+    assert cf.cargar("acme")[cf_id]["estado"] == "prompt_pendiente"
+    app["encolados"].clear()      # trabajos.en_curso siempre False en este fixture
+    r = app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/rearmar")
+    assert r.status_code == 302
+    assert app["encolados"][0]["tipo"] == "flowplus_director"
+    assert cf.cargar("acme")[cf_id]["estado"] == "prompt_pendiente"
+
+
+def test_rearmar_desde_prompt_pendiente_con_trabajo_vivo_se_rechaza(app, monkeypatch):
+    """F4: si el director SIGUE corriendo para esta sesión, rearmar no encola
+    una segunda compilación por encima."""
+    import creative_flow as cf
+    _crear(app)
+    (cf_id, _), = cf.cargar("acme").items()
+    monkeypatch.setattr(app["dashboard"].trabajos, "en_curso", lambda job_id: job_id.endswith("__director"))
+    app["encolados"].clear()
+    r = app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/rearmar")
+    assert r.status_code == 302
+    assert app["encolados"] == []
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "no se puede rearmar ahora" in html
+
+
+def test_tarjeta_prompt_pendiente_huerfana_trae_boton_rearmar(app):
+    """F4 (plantilla): la tarjeta de una sesión prompt_pendiente sin trabajo
+    vivo ofrece el mismo formulario de «Rearmar el prompt» que error."""
+    import creative_flow as cf
+    _crear(app)
+    (cf_id, _), = cf.cargar("acme").items()
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert f'action="/cliente/acme/creative_flow/{cf_id}/rearmar"' in html
+
+
 def test_items_traen_trabajo_del_director_y_costo_con_calidad(app, monkeypatch):
     import creative_flow as cf
     _crear(app, calidad="borrador")
@@ -119,6 +159,9 @@ def test_items_traen_trabajo_del_director_y_costo_con_calidad(app, monkeypatch):
     cf.actualizar("acme", cf_id, estado="prompt_listo", prompt_relleno="A")
     item = app["dashboard"]._creative_flow_items("acme")[0]
     assert item["costo_estimado"]["usd"] == 0.4      # 8 s x 0,05 (480p)
+    # F6: fuera de prompt_pendiente ni se consulta la cola — aunque en_curso
+    # siga diciendo True para ese job_id, la tarjeta ya no lo muestra.
+    assert item["trabajo_director"] is None
 
 
 def _lista(app):
@@ -159,6 +202,38 @@ def test_generar_b_sin_prompt_b_ignora_la_casilla(app):
     cf.actualizar("acme", cf_id, director={"estado": "fallback", "prompt_b": None})
     app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar_video", data={"version_b": "si"})
     assert len(cf.cargar("acme")) == 1 and len(app["encolados"]) == 1
+
+
+def test_generar_b_no_crea_hija_si_ya_hay_un_lanzamiento_en_curso(app, monkeypatch):
+    """F5(i): dos clics casi simultáneos en «Generar» pueden llegar con
+    entry.estado todavía en prompt_listo (la escritura del primer clic no ha
+    llegado) pero con el trabajo del PADRE ya en_curso — ese caso también debe
+    bloquear la creación de la hija, no solo el chequeo de estado."""
+    import creative_flow as cf
+    cf_id = _lista(app)
+    jid = app["dashboard"]._job_id_creative_flow("acme", cf_id)
+    monkeypatch.setattr(app["dashboard"].trabajos, "en_curso", lambda job_id: job_id == jid)
+    r = app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar_video", data={"version_b": "si"})
+    assert r.status_code == 302
+    assert len(cf.cargar("acme")) == 1          # no se creó la hija
+    assert app["encolados"] == []               # tampoco se lanzó nada
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert "Ya se está generando" in html
+
+
+def test_generar_b_no_duplica_hija_si_ya_existe_una(app):
+    """F5(ii): si la sesión ya tiene una hija de versión B (creada por un clic
+    anterior, o por un lote), un segundo POST con version_b=si no crea otra —
+    solo relanza el padre."""
+    import creative_flow as cf
+    cf_id = _lista(app)
+    cf.duplicar("acme", cf_id, prompt_relleno="B", variante="B")
+    app["encolados"].clear()
+    antes = set(cf.cargar("acme"))
+    r = app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/generar_video", data={"version_b": "si"})
+    assert r.status_code == 302
+    assert set(cf.cargar("acme")) == antes       # ninguna hija nueva
+    assert [t["payload"]["cf_id"] for t in app["encolados"]] == [cf_id]   # solo el padre
 
 
 def test_reusar_precarga_sonido_musica_y_calidad(app):

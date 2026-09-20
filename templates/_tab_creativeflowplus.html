@@ -404,7 +404,7 @@
               <button type="submit" class="btn-guardar btn-sm fp-generar-btn">{% if item.estado == "error" %}Reintentar{% else %}Generar{% endif %}{% if item.costo_estimado %} (~${{ item.costo_estimado.usd }}){% endif %}</button>
             </form>
             {% endif %}
-            {% if item.estado == "error" and item.tipo != "imagen" %}
+            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
             <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
               <button type="submit" class="btn-sm">Rearmar el prompt</button>
             </form>

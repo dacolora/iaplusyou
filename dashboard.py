@@ -1831,11 +1831,18 @@ def _creative_flow_items(cliente):
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
     ):
         job_id = _job_id_creative_flow(cliente, cf_id)
+        # trabajo_director solo tiene sentido (y solo se consulta la cola) en
+        # prompt_pendiente: es el único estado donde la tarjeta muestra su
+        # barra de progreso — una consulta menos por tarjeta en cualquier otro
+        # estado.
+        jid_director = tareas_director.job_id(cliente, cf_id)
+        trabajo_director = (
+            {"job_id": jid_director} if entry.get("estado") == "prompt_pendiente" and trabajos.en_curso(jid_director) else None)
         item = {
             "id": cf_id,
             **entry,
             "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
-            "trabajo_director": {"job_id": tareas_director.job_id(cliente, cf_id)} if trabajos.en_curso(tareas_director.job_id(cliente, cf_id)) else None,
+            "trabajo_director": trabajo_director,
         }
         # Si ya existe una hija de versión B (creative_flow.duplicar la crea con
         # derivado_de=cf_id, variante="B"), no tiene sentido ofrecer generarla de
@@ -4636,9 +4643,20 @@ def cf_guardar_prompt(cliente, cf_id):
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/rearmar", methods=["POST"])
 def cf_rearmar(cliente, cf_id):
-    """Vuelve a pedirle los planos a Claude (gratis). Sobrescribe A y B."""
+    """Vuelve a pedirle los planos a Claude (gratis). Sobrescribe A y B.
+
+    También rescata una sesión que quedó en prompt_pendiente sin trabajo vivo
+    (el worker murió antes de que `tareas.director.interrumpida` la pasara a
+    prompt_listo con el fallback) — mientras el director siga corriendo para
+    ella, se sigue rechazando para no encolar una segunda compilación encima."""
     entry = creative_flow.cargar(cliente).get(cf_id)
-    if not entry or entry.get("estado") not in ("prompt_listo", "error") or (entry.get("tipo") or "video") == "imagen":
+    if not entry or (entry.get("tipo") or "video") == "imagen":
+        flash("Esa sesión no se puede rearmar ahora.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    estado = entry.get("estado")
+    puede_rearmar = estado in ("prompt_listo", "error") or (
+        estado == "prompt_pendiente" and not trabajos.en_curso(tareas_director.job_id(cliente, cf_id)))
+    if not puede_rearmar:
         flash("Esa sesión no se puede rearmar ahora.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", error=None)
@@ -4689,9 +4707,19 @@ def cf_generar_video(cliente, cf_id):
     nombre_modelo = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "el modelo")
     que = "la imagen" if (entry.get("tipo") or "video") == "imagen" else "el video"
     prompt_b = (entry.get("director") or {}).get("prompt_b")
-    quiere_b = request.form.get("version_b") == "si" and bool(prompt_b) and que == "el video"
+    # Si ya existe una hija B (de un clic anterior, o de un lote), no se crea
+    # otra aunque la casilla venga marcada.
+    tiene_hija_b = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
+    quiere_b = request.form.get("version_b") == "si" and bool(prompt_b) and que == "el video" and not tiene_hija_b
     hija = None
     if quiere_b:
+        # Dos clics casi simultáneos pueden leer el mismo entry.estado
+        # "prompt_listo" antes de que el primero termine de escribir: este
+        # chequeo, justo antes de crear la hija, es la segunda barrera (la
+        # primera es el estado de arriba) para no duplicar la generación paga.
+        if trabajos.en_curso(_job_id_creative_flow(cliente, cf_id)):
+            flash(f"Ya se está generando {que} — espera a que termine.", "warn")
+            return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
         try:
             hija = creative_flow.duplicar(cliente, cf_id, prompt_relleno=prompt_b, variante="B")
         except Exception as e:
