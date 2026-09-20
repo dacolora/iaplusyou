@@ -127,8 +127,8 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   `clientes/<c>/finales/<final_id>__v<version_id>.mp4`/`.png` (miniatura
 >   primero) en vez de una clave fija, así un reintento nunca pisa el archivo que
 >   la fila todavía enlaza.
-> - **Migración `0011`**, no `0010`: `0010` quedó tomada por `gasto.py` en el
->   ínterin (ver nota en §5).
+> - **Migración `0012`** (`0012_editor.py`, encadenada tras `0011_token_cuenta.py`;
+>   `0010` y `0011` las tomaron `gasto.py` y cuentas en el ínterin; ver §5).
 > - **Caja por defecto 400×200**: una capa sin `ancho_px`/`alto_px` (la capa 3
 >   aún no los manda) usa 400×200 px como tamaño de referencia para
 >   `geometria.caja`; `preparar_rutas` estampa el tamaño natural del material
@@ -332,7 +332,7 @@ iguales); estado central inmutable con historial para deshacer.
 
 Migración nueva encadenada a la última existente al implementar (hoy `0009`).
 
-> Nota: la migración que llegó fue la `0011` (`migrations/versions/0011_editor.py`); `0010` la tomó `gasto.py` en el ínterin.
+> Nota: la migración del editor es la `0012` (`migrations/versions/0012_editor.py`, tras `0011_token_cuenta.py`); `0010` y `0011` las tomaron `gasto.py` y cuentas en el ínterin.
 
 - **`edicion`**: `id`, `cliente`, `cf_id` (nullable), `tipo` (`video|imagen`),
   `nombre`, `documento` JSON, `version_n` int, `estado` (`borrador|producida`),
