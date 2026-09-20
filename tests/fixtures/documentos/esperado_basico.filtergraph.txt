@@ -1,0 +1,7 @@
+[0:v]trim=start=0.000:end=4.000,setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p[v0]
+[0:v]trim=start=3.500:end=7.000,setpts=PTS-STARTPTS,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=30,format=yuv420p[v1]
+[v0][v1]xfade=transition=fade:duration=0.500:offset=3.500[vc]
+[vc][1:v]overlay=x='340+0':y='176-if(lt(t-0.200\,0.300)\,(1-(t-0.200)/0.300)*60\,0)':eof_action=repeat:enable='gte(t,0.200)*lt(t,2.700)'[o1]
+[o1]format=yuv420p[vout]
+[2:a]atrim=start=0.000:end=7.000,asetpts=PTS-STARTPTS,volume=1.0,afade=t=out:st=6.800:d=0.200[au_voz]
+[3:a]atrim=start=0.000:end=7.000,asetpts=PTS-STARTPTS,volume=0.35,afade=t=out:st=6.500:d=0.500[au_musica]
