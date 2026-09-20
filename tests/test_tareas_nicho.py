@@ -139,3 +139,157 @@ def test_cadena_completa_generar_guardar_y_gasto(base_temporal, monkeypatch):
     g = gastos.historial("acme")[0]
     assert g["referencia"] == f"avatares:{eid}:1"
     assert g["usd"] == avatares.costo_real(1000 + 700 + 500, 200 + 300 + 10)
+
+
+# ------------------------------------------------------- nicho_recolectar ---
+
+class _FuenteFalsa:
+    """Fuente programable: entrega `programa`, deja `aviso_final`, y si `fallo_en`
+    no es None lanza `fallo_exc` después de entregar esa cantidad."""
+    tipo = "reddit"
+    de_pago = False
+    programa = ()
+    aviso_final = ""
+    fallo_en = None
+    fallo_exc = None
+
+    def __init__(self):
+        self.aviso = ""
+        self.resultados = 0
+
+    def recolectar(self, params, avanzar=None):
+        avanzar("Buscando")
+        for i, c in enumerate(self.programa):
+            if self.fallo_en is not None and i == self.fallo_en:
+                raise self.fallo_exc
+            avanzar("Leyendo comentarios", f"{i + 1}")
+            self.resultados += 1
+            yield c
+        self.aviso = self.aviso_final
+
+
+def _comentarios_falsos(n):
+    return [{"fuente_id": f"r{i}", "texto": f"Comentario {i}: la garrafa pesa demasiado y gotea.", "url": None, "contexto": None,
+             "puntuacion": i, "fecha": None, "extra": {}} for i in range(n)]
+
+
+def _fuente_falsa(monkeypatch, tipo="reddit", programa=(), aviso_final="", fallo_en=None, fallo_exc=None, de_pago=False):
+    from tareas import nicho as tareas_nicho
+
+    class F(_FuenteFalsa):
+        pass
+    F.tipo, F.de_pago, F.programa, F.aviso_final, F.fallo_en, F.fallo_exc = tipo, de_pago, list(programa), aviso_final, fallo_en, fallo_exc
+    monkeypatch.setattr(tareas_nicho.fuentes_registro, "por_tipo", lambda t: F)
+    return F
+
+
+def _tarea(cliente, eid, fuente, params=None, tid=7):
+    from nicho import datos
+    return {"id": tid, "payload": {"cliente": cliente, "estudio_id": eid, "fuente": fuente, "params": params or {}},
+            "job_id": datos.job_id_recolectar(cliente, eid, fuente)}
+
+
+def test_job_id_y_encolar_recolectar(base_temporal, monkeypatch):
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    encolados = []
+    monkeypatch.setattr(tareas_nicho.trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append({"job_id": job_id, "tipo": tipo, "payload": payload, **kw}) or True)
+    eid = datos.crear_estudio("acme", "X")
+    assert datos.job_id_recolectar("acme", eid, "reddit") == f"nicho:acme:{eid}:recolectar:reddit"
+    assert tareas_nicho.encolar_recolectar("acme", eid, "reddit", {"palabras_clave": "x"}) is True
+    t = encolados[0]
+    assert t["job_id"] == f"nicho:acme:{eid}:recolectar:reddit" and t["tipo"] == "nicho_recolectar"
+    assert t["payload"] == {"cliente": "acme", "estudio_id": eid, "fuente": "reddit", "params": {"palabras_clave": "x"}}
+    assert t["max_intentos"] == 2 and t["duracion_estimada"] == 120 and [e[0] for e in t["etapas"]] == ["Buscando", "Leyendo comentarios", "Guardando"]
+    tareas_nicho.encolar_recolectar("acme", eid, "apify", {"actor": "tiktok_comentarios"})
+    assert encolados[1]["max_intentos"] == 1 and encolados[1]["duracion_estimada"] == 300
+    with pytest.raises(datos.ErrorDatos):
+        tareas_nicho.encolar_recolectar("acme", eid, "texto", {})
+
+
+def test_ejecutar_recolectar_guarda_por_lotes_y_registra(base_temporal, monkeypatch):
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X")
+    _fuente_falsa(monkeypatch, programa=_comentarios_falsos(250))
+    lotes = []
+    original = datos.agregar_comentarios
+    monkeypatch.setattr(tareas_nicho.datos, "agregar_comentarios", lambda c, e, f, lista: lotes.append(len(lista)) or original(c, e, f, lista))
+    msg = tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "reddit", {"palabras_clave": "x"}))
+    assert lotes == [100, 100, 50] and "250 comentario(s) nuevo(s) de Reddit" in msg and "Aviso" not in msg
+    e = datos.estudio("acme", eid)
+    assert e["comentarios_total"] == 250 and e["fuentes"]["reddit"]["total"] == 250 and e["estado"] == "armando"
+    r = e["extra"]["recolecciones"][-1]
+    assert r["fuente"] == "reddit" and r["nuevos"] == 250 and r["repetidos"] == 0 and r["aviso"] == "" and r["fecha"]
+    msg = tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "reddit"))
+    assert "0 comentario(s) nuevo(s)" in msg and "250 repetido(s)" in msg
+    assert datos.estudio("acme", eid)["extra"]["recolecciones"][-1]["repetidos"] == 250
+    assert tareas_nicho.ejecutar_recolectar(_tarea("acme", 999, "reddit")) == "El estudio ya no existe."
+
+
+def test_ejecutar_recolectar_parcial_deja_aviso(base_temporal, monkeypatch):
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X")
+    _fuente_falsa(monkeypatch, tipo="youtube", programa=_comentarios_falsos(3), aviso_final="YouTube agotó la cuota diaria.")
+    msg = tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "youtube"))
+    assert "3 comentario(s) nuevo(s) de YouTube" in msg and "Aviso: YouTube agotó la cuota" in msg
+    assert datos.estudio("acme", eid)["extra"]["recolecciones"][-1]["aviso"] == "YouTube agotó la cuota diaria."
+
+
+def test_ejecutar_recolectar_fallo_guarda_lo_leido_y_relanza(base_temporal, monkeypatch):
+    from nicho import datos
+    from nicho.fuentes.base import ErrorFuente
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X")
+    _fuente_falsa(monkeypatch, programa=_comentarios_falsos(5), fallo_en=3, fallo_exc=ErrorFuente("Reddit rechazó la llamada (token=abc)."))
+    with pytest.raises(ErrorFuente):
+        tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "reddit"))
+    e = datos.estudio("acme", eid)
+    assert e["comentarios_total"] == 3
+    r = e["extra"]["recolecciones"][-1]
+    assert r["nuevos"] == 3 and r["aviso"].startswith("falló: Reddit rechazó") and "abc" not in r["aviso"]
+
+
+def test_ejecutar_recolectar_apify_registra_gasto(base_temporal, monkeypatch):
+    import gastos
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X")
+    _fuente_falsa(monkeypatch, tipo="apify", programa=_comentarios_falsos(30), de_pago=True)
+    tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "apify", {"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 50}, tid=11))
+    g = gastos.historial("acme")[0]
+    assert g["tipo"] == "recoleccion" and g["usd"] == 0.09 and g["proveedor"] == "apify" and g["referencia"] == f"recoleccion:{eid}:t11"
+    assert "30 resultado(s) aprox." in g["detalle"] and g["extra"]["actor"] == "junglee~amazon-reviews-scraper"
+    _fuente_falsa(monkeypatch, tipo="reddit", programa=_comentarios_falsos(3))
+    tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "reddit", tid=12))
+    assert len(gastos.historial("acme")) == 1                                   # las gratis no registran gasto
+
+
+def test_ejecutar_recolectar_apify_fallido_registra_lo_cobrado(base_temporal, monkeypatch):
+    import gastos
+    from nicho import datos
+    from nicho.fuentes.base import ErrorFuente
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X")
+    _fuente_falsa(monkeypatch, tipo="apify", programa=_comentarios_falsos(10), de_pago=True, fallo_en=4, fallo_exc=ErrorFuente("La corrida de Apify terminó en ABORTED."))
+    with pytest.raises(ErrorFuente):
+        tareas_nicho.ejecutar_recolectar(_tarea("acme", eid, "apify", {"actor": "tiktok_comentarios"}, tid=13))
+    g = gastos.historial("acme")[0]
+    assert g["usd"] == 0.01 and "intento fallido" in g["detalle"] and g["extra"]["resultados"] == 4
+    assert datos.estudio("acme", eid)["comentarios_total"] == 4
+
+
+def test_interrumpida_recolectar(base_temporal):
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X")
+    tareas_nicho.interrumpida_recolectar(_tarea("acme", eid, "reddit"), "Se interrumpió por un reinicio.")
+    r = datos.estudio("acme", eid)["extra"]["recolecciones"][-1]
+    assert r["fuente"] == "reddit" and r["aviso"] == "interrumpida: Se interrumpió por un reinicio." and r["nuevos"] == 0
+
+
+def test_worker_registra_recolectar():
+    import tareas
+    from tareas import nicho  # noqa: F401
+    assert "nicho_recolectar" in tareas.REGISTRO and "nicho_recolectar" in tareas.AL_INTERRUMPIR

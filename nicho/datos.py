@@ -44,6 +44,12 @@ def job_id_generar(cliente, estudio_id):
     return f"nicho:{cliente}:{int(estudio_id)}:generar"
 
 
+def job_id_recolectar(cliente, estudio_id, fuente):
+    """Una recolección viva por fuente y estudio (spec §7/§8): la ruta la
+    encola con este id y la página muestra su barra mientras vive."""
+    return f"nicho:{cliente}:{int(estudio_id)}:recolectar:{fuente}"
+
+
 # ------------------------------------------------------------ helpers ---
 
 def _a_dict(fila):
