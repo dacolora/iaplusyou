@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+{% block title %}Meta (agencia){% endblock %}
+{% block content %}
+{# Panel del admin para Meta en modo agencia (dashboard.admin_meta). Contexto:
+   agencia (meta_agencia.estado(): sin_conectar/conectada/rota + detalle SIN
+   token), conectada, activos ({ad_accounts, pages}), error_activos,
+   proyectos_meta (una fila por proyecto: modo, detalle, propia_conectada,
+   app_propia), asignados, cifrado_ok, permisos_agencia, registro_ilegible.
+   Ningún token llega a esta plantilla: meta_agencia.publica()/estado() lo
+   quitan y meta_conexion._detalle tampoco lo trae. #}
+{% set ag = agencia.detalle or {} %}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">Panel de administrador</span>
+    <h1>Meta en modo agencia.</h1>
+    <p class="hero-sub">Conectas UNA vez el Business Manager de Creatv y a cada proyecto le asignas una cuenta publicitaria y una Página de las que ese Business posee o administra para sus clientes. El proyecto ve «Gestionado por Creatv» y no tiene que registrar ninguna app.</p>
+    <p class="hero-sub"><a href="{{ url_for('panel') }}">← Volver al panel</a></p>
+  </div>
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-num">{% if agencia.estado == "conectada" %}✓{% elif agencia.estado == "rota" %}✗{% else %}—{% endif %}</span>
+      <span class="stat-label">{% if agencia.estado == "conectada" %}agencia conectada{% elif agencia.estado == "rota" %}conexión rota{% else %}sin conectar{% endif %}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ asignados }}</span>
+      <span class="stat-label">proyecto{{ 's' if asignados != 1 }} en modo agencia</span>
+    </div>
+    {% if conectada %}
+    <div class="stat">
+      <span class="stat-num">{{ activos.ad_accounts | length }}</span>
+      <span class="stat-label">cuenta{{ 's' if activos.ad_accounts | length != 1 }} publicitaria{{ 's' if activos.ad_accounts | length != 1 }}</span>
+    </div>
+    <div class="stat">
+      <span class="stat-num">{{ activos.pages | length }}</span>
+      <span class="stat-label">Página{{ 's' if activos.pages | length != 1 }}</span>
+    </div>
+    {% endif %}
+  </div>
+</section>
+
+{# ---- Estado de la conexión de la agencia ---- #}
+<section class="admin-bloque aparece" id="agencia-estado">
+  <div class="admin-cabecera">
+    <h2>Conexión de la agencia</h2>
+    <span class="vacio">un solo token de usuario del sistema, cifrado en el servidor; nunca vuelve a pantalla</span>
+  </div>
+
+  {% if conectada %}
+  <div class="idea-block" style="border-left:3px solid {% if agencia.estado == 'rota' %}var(--error){% else %}var(--ok){% endif %};">
+    <div class="idea-header"><div><span class="idea-label">Business Manager</span><div class="idea-texto">{{ ag.business_nombre or ag.business_id }}</div></div></div>
+    <p class="vacio" style="padding-top:0;">
+      Business <code>{{ ag.business_id }}</code>
+      {% if ag.usuario_nombre %}· usuario del sistema <strong>{{ ag.usuario_nombre }}</strong>{% endif %}
+      {% if ag.conectado_en %}· conectado el {{ ag.conectado_en[:10] }}{% endif %}
+      {% if agencia.estado == "conectada" %}· <span class="tag-estado tag-en-uso">conectada</span>{% if not agencia.verificado %} <em>(sin verificar ahora: Meta no respondió)</em>{% endif %}
+      {% else %}· <span class="tag-estado tag-descartado">rota</span>{% endif %}
+    </p>
+    {% if agencia.estado == "rota" %}
+    <p class="tag-error">Meta ya no acepta el token{% if agencia.motivo %} ({{ agencia.motivo }}){% endif %}. Genera uno nuevo en Business Manager y vuelve a conectar abajo; los proyectos asignados siguen asignados y funcionan en cuanto conectes.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('admin_meta_desconectar') }}" style="display:inline;"
+          onsubmit="return confirm('¿Desconectar la agencia? {{ asignados }} proyecto(s) en modo agencia volverán a modo propia y se quedarán sin conexión con Meta (anuncios y orgánico) hasta que registren su app o vuelvas a conectarlos. El token se borra del servidor; en Meta no se revoca nada.');">
+      <button type="submit" class="btn-rechazar btn-sm">Desconectar la agencia</button>
+    </form>
+  </div>
+  {% elif registro_ilegible %}
+  <p class="tag-error">Hay una conexión guardada pero no se puede leer (¿cambió FLASK_SECRET_KEY?). Vuelve a conectar con un token nuevo: la anterior se reemplaza.</p>
+  {% endif %}
+
+  <details class="idea-block agencia-conectar"{% if not conectada %} open{% endif %}>
+    <summary class="idea-header" style="cursor:pointer;"><div><span class="idea-label">Meta</span><div class="idea-texto">{% if conectada %}Volver a conectar con otro token{% else %}Conectar el Business de Creatv{% endif %}</div></div></summary>
+    {% if not cifrado_ok %}
+    <p class="tag-error">Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se puede guardar el token cifrado. Ponla y reinicia la app.</p>
+    {% endif %}
+    <p class="vacio" style="padding-top:0;">
+      Hace falta un <strong>token de usuario del sistema</strong> del Business Manager de Creatv (no un token personal: los del sistema no caducan ni dependen de que alguien siga en el Business) y el <strong>id del Business</strong>.
+    </p>
+    <ol class="vacio" style="padding-top:0;margin-top:0;">
+      <li>Abre <a href="https://business.facebook.com/settings/system-users" target="_blank" rel="noopener">Business Manager › Configuración del negocio › Usuarios › Usuarios del sistema</a> y crea uno llamado <strong>creatv</strong> con rol <strong>administrador</strong>.</li>
+      <li>En ese usuario, <em>Asignar activos</em>: todas las cuentas publicitarias y Páginas que Creatv vaya a operar (propias y las que los clientes compartieron como socios). Las que no asignes no aparecen abajo.</li>
+      <li><em>Generar nuevo token</em>: elige la app de Creatv, caducidad <strong>nunca</strong>, y marca los permisos
+        <code>{{ permisos_agencia }}</code> (los que la app tenga aprobados; mientras esté en modo desarrollo solo sirven cuentas y Páginas de prueba o de los roles de la app).</li>
+      <li>El id del Business está en <em>Configuración del negocio › Información del negocio</em>.</li>
+      <li>Pega los dos aquí. El token se valida contra Meta (<code>/me</code> y el Business) y se guarda cifrado; si algo falla, no se guarda nada.</li>
+    </ol>
+    <form method="post" action="{{ url_for('admin_meta_conectar') }}" autocomplete="off" class="agencia-form">
+      <label>Id del Business <input name="business_id" required inputmode="numeric" pattern="[0-9]+"{% if ag.business_id %} value="{{ ag.business_id }}"{% endif %}></label>
+      <label>Token del usuario del sistema <input name="token" type="password" required autocomplete="off" placeholder="EAA…"></label>
+      <button type="submit" class="btn-generar"{% if not cifrado_ok %} disabled{% endif %}>{% if conectada %}Reemplazar el token{% else %}Conectar la agencia{% endif %}</button>
+    </form>
+  </details>
+</section>
+
+{# ---- Activos que ve el Business ---- #}
+{% if conectada %}
+<section class="admin-bloque aparece" id="agencia-activos">
+  <div class="admin-cabecera">
+    <h2>Activos del Business</h2>
+    <form method="post" action="{{ url_for('admin_meta_activos_actualizar') }}" style="display:inline;">
+      <button type="submit" class="btn-sm">Actualizar desde Meta</button>
+      <span class="vacio" style="padding:0 0 0 .5rem;">se guardan 10 min; si acabas de asignar un activo en Business Manager, actualiza</span>
+    </form>
+  </div>
+  {% if error_activos %}
+  <p class="tag-error">No pude leer los activos: {{ error_activos }}</p>
+  {% endif %}
+  <h3>Cuentas publicitarias</h3>
+  {% if activos.ad_accounts %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>Nombre</th><th>Id</th><th>Moneda</th><th>Estado</th><th>Origen</th></tr></thead>
+      <tbody>
+      {% for a in activos.ad_accounts %}
+      <tr>
+        <td>{{ a.name }}</td>
+        <td><code>{{ a.id }}</code></td>
+        <td>{{ a.currency or '—' }}</td>
+        <td>{% if a.activa %}<span class="tag-estado tag-en-uso">activa</span>{% else %}<span class="tag-estado tag-advertencia">inactiva</span>{% endif %}</td>
+        <td>{% if a.origen == "propia" %}propia de Creatv{% else %}de un cliente (socio){% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="vacio">El Business no ve ninguna cuenta publicitaria. Asígnaselas al usuario del sistema en Business Manager y pulsa «Actualizar desde Meta».</p>
+  {% endif %}
+  <h3>Páginas</h3>
+  {% if activos.pages %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>Nombre</th><th>Id</th><th>Instagram</th><th>Origen</th></tr></thead>
+      <tbody>
+      {% for p in activos.pages %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td><code>{{ p.id }}</code></td>
+        <td>{% if p.ig_username %}@{{ p.ig_username }}{% else %}<span class="vacio" style="padding:0;">sin vincular</span>{% endif %}</td>
+        <td>{% if p.origen == "propia" %}propia de Creatv{% else %}de un cliente (socio){% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="vacio">El Business no ve ninguna Página. Sin Página un proyecto solo puede pautar anuncios (nada de orgánico).</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{# ---- Proyectos: modo y asignación ---- #}
+<section class="admin-bloque aparece" id="agencia-proyectos">
+  <div class="admin-cabecera">
+    <h2>Proyectos</h2>
+    <span class="vacio">cada proyecto está en un modo a la vez: <strong>propia</strong> (registra su app y conecta él) o <strong>agencia</strong> (tú le asignas cuenta y Página)</span>
+  </div>
+  {% if not conectada %}
+  <p class="vacio">Conecta la agencia arriba para poder asignar cuentas y Páginas; mientras tanto solo se ve el modo de cada proyecto.</p>
+  {% endif %}
+  {% if not proyectos_meta %}
+  <p class="vacio">Todavía no hay proyectos.</p>
+  {% else %}
+  <div class="admin-scroll">
+    <table class="tabla-admin tabla-agencia">
+      <thead><tr><th>Proyecto</th><th>Modo</th><th>Conexión actual</th>{% if conectada %}<th>Asignar</th>{% endif %}</tr></thead>
+      <tbody>
+      {% for f in proyectos_meta %}
+      {% set d = f.detalle or {} %}
+      <tr id="agencia-proyecto-{{ f.id }}">
+        <td><a href="{{ url_for('ver_cliente', cliente=f.id, _anchor='settings') }}">{{ f.nombre }}</a><br><code class="vacio" style="padding:0;font-size:.72rem;">{{ f.id }}</code></td>
+        <td>{% if f.modo == "agencia" %}<span class="tag-estado tag-en-uso">agencia</span>{% else %}<span class="tag-estado">propia</span>{% endif %}</td>
+        <td class="admin-detalle">
+          {% if f.modo == "agencia" %}
+            {{ d.ad_account_nombre or d.ad_account_id }}{% if d.moneda %} ({{ d.moneda }}){% endif %} ·
+            {{ d.page_nombre or d.page_id or 'sin Página' }}{% if d.ig_username %} · @{{ d.ig_username }}{% endif %}
+            {% if d.asignado_en %}<br><small>desde {{ d.asignado_en[:10] }}</small>{% endif %}
+          {% elif f.propia_conectada %}
+            Su propia conexión: {{ d.ad_account_nombre or d.ad_account_id }} · {{ d.page_nombre or d.page_id }}
+          {% elif f.app_propia %}
+            App propia registrada, sin conectar
+          {% else %}
+            Sin conexión con Meta
+          {% endif %}
+        </td>
+        {% if conectada %}
+        <td>
+          <form method="post" action="{{ url_for('admin_meta_asignar', cliente=f.id) }}" class="agencia-asignar"
+                {% if f.modo == "propia" and f.propia_conectada %}onsubmit="return confirm('Este proyecto tiene su propia conexión con Meta. Pasarlo a modo agencia la guarda como respaldo (se restaura con «Volver a propia») y sus anuncios pasan a operarse con la cuenta que asignes. ¿Seguir?');"{% endif %}>
+            <select name="ad_account_id" required>
+              <option value="">— cuenta publicitaria —</option>
+              {% for a in activos.ad_accounts %}
+              <option value="{{ a.id }}"{% if d.ad_account_id == a.id %} selected{% endif %}>{{ a.name }} · {{ a.currency or '?' }} · {% if a.activa %}activa{% else %}inactiva{% endif %} · {% if a.origen == "propia" %}propia{% else %}cliente{% endif %}</option>
+              {% endfor %}
+            </select>
+            <select name="page_id">
+              <option value="">— sin Página (solo anuncios) —</option>
+              {% for p in activos.pages %}
+              <option value="{{ p.id }}"{% if d.page_id == p.id %} selected{% endif %}>{{ p.name }}{% if p.ig_username %} (@{{ p.ig_username }}){% endif %} · {% if p.origen == "propia" %}propia{% else %}cliente{% endif %}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn-generar btn-sm"{% if not activos.ad_accounts %} disabled{% endif %}>Asignar</button>
+          </form>
+          {% if f.modo == "agencia" %}
+          <form method="post" action="{{ url_for('admin_meta_desasignar', cliente=f.id) }}" style="display:inline;margin-top:.4rem;"
+                onsubmit="return confirm('¿Volver {{ f.nombre }} a modo propia? Si tenía su propia conexión se restaura; si no, queda sin conexión con Meta hasta que registre su app y conecte.');">
+            <button type="submit" class="btn-rechazar btn-sm">Volver a propia</button>
+          </form>
+          {% endif %}
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
