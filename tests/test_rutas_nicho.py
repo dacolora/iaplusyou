@@ -270,3 +270,25 @@ def test_ver_trae_fuentes_conectadas_y_recolecciones(app, llaves, monkeypatch):
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
     assert "Reddit" in html and "YouTube" in html and "Apify" in html
     assert datos.job_id_recolectar("acme", eid, "youtube") in html and "12 nuevo" in html and "Reddit limitó" in html
+
+
+def test_pagina_tarjetas_sin_llaves(app, monkeypatch):
+    from nicho import datos
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT", "YOUTUBE_API_KEY", "APIFY_TOKEN"):
+        monkeypatch.delenv(v, raising=False)
+    eid = datos.crear_estudio("acme", "X")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "(falta REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USER_AGENT)" in html
+    assert "(falta YOUTUBE_API_KEY)" in html and "(falta APIFY_TOKEN)" in html
+    assert "Puesta a punto" in html
+
+
+def test_pagina_tarjetas_con_llaves(app, llaves):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X", idioma="en")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'name="subreddits"' in html and 'name="periodo"' in html and 'value="year" selected' in html
+    assert 'name="max_videos"' in html and 'name="idioma" value="en"' in html and 'name="region" value="CO"' in html
+    assert 'id="form-apify"' in html and "Reseñas de Amazon" in html and "Comentarios de TikTok" in html
+    assert f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar" in html and "Traer (se cobra)" in html
+    assert "(falta " not in html

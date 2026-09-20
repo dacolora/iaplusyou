@@ -1,6 +1,8 @@
 {# Sección Comentarios de la página del estudio. Contexto: estudio, conteos,
-   fuente_filtro, pagina_comentarios, modos_texto, fuentes_nombre. La Parte 2
-   agrega aquí las tarjetas de Reddit, YouTube y Apify. #}
+   fuente_filtro, pagina_comentarios, modos_texto, fuentes_nombre,
+   fuentes_conectadas, actores_apify, recolecciones, periodos_reddit, max_apify,
+   region_defecto. Texto y CSV corren en la ruta; Reddit, YouTube y Apify
+   encolan `nicho_recolectar` y muestran la barra de progreso mientras vive. #}
 <h3 class="sprint-subtitulo">Comentarios</h3>
 <div class="nicho-fuentes">
   <details class="swap-card" {% if not estudio.comentarios_total %}open{% endif %}>
@@ -22,7 +24,62 @@
       <button type="submit" class="btn-generar btn-sm" {% if estudio.archivado %}disabled{% endif %}>Subir</button>
     </form>
   </details>
+  {% for f in fuentes_conectadas %}
+  <details class="swap-card nicho-fuente-{{ f.tipo }}">
+    <summary class="swap-card-resumen">{{ f.nombre }}{% if f.faltan %} <small class="vacio">(falta {{ f.faltan | join(', ') }})</small>{% elif f.en_curso %} <small class="vacio">(recolectando…)</small>{% endif %}</summary>
+    {% if f.faltan %}
+    <p class="vacio">Configura {{ f.faltan | join(', ') }} en el .env del servidor (Configuración › Puesta a punto) y reinicia los dos servicios.</p>
+    {% endif %}
+    <form method="post" action="{{ url_for('nicho.recolectar', cliente=cliente, eid=estudio.id, fuente=f.tipo) }}" class="form-experimento"{% if f.tipo == 'apify' %} id="form-apify"{% endif %}>
+      {% if f.tipo == 'reddit' %}
+      <label>Palabras clave <input name="palabras_clave" placeholder="foot pain slippers"></label>
+      <label>Subreddits (separados por coma; vacío = toda Reddit) <input name="subreddits" placeholder="Sneakers, BuyItForLife"></label>
+      <label>Links de posts (uno por línea, opcional) <textarea name="links" rows="2"></textarea></label>
+      <div class="fe-opciones">
+        <label>Posts <input type="number" name="max_posts" value="10" min="1" max="25" class="mini-input"></label>
+        <label>Comentarios por post <input type="number" name="max_comentarios_por_post" value="50" min="1" max="200" class="mini-input"></label>
+        <label>Periodo <select name="periodo">{% for p in periodos_reddit %}<option value="{{ p }}"{% if p == 'year' %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+      </div>
+      <small class="vacio">API oficial, gratis para uso propio (100 llamadas por minuto). Si esto se vende como producto, Reddit pide permiso comercial.</small>
+      {% elif f.tipo == 'youtube' %}
+      <label>Palabras clave <input name="palabras_clave" placeholder="best slippers foot pain"></label>
+      <label>Links de videos (uno por línea, opcional) <textarea name="links" rows="2"></textarea></label>
+      <div class="fe-opciones">
+        <label>Videos <input type="number" name="max_videos" value="5" min="1" max="10" class="mini-input"></label>
+        <label>Comentarios por video <input type="number" name="max_comentarios_por_video" value="100" min="1" max="500" class="mini-input"></label>
+        <label>Idioma <input name="idioma" value="{{ estudio.idioma }}" class="mini-input"></label>
+        <label>Región <input name="region" value="{{ region_defecto }}" class="mini-input" placeholder="CO"></label>
+      </div>
+      <small class="vacio">Google permite 100 búsquedas por día por proyecto; cada recolección usa una. Los links no gastan búsqueda.</small>
+      {% else %}
+      <label>Qué traer
+        <select name="actor" id="apify-actor">{% for a in actores_apify %}<option value="{{ a.clave }}" data-ayuda="{{ a.ayuda }}">{{ a.nombre }} · US$ {{ '%.4f' % a.usd_por_resultado }} por resultado</option>{% endfor %}</select>
+      </label>
+      <label>Links (uno por línea) <textarea name="links" rows="3" required></textarea></label>
+      <small class="vacio" id="apify-ayuda">{{ actores_apify[0].ayuda if actores_apify else '' }}</small>
+      <div class="fe-opciones">
+        <label>Máximo de resultados <input type="number" name="max_resultados" id="apify-max" value="200" min="1" max="{{ max_apify }}" class="mini-input"></label>
+        <span class="tag-estado" id="apify-estimado">≈ …</span>
+      </div>
+      <small class="vacio">Se cobra por resultado (aprox.: Apify suma cómputo). Cada clic es una corrida y no se reintenta sola. Usar estos datos es responsabilidad de quien pone el token.</small>
+      {% endif %}
+      <button type="submit" class="btn-generar btn-sm"{% if f.faltan or f.en_curso or estudio.archivado %} disabled{% endif %}>{% if f.tipo == 'apify' %}Traer (se cobra){% else %}Recolectar{% endif %}</button>
+    </form>
+    {% if f.en_curso %}
+    <div class="barra-progreso" id="trabajo-{{ f.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto">Buscando… 0% · 0s</span></div>
+    <script>iniciarPolling({{ f.job_id | tojson }}, {{ ("trabajo-" ~ f.job_id) | tojson }});</script>
+    {% endif %}
+  </details>
+  {% endfor %}
 </div>
+
+{% if recolecciones %}
+<ul class="nicho-recolecciones">
+  {% for r in recolecciones %}
+  <li><small class="vacio">{{ r.fecha }}</small> · {{ fuentes_nombre.get(r.fuente, r.fuente) }}: {{ r.nuevos }} nuevo(s), {{ r.repetidos }} repetido(s){% if r.aviso %} · <span class="tag-estado sprint-aviso">{{ r.aviso }}</span>{% endif %}</li>
+  {% endfor %}
+</ul>
+{% endif %}
 
 {% if conteos %}
 <p class="nicho-conteos">
@@ -58,3 +115,27 @@
   {% endfor %}
 </p>
 {% endif %}
+
+<script>
+  (function () {
+    var form = document.getElementById('form-apify');
+    if (!form) return;
+    var sel = document.getElementById('apify-actor'), max = document.getElementById('apify-max'),
+        out = document.getElementById('apify-estimado'), ayuda = document.getElementById('apify-ayuda');
+    var base = {{ url_for('nicho.apify_estimar', cliente=cliente, eid=estudio.id) | tojson }};
+    function pintar() {
+      var op = sel.options[sel.selectedIndex];
+      if (op && ayuda) ayuda.textContent = op.dataset.ayuda || '';
+      fetch(base + '?actor=' + encodeURIComponent(sel.value) + '&max=' + encodeURIComponent(max.value || '1'))
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { out.textContent = d ? ('≈ ' + d.texto + ' por hasta ' + d.max_resultados + ' resultados (aprox.)') : '≈ ?'; })
+        .catch(function () { out.textContent = '≈ ?'; });
+    }
+    sel.addEventListener('change', pintar);
+    max.addEventListener('input', pintar);
+    pintar();
+    form.addEventListener('submit', function (ev) {
+      if (!confirm('Traer resultados de Apify se cobra: ' + out.textContent + '. ¿Seguimos?')) ev.preventDefault();
+    });
+  })();
+</script>

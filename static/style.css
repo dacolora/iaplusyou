@@ -1708,3 +1708,6 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .estado-nicho-revisando, .estado-nicho-aprobado { background: rgba(62, 207, 142, .2); }
 .estado-nicho-propuesto { background: rgba(124, 92, 255, .15); }
 .estado-nicho-descartado { background: rgba(255, 95, 122, .15); }
+
+/* Nicho · últimas recolecciones (Reddit, YouTube, Apify) */
+.nicho-recolecciones { list-style: none; padding: 0; margin: .6rem 0 0; display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }
