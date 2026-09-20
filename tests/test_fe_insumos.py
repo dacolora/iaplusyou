@@ -66,6 +66,18 @@ def test_voz_larga_se_acelera_o_recorta_en_un_material_derivado(entorno):
     assert args[args.index("-t") + 1] == "1.900"
 
 
+def test_voz_bloque_transcripcion_vacia_cuenta_como_hecha(entorno, monkeypatch):
+    from providers import fal_audio
+    ins, ll = entorno["insumos"], entorno["llamadas"]
+    monkeypatch.setattr(fal_audio, "transcribir_palabras", lambda url, idioma, on_progreso=None:
+                        ll["whisper"].append(url) or {"texto": "", "palabras": [], "costo_usd": 0.01})
+    mat, _ = ins.voz_bloque("acme", "Silencio total", "Rachel", "es", 1500, entorno["carpeta"])
+    assert mat["extra"]["palabras"] == []
+    mat2, costo2 = ins.voz_bloque("acme", "Silencio total", "Rachel", "es", 1500, entorno["carpeta"])
+    assert mat2["id"] == mat["id"] and mat2["extra"]["palabras"] == [] and costo2 == 0.0
+    assert len(ll["whisper"]) == 1              # una transcripción vacía cuenta como hecha: no se repite
+
+
 @_sin_ffmpeg
 def test_clon_registra_medidas_local_y_encola_el_proxy(base_temporal, tmp_path, monkeypatch):
     import trabajos

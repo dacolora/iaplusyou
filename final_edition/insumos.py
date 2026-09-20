@@ -173,7 +173,7 @@ def voz_bloque(cliente, texto_voz, voz, idioma, ventana_ms, carpeta):
                               "recortado": recortado, "local": local}}
         mat, _ = materiales.obtener_o_crear(cliente, h2, _ajustar)
 
-    if not (mat.get("extra") or {}).get("palabras"):
+    if "palabras" not in (mat.get("extra") or {}):
         t = fal_audio.transcribir_palabras(mat["url"], idioma)
         palabras = []
         for p in t.get("palabras") or []:
