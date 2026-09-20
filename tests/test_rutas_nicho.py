@@ -141,6 +141,7 @@ def test_avatar_editar_aprobar_descartar(app):
     assert r.status_code == 302 and r.headers["Location"].endswith(f"/nicho/{eid}")
     a = datos.avatar("acme", sid)
     assert a["estado"] == "aprobado" and sd.persona("acme", a["persona_id"])["nombre"] == "Ana"
+    assert "investigada (con evidencia)" in c.get("/cliente/acme").data.decode()
     c.post(f"/cliente/acme/nicho/avatar/{sid}/descartar")
     assert datos.avatar("acme", sid)["estado"] == "descartado" and sd.persona("acme", a["persona_id"])["archivada"] is True
     nucleo_id = datos.avatares("acme", eid)[0]["id"]
