@@ -134,6 +134,30 @@ def guardar_correo_notificaciones(cliente, correo):
     _json_store.guardar(_path(cliente), datos)
 
 
+FORMAS_META = ("agencia", "propia")
+
+
+def meta_forma(cliente):
+    """Forma de conectar Meta que eligió el cliente ("agencia": Creatv lo
+    gestiona; "propia": su app) o None si todavía no eligió. Es la intención
+    antes de conectar; el estado real de la conexión sigue siendo
+    meta_conexion.modo()."""
+    forma = cargar(cliente).get("meta_forma")
+    return forma if forma in FORMAS_META else None
+
+
+def guardar_meta_forma(cliente, forma):
+    """Guarda (o borra, con None) la forma elegida. No toca Meta ni meta.json."""
+    if forma is not None and forma not in FORMAS_META:
+        raise ValueError(f"Forma no soportada: {forma}")
+    datos = cargar(cliente)
+    if forma is None:
+        datos.pop("meta_forma", None)
+    else:
+        datos["meta_forma"] = forma
+    _json_store.guardar(_path(cliente), datos)
+
+
 PAISES_CALENDARIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE")
 
 
