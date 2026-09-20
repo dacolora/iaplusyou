@@ -395,3 +395,57 @@ def test_rutas_ads_redirigen_a_experimentos(app, base_temporal):
                        (f"/cliente/acme/ads/{aid}/reintentar", {}), (f"/cliente/acme/ads/{aid}/eliminar", {})):
         r = app["c"].post(ruta, data=data)
         assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos"), ruta
+
+
+FORM_PROBAR = {"paises": ["CO", "MX"], "presupuesto_CO": "20000", "presupuesto_MX": "20000", "dias": "7",
+               "tope_total": "500000", "destino_url": "https://tienda.co/p", "edad_min": "18", "edad_max": "55",
+               "objetivo": "OUTCOME_TRAFFIC", "atribucion": "ninguna", "modo": "manual"}
+
+
+def test_probar_crea_reparte_y_encola_en_un_post(app, base_temporal):
+    import experimentos as ex
+    from tests.test_experimentos_db import _pieza_imagen
+    f_co = _pieza(base_temporal)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    img = _pieza_imagen(base_temporal)
+    data = dict(FORM_PROBAR, piezas=[str(f_co), str(clon), str(img)],
+                combinaciones=[f"{f_co}:CO", f"{f_co}:MX", f"{clon}:CO", f"{clon}:MX", f"{img}:MX"])
+    r = app["c"].post("/cliente/acme/experimentos/probar", data=data)
+    assert r.status_code == 302 and "experimentos" in r.headers["Location"]
+    (e,) = ex.cargar("acme")
+    assert e["estado"] == "lanzando" and e["nombre"].startswith("Prueba ") and "3 piezas" in e["nombre"] and "CO, MX" in e["nombre"]
+    assert sorted((p["pieza_id"], p["pais"]) for p in e["piezas"]) == sorted([(f_co, "CO"), (clon, "CO"), (clon, "MX"), (img, "MX")])
+    assert [t["tipo"] for t in app["encolados"]] == ["exp_lanzar"] and app["encolados"][0]["max_intentos"] == 1
+    assert app["encolados"][0]["payload"] == {"cliente": "acme", "experimento_id": e["id"]}
+
+
+def test_probar_no_deja_nada_si_algo_falla(app, base_temporal):
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    c = app["c"]
+    # sin piezas
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[], combinaciones=[]))
+    # presupuesto bajo el mínimo
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"], presupuesto_CO="1"))
+    # país fuera del experimento
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:US"]))
+    # compras sin pixel
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"], objetivo="OUTCOME_SALES"))
+    # pieza ajena
+    c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=["999999"], combinaciones=["999999:CO"]))
+    assert ex.cargar("acme") == [] and app["encolados"] == []
+
+
+def test_probar_exige_meta_conectado(app, monkeypatch, base_temporal):
+    import experimentos as ex
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
+    app["c"].post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"]))
+    assert ex.cargar("acme") == []
+
+
+def test_nombre_experimento_automatico():
+    import datetime
+    import dashboard
+    assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Prueba 20 sep · 3 piezas · CO, MX"
+    assert dashboard.nombre_experimento_automatico(1, ["CO"], datetime.date(2026, 1, 5)) == "Prueba 5 ene · 1 pieza · CO"

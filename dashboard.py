@@ -2804,6 +2804,95 @@ def exp_crear(cliente):
     return volver
 
 
+_MESES_CORTOS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+
+
+def nombre_experimento_automatico(n_piezas, paises, cuando=None):
+    """«Prueba 20 sep · 3 piezas · CO, MX» — el nombre que la galería propone."""
+    cuando = cuando or datetime.now().date()
+    piezas = "1 pieza" if n_piezas == 1 else f"{n_piezas} piezas"
+    return f"Prueba {cuando.day} {_MESES_CORTOS[cuando.month - 1]} · {piezas} · {', '.join(sorted(paises))}"
+
+
+@app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
+def exp_probar(cliente):
+    """La galería primero: un solo POST crea el experimento, reparte las
+    piezas por país y encola el lanzamiento (todo PAUSED en Meta). Valida lo
+    mismo que exp_crear; si algo falla no queda nada creado. Activar sigue
+    siendo un clic aparte."""
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    if meta_conexion.estado(cliente).get("estado") != "conectado":
+        flash("Conecta Meta en Configuración antes de probar piezas.", "error")
+        return volver
+    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    objetivo = request.form.get("objetivo") or ""
+    codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
+    destino = (request.form.get("destino_url") or "").strip()
+    try:
+        piezas_ids = [int(x) for x in request.form.getlist("piezas")]
+        combinaciones = []
+        for c in request.form.getlist("combinaciones"):
+            pid, _, pais = c.partition(":")
+            combinaciones.append((int(pid), pais))
+        dias = int(request.form.get("dias") or 7)
+        tope = float(request.form.get("tope_total") or 0)
+        edad_min = int(request.form.get("edad_min") or 18)
+        edad_max = int(request.form.get("edad_max") or 65)
+        paises = [{"pais": p, "idioma": fe_tipos.PAISES[p]["idioma"],
+                   "presupuesto_dia": float(request.form.get(f"presupuesto_{p}") or 0)} for p in codigos]
+    except ValueError:
+        flash("Revisa los números del formulario.", "error")
+        return volver
+    if not math.isfinite(tope) or any(not math.isfinite(p["presupuesto_dia"]) for p in paises):
+        flash("Revisa los números del formulario.", "error")
+        return volver
+    if not piezas_ids:
+        flash("Marca al menos una pieza en la galería.", "error")
+        return volver
+    combinaciones = [(pid, pais) for pid, pais in combinaciones if pid in piezas_ids and pais in codigos]
+    if not combinaciones:
+        flash("Marca al menos una combinación pieza × país en el paso de revisar.", "error")
+        return volver
+    if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
+            or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
+            or not (13 <= edad_min <= edad_max <= 65)):
+        flash("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s).", "error")
+        return volver
+    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
+    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
+    if bajos:
+        flash(f"El presupuesto diario no alcanza el mínimo de Meta ({minimo} {moneda}) en: {', '.join(bajos)}.", "error")
+        return volver
+    modo = request.form.get("modo") or "manual"
+    if modo not in modos.MODOS:
+        modo = "manual"
+    atribucion = request.form.get("atribucion") or None
+    if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
+        flash("La atribución tiene que ser pixel, tienda o ninguna.", "error")
+        return volver
+    if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
+        flash("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
+              "Configuración, o elige el objetivo de tráfico.", "error")
+        return volver
+    nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(len(piezas_ids), codigos)
+    datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
+                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion)
+    try:
+        eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
+    except experimentos.ErrorCombinacion as e:
+        flash(str(e), "error")
+        return volver
+    job_id = tareas_exp.job_id_lanzar(cliente, eid)
+    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
+                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    if arranco:
+        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+        flash(f"«{nombre}»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", "ok")
+    else:
+        flash(f"«{nombre}» quedó creado; ya se estaba lanzando.", "warn")
+    return volver
+
+
 def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
     """Valida y agrega una pieza (final o clon) a un experimento en armado.
     Devuelve un mensaje de error en español, o None si quedó agregada.
