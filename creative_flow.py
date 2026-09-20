@@ -433,3 +433,15 @@ def pieza_id_por_legado(cliente, legado_id):
     with db.conectar() as con:
         return con.execute(sa.select(db.pieza.c.id).where(
             db.pieza.c.cliente == cliente, db.pieza.c.legado_id == legado_id)).scalar()
+
+
+def piezas_ids_por_legado(cliente):
+    """{legado_id: id numérico de `pieza`} de todos los clones e imágenes del
+    cliente (no finales: esas ya traen `pieza_id` en `finales()`). Una sola
+    consulta para que la pestaña Crear enlace cada tarjeta a la galería de
+    Experimentos sin una consulta por tarjeta."""
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.pieza.c.legado_id, db.pieza.c.id).where(
+            db.pieza.c.cliente == cliente, db.pieza.c.tipo != "final",
+            db.pieza.c.legado_id.isnot(None))).fetchall()
+    return {legado: pid for legado, pid in filas}

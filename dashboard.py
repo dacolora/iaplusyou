@@ -1836,6 +1836,10 @@ def _swap_items(cliente):
 
 def _creative_flow_items(cliente):
     data = creative_flow.cargar(cliente)
+    # Id numérico de la pieza por sesión, UNA consulta para toda la pestaña:
+    # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
+    # (#experimentos?piezas=<pieza_id>). Las finales ya traen su pieza_id.
+    pieza_ids = creative_flow.piezas_ids_por_legado(cliente)
     items = []
     for cf_id, entry in sorted(
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
@@ -1845,6 +1849,7 @@ def _creative_flow_items(cliente):
             "id": cf_id,
             **entry,
             "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
+            "pieza_id": pieza_ids.get(cf_id),
         }
         # Estimado real vía wan3_client.estimate_video() en vez de un número
         # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
@@ -1890,7 +1895,7 @@ def ver_swap(cliente):
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
 PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
-# Rótulos en español del objetivo de Meta en «Nuevo experimento» (Bloque 6).
+# Rótulos en español del objetivo de Meta en «Probar en Meta › Avanzado» (Bloque 6).
 # El valor sigue siendo el enum de Meta; solo cambia lo que se lee.
 NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": "Compras (requiere Pixel)", "OUTCOME_TRAFFIC": "Tráfico (clics al enlace)",
                         "OUTCOME_ENGAGEMENT": "Interacción", "OUTCOME_LEADS": "Clientes potenciales"}
@@ -3854,8 +3859,9 @@ def prod_fotos_subir(cliente, pid):
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/experimento", methods=["POST"])
 def prod_experimento(cliente, pid):
-    """Manda a Experimentos con el formulario «Nuevo experimento» prellenado
-    (nombre y URL de destino) — el JS de esa pestaña lee la query."""
+    """Manda a Experimentos (la galería) con el nombre y la URL de destino del
+    producto ya puestos en el paso 3 de «Probar en Meta» — la plantilla los
+    lee de request.args (exp_nombre, exp_destino)."""
     prod = tiendas.producto(cliente, pid)
     if not prod:
         flash("No encontré ese producto.", "error")

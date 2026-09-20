@@ -295,10 +295,15 @@ def test_tab_experimentos_render_estados(app, base_temporal, estado, con_campana
     r = app["c"].get("/cliente/acme")
     assert r.status_code == 200
     cuerpo = r.data.decode("utf-8")
+    # La galería primero: la pestaña abre con las piezas, sin «+ Nuevo experimento».
+    assert 'id="exp-galeria"' in cuerpo and "+ Nuevo experimento" not in cuerpo
+    # Los botones se miran en las acciones de ESA tarjeta: el «Lanzar a Meta
+    # (en pausa)» del paso 3 de la galería está siempre en la página.
+    acciones = cuerpo.split(f'id="exp-{eid}"')[1].split('<div class="exp-acciones">')[1].split("</div>")[0]
     for texto in esperados:
-        assert texto in cuerpo, f"esperaba '{texto}' en estado {estado}"
+        assert texto in acciones, f"esperaba '{texto}' en estado {estado}"
     for texto in no_esperados:
-        assert texto not in cuerpo, f"no esperaba '{texto}' en estado {estado}"
+        assert texto not in acciones, f"no esperaba '{texto}' en estado {estado}"
 
 
 # ---------- Campañas se fundió en Experimentos (anuncios sueltos) ----------

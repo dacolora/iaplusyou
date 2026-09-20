@@ -370,13 +370,11 @@
             <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar esta pieza?');" style="display:inline;">
               <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
             </form>
-            {% if item.estado == "video_listo" and item.tipo != "imagen" and experimentos_armando %}
-            <form method="post" action="{{ url_for('exp_meter_pieza', cliente=cliente) }}" class="inline exp-meter">
-              <input type="hidden" name="legado_id" value="{{ item.id }}">
-              <select name="experimento_id">{% for e in experimentos_armando %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}</select>
-              <select name="pais">{% for codigo in paises_fe %}<option value="{{ codigo }}">{{ codigo }}</option>{% endfor %}</select>
-              <button type="submit" class="btn-guardar btn-sm">Meter en experimento</button>
-            </form>
+            {# Galería primero: videos e imágenes listos van a Experimentos ya
+               marcados (#experimentos?piezas=<pieza_id>); el reload hace que la
+               pestaña lea el hash y abra los tres pasos. #}
+            {% if item.estado == "video_listo" and item.pieza_id %}
+            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
             {% endif %}
           </div>
         </div>
@@ -451,12 +449,8 @@
             <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
               <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
             </form>
-            {% if f.estado in ("listo", "degradada") and experimentos_armando %}
-            <form method="post" action="{{ url_for('exp_meter_pieza', cliente=cliente) }}" class="inline exp-meter">
-              <input type="hidden" name="legado_id" value="{{ f.id }}">
-              <select name="experimento_id">{% for e in experimentos_armando %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}</select>
-              <button type="submit" class="btn-guardar btn-sm">Meter en experimento</button>
-            </form>
+            {% if f.estado in ("listo", "degradada") and f.pieza_id %}
+            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
             {% endif %}
           </div>
           {% if f.estado in ("listo", "degradada") and f.video_url and f.pieza_id %}
