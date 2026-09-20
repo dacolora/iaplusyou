@@ -273,6 +273,9 @@ def test_crear_con_piezas_es_atomico(base_temporal):
     # sin combinaciones válidas: nada se crea
     with pytest.raises(ex.ErrorCombinacion):
         ex.crear_con_piezas("acme", datos, [(f_co, "MX")])
+    # país del experimento sin ninguna pieza (MX queda sin cobertura): nada se crea
+    with pytest.raises(ex.ErrorCombinacion):
+        ex.crear_con_piezas("acme", datos, [(clon, "CO")])
     assert [x["id"] for x in ex.cargar("acme")] == [eid]
 
 

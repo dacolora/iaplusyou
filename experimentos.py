@@ -277,6 +277,15 @@ def crear_con_piezas(cliente, datos, combinaciones):
         finales.append((pieza_id, pais_ok))
     if not finales:
         raise ErrorCombinacion("Ninguna pieza cabe en los países elegidos: revisa el reparto.")
+    # exp_lanzar rechaza un experimento con un país sin piezas ("Sin piezas
+    # para: …") — pero eso ocurre en el worker, después de gastar el único
+    # intento de la cola. Se valida acá, antes de crear nada, para que la
+    # galería nunca deje un experimento a medio lanzar por un país que el
+    # paso de revisar dejó sin ninguna pieza marcada (o cuya única final cayó
+    # a otro país).
+    faltan = sorted(paises_exp - {pais for _, pais in finales})
+    if faltan:
+        raise ErrorCombinacion(f"Sin piezas para: {', '.join(faltan)}. Quita ese país o marca una pieza para él.")
     ahora = db.ahora()
     atribucion = datos.get("atribucion")
     if atribucion is None:

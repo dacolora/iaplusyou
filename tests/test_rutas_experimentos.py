@@ -433,6 +433,9 @@ def test_probar_no_deja_nada_si_algo_falla(app, base_temporal):
     c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=[str(clon)], combinaciones=[f"{clon}:CO"], objetivo="OUTCOME_SALES"))
     # pieza ajena
     c.post("/cliente/acme/experimentos/probar", data=dict(FORM_PROBAR, piezas=["999999"], combinaciones=["999999:CO"]))
+    # un país del formulario (MX) se queda sin ninguna pieza en el reparto
+    c.post("/cliente/acme/experimentos/probar",
+           data=dict(FORM_PROBAR, piezas=[str(clon)], paises=["CO", "MX"], combinaciones=[f"{clon}:CO"]))
     assert ex.cargar("acme") == [] and app["encolados"] == []
 
 

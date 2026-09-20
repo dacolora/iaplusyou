@@ -2874,7 +2874,8 @@ def exp_probar(cliente):
         flash("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
               "Configuración, o elige el objetivo de tráfico.", "error")
         return volver
-    nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(len(piezas_ids), codigos)
+    n_piezas = len({pid for pid, _ in combinaciones})
+    nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
     datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
                  moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion)
     try:
