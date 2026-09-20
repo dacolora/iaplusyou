@@ -69,7 +69,9 @@
   <button type="button" class="btn-generar btn-sm" id="exp-abrir-pasos">Probar en Meta →</button>
 </div>
 
-<form method="post" action="{{ url_for('exp_probar', cliente=cliente) }}" id="exp-probar" class="exp-pasos" hidden
+{# novalidate: los min/max nativos de un paso oculto (p. ej. el presupuesto de un país sin
+   marcar) bloquearían el envío sin decir nada; el JS avisa y exp_probar valida todo. #}
+<form method="post" action="{{ url_for('exp_probar', cliente=cliente) }}" id="exp-probar" class="exp-pasos" hidden novalidate
       data-minimo="{{ minimo_diario_exp }}" data-moneda="{{ moneda_exp }}">
   <ol class="exp-pasos-nav"><li data-ir="1" class="activo">1 · Dónde</li><li data-ir="2">2 · Cuánto</li><li data-ir="3">3 · Revisar</li></ol>
 
@@ -488,7 +490,21 @@
         irA(destino);
       });
     });
-    casillas.forEach(function (c) { c.addEventListener('change', forzarPaisesDeFinales); });
+    function pasoVisible() {
+      var s = form.querySelector('[data-paso]:not([hidden])');
+      return s ? parseInt(s.dataset.paso, 10) : 0;
+    }
+    // Marcar o desmarcar una pieza con los pasos abiertos: los países de las
+    // finales se recalculan y, si se está en Revisar, la cuadrícula se rearma
+    // (si no, la pieza nueva no tendría fila y exp_probar la dejaría fuera).
+    casillas.forEach(function (c) {
+      c.addEventListener('change', function () {
+        if (form.hidden) return;
+        forzarPaisesDeFinales();
+        if (pasoVisible() === 3) armarCuadricula();
+        refrescarCuenta();
+      });
+    });
     form.querySelectorAll('[name=tope_total], [name=dias], [name^=presupuesto_], .exp-pais-check').forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
     if (nombre) nombre.addEventListener('input', function () { nombre.dataset.tocado = '1'; });
     form.addEventListener('submit', function (ev) {
@@ -501,6 +517,9 @@
       // rehabilitan solo cuando el envío sigue adelante.
       paises.forEach(function (p) { p.disabled = false; });
     });
-    if (q && q.get('piezas') && marcadas().length) { form.hidden = false; forzarPaisesDeFinales(); irA(1); }
+    // El setTimeout deja que cliente.html active la pestaña antes del scroll (como el ?exp= de arriba).
+    if (q && q.get('piezas') && marcadas().length) {
+      setTimeout(function () { form.hidden = false; forzarPaisesDeFinales(); irA(1); }, 0);
+    }
   })();
 </script>
