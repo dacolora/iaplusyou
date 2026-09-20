@@ -22,7 +22,8 @@ import proyectos
 
 log = logging.getLogger("creatv.notificaciones")
 
-TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "tienda", "sprint_lote", "publicado")
+TIPOS = ("propuesta", "ganador", "rechazo_meta", "error_lanzamiento", "tope", "tienda", "sprint_lote", "publicado",
+         "meta_solicitud", "meta_conexion_cliente", "meta_cambio_forma", "meta_conectado")
 
 
 def _config():
@@ -86,3 +87,42 @@ def avisar(cliente, tipo, asunto, cuerpo):
     except Exception as error:  # noqa: BLE001
         log.error("no se pudo registrar el aviso en la bitácora: %s", type(error).__name__)
     return enviado
+
+
+def correos_admin():
+    """Correos verificados de los usuarios con rol admin (usuarios.json),
+    ordenados y sin repetir. [] si no hay o el archivo no se puede leer."""
+    import usuarios  # noqa: PLC0415 — import tardío: usuarios no depende de este módulo, pero así no se acoplan al cargar
+    try:
+        data = usuarios.cargar()
+    except Exception as error:  # noqa: BLE001
+        log.error("no se pudo leer usuarios.json para avisar a los admins: %s", type(error).__name__)
+        return []
+    correos = set()
+    for entry in (data or {}).values():
+        correo = (entry.get("correo") or "").strip()
+        if entry.get("rol") == "admin" and entry.get("correo_verificado") and correo:
+            correos.add(correo)
+    return sorted(correos)
+
+
+def avisar_admin(tipo, asunto, cuerpo, cliente=""):
+    """Aviso para los administradores de la plataforma (spec §2.5): una
+    solicitud de un cliente, una conexión hecha por un cliente, un cambio de
+    forma. Un correo por admin con correo verificado; siempre queda en la
+    bitácora (del proyecto que lo originó, o "_admin"). Devuelve cuántos
+    correos salieron. Nunca lanza."""
+    if tipo not in TIPOS:
+        log.warning("tipo de aviso desconocido: %r", tipo)
+    enviados = 0
+    for correo in correos_admin():
+        try:
+            if enviar(correo, asunto, cuerpo):
+                enviados += 1
+        except Exception as error:  # noqa: BLE001 — defensa extra; enviar ya no lanza
+            log.error("aviso admin %s falló: %s", tipo, type(error).__name__)
+    try:
+        bitacora.registrar(cliente or "_admin", "admin", tipo, f"enviado:{enviados}" if enviados else "sin_correo", asunto)
+    except Exception as error:  # noqa: BLE001
+        log.error("no se pudo registrar el aviso admin en la bitácora: %s", type(error).__name__)
+    return enviados

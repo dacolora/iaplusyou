@@ -110,3 +110,57 @@ def test_avisar_nunca_lanza(smtp_falso, monkeypatch):
     monkeypatch.setattr(notificaciones.proyectos, "correo_notificaciones", lambda c: (_ for _ in ()).throw(RuntimeError("x")))
     monkeypatch.setattr(notificaciones.bitacora, "registrar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("y")))
     assert notificaciones.avisar("acme", "rechazo_meta", "A", "B") is False
+
+
+# ---- avisos a los administradores (spec §2.5) ----
+
+USUARIOS_PRUEBA = {
+    "daniel": {"rol": "admin", "correo": "daniel@creatv.co", "correo_verificado": True},
+    "otro_admin": {"rol": "admin", "correo": "otro@creatv.co", "correo_verificado": False},
+    "repetido": {"rol": "admin", "correo": "daniel@creatv.co", "correo_verificado": True},
+    "acme": {"rol": "cliente", "correo": "acme@cliente.co", "correo_verificado": True},
+}
+
+
+@pytest.fixture()
+def admins_falsos(monkeypatch):
+    import bitacora
+    import notificaciones
+    import usuarios
+    monkeypatch.setattr(usuarios, "cargar", lambda: {k: dict(v) for k, v in USUARIOS_PRUEBA.items()})
+    registros = []
+    monkeypatch.setattr(bitacora, "registrar", lambda *a, **k: registros.append(a))
+    enviados = []
+    monkeypatch.setattr(notificaciones, "enviar", lambda destinatario, asunto, cuerpo, html=None: enviados.append((destinatario, asunto)) or True)
+    return {"registros": registros, "enviados": enviados}
+
+
+def test_correos_admin_solo_verificados_sin_repetir(admins_falsos):
+    import notificaciones
+    assert notificaciones.correos_admin() == ["daniel@creatv.co"]
+
+
+def test_avisar_admin_manda_a_cada_admin_y_deja_bitacora(admins_falsos):
+    import notificaciones
+    n = notificaciones.avisar_admin("meta_solicitud", "Acme pide conectar Meta", "portafolio 777", cliente="acme")
+    assert n == 1 and admins_falsos["enviados"] == [("daniel@creatv.co", "Acme pide conectar Meta")]
+    assert admins_falsos["registros"][-1][:4] == ("acme", "admin", "meta_solicitud", "enviado:1")
+
+
+def test_avisar_admin_sin_admins_ni_smtp_no_lanza(admins_falsos, monkeypatch):
+    import notificaciones
+    import usuarios
+    monkeypatch.setattr(usuarios, "cargar", lambda: {})
+    assert notificaciones.avisar_admin("meta_cambio_forma", "x", "y") == 0
+    assert admins_falsos["registros"][-1][:4] == ("_admin", "admin", "meta_cambio_forma", "sin_correo")
+    # usuarios.json ilegible tampoco tumba nada.
+    def _rompe():
+        raise OSError("disco")
+    monkeypatch.setattr(usuarios, "cargar", _rompe)
+    assert notificaciones.avisar_admin("meta_conectado", "x", "y") == 0
+
+
+def test_tipos_nuevos_registrados():
+    import notificaciones
+    for tipo in ("meta_solicitud", "meta_conexion_cliente", "meta_cambio_forma", "meta_conectado"):
+        assert tipo in notificaciones.TIPOS
