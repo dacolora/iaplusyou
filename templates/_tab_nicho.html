@@ -1,0 +1,50 @@
+{# Pestaña Nicho. Contexto de nicho.rutas.contexto(cliente): estudios_nicho,
+   productos_nicho, idiomas_nicho, min_comentarios_nicho. #}
+<div class="panel-cabecera">
+  <h2>Nicho</h2>
+  <p class="vacio">Un estudio recoge comentarios reales de la gente sobre un producto o nicho y Claude los convierte en avatares con evidencia. Aprobar un sub-avatar crea una persona para Sprints y Crear. Nada se genera sin ver el costo antes.</p>
+</div>
+
+<div class="sprints-lista">
+  {% for e in estudios_nicho %}
+  <a class="swap-card sprint-card" href="{{ url_for('nicho.ver', cliente=cliente, eid=e.id) }}">
+    <div>
+      <strong>{{ e.nombre }}</strong> <span class="tag-estado estado-nicho estado-nicho-{{ e.estado }}">{{ e.estado }}</span>
+      <br><small class="vacio">{{ e.producto or 'sin producto' }} · {{ e.comentarios_total }} comentario(s) de {{ e.fuentes | length }} fuente(s) · {{ e.avatares_aprobados }} de {{ e.avatares_total }} avatar(es) aprobado(s)</small>
+    </div>
+  </a>
+  {% else %}
+  <p class="vacio">Todavía no hay estudios. Crea el primero abajo: con {{ min_comentarios_nicho }} comentarios pegados a mano ya salen avatares.</p>
+  {% endfor %}
+</div>
+
+<details class="swap-card" id="nuevo-estudio" {% if not estudios_nicho %}open{% endif %}>
+  <summary class="swap-card-resumen">+ Nuevo estudio</summary>
+  <form method="post" action="{{ url_for('nicho.crear', cliente=cliente) }}" class="form-experimento" id="form-estudio">
+    <div class="fe-opciones">
+      <label>Nombre <input name="nombre" required maxlength="120" placeholder="Detergente en cápsulas · Suecia"></label>
+      <label>Producto del catálogo
+        <select name="catalogo_id" id="estudio-catalogo">
+          <option value="">(escribir a mano)</option>
+          {% for p in productos_nicho %}<option value="{{ p.id }}" data-descripcion="{{ p.nombre }}{% if p.descripcion %}: {{ p.descripcion }}{% endif %}">{{ p.nombre }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Idioma de los avatares
+        <select name="idioma">{% for codigo, nombre in idiomas_nicho.items() %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}</select>
+      </label>
+    </div>
+    <label>Qué vendemos <textarea name="producto" id="estudio-producto" rows="2" placeholder="Cápsulas de detergente sin plástico, dosis exacta, olor suave"></textarea></label>
+    <label>Qué investigar (nicho, mercado, dolores, palabras clave) <textarea name="tema" rows="3" placeholder="Gente que lava en casa y odia cargar garrafas; mercado sueco; reseñas de Via, Ariel y pods"></textarea></label>
+    <button type="submit" class="btn-generar btn-sm">Crear estudio</button>
+  </form>
+</details>
+<script>
+  (function () {
+    var sel = document.getElementById('estudio-catalogo'), prod = document.getElementById('estudio-producto');
+    if (!sel || !prod) return;
+    sel.addEventListener('change', function () {
+      var op = sel.options[sel.selectedIndex];
+      if (op && op.dataset.descripcion && !prod.value.trim()) prod.value = op.dataset.descripcion;
+    });
+  })();
+</script>
