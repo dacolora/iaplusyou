@@ -123,25 +123,42 @@
     var sel = document.getElementById('apify-actor'), max = document.getElementById('apify-max'),
         out = document.getElementById('apify-estimado'), ayuda = document.getElementById('apify-ayuda');
     var base = {{ url_for('nicho.apify_estimar', cliente=cliente, eid=estudio.id) | tojson }};
+    // Puerta de dinero: solo se envía con el estimado de la combinación (actor,
+    // tope) que está a la vista. `pedidas` numera las peticiones para descartar
+    // las respuestas superadas (cambiar 200 por 1000 y enviar antes de que
+    // llegue la respuesta, o respuestas que llegan desordenadas) y `ultimo`
+    // guarda la última respuesta buena CON su combinación.
+    var pedidas = 0, ultimo = null;
     function pintar() {
       var op = sel.options[sel.selectedIndex];
       if (op && ayuda) ayuda.textContent = op.dataset.ayuda || '';
-      fetch(base + '?actor=' + encodeURIComponent(sel.value) + '&max=' + encodeURIComponent(max.value || '1'))
+      var clave = sel.value, n = max.value || '1', mia = ++pedidas;
+      out.textContent = '≈ …';
+      fetch(base + '?actor=' + encodeURIComponent(clave) + '&max=' + encodeURIComponent(n))
         .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (d) { out.textContent = d ? ('≈ ' + d.texto + ' por hasta ' + d.max_resultados + ' resultados (aprox.)') : '≈ ?'; })
-        .catch(function () { out.textContent = '≈ ?'; });
+        .then(function (d) {
+          if (mia !== pedidas) return;                 // respuesta superada por otra petición
+          if (!d) { ultimo = null; out.textContent = '≈ ?'; return; }
+          ultimo = {clave: clave, max: n, texto: d.texto, max_resultados: d.max_resultados};
+          out.textContent = '≈ ' + ultimo.texto + ' por hasta ' + ultimo.max_resultados + ' resultados (aprox.)';
+        })
+        .catch(function () { if (mia === pedidas) { ultimo = null; out.textContent = '≈ ?'; } });
     }
     sel.addEventListener('change', pintar);
     max.addEventListener('input', pintar);
     pintar();
     form.addEventListener('submit', function (ev) {
-      if (out.textContent.indexOf('US$') < 0) {
+      if (!ultimo || ultimo.clave !== sel.value || ultimo.max !== (max.value || '1')) {
         ev.preventDefault();
-        pintar();
+        ev.stopPropagation();                          // que los listeners globales no marquen el botón
         alert('Todavía no hay estimado de Apify; espera un momento y vuelve a intentar.');
+        pintar();
         return;
       }
-      if (!confirm('Traer resultados de Apify se cobra: ' + out.textContent + '. ¿Seguimos?')) ev.preventDefault();
+      if (!confirm('Traer resultados de Apify se cobra: ≈ ' + ultimo.texto + ' por hasta ' + ultimo.max_resultados + ' resultados (aprox.). ¿Seguimos?')) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
     });
   })();
 </script>
