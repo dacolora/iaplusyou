@@ -118,10 +118,11 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
     # NUNCA un valor de llave en el HTML (ni en la tarjeta ni en otra parte).
     for valor in VALORES_FALSOS.values():
         assert valor not in html, valor
-    # Meta: el botón de conectar también vive en Configuración (y sigue en Experimentos).
-    assert "Conecta tu cuenta de Meta" in cfg   # bloque de registro/conexión de la app del proyecto
+    # Meta: la tarjeta también vive en Configuración (y sigue en Experimentos). Sin forma
+    # elegida ni conexión se ve la elección (spec 2026-09-20 §1).
+    assert "¿Cómo quieres conectar Meta?" in cfg
     exp = html[html.index('<section id="tab-experimentos"'):html.index('<section id="tab-sprints"')]
-    assert "Conecta tu cuenta de Meta" in exp   # sin app registrada se pide registrarla; con app, «Conectar con Meta»
+    assert "¿Cómo quieres conectar Meta?" in exp
 
 
 def test_render_todo_falta(app):
