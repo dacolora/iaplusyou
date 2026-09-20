@@ -87,6 +87,7 @@ def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
     r = director.compilar("acme", _sesion())
     assert reg.kwargs[0]["model"] == director.MODEL and reg.kwargs[0]["max_tokens"] == director.MAX_TOKENS
     assert "Wan 3.0" in reg.kwargs[0]["system"] and "No dialogue. No background music." in reg.kwargs[0]["system"]
+    assert "Hard cut." in reg.kwargs[0]["system"] and "Shot 2 (4-8s): Hard cut. " in r["prompt_a"]
     assert "IDEA: Image 1 gira sobre la piedra" in reg.kwargs[0]["messages"][0]["content"]
     assert r["prompt_a"].count("Shot ") == 2 and "Shot 1 (0-4s)" in r["prompt_a"] and "Shot 2 (4-8s)" in r["prompt_a"]
     assert r["prompt_a"].endswith("Recordatorio final: el producto permanece solo y sin nadie durante todo el video.")

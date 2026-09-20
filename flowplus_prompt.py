@@ -192,18 +192,29 @@ CAMARAS = {
 }
 
 
+# Cómo se pasa de un plano al siguiente, con la frase literal de la guía
+# multi-shot de Wan («Hard cut transition», alibabacloud.com/help/en/model-studio/
+# text-to-video-prompt). Sin decirlo, Wan improvisa: en la prueba real del
+# 2026-09-20 (docs/investigacion/2026-09-20-prueba-tokens-idioma.md) fundió los
+# dos planos con la sandalia semitransparente. Va en inglés como el cierre de
+# sonido: es un token del fabricante, no texto para la persona.
+CORTE = "Hard cut."
+
+
 def _bloque_planos(planos, con_sonido):
     """Líneas `Shot N (a-bs): plano, cámara. Acción. Sonido: ...` (el sonido
-    solo cuando la sesión lo pide). Un id de cámara desconocido es un error
-    de programación (el director ya lo validó): se lanza, no se disimula."""
+    solo cuando la sesión lo pide); a partir del segundo plano la línea abre con
+    `Hard cut.` (CORTE). Un id de cámara desconocido es un error de programación
+    (el director ya lo validó): se lanza, no se disimula."""
     lineas = []
-    for p in planos:
+    for i, p in enumerate(planos):
         cam = CAMARAS.get(p.get("camara"))
         if cam is None:
             raise ValueError(f"Movimiento de cámara desconocido: {p.get('camara')!r}")
         accion = str(p.get("accion") or "").strip().rstrip(".")
         accion = accion[:1].upper() + accion[1:]
-        linea = f"Shot {int(p['n'])} ({int(p['inicio_s'])}-{int(p['fin_s'])}s): {p.get('plano', '').strip()}, {cam}. {accion}."
+        corte = f"{CORTE} " if i > 0 else ""
+        linea = f"Shot {int(p['n'])} ({int(p['inicio_s'])}-{int(p['fin_s'])}s): {corte}{p.get('plano', '').strip()}, {cam}. {accion}."
         sonido = str(p.get("sonido") or "").strip().rstrip(".")
         if con_sonido and sonido:
             linea += f" Sonido: {sonido}."

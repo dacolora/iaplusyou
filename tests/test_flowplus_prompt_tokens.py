@@ -88,7 +88,7 @@ def test_con_planos_el_bloque_shot_reemplaza_a_escena_y_cierra_con_la_frase_ofic
     assert not any(l.startswith("ESCENA: ") for l in lineas) and not any(l.startswith("SONIDO: ") for l in lineas)
     i1 = lineas.index("Shot 1 (0-4s): primer plano, la cámara avanza en línea recta hacia el sujeto, despacio y a velocidad constante, sin zoom. "
                       "La sandalia (Image 1) reposa sobre la piedra; una brisa mueve la correa. Sonido: brisa, roce de la correa.")
-    i2 = lineas.index("Shot 2 (4-8s): plano medio, la cámara rodea al sujeto en un arco corto de menos de 45 grados. "
+    i2 = lineas.index("Shot 2 (4-8s): Hard cut. plano medio, la cámara rodea al sujeto en un arco corto de menos de 45 grados. "
                       "La cámara rodea la sandalia y revela la playa. Sonido: olas lejanas.")
     i_cierre = lineas.index("No dialogue. No background music.")
     i_evitar = next(i for i, l in enumerate(lineas) if l.startswith("EVITAR: "))
@@ -113,3 +113,17 @@ def test_camara_desconocida_en_un_plano_lanza():
     malo = [dict(PLANOS[0], camara="grua_lunar")]
     with pytest.raises(ValueError):
         flowplus_prompt.armar("gira", REF, enfoque="producto", planos=malo)
+
+
+def test_el_primer_plano_no_lleva_corte_y_los_siguientes_si():
+    """Prueba real 2026-09-20: sin decir cómo pasar de un plano a otro, Wan improvisó
+    un fundido con la sandalia semitransparente. La guía multi-shot de Wan escribe
+    «Hard cut transition» al abrir el segundo plano: se antepone la frase literal
+    a cada Shot a partir del segundo, nunca al primero."""
+    tres = PLANOS + [{"n": 3, "inicio_s": 8, "fin_s": 12, "plano": "plano general", "camara": "estatico",
+                      "accion": "la sandalia queda sola en la piedra", "sonido": "olas"}]
+    p = flowplus_prompt.armar("gira", REF, enfoque="producto", con_sonido=False, planos=tres)
+    lineas = [l for l in p.split("\n") if l.startswith("Shot ")]
+    assert lineas[0].startswith("Shot 1 (0-4s): primer plano,") and "Hard cut" not in lineas[0]
+    assert lineas[1].startswith("Shot 2 (4-8s): Hard cut. plano medio,")
+    assert lineas[2].startswith("Shot 3 (8-12s): Hard cut. plano general,")

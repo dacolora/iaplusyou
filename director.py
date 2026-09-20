@@ -71,6 +71,7 @@ REGLAS
 8. Idioma de los textos: {idioma}. Los tokens (Image N, Video N) siempre en inglés.
 9. planos_b: misma intención y mismos activos; el primer plano usa OTRO movimiento de cámara y otro arranque; diferencia_b lo explica en una frase.
 10. Los planos de cada versión, juntos, no pasan de {max_chars} caracteres.
+11. El sistema antepone «Hard cut.» a cada plano a partir del segundo: no escribas transiciones, fundidos ni disolvencias entre planos.
 
 SALIDA (JSON estricto, sin texto alrededor ni markdown):
 {{"planos": [{{"n": 1, "inicio_s": 0, "fin_s": 4, "plano": "...", "camara": "dolly_in", "accion": "...", "sonido": "..."}}],
