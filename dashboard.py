@@ -2816,15 +2816,9 @@ def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
     candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
     if not candidata:
         return "Esa pieza no está disponible (o no está lista)."
-    if candidata["tipo"] == "final":
-        pais_final = candidata["pais"]
-        if pais not in (None, "") and pais != pais_final:
-            return f"Esa final es de {pais_final}; no se puede meter a otro país."
-        pais = pais_final
-    else:
-        paises_experimento = {p["pais"] for p in ex["paises"]}
-        if pais not in paises_experimento:
-            return f"Ese país no está en el experimento (elige entre {', '.join(sorted(paises_experimento))})."
+    pais, error = experimentos.validar_combinacion(candidata, {p["pais"] for p in ex["paises"]}, pais)
+    if error:
+        return error
     experimentos.agregar_pieza(cliente, experimento_id, pieza_id, pais)
     return None
 

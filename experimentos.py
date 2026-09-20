@@ -235,6 +235,73 @@ def agregar_pieza(cliente, experimento_id, pieza_id, pais):
             extra={})).inserted_primary_key[0]
 
 
+class ErrorCombinacion(ValueError):
+    """Una combinación pieza × país no es válida: el experimento no se crea."""
+
+
+def validar_combinacion(candidata, paises_experimento, pais):
+    """Regla de reparto (spec §0/§3): una final solo va a su país; un clon o
+    una imagen solo a un país del experimento. Devuelve (pais_efectivo, error)."""
+    if candidata["tipo"] == "final":
+        pais_final = candidata["pais"]
+        if pais not in (None, "") and pais != pais_final:
+            return pais_final, f"Esa final es de {pais_final}; no se puede meter a otro país."
+        return pais_final, None
+    if pais not in paises_experimento:
+        return pais, f"Ese país no está en el experimento (elige entre {', '.join(sorted(paises_experimento))})."
+    return pais, None
+
+
+def crear_con_piezas(cliente, datos, combinaciones):
+    """Crea el experimento y adjunta las combinaciones (pieza_id, pais) en UNA
+    transacción. Una final pedida en otro país se ignora en silencio (la UI la
+    ofrece solo en el suyo); una pieza ajena/inexistente o un clon a un país
+    fuera del experimento es ErrorCombinacion y no queda nada creado.
+    Duplicados se colapsan. No encola nada."""
+    elegibles_por_id = {e["pieza_id"]: e for e in elegibles(cliente)}
+    paises_exp = {p["pais"] for p in datos["paises"]}
+    finales = []
+    vistas = set()
+    for pieza_id, pais in combinaciones:
+        cand = elegibles_por_id.get(pieza_id)
+        if not cand:
+            raise ErrorCombinacion("Una de las piezas no está disponible (o no está lista).")
+        pais_ok, error = validar_combinacion(cand, paises_exp, pais)
+        if error and cand["tipo"] == "final":
+            continue
+        if error:
+            raise ErrorCombinacion(error)
+        if (pieza_id, pais_ok) in vistas:
+            continue
+        vistas.add((pieza_id, pais_ok))
+        finales.append((pieza_id, pais_ok))
+    if not finales:
+        raise ErrorCombinacion("Ninguna pieza cabe en los países elegidos: revisa el reparto.")
+    ahora = db.ahora()
+    atribucion = datos.get("atribucion")
+    if atribucion is None:
+        atribucion = atribucion_sugerida(cliente)
+    if atribucion not in ATRIBUCIONES:
+        raise ValueError(f"Atribución no válida: {atribucion!r} (usa pixel, tienda o ninguna).")
+    with db.conectar() as con:
+        eid = con.execute(db.experimento.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=datos["nombre"], modo=datos.get("modo", "manual"),
+            reglas={}, paises=[_pais_nuevo(p) for p in datos["paises"]], moneda=datos["moneda"],
+            tope_total=float(datos["tope_total"]), dias=int(datos["dias"]), objetivo_meta=datos["objetivo_meta"],
+            atribucion=atribucion, estado="armando", gasto_acumulado=0.0, legado=False,
+            destino_url=datos["destino_url"], edad_min=int(datos.get("edad_min", 18)), edad_max=int(datos.get("edad_max", 65)),
+            extra={})).inserted_primary_key[0]
+        for pieza_id, pais in finales:
+            con.execute(db.experimento_pieza.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, experimento_id=eid, pieza_id=pieza_id,
+                pais=pais, estado="en_cola", veredicto="pendiente", escalon_rescate=0, extra={}))
+        con.execute(db.evento.insert().values(
+            cliente=cliente, creado_en=ahora, experimento_id=eid, tipo="creado",
+            mensaje=f"Experimento creado desde la galería con {len(finales)} anuncio(s) en {len(paises_exp)} país(es)",
+            datos={}))
+    return eid
+
+
 def experimento_de_pieza(cliente, ep_id):
     """Id del experimento dueño de una pieza, o None si no existe (para
     ese cliente). Usado por lanzador._experimento_de_pieza en vez de que

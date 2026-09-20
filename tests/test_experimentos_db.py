@@ -251,3 +251,37 @@ def test_marcar_pieza_atomico_con_lecturas_intercaladas(base_temporal):
     ex.actualizar_extra("acme", eid, lambda e: {**e, "b": 1})
     t.join()
     assert ex.obtener("acme", eid)["extra"] == {"a": 1, "b": 1}
+
+
+def test_crear_con_piezas_es_atomico(base_temporal):
+    import experimentos as ex
+    f_co = _pieza(base_temporal)
+    clon = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_2")
+    datos = dict(nombre="Prueba", paises=PAISES, objetivo_meta="OUTCOME_TRAFFIC", dias=7, tope_total=100.0,
+                 destino_url="https://t", moneda="COP", edad_min=18, edad_max=65, modo="manual", atribucion="ninguna")
+    eid = ex.crear_con_piezas("acme", datos, [(f_co, "CO"), (f_co, "MX"), (clon, "CO"), (clon, "MX"), (clon, "MX")])
+    e = ex.obtener("acme", eid)
+    # la final solo en su país (MX se ignora), el clon en ambos, sin duplicar
+    assert sorted((p["pieza_id"], p["pais"]) for p in e["piezas"]) == sorted([(f_co, "CO"), (clon, "CO"), (clon, "MX")])
+    assert any(ev["tipo"] == "creado" for ev in e["eventos"])
+    # país fuera del experimento para un clon: nada se crea
+    with pytest.raises(ex.ErrorCombinacion):
+        ex.crear_con_piezas("acme", datos, [(clon, "US")])
+    # pieza ajena o inexistente: nada se crea
+    with pytest.raises(ex.ErrorCombinacion):
+        ex.crear_con_piezas("acme", datos, [(999999, "CO")])
+    # sin combinaciones válidas: nada se crea
+    with pytest.raises(ex.ErrorCombinacion):
+        ex.crear_con_piezas("acme", datos, [(f_co, "MX")])
+    assert [x["id"] for x in ex.cargar("acme")] == [eid]
+
+
+def test_validar_combinacion():
+    import experimentos as ex
+    final = {"tipo": "final", "pais": "CO"}
+    assert ex.validar_combinacion(final, {"CO", "MX"}, "MX") == ("CO", "Esa final es de CO; no se puede meter a otro país.")
+    assert ex.validar_combinacion(final, {"CO", "MX"}, "CO") == ("CO", None)
+    assert ex.validar_combinacion(final, {"CO", "MX"}, None) == ("CO", None)
+    clon = {"tipo": "clon", "pais": None}
+    assert ex.validar_combinacion(clon, {"CO", "MX"}, "US") == ("US", "Ese país no está en el experimento (elige entre CO, MX).")
+    assert ex.validar_combinacion(clon, {"CO", "MX"}, "MX") == ("MX", None)
