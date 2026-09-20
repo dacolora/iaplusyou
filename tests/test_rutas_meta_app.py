@@ -55,6 +55,10 @@ def test_conectar_sin_app_avisa_y_no_redirige_a_meta(app):
 
 
 def test_flowmarketing_sin_app_pide_registrarla_y_no_muestra_conectar(app):
+    """Con la forma «propia» elegida (spec 2026-09-20 §3) y sin app registrada
+    se ve el formulario de la app y todavía no el enlace de conectar."""
+    import proyectos
+    proyectos.guardar_meta_forma("acme", "propia")
     r = app["c"].get("/cliente/acme#ads")
     html = r.get_data(as_text=True)
     assert 'action="/cliente/acme/meta/app"' in html

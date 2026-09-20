@@ -1,0 +1,32 @@
+{# Sin forma elegida y sin conexión: el cliente elige (spec §1). Contexto:
+   agencia_disponible, cuenta_actual. Sin ids: la tarjeta se incluye dos veces. #}
+<div class="idea-block" style="border-left:3px solid var(--accent);">
+  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">¿Cómo quieres conectar Meta?</div></div></div>
+  <p class="vacio" style="padding-top:0;">Para publicar anuncios y contenido en tu Página de Facebook y tu Instagram. Elige una forma; puedes cambiarla después.</p>
+  <div class="meta-formas">
+    <div class="meta-forma meta-forma-recomendada">
+      <p class="meta-forma-titulo">Que Creatv lo gestione <span class="tag-estado">Recomendada</span></p>
+      <ul class="meta-forma-puntos">
+        <li>Cinco minutos. No creas nada en Meta.</li>
+        <li>El acceso no caduca.</li>
+        <li>Creatv solo ve lo que compartas y lo puedes revocar cuando quieras desde tu Business Suite.</li>
+      </ul>
+      {% if agencia_disponible %}
+      <form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}"><input type="hidden" name="forma" value="agencia"><button type="submit" class="btn-generar btn-sm">Elegir</button></form>
+      {% else %}
+      <button type="button" class="btn-generar btn-sm" disabled>Elegir</button>
+      <p class="vacio" style="padding-top:.3rem;"><em>Disponible en cuanto Creatv termine de activarlo.</em>
+        {% if cuenta_actual is defined and cuenta_actual and cuenta_actual.rol == "admin" %}<a href="{{ url_for('admin_meta') }}">Conectar la agencia →</a>{% endif %}</p>
+      {% endif %}
+    </div>
+    <div class="meta-forma">
+      <p class="meta-forma-titulo">Con mi propia app de Meta</p>
+      <ul class="meta-forma-puntos">
+        <li>Control total. Media hora.</li>
+        <li>Creas una app en developers.facebook.com y la pasas a modo Live.</li>
+        <li>Vuelves a conectar cada 60 días.</li>
+      </ul>
+      <form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}"><input type="hidden" name="forma" value="propia"><button type="submit" class="btn-guardar btn-sm">Elegir</button></form>
+    </div>
+  </div>
+</div>

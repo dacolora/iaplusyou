@@ -1,0 +1,70 @@
+{# Forma «agencia» sin conectar todavía (spec §2): guía, buscador por
+   portafolio, resultados filtrados, respaldo «Avisar a Creatv». Contexto:
+   agencia_publica (sin token), agencia_portafolio, agencia_activos,
+   agencia_activos_error, agencia_solicitud. Sin ids: se incluye dos veces. #}
+{% set ag = agencia_publica or {} %}
+<div class="idea-block" style="border-left:3px solid var(--accent);">
+  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">Que Creatv lo gestione</div></div></div>
+  <p class="vacio" style="padding-top:0;">
+    Comparte tu cuenta publicitaria y tu Página con Creatv desde tu Business Suite, como con cualquier agencia. Creatv solo ve lo que compartas y lo puedes revocar cuando quieras.
+    <form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}" style="display:inline;"><input type="hidden" name="forma" value="propia"><button type="submit" class="btn-sm">¿Prefieres usar tu propia app? Cambiar</button></form>
+  </p>
+  <p class="meta-id-creatv">ID de Creatv <code>{{ ag.business_id }}</code>
+    <button type="button" class="btn-sm" data-copiar="{{ ag.business_id }}" onclick="navigator.clipboard && navigator.clipboard.writeText(this.dataset.copiar)">Copiar</button>
+    <small>{{ ag.business_nombre }}</small></p>
+  <ol class="vacio" style="padding-top:0;margin-top:0;">
+    <li>Entra a <a href="https://business.facebook.com/settings/partners" target="_blank" rel="noopener">business.facebook.com</a> › <em>Configuración del negocio</em> › <em>Socios</em> › <em>Agregar</em> › <em>Dar acceso a un socio a tus activos</em> y pega el ID de Creatv. Si Meta te pide activar la autenticación en dos pasos del portafolio, hazlo: es requisito suyo para compartir.</li>
+    <li>Marca lo que Creatv va a operar: en <em>Cuentas publicitarias</em>, tu cuenta con <strong>Administrar campañas</strong>; en <em>Páginas</em>, tu Página con <strong>Crear anuncios</strong> y, si quieres publicar Reels y posts, también <strong>Crear contenido</strong>; en <em>Cuentas de Instagram</em>, tu cuenta con lo mismo (opcional).</li>
+    <li>Copia el <strong>ID de tu portafolio comercial</strong>: <em>Configuración del negocio</em> › <em>Información del negocio</em>.</li>
+    <li>Pégalo aquí y pulsa <strong>Buscar mis activos</strong>.</li>
+  </ol>
+  <form method="post" action="{{ url_for('meta_agencia_buscar', cliente=cliente) }}" class="meta-buscar">
+    <label>ID de tu portafolio comercial <input name="portafolio_id" required inputmode="numeric" pattern="[0-9]{5,20}" value="{{ agencia_portafolio or '' }}"></label>
+    <button type="submit" class="btn-generar btn-sm">Buscar mis activos</button>
+  </form>
+
+  {% if agencia_activos_error %}<p class="tag-error">No pude leer tus activos: {{ agencia_activos_error }}</p>{% endif %}
+  {% if agencia_activos is not none %}
+    {% if agencia_activos.ad_accounts %}
+    <form method="post" action="{{ url_for('meta_agencia_conectar', cliente=cliente) }}" class="meta-activos">
+      <input type="hidden" name="portafolio_id" value="{{ agencia_portafolio }}">
+      <fieldset><legend>Tu cuenta publicitaria</legend>
+        {% for a in agencia_activos.ad_accounts %}
+        <label><input type="radio" name="ad_account_id" value="{{ a.id }}" required{% if loop.first %} checked{% endif %}> {{ a.name }} · {{ a.id }} · {{ a.currency or '?' }}</label>
+        {% endfor %}
+      </fieldset>
+      <fieldset><legend>Tu Página</legend>
+        {% for p in agencia_activos.pages %}
+        <label><input type="radio" name="page_id" value="{{ p.id }}"{% if loop.first %} checked{% endif %}> {{ p.name }}{% if p.ig_username %} · @{{ p.ig_username }}{% endif %}</label>
+        {% endfor %}
+        <label><input type="radio" name="page_id" value=""{% if not agencia_activos.pages %} checked{% endif %}> Sin Página (solo anuncios)</label>
+        {% if agencia_activos.paginas_sin_dueno %}
+        <label>ID de tu Página (Meta no nos dijo de quién es cada Página compartida) <input name="page_id_manual" inputmode="numeric" pattern="[0-9]*"></label>
+        {% endif %}
+      </fieldset>
+      <button type="submit" class="btn-generar">Conectar</button>
+    </form>
+    {% else %}
+    <p class="tag-error">Todavía no vemos activos compartidos desde el portafolio {{ agencia_portafolio }}. A veces Meta tarda unos minutos: revisa que el ID de Creatv sea el de arriba y que hayas marcado la cuenta y la Página.</p>
+    <form method="post" action="{{ url_for('meta_agencia_buscar', cliente=cliente) }}" style="display:inline;">
+      <input type="hidden" name="portafolio_id" value="{{ agencia_portafolio }}"><input type="hidden" name="refrescar" value="1">
+      <button type="submit" class="btn-guardar btn-sm">Volver a buscar</button>
+    </form>
+    <details class="meta-avisar"><summary>Avisar a Creatv para que lo termine a mano</summary>
+      <form method="post" action="{{ url_for('meta_agencia_avisar', cliente=cliente) }}">
+        <input type="hidden" name="portafolio_id" value="{{ agencia_portafolio }}">
+        <label>ID de tu cuenta publicitaria (opcional, empieza por act_) <input name="ad_account_id"></label>
+        <label>ID de tu Página (opcional) <input name="page_id"></label>
+        <label>Nota (opcional) <textarea name="nota" maxlength="500" rows="2"></textarea></label>
+        <button type="submit" class="btn-guardar btn-sm">Avisar a Creatv</button>
+      </form>
+    </details>
+    {% endif %}
+  {% endif %}
+
+  {% if agencia_solicitud %}
+  <p class="vacio" style="padding-top:0;">Solicitud enviada el {{ (agencia_solicitud.creado_en or '')[:10] }}: Creatv la está revisando y te avisa por correo.
+    <form method="post" action="{{ url_for('meta_agencia_avisar_cancelar', cliente=cliente) }}" style="display:inline;"><button type="submit" class="btn-rechazar btn-sm">Cancelar solicitud</button></form>
+  </p>
+  {% endif %}
+</div>

@@ -1,0 +1,28 @@
+{# Forma «propia» sin app registrada (spec §3): la guía corregida — token
+   de usuario y el paso a modo Live, que es lo que fallaba. Sin ids. #}
+<div class="idea-block" style="border-left:3px solid var(--accent);">
+  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">Registra tu app de Meta</div></div></div>
+  <p class="vacio" style="padding-top:0;">
+    Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena.
+    Se crea una sola vez en <a href="https://developers.facebook.com/apps/creation/" target="_blank" rel="noopener">developers.facebook.com</a>.
+    {% if agencia_disponible %}<form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}" style="display:inline;"><input type="hidden" name="forma" value="agencia"><button type="submit" class="btn-sm">¿Prefieres que Creatv lo gestione? Cambiar</button></form>{% endif %}
+  </p>
+  <ol class="vacio" style="padding-top:0;margin-top:0;">
+    <li>Crea la app (tipo <strong>Negocio</strong>) y elige tu <strong>portafolio comercial</strong>.</li>
+    <li>Casos de uso: <em>Crear y administrar anuncios (API de marketing)</em>, <em>Medir datos de rendimiento</em>, <em>Administrar todos los aspectos de tu Página</em> y, si vas a publicar Reels, <em>Administrar mensajes y contenido en Instagram</em>.</li>
+    <li>En <em>Inicio de sesión con Facebook para empresas › Configuraciones</em>, crea una configuración con <strong>token de usuario</strong> (el de usuario del sistema no sirve: Meta lo excluye para el portafolio dueño de la app), activos Páginas y Cuentas publicitarias (e Instagram si aplica) y los permisos
+      <code>ads_management, ads_read, business_management, pages_show_list, pages_read_engagement, pages_manage_ads, pages_manage_posts, instagram_basic, instagram_content_publish</code>
+      (los que no aparezcan, agrégalos primero desde <em>Casos de uso › Personalizar</em>). Copia el <strong>identificador de configuración</strong>.</li>
+    <li>En <em>Inicio de sesión con Facebook para empresas › Configurar</em>, agrega como URI de redireccionamiento válido: <code>{{ meta_redirect_uri }}</code></li>
+    <li>En <em>Configuración › Básica</em>: nombre, correo de contacto, URL de términos, URL de política de privacidad, ícono 1024×1024 sin logos de Meta, categoría, propósito y «Eliminación de datos» (URL con instrucciones). Copia el <strong>identificador de la app</strong> y la <strong>clave secreta</strong>.</li>
+    <li><strong>Arriba del panel, «Modo de la app»: pásala de Desarrollo a Live.</strong> Sin esto Meta rechaza cada anuncio (subcódigo 1885183). En Live sin App Review solo pueden usar la app las personas con rol en ella: conecta con el Facebook que la administra.</li>
+    <li>Pega los tres datos aquí, guarda y pulsa «Conectar con Meta».</li>
+  </ol>
+  <form method="post" action="{{ url_for('meta_app_guardar', cliente=cliente) }}" autocomplete="off" style="display:grid;gap:.5rem;max-width:32rem;">
+    <label>Identificador de la app <input name="app_id" required inputmode="numeric" pattern="[0-9]+"></label>
+    <label>Clave secreta de la app <input name="app_secret" type="password" required></label>
+    <label>Identificador de configuración de inicio de sesión <input name="login_config_id" required inputmode="numeric" pattern="[0-9]+"></label>
+    <button type="submit" class="btn-generar">Guardar app de Meta</button>
+  </form>
+  <p class="vacio" style="padding-top:.4rem;"><em>Tu acceso caduca a los 60 días: cuando pase, esta tarjeta dirá «Meta ya no acepta la conexión» y con «Volver a conectar» queda listo.</em></p>
+</div>

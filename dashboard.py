@@ -66,6 +66,7 @@ import lanzador
 import acciones
 import decisor
 import modos
+import notificaciones
 import organico
 import propuestas
 import cifrado
@@ -1354,6 +1355,30 @@ def ver_cliente(cliente):
     modo_meta = meta_conexion.MODO_AGENCIA if datos_meta.get("modo") == meta_conexion.MODO_AGENCIA else "propia"
     agencia_conectada = meta_agencia.conectada() if modo_meta == meta_conexion.MODO_AGENCIA else False
     meta_detalle = meta_conexion._detalle(datos_meta)
+    # El cliente elige cómo conectar (spec 2026-09-20): forma = intención,
+    # modo = estado real. Con conexión y sin forma, la forma es el modo.
+    meta_forma = proyectos.meta_forma(cliente)
+    if modo_meta == meta_conexion.MODO_AGENCIA:
+        meta_forma = "agencia"
+    elif meta_forma is None and (datos_meta.get("token") or meta_app):
+        # Conectado o con app registrada antes de que existiera la elección: propia.
+        meta_forma = "propia"
+    agencia_disponible = meta_agencia.conectada()
+    agencia_publica = meta_agencia.publica() if agencia_disponible else None  # id y nombre del Business, nunca token
+    agencia_pendiente = meta_forma == "agencia" and modo_meta != meta_conexion.MODO_AGENCIA
+    agencia_solicitud = meta_agencia.solicitud(cliente) if agencia_pendiente else None
+    agencia_portafolio = agencia_activos = agencia_activos_error = None
+    if agencia_pendiente and agencia_disponible:
+        agencia_portafolio = _portafolio_valido(request.args.get("agencia_portafolio"))
+        if agencia_portafolio:
+            try:
+                agencia_activos = meta_agencia.activos_de_portafolio(
+                    agencia_portafolio, cliente=cliente, forzar=request.args.get("refrescar") == "1")
+            except meta_conexion.MetaConexionError as e:
+                agencia_activos_error = cola.sin_token(str(e))
+    motivo_bloqueo_forma = None
+    if meta_conectado or modo_meta == meta_conexion.MODO_AGENCIA:
+        motivo_bloqueo_forma = _bloqueo_cambio_forma(cliente, experimentos_lista=experimentos_exp)
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
     # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
@@ -1425,6 +1450,14 @@ def ver_cliente(cliente):
         modo_meta=modo_meta,
         agencia_conectada=agencia_conectada,
         meta_detalle=meta_detalle,
+        meta_forma=meta_forma,
+        agencia_disponible=agencia_disponible,
+        agencia_publica=agencia_publica,
+        agencia_solicitud=agencia_solicitud,
+        agencia_portafolio=agencia_portafolio,
+        agencia_activos=agencia_activos,
+        agencia_activos_error=agencia_activos_error,
+        motivo_bloqueo_forma=motivo_bloqueo_forma,
         meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
@@ -1461,7 +1494,7 @@ def ver_cliente(cliente):
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
         llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app),
-                              modo_meta=modo_meta, agencia_conectada=agencia_conectada),
+                              modo_meta=modo_meta, agencia_conectada=agencia_conectada, meta_forma=meta_forma),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
         canales_org=canales_org,
@@ -1622,7 +1655,7 @@ PASOS_META_AGENCIA = [
 ]
 
 
-def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="propia", agencia_conectada=False):
+def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="propia", agencia_conectada=False, meta_forma=None):
     """Tarjetas de Configuración › Puesta a punto. Devuelve una lista de dicts
     {id, nombre, para_que, costo, estado, url, url_texto, variables, faltan,
     nota, pasos, opcional} donde `estado` es «configurada» (todas las
@@ -1640,6 +1673,11 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
             # Meta en modo agencia: la conexión es de Creatv, no del proyecto.
             presentes = ["conexión de agencia de Creatv"] if agencia_conectada else []
             faltan = [] if agencia_conectada else ["conexión de agencia de Creatv (la conecta el administrador)"]
+            nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
+        elif s.get("por_proyecto") and meta_forma == "agencia":
+            # Eligió que Creatv lo gestione pero aún no compartió/conectó.
+            presentes = []
+            faltan = ["conexión de agencia: pendiente de que compartas tus activos con Creatv (Configuración › Meta)"]
             nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
         elif s.get("por_proyecto"):
             # Meta: la app es del proyecto (clientes/<c>/meta_app.json), no del .env.
@@ -2672,7 +2710,8 @@ def _ir_a_flowmarketing(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
-MENSAJE_MODO_AGENCIA = "Este proyecto lo gestiona Creatv en Meta; pídele al administrador cualquier cambio."
+MENSAJE_MODO_AGENCIA = ("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
+                        "en Configuración › Meta (con nada en marcha).")
 
 
 def _bloqueo_modo_agencia(cliente):
@@ -2876,6 +2915,222 @@ def meta_desconectar(cliente):
     else:
         flash("Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio.", "ok")
     return _ir_a_flowmarketing(cliente)
+
+
+# ---------- Meta: el cliente elige cómo conectar (spec 2026-09-20) ----------
+# «forma» (proyectos.meta_forma) es lo que el cliente eligió; «modo»
+# (meta_conexion.modo) es el estado real. Autoservicio del modo agencia: el
+# cliente comparte sus activos con el Business de Creatv, pega su id de
+# portafolio, ve SOLO los activos de ese portafolio y conecta; si no los ve,
+# deja una solicitud para el admin. Ningún token pasa por acá.
+
+_RE_PORTAFOLIO = re.compile(r"^\d{5,20}$")
+
+
+def _ir_a_meta(cliente):
+    # La elección de forma y las guías viven en Configuración › Meta.
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
+def _portafolio_valido(texto):
+    texto = (texto or "").strip()
+    return texto if _RE_PORTAFOLIO.match(texto) else None
+
+
+def _bloqueo_cambio_forma(cliente, experimentos_lista=None):
+    """None si el proyecto puede cambiar de forma; si no, el motivo (spec §4):
+    experimentos vivos o publicaciones orgánicas en curso."""
+    lista = experimentos.cargar(cliente) if experimentos_lista is None else experimentos_lista
+    vivos = sum(1 for e in lista if e.get("estado") in experimentos.ESTADOS_VIVOS)
+    en_curso = sum(1 for p in organico.listar(cliente) if p.get("estado") in ("en_cola", "publicando"))
+    if not vivos and not en_curso:
+        return None
+    partes = []
+    if vivos:
+        partes.append(f"{vivos} experimento{'s' if vivos != 1 else ''} vivo{'s' if vivos != 1 else ''}")
+    if en_curso:
+        partes.append(f"{en_curso} publicaci{'ones' if en_curso != 1 else 'ón'} en curso")
+    return "Termina o cierra primero: " + " · ".join(partes)
+
+
+@app.route("/cliente/<cliente>/meta/forma", methods=["POST"])
+def meta_forma(cliente):
+    """El cliente elige cómo conectar Meta. Solo la preferencia: no toca Meta
+    ni meta.json. Con una conexión propia viva, cambiar exige nada en marcha."""
+    if not _mismo_origen():
+        abort(403)
+    forma = (request.form.get("forma") or "").strip()
+    if forma not in proyectos.FORMAS_META:
+        flash("Elige una de las dos formas de conectar.", "error")
+        return _ir_a_meta(cliente)
+    if forma == "agencia" and not meta_agencia.conectada():
+        flash("Esa opción todavía no está disponible: Creatv está terminando de activarla.", "error")
+        return _ir_a_meta(cliente)
+    if meta_conexion.modo(cliente) == meta_conexion.MODO_AGENCIA:
+        flash(MENSAJE_MODO_AGENCIA, "error")
+        return _ir_a_meta(cliente)
+    if (meta_conexion.cargar(cliente) or {}).get("token") and forma != proyectos.meta_forma(cliente):
+        motivo = _bloqueo_cambio_forma(cliente)
+        if motivo:
+            flash(motivo, "error")
+            return _ir_a_meta(cliente)
+    proyectos.guardar_meta_forma(cliente, forma)
+    bitacora.registrar(cliente, "meta", "forma", "ok", f"forma elegida: {forma} (por {session.get('usuario')})")
+    if forma == "agencia":
+        flash("Que Creatv lo gestione: sigue los pasos de la tarjeta de Meta.", "ok")
+    else:
+        flash("Con tu propia app: sigue los pasos de la tarjeta de Meta.", "ok")
+    return _ir_a_meta(cliente)
+
+
+@app.route("/cliente/<cliente>/meta/agencia/buscar", methods=["POST"])
+def meta_agencia_buscar(cliente):
+    """Valida el id del portafolio y manda a la página del proyecto con
+    ?agencia_portafolio= (ver_cliente hace la consulta; «Volver a buscar»
+    agrega refrescar=1 para saltar el caché de 10 min)."""
+    if not _mismo_origen():
+        abort(403)
+    portafolio = _portafolio_valido(request.form.get("portafolio_id"))
+    if not portafolio:
+        flash("Escribe el id de tu portafolio comercial (solo números).", "error")
+        return _ir_a_meta(cliente)
+    extra = {"refrescar": "1"} if request.form.get("refrescar") == "1" else {}
+    return redirect(url_for("ver_cliente", cliente=cliente, agencia_portafolio=portafolio, _anchor="settings", **extra))
+
+
+@app.route("/cliente/<cliente>/meta/agencia/conectar", methods=["POST"])
+def meta_agencia_conectar(cliente):
+    """Autoservicio: el cliente eligió cuenta y Página entre los activos de SU
+    portafolio y queda conectado sin esperar al admin. Los ids se revalidan
+    acá contra lo que Meta devuelve (nunca se confía en el navegador)."""
+    if not _mismo_origen():
+        abort(403)
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
+    if not meta_agencia.conectada():
+        flash("Creatv todavía no activó esta opción; inténtalo más tarde.", "error")
+        return _ir_a_meta(cliente)
+    portafolio = _portafolio_valido(request.form.get("portafolio_id"))
+    ad_account_id = (request.form.get("ad_account_id") or "").strip()
+    page_id = (request.form.get("page_id") or "").strip() or None
+    page_id_manual = (request.form.get("page_id_manual") or "").strip() or None
+    if not portafolio or not ad_account_id:
+        flash("Falta el id de tu portafolio o la cuenta publicitaria.", "error")
+        return _ir_a_meta(cliente)
+    try:
+        activos = meta_agencia.activos_de_portafolio(portafolio, cliente=cliente)
+    except meta_conexion.MetaConexionError as e:
+        flash(f"No pude leer tus activos: {cola.sin_token(str(e))}", "error")
+        return _ir_a_meta(cliente)
+    if ad_account_id not in {a["id"] for a in activos["ad_accounts"]}:
+        flash("Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar.", "error")
+        return _ir_a_meta(cliente)
+    if page_id and page_id not in {p["id"] for p in activos["pages"]}:
+        flash("Esa Página no aparece entre las de tu portafolio; vuelve a buscar.", "error")
+        return _ir_a_meta(cliente)
+    if not page_id and page_id_manual:
+        if not activos["paginas_sin_dueno"] or not meta_agencia.pagina_de_socio(page_id_manual):
+            flash("Esa Página no está compartida con Creatv; revisa el paso 2 de la guía.", "error")
+            return _ir_a_meta(cliente)
+        page_id = page_id_manual
+    try:
+        detalle = meta_agencia.asignar(cliente, ad_account_id, page_id,
+                                       asignado_por=f"cliente:{session.get('usuario')}", portafolio_id=portafolio)
+    except meta_conexion.MetaConexionError as e:
+        flash(f"No pude conectar: {cola.sin_token(str(e))}", "error")
+        return _ir_a_meta(cliente)
+    proyectos.guardar_meta_forma(cliente, "agencia")
+    nombre = proyectos.nombre_visible(cliente)
+    cuenta = detalle.get("ad_account_nombre") or detalle.get("ad_account_id")
+    pagina = detalle.get("page_nombre") or detalle.get("page_id") or "sin Página"
+    bitacora.registrar(cliente, "meta", "agencia", "ok", f"conectado por el cliente {session.get('usuario')}: {cuenta} · {pagina}")
+    notificaciones.avisar_admin(
+        "meta_conexion_cliente", f"{nombre} se conectó a Meta (agencia)",
+        f"El proyecto {nombre} ({cliente}) conectó por su cuenta: cuenta {cuenta} ({detalle.get('ad_account_id')}) · "
+        f"Página {pagina} · portafolio {portafolio}.\nRevísalo en el panel de administración › Meta (agencia).",
+        cliente=cliente)
+    flash(f"Listo: Creatv ya gestiona tu Meta con {cuenta} · {pagina}.", "ok")
+    if detalle.get("cambio_cuenta"):
+        flash("La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse.", "warn")
+    if page_id and not detalle.get("ig_username"):
+        flash("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook.", "warn")
+    if not page_id:
+        flash("Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada.", "warn")
+    return _ir_a_meta(cliente)
+
+
+@app.route("/cliente/<cliente>/meta/agencia/avisar", methods=["POST"])
+def meta_agencia_avisar(cliente):
+    """Respaldo: el cliente no vio sus activos y pide que Creatv termine la
+    conexión a mano. Deja la solicitud y avisa a los admins."""
+    if not _mismo_origen():
+        abort(403)
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
+    portafolio = _portafolio_valido(request.form.get("portafolio_id"))
+    if not portafolio:
+        flash("Escribe el id de tu portafolio comercial (solo números).", "error")
+        return _ir_a_meta(cliente)
+    try:
+        sol = meta_agencia.solicitar(cliente, portafolio, ad_account_id=request.form.get("ad_account_id"),
+                                     page_id=request.form.get("page_id"), nota=request.form.get("nota"),
+                                     usuario=session.get("usuario"))
+    except meta_conexion.MetaConexionError as e:
+        flash(str(e), "error")
+        return _ir_a_meta(cliente)
+    proyectos.guardar_meta_forma(cliente, "agencia")
+    nombre = proyectos.nombre_visible(cliente)
+    bitacora.registrar(cliente, "meta", "agencia", "solicitud",
+                       f"portafolio {portafolio} · cuenta {sol['ad_account_id'] or '?'} · Página {sol['page_id'] or '?'}")
+    notificaciones.avisar_admin(
+        "meta_solicitud", f"{nombre} pide conectar Meta (agencia)",
+        f"El proyecto {nombre} ({cliente}) compartió sus activos pero no los vio desde Configuración.\n"
+        f"Portafolio {portafolio} · cuenta {sol['ad_account_id'] or 'no indicada'} · Página {sol['page_id'] or 'no indicada'}.\n"
+        f"Nota: {sol['nota'] or '—'}\nAsígnalo en el panel de administración › Meta (agencia).",
+        cliente=cliente)
+    flash("Listo: Creatv recibió tu solicitud y te avisa por correo cuando quede conectado.", "ok")
+    return _ir_a_meta(cliente)
+
+
+@app.route("/cliente/<cliente>/meta/agencia/avisar/cancelar", methods=["POST"])
+def meta_agencia_avisar_cancelar(cliente):
+    if not _mismo_origen():
+        abort(403)
+    if meta_agencia.borrar_solicitud(cliente):
+        bitacora.registrar(cliente, "meta", "agencia", "ok", f"solicitud cancelada por {session.get('usuario')}")
+        flash("Solicitud cancelada.", "ok")
+    else:
+        flash("No había ninguna solicitud pendiente.", "warn")
+    return _ir_a_meta(cliente)
+
+
+@app.route("/cliente/<cliente>/meta/agencia/salir", methods=["POST"])
+def meta_agencia_salir(cliente):
+    """Agencia → propia por decisión del cliente (spec §4): solo con nada en
+    marcha; desasigna (restaura su conexión propia si la tenía) y avisa."""
+    if not _mismo_origen():
+        abort(403)
+    if meta_conexion.modo(cliente) != meta_conexion.MODO_AGENCIA:
+        flash("Este proyecto no está en modo agencia.", "warn")
+        return _ir_a_meta(cliente)
+    motivo = _bloqueo_cambio_forma(cliente)
+    if motivo:
+        flash(motivo, "error")
+        return _ir_a_meta(cliente)
+    meta_agencia.desasignar(cliente)
+    restaurada = bool((meta_conexion.cargar(cliente) or {}).get("token"))
+    proyectos.guardar_meta_forma(cliente, "propia")
+    nombre = proyectos.nombre_visible(cliente)
+    bitacora.registrar(cliente, "meta", "agencia", "ok", f"vuelve a modo propia (por el cliente {session.get('usuario')})")
+    notificaciones.avisar_admin("meta_cambio_forma", f"{nombre} dejó el modo agencia",
+                                f"El proyecto {nombre} ({cliente}) volvió a usar su propia app de Meta"
+                                + (" (su conexión anterior se restauró)." if restaurada else " (sin conexión todavía)."),
+                                cliente=cliente)
+    flash("Listo: este proyecto vuelve a usar su propia app de Meta. "
+          + ("Tu conexión anterior se restauró." if restaurada else "Sigue los pasos para registrar tu app y conectar."), "ok")
+    return _ir_a_meta(cliente)
 
 
 # ---------- Meta en modo agencia: panel del admin (/admin/meta) ----------

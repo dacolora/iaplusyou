@@ -395,9 +395,11 @@ def test_proyecto_asignado_con_agencia_caida(app, monkeypatch):
 
 
 def test_proyecto_en_modo_propia_sigue_igual(app, monkeypatch):
+    """Sin forma elegida y sin conexión, el proyecto ve la elección (spec
+    2026-09-20 §1), nunca «Gestionado por Creatv»."""
     monkeypatch.setattr(mc, "estado", lambda c: {"estado": "sin_conectar", "verificado": True, "detalle": {}})
     html = app["admin"].get("/cliente/acme").get_data(as_text=True)
-    assert "Gestionado por Creatv" not in html and "Registra tu app de Meta" in html
+    assert "Gestionado por Creatv" not in html and "¿Cómo quieres conectar Meta?" in html
 
 
 @pytest.mark.parametrize("ruta, metodo", [
