@@ -8,6 +8,7 @@ toca la API: las pruebas la reemplazan. El modelo es el del proyecto
 verificados contra la referencia de Anthropic (tabla del 2026-06-24).
 """
 import json
+import logging
 import math
 import re
 
@@ -15,6 +16,8 @@ import marca
 import proyectos
 from nicho import datos
 from nicho.fuentes.base import MIN_CITA
+
+log = logging.getLogger(__name__)
 
 MIN_COMENTARIOS = 20
 MAX_COMENTARIOS = 600
@@ -39,7 +42,13 @@ IDIOMAS = {"es": "español", "en": "inglés", "pt": "portugués", "sv": "sueco",
 
 
 class AnalisisInvalido(RuntimeError):
-    """Claude no devolvió lo pedido (JSON roto, claves faltantes, corte)."""
+    """Claude no devolvió lo pedido (JSON roto, claves faltantes, corte). Los
+    tokens quedan en 0 salvo que quien la lance ya haya cobrado la llamada
+    (`_llamar` los pone antes de subir el error): el intento fallido también
+    se registra como gasto (spec: "on failure after paying, register what
+    was paid")."""
+    tokens_entrada = 0
+    tokens_salida = 0
 
 
 def modelo_actual():
@@ -265,13 +274,16 @@ def parsear_nucleos(texto, ids_validos):
 def parsear_subs(texto):
     """-> sub-avatares con las claves de datos.AVATAR_EDITABLES + evidencia
     (sin verificar todavía). Sin nombre o sin deseo se descarta; el resto lo
-    normaliza datos.validar_campos_avatar (base, conciencia, listas, largos)."""
+    normaliza datos.validar_campos_avatar (base, conciencia, listas, largos).
+    Filtra TODOS los crudos antes de topar a MAX_SUBS_POR_NUCLEO: si Claude
+    manda algunos inválidos primero, los válidos que vienen después no se
+    pierden por cortar la lista cruda de entrada."""
     data = _json_objeto(texto)
     crudos = data.get("sub_avatares")
     if not isinstance(crudos, list):
         raise AnalisisInvalido("El JSON no trae la lista «sub_avatares».")
     limpios = []
-    for c in crudos[:MAX_SUBS_POR_NUCLEO + 2]:
+    for c in crudos:
         if not isinstance(c, dict):
             continue
         if not _str(c.get("nombre")) or not _str(c.get("deseo")):
@@ -281,7 +293,7 @@ def parsear_subs(texto):
         limpios.append(datos.validar_campos_avatar(campos))
     if not limpios:
         raise AnalisisInvalido("Ningún sub-avatar venía completo.")
-    return limpios
+    return limpios[:MAX_SUBS_POR_NUCLEO]
 
 
 # ----------------------------------------------------------- evidencia ---
@@ -314,27 +326,57 @@ ETAPA_SUBS = "Armando sub-avatares"
 
 def _llamar(texto, max_tokens):
     """Una llamada a Claude (modelo del proyecto). Devuelve (texto, tokens de
-    entrada, tokens de salida) — los tokens alimentan el gasto real. Las
-    pruebas reemplazan esta función."""
+    entrada, tokens de salida) — los tokens alimentan el gasto real. El uso
+    se lee ANTES de mirar `refusal`/`max_tokens`: en cualquiera de los dos
+    casos Claude ya cobró la llamada, así que la `AnalisisInvalido` que sube
+    lleva `tokens_entrada`/`tokens_salida` puestos. Las pruebas reemplazan
+    esta función."""
     import anthropic
     from generador_prompts import MODEL, _api_key
     client = anthropic.Anthropic(api_key=_api_key())
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": texto}])
+    uso = getattr(resp, "usage", None)
+    entrada = int(getattr(uso, "input_tokens", 0) or 0)
+    tok_salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason == "refusal":
-        raise AnalisisInvalido("Claude rechazó la solicitud.")
+        e = AnalisisInvalido("Claude rechazó la solicitud.")
+        e.tokens_entrada, e.tokens_salida = entrada, tok_salida
+        raise e
     salida = "".join(b.text for b in resp.content if b.type == "text").strip()
     if resp.stop_reason == "max_tokens":
-        raise AnalisisInvalido("La respuesta de Claude se cortó por largo (max_tokens).")
-    uso = getattr(resp, "usage", None)
-    return salida, int(getattr(uso, "input_tokens", 0) or 0), int(getattr(uso, "output_tokens", 0) or 0)
+        e = AnalisisInvalido("La respuesta de Claude se cortó por largo (max_tokens).")
+        e.tokens_entrada, e.tokens_salida = entrada, tok_salida
+        raise e
+    return salida, entrada, tok_salida
+
+
+def _llamar_contando(texto, max_tokens, tokens):
+    """Envuelve `_llamar`: suma sus tokens a la lista `tokens` (`[entrada,
+    salida]`, mutada in place) tanto si la llamada sale bien como si sube
+    `AnalisisInvalido` — un corte por `max_tokens` o un rechazo ya se cobró,
+    así que también cuenta. Devuelve el texto de la respuesta, o repropaga el
+    error tras contarlo."""
+    try:
+        texto_resp, entrada, salida = _llamar(texto, max_tokens)
+    except AnalisisInvalido as e:
+        tokens[0] += e.tokens_entrada
+        tokens[1] += e.tokens_salida
+        raise
+    tokens[0] += entrada
+    tokens[1] += salida
+    return texto_resp
 
 
 def generar(cliente, estudio_id, avanzar=None):
     """Las dos pasadas (spec §4.2, §4.5). Pasada 1 inválida: sube la excepción
     y no se guarda nada. Pasada 2: un núcleo que falla queda con `error` y sin
     sub-avatares; si TODOS fallan, sube AnalisisInvalido. No escribe en la
-    base: el llamador (la tarea) guarda con datos.guardar_generacion."""
+    base: el llamador (la tarea) guarda con datos.guardar_generacion.
+    Cualquier `AnalisisInvalido` que salga de acá (pasada 1 inválida, un
+    fallo de `_llamar`, o el "todos los núcleos fallaron") lleva los tokens
+    acumulados hasta ese momento: el intento ya se cobró y la tarea necesita
+    esa cifra para registrar el gasto igual."""
     avanzar = avanzar or (lambda etapa, detalle=None: None)
     est = datos.estudio(cliente, estudio_id)
     if not est:
@@ -346,25 +388,28 @@ def generar(cliente, estudio_id, avanzar=None):
     por_id = {c["id"]: c for c in seleccion}
     marca_nombre = proyectos.nombre_visible(cliente)
     avanzar(ETAPA_NUCLEOS)
-    texto, entrada, salida = _llamar(armar_prompt_nucleos(est, seleccion, marca_nombre), MAX_TOKENS_NUCLEOS)
-    tokens = [entrada, salida]
-    nucleos = parsear_nucleos(texto, set(por_id))
-    guia = marca.guia_efectiva(cliente) or ""
-    resultado, errores = [], []
-    for i, n in enumerate(nucleos):
-        avanzar(ETAPA_SUBS, f"{i + 1}/{len(nucleos)}: {n['nombre']}")
-        propios = [por_id[cid] for cid in n["comentarios"]]
-        try:
-            t2, e2, s2 = _llamar(armar_prompt_subs(est, n, propios, guia, marca_nombre), MAX_TOKENS_SUBS)
-            tokens[0] += e2
-            tokens[1] += s2
-            subs = [verificar_evidencia(s, por_id) for s in parsear_subs(t2)]
-            resultado.append({**n, "sub_avatares": subs})
-        except Exception as e:  # noqa: BLE001 — un núcleo que falla no pierde a los demás (spec §4.5)
-            errores.append(f"{n['nombre']}: {e}")
-            resultado.append({**n, "sub_avatares": [], "error": str(e)[:300]})
-    if errores and len(errores) == len(nucleos):
-        raise AnalisisInvalido("Ningún núcleo produjo sub-avatares: " + " | ".join(errores)[:400])
+    tokens = [0, 0]
+    try:
+        texto = _llamar_contando(armar_prompt_nucleos(est, seleccion, marca_nombre), MAX_TOKENS_NUCLEOS, tokens)
+        nucleos = parsear_nucleos(texto, set(por_id))
+        guia = marca.guia_efectiva(cliente) or ""
+        resultado, errores = [], []
+        for i, n in enumerate(nucleos):
+            avanzar(ETAPA_SUBS, f"{i + 1}/{len(nucleos)}: {n['nombre']}")
+            propios = [por_id[cid] for cid in n["comentarios"]]
+            try:
+                t2 = _llamar_contando(armar_prompt_subs(est, n, propios, guia, marca_nombre), MAX_TOKENS_SUBS, tokens)
+                subs = [verificar_evidencia(s, por_id) for s in parsear_subs(t2)]
+                resultado.append({**n, "sub_avatares": subs})
+            except Exception as e:  # noqa: BLE001 — un núcleo que falla no pierde a los demás (spec §4.5)
+                log.exception("Núcleo «%s» falló en la pasada 2", n["nombre"])
+                errores.append(f"{n['nombre']}: {e}")
+                resultado.append({**n, "sub_avatares": [], "error": str(e)[:300]})
+        if errores and len(errores) == len(nucleos):
+            raise AnalisisInvalido("Ningún núcleo produjo sub-avatares: " + " | ".join(errores)[:400])
+    except AnalisisInvalido as e:
+        e.tokens_entrada, e.tokens_salida = tokens[0], tokens[1]
+        raise
     subs_todos = [s for n in resultado for s in n["sub_avatares"]]
     resumen = {
         "comentarios": len(seleccion), "nucleos": len(resultado), "subs": len(subs_todos),

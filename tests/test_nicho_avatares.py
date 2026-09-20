@@ -91,6 +91,18 @@ def test_parsear_subs_y_verificar_evidencia():
         avatares.parsear_subs(json.dumps({"sub_avatares": [{"nombre": "", "deseo": ""}]}))
 
 
+def test_parsear_subs_topa_despues_de_filtrar():
+    """3 inválidos primero, 5 válidos después: el tope se aplica sobre los
+    válidos, no sobre la lista cruda (si no, los inválidos del principio se
+    comerían el cupo y se perderían válidos reales)."""
+    from nicho import avatares
+    invalidos = [{"nombre": "", "deseo": ""} for _ in range(3)]
+    validos = [dict(SUB_JSON["sub_avatares"][0], nombre=f"Válido {i}") for i in range(5)]
+    subs = avatares.parsear_subs(json.dumps({"sub_avatares": invalidos + validos}))
+    assert len(subs) == avatares.MAX_SUBS_POR_NUCLEO == 4
+    assert [s["nombre"] for s in subs] == [f"Válido {i}" for i in range(4)]
+
+
 def test_prompts_incluyen_contexto():
     from nicho import avatares
     estudio = {"nombre": "Detergente", "producto": "Cápsulas sin plástico", "tema": "lavar en casa, Suecia", "idioma": "sv"}
@@ -162,3 +174,43 @@ def test_generar_falla_limpio(base_temporal, monkeypatch):
     monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: respuestas.pop(0))
     with pytest.raises(avatares.AnalisisInvalido):
         avatares.generar("acme", eid)                                     # TODOS los núcleos fallaron en la pasada 2
+
+
+def test_generar_pasada_1_invalida_carga_los_tokens_en_el_error(base_temporal, monkeypatch):
+    """I1: el intento se cobró aunque la pasada 1 no sirviera — la
+    AnalisisInvalido que sale de generar() debe traer esos tokens."""
+    from nicho import avatares, datos
+    eid = _estudio_listo(datos)
+    monkeypatch.setattr(avatares, "_llamar", lambda texto, max_tokens: ("{}", 1000, 20))
+    with pytest.raises(avatares.AnalisisInvalido) as exc:
+        avatares.generar("acme", eid)
+    assert exc.value.tokens_entrada == 1000 and exc.value.tokens_salida == 20
+
+
+def test_generar_nucleo_cortado_por_llamar_cuenta_sus_tokens(base_temporal, monkeypatch):
+    """I1: un núcleo que revienta dentro de `_llamar` (rechazo/max_tokens en
+    la vida real) no pierde sus tokens: quedan en el resumen final aunque ese
+    núcleo se descarte, y los demás núcleos siguen su curso."""
+    from nicho import avatares, datos
+    eid = _estudio_listo(datos)
+    ids = [c["id"] for c in datos.comentarios_para_generar("acme", eid)]
+    nucleos = {"nucleos": [{"nombre": "Sin peso", "deseo": "Quiero lavar sin cargar", "resumen": "r", "comentarios": ids[:10]},
+                           {"nombre": "Sin goteo", "deseo": "Quiero que no gotee", "resumen": "r2", "comentarios": ids[10:20]}]}
+    sub = dict(SUB_JSON["sub_avatares"][0], evidencia=[{"comentario_id": ids[10], "cita": "la garrafa pesa demasiado"}])
+    llamadas = []
+
+    def _llamar_falso(texto, max_tokens):
+        llamadas.append(texto)
+        if len(llamadas) == 1:
+            return json.dumps(nucleos), 1000, 200
+        if len(llamadas) == 2:
+            e = avatares.AnalisisInvalido("cortado")
+            e.tokens_entrada, e.tokens_salida = 500, 8000
+            raise e
+        return json.dumps({"sub_avatares": [sub]}), 700, 300
+    monkeypatch.setattr(avatares, "_llamar", _llamar_falso)
+    r = avatares.generar("acme", eid)
+    assert r["nucleos"][0]["sub_avatares"] == [] and "cortado" in r["nucleos"][0]["error"]
+    assert len(r["nucleos"][1]["sub_avatares"]) == 1
+    res = r["resumen"]
+    assert res["tokens_entrada"] == 1000 + 500 + 700 and res["tokens_salida"] == 200 + 8000 + 300

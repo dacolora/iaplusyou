@@ -14,7 +14,7 @@ import cola
 import gastos
 import trabajos
 from nicho import avatares, datos
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, ref_sufijo, registrar
 
 ETAPA_GUARDAR = "Guardando"
 ETAPAS_GENERAR = [(avatares.ETAPA_NUCLEOS, 45), (avatares.ETAPA_SUBS, 150), (ETAPA_GUARDAR, 5)]
@@ -47,12 +47,31 @@ def ejecutar_generar(tarea):
         cola.reportar(job, etapa=etapa, detalle=detalle)
 
     datos.recalcular(cliente, eid, tarea_viva=True)
+    r = None
     try:
         r = avatares.generar(cliente, eid, avanzar)
         avanzar(ETAPA_GUARDAR)
         res = datos.guardar_generacion(cliente, eid, r["nucleos"], r["resumen"])
     except Exception as e:
-        # Si Claude alcanzó a responder, ese intento ya se cobró: se dice tal cual.
+        # Si Claude alcanzó a responder, ese intento ya se cobró: se dice tal
+        # cual Y se registra como gasto (nunca se pierde lo que ya se pagó).
+        # Si `r` ya existe, el fallo fue guardando (avatares.generar sí
+        # terminó): su resumen trae la cifra real. Si no, el fallo fue
+        # generando y la excepción es la que carga los tokens acumulados.
+        if r is not None:
+            resumen_fallido = r["resumen"]
+            entrada = resumen_fallido.get("tokens_entrada", 0)
+            salida = resumen_fallido.get("tokens_salida", 0)
+            usd = resumen_fallido.get("usd", 0)
+        else:
+            entrada = getattr(e, "tokens_entrada", 0)
+            salida = getattr(e, "tokens_salida", 0)
+            usd = avatares.costo_real(entrada, salida)
+        if entrada + salida > 0:
+            gastos.registrar_seguro(cliente, "avatares", usd, f"avatares:{eid}:fallido{ref_sufijo(tarea)}",
+                                    detalle=f"intento fallido: {cola.recortar(cola.sin_token(e), 200)}",
+                                    proveedor="anthropic",
+                                    extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": avatares.modelo_actual()})
         _anotar_error(cliente, eid, f"{cola.sin_token(e)} (si Claude alcanzó a responder, este intento sí se cobró)")
         raise
     resumen = r["resumen"]
