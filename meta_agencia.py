@@ -270,28 +270,56 @@ def _paginar(edge, token_usuario, params):
         "revisa el Business o avisa a soporte.")
 
 
+def _negocio(fila):
+    negocio = fila.get("business") or {}
+    return (str(negocio["id"]) if negocio.get("id") else None), (negocio.get("name") or None)
+
+
 def _cuenta(fila, origen):
+    business_id, business_nombre = _negocio(fila)
     return {
         "id": fila["id"], "name": fila.get("name") or fila["id"],
         "currency": fila.get("currency"), "account_status": fila.get("account_status"),
         "activa": fila.get("account_status") == 1,
         "origen": origen,
+        "business_id": business_id, "business_nombre": business_nombre,
     }
 
 
 def _pagina(fila, origen):
     ig = fila.get("instagram_business_account") or {}
+    business_id, business_nombre = _negocio(fila)
     return {
         "id": fila["id"], "name": fila.get("name") or fila["id"],
         "ig_user_id": ig.get("id"), "ig_username": ig.get("username"),
         "origen": origen,
+        "business_id": business_id, "business_nombre": business_nombre,
     }
+
+
+CAMPOS_CUENTA = "id,name,currency,account_status,business{id,name}"
+CAMPOS_PAGINA = "id,name,instagram_business_account{id,username},business{id,name}"
+CAMPOS_PAGINA_SIN_DUENO = "id,name,instagram_business_account{id,username}"
+
+
+def _paginar_paginas(edge, tok):
+    """`business` en una Página exige business_management y que quien generó
+    el token administre la Página; si Meta rechaza el campo (code 100) se
+    lista sin dueño en vez de dejar al admin sin Páginas."""
+    try:
+        return _paginar(edge, tok, {"fields": CAMPOS_PAGINA})
+    except MetaConexionError as e:
+        if e.codigo != 100:
+            raise
+        log.info("meta_agencia: %s no acepta business{id,name}; se lista sin dueño", edge)
+        return _paginar(edge, tok, {"fields": CAMPOS_PAGINA_SIN_DUENO})
 
 
 def listar_activos(forzar=False):
     """Cuentas publicitarias y Páginas que el Business posee (origen 'propia')
-    o administra para sus clientes socios (origen 'cliente'). Cacheado 10 min
-    por proceso; `forzar=True` vuelve a preguntar a Meta."""
+    o administra para sus clientes socios (origen 'cliente'), cada una con el
+    portafolio dueño (`business_id`/`business_nombre`, None si Meta no lo
+    entrega). Cacheado 10 min por proceso; `forzar=True` vuelve a preguntar."""
     global _cache_activos
     ahora = time.time()
     if not forzar and _cache_activos and ahora - _cache_activos[0] < _TTL_ACTIVOS_SEG:
@@ -300,14 +328,12 @@ def listar_activos(forzar=False):
     if not registro:
         raise MetaAgenciaError("La agencia no está conectada.")
     tok, bid = registro["token"], registro["business_id"]
-    campos_cuenta = {"fields": "id,name,currency,account_status"}
-    campos_pagina = {"fields": "id,name,instagram_business_account{id,username}"}
     cuentas, paginas = {}, {}
     for edge, origen in ((f"{bid}/owned_ad_accounts", "propia"), (f"{bid}/client_ad_accounts", "cliente")):
-        for fila in _paginar(edge, tok, campos_cuenta):
+        for fila in _paginar(edge, tok, {"fields": CAMPOS_CUENTA}):
             cuentas.setdefault(fila["id"], _cuenta(fila, origen))
     for edge, origen in ((f"{bid}/owned_pages", "propia"), (f"{bid}/client_pages", "cliente")):
-        for fila in _paginar(edge, tok, campos_pagina):
+        for fila in _paginar_paginas(edge, tok):
             paginas.setdefault(fila["id"], _pagina(fila, origen))
     activos = {"ad_accounts": list(cuentas.values()), "pages": list(paginas.values())}
     _cache_activos = (ahora, activos)
@@ -331,6 +357,73 @@ def _token_pagina(page_id, token_usuario):
     }
 
 
+# ---------- solicitudes de clientes ----------
+# Un cliente en forma «agencia» que no vio sus activos (Meta tarda, o el
+# nivel Limited no lista socios) pide que Creatv termine la conexión a mano.
+# Una fila en kv por proyecto (clave meta_solicitud:<cliente>); asignar() y
+# desasignar() la borran. Nunca guarda nada secreto: ids y texto.
+
+PREFIJO_SOLICITUD = "meta_solicitud:"
+
+
+def _clave_solicitud(cliente):
+    return f"{PREFIJO_SOLICITUD}{cliente}"
+
+
+def solicitar(cliente, portafolio_id, ad_account_id=None, page_id=None, nota=None, usuario=None):
+    """Guarda (o reemplaza) la solicitud pendiente del proyecto y la devuelve."""
+    datos = {
+        "cliente": cliente,
+        "portafolio_id": str(portafolio_id or "").strip(),
+        "ad_account_id": str(ad_account_id or "").strip() or None,
+        "page_id": str(page_id or "").strip() or None,
+        "nota": str(nota or "").strip()[:500] or None,
+        "usuario": usuario,
+        "creado_en": datetime.now().isoformat(timespec="seconds"),
+    }
+    if not datos["portafolio_id"]:
+        raise MetaAgenciaError("Falta el id de tu portafolio comercial.")
+    valor = json.dumps(datos, ensure_ascii=False)
+    with db.conectar() as con:
+        con.execute(insert_sqlite(db.kv).values(
+            clave=_clave_solicitud(cliente), valor=valor, actualizado_en=db.ahora(),
+        ).on_conflict_do_update(index_elements=["clave"], set_={"valor": valor, "actualizado_en": db.ahora()}))
+    return datos
+
+
+def _solicitud_de(crudo, cliente):
+    try:
+        datos = json.loads(crudo)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(datos, dict):
+        return None
+    datos.setdefault("cliente", cliente)
+    return datos
+
+
+def solicitud(cliente):
+    """La solicitud pendiente del proyecto, o None."""
+    with db.conectar() as con:
+        crudo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == _clave_solicitud(cliente))).scalar()
+    return _solicitud_de(crudo, cliente) if crudo else None
+
+
+def solicitudes():
+    """Todas las solicitudes pendientes, la más antigua primero."""
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.kv.c.clave, db.kv.c.valor)
+                            .where(db.kv.c.clave.like(f"{PREFIJO_SOLICITUD}%"))).all()
+    out = [s for clave, crudo in filas if (s := _solicitud_de(crudo, clave[len(PREFIJO_SOLICITUD):]))]
+    return sorted(out, key=lambda s: s.get("creado_en") or "")
+
+
+def borrar_solicitud(cliente):
+    """True si había una solicitud que borrar."""
+    with db.conectar() as con:
+        return bool(con.execute(db.kv.delete().where(db.kv.c.clave == _clave_solicitud(cliente))).rowcount)
+
+
 # ---------- asignación por proyecto ----------
 
 def _clientes_en_modo_agencia():
@@ -341,10 +434,13 @@ def _clientes_en_modo_agencia():
     return [c for c in clientes if meta_conexion.modo(c) == MODO]
 
 
-def asignar(cliente, ad_account_id, page_id=None, asignado_por=None):
+def asignar(cliente, ad_account_id, page_id=None, asignado_por=None, portafolio_id=None):
     """Pone el proyecto en modo agencia con esa cuenta (y Página). Los datos
     propios previos (incluido su token) quedan en `propia_respaldo` dentro del
-    mismo meta.json (0600) para restaurarlos con desasignar(). Devuelve el
+    mismo meta.json (0600) para restaurarlos con desasignar(). Una cuenta
+    publicitaria solo puede estar asignada a un proyecto (spec 2026-09-20
+    §2.3). `portafolio_id` es el portafolio del cliente que la compartió
+    (auditoría; si falta se guarda el dueño que reportó Meta). Devuelve el
     detalle público (meta_conexion._detalle) con `cambio_cuenta` cuando la
     cuenta asignada es distinta a la que el proyecto tenía."""
     registro = _cargar()
@@ -354,6 +450,9 @@ def asignar(cliente, ad_account_id, page_id=None, asignado_por=None):
     cuenta = next((a for a in activos["ad_accounts"] if a["id"] == ad_account_id), None)
     if not cuenta:
         raise MetaAgenciaError(f"La cuenta publicitaria {ad_account_id} no está entre las que ve el Business de la agencia.")
+    ocupada = cuentas_asignadas().get(cuenta["id"])
+    if ocupada and ocupada != cliente:
+        raise MetaAgenciaError("Esa cuenta publicitaria ya está conectada a otro proyecto; avísale a Creatv.")
     pagina = None
     if page_id:
         pagina = next((p for p in activos["pages"] if p["id"] == page_id), None)
@@ -381,6 +480,7 @@ def asignar(cliente, ad_account_id, page_id=None, asignado_por=None):
         "ig_user_id": None, "ig_username": None,
         "asignado_en": datetime.now().isoformat(timespec="seconds"),
         "asignado_por": asignado_por,
+        "portafolio_cliente_id": str(portafolio_id).strip() if portafolio_id else cuenta.get("business_id"),
         "graph_version": meta_conexion.GRAPH_VERSION,
     }
     if pagina:
@@ -393,6 +493,7 @@ def asignar(cliente, ad_account_id, page_id=None, asignado_por=None):
         datos["propia_respaldo"] = respaldo
     assert "token" not in datos  # el token de usuario nunca se escribe en meta.json
     meta_conexion.guardar(cliente, datos, permitir_agencia=True)
+    borrar_solicitud(cliente)
     log.info("meta_agencia: proyecto %s asignado a la cuenta %s", cliente, cuenta["id"])
     detalle = meta_conexion._detalle(datos)
     detalle["cambio_cuenta"] = bool(cuenta_previa and cuenta_previa != cuenta["id"])
@@ -412,6 +513,7 @@ def desasignar(cliente):
         meta_conexion.guardar(cliente, respaldo, permitir_agencia=True)
     else:
         meta_conexion._borrar_crudo(cliente)
+    borrar_solicitud(cliente)
     log.info("meta_agencia: proyecto %s vuelve a modo propia", cliente)
     return True
 
@@ -423,3 +525,42 @@ def proyectos_asignados():
         datos = meta_conexion._cargar_crudo(cliente) or {}
         out[cliente] = meta_conexion._detalle(datos)
     return out
+
+
+def cuentas_asignadas():
+    """{ad_account_id: cliente} de los proyectos en modo agencia."""
+    return {d["ad_account_id"]: c for c, d in proyectos_asignados().items() if d.get("ad_account_id")}
+
+
+# ---------- autoservicio del cliente (spec 2026-09-20 §2.2) ----------
+
+def activos_de_portafolio(portafolio_id, cliente=None, forzar=False):
+    """Cuentas y Páginas de socio cuyo dueño es ese portafolio, sin las
+    cuentas ya asignadas a OTRO proyecto (`cliente` es el que pregunta: su
+    propia cuenta sí se muestra). `paginas_sin_dueno` es True cuando hay
+    Páginas de socio pero Meta no dijo de quién es ninguna (la pantalla pide
+    entonces el id de la Página a mano)."""
+    portafolio_id = str(portafolio_id or "").strip()
+    if not portafolio_id:
+        raise MetaAgenciaError("Falta el id de tu portafolio comercial.")
+    activos = listar_activos(forzar=forzar)
+    ocupadas = cuentas_asignadas()
+    cuentas = [a for a in activos["ad_accounts"]
+               if a["origen"] == "cliente" and a["business_id"] == portafolio_id
+               and ocupadas.get(a["id"]) in (None, cliente)]
+    de_socios = [p for p in activos["pages"] if p["origen"] == "cliente"]
+    paginas = [p for p in de_socios if p["business_id"] == portafolio_id]
+    return {
+        "ad_accounts": cuentas,
+        "pages": paginas,
+        "paginas_sin_dueno": bool(de_socios) and all(p["business_id"] is None for p in de_socios),
+    }
+
+
+def pagina_de_socio(page_id):
+    """La Página de socio con ese id (respaldo cuando Meta no entrega el
+    dueño), o None si no está compartida con el Business."""
+    page_id = str(page_id or "").strip()
+    if not page_id:
+        return None
+    return next((p for p in listar_activos()["pages"] if p["origen"] == "cliente" and p["id"] == page_id), None)

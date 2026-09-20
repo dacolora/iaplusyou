@@ -334,8 +334,10 @@ def test_listar_activos_origen_paginacion_y_cache(entorno):
     assert [(a["id"], a["origen"], a["currency"]) for a in activos["ad_accounts"]] == [
         ("act_1", "propia", "COP"), ("act_2", "propia", "USD"), ("act_9", "cliente", "MXN")]
     assert activos["pages"] == [
-        {"id": "p1", "name": "Página Propia", "ig_user_id": "ig1", "ig_username": "propia_ig", "origen": "propia"},
-        {"id": "p2", "name": "Página Cliente", "ig_user_id": None, "ig_username": None, "origen": "cliente"},
+        {"id": "p1", "name": "Página Propia", "ig_user_id": "ig1", "ig_username": "propia_ig", "origen": "propia",
+         "business_id": None, "business_nombre": None},
+        {"id": "p2", "name": "Página Cliente", "ig_user_id": None, "ig_username": None, "origen": "cliente",
+         "business_id": None, "business_nombre": None},
     ]
     edges = [e for e, _ in graph["llamadas"]]
     assert edges == [f"{BID}/owned_ad_accounts", f"{BID}/owned_ad_accounts", f"{BID}/client_ad_accounts",
@@ -344,8 +346,8 @@ def test_listar_activos_origen_paginacion_y_cache(entorno):
     assert graph["llamadas"][1][1]["after"] == "CUR1"
     assert all(p.get("limit") == 100 for _, p in graph["llamadas"])
     assert all("access_token" not in json.dumps(p) for _, p in graph["llamadas"])
-    assert graph["llamadas"][0][1]["fields"] == "id,name,currency,account_status"
-    assert graph["llamadas"][3][1]["fields"] == "id,name,instagram_business_account{id,username}"
+    assert graph["llamadas"][0][1]["fields"] == "id,name,currency,account_status,business{id,name}"
+    assert graph["llamadas"][3][1]["fields"] == "id,name,instagram_business_account{id,username},business{id,name}"
     # caché
     n = len(graph["llamadas"])
     assert ma.listar_activos() is activos and len(graph["llamadas"]) == n
@@ -645,3 +647,133 @@ def test_modo_propia_no_cambia_nada(entorno):
     assert mc.credenciales_ads("acme")["token"] == "TOKEN-PROPIO"
     assert mc.estado("acme")["detalle"]["modo"] == "propia"
     assert mc.borrar("acme") is True and _meta_json(entorno, "acme") is None
+
+
+# ---------- solicitudes de clientes (spec §2.4) ----------
+
+def test_solicitar_guarda_una_por_proyecto_y_reemplaza(entorno, base_temporal):
+    ma = entorno["ma"]
+    s = ma.solicitar("acme", " 777 ", ad_account_id="act_9", page_id="", nota="x" * 600, usuario="alguien")
+    assert s["cliente"] == "acme" and s["portafolio_id"] == "777" and s["ad_account_id"] == "act_9"
+    assert s["page_id"] is None and len(s["nota"]) == 500 and s["usuario"] == "alguien" and s["creado_en"]
+    assert ma.solicitud("acme")["portafolio_id"] == "777"
+    ma.solicitar("acme", "999")
+    assert ma.solicitud("acme")["portafolio_id"] == "999" and ma.solicitud("acme")["ad_account_id"] is None
+    assert [x["cliente"] for x in ma.solicitudes()] == ["acme"]
+    with base_temporal.conectar() as con:
+        claves = [r[0] for r in con.execute(sa.select(base_temporal.kv.c.clave)).all()]
+    assert "meta_solicitud:acme" in claves
+
+
+def test_solicitudes_ordenadas_y_borrar(entorno):
+    ma = entorno["ma"]
+    ma.solicitar("otro", "111")
+    ma.solicitar("acme", "222")
+    lista = ma.solicitudes()
+    assert [x["cliente"] for x in lista] == ["otro", "acme"] and lista[0]["creado_en"] <= lista[1]["creado_en"]
+    assert ma.borrar_solicitud("otro") is True and ma.borrar_solicitud("otro") is False
+    assert ma.solicitud("otro") is None and [x["cliente"] for x in ma.solicitudes()] == ["acme"]
+
+
+def test_solicitar_sin_portafolio_rechaza(entorno):
+    with pytest.raises(entorno["ma"].MetaAgenciaError, match="portafolio"):
+        entorno["ma"].solicitar("acme", "  ")
+
+
+# ---------- dueño de cada activo y autoservicio por portafolio (spec §2.2-2.3) ----------
+
+CUENTAS_SOCIOS = [
+    {"id": "act_9", "name": "Cuenta Socio", "currency": "MXN", "account_status": 1, "business": {"id": "777", "name": "Socio SA"}},
+    {"id": "act_8", "name": "Cuenta Otro Socio", "currency": "COP", "account_status": 1, "business": {"id": "888", "name": "Otro SA"}},
+    {"id": "act_7", "name": "Sin dueño", "currency": "COP", "account_status": 1},
+]
+PAGINAS_SOCIOS = [
+    {"id": "p2", "name": "Página Cliente", "business": {"id": "777", "name": "Socio SA"}},
+    {"id": "p3", "name": "Página Otro", "business": {"id": "888", "name": "Otro SA"}},
+]
+
+
+def _conectada_con_socios(entorno, paginas=PAGINAS_SOCIOS):
+    ma, graph = entorno["ma"], entorno["graph"]
+    graph["respuestas"][f"{BID}/client_ad_accounts"] = {"data": CUENTAS_SOCIOS}
+    graph["respuestas"][f"{BID}/client_pages"] = {"data": paginas}
+    graph["respuestas"]["p3"] = {"id": "p3", "name": "Página Otro", "access_token": "PAGE-TOKEN-3"}
+    ma.conectar(TOKEN, BID)
+    graph["llamadas"].clear()
+    return ma, graph
+
+
+def test_listar_activos_pide_y_guarda_el_dueno(entorno):
+    ma, graph = _conectada_con_socios(entorno)
+    activos = ma.listar_activos()
+    params = {e: p for e, p in graph["llamadas"]}
+    assert params[f"{BID}/client_ad_accounts"]["fields"] == "id,name,currency,account_status,business{id,name}"
+    assert params[f"{BID}/client_pages"]["fields"] == "id,name,instagram_business_account{id,username},business{id,name}"
+    por_id = {a["id"]: a for a in activos["ad_accounts"]}
+    assert por_id["act_9"]["business_id"] == "777" and por_id["act_9"]["business_nombre"] == "Socio SA"
+    assert por_id["act_7"]["business_id"] is None and por_id["act_1"]["business_id"] is None
+    assert {p["id"]: p["business_id"] for p in activos["pages"]}["p2"] == "777"
+
+
+def test_listar_activos_reintenta_paginas_sin_dueno_si_meta_rechaza_el_campo(entorno):
+    ma, graph = _conectada_con_socios(entorno)
+    original = mc._graph_get
+
+    def _sin_business_en_paginas(edge, token, params=None, timeout=30):
+        if edge.endswith("/client_pages") and "business{id,name}" in (params or {}).get("fields", ""):
+            raise mc.MetaConexionError("(#100) Tried accessing nonexisting field (business)", codigo=100)
+        return original(edge, token, params, timeout)
+    entorno["graph"]["respuestas"][f"{BID}/client_pages"] = {"data": [{"id": "p2", "name": "Página Cliente"}]}
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(mc, "_graph_get", _sin_business_en_paginas)
+        activos = ma.listar_activos(forzar=True)
+    assert [p["id"] for p in activos["pages"] if p["origen"] == "cliente"] == ["p2"]
+    assert all(p["business_id"] is None for p in activos["pages"] if p["origen"] == "cliente")
+
+
+def test_activos_de_portafolio_filtra_por_dueno_y_excluye_ocupadas(entorno):
+    ma, _ = _conectada_con_socios(entorno)
+    r = ma.activos_de_portafolio(" 777 ")
+    assert [a["id"] for a in r["ad_accounts"]] == ["act_9"] and [p["id"] for p in r["pages"]] == ["p2"]
+    assert r["paginas_sin_dueno"] is False
+    # act_9 ya asignada a «otro»: para «acme» desaparece; para «otro» sigue.
+    ma.asignar("otro", "act_9", "p2", asignado_por="admin", portafolio_id="777")
+    assert ma.cuentas_asignadas() == {"act_9": "otro"}
+    assert ma.activos_de_portafolio("777", cliente="acme")["ad_accounts"] == []
+    assert [a["id"] for a in ma.activos_de_portafolio("777", cliente="otro")["ad_accounts"]] == ["act_9"]
+    # Otro portafolio no ve nada de 777; nunca aparecen las cuentas propias de Creatv.
+    assert [a["id"] for a in ma.activos_de_portafolio("888")["ad_accounts"]] == ["act_8"]
+    assert ma.activos_de_portafolio("123456")["ad_accounts"] == []
+    with pytest.raises(ma.MetaAgenciaError, match="portafolio"):
+        ma.activos_de_portafolio("")
+
+
+def test_activos_de_portafolio_marca_paginas_sin_dueno_y_pagina_de_socio(entorno):
+    ma, _ = _conectada_con_socios(entorno, paginas=[{"id": "p2", "name": "Página Cliente"}, {"id": "p3", "name": "Página Otro"}])
+    r = ma.activos_de_portafolio("777")
+    assert r["pages"] == [] and r["paginas_sin_dueno"] is True
+    assert ma.pagina_de_socio("p3")["name"] == "Página Otro"
+    assert ma.pagina_de_socio("p1") is None and ma.pagina_de_socio("nada") is None
+
+
+def test_asignar_rechaza_cuenta_de_otro_proyecto_y_guarda_portafolio(entorno):
+    ma, _ = _conectada_con_socios(entorno)
+    ma.asignar("otro", "act_9", "p2", asignado_por="admin", portafolio_id="777")
+    with pytest.raises(ma.MetaAgenciaError, match="otro proyecto"):
+        ma.asignar("acme", "act_9", None, asignado_por="cliente:alguien", portafolio_id="777")
+    # El mismo proyecto sí puede reasignarse su propia cuenta.
+    ma.asignar("otro", "act_9", None, asignado_por="admin", portafolio_id="777")
+    assert _meta_json(entorno, "otro")["portafolio_cliente_id"] == "777"
+    assert "token" not in _meta_json(entorno, "otro")
+    # Sin portafolio explícito se guarda el dueño que reportó Meta.
+    ma.asignar("acme", "act_8", None, asignado_por="admin")
+    assert _meta_json(entorno, "acme")["portafolio_cliente_id"] == "888"
+
+
+def test_asignar_y_desasignar_cierran_la_solicitud(entorno):
+    ma, _ = _conectada_con_socios(entorno)
+    ma.solicitar("acme", "777")
+    ma.asignar("acme", "act_9", None, asignado_por="admin")
+    assert ma.solicitud("acme") is None
+    ma.solicitar("acme", "777")
+    assert ma.desasignar("acme") is True and ma.solicitud("acme") is None
