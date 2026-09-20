@@ -154,7 +154,10 @@ de planos que escribió Claude.
    activos (no se inventan referencias).
 5. Los prompts no contienen duración total, formato ni resolución escritos
    ("9:16", "720p", "8 segundos de video"): eso va por API.
-6. Longitud de cada prompt ≤ 2 500 caracteres.
+6. Longitud del bloque de planos de cada versión (lo que escribe Claude, ya
+   renderizado como líneas `Shot N`) ≤ 2 500 caracteres. Los bloques fijos
+   (marca, reglas de activos, EVITAR) no cuentan: son los mismos del prompt
+   determinista, que no tiene tope (decisión de la revisión final, 2026-09-20).
 
 Fallo de validación o JSON inválido → **un** reintento con el patrón del repo (se
 añade "Tu respuesta anterior no sirvió ({motivo}). Responde solo el JSON pedido.")
