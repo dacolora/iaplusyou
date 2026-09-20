@@ -95,7 +95,7 @@ def test_validar_subida_por_tipo_tamano_y_duracion():
 
 def test_borrar_falla_si_esta_en_uso(base_temporal, r2_falso):
     import db
-    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/acme/x.png", hash="h1", bytes=5)
+    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/acme/materiales/x.png", hash="h1", bytes=5)
     with db.conectar() as con:
         con.execute(db.edicion.insert().values(
             cliente="acme", creado_en=db.ahora(), actualizado_en=db.ahora(), tipo="video", nombre="e",
@@ -106,15 +106,15 @@ def test_borrar_falla_si_esta_en_uso(base_temporal, r2_falso):
 
 
 def test_borrar_libre_quita_de_r2_y_de_la_base(base_temporal, r2_falso):
-    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/acme/x.png", hash="h2", bytes=5)
+    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/acme/materiales/x.png", hash="h2", bytes=5)
     m.borrar("acme", mat["id"])
     assert m.buscar_hash("acme", "h2") is None
-    assert r2_falso["borrados"] == ["clientes/acme/x.png"]
+    assert r2_falso["borrados"] == ["clientes/acme/materiales/x.png"]
 
 
 def test_borrar_no_toca_la_fila_si_r2_falla(base_temporal, r2_falso, monkeypatch):
     from storage import r2_uploader
-    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/acme/z.png", hash="h3", bytes=5)
+    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/acme/materiales/z.png", hash="h3", bytes=5)
 
     def _falla(k):
         raise RuntimeError("r2 caído")
@@ -127,8 +127,8 @@ def test_borrar_no_toca_la_fila_si_r2_falla(base_temporal, r2_falso, monkeypatch
 def test_limpiar_sin_uso_solo_efimeros_viejos(base_temporal, r2_falso, monkeypatch):
     import db
     viejo = "2020-01-01T00:00:00"
-    a = m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/t.png", hash="p1", bytes=1)
-    b = m.registrar("acme", tipo="video", origen="subida", url="https://r2/clientes/acme/v.mp4", hash="v1", bytes=1)
+    a = m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/materiales/t.png", hash="p1", bytes=1)
+    b = m.registrar("acme", tipo="video", origen="subida", url="https://r2/clientes/acme/materiales/v.mp4", hash="v1", bytes=1)
     with db.conectar() as con:
         con.execute(db.material.update().values(usado_en=viejo, creado_en=viejo))
     assert m.limpiar_sin_uso(dias=30) == 1
@@ -140,8 +140,8 @@ def test_limpiar_sigue_si_r2_falla_en_una_fila(base_temporal, r2_falso, monkeypa
     import db
     from storage import r2_uploader
     viejo = "2020-01-01T00:00:00"
-    m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/a.png", hash="pa", bytes=1)
-    m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/b.png", hash="pb", bytes=1)
+    m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/materiales/a.png", hash="pa", bytes=1)
+    m.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/clientes/acme/materiales/b.png", hash="pb", bytes=1)
     with db.conectar() as con:
         con.execute(db.material.update().values(usado_en=viejo, creado_en=viejo))
 
@@ -152,6 +152,42 @@ def test_limpiar_sigue_si_r2_falla_en_una_fila(base_temporal, r2_falso, monkeypa
     assert m.limpiar_sin_uso(dias=30) == 1
     assert m.buscar_hash("acme", "pa") is not None
     assert m.buscar_hash("acme", "pb") is None
+
+
+def test_borrar_material_de_otro_origen_no_toca_r2(base_temporal, r2_falso):
+    """I8: solo los objetos que el editor subió (clientes/<c>/materiales/...)
+    se borran en R2; un material que apunta al video de Crear (origen
+    `crear`, clave de la pieza) o a cualquier otra clave solo pierde su fila —
+    ese archivo lo enlaza otra cosa."""
+    mat = m.registrar("acme", tipo="video", origen="crear", url="https://r2/clientes/acme/videos/x.mp4", hash="hc", bytes=5)
+    assert m.borrar("acme", mat["id"]) is True
+    assert m.buscar_hash("acme", "hc") is None
+    assert r2_falso["borrados"] == []
+    # ni siquiera una clave de materiales de OTRO cliente
+    mat = m.registrar("acme", tipo="imagen", origen="subida", url="https://r2/clientes/otro/materiales/y.png", hash="hd", bytes=5)
+    assert m.borrar("acme", mat["id"]) is True
+    assert r2_falso["borrados"] == []
+
+
+def test_en_uso_tambien_mira_las_versiones_congeladas(base_temporal, monkeypatch):
+    """I9: un material que ya no está en el documento vivo pero sí en una
+    versión congelada sigue en uso (esa versión se puede restaurar o volver a
+    producir)."""
+    import json
+    import os
+    import ediciones
+    monkeypatch.setattr(m, "marcar_uso", lambda ids: None)
+    with open(os.path.join(os.path.dirname(__file__), "fixtures", "documentos", "video_basico.json"), encoding="utf-8") as f:
+        doc = json.load(f)
+    ed = ediciones.crear("acme", "video", "e", doc)
+    ediciones.versionar("acme", ed["id"], "manual")           # congela [1, 2, 3]
+    doc["pistas"] = doc["pistas"][:3]; doc["materiales"] = []   # el vivo se queda sin la música (3)
+    ediciones.guardar("acme", ed["id"], doc, version_n=0)
+    assert ediciones.cargar("acme", ed["id"])["documento"]["materiales"] == [1, 2]
+    assert m.en_uso("acme", 3) is True
+    assert m.en_uso("acme", 2) is True
+    assert m.en_uso("otro", 3) is False
+    assert m.en_uso("acme", 4) is False
 
 
 def test_bytes_usados_suma_por_cliente(base_temporal, r2_falso):

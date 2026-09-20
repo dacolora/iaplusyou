@@ -109,10 +109,21 @@ def marcar_uso(ids):
 
 
 def en_uso(cliente, material_id):
+    """True si algún documento vivo (`edicion`) o congelado (`edicion_version`,
+    que se puede restaurar o volver a producir) de ese cliente lo lista en
+    `materiales` (lista que `documento.validar` deriva de los clips)."""
     mid = int(material_id)
+
+    def _lo_lista(doc):
+        return mid in [int(x) for x in (doc or {}).get("materiales") or []]
     with db.conectar() as con:
         for (doc,) in con.execute(sa.select(db.edicion.c.documento).where(db.edicion.c.cliente == cliente)):
-            if mid in [int(x) for x in (doc or {}).get("materiales") or []]:
+            if _lo_lista(doc):
+                return True
+        for (doc,) in con.execute(sa.select(db.edicion_version.c.documento)
+                                  .join(db.edicion, db.edicion.c.id == db.edicion_version.c.edicion_id)
+                                  .where(db.edicion.c.cliente == cliente)):
+            if _lo_lista(doc):
                 return True
     return False
 
@@ -120,6 +131,14 @@ def en_uso(cliente, material_id):
 def _key_de_url(url):
     ruta = unquote(urlparse(url).path).lstrip("/")
     return ruta
+
+
+def _clave_propia(cliente, key):
+    """Solo los objetos que el editor subió para este cliente viven bajo
+    `clientes/<cliente>/materiales/`; cualquier otra clave (el video de una
+    pieza de Crear con origen `crear`, una final, otro cliente) la enlaza
+    otra cosa y borrarla en R2 rompería eso."""
+    return key.startswith(f"clientes/{cliente}/materiales/")
 
 
 def borrar(cliente, material_id):
@@ -133,7 +152,9 @@ def borrar(cliente, material_id):
     # (reintentable) que uno huérfano en R2 (sin ninguna fila que lo recuerde).
     for url in (mat["url"], mat.get("url_proxy")):
         if url and url.startswith("http"):
-            r2_uploader.delete_file(_key_de_url(url))
+            key = _key_de_url(url)
+            if _clave_propia(cliente, key):
+                r2_uploader.delete_file(key)
     with db.conectar() as con:
         con.execute(db.material.delete().where(db.material.c.id == mat["id"]))
     return True
