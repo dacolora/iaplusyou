@@ -1,8 +1,7 @@
 """
 Arma el prompt final de FlowPlus a partir de lo que escribió la persona.
 
-El texto de la persona se manda TAL CUAL (esa fue la decisión: sin plantilla
-maestra de 11 secciones). Lo que sí se antepone es lo que evita los dos fallos
+Con el director (`director.py`, spec 2026-09-18) el texto de la persona se convierte en planos `Shot N`; sin director (fallback y sesiones anteriores) se manda TAL CUAL. Lo que sí se antepone es lo que evita los dos fallos
 que se vieron en los primeros videos de Happy Flops:
 
   1. El modelo inventó un logo cursivo en la sandalia. -> Bloque de fidelidad:

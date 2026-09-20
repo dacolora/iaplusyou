@@ -185,7 +185,16 @@ por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
 presets de cámara y plantillas de anuncio son las Etapas 2 y 3). Los lotes de
 Sprints encolan el director con `auto_lanzar` (el costo ya se aprobó). `calidad`
-`borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). Videos
+`borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). `VIDEO` /
+`IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`,
+`familia`, `min_duracion`/`max_duracion`, `formatos`). Crear makes ONE piece per click (the enfoque is
+automatic: `producto`, or `persona` when a catalog personaje is among the references),
+offers 5–30 s (default 8 s) and the formats each model admits (verified on WaveSpeed 2026-09-18: Wan 3.0
+2–30 s and 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3–15 s and 9:16/16:9/1:1; Seedance 2.5 4–30 s
+and follows the reference image, `aspect_ratio` None; Seedream V5 Pro takes `aspect_ratio`
+for images). `ajustar_duracion`/`ajustar_formato` run in the route AND again in the worker's
+`_preparar` (last barrier before spending), so nothing outside a model's range is ever
+requested. Videos
 ALWAYS ask for the model's native scene sound (`generar_video(..., con_sonido=True)`: Wan 3.0
 `enable_audio`, Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
 `usd_por_segundo_efectivo` the templates show —, Seedance 2.5 `generate_audio`), and the
