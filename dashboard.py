@@ -9,6 +9,7 @@ Uso:
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import json
+import logging
 import math
 import os
 import re
@@ -18,12 +19,14 @@ import subprocess
 import threading
 import time
 from functools import wraps
+from urllib.parse import urlsplit
 
 import requests
 import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -112,6 +115,40 @@ app = Flask(__name__)
 # desarrollo local, no en producción.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
+log = logging.getLogger(__name__)
+
+
+def _plataforma_url():
+    """PLATAFORMA_URL del .env (sin barra final) o "". Es la URL pública fija
+    del sitio: base de los enlaces que van por correo y host que se acepta."""
+    return (os.environ.get("PLATAFORMA_URL") or "").strip().rstrip("/")
+
+
+def _config_sesion(plataforma_url):
+    """Flags de la cookie de sesión: HttpOnly siempre, SameSite=Lax (los POST
+    desde otro sitio no la llevan → primera barrera contra CSRF) y Secure
+    cuando el sitio público es https (en local http seguiría funcionando)."""
+    return {
+        "SESSION_COOKIE_HTTPONLY": True,
+        "SESSION_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SECURE": plataforma_url.lower().startswith("https://"),
+    }
+
+
+app.config.update(_config_sesion(_plataforma_url()))
+
+
+def _detras_de_proxy():
+    """DETRAS_DE_PROXY=1: nginx está delante y es el único que llega a
+    gunicorn, así que X-Forwarded-For/-Proto son de fiar (el último valor,
+    el que nginx añade). Sin la variable, esas cabeceras se ignoran: cualquier
+    cliente podría inventarlas y saltarse el límite por IP."""
+    return (os.environ.get("DETRAS_DE_PROXY") or "").strip() == "1"
+
+
+if _detras_de_proxy():
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=0)
+
 from sprints import rutas as sprints_rutas  # noqa: E402  (Blueprint de la pestaña Sprints)
 app.register_blueprint(sprints_rutas.bp)
 
@@ -141,28 +178,30 @@ def requiere_admin(fn):
     return envuelta
 
 
-@app.before_request
-def _guard_por_cliente():
-    """Cualquier ruta cuya URL incluya <cliente> exige sesión con permiso
-    real sobre ESE cliente — nunca solo ocultar un botón en la plantilla.
-    rol 'admin' pasa siempre; rol 'cliente' solo si coincide con el suyo.
-    Rutas sin <cliente> en la URL (login, /, /proyectos/nuevo, estáticos)
-    no pasan por acá."""
-    cliente = request.view_args.get("cliente") if request.view_args else None
-    if cliente is None or request.endpoint in ("landing_cliente", "meli_callback"):
-        # la landing pública de un proyecto es, justamente, pública; el
-        # callback de MercadoLibre no lleva <cliente> en la URL (una sola
-        # dirección registrada) y resuelve el proyecto desde la sesión, con
-        # su propio chequeo de acceso (ver meli_callback).
+HOSTS_LOCALES = frozenset(("localhost", "127.0.0.1", "::1"))
+
+
+def _host_plataforma():
+    """Host (sin puerto) de PLATAFORMA_URL, o None si no está definida."""
+    fijo = _plataforma_url()
+    if not fijo:
         return None
-    sesion = _sesion()
-    if not usuarios.puede_acceder(sesion, cliente):
-        if not sesion:
-            flash("Inicia sesión para entrar a este proyecto.", "error")
-            return redirect(url_for("login"))
-        flash("No tienes acceso a ese proyecto.", "error")
-        return redirect(url_for("ver_cliente", cliente=sesion["cliente"])) if sesion["rol"] == "cliente" else redirect(url_for("index"))
-    return None
+    return (urlsplit(fijo).hostname or "").lower() or None
+
+
+@app.before_request
+def _verificar_host():
+    """Con PLATAFORMA_URL definida, solo se atiende ese host (y localhost para
+    probar en la propia máquina): una petición con otra cabecera Host —la que
+    un atacante usaría para que un enlace por correo apunte a su dominio— es
+    un 404. Va primero que los demás guards. Se salta con app.testing."""
+    esperado = _host_plataforma()
+    if esperado is None or app.testing:
+        return None
+    host = (urlsplit(f"//{request.host}").hostname or "").lower()
+    if host == esperado or host in HOSTS_LOCALES:
+        return None
+    abort(404)
 
 
 # Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
@@ -187,24 +226,48 @@ def _abrir_sesion(usuario, entry):
 
 @app.before_request
 def _verificar_sesion():
-    """Sesión con `sv` (emitida por este código): si el usuario ya no existe o
-    su session_version cambió (restableció la contraseña), la sesión se
-    cierra y se pide entrar de nuevo. Una sesión sin `sv` (cookie anterior a
-    esta versión) se sella con la versión actual del usuario la primera vez
-    que se ve, para que desde ahí también cuente; si el usuario no está en
-    usuarios.json se deja pasar (sesiones de prueba y cookies viejas —
-    rotar FLASK_SECRET_KEY las cierra todas)."""
+    """Toda sesión tiene que corresponder a un usuario que siga en
+    usuarios.json: si ya no existe (borrado) o su session_version cambió
+    (restableció la contraseña), la sesión se cierra y se pide entrar de
+    nuevo. Una sesión sin `sv` (cookie anterior a esta versión) se sella con
+    la versión actual del usuario la primera vez que se ve, para que desde
+    ahí también cuente. Va registrado antes que _guard_por_cliente para que
+    una sesión muerta se cierre aunque pida un proyecto ajeno."""
     if request.endpoint in ENDPOINTS_SIN_GUARD_SESION or "usuario" not in session:
         return None
     entry = usuarios.obtener(session["usuario"])
-    if "sv" not in session:
-        if entry is not None:
-            session["sv"] = int(entry.get("session_version") or 1)
-        return None
-    if entry is None or int(entry.get("session_version") or 1) != int(session.get("sv") or 0):
+    vigente = entry is not None and (
+        "sv" not in session or int(entry.get("session_version") or 1) == int(session.get("sv") or 0))
+    if not vigente:
         session.clear()
         flash("Tu sesión se cerró; entra de nuevo.", "error")
         return redirect(url_for("login"))
+    if "sv" not in session:
+        session["sv"] = int(entry.get("session_version") or 1)
+    return None
+
+
+@app.before_request
+def _guard_por_cliente():
+    """Cualquier ruta cuya URL incluya <cliente> exige sesión con permiso
+    real sobre ESE cliente — nunca solo ocultar un botón en la plantilla.
+    rol 'admin' pasa siempre; rol 'cliente' solo si coincide con el suyo.
+    Rutas sin <cliente> en la URL (login, /, /proyectos/nuevo, estáticos)
+    no pasan por acá."""
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    if cliente is None or request.endpoint in ("landing_cliente", "meli_callback"):
+        # la landing pública de un proyecto es, justamente, pública; el
+        # callback de MercadoLibre no lleva <cliente> en la URL (una sola
+        # dirección registrada) y resuelve el proyecto desde la sesión, con
+        # su propio chequeo de acceso (ver meli_callback).
+        return None
+    sesion = _sesion()
+    if not usuarios.puede_acceder(sesion, cliente):
+        if not sesion:
+            flash("Inicia sesión para entrar a este proyecto.", "error")
+            return redirect(url_for("login"))
+        flash("No tienes acceso a ese proyecto.", "error")
+        return redirect(url_for("ver_cliente", cliente=sesion["cliente"])) if sesion["rol"] == "cliente" else redirect(url_for("index"))
     return None
 
 
@@ -218,24 +281,46 @@ def _cuenta_en_plantillas():
     return {"cuenta_actual": usuarios.obtener(session["usuario"]), "smtp_ok": cuentas.smtp_configurado()}
 
 
+URL_BASE_LOCAL = "http://127.0.0.1:5050"
+_aviso_url_base_dado = False
+
+
 def _url_base():
-    """Base pública de los enlaces que van por correo. PLATAFORMA_URL (si está)
-    gana; si no, la URL de la petición, respetando X-Forwarded-Proto cuando
-    nginx está delante (gunicorn ve http aunque el sitio sea https)."""
-    fijo = (os.environ.get("PLATAFORMA_URL") or "").strip().rstrip("/")
+    """Base pública de los enlaces que van por correo. NUNCA sale de la
+    petición (la cabecera Host la manda el cliente: con ella un atacante haría
+    que el enlace de restablecer de la víctima apuntara a su dominio y se
+    quedara con el token). PLATAFORMA_URL manda; sin ella, el esquema+host de
+    META_REDIRECT_URI (la otra URL pública que ya tiene el .env) y, si tampoco,
+    la de desarrollo local. Los dos últimos avisan una vez en el log."""
+    global _aviso_url_base_dado
+    fijo = _plataforma_url()
     if fijo:
         return fijo
-    base = request.url_root.rstrip("/")
-    proto = (request.headers.get("X-Forwarded-Proto") or "").split(",")[0].strip().lower()
-    if proto == "https" and base.startswith("http://"):
-        base = "https://" + base[len("http://"):]
+    partes = urlsplit((os.environ.get("META_REDIRECT_URI") or "").strip())
+    if partes.scheme in ("http", "https") and partes.netloc:
+        base = f"{partes.scheme}://{partes.netloc}"
+    else:
+        base = URL_BASE_LOCAL
+    if not _aviso_url_base_dado:
+        _aviso_url_base_dado = True
+        log.warning("PLATAFORMA_URL no está en el .env: los enlaces por correo usan %s", base)
     return base
 
 
 def _ip_cliente():
-    """IP real de quien pide (primer valor de X-Forwarded-For detrás de nginx)."""
-    xff = (request.headers.get("X-Forwarded-For") or "").split(",")[0].strip()
-    return xff or request.remote_addr or None
+    """IP de quien pide: request.remote_addr. Detrás de nginx solo es la real
+    con DETRAS_DE_PROXY=1 (ProxyFix, ver arriba); las cabeceras X-Forwarded-*
+    nunca se leen a mano porque el primer valor lo pone el cliente."""
+    return request.remote_addr or None
+
+
+def _mismo_origen():
+    """False solo cuando el navegador declara (Sec-Fetch-Site) que el POST
+    viene de otro sitio: los formularios propios mandan same-origin (o none al
+    escribir la URL). Es la barrera CSRF de los POST que no piden contraseña ni
+    token; los navegadores sin esa cabecera ya no llevan la cookie (SameSite)."""
+    sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+    return not sitio or sitio in ("same-origin", "none")
 
 
 def _limite_correo(prefijo, correo):
@@ -280,6 +365,10 @@ def _sin_cache(resp):
     que obligó a un recarga dura."""
     if resp.mimetype in ("text/html", "application/json"):
         resp.headers["Cache-Control"] = "no-store, must-revalidate"
+        # El token de restablecer/verificar va en la URL: que no viaje en el
+        # Referer a las fuentes externas (Google Fonts) ni a ningún enlace.
+        resp.headers["Referrer-Policy"] = (
+            "no-referrer" if request.endpoint in ("restablecer", "verificar_correo") else "strict-origin-when-cross-origin")
     # Los recursos de marca (ícono de la app, logo) son públicos: otros sitios
     # (p. ej. el panel de Meta) pueden cargarlos por fetch.
     if request.path.startswith("/static/img/"):
@@ -855,6 +944,12 @@ def crear_proyecto():
     if cid in estado_mod.listar_clientes():
         return _error(f"Ya existe un proyecto con el identificador '{cid}' — elige otro nombre.")
 
+    # Tope por IP al alta en sí (5 por hora): sin él, un script crea cuentas y
+    # carpetas sin fin y manda un correo de verificación por cada una.
+    if not cuentas.limite_ok(f"alta:ip:{_ip_cliente() or 'desconocida'}"):
+        flash("Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo.", "error")
+        return render_template("index.html", form=form), 429
+
     try:
         usuarios.crear(usuario, password, "cliente", cliente=cid, correo=correo)
     except ValueError as e:
@@ -869,6 +964,9 @@ def crear_proyecto():
     if not cuentas.smtp_configurado():
         flash(f"Proyecto '{nombre}' creado. El servidor no tiene correo configurado, así que no pudimos "
               "enviarte el enlace de confirmación: avisa al administrador.", "warn")
+    elif not _limite_correo("verif", correo):
+        flash(f"Proyecto '{nombre}' creado. Espera un momento y pide el correo de confirmación desde "
+              "el aviso de arriba.", "warn")
     elif cuentas.enviar_verificacion(usuario, correo, _url_base(), ip=_ip_cliente()):
         flash(f"Proyecto '{nombre}' creado. Te mandamos un correo a {correo} para confirmar tu cuenta.", "ok")
     else:
@@ -906,6 +1004,8 @@ def verificar_correo(token):
 
 @app.route("/reenviar-verificacion", methods=["POST"])
 def reenviar_verificacion():
+    if not _mismo_origen():
+        abort(403)
     sesion = _sesion()
     if not sesion:
         flash("Inicia sesión para reenviar la verificación.", "error")
@@ -1007,6 +1107,10 @@ def cuenta_correo():
     except ValueError as e:
         flash(str(e), "error")
         return _volver_cuenta()
+    # El enlace del correo anterior no puede seguir sirviendo: al abrirlo
+    # devolvería la cuenta al correo viejo (y verificado) aunque no se llegue
+    # a emitir uno nuevo (sin SMTP o con el límite alcanzado).
+    cuentas.invalidar("verificacion", usuario)
     if not cuentas.smtp_configurado():
         flash(f"Correo guardado: {correo}. El servidor no tiene correo configurado, así que no pudimos "
               "enviarte el enlace de confirmación: avisa al administrador.", "warn")
@@ -1051,7 +1155,10 @@ def cuenta_password():
 @requiere_admin
 def admin_usuario_verificar(usuario):
     """El admin confirma a mano un correo (cuando no hay SMTP o el correo no
-    llega). Solo marca; no cambia el correo."""
+    llega). Solo marca; no cambia el correo. Sin contraseña ni token de por
+    medio, el POST tiene que venir de nuestra propia página (403 si no)."""
+    if not _mismo_origen():
+        abort(403)
     try:
         usuarios.actualizar(usuario, correo_verificado=True)
     except ValueError as e:
@@ -1458,7 +1565,7 @@ SERVICIOS_LLAVES = (
         "costo": "Depende del proveedor de correo; con una cuenta normal no cuesta.",
         "url": "https://support.google.com/accounts/answer/185833",
         "url_texto": "Google › Contraseñas de aplicación",
-        "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"],
+        "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL"],
         "nota": "Sin esto nadie puede confirmar su correo ni recuperar la contraseña solo (el administrador "
                 "tiene que marcar las cuentas a mano en el panel) y los avisos solo quedan en la bitácora.",
         "opcional": True,
@@ -1468,7 +1575,9 @@ SERVICIOS_LLAVES = (
             "en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS "
             "(no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma.",
             "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS).",
-            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor y reinicia los dos servicios.",
+            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor, junto con "
+            "PLATAFORMA_URL (la dirección pública del sitio, p. ej. https://app.creatvmachine.com: es la base de "
+            "los enlaces que van en los correos), y reinicia los dos servicios.",
             "Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. "
             "Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto.",
         ],

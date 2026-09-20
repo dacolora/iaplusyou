@@ -9,6 +9,7 @@ import re
 
 import pytest
 
+from tests.conftest import sembrar_usuarios
 from tests.test_rutas_productos import _cliente_admin
 
 
@@ -22,7 +23,11 @@ def app(base_temporal, tmp_path, monkeypatch):
     import dashboard
     monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
     monkeypatch.delenv("PLATAFORMA_URL", raising=False)
+    monkeypatch.delenv("META_REDIRECT_URI", raising=False)
+    # usuarios.json propio (solo el admin sembrado): los tests de acá crean sus
+    # usuarios y comprueban que el registro no deje nada.
     monkeypatch.setattr(usuarios, "_path", lambda: str(tmp_path / "usuarios.json"))
+    sembrar_usuarios(tmp_path / "usuarios.json", nombres=("admin",))
     monkeypatch.setattr(dashboard, "BASE_DIR", str(tmp_path))
     monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
     monkeypatch.setattr(estado_mod, "BASE_DIR", str(tmp_path))
@@ -72,7 +77,9 @@ def _ana(app, correo="ana@ejemplo.com", verificado=False):
 
 
 def _enlace(correo, ruta):
-    m = re.search(rf"(https?://\S+/{ruta}/\S+)", correo["cuerpo"])
+    """Ruta (sin esquema ni host) del enlace del correo: el test client guarda
+    la cookie para "localhost" y el enlace lleva la base pública fija."""
+    m = re.search(rf"https?://[^/\s]+(/{ruta}/\S+)", correo["cuerpo"])
     assert m, correo["cuerpo"]
     return m.group(1)
 
@@ -108,7 +115,7 @@ def test_registro_valida_correo_contrasena_y_usuario(app, cambio, mensaje):
     c = app["dashboard"].app.test_client()
     r = c.post("/proyectos/nuevo", data={**REGISTRO, **cambio})
     assert r.status_code == 400 and mensaje in r.get_data(as_text=True)
-    assert app["usuarios"].cargar() == {}
+    assert list(app["usuarios"].cargar()) == ["admin"]
 
 
 def test_registro_con_correo_crea_usuario_envia_verificacion_y_abre_sesion(app):
@@ -120,7 +127,7 @@ def test_registro_con_correo_crea_usuario_envia_verificacion_y_abre_sesion(app):
     s = _sesion(c)
     assert s["usuario"] == "acme" and s["rol"] == "cliente" and s["cliente"] == "acme_store" and s["sv"] == 1
     assert len(app["correos"]) == 1 and app["correos"][0]["a"] == "dueno@acme.com"
-    assert "http://localhost/verificar/" in app["correos"][0]["cuerpo"]
+    assert "http://127.0.0.1:5050/verificar/" in app["correos"][0]["cuerpo"]   # sin PLATAFORMA_URL: base local
     assert any("Te mandamos un correo a dueno@acme.com" in m for m in _flashes(c))
 
 
@@ -456,18 +463,182 @@ def test_configuracion_tiene_seccion_cuenta_y_tarjeta_smtp_renombrada(app):
     assert "Correo de la plataforma (cuentas y avisos)" in cfg
     tarjeta = cfg[cfg.index('id="llave-smtp"'):cfg.index("</article>", cfg.index('id="llave-smtp"'))]
     assert "confirmar el correo de cada cuenta" in tarjeta and "Contraseñas de aplicación" in tarjeta
+    assert "PLATAFORMA_URL" in tarjeta
 
 
-# --- url_base / ip --------------------------------------------------------------------
+# --- C1: la base de los enlaces nunca sale de la cabecera Host ---------------------------
 
-def test_url_base_respeta_proxy_y_plataforma_url(app, monkeypatch):
+def test_enlace_por_correo_usa_plataforma_url_y_no_la_cabecera_host(app, monkeypatch):
+    _ana(app)
+    monkeypatch.setenv("PLATAFORMA_URL", "https://app.creatv.test/")
+    c = app["dashboard"].app.test_client()
+    r = c.post("/recuperar", data={"correo": "ana@ejemplo.com"}, headers={"Host": "evil.example"})
+    assert r.status_code == 302
+    cuerpo = app["correos"][0]["cuerpo"]
+    assert "https://app.creatv.test/restablecer/" in cuerpo and "evil.example" not in cuerpo
+    assert "evil.example" not in (app["correos"][0]["html"] or "")
+
+
+def test_url_base_sin_plataforma_url_cae_a_meta_redirect_uri_o_local(app, monkeypatch, caplog):
     d = app["dashboard"]
-    with d.app.test_request_context("/recuperar", base_url="http://app.creatv.test",
-                                    headers={"X-Forwarded-Proto": "https", "X-Forwarded-For": "1.2.3.4, 10.0.0.1"}):
+    monkeypatch.setattr(d, "_aviso_url_base_dado", False)
+    with d.app.test_request_context("/recuperar", base_url="http://evil.example",
+                                    headers={"X-Forwarded-Proto": "https", "X-Forwarded-Host": "evil.example"}):
+        with caplog.at_level("WARNING", logger="dashboard"):
+            assert d._url_base() == "http://127.0.0.1:5050"
+            assert d._url_base() == "http://127.0.0.1:5050"
+        assert sum("PLATAFORMA_URL" in rec.getMessage() for rec in caplog.records) == 1   # avisa una sola vez
+        monkeypatch.setenv("META_REDIRECT_URI", "https://app.creatv.test/meta/callback")
         assert d._url_base() == "https://app.creatv.test"
-        assert d._ip_cliente() == "1.2.3.4"
-    with d.app.test_request_context("/recuperar", base_url="http://app.creatv.test"):
-        assert d._url_base() == "http://app.creatv.test"
-    monkeypatch.setenv("PLATAFORMA_URL", "https://fija.test/")
-    with d.app.test_request_context("/recuperar", base_url="http://otro.test"):
+        monkeypatch.setenv("PLATAFORMA_URL", "https://fija.test/")
         assert d._url_base() == "https://fija.test"
+
+
+def test_host_distinto_a_plataforma_url_es_404_salvo_localhost(app, monkeypatch):
+    d = app["dashboard"]
+    monkeypatch.setenv("PLATAFORMA_URL", "https://app.creatv.test")
+    c = d.app.test_client()
+    # Con app.testing el chequeo no corre (los demás tests usan "localhost").
+    assert c.get("/login", headers={"Host": "evil.example"}).status_code == 200
+    monkeypatch.setitem(d.app.config, "TESTING", False)
+    assert c.get("/login", headers={"Host": "evil.example"}).status_code == 404
+    assert c.get("/login", headers={"Host": "app.creatv.test"}).status_code == 200
+    assert c.get("/login", headers={"Host": "APP.creatv.test:443"}).status_code == 200
+    assert c.get("/login", headers={"Host": "localhost:5050"}).status_code == 200
+    assert c.get("/login", headers={"Host": "127.0.0.1:5050"}).status_code == 200
+    monkeypatch.delenv("PLATAFORMA_URL")
+    assert c.get("/login", headers={"Host": "evil.example"}).status_code == 200   # sin la variable no se filtra
+
+
+# --- I1: toda sesión tiene que ser de un usuario que exista -------------------------------
+
+def test_sesion_de_usuario_inexistente_sin_sv_tambien_se_cierra(app):
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "fantasma"; s["rol"] = "cliente"; s["cliente"] = "acme"      # cookie vieja, sin sv
+    r = c.get("/cliente/acme")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+    assert "usuario" not in _sesion(c)
+    # Y también al pedir un proyecto ajeno: la sesión muerta se cierra antes del guard por cliente.
+    with c.session_transaction() as s:
+        s["usuario"] = "fantasma"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    r = c.get("/cliente/otro")
+    assert r.headers["Location"].endswith("/login") and "usuario" not in _sesion(c)
+
+
+# --- I2: la IP sale de remote_addr; X-Forwarded-For solo con ProxyFix ----------------------
+
+def test_ip_cliente_ignora_x_forwarded_for_salvo_detras_de_proxy(app, monkeypatch):
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    d = app["dashboard"]
+    xff = {"X-Forwarded-For": "1.2.3.4, 9.9.9.9", "X-Forwarded-Proto": "https"}
+    with d.app.test_request_context("/recuperar", headers=xff, environ_base={"REMOTE_ADDR": "127.0.0.1"}):
+        assert d._ip_cliente() == "127.0.0.1"
+    monkeypatch.delenv("DETRAS_DE_PROXY", raising=False)
+    assert d._detras_de_proxy() is False
+    monkeypatch.setenv("DETRAS_DE_PROXY", "1")
+    assert d._detras_de_proxy() is True
+    # Con ProxyFix (x_for=1) vale el ÚLTIMO valor, el que añade nginx; el primero lo inventa el cliente.
+    monkeypatch.setattr(d.app, "wsgi_app", ProxyFix(d.app.wsgi_app, x_for=1, x_proto=1, x_host=0))
+    vistas = []
+    monkeypatch.setattr(d, "_limite_correo", lambda prefijo, correo: vistas.append(d._ip_cliente()) or False)
+    _ana(app)
+    d.app.test_client().post("/recuperar", data={"correo": "ana@ejemplo.com"}, headers=xff,
+                             environ_base={"REMOTE_ADDR": "127.0.0.1"})
+    assert vistas == ["9.9.9.9"]
+
+
+# --- I3: cookie de sesión y POST sin contraseña solo desde la propia página ----------------
+
+def test_flags_de_la_cookie_de_sesion(app):
+    d = app["dashboard"]
+    assert d.app.config["SESSION_COOKIE_HTTPONLY"] is True and d.app.config["SESSION_COOKIE_SAMESITE"] == "Lax"
+    assert d._config_sesion("https://app.creatv.test")["SESSION_COOKIE_SECURE"] is True
+    assert d._config_sesion("http://localhost:5050")["SESSION_COOKIE_SECURE"] is False
+    assert d._config_sesion("")["SESSION_COOKIE_SECURE"] is False
+    c = d.app.test_client()
+    _ana(app)
+    r = c.post("/login", data={"usuario": "ana", "password": "secreta123"})
+    cookie = r.headers.get("Set-Cookie", "")
+    assert "HttpOnly" in cookie and "SameSite=Lax" in cookie
+
+
+@pytest.mark.parametrize("sitio, esperado", [
+    (None, 302), ("same-origin", 302), ("none", 302), ("cross-site", 403), ("same-site", 403),
+])
+def test_reenviar_y_marcar_verificado_rechazan_post_de_otro_sitio(app, sitio, esperado):
+    headers = {} if sitio is None else {"Sec-Fetch-Site": sitio}
+    c = _ana(app)
+    r = c.post("/reenviar-verificacion", headers=headers)
+    assert r.status_code == esperado
+    assert len(app["correos"]) == (1 if esperado == 302 else 0)
+    admin = _cliente_admin(app["dashboard"])
+    r = admin.post("/admin/usuarios/ana/verificar", headers=headers)
+    assert r.status_code == esperado
+    assert app["usuarios"].obtener("ana")["correo_verificado"] is (esperado == 302)
+
+
+# --- I4: el registro tiene tope por IP y el correo de verificación pasa por el límite -------
+
+def test_registro_limita_por_ip_y_el_correo_por_limite(app, monkeypatch):
+    d = app["dashboard"]
+    claves = []
+    real = app["cuentas"].limite_ok
+
+    def espiar(clave, maximo=5, ventana_s=3600):
+        claves.append(clave)
+        return real(clave, maximo, ventana_s)
+    monkeypatch.setattr(app["cuentas"], "limite_ok", espiar)
+    c = d.app.test_client()
+    r = c.post("/proyectos/nuevo", data=REGISTRO, environ_base={"REMOTE_ADDR": "5.6.7.8"})
+    assert r.status_code == 302 and len(app["correos"]) == 1
+    assert claves == ["alta:ip:5.6.7.8", "verif:dueno@acme.com", "verif:ip:5.6.7.8"]
+    # Sexto registro desde la misma IP en la hora: 429 y no se crea nada.
+    for i in range(4):
+        real(f"alta:ip:5.6.7.8")
+    r = d.app.test_client().post("/proyectos/nuevo", data={**REGISTRO, "nombre": "Otra", "usuario": "otra",
+                                                            "correo": "otra@acme.com"},
+                                 environ_base={"REMOTE_ADDR": "5.6.7.8"})
+    assert r.status_code == 429 and not app["usuarios"].existe("otra") and len(app["correos"]) == 1
+    assert "Demasiados registros" in r.get_data(as_text=True)
+    # Otra IP sigue pudiendo, pero si el límite de correos ya está lleno se crea la cuenta sin enviar.
+    monkeypatch.setattr(app["cuentas"], "limite_ok", lambda clave, maximo=5, ventana_s=3600: not clave.startswith("verif"))
+    r = d.app.test_client().post("/proyectos/nuevo", data={**REGISTRO, "nombre": "Otra", "usuario": "otra",
+                                                            "correo": "otra@acme.com"},
+                                 environ_base={"REMOTE_ADDR": "5.6.7.9"})
+    assert r.status_code == 302 and app["usuarios"].existe("otra") and len(app["correos"]) == 1
+
+
+# --- menores: confirm del panel, token viejo al cambiar correo, Referrer-Policy ------------
+
+def test_panel_confirm_no_se_rompe_con_un_usuario_raro(app, monkeypatch):
+    monkeypatch.setattr(app["dashboard"].estado_mod, "listar_clientes", lambda: [])
+    raro = "x') ;alert(1);//"
+    app["usuarios"].guardar({**app["usuarios"].cargar(),
+                             raro: {"password_hash": "x", "rol": "cliente", "cliente": "acme", "correo": "r@x.com"}})
+    html = _cliente_admin(app["dashboard"]).get("/panel").get_data(as_text=True)
+    onsubmit = re.search(r"onsubmit='([^']*)'", html).group(1)
+    # Ni la comilla cruda ni su entidad (&#39;, que el parser HTML decodifica
+    # antes de que JS vea el atributo) llegan al confirm: va como '.
+    assert "'" not in onsubmit and "&#39;" not in onsubmit
+    assert "confirm(\"\\u00bfMarcar a x\\u0027) ;alert(1);//" in onsubmit
+
+
+def test_cambiar_correo_invalida_el_token_del_correo_anterior_aunque_no_se_envie(app, monkeypatch):
+    c = _ana(app, correo="vieja@ejemplo.com")
+    token_viejo = app["cuentas"].emitir("verificacion", "ana", "vieja@ejemplo.com")
+    monkeypatch.setattr(app["cuentas"], "smtp_configurado", lambda: False)   # no se emite uno nuevo
+    c.post("/cuenta/correo", data={"correo": "nueva@ejemplo.com", "password": "secreta123"})
+    assert app["usuarios"].obtener("ana")["correo"] == "nueva@ejemplo.com"
+    assert app["cuentas"].validar("verificacion", token_viejo) is None
+    c.get(f"/verificar/{token_viejo}")
+    entry = app["usuarios"].obtener("ana")
+    assert entry["correo"] == "nueva@ejemplo.com" and entry["correo_verificado"] is False
+
+
+def test_referrer_policy_en_paginas_con_token(app):
+    _ana(app)
+    token = app["cuentas"].emitir("restablecer", "ana", "ana@ejemplo.com")
+    c = app["dashboard"].app.test_client()
+    assert c.get(f"/restablecer/{token}").headers["Referrer-Policy"] == "no-referrer"
+    assert c.get("/login").headers["Referrer-Policy"] == "strict-origin-when-cross-origin"

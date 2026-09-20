@@ -91,7 +91,7 @@
         <td>
           {% if not u.correo_verificado %}
           <form method="post" action="{{ url_for('admin_usuario_verificar', usuario=u.usuario) }}" class="inline"
-                onsubmit="return confirm('¿Marcar a {{ u.usuario }} como verificado sin que abra el enlace del correo?');">
+                onsubmit='return confirm({{ ("¿Marcar a %s como verificado sin que abra el enlace del correo?" % u.usuario)|tojson }});'>
             <button type="submit" class="btn-guardar btn-xs">Marcar verificado</button>
           </form>
           {% endif %}

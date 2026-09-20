@@ -78,6 +78,15 @@ def _invalidar_anteriores(con, tipo, usuario, ahora_iso):
     )
 
 
+def invalidar(tipo, usuario):
+    """Marca como usados todos los tokens vivos de ese tipo para el usuario
+    (p. ej. al cambiar el correo: el enlace del correo anterior no puede
+    seguir sirviendo aunque no se llegue a emitir uno nuevo)."""
+    _validar_tipo(tipo)
+    with db.conectar() as con:
+        _invalidar_anteriores(con, tipo, usuario, _iso(_ahora()))
+
+
 def emitir(tipo, usuario, correo, ip=None):
     """Crea un token nuevo de ese tipo para el usuario y devuelve el token
     crudo (lo único que va en el enlace). Los tokens anteriores del mismo
@@ -165,6 +174,9 @@ def limite_ok(clave, maximo=LIMITE_MAXIMO, ventana_s=LIMITE_VENTANA_S):
     ahora = time.time()
     desde = ahora - ventana_s
     with db.conectar() as con:
+        # Lock de escritura ANTES de leer (mismo truco que experimentos._bloquear):
+        # sin él dos peticiones a la vez leen la misma lista y una pisa a la otra.
+        con.execute(db.kv.update().where(db.kv.c.clave == clave_kv).values(valor=db.kv.c.valor))
         crudo = con.execute(sa.select(db.kv.c.valor).where(db.kv.c.clave == clave_kv)).scalar()
         try:
             marcas = [float(t) for t in (json.loads(crudo) if crudo else [])]
