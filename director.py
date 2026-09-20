@@ -21,7 +21,7 @@ import flowplus_prompt
 from providers import flowplus_modelos
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
-MAX_TOKENS = 2000
+MAX_TOKENS = 4000
 COSTO_LLAMADA_USD = 0.01
 VERSION = 1
 MAX_CARACTERES_PROMPT = 2500
@@ -70,6 +70,7 @@ REGLAS
 7. Nada de "alta calidad", "8k", "sin deformaciones" ni packs de calidad.
 8. Idioma de los textos: {idioma}. Los tokens (Image N, Video N) siempre en inglés.
 9. planos_b: misma intención y mismos activos; el primer plano usa OTRO movimiento de cámara y otro arranque; diferencia_b lo explica en una frase.
+10. Los planos de cada versión, juntos, no pasan de {max_chars} caracteres.
 
 SALIDA (JSON estricto, sin texto alrededor ni markdown):
 {{"planos": [{{"n": 1, "inicio_s": 0, "fin_s": 4, "plano": "...", "camara": "dolly_in", "accion": "...", "sonido": "..."}}],
@@ -101,7 +102,8 @@ _FAMILIAS = {
 
 def _system(familia, cierre, n, duracion, idioma):
     return _FAMILIAS[familia].format(cierre=cierre) + _REGLAS_COMUNES.format(
-        n_planos=n, duracion=duracion, camaras=", ".join(flowplus_prompt.CAMARAS), idioma="español" if idioma == "es" else "inglés")
+        n_planos=n, duracion=duracion, camaras=", ".join(flowplus_prompt.CAMARAS), idioma="español" if idioma == "es" else "inglés",
+        max_chars=MAX_CARACTERES_PROMPT)
 
 
 def _mensaje(sesion, idioma):
@@ -186,11 +188,17 @@ def _validar_y_componer(cliente, sesion, datos, n, duracion, cierre):
         raise ValueError("planos_b: el primer plano repite la cámara de la versión A")
     if not str(datos.get("diferencia_b") or "").strip():
         raise ValueError("falta diferencia_b")
+    # El tope de longitud mide SOLO lo que escribió Claude (el bloque de
+    # planos), no el prompt ya compuesto: ese trae guía de marca, reglas de
+    # activos y EVITAR, que con una guía normal ya pasan de 2500 por su
+    # cuenta y harían fallar al director siempre (spec ruling F1).
+    con_sonido = bool(sesion.get("con_sonido"))
+    for nombre, planos in (("planos", datos["planos"]), ("planos_b", datos["planos_b"])):
+        bloque = "\n".join(flowplus_prompt._bloque_planos(planos, con_sonido))
+        if len(bloque) > MAX_CARACTERES_PROMPT:
+            raise ValueError(f"{nombre}: los planos pasan de {MAX_CARACTERES_PROMPT} caracteres")
     prompt_a = _componer(cliente, sesion, datos["planos"], cierre)
     prompt_b = _componer(cliente, sesion, datos["planos_b"], cierre)
-    for nombre, texto in (("prompt_a", prompt_a), ("prompt_b", prompt_b)):
-        if len(texto) > MAX_CARACTERES_PROMPT:
-            raise ValueError(f"{nombre} pasa de {MAX_CARACTERES_PROMPT} caracteres")
     return {"planos": datos["planos"], "planos_b": datos["planos_b"], "prompt_a": prompt_a, "prompt_b": prompt_b,
             "diferencia_b": str(datos["diferencia_b"]).strip()}
 
@@ -222,6 +230,21 @@ def compilar(cliente, sesion, idioma="es"):
         except Exception as e:
             raise DirectorError(f"Anthropic: {e}") from e
         texto = "".join(getattr(b, "text", "") for b in resp.content)
+        if getattr(resp, "stop_reason", None) == "max_tokens":
+            # Se cortó a mitad de la respuesta: ni vale la pena intentar
+            # parsear JSON. Se le pide más corto en vez de gastar el segundo
+            # (y último) intento en un error de parseo que no explica la causa.
+            ultimo_error = "respuesta truncada por longitud: responde más corto"
+            mensajes = mensajes + [{"role": "assistant", "content": texto},
+                                   {"role": "user", "content": f"Tu respuesta anterior no sirvió ({ultimo_error}). Responde solo el JSON pedido."}]
+            continue
+        if not texto.strip():
+            # La API rechaza un turno assistant con content vacío — no se puede
+            # simplemente reusar `texto` como en los demás casos de corrección.
+            ultimo_error = "respuesta vacía"
+            mensajes = mensajes + [{"role": "assistant", "content": "(respuesta vacía)"},
+                                   {"role": "user", "content": f"Tu respuesta anterior no sirvió ({ultimo_error}). Responde solo el JSON pedido."}]
+            continue
         try:
             datos = _extraer_json(texto)
             resultado = _validar_y_componer(cliente, sesion, datos, n, duracion, cierre)

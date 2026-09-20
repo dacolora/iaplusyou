@@ -64,7 +64,7 @@ def ejecutar(tarea):
         prompt, datos = _fallback(cliente, entry, str(e)[:300])
         mensaje = "La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes."
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
-    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos)
+    creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
     if p.get("auto_lanzar"):
         entry = creative_flow.cargar(cliente)[cf_id]
         flowplus_lanzar.lanzar(cliente, cf_id, entry, prioridad=int(p.get("prioridad") or flowplus_lanzar.PRIORIDAD_NORMAL))

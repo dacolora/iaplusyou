@@ -12,8 +12,9 @@ class _Bloque:
 
 
 class _Resp:
-    def __init__(self, texto):
+    def __init__(self, texto, stop_reason="end_turn"):
         self.content = [_Bloque(texto)]
+        self.stop_reason = stop_reason
 
 
 class _Llamadas:
@@ -23,6 +24,9 @@ class _Llamadas:
 
 
 def _instalar_fake(monkeypatch, respuestas):
+    """respuestas: cada elemento es el texto de la respuesta, o un par
+    (texto, stop_reason) cuando el test necesita simular un stop_reason
+    distinto de "end_turn" (p.ej. "max_tokens")."""
     import director as mod
     registro = _Llamadas(respuestas)
 
@@ -31,7 +35,9 @@ def _instalar_fake(monkeypatch, respuestas):
             registro.kwargs.append(kw)
             if not registro.respuestas:
                 raise AssertionError("Claude recibió más llamadas de las esperadas")
-            return _Resp(registro.respuestas.pop(0))
+            item = registro.respuestas.pop(0)
+            texto, stop_reason = item if isinstance(item, tuple) else (item, "end_turn")
+            return _Resp(texto, stop_reason=stop_reason)
 
     class FakeAnthropic:
         def __init__(self, api_key=None):
@@ -42,13 +48,17 @@ def _instalar_fake(monkeypatch, respuestas):
     return registro
 
 
-def _planos(dur=8, cams=("dolly_in", "orbita_corta")):
+def _planos(dur=8, cams=("dolly_in", "orbita_corta"), accion=None, sonido=None):
+    """accion/sonido: si vienen, se usan literales en todos los planos (en vez
+    del default corto) — para los tests que necesitan bloques largos."""
     n = len(cams)
     paso = dur // n
     out = []
     for i, cam in enumerate(cams):
         out.append({"n": i + 1, "inicio_s": i * paso, "fin_s": dur if i == n - 1 else (i + 1) * paso,
-                    "plano": "plano medio", "camara": cam, "accion": f"acción {i + 1} con Image 1", "sonido": "brisa"})
+                    "plano": "plano medio", "camara": cam,
+                    "accion": accion if accion is not None else f"acción {i + 1} con Image 1",
+                    "sonido": sonido if sonido is not None else "brisa"})
     return out
 
 
@@ -99,7 +109,7 @@ def test_rechaza_planos_que_no_suman_y_pide_correccion_una_vez(monkeypatch):
     (lambda p: p.__setitem__("camara", "grua_lunar"), "cámara desconocida"),
     (lambda p: p.__setitem__("accion", "acción con Image 7"), "cita Image 7"),
     (lambda p: p.__setitem__("accion", "video vertical 9:16 de 8 segundos a 720p"), "escribe duración"),
-    (lambda p: p.__setitem__("accion", "x" * 2600), "pasa de 2500"),
+    (lambda p: p.__setitem__("accion", "x" * 2600), "los planos pasan de 2500"),
 ])
 def test_dos_respuestas_invalidas_lanzan_director_error(monkeypatch, cambio, motivo_esperado):
     import director
@@ -180,3 +190,51 @@ def test_modelo_sin_familia_lanza(monkeypatch):
     _instalar_fake(monkeypatch, [])
     with pytest.raises(director.DirectorError):
         director.compilar("acme", _sesion(modelo="inexistente"))
+
+
+def test_acepta_guia_de_marca_larga_y_cinco_planos(monkeypatch):
+    """F1: el tope de 2500 caracteres se mide solo sobre el bloque de planos
+    que escribió Claude (por versión), no sobre el prompt YA COMPUESTO — una
+    guía de marca larga (real, típica) más 5 planos no debe hacer fallar al
+    director aunque el prompt final termine pasando de 2500 caracteres."""
+    import director
+    dur = 25
+    assert director.n_planos(dur) == 5
+    accion = ("gira despacio frente a la luz mostrando el producto sin ninguna prisa en cada instante del plano " * 3)[:180]
+    sonido = ("brisa suave entre las hojas y pasos lejanos sobre la madera vieja del piso " * 2)[:60]
+    cams_a = ("dolly_in", "orbita_corta", "paneo_izq", "tilt_arriba", "grua_arriba")
+    cams_b = ("macro_a_abierto", "travelling_lateral", "zoom_in", "paneo_der", "cenital")
+    planos_a = _planos(dur, cams_a, accion=accion, sonido=sonido)
+    planos_b = _planos(dur, cams_b, accion=accion, sonido=sonido)
+    regla_larga = ("Coincide exacto con la referencia: mismo color, forma, material y logotipo, sin variaciones. " * 3)[:250]
+    guia_larga = "Luz cálida. " * 75
+    assert len(guia_larga) == 900 and len(regla_larga) == 250
+    sesion = _sesion(
+        duracion_objetivo=dur, guia_marca=guia_larga,
+        referencias=[{"tipo": "imagen", "etiqueta": "@Imagen 1", "token": "Image 1", "url": "https://x/1.png",
+                     "frame_url": "https://x/1.png", "categoria": "producto", "activo": "Silla Nórdica", "regla": regla_larga}],
+    )
+    respuesta = json.dumps({"planos": planos_a, "planos_b": planos_b,
+                            "diferencia_b": "La versión B arranca en macro y sigue de lado."})
+    _instalar_fake(monkeypatch, [respuesta])
+    r = director.compilar("acme", sesion)
+    assert len(r["prompt_a"]) > 2500
+
+
+def test_respuesta_truncada_por_max_tokens_pide_correccion(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, [("{\"planos\": [cortado a la mitad", "max_tokens"), _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 2
+    assert "truncada" in reg.kwargs[1]["messages"][-1]["content"]
+    assert r["prompt_a"].count("Shot ") == 2
+
+
+def test_respuesta_vacia_pide_correccion_sin_content_vacio(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, ["", _respuesta()])
+    r = director.compilar("acme", _sesion())
+    assert len(reg.kwargs) == 2
+    asistente = [m for m in reg.kwargs[1]["messages"] if m["role"] == "assistant"]
+    assert asistente[-1]["content"] == "(respuesta vacía)"
+    assert r["prompt_a"].count("Shot ") == 2

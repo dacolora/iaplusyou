@@ -120,3 +120,4 @@ def test_idioma_viene_de_la_preferencia_del_proyecto(base_temporal, monkeypatch,
     monkeypatch.setattr(td.director, "compilar", lambda cliente, sesion, idioma="es": visto.update(idioma=idioma) or _resultado())
     td.ejecutar({"payload": {"cliente": "acme", "cf_id": cid, "auto_lanzar": False}, "job_id": "j"})
     assert visto["idioma"] == "en"
+    assert cf.cargar("acme")[cid]["idioma_prompt"] == "en"
