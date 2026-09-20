@@ -49,6 +49,11 @@ def test_excel():
     assert ws["A3"].value == "Demographics (ASL)" and ws["B3"].value == "Mujer 30-50"
     assert ws["A5"].value == "Beliefs about self" and ws["B5"].value == "generosa"
     assert ws["A8"].value.startswith("What are other solutions") and ws["B8"].value == "1. Tarjetas\n2. Medias"
+    # Verificar que la exportación neutraliza celdas que empiezan como fórmula
+    SUB_F = dict(SUB_A, id=13, nombre="=SUM(A1)", tono="+peligro", estado="propuesto")
+    wb2 = load_workbook(io.BytesIO(exportar.excel(ESTUDIO, [{"id": 9, "nombre": "N", "deseo": "d", "resumen": "", "subs": [SUB_F]}])))
+    ws2 = wb2["Personas"]
+    assert ws2["B1"].value == "'=SUM(A1)" and ws2["B14"].value == "'+peligro"
     assert ws["B16"].value == "«nunca sé qué regalar»" and ws.freeze_panes == "B2"
 
 
@@ -58,5 +63,5 @@ def test_urls_comentarios(base_temporal):
     datos.agregar_comentarios("acme", eid, "texto", [{"fuente_id": "a", "texto": "con link", "url": "https://r.com/1"},
                                                      {"fuente_id": "b", "texto": "sin link"}])
     urls = datos.urls_comentarios("acme", eid)
-    assert sorted(urls.values(), key=str) == ["None", "https://r.com/1"] or set(urls.values()) == {None, "https://r.com/1"}
+    assert set(urls.values()) == {None, "https://r.com/1"}
     assert datos.urls_comentarios("otro", eid) == {}

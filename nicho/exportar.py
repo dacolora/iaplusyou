@@ -33,6 +33,16 @@ FILAS_HOJA = [
 ]
 BASES_NOMBRE = {"emocion": "emoción", "experiencia_producto": "experiencia con el producto"}
 
+# Igual que tablero._celda: un texto que empieza por =, +, -, @, tab o CR lo
+# ejecutaría Excel/Sheets como fórmula al abrir el archivo. Los campos vienen de
+# comentarios ajenos y de Claude, así que se neutralizan con un apóstrofo.
+_INICIOS_FORMULA = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _celda(texto):
+    t = "" if texto is None else str(texto)
+    return "'" + t if t.startswith(_INICIOS_FORMULA) else t
+
 
 def subs_exportables(nucleos):
     return [(n, s) for n in (nucleos or []) for s in (n.get("subs") or []) if s.get("estado") != "descartado"]
@@ -112,7 +122,7 @@ def excel(estudio, nucleos, urls=None):
         celda.font, celda.fill, celda.alignment = negrita, relleno, ajuste
     for col, (_, s) in enumerate(subs_exportables(nucleos), start=2):
         for fila, (clave, _) in enumerate(FILAS_HOJA, start=1):
-            celda = ws.cell(row=fila, column=col, value=valor(s, clave, urls) or None)
+            celda = ws.cell(row=fila, column=col, value=_celda(valor(s, clave, urls)) or None)
             celda.alignment = ajuste
             if fila == 1:
                 celda.font = Font(bold=True)
