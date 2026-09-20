@@ -72,6 +72,27 @@ sudo systemctl restart iaplusyou creatv-worker
 Si solo se reinicia `iaplusyou`, el worker sigue corriendo código viejo y puede quedar
 desalineado con el esquema de la base tras una migración.
 
+**Cuentas con correo verificado** (registro con correo, "olvidé mi contraseña",
+Configuración › Cuenta) necesitan dos variables más en el `.env` del servidor (el
+servicio `iaplusyou` de gunicorn lo carga con `EnvironmentFile=.env`, así que no hay que
+tocar la unidad de systemd):
+- `PLATAFORMA_URL=https://app.creatvmachine.com`: la dirección pública fija del sitio. Es
+  la base de los enlaces que viajan en los correos (confirmar cuenta, restablecer
+  contraseña) — nunca se toma de la cabecera `Host` de la petición, que la manda quien
+  pide — y el único host que el servidor atiende (cualquier otro `Host` responde 404;
+  `localhost`/`127.0.0.1` pasan siempre). Con `https` la cookie de sesión sale `Secure`.
+  Sin ella los enlaces usan el host de `META_REDIRECT_URI`, o `http://127.0.0.1:5050`
+  en local, y el log lo avisa una vez.
+- `DETRAS_DE_PROXY=1`: solo en el VPS, donde nginx está delante de gunicorn y es lo único
+  que le llega. Con esto la IP y el esquema reales se leen de `X-Forwarded-For` /
+  `X-Forwarded-Proto` (el último valor, el que añade nginx con
+  `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` y
+  `proxy_set_header X-Forwarded-Proto $scheme;`). En local déjala vacía: sin proxy,
+  cualquiera podría inventar esas cabeceras y saltarse los límites por IP (5 registros,
+  5 correos de verificación y 5 de recuperación por hora y por IP).
+El correo sale por el SMTP de la sección de abajo; sin SMTP el administrador marca las
+cuentas como verificadas desde el panel.
+
 **Final edition** (guion + voz + música + texto en pantalla sobre un video de
 CreativeFlowPlus ya aprobado) necesita que exista la carpeta donde cachea las pistas
 de música generadas — no la crea sola, y si falta el worker revienta al primer
@@ -138,6 +159,12 @@ servicio que se paga (Anthropic, fal.ai, Higgsfield, Cloudflare R2, Meta, correo
 con el paso a paso para conseguir la llave, qué cuesta y si está puesta en el servidor, y
 después el paso a paso para conectar Shopify, WooCommerce y MercadoLibre. Las reglas del
 decisor se editan en Experimentos › "Reglas del motor".
+
+**Precios a la vista** (sin créditos): cada botón que gasta muestra "≈ US$" antes de
+lanzar, cada pieza/final muestra lo que costó, y Configuración › **Gasto** tiene el total del
+mes por tipo, el historial y un CSV. Son los precios reales de los proveedores (Higgsfield,
+fal.ai, Anthropic); la pauta de Meta se cobra en la cuenta publicitaria del cliente y se
+muestra aparte, en su moneda.
 
 ---
 

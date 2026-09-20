@@ -1,54 +1,303 @@
 {% extends "base.html" %}
 {% block title %}Panel — Proyectos{% endblock %}
 {% block content %}
+{% set t = datos.totales if datos else none %}
 <section class="hero aparece">
   <div class="hero-texto">
     <span class="eyebrow">Panel de administrador</span>
     <h1>Todos los proyectos.</h1>
     <p class="hero-sub">Solo tú ves esta pantalla — cada proyecto tiene su propio usuario y contraseña, restringido a lo suyo.</p>
+    <p class="hero-sub"><a href="{{ url_for('mapa_codigo') }}">Mapa del código →</a> cómo está construida la plataforma, archivo por archivo.</p>
   </div>
-  {% if totales.clientes %}
+  {% if t %}
   <div class="hero-stats">
     <div class="stat">
-      <span class="stat-num">{{ totales.clientes }}</span>
-      <span class="stat-label">proyecto{{ 's' if totales.clientes != 1 }}</span>
+      <span class="stat-num">{{ t.proyectos }}</span>
+      <span class="stat-label">proyecto{{ 's' if t.proyectos != 1 }}</span>
     </div>
     <div class="stat">
-      <span class="stat-num">{{ totales.pendiente }}</span>
+      <span class="stat-num">{{ t.pendiente }}</span>
       <span class="stat-label">por revisar</span>
     </div>
     <div class="stat">
-      <span class="stat-num">{{ totales.publicado }}</span>
+      <span class="stat-num">{{ t.publicado }}</span>
       <span class="stat-label">publicados</span>
+    </div>
+    <div class="stat" title="Lo pagado a los proveedores de IA este mes, todos los proyectos">
+      <span class="stat-num">{{ t.generacion_usd | usd }}</span>
+      <span class="stat-label">generación este mes</span>
     </div>
   </div>
   {% endif %}
 </section>
 
-{% if clientes %}
-<div class="grid-clientes aparece">
-  {% for c in clientes %}
-  <a class="card-cliente" href="{{ url_for('ver_cliente', cliente=c.id) }}" style="--i:{{ loop.index0 }}">
-    <div class="card-cliente-portada">
-      {% if c.portada %}
-      <img src="{{ c.portada }}" alt="" loading="lazy">
-      {% else %}
-      <div class="card-cliente-sin-portada"><span>{{ c.nombre[0] | upper }}</span></div>
-      {% endif %}
-      <div class="card-cliente-degradado"></div>
-    </div>
-    <div class="card-cliente-body">
-      <div class="nombre">{{ c.nombre }}</div>
-      <div class="badges">
-        {% if c.pendiente %}<span class="badge pendiente">{{ c.pendiente }} por revisar</span>{% endif %}
-        <span class="badge publicado">{{ c.publicado }} publicado{{ 's' if c.publicado != 1 }}</span>
-        {% if c.rechazado %}<span class="badge rechazado">{{ c.rechazado }} rechazado{{ 's' if c.rechazado != 1 }}</span>{% endif %}
-      </div>
-    </div>
-  </a>
-  {% endfor %}
-</div>
+{% if not datos %}
+<p class="vacio">No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento.</p>
 {% else %}
-<p class="vacio">Todavía no hay proyectos.</p>
+
+{# ---- Este mes: totales de todos los proyectos (admin.resumen) ---- #}
+<section class="admin-bloque aparece" id="admin-mes">
+  <div class="admin-cabecera">
+    <h2>Este mes</h2>
+    <span class="vacio">del {{ datos.desde[:10] }} al {{ datos.hasta[:10] }} · todos los proyectos</span>
+  </div>
+  <div class="kpis admin-kpis">
+    <div class="kpi">
+      <span>Generación (IA)</span>
+      <strong>{{ t.generacion_usd | usd }}</strong>
+      <small>{{ t.cobros }} cobro{{ 's' if t.cobros != 1 }} a proveedores</small>
+    </div>
+    {% if t.pauta %}
+    {% for moneda, gasto in t.pauta.items() | sort %}
+    <div class="kpi">
+      <span>Pauta en Meta</span>
+      <strong>{{ gasto | dinero(moneda) }}</strong>
+      <small>experimentos y anuncios sueltos</small>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="kpi">
+      <span>Pauta en Meta</span>
+      <strong class="tb-sin-dato">—</strong>
+      <small>sin gasto medido este mes</small>
+    </div>
+    {% endif %}
+    <div class="kpi">
+      <span>Piezas generadas</span>
+      <strong>{{ t.piezas_mes }}</strong>
+      <small>videos, imágenes y finales listos</small>
+    </div>
+    <div class="kpi">
+      <span>Por revisar</span>
+      <strong>{{ t.pendiente }}</strong>
+      <small>esperan una aprobación</small>
+    </div>
+    <div class="kpi">
+      <span>Experimentos corriendo</span>
+      <strong>{{ t.experimentos_corriendo }}</strong>
+      <small>sin contar anuncios sueltos</small>
+    </div>
+  </div>
+  {% if t.por_tipo %}
+  <p class="admin-tipos">
+    {% for tipo, usd in t.por_tipo.items() | sort(attribute=1, reverse=true) %}
+    <span class="admin-tipo">{{ nombres_tipo.get(tipo, tipo) }} <strong>{{ usd | usd }}</strong></span>
+    {% endfor %}
+  </p>
+  {% endif %}
+</section>
+
+{# ---- Salud del sistema: el worker y sus últimos errores ---- #}
+<section class="admin-bloque aparece" id="admin-salud">
+  {% set w = datos.worker %}
+  <div class="admin-cabecera">
+    <h2>Salud del sistema</h2>
+    <span class="vacio">el worker es el proceso que genera, publica y sincroniza; si se atasca, todo espera</span>
+  </div>
+  <div class="kpis admin-kpis">
+    <div class="kpi">
+      <span>Tareas en espera</span>
+      <strong>{{ w.pendientes }}</strong>
+      <small>en la cola</small>
+    </div>
+    <div class="kpi">
+      <span>En curso</span>
+      <strong>{{ w.en_curso }}</strong>
+      <small>ahora mismo</small>
+    </div>
+    <div class="kpi{% if w.error %} kpi-alerta{% endif %}">
+      <span>En error</span>
+      <strong>{{ w.error }}</strong>
+      <small>sin más reintentos</small>
+    </div>
+    <div class="kpi">
+      <span>Última terminada</span>
+      <strong>{{ w.ultima_hecha_hace or '—' }}</strong>
+      <small>{{ w.hechas }} hechas en total</small>
+    </div>
+  </div>
+  {% if w.ultimos_errores %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>Cuándo</th><th>Tarea</th><th>Proyecto</th><th>Error</th></tr></thead>
+      <tbody>
+      {% for e in w.ultimos_errores %}
+      <tr>
+        <td>{{ e.hace or e.cuando }}</td>
+        <td><code>{{ e.tipo }}</code></td>
+        <td>{{ (nombres or {}).get(e.cliente, e.cliente) or '—' }}</td>
+        <td class="admin-error">{{ e.error }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+{# ---- Proyectos: tabla comparativa del mes + tarjetas de acceso ---- #}
+<section class="admin-bloque aparece" id="admin-proyectos">
+  <div class="admin-cabecera">
+    <h2>Proyectos</h2>
+    <span class="vacio">lo de este mes, proyecto por proyecto</span>
+  </div>
+  {% if datos.proyectos %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead>
+        <tr>
+          <th>Proyecto</th><th>Generación (US$)</th><th>Por tipo</th><th>Pauta</th><th>Piezas</th>
+          <th>Por revisar</th><th>Publicados</th><th>Experimentos</th><th>Meta</th><th>Tiendas</th><th>Última actividad</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for p in datos.proyectos %}
+      <tr>
+        <td><a href="{{ url_for('ver_cliente', cliente=p.id) }}"><strong>{{ p.nombre }}</strong></a></td>
+        <td class="num"><strong>{{ p.generacion_usd | usd }}</strong><br><small>{{ p.cobros }} cobro{{ 's' if p.cobros != 1 }}</small></td>
+        <td>
+          <div class="admin-tipos-celda">
+          {% for tipo, usd in p.por_tipo.items() | sort(attribute=1, reverse=true) %}
+            <span class="admin-tipo">{{ nombres_tipo.get(tipo, tipo) }} {{ usd | usd }}</span>
+          {% else %}
+            <span class="vacio">—</span>
+          {% endfor %}
+          </div>
+        </td>
+        <td class="num">
+          {% for moneda, gasto in p.pauta.items() | sort %}{{ gasto | dinero(moneda) }}<br>{% else %}<span class="vacio">—</span>{% endfor %}
+        </td>
+        <td class="num">{{ p.piezas_mes }}</td>
+        <td class="num">{% if p.pendiente %}<span class="badge pendiente">{{ p.pendiente }}</span>{% else %}0{% endif %}</td>
+        <td class="num">{{ p.publicado }}</td>
+        <td class="num">{{ p.experimentos_corriendo }}</td>
+        <td><span class="admin-pill {{ 'ok' if p.meta == 'conectado' else 'off' }}">{{ 'conectada' if p.meta == 'conectado' else 'sin conectar' }}</span></td>
+        <td class="num">{{ p.tiendas }}</td>
+        <td>{{ p.ultima_actividad_hace or '—' }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid-clientes">
+    {% for c in datos.proyectos %}
+    <a class="card-cliente" href="{{ url_for('ver_cliente', cliente=c.id) }}" style="--i:{{ loop.index0 }}">
+      <div class="card-cliente-portada">
+        <div class="card-cliente-sin-portada"><span>{{ c.nombre[0] | upper }}</span></div>
+        <div class="card-cliente-degradado"></div>
+      </div>
+      <div class="card-cliente-body">
+        <div class="nombre">{{ c.nombre }}</div>
+        <div class="badges">
+          {% if c.pendiente %}<span class="badge pendiente">{{ c.pendiente }} por revisar</span>{% endif %}
+          <span class="badge publicado">{{ c.publicado }} publicado{{ 's' if c.publicado != 1 }}</span>
+          {% if c.rechazado %}<span class="badge rechazado">{{ c.rechazado }} rechazado{{ 's' if c.rechazado != 1 }}</span>{% endif %}
+        </div>
+        <div class="card-cliente-gasto" title="Generación del mes (US$): lo pagado a los proveedores de IA este mes">
+          <span>Gasto del mes (US$)</span>
+          <strong>{{ c.generacion_usd | usd }}</strong>
+        </div>
+        {% for moneda, gasto in c.pauta.items() | sort %}
+        <div class="card-cliente-gasto" title="Pauta en Meta este mes, en la moneda de la cuenta publicitaria">
+          <span>Pauta en Meta</span>
+          <strong>{{ gasto | dinero(moneda) }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">Todavía no hay proyectos.</p>
+  {% endif %}
+</section>
+
+{# ---- Historial: gasto por mes, últimos cobros y CSV ---- #}
+<section class="admin-bloque aparece" id="admin-historial">
+  <div class="admin-cabecera">
+    <h2>Historial</h2>
+    <a class="btn-guardar" href="{{ url_for('panel_gasto_csv') }}">Descargar CSV del mes</a>
+  </div>
+  <h3>Generación por mes (US$)</h3>
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead>
+        <tr><th>Mes</th>{% for p in datos.proyectos %}<th>{{ p.nombre }}</th>{% endfor %}<th>Total</th></tr>
+      </thead>
+      <tbody>
+      {% for m in datos.meses %}
+      <tr>
+        <td>{{ m.mes }}</td>
+        {% for p in datos.proyectos %}<td class="num">{{ m.por_proyecto.get(p.id, 0) | usd }}</td>{% endfor %}
+        <td class="num"><strong>{{ m.total | usd }}</strong></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <h3>Últimos cobros</h3>
+  {% if datos.ultimos_cobros %}
+  <div class="admin-scroll">
+    <table class="tabla-admin">
+      <thead><tr><th>Cuándo</th><th>Proyecto</th><th>Tipo</th><th>Monto</th><th>Detalle</th></tr></thead>
+      <tbody>
+      {% for c in datos.ultimos_cobros %}
+      <tr>
+        <td>{{ c.creado_en[:16] | replace('T', ' ') }}</td>
+        <td>{{ (nombres or {}).get(c.cliente, c.cliente) }}</td>
+        <td>{{ nombres_tipo.get(c.tipo, c.tipo) }}</td>
+        <td class="num">{{ c.usd | usd }}</td>
+        <td class="admin-detalle">{{ c.detalle or c.referencia }}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="vacio">Todavía no hay cobros registrados.</p>
+  {% endif %}
+</section>
 {% endif %}
+
+{# ---- Usuarios: correo y verificación (plan cuentas 2026-09-19). Sin SMTP
+   nadie puede confirmar solo: el admin marca a mano desde aquí. ---- #}
+<section class="aparece" id="panel-usuarios" style="margin-top:2.5rem;">
+  <h2>Usuarios</h2>
+  {% if not smtp_ok %}
+  <div class="flash warn" id="aviso-smtp">
+    <strong>SMTP sin configurar.</strong> Nadie puede confirmar su correo ni recuperar la contraseña por su cuenta:
+    pon SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el <code>.env</code> del servidor (ver «Correo de la
+    plataforma» en la Configuración de cualquier proyecto) o marca las cuentas como verificadas a mano.
+  </div>
+  {% endif %}
+  {% if usuarios_lista %}
+  <div style="overflow-x:auto;">
+  <table class="tabla-tiendas">
+    <thead><tr><th>Usuario</th><th>Rol</th><th>Proyecto</th><th>Correo</th><th>Verificado</th><th></th></tr></thead>
+    <tbody>
+      {% for u in usuarios_lista %}
+      <tr>
+        <td><strong>{{ u.usuario }}</strong></td>
+        <td>{{ u.rol }}</td>
+        <td>{% if u.cliente %}<a href="{{ url_for('ver_cliente', cliente=u.cliente) }}">{{ u.cliente }}</a>{% else %}—{% endif %}</td>
+        <td>{{ u.correo or "—" }}</td>
+        <td>{% if u.correo_verificado %}<span class="tag-estado tag-en-uso">sí</span>{% else %}<span class="tag-estado tag-advertencia">no</span>{% endif %}</td>
+        <td>
+          {% if not u.correo_verificado %}
+          <form method="post" action="{{ url_for('admin_usuario_verificar', usuario=u.usuario) }}" class="inline"
+                onsubmit='return confirm({{ ("¿Marcar a %s como verificado sin que abra el enlace del correo?" % u.usuario)|tojson }});'>
+            <button type="submit" class="btn-guardar btn-xs">Marcar verificado</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="vacio">Todavía no hay usuarios.</p>
+  {% endif %}
+</section>
 {% endblock %}

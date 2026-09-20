@@ -405,7 +405,8 @@ def test_csv_mes_cabecera_y_fila(base_temporal, sin_red):
     assert texto.startswith("﻿")
     lineas = texto.lstrip("﻿").splitlines()
     assert lineas[0] == "experimento;pais;pieza;veredicto;impresiones;clics;gasto;compras;ingresos;roas;moneda"
-    assert lineas[1] == f"Cojín;CO;Final es_CO;ganador;3000;30;250.50;2;7000;{round(7000 / 250.5, 2)};COP"
+    roas = str(round(7000 / 250.5, 2)).replace(".", ",")
+    assert lineas[1] == f"Cojín;CO;Final es_CO;ganador;3000;30;250,50;2;7000;{roas};COP"
     assert len(lineas) == 2
 
 

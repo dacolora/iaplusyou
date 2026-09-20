@@ -6,7 +6,8 @@ las cosas y qué hace cada archivo, sin tener que adivinarlo leyendo código. Es
 organizado por lo que cada pieza *hace*, no en orden alfabético, y explica cada término
 técnico la primera vez que aparece.
 
-Regenerado el 18 de septiembre de 2026 desde el commit `5e3f40d`. La versión anterior
+Regenerado el 20 de septiembre de 2026 desde el commit `c92b2f7` (la primera versión
+en llano fue del 18). La versión anterior
 (1 de septiembre) describía una arquitectura sin base de datos que ya no existe. Cuando
 la estructura cambie mucho, vale más regenerarlo que confiar en él. La referencia
 técnica que manda sigue siendo `CLAUDE.md`; este mapa es la puerta de entrada.
@@ -18,7 +19,7 @@ técnica que manda sigue siendo `CLAUDE.md`; este mapa es la puerta de entrada.
 - **Con qué está hecho:** Python + Flask. Las páginas las arma el servidor con
   plantillas Jinja. No hay Angular, React, npm ni paso de build: un solo archivo CSS y
   JavaScript escrito a mano dentro de las plantillas.
-- **Dónde guarda:** una base SQLite en un archivo (`data/creatv.db`, 19 tablas), archivos
+- **Dónde guarda:** una base SQLite en un archivo (`data/creatv.db`, 21 tablas), archivos
   JSON por proyecto para lo más viejo, y Cloudflare R2 para todo lo pesado (fotos,
   videos, música).
 - **Cuántos programas corren:** dos. `dashboard.py` es la web y `worker.py` es la cola
@@ -37,7 +38,7 @@ Sirve para todo el resto del documento. Cada pieza del código tiene un papel:
 | **El mesero** | `dashboard.py` + `sprints/rutas.py` (el proceso web, gunicorn en producción) | Toma el pedido, revisa que tengas permiso sobre ese proyecto, calcula el precio, lo anota. **Nunca cocina.** |
 | **La comanda en la barra** | La tabla `tarea` (`cola.py`, `trabajos.py`) | Una fila por pedido con un identificador fijo (proyecto + entidad + acción): un doble clic no duplica nada. |
 | **La cocina** | `worker.py` + `tareas/` (el proceso worker, servicio systemd `creatv-worker`) | Un cocinero, un plato a la vez. Es el único que llama a los proveedores que cobran. Si se cae a mitad de un plato, la comanda vuelve a la barra. |
-| **El recetario** | Los módulos de dominio: `creative_flow.py`, `final_edition/`, `sprints/`, `experimentos.py`, `tiendas.py`… | Las reglas del negocio. Los usan el mesero y la cocina por igual. |
+| **El recetario** | Los módulos de dominio: `creative_flow.py`, `final_edition/`, `sprints/`, `experimentos.py`, `tiendas.py`, `organico.py`, `gastos.py`… | Las reglas del negocio. Los usan el mesero y la cocina por igual. |
 | **Los proveedores** | Anthropic (Claude), WaveSpeed, fal.ai, Higgsfield, Gemini, Meta, las tiendas | Cobran por cada plato; Claude cobra centavos por cada consulta. |
 | **El libro de cuentas** | SQLite `data/creatv.db` (`db.py`) | Estado, métricas y la cola misma. Lo comparten los dos procesos. |
 | **Los cuadernos viejos** | `clientes/<proyecto>/*.json`, `usuarios.json`, `registro_generaciones.csv` | El estado anterior a la base. Sigue funcionando y nadie lo tocó. |
@@ -59,6 +60,7 @@ todas con la misma regla de aprobación:
 | **Final edition** | Convertir un video aprobado en un anuncio por idioma y país: guion, voz, subtítulos, precio, CTA y música. | `final_edition/`, `tareas/final_edition.py` |
 | **Sprints** | Planear un mes de contenido como matriz persona × producto × temporada, pedir ideas a Claude, producir por lotes, QA automático, revisión y entrega. | `sprints/`, `tareas/sprints.py` |
 | **Experimentos** | Probar piezas en Meta Ads por país, con un decisor que dicta ganadores y perdedores y propone o ejecuta acciones según el modo. Catálogo y tiendas conectadas para atribuir ventas. Tablero con el resumen del mes. | `experimentos.py`, `lanzador.py`, `decisor.py`, `derivaciones.py`, `tiendas.py`, `conectores/`, `tablero.py`, `tareas/experimentos.py`, `tareas/tiendas.py` |
+| **Orgánico y gasto** | La ganadora (o cualquier final) sale como contenido orgánico a Reels, Facebook, TikTok y Shorts con el texto que propone Claude; y cada cosa que cuesta muestra su precio antes y deja su cobro real después, por proyecto y por mes, con un panel de admin que lo junta todo. | `organico.py`, `tareas/organico.py`, `gastos.py`, `admin.py` |
 
 ## Qué pasa cuando pulsas "Generar video" en Crear
 
@@ -85,8 +87,9 @@ tipo de tarea y el módulo que hace el trabajo.
    para ese tipo en `tareas.REGISTRO`.
 6. **Se cocina el plato caro.** `tareas/flowplus.ejecutar_video` llama al modelo en
    WaveSpeed, descarga el video, lo sube a R2, le mezcla la música elegida
-   (`final_edition/mezcla`), guarda la `pieza` en SQLite y reporta cada etapa con
-   `cola.reportar`. Aquí es donde se gastan los créditos.
+   (`final_edition/mezcla`), guarda la `pieza` en SQLite, deja el cobro real en la tabla `gasto`
+   (`gastos.registrar_seguro`) y reporta cada etapa con `cola.reportar`. Aquí es
+   donde se gastan los créditos.
 7. **Listo: te toca decidir.** `cola.terminar` marca la fila; el sondeo lo ve y recarga
    la página, que ahora muestra el video esperando tu aprobación. Aprobarlo es otro
    clic y otra ruta. Si el worker se hubiera caído a la mitad, la fila volvería a
@@ -105,26 +108,28 @@ ese proyecto (`usuarios.puede_acceder`).
 
 | Pestaña | Qué hace la persona ahí | Plantillas | Rutas (bajo `/cliente/<c>/`) | Módulos | Tareas del worker |
 |---|---|---|---|---|---|
-| **Tablero** | Ver el gasto del mes, ventas atribuidas, ROAS, las cinco piezas ganadoras y alertas. | `_tab_tablero.html` | `tablero/mes.csv` | `tablero.py`, `experimentos.py` | Ninguna propia: lee los snapshots que dejan `exp_refrescar*`. |
-| **Crear** | Generar imagen o video con referencias y texto; cambiar el producto en una foto o video real; las ideas del pipeline original; preparar y producir la final edition por país. | `_tab_flowplus.html` → `_tab_creativeflowplus.html`, `_tab_cambiar_calzado.html`, `_seccion_ideas.html`, `_flowplus_bandeja.html` | `creative_flow/*`, `flowplus/*`, `swap/*`, `idea/*`, `prompt/*`, `aprobar/<brief>` | `creative_flow`, `flowplus_prompt`, `flowplus_lanzar`, `referencias_flowplus`, `referencias_link`, `swaps`, `prompt_swap`, `prompts`, `estado`, `final_edition/` | `flowplus_video`, `flowplus_imagen`, `swap_generar`, `final_guion`, `final_producir` |
+| **Tablero** | Ver el gasto del mes en pauta y en generación, ventas atribuidas, ROAS, las cinco piezas ganadoras (y si ya salieron en orgánico) y alertas. | `_tab_tablero.html` | `tablero/mes.csv` | `tablero.py`, `experimentos.py`, `gastos.py`, `organico.py` | Ninguna propia: lee los snapshots que dejan `exp_refrescar*`. |
+| **Crear** | Generar imagen o video con referencias y texto; cambiar el producto en una foto o video real; las ideas del pipeline original; preparar y producir la final edition por país; publicar una pieza en orgánico desde su tarjeta, con el precio de cada botón a la vista. | `_tab_flowplus.html` → `_tab_creativeflowplus.html`, `_tab_cambiar_calzado.html`, `_seccion_ideas.html`, `_flowplus_bandeja.html`, `_organico_publicar.html` | `creative_flow/*`, `flowplus/*`, `swap/*`, `idea/*`, `prompt/*`, `aprobar/<brief>`, `organico/*` | `creative_flow`, `flowplus_prompt`, `flowplus_lanzar`, `referencias_flowplus`, `referencias_link`, `swaps`, `prompt_swap`, `prompts`, `estado`, `final_edition/`, `organico`, `gastos` | `flowplus_video`, `flowplus_imagen`, `swap_generar`, `final_guion`, `final_producir`, `organico_publicar` |
 | **Sprints** | Planear el mes (personas × productos × temporadas), subir referencias, pedir ideas a Claude, lanzar el lote, revisar el QA, aprobar y entregar. | `_tab_sprints.html` + páginas propias `sprint_detalle`, `campana_referencias`, `campana_ideas`, `sprint_revision`, `sprint_entrega` | `sprints/*` (43 rutas del Blueprint) | `sprints/` (13 módulos) | `sprint_analizar_referencia`, `sprint_sugerir_personas`, `sprint_referencia_link`, `sprint_proponer_ideas`, `sprint_qa_pieza`, `sprint_qa_pendientes`, `sprint_empaquetar` |
-| **Experimentos** | Armar un experimento con piezas y países, lanzarlo a Meta en pausa, activarlo, leer veredictos y propuestas del decisor, editar las reglas del motor, registrar la app de Meta; los anuncios sueltos legado. | `_tab_experimentos.html`, `_anuncios_sueltos.html`, `_form_reglas.html`, `_meta_conectar.html` | `experimentos/*`, `propuestas/*`, `ads/*`, `meta/*`, `config/reglas` | `experimentos`, `lanzador`, `decisor`, `modos`, `acciones`, `propuestas`, `derivaciones`, `ads`, `meta_conexion`, `meta_ads/` | `exp_lanzar`, `exp_refrescar`, `exp_decidir`, `exp_avanzar_todos`, `meta_publicar`, `meta_refrescar` |
+| **Experimentos** | Armar un experimento con piezas y países, lanzarlo a Meta en pausa, activarlo, leer veredictos y propuestas del decisor, editar las reglas del motor, registrar la app de Meta, publicar la ganadora en orgánico (Reels, Facebook, TikTok, Shorts) con el texto que propone Claude; los anuncios sueltos legado. | `_tab_experimentos.html`, `_anuncios_sueltos.html`, `_form_reglas.html`, `_meta_conectar.html`, `_organico_publicar.html` | `experimentos/*`, `propuestas/*`, `ads/*`, `meta/*`, `config/reglas`, `organico/*` | `experimentos`, `lanzador`, `decisor`, `modos`, `acciones`, `propuestas`, `derivaciones`, `ads`, `meta_conexion`, `meta_ads/`, `organico` | `exp_lanzar`, `exp_refrescar`, `exp_decidir`, `exp_avanzar_todos`, `meta_publicar`, `meta_refrescar`, `organico_publicar` |
 | **Catálogo** | Productos como activos con fotos, mapa corporal, precio, moneda y URL de compra; importar desde CSV, URL o tienda; personajes y escenas de referencia. | `_tab_catalogo.html`, `_catalogo_lista`, `_catalogo_importar`, `_catalogo_sin_fotos`, `_catalogo_campos_comerciales`, `_maniqui`, `_seccion_personajes` | `productos/*`, `personaje/*`, `escena/*`, `producto_referencia/*`, `logos/*` | `catalogo_productos`, `tiendas`, `importador`, `conectores/`, `mapa_corporal` | `catalogo_importar`, `producto_vincular` |
-| **Configuración** | Guía de estilo de la marca (con análisis de Claude), preferencias de Crear y de sonido, nombre visible, correo de avisos, tiendas conectadas, Pixel, y la "puesta a punto" que dice qué llaves faltan. | `_tab_settings.html`, `_seccion_marca.html`, `_meta_conectar.html`, `_comparacion_modelos.html` | `marca/*`, `preferencias*/guardar`, `config/*`, `nombre`, `meli/callback` | `marca`, `proyectos`, `tiendas`, `cifrado`, `meta_conexion`, `generador_prompts.analizar_marca` | `tienda_sync_productos`, `tienda_sync_pedidos` |
+| **Configuración** | Guía de estilo de la marca (con análisis de Claude), el gasto real del mes con historial y CSV, preferencias de Crear y de sonido, nombre visible, correo de avisos, tiendas conectadas, Pixel, los canales orgánicos disponibles, y la "puesta a punto" que dice qué llaves faltan. | `_tab_settings.html`, `_seccion_marca.html`, `_meta_conectar.html`, `_comparacion_modelos.html` | `marca/*`, `preferencias*/guardar`, `config/*`, `nombre`, `meli/callback`, `gasto/mes.csv` | `marca`, `proyectos`, `tiendas`, `cifrado`, `meta_conexion`, `generador_prompts.analizar_marca`, `gastos`, `organico` | `tienda_sync_productos`, `tienda_sync_pedidos` |
 
-Fuera de esa página hay seis más: `index.html` (lista de proyectos, solo admin),
-`panel.html` (entrada de un usuario cliente), `login.html`, `landing_cliente.html` (alta
-de un proyecto nuevo por link público, ruta `/l/<proyecto>`), `legal.html` (privacidad,
-términos y borrado de datos, que Meta exige) y `meta_elegir.html` (elegir cuenta
-publicitaria y página después del OAuth).
+Fuera de esa página hay siete más: `index.html` (la portada pública, con el alta de un
+proyecto), `panel.html` (el tablero de operación del admin: gasto y pauta del mes por
+proyecto, salud del worker, historial y CSV; los cálculos en `admin.py`), `login.html`,
+`landing_cliente.html` (alta de un proyecto nuevo por link público, ruta `/l/<proyecto>`),
+`legal.html` (privacidad, términos y borrado de datos, que Meta exige), `meta_elegir.html`
+(elegir cuenta publicitaria y página después del OAuth) y `mapa_codigo.html` (este mapa,
+en `/mapa`, solo para el admin).
 
 ## Dónde vive cada dato
 
-Tres lugares. La regla para saber cuál: lo que nació con el motor de ecommerce o los
-sprints está en SQLite; lo que ya existía antes sigue en JSON por proyecto; cualquier
+Tres lugares. La regla para saber cuál: lo que nació con el motor de ecommerce, los
+sprints, el gasto o la publicación orgánica está en SQLite; lo que ya existía antes sigue en JSON por proyecto; cualquier
 archivo pesado está en R2 y aquí solo queda su URL.
 
-### SQLite: `data/creatv.db` (19 tablas, definidas en `db.py`)
+### SQLite: `data/creatv.db` (21 tablas, definidas en `db.py`)
 
 | Grupo | Tablas | Qué guardan |
 |---|---|---|
@@ -133,6 +138,7 @@ archivo pesado está en R2 y aquí solo queda su URL.
 | Experimentos | `experimento`, `experimento_pieza`, `metrica_snapshot`, `propuesta`, `evento` | El experimento, cada anuncio en Meta, las métricas acumuladas por anuncio, las propuestas del decisor y la bitácora de eventos. |
 | Catálogo y tiendas | `tienda`, `producto`, `pedido` | Tiendas conectadas (credenciales cifradas), catálogo normalizado, pedidos con `utm_content`. |
 | Sprints | `persona`, `temporada`, `sprint`, `campana`, `referencia`, `campana_pieza`, `sprint_evento` | El plan del mes y su producción. |
+| Gasto y publicación | `gasto`, `publicacion` | Cada cobro real a un proveedor (USD, referencia única) y cada publicación orgánica por pieza y plataforma (con el id y la URL que devolvió la red). |
 | Varios | `kv` | Valores sueltos. |
 
 El esquema lo crean y actualizan las migraciones de `migrations/versions/` con
@@ -163,10 +169,10 @@ ignorada en git: `data/musica/`, `salidas/`, `clientes/<c>/sprints/`, `importaci
 
 ```
 iaplusyou/
-├── dashboard.py              ← la web: 112 rutas, login, subida de archivos, encola trabajos
+├── dashboard.py              ← la web: 118 rutas, login, subida de archivos, encola trabajos
 ├── worker.py                 ← la cola: ejecuta tareas una a la vez, corre las periódicas
 ├── cola.py · trabajos.py     ← la comanda: tabla tarea, job_id anti doble clic, progreso
-├── db.py                     ← las 19 tablas (SQLAlchemy Core) y la conexión SQLite
+├── db.py                     ← las 21 tablas (SQLAlchemy Core) y la conexión SQLite
 ├── usuarios.py · proyectos.py · _json_store.py · bitacora.py · cifrado.py · notificaciones.py
 ├── creative_flow.py · flowplus_prompt.py · flowplus_lanzar.py · referencias_flowplus.py
 │   referencias_link.py · banco_prompts.py · mapa_corporal.py · prompt_swap.py · swaps.py
@@ -175,12 +181,14 @@ iaplusyou/
 │   derivaciones.py · atribucion.py · tablero.py · ads.py · meta_conexion.py
 │                                                              ← Experimentos y Tablero
 ├── tiendas.py · importador.py                                 ← catálogo y tiendas conectadas
+├── organico.py · gastos.py · admin.py · migrar_gastos_historicos.py
+│                                                              ← orgánico, gasto y panel de admin
 ├── prompts.py · estado.py · conceptos_imagen.py · higgsfield_client.py · publicador.py
 │                                                              ← pipeline original (legado)
 ├── run_batch.py · revisar.py · subir_personaje.py · validar_marca.py · comparar_modelos.py
 │   migrar_json_a_db.py · reconstruir_historial.py · informe.py  ← scripts de terminal
 ├── tareas/            ← lo que ejecuta el worker: flowplus, swap, final_edition, sprints,
-│                         experimentos, meta, tiendas (33 tipos registrados)
+│                         experimentos, meta, tiendas, organico (27 tipos registrados)
 ├── final_edition/     ← guion → cortes → sonido → voz → musica → texto → render (+ mezcla, tipos)
 ├── sprints/           ← datos, estado, progreso, calendario, sugerencias, analisis, archivos,
 │                         ideas, produccion, qa, revision, entrega, rutas
@@ -190,10 +198,10 @@ iaplusyou/
 ├── uploaders/ · auth/ ← publicar en YouTube, Facebook/Instagram, TikTok; OAuth de una sola vez
 ├── storage/           ← r2_uploader.py, la bodega (Cloudflare R2)
 ├── meta_ads/          ← submódulo git: cliente sin estado de la Marketing API de Meta
-├── templates/ (48)    ← base.html, cliente.html, _sidebar.html, _tab_*.html y parciales
+├── templates/ (50)    ← base.html, cliente.html, _sidebar.html, _tab_*.html, panel.html, mapa_codigo.html y parciales
 ├── static/            ← style.css (todo el CSS), fonts/, img/
-├── migrations/        ← Alembic 0001–0008
-├── tests/ (83)        ← pytest, con respuestas grabadas en tests/fixtures/
+├── migrations/        ← Alembic 0001–0010
+├── tests/ (79)        ← pytest, con respuestas grabadas en tests/fixtures/
 ├── clientes/<c>/      ← una carpeta por proyecto (ver "Dónde vive cada dato")
 ├── data/              ← creatv.db y data/musica/ (no versionado)
 ├── deploy/            ← creatv-worker.service (unidad systemd del worker)
@@ -218,46 +226,49 @@ iaplusyou/
 | Cambiar el look de la interfaz | `static/style.css` (tokens en `:root`) y `templates/base.html` | Un solo CSS para todo. |
 | Cambiar cada cuánto corren las periódicas | `worker.py` (`PERIODICAS`) | El orden dentro de un tick importa: pedidos de tiendas antes que experimentos. |
 | Saber por qué un trabajo se quedó pegado | La tabla `tarea` (`estado`, `error`, `etapa_actual`) y `journalctl -u creatv-worker` en el VPS | Una tarea corriendo más de 30 min se re-encola o pasa a `error`. |
+| Agregar algo que cueste dinero y que se vea en el gasto | Al terminar la tarea, `gastos.registrar_seguro(cliente, tipo, usd, referencia)` con una referencia única `tipo:id`; el precio junto al botón sale de `gastos.estimar` | Una fila por cobro real, nunca por intento; la pauta de Meta no va ahí. |
+| Agregar un canal de publicación orgánica | `organico.py` (`canales`, `publicar`) más el uploader de la plataforma en `uploaders/` | Publicar es público e irreversible: `max_intentos=1` y nunca dos veces la misma pieza en la misma plataforma. |
+| Ver cuánto se ha gastado | Configuración › Gasto en cada proyecto; `/panel` para todos; `migrar_gastos_historicos.py` si la tabla quedó vacía tras un despliegue | Generación en USD; la pauta en la moneda de la cuenta de Meta, nunca convertida. |
 | Publicar cambios en producción | En el VPS: `git pull`, `pip install -r requirements.txt`, `alembic upgrade head`, `systemctl restart iaplusyou creatv-worker` | Siempre los dos servicios. Detalle en `CLAUDE.md` y `SETUP.md`. |
 | Dar acceso a un cliente nuevo | El link público `/l/<proyecto>` crea proyecto y usuario; o `usuarios.crear` a mano | El rol `cliente` solo ve su proyecto; `admin` ve todos. |
 
 ## Archivo por archivo
 
-Las líneas son las del 18 de septiembre de 2026. "Legado" significa que sigue enchufado
+Las líneas son las del 20 de septiembre de 2026. "Legado" significa que sigue enchufado
 pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 
 ### Raíz: la app, los dos procesos y lo que comparten
 
 | Archivo | Líneas | Qué hace |
 |---|---:|---|
-| `dashboard.py` | 4 495 | La app web Flask: login, las 112 rutas, subida de archivos, el contexto de las seis pestañas y el encolado de trabajos. Corre sin auto-reloader a propósito, para no matar generaciones en curso. |
+| `dashboard.py` | 4 887 | La app web Flask: login, las 118 rutas, subida de archivos, el contexto de las seis pestañas y el encolado de trabajos. Corre sin auto-reloader a propósito, para no matar generaciones en curso. |
 | `worker.py` | 145 | El segundo proceso: toma tareas de la cola una a la vez, encola las seis periódicas, recupera las colgadas a los 30 minutos y para limpio con SIGINT. Nunca correr dos contra la misma base. |
-| `cola.py` | 182 | La cola persistente sobre la tabla `tarea`: encolar, reclamar (UPDATE condicionado), terminar, fallar, reportar progreso, recuperar colgadas. |
+| `cola.py` | 184 | La cola persistente sobre la tabla `tarea`: encolar, reclamar (UPDATE condicionado), terminar, fallar, reportar progreso, recuperar colgadas. |
 | `trabajos.py` | 321 | Adaptador de trabajos en segundo plano: hilos en memoria para el pipeline original (`iniciar`) o fila en la cola (`encolar`); `job_id` determinista contra el doble clic; `consultar` alimenta la barra de progreso por los dos caminos. |
-| `db.py` | 411 | Las 19 tablas en SQLAlchemy Core (sin ORM) y la conexión a `data/creatv.db` en modo WAL. |
+| `db.py` | 454 | Las 21 tablas en SQLAlchemy Core (sin ORM) y la conexión a `data/creatv.db` en modo WAL. |
 | `usuarios.py` | 79 | `usuarios.json` con contraseñas hasheadas y dos roles: admin entra a todo, cliente solo a su proyecto. |
 | `proyectos.py` | 139 | `proyecto.json`: nombre visible (el id es la carpeta y no se toca), preferencias de Crear y sonido, reglas del motor, correo, país. |
 | `_json_store.py` | 31 | Leer y escribir un JSON por proyecto; lo usan los once módulos que guardan estado en archivos. |
 | `bitacora.py` | 29 | Log CSV append-only de cada generación, subida y publicación. |
 | `cifrado.py` | 41 | Fernet con clave derivada de `FLASK_SECRET_KEY` para las credenciales de tiendas. Rotar la clave obliga a reconectar cada tienda. |
-| `notificaciones.py` | 84 | Correos SMTP del motor (propuesta, ganador, rechazo de Meta, error de lanzamiento, tienda caída). Sin SMTP solo queda el evento. |
+| `notificaciones.py` | 85 | Correos SMTP del motor (propuesta, ganador, rechazo de Meta, error de lanzamiento, tienda caída). Sin SMTP solo queda el evento. |
 | `migrar_json_a_db.py` | 89 | Importó `creative_flow_pendientes.json` y `ads.json` a SQLite; idempotente. Terminal. |
 
 ### Crear (FlowPlus): referencias + texto → imagen o video nuevo
 
 | Archivo | Líneas | Qué hace |
 |---|---:|---|
-| `creative_flow.py` | 432 | Estado de cada sesión cf_… en SQLite (concepto + pieza): crear, actualizar, duplicar, archivar y las finales por idioma/país. Conserva la API de dicts que tenía cuando era un JSON. |
+| `creative_flow.py` | 435 | Estado de cada sesión cf_… en SQLite (concepto + pieza): crear, actualizar, duplicar, archivar y las finales por idioma/país. Conserva la API de dicts que tenía cuando era un JSON. |
 | `flowplus_prompt.py` | 243 | Arma el prompt final: texto de la persona tal cual + bloque de fidelidad por producto + línea `SONIDO:`. |
 | `flowplus_lanzar.py` | 33 | Encola la generación con `max_intentos=1` y prioridad (5 pieza suelta, 3 lote de sprint). |
-| `tareas/flowplus.py` | 286 | El trabajo real: llama al modelo en WaveSpeed, descarga, sube a R2, mezcla la música y guarda la pieza con su video crudo aparte. |
-| `providers/flowplus_modelos.py` | 160 | El único registro de modelos de Crear (Wan 3.0, Kling O3 Pro, Seedance 2.5…): ruta, precio por segundo, límites, audio nativo, estimaciones. |
+| `tareas/flowplus.py` | 335 | El trabajo real: llama al modelo en WaveSpeed, descarga, sube a R2, mezcla la música y guarda la pieza con su video crudo aparte. |
+| `providers/flowplus_modelos.py` | 216 | El único registro de modelos de Crear (Wan 3.0, Kling O3 Pro, Seedance 2.5…): ruta, precio por segundo, límites, audio nativo, estimaciones. |
 | `providers/wan3_client.py` · `wavespeed_common.py` | 142 | Wan 3.0 vía WaveSpeed, y la autenticación y el poll que comparten todos los clientes de WaveSpeed. |
 | `referencias_flowplus.py` | 62 | La bandeja de referencias pendientes de Crear, que sobrevive a las recargas. |
 | `referencias_link.py` | 156 | Trae una referencia desde un link (TrendTrack directo; TikTok, Instagram y YouTube con yt-dlp), saca fotogramas y la describe con Claude. |
 | `banco_prompts.py` | 87 | Recetas de partida para no escribir la idea desde cero. |
 | `mapa_corporal.py` | 133 | Zonas tocadas en el maniquí → instrucción de tamaño y ubicación del producto. |
-| `generador_prompts.py` | 346 | Todas las llamadas de texto a Claude: 5 prompts por idea, conceptos de imagen, análisis de marca (visión), regla de fidelidad, prompt de creative flow. |
+| `generador_prompts.py` | 436 | Todas las llamadas de texto a Claude: 5 prompts por idea, conceptos de imagen, análisis de marca (visión), regla de fidelidad, prompt de creative flow. |
 | `marca.py` | 77 | Guía de estilo y `root.json` de la matriz de marca; guía efectiva y negative prompt de cada generación. |
 | `catalogo_productos.py` | 299 | Activos del catálogo: una carpeta por producto con varias fotos, metadatos en `productos.json` con flock. |
 | `prompt_swap.py` | 203 | Los prompts de "cambiar producto" en un solo lugar y los tipos de producto válidos. |
@@ -267,9 +278,9 @@ pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 | Archivo | Líneas | Qué hace |
 |---|---:|---|
 | `swaps.py` | 63 | Estado de los swaps en `swaps.json`. |
-| `tareas/swap.py` | 400 | Genera la foto o el video con el producto puesto según el modelo elegido, con segunda pasada de mejora de calidad; sube a R2. |
+| `tareas/swap.py` | 428 | Genera la foto o el video con el producto puesto según el modelo elegido, con segunda pasada de mejora de calidad; sube a R2. |
 | `providers/nano_banana_client.py` | 185 | Gemini 2.5 Flash Image directo (responde la imagen en la misma llamada). |
-| `providers/wavespeed_imagen.py` | 165 | nano-banana-pro edit-ultra (edita y saca 4k/8k), bria para agrandar, Seedream. |
+| `providers/wavespeed_imagen.py` | 168 | nano-banana-pro edit-ultra (edita y saca 4k/8k), bria para agrandar, Seedream. |
 | `providers/kling_o1_client.py` | 43 | Kling O1 vía fal.ai: edita un video existente preservando movimiento. |
 | `providers/wavespeed_client.py` · `wavespeed_video_edit.py` | 151 | Wan 2.7 Video Edit y los editores de video premium de WaveSpeed. |
 | `providers/comparador_modelos.py` | 130 | Candidatos de edición vía fal.ai (Luma Ray3, Wan-2.2 Animate, Qwen Edit…). |
@@ -281,7 +292,7 @@ pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 
 | Archivo | Líneas | Qué hace |
 |---|---:|---|
-| `final_edition/__init__.py` | 471 | Orquestador: `preparar_guion` y `producir`; encadena las capas y guarda el estado con `creative_flow.crear_final`, una fila por destino. |
+| `final_edition/__init__.py` | 521 | Orquestador: `preparar_guion` y `producir`; encadena las capas y guarda el estado con `creative_flow.crear_final`, una fila por destino. |
 | `final_edition/guion.py` | 378 | Claude escribe el guion base en 5 bloques (hook → problema → producto → prueba → cta), lo localiza por país y genera variantes. |
 | `final_edition/cortes.py` | 140 | ffmpeg `scdet`: cortes y plan de segmentos; helpers ffmpeg/ffprobe/duración. |
 | `final_edition/sonido.py` | 39 | Claude sugiere qué se oye en la escena (campo de Crear). |
@@ -291,7 +302,7 @@ pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 | `final_edition/render.py` | 211 | Un solo filtergraph de ffmpeg: segmentos con zoompan, overlays por tiempo, audio mezclado, AAC a 48 kHz. |
 | `final_edition/mezcla.py` | 130 | La única fábrica del filtro de audio: sonido + voz + música con ducking, presets y loudnorm. También mezcla la música en Crear. |
 | `final_edition/tipos.py` | 116 | Roles del guion, países con idioma y moneda, estilos de música, validación, fuentes TTF. |
-| `tareas/final_edition.py` | 84 | Tareas `final_guion` y `final_producir`. |
+| `tareas/final_edition.py` | 86 | Tareas `final_guion` y `final_producir`. |
 | `providers/fal_audio.py` | 103 | Voz, transcripción y música vía fal.ai, con costo estimado. |
 
 ### Sprints: un mes de contenido como matriz persona × producto × temporada
@@ -304,7 +315,7 @@ pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 | `sprints/calendario.py` · `sugerencias.py` | 164 | Calendario comercial por país; personas sugeridas por Claude. |
 | `sprints/analisis.py` · `archivos.py` | 166 | Análisis de referencias con Claude visión; guardado local + R2 y fotogramas. |
 | `sprints/ideas.py` | 227 | El prompt maestro → ideas de video e imagen por campaña. |
-| `sprints/produccion.py` | 388 | Lotes: costo estimado, una sesión de Crear por idea aprobada, lanzar, reintentar, regenerar, progreso. |
+| `sprints/produccion.py` | 393 | Lotes: costo estimado, una sesión de Crear por idea aprobada, lanzar, reintentar, regenerar, progreso. |
 | `sprints/qa.py` | 188 | QA automático con Claude visión y ffprobe; nunca genera. |
 | `sprints/revision.py` · `entrega.py` | 192 | Aprobar/rechazar, cerrar/reabrir; enlaces y zip de entrega en R2. |
 | `tareas/sprints.py` | 265 | Siete tipos de tarea (analizar, sugerir, link, ideas, QA pieza, QA pendientes, empaquetar). |
@@ -316,14 +327,32 @@ pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 | `experimentos.py` | 479 | Solo datos: experimento, piezas, snapshots, eventos; escrituras con el bloqueo de SQLite tomado antes de leer. |
 | `lanzador.py` | 558 | Traduce un experimento a Meta (1 campaña → 1 conjunto por país → 1 anuncio por pieza, todo en pausa), guarda cada id apenas vuelve; refrescar métricas, escalar, cerrar. |
 | `decisor.py` | 176 | Función pura: puerta de tráfico, puerta de ventas, ranking → ganador / perdedor / inconcluso / pendiente. |
-| `modos.py` · `acciones.py` · `propuestas.py` | 354 | manual/semi/auto; pedir y ejecutar acciones respetando modo y tope; la tabla `propuesta`. |
-| `derivaciones.py` | 478 | Máquina de estados asíncrona que produce piezas nuevas (re-ediciones y regeneraciones) y las mete al experimento. |
+| `modos.py` · `acciones.py` · `propuestas.py` | 549 | manual/semi/auto; pedir y ejecutar acciones respetando modo y tope; la tabla `propuesta`. |
+| `derivaciones.py` | 489 | Máquina de estados asíncrona que produce piezas nuevas (re-ediciones y regeneraciones) y las mete al experimento. |
 | `atribucion.py` | 93 | Liga pedidos con `utm_content` a la pieza que los generó. |
-| `tablero.py` | 538 | Cálculos de solo lectura para Tablero: deltas de snapshots, serie de 30 días, top 5, alertas, CSV. |
+| `tablero.py` | 599 | Cálculos de solo lectura para Tablero: deltas de snapshots, serie de 30 días, top 5, alertas, CSV. |
 | `ads.py` | 149 | "Anuncios sueltos" sobre el experimento legado de cada proyecto. Legado. |
-| `meta_conexion.py` | 485 | Conexión con Meta por proyecto: `meta_app.json`, OAuth desde la app, `meta.json`, Pixel. No hay app de Meta compartida. |
-| `tareas/experimentos.py` · `tareas/meta.py` | 566 | Lanzar, refrescar, decidir y avanzar derivaciones; publicar y refrescar anuncios sueltos. |
+| `meta_conexion.py` | 496 | Conexión con Meta por proyecto: `meta_app.json`, OAuth desde la app, `meta.json`, Pixel. No hay app de Meta compartida. |
+| `tareas/experimentos.py` · `tareas/meta.py` | 609 | Lanzar, refrescar, decidir y avanzar derivaciones; publicar y refrescar anuncios sueltos. |
 | `meta_ads/` (submódulo) | 338 | Cliente sin estado de la Marketing API: campaign, adset, targeting, ad, creative, insights, pixel, auth. Todo acepta `dry_run`. |
+
+### Publicación orgánica (bloque 7): la ganadora, o cualquier final, sale como contenido normal
+
+| Archivo | Líneas | Qué hace |
+|---|---:|---|
+| `organico.py` | 754 | Canales disponibles según lo conectado, el texto propuesto por Claude (normalizado por plataforma), una fila de `publicacion` por pieza y plataforma, la publicación en sí (siempre el id externo primero, nunca error después de subir), reconciliación y reintento. Publicar es público e irreversible. |
+| `tareas/organico.py` | 131 | La tarea `organico_publicar` (`max_intentos=1`): publica las filas en cola, reporta etapas y avisa por correo. |
+| `templates/_organico_publicar.html` | 206 | El bloque "Publicar orgánico" que comparten Crear y Experimentos, y la propuesta `publicar_organico` del decisor. |
+| `acciones.py` · `modos.py` · `propuestas.py` | 549 | `publicar_organico` entra al circuito del decisor: en auto se ejecuta, en manual y semi queda como propuesta con el texto para aprobar. |
+
+### Gasto y panel de admin: cuánto costó cada cosa y cómo va todo
+
+| Archivo | Líneas | Qué hace |
+|---|---:|---|
+| `gastos.py` | 419 | Gasto real por proyecto en dólares: `registrar` (una fila por cobro, única por referencia), `estimar` con las tarifas de cada proveedor, resumen del mes por tipo, historial, serie diaria, CSV, total por proyecto y el relleno histórico. La pauta de Meta no va aquí. |
+| `migrar_gastos_historicos.py` | 30 | Relleno único de la tabla `gasto` con lo pagado antes de que existiera (piezas y swaps), idempotente. Terminal. |
+| `admin.py` | 356 | El tablero de operación del admin, de solo lectura y sin red: generación y pauta del mes por proyecto (la pauta cuenta los anuncios sueltos), piezas, aprobaciones, experimentos, Meta y tiendas, última actividad, salud del worker con sus últimos errores sin tokens, historial de seis meses, últimos cobros y CSV. |
+| `templates/panel.html` | 262 | La página `/panel`: totales del mes, salud del sistema, tabla comparativa de proyectos con sus tarjetas, historial y CSV. |
 
 ### Catálogo y tiendas
 
@@ -334,7 +363,7 @@ pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 | `conectores/__init__.py` · `_http.py` | 138 | Registro por tipo con carga perezosa; HTTP común con timeout y un reintento. |
 | `conectores/shopify.py` · `woo.py` · `meli.py` | 735 | Admin GraphQL de Shopify, REST v3 de WooCommerce, OAuth de MercadoLibre. |
 | `conectores/csv_excel.py` · `url.py` | 485 | Catálogo desde archivo, o un producto desde la URL de su página (JSON-LD, Open Graph) con guardas contra SSRF. |
-| `importador.py` | 541 | Producto normalizado → fila `producto` → activo del catálogo con fotos y regla de fidelidad de Claude; por tandas. |
+| `importador.py` | 549 | Producto normalizado → fila `producto` → activo del catálogo con fotos y regla de fidelidad de Claude; por tandas. |
 | `tareas/tiendas.py` | 389 | Sync de productos y pedidos, importar, vincular, y las dos periódicas. |
 
 ### Pipeline original (Higgsfield): idea → 5 prompts → imagen → video → publicar
@@ -344,8 +373,8 @@ pero ya no es el camino principal; "terminal" son scripts que se corren a mano.
 | `prompts.py` · `estado.py` · `conceptos_imagen.py` | 277 | El estado en JSON del pipeline original y del flujo "imagen primero". Legado. |
 | `higgsfield_client.py` | 200 | Cliente Higgsfield (kling-2.1-pro, soul-reference) con estimaciones gratis antes de generar. Legado. |
 | `providers/image_provider.py` · `video_provider.py` · `seedance_client.py` | 128 | Capa única "generame una imagen/un video con este proveedor". Legado. |
-| `publicador.py` | 55 | Publica un brief aprobado en las plataformas que indique; nunca se dispara solo. |
-| `uploaders/youtube_uploader.py` · `meta_uploader.py` · `tiktok_uploader.py` | 363 | YouTube Data API v3; Facebook e Instagram con el `meta.json` del proyecto (vivo); TikTok Content Posting API. |
+| `publicador.py` | 59 | Publica un brief aprobado en las plataformas que indique; nunca se dispara solo. |
+| `uploaders/youtube_uploader.py` · `meta_uploader.py` · `tiktok_uploader.py` | 369 | YouTube Data API v3, Facebook e Instagram con el `meta.json` del proyecto, TikTok Content Posting API (con `check_status`). Los usan el pipeline original y, desde el bloque 7, la publicación orgánica. Vivos. |
 | `auth/auth_youtube.py` · `auth_tiktok.py` | 175 | OAuth de una sola vez, en tu máquina; generan los `token_*.json`. Terminal. |
 | `storage/r2_uploader.py` | 101 | Sube y borra en Cloudflare R2. Lo importan 13 módulos. Vivo. |
 
@@ -362,12 +391,13 @@ bitácora), `informe.py` (informe verificable para una cuenta de cobro),
 | Qué | Dónde | Notas |
 |---|---|---|
 | Esqueleto y polling | `templates/base.html`, `_sidebar.html`, `cliente.html` | Fuentes, `style.css`, el menú lateral y `iniciarPolling()`. |
-| Pestañas | `_tab_tablero`, `_tab_flowplus` → `_tab_creativeflowplus` (779 líneas, la más grande), `_tab_cambiar_calzado`, `_tab_sprints`, `_tab_experimentos`, `_tab_catalogo`, `_tab_settings` | Cada una con sus parciales `_catalogo_*`, `_sprint_*`, `_meta_conectar`, `_form_reglas`, `_seccion_*`. |
+| Pestañas | `_tab_tablero`, `_tab_flowplus` → `_tab_creativeflowplus` (la más grande), `_tab_cambiar_calzado`, `_tab_sprints`, `_tab_experimentos`, `_tab_catalogo`, `_tab_settings` | Cada una con sus parciales `_catalogo_*`, `_sprint_*`, `_meta_conectar`, `_form_reglas`, `_seccion_*`, `_organico_publicar`. |
+| Panel de admin y mapa | `panel.html`, `mapa_codigo.html` | El tablero de operación del admin (`admin.py`) y este mapa en `/mapa`. |
 | Piezas reutilizables | `_idea_card`, `_idea_visual_card`, `_prompt_row`, `_imagen_row`, `_progreso_row`, `_video_card`, `_selector_productos*`, `_maniqui` | La fila de progreso es la que engancha el polling. |
 | Estilos | `static/style.css` (1 564 líneas), `static/fonts/`, `static/img/` | Tokens en `:root`; los TTF los usa Pillow en final edition. |
-| Base | `alembic.ini`, `migrations/env.py`, `migrations/versions/0001…0008` | 0001 crea el motor; 0006 los sprints; 0008 la prioridad de la cola. |
-| Pruebas | `tests/` (83 archivos), `tests/conftest.py`, `tests/fixtures/` | `venv/bin/python3 -m pytest -q`; `-m "not slow"` salta los renders reales. |
-| Documentación | `CLAUDE.md`, `SETUP.md`, `ROADMAP.md`, `docs/superpowers/specs` (8), `plans` (13), `docs/investigacion`, `docs/adr/0001`, `docs/agents`, `docs/meta` | `CLAUDE.md` es la biblia técnica. Cada bloque tiene spec y plan con fecha. |
+| Base | `alembic.ini`, `migrations/env.py`, `migrations/versions/0001…0010` | 0001 crea el motor; 0006 los sprints; 0008 la prioridad de la cola; 0009 la publicación orgánica; 0010 el gasto. |
+| Pruebas | `tests/` (79 archivos), `tests/conftest.py`, `tests/fixtures/` | `venv/bin/python3 -m pytest -q`; `-m "not slow"` salta los renders reales. |
+| Documentación | `CLAUDE.md`, `SETUP.md`, `ROADMAP.md`, `docs/superpowers/specs` (13), `plans` (20), `docs/investigacion`, `docs/adr/0001`, `docs/agents`, `docs/meta` | `CLAUDE.md` es la biblia técnica. Cada bloque tiene spec y plan con fecha; los últimos diseños (director de prompts en Crear, final edition como editor tipo CapCut, nicho y avatares, cuentas con correo) todavía no están construidos. |
 | Despliegue | `deploy/creatv-worker.service`, `requirements.txt`, `.env.example` | La unidad de gunicorn y la config de nginx viven solo en el VPS. |
 
 ## Servicios externos y qué llave los abre
@@ -383,9 +413,9 @@ Todo sale de `.env` en la raíz más el `.env` y los JSON de cada proyecto. Conf
 | `HF_API_KEY_ID`, `HF_API_KEY_SECRET` | Higgsfield | Pipeline original. | `higgsfield_client` |
 | `GEMINI_API_KEY` | Google Gemini | Nano Banana para cambiar producto. | `providers/nano_banana_client` |
 | `R2_*` (5 variables) | Cloudflare R2 | Todos los binarios y sus URLs públicas. | `storage/r2_uploader` |
-| `META_REDIRECT_URI` + `meta_app.json` y `meta.json` por proyecto | Meta | Cada proyecto trae su propia app de Meta. No existe credencial global de Meta. | `meta_conexion`, `meta_ads/`, `lanzador`, `tareas/meta`, `uploaders/meta_uploader` |
-| `client_secret_youtube.json` + token | YouTube Data API v3 | Publicar. | `uploaders/youtube_uploader`, `auth/auth_youtube` |
-| `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` + token | TikTok | Publicar (solo "Solo yo" mientras la app no esté auditada). | `uploaders/tiktok_uploader`, `auth/auth_tiktok` |
+| `META_REDIRECT_URI` + `meta_app.json` y `meta.json` por proyecto | Meta | Cada proyecto trae su propia app de Meta: campañas y publicación en Reels y Página, también en orgánico. No existe credencial global. | `meta_conexion`, `meta_ads/`, `lanzador`, `tareas/meta`, `uploaders/meta_uploader`, `organico` |
+| `client_secret_youtube.json` + token | YouTube Data API v3 | Publicar (pipeline original y Shorts orgánicos). | `uploaders/youtube_uploader`, `auth/auth_youtube` |
+| `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET` + token | TikTok | Publicar, también en orgánico (solo "Solo yo" mientras la app no esté auditada). | `uploaders/tiktok_uploader`, `auth/auth_tiktok` |
 | `MELI_APP_ID`, `MELI_SECRET` | MercadoLibre | Conectar una tienda por OAuth. | `conectores/meli` |
 | (cifradas en la tabla `tienda`) | Shopify, WooCommerce | Catálogo y pedidos. | `conectores/shopify`, `woo`, `tiendas`, `cifrado` |
 | `SMTP_*` | Correo | Avisos del motor y de los lotes. Opcional. | `notificaciones` |
@@ -397,12 +427,14 @@ Todo sale de `.env` en la raíz más el `.env` y los JSON de cada proyecto. Conf
 
 - **Núcleo actual:** SQLite + worker + cola; Crear con sonido y música; final edition;
   sprints; experimentos, decisor, derivaciones y tablero; catálogo, tiendas y
-  conectores; conexión con Meta por proyecto y publicación en Facebook e Instagram.
+  conectores; conexión con Meta por proyecto y publicación en Facebook e Instagram; gasto
+  a la vista (`gastos`, Configuración › Gasto); publicación orgánica (`organico`, bloque 7);
+  el panel de admin (`admin`, `/panel`) y este mapa en `/mapa`.
 - **Legado, enchufado pero no principal:** el pipeline Higgsfield (`prompts`, `estado`,
   `conceptos_imagen`, `higgsfield_client`, `image_provider`, `video_provider`,
   `seedance_client`), que sigue visible en Crear › ideas y corre en hilos del proceso
-  web; "Anuncios sueltos" (`ads.py`, `tareas/meta`); los JSON ya migrados; publicar en
-  YouTube y TikTok con tokens generados a mano.
+  web; "Anuncios sueltos" (`ads.py`, `tareas/meta`); los JSON ya migrados. Los tokens de
+  YouTube y TikTok siguen generándose a mano (los usan el pipeline original y el orgánico).
 - **Solo desde la terminal:** los scripts de la sección anterior y los dos `auth/`.
 
 ## Cómo se corre y cómo se despliega
@@ -440,6 +472,8 @@ los dos leyendo `data/creatv.db`. Para publicar cambios: `git pull`, `pip instal
 | sprint / campaña | El plan de un mes y cada celda persona × producto × temporada; una `campana_pieza` es una idea que se convierte en sesión de Crear. |
 | activo del catálogo | Un producto con fotos y mapa corporal listo para citarse como @Producto; tiene su fila `producto` con precio y URL. |
 | tarea / job_id | Una fila de la cola y su identificador determinista, el que el navegador sondea y el que impide lanzar lo mismo dos veces. |
+| cobro / gasto | Una fila de la tabla `gasto`: lo que un proveedor cobró de verdad por una pieza, un swap, un guion o una final, en dólares y con referencia única. La pauta de Meta no va ahí. |
+| publicación orgánica | Sacar una pieza como contenido normal, no pagado, en Reels, Facebook, TikTok o Shorts; una fila de `publicacion` por pieza y plataforma, con el id y la URL que devolvió la red. |
 
 ## Cosas sueltas que vale la pena ordenar (al 18 sep 2026)
 

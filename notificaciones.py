@@ -37,9 +37,10 @@ def _config():
     return host, puerto, usuario, clave, remitente
 
 
-def enviar(destinatario, asunto, cuerpo):
+def enviar(destinatario, asunto, cuerpo, html=None):
     """True si el correo salió; False (sin excepción) si falta configuración,
-    falta destinatario o el envío falló."""
+    falta destinatario o el envío falló. Con `html` se manda multipart
+    (texto plano + alternativa HTML); sin él, texto plano como siempre."""
     host, puerto, usuario, clave, remitente = _config()
     destinatario = (destinatario or "").strip()
     if not host or not destinatario:
@@ -50,6 +51,8 @@ def enviar(destinatario, asunto, cuerpo):
     msg["From"] = remitente or usuario or f"creatv@{host}"
     msg["To"] = destinatario
     msg.set_content(cuerpo or "")
+    if html:
+        msg.add_alternative(html, subtype="html")
     try:
         with smtplib.SMTP(host, puerto, timeout=30) as smtp:
             smtp.starttls()

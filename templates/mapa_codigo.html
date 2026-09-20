@@ -1,0 +1,922 @@
+{# Mapa conceptual del código: la versión interactiva de ESTRUCTURA.md, solo
+   para el admin (ruta /mapa, dashboard.mapa_codigo). Lo que va entre raw es HTML
+   estático que se regenera junto con ESTRUCTURA.md; no lleva Jinja a propósito,
+   así se pega tal cual desde la versión publicada sin escapar nada. #}
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+{% raw %}
+<title>Mapa de Creatv Machine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6f6fb;--panel:#ffffff;--panel-2:#f1f1f8;--border:#e3e4ee;--text:#16172b;--muted:#5f6377;--muted-2:#9497ab;
+  --accent:#7c3aed;--accent-soft:#efe7fd;--accent-line:#c9b4f7;--ok:#1f9d6a;--ok-soft:#e3f7ee;--warn:#a8780a;--warn-soft:#fdf3d9;--err:#d63c5e;--err-soft:#ffe6ec;
+  --shadow:0 4px 16px rgba(30,20,60,.07);--shadow-2:0 12px 32px rgba(30,20,60,.10);
+  --display:"Space Grotesk","Helvetica Neue",Arial,sans-serif;
+  --body:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){--bg:#12132a;--panel:#1b1c36;--panel-2:#23244a;--border:#31325a;--text:#ecebf7;--muted:#a9abc6;--muted-2:#7c7f9e;--accent:#b39cff;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;--shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);}
+}
+:root[data-theme="dark"]{--bg:#12132a;--panel:#1b1c36;--panel-2:#23244a;--border:#31325a;--text:#ecebf7;--muted:#a9abc6;--muted-2:#7c7f9e;--accent:#b39cff;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;--shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:15.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:0 72px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(2rem,4.2vw,2.8rem);letter-spacing:-.015em;margin-top:.35rem}
+h2{font-size:1.55rem;margin-block:.15rem .5rem}
+h3{font-size:1.05rem;margin-block:1.4rem .5rem}
+p{margin:0 0 .8rem;max-width:70ch}
+a{color:var(--accent)}
+code{font-family:var(--mono);font-size:.86em;background:var(--panel-2);padding:.1em .35em;border-radius:5px}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
+header.top{padding-block:2.2rem 1rem}
+header.top p.lead{font-size:1.08rem;color:var(--muted);max-width:64ch;margin-top:.8rem}
+nav.nav{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);border-block:1px solid var(--border);margin-inline:-16px;padding-inline:16px}
+nav.nav ul{list-style:none;margin:0;padding:0;display:flex;gap:.1rem;overflow-x:auto;scrollbar-width:none}
+nav.nav li a{display:block;padding:.7rem .6rem;font-size:.84rem;font-weight:500;color:var(--muted);text-decoration:none;white-space:nowrap;border-bottom:2px solid transparent}
+nav.nav li a:hover,nav.nav li a:focus-visible{color:var(--text);border-color:var(--accent);outline:none}
+section{padding-block:2.8rem 0}
+.cristiano{font-size:1rem;color:var(--text);border-left:3px solid var(--accent);background:var(--accent-soft);padding:.6rem .9rem;border-radius:0 10px 10px 0;margin:.4rem 0 1.1rem;max-width:74ch}
+.cristiano b{font-family:var(--display);color:var(--accent)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow)}
+.card h3{margin-top:0}
+.card .q{font-family:var(--display);font-weight:600;font-size:1rem;color:var(--muted);margin-bottom:.35rem}
+.card .a{font-size:1.2rem;font-weight:700;color:var(--accent);font-family:var(--display);line-height:1.25}
+.card p{margin:.55rem 0 0;font-size:.93rem;color:var(--muted);max-width:none}
+.card ul.lista{font-size:.93rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
+.stat{background:var(--panel-2);border-radius:10px;padding:12px 14px}
+.stat b{display:block;font-family:var(--display);font-size:1.55rem;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat span{font-size:.8rem;color:var(--muted)}
+.chip{display:inline-block;font-size:.68rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:.15em .5em;border-radius:999px;vertical-align:middle;margin-left:.3rem;white-space:nowrap}
+.chip.vivo{background:var(--ok-soft);color:var(--ok)}
+.chip.legado{background:var(--warn-soft);color:var(--warn)}
+.chip.cli{background:var(--panel-2);color:var(--muted)}
+.chip.db{background:var(--accent-soft);color:var(--accent)}
+/* héroe y analogía */
+.hero{margin-top:1.2rem;border:1px solid var(--border);border-radius:18px;background:linear-gradient(135deg,var(--accent-soft),var(--panel) 62%);padding:24px 24px 20px;box-shadow:var(--shadow)}
+.hero .una{font-family:var(--display);font-size:clamp(1.2rem,2.5vw,1.55rem);font-weight:600;line-height:1.3;max-width:36ch;text-wrap:balance;margin:0}
+.hero .regla{margin:1rem 0 0;padding:.75rem 1rem;border-radius:12px;background:var(--panel);border:1px dashed var(--accent-line);font-size:.97rem;max-width:none}
+.hero .regla b{color:var(--accent)}
+.cadena{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-top:.9rem}
+.cadena .nodo{flex:1 1 160px;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+.cadena .nodo .rol{font-family:var(--display);font-weight:700;font-size:1.02rem}
+.cadena .nodo .real{font-family:var(--mono);font-size:.76rem;color:var(--accent);margin-top:.2rem;word-break:break-word}
+.cadena .nodo p{font-size:.86rem;color:var(--muted);margin:.45rem 0 0;max-width:none}
+.cadena .flecha{align-self:center;color:var(--muted-2);font-size:1.3rem;flex:0 0 auto;padding-inline:2px}
+.cadena .nodo.almacen{background:var(--accent-soft);border-color:transparent}
+.cadena .nodo.cobra{background:var(--warn-soft);border-color:transparent}
+@media (max-width:640px){.cadena{flex-direction:column}.cadena .flecha{transform:rotate(90deg);align-self:center;line-height:1}}
+/* diagrama */
+figure{margin:1rem 0 0;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px}
+figure .svgwrap{overflow-x:auto}
+figure svg{display:block;max-width:100%;height:auto;min-width:720px;font-family:var(--body);color:var(--text)}
+figcaption{font-size:.88rem;color:var(--muted);padding:10px 6px 2px}
+.bx{fill:var(--panel);stroke:currentColor;stroke-width:1.1}
+.band{fill:var(--panel-2);stroke:var(--border);stroke-width:1}
+.band.cobra{fill:var(--warn-soft);stroke:var(--warn)}
+.store{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.1}
+.ln{stroke:currentColor;stroke-width:1.4;fill:none}
+.ln.dash{stroke-dasharray:5 4}
+.t{fill:currentColor;font-size:12.5px}
+.t.b{font-weight:600;font-family:var(--display);font-size:13px}
+.t.i{font-size:11.5px;fill:var(--muted);font-style:italic}
+.t.s{font-size:11px;fill:var(--muted)}
+.t.m{font-family:var(--mono);font-size:11.5px}
+svg [data-hl]{transition:opacity .25s}
+svg.paso-activo [data-hl]:not(.on){opacity:.2}
+svg .on .band{stroke:var(--accent);stroke-width:2.2}
+svg .on .store{stroke-width:2.2}
+svg .on .ln{stroke:var(--accent);stroke-width:2.6;marker-end:url(#ar-on)}
+svg .on .ln.dos{marker-start:url(#ar-on)}
+svg .on .t.s,svg .on .t.i{fill:var(--text)}
+/* recorrido */
+.controles{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:1rem}
+.btn{font:inherit;font-weight:600;font-size:.9rem;padding:.55rem 1rem;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--text);cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn.primario{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn[disabled]{opacity:.45;cursor:default}
+.controles .donde{font-size:.86rem;color:var(--muted);font-variant-numeric:tabular-nums;margin-left:auto}
+.panel-paso{margin-top:10px;padding:14px 16px;border-radius:12px;border:1px solid var(--accent-line);background:var(--panel);min-height:3.2rem}
+.panel-paso b{font-family:var(--display);font-size:1.02rem}
+.panel-paso .quien{display:block;font-size:.78rem;color:var(--muted);margin-top:.35rem;font-family:var(--mono);word-break:break-word}
+ol.pasos{counter-reset:p;list-style:none;padding:0;margin:1rem 0 0;display:grid;gap:10px}
+ol.pasos li{counter-increment:p;position:relative;padding:12px 14px 12px 58px;background:var(--panel);border:1px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color .2s,box-shadow .2s}
+ol.pasos li::before{content:counter(p);position:absolute;left:14px;top:12px;width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;font-family:var(--display);font-weight:700;display:grid;place-items:center;font-size:.95rem}
+ol.pasos li:hover{border-color:var(--accent)}
+ol.pasos li.actual{border-color:var(--accent);box-shadow:var(--shadow-2);background:var(--accent-soft)}
+ol.pasos li:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+ol.pasos li b{font-family:var(--display)}
+ol.pasos li .quien{display:block;font-size:.78rem;color:var(--muted);margin-top:.3rem;font-family:var(--mono);word-break:break-word}
+/* tablas */
+.scroll{overflow-x:auto;margin-top:.8rem;border:1px solid var(--border);border-radius:14px;background:var(--panel)}
+table.tbl{width:100%;border-collapse:collapse;font-size:.9rem}
+table.tbl th{text-align:left;font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);padding:10px 12px;border-bottom:1px solid var(--border);background:var(--panel-2);white-space:nowrap}
+table.tbl td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+table.tbl tr:last-child td{border-bottom:0}
+table.tbl td.f{font-family:var(--mono);font-size:.8rem;white-space:nowrap}
+table.tbl td.f.w{white-space:normal;min-width:180px}
+table.tbl td.n{font-variant-numeric:tabular-nums;text-align:right;color:var(--muted);white-space:nowrap}
+table.tbl td.d{min-width:260px}
+table.tbl td.q{font-weight:600;min-width:200px}
+table.tbl td.d code,table.tbl td.p code{white-space:nowrap}
+table.tbl tr.grp td{background:var(--panel-2);font-family:var(--display);font-weight:600;font-size:.95rem;padding-block:10px}
+table.tbl tr.grp td small{font-family:var(--body);font-weight:400;color:var(--muted);font-size:.8rem;margin-left:.5rem}
+.buscar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:1rem}
+.buscar input{flex:1 1 260px;font:inherit;padding:.65rem .95rem;border:1px solid var(--border);border-radius:10px;background:var(--panel);color:var(--text)}
+.buscar input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.buscar output{font-size:.86rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.filtros{display:flex;flex-wrap:wrap;gap:6px;margin-top:.7rem}
+.filtros button{font:inherit;font-size:.8rem;font-weight:600;padding:.35rem .75rem;border-radius:999px;border:1px solid var(--border);background:var(--panel);color:var(--muted);cursor:pointer}
+.filtros button:hover{border-color:var(--accent);color:var(--text)}
+.filtros button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.filtros button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+ul.lista{padding-left:1.2rem;margin:.4rem 0 0}
+ul.lista li{margin-bottom:.45rem}
+.faq details{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:0 16px;margin-top:8px}
+.faq summary{cursor:pointer;font-family:var(--display);font-weight:600;padding:13px 0;list-style:none;display:flex;gap:10px;align-items:baseline}
+.faq summary::-webkit-details-marker{display:none}
+.faq summary::before{content:"+";color:var(--accent);font-weight:700;width:1em;flex:0 0 auto}
+.faq details[open] summary::before{content:"–"}
+.faq details p{padding-bottom:13px;color:var(--muted);max-width:none;margin:0}
+dl.glos{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem;margin:1rem 0 0;font-size:.93rem}
+dl.glos dt{font-family:var(--mono);font-size:.82rem;color:var(--accent);padding-top:.15rem}
+dl.glos dd{margin:0;max-width:70ch}
+.aviso{border-left:3px solid var(--warn);background:var(--warn-soft);padding:12px 16px;border-radius:0 12px 12px 0;margin-top:1rem}
+.aviso p{margin:0 0 .45rem;max-width:none}
+footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);font-size:.82rem;color:var(--muted)}
+@media (max-width:640px){dl.glos{grid-template-columns:1fr}dl.glos dd{margin-bottom:.5rem}ol.pasos li{padding-left:52px}.hero{padding:18px 16px}}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+@media (prefers-reduced-motion:reduce){svg [data-hl],ol.pasos li{transition:none}}
+[hidden]{display:none!important}
+.barra-app{display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--border);font-size:.86rem;color:var(--muted)}
+.barra-app a{font-weight:600;text-decoration:none}
+.barra-app .solo{margin-left:auto}
+</style>
+{% endraw %}
+</head>
+<body>
+<div class="barra-app"><a href="{{ url_for('panel') }}">Volver al panel</a><span>Mapa del código · versión del 20 de septiembre de 2026</span><span class="solo">Solo lo ve el administrador</span></div>
+{% raw %}
+<div class="wrap">
+<header class="top">
+  <div class="eyebrow">iaplusyou · app.creatvmachine.com · leído del repositorio el 20 de septiembre de 2026</div>
+  <h1>Mapa de Creatv Machine</h1>
+  <p class="lead">Qué es, con qué está hecho, dónde guarda las cosas y qué hace cada archivo. Escrito para quien abre el repositorio en frío, sin asumir que sabe nada de programación.</p>
+</header>
+<nav class="nav" aria-label="Secciones"><ul>
+  <li><a href="#cristiano">En cristiano</a></li>
+  <li><a href="#respuestas">Respuestas rápidas</a></li>
+  <li><a href="#mapa">El mapa y el clic</a></li>
+  <li><a href="#pestanas">Pestañas</a></li>
+  <li><a href="#datos">Datos</a></li>
+  <li><a href="#quiero">¿Quiero hacer X?</a></li>
+  <li><a href="#inventario">Inventario</a></li>
+  <li><a href="#servicios">Llaves</a></li>
+  <li><a href="#faq">Preguntas</a></li>
+  <li><a href="#vivo">Vivo vs legado</a></li>
+  <li><a href="#exponer">Antes de exponerlo</a></li>
+  <li><a href="#glosario">Glosario</a></li>
+</ul></nav>
+
+<section id="cristiano">
+  <div class="hero">
+    <div class="eyebrow">En una frase</div>
+    <p class="una">Una fábrica de videos e imágenes para redes y pauta, con un botón de aprobación humana entre cada paso que cuesta dinero.</p>
+    <p class="regla"><b>La regla de oro:</b> nada que gaste créditos corre solo. Idea → prompts → imagen → video → publicación, y entre cada flecha alguien aprueba. Todo el código está construido alrededor de esa regla, y por eso hay una cola de trabajos, un identificador fijo por clic y, desde el 18 de septiembre, el precio a la vista antes de cada botón y el cobro real anotado después. Sobre ese núcleo viven Final edition, Sprints, Experimentos, Catálogo con tiendas y la publicación orgánica de la ganadora.</p>
+  </div>
+
+  <h2 style="margin-top:2rem">La analogía del restaurante</h2>
+  <p class="cristiano"><b>Léelo así:</b> el código está partido en papeles, como un restaurante. Si entiendes quién toma el pedido, quién cocina y dónde se anota todo, entiendes el proyecto entero. El resto de la página usa estos nombres.</p>
+  <div class="cadena">
+    <div class="nodo"><div class="rol">El cliente que pide</div><div class="real">el navegador · templates/</div><p>Manda formularios HTML y pregunta "¿cómo va mi pedido?" cada uno o dos segundos.</p></div>
+    <div class="flecha" aria-hidden="true">→</div>
+    <div class="nodo"><div class="rol">El mesero</div><div class="real">dashboard.py · sprints/rutas.py</div><p>Toma el pedido, revisa que tengas permiso, calcula el precio y lo anota. Nunca cocina.</p></div>
+    <div class="flecha" aria-hidden="true">→</div>
+    <div class="nodo almacen"><div class="rol">La comanda en la barra</div><div class="real">tabla tarea · cola.py</div><p>Una fila por pedido, con un número fijo: un doble clic no hace dos platos.</p></div>
+    <div class="flecha" aria-hidden="true">→</div>
+    <div class="nodo"><div class="rol">La cocina</div><div class="real">worker.py · tareas/</div><p>Un cocinero, un plato a la vez. Si se cae a mitad de un plato, la comanda vuelve a la barra.</p></div>
+    <div class="flecha" aria-hidden="true">→</div>
+    <div class="nodo cobra"><div class="rol">Los proveedores</div><div class="real">Claude · WaveSpeed · fal.ai · Meta…</div><p>Cobran por cada plato. Solo la cocina les habla; el mesero solo pregunta precios.</p></div>
+  </div>
+  <div class="cadena" style="margin-top:8px">
+    <div class="nodo"><div class="rol">El recetario</div><div class="real">creative_flow.py · final_edition/ · sprints/ · experimentos.py…</div><p>Las reglas del negocio. Las usan el mesero y la cocina por igual, por eso son módulos aparte.</p></div>
+    <div class="nodo almacen"><div class="rol">El libro de cuentas</div><div class="real">SQLite · data/creatv.db</div><p>Estado, métricas y la cola misma, en un solo archivo que comparten los dos procesos.</p></div>
+    <div class="nodo almacen"><div class="rol">Los cuadernos viejos</div><div class="real">clientes/&lt;proyecto&gt;/*.json</div><p>El estado de antes de la base. Sigue funcionando y nadie lo tocó.</p></div>
+    <div class="nodo almacen"><div class="rol">La bodega</div><div class="real">Cloudflare R2</div><p>Fotos, videos y música. En el libro solo queda la dirección de cada cosa.</p></div>
+  </div>
+</section>
+
+<section id="respuestas">
+  <div class="eyebrow">Lo que preguntaste</div>
+  <h2>Respuestas rápidas</h2>
+  <div class="grid g2">
+    <div class="card">
+      <div class="q">¿Es Angular, React, "full HTML"?</div>
+      <div class="a">Es Python con Flask. El servidor arma el HTML y lo manda listo.</div>
+      <p>No hay framework de JavaScript, ni npm, ni paso de build. Cada página la construye el servidor con plantillas Jinja (<code>templates/</code>): son archivos HTML con huecos que Python rellena. Hay un solo archivo de estilos (<code>static/style.css</code>) y JavaScript escrito a mano dentro de las plantillas. La pieza de JS que más importa es <code>iniciarPolling()</code> en <code>base.html</code>: pregunta cómo va un trabajo y recarga la página cuando termina.</p>
+    </div>
+    <div class="card">
+      <div class="q">¿Qué base de datos tiene?</div>
+      <div class="a">SQLite en un archivo, más JSON por proyecto, más Cloudflare R2.</div>
+      <p>SQLite es una base de datos que vive en un solo archivo, sin servidor aparte: <code>data/creatv.db</code>, 21 tablas definidas en <code>db.py</code>, migraciones con Alembic (el historial de cambios del esquema). El estado más antiguo sigue en archivos JSON dentro de <code>clientes/&lt;proyecto&gt;/</code>. Todo lo pesado (fotos, videos, música) vive en R2 y en la base solo queda la dirección.</p>
+    </div>
+    <div class="card">
+      <div class="q">¿Cuántos programas corren?</div>
+      <div class="a">Dos procesos que comparten una sola base.</div>
+      <p><code>dashboard.py</code> es la web (en producción corre con gunicorn detrás de nginx) y <code>worker.py</code> es una cola que ejecuta una tarea a la vez. Solo se hablan a través de la tabla <code>tarea</code>. Producción: un VPS de Hetzner con dos servicios systemd. En local: <code>python dashboard.py</code> en el puerto 5050 y <code>python worker.py</code> en otra terminal.</p>
+    </div>
+    <div class="card">
+      <div class="q">¿De qué tamaño es esto?</div>
+      <div class="a">Un proyecto mediano y ordenado, con un archivo gigante.</div>
+      <p>La mitad del código está en módulos pequeños de una sola responsabilidad. El archivo grande es <code>dashboard.py</code>: todas las rutas de la web en uno. Cuatro de cada diez líneas de Python son pruebas automáticas, lo que para un proyecto de una sola persona es mucho más de lo normal.</p>
+    </div>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>370</b><span>archivos versionados</span></div>
+    <div class="stat"><b>47 391</b><span>líneas de Python (18 968 son pruebas)</span></div>
+    <div class="stat"><b>4 887</b><span>líneas de dashboard.py, el archivo más grande</span></div>
+    <div class="stat"><b>161</b><span>rutas HTTP (118 + 43 del blueprint Sprints)</span></div>
+    <div class="stat"><b>50</b><span>plantillas Jinja (6 988 líneas)</span></div>
+    <div class="stat"><b>21</b><span>tablas SQLite · 10 migraciones</span></div>
+    <div class="stat"><b>27</b><span>tipos de tarea del worker · 6 periódicas</span></div>
+    <div class="stat"><b>79</b><span>archivos de pruebas (pytest)</span></div>
+  </div>
+</section>
+
+<section id="mapa">
+  <div class="eyebrow">El mecanismo</div>
+  <h2>El mapa: dos procesos, una base y un navegador que solo pregunta</h2>
+  <p class="cristiano"><b>En cristiano:</b> lo que ves en pantalla lo arma el mesero (la web). Lo que cuesta plata lo hace la cocina (el worker). Los dos leen el mismo recetario y escriben en el mismo libro de cuentas. Pulsa <b>Reproducir</b> para ver el viaje de un clic sobre el dibujo, o toca cualquier paso de la lista de abajo.</p>
+  <div class="controles">
+    <button class="btn primario" id="b-play" type="button">Reproducir</button>
+    <button class="btn" id="b-prev" type="button">Anterior</button>
+    <button class="btn" id="b-next" type="button">Siguiente</button>
+    <button class="btn" id="b-off" type="button">Ver todo</button>
+    <span class="donde" id="donde"></span>
+  </div>
+  <div class="panel-paso" id="panel-paso" aria-live="polite"><b>Así viaja un clic.</b> Siete pasos entre que pulsas "Generar video" y ves el resultado esperando tu aprobación. Cada paso ilumina en el dibujo quién actúa.</div>
+  <figure>
+  <div class="svgwrap">
+  <svg id="svg-mapa" viewBox="0 0 1000 776" role="img" aria-label="La web y el worker son dos procesos separados que comparten los módulos de dominio y una base SQLite. El navegador manda formularios y sondea el progreso. La web encola una fila en la tabla tarea, el worker la reclama y es el único que llama a los proveedores que cobran." xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ar" viewBox="0 0 8 8" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker>
+      <marker id="ar-on" viewBox="0 0 8 8" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" style="fill:var(--accent)"/></marker>
+    </defs>
+
+    <g id="l-nav" data-hl>
+      <rect class="band" x="200" y="24" width="530" height="74" rx="10"/>
+      <text class="t b" x="216" y="46">NAVEGADOR</text>
+      <text class="t i" x="300" y="46">el cliente que pide</text>
+      <text class="t" x="216" y="66">Plantillas Jinja (templates/) + static/style.css + JS inline</text>
+      <text class="t s" x="216" y="84">Sin framework de front: formularios HTML y fetch() al endpoint de progreso</text>
+    </g>
+
+    <g id="a-post" data-hl>
+      <line class="ln" x1="440" y1="98" x2="440" y2="150" marker-end="url(#ar)"/>
+      <text class="t s" x="450" y="128">POST del formulario</text>
+    </g>
+    <g id="a-poll" data-hl>
+      <line class="ln dash" x1="560" y1="150" x2="560" y2="98" marker-end="url(#ar)"/>
+      <text class="t s" x="570" y="120">sondea /trabajo/&lt;job_id&gt;/estado cada 1–2 s</text>
+      <text class="t s" x="570" y="134">y recarga la página al terminar</text>
+    </g>
+
+    <g id="l-web" data-hl>
+      <rect class="band" x="200" y="150" width="530" height="96" rx="10"/>
+      <text class="t b" x="216" y="170">PROCESO WEB · gunicorn</text>
+      <text class="t i" x="395" y="170">el mesero: toma el pedido, nunca cocina</text>
+      <rect class="bx" x="216" y="182" width="158" height="48" rx="7"/>
+      <text class="t m" x="295" y="202" text-anchor="middle">dashboard.py</text>
+      <text class="t s" x="295" y="219" text-anchor="middle">118 rutas · sube archivos</text>
+      <rect class="bx" x="386" y="182" width="158" height="48" rx="7"/>
+      <text class="t m" x="465" y="202" text-anchor="middle">sprints/rutas.py</text>
+      <text class="t s" x="465" y="219" text-anchor="middle">43 rutas (Blueprint)</text>
+      <rect class="bx" x="556" y="182" width="158" height="48" rx="7"/>
+      <text class="t m" x="635" y="202" text-anchor="middle">trabajos.py</text>
+      <text class="t s" x="635" y="219" text-anchor="middle">encola · usuarios.py: login</text>
+    </g>
+
+    <g id="a-web-dom" data-hl>
+      <line class="ln" x1="465" y1="246" x2="465" y2="300" marker-end="url(#ar)"/>
+      <text class="t s" x="475" y="278">llama</text>
+    </g>
+
+    <g id="a-encola" data-hl>
+      <path class="ln" d="M 230 246 L 230 272 L 100 272 L 100 340" marker-end="url(#ar)"/>
+      <text class="t s" x="36" y="264">encola una fila (job_id único)</text>
+    </g>
+    <g id="l-cola" data-hl>
+      <rect class="store" x="30" y="340" width="140" height="60" rx="8"/>
+      <text class="t b" x="100" y="358" text-anchor="middle">tabla tarea</text>
+      <text class="t i" x="100" y="373" text-anchor="middle">la comanda</text>
+      <text class="t s" x="100" y="389" text-anchor="middle">cola.py · en SQLite</text>
+    </g>
+    <g id="a-reclama" data-hl>
+      <path class="ln" d="M 100 400 L 100 580 L 200 580" marker-end="url(#ar)"/>
+      <text class="t s" x="36" y="480">reclama 1 a la vez</text>
+      <text class="t s" x="36" y="494">nunca se ejecuta doble</text>
+    </g>
+
+    <g id="l-dom" data-hl>
+      <rect class="band" x="200" y="300" width="530" height="172" rx="10"/>
+      <text class="t b" x="216" y="320">MÓDULOS DE DOMINIO</text>
+      <text class="t i" x="370" y="320">el recetario que usan mesero y cocina</text>
+      <rect class="bx" x="216" y="332" width="158" height="38" rx="7"/>
+      <text class="t b" x="295" y="348" text-anchor="middle">Crear (FlowPlus)</text>
+      <text class="t s" x="295" y="362" text-anchor="middle">creative_flow · flowplus_*</text>
+      <rect class="bx" x="386" y="332" width="158" height="38" rx="7"/>
+      <text class="t b" x="465" y="348" text-anchor="middle">Final edition</text>
+      <text class="t s" x="465" y="362" text-anchor="middle">final_edition/</text>
+      <rect class="bx" x="556" y="332" width="158" height="38" rx="7"/>
+      <text class="t b" x="635" y="348" text-anchor="middle">Sprints</text>
+      <text class="t s" x="635" y="362" text-anchor="middle">sprints/</text>
+      <rect class="bx" x="216" y="378" width="158" height="38" rx="7"/>
+      <text class="t b" x="295" y="394" text-anchor="middle">Experimentos</text>
+      <text class="t s" x="295" y="408" text-anchor="middle">experimentos · lanzador · decisor</text>
+      <rect class="bx" x="386" y="378" width="158" height="38" rx="7"/>
+      <text class="t b" x="465" y="394" text-anchor="middle">Catálogo y tiendas</text>
+      <text class="t s" x="465" y="408" text-anchor="middle">tiendas · conectores/</text>
+      <rect class="bx" x="556" y="378" width="158" height="38" rx="7"/>
+      <text class="t b" x="635" y="394" text-anchor="middle">Publicación orgánica</text>
+      <text class="t s" x="635" y="408" text-anchor="middle">organico · uploaders/</text>
+      <rect class="bx" x="216" y="424" width="158" height="38" rx="7"/>
+      <text class="t b" x="295" y="440" text-anchor="middle">Gasto y panel admin</text>
+      <text class="t s" x="295" y="454" text-anchor="middle">gastos · admin</text>
+      <rect class="bx" x="386" y="424" width="158" height="38" rx="7"/>
+      <text class="t b" x="465" y="440" text-anchor="middle">Marca y catálogo</text>
+      <text class="t s" x="465" y="454" text-anchor="middle">marca · catalogo_productos</text>
+      <rect class="bx" x="556" y="424" width="158" height="38" rx="7"/>
+      <text class="t b" x="635" y="440" text-anchor="middle">Pipeline original</text>
+      <text class="t s" x="635" y="454" text-anchor="middle">prompts · estado · higgsfield</text>
+    </g>
+
+    <g id="l-store" data-hl>
+      <text class="t s" x="800" y="290">LIBRO DE CUENTAS Y BODEGA</text>
+      <rect class="store" x="800" y="300" width="170" height="42" rx="8"/>
+      <text class="t m" x="885" y="318" text-anchor="middle">data/creatv.db</text>
+      <text class="t s" x="885" y="334" text-anchor="middle">SQLite · 21 tablas</text>
+      <rect class="store" x="800" y="350" width="170" height="42" rx="8"/>
+      <text class="t m" x="885" y="368" text-anchor="middle">clientes/&lt;c&gt;/*.json</text>
+      <text class="t s" x="885" y="384" text-anchor="middle">estado viejo · usuarios.json</text>
+      <rect class="store" x="800" y="400" width="170" height="42" rx="8"/>
+      <text class="t m" x="885" y="418" text-anchor="middle">Cloudflare R2</text>
+      <text class="t s" x="885" y="434" text-anchor="middle">fotos, videos, música</text>
+    </g>
+    <g id="a-dom-store" data-hl>
+      <line class="ln dos" x1="730" y1="330" x2="800" y2="330" marker-start="url(#ar)" marker-end="url(#ar)"/>
+      <text class="t s" x="765" y="321" text-anchor="middle">lee/escribe</text>
+    </g>
+
+    <g id="a-worker-dom" data-hl>
+      <line class="ln" x1="465" y1="526" x2="465" y2="472" marker-end="url(#ar)"/>
+      <text class="t s" x="475" y="504">llama los mismos módulos</text>
+    </g>
+
+    <g id="l-worker" data-hl>
+      <rect class="band" x="200" y="526" width="530" height="108" rx="10"/>
+      <text class="t b" x="216" y="546">PROCESO WORKER · worker.py</text>
+      <text class="t i" x="425" y="546">la cocina: un plato a la vez</text>
+      <rect class="bx" x="216" y="558" width="242" height="62" rx="7"/>
+      <text class="t m" x="337" y="576" text-anchor="middle">tareas/ · 27 tipos registrados</text>
+      <text class="t s" x="337" y="592" text-anchor="middle">flowplus · final · sprint · swap · organico</text>
+      <text class="t s" x="337" y="606" text-anchor="middle">exp · meta · tienda · catalogo</text>
+      <rect class="bx" x="472" y="558" width="242" height="62" rx="7"/>
+      <text class="t b" x="593" y="576" text-anchor="middle">6 periódicas</text>
+      <text class="t s" x="593" y="592" text-anchor="middle">refrescar 2 h · decidir 1 h · avanzar 10 min</text>
+      <text class="t s" x="593" y="606" text-anchor="middle">QA 5 min · pedidos 2 h · productos 6 h</text>
+    </g>
+
+    <g id="a-r2" data-hl>
+      <path class="ln" d="M 730 588 L 765 588 L 765 421 L 800 421" marker-end="url(#ar)"/>
+      <text class="t s" transform="rotate(-90 755 505)" x="755" y="505" text-anchor="middle">sube binarios</text>
+    </g>
+
+    <g id="a-worker-prov" data-hl>
+      <line class="ln" x1="465" y1="634" x2="465" y2="686" marker-end="url(#ar)"/>
+      <text class="t s" x="475" y="665">genera · publica · sincroniza · aquí se gastan los créditos</text>
+    </g>
+
+    <g id="l-prov" data-hl>
+      <rect class="band cobra" x="200" y="686" width="530" height="74" rx="10"/>
+      <text class="t b" x="216" y="706">PROVEEDORES EXTERNOS</text>
+      <text class="t i" x="385" y="706">los que cobran por cada plato</text>
+      <text class="t" x="216" y="727">Anthropic (Claude) · WaveSpeed · fal.ai · Higgsfield · Gemini · Meta</text>
+      <text class="t s" x="216" y="745">YouTube · TikTok · Shopify · WooCommerce · MercadoLibre · SMTP · ffmpeg y yt-dlp locales</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption>El navegador solo manda formularios y sondea. La web valida, guarda estado y encola. El worker toma la fila, llama a los mismos módulos y es el único que gasta créditos en proveedores; cada cobro real queda anotado en la tabla <code>gasto</code> al terminar. Si el worker se cae a mitad de una tarea, la fila vuelve a <code>pendiente</code> y nada se pierde. Las llamadas baratas (los cinco prompts de una idea, las estimaciones de costo) sí salen directo del proceso web. El pipeline original de Higgsfield todavía corre en hilos dentro del proceso web (<code>trabajos.iniciar</code>), no en el worker.</figcaption>
+  </figure>
+
+  <h3>Los siete pasos, para leer con calma</h3>
+  <p class="cristiano"><b>El ejemplo:</b> alguien pulsa "Generar video" en Crear. Los demás botones caros (producir una final, lanzar un lote de sprint, lanzar un experimento, importar un catálogo, publicar en orgánico) siguen exactamente el mismo camino; solo cambian el tipo de tarea y el módulo que hace el trabajo.</p>
+  <ol class="pasos" id="pasos">
+    <li data-hl="l-nav a-post" tabindex="0"><b>Pulsas el botón.</b> El navegador manda un formulario normal, como cualquier página web de toda la vida. No hay ninguna app corriendo en tu computador: solo HTML.<span class="quien">templates/_tab_creativeflowplus.html → POST /cliente/&lt;c&gt;/creative_flow/&lt;cf_id&gt;/generar_video</span></li>
+    <li data-hl="l-web a-web-dom l-dom a-dom-store l-store" tabindex="0"><b>El mesero revisa el pedido.</b> La ruta comprueba que estés logueado y que el proyecto sea tuyo, calcula cuánto va a costar (el precio que viste junto al botón) y anota en el libro que la sesión está "generando". Todavía no se gastó nada.<span class="quien">dashboard.py → providers/flowplus_modelos.estimate_video → creative_flow.actualizar</span></li>
+    <li data-hl="l-web a-encola l-cola" tabindex="0"><b>Deja la comanda en la barra.</b> En vez de cocinar, la web inserta una fila en la tabla <code>tarea</code> y responde al instante. La fila lleva un identificador fijo (proyecto + sesión + acción): si haces doble clic, la segunda vez no pasa nada.<span class="quien">flowplus_lanzar.lanzar → trabajos.encolar → cola.encolar (max_intentos=1)</span></li>
+    <li data-hl="a-poll l-nav l-web l-cola" tabindex="0"><b>Tu pantalla pregunta "¿cómo va?".</b> Cada uno o dos segundos el navegador consulta el estado del trabajo y dibuja la barra de progreso con las etapas que la tarea va reportando.<span class="quien">base.html iniciarPolling() → GET /trabajo/&lt;job_id&gt;/estado → trabajos.consultar</span></li>
+    <li data-hl="l-cola a-reclama l-worker" tabindex="0"><b>La cocina toma la comanda.</b> El worker, que es otro programa, reclama la fila con una actualización condicionada en la base: solo un proceso puede ganarla. Luego busca qué función atiende ese tipo de tarea.<span class="quien">worker.py → cola.reclamar → tareas.REGISTRO["flowplus_video"]</span></li>
+    <li data-hl="l-worker a-worker-prov l-prov a-worker-dom l-dom a-r2 l-store" tabindex="0"><b>Se cocina el plato caro.</b> La tarea llama al modelo de video (WaveSpeed), descarga el resultado, lo guarda en la bodega (R2), le mezcla la música, anota la pieza en el libro y deja el cobro real en la tabla <code>gasto</code>. Cada etapa se reporta para la barra. Aquí es donde se gastan los créditos.<span class="quien">tareas/flowplus.ejecutar_video → providers/flowplus_modelos → storage/r2_uploader → final_edition/mezcla → gastos.registrar_seguro → cola.reportar</span></li>
+    <li data-hl="l-cola a-poll l-nav" tabindex="0"><b>Listo: te toca decidir.</b> La tarea se marca terminada, tu pantalla lo ve en el siguiente sondeo y recarga. El video aparece esperando tu aprobación; aprobarlo es otro clic y otra ruta. Si el worker se hubiera caído a la mitad, la fila volvería a "pendiente" a los 30 minutos y nada se perdería.<span class="quien">cola.terminar → recarga → dashboard.ver_cliente</span></li>
+  </ol>
+</section>
+
+<section id="pestanas">
+  <div class="eyebrow">Lo que ve la persona</div>
+  <h2>Las seis pestañas y qué archivos las mueven</h2>
+  <p class="cristiano"><b>En cristiano:</b> la página de un proyecto es una sola (<code>cliente.html</code>) con seis pestañas. Cada pestaña es un archivo de plantilla, cada botón es una ruta en el mesero, y cada botón caro termina en una tarea de la cocina. Esta tabla es el índice para saber por dónde empezar a buscar.</p>
+  <div class="scroll"><table class="tbl">
+    <thead><tr><th>Pestaña</th><th>Qué hace la persona ahí</th><th>Plantillas</th><th>Rutas (bajo /cliente/&lt;c&gt;/)</th><th>Módulos</th><th>Tareas del worker</th></tr></thead>
+    <tbody>
+      <tr><td class="f">Tablero</td><td class="d">Ver el gasto del mes en pauta y en generación, las ventas atribuidas, el ROAS, las cinco piezas ganadoras (y si ya salieron en orgánico) y las alertas.</td><td class="f w">_tab_tablero.html</td><td class="f w">tablero/mes.csv</td><td class="f w">tablero.py · experimentos.py · gastos.py · organico.py</td><td class="f w">ninguna propia: lee los snapshots que dejan exp_refrescar*</td></tr>
+      <tr><td class="f">Crear</td><td class="d">Generar una imagen o un video a partir de referencias y texto; cambiar el producto en una foto o video real; las ideas del pipeline original; preparar y producir la final edition por país; publicar una pieza en orgánico desde su tarjeta, con el precio de cada botón a la vista.</td><td class="f w">_tab_flowplus.html → _tab_creativeflowplus.html, _tab_cambiar_calzado.html, _seccion_ideas.html, _flowplus_bandeja.html, _organico_publicar.html</td><td class="f w">creative_flow/* · flowplus/* · swap/* · idea/* · prompt/* · aprobar/&lt;brief&gt; · organico/*</td><td class="f w">creative_flow · flowplus_prompt · flowplus_lanzar · referencias_flowplus · referencias_link · swaps · prompt_swap · prompts · estado · final_edition/ · organico · gastos</td><td class="f w">flowplus_video · flowplus_imagen · swap_generar · final_guion · final_producir · organico_publicar</td></tr>
+      <tr><td class="f">Sprints</td><td class="d">Planear el mes: personas × productos × temporadas, subir referencias, pedir ideas a Claude, lanzar el lote, revisar el QA, aprobar y entregar.</td><td class="f w">_tab_sprints.html + páginas propias sprint_detalle, campana_referencias, campana_ideas, sprint_revision, sprint_entrega</td><td class="f w">sprints/* (43 rutas del Blueprint)</td><td class="f w">sprints/ (13 módulos)</td><td class="f w">sprint_analizar_referencia · sprint_sugerir_personas · sprint_referencia_link · sprint_proponer_ideas · sprint_qa_pieza · sprint_qa_pendientes · sprint_empaquetar</td></tr>
+      <tr><td class="f">Experimentos</td><td class="d">Armar un experimento con piezas y países, lanzarlo a Meta en pausa, activarlo, leer veredictos y propuestas del decisor, editar las reglas del motor, registrar la app de Meta, publicar la ganadora en orgánico (Reels, Facebook, TikTok, Shorts) con el texto que propone Claude; los anuncios sueltos legado.</td><td class="f w">_tab_experimentos.html, _anuncios_sueltos.html, _form_reglas.html, _meta_conectar.html, _organico_publicar.html</td><td class="f w">experimentos/* · propuestas/* · ads/* · meta/* · config/reglas · organico/*</td><td class="f w">experimentos · lanzador · decisor · modos · acciones · propuestas · derivaciones · ads · meta_conexion · meta_ads/ · organico</td><td class="f w">exp_lanzar · exp_refrescar · exp_decidir · exp_avanzar_todos · meta_publicar · meta_refrescar · organico_publicar</td></tr>
+      <tr><td class="f">Catálogo</td><td class="d">Productos como activos con fotos, mapa corporal, precio, moneda y URL de compra; importar desde CSV, URL o tienda; personajes y escenas de referencia.</td><td class="f w">_tab_catalogo.html, _catalogo_lista, _catalogo_importar, _catalogo_sin_fotos, _catalogo_campos_comerciales, _maniqui, _seccion_personajes</td><td class="f w">productos/* · personaje/* · escena/* · producto_referencia/* · logos/*</td><td class="f w">catalogo_productos · tiendas · importador · conectores/ · mapa_corporal</td><td class="f w">catalogo_importar · producto_vincular</td></tr>
+      <tr><td class="f">Configuración</td><td class="d">Guía de estilo de la marca (con análisis de Claude), el gasto real del mes con historial y CSV, preferencias de Crear y de sonido, nombre visible, correo de avisos, tiendas conectadas, Pixel, los canales orgánicos disponibles, y la "puesta a punto" que dice qué llaves faltan.</td><td class="f w">_tab_settings.html, _seccion_marca.html, _meta_conectar.html, _comparacion_modelos.html</td><td class="f w">marca/* · preferencias*/guardar · config/* · nombre · meli/callback · gasto/mes.csv</td><td class="f w">marca · proyectos · tiendas · cifrado · meta_conexion · generador_prompts.analizar_marca · gastos · organico</td><td class="f w">tienda_sync_productos · tienda_sync_pedidos</td></tr>
+    </tbody>
+  </table></div>
+  <p style="margin-top:1rem">Fuera de esa página hay siete más: <code>index.html</code> (la portada pública, con el alta de un proyecto), <code>panel.html</code> (el tablero de operación del admin: gasto y pauta del mes por proyecto, salud del worker, historial y CSV), <code>login.html</code>, <code>landing_cliente.html</code> (alta de un proyecto nuevo por link público, ruta <code>/l/&lt;c&gt;</code>), <code>legal.html</code> (privacidad, términos y borrado de datos, que Meta exige), <code>meta_elegir.html</code> (elegir cuenta publicitaria y página después del OAuth) y <code>mapa_codigo.html</code> (este mapa, en <code>/mapa</code>, solo para el admin).</p>
+</section>
+
+<section id="datos">
+  <div class="eyebrow">Persistencia</div>
+  <h2>Dónde vive cada dato</h2>
+  <p class="cristiano"><b>En cristiano:</b> hay tres sitios donde se guardan cosas, y una regla para saber cuál. Lo que nació con el motor de ecommerce, los sprints, el gasto o la publicación orgánica está en el libro de cuentas (SQLite). Lo que ya existía antes sigue en los cuadernos viejos (JSON por proyecto). Cualquier archivo pesado está en la bodega (R2) y aquí solo queda su dirección.</p>
+  <div class="grid g3">
+    <div class="card">
+      <h3>SQLite · data/creatv.db <span class="chip db">21 tablas</span></h3>
+      <ul class="lista">
+        <li><b>Cola:</b> <code>tarea</code> (tipo, payload, estado, intentos, prioridad, etapas y progreso).</li>
+        <li><b>Crear y piezas:</b> <code>concepto</code> (idea + referencias, una por sesión cf_…) y <code>pieza</code> (clon limpio o final, con URL, costo, capas de audio).</li>
+        <li><b>Experimentos:</b> <code>experimento</code>, <code>experimento_pieza</code> (un anuncio en Meta), <code>metrica_snapshot</code> (métricas acumuladas por anuncio), <code>propuesta</code>, <code>evento</code>.</li>
+        <li><b>Catálogo y tiendas:</b> <code>tienda</code> (credenciales cifradas), <code>producto</code>, <code>pedido</code>.</li>
+        <li><b>Sprints:</b> <code>persona</code>, <code>temporada</code>, <code>sprint</code>, <code>campana</code>, <code>referencia</code>, <code>campana_pieza</code>, <code>sprint_evento</code>.</li>
+        <li><b>Gasto y publicación:</b> <code>gasto</code> (cada cobro real a un proveedor, en USD, con una referencia única) y <code>publicacion</code> (una fila por pieza y plataforma publicada en orgánico, con el id y la URL que devolvió la red).</li>
+        <li><b>Varios:</b> <code>kv</code>.</li>
+      </ul>
+      <p>Definidas en <code>db.py</code>; el esquema lo crean y actualizan las migraciones de <code>migrations/versions/</code> con <code>alembic upgrade head</code>. La carpeta <code>data/</code> no se versiona.</p>
+    </div>
+    <div class="card">
+      <h3>JSON y CSV en disco <span class="chip legado">estado previo</span></h3>
+      <ul class="lista">
+        <li><code>clientes/&lt;c&gt;/proyecto.json</code>: nombre, preferencias, reglas, correo, país (<code>proyectos.py</code>). Es el único JSON versionado.</li>
+        <li><code>marca.json</code> y <code>marca/root.json</code>: guía de estilo y matriz de marca (<code>marca.py</code>).</li>
+        <li><code>productos.json</code> + <code>productos/&lt;id&gt;/</code>: activos del catálogo (<code>catalogo_productos.py</code>).</li>
+        <li><code>prompts_pendientes.json</code>, <code>estado_videos.json</code>, <code>conceptos_pendientes.json</code>, <code>swaps.json</code>, <code>referencias_pendientes.json</code>: pipeline original, swaps y bandeja de Crear.</li>
+        <li><code>meta_app.json</code>, <code>meta.json</code>, <code>.env</code>, <code>token_youtube.json</code>, <code>token_tiktok.json</code>: secretos por proyecto, permisos 0600.</li>
+        <li>En la raíz: <code>usuarios.json</code> (login) y <code>registro_generaciones.csv</code> (bitácora append-only).</li>
+        <li><code>creative_flow_pendientes.json</code> y <code>ads.json</code>: ya migrados a SQLite, quedan solo como respaldo.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Cloudflare R2 y caché local <span class="chip vivo">binarios</span></h3>
+      <ul class="lista">
+        <li>Personajes, escenas, referencias de marca y de producto, fotos del catálogo.</li>
+        <li>Imágenes candidatas, videos crudos (solo sonido nativo) y mezclados, finales por país, miniaturas.</li>
+        <li>Pistas de música generadas, fotogramas de referencias, zips de entrega de sprints.</li>
+        <li>Todo sube por <code>storage/r2_uploader.py</code>, el módulo que más se importa después de <code>db.py</code>.</li>
+        <li>Caché local, ignorada en git: <code>data/musica/</code>, <code>salidas/</code>, <code>clientes/&lt;c&gt;/sprints/</code>, <code>importaciones/</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="quiero">
+  <div class="eyebrow">El índice práctico</div>
+  <h2>"Quiero hacer X": qué archivo toco</h2>
+  <p class="cristiano"><b>En cristiano:</b> cuando quieras pedir un cambio (a Claude Code o a otra persona), esta tabla dice dónde vive cada cosa y qué trampa evitar. Si lo que quieres no está aquí, el inventario de abajo tiene todos los archivos.</p>
+  <div class="scroll"><table class="tbl">
+    <thead><tr><th>Quiero…</th><th>Toco…</th><th>Ojo</th></tr></thead>
+    <tbody>
+      <tr><td class="q">Agregar o cambiar un modelo de video o imagen en Crear</td><td class="d"><code>providers/flowplus_modelos.py</code>, diccionarios <code>VIDEO</code> e <code>IMAGEN</code> (ruta, precio, límites, audio nativo).</td><td class="d">La pestaña y la estimación de costo leen de ahí; no hay que tocar plantillas.</td></tr>
+      <tr><td class="q">Cambiar cómo se arma el prompt de Crear</td><td class="d"><code>flowplus_prompt.py</code></td><td class="d">El texto de la persona va tal cual; lo que se antepone es el bloque de fidelidad y la línea <code>SONIDO:</code>.</td></tr>
+      <tr><td class="q">Cambiar lo que Claude escribe (prompts, guía de marca, guiones, ideas)</td><td class="d"><code>generador_prompts.py</code>, <code>final_edition/guion.py</code>, <code>sprints/ideas.py</code></td><td class="d">Cada uno tiene su plantilla de prompt; las pruebas reemplazan la llamada real.</td></tr>
+      <tr><td class="q">Agregar una pestaña</td><td class="d"><code>templates/_sidebar.html</code>, <code>templates/cliente.html</code>, una <code>_tab_x.html</code> nueva, rutas en <code>dashboard.py</code> o un Blueprint como <code>sprints/rutas.py</code>.</td><td class="d">El contexto de cada pestaña lo arma <code>ver_cliente</code> en <code>dashboard.py</code>.</td></tr>
+      <tr><td class="q">Agregar una acción lenta o que cueste créditos</td><td class="d">Una función en <code>tareas/&lt;área&gt;.py</code> con <code>@registrar("tipo")</code>, importada en <code>tareas/__init__.cargar_todas</code>, encolada con <code>trabajos.encolar(..., max_intentos=1)</code>.</td><td class="d">Nunca en un hilo del proceso web; estimar el costo antes de mostrar el botón.</td></tr>
+      <tr><td class="q">Agregar una tabla o una columna</td><td class="d"><code>db.py</code> + una migración nueva en <code>migrations/versions/</code> + <code>alembic upgrade head</code>.</td><td class="d">La web y el worker comparten la base: reiniciar los dos servicios.</td></tr>
+      <tr><td class="q">Cambiar las reglas por defecto del decisor</td><td class="d"><code>decisor.py</code> (<code>REGLAS_DEFECTO</code>) y el formulario <code>templates/_form_reglas.html</code>.</td><td class="d">Un proyecto y un experimento pueden sobreescribirlas.</td></tr>
+      <tr><td class="q">Conectar otro tipo de tienda</td><td class="d">Un módulo en <code>conectores/</code> que implemente <code>conectores/base.Conector</code> y se registre por tipo.</td><td class="d"><code>tiendas.py</code> e <code>importador.py</code> no cambian.</td></tr>
+      <tr><td class="q">Agregar un país, una voz o un estilo de música a final edition</td><td class="d"><code>final_edition/tipos.py</code> (<code>PAISES</code>, <code>ESTILOS_MUSICA</code>) y <code>providers/fal_audio.py</code> (<code>VOCES</code>).</td><td class="d">Las voces se verifican una por una contra fal antes de listarlas.</td></tr>
+      <tr><td class="q">Cambiar el look de la interfaz</td><td class="d"><code>static/style.css</code> (tokens en <code>:root</code>) y <code>templates/base.html</code>.</td><td class="d">Un solo CSS para todo.</td></tr>
+      <tr><td class="q">Cambiar cada cuánto corren las periódicas</td><td class="d"><code>worker.py</code> (<code>PERIODICAS</code>).</td><td class="d">El orden dentro de un tick importa: pedidos de tiendas antes que experimentos.</td></tr>
+      <tr><td class="q">Saber por qué un trabajo se quedó pegado</td><td class="d">La tabla <code>tarea</code> (<code>estado</code>, <code>error</code>, <code>etapa_actual</code>) y <code>journalctl -u creatv-worker</code> en el VPS.</td><td class="d">Una tarea corriendo más de 30 min se re-encola o pasa a <code>error</code>.</td></tr>
+      <tr><td class="q">Agregar algo que cueste dinero y que se vea en el gasto</td><td class="d">Al terminar la tarea, <code>gastos.registrar_seguro(cliente, tipo, usd, referencia)</code> con una referencia única <code>tipo:id</code>; el precio estimado junto al botón sale de <code>gastos.estimar</code>.</td><td class="d">Una fila por cobro real, nunca por intento; la pauta de Meta no va ahí.</td></tr>
+      <tr><td class="q">Agregar un canal de publicación orgánica</td><td class="d"><code>organico.py</code> (<code>canales</code>, <code>publicar</code>) más el uploader de la plataforma en <code>uploaders/</code>.</td><td class="d">Publicar es público e irreversible: <code>max_intentos=1</code> y nunca dos veces la misma pieza en la misma plataforma.</td></tr>
+      <tr><td class="q">Ver cuánto se ha gastado</td><td class="d">Configuración › Gasto en cada proyecto; <code>/panel</code> para todos; <code>migrar_gastos_historicos.py</code> si la tabla quedó vacía tras un despliegue.</td><td class="d">Generación en USD; la pauta en la moneda de la cuenta de Meta, nunca convertida.</td></tr>
+      <tr><td class="q">Publicar cambios en producción</td><td class="d">En el VPS: <code>git pull</code>, <code>pip install -r requirements.txt</code>, <code>alembic upgrade head</code>, <code>systemctl restart iaplusyou creatv-worker</code>.</td><td class="d">Siempre los dos servicios. Detalle en <code>CLAUDE.md</code> y <code>SETUP.md</code>.</td></tr>
+      <tr><td class="q">Dar acceso a un cliente nuevo</td><td class="d">El link público <code>/l/&lt;proyecto&gt;</code> crea proyecto y usuario; o <code>usuarios.crear</code> a mano.</td><td class="d">El rol <code>cliente</code> solo ve su proyecto; <code>admin</code> ve todos.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="inventario">
+  <div class="eyebrow">Archivo por archivo</div>
+  <h2>Inventario del código</h2>
+  <p class="cristiano"><b>En cristiano:</b> todos los archivos que importan, agrupados por lo que hacen y no por orden alfabético, con una línea de qué hace cada uno. Filtra por área con los botones o escribe una palabra (por ejemplo <i>meta</i>, <i>ffmpeg</i>, <i>claude</i>). Las líneas son las del 20 de septiembre de 2026. <span class="chip vivo">vivo</span> es el núcleo actual, <span class="chip legado">legado</span> sigue enchufado pero ya no es el camino principal, <span class="chip cli">terminal</span> son scripts que se corren a mano y <span class="chip db">sqlite</span> marca los módulos que escriben en la base.</p>
+  <div class="buscar">
+    <input id="buscar" type="search" placeholder="Filtrar: meta, sqlite, worker, ffmpeg, claude…" aria-label="Filtrar el inventario">
+    <output id="n-res" for="buscar"></output>
+  </div>
+  <div class="filtros" id="filtros" role="group" aria-label="Filtrar por área">
+    <button type="button" data-a="todos" aria-pressed="true">Todos</button>
+    <button type="button" data-a="raiz" aria-pressed="false">Raíz y procesos</button>
+    <button type="button" data-a="crear" aria-pressed="false">Crear</button>
+    <button type="button" data-a="swap" aria-pressed="false">Cambiar producto</button>
+    <button type="button" data-a="final" aria-pressed="false">Final edition</button>
+    <button type="button" data-a="sprints" aria-pressed="false">Sprints</button>
+    <button type="button" data-a="exp" aria-pressed="false">Experimentos</button>
+    <button type="button" data-a="organico" aria-pressed="false">Orgánico</button>
+    <button type="button" data-a="gasto" aria-pressed="false">Gasto y admin</button>
+    <button type="button" data-a="catalogo" aria-pressed="false">Catálogo y tiendas</button>
+    <button type="button" data-a="orig" aria-pressed="false">Pipeline original</button>
+    <button type="button" data-a="cli" aria-pressed="false">Terminal</button>
+    <button type="button" data-a="tpl" aria-pressed="false">Plantillas y CSS</button>
+    <button type="button" data-a="db" aria-pressed="false">Base de datos</button>
+    <button type="button" data-a="clientes" aria-pressed="false">Proyectos</button>
+    <button type="button" data-a="tests" aria-pressed="false">Pruebas</button>
+    <button type="button" data-a="docs" aria-pressed="false">Docs y deploy</button>
+  </div>
+  <div class="scroll"><table class="tbl" id="inv">
+    <thead><tr><th>Archivo</th><th>Líneas</th><th>Qué hace</th></tr></thead>
+    <tbody>
+      <tr class="grp" data-a="raiz"><td colspan="3">Raíz · la app, los dos procesos y lo que comparten <small>16 252 líneas en módulos sueltos</small></td></tr>
+      <tr data-f data-a="raiz"><td class="f">dashboard.py</td><td class="n">4 887</td><td class="d">La app web Flask: login, las 118 rutas, subida de archivos, el contexto de las seis pestañas y el encolado de trabajos. Corre bajo gunicorn en producción y sin auto-reloader a propósito, para no matar generaciones en curso. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="raiz"><td class="f">worker.py</td><td class="n">145</td><td class="d">El segundo proceso: toma tareas de la cola una a la vez, encola las seis periódicas, recupera las colgadas a los 30 minutos y para limpio con SIGINT. Nunca correr dos contra la misma base. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="raiz"><td class="f">cola.py</td><td class="n">184</td><td class="d">La cola persistente sobre la tabla <code>tarea</code>: encolar, reclamar (UPDATE condicionado, gana un solo proceso), terminar, fallar, reportar progreso y recuperar colgadas. <span class="chip db">sqlite</span></td></tr>
+      <tr data-f data-a="raiz"><td class="f">trabajos.py</td><td class="n">321</td><td class="d">Adaptador de trabajos en segundo plano: hilos en memoria para el pipeline original (<code>iniciar</code>) o fila en la cola (<code>encolar</code>). El <code>job_id</code> determinista evita el doble clic; <code>consultar</code> alimenta la barra de progreso por los dos caminos.</td></tr>
+      <tr data-f data-a="raiz"><td class="f">db.py</td><td class="n">454</td><td class="d">Las 21 tablas en SQLAlchemy Core (sin ORM) y la conexión a <code>data/creatv.db</code> en modo WAL, compartida por gunicorn y el worker. <span class="chip db">sqlite</span></td></tr>
+      <tr data-f data-a="raiz"><td class="f">usuarios.py</td><td class="n">79</td><td class="d"><code>usuarios.json</code> con contraseñas hasheadas y dos roles: admin entra a todo, cliente solo a su proyecto. <code>puede_acceder</code> protege cada ruta que lleva un proyecto en la URL.</td></tr>
+      <tr data-f data-a="raiz"><td class="f">proyectos.py</td><td class="n">139</td><td class="d"><code>proyecto.json</code> por proyecto: nombre visible (el id es la carpeta y no se toca), preferencias de Crear y de sonido, reglas por defecto del motor, correo de avisos, país.</td></tr>
+      <tr data-f data-a="raiz"><td class="f">_json_store.py</td><td class="n">31</td><td class="d">Leer y escribir un JSON por proyecto. Lo usan los once módulos que guardan estado en archivos.</td></tr>
+      <tr data-f data-a="raiz"><td class="f">bitacora.py</td><td class="n">29</td><td class="d">Log CSV append-only (<code>registro_generaciones.csv</code>) de cada generación, subida y publicación; es la evidencia que usa <code>informe.py</code>.</td></tr>
+      <tr data-f data-a="raiz"><td class="f">cifrado.py</td><td class="n">41</td><td class="d">Fernet con clave derivada de <code>FLASK_SECRET_KEY</code> para las credenciales de tiendas. Rotar esa clave obliga a reconectar cada tienda.</td></tr>
+      <tr data-f data-a="raiz"><td class="f">notificaciones.py</td><td class="n">85</td><td class="d">Correos SMTP del motor: propuesta pendiente, ganador, rechazo de Meta, error de lanzamiento, tienda que dejó de sincronizar. Sin SMTP solo queda el evento en la bitácora.</td></tr>
+      <tr data-f data-a="raiz"><td class="f">migrar_json_a_db.py</td><td class="n">89</td><td class="d">Importó <code>creative_flow_pendientes.json</code> y <code>ads.json</code> a SQLite. Idempotente: lo que ya está, se salta. <span class="chip cli">terminal</span></td></tr>
+
+      <tr class="grp" data-a="crear"><td colspan="3">Crear (FlowPlus) · referencias + texto → imagen o video nuevo</td></tr>
+      <tr data-f data-a="crear"><td class="f">creative_flow.py</td><td class="n">435</td><td class="d">Estado de cada sesión cf_… en SQLite: un <code>concepto</code> con su <code>pieza</code>; crear, actualizar, duplicar, archivar y las finales por idioma/país. Conserva la misma API de dicts que tenía cuando era un JSON. <span class="chip db">sqlite</span> <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="crear"><td class="f">flowplus_prompt.py</td><td class="n">243</td><td class="d">Arma el prompt final: el texto de la persona tal cual, más el bloque de fidelidad por cada producto y la línea <code>SONIDO:</code> (solo en video).</td></tr>
+      <tr data-f data-a="crear"><td class="f">flowplus_lanzar.py</td><td class="n">33</td><td class="d">Encola la generación (imagen o video) con <code>max_intentos=1</code> y prioridad: 5 para una pieza suelta, 3 para los lotes de sprint.</td></tr>
+      <tr data-f data-a="crear"><td class="f">tareas/flowplus.py</td><td class="n">335</td><td class="d">El trabajo real: llama al modelo en WaveSpeed, descarga, sube a R2, mezcla la música ("Mezclando sonido") y guarda la pieza con sus capas de audio y el video crudo aparte.</td></tr>
+      <tr data-f data-a="crear"><td class="f">providers/flowplus_modelos.py</td><td class="n">216</td><td class="d">El único registro de modelos VIDEO e IMAGEN de Crear (Wan 3.0, Kling O3 Pro, Seedance 2.5…): ruta en WaveSpeed, precio por segundo, duración mínima y máxima, formatos, audio nativo y estimaciones; <code>ajustar_duracion</code> y <code>ajustar_formato</code> recortan lo pedido a lo que admite el modelo antes de gastar. Agregar un modelo es agregar una entrada aquí.</td></tr>
+      <tr data-f data-a="crear"><td class="f">providers/wan3_client.py</td><td class="n">87</td><td class="d">Wan 3.0 vía WaveSpeed: video nuevo desde referencias de personaje, producto y escena, hasta 30 s, con audio nativo.</td></tr>
+      <tr data-f data-a="crear"><td class="f">providers/wavespeed_common.py</td><td class="n">55</td><td class="d">Autenticación y poll genérico contra WaveSpeed, compartidos por sus cinco clientes.</td></tr>
+      <tr data-f data-a="crear"><td class="f">referencias_flowplus.py</td><td class="n">62</td><td class="d">La bandeja de referencias pendientes de Crear (<code>referencias_pendientes.json</code>), que sobrevive a las recargas de página.</td></tr>
+      <tr data-f data-a="crear"><td class="f">referencias_link.py</td><td class="n">156</td><td class="d">Trae una referencia desde un link (TrendTrack directo; TikTok, Instagram y YouTube con yt-dlp), extrae fotogramas y la describe con Claude.</td></tr>
+      <tr data-f data-a="crear"><td class="f">banco_prompts.py</td><td class="n">87</td><td class="d">Recetas de partida (escenarios, cambios de posición, acercamientos) para no escribir la idea desde cero.</td></tr>
+      <tr data-f data-a="crear"><td class="f">mapa_corporal.py</td><td class="n">133</td><td class="d">Las zonas que se tocan en el maniquí del catálogo se traducen a una instrucción de tamaño y ubicación del producto, anclada al canon de 8 cabezas.</td></tr>
+      <tr data-f data-a="crear"><td class="f">generador_prompts.py</td><td class="n">436</td><td class="d">Todas las llamadas de texto a Claude (Anthropic): los 5 prompts por idea, conceptos de imagen, análisis de marca con visión, regla de fidelidad, prompt de creative flow.</td></tr>
+      <tr data-f data-a="crear"><td class="f">marca.py</td><td class="n">77</td><td class="d">Guía de estilo (<code>marca.json</code>) y <code>root.json</code> de la matriz de marca; la guía efectiva y el negative prompt entran en cada generación.</td></tr>
+      <tr data-f data-a="crear"><td class="f">catalogo_productos.py</td><td class="n">299</td><td class="d">Activos del catálogo: una carpeta por producto en <code>clientes/&lt;c&gt;/productos/</code> con varias fotos, y los metadatos en <code>productos.json</code> escritos con flock porque Flask y el worker lo tocan.</td></tr>
+      <tr data-f data-a="crear"><td class="f">prompt_swap.py</td><td class="n">203</td><td class="d">Los prompts de "cambiar producto" en un solo lugar y los tipos de producto válidos; antes estaban copiados en cinco sitios con la palabra "calzado".</td></tr>
+
+      <tr class="grp" data-a="swap"><td colspan="3">Cambiar producto (swap) · poner un producto del catálogo sobre una foto o video real</td></tr>
+      <tr data-f data-a="swap"><td class="f">swaps.py</td><td class="n">63</td><td class="d">Estado de los swaps en <code>swaps.json</code> por proyecto.</td></tr>
+      <tr data-f data-a="swap"><td class="f">tareas/swap.py</td><td class="n">428</td><td class="d">Genera la foto o el video con el producto puesto según el modelo elegido, con segunda pasada opcional de mejora de calidad; sube el resultado a R2.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/nano_banana_client.py</td><td class="n">185</td><td class="d">Gemini 2.5 Flash Image directo: devuelve la imagen en la misma llamada, sin poll.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/wavespeed_imagen.py</td><td class="n">168</td><td class="d">Edición de imagen vía WaveSpeed: nano-banana-pro edit-ultra (edita y saca 4k/8k), bria para agrandar, Seedream.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/kling_o1_client.py</td><td class="n">43</td><td class="d">Kling O1 vía fal.ai: edita un video existente preservando movimiento y escena, con hasta 4 imágenes de referencia.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/wavespeed_client.py</td><td class="n">67</td><td class="d">Wan 2.7 Video Edit vía WaveSpeed: video real + hasta 3 referencias, cambia solo lo que pide el prompt.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/wavespeed_video_edit.py</td><td class="n">84</td><td class="d">Los editores de video premium de WaveSpeed, mismo patrón encolar + poll.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/comparador_modelos.py</td><td class="n">130</td><td class="d">Candidatos de edición vía fal.ai (Luma Ray3, Wan-2.2 Animate, Qwen Edit…) que sí ven la foto del producto.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/aspect_ratio.py</td><td class="n">76</td><td class="d">Detecta la proporción del original y la traduce al parámetro que acepta cada proveedor, para que nada salga recortado.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/fal_client.py</td><td class="n">91</td><td class="d">Helper encolar + poll para cualquier modelo de fal.ai.</td></tr>
+      <tr data-f data-a="swap"><td class="f">providers/image_provider.py · video_provider.py</td><td class="n">70</td><td class="d">Capa única de "generame una imagen / un video con este proveedor" (Higgsfield, Nano Banana o Seedance) para que el resto no nombre proveedores. <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="swap"><td class="f">comparar_modelos.py</td><td class="n">158</td><td class="d">Investigación: la misma foto y el mismo producto contra varios modelos, lado a lado. No toca el estado. <span class="chip cli">terminal</span></td></tr>
+
+      <tr class="grp" data-a="final"><td colspan="3">Final edition · del clon aprobado al anuncio final por idioma y país</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/__init__.py</td><td class="n">521</td><td class="d">Orquestador: <code>preparar_guion</code> y <code>producir</code>. Encadena guion → cortes → sonido → voz → música → texto → render y guarda el estado con <code>creative_flow.crear_final</code>; una fila por idioma/país. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/guion.py</td><td class="n">378</td><td class="d">Claude escribe el guion base en 5 bloques (hook → problema → producto → prueba → cta), lo localiza por país (moneda, unidades, tono) y genera variantes para las derivaciones.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/cortes.py</td><td class="n">140</td><td class="d">ffmpeg <code>scdet</code>: detecta cortes y planifica segmentos; expone los helpers ffmpeg, ffprobe y duración que usan las demás capas.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/sonido.py</td><td class="n">39</td><td class="d">Claude sugiere qué se oye en la escena, para el campo "Sonido de la escena" de Crear.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/voz.py</td><td class="n">151</td><td class="d">Locución por bloque (ElevenLabs vía fal.ai), acelera con <code>atempo</code> si no cabe y saca marcas por palabra con Whisper. Fallar el primer bloque es fatal; los demás degradan.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/musica.py</td><td class="n">95</td><td class="d">Música de fondo con Stable Audio, cacheada en <code>data/musica/</code> y R2 por estilo y duración redondeada; si ya existe no cuesta.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/texto.py</td><td class="n">362</td><td class="d">Overlays PNG con Pillow (hook, subtítulos, precio, CTA) porque el ffmpeg del VPS no trae <code>drawtext</code>.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/render.py</td><td class="n">211</td><td class="d">Un solo filtergraph de ffmpeg: segmentos con zoompan, overlays por tiempo, audio mezclado, salida AAC a 48 kHz.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/mezcla.py</td><td class="n">130</td><td class="d">La única fábrica del filtro de audio: sonido del clon + voz + música con ducking, presets y loudnorm. También mezcla la música al terminar una generación en Crear.</td></tr>
+      <tr data-f data-a="final"><td class="f">final_edition/tipos.py</td><td class="n">116</td><td class="d">Constantes compartidas: roles del guion, países con idioma y moneda, estilos de música, validación del guion, rutas de las fuentes TTF.</td></tr>
+      <tr data-f data-a="final"><td class="f">tareas/final_edition.py</td><td class="n">86</td><td class="d">Tareas <code>final_guion</code> y <code>final_producir</code>: cablean payload, etapas y el mensaje que ve la persona.</td></tr>
+      <tr data-f data-a="final"><td class="f">providers/fal_audio.py</td><td class="n">103</td><td class="d">Voz (ElevenLabs multilingual-v2), transcripción (Whisper) y música (Stable Audio) vía fal.ai, cada una con su costo estimado; la lista de voces está verificada contra fal.</td></tr>
+
+      <tr class="grp" data-a="sprints"><td colspan="3">Sprints · un mes de contenido como matriz persona × producto × temporada <small>3 181 líneas</small></td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/rutas.py</td><td class="n">950</td><td class="d">Blueprint con las 43 rutas de la pestaña y de las páginas de sprint; solo valida, delega y redirige. <code>contexto()</code> es lo que la página del proyecto agrega para la pestaña. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/datos.py</td><td class="n">763</td><td class="d">El único escritor de <code>persona</code>, <code>temporada</code>, <code>sprint</code>, <code>campana</code>, <code>referencia</code>, <code>campana_pieza</code> y <code>sprint_evento</code>; las validaciones de negocio viven aquí. <span class="chip db">sqlite</span></td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/estado.py</td><td class="n">73</td><td class="d">Vuelve a derivar el estado de campañas y sprints después de cada evento, para que la interfaz nunca mienta.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/progreso.py</td><td class="n">62</td><td class="d">Progreso y cobertura; funciones puras sobre los dicts de <code>datos</code>.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/calendario.py</td><td class="n">96</td><td class="d">Calendario comercial por país: temporadas que un proyecto adopta con un clic (sin calendario propio se usa el de Colombia).</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/sugerencias.py</td><td class="n">68</td><td class="d">Personas (arquetipos de cliente) sugeridas por Claude a partir de la guía de estilo y el catálogo.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/analisis.py</td><td class="n">106</td><td class="d">Análisis de una referencia con Claude visión, guardado en <code>referencia.analisis</code>; alimenta el prompt maestro.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/archivos.py</td><td class="n">60</td><td class="d">Guarda las referencias subidas (local + R2) y saca un fotograma de cada video.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/ideas.py</td><td class="n">227</td><td class="d">El prompt maestro (persona + producto + temporada + análisis de referencias + guía de marca + banco de prompts) → ideas de video e imagen por campaña, guardadas como <code>campana_pieza</code>.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/produccion.py</td><td class="n">393</td><td class="d">Lotes: costo estimado primero, una sesión de Crear por idea aprobada, lanzar con prioridad baja, reintentar, regenerar y el progreso del lote.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/qa.py</td><td class="n">188</td><td class="d">QA automático: Claude visión sobre la imagen o tres fotogramas del video, más ffprobe para el formato. Marca y explica; nunca genera.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/revision.py</td><td class="n">117</td><td class="d">Aprobar y rechazar piezas (rechazar las saca de la cola de publicación), cerrar y reabrir el sprint.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">sprints/entrega.py</td><td class="n">75</td><td class="d">Enlaces de las piezas aprobadas y el zip de entrega subido a R2.</td></tr>
+      <tr data-f data-a="sprints"><td class="f">tareas/sprints.py</td><td class="n">265</td><td class="d">Siete tipos de tarea: analizar referencia, sugerir personas, traer link, proponer ideas, QA de una pieza, QA pendientes (periódica) y empaquetar.</td></tr>
+
+      <tr class="grp" data-a="exp"><td colspan="3">Experimentos · probar piezas en Meta Ads y dejar que el motor decida</td></tr>
+      <tr data-f data-a="exp"><td class="f">experimentos.py</td><td class="n">479</td><td class="d">Solo datos: <code>experimento</code>, <code>experimento_pieza</code>, snapshots y eventos; atribución y objetivo sugeridos. Sus escrituras toman el bloqueo de SQLite antes de leer para que Flask y el worker no se pisen. <span class="chip db">sqlite</span> <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="exp"><td class="f">lanzador.py</td><td class="n">558</td><td class="d">Traduce un experimento a Meta: 1 campaña → 1 conjunto por país → 1 anuncio por pieza, todo en pausa, guardando cada id apenas vuelve para poder reanudar. También refrescar métricas, escalar y cerrar.</td></tr>
+      <tr data-f data-a="exp"><td class="f">decisor.py</td><td class="n">176</td><td class="d">Función pura: puerta de tráfico, puerta de ventas y ranking por país → ganador, perdedor, inconcluso o pendiente, más la acción recomendada. No toca la base ni Meta.</td></tr>
+      <tr data-f data-a="exp"><td class="f">modos.py</td><td class="n">35</td><td class="d">manual, semi o auto: qué acción del decisor se ejecuta sola y cuál queda como propuesta para la persona.</td></tr>
+      <tr data-f data-a="exp"><td class="f">acciones.py</td><td class="n">388</td><td class="d"><code>pedir</code> y <code>ejecutar</code> las acciones (pausar, escalar, derivar, rescatar, activar, archivar, publicar_organico) respetando el modo y el tope de gasto; siempre deja un evento.</td></tr>
+      <tr data-f data-a="exp"><td class="f">propuestas.py</td><td class="n">126</td><td class="d">Tabla <code>propuesta</code>: pendiente → aprobada o rechazada → ejecutada. <span class="chip db">sqlite</span></td></tr>
+      <tr data-f data-a="exp"><td class="f">derivaciones.py</td><td class="n">489</td><td class="d">Máquina de estados asíncrona que produce piezas nuevas a partir de una ganadora o una perdedora (re-ediciones de guion y regeneraciones) y las mete al experimento cuando están listas.</td></tr>
+      <tr data-f data-a="exp"><td class="f">atribucion.py</td><td class="n">93</td><td class="d">Liga los pedidos que llegaron con <code>utm_content</code> a la pieza que los generó; cuenta ventas por tienda en vez de creerle a Meta.</td></tr>
+      <tr data-f data-a="exp"><td class="f">tablero.py</td><td class="n">599</td><td class="d">Cálculos de solo lectura para la pestaña Tablero: deltas de snapshots acumulados, serie de 30 días, top 5 de ganadoras, alertas y CSV del mes.</td></tr>
+      <tr data-f data-a="exp"><td class="f">ads.py</td><td class="n">149</td><td class="d">Los "Anuncios sueltos" guardados como el experimento legado de cada proyecto; misma API de dicts de siempre. <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="exp"><td class="f">meta_conexion.py</td><td class="n">496</td><td class="d">Conexión con Meta por proyecto: registro de la app (<code>meta_app.json</code>), diálogo OAuth desde la app, tokens y activos en <code>meta.json</code>, estado del Pixel. No hay app de Meta compartida.</td></tr>
+      <tr data-f data-a="exp"><td class="f">tareas/experimentos.py</td><td class="n">398</td><td class="d"><code>exp_lanzar</code>, <code>exp_refrescar</code>, <code>exp_decidir</code> y las periódicas que refrescan, deciden y hacen avanzar las derivaciones de todos los experimentos que corren.</td></tr>
+      <tr data-f data-a="exp"><td class="f">tareas/meta.py</td><td class="n">211</td><td class="d"><code>meta_publicar</code> y <code>meta_refrescar</code> para los anuncios sueltos.</td></tr>
+      <tr data-f data-a="exp"><td class="f">meta_ads/ (submódulo)</td><td class="n">338</td><td class="d">Repositorio aparte (CreaTvMetaAds): cliente sin estado de la Marketing API con campaign, adset, targeting, ad, creative, insights, pixel y auth. Todo lo que crea algo acepta <code>dry_run</code>.</td></tr>
+
+      <tr class="grp" data-a="organico"><td colspan="3">Publicación orgánica (bloque 7) · la ganadora, o cualquier final, sale como contenido normal a Reels, Facebook, TikTok y Shorts</td></tr>
+      <tr data-f data-a="organico"><td class="f">organico.py</td><td class="n">754</td><td class="d">Canales disponibles según lo conectado, el texto propuesto por Claude (normalizado por plataforma, con "Link en bio" si hay URL de compra), una fila de <code>publicacion</code> por pieza y plataforma, la publicación en sí (siempre el id externo primero, nunca error después de subir), reconciliación de subidas y reintento. Publicar es público e irreversible. <span class="chip db">sqlite</span> <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="organico"><td class="f">tareas/organico.py</td><td class="n">131</td><td class="d">La tarea <code>organico_publicar</code> (<code>max_intentos=1</code>): publica las filas que quedaron en cola, reporta etapas y avisa por correo; si el worker muere a mitad, las filas vivas pasan a error.</td></tr>
+      <tr data-f data-a="organico"><td class="f">templates/_organico_publicar.html</td><td class="n">206</td><td class="d">El bloque "Publicar orgánico" que comparten la tarjeta de Crear y la ganadora en Experimentos: canales, texto editable, estado por plataforma con su enlace, reintentar; y la propuesta <code>publicar_organico</code> del decisor.</td></tr>
+      <tr data-f data-a="organico"><td class="f">acciones.py · modos.py · propuestas.py</td><td class="n">549</td><td class="d">La acción <code>publicar_organico</code> entra al mismo circuito del decisor: en modo auto se ejecuta, en manual y semi queda como propuesta con el texto para aprobar. <span class="chip vivo">vivo</span></td></tr>
+
+      <tr class="grp" data-a="gasto"><td colspan="3">Gasto y panel de admin · cuánto costó cada cosa y cómo va todo</td></tr>
+      <tr data-f data-a="gasto"><td class="f">gastos.py</td><td class="n">419</td><td class="d">Gasto real por proyecto en dólares: <code>registrar</code> (una fila por cobro, única por referencia), <code>estimar</code> con las tarifas de cada proveedor para el precio junto al botón, resumen del mes por tipo, historial, serie diaria, CSV, total por proyecto y el relleno histórico. La pauta de Meta no va aquí. <span class="chip db">sqlite</span> <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="gasto"><td class="f">migrar_gastos_historicos.py</td><td class="n">30</td><td class="d">Relleno único de la tabla <code>gasto</code> con lo pagado antes de que existiera (costo de cada pieza y de cada swap listo), idempotente. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="gasto"><td class="f">admin.py</td><td class="n">356</td><td class="d">El tablero de operación del admin, de solo lectura y sin red: generación y pauta del mes por proyecto (la pauta cuenta también los anuncios sueltos), piezas, aprobaciones, experimentos, Meta y tiendas, última actividad, salud del worker con sus últimos errores sin tokens, historial de seis meses, últimos cobros y CSV de todos los proyectos. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="gasto"><td class="f">templates/panel.html</td><td class="n">262</td><td class="d">La página <code>/panel</code>: totales del mes, salud del sistema, tabla comparativa de proyectos con sus tarjetas, historial y el botón del CSV.</td></tr>
+
+      <tr class="grp" data-a="catalogo"><td colspan="3">Catálogo y tiendas · lo que vende el proyecto <small>conectores/ 1 618 líneas</small></td></tr>
+      <tr data-f data-a="catalogo"><td class="f">tiendas.py</td><td class="n">430</td><td class="d">Tablas <code>tienda</code>, <code>producto</code> y <code>pedido</code>; credenciales cifradas que nunca salen a logs; upsert de productos (los que desaparecen se archivan, no se borran); ventas por pieza. <span class="chip db">sqlite</span></td></tr>
+      <tr data-f data-a="catalogo"><td class="f">conectores/base.py</td><td class="n">260</td><td class="d">El contrato <code>Conector</code> y <code>normalizar_producto</code> / <code>normalizar_pedido</code>: todas las fuentes devuelven las mismas claves.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">conectores/__init__.py · _http.py</td><td class="n">138</td><td class="d">Registro por tipo con carga perezosa, y el HTTP común: timeout de 30 s, un reintento en 5xx o 429, errores en español sin la URL completa.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">conectores/shopify.py</td><td class="n">279</td><td class="d">Admin GraphQL 2025-07, con el costo de consulta bajo el tope de 1 000 puntos y THROTTLED manejado.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">conectores/woo.py</td><td class="n">149</td><td class="d">WooCommerce REST v3 con consumer key y secret; lee el <code>utm_content</code> de cada pedido.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">conectores/meli.py</td><td class="n">307</td><td class="d">MercadoLibre con OAuth de usuario; el refresh token es de un solo uso y se persiste después de cada refresco.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">conectores/csv_excel.py</td><td class="n">170</td><td class="d">Catálogo desde un .csv o .xlsx subido, reconociendo columnas por alias sin importar mayúsculas ni acentos.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">conectores/url.py</td><td class="n">315</td><td class="d">Un producto desde la URL de su página (JSON-LD, luego Open Graph), con guardas contra SSRF: hosts privados rechazados y redirecciones revalidadas.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">importador.py</td><td class="n">549</td><td class="d">Producto normalizado → fila <code>producto</code> → activo del catálogo con sus fotos y una regla de fidelidad escrita por Claude; por tandas, con tarea de continuación para no bloquear el worker.</td></tr>
+      <tr data-f data-a="catalogo"><td class="f">tareas/tiendas.py</td><td class="n">389</td><td class="d">Sincronizar productos y pedidos de una tienda, importar un catálogo, vincular un producto, y las dos periódicas que encolan las syncs.</td></tr>
+
+      <tr class="grp" data-a="orig"><td colspan="3">Pipeline original (Higgsfield) · idea → 5 prompts → imagen → video → publicar</td></tr>
+      <tr data-f data-a="orig"><td class="f">prompts.py</td><td class="n">118</td><td class="d"><code>prompts_pendientes.json</code>: cada idea con sus prompts candidatos y la imagen candidata que espera aprobación. <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">estado.py</td><td class="n">36</td><td class="d"><code>estado_videos.json</code>: videos pendientes, rechazados y publicados; los sprints también lo usan al rechazar una pieza. <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">conceptos_imagen.py</td><td class="n">123</td><td class="d"><code>conceptos_pendientes.json</code>: el flujo "imagen primero" (idea → escenas con dos proveedores → animaciones). <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">higgsfield_client.py</td><td class="n">200</td><td class="d">Cliente Higgsfield: kling-2.1-pro para video y soul-reference para imagen, lanzar → poll → resultado, con estimaciones gratis antes de generar. <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">providers/seedance_client.py</td><td class="n">58</td><td class="d">Seedance 2.0 vía fal.ai, alternativa de video del pipeline original. <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">publicador.py</td><td class="n">59</td><td class="d">Publica un brief ya aprobado en las plataformas que indique; nunca se dispara solo. <span class="chip legado">legado</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">uploaders/youtube_uploader.py</td><td class="n">73</td><td class="d">YouTube Data API v3 con el token que generó <code>auth/auth_youtube.py</code>; publica el pipeline original y, desde el bloque 7, los Shorts orgánicos. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">uploaders/meta_uploader.py</td><td class="n">116</td><td class="d">Facebook (Página) e Instagram (Reels) vía Graph API, con el <code>meta.json</code> del proyecto. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">uploaders/tiktok_uploader.py</td><td class="n">180</td><td class="d">TikTok Content Posting API para el pipeline original y el orgánico, con confirmación por <code>check_status</code>; mientras la app no esté auditada solo publica como "Solo yo". <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">auth/auth_youtube.py · auth_tiktok.py</td><td class="n">175</td><td class="d">Autorización OAuth de una sola vez, en tu máquina (abren el navegador y un callback en localhost); generan los <code>token_*.json</code> que luego se copian al servidor. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="orig"><td class="f">storage/r2_uploader.py</td><td class="n">101</td><td class="d">Sube y borra archivos en Cloudflare R2 y devuelve la URL pública. Lo importan 13 módulos. <span class="chip vivo">vivo</span></td></tr>
+
+      <tr class="grp" data-a="cli"><td colspan="3">Scripts de terminal · anteriores al dashboard o de mantenimiento</td></tr>
+      <tr data-f data-a="cli"><td class="f">run_batch.py</td><td class="n">195</td><td class="d">Lote de briefs con Higgsfield → R2 → pendientes de revisión, sin abrir el navegador. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="cli"><td class="f">revisar.py</td><td class="n">85</td><td class="d">Revisar los videos pendientes uno por uno y publicar al aprobar. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="cli"><td class="f">subir_personaje.py</td><td class="n">52</td><td class="d">Sube una referencia de personaje a R2 y devuelve la URL. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="cli"><td class="f">validar_marca.py</td><td class="n">77</td><td class="d">Valida un "submundo" de la matriz de marca contra su schema: un submundo nunca pisa un invariante. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="cli"><td class="f">reconstruir_historial.py</td><td class="n">126</td><td class="d">Reconstruye en <code>swaps.json</code> las generaciones que la bitácora prueba que ocurrieron. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="cli"><td class="f">informe.py</td><td class="n">186</td><td class="d">Informe de operación y de desarrollo, todo verificable contra la bitácora, el estado en disco o git; pensado para sustentar una cuenta de cobro. <span class="chip cli">terminal</span></td></tr>
+      <tr data-f data-a="cli"><td class="f">briefs_example.json</td><td class="n">—</td><td class="d">Ejemplo de briefs para <code>run_batch.py</code>.</td></tr>
+
+      <tr class="grp" data-a="tpl"><td colspan="3">Plantillas (templates/) y estilos · 50 archivos Jinja, 6 988 líneas, un CSS</td></tr>
+      <tr data-f data-a="tpl"><td class="f">base.html</td><td class="n">292</td><td class="d">Esqueleto de toda página: fuentes, <code>style.css</code>, el sidebar y <code>iniciarPolling()</code>, el JS que sondea el progreso y recarga.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">cliente.html · _sidebar.html</td><td class="n">179</td><td class="d">La página del proyecto con sus seis secciones de pestaña, y el menú lateral que las cambia (recuerda la última).</td></tr>
+      <tr data-f data-a="tpl"><td class="f">index · login · landing_cliente · legal · meta_elegir</td><td class="n">192</td><td class="d">La portada pública con el alta de proyecto, el login, el alta por link público, los textos legales que exige Meta y la elección de cuenta y página tras el OAuth.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">mapa_codigo.html</td><td class="n">885</td><td class="d">Este mapa dentro de la app (<code>/mapa</code>, solo admin): el mismo HTML de la versión publicada, envuelto en <code>raw</code>.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_tab_tablero.html</td><td class="n">222</td><td class="d">Pestaña Tablero: tiles del mes, gráfico SVG inline de gasto e ingresos, ganadoras y alertas.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_tab_flowplus.html → _tab_creativeflowplus.html</td><td class="n">849</td><td class="d">Pestaña Crear: el formulario de Crear con modelos, referencias, sonido y música; el detalle de cada sesión con su final edition; "Meter en experimento". La plantilla más grande del repo.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_tab_cambiar_calzado.html · _seccion_ideas.html · _flowplus_bandeja.html</td><td class="n">322</td><td class="d">Dentro de Crear: cambiar producto sobre foto o video, las ideas del pipeline original y la bandeja de referencias.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_tab_sprints.html + sprint_detalle · campana_referencias · campana_ideas · sprint_revision · sprint_entrega · _sprint_nav · _sprint_macros · _sprint_lote_modal</td><td class="n">1 029</td><td class="d">Pestaña Sprints y sus cinco páginas propias (detalle, referencias de una campaña, ideas, revisión, entrega), con navegación y macros compartidas.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_tab_experimentos.html · _anuncios_sueltos · _form_reglas · _meta_conectar</td><td class="n">551</td><td class="d">Pestaña Experimentos: árbol experimento → país → pieza, propuestas, reglas del motor, anuncios sueltos y la conexión con Meta.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_tab_catalogo.html · _catalogo_lista · _catalogo_importar · _catalogo_sin_fotos · _catalogo_campos_comerciales · _maniqui · _seccion_personajes</td><td class="n">619</td><td class="d">Pestaña Catálogo: lista de activos con campos comerciales, importación, importados sin fotos, el maniquí del mapa corporal y los personajes.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_tab_settings.html · _seccion_marca · _comparacion_modelos</td><td class="n">915</td><td class="d">Pestaña Configuración: puesta a punto de llaves, Gasto (real del mes, historial, CSV), marca, preferencias, tiendas, Pixel, canales orgánicos y la comparación de modelos.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">_idea_card · _idea_visual_card · _prompt_row · _imagen_row · _progreso_row · _video_card · _seccion_videos · _seccion_bitacora · _selector_productos · _selector_productos_nuevo</td><td class="n">465</td><td class="d">Piezas reutilizables: tarjetas del pipeline original según el estado de cada prompt, la fila de progreso que engancha el polling, el selector de productos del catálogo.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">static/style.css</td><td class="n">1 643</td><td class="d">Todo el CSS en un archivo: tokens en <code>:root</code> (tema claro, acento morado, Space Grotesk + Inter), sidebar, tarjetas, pestañas, barras de progreso.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">static/fonts/ · static/img/</td><td class="n">—</td><td class="d">Inter y Space Grotesk en TTF (la web los carga de Google Fonts; los TTF los usa Pillow para el texto en pantalla de final edition) y el ícono de la app.</td></tr>
+
+      <tr class="grp" data-a="db"><td colspan="3">Base de datos y migraciones</td></tr>
+      <tr data-f data-a="db"><td class="f">alembic.ini · migrations/env.py</td><td class="n">—</td><td class="d">Configuración de Alembic; la URL de la base sale de <code>db.url()</code> (o de <code>CREATV_DB_URL</code> si está definida).</td></tr>
+      <tr data-f data-a="db"><td class="f">migrations/versions/0001_tablas_motor.py</td><td class="n">353</td><td class="d">Nacen kv, producto, tarea, tienda, concepto, experimento, pieza, propuesta, experimento_pieza, evento, metrica_snapshot y pedido.</td></tr>
+      <tr data-f data-a="db"><td class="f">0002 … 0005</td><td class="n">—</td><td class="d">Índice único del experimento legado por proyecto, índice de tarea viva por job_id, columna <code>extra</code> en experimento y en producto.</td></tr>
+      <tr data-f data-a="db"><td class="f">0006_sprints · 0007_merge_sprints · 0008_tarea_prioridad</td><td class="n">—</td><td class="d">Las siete tablas de sprints, el merge de ramas y la columna <code>prioridad</code> de la cola.</td></tr>
+      <tr data-f data-a="db"><td class="f">0009_publicacion</td><td class="n">—</td><td class="d">La tabla <code>publicacion</code> del bloque 7, con el índice único parcial que impide publicar dos veces la misma pieza en la misma plataforma mientras haya una publicación viva.</td></tr>
+      <tr data-f data-a="db"><td class="f">0010_gasto</td><td class="n">—</td><td class="d">La tabla <code>gasto</code>: un cobro real por fila, único por proyecto y referencia.</td></tr>
+
+      <tr class="grp" data-a="clientes"><td colspan="3">Proyectos (clientes/) · una carpeta por proyecto; el nombre de la carpeta es el id y no se renombra</td></tr>
+      <tr data-f data-a="clientes"><td class="f">clientes/&lt;c&gt;/proyecto.json</td><td class="n">—</td><td class="d">Nombre visible y preferencias. Es lo único de la carpeta que se versiona (hoy: forja y happyflops).</td></tr>
+      <tr data-f data-a="clientes"><td class="f">clientes/&lt;c&gt;/marca/ · marca.json</td><td class="n">—</td><td class="d">La matriz de marca (en happyflops es el submódulo <code>happyflops-brand-matrix</code>, con <code>root.json</code> y <code>schema.json</code> versionados a propósito) y la guía de estilo generada.</td></tr>
+      <tr data-f data-a="clientes"><td class="f">clientes/&lt;c&gt;/productos/&lt;id&gt;/ · productos.json</td><td class="n">—</td><td class="d">Activos del catálogo con sus fotos (versionadas en happyflops).</td></tr>
+      <tr data-f data-a="clientes"><td class="f">personajes/ · escenas/ · productos_referencia/ · logos/ · referencias_flowplus/ · sprints/ · importaciones/</td><td class="n">—</td><td class="d">Binarios subidos; la copia local es caché y el original está en R2. Ignorados en git salvo un <code>.gitkeep</code>.</td></tr>
+      <tr data-f data-a="clientes"><td class="f">prompts_pendientes · estado_videos · conceptos_pendientes · swaps · referencias_pendientes (.json)</td><td class="n">—</td><td class="d">Estado en archivos del pipeline original, los swaps y la bandeja de Crear. Ignorados en git: viajan al servidor por rsync.</td></tr>
+      <tr data-f data-a="clientes"><td class="f">.env · meta_app.json · meta.json · token_youtube.json · token_tiktok.json</td><td class="n">—</td><td class="d">Secretos por proyecto: variables Meta, la app de Meta registrada, tokens de la conexión, tokens de YouTube y TikTok. Ignorados, permisos 0600.</td></tr>
+
+      <tr class="grp" data-a="tests"><td colspan="3">Pruebas (tests/) · 79 archivos, 18 968 líneas, pytest</td></tr>
+      <tr data-f data-a="tests"><td class="f">tests/conftest.py · tests/fixtures/</td><td class="n">—</td><td class="d">Fixtures comunes (base temporal, cliente de Flask) y respuestas grabadas de Shopify, Woo y MELI, un CSV y un HTML con Open Graph.</td></tr>
+      <tr data-f data-a="tests"><td class="f">tests/test_rutas_*.py</td><td class="n">—</td><td class="d">Las rutas de Flask por área: productos, sprints, experimentos, final edition, tablero, configuración, app de Meta, sonido en Crear, bloque 4.</td></tr>
+      <tr data-f data-a="tests"><td class="f">tests/test_tareas_*.py · test_worker.py · test_cola.py</td><td class="n">—</td><td class="d">Cada tipo de tarea del worker con proveedores falsos, y la cola misma.</td></tr>
+      <tr data-f data-a="tests"><td class="f">tests/test_fe_*.py</td><td class="n">—</td><td class="d">Final edition capa por capa; los marcados <code>slow</code> renderizan video real con ffmpeg (se saltan con <code>-m "not slow"</code>).</td></tr>
+      <tr data-f data-a="tests"><td class="f">tests/test_gastos*.py · test_admin.py · test_rutas_panel.py · test_organico.py · test_tareas_organico.py · test_rutas_organico.py · test_rutas_mapa.py · test_*_formatos.py</td><td class="n">—</td><td class="d">Lo de estos días: el gasto real y su relleno, el panel de admin, la publicación orgánica (módulo, tarea y rutas), el mapa y los formatos por modelo en Crear.</td></tr>
+      <tr data-f data-a="tests"><td class="f">tests/test_sprints_*.py · test_conectores_*.py · test_lanzador · test_decisor · test_derivaciones · test_tablero · test_importador …</td><td class="n">—</td><td class="d">La lógica de dominio de cada bloque, sin red ni proveedores reales.</td></tr>
+
+      <tr class="grp" data-a="docs"><td colspan="3">Documentación y despliegue</td></tr>
+      <tr data-f data-a="docs"><td class="f">CLAUDE.md</td><td class="n">—</td><td class="d">La biblia técnica al día: arquitectura, reglas de diseño que no se rompen, cómo correr y probar. Es lo primero que hay que leer.</td></tr>
+      <tr data-f data-a="docs"><td class="f">ESTRUCTURA.md</td><td class="n">—</td><td class="d">La versión en Markdown de este mapa, regenerada el 20 de septiembre de 2026, para leerla dentro del repo. <span class="chip vivo">vivo</span></td></tr>
+      <tr data-f data-a="docs"><td class="f">SETUP.md · ROADMAP.md</td><td class="n">—</td><td class="d">Puesta en marcha desde cero (Google, Meta, TikTok, R2) y la comparación de proveedores con precios reales de agosto de 2026.</td></tr>
+      <tr data-f data-a="docs"><td class="f">docs/superpowers/specs/ (13) · plans/ (20)</td><td class="n">—</td><td class="d">Diseño y plan, con fecha, de cada bloque: creativeflowplus, conexión Meta, motor de ecommerce (bloques 1 a 7), final edition estudio, sprints, sonido, gasto real, app móvil Flutter (solo spec); y lo que viene: director de prompts por planos en Crear, final edition como editor tipo CapCut, nicho y avatares, cuentas con correo verificado.</td></tr>
+      <tr data-f data-a="docs"><td class="f">docs/investigacion/ (5) · docs/adr/0001 · docs/agents/ · docs/meta/</td><td class="n">—</td><td class="d">Investigación de APIs (WaveSpeed, Meta Marketing, el diagnóstico de open-higgsfield), la decisión "una app de Meta por proyecto", el flujo de issues y etiquetas, la solicitud de revisión de la app de Meta y la apelación de su restricción.</td></tr>
+      <tr data-f data-a="docs"><td class="f">deploy/creatv-worker.service</td><td class="n">—</td><td class="d">Unidad systemd del worker (la del gunicorn y la config de nginx viven solo en el VPS).</td></tr>
+      <tr data-f data-a="docs"><td class="f">requirements.txt · .env.example · pytest.ini · .gitmodules · .gitignore</td><td class="n">—</td><td class="d">Dependencias (Flask, SQLAlchemy, Alembic, anthropic, boto3, Pillow, yt-dlp, cryptography, openpyxl, google-api-python-client), las llaves esperadas con comentarios, el marcador <code>slow</code>, los dos submódulos y todo lo que no se versiona.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="servicios">
+  <div class="eyebrow">Afuera del repo</div>
+  <h2>Servicios externos y qué llave los abre</h2>
+  <p class="cristiano"><b>En cristiano:</b> el proyecto no genera nada solo: le pide a empresas de afuera (Claude para escribir, WaveSpeed y fal.ai para video y audio, Meta para pauta y publicar). Cada una necesita una "llave", una contraseña larga que vive en el archivo <code>.env</code> y nunca en el código. La sección "Puesta a punto" de Configuración muestra cuáles faltan sin enseñar nunca el valor.</p>
+  <div class="scroll"><table class="tbl">
+    <thead><tr><th>Llave</th><th>Servicio</th><th>Para qué</th><th>Módulos que la usan</th></tr></thead>
+    <tbody>
+      <tr><td class="f">ANTHROPIC_API_KEY</td><td>Anthropic (Claude)</td><td class="d">Los 5 prompts por idea, guiones y localización, análisis de marca y de referencias (visión), ideas de sprint, QA, reglas de fidelidad, sugerencias de sonido y personas. Centavos por llamada.</td><td class="f w">generador_prompts · final_edition/guion · sprints/analisis, ideas, qa, sugerencias · importador</td></tr>
+      <tr><td class="f">WAVESPEED_API_KEY</td><td>WaveSpeed AI</td><td class="d">Los modelos de Crear (Wan 3.0, Kling O3 Pro, Seedance 2.5), Wan 2.7 Video Edit, Nano Banana Pro, upscales y editores premium.</td><td class="f w">providers/flowplus_modelos · wan3_client · wavespeed_client · wavespeed_imagen · wavespeed_video_edit</td></tr>
+      <tr><td class="f">FAL_KEY</td><td>fal.ai</td><td class="d">Voz (ElevenLabs), transcripción (Whisper) y música (Stable Audio) de final edition; Kling O1, Seedance 2.0 y los comparadores del swap.</td><td class="f w">providers/fal_audio · fal_client · kling_o1_client · seedance_client · comparador_modelos</td></tr>
+      <tr><td class="f">HF_API_KEY_ID · HF_API_KEY_SECRET</td><td>Higgsfield</td><td class="d">Imagen y video del pipeline original.</td><td class="f w">higgsfield_client</td></tr>
+      <tr><td class="f">GEMINI_API_KEY</td><td>Google Gemini</td><td class="d">Nano Banana (Gemini 2.5 Flash Image) para cambiar producto.</td><td class="f w">providers/nano_banana_client</td></tr>
+      <tr><td class="f">R2_ACCOUNT_ID · R2_ACCESS_KEY_ID · R2_SECRET_ACCESS_KEY · R2_BUCKET_NAME · R2_PUBLIC_BASE_URL</td><td>Cloudflare R2</td><td class="d">Todos los binarios y sus URLs públicas.</td><td class="f w">storage/r2_uploader</td></tr>
+      <tr><td class="f">META_REDIRECT_URI + meta_app.json y meta.json por proyecto</td><td>Meta (Facebook, Instagram, Ads)</td><td class="d">Cada proyecto trae su propia app de Meta; con ella se crean campañas y se publican Reels y la Página, también en orgánico. No existe una credencial global de Meta.</td><td class="f w">meta_conexion · meta_ads/ · lanzador · tareas/meta · uploaders/meta_uploader · organico</td></tr>
+      <tr><td class="f">client_secret_youtube.json + token_youtube.json</td><td>YouTube Data API v3</td><td class="d">Publicar los videos del pipeline original y los Shorts orgánicos (bloque 7).</td><td class="f w">uploaders/youtube_uploader · auth/auth_youtube · organico</td></tr>
+      <tr><td class="f">TIKTOK_CLIENT_KEY · TIKTOK_CLIENT_SECRET + token_tiktok.json</td><td>TikTok Content Posting API</td><td class="d">Publicar los videos del pipeline original y los TikToks orgánicos, con confirmación por <code>check_status</code>.</td><td class="f w">uploaders/tiktok_uploader · auth/auth_tiktok · organico</td></tr>
+      <tr><td class="f">MELI_APP_ID · MELI_SECRET</td><td>MercadoLibre</td><td class="d">Conectar una tienda MELI por OAuth; los tokens quedan cifrados en la tabla <code>tienda</code>.</td><td class="f w">conectores/meli · dashboard (meli/callback)</td></tr>
+      <tr><td class="f">(en la tabla tienda, cifradas)</td><td>Shopify · WooCommerce</td><td class="d">Catálogo y pedidos de la tienda; se conectan desde Configuración.</td><td class="f w">conectores/shopify · conectores/woo · tiendas · cifrado</td></tr>
+      <tr><td class="f">SMTP_HOST · SMTP_PORT · SMTP_USER · SMTP_PASS · SMTP_FROM</td><td>Correo</td><td class="d">Avisos del motor y de los lotes de sprint. Opcional.</td><td class="f w">notificaciones</td></tr>
+      <tr><td class="f">FLASK_SECRET_KEY</td><td>—</td><td class="d">Firma las sesiones de login y deriva la clave de cifrado de tiendas. Sin ella, cada reinicio cierra la sesión de todos.</td><td class="f w">dashboard · cifrado</td></tr>
+      <tr><td class="f">CREATV_DB_URL · FLASK_DEBUG · ENABLE_YOUTUBE/FACEBOOK/INSTAGRAM/TIKTOK</td><td>—</td><td class="d">Ruta alternativa de la base, modo debug (nunca en el VPS) y plataformas por defecto del pipeline original.</td><td class="f w">db · dashboard · publicador</td></tr>
+      <tr><td class="f">ffmpeg · ffprobe · yt-dlp</td><td>Programas instalados en el servidor</td><td class="d">Fotogramas de videos subidos, cortes, render y mezcla de audio; descarga de referencias desde links.</td><td class="f w">final_edition/cortes, render, mezcla · sprints/archivos · referencias_link</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="faq" class="faq">
+  <div class="eyebrow">Lo que uno se pregunta</div>
+  <h2>Preguntas de dummy, respondidas</h2>
+  <details><summary>¿Si se reinicia el servidor pierdo un video que se estaba generando?</summary><p>No, si iba por el worker: la fila sigue en la tabla <code>tarea</code>. A los 30 minutos vuelve a <code>pendiente</code> si le quedan intentos, o pasa a <code>error</code> y la sesión se marca para que lo veas. Lo que sí se pierde con un reinicio es el pipeline viejo de Higgsfield, que corre en hilos dentro del proceso web. Por eso todo lo nuevo va por la cola.</p></details>
+  <details><summary>¿Dónde está guardado un video de verdad?</summary><p>En Cloudflare R2, la bodega. En la base solo está la dirección (<code>pieza.video_url</code>, más <code>video_url_crudo</code> para la versión con solo el sonido nativo). En el VPS pueden quedar copias locales en <code>salidas/</code> y en cachés, pero la fuente es R2. Si R2 se borrara, la base seguiría apuntando a direcciones vacías.</p></details>
+  <details><summary>¿Por qué hay archivos JSON y una base de datos al mismo tiempo?</summary><p>Porque la base llegó en septiembre de 2026 con el motor de ecommerce. Lo que nació después (Crear, experimentos, tiendas, sprints, la cola) vive en SQLite. Lo anterior (pipeline original, swaps, marca, catálogo, usuarios) sigue en JSON porque funcionaba y no valía la pena tocarlo. Migrar el resto es opcional; los dos conviven sin problema.</p></details>
+  <details><summary>¿Qué cuesta plata y qué no?</summary><p>Cuesta: generar imagen o video (WaveSpeed, fal.ai, Higgsfield, Gemini), voz y música (fal.ai) y, por supuesto, la pauta en Meta. Centavos: cada llamada a Claude (prompts, análisis, QA, ideas). Gratis: estimar costos, sondear el progreso, todo lo que hace la base. Cada botón caro muestra el costo estimado antes de que lo pulses.</p></details>
+  <details><summary>¿Qué pasa si hago doble clic en "Generar"?</summary><p>Nada la segunda vez. El identificador del trabajo (<code>job_id</code>) se calcula a partir del proyecto, la sesión y la acción, y la base tiene un índice único para tareas vivas: la segunda inserción no entra y la ruta simplemente te devuelve el progreso de la primera.</p></details>
+  <details><summary>¿Qué es un "proyecto" y por qué el código dice "cliente"?</summary><p>Lo mismo. La interfaz se renombró a "proyecto" en septiembre, pero las carpetas (<code>clientes/</code>), las rutas (<code>/cliente/…</code>) y las variables siguen diciendo <code>cliente</code> a propósito: renombrarlas rompería las direcciones en R2, los archivos de estado y los tokens.</p></details>
+  <details><summary>¿Puedo correrlo en mi computador?</summary><p>Sí. Un entorno virtual con <code>requirements.txt</code>, un <code>.env</code> con las llaves, <code>alembic upgrade head</code> para crear la base, y dos terminales: <code>python dashboard.py</code> (puerto 5050) y <code>python worker.py</code>. Hace falta tener <code>ffmpeg</code> instalado. Las conexiones de YouTube y TikTok se autorizan en local con los scripts de <code>auth/</code> y los tokens se copian al servidor.</p></details>
+  <details><summary>¿Y si el proveedor de video se cae a mitad de una generación?</summary><p>La tarea falla y no se reintenta sola (<code>max_intentos=1</code>) para no gastar dos veces. La sesión queda en error con el mensaje, y la persona decide si reintenta con un clic. Las tareas baratas (analizar una referencia, traer un link) sí tienen varios intentos.</p></details>
+  <details><summary>¿Por qué el pipeline viejo sigue ahí si ya hay uno nuevo?</summary><p>Porque todavía es el camino de "ideas → 5 prompts" en Crear y de publicar en YouTube y TikTok, y las pruebas lo cubren. Está marcado como legado en este mapa para que nadie lo amplíe: lo nuevo se construye sobre la cola y SQLite.</p></details>
+  <details><summary>¿Dónde veo cuánto se ha gastado?</summary><p>En dos sitios. Configuración › Gasto, dentro de cada proyecto: lo pagado este mes a los proveedores de IA por tipo (videos, imágenes, swaps, guiones, finales), el historial y un CSV; el mismo número aparece como chip en la barra lateral y como tile en el Tablero. Y en <code>/panel</code>, solo para el admin: todos los proyectos juntos, con la pauta de Meta al lado en la moneda de la cuenta. Los cobros anteriores al 18 de septiembre se importaron con <code>migrar_gastos_historicos.py</code>; los nuevos los anota cada tarea al terminar.</p></details>
+  <details><summary>¿Cómo sé qué llaves me faltan?</summary><p>En Configuración › Puesta a punto: cada llave aparece como configurada o faltante, calculado solo a partir de si la variable existe. Los valores nunca se muestran en pantalla ni en los logs.</p></details>
+</section>
+
+<section id="vivo">
+  <div class="eyebrow">Para no confundirse</div>
+  <h2>Qué está vivo y qué es legado</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>Núcleo actual <span class="chip vivo">vivo</span></h3>
+      <ul class="lista">
+        <li>SQLite + worker + cola (<code>db</code>, <code>cola</code>, <code>worker</code>, <code>tareas/</code>).</li>
+        <li>Crear (FlowPlus) con sonido y música (<code>creative_flow</code>, <code>flowplus_*</code>, <code>tareas/flowplus</code>).</li>
+        <li>Final edition (<code>final_edition/</code>).</li>
+        <li>Sprints (<code>sprints/</code>).</li>
+        <li>Experimentos, decisor, derivaciones y Tablero.</li>
+        <li>Catálogo, tiendas y conectores.</li>
+        <li>Conexión con Meta por proyecto y publicación en Facebook e Instagram.</li>
+        <li>Gasto a la vista: precio junto a cada botón y cobro real por pieza (<code>gastos</code>, Configuración › Gasto).</li>
+        <li>Publicación orgánica de la ganadora o de cualquier final en Reels, Facebook, TikTok y YouTube Shorts (<code>organico</code>, bloque 7).</li>
+        <li>El panel de admin como tablero de operación (<code>admin</code>, <code>/panel</code>) y este mapa en <code>/mapa</code>.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Enchufado pero ya no es el camino principal <span class="chip legado">legado</span></h3>
+      <ul class="lista">
+        <li>El pipeline Higgsfield (<code>prompts</code>, <code>estado</code>, <code>conceptos_imagen</code>, <code>higgsfield_client</code>, <code>image_provider</code>, <code>video_provider</code>, <code>seedance_client</code>). Sigue visible en Crear › ideas y sus hilos corren dentro del proceso web, no en el worker.</li>
+        <li>"Anuncios sueltos" (<code>ads.py</code>, <code>tareas/meta</code>) dentro de Experimentos.</li>
+        <li>Los JSON <code>creative_flow_pendientes.json</code> y <code>ads.json</code>, ya migrados.</li>
+        <li>Los tokens de YouTube y TikTok se siguen generando a mano en tu máquina (<code>auth/</code>); los usan el pipeline original y el orgánico.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Solo desde la terminal <span class="chip cli">terminal</span></h3>
+      <ul class="lista">
+        <li><code>run_batch.py</code>, <code>revisar.py</code>, <code>subir_personaje.py</code>: la interfaz anterior al dashboard.</li>
+        <li><code>validar_marca.py</code>, <code>comparar_modelos.py</code>: herramientas de la matriz de marca y de investigación.</li>
+        <li><code>migrar_json_a_db.py</code>, <code>reconstruir_historial.py</code>, <code>informe.py</code>: mantenimiento y cobro.</li>
+        <li><code>auth/auth_youtube.py</code>, <code>auth/auth_tiktok.py</code>: OAuth de una sola vez.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="exponer">
+  <div class="eyebrow">Ojo</div>
+  <h2>Antes de exponerlo al mundo</h2>
+  <p class="cristiano"><b>En cristiano:</b> hoy no hay llaves versionadas, pero varios archivos están a un <code>git add .</code> de subirse, y hay datos de un cliente real dentro del repo. Esto es lo que encontré revisando el estado del repositorio el 18 de septiembre de 2026, vuelto a revisar el 20.</p>
+  <div class="aviso">
+    <p><b>Los respaldos del .env no están ignorados.</b> <code>.gitignore</code> cubre <code>.env</code>, no <code>.env.*</code>: una copia como <code>.env.bak_…</code> dejada en la carpeta se subiría con un <code>git add .</code> con llaves reales (el 18 de septiembre había una; ya no está). Conviene agregar <code>.env.*</code> al ignore.</p>
+    <p><b>Otros dos archivos sueltos sin ignorar:</b> <code>clientes/happyflops/swaps.json.respaldo_20260904_023504</code> (el patrón ignora <code>swaps.json</code>, no sus copias) y <code>docs/propuestas/</code> (una propuesta comercial con precios).</p>
+    <p><b>Datos de un cliente real están versionados.</b> Las fotos de producto de Happy Flops en <code>clientes/happyflops/productos/</code> y el submódulo privado <code>clientes/happyflops/marca</code> (su matriz de marca) salen con el repo si se hace público. Lo mismo <code>clientes/forja/proyecto.json</code>.</p>
+    <p><b>Detalles menores:</b> hay cuatro <code>.DS_Store</code> versionados, tres de ellos en las carpetas vacías <code>HO-rose/</code>, <code>HO-sky/</code> y <code>HOriginal/</code> de la raíz, que ya no contienen nada más; y el docstring de <code>dashboard.py</code> todavía dice que "solo corre en tu máquina, no queda expuesto a internet".</p>
+  </div>
+</section>
+
+<section id="glosario">
+  <div class="eyebrow">Palabras del proyecto</div>
+  <h2>Glosario</h2>
+  <dl class="glos">
+    <dt>proyecto / cliente</dt><dd>La misma cosa. La interfaz dice "proyecto"; el código, las rutas y las carpetas dicen <code>cliente</code> a propósito, para no tocar la lógica que funciona.</dd>
+    <dt>sesión cf_…</dt><dd>Una generación de Crear: la idea, sus referencias y lo que salió. En SQLite es un <code>concepto</code> más una <code>pieza</code>.</dd>
+    <dt>clon (limpio)</dt><dd>El video o imagen generado sin texto encima; es la materia prima de la final edition y de los experimentos de cualquier país.</dd>
+    <dt>final</dt><dd>El clon convertido en anuncio para un idioma y país: narrado, subtitulado, con precio, CTA y música. Una fila de <code>pieza</code> tipo final por destino.</dd>
+    <dt>swap</dt><dd>Cambiar el producto en una foto o video real del cliente sin tocar nada más.</dd>
+    <dt>brief</dt><dd>Del pipeline original: un video con su prompt y las plataformas donde publicarlo.</dd>
+    <dt>experimento</dt><dd>Un conjunto de piezas probadas en Meta Ads con presupuesto por país; en Meta es 1 campaña, 1 conjunto por país y 1 anuncio por pieza (<code>experimento_pieza</code>).</dd>
+    <dt>snapshot</dt><dd>Una foto de las métricas acumuladas de un anuncio; el Tablero resta dos snapshots para hablar de un período.</dd>
+    <dt>propuesta</dt><dd>Una acción que el decisor recomienda pero que espera un clic humano por el modo del experimento o por el tope de gasto.</dd>
+    <dt>sprint / campaña</dt><dd>El plan de un mes y cada celda persona × producto × temporada dentro de él; una <code>campana_pieza</code> es una idea que se convierte en sesión de Crear.</dd>
+    <dt>activo del catálogo</dt><dd>Un producto con fotos y mapa corporal listo para citarse como @Producto en un prompt; cada activo tiene su fila <code>producto</code> con precio y URL.</dd>
+    <dt>tarea / job_id</dt><dd>Una fila de la cola y el identificador determinista (proyecto + entidad + acción) que el navegador sondea y que impide lanzar lo mismo dos veces.</dd>
+    <dt>cobro / gasto</dt><dd>Una fila de la tabla <code>gasto</code>: lo que un proveedor cobró de verdad por una pieza, un swap, un guion o una final, en dólares y con una referencia única para no contarlo dos veces. La pauta de Meta no va ahí.</dd>
+    <dt>publicación orgánica</dt><dd>Sacar una pieza como contenido normal, no pagado, en Reels, Facebook, TikTok o Shorts; una fila de <code>publicacion</code> por pieza y plataforma, con el id y la URL que devolvió la red.</dd>
+    <dt>worker</dt><dd>El segundo programa, la cocina: lee la cola y ejecuta una tarea a la vez. En el VPS es el servicio <code>creatv-worker</code>.</dd>
+    <dt>migración</dt><dd>Un archivo numerado en <code>migrations/versions/</code> que cambia la forma de la base (una tabla o columna nueva). <code>alembic upgrade head</code> aplica las que falten.</dd>
+  </dl>
+</section>
+
+<footer>Hecho a partir del repositorio iaplusyou en <code>main</code> (último commit c92b2f7, 20 de septiembre de 2026): conteos con <code>git ls-files</code> y <code>wc -l</code>, rutas con los decoradores de Flask, tablas de <code>db.py</code>, tareas de los registros en <code>tareas/</code>. La misma información, en Markdown, está en <code>ESTRUCTURA.md</code> dentro del repo. Cuando la estructura cambie mucho, vale más regenerar este mapa que confiar en él.</footer>
+</div>
+<script>
+(function(){
+  var inp=document.getElementById('buscar'),out=document.getElementById('n-res');
+  if(!inp||!out)return;
+  var rows=[].slice.call(document.querySelectorAll('#inv tr[data-f]'));
+  var grps=[].slice.call(document.querySelectorAll('#inv tr.grp'));
+  var chips=[].slice.call(document.querySelectorAll('#filtros button'));
+  var area='todos';
+  function norm(s){return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');}
+  function run(){
+    var q=norm(inp.value.trim()),n=0;
+    rows.forEach(function(r){var ok=(area==='todos'||r.getAttribute('data-a')===area)&&(!q||norm(r.textContent).indexOf(q)>=0);r.hidden=!ok;if(ok)n++;});
+    grps.forEach(function(g){var t=g.nextElementSibling,any=false;while(t&&!t.classList.contains('grp')){if(!t.hidden){any=true;break;}t=t.nextElementSibling;}g.hidden=!any;});
+    out.textContent=(q||area!=='todos')?n+' de '+rows.length+' entradas':rows.length+' entradas';
+  }
+  chips.forEach(function(b){b.addEventListener('click',function(){area=b.getAttribute('data-a');chips.forEach(function(c){c.setAttribute('aria-pressed',c===b?'true':'false');});run();});});
+  inp.addEventListener('input',run);run();
+})();
+(function(){
+  var svg=document.getElementById('svg-mapa');if(!svg)return;
+  var pasos=[].slice.call(document.querySelectorAll('#pasos li'));
+  var sets=pasos.map(function(li){return (li.getAttribute('data-hl')||'').split(' ').filter(Boolean);});
+  var idx=-1,timer=null;
+  var bPrev=document.getElementById('b-prev'),bNext=document.getElementById('b-next'),bPlay=document.getElementById('b-play'),bOff=document.getElementById('b-off'),donde=document.getElementById('donde'),panel=document.getElementById('panel-paso');
+  var reposo=panel.innerHTML;
+  function pintar(){
+    var hl=svg.querySelectorAll('[data-hl]');
+    for(var i=0;i<hl.length;i++)hl[i].classList.remove('on');
+    pasos.forEach(function(li){li.classList.remove('actual');li.removeAttribute('aria-current');});
+    if(idx<0){svg.classList.remove('paso-activo');donde.textContent='';panel.innerHTML=reposo;}
+    else{
+      svg.classList.add('paso-activo');
+      sets[idx].forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('on');});
+      pasos[idx].classList.add('actual');pasos[idx].setAttribute('aria-current','step');
+      donde.textContent='Paso '+(idx+1)+' de '+pasos.length;
+      panel.innerHTML='<span class="eyebrow">Paso '+(idx+1)+'</span> '+pasos[idx].innerHTML;
+    }
+    bPrev.disabled=idx<=0;bNext.disabled=idx>=pasos.length-1;
+  }
+  function ir(n){idx=Math.max(-1,Math.min(pasos.length-1,n));pintar();}
+  function parar(){if(timer){clearInterval(timer);timer=null;}bPlay.textContent='Reproducir';}
+  bPrev.addEventListener('click',function(){parar();ir(idx-1);});
+  bNext.addEventListener('click',function(){parar();ir(idx+1);});
+  bOff.addEventListener('click',function(){parar();ir(-1);});
+  bPlay.addEventListener('click',function(){
+    if(timer){parar();return;}
+    if(idx>=pasos.length-1)idx=-1;
+    ir(idx+1);bPlay.textContent='Pausar';
+    timer=setInterval(function(){if(idx>=pasos.length-1){parar();return;}ir(idx+1);},2800);
+  });
+  pasos.forEach(function(li,i){
+    li.addEventListener('click',function(){parar();ir(i);});
+    li.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();parar();ir(i);}});
+  });
+  pintar();
+})();
+</script>
+{% endraw %}
+</body>
+</html>

@@ -9,6 +9,7 @@ Uso:
 Solo corre en tu máquina (127.0.0.1), no queda expuesto a internet.
 """
 import json
+import logging
 import math
 import os
 import re
@@ -18,12 +19,14 @@ import subprocess
 import threading
 import time
 from functools import wraps
+from urllib.parse import urlsplit
 
 import requests
 import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import datetime
 
@@ -41,6 +44,7 @@ import prompt_swap
 import proyectos
 import trabajos
 import usuarios
+import cuentas
 import meta_conexion
 import flowplus_prompt
 import referencias_flowplus
@@ -67,6 +71,8 @@ import cifrado
 import conectores
 import tiendas
 import tablero
+import admin
+import gastos
 from conectores import ErrorConector
 from conectores import csv_excel as conector_csv
 from conectores import meli as conector_meli
@@ -111,6 +117,40 @@ app = Flask(__name__)
 # desarrollo local, no en producción.
 app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
 
+log = logging.getLogger(__name__)
+
+
+def _plataforma_url():
+    """PLATAFORMA_URL del .env (sin barra final) o "". Es la URL pública fija
+    del sitio: base de los enlaces que van por correo y host que se acepta."""
+    return (os.environ.get("PLATAFORMA_URL") or "").strip().rstrip("/")
+
+
+def _config_sesion(plataforma_url):
+    """Flags de la cookie de sesión: HttpOnly siempre, SameSite=Lax (los POST
+    desde otro sitio no la llevan → primera barrera contra CSRF) y Secure
+    cuando el sitio público es https (en local http seguiría funcionando)."""
+    return {
+        "SESSION_COOKIE_HTTPONLY": True,
+        "SESSION_COOKIE_SAMESITE": "Lax",
+        "SESSION_COOKIE_SECURE": plataforma_url.lower().startswith("https://"),
+    }
+
+
+app.config.update(_config_sesion(_plataforma_url()))
+
+
+def _detras_de_proxy():
+    """DETRAS_DE_PROXY=1: nginx está delante y es el único que llega a
+    gunicorn, así que X-Forwarded-For/-Proto son de fiar (el último valor,
+    el que nginx añade). Sin la variable, esas cabeceras se ignoran: cualquier
+    cliente podría inventarlas y saltarse el límite por IP."""
+    return (os.environ.get("DETRAS_DE_PROXY") or "").strip() == "1"
+
+
+if _detras_de_proxy():
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=0)
+
 from sprints import rutas as sprints_rutas  # noqa: E402  (Blueprint de la pestaña Sprints)
 app.register_blueprint(sprints_rutas.bp)
 
@@ -140,6 +180,75 @@ def requiere_admin(fn):
     return envuelta
 
 
+HOSTS_LOCALES = frozenset(("localhost", "127.0.0.1", "::1"))
+
+
+def _host_plataforma():
+    """Host (sin puerto) de PLATAFORMA_URL, o None si no está definida."""
+    fijo = _plataforma_url()
+    if not fijo:
+        return None
+    return (urlsplit(fijo).hostname or "").lower() or None
+
+
+@app.before_request
+def _verificar_host():
+    """Con PLATAFORMA_URL definida, solo se atiende ese host (y localhost para
+    probar en la propia máquina): una petición con otra cabecera Host —la que
+    un atacante usaría para que un enlace por correo apunte a su dominio— es
+    un 404. Va primero que los demás guards. Se salta con app.testing."""
+    esperado = _host_plataforma()
+    if esperado is None or app.testing:
+        return None
+    host = (urlsplit(f"//{request.host}").hostname or "").lower()
+    if host == esperado or host in HOSTS_LOCALES:
+        return None
+    abort(404)
+
+
+# Rutas de cuentas que deben funcionar aunque la sesión esté vencida o el
+# usuario ya no exista (verificar el correo o restablecer la contraseña se
+# abren desde un enlace, muchas veces sin sesión): el guard de sesión no las
+# cierra.
+ENDPOINTS_SIN_GUARD_SESION = frozenset((
+    "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
+    "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
+))
+
+
+def _abrir_sesion(usuario, entry):
+    """Escribe la sesión de Flask tras un login o un alta. `sv` es la
+    session_version del usuario: cambiar la contraseña la sube y el guard
+    (_verificar_sesion) cierra cualquier sesión que traiga otra."""
+    session["usuario"] = usuario
+    session["rol"] = entry["rol"]
+    session["cliente"] = entry.get("cliente")
+    session["sv"] = int(entry.get("session_version") or 1)
+
+
+@app.before_request
+def _verificar_sesion():
+    """Toda sesión tiene que corresponder a un usuario que siga en
+    usuarios.json: si ya no existe (borrado) o su session_version cambió
+    (restableció la contraseña), la sesión se cierra y se pide entrar de
+    nuevo. Una sesión sin `sv` (cookie anterior a esta versión) se sella con
+    la versión actual del usuario la primera vez que se ve, para que desde
+    ahí también cuente. Va registrado antes que _guard_por_cliente para que
+    una sesión muerta se cierre aunque pida un proyecto ajeno."""
+    if request.endpoint in ENDPOINTS_SIN_GUARD_SESION or "usuario" not in session:
+        return None
+    entry = usuarios.obtener(session["usuario"])
+    vigente = entry is not None and (
+        "sv" not in session or int(entry.get("session_version") or 1) == int(session.get("sv") or 0))
+    if not vigente:
+        session.clear()
+        flash("Tu sesión se cerró; entra de nuevo.", "error")
+        return redirect(url_for("login"))
+    if "sv" not in session:
+        session["sv"] = int(entry.get("session_version") or 1)
+    return None
+
+
 @app.before_request
 def _guard_por_cliente():
     """Cualquier ruta cuya URL incluya <cliente> exige sesión con permiso
@@ -164,6 +273,92 @@ def _guard_por_cliente():
     return None
 
 
+@app.context_processor
+def _cuenta_en_plantillas():
+    """`cuenta_actual` (registro del usuario de la sesión, sin contraseña) y
+    `smtp_ok` para el banner de base.html y Configuración › Cuenta. Lectura
+    de un JSON pequeño; los parciales por fetch no lo necesitan."""
+    if "usuario" not in session or _quiere_json():
+        return {}
+    return {"cuenta_actual": usuarios.obtener(session["usuario"]), "smtp_ok": cuentas.smtp_configurado()}
+
+
+URL_BASE_LOCAL = "http://127.0.0.1:5050"
+_aviso_url_base_dado = False
+
+
+def _url_base():
+    """Base pública de los enlaces que van por correo. NUNCA sale de la
+    petición (la cabecera Host la manda el cliente: con ella un atacante haría
+    que el enlace de restablecer de la víctima apuntara a su dominio y se
+    quedara con el token). PLATAFORMA_URL manda; sin ella, el esquema+host de
+    META_REDIRECT_URI (la otra URL pública que ya tiene el .env) y, si tampoco,
+    la de desarrollo local. Los dos últimos avisan una vez en el log."""
+    global _aviso_url_base_dado
+    fijo = _plataforma_url()
+    if fijo:
+        return fijo
+    partes = urlsplit((os.environ.get("META_REDIRECT_URI") or "").strip())
+    if partes.scheme in ("http", "https") and partes.netloc:
+        base = f"{partes.scheme}://{partes.netloc}"
+    else:
+        base = URL_BASE_LOCAL
+    if not _aviso_url_base_dado:
+        _aviso_url_base_dado = True
+        log.warning("PLATAFORMA_URL no está en el .env: los enlaces por correo usan %s", base)
+    return base
+
+
+def _ip_cliente():
+    """IP de quien pide: request.remote_addr. Detrás de nginx solo es la real
+    con DETRAS_DE_PROXY=1 (ProxyFix, ver arriba); las cabeceras X-Forwarded-*
+    nunca se leen a mano porque el primer valor lo pone el cliente."""
+    return request.remote_addr or None
+
+
+def _mismo_origen():
+    """False solo cuando el navegador declara (Sec-Fetch-Site) que el POST
+    viene de otro sitio: los formularios propios mandan same-origin (o none al
+    escribir la URL). Es la barrera CSRF de los POST que no piden contraseña ni
+    token; los navegadores sin esa cabecera ya no llevan la cookie (SameSite)."""
+    sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+    return not sitio or sitio in ("same-origin", "none")
+
+
+def _limite_correo(prefijo, correo):
+    """True si todavía cabe otro correo de ese tipo para ese correo Y desde
+    esta IP (5 por hora cada uno, cuentas.limite_ok)."""
+    ip = _ip_cliente() or "desconocida"
+    return cuentas.limite_ok(f"{prefijo}:{correo}") and cuentas.limite_ok(f"{prefijo}:ip:{ip}")
+
+
+def _requiere_correo_verificado():
+    """None si la sesión puede seguir (admin, o cliente con correo
+    verificado); si no, un redirect a Configuración › Cuenta con el aviso.
+    Se aplica en lo que conecta cuentas de terceros (Meta, tiendas)."""
+    sesion = _sesion()
+    if not sesion or sesion["rol"] == "admin":
+        return None
+    entry = usuarios.obtener(sesion["usuario"])
+    if entry and entry.get("correo_verificado"):
+        return None
+    flash("Confirma tu correo primero (Configuración › Cuenta).", "error")
+    if sesion.get("cliente"):
+        return redirect(url_for("ver_cliente", cliente=sesion["cliente"], _anchor="settings"))
+    return redirect(url_for("index"))
+
+
+def _volver_cuenta():
+    """Adónde vuelve un formulario de cuenta: la Configuración del proyecto
+    (rol cliente) o el panel (admin)."""
+    sesion = _sesion()
+    if sesion and sesion["rol"] == "cliente" and sesion.get("cliente"):
+        return redirect(url_for("ver_cliente", cliente=sesion["cliente"], _anchor="settings"))
+    if sesion and sesion["rol"] == "admin":
+        return redirect(url_for("panel"))
+    return redirect(url_for("login"))
+
+
 @app.after_request
 def _sin_cache(resp):
     """Ni el HTML ni el JSON de estado deben cachearse: son estado vivo que cambia
@@ -172,6 +367,10 @@ def _sin_cache(resp):
     que obligó a un recarga dura."""
     if resp.mimetype in ("text/html", "application/json"):
         resp.headers["Cache-Control"] = "no-store, must-revalidate"
+        # El token de restablecer/verificar va en la URL: que no viaje en el
+        # Referer a las fuentes externas (Google Fonts) ni a ningún enlace.
+        resp.headers["Referrer-Policy"] = (
+            "no-referrer" if request.endpoint in ("restablecer", "verificar_correo") else "strict-origin-when-cross-origin")
     # Los recursos de marca (ícono de la app, logo) son públicos: otros sitios
     # (p. ej. el panel de Meta) pueden cargarlos por fetch.
     if request.path.startswith("/static/img/"):
@@ -620,30 +819,55 @@ def landing_cliente(cliente):
 @app.route("/panel")
 @requiere_admin
 def panel():
+    """Tablero de operación del admin: todos los proyectos con su gasto del
+    mes (generación y pauta), piezas, aprobaciones, experimentos y
+    conexiones; salud del worker; historial y CSV. Cálculos en admin.py."""
     ids = estado_mod.listar_clientes()
-    clientes = []
-    total_pendiente = total_publicado = total_rechazado = 0
-    for cid in ids:
-        resumen = _resumen_cliente(cid)
-        clientes.append({
-            "id": cid,
-            "nombre": proyectos.nombre_visible(cid),
-            "pendiente": resumen["pendiente"],
-            "publicado": resumen["publicado"],
-            "rechazado": resumen["rechazado"],
-            "portada": None,
-        })
-        total_pendiente += resumen["pendiente"]
-        total_publicado += resumen["publicado"]
-        total_rechazado += resumen["rechazado"]
+    nombres = {cid: proyectos.nombre_visible(cid) for cid in ids}
+    try:
+        datos = admin.resumen(ids, nombres)
+    except Exception as e:  # noqa: BLE001 — el panel se pinta igual, sin números, y avisa
+        print(f"[aviso] Panel: no pude calcular el resumen: {type(e).__name__}: {e}")
+        datos = None
+    return render_template("panel.html", datos=datos, nombres=nombres, nombres_tipo=NOMBRES_TIPO_GASTO,
+                           usuarios_lista=_usuarios_panel(), smtp_ok=cuentas.smtp_configurado())
 
-    totales = {
-        "clientes": len(clientes),
-        "pendiente": total_pendiente,
-        "publicado": total_publicado,
-        "rechazado": total_rechazado,
-    }
-    return render_template("panel.html", clientes=clientes, totales=totales)
+
+@app.route("/panel/gasto.csv")
+@requiere_admin
+def panel_gasto_csv():
+    """CSV del mes con los cobros de generación de TODOS los proyectos (admin.csv_mes)."""
+    ids = estado_mod.listar_clientes()
+    resp = app.response_class(admin.csv_mes(ids), mimetype="text/csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="gasto-{db.ahora()[:7]}.csv"'
+    return resp
+
+
+def _usuarios_panel():
+    """Usuarios para la tabla del panel: nombre, rol, proyecto, correo y si
+    está verificado. Sin contraseña (usuarios.obtener la quita)."""
+    lista = []
+    for nombre in sorted(usuarios.cargar(), key=str.lower):
+        entry = usuarios.obtener(nombre) or {}
+        lista.append({
+            "usuario": nombre,
+            "rol": entry.get("rol"),
+            "cliente": entry.get("cliente"),
+            "correo": entry.get("correo"),
+            "correo_verificado": bool(entry.get("correo_verificado")),
+            "creado_en": entry.get("creado_en"),
+        })
+    return lista
+
+
+@app.route("/mapa")
+@requiere_admin
+def mapa_codigo():
+    """Mapa conceptual del código: la versión interactiva de ESTRUCTURA.md
+    (diagrama web/worker, recorrido de un clic, inventario con buscador,
+    llaves por nombre, riesgos del repo). Solo admin: es documentación
+    interna de la plataforma, no algo que un proyecto deba ver."""
+    return render_template("mapa_codigo.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -660,9 +884,7 @@ def login():
         flash("Usuario o contraseña incorrectos.", "error")
         return render_template("login.html"), 401
 
-    session["usuario"] = usuario
-    session["rol"] = entry["rol"]
-    session["cliente"] = entry.get("cliente")
+    _abrir_sesion(usuario, entry)
     if entry["rol"] == "admin":
         return redirect(url_for("panel"))
     return redirect(url_for("ver_cliente", cliente=entry["cliente"]))
@@ -679,37 +901,262 @@ def logout():
 def crear_proyecto():
     nombre = (request.form.get("nombre") or "").strip()
     usuario = (request.form.get("usuario") or "").strip()
+    correo_crudo = (request.form.get("correo") or "").strip()
     password = request.form.get("password") or ""
+    form = {"nombre": nombre, "usuario": usuario, "correo": correo_crudo}
+
+    def _error(mensaje):
+        # Se vuelve a pintar la portada con lo escrito (menos la contraseña)
+        # para que no haya que llenar todo otra vez.
+        flash(mensaje, "error")
+        return render_template("index.html", form=form), 400
+
     if not nombre:
-        flash("Ponle un nombre a la empresa.", "error")
-        return redirect(url_for("index"))
+        return _error("Ponle un nombre a la empresa.")
     if not usuario or not password:
-        flash("Elige un usuario y una contraseña para entrar a tu proyecto.", "error")
-        return redirect(url_for("index"))
+        return _error("Elige un usuario y una contraseña para entrar a tu proyecto.")
+    error_usuario = usuarios.validar_usuario(usuario)
+    if error_usuario:
+        return _error(error_usuario)
+    correo = usuarios.validar_correo(correo_crudo)
+    if not correo:
+        return _error("Escribe un correo válido: ahí te llega el enlace para confirmar la cuenta y recuperar la contraseña.")
+    error_password = usuarios.validar_password(password)
+    if error_password:
+        return _error(error_password)
     if usuarios.existe(usuario):
-        flash(f"Ya existe un usuario '{usuario}' — elige otro.", "error")
-        return redirect(url_for("index"))
+        return _error(f"Ya existe un usuario '{usuario}' — elige otro.")
+    if usuarios.por_correo(correo):
+        return _error("Ese correo ya tiene una cuenta. Entra con ella o recupera la contraseña.")
 
     cid = secure_filename(nombre.lower().replace(" ", "_"))
     if not cid:
-        flash("Ese nombre no genera un identificador de proyecto válido.", "error")
-        return redirect(url_for("index"))
+        return _error("Ese nombre no genera un identificador de proyecto válido.")
     if cid in estado_mod.listar_clientes():
-        flash(f"Ya existe un proyecto con el identificador '{cid}' — elige otro nombre.", "error")
-        return redirect(url_for("index"))
+        return _error(f"Ya existe un proyecto con el identificador '{cid}' — elige otro nombre.")
 
+    # Tope por IP al alta en sí (5 por hora): sin él, un script crea cuentas y
+    # carpetas sin fin y manda un correo de verificación por cada una.
+    if not cuentas.limite_ok(f"alta:ip:{_ip_cliente() or 'desconocida'}"):
+        flash("Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo.", "error")
+        return render_template("index.html", form=form), 429
+
+    try:
+        usuarios.crear(usuario, password, "cliente", cliente=cid, correo=correo)
+    except ValueError as e:
+        return _error(str(e))
     os.makedirs(os.path.join(BASE_DIR, "clientes", cid), exist_ok=True)
     proyectos.guardar_nombre(cid, nombre)
-    usuarios.crear(usuario, password, "cliente", cliente=cid)
 
     # Alta con sesión inmediata: quien crea el proyecto queda logueado en su
     # propio proyecto de una vez, sin tener que ir a /login aparte.
-    session["usuario"] = usuario
-    session["rol"] = "cliente"
-    session["cliente"] = cid
+    _abrir_sesion(usuario, usuarios.obtener(usuario) or {"rol": "cliente", "cliente": cid})
 
-    flash(f"Proyecto '{nombre}' creado.", "ok")
+    if not cuentas.smtp_configurado():
+        flash(f"Proyecto '{nombre}' creado. El servidor no tiene correo configurado, así que no pudimos "
+              "enviarte el enlace de confirmación: avisa al administrador.", "warn")
+    elif not _limite_correo("verif", correo):
+        flash(f"Proyecto '{nombre}' creado. Espera un momento y pide el correo de confirmación desde "
+              "el aviso de arriba.", "warn")
+    elif cuentas.enviar_verificacion(usuario, correo, _url_base(), ip=_ip_cliente()):
+        flash(f"Proyecto '{nombre}' creado. Te mandamos un correo a {correo} para confirmar tu cuenta.", "ok")
+    else:
+        flash(f"Proyecto '{nombre}' creado, pero no pudimos enviar el correo de confirmación. "
+              "Reenvíalo desde el aviso de arriba en un momento.", "warn")
     return redirect(url_for("ver_cliente", cliente=cid))
+
+
+# --- Cuentas: verificar correo, recuperar y restablecer contraseña, cuenta ---
+# Plan: docs/superpowers/plans/2026-09-19-cuentas-correo-verificado.md. Los
+# tokens y los correos viven en cuentas.py; acá solo las rutas. Ninguna de
+# estas respuestas dice si un correo o usuario existe.
+
+@app.route("/verificar/<token>")
+def verificar_correo(token):
+    """Enlace del correo de verificación. Funciona con o sin sesión: consume
+    el token (un solo uso) y marca el correo como verificado; si el token
+    trae un correo distinto al actual (cambio de correo), lo actualiza."""
+    resultado = cuentas.consumir("verificacion", token)
+    sesion = _sesion()
+    if resultado is None:
+        flash("Ese enlace de verificación no sirve: ya se usó o venció. Pide uno nuevo desde tu cuenta.", "error")
+        return _volver_cuenta() if sesion else redirect(url_for("login"))
+    usuario = resultado["usuario"]
+    try:
+        usuarios.actualizar(usuario, correo=resultado["correo"], correo_verificado=True)
+    except ValueError as e:
+        flash(f"No pude confirmar el correo: {e}", "error")
+        return _volver_cuenta() if sesion else redirect(url_for("login"))
+    flash("Correo confirmado. ¡Gracias!", "ok")
+    # Con sesión abierta (la suya o la de otro usuario en este navegador) se
+    # vuelve a su cuenta; sin sesión, al login.
+    return _volver_cuenta() if sesion else redirect(url_for("login"))
+
+
+@app.route("/reenviar-verificacion", methods=["POST"])
+def reenviar_verificacion():
+    if not _mismo_origen():
+        abort(403)
+    sesion = _sesion()
+    if not sesion:
+        flash("Inicia sesión para reenviar la verificación.", "error")
+        return redirect(url_for("login"))
+    entry = usuarios.obtener(sesion["usuario"])
+    if not entry or not entry.get("correo"):
+        flash("Primero escribe tu correo en Configuración › Cuenta.", "error")
+        return _volver_cuenta()
+    if entry.get("correo_verificado"):
+        flash("Tu correo ya está confirmado.", "ok")
+        return _volver_cuenta()
+    if not cuentas.smtp_configurado():
+        flash("El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.", "warn")
+        return _volver_cuenta()
+    if not _limite_correo("verif", entry["correo"]):
+        flash("Espera un momento antes de pedir otro correo de verificación.", "warn")
+        return _volver_cuenta()
+    cuentas.enviar_verificacion(sesion["usuario"], entry["correo"], _url_base(), ip=_ip_cliente())
+    flash(f"Si {entry['correo']} es correcto, te llega el enlace en unos minutos (revisa también el spam).", "ok")
+    return _volver_cuenta()
+
+
+@app.route("/recuperar", methods=["GET", "POST"])
+def recuperar():
+    """Pide el correo y, si corresponde a un usuario, manda el enlace de
+    restablecimiento. La respuesta es la misma exista o no el correo."""
+    if request.method == "GET":
+        return render_template("recuperar.html")
+    correo = usuarios.validar_correo(request.form.get("correo") or "")
+    encontrado = usuarios.por_correo(correo) if correo else None
+    if encontrado and cuentas.smtp_configurado() and _limite_correo("reset", correo):
+        usuario, _entry = encontrado
+        cuentas.enviar_restablecer(usuario, correo, _url_base(), ip=_ip_cliente())
+    flash("Si ese correo está registrado, te llegará un enlace para restablecer la contraseña "
+          "(vence en 1 hora; revisa también el spam).", "ok")
+    return redirect(url_for("login"))
+
+
+@app.route("/restablecer/<token>", methods=["GET", "POST"])
+def restablecer(token):
+    """GET: valida el token sin gastarlo y muestra el formulario (o «enlace
+    vencido»). POST: valida la contraseña nueva, consume el token, la cambia
+    (sube session_version → se cierran las demás sesiones) y manda al login."""
+    if request.method == "GET":
+        if cuentas.validar("restablecer", token) is None:
+            return render_template("restablecer.html", vencido=True), 400
+        return render_template("restablecer.html", vencido=False, token=token)
+    nueva = request.form.get("password") or ""
+    confirmacion = request.form.get("confirmacion") or ""
+    error = usuarios.validar_password(nueva)
+    if not error and nueva != confirmacion:
+        error = "Las dos contraseñas no coinciden."
+    if error:
+        if cuentas.validar("restablecer", token) is None:
+            return render_template("restablecer.html", vencido=True), 400
+        flash(error, "error")
+        return render_template("restablecer.html", vencido=False, token=token), 400
+    resultado = cuentas.consumir("restablecer", token)
+    if resultado is None:
+        return render_template("restablecer.html", vencido=True), 400
+    usuario = resultado["usuario"]
+    try:
+        usuarios.cambiar_password(usuario, nueva)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("login"))
+    # Abrir el enlace que llegó a ese correo demuestra que es suyo: si sigue
+    # siendo el correo de la cuenta, queda confirmado de paso.
+    entry = usuarios.obtener(usuario) or {}
+    if entry.get("correo") == resultado["correo"] and not entry.get("correo_verificado"):
+        usuarios.actualizar(usuario, correo_verificado=True)
+    session.clear()
+    flash("Contraseña cambiada. Entra con la nueva.", "ok")
+    return redirect(url_for("login"))
+
+
+@app.route("/cuenta/correo", methods=["POST"])
+def cuenta_correo():
+    """Pone o cambia el correo de la cuenta (pide la contraseña actual). El
+    correo nuevo queda sin verificar hasta abrir el enlace."""
+    sesion = _sesion()
+    if not sesion:
+        flash("Inicia sesión para cambiar tu correo.", "error")
+        return redirect(url_for("login"))
+    usuario = sesion["usuario"]
+    if not usuarios.verificar(usuario, request.form.get("password") or ""):
+        flash("La contraseña actual no es correcta.", "error")
+        return _volver_cuenta()
+    correo = usuarios.validar_correo(request.form.get("correo") or "")
+    if not correo:
+        flash("Escribe un correo válido.", "error")
+        return _volver_cuenta()
+    actual = usuarios.obtener(usuario) or {}
+    if actual.get("correo") == correo and actual.get("correo_verificado"):
+        flash("Ese ya es tu correo y está confirmado.", "ok")
+        return _volver_cuenta()
+    try:
+        usuarios.actualizar(usuario, correo=correo, correo_verificado=False)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_cuenta()
+    # El enlace del correo anterior no puede seguir sirviendo: al abrirlo
+    # devolvería la cuenta al correo viejo (y verificado) aunque no se llegue
+    # a emitir uno nuevo (sin SMTP o con el límite alcanzado).
+    cuentas.invalidar("verificacion", usuario)
+    if not cuentas.smtp_configurado():
+        flash(f"Correo guardado: {correo}. El servidor no tiene correo configurado, así que no pudimos "
+              "enviarte el enlace de confirmación: avisa al administrador.", "warn")
+    elif not _limite_correo("verif", correo):
+        flash(f"Correo guardado: {correo}. Espera un momento antes de pedir el enlace de confirmación.", "warn")
+    else:
+        cuentas.enviar_verificacion(usuario, correo, _url_base(), ip=_ip_cliente())
+        flash(f"Correo guardado. Si {correo} es correcto, te llega el enlace de confirmación en unos minutos.", "ok")
+    return _volver_cuenta()
+
+
+@app.route("/cuenta/password", methods=["POST"])
+def cuenta_password():
+    """Cambia la contraseña con la actual + nueva + confirmación. Sube
+    session_version (las demás sesiones se cierran) y refresca la de este
+    navegador para que siga abierta."""
+    sesion = _sesion()
+    if not sesion:
+        flash("Inicia sesión para cambiar tu contraseña.", "error")
+        return redirect(url_for("login"))
+    usuario = sesion["usuario"]
+    if not usuarios.verificar(usuario, request.form.get("password_actual") or ""):
+        flash("La contraseña actual no es correcta.", "error")
+        return _volver_cuenta()
+    nueva = request.form.get("password") or ""
+    error = usuarios.validar_password(nueva)
+    if not error and nueva != (request.form.get("confirmacion") or ""):
+        error = "Las dos contraseñas no coinciden."
+    if error:
+        flash(error, "error")
+        return _volver_cuenta()
+    try:
+        session["sv"] = usuarios.cambiar_password(usuario, nueva)
+    except ValueError as e:
+        flash(str(e), "error")
+        return _volver_cuenta()
+    flash("Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron.", "ok")
+    return _volver_cuenta()
+
+
+@app.route("/admin/usuarios/<usuario>/verificar", methods=["POST"])
+@requiere_admin
+def admin_usuario_verificar(usuario):
+    """El admin confirma a mano un correo (cuando no hay SMTP o el correo no
+    llega). Solo marca; no cambia el correo. Sin contraseña ni token de por
+    medio, el POST tiene que venir de nuestra propia página (403 si no)."""
+    if not _mismo_origen():
+        abort(403)
+    try:
+        usuarios.actualizar(usuario, correo_verificado=True)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("panel"))
+    flash(f"Usuario '{usuario}' marcado como verificado.", "ok")
+    return redirect(url_for("panel"))
 
 
 def _job_id_imagen(cliente, prompt_id):
@@ -912,6 +1359,10 @@ def ver_cliente(cliente):
     canales_org = organico.canales(cliente)
     publicaciones_por_pieza = organico.por_pieza(cliente)
     trabajos_org = _trabajos_organico(cliente, publicaciones_por_pieza)
+    # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
+    # sale la pauta por moneda; la generación viene de la tabla `gasto`.
+    tablero_ctx = _contexto_tablero(cliente)
+    gasto_ctx = _contexto_gasto(cliente, tablero_ctx)
 
     return render_template(
         "cliente.html",
@@ -997,8 +1448,9 @@ def ver_cliente(cliente):
         tipos_tienda=conectores.TIPOS_API,
         llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app)),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
-        tablero=_contexto_tablero(cliente),
+        tablero=tablero_ctx,
         canales_org=canales_org,
+        **gasto_ctx,
         plataformas_org=organico.PLATAFORMAS,
         publicaciones_por_pieza=publicaciones_por_pieza,
         trabajos_org=trabajos_org,
@@ -1098,20 +1550,27 @@ SERVICIOS_LLAVES = (
     },
     {
         "id": "smtp",
-        "nombre": "Correo de avisos (opcional)",
-        "para_que": "Manda un correo cuando hay propuestas pendientes, un ganador, un rechazo de Meta o un lanzamiento fallido.",
+        "nombre": "Correo de la plataforma (cuentas y avisos)",
+        "para_que": "Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; "
+                    "también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos).",
         "costo": "Depende del proveedor de correo; con una cuenta normal no cuesta.",
         "url": "https://support.google.com/accounts/answer/185833",
         "url_texto": "Google › Contraseñas de aplicación",
-        "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"],
-        "nota": "Sin esto los avisos solo quedan en la bitácora.",
+        "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL"],
+        "nota": "Sin esto nadie puede confirmar su correo ni recuperar la contraseña solo (el administrador "
+                "tiene que marcar las cuentas a mano en el panel) y los avisos solo quedan en la bitácora.",
         "opcional": True,
         "pasos": [
             "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio).",
-            "Si es Gmail, activa la verificación en dos pasos y crea una «Contraseña de aplicación»: esa es SMTP_PASS.",
+            "Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, "
+            "en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS "
+            "(no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma.",
             "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS).",
-            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor y reinicia.",
-            "Abajo, en «Correo de avisos», escribe a qué dirección deben llegar los avisos de este proyecto.",
+            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor, junto con "
+            "PLATAFORMA_URL (la dirección pública del sitio, p. ej. https://app.creatvmachine.com: es la base de "
+            "los enlaces que van en los correos), y reinicia los dos servicios.",
+            "Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. "
+            "Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto.",
         ],
     },
     {
@@ -1826,6 +2285,10 @@ def _swap_items(cliente):
 
 def _creative_flow_items(cliente):
     data = creative_flow.cargar(cliente)
+    # Id numérico de la pieza por sesión, UNA consulta para toda la pestaña:
+    # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
+    # (#experimentos?piezas=<pieza_id>). Las finales ya traen su pieza_id.
+    pieza_ids = creative_flow.piezas_ids_por_legado(cliente)
     items = []
     for cf_id, entry in sorted(
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
@@ -1843,6 +2306,7 @@ def _creative_flow_items(cliente):
             **entry,
             "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
             "trabajo_director": trabajo_director,
+            "pieza_id": pieza_ids.get(cf_id),
         }
         # Si ya existe una hija de versión B (creative_flow.duplicar la crea con
         # derivado_de=cf_id, variante="B"), no tiene sentido ofrecer generarla de
@@ -1893,7 +2357,7 @@ def ver_swap(cliente):
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
 PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
-# Rótulos en español del objetivo de Meta en «Nuevo experimento» (Bloque 6).
+# Rótulos en español del objetivo de Meta en «Probar en Meta › Avanzado» (Bloque 6).
 # El valor sigue siendo el enum de Meta; solo cambia lo que se lee.
 NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": "Compras (requiere Pixel)", "OUTCOME_TRAFFIC": "Tráfico (clics al enlace)",
                         "OUTCOME_ENGAGEMENT": "Interacción", "OUTCOME_LEADS": "Clientes potenciales"}
@@ -2176,6 +2640,9 @@ def _ir_a_flowmarketing(cliente):
 def meta_app_guardar(cliente):
     """El proyecto registra SU app de Meta (id, secret, config de login).
     El secret va a disco (meta_app.json, 0600) y nunca vuelve a pantalla."""
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     try:
         meta_conexion.guardar_app(cliente, {
             "app_id": request.form.get("app_id"),
@@ -2200,6 +2667,9 @@ def meta_app_borrar(cliente):
 
 @app.route("/cliente/<cliente>/meta/conectar")
 def meta_conectar(cliente):
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     state = meta_conexion.nuevo_state()
     session["meta_oauth"] = {"state": state, "cliente": cliente}
     try:
@@ -2625,6 +3095,115 @@ def tab_descargar_csv(cliente):
     return resp
 
 
+# ---------- Gasto real (Task 3): precio antes y después ----------
+
+# Rótulos en español de cada `tipo` de la tabla `gasto` (gastos.TIPOS).
+NOMBRES_TIPO_GASTO = {
+    "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
+    "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
+    "musica": "Música", "otro": "Otros",
+}
+
+
+@app.template_filter("usd")
+def _filtro_usd(valor):
+    """«US$ 0,07» (gastos.formatear): coma decimal, dos decimales, «—» si no hay."""
+    return gastos.formatear(valor)
+
+
+def _pauta_mes(tablero_ctx):
+    """[{"moneda", "gasto"}] con la pauta del mes por moneda (solo > 0), del
+    resumen ya calculado por el tablero. Sin resumen (parte rota) → []."""
+    resumen = (tablero_ctx or {}).get("resumen") or {}
+    salida = []
+    for moneda, g in sorted((resumen.get("por_moneda") or {}).items()):
+        gasto = float((g or {}).get("gasto") or 0)
+        if gasto > 0:
+            salida.append({"moneda": moneda, "gasto": gasto})
+    return salida
+
+
+def _precios_pagina():
+    """Estimados fijos para los botones de la página (guion, final por país,
+    regla de producto, texto orgánico). Video/imagen los calcula Crear con
+    las tarifas del modelo elegido (data-usd-* en el formulario)."""
+    return {
+        "guion": gastos.estimar("guion"),
+        "final_por_pais": gastos.estimar("final", paises=1),
+        "regla_producto": gastos.estimar("regla_producto"),
+        "caption_organico": gastos.estimar("caption_organico"),
+    }
+
+
+def _chip_gasto(gasto_mes, pauta_mes):
+    """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
+    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0)."""
+    partes = [f"{gastos.formatear((gasto_mes or {}).get('total') or 0)} generación"]
+    for p in pauta_mes or []:
+        partes.append(f"{tablero.dinero(p['gasto'], p['moneda'])} pauta")
+    return " · ".join(partes)
+
+
+def _contexto_gasto(cliente, tablero_ctx):
+    """gasto_mes (gastos.resumen_mes), pauta_mes (por moneda, del tablero),
+    precios (estimados de los botones), gastos_historial (200 últimos),
+    gastos_por_tipo (tabla) y gasto_chip (sidebar). Cada parte en su
+    try/except: el gasto informa, nunca tumba la página."""
+    try:
+        gasto_mes = gastos.resumen_mes(cliente)
+    except Exception as e:  # noqa: BLE001 — informativo
+        print(f"[aviso] Gasto de {cliente}: no pude leer el resumen del mes: {type(e).__name__}")
+        gasto_mes = {"desde": None, "hasta": None, "total": 0.0, "por_tipo": {}, "n": 0, "error": True}
+    try:
+        historial = gastos.historial(cliente, limite=200)
+    except Exception as e:  # noqa: BLE001 — informativo
+        print(f"[aviso] Gasto de {cliente}: no pude leer el historial: {type(e).__name__}")
+        historial = []
+    pauta = _pauta_mes(tablero_ctx)
+    por_tipo = [{"tipo": t, "nombre": NOMBRES_TIPO_GASTO.get(t, t), "n": v["n"], "usd": v["usd"]}
+                for t, v in sorted(gasto_mes["por_tipo"].items(), key=lambda kv: -kv[1]["usd"])]
+    return {
+        "gasto_mes": gasto_mes,
+        "pauta_mes": pauta,
+        "precios": _precios_pagina(),
+        "gastos_historial": historial,
+        "gastos_por_tipo": por_tipo,
+        "nombres_tipo_gasto": NOMBRES_TIPO_GASTO,
+        "gasto_chip": _chip_gasto(gasto_mes, pauta),
+    }
+
+
+@app.context_processor
+def _chip_gasto_sidebar():
+    """El sidebar (base.html) se pinta en toda página con <cliente> en la URL
+    — también las de Sprints, que no pasan por ver_cliente. Acá se calcula
+    el chip para esas; ver_cliente ya lo trae en su contexto (y lo explícito
+    gana sobre el context processor), así que no se repite el trabajo.
+    M1: los parciales JSON (`_respuesta_bandeja` y similares, sin sidebar)
+    no lo necesitan — salir temprano evita recalcular el tablero entero
+    (1 + 5 consultas) solo para un chip que nadie va a ver."""
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    if not cliente or request.endpoint == "ver_cliente" or _quiere_json():
+        return {}
+    try:
+        return {"gasto_chip": _chip_gasto(gastos.resumen_mes(cliente), _pauta_mes(_contexto_tablero(cliente)))}
+    except Exception as e:  # noqa: BLE001 — sin chip, pero con página
+        print(f"[aviso] Gasto de {cliente}: no pude calcular el chip del sidebar: {type(e).__name__}")
+        return {}
+
+
+@app.route("/cliente/<cliente>/gasto/mes.csv")
+def gasto_csv(cliente):
+    """CSV del gasto de generación del mes en curso (una fila por cobro,
+    `;`, BOM) para abrir en Excel. Mismos headers que tab_descargar_csv."""
+    ahora = db.ahora()
+    texto = gastos.csv_mes(cliente, ahora)
+    resp = Response(texto, content_type="text/csv; charset=utf-8")
+    nombre = secure_filename(f"gasto_{cliente}_{ahora[:7]}.csv")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{nombre}"'
+    return resp
+
+
 @app.route("/cliente/<cliente>/experimentos/nuevo", methods=["POST"])
 def exp_crear(cliente):
     """Crea un experimento en 'armando' — sin piezas ni objetos en Meta
@@ -2698,6 +3277,101 @@ def exp_crear(cliente):
     return volver
 
 
+_MESES_CORTOS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+
+
+def nombre_experimento_automatico(n_piezas, paises, cuando=None):
+    """«Prueba 20 sep · 3 piezas · CO, MX» — el nombre que la galería propone."""
+    cuando = cuando or datetime.now().date()
+    piezas = "1 pieza" if n_piezas == 1 else f"{n_piezas} piezas"
+    return f"Prueba {cuando.day} {_MESES_CORTOS[cuando.month - 1]} · {piezas} · {', '.join(sorted(paises))}"
+
+
+@app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
+def exp_probar(cliente):
+    """La galería primero: un solo POST crea el experimento, reparte las
+    piezas por país y encola el lanzamiento (todo PAUSED en Meta). Valida lo
+    mismo que exp_crear; si algo falla no queda nada creado. Activar sigue
+    siendo un clic aparte."""
+    volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+    if meta_conexion.estado(cliente).get("estado") != "conectado":
+        flash("Conecta Meta en Configuración antes de probar piezas.", "error")
+        return volver
+    moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
+    objetivo = request.form.get("objetivo") or ""
+    codigos = [p for p in request.form.getlist("paises") if p in fe_tipos.PAISES]
+    destino = (request.form.get("destino_url") or "").strip()
+    try:
+        piezas_ids = [int(x) for x in request.form.getlist("piezas")]
+        combinaciones = []
+        for c in request.form.getlist("combinaciones"):
+            pid, _, pais = c.partition(":")
+            combinaciones.append((int(pid), pais))
+        dias = int(request.form.get("dias") or 7)
+        tope = float(request.form.get("tope_total") or 0)
+        edad_min = int(request.form.get("edad_min") or 18)
+        edad_max = int(request.form.get("edad_max") or 65)
+        paises = [{"pais": p, "idioma": fe_tipos.PAISES[p]["idioma"],
+                   "presupuesto_dia": float(request.form.get(f"presupuesto_{p}") or 0)} for p in codigos]
+    except ValueError:
+        flash("Revisa los números del formulario.", "error")
+        return volver
+    if not math.isfinite(tope) or any(not math.isfinite(p["presupuesto_dia"]) for p in paises):
+        flash("Revisa los números del formulario.", "error")
+        return volver
+    if not piezas_ids:
+        flash("Marca al menos una pieza en la galería.", "error")
+        return volver
+    if not codigos:
+        # Antes de filtrar las combinaciones por país: sin país quedarían
+        # vacías y el aviso hablaría de la cuadrícula, no del país.
+        flash("Marca al menos un país.", "error")
+        return volver
+    combinaciones = [(pid, pais) for pid, pais in combinaciones if pid in piezas_ids and pais in codigos]
+    if not combinaciones:
+        flash("Marca al menos una combinación pieza × país en el paso de revisar.", "error")
+        return volver
+    if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
+            or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
+            or not (13 <= edad_min <= edad_max <= 65)):
+        flash("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s).", "error")
+        return volver
+    minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
+    bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
+    if bajos:
+        flash(f"El presupuesto diario no alcanza el mínimo de Meta ({minimo} {moneda}) en: {', '.join(bajos)}.", "error")
+        return volver
+    modo = request.form.get("modo") or "manual"
+    if modo not in modos.MODOS:
+        modo = "manual"
+    atribucion = request.form.get("atribucion") or None
+    if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
+        flash("La atribución tiene que ser pixel, tienda o ninguna.", "error")
+        return volver
+    if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
+        flash("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
+              "Configuración, o elige el objetivo de tráfico.", "error")
+        return volver
+    n_piezas = len({pid for pid, _ in combinaciones})
+    nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
+    datos = dict(nombre=nombre, paises=paises, objetivo_meta=objetivo, dias=dias, tope_total=tope, destino_url=destino,
+                 moneda=moneda, edad_min=edad_min, edad_max=edad_max, modo=modo, atribucion=atribucion)
+    try:
+        eid = experimentos.crear_con_piezas(cliente, datos, combinaciones)
+    except experimentos.ErrorCombinacion as e:
+        flash(str(e), "error")
+        return volver
+    job_id = tareas_exp.job_id_lanzar(cliente, eid)
+    arranco = trabajos.encolar(job_id, "exp_lanzar", {"cliente": cliente, "experimento_id": eid},
+                               cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
+    if arranco:
+        experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
+        flash(f"«{nombre}»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", "ok")
+    else:
+        flash(f"«{nombre}» quedó creado; ya se estaba lanzando.", "warn")
+    return volver
+
+
 def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
     """Valida y agrega una pieza (final o clon) a un experimento en armado.
     Devuelve un mensaje de error en español, o None si quedó agregada.
@@ -2710,15 +3384,9 @@ def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
     candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
     if not candidata:
         return "Esa pieza no está disponible (o no está lista)."
-    if candidata["tipo"] == "final":
-        pais_final = candidata["pais"]
-        if pais not in (None, "") and pais != pais_final:
-            return f"Esa final es de {pais_final}; no se puede meter a otro país."
-        pais = pais_final
-    else:
-        paises_experimento = {p["pais"] for p in ex["paises"]}
-        if pais not in paises_experimento:
-            return f"Ese país no está en el experimento (elige entre {', '.join(sorted(paises_experimento))})."
+    pais, error = experimentos.validar_combinacion(candidata, {p["pais"] for p in ex["paises"]}, pais)
+    if error:
+        return error
     experimentos.agregar_pieza(cliente, experimento_id, pieza_id, pais)
     return None
 
@@ -3664,8 +4332,9 @@ def prod_fotos_subir(cliente, pid):
 
 @app.route("/cliente/<cliente>/productos/<int:pid>/experimento", methods=["POST"])
 def prod_experimento(cliente, pid):
-    """Manda a Experimentos con el formulario «Nuevo experimento» prellenado
-    (nombre y URL de destino) — el JS de esa pestaña lee la query."""
+    """Manda a Experimentos (la galería) con el nombre y la URL de destino del
+    producto ya puestos en el paso 3 de «Probar en Meta» — la plantilla los
+    lee de request.args (exp_nombre, exp_destino)."""
     prod = tiendas.producto(cliente, pid)
     if not prod:
         flash("No encontré ese producto.", "error")
@@ -3704,6 +4373,9 @@ def _flash_sin_cifrado():
 def tienda_conectar(cliente):
     """Shopify/WooCommerce: prueba las credenciales contra la tienda (inline,
     una llamada corta), las guarda cifradas y encola la primera sync."""
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     if not cifrado.disponible():
         _flash_sin_cifrado()
         return _volver_config(cliente)
@@ -3739,6 +4411,9 @@ def tienda_conectar(cliente):
 def tienda_meli_iniciar(cliente):
     """Arranca el OAuth de MercadoLibre. El `state` queda en la sesión junto
     con el cliente: el callback (global, sin <cliente>) lo resuelve de ahí."""
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
     if not cifrado.disponible():
         _flash_sin_cifrado()
         return _volver_config(cliente)

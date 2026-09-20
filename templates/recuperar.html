@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Recuperar contraseña{% endblock %}
+{% block content %}
+<section class="login-caja aparece">
+  <span class="eyebrow">Creatv Machine</span>
+  <h1 style="margin-bottom:.3rem;">Recuperar contraseña</h1>
+  <p class="hero-sub" style="margin-bottom:1.4rem;">Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva. Vence en 1 hora.</p>
+  <form method="post" action="{{ url_for('recuperar') }}" class="form-nueva-idea">
+    <label class="campo-label">Correo</label>
+    <input type="email" name="correo" autocomplete="email" required autofocus>
+    <button type="submit" class="btn-generar" style="margin-top:1rem;width:100%;">Enviarme el enlace</button>
+  </form>
+  <p class="vacio" style="margin-top:1rem;font-size:.82rem;">
+    <a href="{{ url_for('login') }}">Volver a iniciar sesión</a>
+  </p>
+</section>
+{% endblock %}

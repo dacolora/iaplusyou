@@ -24,6 +24,9 @@ _SNAP_COLS = ("impresiones", "alcance", "frecuencia", "clics", "clics_enlace", "
               "thruplay_rate", "gasto", "compras", "ingresos", "roas", "cpa", "fuente_ventas")
 _SNAP_INT = {"impresiones", "alcance", "clics", "clics_enlace", "thruplay", "compras"}
 _TIPOS_CLON = ("video", "clon_limpio")
+# Experimentos "vivos" para la galería (etiqueta «en prueba»): `decidido`
+# cuenta — los ganadores siguen entregando y exp_refrescar_todos lo refresca.
+ESTADOS_VIVOS = ("armando", "lanzando", "pausado", "corriendo", "decidido")
 
 
 def _pais_nuevo(p):
@@ -234,6 +237,82 @@ def agregar_pieza(cliente, experimento_id, pieza_id, pais):
             extra={})).inserted_primary_key[0]
 
 
+class ErrorCombinacion(ValueError):
+    """Una combinación pieza × país no es válida: el experimento no se crea."""
+
+
+def validar_combinacion(candidata, paises_experimento, pais):
+    """Regla de reparto (spec §0/§3): una final solo va a su país; un clon o
+    una imagen solo a un país del experimento. Devuelve (pais_efectivo, error)."""
+    if candidata["tipo"] == "final":
+        pais_final = candidata["pais"]
+        if pais not in (None, "") and pais != pais_final:
+            return pais_final, f"Esa final es de {pais_final}; no se puede meter a otro país."
+        return pais_final, None
+    if pais not in paises_experimento:
+        return pais, f"Ese país no está en el experimento (elige entre {', '.join(sorted(paises_experimento))})."
+    return pais, None
+
+
+def crear_con_piezas(cliente, datos, combinaciones):
+    """Crea el experimento y adjunta las combinaciones (pieza_id, pais) en UNA
+    transacción. Una final pedida en otro país se ignora en silencio (la UI la
+    ofrece solo en el suyo); una pieza ajena/inexistente o un clon a un país
+    fuera del experimento es ErrorCombinacion y no queda nada creado.
+    Duplicados se colapsan. No encola nada."""
+    elegibles_por_id = {e["pieza_id"]: e for e in elegibles(cliente)}
+    paises_exp = {p["pais"] for p in datos["paises"]}
+    finales = []
+    vistas = set()
+    for pieza_id, pais in combinaciones:
+        cand = elegibles_por_id.get(pieza_id)
+        if not cand:
+            raise ErrorCombinacion("Una de las piezas no está disponible (o no está lista).")
+        pais_ok, error = validar_combinacion(cand, paises_exp, pais)
+        if error and cand["tipo"] == "final":
+            continue
+        if error:
+            raise ErrorCombinacion(error)
+        if (pieza_id, pais_ok) in vistas:
+            continue
+        vistas.add((pieza_id, pais_ok))
+        finales.append((pieza_id, pais_ok))
+    if not finales:
+        raise ErrorCombinacion("Ninguna pieza cabe en los países elegidos: revisa el reparto.")
+    # exp_lanzar rechaza un experimento con un país sin piezas ("Sin piezas
+    # para: …") — pero eso ocurre en el worker, después de gastar el único
+    # intento de la cola. Se valida acá, antes de crear nada, para que la
+    # galería nunca deje un experimento a medio lanzar por un país que el
+    # paso de revisar dejó sin ninguna pieza marcada (o cuya única final cayó
+    # a otro país).
+    faltan = sorted(paises_exp - {pais for _, pais in finales})
+    if faltan:
+        raise ErrorCombinacion(f"Sin piezas para: {', '.join(faltan)}. Quita ese país o marca una pieza para él.")
+    ahora = db.ahora()
+    atribucion = datos.get("atribucion")
+    if atribucion is None:
+        atribucion = atribucion_sugerida(cliente)
+    if atribucion not in ATRIBUCIONES:
+        raise ValueError(f"Atribución no válida: {atribucion!r} (usa pixel, tienda o ninguna).")
+    with db.conectar() as con:
+        eid = con.execute(db.experimento.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=datos["nombre"], modo=datos.get("modo", "manual"),
+            reglas={}, paises=[_pais_nuevo(p) for p in datos["paises"]], moneda=datos["moneda"],
+            tope_total=float(datos["tope_total"]), dias=int(datos["dias"]), objetivo_meta=datos["objetivo_meta"],
+            atribucion=atribucion, estado="armando", gasto_acumulado=0.0, legado=False,
+            destino_url=datos["destino_url"], edad_min=int(datos.get("edad_min", 18)), edad_max=int(datos.get("edad_max", 65)),
+            extra={})).inserted_primary_key[0]
+        for pieza_id, pais in finales:
+            con.execute(db.experimento_pieza.insert().values(
+                cliente=cliente, creado_en=ahora, actualizado_en=ahora, experimento_id=eid, pieza_id=pieza_id,
+                pais=pais, estado="en_cola", veredicto="pendiente", escalon_rescate=0, extra={}))
+        con.execute(db.evento.insert().values(
+            cliente=cliente, creado_en=ahora, experimento_id=eid, tipo="creado",
+            mensaje=f"Experimento creado desde la galería con {len(finales)} anuncio(s) en {len(paises_exp)} país(es)",
+            datos={}))
+    return eid
+
+
 def experimento_de_pieza(cliente, ep_id):
     """Id del experimento dueño de una pieza, o None si no existe (para
     ese cliente). Usado por lanzador._experimento_de_pieza en vez de que
@@ -362,6 +441,7 @@ def _piezas(con, cliente, experimento_id):
             "presupuesto_dia_actual": m[ep.c.presupuesto_dia_actual], "veredicto": m[ep.c.veredicto],
             "veredicto_motivo": m[ep.c.veredicto_motivo], "veredicto_en": m[ep.c.veredicto_en],
             "nombre": nombre[:80], "url_video": m["url_video"], "url_miniatura": m["url_miniatura"], "tipo": tipo,
+            "es_imagen": m["tipo"] == "imagen", "url_imagen": m["url_video"] if m["tipo"] == "imagen" else None,
             "idioma": m["p_idioma"], "legado_id": m["p_legado"], "duracion_s": m["duracion_s"],
             "metricas": _ultima_metrica(con, m[ep.c.id]), "creado_en": m[ep.c.creado_en],
             "extra": m[ep.c.extra] or {}, "escalon_rescate": m[ep.c.escalon_rescate] or 0,
@@ -455,25 +535,50 @@ def eventos(cliente, experimento_id, limite=None):
 
 
 def elegibles(cliente):
-    """Finales listas/degradadas (para su país) y clones de video listos (para
-    cualquier país). Imágenes y piezas sin url_video no entran."""
+    """Todo lo que se puede probar en Meta: finales listas/degradadas (van a su
+    país), clones de video listos e imágenes listas (van a cualquier país).
+    Piezas sin URL pública no entran. Cada elemento trae de dónde viene
+    (`origen`, `sprint`), su formato y en qué experimentos vivos está."""
     pz, cp = db.pieza, db.concepto
     q = (sa.select(pz, cp.c.extra.label("c_extra"))
          .select_from(pz.outerjoin(cp, cp.c.id == pz.c.concepto_id))
          .where(pz.c.cliente == cliente, pz.c.url_video.isnot(None),
                 cp.c.archivado.isnot(True),
                 sa.or_(sa.and_(pz.c.tipo == "final", pz.c.estado.in_(("listo", "degradada"))),
-                       sa.and_(pz.c.tipo.in_(_TIPOS_CLON), pz.c.estado == "listo")))
+                       sa.and_(pz.c.tipo.in_(_TIPOS_CLON + ("imagen",)), pz.c.estado == "listo")))
          .order_by(pz.c.id.desc()))
     out = []
     with db.conectar() as con:
+        vivos = _experimentos_vivos_por_pieza(con, cliente)
         for f in con.execute(q):
             m = f._mapping
+            es_imagen = m[pz.c.tipo] == "imagen"
             tipo = "final" if m[pz.c.tipo] == "final" else "clon"
+            extra_c = m["c_extra"] or {}
             nombre = (f"Final {m[pz.c.idioma]}_{m[pz.c.pais]} · {m[pz.c.legado_id] or ''}" if tipo == "final"
-                      else ((m["c_extra"] or {}).get("accion_central") or m[pz.c.legado_id] or f"Pieza {m[pz.c.id]}"))
-            out.append({"pieza_id": m[pz.c.id], "legado_id": m[pz.c.legado_id], "tipo": tipo, "nombre": nombre[:80],
-                        "url_video": m[pz.c.url_video], "url_miniatura": m[pz.c.url_miniatura],
+                      else (extra_c.get("accion_central") or m[pz.c.legado_id] or f"Pieza {m[pz.c.id]}"))
+            sprint = extra_c.get("sprint") if isinstance(extra_c.get("sprint"), dict) else None
+            origen = "final" if tipo == "final" else ("sprint" if sprint else "crear")
+            out.append({"pieza_id": m[pz.c.id], "legado_id": m[pz.c.legado_id], "tipo": tipo, "es_imagen": es_imagen,
+                        "nombre": nombre[:80], "url_video": m[pz.c.url_video], "url_miniatura": m[pz.c.url_miniatura],
                         "idioma": m[pz.c.idioma], "pais": m[pz.c.pais] if tipo == "final" else None,
-                        "duracion_s": m[pz.c.duracion_s]})
+                        "duracion_s": m[pz.c.duracion_s], "formato": m[pz.c.aspect_ratio],
+                        "origen": origen, "sprint": sprint, "creado_en": m[pz.c.creado_en],
+                        "en_experimentos": vivos.get(m[pz.c.id], [])})
+    return out
+
+
+def _experimentos_vivos_por_pieza(con, cliente):
+    """{pieza_id: [{id, nombre, estado}, ...]} de los experimentos vivos que
+    contienen cada pieza (sin duplicar un experimento que la tenga en dos países)."""
+    ep, e = db.experimento_pieza, db.experimento
+    q = (sa.select(ep.c.pieza_id, e.c.id, e.c.nombre, e.c.estado)
+         .select_from(ep.join(e, e.c.id == ep.c.experimento_id))
+         .where(ep.c.cliente == cliente, e.c.cliente == cliente, e.c.legado.is_(False), e.c.estado.in_(ESTADOS_VIVOS))
+         .order_by(e.c.id))
+    out = {}
+    for pieza_id, eid, nombre, estado in con.execute(q):
+        lista = out.setdefault(pieza_id, [])
+        if not any(x["id"] == eid for x in lista):
+            lista.append({"id": eid, "nombre": nombre, "estado": estado})
     return out

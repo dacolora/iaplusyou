@@ -140,6 +140,49 @@ pieza = Table("pieza", metadata,
     Column("guion", JSON),
     Column("legado_id", String(60), index=True),
     Column("extra", JSON, default=dict),
+    Column("edicion_version_id", Integer),
+)
+
+# --- editor (spec 2026-09-18-final-edition-editor-design.md §5) ---------------
+edicion = Table("edicion", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("cf_id", String(60), index=True),                # sesión de Crear de la que nació (nullable)
+    Column("tipo", String(8), nullable=False),              # video|imagen
+    Column("nombre", String(120), nullable=False),
+    Column("documento", JSON, nullable=False),
+    Column("version_n", Integer, nullable=False, default=0),  # CAS del autoguardado
+    Column("estado", String(12), nullable=False, default="borrador"),  # borrador|producida
+    Column("creada_por", String(80)),
+)
+
+edicion_version = Table("edicion_version", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("edicion_id", Integer, sa.ForeignKey("edicion.id"), nullable=False),
+    Column("n", Integer, nullable=False),
+    Column("documento", JSON, nullable=False),
+    Column("motivo", String(10), nullable=False),           # producir|manual
+    Column("creada_en", String(19), nullable=False),
+    sa.UniqueConstraint("edicion_id", "n", name="uq_edicion_version_n"),
+)
+
+material = Table("material", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("tipo", String(12), nullable=False),             # video|imagen|audio|png_texto|proxy|tira|forma_onda
+    Column("origen", String(12), nullable=False),           # crear|subida|catalogo|marca|voz|musica|sonido|efecto|grabacion|texto|traduccion
+    Column("url", Text, nullable=False),
+    Column("url_proxy", Text),
+    Column("hash", String(64), nullable=False),
+    Column("duracion_ms", Integer),
+    Column("ancho", Integer),
+    Column("alto", Integer),
+    Column("bytes", Integer, nullable=False, default=0),
+    Column("costo_usd", Float, default=0.0),
+    Column("padre_id", Integer),
+    Column("extra", JSON, default=dict),                    # palabras con tiempos, picos, cortes detectados
+    Column("usado_en", String(19)),
+    sa.UniqueConstraint("cliente", "hash", name="uq_material_hash"),
 )
 
 experimento = Table("experimento", metadata,
@@ -308,10 +351,46 @@ publicacion = Table("publicacion", metadata,
              sqlite_where=sa.text("estado IN ('en_cola','publicando','publicada')")),
 )
 
+# --- Gasto real por proyecto (docs/superpowers/plans/2026-09-18-gasto-real-por-proyecto.md) ---
+
+gasto = Table("gasto", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), nullable=False, index=True),
+    Column("creado_en", String(19), nullable=False),
+    Column("tipo", String(20), nullable=False),               # video|imagen|swap|guion|final|regla_producto|caption_organico|musica|otro
+    Column("usd", Float, nullable=False, default=0.0),
+    Column("proveedor", String(30)),
+    Column("referencia", String(160), nullable=False),        # f"{tipo}:{id}" — un cobro real, una fila
+    Column("detalle", String(300)),
+    Column("extra", JSON),
+    # Idempotencia de gastos.registrar: la segunda llamada con la misma
+    # referencia actualiza usd/detalle, nunca duplica (migración 0010).
+    sa.UniqueConstraint("cliente", "referencia", name="uq_gasto_referencia"),
+    sa.Index("ix_gasto_cliente_creado", "cliente", "creado_en"),
+)
+
 kv = Table("kv", metadata,
     Column("clave", String(120), primary_key=True),
     Column("valor", Text),
     Column("actualizado_en", String(19), nullable=False),
+)
+
+# --- Cuentas (docs/superpowers/plans/2026-09-19-cuentas-correo-verificado.md) ---
+# Tokens de verificación de correo y de restablecimiento de contraseña. El
+# usuario sigue viviendo en usuarios.json; acá solo va el sha256 del token
+# (nunca el token crudo), su tipo, para quién es, a qué correo se mandó,
+# cuándo vence y cuándo se usó — de un solo uso (migración 0011).
+
+token_cuenta = Table("token_cuenta", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("usuario", String(80), nullable=False, index=True),
+    Column("tipo", String(12), nullable=False),               # verificacion|restablecer
+    Column("correo", String(254), nullable=False),
+    Column("token_hash", String(64), nullable=False, unique=True),
+    Column("creado_en", String(19), nullable=False),
+    Column("vence_en", String(19), nullable=False),
+    Column("usado_en", String(19)),
+    Column("ip", String(45)),
 )
 
 # --- Sprints de contenido (docs/superpowers/specs/2026-09-16-sprints-design.md, Parte 1) ---

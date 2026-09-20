@@ -248,6 +248,63 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 `tareas/final_edition.py`; the dashboard routes are `fe_preparar`, `fe_guardar_guion`,
 `fe_producir`, `fe_descartar`.
 
+**Editor (capa 1, 2026-09):** the editor's source of truth is a JSON document
+(`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
+schema). `validar` is the contract everything else leans on: the principal `video` track
+must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
+`imagen` tracks have no timeline), every pista/clip id matches `^[A-Za-z0-9_-]{1,40}$`
+with clip ids unique across the document, `pngs` is `{text clip id: material id}`,
+keyframes have strictly increasing `t_ms`, audio clips keep `velocidad` 1.0 (no `atempo`
+yet), and `materiales` is DERIVED (given list ∪ clip `material_id`s ∪ `pngs` values), so
+`en_uso`/`marcar_uso` never trust the browser's list. The document is stored in `edicion` with CAS autosave (`ediciones.guardar`: `version_n` must match
+or `Conflicto`) and frozen copies in `edicion_version` (`versionar` takes SQLite's write
+lock before `MAX(n)`, same trick as `experimentos._bloquear`; `restaurar` migrates the
+frozen document before reusing it). Every file that costs money or time is a `material`
+row keyed by `UNIQUE(cliente, hash)` (`materiales.py`: never pay twice; `borrar` only
+deletes R2 objects under `clientes/<cliente>/materiales/` — any other key, e.g. a Crear
+piece's video with origen `crear`, loses just its row — and propagates a failed R2 delete
+instead of swallowing it, so the row survives for retry — `limpiar_sin_uso` skips those
+rows too; `en_uso` scans live documents AND frozen `edicion_version`s;
+`obtener_o_crear`'s `producir()` can still run twice in a true race, accepted). `final_edition/motor/` compiles a resolved document into
+one ffmpeg filtergraph (`compilador.py`, pure): a `transicion` of `d` ms on clip A
+occupies output `[fin_A, fin_A + d)` while B keeps its timeline position — the extra
+frames come from A's tail (`recorte.hasta_ms + d × velocidad`), and a hard cut is
+`concat,settb=1/fps`. Audio chains one filter per clip
+(`atrim`/`asetpts`/`volume`/`afade` at real clip edges, `adelay` past the window start),
+`amix`ed per role at ≥ 2 clips into `mezcla.filtro_mezcla`, with `anullsrc` covering a
+window with no audio clip so `concat -c copy` never breaks on a stream mismatch, and `-t`
+always closes the output (the mix carries `apad` too); only x/y keyframes are interpreted
+(piecewise-linear in `t` — escala/opacidad/rotación wait for PNG-alpha layers). Free
+texts are browser-rendered PNGs (`rutas["png:<clip_id>"]`, `ancho_px`/`alto_px` per clip,
+400×200 fallback) placed via `final_edition/geometria.py`'s
+fraction→pixel math (round-half-up; `tests/fixtures/geometria_casos.json` is the parity
+table the browser must match too), scaled to that box (`scale=w:h`) with per-clip
+`opacidad` (`colorchannelmixer`); the native scene sound is just an `audio` pista with
+`rol_audio: sonido` over the same material (all non-voz/musica roles `amix` into
+`filtro_mezcla`'s sonido input); `tpad=stop_mode=clone` pads the main track when the audio
+outlasts it; subtitles get `fontsdir=static/fonts` and every path inside the graph goes
+through `_ruta_filtro` (two-level ffmpeg escaping — `'` becomes `\'\''`). NOT rendered in
+capa 1: `superpuesto` (PIP — `compilar` raises if it has clips), `rotacion` and
+`marca.marca_de_agua`; and one `-ss/-t` input per principal clip (memory bound for
+reordered clips) is due before capa 3. `motor/tramos.py` splits into windows past
+`PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
+exceeding budget at one instant is the only hard error — and `motor.renderizar` cleans
+partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
+(`motor/subtitulos.py`) only when the host ffmpeg has libass (`render.tiene_libass()`,
+cached: the VPS does, the dev Mac doesn't — `renderizar` reports the omission via
+`on_etapa`). Worker tasks in `tareas/edicion.py`: `edicion_producir` renders the FROZEN
+version (`max_intentos=1`, no gasto yet — capa 2 adds voice/music via
+`gastos.registrar_seguro`; the route must `crear_final` BEFORE enqueuing — the task
+raises if `actualizar_final`/`apuntar_final` find no row — and `idioma`/`pais` are
+shape-checked before the work folder exists; `preparar_rutas` stamps `imagen` clip sizes
+from the material row and runs `compilador.verificar_recortes` with the known
+`duracion_ms`), uploads to versioned keys
+`clientes/<c>/finales/<final_id>__v<version_id>.mp4`/`.png` (thumbnail first), errors go
+through `cola.sin_token`/`cola.recortar`, and wipes its work folder at start and on
+success (kept on failure, for the `.filtergraph.txt`); `edicion_proxy` (540p, frame strip,
+scene cuts, `aresample=48000`-first waveform peaks) wipes its folder in `finally`; the
+daily `materiales_limpiar` (`worker.PERIODICAS`) is what deletes efímero materials.
+
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
 sueltos" is the one `legado=True` row per client and is untouched) names countries with
@@ -264,14 +321,32 @@ appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
-launch (resumable). UI: sidebar tab "Experimentos" (`_tab_experimentos.html`, tree
-experiment -> country -> piece) and "Meter en experimento" in Crear's detail modal.
+launch (resumable). UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
+every piece with a public URL (`experimentos.elegibles`: Crear videos AND images, sprint
+pieces, finals; `origen`, `formato`, `en_experimentos`), the user ticks pieces and a 3-step
+form appears (where: countries + daily budget; how much: cap + days with a live count;
+review: piece × country grid, auto name «Prueba 20 sep · 3 piezas · CO, MX», "Avanzado"
+with objective/attribution/mode/URL). One `POST exp_probar` runs
+`experimentos.crear_con_piezas` (experiment + `experimento_pieza` rows in ONE transaction,
+`validar_combinacion`: a final only in its country, clones/images only in the experiment's
+countries) and enqueues `exp_lanzar` — activating is still a separate click. The old
+"+ Nuevo experimento" form is gone: `exp_crear` has no UI any more and is kept for
+tests/scripts; `exp_agregar_pieza`/`exp_meter_pieza` remain for an `armando` experiment's
+card. Crear (and the legacy "Anuncios sueltos" queue) link to `#experimentos?piezas=<pieza_id>`
+(the gallery opens with that piece ticked); Catálogo does NOT — "Crear experimento" on a
+product redirects with `?exp_nombre=&exp_destino=`, which step 3 prefills. Images are real
+Meta ads (`crear_creative_imagen`, no video upload); the decisor skips ThruPlay for them
+(`contexto["es_imagen"]`), never asks `derivar`/`rescatar` on one (a winner only scales, a
+loser is only paused — `derivaciones` refuses image sessions), and they never enter the
+organic publish path (`organico`/`publicador` are video-only; for an image piece `url_video`
+IS the image URL, so every gate also checks `es_imagen`). `experimentos.ESTADOS_VIVOS`
+(the gallery's «en prueba» label) includes `decidido`: winners keep delivering there.
 
 **Decisor, escalera y modos** (`decisor.py`, `modos.py`, `propuestas.py`, `acciones.py`,
 `derivaciones.py`, `notificaciones.py`): the part of the loop that closes on its own.
 `decisor.decidir(snapshots, reglas, contexto)` is a pure function — traffic gate first
 (impressions/spend/hours evidence, then CPC/CTR/ThruPlay thresholds; zero impressions is
-never a loser), sales gate second only with attribution (ROAS/CPA after
+never a loser; ThruPlay is skipped when `contexto["es_imagen"]`), sales gate second only with attribution (ROAS/CPA after
 `ventana_ventas_horas`), top-third ranking per country when ≥ 3 ads — returning
 `ganador | perdedor | inconcluso | pendiente` plus an action. Rules layer
 `REGLAS_DEFECTO ← proyecto.json["reglas_experimentos"] ← experimento.reglas`. The worker
@@ -370,6 +445,40 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
 `promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
+
+**Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): there are no
+credits or balances — the product shows the real provider price. Every paying task registers
+one row per charge through `gastos.registrar_seguro(cliente, tipo, usd, referencia, ...)`
+(never raises), with a reference that includes the task id (`final:<id>:t<tarea_id>`,
+`video:<cf_id>:t<tarea_id>`, …) so re-runs add history instead of overwriting it; the
+reference is unique per cliente, so registering is idempotent. **Any new task that pays a
+provider must call it** where the real figure is known (on failure after paying, register what
+was paid with a detalle). `gastos.estimar(tipo, **params)` gives the "≈ US$" shown next to
+buttons from `gastos.TARIFAS` (video/imagen from `flowplus_modelos`, `final` per country,
+guion, regla_producto, caption_organico) and returns "precio no disponible" rather than
+guessing. Meta spend is NOT in `gasto` — it comes from `metrica_snapshot` via `tablero` and is
+shown next to generation spend in its own currency. UI: sidebar chip "Este mes: US$ X
+generación · Y pauta" (context processor, template renders only, cached), Configuración ›
+Gasto (by type, history, CSV), Tablero tile, admin panel column.
+
+**Cuentas** (`usuarios.py`, `cuentas.py`, table `token_cuenta`, migration 0011): users still
+live in `usuarios.json` (now with `correo`, `correo_verificado`, `session_version`,
+`creado_en`; correo unique across users, usuario validated `[a-z0-9._-]{3,40}`), while
+one-time tokens (verification 24 h, password reset 1 h) live in SQLite as sha256 hashes —
+emitting a new token invalidates the previous ones of that type, `consumir` marks it used.
+Flows: registration asks for correo and sends a verification link; `/verificar/<token>`;
+`/reenviar-verificacion`; `/recuperar` (always the same neutral answer) →
+`/restablecer/<token>` (GET validates without consuming, POST consumes, changes the password
+and bumps `session_version` so every other session dies — `_verificar_sesion` compares the
+cookie's `sv` on each request and rejects sessions whose usuario no longer exists);
+Configuración › Cuenta (change correo → re-verify; change password → current required).
+Without a verified correo a cliente cannot connect Meta or a store (`_requiere_correo_verificado`;
+admins exempt); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
+`kv`, 5/h) per correo and per IP on registration, resend and recovery. Links are built from
+`PLATAFORMA_URL` (never from the `Host` header) and the app 404s requests whose host isn't that
+one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
+Lax, Secure when the platform URL is https. Emails go through `notificaciones.enviar(html=)` —
+if SMTP is missing the flows still work and the admin panel shows the warning.
 
 ## Agent skills
 

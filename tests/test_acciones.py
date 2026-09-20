@@ -18,7 +18,7 @@ def ent(base_temporal, monkeypatch):
     ep = ex.agregar_pieza("acme", eid, pid, "CO")
     ex.actualizar_pieza("acme", ep, meta_ad_id="ad1", estado="activo")
     ex.actualizar("acme", eid, estado="corriendo", meta_campaign_id="c1")
-    return {"ac": acciones, "ex": ex, "eid": eid, "ep": ep, "pid": pid, "llamadas": llamadas}
+    return {"ac": acciones, "ex": ex, "eid": eid, "ep": ep, "pid": pid, "llamadas": llamadas, "db": base_temporal}
 
 
 def test_pedir_respeta_modo(ent):
@@ -414,6 +414,23 @@ def test_ejecutar_publicar_organico_sin_canales_no_es_error(org):
     assert "publicado_organico" not in _pieza_ep(org)["extra"]
 
 
+def test_ejecutar_publicar_organico_salta_las_imagenes(org):
+    """F1: organico/publicador son solo de video. Una pieza de imagen no
+    crea publicaciones, no redacta (Claude) ni encola; el mensaje lo dice."""
+    import cola
+    from tests.test_experimentos_db import _pieza_imagen
+    ac, ex, eid = org["ac"], org["ex"], org["eid"]
+    pid = _pieza_imagen(org["db"])
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.actualizar_pieza("acme", ep, meta_ad_id="ad_img", estado="activo")
+    msg = ac.ejecutar("acme", eid, "publicar_organico", {"ep_id": ep})
+    assert "Las imágenes no se publican en orgánico todavía." in msg
+    assert org["organico"].listar("acme", pieza_id=pid) == [] and org["redactadas"] == []
+    assert cola.consultar_por_job(f"acme__pieza{pid}__organico") is None
+    pz = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert "publicado_organico" not in (pz["extra"] or {})
+
+
 def test_pedir_publicar_organico_en_semi_propone_con_textos_y_en_auto_publica(org):
     import cola
     import propuestas as pr
@@ -458,3 +475,55 @@ def test_pedir_publicar_organico_propone_aunque_redactar_falle(org, monkeypatch)
     payload = pr.pendientes("acme", eid)[0]["payload"]
     assert "captions" not in payload and payload["captions_error"] == "sin base"
     assert payload["plataformas"] == ["instagram", "facebook"]
+
+
+# ---- Task 3: precio a la vista en las propuestas de derivar / rescatar ----
+
+def test_pedir_derivar_y_rescatar_llevan_precio_estimado(ent):
+    """`pedir` deja en payload["precio_estimado"] {"usd", "texto"} con
+    gastos.estimar: derivar = n_reediciones × final (n_paises × el precio de
+    un país, sin descuento por país extra — I2) + n_regeneraciones × (video
+    + final), valorando CADA regeneración k con el modelo que esa
+    regeneración de verdad usa (`derivaciones.modelo_regeneracion`: nunca el
+    modelo de la sesión original, que las reglas por defecto ni siquiera
+    repiten — I1); rescatar escalón 1 = una re-edición = final de un país."""
+    import creative_flow as cf
+    import derivaciones as dv
+    import gastos
+    import propuestas as pr
+    ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
+    # La pieza del fixture viene de la sesión cf_1 (legado "cf_1__es_CO").
+    cf.crear("acme", [], ["Chancla"], [], "camina", 8, "", "A", legado_id="cf_1")
+    cf.actualizar("acme", "cf_1", modelo="wan3", estado="video_listo")
+
+    assert ac.pedir("acme", eid, "derivar", {"ep_id": ep}, "ganador")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "derivar"][0]
+    precio = prop["payload"]["precio_estimado"]
+    final_2 = 2 * gastos.estimar("final", paises=1)["usd"]      # el experimento tiene CO y MX
+    # Reglas por defecto: 2 regeneraciones desde "wan3" — la 1.ª va a
+    # "kling_o3_pro" y la 2.ª a "seedance25" (nunca "wan3", el original).
+    modelos_regen = [dv.modelo_regeneracion({"modelo": "wan3"}, k) for k in range(2)]
+    assert modelos_regen == ["kling_o3_pro", "seedance25"]
+    videos = [gastos.estimar("video", modelo=m, duracion=8)["usd"] for m in modelos_regen]
+    esperado = round(3 * final_2 + sum(v + final_2 for v in videos), 4)   # reglas por defecto: 3 re-ediciones, 2 regeneraciones
+    assert precio["usd"] == esperado and precio["usd"] > 0
+    assert precio["texto"] == f"{gastos.formatear(esperado)} aprox."
+
+    assert ac.pedir("acme", eid, "rescatar", {"ep_id": ep}, "perdedor")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "rescatar"][0]
+    precio = prop["payload"]["precio_estimado"]
+    assert precio["usd"] == gastos.TARIFAS["final"] and precio["texto"] == "US$ 0,10 aprox."
+
+
+def test_pedir_precio_no_disponible_no_bloquea(ent):
+    """Sin sesión de Crear detrás de la pieza (o sin modelo con tarifa) el
+    precio es «precio no disponible» y la propuesta se crea igual. Las
+    acciones que no producen no llevan precio."""
+    import propuestas as pr
+    ac, eid, ep = ent["ac"], ent["eid"], ent["ep"]
+    assert ac.pedir("acme", eid, "derivar", {"ep_id": ep}, "ganador")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "derivar"][0]
+    assert prop["payload"]["precio_estimado"] == {"usd": None, "texto": "precio no disponible"}
+    assert ac.pedir("acme", eid, "escalar", {"pais": "CO", "ep_id": ep}, "ganador")[0] == "propuesta"
+    prop = [p for p in pr.pendientes("acme", eid) if p["accion"] == "escalar"][0]
+    assert "precio_estimado" not in prop["payload"]

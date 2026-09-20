@@ -283,7 +283,7 @@ def test_tarjeta_lista_trae_el_editor_rearmar_y_version_b(app):
     assert f'action="/cliente/acme/creative_flow/{cf_id}/prompt"' in html and 'name="prompt_a"' in html and 'name="prompt_b"' in html
     assert f'action="/cliente/acme/creative_flow/{cf_id}/rearmar"' in html
     assert 'name="version_b" value="si"' in html and "otro" in html      # diferencia_b visible
-    assert "Generar (~$0.8)" in html or "Generar (~$0.80)" in html          # 8 s x 0,10
+    assert "Generar ≈ US$ 0,80" in html          # 8 s x 0,10, formato de gastos.formatear
     cf.actualizar("acme", cf_id, director={"estado": "fallback", "aviso": "Anthropic caído", "prompt_b": None})
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert "no pudo armar los planos" in html and "Anthropic caído" in html and 'name="version_b"' not in html

@@ -646,3 +646,11 @@ def test_rutas_organico_rechazan_cliente_cruzado(app, base_temporal):
     # Con sesión de acme, una publicación de `otro` tampoco se reintenta por id.
     app["c"].post(f"/cliente/acme/organico/{pub}/reintentar")
     assert org.obtener("otro", pub)["estado"] == "error" and app["encolados"] == []
+
+
+def test_boton_escribir_texto_con_ia_muestra_precio(app, base_temporal):
+    """Task 3: precio a la vista antes de gastar — «Escribir texto con IA ≈ US$ 0,01»."""
+    eid = _experimento()
+    _pieza_en(base_temporal, eid)
+    html = _seccion(_html(app), "experimentos")
+    assert "Escribir texto con IA ≈ US$ 0,01</button>" in html

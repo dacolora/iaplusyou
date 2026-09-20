@@ -369,6 +369,14 @@ plataforma pedida y en cada una {"titulo": "...", "caption": "..."}.
 Ejemplo: {"instagram": {"titulo": "...", "caption": "..."}, "youtube": {"titulo": "...", "caption": "..."}}"""
 
 
+class RespuestaInvalida(ValueError):
+    """Claude respondió — la llamada ya se cobró — pero el texto no vino en
+    el formato que se pedía (JSON inválido, sin las plataformas pedidas).
+    Subclase de ValueError para no romper a quien ya atrapa `Exception`;
+    quien necesite distinguir "se cobró igual" de "la llamada ni corrió"
+    (p. ej. `organico.redactar`) atrapa este tipo aparte."""
+
+
 def caption_organico(contexto, plataformas):
     """Una llamada a Claude: título + caption de publicación orgánica por
     plataforma. `contexto` = {"nombre_producto", "descripcion", "url_compra",
@@ -376,7 +384,10 @@ def caption_organico(contexto, plataformas):
     claves de organico.PLATAFORMAS. Devuelve {plataforma: {"titulo",
     "caption"}}. Lanza excepción ante cualquier fallo (sin API key, red,
     JSON inválido): organico.redactar la atrapa y usa su fallback
-    determinista, así redactar nunca deja a la persona sin texto."""
+    determinista, así redactar nunca deja a la persona sin texto. Un fallo
+    ANTES de que Claude conteste (sin API key, red) sale como una excepción
+    cualquiera; uno DESPUÉS (JSON inválido o sin ninguna plataforma pedida)
+    sale como `RespuestaInvalida`, porque la llamada ya se cobró."""
     plataformas = list(plataformas)
 
     def _dato(etiqueta, valor, tope):
@@ -409,14 +420,17 @@ def caption_organico(contexto, plataformas):
         texto = texto.split("\n", 1)[1] if "\n" in texto else texto[3:]
         if texto.rstrip().endswith("```"):
             texto = texto.rstrip()[:-3]
-    datos = json.loads(texto.strip())
+    try:
+        datos = json.loads(texto.strip())
+    except json.JSONDecodeError as e:
+        raise RespuestaInvalida(f"Claude no devolvió JSON válido: {e}") from e
     if not isinstance(datos, dict):
-        raise ValueError("Claude no devolvió un objeto JSON por plataforma.")
+        raise RespuestaInvalida("Claude no devolvió un objeto JSON por plataforma.")
     salida = {}
     for p in plataformas:
         v = datos.get(p)
         if isinstance(v, dict):
             salida[p] = {"titulo": str(v.get("titulo") or ""), "caption": str(v.get("caption") or "")}
     if not salida:
-        raise ValueError("Claude no devolvió texto para ninguna plataforma pedida.")
+        raise RespuestaInvalida("Claude no devolvió texto para ninguna plataforma pedida.")
     return salida

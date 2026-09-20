@@ -62,7 +62,9 @@
       });
     });
 
-    var desdeHash = location.hash.replace('#', '');
+    // El hash puede traer query propia de una pestaña (#experimentos?piezas=1,2
+    // desde Crear): la pestaña es lo que va antes del «?».
+    var desdeHash = location.hash.replace('#', '').split('?')[0];
     var desdeStorage = null;
     try { desdeStorage = localStorage.getItem(STORAGE_KEY); } catch (e) {}
     // 'idea' era una pestaña propia y ahora vive dentro de FlowPlus: quien la

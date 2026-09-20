@@ -1,6 +1,6 @@
 {# Configuración = puesta a punto del proyecto. Orden: Puesta a punto (llaves
    por servicio, `llaves` de dashboard._estado_llaves: solo estado, nunca el
-   valor) → Conectar tu tienda → Pixel → Canales orgánicos → Correo de avisos → Nombre → Modelos →
+   valor) → Cuenta (correo/contraseña del usuario) → Gasto (real del mes + historial) → Conectar tu tienda → Pixel → Canales orgánicos → Correo de avisos → Nombre → Modelos →
    Logos → Marca → informe (admin). Las reglas del decisor ya no están aquí:
    viven en Experimentos › «Reglas del motor» (ruta cfg_reglas). #}
 
@@ -50,6 +50,139 @@
   </article>
   {% endfor %}
 </div>
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
+{# ---- Cuenta: correo (verificado o no) y contraseña del usuario de la
+   sesión. cuenta_actual/smtp_ok vienen del context processor
+   _cuenta_en_plantillas; el admin ve el bloque con su propia cuenta. ---- #}
+<h2 id="config-cuenta">Cuenta</h2>
+{% if cuenta_actual is defined and cuenta_actual %}
+<p class="vacio" style="padding-top:0;">
+  Usuario <strong>{{ session['usuario'] }}</strong>
+  {% if cuenta_actual.correo %}
+  · correo <strong>{{ cuenta_actual.correo }}</strong>
+  {% if cuenta_actual.correo_verificado %}<span class="tag-estado tag-en-uso">confirmado</span>
+  {% else %}<span class="tag-estado tag-advertencia">sin confirmar</span>{% endif %}
+  {% else %}
+  · <span class="tag-estado tag-advertencia">sin correo</span>
+  {% endif %}
+</p>
+{% if cuenta_actual.correo and not cuenta_actual.correo_verificado %}
+<p class="vacio" style="padding-top:0;">
+  Abre el enlace que te mandamos a {{ cuenta_actual.correo }} para confirmarlo.
+  {% if smtp_ok %}
+  <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="inline"><button type="submit" class="btn-guardar btn-xs">Reenviar el correo</button></form>
+  {% else %}
+  <span class="tag-error">El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.</span>
+  {% endif %}
+</p>
+{% endif %}
+<div class="fila-campos-idea" style="align-items:flex-start;">
+  <form method="post" action="{{ url_for('cuenta_correo') }}" class="form-nueva-idea" id="form-cuenta-correo">
+    <h3 style="margin-top:0;">{% if cuenta_actual.correo %}Cambiar correo{% else %}Poner correo{% endif %}</h3>
+    <label class="campo-label">Correo nuevo</label>
+    <input type="email" name="correo" autocomplete="email" placeholder="tu@empresa.com" required>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Contraseña actual</label>
+    <input type="password" name="password" autocomplete="current-password" required>
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">El correo nuevo queda sin confirmar hasta que abras el enlace que le mandamos.</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+  </form>
+  <form method="post" action="{{ url_for('cuenta_password') }}" class="form-nueva-idea" id="form-cuenta-password">
+    <h3 style="margin-top:0;">Cambiar contraseña</h3>
+    <label class="campo-label">Contraseña actual</label>
+    <input type="password" name="password_actual" autocomplete="current-password" required>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Nueva (mínimo 8 caracteres)</label>
+    <input type="password" name="password" autocomplete="new-password" required minlength="8">
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Repítela</label>
+    <input type="password" name="confirmacion" autocomplete="new-password" required minlength="8">
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue.</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Cambiar contraseña</button>
+  </form>
+</div>
+{% else %}
+<p class="vacio">No hay una cuenta en esta sesión.</p>
+{% endif %}
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
+{# ---- Gasto real (Task 3): lo pagado a los proveedores este mes, en USD;
+   la pauta de Meta al lado, en la moneda de la cuenta. Contexto de
+   ver_cliente: gasto_mes, pauta_mes, gastos_por_tipo, gastos_historial. ---- #}
+<div class="panel-cabecera tb-cabecera" id="config-gasto">
+  <div>
+    <h2 style="margin-top:0;">Gasto</h2>
+    <p class="vacio" style="padding-top:0;">
+      Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,
+      final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
+      muestran el precio aproximado antes de gastar; esta lista es el precio real después.
+    </p>
+  </div>
+  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
+</div>
+
+<div class="tb-tiles gasto-tiles">
+  <div class="kpi-tile">
+    <span>Generación este mes</span>
+    <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores{% else %}sin generación pagada{% endif %}</small>
+  </div>
+  {% for p in pauta_mes %}
+  <div class="kpi-tile">
+    <span>Pauta este mes{% if pauta_mes | length > 1 %} · {{ p.moneda }}{% endif %}</span>
+    <strong>{{ p.gasto | dinero(p.moneda) }}</strong>
+    <small>se cobra en tu cuenta de Meta</small>
+  </div>
+  {% else %}
+  <div class="kpi-tile">
+    <span>Pauta este mes</span>
+    <strong class="tb-sin-dato">—</strong>
+    <small>sin pauta corriendo</small>
+  </div>
+  {% endfor %}
+</div>
+
+{% if gastos_por_tipo %}
+<h3 style="margin-top:1.2rem;">Por tipo</h3>
+<table class="gasto-tabla">
+  <thead><tr><th>Tipo</th><th class="num">Cantidad</th><th class="num">US$</th></tr></thead>
+  <tbody>
+    {% for t in gastos_por_tipo %}
+    <tr><td>{{ t.nombre }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td></tr>
+    {% endfor %}
+    <tr class="gasto-total"><td>Total</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td></tr>
+  </tbody>
+</table>
+{% endif %}
+
+{# M6: el límite de 200 es fijo (sin paginación real); el scroll + la nota
+   de abajo alcanzan para el brief de hoy, pero si el volumen de cobros
+   crece, una Task futura debería paginar de verdad en vez de solo recortar. #}
+<h3 style="margin-top:1.2rem;">Historial</h3>
+{% if gastos_historial %}
+<div class="gasto-historial">
+  <table class="gasto-tabla">
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th class="num">US$</th></tr></thead>
+    <tbody>
+      {% for g in gastos_historial %}
+      <tr>
+        <td class="gasto-fecha">{{ g.creado_en[:16] | replace("T", " ") }}</td>
+        <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo) }}</td>
+        <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
+        <td class="num">{{ g.usd | usd }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">Se muestran los últimos {{ gastos_historial | length }} cobros{% if gastos_historial | length >= 200 %} (el CSV trae todos los del mes){% endif %}.</p>
+{% else %}
+<p class="vacio">Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.</p>
+{% endif %}
+<p class="vacio gasto-nota" style="font-size:.78rem;">
+  Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta
+  y no entra en este total. Ningún gasto bloquea una acción: solo se informa.
+</p>
 
 <hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 

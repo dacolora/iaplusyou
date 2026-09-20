@@ -4,8 +4,11 @@
    paises_fe, capacidades_meta; (Bloque 5) atribucion_sugerida, atribuciones_exp,
    pedidos_por_exp ({eid: pedidos atribuidos}); (Bloque 6) objetivo_exp_sugerido,
    nombres_objetivo_exp. Nada se lanza ni activa sin un
-   clic explícito con confirm() cuando gasta. Catálogo › Productos manda acá
-   con ?exp_nombre=&exp_destino= para prellenar «Nuevo experimento». Campañas
+   clic explícito con confirm() cuando gasta. (Galería primero, spec
+   2026-09-20) la pestaña abre con todas las piezas listas (elegibles_exp) con
+   casilla; «Probar en Meta» abre tres pasos (dónde, cuánto, revisar) que
+   terminan en un POST a exp_probar — todo nace en pausa. Catálogo › Productos
+   manda acá con ?exp_nombre=&exp_destino= y el paso 3 los prellena. Campañas
    ya no es pestaña: la conexión con Meta (_meta_conectar.html) vive acá y los
    anuncios sueltos que quedaron de esa pestaña se pintan al final
    (_anuncios_sueltos.html, solo si `ads` no está vacío). Las reglas por
@@ -23,43 +26,109 @@
 
 {% include "_meta_conectar.html" %}
 
-{% if capacidades_meta.estado != "conectado" %}
-<p class="tag-error">Conecta Meta (arriba) para crear experimentos.</p>
-{% else %}
-<details class="swap-card" id="nuevo-experimento">
-  <summary class="swap-card-resumen">+ Nuevo experimento</summary>
-  <form method="post" action="{{ url_for('exp_crear', cliente=cliente) }}" class="form-experimento">
-    <label>Nombre <input name="nombre" required maxlength="200"></label>
-    <label>Objetivo
-      <select name="objetivo">{% for o in objetivos_exp %}<option value="{{ o }}" {% if o == objetivo_exp_sugerido %}selected{% endif %}>{{ nombres_objetivo_exp.get(o, o) }}{% if o == objetivo_exp_sugerido %} (sugerido){% endif %}</option>{% endfor %}</select>
+{# ---- La galería primero (spec 2026-09-20): todo lo generado, marcas y pruebas ---- #}
+<section id="exp-galeria" class="exp-galeria">
+  <div class="exp-galeria-cab">
+    <h3>Piezas para probar</h3>
+    <div class="exp-filtros" id="exp-filtros">
+      {% for f, etiqueta in [("todo", "Todo"), ("video", "Videos"), ("imagen", "Imágenes"), ("final", "Finales"), ("sprint", "Sprints")] %}
+      <button type="button" class="chip{% if f == 'todo' %} activo{% endif %}" data-filtro="{{ f }}">{{ etiqueta }}</button>
+      {% endfor %}
+    </div>
+  </div>
+  {% if not elegibles_exp %}
+  <p class="vacio">Todavía no hay videos ni imágenes listos. Genera algo en Crear o en un sprint y vuelve.</p>
+  {% endif %}
+  <div class="exp-tarjetas">
+    {% for el in elegibles_exp %}
+    <label class="exp-tarjeta" data-tipo="{{ 'imagen' if el.es_imagen else ('final' if el.tipo == 'final' else 'video') }}" data-origen="{{ el.origen }}">
+      <input type="checkbox" name="piezas" value="{{ el.pieza_id }}" form="exp-probar"
+             data-pais="{{ el.pais or '' }}" data-imagen="{{ '1' if el.es_imagen else '0' }}" data-nombre="{{ el.nombre }}"
+             data-final="{{ '1' if el.tipo == 'final' else '0' }}">
+      <span class="exp-tarjeta-media">
+        {% if el.url_miniatura %}<img src="{{ el.url_miniatura }}" alt="" loading="lazy">
+        {% elif el.es_imagen %}<img src="{{ el.url_video }}" alt="" loading="lazy">
+        {% else %}<video src="{{ el.url_video }}" muted playsinline preload="metadata"></video>{% endif %}
+      </span>
+      <span class="exp-tarjeta-texto">
+        <strong>{{ el.nombre }}</strong>
+        <small>{% if el.es_imagen %}Imagen{% if el.formato %} · {{ el.formato }}{% endif %}{% elif el.tipo == "final" %}Final {{ el.idioma }}_{{ el.pais }}{% else %}Video{% if el.duracion_s %} · {{ el.duracion_s | int }} s{% endif %}{% if el.formato %} · {{ el.formato }}{% endif %}{% endif %}
+          · {% if el.origen == "sprint" %}Sprint {{ el.sprint.sprint_nombre }} · Campaña {{ el.sprint.campana_n }}{% elif el.origen == "final" %}Final edition{% else %}Crear{% endif %}</small>
+        {% for x in el.en_experimentos %}<span class="tag-estado">en prueba: {{ x.nombre }}</span>{% endfor %}
+      </span>
     </label>
+    {% endfor %}
+  </div>
+</section>
+
+{% if capacidades_meta.estado != "conectado" %}
+<div class="exp-barra" id="exp-barra" hidden><span id="exp-barra-texto"></span> <span class="tag-error">Conecta Meta en Configuración para probar</span></div>
+{% else %}
+<div class="exp-barra" id="exp-barra" hidden>
+  <span id="exp-barra-texto">0 piezas marcadas</span>
+  <button type="button" class="btn-generar btn-sm" id="exp-abrir-pasos">Probar en Meta →</button>
+</div>
+
+{# novalidate: los min/max nativos de un paso oculto (p. ej. el presupuesto de un país sin
+   marcar) bloquearían el envío sin decir nada; el JS avisa y exp_probar valida todo. #}
+<form method="post" action="{{ url_for('exp_probar', cliente=cliente) }}" id="exp-probar" class="exp-pasos" hidden novalidate
+      data-minimo="{{ minimo_diario_exp }}" data-moneda="{{ moneda_exp }}">
+  <ol class="exp-pasos-nav"><li data-ir="1" class="activo">1 · Dónde</li><li data-ir="2">2 · Cuánto</li><li data-ir="3">3 · Revisar</li></ol>
+
+  <section data-paso="1">
+    <h4>¿Dónde se prueban?</h4>
+    <p class="vacio">Presupuesto diario por país en {{ moneda_exp }} (la moneda de tu cuenta de Meta; mínimo {{ minimo_diario_exp }}).</p>
     <fieldset class="exp-paises">
-      <legend>Países y presupuesto diario en {{ moneda_exp }} — la moneda de tu cuenta de Meta, sin importar el país (mínimo {{ minimo_diario_exp }})</legend>
       {% for codigo, p in paises_fe.items() %}
       <label class="fe-destino">
-        <input type="checkbox" name="paises" value="{{ codigo }}"> {{ p.bandera }} {{ p.nombre }}
-        <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" placeholder="{{ minimo_diario_exp }}" style="width:8rem;">
+        <input type="checkbox" name="paises" value="{{ codigo }}" class="exp-pais-check"> {{ p.bandera }} {{ p.nombre }}
+        <input type="number" name="presupuesto_{{ codigo }}" min="{{ minimo_diario_exp }}" step="any" value="{{ minimo_diario_exp }}" style="width:8rem;">
       </label>
       {% endfor %}
     </fieldset>
+    <label>Edad <input type="number" name="edad_min" value="18" min="13" max="65" style="width:4rem;"> – <input type="number" name="edad_max" value="65" min="13" max="65" style="width:4rem;"></label>
+    <div class="exp-pasos-botones"><button type="button" class="btn-guardar btn-sm" data-ir="2">Siguiente →</button></div>
+  </section>
+
+  <section data-paso="2" hidden>
+    <h4>¿Cuánto y por cuánto tiempo?</h4>
     <div class="fe-opciones">
-      <label>Días <input type="number" name="dias" value="7" min="1" max="90"></label>
       <label>Tope total ({{ moneda_exp }}) <input type="number" name="tope_total" min="0" step="any" required></label>
-      <label>Edad <input type="number" name="edad_min" value="18" min="13" max="65" style="width:4rem;"> – <input type="number" name="edad_max" value="65" min="13" max="65" style="width:4rem;"></label>
-      <label>URL de destino <input type="url" name="destino_url" value="{{ url_for('landing_cliente', cliente=cliente, _external=True) }}" required></label>
-      <label>Modo
-        <select name="modo">{% for m in modos_exp %}<option value="{{ m }}" {% if m == "manual" %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
-      </label>
-      <label>Atribución
-        <select name="atribucion">{% for a in atribuciones_exp %}<option value="{{ a }}" {% if a == atribucion_sugerida %}selected{% endif %}>{{ a }}{% if a == atribucion_sugerida %} (sugerida){% endif %}</option>{% endfor %}</select>
-      </label>
+      <label>Días <input type="number" name="dias" value="7" min="1" max="90"></label>
     </div>
-    <p class="vacio exp-ayuda-modo">Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar (no gastan) se hacen solos; escalar, derivar, rescatar y activar esperan tu aprobación. Auto: todo se ejecuta solo, salvo cuando el tope está alcanzado.</p>
-    <p class="vacio exp-ayuda-modo">Objetivo — qué optimiza Meta: <strong>Compras</strong> (el conjunto optimiza por compras reportadas por el Pixel; requiere el Pixel activo y atribución pixel) o <strong>Tráfico</strong> (clics al enlace; sirve con cualquier atribución). No se puede cambiar después de lanzar: el sugerido sale del Pixel comprobado en Configuración.</p>
-    <p class="vacio exp-ayuda-modo">Atribución — con qué se miden las ventas: <strong>pixel</strong> (Meta reporta compras y ROAS; requiere el Pixel disparando), <strong>tienda</strong> (pedidos de tu Shopify/WooCommerce que llegan con la pieza en la URL) o <strong>ninguna</strong> (solo tráfico). La sugerida sale de lo que tienes conectado en Configuración: pulsa «Comprobar Pixel» allí para que la sugerencia lo tenga en cuenta.</p>
-    <button type="submit" class="btn-generar btn-sm">Crear experimento</button>
-  </form>
-</details>
+    <p class="exp-cuenta" id="exp-cuenta"></p>
+    <div class="exp-pasos-botones"><button type="button" class="btn-sm" data-ir="1">← Atrás</button> <button type="button" class="btn-guardar btn-sm" data-ir="3">Siguiente →</button></div>
+  </section>
+
+  <section data-paso="3" hidden>
+    <h4>Revisar</h4>
+    <p class="vacio">Cada casilla es un anuncio (pieza × país). Las finales solo van a su país.</p>
+    <div id="exp-cuadricula" class="exp-cuadricula"></div>
+    {# Desde Catálogo › Productos («Crear experimento») llega ?exp_nombre=&exp_destino=:
+       un nombre ya puesto cuenta como «tocado» para que el JS no lo pise con el automático. #}
+    <label>Nombre <input name="nombre" id="exp-nombre" maxlength="200" placeholder="se genera solo" value="{{ request.args.get('exp_nombre', '') }}"{% if request.args.get('exp_nombre') %} data-tocado="1"{% endif %}></label>
+    <details class="exp-avanzado">
+      <summary>Avanzado (objetivo, atribución, modo, destino)</summary>
+      <div class="fe-opciones">
+        <label>Objetivo
+          <select name="objetivo">{% for o in objetivos_exp %}<option value="{{ o }}" {% if o == objetivo_exp_sugerido %}selected{% endif %}>{{ nombres_objetivo_exp.get(o, o) }}{% if o == objetivo_exp_sugerido %} (sugerido){% endif %}</option>{% endfor %}</select>
+        </label>
+        <label>Atribución
+          <select name="atribucion">{% for a in atribuciones_exp %}<option value="{{ a }}" {% if a == atribucion_sugerida %}selected{% endif %}>{{ a }}{% if a == atribucion_sugerida %} (sugerida){% endif %}</option>{% endfor %}</select>
+        </label>
+        <label>Modo
+          <select name="modo">{% for m in modos_exp %}<option value="{{ m }}" {% if m == "manual" %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
+        </label>
+        <label>URL de destino <input type="url" name="destino_url" value="{{ request.args.get('exp_destino') or url_for('landing_cliente', cliente=cliente, _external=True) }}" required></label>
+      </div>
+      <p class="vacio exp-ayuda-modo">Manual: el motor solo propone y tú apruebas. Semi: pausar y archivar se hacen solos. Auto: todo solo salvo con el tope alcanzado. Compras exige el Pixel activo y atribución pixel; Tráfico sirve siempre. La atribución sugerida sale de lo conectado en Configuración: pulsa «Comprobar Pixel» allí para que la tenga en cuenta.</p>
+    </details>
+    <div class="exp-pasos-botones">
+      <button type="button" class="btn-sm" data-ir="2">← Atrás</button>
+      <button type="submit" class="btn-generar" id="exp-lanzar">Lanzar a Meta (en pausa)</button>
+    </div>
+  </section>
+</form>
 {% endif %}
 
 {# Reglas del motor (antes «Reglas por defecto» en Configuración): valen para
@@ -134,6 +203,9 @@
           {% if pz_prop %}{{ pz_prop.nombre }}{% endif %}{% if pl.pais %} · {{ pl.pais }}{% endif %}
           {% if pzs_prop %}{% for p in pzs_prop %}{{ p.nombre }} ({{ p.pais }}){% if not loop.last %}, {% endif %}{% endfor %}{% elif pl.ep_ids %}{{ pl.ep_ids|length }} pieza(s){% endif %}
           {% if pl.motivo %}<small>— {{ pl.motivo }}</small>{% endif %}
+          {# Precio a la vista (acciones.pedir → payload.precio_estimado): lo que
+             costaría producir lo que pide derivar/rescatar, aproximado. #}
+          {% if pl.precio_estimado and pl.precio_estimado.texto %}<small class="exp-propuesta-precio" title="Lo que costaría producir lo que pide esta propuesta (precio aproximado de los proveedores)">{% if pl.precio_estimado.usd is not none %}≈ {{ pl.precio_estimado.usd | usd }}{% else %}{{ pl.precio_estimado.texto }}{% endif %}</small>{% endif %}
         </span>
         {% if pr.accion == "publicar_organico" %}
         <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">Rechazar</button></form>
@@ -190,7 +262,7 @@
       <ul class="exp-piezas">
         {% for pz in e.piezas if pz.pais == p.pais %}
         <li class="exp-pieza exp-pieza-{{ pz.estado }}">
-          <span class="exp-pieza-mini">{% if pz.url_miniatura %}<img src="{{ pz.url_miniatura }}" alt="">{% endif %}</span>
+          <span class="exp-pieza-mini">{% if pz.url_miniatura %}<img src="{{ pz.url_miniatura }}" alt="">{% elif pz.es_imagen %}<img src="{{ pz.url_imagen }}" alt="">{% elif pz.url_video %}<video src="{{ pz.url_video }}" muted playsinline preload="metadata"></video>{% endif %}</span>
           <span class="exp-pieza-nombre">{{ pz.nombre }} <small>({{ pz.tipo }})</small> <span class="tag-estado">{{ pz.estado }}</span>
             {% if pz.metricas.estado_meta_texto %}<small>· {{ pz.metricas.estado_meta_texto }}</small>{% endif %}
             {% if pz.veredicto and pz.veredicto != "pendiente" %}<span class="veredicto veredicto-{{ pz.veredicto }}" title="{{ pz.veredicto_motivo or '' }}">{{ pz.veredicto }}</span>{% endif %}
@@ -202,7 +274,7 @@
             <span class="kpi"><b>{{ pz.metricas.clics_enlace }}</b> clics</span>
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.ctr or 0) }}%</b> CTR</span>
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.cpc or 0) }}</b> CPC</span>
-            <span class="kpi"><b>{{ "%.0f"|format((pz.metricas.thruplay_rate or 0) * 100) }}%</b> ThruPlay</span>
+            {% if not pz.es_imagen %}<span class="kpi"><b>{{ "%.0f"|format((pz.metricas.thruplay_rate or 0) * 100) }}%</b> ThruPlay</span>{% endif %}
             <span class="kpi"><b>{{ "%.2f"|format(pz.metricas.gasto or 0) }}</b> gasto</span>
             {% if pz.metricas.compras %}<span class="kpi"><b>{{ pz.metricas.compras }}</b> compras · ROAS {{ "%.1f"|format(pz.metricas.roas or 0) }}</span>{% endif %}
             {% if pz.metricas.motivo_rechazo %}<span class="tag-error">{{ pz.metricas.motivo_rechazo }}</span>{% endif %}
@@ -211,7 +283,8 @@
           {% if pz.estado == "en_cola" and not e.meta_campaign_id %}
           <form method="post" action="{{ url_for('exp_quitar_pieza', cliente=cliente, eid=e.id, ep_id=pz.id) }}" class="inline"><button class="btn-rechazar btn-xs">Quitar</button></form>
           {% endif %}
-          {% if pz.url_video and pz.pieza_id %}
+          {# Orgánico es solo de video (para una imagen url_video ES la imagen). #}
+          {% if pz.url_video and pz.pieza_id and not pz.es_imagen %}
           {{ bloque_organico(pz.pieza_id, "experimentos", ep_id=pz.id) }}
           {% endif %}
         </li>
@@ -227,7 +300,7 @@
   <form method="post" action="{{ url_for('exp_agregar_pieza', cliente=cliente, eid=e.id) }}" class="exp-agregar">
     <label>Agregar pieza
       <select name="pieza_id">
-        {% for el in elegibles_exp %}<option value="{{ el.pieza_id }}" data-pais="{{ el.pais or '' }}">{{ el.nombre }}{% if el.pais %} · {{ el.pais }}{% endif %}</option>{% endfor %}
+        {% for el in elegibles_exp %}<option value="{{ el.pieza_id }}" data-pais="{{ el.pais or '' }}">{{ el.nombre }}{% if el.es_imagen %} (imagen){% endif %}{% if el.pais %} · {{ el.pais }}{% endif %}</option>{% endfor %}
       </select>
     </label>
     <label>País <select name="pais">{% for p in e.paises %}<option value="{{ p.pais }}">{{ p.pais }}</option>{% endfor %}</select></label>
@@ -274,7 +347,7 @@
   </details>
 </details>
 {% else %}
-<p class="vacio">Todavía no hay experimentos. Crea uno, agrega piezas desde Crear («Meter en experimento») y lánzalo.</p>
+<p class="vacio">Todavía no hay experimentos. Marca piezas en la galería de arriba y pulsa «Probar en Meta».</p>
 {% endfor %}
 
 {% if ads %}{% include "_anuncios_sueltos.html" %}{% endif %}
@@ -286,19 +359,173 @@
     // <details id="exp-<id>">. El scroll va en un setTimeout porque la
     // pestaña se activa en el script de cliente.html, que corre después.
     var exp = q.get('exp');
-    if (exp) {
-      var det = document.getElementById('exp-' + exp);
-      if (det) { det.open = true; setTimeout(function () { det.scrollIntoView({ block: 'start' }); }, 0); }
+    if (!exp) return;
+    var det = document.getElementById('exp-' + exp);
+    if (det) { det.open = true; setTimeout(function () { det.scrollIntoView({ block: 'start' }); }, 0); }
+  })();
+
+  // La galería primero (spec 2026-09-20): marcar piezas -> barra «Probar en
+  // Meta» -> tres pasos (dónde, cuánto, revisar) -> un POST a exp_probar que
+  // crea el experimento y lo lanza EN PAUSA. Nada gasta hasta «Activar».
+  (function () {
+    var galeria = document.getElementById('exp-galeria');
+    var form = document.getElementById('exp-probar');
+    var barra = document.getElementById('exp-barra');
+    if (!galeria || !barra) return;
+    var casillas = Array.prototype.slice.call(galeria.querySelectorAll('input[name=piezas]'));
+    var barraTexto = document.getElementById('exp-barra-texto');
+    function marcadas() { return casillas.filter(function (c) { return c.checked; }); }
+    function refrescarBarra() {
+      var n = marcadas().length;
+      barra.hidden = n === 0;
+      barraTexto.textContent = n + (n === 1 ? ' pieza marcada' : ' piezas marcadas');
+      if (form && n === 0) form.hidden = true;
     }
-    // Prellenado desde Catálogo › Productos («Crear experimento»): ?exp_nombre=&exp_destino=
-    var nombre = q.get('exp_nombre'), destino = q.get('exp_destino');
-    if (!nombre && !destino) return;
-    var det = document.getElementById('nuevo-experimento');
-    if (!det) return;
-    var f = det.querySelector('form');
-    if (nombre && f.elements.nombre) f.elements.nombre.value = nombre;
-    if (destino && f.elements.destino_url) f.elements.destino_url.value = destino;
-    det.open = true;
-    det.scrollIntoView({ block: 'start' });
+    casillas.forEach(function (c) { c.addEventListener('change', refrescarBarra); });
+    // Filtros por tipo/origen.
+    galeria.querySelectorAll('[data-filtro]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        galeria.querySelectorAll('[data-filtro]').forEach(function (x) { x.classList.toggle('activo', x === b); });
+        var f = b.dataset.filtro;
+        galeria.querySelectorAll('.exp-tarjeta').forEach(function (t) {
+          t.hidden = !(f === 'todo' || t.dataset.tipo === f || (f === 'sprint' && t.dataset.origen === 'sprint'));
+        });
+      });
+    });
+    // Llegada con piezas ya marcadas: #experimentos?piezas=1,2
+    var hash = location.hash || '';
+    var q = hash.indexOf('?') >= 0 ? new URLSearchParams(hash.slice(hash.indexOf('?') + 1)) : null;
+    if (q && q.get('piezas')) {
+      q.get('piezas').split(',').forEach(function (id) {
+        var c = casillas.filter(function (x) { return x.value === id; })[0];
+        if (c) c.checked = true;
+      });
+    }
+    refrescarBarra();
+    if (!form) return;
+
+    var abrir = document.getElementById('exp-abrir-pasos');
+    var paises = Array.prototype.slice.call(form.querySelectorAll('.exp-pais-check'));
+    var cuenta = document.getElementById('exp-cuenta');
+    var cuadricula = document.getElementById('exp-cuadricula');
+    var nombre = document.getElementById('exp-nombre');
+    var minimo = parseFloat(form.dataset.minimo || '0'), moneda = form.dataset.moneda || '';
+    var MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+
+    function irA(n) {
+      form.querySelectorAll('[data-paso]').forEach(function (s) { s.hidden = s.dataset.paso !== String(n); });
+      form.querySelectorAll('.exp-pasos-nav li').forEach(function (li) { li.classList.toggle('activo', li.dataset.ir === String(n)); });
+      if (n === 2) refrescarCuenta();
+      if (n === 3) { armarCuadricula(); refrescarCuenta(); }
+      form.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }
+    function paisesMarcados() { return paises.filter(function (p) { return p.checked; }).map(function (p) { return p.value; }); }
+    function finalesMarcadas() { return marcadas().filter(function (c) { return c.dataset.final === '1'; }); }
+    // Una final obliga a su país (spec §2, paso 1).
+    function forzarPaisesDeFinales() {
+      var obligados = finalesMarcadas().map(function (c) { return c.dataset.pais; });
+      paises.forEach(function (p) {
+        var obligado = obligados.indexOf(p.value) !== -1;
+        if (obligado) p.checked = true;
+        p.disabled = obligado;
+      });
+    }
+    function combinaciones() {
+      var ps = paisesMarcados();
+      var out = [];
+      marcadas().forEach(function (c) {
+        if (c.dataset.final === '1') { if (ps.indexOf(c.dataset.pais) !== -1) out.push([c, c.dataset.pais]); }
+        else ps.forEach(function (p) { out.push([c, p]); });
+      });
+      return out;
+    }
+    // Un país marcado sin ninguna pieza (solo finales de otro país) no puede
+    // viajar: exp_probar lo rechaza, así que se avisa antes. `pares` son
+    // [casilla, pais] (paso 1-2) o los inputs marcados de la cuadrícula (paso 3).
+    function paisSinPiezas(paisesConPieza) {
+      return paisesMarcados().filter(function (p) { return paisesConPieza.indexOf(p) === -1; })[0] || null;
+    }
+    function avisarPaisSinPiezas(pais) {
+      alert('El país ' + pais + ' quedó sin piezas: quita el país o marca una pieza para él.');
+    }
+    function refrescarCuenta() {
+      var n = marcadas().length, ps = paisesMarcados();
+      var anuncios = cuadricula.querySelectorAll('input[name=combinaciones]:checked').length || combinaciones().length;
+      var dia = 0;
+      ps.forEach(function (p) { dia += parseFloat((form.querySelector('[name=presupuesto_' + p + ']') || {}).value || '0'); });
+      var tope = parseFloat((form.querySelector('[name=tope_total]') || {}).value || '0');
+      var dias = parseInt((form.querySelector('[name=dias]') || {}).value || '0', 10);
+      cuenta.textContent = n + ' pieza' + (n === 1 ? '' : 's') + ' × ' + ps.length + ' país' + (ps.length === 1 ? '' : 'es') + ' = ' +
+        anuncios + ' anuncio' + (anuncios === 1 ? '' : 's') + ' · hasta ' + dia.toLocaleString('es-CO') + ' ' + moneda + '/día' +
+        (tope ? ' · tope ' + tope.toLocaleString('es-CO') + ' ' + moneda : '') + (dias ? ' · ' + dias + ' días' : '');
+      if (nombre && !nombre.dataset.tocado) {
+        var hoy = new Date();
+        nombre.value = 'Prueba ' + hoy.getDate() + ' ' + MESES[hoy.getMonth()] + ' · ' + n + (n === 1 ? ' pieza' : ' piezas') + ' · ' + ps.slice().sort().join(', ');
+      }
+    }
+    function armarCuadricula() {
+      var ps = paisesMarcados();
+      var filas = marcadas().map(function (c) {
+        var celdas = ps.map(function (p) {
+          var cabe = c.dataset.final !== '1' || c.dataset.pais === p;
+          return '<td>' + (cabe ? '<input type="checkbox" name="combinaciones" value="' + c.value + ':' + p + '" checked>' : '<span class="vacio">—</span>') + '</td>';
+        }).join('');
+        var nombreSeguro = document.createElement('div'); nombreSeguro.textContent = c.dataset.nombre;
+        return '<tr><th>' + nombreSeguro.innerHTML + (c.dataset.imagen === '1' ? ' <small>(imagen)</small>' : '') + '</th>' + celdas + '</tr>';
+      }).join('');
+      cuadricula.innerHTML = '<table><thead><tr><th></th>' + ps.map(function (p) { return '<th>' + p + '</th>'; }).join('') + '</tr></thead><tbody>' + filas + '</tbody></table>';
+      cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function (i) { i.addEventListener('change', refrescarCuenta); });
+    }
+    abrir.addEventListener('click', function () { form.hidden = false; forzarPaisesDeFinales(); irA(1); });
+    form.querySelectorAll('[data-ir]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var destino = parseInt(b.dataset.ir, 10);
+        if (destino >= 2 && paisesMarcados().length === 0) { alert('Marca al menos un país.'); return; }
+        if (destino >= 2) {
+          var bajos = paisesMarcados().filter(function (p) { return parseFloat(form.querySelector('[name=presupuesto_' + p + ']').value || '0') < minimo; });
+          if (bajos.length) { alert('El presupuesto diario no alcanza el mínimo de Meta (' + minimo + ' ' + moneda + ') en: ' + bajos.join(', ')); return; }
+          var huerfano = paisSinPiezas(combinaciones().map(function (par) { return par[1]; }));
+          if (huerfano) { avisarPaisSinPiezas(huerfano); return; }
+        }
+        if (destino >= 3 && !(parseFloat(form.querySelector('[name=tope_total]').value || '0') > 0)) { alert('Escribe el tope total.'); return; }
+        irA(destino);
+      });
+    });
+    function pasoVisible() {
+      var s = form.querySelector('[data-paso]:not([hidden])');
+      return s ? parseInt(s.dataset.paso, 10) : 0;
+    }
+    // Marcar o desmarcar una pieza con los pasos abiertos: los países de las
+    // finales se recalculan y, si se está en Revisar, la cuadrícula se rearma
+    // (si no, la pieza nueva no tendría fila y exp_probar la dejaría fuera).
+    casillas.forEach(function (c) {
+      c.addEventListener('change', function () {
+        if (form.hidden) return;
+        forzarPaisesDeFinales();
+        if (pasoVisible() === 3) armarCuadricula();
+        refrescarCuenta();
+      });
+    });
+    form.querySelectorAll('[name=tope_total], [name=dias], [name^=presupuesto_], .exp-pais-check').forEach(function (i) { i.addEventListener('input', refrescarCuenta); });
+    if (nombre) nombre.addEventListener('input', function () { nombre.dataset.tocado = '1'; });
+    form.addEventListener('submit', function (ev) {
+      var marcadasCuadricula = Array.prototype.slice.call(cuadricula.querySelectorAll('input[name=combinaciones]:checked'));
+      if (!marcadasCuadricula.length) { ev.preventDefault(); alert('Deja al menos una casilla marcada en la cuadrícula.'); return; }
+      var huerfano = paisSinPiezas(marcadasCuadricula.map(function (i) { return i.value.split(':')[1]; }));
+      if (huerfano) { ev.preventDefault(); avisarPaisSinPiezas(huerfano); return; }
+      if (!confirm('Se crean la campaña, los conjuntos y los anuncios en Meta, EN PAUSA (no gasta hasta que actives). ' + cuenta.textContent + ' ¿Seguimos?')) { ev.preventDefault(); return; }
+      // Los países deshabilitados por una final igual deben viajar: se
+      // rehabilitan solo cuando el envío sigue adelante.
+      paises.forEach(function (p) { p.disabled = false; });
+      // Un doble clic no crea dos experimentos: el botón se bloquea ya
+      // confirmado (después de preventDefault: un botón disabled no viaja,
+      // pero ya no hace falta que viaje).
+      var lanzar = ev.submitter || document.getElementById('exp-lanzar');
+      if (lanzar) { lanzar.disabled = true; lanzar.textContent = 'Lanzando…'; }
+    });
+    // El setTimeout deja que cliente.html active la pestaña antes del scroll (como el ?exp= de arriba).
+    if (q && q.get('piezas') && marcadas().length) {
+      setTimeout(function () { form.hidden = false; forzarPaisesDeFinales(); irA(1); }, 0);
+    }
   })();
 </script>

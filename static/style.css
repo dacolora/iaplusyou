@@ -240,6 +240,11 @@ h2::before {
 .flash.ok { background: rgba(47, 158, 110, .1); color: var(--ok); border: 1px solid rgba(47, 158, 110, .25); }
 .flash.warn { background: rgba(181, 129, 8, .1); color: var(--warn); border: 1px solid rgba(181, 129, 8, .25); }
 .flash.error { background: rgba(196, 63, 90, .1); color: var(--error); border: 1px solid rgba(196, 63, 90, .25); }
+/* Banner de cuenta (base.html): correo sin poner o sin confirmar. */
+.cuenta-banner { animation: none; }
+.cuenta-banner-form { display: flex; flex-wrap: wrap; gap: .5rem .7rem; align-items: center; }
+.cuenta-banner-form input { padding: .35rem .6rem; font-size: .82rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); color: var(--text); min-width: 12rem; }
+.cuenta-banner-form a { font-size: .8rem; }
 
 /* ---------- hero (index) ---------- */
 
@@ -1591,3 +1596,86 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .org-canal-config { background: var(--panel); border: 1px solid var(--border); border-left: 3px solid var(--warn); border-radius: var(--radius); padding: .6rem .9rem; font-size: .84rem; }
 .org-canal-config-ok { border-left-color: var(--ok); }
 .org-canal-cab { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+
+/* ---------- Gasto real (Task 3): precio a la vista ---------- */
+/* Chip del sidebar bajo el nombre del proyecto: generación en USD (+ pauta en su moneda). */
+.sidebar-gasto { display: block; margin-top: .3rem; font-size: .68rem; line-height: 1.25; color: var(--muted); text-decoration: none; white-space: normal; border: 1px solid var(--border); border-radius: 999px; padding: .15rem .5rem; transition: border-color .15s, color .15s; }
+.sidebar-gasto:hover { color: var(--text); border-color: var(--accent); }
+/* Configuración › Gasto: tiles reutilizan .kpi-tile; tablas por tipo e historial. */
+.gasto-tiles { margin-top: .4rem; }
+.gasto-tabla { margin-top: .4rem; }
+.gasto-tabla th, .gasto-tabla td { padding: .4rem .6rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.gasto-tabla th { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.gasto-tabla .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.gasto-tabla .gasto-total td { font-weight: 700; border-bottom: 0; }
+.gasto-historial { max-height: 28rem; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.gasto-historial .gasto-tabla { margin-top: 0; }
+.gasto-historial thead th { position: sticky; top: 0; background: var(--panel); }
+.gasto-fecha { white-space: nowrap; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gasto-detalle { word-break: break-word; }
+.gasto-nota { padding-top: .6rem; }
+/* Nota de precio junto a un botón («≈ US$ 0,01 la regla con IA»). */
+.precio-nota { font-size: .74rem; }
+/* Propuesta del motor: precio estimado de derivar/rescatar. */
+.exp-propuesta-precio { color: var(--muted); white-space: nowrap; margin-left: .35rem; }
+/* Panel admin: gasto de generación del mes por proyecto. */
+.card-cliente-gasto { display: flex; justify-content: space-between; align-items: baseline; gap: .6rem; margin-top: .7rem; padding-top: .6rem; border-top: 1px dashed var(--border); }
+.card-cliente-gasto span { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.card-cliente-gasto strong { font-variant-numeric: tabular-nums; font-size: .92rem; }
+
+/* ---- Panel de administrador (admin.py): totales del mes, salud del worker,
+   tabla comparativa de proyectos e historial. ---- */
+.admin-bloque { margin-top: 2rem; }
+.admin-cabecera { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: .7rem; }
+.admin-cabecera h2 { margin: 0; font-size: 1.15rem; }
+.admin-cabecera .vacio { padding: 0; font-size: .82rem; }
+.admin-kpis { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+.kpi.kpi-alerta strong { color: var(--error); }
+.admin-tipos { display: flex; flex-wrap: wrap; gap: .4rem; margin: .7rem 0 0; }
+.admin-tipo { display: inline-block; font-size: .74rem; padding: .2rem .55rem; border-radius: 999px; background: var(--panel-2); color: var(--muted); white-space: nowrap; }
+.admin-tipo strong { color: var(--text); }
+.admin-tipos-celda { display: flex; flex-wrap: wrap; gap: .3rem; max-width: 22rem; }
+.admin-scroll { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; }
+.tabla-admin th { text-align: left; font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: .6rem .75rem; border-bottom: 1px solid var(--border); white-space: nowrap; background: var(--panel-2); }
+.tabla-admin td { padding: .6rem .75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.tabla-admin tr:last-child td { border-bottom: 0; }
+.tabla-admin td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tabla-admin td.admin-error, .tabla-admin td.admin-detalle { font-size: .8rem; color: var(--muted); max-width: 34rem; }
+.admin-pill { display: inline-block; font-size: .72rem; padding: .15rem .55rem; border-radius: 999px; white-space: nowrap; }
+.admin-pill.ok { background: rgba(62, 207, 142, .15); color: var(--ok); }
+.admin-pill.off { background: var(--panel-2); color: var(--muted); }
+.admin-bloque h3 { font-size: .95rem; margin: 1.2rem 0 .5rem; }
+.admin-bloque .grid-clientes { margin-top: 1.2rem; }
+
+/* Experimentos — galería primero */
+.exp-galeria-cab { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap; }
+.exp-galeria-cab h3 { margin:0; font-size:1rem; }
+.exp-filtros { display:flex; gap:.4rem; flex-wrap:wrap; }
+.exp-filtros .chip { border:1px solid var(--border); background:var(--panel); color:var(--text); border-radius:999px; padding:.2rem .7rem; font-size:.8rem; cursor:pointer; }
+.exp-filtros .chip.activo { background:var(--accent); color:#fff; border-color:var(--accent); }
+.exp-tarjetas { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:.8rem; margin-top:.8rem; }
+.exp-tarjeta { position:relative; display:flex; flex-direction:column; gap:.4rem; border:2px solid transparent; border-radius:10px; padding:.4rem; background:var(--panel-2); cursor:pointer; }
+.exp-tarjeta:has(input:checked) { border-color:var(--accent); background:#f3eefe; }
+.exp-tarjeta input[type=checkbox] { position:absolute; top:.6rem; left:.6rem; width:1.2rem; height:1.2rem; z-index:1; }
+.exp-tarjeta-media { aspect-ratio:9/16; max-height:220px; overflow:hidden; border-radius:8px; background:#111; }
+.exp-tarjeta-media img, .exp-tarjeta-media video { width:100%; height:100%; object-fit:cover; display:block; }
+.exp-tarjeta-texto strong { font-size:.85rem; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.exp-tarjeta-texto small { color:var(--muted); font-size:.72rem; }
+.exp-barra { position:sticky; bottom:0; display:flex; gap:1rem; align-items:center; justify-content:space-between; background:var(--panel); border-top:1px solid var(--border); padding:.6rem 1rem; margin-top:.8rem; z-index:5; }
+.exp-pasos { border:1px solid var(--border); border-radius:12px; padding:1rem; margin-top:1rem; }
+/* display:flex pisaría el atributo hidden (misma trampa que .org-texto[hidden]): todo lo que
+   el JS esconde con .hidden = true lleva su regla explícita. */
+.exp-tarjeta[hidden], .exp-barra[hidden], .exp-pasos[hidden], .exp-pasos [data-paso][hidden] { display:none; }
+.exp-pasos-nav { display:flex; gap:1rem; list-style:none; padding:0; margin:0 0 1rem; font-weight:600; color:var(--muted-2); }
+.exp-pasos-nav li { cursor:pointer; }
+.exp-pasos-nav li.activo { color:var(--accent); }
+.exp-pasos-botones { display:flex; gap:.6rem; margin-top:1rem; }
+.exp-cuenta { font-weight:600; margin-top:.8rem; }
+.exp-cuadricula table { border-collapse:collapse; margin:.6rem 0; }
+.exp-cuadricula th, .exp-cuadricula td { border:1px solid var(--border); padding:.3rem .6rem; text-align:center; font-size:.85rem; }
+.exp-cuadricula tbody th { text-align:left; font-weight:500; text-transform:none; letter-spacing:0; }
+/* La miniatura del árbol es de 48×85 (arriba): el video llena lo mismo que la imagen. */
+.exp-pieza-mini video { width:100%; height:100%; object-fit:cover; display:block; }
+/* Paso 1: cada país con su presupuesto en una sola línea, en filas que se envuelven. */
+.exp-pasos .exp-paises { display:flex; flex-wrap:wrap; gap:.5rem 1.2rem; }
+.exp-pasos .exp-paises .fe-destino { flex:0 0 auto; white-space:nowrap; }

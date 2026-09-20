@@ -22,6 +22,51 @@ def base_temporal(monkeypatch):
     db._reset_para_tests()
 
 
+# Usuarios que los tests de rutas meten en la sesión a mano (session_transaction).
+# El guard _verificar_sesion cierra cualquier sesión cuyo usuario no esté en
+# usuarios.json, así que tienen que existir. Contraseña de todos: PASSWORD_PRUEBA.
+PASSWORD_PRUEBA = "prueba-1234"
+USUARIOS_PRUEBA = {
+    "admin": {"rol": "admin", "cliente": None, "correo": "admin@prueba.local", "correo_verificado": True},
+    "alguien": {"rol": "cliente", "cliente": "acme", "correo": "alguien@prueba.local", "correo_verificado": True},
+    "user_acme": {"rol": "cliente", "cliente": "acme", "correo": "acme@prueba.local", "correo_verificado": True},
+    "otro": {"rol": "cliente", "cliente": "otro", "correo": "otro@prueba.local", "correo_verificado": True},
+}
+_hash_prueba = []
+
+
+def sembrar_usuarios(ruta, nombres=None):
+    """Escribe en `ruta` los USUARIOS_PRUEBA (o solo `nombres`) con un hash
+    real de PASSWORD_PRUEBA calculado una sola vez por sesión de pytest (pbkdf2
+    es lento a propósito; hacerlo por test costaría minutos)."""
+    import _json_store
+    if not _hash_prueba:
+        import usuarios
+        _hash_prueba.append(usuarios._hash(PASSWORD_PRUEBA))
+    data = {}
+    for nombre, campos in USUARIOS_PRUEBA.items():
+        if nombres is not None and nombre not in nombres:
+            continue
+        data[nombre] = {"password_hash": _hash_prueba[0], "session_version": 1,
+                        "creado_en": "2026-01-01T00:00:00", **campos}
+    _json_store.guardar(str(ruta), data)
+    return data
+
+
+@pytest.fixture(autouse=True)
+def usuarios_tmp(tmp_path, monkeypatch):
+    """usuarios.json temporal por test, con USUARIOS_PRUEBA sembrados: ningún
+    test lee ni escribe el usuarios.json real del repo, y las sesiones falsas
+    de los tests de rutas (admin, alguien, user_acme, otro) pasan el guard.
+    Devuelve el módulo `usuarios`; un test que quiera el archivo vacío lo
+    repunta con monkeypatch (tests/test_cuentas.py, test_rutas_cuentas.py)."""
+    import usuarios
+    ruta = tmp_path / "usuarios_prueba.json"
+    monkeypatch.setattr(usuarios, "_path", lambda: str(ruta))
+    sembrar_usuarios(ruta)
+    return usuarios
+
+
 @pytest.fixture(autouse=True)
 def _sin_cache_meta():
     """Los cachés por proceso de meta_conexion (estado y Pixel) no deben
