@@ -31,7 +31,6 @@ _RE_VIDEO = re.compile(r"(?:[?&]v=|youtu\.be/|/shorts/|/live/|/embed/)([A-Za-z0-
 _RE_IDIOMA = re.compile(r"^[a-z]{2,5}$")
 _RE_REGION = re.compile(r"^[A-Z]{2}$")
 _CUOTA = ("quotaExceeded", "rateLimitExceeded", "dailyLimitExceeded")
-_LLAVE = ("keyInvalid", "accessNotConfigured", "forbidden", "ipRefererBlocked", "badRequest")
 
 
 def id_video_desde_link(url):
@@ -167,13 +166,21 @@ class FuenteYouTube(Fuente):
         avanzar("Buscando")
         try:
             videos = videos_por_id(yt, p["links"])
-            if p["palabras_clave"]:
-                videos += buscar_videos(yt, p)
         except HttpError as e:
             if razon(e) in _CUOTA:
-                self.aviso = "YouTube agotó la cuota diaria del proyecto de Google antes de buscar; vuelve a intentar mañana."
+                self.aviso = "YouTube agotó la cuota diaria del proyecto de Google; vuelve a intentar mañana."
                 return
             raise _error_llave(e)
+        if p["palabras_clave"]:
+            try:
+                videos += buscar_videos(yt, p)
+            except HttpError as e:
+                if razon(e) not in _CUOTA:
+                    raise _error_llave(e)
+                self.aviso = ("YouTube agotó las búsquedas del día (100 por proyecto de Google); se leyeron solo los videos de los links. "
+                              "Vuelve a buscar mañana.")
+        if not videos:
+            return
         vistos, pendientes = set(), []
         for v in videos:
             if v["id"] not in vistos:

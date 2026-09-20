@@ -162,7 +162,9 @@ def _get(sesion, token, ll, ruta, params):
 
 
 def buscar_posts(sesion, token, ll, p):
-    """Una búsqueda global o una por subreddit; posts únicos hasta max_posts."""
+    """Una búsqueda global o una por subreddit; devuelve (posts, limitado).
+    `limitado` es True si Reddit cortó con 429 a mitad de las búsquedas;
+    se devuelven los posts ya encontrados."""
     consulta = {"q": p["palabras_clave"], "sort": "relevance", "t": p["periodo"], "limit": p["max_posts"], "type": "link"}
     rutas = [f"/r/{s}/search" for s in p["subreddits"]] or ["/search"]
     vistos, posts = set(), []
@@ -170,11 +172,14 @@ def buscar_posts(sesion, token, ll, p):
         if i:
             _http.dormir(PAUSA)
         params = dict(consulta, restrict_sr=1) if ruta != "/search" else consulta
-        for post in parsear_busqueda(_get(sesion, token, ll, ruta, params) or {}):
-            if post["id"] not in vistos:
-                vistos.add(post["id"])
-                posts.append(post)
-    return posts[:p["max_posts"]]
+        try:
+            for post in parsear_busqueda(_get(sesion, token, ll, ruta, params) or {}):
+                if post["id"] not in vistos:
+                    vistos.add(post["id"])
+                    posts.append(post)
+        except _http.Error429:
+            return posts[:p["max_posts"]], True
+    return posts[:p["max_posts"]], False
 
 
 class FuenteReddit(Fuente):
@@ -193,15 +198,18 @@ class FuenteReddit(Fuente):
         avanzar = avanzar or (lambda etapa, detalle=None: None)
         self.aviso = ""
         sesion = _http.sesion()
-        token = _token(sesion, ll)
+        try:
+            token = _token(sesion, ll)
+        except _http.Error429 as e:
+            self.aviso = f"Reddit limitó las llamadas al pedir el token; intenta en unos minutos. ({e.usuario})"
+            return
         avanzar("Buscando")
         ids = list(p["links"])
         if p["palabras_clave"]:
-            try:
-                ids += [post["id"] for post in buscar_posts(sesion, token, ll, p)]
-            except _http.Error429 as e:
-                self.aviso = f"Reddit limitó las llamadas durante la búsqueda: {e.usuario}"
-                return
+            posts, limitado = buscar_posts(sesion, token, ll, p)
+            ids += [post["id"] for post in posts]
+            if limitado:
+                self.aviso = "Reddit limitó las llamadas durante la búsqueda; se leyeron los posts encontrados hasta ahí y los links. Vuelve a buscar en unos minutos."
         vistos, pendientes = set(), []
         for i in ids:
             if i not in vistos:

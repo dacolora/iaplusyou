@@ -152,3 +152,26 @@ def test_probar_ok(entorno, monkeypatch):
 def test_registro():
     from nicho import fuentes
     assert fuentes.por_tipo("reddit").tipo == "reddit" and "reddit" in fuentes.tipos()
+
+
+def test_recolectar_429_en_busqueda_sigue_con_los_links(entorno, monkeypatch):
+    from nicho.fuentes import _http, reddit
+    limitado = [_Resp(429, headers={"Retry-After": "1"})] * (_http.MAX_429 + 1)
+    s = _Sesion({"api/v1/access_token": _Resp(200, {"access_token": "sec-777"}),
+                 "/search": limitado,
+                 "/comments/abc123": _Resp(200, _fixture("reddit_comments.json"))})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = reddit.FuenteReddit()
+    lista = list(f.recolectar({"palabras_clave": "foot pain", "links": ["https://redd.it/abc123"], "max_comentarios_por_post": 10}))
+    assert [c["fuente_id"] for c in lista] == ["abc123", "c1", "c1r", "c4"]
+    assert "búsqueda" in f.aviso
+
+
+def test_recolectar_429_en_token_termina_con_aviso(entorno, monkeypatch):
+    from nicho.fuentes import _http, reddit
+    s = _Sesion({"api/v1/access_token": [_Resp(429)] * (_http.MAX_429 + 1)})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = reddit.FuenteReddit()
+    lista = list(f.recolectar({"palabras_clave": "x"}))
+    assert lista == []
+    assert "token" in f.aviso

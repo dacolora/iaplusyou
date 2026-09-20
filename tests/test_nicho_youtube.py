@@ -164,3 +164,30 @@ def test_probar(entorno, monkeypatch):
 def test_registro():
     from nicho import fuentes
     assert fuentes.por_tipo("youtube").tipo == "youtube"
+
+
+def test_recolectar_busqueda_agotada_sigue_con_los_links(entorno, monkeypatch):
+    from nicho.fuentes import youtube
+    paginas = _fixture("youtube_comment_threads.json")
+    yt = _YouTube(videos=[_fixture("youtube_videos.json")],
+                  busqueda=[_http_error(403, "quotaExceeded")],
+                  hilos={"vid00000003": [paginas["pagina2"]], "vid00000001": [paginas["pagina1"], paginas["pagina2"]]})
+    monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
+    f = youtube.FuenteYouTube()
+    lista = list(f.recolectar({"palabras_clave": "x", "links": ["https://youtu.be/vid00000003", "https://youtu.be/vid00000001"], "max_comentarios_por_video": 10}))
+    assert [c["fuente_id"] for c in lista] == ["Ugx4", "Ugx1", "Ugx2", "Ugx4"]
+    assert "búsquedas del día" in f.aviso
+
+
+def test_recolectar_dedup_links_y_busqueda_youtube(entorno, monkeypatch):
+    from nicho.fuentes import youtube
+    paginas = _fixture("youtube_comment_threads.json")
+    yt = _YouTube(videos=[_fixture("youtube_videos.json")],
+                  busqueda=[_fixture("youtube_search.json")],
+                  hilos={"vid00000001": [paginas["pagina2"]], "vid00000002": [_http_error(403, "commentsDisabled")], "vid00000003": [paginas["pagina2"]]})
+    monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
+    f = youtube.FuenteYouTube()
+    lista = list(f.recolectar({"palabras_clave": "x", "links": ["https://youtu.be/vid00000001"], "max_comentarios_por_video": 10}))
+    vid00000001_calls = [kw for kw in yt.llamadas["commentThreads"] if kw.get("videoId") == "vid00000001"]
+    assert len(vid00000001_calls) == 1
+    assert f.aviso == ""
