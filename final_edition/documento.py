@@ -290,6 +290,20 @@ def duracion_ms(doc):
     return fin
 
 
+def pista_principal(doc):
+    """La pista que hace de fondo: la primera `video` no oculta; si el
+    documento no tiene ninguna, la primera `imagen` no oculta (edición de
+    imagen); None si no hay. Compilador y partición por tramos eligen con
+    esta misma función — una `imagen` listada antes que la `video` es una
+    capa (un logo), no el fondo."""
+    pistas = [p for p in doc.get("pistas") or [] if not p.get("oculta")]
+    for tipo in ("video", "imagen"):
+        for p in pistas:
+            if p.get("tipo") == tipo:
+                return p
+    return None
+
+
 def _base(formato, idioma_base):
     if formato not in FORMATOS:
         _fallar(f"formato desconocido: {formato!r}.")

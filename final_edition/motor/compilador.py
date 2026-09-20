@@ -13,22 +13,44 @@ crossfade salen de la COLA de A (`recorte.hasta + d`, sin sondear el archivo
 `dur_A + dur_B`; el solape del `xfade` lo paga la cola extra de A, nunca un
 recorte de B. Por eso el `offset` del `xfade` es dónde A termina en la línea
 de SALIDA (acumulado de duraciones tal cual, sin restar la duración de la
-transición).
+transición). `verificar_recortes` (con las duraciones reales de los
+materiales, que aquí no se sondean) es quien acorta esa cola cuando el
+material no alcanza.
+
+Si la pista principal termina antes que el tramo (la voz sigue después del
+último clip), su último cuadro se clona con `tpad` hasta el fin del tramo:
+el video nunca acaba antes que el audio.
+
+Capas (PNG de texto e imágenes): cada una se escala a la caja que da
+`geometria.caja` (`scale=w:h`, misma regla de píxeles que el navegador) y,
+con `opacidad < 1`, se atenúa el alfa (`format=rgba,colorchannelmixer=aa=`).
+`rotacion` NO se renderiza en la capa 1 (ni `superpuesto`, el PIP: `compilar`
+lo rechaza con un error explícito; ni `marca.marca_de_agua`).
 
 Keyframes: solo x/y se interpretan aquí (expresiones lineales por tramos en
 t); escala, opacidad y rotación por keyframe quedan para cuando las
-animaciones predefinidas lleguen con alfa en PNG.
+animaciones predefinidas lleguen con alfa en PNG (el tamaño de la capa es el
+de su transform en t=0).
 
 Audio por tramo: la presencia de audio es una decisión de TODO el documento,
 no de la ventana — si el documento tiene algún clip de audio activo pero esta
 ventana no tiene ninguno (p. ej. la voz termina antes de este tramo),
 `compilar` rellena con `anullsrc` en vez de dejar el tramo sin stream de
 audio, porque `concat -c copy` (el renderer) no tolera streams heterogéneos
-entre segmentos y cortaría el audio del video entero en esa frontera."""
+entre segmentos y cortaría el audio del video entero en esa frontera. Los
+roles se reducen a las tres entradas de `mezcla.filtro_mezcla`: `voz`,
+`musica` y "sonido" (todo lo demás: `sonido`, `efecto`, `subida`,
+`grabacion`), sumado con `amix` cuando hay más de un clip.
+
+Rutas dentro del filtergraph (`subtitles=`, `fontsdir=`): van citadas con
+'...' y pasan por `_ruta_filtro`, porque ffmpeg las parsea dos veces
+(`av_get_token` del grafo y luego el de las opciones del filtro)."""
+import os
 from dataclasses import dataclass, field
 
+import final_edition
 from final_edition import geometria, mezcla
-from final_edition.documento import FORMATOS, duracion_ms
+from final_edition.documento import FORMATOS, duracion_ms, pista_principal
 from final_edition.motor import subtitulos as sub_mod
 
 _XFADE = {"fundido": "fade", "deslizar": "slideleft", "zoom": "zoomin", "desenfoque": "fadeblack"}
@@ -36,11 +58,16 @@ _DESPLAZ_ANIM_PX = 60
 # Respaldo: el navegador manda ancho_px/alto_px con cada PNG (capa 3).
 _CAPA_ANCHO_DEFECTO = 400
 _CAPA_ALTO_DEFECTO = 200
+# Fuentes del repo para libass (`subtitles=...:fontsdir=`): las mismas que usa
+# `final_edition/texto.py`; sin esto libass cae a la fuente que encuentre el
+# sistema y el VPS no tiene Inter instalada.
+FONTSDIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(final_edition.__file__))), "static", "fonts")
 
 # Orden en el que `compilar` agrega entradas (`-i`) al plan: la fuente
-# principal primero, luego los PNG de capas (superpuesto/imagen/texto) en
-# orden de pista/clip, luego los audios en orden de pista/clip.
+# principal primero, luego los PNG de capas (imagen/texto) en orden de
+# pista/clip, luego los audios en orden de pista/clip.
 ORDEN_ENTRADAS = ("principal", "png_capas", "audio")
+_ROLES_SONIDO_GRUPO = "sonido"
 
 
 @dataclass
@@ -62,6 +89,17 @@ def _transicion_xfade(tipo):
 
 def _s(ms):
     return f"{ms / 1000.0:.3f}"
+
+
+def _ruta_filtro(ruta):
+    """Escapa una ruta para ir dentro de `'...'` en una opción de filtro.
+    ffmpeg la parsea dos veces con `av_get_token`: el grafo (donde dentro de
+    comillas TODO es literal salvo la propia comilla) y luego las opciones del
+    filtro (donde `\\` escapa y `:` separa). De ahí: `\\`→`\\\\`, `:`→`\\:` y la
+    comilla → `\\'` para el segundo nivel, escrita como `\\'\\''` (cerrar la
+    cita, comilla escapada, reabrir) para que el primero la deje pasar.
+    Verificado con ffmpeg 9 (`movie=`) sobre una ruta con `:`, `'` y `\\`."""
+    return ruta.replace("\\", "\\\\").replace(":", "\\:").replace("'", "\\'\\''")
 
 
 def _transicion_real(clip):
@@ -127,19 +165,72 @@ def _clips_en(pista, ventana):
     return [cl for cl in pista.get("clips") or [] if cl["inicio_ms"] < b and cl["inicio_ms"] + cl["duracion_ms"] > a]
 
 
+def _fuente_ms(clip):
+    """Milisegundos de FUENTE que consume el clip completo (duración de salida
+    × velocidad), redondeados igual que en `compilar`."""
+    return round(clip["duracion_ms"] * float(clip.get("velocidad") or 1.0))
+
+
+def verificar_recortes(doc, duraciones):
+    """Comprueba los recortes contra las duraciones reales de los materiales
+    (`{material_id: duracion_ms}`, solo los que se conocen; los que faltan no
+    se juzgan). Sin disco ni ffmpeg. Modifica `doc` en el sitio y lo
+    devuelve:
+
+      - un clip de video/audio que pide más fuente de la que hay
+        (`recorte.desde_ms + duracion_ms × velocidad > material`) →
+        ValueError con el nombre del clip; la música no cuenta (entra con
+        `-stream_loop -1`, así que nunca se acaba);
+      - la cola de una transición de la pista principal (`+ d × velocidad`
+        de fuente) que no cabe se recorta a lo que queda, en ms de SALIDA;
+        si no queda nada, la transición pasa a corte seco (`None`)."""
+    principal = pista_principal(doc)
+    for p in doc.get("pistas") or []:
+        if p.get("tipo") not in ("video", "superpuesto", "audio"):
+            continue
+        clips = p.get("clips") or []
+        if p is principal:
+            clips = sorted(clips, key=lambda c: c["inicio_ms"])
+        for i, cl in enumerate(clips):
+            if p["tipo"] == "audio" and (cl.get("rol_audio") or "subida") == "musica":
+                continue
+            mid = cl.get("material_id")
+            if mid not in duraciones or duraciones[mid] is None:
+                continue
+            material = int(duraciones[mid])
+            desde = int((cl.get("recorte") or {}).get("desde_ms", 0))
+            fin_fuente = desde + _fuente_ms(cl)
+            if fin_fuente > material:
+                raise ValueError(f"El clip '{cl['id']}' pide {fin_fuente} ms de un material de {material} ms; "
+                                 f"acorta el clip o el recorte.")
+            tr = _transicion_real(cl)
+            if p is principal and tr and i + 1 < len(clips):
+                vel = float(cl.get("velocidad") or 1.0)
+                sobrante_salida = int((material - fin_fuente) / vel)
+                if int(tr["duracion_ms"]) > sobrante_salida:
+                    if sobrante_salida <= 0:
+                        cl["transicion"] = None
+                    else:
+                        cl["transicion"] = {**tr, "duracion_ms": sobrante_salida}
+    return doc
+
+
 def compilar(doc, rutas, ventana=None, con_ass=True):
     ancho, alto = FORMATOS[doc["formato"]]
     fps = int(doc.get("fps") or 30)
     total = duracion_ms(doc)
+    es_imagen = total == 0
     ventana = ventana or (0, total)
     desplaz = ventana[0]
     dur_tramo = ventana[1] - ventana[0]
     plan = Plan(ancho=ancho, alto=alto, duracion_ms=dur_tramo)
     partes = []
     pistas = [p for p in doc["pistas"] if not p.get("oculta")]
+    if any(p["tipo"] == "superpuesto" and p.get("clips") for p in pistas):
+        raise ValueError("El video superpuesto (PIP) llega en la capa 4.")
 
     # ---- pista principal (video o imagen) ---------------------------------
-    principal = next((p for p in pistas if p["tipo"] in ("video", "imagen")), None)
+    principal = pista_principal(doc)
     if principal and principal["tipo"] == "imagen":
         # Una imagen no tiene línea de tiempo real (duración 0 = "la foto de
         # siempre"): se usan sus clips tal cual, sin filtrar por ventana.
@@ -180,6 +271,11 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             partes.append(f"[0:v]trim=start={_s(desde)}:end={_s(hasta)},{setpts},"
                           f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={fps},format=yuv420p[v{i}]")
         etiquetas.append((f"[v{i}]", cl))
+    # Relleno: si la principal termina antes que el tramo (la voz sigue), el
+    # último cuadro se clona hasta `dur_tramo`. Cero para una imagen.
+    fin_principal = 0 if es_imagen else min(ventana[1], max(cl["inicio_ms"] + cl["duracion_ms"] for cl in clips_v)) - desplaz
+    faltante = max(0, dur_tramo - fin_principal)
+    etiqueta_cadena = "[vp]" if faltante > 0 else "[vc]"
     # transiciones / concat
     actual = etiquetas[0][0]
     acumulado = 0
@@ -187,7 +283,7 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
         prev_clip = etiquetas[i - 1][1]
         dur_prev = min(ventana[1], prev_clip["inicio_ms"] + prev_clip["duracion_ms"]) - max(ventana[0], prev_clip["inicio_ms"])
         tr = _transicion_real(prev_clip) if prev_clip["inicio_ms"] + prev_clip["duracion_ms"] < ventana[1] else None
-        salida = "[vc]" if i == len(etiquetas) - 1 else f"[vx{i}]"
+        salida = etiqueta_cadena if i == len(etiquetas) - 1 else f"[vx{i}]"
         if tr:
             d_tr = int(tr.get("duracion_ms", 0))
             # B conserva su posición exacta -> el offset es dónde termina A
@@ -203,15 +299,20 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             partes.append(f"{actual}{etiquetas[i][0]}concat=n=2:v=1:a=0,settb=1/{fps}{salida}")
         acumulado += dur_prev
         actual = salida
-    if len(etiquetas) == 1:
-        partes.append(f"{actual}null[vc]"); actual = "[vc]"
+    if faltante > 0:
+        partes.append(f"{actual}tpad=stop_mode=clone:stop_duration={_s(faltante)}[vc]")
+    elif len(etiquetas) == 1:
+        partes.append(f"{actual}null[vc]")
+    actual = "[vc]"
 
     # ---- capas overlay (PNG) ---------------------------------------------
     n_png = 0
     for p in pistas:
-        if p["tipo"] not in ("superpuesto", "imagen", "texto") or p is principal:
+        if p["tipo"] not in ("imagen", "texto") or p is principal:
             continue
-        for cl in _clips_en(p, ventana):
+        # Una imagen no tiene ventana: entran todas sus capas, sin `enable`.
+        clips_capa = list(p.get("clips") or []) if es_imagen else _clips_en(p, ventana)
+        for cl in clips_capa:
             clave = f"png:{cl['id']}" if p["tipo"] == "texto" else cl["material_id"]
             if clave not in rutas:
                 raise ValueError(f"Falta la ruta ('{clave}') del clip '{cl['id']}'.")
@@ -224,10 +325,20 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             t = geometria.interpolar(kfs, 0, cl["transform"])
             caja_defecto = geometria.caja(t, capa_w, capa_h, doc["formato"])
             x, y = _expr_posicion(cl, kfs, capa_w, capa_h, doc["formato"], desplaz, caja_defecto, fps)
-            ini = max(0, cl["inicio_ms"] - desplaz)
-            fin = min(dur_tramo, cl["inicio_ms"] + cl["duracion_ms"] - desplaz)
+            # la capa se lleva al tamaño de su caja (escala del transform) y,
+            # si es translúcida, se atenúa su alfa antes del overlay.
+            capa = f"[{idx}:v]scale={caja_defecto['w']}:{caja_defecto['h']}"
+            if caja_defecto["opacidad"] < 1.0:
+                capa += f",format=rgba,colorchannelmixer=aa={caja_defecto['opacidad']:g}"
+            partes.append(f"{capa}[l{n_png}]")
             salida = f"[o{n_png}]"
-            partes.append(f"{actual}[{idx}:v]overlay=x='{x}':y='{y}':eof_action=repeat:enable='gte(t,{_s(ini)})*lt(t,{_s(fin)})'{salida}")
+            if es_imagen:
+                enable = ""
+            else:
+                ini = max(0, cl["inicio_ms"] - desplaz)
+                fin = min(dur_tramo, cl["inicio_ms"] + cl["duracion_ms"] - desplaz)
+                enable = f":enable='gte(t,{_s(ini)})*lt(t,{_s(fin)})'"
+            partes.append(f"{actual}[l{n_png}]overlay=x='{x}':y='{y}':eof_action=repeat{enable}{salida}")
             actual = salida
     plan.overlays = n_png
 
@@ -237,7 +348,7 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
                     if w["t_ms"] + w["dur_ms"] > desplaz and w["t_ms"] < ventana[1]]
         if palabras:
             plan.ass_texto = sub_mod.generar_ass({**doc["subtitulos"], "palabras": palabras}, doc["formato"])
-            partes.append(f"{actual}subtitles='{rutas['ass']}'[os]")
+            partes.append(f"{actual}subtitles='{_ruta_filtro(rutas['ass'])}':fontsdir='{_ruta_filtro(FONTSDIR)}'[os]")
             actual = "[os]"
     partes.append(f"{actual}format=yuv420p[vout]")
 
@@ -245,27 +356,29 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
     # Presencia de audio: decisión de TODO el documento (no de la ventana) —
     # ver el `elif hay_audio_doc` más abajo y el docstring del módulo.
     hay_audio_doc = any(clip for p in doc["pistas"] if p["tipo"] == "audio" and not p.get("silenciada") and not p.get("oculta") for clip in p.get("clips") or [])
-    # Primera pasada: agrupar los clips de audio por rol_audio, en orden de
-    # pista/clip (así se decide, ya con el conteo real por rol, si el rol usa
-    # su etiqueta simple `[au_<rol>]` o si varios clips necesitan mezclarse).
-    por_rol = {}
+    # Primera pasada: agrupar los clips de audio por grupo de mezcla (`voz`,
+    # `musica` o `sonido` para todo lo demás), en orden de pista/clip — así se
+    # decide, ya con el conteo real por grupo, si el grupo usa su etiqueta
+    # simple `[au_<grupo>]` o si varios clips necesitan sumarse con amix.
+    por_grupo = {}
     for p in pistas:
         if p["tipo"] != "audio" or p.get("silenciada"):
             continue
         for cl in _clips_en(p, ventana):
             rol = cl.get("rol_audio") or "subida"
+            grupo = rol if rol in ("voz", "musica") else _ROLES_SONIDO_GRUPO
             if cl["material_id"] not in rutas:
                 raise ValueError(f"Falta la ruta ('{cl['material_id']}') del clip '{cl['id']}'.")
             idx = len(plan.entradas)
             opciones = ["-stream_loop", "-1"] if rol == "musica" else []
             plan.entradas.append({"ruta": rutas[cl["material_id"]], "opciones": opciones})
-            por_rol.setdefault(rol, []).append((idx, cl))
+            por_grupo.setdefault(grupo, []).append((idx, cl))
 
-    etiquetas_rol = {}
-    for rol, clips_rol in por_rol.items():
-        n = len(clips_rol)
+    etiquetas_grupo = {}
+    for grupo, clips_grupo in por_grupo.items():
+        n = len(clips_grupo)
         sub_etiquetas = []
-        for k, (idx, cl) in enumerate(clips_rol):
+        for k, (idx, cl) in enumerate(clips_grupo):
             rec = cl.get("recorte") or {"desde_ms": 0, "hasta_ms": cl["duracion_ms"]}
             au = cl.get("audio") or {}
             corte_ini = max(ventana[0], cl["inicio_ms"]) - cl["inicio_ms"]
@@ -281,7 +394,7 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             if au.get("fundido_salida_ms") and corte_fin == cl["duracion_ms"]:
                 fin_local = corte_fin - corte_ini
                 filtros.append(f"afade=t=out:st={_s(fin_local - au['fundido_salida_ms'])}:d={_s(au['fundido_salida_ms'])}")
-            # posición del clip dentro del tramo: dos clips del mismo rol
+            # posición del clip dentro del tramo: dos clips del mismo grupo
             # (dos voces que se turnan, por ejemplo) no pueden sonar los dos
             # desde 0 — adelay los deja donde van. Se omite en 0 para que la
             # línea de un solo clip que ya empieza en el arranque del tramo
@@ -289,28 +402,23 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
             ini = max(0, cl["inicio_ms"] - desplaz)
             if ini > 0:
                 filtros.append(f"adelay={ini}|{ini}")
-            # con un solo clip para este rol, la etiqueta queda simple
-            # (`[au_<rol>]`, la que espera `mezcla.filtro_mezcla`); con
+            # con un solo clip para este grupo, la etiqueta queda simple
+            # (`[au_<grupo>]`, la que espera `mezcla.filtro_mezcla`); con
             # varios, cada uno lleva su índice y se suman con amix.
-            etiqueta = f"[au_{rol}]" if n == 1 else f"[au_{rol}_{k}]"
+            etiqueta = f"[au_{grupo}]" if n == 1 else f"[au_{grupo}_{k}]"
             partes.append(f"[{idx}:a]{','.join(filtros)}{etiqueta}")
             sub_etiquetas.append(etiqueta)
         if n == 1:
-            etiquetas_rol[rol] = sub_etiquetas[0]
+            etiquetas_grupo[grupo] = sub_etiquetas[0]
         else:
-            salida_mix = f"[au_{rol}]"
+            salida_mix = f"[au_{grupo}]"
             partes.append(f"{''.join(sub_etiquetas)}amix=inputs={n}:normalize=0{salida_mix}")
-            etiquetas_rol[rol] = salida_mix
+            etiquetas_grupo[grupo] = salida_mix
 
-    voz = etiquetas_rol.get("voz")
-    musica = etiquetas_rol.get("musica")
-    sonido = None
-    for rol, etq in etiquetas_rol.items():
-        if rol not in ("voz", "musica"):
-            sonido = etq
     mz = doc.get("mezcla") or {}
     vol = mezcla.volumenes_para(mz.get("preset"), mz.get("volumenes"))
-    audio = mezcla.filtro_mezcla(voz=voz, sonido=sonido, musica=musica, volumenes=vol)
+    audio = mezcla.filtro_mezcla(voz=etiquetas_grupo.get("voz"), sonido=etiquetas_grupo.get(_ROLES_SONIDO_GRUPO),
+                                 musica=etiquetas_grupo.get("musica"), volumenes=vol)
     if audio:
         partes.append(audio)
         plan.salida_audio = True

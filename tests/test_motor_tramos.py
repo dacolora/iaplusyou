@@ -104,3 +104,15 @@ def test_clip_largo_se_parte_por_tiempo():
 def test_instante_imposible_lanza_error():
     with pytest.raises(ValueError, match="mismo instante"):
         tr.partir(_con_textos(61, 0, 7000))
+
+
+def test_fronteras_usan_la_misma_pista_principal_que_el_compilador():
+    # documento.pista_principal: la primera pista `video` NO oculta (una
+    # imagen listada antes es una capa). Una pista de video oculta que va
+    # primero no debe aportar fronteras.
+    doc = _doc()
+    doc["pistas"].insert(0, {"id": "p_img", "tipo": "imagen", "oculta": False, "clips": []})
+    doc["pistas"].insert(0, {"id": "p_vieja", "tipo": "video", "oculta": True, "clips": [
+        {"id": "x1", "inicio_ms": 0, "duracion_ms": 1000, "material_id": 1, "transicion": None}]})
+    assert tr._fronteras_seguras(doc, 7000) == [4000]
+    assert tr._intervalos_transicion(doc) == [(3500, 4000)]

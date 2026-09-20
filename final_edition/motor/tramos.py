@@ -1,7 +1,7 @@
 """Partición del render por tramos (spec §2.2): cada `overlay` de ffmpeg
 cuesta ~8 MB de RSS; por encima de PRESUPUESTO_OVERLAYS el documento se
 renderiza por ventanas de tiempo y se concatena sin recodificar. Puro."""
-from final_edition.documento import duracion_ms
+from final_edition.documento import duracion_ms, pista_principal
 
 PRESUPUESTO_OVERLAYS = 60
 TRAMO_MIN_MS = 2000
@@ -26,9 +26,10 @@ def contar(doc, inicio_ms, fin_ms):
 
 
 def _fronteras_seguras(doc, total):
-    """Fines de clip de la pista principal, corridos al final de su
+    """Fines de clip de la pista principal (la misma que elige el
+    compilador: `documento.pista_principal`), corridos al final de su
     transición si la hay (nunca se corta dentro de un xfade)."""
-    principal = next((p for p in doc["pistas"] if p["tipo"] == "video"), None)
+    principal = pista_principal(doc)
     puntos = set()
     for c in (principal or {}).get("clips") or []:
         fin = int(c["inicio_ms"]) + int(c["duracion_ms"])
@@ -44,7 +45,7 @@ def _intervalos_transicion(doc):
     """[(fin_A, fin_A + d)] de cada transición de la pista principal: el
     intervalo de salida que ocupa la cola de A mientras B ya empieza en su
     posición exacta. Cortar en ese rango pierde la transición."""
-    principal = next((p for p in doc["pistas"] if p["tipo"] == "video"), None)
+    principal = pista_principal(doc)
     intervalos = []
     for c in (principal or {}).get("clips") or []:
         fin = int(c["inicio_ms"]) + int(c["duracion_ms"])

@@ -266,6 +266,15 @@ def test_velocidad_distinta_de_1_en_audio_se_rechaza():
         d.validar(doc)
 
 
+def test_pista_principal_prefiere_video_sobre_imagen_y_salta_ocultas():
+    doc = d.validar(cargar("video_basico.json"))
+    doc["pistas"].insert(0, {"id": "p_img", "tipo": "imagen", "oculta": False, "clips": []})
+    assert d.pista_principal(doc)["id"] == "p_video"
+    doc["pistas"][1]["oculta"] = True
+    assert d.pista_principal(doc)["id"] == "p_img"
+    assert d.pista_principal({"pistas": []}) is None
+
+
 def test_materiales_se_deriva_de_clips_y_pngs():
     # I9: la lista guardada no es de fiar (el navegador puede olvidarla);
     # validar la deriva de los clips (todas las pistas) y de los PNG.

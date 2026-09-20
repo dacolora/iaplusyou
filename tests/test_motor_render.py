@@ -122,6 +122,26 @@ def test_imagen_estatica_sale_png(tmp_path, medios):
     assert out["miniatura"] == out["archivo"]
 
 
+@pytest.mark.slow
+def test_renderiza_sonido_mas_efecto_y_capa_translucida(tmp_path, medios):
+    # C1 + I2 con ffmpeg real: el amix de sonido+efecto hacia [au_sonido] y
+    # la capa escalada/atenuada (scale + format=rgba,colorchannelmixer) son
+    # grafos que ffmpeg acepta y producen el video completo.
+    doc = _doc()
+    doc["pistas"][1]["clips"][0]["transform"]["escala"] = 1.5
+    doc["pistas"][1]["clips"][0]["transform"]["opacidad"] = 0.5
+    doc["pistas"][3]["clips"] = [
+        {"id": "s1", "inicio_ms": 0, "duracion_ms": 4000, "material_id": 3, "rol_audio": "sonido",
+         "recorte": {"desde_ms": 0, "hasta_ms": 4000}, "audio": {"volumen": 1.0}},
+        {"id": "e1", "inicio_ms": 1000, "duracion_ms": 500, "material_id": 3, "rol_audio": "efecto",
+         "recorte": {"desde_ms": 0, "hasta_ms": 500}, "audio": {"volumen": 1.0}},
+    ]
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "f.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert abs(dur - 7.0) <= 0.2 and "audio" in streams
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+
+
 def test_validar_detecta_tamano_incorrecto(tmp_path, medios):
     from final_edition.motor.compilador import Plan
     plan = Plan(ancho=1080, alto=1920, duracion_ms=8000, salida_audio=False)
