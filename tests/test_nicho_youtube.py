@@ -11,11 +11,11 @@ def _fixture(nombre):
         return json.load(f)
 
 
-def _http_error(status, razon):
+def _http_error(status, razon, uri=None):
     import httplib2
     from googleapiclient.errors import HttpError
     cuerpo = json.dumps({"error": {"code": status, "errors": [{"reason": razon, "message": razon}]}}).encode()
-    return HttpError(httplib2.Response({"status": status}), cuerpo)
+    return HttpError(httplib2.Response({"status": status}), cuerpo, uri=uri)
 
 
 class _Peticion:
@@ -107,7 +107,7 @@ def test_recolectar_busca_pagina_y_salta_comentarios_cerrados(entorno, monkeypat
     monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
     etapas = []
     f = youtube.FuenteYouTube()
-    lista = list(f.recolectar({"palabras_clave": "foot pain", "max_videos": 5, "max_comentarios_por_video": 52, "idioma": "en", "region": "US"},
+    lista = list(f.recolectar({"palabras_clave": "foot pain", "max_videos": 5, "max_comentarios_por_video": 152, "idioma": "en", "region": "US"},
                               avanzar=lambda e, d=None: etapas.append(e)))
     assert [c["fuente_id"] for c in lista] == ["Ugx1", "Ugx2", "Ugx4"]              # "ok" no llega a MIN_TEXTO; vid2 cerrado se salta
     assert lista[0]["fecha"] == "2026-03-01T10:00:00" and lista[0]["contexto"] == "Best slippers for foot pain" and f.aviso == ""
@@ -115,8 +115,8 @@ def test_recolectar_busca_pagina_y_salta_comentarios_cerrados(entorno, monkeypat
     assert b["q"] == "foot pain" and b["type"] == "video" and b["maxResults"] == 5 and b["relevanceLanguage"] == "en" and b["regionCode"] == "US"
     assert b["part"] == "id,snippet"
     h1, h2 = yt.llamadas["commentThreads"][:2]
-    assert h1["videoId"] == "vid00000001" and h1["maxResults"] == 52 and h1["order"] == "relevance" and h1["textFormat"] == "plainText"
-    assert "pageToken" not in h1 and h2["pageToken"] == "P2" and h2["maxResults"] == 50
+    assert h1["videoId"] == "vid00000001" and h1["maxResults"] == youtube.POR_PAGINA and h1["order"] == "relevance" and h1["textFormat"] == "plainText"
+    assert "pageToken" not in h1 and h2["pageToken"] == "P2" and h2["maxResults"] == youtube.POR_PAGINA
     assert etapas[0] == "Buscando" and "Leyendo comentarios" in etapas
 
 
@@ -130,6 +130,7 @@ def test_recolectar_links_sin_busqueda_y_cuota_agotada(entorno, monkeypatch):
     lista = list(f.recolectar({"links": ["https://youtu.be/vid00000003", "https://youtu.be/vid00000001"], "max_comentarios_por_video": 10}))
     assert [c["fuente_id"] for c in lista] == ["Ugx4"] and yt.llamadas["search"] == []
     assert yt.llamadas["videos"][0]["id"] == "vid00000003,vid00000001" and yt.llamadas["videos"][0]["part"] == "snippet"
+    assert yt.llamadas["commentThreads"][0]["maxResults"] == 10            # nunca se piden más de los que caben
     assert "cuota" in f.aviso.lower()
 
 
@@ -174,9 +175,65 @@ def test_recolectar_busqueda_agotada_sigue_con_los_links(entorno, monkeypatch):
                   hilos={"vid00000003": [paginas["pagina2"]], "vid00000001": [paginas["pagina1"], paginas["pagina2"]]})
     monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
     f = youtube.FuenteYouTube()
-    lista = list(f.recolectar({"palabras_clave": "x", "links": ["https://youtu.be/vid00000003", "https://youtu.be/vid00000001"], "max_comentarios_por_video": 10}))
+    lista = list(f.recolectar({"palabras_clave": "x", "links": ["https://youtu.be/vid00000003", "https://youtu.be/vid00000001"], "max_comentarios_por_video": 150}))
     assert [c["fuente_id"] for c in lista] == ["Ugx4", "Ugx1", "Ugx2", "Ugx4"]
     assert "búsquedas del día" in f.aviso
+
+
+def test_error_de_google_no_filtra_la_llave(entorno, monkeypatch):
+    """I3: el HttpError de googleapiclient trae la URI con key=<llave>; el mensaje
+    que sale de la fuente se arma con `razon`, nunca con str(e)."""
+    from nicho.fuentes import base, youtube
+    uri = "https://youtube.googleapis.com/youtube/v3/commentThreads?part=snippet&key=SECRETA"
+    yt = _YouTube(videos=[_fixture("youtube_videos.json")],
+                  hilos={"vid00000003": [_http_error(500, "processingFailure", uri=uri)]})
+    monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
+    f = youtube.FuenteYouTube()
+    with pytest.raises(base.ErrorFuente) as e:
+        list(f.recolectar({"links": ["https://youtu.be/vid00000003"], "max_comentarios_por_video": 10}))
+    assert "SECRETA" not in str(e.value) and "SECRETA" not in f.aviso
+    assert "processingFailure" in str(e.value) and "YOUTUBE_API_KEY" in str(e.value)
+
+
+def test_cuota_a_media_paginacion_entrega_lo_leido(entorno, monkeypatch):
+    """I5 (spec §3.4): las páginas ya leídas gastaron cuota, así que se entregan
+    antes de aplicar la decisión del error."""
+    from nicho.fuentes import youtube
+    paginas = _fixture("youtube_comment_threads.json")
+    yt = _YouTube(videos=[_fixture("youtube_videos.json")],
+                  hilos={"vid00000003": [paginas["pagina1"], _http_error(403, "quotaExceeded")]})
+    monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
+    f = youtube.FuenteYouTube()
+    lista = list(f.recolectar({"links": ["https://youtu.be/vid00000003"], "max_comentarios_por_video": 150}))
+    assert [c["fuente_id"] for c in lista] == ["Ugx1", "Ugx2"]          # la 1.ª página no se pierde
+    assert "cuota" in f.aviso.lower() and len(yt.llamadas["commentThreads"]) == 2
+
+
+def test_comentarios_cerrados_a_media_paginacion_entrega_lo_leido(entorno, monkeypatch):
+    """I5: lo mismo con commentsDisabled (el video se salta, pero lo leído queda)."""
+    from nicho.fuentes import youtube
+    paginas = _fixture("youtube_comment_threads.json")
+    yt = _YouTube(videos=[_fixture("youtube_videos.json")],
+                  hilos={"vid00000003": [paginas["pagina1"], _http_error(403, "commentsDisabled")],
+                         "vid00000001": [paginas["pagina2"]]})
+    monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
+    f = youtube.FuenteYouTube()
+    lista = list(f.recolectar({"links": ["https://youtu.be/vid00000003", "https://youtu.be/vid00000001"], "max_comentarios_por_video": 150}))
+    assert [c["fuente_id"] for c in lista] == ["Ugx1", "Ugx2", "Ugx4"] and f.aviso == ""
+
+
+def test_tope_de_paginas_por_video(entorno, monkeypatch):
+    """I5: un nextPageToken eterno (o páginas vacías) no pagina para siempre: el
+    tope es ceil(max_n / POR_PAGINA) páginas."""
+    from nicho.fuentes import youtube
+    eterna = {"nextPageToken": "P", "items": []}
+    yt = _YouTube(videos=[_fixture("youtube_videos.json")],
+                  hilos={"vid00000003": [eterna] * 4, "vid00000001": [{"items": []}]})
+    monkeypatch.setattr(youtube, "cliente_api", lambda: yt)
+    f = youtube.FuenteYouTube()
+    lista = list(f.recolectar({"links": ["https://youtu.be/vid00000003"], "max_comentarios_por_video": 150}))
+    assert lista == [] and f.aviso == ""
+    assert len([kw for kw in yt.llamadas["commentThreads"] if kw.get("videoId") == "vid00000003"]) == 2   # ceil(150 / 100)
 
 
 def test_recolectar_dedup_links_y_busqueda_youtube(entorno, monkeypatch):

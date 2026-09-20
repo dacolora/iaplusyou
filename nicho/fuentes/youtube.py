@@ -14,8 +14,15 @@ idioma (relevanceLanguage) y region (regionCode). Un video con comentarios
 cerrados (`commentsDisabled`) se salta; cuota agotada (`quotaExceeded`,
 `rateLimitExceeded`, `dailyLimitExceeded`) entrega lo leído con `aviso`;
 llave inválida o API no habilitada -> ErrorFuente. Nunca se guarda el autor.
+
+Cuota gastada = cuota entregada: un error a mitad de la paginación de un video
+no descarta sus páginas anteriores (`comentarios_video` devuelve
+`(comentarios, error)` y la decisión se aplica DESPUÉS de entregarlas). El
+mensaje de un HttpError se arma siempre con `razon(e)`, nunca con `str(e)`: el
+repr de googleapiclient incluye la URI, y la URI lleva `key=<llave>`.
 """
 import json
+import math
 import os
 import re
 
@@ -130,19 +137,26 @@ def videos_por_id(yt, ids):
 
 
 def comentarios_video(yt, video, max_n):
-    """Páginas de commentThreads hasta max_n. Lanza HttpError tal cual (la fuente decide)."""
+    """Devuelve `(comentarios, error)` con las páginas de commentThreads hasta
+    max_n y como máximo ceil(max_n / POR_PAGINA) páginas (un nextPageToken
+    eterno no pagina para siempre). Un HttpError a mitad de la paginación NO se
+    lanza: las páginas ya leídas gastaron cuota, así que se devuelven junto con
+    el error y el llamador decide después de entregarlas (spec §3.4)."""
     salida, token = [], None
-    while len(salida) < max_n:
+    for _ in range(max(1, math.ceil(max_n / POR_PAGINA))):
         consulta = {"part": "snippet", "videoId": video["id"], "maxResults": min(POR_PAGINA, max_n - len(salida)),
                     "order": "relevance", "textFormat": "plainText"}
         if token:
             consulta["pageToken"] = token
-        resp = yt.commentThreads().list(**consulta).execute()
+        try:
+            resp = yt.commentThreads().list(**consulta).execute()
+        except HttpError as e:
+            return salida[:max_n], e
         salida += parsear_hilos(resp, video)
         token = (resp or {}).get("nextPageToken")
-        if not token:
+        if not token or len(salida) >= max_n:
             break
-    return salida[:max_n]
+    return salida[:max_n], None
 
 
 class FuenteYouTube(Fuente):
@@ -189,18 +203,18 @@ class FuenteYouTube(Fuente):
         pendientes = pendientes[:MAX_VIDEOS]
         for n, video in enumerate(pendientes, start=1):
             avanzar("Leyendo comentarios", f"video {n} de {len(pendientes)}")
-            try:
-                hilos = comentarios_video(yt, video, p["max_comentarios_por_video"])
-            except HttpError as e:
-                motivo = razon(e)
-                if motivo == "commentsDisabled":
-                    continue
-                if motivo in _CUOTA:
-                    self.aviso = (f"YouTube agotó la cuota diaria; se guardó lo leído hasta el video {n - 1} de {len(pendientes)}. "
-                                  "Vuelve a recolectar mañana.")
-                    return
-                raise _error_llave(e)
-            for crudo in hilos:
+            hilos, error = comentarios_video(yt, video, p["max_comentarios_por_video"])
+            for crudo in hilos:                        # primero lo leído: esas páginas ya gastaron cuota
                 c = normalizar_comentario(crudo)
                 if c:
                     yield c
+            if error is None:
+                continue
+            motivo = razon(error)                      # nunca str(error): la URI lleva key=<llave>
+            if motivo == "commentsDisabled":
+                continue
+            if motivo in _CUOTA:
+                self.aviso = (f"YouTube agotó la cuota diaria; se guardó lo leído hasta el video {n} de {len(pendientes)}. "
+                              "Vuelve a recolectar mañana.")
+                return
+            raise _error_llave(error)

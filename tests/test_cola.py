@@ -86,6 +86,12 @@ def test_sin_token():
     # Minor #8: la upload_url de TikTok trae upload_token=…
     assert cola.sin_token("413 for url: https://open-upload.tiktokapis.com/video/?upload_id=7&upload_token=ABC.def") == \
         "413 for url: https://open-upload.tiktokapis.com/video/?upload_id=7&upload_token=***"
+    # I3: un HttpError de Google trae la URI con key=<llave de YouTube>
+    assert cola.sin_token("HttpError 403 when requesting https://youtube.googleapis.com/x?part=id&key=AIzaSyX returned") == \
+        "HttpError 403 when requesting https://youtube.googleapis.com/x?part=id&key=*** returned"
+    assert cola.sin_token("Meta: token=EAAB123 caducó") == "Meta: token=*** caducó"
+    # el paréntesis que cierra no es parte del token
+    assert cola.sin_token("(access_token=abc).") == "(access_token=***)."
 
 
 def test_sin_token_no_recorta_y_recortar_si():
