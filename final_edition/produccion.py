@@ -38,12 +38,17 @@ class VozIncompleta(Exception):
 class VozFatal(ValueError):
     """Falló la voz del PRIMER bloque (voz.ErrorPrimerBloque): fatal, pero lo
     que ya se pagó y las capas ya construidas viajan con la excepción para
-    que quien produce las registre (gasto y `capas` de la final)."""
+    que quien produce las registre (gasto y `capas` de la final). `.costo`/
+    `.capas` quedan para las pruebas de Task 7; `.costo_pagado`/
+    `.capas_pagadas` son el mismo par bajo el nombre genérico que `producir`
+    lee de CUALQUIER excepción pagada (ver `asegurar_borrador`/`traducir`)."""
 
     def __init__(self, mensaje, costo, capas):
         super().__init__(mensaje)
         self.costo = costo
         self.capas = capas
+        self.costo_pagado = costo
+        self.capas_pagadas = capas
 
 
 def _mensaje(e):
@@ -104,79 +109,88 @@ def asegurar_borrador(cliente, cf_id, entry, guion_base, guion, o, avisar):
         return existente, capas, 0.0, False
 
     capas, costo, degradada = {}, 0.0, False
-    carpeta = _carpeta_borrador(cliente, cf_id)
-    # 1. clon como material + cortes → segmentos
-    avisar(ETAPAS_FINAL[1][0])
-    clon_local = final_edition._clon_local(cliente, cf_id, entry)
-    clon_mat, _ = insumos.clon(cliente, cf_id, entry, clon_local)
-    extra_clon = clon_mat.get("extra") or {}
-    cortes_s = [c / 1000.0 for c in extra_clon.get("cortes_ms") or []]
-    duracion_clon = int(clon_mat["duracion_ms"] or 0) / 1000.0
-    fin_guion = (guion.get("bloques") or [{}])[-1].get("fin_s") or duracion_clon
-    segmentos = cortes.planificar_segmentos(duracion_clon, cortes_s, float(fin_guion))
-    if not segmentos:
-        raise RuntimeError("El clon no da para ningún segmento.")
-    _capa(capas, "cortes", "ffmpeg", {"cortes": cortes_s, "segmentos": len(segmentos)})
-    duracion_final = float(segmentos[-1]["fin"])
-    # 1b. sonido de la escena (gratis; el clon mudo no degrada la pieza)
-    pedir_sonido = bool(o.get("con_sonido", True)) and o.get("sonido") == "nativo"
-    params_sonido = {"sonido": o.get("sonido"), "mezcla": o.get("mezcla") or mezcla.PRESET_DEFECTO,
-                     "volumenes": mezcla.volumenes_para(o.get("mezcla"), o.get("volumenes"))}
-    if not pedir_sonido:
-        _capa(capas, "sonido", "nativo", params_sonido, estado="omitida")
-    elif extra_clon.get("tiene_audio") is True:
-        _capa(capas, "sonido", "nativo", params_sonido, estado="ok")
-    else:
-        _capa(capas, "sonido", "nativo", params_sonido, estado="ausente")
-    # 2. voz por bloque (degradable, salvo el primer bloque)
-    avisar(ETAPAS_FINAL[2][0])
-    voces = None
-    if not o.get("con_voz", True):
-        _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="omitida")
-    else:
-        try:
-            voces, c = _voces_bloques(cliente, guion, o.get("voz"), carpeta)
-            costo += c
-            _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, c)
-        except voz_mod.ErrorPrimerBloque as e:
-            _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
-            raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{o.get('voz')}'): {e}",
-                          round(costo, 4), capas) from e
-        except VozIncompleta as e:
-            degradada, voces = True, None
-            costo += e.costo
-            _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, e.costo, estado="error", error=_mensaje(e))
-    # 3. música (degradable)
-    avisar(ETAPAS_FINAL[3][0])
-    musica = None
-    if not o.get("con_musica", True):
-        _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica")}, estado="omitida")
-    else:
-        try:
-            mat, c = insumos.musica(cliente, o.get("estilo_musica"), duracion_final)
-            musica = {"id": mat["id"]}
-            costo += c
-            _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica"), "url": mat.get("url")}, c)
-        except Exception as e:
-            degradada = True
-            _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica")}, estado="error", error=_mensaje(e))
-    # 4. el documento
-    logo = insumos.logo(cliente)
-    marca = {"color": final_edition._color_acento(cliente),
-             "logo": ({"id": logo["id"], "ancho": logo["ancho"], "alto": logo["alto"]}
-                      if logo and logo.get("ancho") and logo.get("alto") else None)}
-    _capa(capas, "texto", "pillow", {"formato": formato, "logo": bool(marca["logo"])})
-    origen = {"tipo": "borrador", "cf_id": cf_id, "variante": o.get("variante"), "variante_tipo": o.get("variante_tipo"),
-              "receta": rec, "degradada": degradada, "capas": copy.deepcopy(capas)}
-    clon = {"id": clon_mat["id"], "duracion_ms": clon_mat["duracion_ms"], "ancho": clon_mat.get("ancho"),
-            "alto": clon_mat.get("alto"), "tiene_audio": extra_clon.get("tiene_audio")}
-    doc = borrador.armar_documento(guion, segmentos, clon, voces, musica, marca, formato,
-                                   {"con_sonido": pedir_sonido, "mezcla": o.get("mezcla"), "volumenes": o.get("volumenes")},
-                                   origen=origen)
-    nombre = "Borrador" if o.get("variante") is None else f"Variante {int(o['variante'])} ({o.get('variante_tipo')})"
-    nombre += " · " + (entry.get("accion_central") or cf_id)[:60]
-    edicion = ediciones.crear(cliente, "video", nombre, doc, cf_id=cf_id, creada_por="final_edition")
-    return edicion, capas, round(costo, 4), True
+    try:
+        carpeta = _carpeta_borrador(cliente, cf_id)
+        # 1. clon como material + cortes → segmentos
+        avisar(ETAPAS_FINAL[1][0])
+        clon_local = final_edition._clon_local(cliente, cf_id, entry)
+        clon_mat, _ = insumos.clon(cliente, cf_id, entry, clon_local)
+        extra_clon = clon_mat.get("extra") or {}
+        cortes_s = [c / 1000.0 for c in extra_clon.get("cortes_ms") or []]
+        duracion_clon = int(clon_mat["duracion_ms"] or 0) / 1000.0
+        fin_guion = (guion.get("bloques") or [{}])[-1].get("fin_s") or duracion_clon
+        segmentos = cortes.planificar_segmentos(duracion_clon, cortes_s, float(fin_guion))
+        if not segmentos:
+            raise RuntimeError("El clon no da para ningún segmento.")
+        _capa(capas, "cortes", "ffmpeg", {"cortes": cortes_s, "segmentos": len(segmentos)})
+        duracion_final = float(segmentos[-1]["fin"])
+        # 1b. sonido de la escena (gratis; el clon mudo no degrada la pieza)
+        pedir_sonido = bool(o.get("con_sonido", True)) and o.get("sonido") == "nativo"
+        params_sonido = {"sonido": o.get("sonido"), "mezcla": o.get("mezcla") or mezcla.PRESET_DEFECTO,
+                         "volumenes": mezcla.volumenes_para(o.get("mezcla"), o.get("volumenes"))}
+        if not pedir_sonido:
+            _capa(capas, "sonido", "nativo", params_sonido, estado="omitida")
+        elif extra_clon.get("tiene_audio") is True:
+            _capa(capas, "sonido", "nativo", params_sonido, estado="ok")
+        else:
+            _capa(capas, "sonido", "nativo", params_sonido, estado="ausente")
+        # 2. voz por bloque (degradable, salvo el primer bloque)
+        avisar(ETAPAS_FINAL[2][0])
+        voces = None
+        if not o.get("con_voz", True):
+            _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="omitida")
+        else:
+            try:
+                voces, c = _voces_bloques(cliente, guion, o.get("voz"), carpeta)
+                costo += c
+                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, c)
+            except voz_mod.ErrorPrimerBloque as e:
+                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, estado="error", error=_mensaje(e))
+                raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{o.get('voz')}'): {e}",
+                              round(costo, 4), capas) from e
+            except VozIncompleta as e:
+                degradada, voces = True, None
+                costo += e.costo
+                _capa(capas, "voz", "fal/elevenlabs", {"voz": o.get("voz")}, e.costo, estado="error", error=_mensaje(e))
+        # 3. música (degradable)
+        avisar(ETAPAS_FINAL[3][0])
+        musica = None
+        if not o.get("con_musica", True):
+            _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica")}, estado="omitida")
+        else:
+            try:
+                mat, c = insumos.musica(cliente, o.get("estilo_musica"), duracion_final)
+                musica = {"id": mat["id"]}
+                costo += c
+                _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica"), "url": mat.get("url")}, c)
+            except Exception as e:
+                degradada = True
+                _capa(capas, "musica", "fal/stable-audio", {"estilo": o.get("estilo_musica")}, estado="error", error=_mensaje(e))
+        # 4. el documento
+        logo = insumos.logo(cliente)
+        marca = {"color": final_edition._color_acento(cliente),
+                 "logo": ({"id": logo["id"], "ancho": logo["ancho"], "alto": logo["alto"]}
+                          if logo and logo.get("ancho") and logo.get("alto") else None)}
+        _capa(capas, "texto", "pillow", {"formato": formato, "logo": bool(marca["logo"])})
+        origen = {"tipo": "borrador", "cf_id": cf_id, "variante": o.get("variante"), "variante_tipo": o.get("variante_tipo"),
+                  "receta": rec, "degradada": degradada, "capas": copy.deepcopy(capas)}
+        clon = {"id": clon_mat["id"], "duracion_ms": clon_mat["duracion_ms"], "ancho": clon_mat.get("ancho"),
+                "alto": clon_mat.get("alto"), "tiene_audio": extra_clon.get("tiene_audio")}
+        doc = borrador.armar_documento(guion, segmentos, clon, voces, musica, marca, formato,
+                                       {"con_sonido": pedir_sonido, "mezcla": o.get("mezcla"), "volumenes": o.get("volumenes")},
+                                       origen=origen)
+        nombre = "Borrador" if o.get("variante") is None else f"Variante {int(o['variante'])} ({o.get('variante_tipo')})"
+        nombre += " · " + (entry.get("accion_central") or cf_id)[:60]
+        edicion = ediciones.crear(cliente, "video", nombre, doc, cf_id=cf_id, creada_por="final_edition")
+        return edicion, capas, round(costo, 4), True
+    except VozFatal:
+        raise
+    except Exception as e:
+        # Lo pagado y las capas construidas viajan con cualquier fallo (un
+        # Conflicto al guardar, un proveedor caído) para que `producir` lo registre.
+        e.costo_pagado = round(costo, 4)
+        e.capas_pagadas = capas
+        raise
 
 
 def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
@@ -194,35 +208,44 @@ def traducir(cliente, edicion, idioma, pais, precio, nombre_voz, con_voz):
     pagado y las capas construidas hasta ahí) y la edición no se guarda."""
     doc = edicion["documento"]
     capas, costo = {}, 0.0
-    params = {"idioma": idioma, "pais": pais, "precio": precio}
-    if borrador.tiene_destino(doc, idioma, pais):
-        _capa(capas, "guion", "anthropic", params, 0.0)
-        nuevo = borrador.fijar_precio(doc, idioma, pais, precio)
-    else:
-        if borrador.tiene_textos(doc, idioma, pais):
-            g, c = borrador.guion_destino(doc, idioma, pais), 0.0
+    try:
+        params = {"idioma": idioma, "pais": pais, "precio": precio}
+        if borrador.tiene_destino(doc, idioma, pais):
+            _capa(capas, "guion", "anthropic", params, 0.0)
+            nuevo = borrador.fijar_precio(doc, idioma, pais, precio)
         else:
-            g, c = guion_mod.localizar_guion(doc.get("guion") or {}, idioma, pais, precio)
-        costo += float(c or 0.0)
-        _capa(capas, "guion", "anthropic", params, c)
-        voces = None
-        hay_pista_voz = any(p["tipo"] == "audio" and any(cl.get("rol_audio") == "voz" for cl in p["clips"]) for p in doc["pistas"])
-        if con_voz and hay_pista_voz:
-            carpeta = _carpeta_borrador(cliente, edicion.get("cf_id") or f"ed{edicion['id']}")
-            try:
-                voces, cv = _voces_bloques(cliente, g, nombre_voz, carpeta)
-                costo += cv
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, cv)
-            except voz_mod.ErrorPrimerBloque as e:
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=_mensaje(e))
-                raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{nombre_voz}'): {e}",
-                              round(costo, 4), capas) from e
-            except VozIncompleta as e:
-                costo += e.costo
-                _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
-        nuevo = borrador.agregar_destino(doc, g, voces, precio)
-    ediciones.guardar(cliente, edicion["id"], nuevo, edicion["version_n"])
-    return ediciones.cargar(cliente, edicion["id"]), capas, round(costo, 4)
+            if borrador.tiene_textos(doc, idioma, pais):
+                g, c = borrador.guion_destino(doc, idioma, pais), 0.0
+            else:
+                g, c = guion_mod.localizar_guion(doc.get("guion") or {}, idioma, pais, precio)
+            costo += float(c or 0.0)
+            _capa(capas, "guion", "anthropic", params, c)
+            voces = None
+            hay_pista_voz = any(p["tipo"] == "audio" and any(cl.get("rol_audio") == "voz" for cl in p["clips"]) for p in doc["pistas"])
+            if con_voz and hay_pista_voz:
+                carpeta = _carpeta_borrador(cliente, edicion.get("cf_id") or f"ed{edicion['id']}")
+                try:
+                    voces, cv = _voces_bloques(cliente, g, nombre_voz, carpeta)
+                    costo += cv
+                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, cv)
+                except voz_mod.ErrorPrimerBloque as e:
+                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, estado="error", error=_mensaje(e))
+                    raise VozFatal(f"No se pudo generar la voz (revisa la voz elegida, '{nombre_voz}'): {e}",
+                                  round(costo, 4), capas) from e
+                except VozIncompleta as e:
+                    costo += e.costo
+                    _capa(capas, "voz", "fal/elevenlabs", {"voz": nombre_voz}, e.costo, estado="error", error=_mensaje(e))
+            nuevo = borrador.agregar_destino(doc, g, voces, precio)
+        ediciones.guardar(cliente, edicion["id"], nuevo, edicion["version_n"])
+        return ediciones.cargar(cliente, edicion["id"]), capas, round(costo, 4)
+    except VozFatal:
+        raise
+    except Exception as e:
+        # Lo pagado y las capas construidas viajan con cualquier fallo (un
+        # Conflicto al guardar, un proveedor caído) para que `producir` lo registre.
+        e.costo_pagado = round(costo, 4)
+        e.capas_pagadas = capas
+        raise
 
 
 def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_sufijo=""):
@@ -280,6 +303,11 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             # de la misma variante la leen del documento (doc["guion"]).
             guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, final_edition._guia_marca(cliente))
             costo += float(costo_variante or 0.0)
+            # Capa "guion" desde ya: si el borrador falla más abajo (p. ej.
+            # voz fatal), lo que costó variar el guion no debe quedar fuera
+            # de `capas` (la sobrescribe la de después con el costo completo).
+            _capa(capas, "guion", "anthropic",
+                  {"idioma": idioma, "pais": pais, "precio": None, "variante_tipo": variante_tipo}, costo_variante)
     except Exception as e:
         _capa(capas, "guion", "anthropic", {"variante_tipo": variante_tipo} if variante_tipo else {},
               estado="error", error=_mensaje(e))
@@ -321,9 +349,11 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
                                           "tramos": res["tramos"], "con_ass": res["con_ass"],
                                           "mezcla": o.get("mezcla") or mezcla.PRESET_DEFECTO})
     except Exception as e:
-        if isinstance(e, VozFatal):
-            capas.update(e.capas)
-            costo += e.costo
+        # Lo pagado y las capas construidas viajan con CUALQUIER excepción
+        # pagada (VozFatal u otra: un Conflicto al guardar, un proveedor
+        # caído) — no solo VozFatal — para no perder el cobro.
+        capas.update(getattr(e, "capas_pagadas", None) or {})
+        costo += float(getattr(e, "costo_pagado", 0.0) or 0.0)
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
                                        costo_usd=round(costo, 4), guion=guion)
         final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, _ordenar(capas),
@@ -332,10 +362,15 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
 
     capas = _ordenar(capas)
     degradada = any((capas.get(k) or {}).get("estado") == "error" for k in ("voz", "musica"))
-    creative_flow.actualizar_final(
-        cliente, final_id, estado="degradada" if degradada else "listo", url_video=res["url_video"],
-        url_miniatura=res["url_miniatura"], duracion_s=float(res["duracion_s"]), capas=capas,
-        costo_usd=round(costo, 4), guion=guion, error=None)
-    ediciones.apuntar_final(cliente, final_id, version["id"])
+    # La fila la creó `crear_final` al principio: si ya no está, algo la
+    # borró en el camino — un error del worker, nada que escribirle. El
+    # gasto se registra DESPUÉS de las dos comprobaciones.
+    if not creative_flow.actualizar_final(
+            cliente, final_id, estado="degradada" if degradada else "listo", url_video=res["url_video"],
+            url_miniatura=res["url_miniatura"], duracion_s=float(res["duracion_s"]), capas=capas,
+            costo_usd=round(costo, 4), guion=guion, error=None):
+        raise RuntimeError(f"La final {final_id} no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
+    if not ediciones.apuntar_final(cliente, final_id, version["id"]):
+        raise RuntimeError(f"La final {final_id} no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
     final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
     return final_id, creative_flow.final_por_legado(cliente, final_id)
