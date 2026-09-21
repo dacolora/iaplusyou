@@ -202,6 +202,18 @@ def test_recolectar_corrida_fallida_y_llave_rechazada(entorno_apify, monkeypatch
     assert "productUrls is required" in str(e.value)
 
 
+def test_corrida_sin_dataset_conserva_el_id(entorno_apify, monkeypatch):
+    """C2: si Apify arrancó la corrida pero no dijo el dataset, el id igual queda en
+    la fuente (la corrida pudo cobrar) y sale en el mensaje."""
+    from nicho.fuentes import _http, apify, base
+    s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_x", "status": "READY"}})})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = apify.FuenteApify()
+    with pytest.raises(base.ErrorFuente) as e:
+        list(f.recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 10}))
+    assert "run_x" in str(e.value) and f.run_id == "run_x" and f.resultados == 0
+
+
 def test_recolectar_vence_por_tiempo(entorno_apify, monkeypatch):
     """C2: al vencer el reloj local el dataset se lee igual (la corrida ya se pagó);
     vacío, el error dice los 20 min y la corrida."""

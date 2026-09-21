@@ -110,9 +110,11 @@ class FuenteApify(Fuente):
         if r.status_code not in (200, 201):
             raise ErrorFuente(f"Apify no arrancó la corrida ({r.status_code}).")
         corrida = (r.json() or {}).get("data") or {}
-        if not corrida.get("id") or not corrida.get("defaultDatasetId"):
-            raise ErrorFuente("Apify no devolvió el id de la corrida.")
-        self.run_id, self.dataset_id = corrida["id"], corrida["defaultDatasetId"]
+        self.run_id, self.dataset_id = corrida.get("id") or None, corrida.get("defaultDatasetId") or None
+        if not self.run_id or not self.dataset_id:
+            # Si el id sí vino, queda guardado igual: la corrida pudo arrancar (y cobrar).
+            raise ErrorFuente(f"Apify no devolvió los ids de la corrida (corrida {self.run_id or '?'}, "
+                              f"dataset {self.dataset_id or '?'}); revísala en console.apify.com.")
         return corrida.get("status") or "READY"
 
     def _sondear(self, sesion, token, estado, avanzar):
