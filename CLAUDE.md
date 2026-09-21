@@ -293,7 +293,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 `tareas/final_edition.py`; the dashboard routes are `fe_preparar`, `fe_guardar_guion`,
 `fe_producir`, `fe_descartar`.
 
-**Editor (capa 1, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–2, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -338,8 +338,8 @@ partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
 (`motor/subtitulos.py`) only when the host ffmpeg has libass (`render.tiene_libass()`,
 cached: the VPS does, the dev Mac doesn't — `renderizar` reports the omission via
 `on_etapa`). Worker tasks in `tareas/edicion.py`: `edicion_producir` renders the FROZEN
-version (`max_intentos=1`, no gasto yet — capa 2 adds voice/music via
-`gastos.registrar_seguro`; the route must `crear_final` BEFORE enqueuing — the task
+version (`max_intentos=1`, no spend of its own: the automatic path pays in
+`final_edition/produccion.py`; the route must `crear_final` BEFORE enqueuing — the task
 raises if `actualizar_final`/`apuntar_final` find no row — and `idioma`/`pais` are
 shape-checked before the work folder exists; `preparar_rutas` stamps `imagen` clip sizes
 from the material row and runs `compilador.verificar_recortes` with the known

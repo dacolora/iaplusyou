@@ -240,7 +240,10 @@ def ejecutar_proxy(tarea):
             cortes.ffmpeg(["-i", original, "-vf", f"fps=1,scale=160:-2,tile={celdas}x1", "-frames:v", "1", "-q:v", "6", tira], timeout=600)
             campos["url_proxy"] = r2_uploader.upload_file(proxy, f"clientes/{cliente}/materiales/{mid}_proxy.mp4", "video/mp4")
             extra["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
-            extra["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
+            if "cortes_ms" not in extra:
+                # `insumos.clon` ya los midió al crear el material (I4,
+                # plan-mandated capa 2): no repetir el trabajo de `scdet`.
+                extra["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
         else:  # audio (único otro tipo posible tras el chequeo de arriba)
             campos["duracion_ms"] = int(round(cortes.duracion(original) * 1000))
             extra["picos"] = _picos(original)

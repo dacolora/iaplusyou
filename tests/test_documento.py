@@ -358,6 +358,30 @@ def test_por_destino_en_voz_cambia_material_y_duracion_y_cuenta_en_materiales():
         d.validar(doc)
 
 
+def test_por_destino_none_es_sin_voz_y_quita_el_clip_al_resolver():
+    # Decisión 1 (capa 2): un None explícito en por_destino[clave] dice "este
+    # destino no tiene voz" — nunca cae al material_id crudo del clip (que
+    # sería la voz de OTRO idioma/país).
+    doc = cargar("video_basico.json")
+    doc["variables"]["textos"]["hook"]["pt"] = "Alguma coisa"   # para que "pt" no falle antes en el texto
+    voz = doc["pistas"][2]["clips"][0]
+    voz["bloque"] = "hook"
+    voz["por_destino"] = {"es_CO": {"material_id": 2, "duracion_ms": 7000},
+                         "es": {"material_id": 2, "duracion_ms": 7000},
+                         "en_US": None}
+    v = d.validar(doc)                                   # acepta el None
+    en = d.resolver(v, "en", "US")
+    assert en["pistas"][2]["clips"] == []                 # se quita: no hay voz para en_US
+    assert en["materiales"] == [1, 3]                     # sin la voz base (material 2)
+    pt = d.resolver(v, "pt", "BR")                        # ni clave ni idioma en por_destino
+    assert pt["pistas"][2]["clips"] == []
+    mx = d.resolver(v, "es", "MX")                        # sin es_MX: usa la clave "es"
+    assert mx["pistas"][2]["clips"][0]["material_id"] == 2
+    # un clip sin por_destino se conserva en cualquier destino
+    intacto = d.validar(cargar("video_basico.json"))
+    assert d.resolver(intacto, "en", "US")["pistas"][2]["clips"][0]["material_id"] == 2
+
+
 def test_ken_burns_solo_in_out():
     doc = cargar("video_basico.json")
     doc["pistas"][0]["clips"][0]["ken_burns"] = "in"

@@ -266,8 +266,10 @@ esperado.
   destino, `max_intentos=1` (paga solo materiales nuevos). Etapas: materiales →
   voz → música → render → subida.
 - `edicion_proxy` `{cliente, material_id}`: `max_intentos=3`, gratis.
-- `final_producir` (existente) pasa a: borrador → documento por defecto →
-  `edicion_producir`. Derivaciones y experimentos no cambian.
+- `final_producir` (existente) pasa a: borrador → documento → traducción del
+  destino → versión → render (en la MISMA tarea, por
+  `tareas.edicion.renderizar_final`; ver la decisión 5 del bloque de estado).
+  Derivaciones y experimentos no cambian.
 - Periódica `materiales_limpiar` (diaria): borra `png_texto` y proxies sin uso
   hace 30 días; originales, voces y músicas se conservan.
 

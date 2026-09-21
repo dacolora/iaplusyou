@@ -24,8 +24,11 @@ pasada a fracciones del lienzo):
 
 Claves por destino (decisión 1 de la capa 2): el destino base se escribe
 bajo `<idioma>_<PAIS>` y bajo `<idioma>` (respaldo para otro país del
-mismo idioma sin traducción propia); `agregar_destino` escribe solo la
-clave del destino."""
+mismo idioma sin traducción propia) — por eso el `material_id` crudo del
+clip nunca es un respaldo legítimo cuando hay `por_destino`; `agregar_destino`
+escribe solo la clave del destino, y `None` explícito (no la clave omitida)
+cuando ese destino no tiene locución, para que `documento.resolver` quite el
+clip en vez de heredar la voz de otro idioma/país."""
 import copy
 import hashlib
 import json
@@ -225,7 +228,9 @@ def tiene_textos(doc, idioma, pais):
 
 def tiene_destino(doc, idioma, pais):
     """True si `tiene_textos` para ese destino y, si hay pista de voz, cada
-    clip de voz trae su material para ese destino."""
+    clip de voz trae su material `{material_id, duracion_ms}` para ese
+    destino — un `None` explícito (sin locución) cuenta como «sin voz» y
+    devuelve False, para que un reintento vuelva a sintetizarla."""
     if not tiene_textos(doc, idioma, pais):
         return False
     clave = f"{idioma}_{pais}"
@@ -233,7 +238,7 @@ def tiene_destino(doc, idioma, pais):
         if p.get("tipo") != "audio":
             continue
         for c in p.get("clips") or []:
-            if c.get("rol_audio") == "voz" and clave not in (c.get("por_destino") or {}):
+            if c.get("rol_audio") == "voz" and not isinstance((c.get("por_destino") or {}).get(clave), dict):
                 return False
     return True
 
@@ -241,8 +246,12 @@ def tiene_destino(doc, idioma, pais):
 def agregar_destino(doc, guion_destino, voces, precio=None):
     """Copia del documento con el destino de `guion_destino` (textos y voz
     por variable, material de voz por bloque, subtítulos, precio). `voces`
-    None = ese destino sin locución (no cuenta como traducido del todo:
-    `tiene_destino` sigue False si hay pista de voz)."""
+    None (o sin el bloque de un clip) = ese destino sin locución: se
+    escribe `por_destino[clave] = None` EXPLÍCITO en ese clip de voz — «este
+    destino no tiene voz» — en vez de omitir la clave, para que
+    `documento.resolver` lo quite en vez de heredar la voz de otro
+    idioma/país. `tiene_destino` sigue False mientras haya un clip de voz
+    sin su `{material_id, duracion_ms}` para este destino."""
     res = copy.deepcopy(doc)
     idioma, pais = guion_destino.get("idioma") or "es", guion_destino.get("pais") or "CO"
     clave = f"{idioma}_{pais}"
@@ -253,17 +262,19 @@ def agregar_destino(doc, guion_destino, voces, precio=None):
         var["voz"].setdefault(bl["rol"], {})[clave] = bl.get("texto_voz") or ""
     total_ms = fin_principal(res)
     palabras = []
-    if voces:
-        for p in res["pistas"]:
-            if p["tipo"] != "audio":
+    for p in res["pistas"]:
+        if p["tipo"] != "audio":
+            continue
+        for c in p["clips"]:
+            if c.get("rol_audio") != "voz":
                 continue
-            for c in p["clips"]:
-                v = voces.get(c.get("bloque")) if c.get("rol_audio") == "voz" else None
-                if not v:
-                    continue
-                dur = min(int(v["duracion_ms"]), max(0, total_ms - c["inicio_ms"]))
-                c.setdefault("por_destino", {})[clave] = {"material_id": int(v["material_id"]), "duracion_ms": dur}
-                palabras += palabras_absolutas(v, c["inicio_ms"], c["inicio_ms"] + dur)
+            v = (voces or {}).get(c.get("bloque"))
+            if not v:
+                c.setdefault("por_destino", {})[clave] = None
+                continue
+            dur = min(int(v["duracion_ms"]), max(0, total_ms - c["inicio_ms"]))
+            c.setdefault("por_destino", {})[clave] = {"material_id": int(v["material_id"]), "duracion_ms": dur}
+            palabras += palabras_absolutas(v, c["inicio_ms"], c["inicio_ms"] + dur)
     res["subtitulos"].setdefault("palabras", {})[clave] = palabras
     res = fijar_precio(res, idioma, pais, precio)
     return documento_mod.validar(res)

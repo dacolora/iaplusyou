@@ -62,7 +62,9 @@ def _descargar(url, destino):
 
 def clon(cliente, cf_id, entry, ruta_local):
     """(material, creado) del clon crudo. Encola `edicion_proxy` (gratis,
-    prioridad 3 para no adelantar a las finales, max_intentos=3) si el
+    max_intentos=3, prioridad 1: la capa 3 necesita los proxies para que el
+    editor abra al instante las finales existentes, pero sin adelantarse
+    nunca a un lote de Sprints (3) ni a una pieza suelta de Crear (5)) si el
     material aún no tiene proxy."""
     url = entry.get("video_url_crudo") or entry.get("video_url")
     if not url:
@@ -86,8 +88,11 @@ def clon(cliente, cf_id, entry, ruta_local):
             tiene_audio=extra["tiene_audio"] if "tiene_audio" in extra else mezcla.tiene_audio(ruta_local),
             cortes_ms=extra["cortes_ms"] if "cortes_ms" in extra else [ms(t) for t in cortes.detectar_cortes(ruta_local)])
     if not mat.get("url_proxy"):
+        # Prioridad 1 (mínima, decisión 4 capa 2): nunca por delante de un lote
+        # de Sprints (3) ni de una pieza suelta de Crear (5) — el proxy es
+        # gratis y puede esperar a lo que ya se está pagando.
         trabajos.encolar(job_id_proxy(cliente, mat["id"]), "edicion_proxy", {"cliente": cliente, "material_id": mat["id"]},
-                         cliente=cliente, duracion_estimada=120, max_intentos=3, prioridad=3)
+                         cliente=cliente, duracion_estimada=120, max_intentos=3, prioridad=1)
     return mat, creado
 
 

@@ -120,6 +120,9 @@ def test_agregar_destino_traduce_textos_voz_subtitulos_y_precio():
     # sin voz en el destino (voz degradada): el destino cuenta igual y no hay subtítulos
     doc3 = b.agregar_destino(doc, g_en, None, None)
     assert b.tiene_destino(doc3, "en", "US") is False and doc3["subtitulos"]["palabras"]["en_US"] == []
+    # None explícito (no la clave omitida): así `resolver` no hereda la voz de otro destino
+    voces3 = [c for c in _pistas(doc3)["p_voz"]["clips"]]
+    assert voces3 and all(c["por_destino"]["en_US"] is None for c in voces3)
     assert b.fijar_precio(doc3, "en", "US", 10)["variables"]["precios"] == {"en_US": 10.0}
     assert b.fijar_precio(doc2, "en", "US", None)["variables"]["precios"] == {}
 

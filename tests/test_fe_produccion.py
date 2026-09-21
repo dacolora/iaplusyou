@@ -221,12 +221,32 @@ def test_traducir_voz_incompleta_degrada_el_destino_y_la_retraduccion_no_paga_cl
     assert ed2["documento"]["variables"]["textos"]["hook"]["en_US"] == "Hola en"
     assert borrador.tiene_textos(ed2["documento"], "en", "US") is True
     assert borrador.tiene_destino(ed2["documento"], "en", "US") is False
+    # Crítico (I1, capa 2): la voz incompleta no debe dejar la pieza sonando
+    # en español — `por_destino["en_US"]` quedó None en cada clip de voz, así
+    # que `resolver` QUITA la pista en vez de heredar la voz base.
+    ids_es = {c["material_id"] for p in ed["documento"]["pistas"] if p["id"] == "p_voz" for c in p["clips"]}
+    res_en = d.resolver(ed2["documento"], "en", "US")
+    assert next(p for p in res_en["pistas"] if p["id"] == "p_voz")["clips"] == []
+    assert not (ids_es & set(res_en["materiales"]))
     entorno["fallar_voz_en"] = None
     ed3, capas3, costo3 = produccion.traducir("acme", ed2, "en", "US", 24.99, "Rachel", True)
     assert len(entorno["localizar"]) == 1                        # Claude no se vuelve a llamar
     assert costo3 == pytest.approx(3 * 0.05)                     # los dos bloques ya pagados vienen de la caché
     assert borrador.tiene_destino(ed3["documento"], "en", "US") is True
     assert "voz" in capas3 and capas3["voz"]["estado"] == "ok"
+
+
+def test_producir_destino_traducido_con_voz_incompleta_queda_degradada(entorno):
+    # Fin a fin (I1, capa 2): un destino TRADUCIDO cuya voz degrada también
+    # debe rendirse — el render (fake) sí corre, sobre el documento con la
+    # pista de voz vacía para ese destino (ver la prueba de arriba).
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"precio": 89900}, ref_sufijo=":t1")
+    entorno["fallar_voz_en"] = len(entorno["voz"]) + 3      # 3er bloque en inglés: no el primero (no es fatal)
+    final_en, resumen = produccion.producir("acme", cf_id, "en", "US", {"precios": {"en_US": 24.99}}, ref_sufijo=":t2")
+    assert resumen["estado"] == "degradada" and resumen["capas"]["voz"]["estado"] == "error"
+    assert entorno["render"][-1][0] == final_en and entorno["render"][-1][2:] == ("en", "US")
 
 
 def test_musica_que_falla_degrada_el_borrador(entorno, monkeypatch):
@@ -307,6 +327,19 @@ def test_segundo_destino_reutiliza_el_borrador_y_solo_paga_su_traduccion(entorno
     assert [v["n"] for v in ediciones.versiones("acme", eds[0]["id"])] == [1, 2, 3]
 
 
+def test_segundo_destino_reutilizado_avisa_musica_antes_de_traducir(entorno):
+    # Menor (capa 2): `asegurar_borrador` no avisa Cortes/Voz/Música cuando
+    # REUTILIZA el borrador (vuelve de una) — sin un aviso propio acá la
+    # barra quedaría clavada en "Escribiendo el guion" durante los Claude +
+    # 5 voces + 5 Whisper que corren dentro de `traducir`.
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    produccion.producir("acme", cf_id, "es", "CO", {"precio": 89900}, ref_sufijo=":t1")
+    etapas = []
+    produccion.producir("acme", cf_id, "en", "US", {"precios": {"en_US": 24.99}}, on_etapa=etapas.append, ref_sufijo=":t2")
+    assert [e for e in etapas if e in NOMBRES] == ["Escribiendo el guion", "Música", "Texto y render"]
+
+
 def test_el_precio_es_por_destino_y_nunca_se_convierte(entorno):
     import ediciones
     from final_edition import produccion
@@ -373,6 +406,10 @@ def test_opciones_invalidas_fallan_antes_de_crear_la_final(entorno):
             produccion.producir("acme", cf_id, "es", "CO", opciones)
     with pytest.raises(ValueError, match="País"):
         produccion.producir("acme", cf_id, "es", "XX", {})
+    with pytest.raises(ValueError, match="Idioma"):
+        produccion.producir("acme", cf_id, "ES", "CO", {})
+    with pytest.raises(ValueError, match="Idioma"):
+        produccion.producir("acme", cf_id, "spanish", "CO", {})
     assert cf.finales("acme", cf_id) == [] and entorno["clon"] == 0
 
 
@@ -469,15 +506,22 @@ def test_variante_con_voz_fatal_registra_el_guion_variado(entorno):
 def test_final_desaparecida_en_el_cierre_es_error(entorno, monkeypatch):
     import creative_flow as cf
     import ediciones
+    import gastos
     from final_edition import produccion
     cf_id = entorno["cf_id"]
     monkeypatch.setattr(ediciones, "apuntar_final", lambda *a, **k: 0)
     with pytest.raises(RuntimeError, match="no existe"):
         produccion.producir("acme", cf_id, "es", "CO", {}, ref_sufijo=":t1")
+    # el gasto es real aunque `apuntar_final` no encontrara la fila (I2, capa 2)
+    filas = {f["referencia"]: f for f in gastos.historial("acme")}
+    assert f"final:{cf_id}__es_CO:t1" in filas
     # segundo escenario, sin deshacer el parche anterior (no aplica: revienta antes)
     monkeypatch.setattr(cf, "actualizar_final", lambda *a, **k: False)
     with pytest.raises(RuntimeError, match="no existe"):
         produccion.producir("acme", cf_id, "es", "MX", {}, ref_sufijo=":t2")
+    # también cuando el primer chequeo (`actualizar_final`) es el que falla
+    filas2 = {f["referencia"]: f for f in gastos.historial("acme")}
+    assert f"final:{cf_id}__es_MX:t2" in filas2
 
 
 def test_variante_en_el_pais_base_con_conflicto_conserva_el_costo_del_guion(entorno, monkeypatch):

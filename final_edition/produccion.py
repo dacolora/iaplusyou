@@ -13,6 +13,7 @@ destino corre bajo «Música» (sin etapa propia: la barra no retrocede).
 Las carpetas de trabajo del borrador no se borran (ver insumos)."""
 import copy
 import os
+import re
 
 import cola
 import creative_flow
@@ -267,6 +268,11 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
     mezcla.volumenes_para(o.get("mezcla"), o.get("volumenes"))   # ValueError si el preset no existe
     if pais not in tipos.PAISES:
         raise ValueError(f"País no soportado: {pais}. Opciones: {sorted(tipos.PAISES)}")
+    if not isinstance(idioma, str) or not re.fullmatch(r"[a-z]{2}", idioma):
+        # Misma forma que `tareas.edicion.renderizar_final` (idioma/país arman
+        # el nombre de la carpeta de trabajo más abajo): se valida ANTES de
+        # gastar un centavo, no cuando el render ya pagó todo lo anterior.
+        raise ValueError(f"Idioma no soportado: {idioma!r} (se esperan dos letras minúsculas).")
 
     final_id = creative_flow.crear_final(cliente, cf_id, idioma, pais, variante=o.get("variante"))
     costo, costo_base, costo_variante = 0.0, 0.0, 0.0
@@ -328,6 +334,14 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             precio = o.get("precio") if o.get("precio") is not None else guion_base.get("precio_base")
         else:
             precio = None
+        if not borrador.tiene_destino(edicion["documento"], idioma, pais):
+            # Un borrador REUTILIZADO no pasa por los avisos de Cortes/Voz/
+            # Música de `asegurar_borrador` (vuelve de una, sin reportar
+            # nada): sin este aviso la barra queda clavada en "Escribiendo
+            # el guion" durante los Claude + hasta 5 voces + 5 Whisper que
+            # corren dentro de `traducir` (esa es la etapa bajo la que el
+            # docstring del módulo dice que corre la traducción).
+            avisar(ETAPAS_FINAL[3][0])
         edicion, capas_t, c_t = traducir(cliente, edicion, idioma, pais, precio, o["voz"], bool(o.get("con_voz", True)))
         costo += c_t
         params_guion = {"idioma": idioma, "pais": pais, "precio": precio}
@@ -369,9 +383,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
 
     capas = _ordenar(capas)
     degradada = any((capas.get(k) or {}).get("estado") == "error" for k in ("voz", "musica"))
+    # El gasto es real aunque la fila final ya no exista (p. ej. la persona la
+    # descartó mientras se producía: "Descartar" también se muestra en
+    # `generando`) — se registra ANTES de las dos comprobaciones de abajo.
+    final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
     # La fila la creó `crear_final` al principio: si ya no está, algo la
-    # borró en el camino — un error del worker, nada que escribirle. El
-    # gasto se registra DESPUÉS de las dos comprobaciones.
+    # borró en el camino — un error del worker, nada más que escribirle.
     if not creative_flow.actualizar_final(
             cliente, final_id, estado="degradada" if degradada else "listo", url_video=res["url_video"],
             url_miniatura=res["url_miniatura"], duracion_s=float(res["duracion_s"]), capas=capas,
@@ -379,5 +396,4 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         raise RuntimeError(f"La final {final_id} no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
     if not ediciones.apuntar_final(cliente, final_id, version["id"]):
         raise RuntimeError(f"La final {final_id} no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
-    final_edition.registrar_gasto_final(cliente, final_id, idioma, pais, costo - costo_base, capas, ref_sufijo=ref_sufijo)
     return final_id, creative_flow.final_por_legado(cliente, final_id)

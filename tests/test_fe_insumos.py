@@ -80,6 +80,7 @@ def test_voz_bloque_transcripcion_vacia_cuenta_como_hecha(entorno, monkeypatch):
 
 @_sin_ffmpeg
 def test_clon_registra_medidas_local_y_encola_el_proxy(base_temporal, tmp_path, monkeypatch):
+    import cola
     import trabajos
     import tareas.edicion as te
     from final_edition import insumos
@@ -93,6 +94,9 @@ def test_clon_registra_medidas_local_y_encola_el_proxy(base_temporal, tmp_path, 
     assert (mat["ancho"], mat["alto"]) == (320, 240) and 1900 <= mat["duracion_ms"] <= 2100
     assert mat["extra"]["local"] == clip and mat["extra"]["tiene_audio"] is False and mat["extra"]["cortes_ms"] == [900]
     assert trabajos.en_curso(insumos.job_id_proxy("acme", mat["id"]))
+    # I4 (plan-mandated, capa 2): prioridad 1 — nunca por delante de los lotes
+    # de Sprints (3) ni de las piezas sueltas de Crear (5).
+    assert cola.consultar_por_job(insumos.job_id_proxy("acme", mat["id"]))["prioridad"] == 1
     assert insumos.job_id_proxy("acme", 3) == te.job_id_proxy("acme", 3)
     mat2, creado2 = insumos.clon("acme", "cf_1", entry, clip)
     assert mat2["id"] == mat["id"] and not creado2

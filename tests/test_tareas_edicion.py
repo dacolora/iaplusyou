@@ -260,6 +260,26 @@ def test_proxy_genera_540p_tira_y_cortes_y_los_guarda(entorno, monkeypatch, tmp_
     assert not os.path.exists(carpeta)
 
 
+def test_proxy_no_repite_cortes_si_extra_ya_los_trae(entorno, monkeypatch, tmp_path):
+    # I4 (plan-mandated, capa 2): `insumos.clon` ya midió los cortes al crear
+    # el material (extra.cortes_ms) — `ejecutar_proxy` no debe volver a
+    # correr `cortes.detectar_cortes` (ffmpeg real, caro) por él.
+    import materiales
+    from final_edition import cortes
+    mat = materiales.registrar("acme", tipo="video", origen="crear", url="https://r2/m4", hash="h4", bytes=1,
+                               extra={"cortes_ms": [900]})
+    monkeypatch.setattr(cortes, "ffmpeg", lambda args, timeout=300: open(args[-1], "wb").write(b"x"))
+    monkeypatch.setattr(cortes, "duracion", lambda p: 8.0)
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video", "width": 540, "height": 960}], "format": {"duration": "8.0"}})
+
+    def _no_llamar(p, umbral=10.0):
+        raise AssertionError("detectar_cortes no debía llamarse: extra ya traía cortes_ms")
+    monkeypatch.setattr(cortes, "detectar_cortes", _no_llamar)
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    m2 = materiales.obtener("acme", mat["id"])
+    assert m2["extra"]["cortes_ms"] == [900]
+
+
 @pytest.mark.slow
 def test_proxy_real_sobre_un_clip_de_tres_segundos(entorno, monkeypatch, tmp_path):
     """I11 con ffmpeg real: proxy, tira (3 celdas de 160 px = 480 de ancho),

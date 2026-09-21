@@ -33,11 +33,15 @@ Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
     `tipos.formatear_precio` según `variables.precios` del destino, y si
     ese destino no tiene precio el clip de texto DESAPARECE del documento
     resuelto — nunca toma el precio de otro país;
-  - en audio, `por_destino` cambia `material_id`/`duracion_ms` según el
-    destino (otra grabación de voz) y `bloque` guarda el rol del guion que
-    la originó; en video/superpuesto, `ken_burns` es `None`, `"in"` o
-    `"out"`; `origen` y `guion`, si vienen, deben ser objeto o null —
-    `validar` los conserva tal cual, sin mirar su contenido."""
+  - en audio, `por_destino[clave]` es `{material_id, duracion_ms}` (otra
+    grabación de voz para ese destino) o `None` explícito — «este destino
+    no tiene voz»: `resolver` QUITA el clip en vez de heredar la voz de
+    otro idioma/país (nunca cae al `material_id` crudo del clip cuando hay
+    `por_destino`); un clip sin `por_destino` (o con `{}`) no distingue por
+    destino y se conserva igual en cualquiera; `bloque` guarda el rol del
+    guion que lo originó; en video/superpuesto, `ken_burns` es `None`,
+    `"in"` o `"out"`; `origen` y `guion`, si vienen, deben ser objeto o
+    null — `validar` los conserva tal cual, sin mirar su contenido."""
 import copy
 import re
 
@@ -246,8 +250,10 @@ def _validar_clip(clip, pista, i):
         if pd is not None:
             _validar_claves(pd, f"{ruta}.por_destino")
             for clave, alt in pd.items():
+                if alt is None:
+                    continue    # explícito «este destino no tiene voz» (decisión 1, capa 2)
                 if not isinstance(alt, dict):
-                    _fallar(f"{ruta}.por_destino[{clave}] debe ser {{material_id, duracion_ms}}.")
+                    _fallar(f"{ruta}.por_destino[{clave}] debe ser {{material_id, duracion_ms}} o null.")
                 _entero_positivo(alt.get("material_id"), f"{ruta}.por_destino[{clave}].material_id")
                 _entero_no_negativo(alt.get("duracion_ms"), f"{ruta}.por_destino[{clave}].duracion_ms")
         if clip.get("bloque") is not None and not isinstance(clip["bloque"], str):
@@ -388,7 +394,8 @@ def validar(doc):
             if c.get("material_id") is not None:
                 mats.add(c["material_id"])
             for alt in (c.get("por_destino") or {}).values():
-                mats.add(int(alt["material_id"]))
+                if alt is not None:      # None = sin voz para ese destino: no hay material que sumar
+                    mats.add(int(alt["material_id"]))
     mats.update((doc.get("pngs") or {}).values())
     doc["materiales"] = sorted(mats)
     doc["miniatura_ms"] = _entero_no_negativo(doc.get("miniatura_ms", 0), "miniatura_ms")
@@ -472,8 +479,11 @@ def resolver(doc, idioma, pais):
     `<idioma>` (`valor_destino`). El texto variable `precio` es el número
     escrito para `<idioma>_<pais>` formateado con `tipos.formatear_precio`;
     sin precio para ese país el clip DESAPARECE (no hay badge) — nunca se
-    convierte desde otro país. Los clips de audio con `por_destino` cambian
-    de material y duración (la voz por bloque de ese destino). `materiales`
+    convierte desde otro país. Un clip de audio sin `por_destino` (o con
+    `{}`) queda tal cual, para cualquier destino. Si lo tiene: gana la
+    clave exacta `<idioma>_<pais>` si está en el mapa (aunque sea `None`);
+    si no, `<idioma>` si está; si ninguna, el clip SE QUITA — nunca cae al
+    `material_id` crudo del clip (la voz de otro idioma/país). `materiales`
     se recalcula con lo que ESTE destino usa (las voces de otros idiomas
     no se descargan al renderizar)."""
     res = copy.deepcopy(doc)
@@ -505,13 +515,31 @@ def resolver(doc, idioma, pais):
                 vivos.append(c)
             p["clips"] = vivos
         elif p["tipo"] == "audio":
+            vivos = []
             for c in p["clips"]:
-                alt = valor_destino(c.get("por_destino"), idioma, pais)
-                if alt:
-                    c["material_id"] = int(alt["material_id"])
-                    c["duracion_ms"] = int(alt["duracion_ms"])
-                    c["recorte"] = {"desde_ms": 0, "hasta_ms": int(alt["duracion_ms"])}
+                pd = c.get("por_destino") or {}
+                quitar = False
+                if pd:
+                    # A diferencia de `valor_destino`, una clave PRESENTE con
+                    # valor `None` gana y NO cae a la clave de idioma: ese
+                    # destino exacto ya dijo "sin voz" (decisión 1, capa 2).
+                    clave = f"{idioma}_{pais}"
+                    if clave in pd:
+                        alt = pd[clave]
+                    elif idioma in pd:
+                        alt = pd[idioma]
+                    else:
+                        alt = None
+                    if alt is None:
+                        quitar = True
+                    else:
+                        c["material_id"] = int(alt["material_id"])
+                        c["duracion_ms"] = int(alt["duracion_ms"])
+                        c["recorte"] = {"desde_ms": 0, "hasta_ms": int(alt["duracion_ms"])}
                 c.pop("por_destino", None)
+                if not quitar:
+                    vivos.append(c)
+            p["clips"] = vivos
     palabras = valor_destino((res.get("subtitulos") or {}).get("palabras"), idioma, pais) or []
     res["subtitulos"] = {**res.get("subtitulos", {}), "palabras": list(palabras)}
     res["destino"] = {"idioma": idioma, "pais": pais, "precio": precio}
