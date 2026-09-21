@@ -63,6 +63,9 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
     import catalogo_productos
 
     monkeypatch.setattr(final_edition, "BASE_DIR", str(tmp_path))
+    # Estas pruebas cubren el pipeline LEGADO (render.py/texto.py) hasta que
+    # se retire; la vía del editor se prueba en test_fe_produccion.py.
+    monkeypatch.setenv("FINAL_EDITION_LEGADO", "1")
     cf_id = cf.crear("acme", [], ["Chancla Rose"], [], "la persona camina con las chanclas", 8, "", "A")
     cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", video_local=clip,
                   enfoque="producto", aspect_ratio="9:16",

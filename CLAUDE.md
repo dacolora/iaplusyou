@@ -253,14 +253,23 @@ degradable (the paid video is never lost) — it only reports, never regenerates
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with
 Anthropic; `fe_producir` queues one `final_producir` task per destino ticked, each
-worth its own approval). `final_edition/__init__.py` orchestrates the layers in order
-— `guion` (Anthropic: base guion, then localize per destino) -> `cortes` (ffmpeg: cut
-detection on the source clip) -> sonido (the clon's native track, `ausente` when it has
-none) -> `voz` (fal/ElevenLabs TTS per block, degradable
-except a failure on the FIRST block, which is fatal and never reaches música) ->
-`musica` (fal/Stable Audio, degradable, cached) -> `texto` (Pillow: overlay PNGs for
-hook/subtitles/price badge/CTA) -> `render` (ffmpeg: one filtergraph, `MAX_OVERLAYS_TOTAL`
-caps the overlay count so a long guion can't OOM the box). Since S2 the clon's native sound is a layer: `producir` reads the RAW clon
+worth its own approval). `final_edition/__init__.py::producir` (the worker task `final_producir`, one per destino,
+`max_intentos=1`) now runs through the editor (capa 2, 2026-09): `final_edition/produccion.py`
+turns the guion into an **edición** (a capa-1 document built by `final_edition/borrador.py`
+from materials cached by hash in `final_edition/insumos.py`: the raw clon, the voice per
+block — TTS + `atempo` fit as a derived material, Whisper words in `material.extra.palabras` —,
+the music track and the logo), translates the destino into it (`variables.textos/voz` and
+`por_destino` keyed `<idioma>_<PAIS>` with `<idioma>` as fallback; the price is the reserved
+text variable `precio`, formatted per country or absent), freezes a version and renders it with
+`tareas.edicion.renderizar_final` (the same code path as `edicion_producir`). One edición per
+"receta" (`borrador.receta`: guion base + variante + voz + música + sonido + mezcla + formato):
+a second destino only pays its localization and voice; a changed guion or voice makes a new
+edición; degraded borradores are never reused (a new one is built, paying only the missing
+pieces). `capas`, `pieza.guion`, `final_id`s, the 5 `ETAPAS_FINAL` and the spend row
+`final:<id>:t<tarea>` keep their old shape, so the Crear modal, derivaciones and experiments did
+not change. `FINAL_EDITION_LEGADO=1` switches the worker back to the old layered pipeline
+(`producir_legado`: `guion` -> `cortes` -> sonido -> `voz` -> `musica` -> `texto` -> `render`),
+kept only until `render.py`/`texto.py` are retired. Since S2 the clon's native sound is a layer: `producir` reads the RAW clon
 (`video_local_crudo`/`video_url_crudo`, never the music-mixed file), `render` trims `[0:a]`
 with the very same segment `inicio`/`fin` as the video (sync by construction) and
 `final_edition/mezcla.py::filtro_mezcla` mixes sound + voice + music (voice ducks sound at
@@ -340,6 +349,16 @@ through `cola.sin_token`/`cola.recortar`, and wipes its work folder at start and
 success (kept on failure, for the `.filtergraph.txt`); `edicion_proxy` (540p, frame strip,
 scene cuts, `aresample=48000`-first waveform peaks) wipes its folder in `finally`; the
 daily `materiales_limpiar` (`worker.PERIODICAS`) is what deletes efímero materials.
+Capa 2 additions: `documento` keys by destino (`<idioma>_<PAIS>` wins over `<idioma>`), the
+reserved `precio` variable (clip dropped when the country has no price), `por_destino`/`bloque` on
+voice clips, `ken_burns: in|out` on principal clips (compiler `zoompan`), normalized
+`estilo.{contorno,sombra,fondo,ancho_max}` (fractions of the canvas) and opaque `origen`/`guion`.
+Text clips without a browser PNG are rasterized server-side by `final_edition/rasterizar.py`
+(Pillow, same TTFs) inside `preparar_rutas` — the automatic path has no browser. `materiales.descargar`
+copies `extra.local` when the file is still on disk; `materiales.actualizar_extra` merges into
+`extra`; `ediciones.buscar_origen` finds the borrador of a receta. A fatal first-block voice
+failure raises `produccion.VozFatal`, and any exception raised after paying carries
+`costo_pagado`/`capas_pagadas` so `producir` still records the spend (Task 8's rulings).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

@@ -97,3 +97,19 @@ def test_interrumpida_marca_error_solo_si_generando(base_temporal):
 
     # Sin fila: no revienta.
     tfe.interrumpida({"payload": {"cliente": "acme", "cf_id": cf_id, "idioma": "pt", "pais": "BR"}}, "x")
+
+
+def test_producir_despacha_a_la_via_del_editor_salvo_con_el_interruptor(monkeypatch):
+    import final_edition
+    from final_edition import produccion
+    visto = []
+    monkeypatch.setattr(produccion, "producir", lambda *a, **k: visto.append(("editor", a, k)) or ("f", {}))
+    monkeypatch.setattr(final_edition, "producir_legado", lambda *a, **k: visto.append(("legado", a, k)) or ("f", {}))
+    monkeypatch.delenv("FINAL_EDITION_LEGADO", raising=False)
+    final_edition.producir("acme", "cf_1", "es", "CO", {"x": 1}, None, ":t1")
+    monkeypatch.setenv("FINAL_EDITION_LEGADO", "1")
+    final_edition.producir("acme", "cf_1", "es", "CO", {"x": 1}, None, ":t1")
+    monkeypatch.setenv("FINAL_EDITION_LEGADO", "0")
+    final_edition.producir("acme", "cf_1", "es", "CO")
+    assert [v[0] for v in visto] == ["editor", "legado", "editor"]
+    assert visto[0][1] == ("acme", "cf_1", "es", "CO", {"x": 1}, None, ":t1")
