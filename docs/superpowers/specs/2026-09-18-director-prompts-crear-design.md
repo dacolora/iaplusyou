@@ -335,7 +335,9 @@ cada plano contra `presets_camara` (sustituye la lista cerrada de Etapa 1).
 
 ## 9. Plantillas por tipo de anuncio (Etapa 3, `plantillas_anuncio.py`)
 
-Sustituyen a `banco_prompts.py` (se elimina junto con la sección "¿Qué buscas?").
+Sustituyen a `banco_prompts.py`. La sección "¿Qué buscas?" ya se quitó de Crear el
+2026-09-20 (a pedido del usuario, antes de la Etapa 2); `banco_prompts.py` sigue solo como
+contexto del prompt maestro de ideas de Sprints hasta que lleguen las plantillas.
 `PLANTILLAS = [{"id", "nombre", "descripcion", "enfoque", "requiere":
 {"persona": bool, "video_ref": bool}, "preset_sugerido", "sonido_sugerido",
 "actos": [{"nombre", "desde_pct", "hasta_pct", "que_se_ve"}]}]`. Siete plantillas

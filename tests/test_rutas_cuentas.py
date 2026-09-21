@@ -460,6 +460,11 @@ def test_configuracion_tiene_seccion_cuenta_y_tarjeta_smtp_renombrada(app):
     assert cfg.index("Puesta a punto") < cfg.index('id="config-cuenta"') < cfg.index('id="config-gasto"')
     assert 'action="/cuenta/correo"' in cfg and 'action="/cuenta/password"' in cfg
     assert "ana@ejemplo.com" in cfg and ">confirmado<" in cfg
+    # La tarjeta del correo de la plataforma es del servidor: la ve el admin,
+    # no Ana (Puesta a punto solo le muestra a un cliente lo que le toca).
+    assert 'id="llave-smtp"' not in cfg
+    html = _cliente_con_sesion(app, "admin").get("/cliente/acme").get_data(as_text=True)
+    cfg = html[html.index('<section id="tab-settings"'):]
     assert "Correo de la plataforma (cuentas y avisos)" in cfg
     tarjeta = cfg[cfg.index('id="llave-smtp"'):cfg.index("</article>", cfg.index('id="llave-smtp"'))]
     assert "confirmar el correo de cada cuenta" in tarjeta and "Contraseñas de aplicación" in tarjeta

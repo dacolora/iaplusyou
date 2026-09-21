@@ -36,7 +36,6 @@ import marca as marca_mod
 import conceptos_imagen
 import catalogo_productos
 import swaps as swaps_mod
-import banco_prompts
 import bitacora
 import informe
 import mapa_corporal
@@ -1441,7 +1440,6 @@ def ver_cliente(cliente):
         zonas_cuerpo=mapa_corporal.ZONAS,
         presets_cuerpo=mapa_corporal.PRESETS,
         etiquetas_presets=mapa_corporal.ETIQUETAS_PRESETS,
-        banco_prompts=banco_prompts.listar(),
         nombre_proyecto=proyectos.nombre_visible(cliente),
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
@@ -1510,8 +1508,10 @@ def ver_cliente(cliente):
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
-        llaves=_estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app),
-                              modo_meta=modo_meta, agencia_conectada=agencia_conectada, meta_forma=meta_forma),
+        llaves=_llaves_visibles(
+            _estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app),
+                           modo_meta=modo_meta, agencia_conectada=agencia_conectada, meta_forma=meta_forma),
+            session.get("rol")),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
         canales_org=canales_org,
@@ -1605,6 +1605,9 @@ SERVICIOS_LLAVES = (
         "url_texto": "business.facebook.com › Facturación",
         "variables": [],
         "por_proyecto": True,
+        # Lo único de esta tarjeta que le toca al cliente (el resto es del admin).
+        "cliente_hace": "Agrega un método de pago a tu cuenta publicitaria (enlace de abajo): sin él Meta no "
+                        "activa ningún anuncio. La conexión se hace en el bloque «¿Cómo quieres conectar Meta?».",
         "nota": "No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta».",
         "pasos": [
             "En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login.",
@@ -1770,9 +1773,21 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
             "faltan": faltan,
             "nota": nota,
             "opcional": bool(s.get("opcional")),
+            "por_proyecto": bool(s.get("por_proyecto")),
+            "cliente_hace": s.get("cliente_hace", ""),
             "pasos": [p.replace("{callback_meli}", callback) for p in pasos],
         })
     return tarjetas
+
+
+def _llaves_visibles(tarjetas, rol):
+    """Un cliente no administra el servidor: en Puesta a punto ve solo las
+    tarjetas que se configuran por proyecto (Meta), y de ellas solo su parte
+    (la plantilla esconde variables, nota y pasos si no es admin). El admin
+    las ve todas."""
+    if rol == "admin":
+        return tarjetas
+    return [t for t in tarjetas if t["por_proyecto"]]
 
 
 PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}

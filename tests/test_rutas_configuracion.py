@@ -370,3 +370,52 @@ def test_llaves_de_nicho_son_opcionales_y_solo_miran_presencia(app, monkeypatch)
     assert all(por_id[i]["opcional"] for i in ("reddit", "youtube_api", "apify"))
     plano = repr(por_id)
     assert "id-secreto-123" not in plano and "apify_secreto_456" not in plano
+
+
+# ---- Qué ve un cliente en Puesta a punto -----------------------------------
+# Las llaves de Anthropic, fal, Higgsfield, R2, SMTP, MELI y las fuentes de
+# Nicho las pone Creatv en el .env del servidor: un cliente no puede hacer
+# nada con ellas. Lo único que se configura por proyecto es Meta.
+
+
+def _cliente_rol_cliente(dashboard):
+    c = dashboard.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    return c
+
+
+def _puesta_a_punto(cfg):
+    return cfg[cfg.index('id="config-puesta-a-punto"'):cfg.index('id="config-cuenta"')]
+
+
+def test_cliente_solo_ve_en_puesta_a_punto_lo_que_le_toca(app, monkeypatch):
+    for var, valor in VALORES_FALSOS.items():
+        monkeypatch.setenv(var, valor)
+    html = _cliente_rol_cliente(app["dashboard"]).get("/cliente/acme").data.decode()
+    puesta = _puesta_a_punto(_config(html))
+    assert puesta.count('class="llave-tarjeta') == 1
+    assert 'id="llave-meta"' in puesta
+    for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify"):
+        assert f'id="llave-{sid}"' not in puesta, sid
+    for valor in VALORES_FALSOS.values():
+        assert valor not in html, valor
+    # Ni nombres de variables, ni el .env, ni los pasos para conseguir llaves:
+    # eso es del administrador. Se mira la tarjeta hasta el bloque de conexión
+    # (el bloque de Meta tiene su propia guía).
+    tarjeta = _tarjeta(puesta, "meta").split('class="llave-meta-conexion"')[0]
+    intro = puesta.split('class="llaves-tarjetas"')[0]
+    for trozo in (tarjeta, intro):
+        for texto in ("ANTHROPIC_API_KEY", "SMTP_HOST", ".env", "no se escriben desde aquí", "Cómo conseguirla"):
+            assert texto not in trozo, texto
+    # Lo que sí le toca: elegir cómo conectar Meta y poner el método de pago de
+    # su cuenta publicitaria; y saber que el resto lo pone Creatv.
+    assert "¿Cómo quieres conectar Meta?" in puesta
+    assert "business.facebook.com › Facturación" in tarjeta
+    assert "los pone Creatv" in intro
+
+
+def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
+    puesta = _puesta_a_punto(_config(app["c"].get("/cliente/acme").data.decode()))
+    assert puesta.count('class="llave-tarjeta') == 10
+    assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")

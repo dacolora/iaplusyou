@@ -95,3 +95,14 @@ def test_formulario_sin_versiones_ni_enfoque_y_con_formatos(app):
     assert 'data-formatos="9:16,16:9,1:1,4:3,3:4"' in html and 'data-formatos="9:16,16:9,1:1"' in html and 'data-formatos=""' in html
     assert 'name="aspect_ratio_imagen"' in html and '<option value="4:5">' in html
     assert "sus segundos más los del resultado no pueden pasar de 30" in html
+
+
+def test_crear_ya_no_ofrece_las_recetas_de_que_buscas(app):
+    """La sección «¿Qué buscas?» (chips que rellenaban «Qué tiene que pasar»
+    con una receta de banco_prompts.py) se quitó a pedido del usuario el
+    2026-09-20: el texto se escribe directo y el director arma los planos."""
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    crear = html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-sprints"')]
+    assert "¿Qué buscas?" not in crear
+    assert 'id="fp-objetivos"' not in crear
+    assert 'name="accion_central"' in crear   # el texto libre sigue ahí

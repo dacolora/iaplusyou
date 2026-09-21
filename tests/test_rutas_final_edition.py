@@ -361,7 +361,7 @@ def _contexto_minimo(items):
     from final_edition import tipos
     from providers import fal_audio
     return dict(
-        creative_flow_items=items, cliente="acme", banco_prompts=[], logos=[],
+        creative_flow_items=items, cliente="acme", logos=[],
         modelos_flowplus_video={}, modelos_flowplus_imagen={}, preferencias_flowplus={},
         preferencias_sonido={"con_sonido": True, "musica_al_crear": ""},
         fp_prefill=None, activos_por_categoria={}, categorias={}, productos=[],

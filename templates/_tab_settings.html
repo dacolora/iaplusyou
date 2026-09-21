@@ -4,8 +4,13 @@
    Logos → Marca → informe (admin). Las reglas del decisor ya no están aquí:
    viven en Experimentos › «Reglas del motor» (ruta cfg_reglas). #}
 
-{# ---- Puesta a punto: una tarjeta por servicio externo ---- #}
+{# ---- Puesta a punto: una tarjeta por servicio externo. El admin ve todas
+   (llaves del .env del servidor); un cliente recibe solo las tarjetas por
+   proyecto (dashboard._llaves_visibles) y de cada una solo su parte:
+   sin variables, sin nota del .env y sin pasos para conseguir llaves. ---- #}
+{% set es_admin = session.get('rol') == 'admin' %}
 <h2 id="config-puesta-a-punto">Puesta a punto</h2>
+{% if es_admin %}
 <p class="vacio" style="padding-top:0;">
   Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar
   anuncios, en el orden en que se usa. Cada tarjeta dice para qué sirve, cómo se
@@ -13,6 +18,13 @@
   servidor en el archivo <code>.env</code>; aquí solo se ve si están o faltan,
   nunca su valor.
 </p>
+{% else %}
+<p class="vacio" style="padding-top:0;">
+  Lo que te toca configurar a ti. Los servicios de generación (guiones, imagen y
+  video, voz y música, almacenamiento) y el correo de la plataforma los pone Creatv
+  en el servidor: ahí no tienes que hacer nada.
+</p>
+{% endif %}
 <div class="llaves-tarjetas">
   {% for l in llaves %}
   <article class="llave-tarjeta llave-{{ l.estado }}" id="llave-{{ l.id }}">
@@ -24,7 +36,7 @@
     </header>
     <p class="llave-para-que">{{ l.para_que }}</p>
     <p class="vacio llave-costo"><strong>Cómo se paga:</strong> {{ l.costo }}</p>
-    {% if l.variables %}
+    {% if es_admin and l.variables %}
     <p class="vacio">
       <strong>Variables en el <code>.env</code> del servidor:</strong>
       {% for v in l.variables %}<code class="llave-var{% if v in l.faltan %} llave-var-falta{% endif %}">{{ v }}</code>{% if not loop.last %} {% endif %}{% endfor %}
@@ -33,15 +45,21 @@
     {% if l.estado == "parcial" %}
     <p class="tag-error">Faltan: {% for v in l.faltan %}<code>{{ v }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
     {% endif %}
+    {% if es_admin %}
     <p class="vacio llave-nota">{{ l.nota }}</p>
     <p class="vacio" style="font-size:.74rem;">Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí.</p>
+    {% elif l.cliente_hace %}
+    <p class="vacio llave-nota">{{ l.cliente_hace }}</p>
+    {% endif %}
     <a class="llave-enlace" href="{{ l.url }}" target="_blank" rel="noopener">{{ l.url_texto }} ↗</a>
+    {% if es_admin %}
     <details class="llave-pasos">
       <summary>Cómo conseguirla</summary>
       <ol>
         {% for paso in l.pasos %}<li>{{ paso }}</li>{% endfor %}
       </ol>
     </details>
+    {% endif %}
     {% if l.id == "meta" %}
     <div class="llave-meta-conexion">
       {% include "_meta_conectar.html" %}

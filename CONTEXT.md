@@ -55,5 +55,6 @@ _Avoid_: ticket, petición, pendiente
 
 **Puesta a punto**:
 La sección de Configuración que dice qué llaves y conexiones tiene el proyecto y cuáles le
-faltan, sin mostrar nunca un valor.
+faltan, sin mostrar nunca un valor. El administrador ve todas las llaves del servidor; un
+cliente ve solo lo que se configura por proyecto (Meta) y lo que le toca hacer ahí.
 _Avoid_: setup, checklist

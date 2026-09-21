@@ -483,7 +483,10 @@ details, imported products without photos sit in "Importados sin fotos" until `p
 or `prod_vincular` creates their activo. Store connections and the Pixel check are in
 Configuración, whose first section "Puesta a punto" (`dashboard._estado_llaves`) lists every
 paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
-computed from `bool(os.environ.get(...))` only, values are never rendered.
+computed from `bool(os.environ.get(...))` only, values are never rendered. Since 2026-09-20 that
+full list is admin-only: `dashboard._llaves_visibles` gives a cliente just the `por_proyecto`
+cards (Meta), and the template hides `.env` variables, the server note and the "Cómo
+conseguirla" steps for them (the client sees `cliente_hace`: billing + the connect block).
 
 There is also NO Campañas tab any more: `_tab_ads.html` is gone, `nueva_campana`/`publicar_ad`
 are no-ops that flash and redirect, and the legacy "Anuncios sueltos" (Forja's ads) render

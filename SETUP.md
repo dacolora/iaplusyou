@@ -156,7 +156,8 @@ en "Traer productos de…". Los anuncios se hacen en **Experimentos** (un experi
 pieza y un país es un anuncio); la pestaña Campañas ya no existe y sus anuncios anteriores se
 ven dentro de Experimentos. **Configuración** empieza con "Puesta a punto": una tarjeta por
 servicio que se paga (Anthropic, fal.ai, Higgsfield, Cloudflare R2, Meta, correo, MercadoLibre)
-con el paso a paso para conseguir la llave, qué cuesta y si está puesta en el servidor, y
+con el paso a paso para conseguir la llave, qué cuesta y si está puesta en el servidor (eso lo
+ve solo el administrador: un cliente ve únicamente la tarjeta Meta, con lo que le toca a él), y
 después el paso a paso para conectar Shopify, WooCommerce y MercadoLibre. Las reglas del
 decisor se editan en Experimentos › "Reglas del motor".
 
