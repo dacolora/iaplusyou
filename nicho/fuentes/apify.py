@@ -161,7 +161,11 @@ class FuenteApify(Fuente):
             if r.status_code != 200:
                 motivo = f"HTTP {r.status_code}"
                 continue
-            datos = r.json()
+            try:
+                datos = r.json()
+            except ValueError:                      # 200 con cuerpo ilegible: cuenta como intento fallido
+                motivo = "respuesta ilegible"
+                continue
             return (datos if isinstance(datos, list) else []), ""
         return None, motivo
 

@@ -309,6 +309,27 @@ def test_resultados_cuenta_items_crudos(entorno_apify, monkeypatch):
     assert len(lista) == 2 and f.resultados == 3
 
 
+def test_dataset_con_cuerpo_ilegible_cae_al_itemcount(entorno_apify, monkeypatch):
+    """Un 200 con JSON roto cuenta como intento fallido: se agotan los intentos,
+    `resultados` sale del itemCount y el error lleva corrida y dataset."""
+    from nicho.fuentes import _http, apify, base
+
+    class _RespRota(_Resp):
+        def json(self):
+            raise ValueError("cuerpo ilegible")
+
+    s = _Sesion({"/runs": _Resp(201, {"data": {"id": "run_j", "status": "SUCCEEDED", "defaultDatasetId": "ds_j"}}),
+                 "/datasets/ds_j/items": [_RespRota(200)] * apify.INTENTOS_DATASET,
+                 "/datasets/ds_j": _Resp(200, {"data": {"id": "ds_j", "itemCount": 4}})})
+    monkeypatch.setattr(_http, "sesion", lambda: s)
+    f = apify.FuenteApify()
+    with pytest.raises(base.ErrorFuente) as e:
+        list(f.recolectar({"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 50}))
+    assert "run_j" in str(e.value) and "ds_j" in str(e.value) and "ilegible" in str(e.value)
+    assert f.resultados == 4
+    assert len([1 for _, u, _ in s.llamadas if u.endswith("/items")]) == apify.INTENTOS_DATASET
+
+
 def test_probar_y_llave_faltante(entorno_apify, monkeypatch):
     from nicho.fuentes import _http, apify, base
     s = _Sesion({"/users/me": _Resp(200, {"data": {"username": "acme"}})})
