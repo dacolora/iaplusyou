@@ -352,7 +352,14 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         # Lo pagado y las capas construidas viajan con CUALQUIER excepción
         # pagada (VozFatal u otra: un Conflicto al guardar, un proveedor
         # caído) — no solo VozFatal — para no perder el cobro.
-        capas.update(getattr(e, "capas_pagadas", None) or {})
+        pagadas = getattr(e, "capas_pagadas", None) or {}
+        guion_previo = capas.get("guion")
+        capas.update(pagadas)
+        if guion_previo and "guion" in pagadas:
+            # la capa guion temprana (lo que cobró la variante) se SUMA a la de la
+            # traducción; pisarla diría "guion gratis" en un gasto que sí lo cobró
+            capas["guion"]["costo_usd"] = round(float(capas["guion"]["costo_usd"] or 0.0) + float(guion_previo["costo_usd"] or 0.0), 4)
+            capas["guion"]["parametros"] = {**(guion_previo.get("parametros") or {}), **(capas["guion"].get("parametros") or {})}
         costo += float(getattr(e, "costo_pagado", 0.0) or 0.0)
         creative_flow.actualizar_final(cliente, final_id, estado="error", error=_mensaje(e), capas=_ordenar(capas),
                                        costo_usd=round(costo, 4), guion=guion)

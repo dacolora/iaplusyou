@@ -478,3 +478,28 @@ def test_final_desaparecida_en_el_cierre_es_error(entorno, monkeypatch):
     monkeypatch.setattr(cf, "actualizar_final", lambda *a, **k: False)
     with pytest.raises(RuntimeError, match="no existe"):
         produccion.producir("acme", cf_id, "es", "MX", {}, ref_sufijo=":t2")
+
+
+def test_variante_en_el_pais_base_con_conflicto_conserva_el_costo_del_guion(entorno, monkeypatch):
+    import creative_flow as cf
+    import ediciones
+    import gastos
+    from final_edition import produccion
+    cf_id = entorno["cf_id"]
+    cf.guardar_guion_base("acme", cf_id, copy.deepcopy(GUION_BASE))
+
+    def _conflicto(*a, **k):
+        raise ediciones.Conflicto("otra pestaña")
+    monkeypatch.setattr(ediciones, "guardar", _conflicto)
+    with pytest.raises(ediciones.Conflicto):
+        produccion.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"}, ref_sufijo=":t1")
+    final_id = f"{cf_id}__es_CO__v1"
+    f = cf.final_por_legado("acme", final_id)
+    assert f["estado"] == "error"
+    assert f["capas"]["guion"]["costo_usd"] == 0.02
+    assert f["capas"]["guion"]["parametros"]["variante_tipo"] == "hook"
+    assert f["capas"]["guion"]["parametros"]["pais"] == "CO"
+    assert f["costo_usd"] == pytest.approx(0.02 + 0.25 + 0.02)     # variante + voz + música del borrador nuevo
+    g = {x["referencia"]: x for x in gastos.historial("acme")}[f"final:{final_id}:t1"]
+    assert g["usd"] == pytest.approx(0.29)
+    assert g["extra"]["capas"]["guion"] == 0.02 and "guion" in g["detalle"]
