@@ -22,7 +22,11 @@
 
     // Anti doble-clic global: apenas se envía un formulario, deshabilita sus
     // botones de submit (no cancela el envío en curso, solo evita reenvíos).
+    // Si el envío fue cancelado (un confirm() al que dijeron "no", la puerta de
+    // costo de Apify), no hay nada en curso: dejar el botón en "Procesando…"
+    // obligaba a recargar la página para volver a intentarlo.
     document.addEventListener('submit', function (e) {
+      if (e.defaultPrevented) return;
       e.target.querySelectorAll('button[type="submit"]').forEach(function (btn) {
         btn.disabled = true;
         if (!btn.dataset.textoOriginal) btn.dataset.textoOriginal = btn.textContent;
@@ -57,7 +61,9 @@
 
     // Al enviar un formulario, lo que estaba sucio ahí adentro ya se está
     // guardando: dejarlo marcado bloquearía recargas legítimas para siempre.
+    // Un envío cancelado no guarda nada: lo sucio sigue sucio.
     document.addEventListener('submit', function (e) {
+      if (e.defaultPrevented) return;
       e.target.querySelectorAll('[data-sucio]').forEach(function (el) {
         delete el.dataset.sucio;
       });

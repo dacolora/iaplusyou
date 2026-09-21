@@ -1,0 +1,6 @@
+{"pagina1": {"nextPageToken": "P2", "items": [
+   {"id": "Ugx1", "snippet": {"topLevelComment": {"id": "Ugx1", "snippet": {"textOriginal": "My feet stopped hurting after a week with these", "likeCount": 31, "publishedAt": "2026-03-01T10:00:00Z"}}}},
+   {"id": "Ugx2", "snippet": {"topLevelComment": {"id": "Ugx2", "snippet": {"textOriginal": "Fell apart in two months, never again", "likeCount": 5, "publishedAt": "2026-03-02T11:00:00Z"}}}}]},
+ "pagina2": {"items": [
+   {"id": "Ugx3", "snippet": {"topLevelComment": {"id": "Ugx3", "snippet": {"textOriginal": "ok", "likeCount": 0, "publishedAt": "2026-03-03T12:00:00Z"}}}},
+   {"id": "Ugx4", "snippet": {"topLevelComment": {"id": "Ugx4", "snippet": {"textOriginal": "Sole flattened, zero grip on tile floors", "likeCount": 2, "publishedAt": "2026-03-04T12:00:00Z"}}}}]}}

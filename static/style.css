@@ -1720,3 +1720,6 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .meta-activos { display: grid; gap: .6rem; max-width: 36rem; }
 .meta-activos fieldset { border: 1px solid var(--border); border-radius: 8px; display: grid; gap: .3rem; }
 .meta-avisar form { display: grid; gap: .4rem; max-width: 32rem; margin-top: .5rem; }
+
+/* Nicho · últimas recolecciones (Reddit, YouTube, Apify) */
+.nicho-recolecciones { list-style: none; padding: 0; margin: .6rem 0 0; display: flex; flex-direction: column; gap: .25rem; font-size: .85rem; }

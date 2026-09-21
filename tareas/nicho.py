@@ -1,23 +1,41 @@
 """
-Tareas del worker para Nicho (spec §8). Parte 1: solo la generación de
-avatares con Claude; la Parte 2 agrega `nicho_recolectar` (Reddit, YouTube,
-Apify) en este mismo módulo.
+Tareas del worker para Nicho (spec §8).
 
   nicho_generar_avatares -> nicho.datos.job_id_generar(cliente, estudio_id)
-                            = "nicho:<cliente>:<estudio_id>:generar"   (max_intentos=1: gasta)
+                            = "nicho:<cliente>:<estudio_id>:generar"           (max_intentos=1: gasta)
+  nicho_recolectar       -> nicho.datos.job_id_recolectar(cliente, estudio_id, fuente)
+                            = "nicho:<cliente>:<estudio_id>:recolectar:<fuente>"
+                            (Apify max_intentos=1: gasta; Reddit/YouTube 2: la dedup hace seguro el reintento)
 
-Gasta dinero (dos pasadas de Claude), por eso nunca se reintenta sola y al
+La generación gasta dinero (dos pasadas de Claude): nunca se reintenta sola y al
 terminar anota el gasto real con `gastos.registrar_seguro` (tokens × precio,
-referencia `avatares:<estudio_id>:<generacion>`).
+referencia `avatares:<estudio_id>:<generacion>`; un intento fallido, con lo que
+Claude alcanzó a cobrar). La recolección guarda en lotes de LOTE comentarios
+(idempotente por la unicidad estudio + fuente + fuente_id), anota la
+recolección en `estudio.extra.recolecciones` y, para Apify, el gasto
+(`recoleccion:<estudio_id>:t<tarea>`, ítems crudos del dataset × precio del
+actor, aprox.). Cuando la fuente dejó un id de corrida, ese id viaja en el
+registro y en el extra del gasto: un cobro sin resultados tiene que poder
+rastrearse en console.apify.com.
+Nada corre solo: no hay periódicas.
 """
+import logging
+import math
+
 import cola
 import gastos
 import trabajos
 from nicho import avatares, datos
+from nicho import fuentes as fuentes_registro
+from nicho.fuentes import apify_actores
 from tareas import al_interrumpir, ref_sufijo, registrar
 
 ETAPA_GUARDAR = "Guardando"
 ETAPAS_GENERAR = [(avatares.ETAPA_NUCLEOS, 45), (avatares.ETAPA_SUBS, 150), (ETAPA_GUARDAR, 5)]
+ETAPA_BUSCAR, ETAPA_LEER = "Buscando", "Leyendo comentarios"
+ETAPAS_RECOLECTAR = [(ETAPA_BUSCAR, 20), (ETAPA_LEER, 90), (ETAPA_GUARDAR, 10)]
+LOTE = 100
+log = logging.getLogger(__name__)
 
 
 def encolar_generar(cliente, estudio_id):
@@ -89,3 +107,98 @@ def ejecutar_generar(tarea):
 def interrumpida_generar(tarea, mensaje):
     p = tarea["payload"]
     _anotar_error(p["cliente"], int(p["estudio_id"]), mensaje)
+
+
+# ------------------------------------------------------- nicho_recolectar ---
+
+def encolar_recolectar(cliente, estudio_id, fuente, params):
+    """False si ya hay una recolección viva de esa fuente para ese estudio."""
+    if fuente not in fuentes_registro.CONECTADAS:
+        raise datos.ErrorDatos(f"Fuente desconocida: {fuente}")
+    de_pago = fuente == "apify"
+    return trabajos.encolar(datos.job_id_recolectar(cliente, estudio_id, fuente), "nicho_recolectar",
+                            {"cliente": cliente, "estudio_id": int(estudio_id), "fuente": fuente, "params": dict(params or {})},
+                            cliente=cliente, duracion_estimada=300 if de_pago else 120, etapas=ETAPAS_RECOLECTAR,
+                            max_intentos=1 if de_pago else 2)
+
+
+def _corrida(fuente):
+    """`{"corrida": <id>}` cuando la fuente dejó un id de corrida de Apify (o
+    vacío). Va en el registro de la recolección y en el extra del gasto: sin él
+    un cobro sin resultados no se puede rastrear en console.apify.com."""
+    rid = getattr(fuente, "run_id", None)
+    return {"corrida": rid} if rid else {}
+
+
+def _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota=""):
+    """Solo Apify: ítems crudos del dataset × precio del actor ("aprox.": Apify
+    suma cómputo). Las fuentes gratis no registran nada. Nunca lanza."""
+    n = int(getattr(fuente, "resultados", 0) or 0)
+    if getattr(fuente, "tipo", "") != "apify" or n <= 0:
+        return
+    actor = apify_actores.ACTORES.get((params or {}).get("actor") or "")
+    if not actor:
+        return
+    usd = math.ceil(round(n * actor["usd_por_resultado"] * 100, 6)) / 100     # round antes de ceil: 30 × 0.003 × 100 no es 9 exacto
+    gastos.registrar_seguro(cliente, "recoleccion", usd, f"recoleccion:{eid}{ref_sufijo(tarea)}",
+                            detalle=f"Apify {actor['nombre']}: {n} resultado(s) aprox." + (f" — {nota}" if nota else ""),
+                            proveedor="apify",
+                            extra={"actor": actor["actor"], "resultados": n, "usd_por_resultado": actor["usd_por_resultado"], **_corrida(fuente)})
+
+
+@registrar("nicho_recolectar")
+def ejecutar_recolectar(tarea):
+    p = tarea["payload"]
+    cliente, eid, tipo = p["cliente"], int(p["estudio_id"]), p["fuente"]
+    if not datos.estudio(cliente, eid):
+        return "El estudio ya no existe."
+    if tipo not in fuentes_registro.CONECTADAS:
+        raise datos.ErrorDatos(f"Fuente desconocida: {tipo}")
+    job = tarea.get("job_id") or datos.job_id_recolectar(cliente, eid, tipo)
+    params = p.get("params") or {}
+
+    def avanzar(etapa, detalle=None):
+        cola.reportar(job, etapa=etapa, detalle=detalle)
+
+    fuente = fuentes_registro.por_tipo(tipo)()
+    totales = {"nuevos": 0, "repetidos": 0}
+    lote = []
+
+    def guardar():
+        if lote:
+            r = datos.agregar_comentarios(cliente, eid, tipo, lote)
+            totales["nuevos"] += r["nuevos"]
+            totales["repetidos"] += r["repetidos"]
+            del lote[:]
+
+    try:
+        for c in fuente.recolectar(params, avanzar):
+            lote.append(c)
+            if len(lote) >= LOTE:
+                guardar()
+        avanzar(ETAPA_GUARDAR)
+        guardar()
+    except Exception as e:
+        try:
+            guardar()                                   # lo ya leído nunca se pierde
+        except Exception:  # noqa: BLE001 — si la base también falla, manda el error original
+            log.exception("No se pudo guardar el lote pendiente de %s", tipo)
+        mensaje = cola.recortar(cola.sin_token(e), 300)
+        datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": f"falló: {mensaje}", **_corrida(fuente)})
+        _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota="intento fallido")
+        datos.recalcular(cliente, eid)
+        raise
+    aviso = getattr(fuente, "aviso", "") or ""
+    datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso, **_corrida(fuente)})
+    _gasto_recoleccion(cliente, eid, tarea, fuente, params)
+    datos.recalcular(cliente, eid)
+    texto = f"{totales['nuevos']} comentario(s) nuevo(s) de {fuentes_registro.NOMBRES.get(tipo, tipo)}; {totales['repetidos']} repetido(s)."
+    return texto + (f" Aviso: {aviso}" if aviso else "")
+
+
+@al_interrumpir("nicho_recolectar")
+def interrumpida_recolectar(tarea, mensaje):
+    p = tarea["payload"]
+    cliente, eid = p["cliente"], int(p["estudio_id"])
+    datos.registrar_recoleccion(cliente, eid, {"fuente": p.get("fuente"), "nuevos": 0, "repetidos": 0, "aviso": f"interrumpida: {mensaje}"})
+    datos.recalcular(cliente, eid)

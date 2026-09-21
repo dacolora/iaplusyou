@@ -189,3 +189,106 @@ def test_exportar(app):
     assert r.status_code == 200 and "spreadsheetml" in r.content_type and r.data[:2] == b"PK"
     assert app["c"].get(f"/cliente/otro/nicho/{eid}/exportar.md").status_code == 404
     assert app["c"].get(f"/cliente/otro/nicho/{eid}/exportar.xlsx").status_code == 404
+
+
+@pytest.fixture()
+def llaves(monkeypatch):
+    monkeypatch.setenv("REDDIT_CLIENT_ID", "id")
+    monkeypatch.setenv("REDDIT_CLIENT_SECRET", "s")
+    monkeypatch.setenv("REDDIT_USER_AGENT", "creatv/1.0 (by u/x)")
+    monkeypatch.setenv("YOUTUBE_API_KEY", "k")
+    monkeypatch.setenv("APIFY_TOKEN", "t")
+
+
+def test_recolectar_reddit_encola_con_params(app, llaves):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X", idioma="sv")
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={
+        "palabras_clave": "foot pain", "subreddits": "Sneakers, r/BuyItForLife", "links": "https://redd.it/abc123\n\nnada",
+        "max_posts": "30", "max_comentarios_por_post": "40", "periodo": "month"})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/nicho/{eid}")
+    t = app["encolados"][0]
+    assert t["tipo"] == "nicho_recolectar" and t["max_intentos"] == 2 and t["payload"]["fuente"] == "reddit"
+    assert t["payload"]["params"] == {"palabras_clave": "foot pain", "subreddits": ["Sneakers", "r/BuyItForLife"], "links": ["https://redd.it/abc123", "nada"],
+                                      "max_posts": 30, "max_comentarios_por_post": 40, "periodo": "month"}
+    app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={"palabras_clave": "", "links": ""})
+    assert len(app["encolados"]) == 1                                            # sin palabras ni links: no encola
+
+
+def test_recolectar_youtube_toma_idioma_y_pais_del_proyecto(app, llaves):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X", idioma="sv")
+    app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/youtube", data={"palabras_clave": "slippers", "max_videos": "3"})
+    p = app["encolados"][0]["payload"]["params"]
+    assert p["idioma"] == "sv" and p["region"] == "CO" and p["max_videos"] == 3 and p["max_comentarios_por_video"] == 100 and p["links"] == []
+
+
+def test_recolectar_sin_llaves_no_encola(app, monkeypatch):
+    from nicho import datos
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT", "YOUTUBE_API_KEY", "APIFY_TOKEN"):
+        monkeypatch.delenv(v, raising=False)
+    eid = datos.crear_estudio("acme", "X")
+    app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={"palabras_clave": "x"})
+    app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/youtube", data={"palabras_clave": "x"})
+    assert app["encolados"] == []
+
+
+def test_recolectar_apify_valida_links_y_estimado(app, llaves):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X")
+    c = app["c"]
+    c.post(f"/cliente/acme/nicho/{eid}/recolectar/apify", data={"actor": "amazon_resenas", "links": "https://www.amazon.com/s?k=slippers", "max_resultados": "100"})
+    assert app["encolados"] == []                                                # link que no es de producto: no encola
+    c.post(f"/cliente/acme/nicho/{eid}/recolectar/apify", data={"actor": "amazon_resenas", "links": "https://www.amazon.com/dp/B0TEST1234", "max_resultados": "100"})
+    t = app["encolados"][0]
+    assert t["max_intentos"] == 1 and t["payload"]["params"] == {"actor": "amazon_resenas", "links": ["https://www.amazon.com/dp/B0TEST1234"], "max_resultados": 100}
+    r = c.get(f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar?actor=tiktok_comentarios&max=400")
+    assert r.status_code == 200 and r.get_json() == {"actor": "clockworks~tiktok-comments-scraper", "max_resultados": 400, "usd": 0.2, "texto": "US$ 0,20"}
+    assert c.get(f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar?actor=magia&max=1").status_code == 400
+    assert c.get("/cliente/acme/nicho/999/recolectar/apify/estimar?actor=tiktok_comentarios&max=1").status_code == 404
+
+
+def test_recolectar_archivado_fuente_desconocida_y_doble_clic(app, llaves, monkeypatch):
+    from nicho import datos
+    from tareas import nicho as tareas_nicho
+    eid = datos.crear_estudio("acme", "X")
+    assert app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/magia", data={}).status_code == 404
+    datos.archivar_estudio("acme", eid)
+    app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={"palabras_clave": "x"})
+    assert app["encolados"] == []
+    datos.archivar_estudio("acme", eid, archivado=False)
+    monkeypatch.setattr(tareas_nicho.trabajos, "encolar", lambda *a, **k: False)
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={"palabras_clave": "x"}, follow_redirects=True)
+    assert "en curso" in r.data.decode()
+
+
+def test_ver_trae_fuentes_conectadas_y_recolecciones(app, llaves, monkeypatch):
+    from nicho import datos, rutas
+    eid = _estudio(datos)
+    datos.registrar_recoleccion("acme", eid, {"fuente": "reddit", "nuevos": 12, "repetidos": 3, "aviso": "Reddit limitó las llamadas"})
+    monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: job_id.endswith(":recolectar:youtube"))
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "Reddit" in html and "YouTube" in html and "Apify" in html
+    assert datos.job_id_recolectar("acme", eid, "youtube") in html and "12 nuevo" in html and "Reddit limitó" in html
+
+
+def test_pagina_tarjetas_sin_llaves(app, monkeypatch):
+    from nicho import datos
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT", "YOUTUBE_API_KEY", "APIFY_TOKEN"):
+        monkeypatch.delenv(v, raising=False)
+    eid = datos.crear_estudio("acme", "X")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "(falta REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USER_AGENT)" in html
+    assert "(falta YOUTUBE_API_KEY)" in html and "(falta APIFY_TOKEN)" in html
+    assert "Puesta a punto" in html
+
+
+def test_pagina_tarjetas_con_llaves(app, llaves):
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X", idioma="en")
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'name="subreddits"' in html and 'name="periodo"' in html and 'value="year" selected' in html
+    assert 'name="max_videos"' in html and 'name="idioma" value="en"' in html and 'name="region" value="CO"' in html
+    assert 'id="form-apify"' in html and "Reseñas de Amazon" in html and "Comentarios de TikTok" in html
+    assert f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar" in html and "Traer (se cobra)" in html
+    assert "(falta " not in html

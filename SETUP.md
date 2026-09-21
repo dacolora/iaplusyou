@@ -405,6 +405,36 @@ user" de prueba en tu panel de TikTok for Developers, y solo publicará en priva
 un cliente publique en público de verdad, hace falta pasar la auditoría de la Content
 Posting API con tu app (una sola vez, cubre a todos los clientes futuros).
 
+## 7. Nicho: fuentes de comentarios (Reddit, YouTube, Apify)
+
+Las tres son opcionales: sin ellas, un estudio de Nicho funciona con texto pegado y CSV/Excel. Cada llave va en el `.env` raíz del servidor (nunca en la base ni en una URL) y aparece con su insignia en Configuración › Puesta a punto. Después de editar el `.env`, reinicia gunicorn y el worker.
+
+### 7.1 Reddit (gratis para uso propio)
+
+1. Con la cuenta de Reddit de la empresa entra a [reddit.com/prefs/apps](https://www.reddit.com/prefs/apps) y pulsa **create another app…**.
+2. Tipo **script**, nombre `creatv-machine`, redirect uri `http://localhost:8080` (no se usa). Crea la app.
+3. Copia el id que aparece bajo el nombre como `REDDIT_CLIENT_ID` y el **secret** como `REDDIT_CLIENT_SECRET`.
+4. `REDDIT_USER_AGENT` debe describir la app, por ejemplo `creatv-machine/1.0 (by u/tu_usuario)`; Reddit rechaza user agents genéricos.
+
+Límites: 100 llamadas por minuto por app (la recolección hace una pausa de 1 s entre llamadas). La API gratis es para uso **no comercial**; si Creatv Machine se vende como producto, hay que pedir acceso comercial a Reddit antes de usar esta fuente para clientes.
+
+### 7.2 YouTube Data API (gratis, con cuota)
+
+Es una **llave de API** simple, distinta del OAuth de publicación de la sección 2 (que sigue igual).
+
+1. En el mismo proyecto de Google Cloud donde habilitaste **YouTube Data API v3**, ve a **APIs y servicios › Credenciales › Crear credenciales › Clave de API**.
+2. En **Restricciones de API** limítala a YouTube Data API v3.
+3. Cópiala como `YOUTUBE_API_KEY`.
+
+Cuota: la búsqueda (`search.list`) tiene un cupo de **100 llamadas por día** por proyecto; cada recolección usa una. Leer comentarios cuesta 1 unidad por página de 100, de las 10 000 diarias. Los links de video no gastan búsqueda.
+
+### 7.3 Apify (de pago, por resultado)
+
+1. Crea la cuenta en [apify.com](https://apify.com) (trae crédito gratis mensual) y agrega una tarjeta si vas a superarlo.
+2. **Settings › Integrations › Personal API token**: cópialo como `APIFY_TOKEN`.
+
+El dashboard usa dos actores de la tienda, ambos con precio por resultado: `junglee~amazon-reviews-scraper` (≈ US$ 3 por 1 000 reseñas) y `clockworks~tiktok-comments-scraper` (≈ US$ 0,50 por 1 000 comentarios). Antes de cada clic se muestra el estimado y la corrida nunca se reintenta sola; el gasto real queda en Configuración › Gasto como tipo `recoleccion`. Traer datos de Amazon o TikTok por scraping es una zona gris de sus términos de uso: es responsabilidad de quien pone el token.
+
 ## Resumen de limitaciones a tener en cuenta
 
 - **Instagram** usa la URL pública de tu bucket R2 (no la de Higgsfield), así que no depende

@@ -17,7 +17,10 @@ import db
 
 # access_token: Meta (paging.next, mensajes de Graph). upload_token: la
 # upload_url de TikTok (PUT de chunks) — un chunk rechazado la mete en el HTTPError.
-_RE_TOKEN = re.compile(r"((?:access|upload)_token=)[^&\s\"']+")
+# key / token: la URI que googleapiclient mete en su HttpError lleva
+# key=<llave de YouTube>, y "token=" cubre cualquier otra variante. El ")" queda
+# fuera del valor para no comerse el cierre de un paréntesis del mensaje.
+_RE_TOKEN = re.compile(r"((?:access_token|upload_token|key|token)=)[^&\s\"')]+")
 
 # Dedupe de encolar dentro del proceso (gunicorn con hilos). Entre procesos
 # manda el índice único parcial uq_tarea_job_viva (db.py / migración 0003).

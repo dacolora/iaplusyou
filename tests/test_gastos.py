@@ -184,3 +184,9 @@ def test_tipo_avatares_es_conocido(base_temporal):
     gid = gastos.registrar("acme", "avatares", 0.12, "avatares:3:1", detalle="2 núcleos", proveedor="anthropic")
     fila = gastos.historial("acme")[0]
     assert fila["id"] == gid and fila["tipo"] == "avatares" and fila["usd"] == 0.12
+
+
+def test_tipo_recoleccion_es_conocido(base_temporal):
+    import gastos
+    gastos.registrar("acme", "recoleccion", 0.6, "recoleccion:3:t9", detalle="Apify tiktok: 1200 resultado(s) aprox.", proveedor="apify")
+    assert gastos.historial("acme")[0]["tipo"] == "recoleccion"

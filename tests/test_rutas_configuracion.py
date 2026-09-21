@@ -71,7 +71,7 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli"]
+    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli", "reddit", "youtube_api", "apify"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
@@ -108,7 +108,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 7
+    assert cfg.count('class="llave-tarjeta') == 10
     # Orden de las tarjetas.
     pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli")]
     assert pos == sorted(pos)
@@ -356,3 +356,17 @@ def test_panel_admin_columna_gasto_del_mes(app, monkeypatch):
     assert "US$ 0,00" in tarjeta("vacio")
     # Total en la cabecera: 0,94 + 9,02.
     assert "US$ 9,96" in html and "generación este mes" in html
+
+
+def test_llaves_de_nicho_son_opcionales_y_solo_miran_presencia(app, monkeypatch):
+    import dashboard as d
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT", "YOUTUBE_API_KEY", "APIFY_TOKEN"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("REDDIT_CLIENT_ID", "id-secreto-123")
+    monkeypatch.setenv("APIFY_TOKEN", "apify_secreto_456")
+    por_id = {l["id"]: l for l in d._estado_llaves()}
+    assert por_id["reddit"]["estado"] == "parcial" and por_id["reddit"]["faltan"] == ["REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"]
+    assert por_id["youtube_api"]["estado"] == "falta" and por_id["apify"]["estado"] == "configurada"
+    assert all(por_id[i]["opcional"] for i in ("reddit", "youtube_api", "apify"))
+    plano = repr(por_id)
+    assert "id-secreto-123" not in plano and "apify_secreto_456" not in plano
