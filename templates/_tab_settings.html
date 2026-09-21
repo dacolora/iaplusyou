@@ -23,9 +23,9 @@
       {% else %}<span class="tag-estado tag-advertencia">falta</span>{% endif %}
     </header>
     <p class="llave-para-que">{{ l.para_que }}</p>
-    <p class="vacio llave-costo" style="padding-top:0;"><strong>Cómo se paga:</strong> {{ l.costo }}</p>
+    <p class="vacio llave-costo"><strong>Cómo se paga:</strong> {{ l.costo }}</p>
     {% if l.variables %}
-    <p class="vacio" style="padding-top:0;">
+    <p class="vacio">
       <strong>Variables en el <code>.env</code> del servidor:</strong>
       {% for v in l.variables %}<code class="llave-var{% if v in l.faltan %} llave-var-falta{% endif %}">{{ v }}</code>{% if not loop.last %} {% endif %}{% endfor %}
     </p>
@@ -33,8 +33,8 @@
     {% if l.estado == "parcial" %}
     <p class="tag-error">Faltan: {% for v in l.faltan %}<code>{{ v }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
     {% endif %}
-    <p class="vacio llave-nota" style="padding-top:0;">{{ l.nota }}</p>
-    <p class="vacio" style="padding-top:0;font-size:.74rem;">Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí.</p>
+    <p class="vacio llave-nota">{{ l.nota }}</p>
+    <p class="vacio" style="font-size:.74rem;">Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí.</p>
     <a class="llave-enlace" href="{{ l.url }}" target="_blank" rel="noopener">{{ l.url_texto }} ↗</a>
     <details class="llave-pasos">
       <summary>Cómo conseguirla</summary>

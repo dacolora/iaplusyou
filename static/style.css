@@ -75,7 +75,12 @@ body {
 
 /* ---------- header ---------- */
 
-header {
+/* Solo la barra superior de la página (base.html: <body><header>). Las
+   plantillas también usan <header> dentro de tarjetas (Puesta a punto,
+   ideas y campañas de Sprints): una regla `header {…}` sin acotar les
+   metía el sticky, el fondo, el padding y el margen de la barra lateral
+   (tests/test_estilos.py lo vigila). */
+body > header {
   position: sticky;
   top: 0;
   z-index: 10;
@@ -1040,9 +1045,9 @@ textarea.con-error, input.con-error { border-color: var(--error) !important; box
 .sidebar-plegada .sidebar-usuario { justify-content: center; padding-left: 0; padding-right: 0; }
 
 /* El header pasa a ser una barra superior a la derecha de la barra lateral. */
-.con-sidebar header { margin-left: var(--sb); transition: margin-left .18s ease; }
-.con-sidebar header .marca-header { display: none; }
-.con-sidebar header .header-logout { display: none; }
+body.con-sidebar > header { margin-left: var(--sb); transition: margin-left .18s ease; }
+body.con-sidebar > header .marca-header { display: none; }
+body.con-sidebar > header .header-logout { display: none; }
 .con-sidebar main { margin-left: var(--sb); max-width: none; padding: 2rem 2.5rem; transition: margin-left .18s ease; }
 .pagina-cabecera { margin-bottom: 1.2rem; }
 .con-sidebar .tab-panel.activo { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.6rem 1.8rem; box-shadow: var(--shadow-soft); }
@@ -1516,7 +1521,12 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .llave-configurada { border-left-color: var(--ok); }
 .llave-cabecera { display: flex; align-items: center; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
 .llave-cabecera h3 { margin: 0; font-size: .98rem; }
-.llave-para-que { margin: 0; }
+/* Entre los párrafos propios de la tarjeta manda el `gap`: ni el margen por
+   defecto de <p> ni el padding vertical de .vacio (pensado para estados vacíos
+   sueltos). Solo hijos directos: el bloque de Conectar Meta que va dentro de
+   la tarjeta Meta conserva su propio espaciado. */
+.llave-tarjeta > p { margin: 0; }
+.llave-tarjeta > .vacio { padding: 0; }
 .llave-var { font-size: .72rem; }
 .llave-var-falta { color: var(--warn); }
 .llave-enlace { font-size: .8rem; align-self: flex-start; }

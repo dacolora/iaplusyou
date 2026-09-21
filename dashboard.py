@@ -110,6 +110,23 @@ FRAME_SUFFIX = ".frame.jpg"
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
+
+
+@app.url_defaults
+def _version_estaticos(endpoint, values):
+    """Cache-busting: url_for('static', filename=…) lleva ?v=<mtime del
+    archivo>, así el navegador pide el CSS nuevo tras cada despliegue (Flask
+    no manda max-age y el navegador reutiliza el viejo por heurística sobre
+    Last-Modified). Un archivo que no existe se enlaza sin versión."""
+    if endpoint != "static" or "v" in values or not values.get("filename"):
+        return
+    try:
+        ruta = os.path.join(app.static_folder, values["filename"])
+        values["v"] = int(os.stat(ruta).st_mtime)
+    except OSError:
+        pass
+
+
 # Real y aleatoria: con login de por medio, un secret_key adivinable permite
 # falsificar la cookie de sesión y hacerse pasar por cualquier usuario — el
 # literal fijo de antes ("solo-local-no-hace-falta-secreto-real") deja de ser
