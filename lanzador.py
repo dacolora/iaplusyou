@@ -51,6 +51,31 @@ def _con_credenciales(cliente, fn):
             meta_auth.limpiar()
 
 
+# Errores de Meta que ningún reintento arregla: se traducen a lo que la persona
+# tiene que hacer. Marcas que identifican cada caso dentro del texto que
+# devuelve meta_ads.auth.llamar (subcode o frase de Meta).
+_APP_EN_DESARROLLO = ("1885183", "modo de desarrollo", "development mode")
+
+
+def traducir_error_meta(mensaje, modo="propia"):
+    """Cambia el JSON crudo de Meta por una instrucción cuando el error tiene
+    remedio conocido fuera del código; lo demás pasa tal cual. Hoy: la app en
+    modo Desarrollo (subcode 1885183) — Meta no crea anuncios a partir de
+    posts de una app que no está en Live, y solo la persona (o el admin de
+    Creatv, en modo agencia) puede cambiar eso en developers.facebook.com."""
+    texto = str(mensaje or "")
+    if any(marca in texto for marca in _APP_EN_DESARROLLO):
+        if modo == "agencia":
+            return ("Meta rechazó el anuncio porque la app de Meta de Creatv (modo agencia) está en modo Desarrollo "
+                    "(subcódigo 1885183). Avísale al admin de Creatv para que la pase a modo Live y luego reintenta el "
+                    "lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se duplica nada.")
+        return ("Meta rechazó el anuncio porque la app de Meta de este proyecto está en modo Desarrollo (subcódigo "
+                "1885183). Pásala a modo Live en developers.facebook.com › Mis apps › tu app › «Modo de la app» y "
+                "reintenta el lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se "
+                "duplica nada.")
+    return texto
+
+
 def _validar_para_lanzar(cliente, experimento_id):
     """Chequeos previos a tocar Meta. Separado de lanzar() para poder
     envolverlos en el mismo try/except que sana el estado (M3): si el
@@ -190,13 +215,16 @@ def lanzar(cliente, experimento_id, on_etapa=None):
     try:
         _con_credenciales(cliente, _correr)
     except Exception as e:
-        mensaje = cola.sin_token(str(e))
+        crudo = cola.sin_token(str(e))
+        mensaje = traducir_error_meta(crudo, meta_conexion.modo(cliente))
         ex_actual = experimentos.obtener(cliente, experimento_id)
         for pz in (ex_actual["piezas"] if ex_actual else []):
             if pz["estado"] == "publicando" and not pz["meta_ad_id"]:
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="en_cola")
         experimentos.actualizar(cliente, experimento_id, estado="error", error=mensaje)
-        experimentos.registrar_evento(cliente, experimento_id, "error", f"Falló el lanzamiento: {mensaje}")
+        # El evento conserva el texto crudo de Meta (sin token) para diagnosticar.
+        experimentos.registrar_evento(cliente, experimento_id, "error", f"Falló el lanzamiento: {mensaje}",
+                                      {"detalle": cola.recortar(crudo)} if mensaje != crudo else None)
         notificaciones.avisar(cliente, "error_lanzamiento", f"Falló el lanzamiento de «{ex['nombre']}»",
                               f"El experimento «{ex['nombre']}» (#{experimento_id}) no se pudo lanzar a Meta.\n\n"
                               f"Motivo: {mensaje}\n\nRevísalo en el panel y vuelve a intentar.")
@@ -365,14 +393,17 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
             video_guardado = (pz_.get("extra") or {}).get("meta_video_id")
             if video_guardado:
                 cache.setdefault(pz_["pieza_id"], video_guardado)
+        modo = meta_conexion.modo(cliente)
         for pz in piezas_nuevas:
             try:
                 creadas += _crear_anuncios(cliente, {**ex, "piezas": [pz]}, creds, adsets, cache=cache)
             except Exception as e:
-                mensaje = cola.sin_token(str(e))
+                crudo = cola.sin_token(str(e))
+                mensaje = traducir_error_meta(crudo, modo)
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="error", error=mensaje)
                 experimentos.registrar_evento(cliente, experimento_id, "error",
-                                              f"No se pudo crear el anuncio de {pz['nombre']} ({pz['pais']}): {mensaje}", ep_id=pz["id"])
+                                              f"No se pudo crear el anuncio de {pz['nombre']} ({pz['pais']}): {mensaje}",
+                                              {"detalle": cola.recortar(crudo)} if mensaje != crudo else None, ep_id=pz["id"])
                 fallidas.append(pz["nombre"])
         if fallidas:
             raise RuntimeError(f"Fallaron {len(fallidas)} pieza(s) al crear su anuncio: {', '.join(fallidas)}")

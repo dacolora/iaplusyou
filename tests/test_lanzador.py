@@ -693,3 +693,43 @@ def test_activar_pieza_y_lanzar_escriben_extra_sin_pisar_lo_que_llego_entre_medi
     lz.activar_pieza("acme", ep)
     extra = next(p for p in ex.piezas("acme", eid) if p["id"] == ep)["extra"]
     assert extra["activado_en"] and extra["rescatado_en_escalon"] == 1 and extra["meta_video_id"] == "vid_1"
+
+
+# Meta rechaza crear el anuncio cuando la app del proyecto sigue en modo
+# Desarrollo (subcode 1885183): la persona debe pasarla a Live, no hay nada
+# que el código pueda hacer. El experimento queda en `error` con un mensaje
+# que dice eso en claro (no el JSON crudo), el evento conserva el detalle
+# crudo para diagnosticar, y el reintento retoma sin duplicar.
+_ERROR_DEV_MODE = ('Meta Ads (act_1/adcreatives) respondió 400: {"error":{"message":"Invalid parameter",'
+                   '"type":"OAuthException","code":100,"error_subcode":1885183,"is_transient":false,'
+                   '"error_user_title":"La publicaci\\u00f3n con contenido publicitario se cre\\u00f3 con una app '
+                   'que se encuentra en modo de desarrollo","error_user_msg":"Debe estar en modo p\\u00fablico '
+                   'para crear este anuncio.","fbtrace_id":"A_x"}}')
+
+
+def test_lanzar_traduce_app_en_modo_desarrollo(entorno):
+    ex, lz, eid = entorno["ex"], entorno["lanzador"], entorno["eid"]
+
+    def rechaza(*a, **k):
+        raise RuntimeError(_ERROR_DEV_MODE)
+
+    entorno["monkeypatch"].setattr(lz.meta_creative, "crear_creative_video", rechaza)
+    avisos = []
+    entorno["monkeypatch"].setattr(lz.notificaciones, "avisar", lambda c, tipo, asunto, cuerpo: (avisos.append(cuerpo), True)[1])
+    with pytest.raises(RuntimeError):
+        lz.lanzar("acme", eid)
+    e = ex.obtener("acme", eid)
+    assert e["estado"] == "error" and e["meta_campaign_id"]  # el reintento retoma desde la campaña ya creada
+    assert "modo Desarrollo" in e["error"] and "Live" in e["error"] and "1885183" in e["error"]
+    assert "error_subcode" not in e["error"]  # nada de JSON crudo en pantalla
+    assert "modo Desarrollo" in avisos[0]
+    ev = next(ev for ev in e["eventos"] if ev["tipo"] == "error")
+    assert "modo Desarrollo" in ev["mensaje"] and "error_subcode" in ev["datos"]["detalle"]
+
+
+def test_traducir_error_meta():
+    lz = __import__("lanzador")
+    assert "Creatv" in lz.traducir_error_meta(_ERROR_DEV_MODE, modo="agencia")
+    assert "developers.facebook.com" in lz.traducir_error_meta(_ERROR_DEV_MODE, modo="propia")
+    # Lo que no se reconoce pasa tal cual (los demás tests cuentan con "Meta falló en …").
+    assert lz.traducir_error_meta("Meta falló en creative") == "Meta falló en creative"
