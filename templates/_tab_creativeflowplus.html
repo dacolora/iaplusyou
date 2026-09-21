@@ -2,10 +2,10 @@
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 <p class="vacio" style="padding-top:0;">
-  Sube las imágenes de referencia (producto, persona, lugar — las que quieras), escribe en una o dos frases
-  qué tiene que pasar y pulsa <strong>Armar prompt</strong>: la IA lo convierte, gratis, en un plan por planos
-  con la fórmula del modelo elegido (Wan 3.0, Kling O3 Pro o Seedance 2.5). Lo revisas, lo editas si quieres y
-  ahí sí generas. Las imágenes van solas a Seedream V5 Pro.
+  Sube las imágenes de referencia (producto, persona, lugar — las que quieras), escribe qué tiene que pasar
+  y pulsa <strong>Generar</strong>: tu texto va tal cual al modelo elegido (Wan 3.0, Kling O3 Pro o Seedance 2.5).
+  ¿No sabes qué escribir? <strong>Armar prompt con IA</strong> convierte, gratis, una o dos frases en un plan por
+  planos que revisas y editas antes de generar. Las imágenes van solas a Seedream V5 Pro.
 </p>
 
 <div class="form-nueva-idea" style="margin-top:1rem;">
@@ -130,8 +130,12 @@
   </div>
   <input type="hidden" name="modelo" id="fp-modelo">
 
-  <button class="btn-generar" type="submit" id="fp-generar" style="margin-top:1.2rem;">Armar prompt (gratis)</button>
-  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Armar el prompt no cuesta; se cobra al generar desde la tarjeta.</p>
+  {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
+     cobra al generar; «Armar prompt con IA» (director, gratis) es la ayuda para
+     quien no sabe qué escribir y deja revisar el prompt antes de gastar. #}
+  <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo" style="margin-top:1.2rem;">Generar video</button>
+  <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="La IA arma el prompt por planos con la fórmula del modelo; lo revisas y editas antes de generar. No cuesta.">¿No sabes qué escribir? Armar prompt con IA (gratis)</button>
+  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.</p>
 </form>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
@@ -697,16 +701,17 @@
           usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value) ? 0.02 : 0);
         }
       }
-      // La imagen se genera y se cobra al instante (nunca pasa por el director):
-      // su botón sigue diciendo "Generar imagen", nunca "gratis", y la ayuda de
-      // debajo no debe prometer una tarjeta pendiente que nunca aparece. Mismo
-      // formato que gastos.formatear en el servidor: «≈ US$ 1,00».
+      // «Generar» (video o imagen) cobra al generar con el texto de la persona;
+      // «Armar prompt con IA» solo existe para video (la imagen nunca pasa por
+      // el director). Mismo formato que gastos.formatear: «≈ US$ 1,00».
+      var btnArmar = document.getElementById('fp-armar');
+      if (btnArmar) btnArmar.hidden = esImagen;
       if (esImagen) {
         botonGenerar.textContent = 'Generar imagen' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
         if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.';
       } else {
-        botonGenerar.textContent = 'Armar prompt (gratis)' + (usd ? ' · generar costará ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. Armar el prompt no cuesta; se cobra al generar desde la tarjeta.';
+        botonGenerar.textContent = 'Generar video' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
+        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. «Generar» manda tu texto tal cual y se cobra al generar; «Armar prompt con IA» es gratis y te deja revisar el prompt antes de gastar.';
       }
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });

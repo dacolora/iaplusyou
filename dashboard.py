@@ -5747,9 +5747,16 @@ def fp_describir(cliente):
 
 @app.route("/cliente/<cliente>/creative_flow/crear", methods=["POST"])
 def cf_crear_video(cliente):
-    """Crear: referencias + activos + idea corta → sesión en prompt_pendiente y
-    tarea flowplus_director (gratis). La generación (paga) la dispara la
-    persona desde la tarjeta con cf_generar_video (spec director §1)."""
+    """Crear: referencias + activos + texto de la persona → video.
+
+    Camino por defecto (la generación tradicional): el texto de la persona
+    manda, se arma el prompt determinista de siempre (flowplus_prompt.armar) y
+    se genera de una, con el costo que ya vio en el botón. Con
+    `modo_prompt=director` («Armar prompt con IA», opcional, para quien no sabe
+    qué escribir) la sesión queda en prompt_pendiente, el worker corre
+    flowplus_director (gratis) y la persona genera desde la tarjeta con
+    cf_generar_video (spec director §1). Desde 2026-09-21: el director dejó de
+    ser el único camino porque los clientes perdieron la generación directa."""
     accion_central = (request.form.get("accion_central") or "").strip()
     tipo = "imagen" if request.form.get("tipo") == "imagen" else "video"
     # Sonido de la escena y música al crear (spec estudio S1): solo para videos.
@@ -5870,6 +5877,30 @@ def cf_crear_video(cliente):
         nombre_modelo = flowplus_modelos.IMAGEN[modelo]["nombre"]
         flash(f"Generando la imagen con {nombre_modelo}{' · ' + aspect_ratio if aspect_ratio else ''}…" if lanzado
               else "Ya se estaba generando eso — espera a que termine.", "ok" if lanzado else "warn")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+    if request.form.get("modo_prompt") != "director":
+        # Generación directa: el prompt determinista con el texto íntegro de la
+        # persona (el mismo que usa el worker como fallback del director).
+        prompt_final = flowplus_prompt.armar(
+            accion_central, referencias, con_persona=info["con_persona"],
+            guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
+            logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
+            sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido,
+            cierre_sonido=flowplus_modelos.cierre_sonido(modelo),
+        )
+        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **campos)
+        entry = creative_flow.cargar(cliente)[cf_id]
+        lanzado = _lanzar_video_cf(cliente, cf_id, entry)
+        referencias_flowplus.vaciar(cliente)
+        nombre_modelo = flowplus_modelos.VIDEO[modelo]["nombre"]
+        if lanzado:
+            detalle = f" · {aspect_ratio}" if aspect_ratio else ""
+            flash(f"Generando el video con {nombre_modelo}{detalle} · {duracion_objetivo} s…", "ok")
+            if aviso_duracion is not None:
+                flash(f"{nombre_modelo} llega a {aviso_duracion} s: se generará de {aviso_duracion} s.", "warn")
+        else:
+            flash("Ya se estaba generando eso — espera a que termine.", "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", **campos)

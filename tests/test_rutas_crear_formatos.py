@@ -33,7 +33,10 @@ def _flashes(c):
 
 
 def _post(app, **campos):
-    datos = {"accion_central": "gira despacio", "tipo": "video", "modelo": "wan3", "duracion_objetivo": "10", "aspect_ratio": "9:16"}
+    # modo_prompt=director: estas pruebas miran duración/formato en la sesión que
+    # deja el director; el camino directo (por defecto) se prueba en test_rutas_crear_director.py.
+    datos = {"accion_central": "gira despacio", "tipo": "video", "modelo": "wan3", "duracion_objetivo": "10", "aspect_ratio": "9:16",
+             "modo_prompt": "director"}
     datos.update(campos)
     r = app["c"].post("/cliente/acme/creative_flow/crear", data=datos)
     assert r.status_code == 302

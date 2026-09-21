@@ -56,6 +56,15 @@ datos y un campo de formulario cada una.
 
 ## 1. Flujo de Crear con el director (Etapa 1)
 
+> **Corrección 2026-09-21.** El director es **opcional**. En producción los clientes
+> perdieron la generación tradicional (escribir y generar de una) porque «Armar
+> prompt» se volvió el único camino. Desde entonces el formulario tiene dos botones:
+> «Generar video» (por defecto, `modo_prompt=directo`: el texto de la persona va por
+> `flowplus_prompt.armar` y se genera de una con el costo a la vista) y «¿No sabes qué
+> escribir? Armar prompt con IA (gratis)» (`modo_prompt=director`: el flujo de abajo).
+> Si la persona manda su prompt, ese prima; el director es la ayuda para quien no
+> sabe qué escribir.
+
 ```
 Formulario Crear (referencias, catálogo, idea corta, modelo, duración, formato,
 sonido, música, [preset], [plantilla], [borrador 480p])

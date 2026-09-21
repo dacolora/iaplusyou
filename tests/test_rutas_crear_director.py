@@ -35,8 +35,10 @@ def test_settings_guarda_idioma_y_duracion_por_defecto(app):
 
 
 def _crear(app, **extra):
+    # modo_prompt="director" = botón «Armar prompt con IA» (opcional desde 2026-09-21);
+    # sin él, o con "directo", el prompt de la persona manda y se genera de una.
     data = {"accion_central": "@Imagen 1 gira despacio", "duracion_objetivo": "8", "aspect_ratio": "9:16", "tipo": "video",
-            "modelo": "wan3", "con_sonido": "si", "sonido": "brisa", "musica_estilo": ""}
+            "modelo": "wan3", "con_sonido": "si", "sonido": "brisa", "musica_estilo": "", "modo_prompt": "director"}
     data.update(extra)
     return app["c"].post("/cliente/acme/creative_flow/crear", data=data)
 
@@ -253,7 +255,9 @@ def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app)
     import proyectos
     proyectos.guardar_preferencias_flowplus("acme", "wan3", "seedream_v5_pro", idioma_prompt="es", duracion_defecto=8)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert "Armar prompt (gratis)" in html and 'id="fp-calidad"' in html and 'name="calidad" value="borrador"' in html
+    # Desde 2026-09-21 el botón principal genera; «Armar prompt con IA» es la ayuda opcional.
+    assert "Generar video" in html and "Armar prompt con IA (gratis)" in html
+    assert 'id="fp-calidad"' in html and 'name="calidad" value="borrador"' in html
     assert '<option value="8" selected>8 s</option>' in html and 'id="fp-duracion-larga"' in html
     assert "exactamente lo que recibe el modelo" not in html
     # La imagen se cobra al instante (nunca pasa por el director): su botón en
@@ -305,3 +309,58 @@ def test_version_b_checkbox_se_oculta_si_ya_existe_hija(app):
     cf.duplicar("acme", cf_id, prompt_relleno="B", variante="B")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert 'name="version_b"' not in html
+
+
+# ---- El director es opcional: el prompt de la persona manda (2026-09-21) ----
+# En producción los clientes perdieron la generación tradicional (escribir y
+# generar de una): «Armar prompt» se había vuelto el único camino. Vuelve el
+# botón «Generar» directo como camino por defecto; «Armar prompt con IA» queda
+# como ayuda para quien no sabe qué escribir.
+
+
+def _generado_directo(app, cf):
+    (cf_id, e), = cf.cargar("acme").items()
+    assert e["estado"] == "video_generando", e["estado"]
+    # El texto de la persona va en el prompt (con @Imagen 1 traducido al token del modelo).
+    assert "gira despacio" in (e["prompt_relleno"] or "") and "Image 1" in e["prompt_relleno"]
+    assert "SONIDO" in e["prompt_relleno"]
+    assert e["prompt_fuente"] == "@Imagen 1 gira despacio" and not e.get("director")
+    assert [t["tipo"] for t in app["encolados"]] == ["flowplus_video"]
+    assert app["encolados"][0]["max_intentos"] == 1
+    return cf_id
+
+
+def test_generar_directo_con_el_prompt_de_la_persona(app):
+    import creative_flow as cf
+    r = _crear(app, modo_prompt="directo")
+    assert r.status_code == 302
+    _generado_directo(app, cf)
+
+
+def test_sin_modo_prompt_tambien_genera_directo(app):
+    """Un formulario viejo o un script que no manda modo_prompt cae en el camino
+    tradicional, nunca en el director."""
+    import creative_flow as cf
+    data = {"accion_central": "@Imagen 1 gira despacio", "duracion_objetivo": "8", "aspect_ratio": "9:16", "tipo": "video",
+            "modelo": "wan3", "con_sonido": "si", "sonido": "brisa", "musica_estilo": ""}
+    app["c"].post("/cliente/acme/creative_flow/crear", data=data)
+    _generado_directo(app, cf)
+
+
+def test_armar_prompt_con_ia_sigue_como_opcion(app):
+    import creative_flow as cf
+    _crear(app, modo_prompt="director")
+    (cf_id, e), = cf.cargar("acme").items()
+    assert e["estado"] == "prompt_pendiente" and e["prompt_relleno"] is None
+    assert [t["tipo"] for t in app["encolados"]] == ["flowplus_director"]
+
+
+def test_formulario_ofrece_generar_y_armar_prompt(app):
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    crear = html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-sprints"')]
+    form = crear[crear.index('id="form-flowplus"'):crear.index("</form>", crear.index('id="form-flowplus"'))]
+    assert 'name="modo_prompt" value="directo"' in form and 'id="fp-generar"' in form
+    assert 'name="modo_prompt" value="director"' in form and "Armar prompt con IA" in form
+    # El botón principal genera; el del director es la ayuda, no al revés.
+    assert form.index('value="directo"') < form.index('value="director"')
+    assert "pulsa <strong>Generar</strong>" in crear

@@ -233,13 +233,20 @@ plantilla de la hoja "Personas" (`nicho/exportar.py`). UI: pestaña **Nicho**
 (`_tab_nicho.html`) y página propia del estudio (`nicho_estudio.html`), Blueprint
 `nicho/rutas.py` bajo `/cliente/<cliente>/nicho/...`.
 
-**Crear (FlowPlus)** (`cf_crear_video` -> sesión en `prompt_pendiente` -> worker
+**Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field
+`modo_prompt`). **Default = direct generation** (the "generación tradicional" clients rely
+on, restored 2026-09-21 after the director had become the only path): the person's text
+goes through the deterministic `flowplus_prompt.armar` and `_lanzar_video_cf` launches
+right away with the cost shown on the «Generar video» button. **Optional** «Armar prompt
+con IA (gratis)» (`modo_prompt=director`, for people who don't know what to write):
+sesión en `prompt_pendiente` -> worker
 `tareas/director.py` (`director.compilar`: Claude escribe los planos por familia de
 modelo, valida y compone A/B con `flowplus_prompt.armar(..., planos=)`; fallback al
 prompt determinista, nunca bloquea) -> `prompt_listo` (la persona edita con
 `cf_guardar_prompt` o rearma con `cf_rearmar`) -> `cf_generar_video` (A, o A+B vía
 `creative_flow.duplicar(prompt_relleno=, variante="B")`) -> `flowplus_lanzar.lanzar`
 -> worker `tareas/flowplus.py` -> `providers/flowplus_modelos.py`, todo vía WaveSpeed).
+Never make the director mandatory again: a client's own prompt always wins.
 Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
 por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
