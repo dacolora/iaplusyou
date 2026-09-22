@@ -231,7 +231,13 @@
       if (!modalProducto.value) { alert('Elige un producto'); return; }
       var catalogoId = modalVariante.value || modalProducto.value;
       var k = modalPersona.value + '|' + catalogoId + '|' + (modalTemporada.value || 'null');
-      if (campanas[k]) { alert('Ya existe esa campaña'); return; }
+      var editKey = modal.dataset.editKey;
+
+      if (!editKey && campanas[k]) { alert('Ya existe esa campaña'); return; }
+      if (editKey && editKey !== k && campanas[k]) { alert('Ya existe esa campaña'); return; }
+
+      if (editKey) delete campanas[editKey];
+
       var personaNombre = modalPersona.options[modalPersona.selectedIndex].textContent;
       var nVideos = parseInt(document.getElementById('modal-n-videos').value) || 5;
       var nImagenes = parseInt(document.getElementById('modal-n-imagenes').value) || 5;
@@ -246,6 +252,7 @@
       };
       mostrarCampanas2();
       modal.style.display = 'none';
+      delete modal.dataset.editKey;
       modalPersona.value = '';
       modalProducto.value = '';
       modalVariante.value = '';
@@ -260,16 +267,37 @@
       Object.keys(campanas).forEach(function (k) {
         var c = campanas[k];
         var div = document.createElement('div');
-        div.style.cssText = 'padding: 0.75rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;';
+        div.style.cssText = 'padding: 0.75rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px;';
         var labels = document.createElement('div');
         labels.innerHTML = '<strong>' + c.persona_nombre + ' × ' + c.catalogo_id + '</strong><br>' +
                           '<label style="display: inline-block; margin-right: 1rem; margin-top: 0.5rem;">Videos: <input type="number" value="' + c.n_videos + '" class="mini-input" data-key="' + k + '" data-type="n_videos" style="width: 50px;"></label>' +
-                          '<label style="display: inline-block;">Imágenes: <input type="number" value="' + c.n_imagenes + '" class="mini-input" data-key="' + k + '" data-type="n_imagenes" style="width: 50px;"></label>';
+                          '<label style="display: inline-block; margin-right: 1rem;">Imágenes: <input type="number" value="' + c.n_imagenes + '" class="mini-input" data-key="' + k + '" data-type="n_imagenes" style="width: 50px;"></label>';
         div.appendChild(labels);
+
+        var btnEdit = document.createElement('button');
+        btnEdit.className = 'btn-xs';
+        btnEdit.textContent = 'Editar';
+        btnEdit.style.marginRight = '0.5rem';
+        btnEdit.style.marginTop = '0.5rem';
+        btnEdit.addEventListener('click', function () {
+          modalPersona.value = c.persona_id;
+          modalProducto.value = c.catalogo_id.split('/')[0];
+          actualizarVariantesModal();
+          if (c.catalogo_id.includes('/')) {
+            modalVariante.value = c.catalogo_id;
+          }
+          modalTemporada.value = c.temporada_id || '';
+          modalFunnel.value = c.funnel;
+          document.getElementById('modal-n-videos').value = c.n_videos;
+          document.getElementById('modal-n-imagenes').value = c.n_imagenes;
+          modal.dataset.editKey = k;
+          modal.style.display = 'block';
+        });
+        div.appendChild(btnEdit);
+
         var btnDel = document.createElement('button');
         btnDel.className = 'btn-xs btn-peligro';
         btnDel.textContent = '✕';
-        btnDel.style.marginLeft = '1rem';
         btnDel.addEventListener('click', function () {
           delete campanas[k];
           mostrarCampanas2();
