@@ -12,6 +12,8 @@ import db
 import experimentos
 import meta_conexion
 import notificaciones
+import triple_whale
+import triple_whale_tiendas
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
@@ -530,6 +532,55 @@ def _avisar_moneda_no_comparable(cliente, ex, ajenas):
     experimentos.actualizar_extra(cliente, ex["id"], lambda extra: {**extra, "aviso_moneda": monedas})
 
 
+def _obtener_metricas_triple_whale(cliente, ex, pz):
+    """Obtiene métricas de Triple Whale para una pieza y las mapea al formato de snapshot."""
+    config_tw = triple_whale_tiendas.obtener(cliente)
+    if not config_tw:
+        return None
+
+    try:
+        llave = triple_whale_tiendas.obtener_llave(cliente)
+        if not llave:
+            return None
+
+        # Obtener métricas de Triple Whale
+        metricas = triple_whale.metricas_por_anuncio(
+            llave_api=llave,
+            shop_id=config_tw["dominio_tienda"],
+            consulta=None,  # Usa la consulta predeterminada
+            parametros={
+                "modelo_atribucion": config_tw["modelo_atribucion"],
+                "ventana_atribucion": config_tw["ventana_atribucion"]
+            }
+        )
+
+        if not metricas:
+            return None
+
+        # Buscar métrica que coincida con el ad_id de la pieza
+        # (triple_whale devuelve ad_id del canal, mapear si es necesario)
+        for fila in metricas:
+            # Mapear campos de TW a snapshot
+            snap = {
+                "impresiones": fila.get("impressions", 0),
+                "clics": fila.get("clicks", 0),
+                "thruplay": fila.get("thruplay", 0),
+                "compras": fila.get("conversions", 0),
+                "gasto": fila.get("spend", 0),
+                "roas": fila.get("pixel_roas", 0),
+                "cpa": fila.get("pixel_cpa", 0),
+                "fuente_ventas": "triple_whale" if (fila.get("conversions") or 0) > 0 else "ninguna"
+            }
+            return snap
+
+        return None
+    except Exception as e:
+        experimentos.registrar_evento(
+            cliente, ex["id"], "error",
+            f"Error al traer métricas de Triple Whale: {cola.sin_token(str(e))}", ep_id=pz["id"])
+        return None
+
+
 def refrescar(cliente, experimento_id):
     ex = experimentos.obtener(cliente, experimento_id)
     piezas = _piezas_de(ex) if ex else []
@@ -543,6 +594,17 @@ def refrescar(cliente, experimento_id):
         n = 0
         for pz in piezas:
             try:
+                # Usar Triple Whale si está configurado como atribución
+                if ex.get("atribucion") == "triple_whale":
+                    snap = _obtener_metricas_triple_whale(cliente, ex, pz)
+                    if snap:
+                        if ex["atribucion"] == "tienda":
+                            monedas_ajenas.update(_mezclar_ventas_tienda(cliente, ex, pz, snap))
+                        experimentos.snapshot(pz["id"], snap)
+                        n += 1
+                        continue
+
+                # Fallback: usar Meta Pixel (comportamiento actual)
                 r = meta_insights.obtener_resultados(pz["meta_ad_id"], objetivo=ex["objetivo_meta"])
                 snap = {dest: r.get(src) for src, dest in _SNAP_DESDE_INSIGHTS.items() if src in r}
                 snap["fuente_ventas"] = "meta" if (r.get("compras") or 0) > 0 else "ninguna"
