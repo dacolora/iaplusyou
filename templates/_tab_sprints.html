@@ -52,7 +52,7 @@
       <legend>2. Matriz persona × producto</legend>
       <div class="fe-opciones">
         <label>Producto
-          <select id="matriz-producto"><option value="">(elige un producto)</option>{% for p in productos_sprint %}{% if p.variantes %}<option value="{{ p.id }}" data-variantes="{{ p.variantes | tojson | safe }}">{{ p.nombre }}</option>{% else %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endif %}{% endfor %}</select>
+          <select id="matriz-producto"><option value="">(elige un producto)</option>{% for p in productos_sprint %}{% if p.variantes %}<option value="{{ p.id }}" data-variantes='{{ p.variantes | tojson }}'>{{ p.nombre }}</option>{% else %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endif %}{% endfor %}</select>
         </label>
         <label>Variante
           <select id="matriz-variante" disabled><option value="">(elige una variante)</option></select>
@@ -112,123 +112,15 @@
 </details>
 
 <script>
-  (function () {
-    var KEY = 'sprint-asistente-' + {{ cliente | tojson }};
-    {% if sprint_recien_creado %}
-    // El sprint se acaba de crear: el borrador del asistente ya no sirve. Se limpia aquí, al
-    // volver con éxito, y no en submit, para que un envío rechazado no pierda la matriz armada.
-    try { sessionStorage.removeItem(KEY); } catch (e) {}
-    {% endif %}
-    var form = document.getElementById('form-sprint');
-    if (!form) return;
-    var costoV = parseFloat(form.dataset.estimadoVideo || '0'), costoI = parseFloat(form.dataset.estimadoImagen || '0');
-    var campanas = {};   // "persona|catalogo_id|temporada" -> {persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, funnel, nombres}
-    var selProducto = document.getElementById('matriz-producto'), selVariante = document.getElementById('matriz-variante'),
-        selTemporada = document.getElementById('matriz-temporada'), selFunnel = document.getElementById('matriz-funnel'),
-        matrizContainer = document.getElementById('matriz-container'), matrizVarianteTitulo = document.getElementById('matriz-variante-titulo');
-
-    // Fechas por defecto: el mes siguiente completo.
-    var hoy = new Date(), ini = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1), fin = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
-    function pad(n) { return (n < 10 ? '0' : '') + n; }
-    function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }   // hora local, no UTC
-    if (!form.inicio.value) form.inicio.value = iso(ini);
-    if (!form.fin.value) form.fin.value = iso(fin);
-    if (!form.nombre.value) form.nombre.value = 'Sprint ' + ini.toLocaleDateString('es', {month: 'long', year: 'numeric'});
-
-    // Estado guardado (por si se crea una persona o temporada a mitad de camino y la página recarga).
-    try { var g = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (g) { campanas = g.campanas || {}; if (g.nombre) form.nombre.value = g.nombre; if (g.inicio) form.inicio.value = g.inicio; if (g.fin) form.fin.value = g.fin; } } catch (e) {} }
-    function guardarEstado() { try { sessionStorage.setItem(KEY, JSON.stringify({campanas: campanas, nombre: form.nombre.value, inicio: form.inicio.value, fin: form.fin.value})); } catch (e) {} }
-
-    // Actualizar variantes cuando cambia el producto
-    selProducto.addEventListener('change', function () {
-      var opt = selProducto.options[selProducto.selectedIndex];
-      var variantes = opt.dataset.variantes ? JSON.parse(opt.dataset.variantes) : {};
-      selVariante.innerHTML = '<option value="">(elige una variante)</option>';
-      Object.keys(variantes).sort().forEach(function (k) {
-        var o = document.createElement('option');
-        o.value = selProducto.value + '/' + k;
-        o.textContent = variantes[k].nombre;
-        selVariante.appendChild(o);
-      });
-      selVariante.disabled = !Object.keys(variantes).length;
-      if (!selVariante.disabled) selVariante.value = '';
-      pintar();
-    });
-
-    selVariante.addEventListener('change', function () { pintar(); });
-
-    function clave(persona_id) { return persona_id + '|' + selVariante.value + '|' + selTemporada.value; }
-    function pintar() {
-      matrizContainer.style.display = selVariante.value ? 'block' : 'none';
-      if (!selVariante.value) return;
-
-      var varianteParts = selVariante.value.split('/');
-      var productoNombre = '', varianteNombre = '';
-      Array.from(selProducto.options).forEach(function (opt) {
-        if (opt.value === varianteParts[0] && opt.dataset.variantes) {
-          productoNombre = opt.textContent;
-          var v = JSON.parse(opt.dataset.variantes);
-          if (v[varianteParts[1]]) varianteNombre = v[varianteParts[1]].nombre;
-        }
-      });
-      matrizVarianteTitulo.textContent = (varianteNombre || selVariante.value).substring(0, 30);
-
-      form.querySelectorAll('.sprint-celda').forEach(function (td) {
-        var k = clave(td.dataset.persona);
-        var c = campanas[k];
-        td.classList.toggle('activa', !!c);
-        td.querySelector('.sprint-celda-campos').hidden = !c;
-        td.querySelector('.sprint-celda-btn').textContent = c ? '✓' : '+';
-        if (c) { td.querySelector('.celda-videos').value = c.n_videos; td.querySelector('.celda-imagenes').value = c.n_imagenes; }
-      });
-
-      var n = 0, v = 0, i = 0;
-      Object.keys(campanas).forEach(function (k) { n++; v += +campanas[k].n_videos; i += +campanas[k].n_imagenes; });
-      document.getElementById('matriz-totales').textContent = n + ' campañas · ' + v + ' videos · ' + i + ' imágenes · costo estimado USD ' + (v * costoV + i * costoI).toFixed(2).replace('.', ',');
-
-      var ul = document.getElementById('resumen-campanas'); ul.innerHTML = '';
-      Object.keys(campanas).forEach(function (k) {
-        var c = campanas[k], li = document.createElement('li');
-        li.textContent = c.persona_nombre + ' · ' + c.catalogo_id + ' · ' + (c.temporada_nombre || '(sin temporada)') + ': ' + c.n_videos + ' videos, ' + c.n_imagenes + ' imágenes';
-        ul.appendChild(li);
-      });
-
-      document.getElementById('campanas-json').value = JSON.stringify(Object.keys(campanas).map(function (k) {
-        var c = campanas[k]; return {persona_id: c.persona_id, catalogo_id: c.catalogo_id, temporada_id: c.temporada_id, n_videos: c.n_videos, n_imagenes: c.n_imagenes, funnel: c.funnel};
-      }));
-      guardarEstado();
-    }
-    form.querySelectorAll('.sprint-celda').forEach(function (td) {
-      td.querySelector('.sprint-celda-btn').addEventListener('click', function () {
-        if (!selVariante.value) { alert('Elige producto y variante primero'); return; }
-        var k = clave(td.dataset.persona);
-        if (campanas[k]) { delete campanas[k]; }
-        else {
-          campanas[k] = {persona_id: +td.dataset.persona, catalogo_id: selVariante.value,
-                         temporada_id: selTemporada.value ? +selTemporada.value : null,
-                         n_videos: 5, n_imagenes: 5, funnel: selFunnel.value,
-                         persona_nombre: td.dataset.personaNombre,
-                         temporada_nombre: selTemporada.options[selTemporada.selectedIndex].text};
-        }
-        pintar();
-      });
-      ['.celda-videos', '.celda-imagenes'].forEach(function (sel, idx) {
-        td.querySelector(sel).addEventListener('input', function (e) {
-          var c = campanas[clave(td.dataset.persona)]; if (!c) return;
-          c[idx === 0 ? 'n_videos' : 'n_imagenes'] = Math.max(0, parseInt(e.target.value || '0', 10)); pintar();
-        });
-      });
-    });
-    selTemporada.addEventListener('change', pintar);
-    selFunnel.addEventListener('change', function () { Object.keys(campanas).forEach(function (k) { if (campanas[k]) campanas[k].funnel = selFunnel.value; }); pintar(); });
-    ['nombre', 'inicio', 'fin'].forEach(function (n) { form[n].addEventListener('input', guardarEstado); });
+  var form = document.getElementById('form-sprint');
+  if (form) {
     form.querySelectorAll('[data-ir]').forEach(function (b) {
       b.addEventListener('click', function () {
         var destino = b.dataset.ir;
-        if (destino === '3' && !Object.keys(campanas).length) { alert('Agrega al menos una campaña en la matriz.'); return; }
-        form.querySelectorAll('.sprint-paso').forEach(function (p) { p.hidden = p.dataset.paso !== destino; });
+        form.querySelectorAll('.sprint-paso').forEach(function (p) {
+          p.hidden = (p.dataset.paso !== destino);
+        });
       });
     });
-    pintar();
-  })();
+  }
 </script>
