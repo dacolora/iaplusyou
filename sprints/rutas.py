@@ -339,16 +339,19 @@ def crear(cliente):
                                  referencias_objetivo_defecto=request.form.get("referencias_objetivo") or 5,
                                  notas=request.form.get("notas"))
         try:
+            primera_cid = None
             for c in campanas:
-                datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
+                cid = datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
                                       c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"], funnel=c["funnel"])
+                if primera_cid is None:
+                    primera_cid = cid
         except datos.ErrorDatos:
             datos.archivar_sprint(cliente, sid)
             raise
         estado.recalcular(cliente, sid)
         session["sprint_creado"] = True     # la pestaña descarta el borrador del asistente al volver (contexto)
         flash(f"Sprint creado con {len(campanas)} campaña(s). Ahora sube referencias a cada campaña.", "ok")
-        return _volver(cliente, sid)
+        return _volver(cliente, sid, primera_cid)
     except datos.ErrorDatos as e:
         flash(str(e), "error")
         return _volver(cliente)
