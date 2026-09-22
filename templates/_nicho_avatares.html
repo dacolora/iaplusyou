@@ -1,15 +1,44 @@
 {# Sección Avatares. Contexto: estudio, nucleos, urls_comentarios, estimado,
    precio_texto, min_comentarios, trabajo_generar, niveles_conciencia, bases. #}
 <h3 class="sprint-subtitulo">Avatares</h3>
+
+<details class="nicho-presupuesto" open>
+  <summary class="vacio" style="cursor: pointer; font-weight: bold;">💰 Presupuesto estimado</summary>
+  <div style="padding: 1rem; background: #f9f9f9; border-radius: 4px; margin: 0.5rem 0;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.9rem;">
+      <div>
+        <strong>Entrada (tokens):</strong> {{ estimado.tokens_entrada | int }}
+        <small class="vacio">Comentarios × 2 pasadas + prompts</small>
+      </div>
+      <div>
+        <strong>Salida (tokens):</strong> {{ estimado.tokens_salida | int }}
+        <small class="vacio">Núcleos + sub-avatares</small>
+      </div>
+      <div>
+        <strong>Comentarios a procesar:</strong> {{ estimado.comentarios }}
+        <small class="vacio">Se analizan dos veces (núcleos, luego subs)</small>
+      </div>
+      <div>
+        <strong>Modelo:</strong> {{ estimado.modelo }}
+        <small class="vacio">Claude para investigación</small>
+      </div>
+    </div>
+    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #ddd;">
+      <strong style="font-size: 1.1rem;">Costo estimado: {{ precio_texto }}</strong>
+      <small class="vacio" style="display: block; margin-top: 0.5rem;">Pasada 1: Agrupa en núcleos de deseos comunes. Pasada 2: Desglosa cada núcleo en sub-avatares (bases de emoción/experiencia).</small>
+    </div>
+    {% if estimado.referencia %}<small class="tag-estado sprint-aviso" style="margin-top: 0.5rem; display: block;">Precio de referencia: el modelo {{ estimado.modelo }} no está en la tabla.</small>{% endif %}
+  </div>
+</details>
+
 <div class="acciones sprint-acciones">
   <form method="post" action="{{ url_for('nicho.generar', cliente=cliente, eid=estudio.id) }}" class="inline"
-        onsubmit="return confirm('Generar avatares con Claude cuesta aprox. {{ precio_texto }} ({{ estimado.comentarios }} comentarios). ¿Seguimos?');">
+        onsubmit="return confirm('Esto va a:\n1. Agrupar {{ estimado.comentarios }} comentarios en núcleos de deseos\n2. Crear sub-avatares por núcleo\n3. Cobrar aprox. {{ precio_texto }} de Claude\n\n¿Seguimos?');">
     <button type="submit" class="btn-generar btn-sm" {% if not estimado.suficientes or trabajo_generar or estudio.archivado %}disabled{% endif %}>
-      {{ 'Regenerar avatares' if nucleos else 'Generar avatares' }} · ≈ {{ precio_texto }} · {{ estimado.comentarios }} comentario(s)
+      {{ 'Regenerar avatares' if nucleos else 'Generar avatares' }} · ≈ {{ precio_texto }}
     </button>
   </form>
   {% if not estimado.suficientes %}<small class="vacio">Hacen falta al menos {{ min_comentarios }} comentarios no excluidos.</small>{% endif %}
-  {% if estimado.referencia %}<small class="vacio">Estimado con precio de referencia: el modelo {{ estimado.modelo }} no está en la tabla de precios.</small>{% endif %}
   {% if nucleos %}
   <a class="btn-sm" href="{{ url_for('nicho.exportar_md', cliente=cliente, eid=estudio.id) }}">Exportar .md</a>
   <a class="btn-sm" href="{{ url_for('nicho.exportar_xlsx', cliente=cliente, eid=estudio.id) }}">Exportar Excel</a>
