@@ -6181,22 +6181,22 @@ def cfg_triple_whale_conectar(cliente):
     import triple_whale
     import triple_whale_tiendas
     from flask import flash, redirect, url_for, request
-    
-    llave = request.form.get("triple_whale_llave", "").strip()
+
+    llave = request.form.get("llave_api", "").strip()
     dominio = request.form.get("dominio_tienda", "").strip()
     if not llave or not dominio:
         flash("Llave y dominio de tienda son requeridos.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
-    
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+
     # Validar llave
     if not triple_whale.validar_llave(llave):
         flash("Llave inválida, revocada o sin scope 'Data Out'.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
-    
-    moneda = request.form.get("moneda_triple_whale", "USD").strip().upper()
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+
+    moneda = request.form.get("moneda", "USD").strip().upper()
     modelo = request.form.get("modelo_atribucion", "Triple Attribution").strip()
     ventana = request.form.get("ventana_atribucion", "lifetime").strip()
-    
+
     try:
         triple_whale_tiendas.conectar(
             cliente, llave, dominio, moneda=moneda,
@@ -6205,8 +6205,8 @@ def cfg_triple_whale_conectar(cliente):
         flash("Triple Whale conectado correctamente.", "ok")
     except Exception as e:
         flash(f"Error al conectar: {str(e)}", "error")
-    
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
+
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/probar", methods=["POST"])
@@ -6235,10 +6235,10 @@ def cfg_triple_whale_desconectar(cliente):
     """Desconecta Triple Whale del proyecto."""
     import triple_whale_tiendas
     from flask import flash, redirect, url_for
-    
+
     triple_whale_tiendas.desconectar(cliente)
     flash("Triple Whale desconectado.", "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
 
 if __name__ == "__main__":
     _candado = _tomar_puerto_o_none(HOST, PUERTO)
