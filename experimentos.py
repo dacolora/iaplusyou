@@ -13,9 +13,9 @@ ESTADOS_EXPERIMENTO = ("armando", "lanzando", "pausado", "corriendo", "cerrado",
                        "esperando_aprobacion", "decidido")
 ESTADOS_PIEZA = ("en_cola", "publicando", "pausado", "activo", "error")
 # Cómo se miden las ventas de un experimento: por el Pixel de Meta (insights),
-# por los pedidos de la tienda conectada (utm_content → experimento_pieza) o
-# no se miden.
-ATRIBUCIONES = ("pixel", "tienda", "ninguna")
+# por los pedidos de la tienda conectada (utm_content → experimento_pieza),
+# por Triple Whale (SQL: ads_table + pixel_joined_tvf), o no se miden.
+ATRIBUCIONES = ("pixel", "tienda", "triple_whale", "ninguna")
 _EXP_COLS = ("estado", "error", "meta_campaign_id", "gasto_acumulado", "paises", "nombre", "tope_total",
              "dias", "destino_url", "edad_min", "edad_max", "extra", "modo", "reglas", "atribucion", "objetivo_meta")
 _EP_COLS = ("estado", "error", "meta_adset_id", "meta_ad_id", "meta_creative_id", "estado_meta",

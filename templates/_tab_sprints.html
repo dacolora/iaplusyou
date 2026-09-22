@@ -182,25 +182,99 @@
       }
     }
 
-    selProducto.addEventListener('change', actualizarVariantes);
+    var modal = document.getElementById('modal-agregar-campana');
+    var abrirModalBtn = document.getElementById('abrir-modal-campana');
+    var cerrarModalBtn = document.getElementById('cerrar-modal-campana');
+    var confirmarBtn = document.getElementById('confirmar-campana');
+    var modalPersona = document.getElementById('modal-persona');
+    var modalProducto = document.getElementById('modal-producto');
+    var modalVariante = document.getElementById('modal-variante');
+    var modalTemporada = document.getElementById('modal-temporada');
+    var modalFunnel = document.getElementById('modal-funnel');
 
-    agregarBtn.addEventListener('click', function () {
-      if (!selPersona.value) { alert('Elige una persona'); return; }
-      if (!selVariante.value) { alert('Elige producto y variante'); return; }
-      var k = selPersona.value + '|' + selVariante.value + '|' + (selTemporada.value || 'null');
+    function actualizarVariantesModal() {
+      var opt = modalProducto.options[modalProducto.selectedIndex];
+      var tieneVariantes = opt && opt.dataset.tieneVariantes === '1';
+      var variantes = tieneVariantes ? JSON.parse(opt.dataset.variantes) : {};
+      modalVariante.innerHTML = '<option value="">(ninguna)</option>';
+      Object.keys(variantes).sort().forEach(function (k) {
+        var o = document.createElement('option');
+        o.value = modalProducto.value + '/' + k;
+        o.textContent = variantes[k].nombre;
+        modalVariante.appendChild(o);
+      });
+      modalVariante.disabled = !tieneVariantes;
+    }
+
+    abrirModalBtn.addEventListener('click', function () {
+      modal.style.display = 'block';
+    });
+
+    cerrarModalBtn.addEventListener('click', function () {
+      modal.style.display = 'none';
+    });
+
+    modal.addEventListener('click', function (e) {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+
+    modalProducto.addEventListener('change', actualizarVariantesModal);
+
+    confirmarBtn.addEventListener('click', function () {
+      if (!modalPersona.value) { alert('Elige una persona'); return; }
+      if (!modalProducto.value) { alert('Elige un producto'); return; }
+      var catalogoId = modalVariante.value || modalProducto.value;
+      var k = modalPersona.value + '|' + catalogoId + '|' + (modalTemporada.value || 'null');
       if (campanas[k]) { alert('Ya existe esa campaña'); return; }
-      var personaNombre = selPersona.options[selPersona.selectedIndex].textContent;
+      var personaNombre = modalPersona.options[modalPersona.selectedIndex].textContent;
       campanas[k] = {
-        persona_id: parseInt(selPersona.value),
-        catalogo_id: selVariante.value,
-        temporada_id: selTemporada.value ? parseInt(selTemporada.value) : null,
+        persona_id: parseInt(modalPersona.value),
+        catalogo_id: catalogoId,
+        temporada_id: modalTemporada.value ? parseInt(modalTemporada.value) : null,
         n_videos: 5,
         n_imagenes: 5,
-        funnel: selFunnel.value,
+        funnel: modalFunnel.value,
         persona_nombre: personaNombre
       };
       mostrarCampanas();
+      modal.style.display = 'none';
+      modalPersona.value = '';
+      modalProducto.value = '';
+      modalVariante.value = '';
+      modalTemporada.value = '';
+      actualizarVariantesModal();
     });
+
+    function mostrarCampanas2() {
+      resumenDiv.innerHTML = '';
+      Object.keys(campanas).forEach(function (k) {
+        var c = campanas[k];
+        var div = document.createElement('div');
+        div.style.cssText = 'padding: 0.75rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px; display: flex; justify-content: space-between; align-items: center;';
+        var labels = document.createElement('div');
+        labels.innerHTML = '<strong>' + c.persona_nombre + ' × ' + c.catalogo_id + '</strong><br>' +
+                          '<label style="display: inline-block; margin-right: 1rem; margin-top: 0.5rem;">Videos: <input type="number" value="' + c.n_videos + '" class="mini-input" data-key="' + k + '" data-type="n_videos" style="width: 50px;"></label>' +
+                          '<label style="display: inline-block;">Imágenes: <input type="number" value="' + c.n_imagenes + '" class="mini-input" data-key="' + k + '" data-type="n_imagenes" style="width: 50px;"></label>';
+        div.appendChild(labels);
+        var btnDel = document.createElement('button');
+        btnDel.className = 'btn-xs btn-peligro';
+        btnDel.textContent = '✕';
+        btnDel.style.marginLeft = '1rem';
+        btnDel.addEventListener('click', function () {
+          delete campanas[k];
+          mostrarCampanas2();
+        });
+        div.appendChild(btnDel);
+        resumenDiv.appendChild(div);
+      });
+      resumenDiv.querySelectorAll('.mini-input').forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          campanas[inp.dataset.key][inp.dataset.type] = Math.max(0, parseInt(inp.value) || 0);
+          actualizarJSON();
+        });
+      });
+      actualizarJSON();
+    }
 
     form.querySelectorAll('[data-ir]').forEach(function (b) {
       b.addEventListener('click', function () {
@@ -212,6 +286,8 @@
       });
     });
 
-    actualizarVariantes();
+    // Reemplazar mostrarCampanas original
+    window.mostrarCampanas = mostrarCampanas2;
+    actualizarVariantesModal();
   }
 </script>

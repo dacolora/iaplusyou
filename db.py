@@ -313,6 +313,20 @@ tienda = Table("tienda", metadata,
     Column("error", Text),
 )
 
+triple_whale = Table("triple_whale", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("llave", Text),                                   # cifrado (Fernet)
+    Column("dominio_tienda", String(200)),                   # ej: example.myshopify.com
+    Column("moneda", String(3)),                             # ISO 4217 (ej: USD, COP)
+    Column("modelo_atribucion", String(50), default="Triple Attribution"),  # ej: Triple Attribution, Last Click 7d
+    Column("ventana_atribucion", String(30), default="lifetime"),  # ej: lifetime, 7d
+    Column("zona_horaria", String(50)),                      # ej: America/Bogota (desde shop_timezone)
+    Column("ultima_sincronizacion", String(19)),             # ISO 8601
+    Column("estado", String(20), default="conectada"),       # conectada / error
+    Column("error", Text),
+)
+
 pedido = Table("pedido", metadata,
     Column("id", Integer, primary_key=True),
     Column("cliente", String(80), nullable=False, index=True),
