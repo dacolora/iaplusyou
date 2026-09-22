@@ -49,26 +49,40 @@
     </fieldset>
 
     <fieldset class="sprint-paso" data-paso="2" hidden>
-      <legend>2. Matriz persona × producto</legend>
-      <div class="fe-opciones">
-        <label>Producto
-          <select id="matriz-producto"><option value="">(elige un producto)</option>{% for p in productos_sprint %}{% if p.variantes %}<option value="{{ p.id }}" data-variantes='{{ p.variantes | tojson }}'>{{ p.nombre }}</option>{% else %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endif %}{% endfor %}</select>
+      <legend>2. Campaña(s)</legend>
+      <button type="button" class="btn-generar btn-sm" id="abrir-modal-campana">+ Agregar campaña</button>
+      <div id="campanas-resumen-paso2" style="margin-top: 1rem;"></div>
+    </fieldset>
+
+    <div id="modal-agregar-campana" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
+      <div style="background: white; border-radius: 8px; padding: 2rem; max-width: 500px; margin: 2rem auto;">
+        <h3>Agregar campaña</h3>
+        <label style="display: block; margin: 1rem 0;">Persona
+          <select id="modal-persona"><option value="">(elige una persona)</option>{% for p in personas_sprint %}<option value="{{ p.id }}" data-resumen="{{ p.nombre }}, {{ p.edad_rango }}">{{ p.nombre }}</option>{% endfor %}</select>
+          <small id="persona-detalle" style="display: block; color: #666; margin-top: 0.5rem;"></small>
         </label>
-        <label>Variante
-          <select id="matriz-variante" disabled><option value="">(elige una variante)</option></select>
+        <label style="display: block; margin: 1rem 0;">Producto
+          <select id="modal-producto"><option value="">(elige un producto)</option>{% for p in productos_sprint %}{% if p.variantes %}<option value="{{ p.id }}" data-variantes='{{ p.variantes | tojson }}' data-tiene-variantes="1">{{ p.nombre }}</option>{% else %}<option value="{{ p.id }}" data-tiene-variantes="0">{{ p.nombre }}</option>{% endif %}{% endfor %}</select>
         </label>
-        <label>Temporada (opcional)
-          <select id="matriz-temporada"><option value="">(ninguna)</option>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }} → {{ t.fin }})</option>{% endfor %}</select>
+        <label style="display: block; margin: 1rem 0;">Variante (opcional)
+          <select id="modal-variante" disabled><option value="">(ninguna)</option></select>
         </label>
-        <label>Funnel
-          <select id="matriz-funnel">
+        <label style="display: block; margin: 1rem 0;">Temporada (opcional)
+          <select id="modal-temporada"><option value="">(ninguna)</option>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }} → {{ t.fin }})</option>{% endfor %}</select>
+        </label>
+        <label style="display: block; margin: 1rem 0;">Funnel
+          <select id="modal-funnel">
             <option value="tof">Top of Funnel (TOF) - Conciencia</option>
             <option value="mof">Middle of Funnel (MOF) - Consideración</option>
             <option value="bof">Bottom of Funnel (BOF) - Conversión</option>
           </select>
         </label>
-        <small class="vacio">Elige producto + variante, luego haz clic en una celda para agregar esa campaña.</small>
+        <div style="margin-top: 1.5rem;">
+          <button type="button" class="btn-sm" id="cerrar-modal-campana" style="margin-right: 0.5rem;">Cancelar</button>
+          <button type="button" class="btn-generar btn-sm" id="confirmar-campana">Agregar</button>
+        </div>
       </div>
+    </div>
       <div id="matriz-container" style="display: none;">
         <div class="sprint-matriz-scroll">
           <table class="sprint-matriz" id="matriz">
@@ -114,13 +128,90 @@
 <script>
   var form = document.getElementById('form-sprint');
   if (form) {
+    var campanas = {};
+    var selPersona = document.getElementById('matriz-persona');
+    var selProducto = document.getElementById('matriz-producto');
+    var selVariante = document.getElementById('matriz-variante');
+    var selTemporada = document.getElementById('matriz-temporada');
+    var selFunnel = document.getElementById('matriz-funnel');
+    var agregarBtn = document.getElementById('agregar-campana-btn');
+    var resumenDiv = document.getElementById('campanas-resumen-paso2');
+    var campanasJsonInput = document.getElementById('campanas-json');
+
+    function actualizarVariantes() {
+      var opt = selProducto.options[selProducto.selectedIndex];
+      var variantes = opt && opt.dataset.variantes ? JSON.parse(opt.dataset.variantes) : {};
+      selVariante.innerHTML = '<option value="">(elige una variante)</option>';
+      Object.keys(variantes).sort().forEach(function (k) {
+        var o = document.createElement('option');
+        o.value = selProducto.value + '/' + k;
+        o.textContent = variantes[k].nombre;
+        selVariante.appendChild(o);
+      });
+      selVariante.disabled = !Object.keys(variantes).length;
+      if (!selVariante.disabled) selVariante.value = '';
+    }
+
+    function mostrarCampanas() {
+      resumenDiv.innerHTML = '';
+      Object.keys(campanas).forEach(function (k) {
+        var c = campanas[k];
+        var div = document.createElement('div');
+        div.style.cssText = 'padding: 0.5rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px;';
+        div.innerHTML = '<strong>' + c.persona_nombre + ' × ' + c.catalogo_id + '</strong><br>' +
+                        'Videos: <input type="number" value="' + c.n_videos + '" class="mini-input" data-key="' + k + '" data-type="n_videos"> ' +
+                        'Imágenes: <input type="number" value="' + c.n_imagenes + '" class="mini-input" data-key="' + k + '" data-type="n_imagenes"> ' +
+                        '<button class="btn-xs btn-peligro" onclick="delete campanas[' + JSON.stringify(k) + ']; mostrarCampanas(); actualizarJSON();">✕</button>';
+        resumenDiv.appendChild(div);
+      });
+      resumenDiv.querySelectorAll('.mini-input').forEach(function (inp) {
+        inp.addEventListener('change', function () {
+          campanas[inp.dataset.key][inp.dataset.type] = parseInt(inp.value) || 0;
+          actualizarJSON();
+        });
+      });
+      actualizarJSON();
+    }
+
+    function actualizarJSON() {
+      if (campanasJsonInput) {
+        campanasJsonInput.value = JSON.stringify(Object.keys(campanas).map(function (k) {
+          var c = campanas[k];
+          return {persona_id: c.persona_id, catalogo_id: c.catalogo_id, temporada_id: c.temporada_id, n_videos: c.n_videos, n_imagenes: c.n_imagenes, funnel: c.funnel};
+        }));
+      }
+    }
+
+    selProducto.addEventListener('change', actualizarVariantes);
+
+    agregarBtn.addEventListener('click', function () {
+      if (!selPersona.value) { alert('Elige una persona'); return; }
+      if (!selVariante.value) { alert('Elige producto y variante'); return; }
+      var k = selPersona.value + '|' + selVariante.value + '|' + (selTemporada.value || 'null');
+      if (campanas[k]) { alert('Ya existe esa campaña'); return; }
+      var personaNombre = selPersona.options[selPersona.selectedIndex].textContent;
+      campanas[k] = {
+        persona_id: parseInt(selPersona.value),
+        catalogo_id: selVariante.value,
+        temporada_id: selTemporada.value ? parseInt(selTemporada.value) : null,
+        n_videos: 5,
+        n_imagenes: 5,
+        funnel: selFunnel.value,
+        persona_nombre: personaNombre
+      };
+      mostrarCampanas();
+    });
+
     form.querySelectorAll('[data-ir]').forEach(function (b) {
       b.addEventListener('click', function () {
         var destino = b.dataset.ir;
+        if (destino === '3' && !Object.keys(campanas).length) { alert('Agrega al menos una campaña'); return; }
         form.querySelectorAll('.sprint-paso').forEach(function (p) {
           p.hidden = (p.dataset.paso !== destino);
         });
       });
     });
+
+    actualizarVariantes();
   }
 </script>
