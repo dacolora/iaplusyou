@@ -43,8 +43,7 @@ def upgrade() -> None:
         batch_op.drop_index(batch_op.f('ix_avatar_estudio'))
         batch_op.create_index(batch_op.f('ix_avatar_estudio_id'), ['estudio_id'], unique=False)
 
-    with op.batch_alter_table('campana', schema=None) as batch_op:
-        batch_op.drop_column('funnel')
+    # Nota: funnel se agregó en 0014 y debe permanecer en 0015
 
     with op.batch_alter_table('comentario', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_comentario_estudio'))
@@ -60,8 +59,7 @@ def downgrade() -> None:
         batch_op.drop_index(batch_op.f('ix_comentario_estudio_id'))
         batch_op.create_index(batch_op.f('ix_comentario_estudio'), ['estudio_id'], unique=False)
 
-    with op.batch_alter_table('campana', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('funnel', sa.VARCHAR(length=3), server_default=sa.text("'tof'"), nullable=True))
+    # Nota: funnel permanece de la migración 0014
 
     with op.batch_alter_table('avatar', schema=None) as batch_op:
         batch_op.drop_index(batch_op.f('ix_avatar_estudio_id'))
