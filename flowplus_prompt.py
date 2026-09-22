@@ -267,15 +267,9 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         # Con un personaje del catálogo la escena lleva persona sí o sí: ese personaje.
         con_persona = True
 
-    # Lo primero que lee el modelo pesa más: si no hay persona, se dice antes que
-    # nada (Wan 3.0 asocia "sandalia" con "pie" con mucha fuerza y, dicho solo al
-    # final, lo ignoraba en el último tramo del video).
-    if not con_persona:
-        partes.append(
-            "VIDEO DE PRODUCTO SOLO, SIN NINGUNA PERSONA: el producto aparece vacío, sin usar, "
-            "sobre la superficie o flotando. Nadie lo lleva puesto. No hay pies, piernas, manos ni "
-            "cuerpo en ningún momento del video, ni al principio ni al final."
-        )
+    # Nota: ya no hardcodeamos "VIDEO DE PRODUCTO SOLO" — el usuario edita libremente
+    # el prompt con el esquema de frames/tomas que prefiera. El prompt es completamente
+    # editable en la UI.
 
     # --- Contexto de campaña (Sprints): audiencia y temporada ---
     partes.extend(_lineas_contexto(contexto))
