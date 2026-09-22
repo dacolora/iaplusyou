@@ -6167,6 +6167,74 @@ def _tomar_puerto_o_none(host, puerto):
     return s
 
 
+
+# ---- Triple Whale (atribución alternativa de Meta) ----
+
+@app.route("/cliente/<cliente>/cfg_triple_whale/conectar", methods=["POST"])
+def cfg_triple_whale_conectar(cliente):
+    """Conecta o reemplaza la configuración Triple Whale del proyecto."""
+    import triple_whale
+    import triple_whale_tiendas
+    from flask import flash, redirect, url_for, request
+    
+    llave = request.form.get("triple_whale_llave", "").strip()
+    dominio = request.form.get("dominio_tienda", "").strip()
+    if not llave or not dominio:
+        flash("Llave y dominio de tienda son requeridos.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
+    
+    # Validar llave
+    if not triple_whale.validar_llave(llave):
+        flash("Llave inválida, revocada o sin scope 'Data Out'.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
+    
+    moneda = request.form.get("moneda_triple_whale", "USD").strip().upper()
+    modelo = request.form.get("modelo_atribucion", "Triple Attribution").strip()
+    ventana = request.form.get("ventana_atribucion", "lifetime").strip()
+    
+    try:
+        triple_whale_tiendas.conectar(
+            cliente, llave, dominio, moneda=moneda,
+            modelo_atribucion=modelo, ventana_atribucion=ventana
+        )
+        flash("Triple Whale conectado correctamente.", "ok")
+    except Exception as e:
+        flash(f"Error al conectar: {str(e)}", "error")
+    
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
+
+
+@app.route("/cliente/<cliente>/cfg_triple_whale/probar", methods=["POST"])
+def cfg_triple_whale_probar(cliente):
+    """Prueba la conexión y lista las tiendas accesibles."""
+    import triple_whale
+    import triple_whale_tiendas
+    from flask import jsonify
+    
+    config = triple_whale_tiendas.obtener(cliente)
+    if not config:
+        return jsonify({"error": "Triple Whale no configurado"}), 404
+    
+    llave = triple_whale_tiendas.obtener_llave(cliente)
+    if not llave:
+        return jsonify({"error": "No se puede recuperar la llave (descifrado falló)"}), 500
+    
+    if not triple_whale.validar_llave(llave):
+        return jsonify({"error": "Llave inválida o revocada"}), 401
+    
+    return jsonify({"ok": True, "dominio": config["dominio_tienda"], "moneda": config["moneda"]})
+
+
+@app.route("/cliente/<cliente>/cfg_triple_whale/desconectar", methods=["POST"])
+def cfg_triple_whale_desconectar(cliente):
+    """Desconecta Triple Whale del proyecto."""
+    import triple_whale_tiendas
+    from flask import flash, redirect, url_for
+    
+    triple_whale_tiendas.desconectar(cliente)
+    flash("Triple Whale desconectado.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="configuracion"))
+
 if __name__ == "__main__":
     _candado = _tomar_puerto_o_none(HOST, PUERTO)
     if _candado is not None:
