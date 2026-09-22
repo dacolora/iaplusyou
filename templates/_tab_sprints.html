@@ -317,6 +317,16 @@
     form.querySelectorAll('[data-ir]').forEach(function (b) {
       b.addEventListener('click', function () {
         var destino = b.dataset.ir;
+        // Validar Paso 1 antes de ir a Paso 2
+        if (destino === '2') {
+          var nombre = (form.querySelector('input[name="nombre"]') || {}).value || '';
+          var inicio = (form.querySelector('input[name="inicio"]') || {}).value || '';
+          var fin = (form.querySelector('input[name="fin"]') || {}).value || '';
+          if (!nombre.trim()) { alert('El nombre del sprint es requerido'); return; }
+          if (!inicio) { alert('La fecha de inicio es requerida'); return; }
+          if (!fin) { alert('La fecha de fin es requerida'); return; }
+        }
+        // Validar Paso 2 antes de ir a Paso 3
         if (destino === '3' && !Object.keys(campanas).length) { alert('Agrega al menos una campaña'); return; }
         form.querySelectorAll('.sprint-paso').forEach(function (p) {
           p.hidden = (p.dataset.paso !== destino);
