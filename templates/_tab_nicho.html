@@ -10,6 +10,8 @@
   <a class="swap-card sprint-card" href="{{ url_for('nicho.ver', cliente=cliente, eid=e.id) }}">
     <div>
       <strong>{{ e.nombre }}</strong> <span class="tag-estado estado-nicho estado-nicho-{{ e.estado }}">{{ e.estado }}</span>
+      {% set inv = (e.extra or {}).get('investigacion', {}) %}
+      {% if inv.estado %}<span class="tag-estado badge-{{ inv.estado }}">inv: {{ inv.estado }}</span>{% endif %}
       <br><small class="vacio">{{ e.producto or 'sin producto' }} · {{ e.comentarios_total }} comentario(s) de {{ e.fuentes | length }} fuente(s) · {{ e.avatares_aprobados }} de {{ e.avatares_total }} avatar(es) aprobado(s)</small>
     </div>
   </a>

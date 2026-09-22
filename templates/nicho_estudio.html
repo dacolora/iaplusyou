@@ -39,6 +39,9 @@
   </form>
 </details>
 
+{% set investigacion = estudio.extra.investigacion or {} %}
+{% include "_nicho_investigacion.html" %}
+
 {% include "_nicho_comentarios.html" %}
 {% include "_nicho_avatares.html" %}
 {% endblock %}

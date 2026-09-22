@@ -534,3 +534,118 @@ def eliminar_estudio(cliente, estudio_id):
             (db.estudio.c.cliente == cliente)
         ))
     return True
+
+
+# ------ Investigación (Parte 3) ------
+
+def actualizar_investigacion(cliente, estudio_id, fn):
+    """RMW con candado para extra.investigacion (Flask + worker escriben simultáneamente).
+    
+    fn recibe el dict investigacion actual y retorna uno actualizado.
+    """
+    _bloquear_estudio(cliente, estudio_id)
+    with db.conectar() as con:
+        est = con.execute(sa.select(db.estudio).where(
+            (db.estudio.c.id == int(estudio_id)) &
+            (db.estudio.c.cliente == cliente)
+        )).first()
+        if not est:
+            return
+        extra = est["extra"] or {}
+        inv_actual = extra.get("investigacion", {})
+        inv_nueva = fn(inv_actual)
+        extra["investigacion"] = inv_nueva
+        con.execute(
+            db.estudio.update()
+            .where((db.estudio.c.id == int(estudio_id)) & (db.estudio.c.cliente == cliente))
+            .values(extra=extra, actualizado_en=db.ahora())
+        )
+        con.commit()
+
+
+def investigacion(cliente, estudio_id):
+    """Leer el estado actual de la investigación."""
+    with db.conectar() as con:
+        est = con.execute(sa.select(db.estudio).where(
+            (db.estudio.c.id == int(estudio_id)) &
+            (db.estudio.c.cliente == cliente)
+        )).first()
+        if est:
+            return (est["extra"] or {}).get("investigacion", {})
+        return {}
+
+
+def guardar_productos_nicho(cliente, estudio_id, plataforma, productos_lista):
+    """Upsert productos (no duplicar si ya existen con mismo estudio+plat+fuente_id).
+    Retorna count de nuevos/actualizados."""
+    ahora = db.ahora()
+    with db.conectar() as con:
+        count = 0
+        for prod in productos_lista:
+            try:
+                r = con.execute(
+                    db.producto_nicho.insert().values(
+                        cliente=cliente,
+                        estudio_id=int(estudio_id),
+                        plataforma=plataforma,
+                        fuente_id=prod["fuente_id"],
+                        titulo=prod["titulo"][:300],
+                        marca=prod.get("marca", "")[:120] if prod.get("marca") else None,
+                        precio=prod.get("precio"),
+                        moneda=prod.get("moneda"),
+                        estrellas=prod.get("estrellas"),
+                        n_resenas=prod.get("n_resenas"),
+                        url=prod.get("url", "")[:500],
+                        imagen=prod.get("imagen", "")[:500],
+                        consulta=prod.get("consulta", "")[:200],
+                        extra=prod.get("extra"),
+                        creado_en=ahora,
+                        actualizado_en=ahora
+                    ).on_conflict_do_update(
+                        index_elements=["estudio_id", "plataforma", "fuente_id"],
+                        set_={"precio": prod.get("precio"), "estrellas": prod.get("estrellas"),
+                              "n_resenas": prod.get("n_resenas"), "actualizado_en": ahora}
+                    )
+                )
+                count += r.rowcount
+            except Exception:
+                pass  # Ignorar conflictos o errores menores
+        con.commit()
+    return count
+
+
+def productos_nicho(cliente, estudio_id, plataforma=None, solo_relevantes=False):
+    """Listar productos del nicho. Filtrar por plataforma y/o relevancia."""
+    with db.conectar() as con:
+        q = sa.select(db.producto_nicho).where(
+            (db.producto_nicho.c.cliente == cliente) &
+            (db.producto_nicho.c.estudio_id == int(estudio_id))
+        )
+        if plataforma:
+            q = q.where(db.producto_nicho.c.plataforma == plataforma)
+        if solo_relevantes:
+            q = q.where(db.producto_nicho.c.relevante == True)
+        q = q.order_by(db.producto_nicho.c.n_resenas.desc())
+        return [dict(r) for r in con.execute(q)]
+
+
+def marcar_relevancia(cliente, estudio_id, producto_id, relevante, motivo):
+    """Marcar un producto como relevante/irrelevante."""
+    with db.conectar() as con:
+        con.execute(
+            db.producto_nicho.update()
+            .where((db.producto_nicho.c.id == int(producto_id)) & (db.producto_nicho.c.cliente == cliente))
+            .values(relevante=relevante, motivo=motivo, actualizado_en=db.ahora())
+        )
+        con.commit()
+
+
+def sumar_resenas_traidas(cliente, estudio_id, producto_id, cantidad):
+    """Incrementar resenas_traidas."""
+    with db.conectar() as con:
+        con.execute(
+            sa.update(db.producto_nicho)
+            .where((db.producto_nicho.c.id == int(producto_id)) & (db.producto_nicho.c.cliente == cliente))
+            .values(resenas_traidas=db.producto_nicho.c.resenas_traidas + cantidad)
+        )
+        con.commit()

@@ -16,7 +16,7 @@ import catalogo_productos
 import gastos
 import proyectos
 import trabajos
-from nicho import avatares, datos, exportar
+from nicho import avatares, datos, exportar, investigacion
 from nicho import fuentes as fuentes_registro
 from nicho.fuentes import apify as fuente_apify
 from nicho.fuentes import apify_actores
@@ -384,3 +384,130 @@ def exportar_xlsx(cliente, eid):
     contenido = exportar.excel(est, datos.avatares(cliente, eid), urls=datos.urls_comentarios(cliente, eid))
     return send_file(io.BytesIO(contenido), as_attachment=True, download_name=exportar.nombre_archivo(est, "xlsx"),
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+# ------ Investigación (Parte 3) ------
+
+@bp.get("/<int:eid>/investigacion/estimar")
+def investigacion_estimar(cliente, eid):
+    """Estimar el costo de una investigación (GET con parámetros)."""
+    est = _estudio_o_404(cliente, eid)
+    
+    try:
+        pais = request.args.get("pais") or est.get("pais") or "CO"
+        plataformas = [p.strip() for p in (request.args.get("plataformas") or "").split(",") if p.strip()]
+        redes = [r.strip() for r in (request.args.get("redes") or "").split(",") if r.strip()]
+        
+        estimado = investigacion.estimar(est, pais, plataformas, redes, investigacion.TOPES_DEFECTO)
+        return jsonify({
+            **estimado,
+            "texto": gastos.formatear(estimado["total_usd"])
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@bp.post("/<int:eid>/investigacion")
+def investigacion_iniciar(cliente, eid):
+    """Iniciar una investigación nueva (aprobando el presupuesto)."""
+    est = _estudio_o_404(cliente, eid)
+    if est["archivado"]:
+        flash("El estudio está archivado.", "error")
+        return _volver(cliente, eid)
+    
+    inv_actual = datos.investigacion(cliente, eid)
+    if inv_actual.get("estado") and inv_actual["estado"] not in ("lista", "detenida", "interrumpida"):
+        flash("Ya hay una investigación en curso.", "error")
+        return _volver(cliente, eid)
+    
+    try:
+        pais = request.form.get("pais") or est.get("pais") or "CO"
+        plataformas = [p.strip() for p in (request.form.get("plataformas") or "").split(",") if p.strip()]
+        redes = [r.strip() for r in (request.form.get("redes") or "").split(",") if r.strip()]
+        presupuesto_usd = float(request.form.get("presupuesto_usd") or 0)
+        
+        if presupuesto_usd <= 0:
+            flash("El presupuesto debe ser mayor a 0.", "error")
+            return _volver(cliente, eid)
+        
+        # Validar país
+        if pais not in investigacion.IDIOMAS:
+            flash(f"País {pais} no soportado.", "error")
+            return _volver(cliente, eid)
+        
+        # Actualizar estudio con país si no lo tiene
+        if not est.get("pais"):
+            datos.actualizar_estudio(cliente, eid, pais=pais)
+        
+        # Inicializar investigación
+        inv_nueva = investigacion.inicializar()
+        inv_nueva["estado"] = "consultas"
+        inv_nueva["pais"] = pais
+        inv_nueva["plataformas"] = plataformas
+        inv_nueva["redes"] = redes
+        inv_nueva["aprobado_usd"] = presupuesto_usd
+        
+        # Guardar en BD
+        datos.actualizar_investigacion(cliente, eid, lambda x: inv_nueva)
+        
+        # Encolatr tarea: nicho_inv_consultas
+        job_id = f"nicho:{cliente}:{int(eid)}:inv:consultas"
+        trabajos.encolar(job_id, "nicho_inv_consultas",
+                        {"cliente": cliente, "estudio_id": int(eid)},
+                        cliente=cliente, duracion_estimada=60, max_intentos=2)
+        
+        flash("Investigación iniciada; Claude está generando consultas.", "ok")
+    except (ValueError, datos.ErrorDatos) as e:
+        flash(f"Error: {str(e)}", "error")
+    
+    return _volver(cliente, eid)
+
+
+@bp.post("/<int:eid>/investigacion/reanudar")
+def investigacion_reanudar(cliente, eid):
+    """Reanudar una investigación detenida o interrumpida."""
+    est = _estudio_o_404(cliente, eid)
+    inv_actual = datos.investigacion(cliente, eid)
+    
+    estado = inv_actual.get("estado", "")
+    if not investigacion.puede_reanudar(estado):
+        flash(f"No se puede reanudar un estudio con estado '{estado}'.", "error")
+        return _volver(cliente, eid)
+    
+    try:
+        # Reanudar el siguiente paso
+        paso = investigacion.siguiente_paso(inv_actual)
+        if paso is None:
+            flash("La investigación ya está completa.", "ok")
+            return _volver(cliente, eid)
+        
+        # Cambiar estado a activo
+        datos.actualizar_investigacion(cliente, eid, lambda inv: {
+            **inv, "estado": "consultas", "ultimo_error": None
+        })
+        
+        flash("Investigación reanudada.", "ok")
+    except datos.ErrorDatos as e:
+        flash(str(e), "error")
+    
+    return _volver(cliente, eid)
+
+
+@bp.post("/<int:eid>/investigacion/cancelar")
+def investigacion_cancelar(cliente, eid):
+    """Marcar una investigación como interrumpida (cancelar)."""
+    est = _estudio_o_404(cliente, eid)
+    inv_actual = datos.investigacion(cliente, eid)
+    
+    estado = inv_actual.get("estado", "")
+    if not estado or estado in ("lista", "interrumpida"):
+        flash("No hay investigación en curso para cancelar.", "error")
+        return _volver(cliente, eid)
+    
+    # Marcar como interrumpida
+    datos.actualizar_investigacion(cliente, eid, lambda inv: {
+        **inv, "estado": "interrumpida", "detenida_por": "usuario"
+    })
+    
+    flash("Investigación cancelada.", "ok")
+    return _volver(cliente, eid)

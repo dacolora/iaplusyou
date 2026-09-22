@@ -1,0 +1,425 @@
+{# Card de investigación automática de Nicho Parte 3 #}
+<div class="card-nicho card-investigacion">
+  <div class="card-title">
+    <h3>Investigación automática</h3>
+    {% if investigacion.estado %}
+      <span class="badge badge-{{ investigacion.estado }}">{{ investigacion.estado | upper }}</span>
+    {% else %}
+      <span class="badge badge-neutral">Sin iniciar</span>
+    {% endif %}
+  </div>
+
+  {% if not investigacion.estado or investigacion.estado in ('lista', 'detenida', 'interrumpida') %}
+    {# Formulario para iniciar investigación #}
+    <form method="post" action="{{ url_for('nicho.investigacion_iniciar', cliente=cliente, eid=estudio.id) }}" class="form-investigacion">
+      <fieldset>
+        <legend>Configura tu investigación</legend>
+        
+        <div class="form-group">
+          <label for="inv_pais">País:</label>
+          <select id="inv_pais" name="pais" required>
+            <option value="">-- Selecciona --</option>
+            <option value="CO" {% if estudio.pais == 'CO' %}selected{% endif %}>Colombia</option>
+            <option value="MX" {% if estudio.pais == 'MX' %}selected{% endif %}>México</option>
+            <option value="AR" {% if estudio.pais == 'AR' %}selected{% endif %}>Argentina</option>
+            <option value="BR" {% if estudio.pais == 'BR' %}selected{% endif %}>Brasil</option>
+            <option value="CL" {% if estudio.pais == 'CL' %}selected{% endif %}>Chile</option>
+            <option value="PE" {% if estudio.pais == 'PE' %}selected{% endif %}>Perú</option>
+            <option value="US" {% if estudio.pais == 'US' %}selected{% endif %}>USA</option>
+            <option value="ES" {% if estudio.pais == 'ES' %}selected{% endif %}>España</option>
+            <option value="SE" {% if estudio.pais == 'SE' %}selected{% endif %}>Suecia</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Plataformas de búsqueda:</label>
+          <div class="chips">
+            <label class="chip">
+              <input type="checkbox" name="plataformas" value="amazon"> Amazon
+            </label>
+            <label class="chip">
+              <input type="checkbox" name="plataformas" value="meli"> Mercado Libre
+            </label>
+            <label class="chip">
+              <input type="checkbox" name="plataformas" value="tiktok_shop"> TikTok Shop
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Redes sociales:</label>
+          <div class="chips">
+            <label class="chip">
+              <input type="checkbox" name="redes" value="reddit"> Reddit
+            </label>
+            <label class="chip">
+              <input type="checkbox" name="redes" value="youtube"> YouTube
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group" id="cost-estimate" style="display: none;">
+          <label>Costo estimado:</label>
+          <div class="cost-breakdown">
+            <p id="cost-text" class="cost-total">Calculando...</p>
+            <details>
+              <summary>Desglose</summary>
+              <div id="cost-details"></div>
+            </details>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="inv_presupuesto">Presupuesto a aprobar (USD):</label>
+          <input type="number" id="inv_presupuesto" name="presupuesto_usd" min="0.01" step="0.01" 
+                 placeholder="Ej: 10.00" required>
+          <small>Aproximadamente {{ price_estimate }}</small>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Iniciar investigación</button>
+          <button type="button" class="btn btn-secondary" onclick="this.form.reset()">Limpiar</button>
+        </div>
+      </fieldset>
+    </form>
+
+    <script>
+    (function() {
+      const form = document.querySelector('.form-investigacion');
+      const costEstimate = document.getElementById('cost-estimate');
+      const costText = document.getElementById('cost-text');
+      const costDetails = document.getElementById('cost-details');
+      const presupuesto = document.getElementById('inv_presupuesto');
+
+      async function calcularCosto() {
+        const pais = document.getElementById('inv_pais').value;
+        const plataformas = Array.from(document.querySelectorAll('input[name="plataformas"]:checked')).map(x => x.value).join(',');
+        const redes = Array.from(document.querySelectorAll('input[name="redes"]:checked')).map(x => x.value).join(',');
+
+        if (!pais) {
+          costEstimate.style.display = 'none';
+          return;
+        }
+
+        try {
+          const response = await fetch(
+            `/cliente/{{ cliente }}/nicho/{{ estudio.id }}/investigacion/estimar?pais=${pais}&plataformas=${plataformas}&redes=${redes}`,
+            { headers: { 'Accept': 'application/json' } }
+          );
+          const data = await response.json();
+          if (data.error) {
+            costText.textContent = 'Error: ' + data.error;
+          } else {
+            costText.textContent = `Total: ${data.texto}`;
+            presupuesto.placeholder = `Ej: ${data.total_usd}`;
+            
+            if (data.filas && data.filas.length > 0) {
+              costDetails.innerHTML = data.filas.map(f => 
+                `<div class="cost-row"><strong>${f.nombre}</strong>: $${f.busqueda_usd} búsqueda + $${f.resenas_usd} reseñas</div>`
+              ).join('') + 
+              `<div class="cost-row"><strong>Claude</strong>: $${data.claude_usd}</div>` +
+              `<div class="cost-row"><strong>Avatares</strong>: $${data.avatares_usd}</div>`;
+            }
+          }
+          costEstimate.style.display = 'block';
+        } catch (e) {
+          costText.textContent = 'Error calculando costo';
+        }
+      }
+
+      document.getElementById('inv_pais').addEventListener('change', calcularCosto);
+      document.querySelectorAll('input[name="plataformas"], input[name="redes"]').forEach(el => {
+        el.addEventListener('change', calcularCosto);
+      });
+    })();
+    </script>
+
+  {% elif investigacion.estado in ('consultas', 'buscando', 'seleccionando', 'resenas', 'redes', 'generando') %}
+    {# Investigación en curso #}
+    <div class="investigacion-progress">
+      <div class="progress-bar">
+        <div class="progress-fill" style="width: 50%;"></div>
+      </div>
+      <p class="progress-text">Paso actual: <strong>{{ investigacion.estado }}</strong></p>
+      
+      {% if investigacion.pasos %}
+        <details>
+          <summary>Detalles de pasos</summary>
+          <ul class="pasos-list">
+            {% for paso, info in investigacion.pasos.items() %}
+              <li>
+                <span class="paso-name">{{ paso }}</span>
+                <span class="paso-estado badge-{{ info.estado or 'pendiente' }}">
+                  {{ info.estado or 'pendiente' }}
+                </span>
+                {% if info.productos %}<span class="badge">{{ info.productos }} productos</span>{% endif %}
+                {% if info.relevantes %}<span class="badge">{{ info.relevantes }} relevantes</span>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        </details>
+      {% endif %}
+
+      <div class="investigacion-actions">
+        <form method="post" action="{{ url_for('nicho.investigacion_cancelar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
+          <button type="submit" class="btn btn-sm btn-secondary">Cancelar investigación</button>
+        </form>
+      </div>
+    </div>
+
+  {% elif investigacion.estado == 'lista' %}
+    {# Investigación completada #}
+    <div class="investigacion-resultado">
+      <div class="alert alert-success">
+        <strong>Investigación completada</strong>
+      </div>
+      
+      {% set resumen = investigacion %}
+      <div class="resultado-stats">
+        <div class="stat">
+          <span class="label">Consultas:</span>
+          <span class="value">{{ resumen.consultas | length }}</span>
+        </div>
+        <div class="stat">
+          <span class="label">Productos encontrados:</span>
+          <span class="value">{{ resumen.productos }}</span>
+        </div>
+        <div class="stat">
+          <span class="label">Relevantes:</span>
+          <span class="value">{{ resumen.relevantes }}</span>
+        </div>
+        <div class="stat">
+          <span class="label">Gasto:</span>
+          <span class="value">${{ "%.2f" | format(resumen.gastado) }}</span>
+        </div>
+      </div>
+
+      {% if resumen.consultas %}
+        <div class="consultas-usadas">
+          <h4>Consultas usadas:</h4>
+          <ul>
+            {% for c in resumen.consultas %}
+              <li>{{ c }}</li>
+            {% endfor %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <div class="investigacion-actions">
+        <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
+          <button type="submit" class="btn btn-sm btn-primary">Investigar de nuevo</button>
+        </form>
+        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">Cerrar</button>
+      </div>
+    </div>
+
+  {% elif investigacion.estado in ('detenida', 'interrumpida') %}
+    {# Investigación pausada #}
+    <div class="investigacion-pausa">
+      <div class="alert alert-warning">
+        <strong>Investigación pausada</strong>
+        {% if investigacion.detenida_por %}
+          <p>Razón: {{ investigacion.detenida_por }}</p>
+        {% endif %}
+      </div>
+
+      {% if investigacion.ultimo_error %}
+        <div class="alert alert-error">
+          <strong>Último error:</strong>
+          <p>{{ investigacion.ultimo_error }}</p>
+        </div>
+      {% endif %}
+
+      <div class="investigacion-actions">
+        <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
+          <button type="submit" class="btn btn-sm btn-primary">Reanudar investigación</button>
+        </form>
+        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">Cerrar</button>
+      </div>
+    </div>
+  {% endif %}
+</div>
+
+<style>
+.card-investigacion {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+}
+
+.card-investigacion .card-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.card-investigacion h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 20px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.chip input {
+  cursor: pointer;
+}
+
+.chip:has(input:checked) {
+  background: #e3f2fd;
+  border-color: #2196f3;
+}
+
+.cost-breakdown {
+  background: #fff;
+  padding: 1rem;
+  border-radius: 4px;
+  border-left: 3px solid #2196f3;
+}
+
+.cost-total {
+  font-weight: bold;
+  color: #2196f3;
+  margin: 0 0 0.5rem 0;
+}
+
+.cost-row {
+  padding: 0.25rem 0;
+  font-size: 0.9rem;
+}
+
+.investigacion-progress {
+  padding: 1rem;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+.progress-text {
+  margin: 0.5rem 0;
+  font-size: 0.95rem;
+}
+
+.pasos-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.pasos-list li {
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fff;
+  border-radius: 4px;
+  margin-bottom: 0.25rem;
+}
+
+.paso-name {
+  font-family: monospace;
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.resultado-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.stat {
+  background: #fff;
+  padding: 1rem;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.stat .label {
+  display: block;
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.stat .value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2196f3;
+}
+
+.consultas-usadas {
+  background: #fff;
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.consultas-usadas h4 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.consultas-usadas ul {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+.investigacion-actions {
+  margin-top: 1rem;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.badge-consultas { background: #e3f2fd; color: #1976d2; }
+.badge-buscando { background: #fff3e0; color: #f57c00; }
+.badge-seleccionando { background: #fce4ec; color: #c2185b; }
+.badge-resenas { background: #f3e5f5; color: #7b1fa2; }
+.badge-redes { background: #e0f2f1; color: #00796b; }
+.badge-generando { background: #e8f5e9; color: #388e3c; }
+.badge-lista { background: #e8f5e9; color: #388e3c; }
+.badge-detenida { background: #fff3e0; color: #e65100; }
+.badge-interrumpida { background: #ffebee; color: #c62828; }
+.badge-neutral { background: #f5f5f5; color: #616161; }
+.badge-pendiente { background: #f5f5f5; color: #616161; }
+.badge-hecho { background: #e8f5e9; color: #388e3c; }
+.badge-en_curso { background: #fff3e0; color: #f57c00; }
+.badge-error { background: #ffebee; color: #c62828; }
+</style>
