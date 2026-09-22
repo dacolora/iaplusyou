@@ -106,6 +106,7 @@ def _sprint_recien_creado():
 
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
+    datos.asegurar_personajes_predeterminados(cliente)
     prefs = proyectos.preferencias_flowplus(cliente)
     modelo_video, modelo_imagen = prefs["modelo_video"], prefs["modelo_imagen"]
     lista = []
