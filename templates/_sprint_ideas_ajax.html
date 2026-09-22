@@ -1,0 +1,47 @@
+{# Contenido de ideas para desplegable AJAX #}
+<div class="sprint-ajax-contenido ideas">
+  <p class="vacio">{{ conteo.videos_aprobados }} videos aprobados · {{ conteo.imagenes_aprobadas }} imágenes aprobadas</p>
+
+  {% if conteo.faltan_videos > 0 or conteo.imagenes_aprobadas > 0 %}
+  <form method="post" action="{{ url_for('sprints.ideas_proponer', cliente=cliente, sid=sprint.id, cid=campana.id) }}">
+    <fieldset>
+      <legend>Proponer idea</legend>
+      <label>Tipo
+        <select name="tipo" required>
+          <option value="video">Video</option>
+          <option value="imagen">Imagen</option>
+        </select>
+      </label>
+      <label>Título <input type="text" name="titulo" maxlength="200"></label>
+      <label>Descripción
+        <textarea name="descripcion" rows="3" placeholder="Qué se va a mostrar, mensaje, etc."></textarea>
+      </label>
+      <button type="submit" class="btn-generar btn-sm">Proponer</button>
+    </fieldset>
+  </form>
+  {% endif %}
+
+  {% set vivas = ideas | rejectattr('estado_idea', 'equalto', 'descartada') | list %}
+  {% if vivas %}
+  <div class="sprint-ideas-lista">
+    <h4>Ideas</h4>
+    {% for i in vivas %}
+    <div class="sprint-idea-item" data-iid="{{ i.id }}">
+      <span class="idea-tipo">{{ i.tipo | upper }}</span>
+      <strong>{{ i.titulo or "Sin título" }}</strong>
+      <span class="idea-estado">{{ i.estado_idea | upper }}</span>
+      {% if i.descripcion %}<p>{{ i.descripcion }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay ideas todavía. Propón una.</p>
+  {% endif %}
+</div>
+
+<style>
+.sprint-ideas-lista { margin-top: 1.5rem; }
+.sprint-idea-item { margin: 0.75rem 0; padding: 0.75rem; background: #f9f9f9; border-radius: 4px; }
+.idea-tipo { display: inline-block; font-size: 0.75rem; background: var(--accent); color: white; padding: 2px 6px; border-radius: 2px; margin-right: 0.5rem; }
+.idea-estado { display: inline-block; font-size: 0.75rem; background: #ccc; padding: 2px 6px; border-radius: 2px; margin-left: 0.5rem; }
+</style>

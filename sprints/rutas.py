@@ -573,6 +573,43 @@ def referencias_estado(cliente, sid, cid):
                                      "estado": r["estado"]} for r in datos.referencias(cliente, cid)]})
 
 
+# --------------------------------------------------- desplegables ajax ---
+
+@bp.get("/<int:sid>/campanas/<int:cid>/referencias-ajax")
+def referencias_ajax(cliente, sid, cid):
+    sp = _sprint_o_404(cliente, sid)
+    c = _campana_o_404(cliente, sid, cid)
+    refs = datos.referencias(cliente, cid)
+    c["progreso"] = progreso.progreso_campana(c)
+    return render_template("_sprint_referencias_ajax.html", cliente=cliente, sprint=sp, campana=c,
+                           referencias=refs, intenciones_sprint=datos.INTENCIONES_NOMBRE,
+                           cobertura=progreso.cobertura(c, refs))
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/ideas-ajax")
+def ideas_ajax(cliente, sid, cid):
+    sp = _sprint_o_404(cliente, sid)
+    c = _campana_o_404(cliente, sid, cid)
+    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
+    lista = datos.ideas(cliente, cid)
+    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
+    faltan_v, faltan_i = ideas.faltantes(c)
+    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
+              "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
+              "faltan_videos": faltan_v, "faltan_imagenes": faltan_i}
+    return render_template("_sprint_ideas_ajax.html", cliente=cliente, sprint=sp, campana=c,
+                           ideas=lista, referencias_por_id=refs, conteo=conteo,
+                           enfoques=flowplus_prompt_enfoques())
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/revision-ajax")
+def revision_ajax(cliente, sid, cid):
+    sp = _sprint_o_404(cliente, sid)
+    c = _campana_o_404(cliente, sid, cid)
+    piezas = [p for p in c.get("piezas", []) if p.get("estado") != "descartada"]
+    return render_template("_sprint_revision_ajax.html", cliente=cliente, sprint=sp, campana=c, piezas=piezas)
+
+
 @bp.post("/referencias/<int:rid>")
 def referencia_editar(cliente, rid):
     """Autoguardado de la tarjeta (JSON por fetch) o formulario clásico."""

@@ -271,6 +271,30 @@ def resumen_mes(cliente, ahora_iso=None, datos=None):
 
 # ---------- serie diaria ----------
 
+def _serie_diaria_con_filtro(filas, lista_dias, moneda, atribucion_filtro=None):
+    """Calcula una serie diaria filtrando por atribución de experimento.
+    Si atribucion_filtro es None, no filtra. Si es una tupla/lista, solo incluye
+    experimentos cuyo atribucion esté en esa tupla."""
+    salida = []
+    for d in lista_dias:
+        a = d.isoformat() + "T00:00:00"
+        b = (d + timedelta(days=1)).isoformat() + "T00:00:00"
+        gasto = compras = ingresos = 0.0
+        for ex, _pz, snaps in filas:
+            # Filtrar por atribución si se pide
+            if atribucion_filtro is not None and ex.get("atribucion") not in atribucion_filtro:
+                continue
+            if _moneda(ex) != moneda:
+                continue
+            dd = _deltas_pieza(snaps, a, b)
+            gasto += dd["gasto"]
+            compras += dd["compras"]
+            ingresos += dd["ingresos"]
+        salida.append({"dia": d.isoformat(), "gasto": round(gasto, 2), "compras": int(compras),
+                       "ingresos": round(ingresos, 2)})
+    return salida
+
+
 def serie_diaria(cliente, dias=DIAS_SERIE, ahora_iso=None, datos=None):
     """{"moneda", "dias": [{"dia", "gasto", "compras", "ingresos"}]}: un
     delta por día natural (hora local del servidor) para los últimos `dias`
@@ -292,21 +316,34 @@ def serie_diaria(cliente, dias=DIAS_SERIE, ahora_iso=None, datos=None):
         moneda = None
     else:
         moneda = max(sorted(gasto_por_moneda), key=lambda m: gasto_por_moneda[m])
-    salida = []
-    for d in lista_dias:
-        a = d.isoformat() + "T00:00:00"
-        b = (d + timedelta(days=1)).isoformat() + "T00:00:00"
-        gasto = compras = ingresos = 0.0
-        for ex, _pz, snaps in filas:
-            if _moneda(ex) != moneda:
-                continue
-            dd = _deltas_pieza(snaps, a, b)
-            gasto += dd["gasto"]
-            compras += dd["compras"]
-            ingresos += dd["ingresos"]
-        salida.append({"dia": d.isoformat(), "gasto": round(gasto, 2), "compras": int(compras),
-                       "ingresos": round(ingresos, 2)})
+    salida = _serie_diaria_con_filtro(filas, lista_dias, moneda, atribucion_filtro=None)
     return {"moneda": moneda, "dias": salida}
+
+
+def serie_diaria_triple_whale(cliente, dias=DIAS_SERIE, ahora_iso=None, datos=None):
+    """{"moneda", "dias": [...]}: serie de 30 días solo con experimentos que usan
+    atribucion="triple_whale". Retorna None si no hay datos."""
+    ahora = _ahora(ahora_iso)
+    lista_dias = _dias(ahora, dias)
+    if not lista_dias:
+        return None
+    ventana_desde = lista_dias[0].isoformat() + "T00:00:00"
+    ventana_hasta = (lista_dias[-1] + timedelta(days=1)).isoformat() + "T00:00:00"
+    filas = _datos(cliente, ahora, datos, desde_necesario=ventana_desde).filas
+    # Filtrar solo experimentos con atribucion="triple_whale"
+    filas_tw = [(ex, pz, snaps) for ex, pz, snaps in filas if ex.get("atribucion") == "triple_whale"]
+    if not filas_tw:
+        return None
+    # Buscar moneda con más gasto en experimentos de TW
+    gasto_por_moneda = {}
+    for ex, _pz, snaps in filas_tw:
+        m = _moneda(ex)
+        gasto_por_moneda[m] = gasto_por_moneda.get(m, 0.0) + delta(snaps, ventana_desde, ventana_hasta, "gasto")
+    if not gasto_por_moneda:
+        return None
+    moneda = max(sorted(gasto_por_moneda), key=lambda m: gasto_por_moneda[m])
+    salida = _serie_diaria_con_filtro(filas_tw, lista_dias, moneda, atribucion_filtro=("triple_whale",))
+    return {"moneda": moneda, "dias": salida} if salida else None
 
 
 # ---------- top ganadoras ----------
@@ -586,14 +623,16 @@ PARTES = ("resumen", "serie", "top", "alertas", "csv")
 
 def contexto(cliente, ahora_iso=None, dias=DIAS_SERIE, datos=None):
     """Todas las partes del tablero de una sola carga: {"ahora", "resumen"
-    (resumen_mes), "serie" (serie_diaria de `dias`), "top" (top_ganadoras),
-    "alertas", "csv" (csv_mes)}. Sin tolerancia a fallos: eso lo pone
-    dashboard._contexto_tablero, que llama a cada parte con `datos=` y
-    envuelve cada una en su try."""
+    (resumen_mes), "serie" (serie_diaria de `dias`), "serie_triple_whale"
+    (solo si hay experimentos con atribucion=triple_whale), "top"
+    (top_ganadoras), "alertas", "csv" (csv_mes)}. Sin tolerancia a fallos:
+    eso lo pone dashboard._contexto_tablero, que llama a cada parte con
+    `datos=` y envuelve cada una en su try."""
     d = datos if datos is not None else cargar_datos(cliente, ahora_iso, dias)
     return {"ahora": d.ahora,
             "resumen": resumen_mes(cliente, d.ahora, datos=d),
             "serie": serie_diaria(cliente, dias, d.ahora, datos=d),
+            "serie_triple_whale": serie_diaria_triple_whale(cliente, dias, d.ahora, datos=d),
             "top": top_ganadoras(cliente, datos=d),
             "alertas": alertas(cliente, d.ahora, datos=d),
             "csv": csv_mes(cliente, d.ahora, datos=d)}

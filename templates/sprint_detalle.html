@@ -76,18 +76,31 @@
       {% set vivas = c.ideas | rejectattr('estado_idea', 'equalto', 'descartada') | list %}
       {% set aprobadas = vivas | selectattr('estado_idea', 'equalto', 'aprobada') | list %}
       {% set pendientes_lote = aprobadas | selectattr('sin_sesion') | list %}
+
+      <details class="sprint-desplegable" data-desplegable="referencias" data-cid="{{ c.id }}" data-sid="{{ sprint.id }}">
+        <summary>
+          📎 Referencias {% if c.referencias_total > 0 %}({{ c.referencias_listas }}/{{ c.referencias_objetivo }}){% endif %}
+        </summary>
+        <div class="sprint-contenido" id="referencias-{{ c.id }}"></div>
+      </details>
+
+      <details class="sprint-desplegable" data-desplegable="ideas" data-cid="{{ c.id }}" data-sid="{{ sprint.id }}" {% if c.referencias_total == 0 %}disabled{% endif %}>
+        <summary>
+          💡 Ideas {% if aprobadas %}({{ aprobadas | length }}/{{ c.n_videos + c.n_imagenes }}){% endif %}
+        </summary>
+        <div class="sprint-contenido" id="ideas-{{ c.id }}"></div>
+      </details>
+
+      <details class="sprint-desplegable" data-desplegable="revision" data-cid="{{ c.id }}" data-sid="{{ sprint.id }}" {% if not aprobadas %}disabled{% endif %}>
+        <summary>
+          ✓ Revisar {% if c.piezas %}({{ c.piezas_aprobadas }}/{{ c.piezas | length }}){% endif %}
+        </summary>
+        <div class="sprint-contenido" id="revision-{{ c.id }}"></div>
+      </details>
+
       <div class="sprint-campana-acciones">
-        <a class="btn-sm" href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">
-          {% if c.referencias_total == 0 %}Subir referencias{% else %}Referencias ({{ c.referencias_listas }}/{{ c.referencias_objetivo }}){% endif %}
-        </a>
-        <a class="btn-sm {% if c.referencias_total and not aprobadas %}btn-generar{% endif %}" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=sprint.id, cid=c.id) }}">
-          Ideas ({{ aprobadas | length }}/{{ c.n_videos + c.n_imagenes }})
-        </a>
         {% if pendientes_lote %}
         <button type="button" class="btn-generar btn-sm" onclick="abrirLote({{ c.id }})">Generar lote ({{ pendientes_lote | length }})</button>
-        {% endif %}
-        {% if c.piezas %}
-        <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}#campana-{{ c.id }}">Revisar ({{ c.piezas_aprobadas }}/{{ c.piezas | length }})</a>
         {% endif %}
         <form method="post" action="{{ url_for('sprints.campana_eliminar', cliente=cliente, sid=sprint.id, cid=c.id) }}" class="inline"
               onsubmit="return confirm('¿Eliminar esta campaña y sus referencias?');">
@@ -168,6 +181,39 @@
           }).catch(function () {});
       }, 5000);
     }
+
+    // Manejar desplegables con carga AJAX
+    document.querySelectorAll('.sprint-desplegable').forEach(function (details) {
+      details.addEventListener('toggle', function () {
+        if (!this.open) return;
+
+        var tipo = this.dataset.desplegable;
+        var cid = this.dataset.cid;
+        var sid = this.dataset.sid;
+        var contenedor = document.getElementById(tipo + '-' + cid);
+
+        // Si ya se cargó, no cargar de nuevo
+        if (contenedor.textContent.trim()) return;
+
+        // Validar flujo
+        if (tipo === 'ideas' && !document.querySelector('.sprint-campana[id="campana-' + cid + '"] .sprint-desplegable[data-desplegable="referencias"]').open) {
+          alert('Debes completar las referencias primero');
+          this.open = false;
+          return;
+        }
+
+        // Cargar contenido
+        var url = '/cliente/{{ cliente }}/sprints/' + sid + '/campanas/' + cid + '/' + tipo + '-ajax';
+        fetch(url, {headers: {'X-Requested-With': 'fetch'}})
+          .then(function (r) { return r.text(); })
+          .then(function (html) {
+            contenedor.innerHTML = html;
+          })
+          .catch(function (err) {
+            contenedor.innerHTML = '<p class="error">Error cargando ' + tipo + '</p>';
+          });
+      });
+    });
   })();
 </script>
 {% endblock %}

@@ -1,0 +1,48 @@
+{# Contenido de referencias para desplegable AJAX #}
+<div class="sprint-ajax-contenido referencias">
+  <p class="vacio">{{ campana.referencias_listas }}/{{ campana.referencias_objetivo }} referencias · {{ cobertura }}% cobertura</p>
+
+  <form method="post" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="sprint-form-referencias">
+    <fieldset>
+      <legend>Subir referencia</legend>
+      <label>Archivo o link
+        <input type="file" name="archivo" accept="image/*,video/*">
+        <small>o</small>
+        <input type="url" name="link" placeholder="https://...">
+      </label>
+      <label>Descripción
+        <textarea name="descripcion" rows="2" placeholder="Qué se busca: estilo, composición, etc."></textarea>
+      </label>
+      <div class="checks">
+        <span class="campo-label">Intención</span>
+        {% for k in intenciones_sprint %}
+        <label><input type="checkbox" name="intencion" value="{{ k }}"> {{ intenciones_sprint[k] }}</label>
+        {% endfor %}
+      </div>
+      <button type="submit" class="btn-generar btn-sm">Agregar</button>
+    </fieldset>
+  </form>
+
+  {% if referencias %}
+  <div class="sprint-referencias-lista">
+    <h4>Referencias subidas</h4>
+    {% for r in referencias %}
+    <div class="sprint-referencia-item">
+      <small>{{ r.creado_en | replace("T", " ") }}</small>
+      {% if r.frame_url %}<img src="{{ r.frame_url }}" alt="" class="sprint-ref-mini">{% endif %}
+      <strong>{{ r.titulo or "Sin título" }}</strong>
+      {% if r.descripcion %}<p>{{ r.descripcion }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay referencias todavía. Sube una para empezar.</p>
+  {% endif %}
+</div>
+
+<style>
+.sprint-ajax-contenido { padding: 1rem; }
+.sprint-referencias-lista { margin-top: 1.5rem; }
+.sprint-referencia-item { margin: 0.75rem 0; padding: 0.75rem; background: #f9f9f9; border-radius: 4px; }
+.sprint-ref-mini { width: 60px; height: auto; border-radius: 2px; margin-right: 0.5rem; }
+</style>

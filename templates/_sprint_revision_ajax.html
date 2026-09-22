@@ -1,0 +1,40 @@
+{# Contenido de revisión para desplegable AJAX #}
+<div class="sprint-ajax-contenido revision">
+  {% if piezas %}
+  <p class="vacio">{{ piezas | selectattr('estado', 'equalto', 'aprobada') | list | length }} aprobadas · {{ piezas | selectattr('estado', 'equalto', 'rechazada') | list | length }} rechazadas</p>
+
+  <div class="sprint-piezas-lista">
+    {% for p in piezas %}
+    <div class="sprint-pieza-item">
+      <div class="pieza-header">
+        <strong>{{ p.titulo or "Pieza " + (loop.index | string) }}</strong>
+        <span class="pieza-estado">{{ p.estado | upper }}</span>
+      </div>
+      {% if p.video_url %}
+      <div class="pieza-video">
+        <video controls style="max-width: 100%; max-height: 300px;">
+          <source src="{{ p.video_url }}" type="video/mp4">
+        </video>
+      </div>
+      {% endif %}
+      {% if p.qa %}
+      <small class="pieza-qa">QA: {{ p.qa }}</small>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="vacio">No hay piezas generadas todavía. Genera ideas aprobadas primero.</p>
+  {% endif %}
+</div>
+
+<style>
+.sprint-piezas-lista { margin-top: 1rem; }
+.sprint-pieza-item { margin: 1rem 0; padding: 1rem; background: #f9f9f9; border-radius: 4px; border-left: 3px solid var(--accent); }
+.pieza-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.pieza-estado { font-size: 0.75rem; background: #ccc; padding: 2px 6px; border-radius: 2px; }
+.pieza-estado.aprobada { background: #4CAF50; color: white; }
+.pieza-estado.rechazada { background: #f44336; color: white; }
+.pieza-video { margin: 0.5rem 0; }
+.pieza-qa { display: block; color: #666; margin-top: 0.5rem; }
+</style>

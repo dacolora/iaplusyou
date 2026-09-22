@@ -3606,6 +3606,7 @@ def _calcular_tablero(cliente):
     partes = {
         "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
         "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
+        "serie_triple_whale": lambda: tablero.serie_diaria_triple_whale(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
         "alertas": lambda: tablero.alertas(cliente, ahora, datos=datos),
         "csv": lambda: tablero.csv_mes(cliente, ahora, datos=datos),
@@ -3619,8 +3620,10 @@ def _calcular_tablero(cliente):
             print(f"[aviso] Tablero de {cliente}: no pude calcular {nombre}: {type(e).__name__}")
     try:
         out["grafico"] = _grafico_tablero(out["serie"]) if out["serie"] else None
+        out["grafico_triple_whale"] = _grafico_tablero(out["serie_triple_whale"]) if out["serie_triple_whale"] else None
     except Exception as e:  # noqa: BLE001 — el gráfico es una parte más: si falla, se muestra el resto
         out["grafico"] = None
+        out["grafico_triple_whale"] = None
         out["errores"].append(f"grafico: {type(e).__name__}")
         print(f"[aviso] Tablero de {cliente}: no pude dibujar el gráfico: {type(e).__name__}")
     return out

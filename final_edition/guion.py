@@ -76,7 +76,42 @@ FORMATO_JSON = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional
  "idioma": "es", "pais": "CO", "moneda": null, "precio_texto": null}"""
 
 
-def _system_generar(duracion_s, idioma_base):
+def _system_generar(duracion_s, idioma_base, canal_optimo=None):
+    ajuste_canal = ""
+    if canal_optimo:
+        if canal_optimo["canal"] == "google_ads":
+            # Google Ads: búsqueda, usuario buscando activamente, breve y directo
+            ajuste_canal = f"""
+NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
+- Hook: muy rápido, captura urgencia o curiosidad inmediata (primeros 0.5 s).
+- Tono: directo, agresivo, enfocado en el beneficio inmediato.
+- Estructura: problema → solución → CTA (rápido).
+- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 6)}} segundos."""
+        elif canal_optimo["canal"] == "tiktok":
+            # TikTok: scroll social, emocional, trending
+            ajuste_canal = f"""
+NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
+- Hook: emocional, engagement visual fuerte (trending music, cambios).
+- Tono: conversacional, emocional, relatable.
+- Estructura: gancho emocional → problema identificable → producto como solución → CTA social.
+- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 9)}} segundos."""
+        elif canal_optimo["canal"] == "instagram":
+            # Instagram: estético, lifestyle
+            ajuste_canal = f"""
+NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
+- Hook: estético, visual fuerte (cuidado con el framing).
+- Tono: aspiracional, lifestyle, inspirador.
+- Estructura: muestra el resultado/lifestyle → problema → producto integrado → CTA sutil.
+- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 7)}} segundos."""
+        elif canal_optimo["canal"] == "pinterest":
+            # Pinterest: inspiración, soluciones prácticas
+            ajuste_canal = f"""
+NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
+- Hook: visual limpio, inspirador, con números/datos si aplica.
+- Tono: práctico, informativo, inspirador.
+- Estructura: resultado/beneficio → problema → producto como solución → CTA claro.
+- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 8)}} segundos."""
+
     return f"""Eres un guionista de videos cortos de venta (reels, TikTok, shorts). \
 Escribes guiones en el idioma '{idioma_base}' para un video de {duracion_s:g} segundos.
 
@@ -88,7 +123,7 @@ El guion tiene EXACTAMENTE 5 bloques, en este orden y con estos roles:
 5. cta: llamado a la acción claro.
 
 Tiempos sugeridos por bloque (inicio_s / fin_s en segundos; el último fin_s no puede pasar de {duracion_s:g}):
-{_lineas_tiempos(duracion_s)}
+{_lineas_tiempos(duracion_s)}{ajuste_canal}
 
 Reglas:
 - texto_pantalla: máximo {MAX_PALABRAS_PANTALLA} palabras, impactante, para sobreimprimir en el video.
@@ -139,13 +174,15 @@ lugar), y deja "precio_texto": null.
 {_formato_json_localizado(idioma, pais, info['moneda'], precio_texto)}"""
 
 
-def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint):
+def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=None):
     """Devuelve el contenido del mensaje de usuario: un string si no hay
     referencia con frames, o una lista de bloques (texto + imágenes) para que
     Claude vea los fotogramas del referente, no solo su conteo."""
     partes = [f"Producto: {json.dumps(producto, ensure_ascii=False)}",
               f"Enfoque del video: {enfoque}",
               f"Duración objetivo: {duracion_s:g} segundos"]
+    if canal_optimo:
+        partes.append(f"Canal optimizado: {canal_optimo['canal']} (ROAS {canal_optimo['roas']:.1f}x)")
     if marca and str(marca).strip():
         partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
     if cliente_hint and str(cliente_hint).strip():
@@ -254,9 +291,10 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar):
 
 # ---------------------------------------------------------------- API ---
 
-def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint):
+def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None):
     """Guion en el idioma base. `producto`: {"nombre", "descripcion", "precio",
     "moneda", "beneficios"}; `referencia`: {"frames": [urls], "transcripcion"}
+    o None; `canal_optimo`: {"canal": "google_ads|tiktok|...", "roas": 3.5, "duracion_sugerida_s": 6}
     o None. Devuelve (guion, costo_usd)."""
     duracion_s = float(duracion_s)
     pais_base = _pais_por_idioma(idioma_base)
@@ -269,8 +307,8 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
         return g
 
     return _generar_con_correccion(
-        _system_generar(duracion_s, idioma_base),
-        _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint),
+        _system_generar(duracion_s, idioma_base, canal_optimo=canal_optimo),
+        _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=canal_optimo),
         duracion_s, ajustar,
     )
 
