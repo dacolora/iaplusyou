@@ -1,8 +1,9 @@
 {# Tablero (Bloque 6): lo que el dueño mira cada mañana. Contexto de
    ver_cliente: `tablero` (dashboard._contexto_tablero: mes, anio, resumen,
-   serie, grafico, top, alertas, errores — cada parte puede venir None si su
-   cálculo explotó), `experimentos`, `moneda_exp`, `paises_fe`. Solo lectura:
-   nada de acá gasta ni publica; los botones llevan a la pestaña que sí. #}
+   resumen_triple_whale, serie, serie_triple_whale, grafico, grafico_triple_whale,
+   top, alertas, errores — cada parte puede venir None si su cálculo explotó),
+   `experimentos`, `moneda_exp`, `paises_fe`. Solo lectura: nada de acá gasta
+   ni publica; los botones llevan a la pestaña que sí. #}
 {% set tb = tablero %}
 {% set nombres_tab = {"settings": "Configuración", "experimentos": "Experimentos",
                       "creativeflowplus": "Crear", "catalogo": "Catálogo"} %}
@@ -10,13 +11,13 @@
 <div class="panel-cabecera tb-cabecera">
   <div>
     <h2>Tablero · {{ tb.mes }} {{ tb.anio }}</h2>
-    <p class="vacio">Gasto y ventas del mes en curso (solo las medidas por Pixel o por la tienda), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker.</p>
+    <p class="vacio">Gasto y ventas del mes en curso (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker.</p>
   </div>
   <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
 </div>
 
 {# ---------- tiles ---------- #}
-{% if tb.resumen is none %}
+{% if tb.resumen is none and tb.resumen_triple_whale is none %}
 <p class="tag-error">No se pudo calcular el resumen del mes. El resto del tablero sigue abajo.</p>
 {# M2: el gasto de generación no depende de la pauta/Meta, así que se pinta
    igual aunque el resumen de pauta haya fallado. #}
@@ -28,12 +29,14 @@
   </a>
 </div>
 {% else %}
+{# Mostrar resumen de Meta si existe #}
+{% if tb.resumen is not none %}
 {% set r = tb.resumen %}
 {% set grupos = r.por_moneda if r.por_moneda else {moneda_exp: {"gasto": 0, "compras": 0, "ingresos": 0, "roas": 0}} %}
 {% set varias = grupos | length > 1 %}
 {% for moneda, g in grupos.items() %}
-<div class="tb-tiles" {% if varias %}aria-label="Resumen en {{ moneda }}"{% endif %}>
-  {% if varias %}<div class="tb-tiles-moneda">{{ moneda }}</div>{% endif %}
+<div class="tb-tiles" {% if varias %}aria-label="Meta: Resumen en {{ moneda }}"{% endif %}>
+  {% if varias %}<div class="tb-tiles-moneda">Meta · {{ moneda }}</div>{% else %}<div class="tb-tiles-moneda" style="color: var(--muted);">Meta</div>{% endif %}
   <div class="kpi-tile">
     <span>Gasto del mes</span>
     <strong>{{ g.gasto | dinero(moneda) }}</strong>
@@ -86,6 +89,43 @@
 </div>
 {% endfor %}
 {% endif %}
+{# Mostrar resumen de Triple Whale si existe #}
+{% if tb.resumen_triple_whale is not none %}
+{% set r = tb.resumen_triple_whale %}
+{% set grupos = r.por_moneda if r.por_moneda else {moneda_exp: {"gasto": 0, "compras": 0, "ingresos": 0, "roas": 0}} %}
+{% set varias = grupos | length > 1 %}
+{% for moneda, g in grupos.items() %}
+<div class="tb-tiles" {% if varias %}aria-label="Triple Whale: Resumen en {{ moneda }}"{% endif %}>
+  {% if varias %}<div class="tb-tiles-moneda">Triple Whale · {{ moneda }}</div>{% else %}<div class="tb-tiles-moneda" style="color: var(--muted);">Triple Whale</div>{% endif %}
+  <div class="kpi-tile">
+    <span>Gasto del mes</span>
+    <strong>{{ g.gasto | dinero(moneda) }}</strong>
+    <small>desde el 1 de {{ tb.mes }}</small>
+  </div>
+  <div class="kpi-tile">
+    <span>Compras</span>
+    <strong>{{ g.compras }}</strong>
+    <small>atribuidas por TW</small>
+  </div>
+  <div class="kpi-tile">
+    <span>Ingresos</span>
+    <strong>{{ g.ingresos | dinero(moneda) }}</strong>
+    <small>solo ventas medibles</small>
+  </div>
+  <div class="kpi-tile">
+    <span>ROAS</span>
+    {% if g.ingresos > 0 and g.roas > 0 %}
+    <strong>{{ g.roas | roas }}×</strong>
+    <small>ingresos / gasto</small>
+    {% else %}
+    <strong class="tb-sin-dato">—</strong>
+    <small>sin ventas medibles</small>
+    {% endif %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endif %}
 
 {% if not experimentos %}
 <div class="tb-vacio">
@@ -98,51 +138,103 @@
 <section class="tb-seccion">
   <div class="tb-seccion-cab">
     <h3>Últimos 30 días</h3>
-    {% if tb.grafico %}
+    {% if tb.grafico or tb.grafico_triple_whale %}
     <ul class="tb-leyenda" aria-label="Leyenda">
       <li><span class="tb-muestra tb-muestra-gasto"></span>Gasto</li>
       <li><span class="tb-muestra tb-muestra-ingresos"></span>Ingresos</li>
-      <li class="tb-leyenda-moneda">{{ tb.grafico.moneda }}</li>
+      {% set moneda_meta = (tb.grafico or {}).get('moneda') %}
+      {% set moneda_tw = (tb.grafico_triple_whale or {}).get('moneda') %}
+      {% if moneda_meta and moneda_tw and moneda_meta != moneda_tw %}
+      <li class="tb-leyenda-moneda">Meta: {{ moneda_meta }} · TW: {{ moneda_tw }}</li>
+      {% elif moneda_meta %}
+      <li class="tb-leyenda-moneda">{{ moneda_meta }}</li>
+      {% elif moneda_tw %}
+      <li class="tb-leyenda-moneda">{{ moneda_tw }}</li>
+      {% endif %}
     </ul>
     {% endif %}
   </div>
-  {% if tb.serie is none %}
+  {% if tb.serie is none and tb.serie_triple_whale is none %}
   <p class="tag-error">No se pudo calcular la serie de 30 días.</p>
-  {% elif not tb.grafico %}
+  {% elif not tb.grafico and not tb.grafico_triple_whale %}
   <p class="vacio">Todavía no hay gasto ni ventas en los últimos 30 días. Cuando un experimento empiece a gastar, aquí verás el día a día.</p>
   {% else %}
+  {# Mostrar Meta si existe #}
+  {% if tb.grafico %}
   {% set g = tb.grafico %}
-  <svg class="tb-grafico" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img"
-       aria-label="Gasto (barras) e ingresos (línea) por día en {{ g.moneda }} durante los últimos 30 días">
-    {# rejilla + marcas del eje y (recesivas) #}
-    {% for t in g.marcas %}
-    <line class="tb-rejilla" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
-    <text class="tb-eje" x="{{ g.margen.izq - 8 }}" y="{{ t.y }}" text-anchor="end" dominant-baseline="middle">{{ t.texto }}</text>
-    {% endfor %}
-    {# línea base #}
-    <line class="tb-base" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ g.base_y }}" y2="{{ g.base_y }}"/>
-    {# barras de gasto: un <g> por día con su tooltip nativo y un blanco de hover de toda la altura #}
-    {% for d in g.dias %}
-    <g class="tb-dia">
-      <title>{{ d.titulo }}</title>
-      <rect class="tb-blanco" x="{{ d.x }}" y="{{ g.margen.arriba }}" width="{{ d.ancho + 2 }}" height="{{ g.base_y - g.margen.arriba }}"/>
-      {% if d.gasto > 0 %}
-      {% set alto = g.base_y - d.gasto_y %}
-      {% if alto >= 4 %}
-      <path class="tb-barra" d="M{{ d.x }},{{ g.base_y }} V{{ d.gasto_y + 4 }} Q{{ d.x }},{{ d.gasto_y }} {{ d.x + 4 }},{{ d.gasto_y }} H{{ d.x + d.ancho - 4 }} Q{{ d.x + d.ancho }},{{ d.gasto_y }} {{ d.x + d.ancho }},{{ d.gasto_y + 4 }} V{{ g.base_y }} Z"/>
-      {% else %}
-      <rect class="tb-barra" x="{{ d.x }}" y="{{ d.gasto_y }}" width="{{ d.ancho }}" height="{{ alto }}"/>
-      {% endif %}
-      {% endif %}
-      <circle class="tb-marcador" cx="{{ d.x_centro }}" cy="{{ d.ingresos_y }}" r="4"/>
-      {% if d.etiqueta %}
-      <text class="tb-eje" x="{{ d.x_centro }}" y="{{ g.alto - 8 }}" text-anchor="middle">{{ d.etiqueta }}</text>
-      {% endif %}
-    </g>
-    {% endfor %}
-    {# línea de ingresos, encima de las barras #}
-    <polyline class="tb-linea" points="{{ g.puntos_linea }}"/>
-  </svg>
+  <div style="margin-bottom: 1.5rem;">
+    <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin: 0 0 0.75rem 0;">Meta (Pixel/Tienda)</h4>
+    <svg class="tb-grafico" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img"
+         aria-label="Meta: Gasto (barras) e ingresos (línea) por día en {{ g.moneda }} durante los últimos 30 días">
+      {# rejilla + marcas del eje y (recesivas) #}
+      {% for t in g.marcas %}
+      <line class="tb-rejilla" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
+      <text class="tb-eje" x="{{ g.margen.izq - 8 }}" y="{{ t.y }}" text-anchor="end" dominant-baseline="middle">{{ t.texto }}</text>
+      {% endfor %}
+      {# línea base #}
+      <line class="tb-base" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ g.base_y }}" y2="{{ g.base_y }}"/>
+      {# barras de gasto: un <g> por día con su tooltip nativo y un blanco de hover de toda la altura #}
+      {% for d in g.dias %}
+      <g class="tb-dia">
+        <title>{{ d.titulo }}</title>
+        <rect class="tb-blanco" x="{{ d.x }}" y="{{ g.margen.arriba }}" width="{{ d.ancho + 2 }}" height="{{ g.base_y - g.margen.arriba }}"/>
+        {% if d.gasto > 0 %}
+        {% set alto = g.base_y - d.gasto_y %}
+        {% if alto >= 4 %}
+        <path class="tb-barra" d="M{{ d.x }},{{ g.base_y }} V{{ d.gasto_y + 4 }} Q{{ d.x }},{{ d.gasto_y }} {{ d.x + 4 }},{{ d.gasto_y }} H{{ d.x + d.ancho - 4 }} Q{{ d.x + d.ancho }},{{ d.gasto_y }} {{ d.x + d.ancho }},{{ d.gasto_y + 4 }} V{{ g.base_y }} Z"/>
+        {% else %}
+        <rect class="tb-barra" x="{{ d.x }}" y="{{ d.gasto_y }}" width="{{ d.ancho }}" height="{{ alto }}"/>
+        {% endif %}
+        {% endif %}
+        <circle class="tb-marcador" cx="{{ d.x_centro }}" cy="{{ d.ingresos_y }}" r="4"/>
+        {% if d.etiqueta %}
+        <text class="tb-eje" x="{{ d.x_centro }}" y="{{ g.alto - 8 }}" text-anchor="middle">{{ d.etiqueta }}</text>
+        {% endif %}
+      </g>
+      {% endfor %}
+      {# línea de ingresos, encima de las barras #}
+      <polyline class="tb-linea" points="{{ g.puntos_linea }}"/>
+    </svg>
+  </div>
+  {% endif %}
+  {# Mostrar Triple Whale si existe #}
+  {% if tb.grafico_triple_whale %}
+  {% set g = tb.grafico_triple_whale %}
+  <div>
+    <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin: 0 0 0.75rem 0;">Triple Whale</h4>
+    <svg class="tb-grafico" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img"
+         aria-label="Triple Whale: Gasto (barras) e ingresos (línea) por día en {{ g.moneda }} durante los últimos 30 días">
+      {# rejilla + marcas del eje y (recesivas) #}
+      {% for t in g.marcas %}
+      <line class="tb-rejilla" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
+      <text class="tb-eje" x="{{ g.margen.izq - 8 }}" y="{{ t.y }}" text-anchor="end" dominant-baseline="middle">{{ t.texto }}</text>
+      {% endfor %}
+      {# línea base #}
+      <line class="tb-base" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ g.base_y }}" y2="{{ g.base_y }}"/>
+      {# barras de gasto: un <g> por día con su tooltip nativo y un blanco de hover de toda la altura #}
+      {% for d in g.dias %}
+      <g class="tb-dia">
+        <title>{{ d.titulo }}</title>
+        <rect class="tb-blanco" x="{{ d.x }}" y="{{ g.margen.arriba }}" width="{{ d.ancho + 2 }}" height="{{ g.base_y - g.margen.arriba }}"/>
+        {% if d.gasto > 0 %}
+        {% set alto = g.base_y - d.gasto_y %}
+        {% if alto >= 4 %}
+        <path class="tb-barra tb-barra-tw" d="M{{ d.x }},{{ g.base_y }} V{{ d.gasto_y + 4 }} Q{{ d.x }},{{ d.gasto_y }} {{ d.x + 4 }},{{ d.gasto_y }} H{{ d.x + d.ancho - 4 }} Q{{ d.x + d.ancho }},{{ d.gasto_y }} {{ d.x + d.ancho }},{{ d.gasto_y + 4 }} V{{ g.base_y }} Z"/>
+        {% else %}
+        <rect class="tb-barra tb-barra-tw" x="{{ d.x }}" y="{{ d.gasto_y }}" width="{{ d.ancho }}" height="{{ alto }}"/>
+        {% endif %}
+        {% endif %}
+        <circle class="tb-marcador tb-marcador-tw" cx="{{ d.x_centro }}" cy="{{ d.ingresos_y }}" r="4"/>
+        {% if d.etiqueta %}
+        <text class="tb-eje" x="{{ d.x_centro }}" y="{{ g.alto - 8 }}" text-anchor="middle">{{ d.etiqueta }}</text>
+        {% endif %}
+      </g>
+      {% endfor %}
+      {# línea de ingresos, encima de las barras #}
+      <polyline class="tb-linea tb-linea-tw" points="{{ g.puntos_linea }}"/>
+    </svg>
+  </div>
+  {% endif %}
   {% endif %}
 </section>
 

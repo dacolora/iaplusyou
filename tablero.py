@@ -201,9 +201,15 @@ def _grupo_vacio():
             "anuncios": 0}
 
 
-def _resumen_periodo(exps, filas, desde_iso, hasta_iso):
+def _resumen_periodo(exps, filas, desde_iso, hasta_iso, atribucion_filtro=None):
+    """Calcula resumen filtrando por atribución si se pide.
+    Si atribucion_filtro es None, no filtra. Si es una tupla/lista, solo
+    incluye experimentos cuyo atribucion esté en esa tupla."""
     por_moneda = {}
     for ex, _pz, snaps in filas:
+        # Filtrar por atribución si se pide
+        if atribucion_filtro is not None and ex.get("atribucion") not in atribucion_filtro:
+            continue
         d = _deltas_pieza(snaps, desde_iso, hasta_iso)
         g = por_moneda.setdefault(_moneda(ex), _grupo_vacio())
         for k in ("gasto", "compras", "ingresos", "clics_enlace", "impresiones"):
@@ -214,10 +220,13 @@ def _resumen_periodo(exps, filas, desde_iso, hasta_iso):
         g["gasto"] = round(g["gasto"], 2)
         g["ingresos"] = round(g["ingresos"], 2)
         g["roas"] = _roas(g["ingresos"], g["gasto"])
+    # Contar experimentos y piezas activas solo del filtro
+    exps_filtrados = exps if atribucion_filtro is None else [ex for ex in exps
+                                                              if ex.get("atribucion") in atribucion_filtro]
     return {
         "por_moneda": por_moneda,
-        "experimentos_corriendo": sum(1 for ex in exps if ex["estado"] == "corriendo"),
-        "piezas_activas": sum(1 for ex in exps if ex["estado"] != "cerrado"
+        "experimentos_corriendo": sum(1 for ex in exps_filtrados if ex["estado"] == "corriendo"),
+        "piezas_activas": sum(1 for ex in exps_filtrados if ex["estado"] != "cerrado"
                               for pz in ex["piezas"] if pz["estado"] == "activo"),
     }
 
@@ -269,6 +278,22 @@ def resumen_mes(cliente, ahora_iso=None, datos=None):
     return out
 
 
+def resumen_mes_triple_whale(cliente, ahora_iso=None, datos=None):
+    """Resumen del mes en curso SOLO para experimentos con
+    atribucion='triple_whale'. Retorna None si no hay datos."""
+    hasta = _ahora(ahora_iso)
+    desde = _inicio_mes(hasta)
+    d = _datos(cliente, hasta, datos, desde_necesario=desde)
+    # Filtrar solo experimentos con atribucion="triple_whale"
+    filas_tw = [(ex, pz, snaps) for ex, pz, snaps in d.filas
+                if ex.get("atribucion") == "triple_whale"]
+    if not filas_tw:
+        return None
+    out = _resumen_periodo(d.exps, filas_tw, desde, hasta, atribucion_filtro=("triple_whale",))
+    out.update(desde=desde, hasta=hasta)
+    return out
+
+
 # ---------- serie diaria ----------
 
 def _serie_diaria_con_filtro(filas, lista_dias, moneda, atribucion_filtro=None):
@@ -316,7 +341,7 @@ def serie_diaria(cliente, dias=DIAS_SERIE, ahora_iso=None, datos=None):
         moneda = None
     else:
         moneda = max(sorted(gasto_por_moneda), key=lambda m: gasto_por_moneda[m])
-    salida = _serie_diaria_con_filtro(filas, lista_dias, moneda, atribucion_filtro=None)
+    salida = _serie_diaria_con_filtro(filas, lista_dias, moneda)
     return {"moneda": moneda, "dias": salida}
 
 
@@ -330,19 +355,17 @@ def serie_diaria_triple_whale(cliente, dias=DIAS_SERIE, ahora_iso=None, datos=No
     ventana_desde = lista_dias[0].isoformat() + "T00:00:00"
     ventana_hasta = (lista_dias[-1] + timedelta(days=1)).isoformat() + "T00:00:00"
     filas = _datos(cliente, ahora, datos, desde_necesario=ventana_desde).filas
-    # Filtrar solo experimentos con atribucion="triple_whale"
-    filas_tw = [(ex, pz, snaps) for ex, pz, snaps in filas if ex.get("atribucion") == "triple_whale"]
-    if not filas_tw:
-        return None
     # Buscar moneda con más gasto en experimentos de TW
     gasto_por_moneda = {}
-    for ex, _pz, snaps in filas_tw:
+    for ex, _pz, snaps in filas:
+        if ex.get("atribucion") != "triple_whale":
+            continue
         m = _moneda(ex)
         gasto_por_moneda[m] = gasto_por_moneda.get(m, 0.0) + delta(snaps, ventana_desde, ventana_hasta, "gasto")
     if not gasto_por_moneda:
         return None
     moneda = max(sorted(gasto_por_moneda), key=lambda m: gasto_por_moneda[m])
-    salida = _serie_diaria_con_filtro(filas_tw, lista_dias, moneda, atribucion_filtro=("triple_whale",))
+    salida = _serie_diaria_con_filtro(filas, lista_dias, moneda, atribucion_filtro=("triple_whale",))
     return {"moneda": moneda, "dias": salida} if salida else None
 
 
@@ -623,14 +646,16 @@ PARTES = ("resumen", "serie", "top", "alertas", "csv")
 
 def contexto(cliente, ahora_iso=None, dias=DIAS_SERIE, datos=None):
     """Todas las partes del tablero de una sola carga: {"ahora", "resumen"
-    (resumen_mes), "serie" (serie_diaria de `dias`), "serie_triple_whale"
-    (solo si hay experimentos con atribucion=triple_whale), "top"
-    (top_ganadoras), "alertas", "csv" (csv_mes)}. Sin tolerancia a fallos:
+    (resumen_mes), "resumen_triple_whale" (solo si hay experimentos con
+    atribucion=triple_whale), "serie" (serie_diaria de `dias`),
+    "serie_triple_whale" (solo si hay experimentos con atribucion=triple_whale),
+    "top" (top_ganadoras), "alertas", "csv" (csv_mes)}. Sin tolerancia a fallos:
     eso lo pone dashboard._contexto_tablero, que llama a cada parte con
     `datos=` y envuelve cada una en su try."""
     d = datos if datos is not None else cargar_datos(cliente, ahora_iso, dias)
     return {"ahora": d.ahora,
             "resumen": resumen_mes(cliente, d.ahora, datos=d),
+            "resumen_triple_whale": resumen_mes_triple_whale(cliente, d.ahora, datos=d),
             "serie": serie_diaria(cliente, dias, d.ahora, datos=d),
             "serie_triple_whale": serie_diaria_triple_whale(cliente, dias, d.ahora, datos=d),
             "top": top_ganadoras(cliente, datos=d),

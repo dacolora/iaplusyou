@@ -1466,6 +1466,12 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .tb-dia:hover .tb-marcador { opacity: 1; }
 .tb-dia:hover .tb-barra { fill: var(--accent-2); }
 
+/* Triple Whale: colores alternativos en la serie #}
+.tb-barra-tw { fill: var(--accent-3, #8b5cf6); }  /* púrpura por defecto si no existe */
+.tb-linea-tw { fill: none; stroke: var(--accent-3, #8b5cf6); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; pointer-events: none; }
+.tb-marcador-tw { fill: var(--accent-3, #8b5cf6); stroke: var(--panel); stroke-width: 2; opacity: 0; transition: opacity .12s; pointer-events: none; }
+.tb-dia:hover .tb-barra-tw { fill: var(--accent-1, #06b6d4); }  /* cian al hover */
+
 /* Top 5 ganadoras */
 .tb-top { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .8rem; }
 .tb-ganadora { display: flex; gap: .8rem; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: .8rem; min-width: 0; }
