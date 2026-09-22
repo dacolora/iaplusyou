@@ -179,7 +179,9 @@ def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_h
     referencia con frames, o una lista de bloques (texto + imágenes) para que
     Claude vea los fotogramas del referente, no solo su conteo."""
     partes = [f"Producto: {json.dumps(producto, ensure_ascii=False)}",
-              f"Enfoque del video: {enfoque}",
+              "Enfoque del video: Escenas asombrosas que muestren transformación y resultado wow. "
+              "Prioriza secuencias visuales impactantes, antes/después, reacciones, momentos de impacto. "
+              "La idea es que alguien que lo ve diga '¡wow, quiero eso!'",
               f"Duración objetivo: {duracion_s:g} segundos"]
     if canal_optimo:
         partes.append(f"Canal optimizado: {canal_optimo['canal']} (ROAS {canal_optimo['roas']:.1f}x)")
