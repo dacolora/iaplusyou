@@ -2,11 +2,14 @@
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 <p class="vacio" style="padding-top:0;">
-  Sube las imágenes de referencia (producto, persona, lugar — las que quieras), escribe qué tiene que pasar
-  y pulsa <strong>Generar</strong>: tu texto va tal cual al modelo elegido (Wan 3.0, Kling O3 Pro o Seedance 2.5).
-  ¿No sabes qué escribir? <strong>Armar prompt con IA</strong> convierte, gratis, una o dos frases en un plan por
-  planos que revisas y editas antes de generar. Las imágenes van solas a Seedream V5 Pro.
+  Sube las imágenes de referencia (producto, persona, lugar — las que quieras) y escribe qué tiene que pasar.
+  Dos caminos:
 </p>
+<ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.95rem;">
+  <li><strong>Generar video</strong>: Tu texto va tal cual al modelo (Wan 3.0, Kling O3 Pro o Seedance 2.5).</li>
+  <li><strong>Crear super prompt</strong>: La IA arma un prompt detallado por planos desde tu idea y las referencias. Lo revisas, editas y regeneras (gratis) antes de generar el video — perfecto si no sabes qué escribir.</li>
+</ul>
+<p class="vacio" style="padding-top:0;margin-top:0.5rem;">Las imágenes van solas a Seedream V5 Pro. Ninguna genera costos hasta que pulses "Generar".</p>
 
 <div class="form-nueva-idea" style="margin-top:1rem;">
   <label class="campo-label">Referencias</label>
@@ -131,10 +134,10 @@
   <input type="hidden" name="modelo" id="fp-modelo">
 
   {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
-     cobra al generar; «Armar prompt con IA» (director, gratis) es la ayuda para
-     quien no sabe qué escribir y deja revisar el prompt antes de gastar. #}
+     cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
+     quien tiene una idea pero quiere que la IA arme los planos — revisa, edita y regenera antes de generar. #}
   <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo" style="margin-top:1.2rem;">Generar video</button>
-  <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="La IA arma el prompt por planos con la fórmula del modelo; lo revisas y editas antes de generar. No cuesta.">¿No sabes qué escribir? Armar prompt con IA (gratis)</button>
+  <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.">Crear super prompt con IA (gratis)</button>
   <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.</p>
 </form>
 
