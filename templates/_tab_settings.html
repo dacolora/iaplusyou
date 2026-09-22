@@ -399,6 +399,70 @@
   </ul>
 </details>
 
+{# ---- Bloque 6: Triple Whale ---- #}
+<h2 id="config-triple-whale" style="margin-top:2rem;">Triple Whale (atribución)</h2>
+<p class="vacio" style="padding-top:0;">
+  Conecta tu cuenta de Triple Whale para traer métricas de anuncios por canal y
+  modelo de atribución. Los experimentos pueden usar estas métricas en lugar de
+  los datos de Meta Pixel o la tienda para decidir ganadores y perdedores.
+</p>
+{% if not cifrado_ok %}
+<p class="tag-error">Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de Triple Whale. Ponla y reinicia para habilitar este formulario.</p>
+{% endif %}
+
+{% if triple_whale_conectado %}
+<div class="pixel-estado pixel-estado-ok">
+  <span class="tag-estado tag-en-uso">conectado</span>
+  <strong>{{ triple_whale_conectado.dominio_tienda }}</strong>
+  <small class="vacio" style="padding:0;display:block;margin-top:.3rem;">
+    Modelo: {{ triple_whale_conectado.modelo_atribucion }}<br>
+    Ventana: {{ triple_whale_conectado.ventana_atribucion }}
+  </small>
+  <div style="margin-top:.5rem;">
+    <form method="post" action="{{ url_for('cfg_triple_whale_probar', cliente=cliente) }}" class="inline"><button class="btn-guardar btn-xs">Probar conexión</button></form>
+    <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" onsubmit="return confirm('¿Desconectar Triple Whale? Se quita la atribución por este canal.');"><button class="btn-rechazar btn-xs">Desconectar</button></form>
+  </div>
+</div>
+{% else %}
+<details class="swap-card" open>
+  <summary class="swap-card-resumen">+ Conectar Triple Whale</summary>
+  <form method="post" action="{{ url_for('cfg_triple_whale_conectar', cliente=cliente) }}" class="form-nueva-idea" id="form-triple-whale">
+    <label class="campo-label">Llave API de Triple Whale</label>
+    <input type="password" name="llave_api" placeholder="tw_..." autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}>
+    <label class="campo-label" style="margin-top:.6rem;">Dominio de la tienda (Shopify)</label>
+    <input type="text" name="dominio_tienda" placeholder="mitienda.myshopify.com" {% if not cifrado_ok %}disabled{% endif %}>
+    <label class="campo-label" style="margin-top:.6rem;">Moneda</label>
+    <select name="moneda" {% if not cifrado_ok %}disabled{% endif %}>
+      <option value="USD" selected>USD</option>
+      <option value="EUR">EUR</option>
+      <option value="GBP">GBP</option>
+      <option value="AUD">AUD</option>
+      <option value="CAD">CAD</option>
+      <option value="MXN">MXN</option>
+      <option value="COP">COP</option>
+    </select>
+    <label class="campo-label" style="margin-top:.6rem;">Modelo de atribución</label>
+    <select name="modelo_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
+      <option value="Triple Attribution" selected>Triple Attribution</option>
+      <option value="First Touch">First Touch</option>
+      <option value="Last Touch">Last Touch</option>
+    </select>
+    <label class="campo-label" style="margin-top:.6rem;">Ventana de atribución</label>
+    <select name="ventana_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
+      <option value="lifetime" selected>Lifetime</option>
+      <option value="7">7 días</option>
+      <option value="30">30 días</option>
+    </select>
+    <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
+      Tu llave API se guarda cifrada. Obtenla en <a href="https://app.triplewhale.com/settings/api-keys" target="_blank" rel="noopener">Triple Whale › Settings › API Keys</a>.
+    </p>
+    <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>Conectar Triple Whale</button>
+  </form>
+</details>
+{% endif %}
+
+<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+
 {# ---- Bloque 7: canales orgánicos ---- #}
 <h2 id="config-canales-organicos" style="margin-top:2rem;">Canales orgánicos</h2>
 <p class="vacio" style="padding-top:0;">

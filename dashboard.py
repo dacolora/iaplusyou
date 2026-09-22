@@ -71,6 +71,8 @@ import propuestas
 import cifrado
 import conectores
 import tiendas
+import triple_whale
+import triple_whale_tiendas
 import tablero
 import admin
 import gastos
@@ -1396,6 +1398,8 @@ def ver_cliente(cliente):
     if meta_conectado or modo_meta == meta_conexion.MODO_AGENCIA:
         motivo_bloqueo_forma = _bloqueo_cambio_forma(cliente, experimentos_lista=experimentos_exp)
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
+    # Triple Whale: obtener configuración si existe
+    triple_whale_conectado = triple_whale_tiendas.obtener(cliente) if cifrado.disponible() else None
     tiendas_cliente = tiendas.listar(cliente)
     # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
     # vuelo si falta) y la fila se pinta en la tarjeta del activo.
@@ -1502,6 +1506,7 @@ def ver_cliente(cliente):
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
         estado_pixel=estado_pixel,
         meta_conectado=meta_conectado,
+        triple_whale_conectado=triple_whale_conectado,
         atribucion_sugerida=atribucion_sug,
         atribuciones_exp=experimentos.ATRIBUCIONES,
         pedidos_por_exp=tiendas.pedidos_por_experimento(cliente),
