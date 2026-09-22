@@ -409,6 +409,14 @@ def archivar(cliente, sid):
     return _volver(cliente)
 
 
+@bp.post("/<int:sid>/eliminar")
+def eliminar(cliente, sid):
+    _sprint_o_404(cliente, sid)
+    if datos.eliminar_sprint(cliente, sid):
+        flash("Sprint eliminado permanentemente.", "ok")
+    return _volver(cliente)
+
+
 @bp.post("/<int:sid>/campanas")
 def campana_agregar(cliente, sid):
     _sprint_o_404(cliente, sid)

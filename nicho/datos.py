@@ -505,3 +505,32 @@ def descartar_avatar(cliente, avatar_id):
         sprints_datos.archivar_persona(cliente, a["persona_id"])
     with db.conectar() as con:
         return _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, {"estado": "descartado"})
+
+
+def eliminar_estudio(cliente, estudio_id):
+    """Elimina un estudio completo: comentarios, avatares, recolecciones. No reversible."""
+    e = estudio(cliente, estudio_id)
+    if not e:
+        return False
+    with db.conectar() as con:
+        # Desconectar avatares de personas (no eliminar personas, son reutilizables)
+        con.execute(db.avatar.update().where(
+            (db.avatar.c.estudio_id == estudio_id) &
+            (db.avatar.c.cliente == cliente)
+        ).values(persona_id=None))
+        # Eliminar avatares
+        con.execute(db.avatar.delete().where(
+            (db.avatar.c.estudio_id == estudio_id) &
+            (db.avatar.c.cliente == cliente)
+        ))
+        # Eliminar comentarios
+        con.execute(db.comentario.delete().where(
+            (db.comentario.c.estudio_id == estudio_id) &
+            (db.comentario.c.cliente == cliente)
+        ))
+        # Eliminar estudio
+        con.execute(db.estudio.delete().where(
+            (db.estudio.c.id == estudio_id) &
+            (db.estudio.c.cliente == cliente)
+        ))
+    return True

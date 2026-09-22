@@ -35,6 +35,10 @@
         onsubmit="return confirm('¿Archivar este sprint? Se puede desarchivar después.');">
     <button type="submit" class="btn-sm btn-peligro">Archivar</button>
   </form>
+  <form method="post" action="{{ url_for('sprints.eliminar', cliente=cliente, sid=sprint.id) }}" class="inline"
+        onsubmit="return confirm('⚠️ ¿Eliminar este sprint PERMANENTEMENTE? Se borran todas las campañas, ideas y referencias. No se puede deshacer.');">
+    <button type="submit" class="btn-sm btn-rechazar">Eliminar permanentemente</button>
+  </form>
 </div>
 
 {% if lote and lote.planeadas %}

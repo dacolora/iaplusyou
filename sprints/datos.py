@@ -819,3 +819,50 @@ def reclamar_cf(cliente, cp_id, cf_id, esperado=None):
         r = con.execute(cp.update().where(cp.c.id == cp_id, cp.c.cliente == cliente, condicion)
                         .values(cf_id=cf_id, actualizado_en=db.ahora()))
         return r.rowcount == 1
+
+
+def eliminar_sprint(cliente, sprint_id):
+    """Elimina un sprint completo: campañas, ideas, referencias, eventos. No reversible."""
+    s = sprint(cliente, sprint_id)
+    if not s:
+        return False
+    with db.conectar() as con:
+        # Obtener IDs de campañas para eliminar referencias
+        campanas_ids = con.execute(
+            db.campana.select().where(
+                (db.campana.c.sprint_id == sprint_id) &
+                (db.campana.c.cliente == cliente)
+            )
+        ).fetchall()
+        campanas_ids = [c.id for c in campanas_ids]
+
+        # Eliminar referencias, ideas y eventos por campaña
+        for cid in campanas_ids:
+            con.execute(db.referencia.delete().where(
+                (db.referencia.c.campana_id == cid)
+            ))
+            con.execute(db.campana_pieza.delete().where(
+                (db.campana_pieza.c.campana_id == cid)
+            ))
+            con.execute(db.sprint_evento.delete().where(
+                (db.sprint_evento.c.campana_id == cid)
+            ))
+
+        # Eliminar campañas
+        con.execute(db.campana.delete().where(
+            (db.campana.c.sprint_id == sprint_id) &
+            (db.campana.c.cliente == cliente)
+        ))
+
+        # Eliminar eventos del sprint
+        con.execute(db.sprint_evento.delete().where(
+            (db.sprint_evento.c.sprint_id == sprint_id) &
+            (db.sprint_evento.c.cliente == cliente)
+        ))
+
+        # Eliminar sprint
+        con.execute(db.sprint.delete().where(
+            (db.sprint.c.id == sprint_id) &
+            (db.sprint.c.cliente == cliente)
+        ))
+    return True

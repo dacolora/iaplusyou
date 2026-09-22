@@ -33,6 +33,10 @@
     {% if estudio.archivado %}<input type="hidden" name="desarchivar" value="1">{% endif %}
     <button type="submit" class="btn-sm btn-peligro">{{ 'Desarchivar' if estudio.archivado else 'Archivar' }}</button>
   </form>
+  <form method="post" action="{{ url_for('nicho.eliminar', cliente=cliente, eid=estudio.id) }}" class="inline"
+        onsubmit="return confirm('⚠️ ¿Eliminar este estudio PERMANENTEMENTE? Se borran todos los comentarios y avatares. No se puede deshacer.');">
+    <button type="submit" class="btn-sm btn-rechazar">Eliminar permanentemente</button>
+  </form>
 </details>
 
 {% include "_nicho_comentarios.html" %}

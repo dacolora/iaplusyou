@@ -171,6 +171,14 @@ def archivar(cliente, eid):
     return _volver(cliente, eid)
 
 
+@bp.post("/<int:eid>/eliminar")
+def eliminar(cliente, eid):
+    _estudio_o_404(cliente, eid)
+    if datos.eliminar_estudio(cliente, eid):
+        flash("Estudio eliminado permanentemente.", "ok")
+    return _volver(cliente)
+
+
 # -------------------------------------------------------- comentarios ---
 
 def _agregar(cliente, eid, fuente, lista):
