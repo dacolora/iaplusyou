@@ -136,42 +136,68 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
     info_cat = CATEGORIAS[categoria]
     productos = []
     public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
+
     for nombre_carpeta in sorted(os.listdir(carpeta)):
-        subcarpeta = os.path.join(carpeta, nombre_carpeta)
-        if not os.path.isdir(subcarpeta):
+        ruta_carpeta = os.path.join(carpeta, nombre_carpeta)
+        if not os.path.isdir(ruta_carpeta):
             continue
-        archivos = sorted(f for f in os.listdir(subcarpeta) if f.lower().endswith(IMAGE_EXTS))
-        if not archivos:
-            continue
-        propio = meta.get(nombre_carpeta, {})
-        productos.append({
-            "id": nombre_carpeta,
-            "categoria": categoria,
-            "etiqueta_base": info_cat["etiqueta"],
-            # Regla de consistencia: la de la categoría más lo que la persona anotó
-            # (ej. "siempre lleva la gorra roja") — es lo que va al prompt.
-            "regla": (info_cat["regla"] + (" " + propio["regla"].strip() if propio.get("regla") else "")).strip(),
-            "regla_propia": (propio.get("regla") or "").strip(),
-            "nombre": propio.get("nombre") or NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
-            "descripcion": propio.get("descripcion") or DESCRIPCIONES.get(nombre_carpeta, ""),
-            # El tipo decide QUÉ prompt se le manda al modelo (un calzado va en
-            # los pies, una cobija se drapea). Los productos que ya existían son
-            # todos calzado, así que ese es el default y no hay que migrar nada.
-            "tipo": prompt_swap.tipo_valido(propio.get("tipo")),
-            # Zonas del cuerpo que ocupa el producto (mapa corporal). Vacío =
-            # no va sobre una persona (una cobija, un objeto de escena).
-            "zonas": mapa_corporal.normalizar(propio.get("zonas")),
-            "mapa_texto": mapa_corporal.describir(propio.get("zonas")),
-            "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
-                mapa_corporal.preset_de(propio.get("zonas"))),
-            "referencias": [os.path.join(subcarpeta, f) for f in archivos],
-            # Nombres de archivo sueltos: la UI de gestión necesita poder
-            # referirse a una imagen concreta (para borrarla o mostrarla) sin
-            # exponer rutas absolutas del disco en una URL.
-            "imagenes": archivos,
-            "representativa": os.path.join(subcarpeta, archivos[0]),
-            "representativa_url": f"{public_base}/clientes/{cliente}/{info_cat['carpeta']}/{nombre_carpeta}/{archivos[0]}" if public_base else None,
-        })
+
+        propio_base = meta.get(nombre_carpeta, {})
+        tiene_variantes = isinstance(propio_base.get("variantes"), dict) and propio_base["variantes"]
+
+        if tiene_variantes:
+            # Estructura nueva con variantes: horiginal/ contiene beige/, sky/, rose/
+            for nombre_variante in sorted(propio_base["variantes"].keys()):
+                ruta_variante = os.path.join(ruta_carpeta, nombre_variante)
+                if not os.path.isdir(ruta_variante):
+                    continue
+                archivos = sorted(f for f in os.listdir(ruta_variante) if f.lower().endswith(IMAGE_EXTS))
+                if not archivos:
+                    continue
+                propio_var = propio_base["variantes"][nombre_variante]
+                id_producto = f"{nombre_carpeta}/{nombre_variante}"
+                nombre_mostrado = propio_var.get("nombre") or f"{propio_base.get('nombre', nombre_carpeta)} {nombre_variante.title()}"
+                productos.append({
+                    "id": id_producto,
+                    "categoria": categoria,
+                    "etiqueta_base": info_cat["etiqueta"],
+                    "regla": (info_cat["regla"] + (" " + propio_base.get("regla", "").strip() if propio_base.get("regla") else "")).strip(),
+                    "regla_propia": (propio_base.get("regla") or "").strip(),
+                    "nombre": nombre_mostrado,
+                    "descripcion": propio_var.get("descripcion") or "",
+                    "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
+                    "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
+                    "mapa_texto": mapa_corporal.describir(propio_base.get("zonas")),
+                    "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
+                        mapa_corporal.preset_de(propio_base.get("zonas"))),
+                    "referencias": [os.path.join(ruta_variante, f) for f in archivos],
+                    "imagenes": archivos,
+                    "representativa": os.path.join(ruta_variante, archivos[0]),
+                    "representativa_url": f"{public_base}/clientes/{cliente}/{info_cat['carpeta']}/{id_producto}/{archivos[0]}" if public_base else None,
+                })
+        else:
+            # Estructura antigua (sin variantes): cada carpeta es un producto
+            archivos = sorted(f for f in os.listdir(ruta_carpeta) if f.lower().endswith(IMAGE_EXTS))
+            if not archivos:
+                continue
+            productos.append({
+                "id": nombre_carpeta,
+                "categoria": categoria,
+                "etiqueta_base": info_cat["etiqueta"],
+                "regla": (info_cat["regla"] + (" " + propio_base["regla"].strip() if propio_base.get("regla") else "")).strip(),
+                "regla_propia": (propio_base.get("regla") or "").strip(),
+                "nombre": propio_base.get("nombre") or NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
+                "descripcion": propio_base.get("descripcion") or DESCRIPCIONES.get(nombre_carpeta, ""),
+                "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
+                "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
+                "mapa_texto": mapa_corporal.describir(propio_base.get("zonas")),
+                "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
+                    mapa_corporal.preset_de(propio_base.get("zonas"))),
+                "referencias": [os.path.join(ruta_carpeta, f) for f in archivos],
+                "imagenes": archivos,
+                "representativa": os.path.join(ruta_carpeta, archivos[0]),
+                "representativa_url": f"{public_base}/clientes/{cliente}/{info_cat['carpeta']}/{nombre_carpeta}/{archivos[0]}" if public_base else None,
+            })
     return productos
 
 

@@ -60,8 +60,39 @@ def _mood_desde_form():
 
 
 def _productos(cliente):
-    return [{"id": p["id"], "nombre": p["nombre"], "descripcion": p.get("descripcion") or "",
-             "representativa_url": p.get("representativa_url")} for p in catalogo_productos.listar(cliente, "producto")]
+    """Retorna productos con estructura de variantes si aplica."""
+    productos_planos = catalogo_productos.listar(cliente, "producto")
+    productos_dict = {}
+
+    for p in productos_planos:
+        pid = p["id"]
+        if "/" in pid:
+            # Producto con variante: "horiginal/beige"
+            base, variante = pid.split("/", 1)
+            if base not in productos_dict:
+                productos_dict[base] = {
+                    "id": base,
+                    "nombre": p["nombre"].rsplit(" — ", 1)[0] if " — " in p["nombre"] else p["nombre"],
+                    "descripcion": p.get("descripcion") or "",
+                    "variantes": {}
+                }
+            productos_dict[base]["variantes"][variante] = {
+                "id": pid,
+                "nombre": p["nombre"],
+                "descripcion": p.get("descripcion") or "",
+                "representativa_url": p.get("representativa_url")
+            }
+        else:
+            # Producto sin variantes (estructura antigua)
+            if pid not in productos_dict:
+                productos_dict[pid] = {
+                    "id": pid,
+                    "nombre": p["nombre"],
+                    "descripcion": p.get("descripcion") or "",
+                    "representativa_url": p.get("representativa_url")
+                }
+
+    return list(productos_dict.values())
 
 
 def _sprint_recien_creado():
@@ -102,6 +133,7 @@ def contexto(cliente):
         },
         "intenciones_sprint": datos.INTENCIONES_NOMBRE,
         "tipos_temporada": datos.TIPOS_TEMPORADA,
+        "funnels_sprint": datos.FUNNELS_NOMBRE,
         "trabajo_sugerir": ({"job_id": tareas_sprints.job_id_sugerir(cliente)}
                             if trabajos.en_curso(tareas_sprints.job_id_sugerir(cliente)) else None),
         "hoy": date.today().isoformat(),

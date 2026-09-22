@@ -52,6 +52,12 @@
     <fieldset class="sprint-paso" data-paso="2" hidden>
       <legend>2. Matriz persona × producto</legend>
       <div class="fe-opciones">
+        <label>Producto
+          <select id="matriz-producto"><option value="">(elige un producto)</option>{% for p in productos_sprint %}{% if p.variantes %}<option value="{{ p.id }}" data-variantes="{{ p.variantes | tojson | safe }}">{{ p.nombre }}</option>{% else %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endif %}{% endfor %}</select>
+        </label>
+        <label>Variante
+          <select id="matriz-variante" disabled><option value="">(elige una variante)</option></select>
+        </label>
         <label>Temporada (opcional)
           <select id="matriz-temporada"><option value="">(ninguna)</option>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }} → {{ t.fin }})</option>{% endfor %}</select>
         </label>
@@ -62,30 +68,30 @@
             <option value="bof">Bottom of Funnel (BOF) - Conversión</option>
           </select>
         </label>
-        <small class="vacio">Haz clic en una celda para agregar esa campaña. Las celdas grises ya existen para esta persona + producto.</small>
+        <small class="vacio">Elige producto + variante, luego haz clic en una celda para agregar esa campaña.</small>
       </div>
-      <div class="sprint-matriz-scroll">
-        <table class="sprint-matriz" id="matriz">
-          <thead><tr><th></th>{% for p in productos_sprint %}<th>{% if p.representativa_url %}<img class="sprint-mini" src="{{ p.representativa_url }}" alt="">{% endif %}<br>{{ p.nombre }}</th>{% endfor %}</tr></thead>
-          <tbody>
-            {% for pe in personas_sprint %}
-            <tr>
-              <th><span class="sprint-punto" style="background: {{ pe.color or 'var(--accent)' }}"></span> {{ pe.nombre }}</th>
-              {% for p in productos_sprint %}
-              <td class="sprint-celda" data-persona="{{ pe.id }}" data-producto="{{ p.id }}" data-persona-nombre="{{ pe.nombre }}" data-producto-nombre="{{ p.nombre }}">
-                <button type="button" class="sprint-celda-btn">+</button>
-                <div class="sprint-celda-campos" hidden>
-                  <label>Videos <input type="number" min="0" value="5" class="mini-input celda-videos"></label>
-                  <label>Imágenes <input type="number" min="0" value="5" class="mini-input celda-imagenes"></label>
-                </div>
-              </td>
+      <div id="matriz-container" style="display: none;">
+        <div class="sprint-matriz-scroll">
+          <table class="sprint-matriz" id="matriz">
+            <thead><tr><th>Persona</th><th id="matriz-variante-titulo" style="text-align: center; font-weight: normal;">Elige variante arriba</th></tr></thead>
+            <tbody>
+              {% for pe in personas_sprint %}
+              <tr>
+                <th><span class="sprint-punto" style="background: {{ pe.color or 'var(--accent)' }}"></span> {{ pe.nombre }}</th>
+                <td class="sprint-celda" data-persona="{{ pe.id }}" data-persona-nombre="{{ pe.nombre }}">
+                  <button type="button" class="sprint-celda-btn">+</button>
+                  <div class="sprint-celda-campos" hidden>
+                    <label>Videos <input type="number" min="0" value="5" class="mini-input celda-videos"></label>
+                    <label>Imágenes <input type="number" min="0" value="5" class="mini-input celda-imagenes"></label>
+                  </div>
+                </td>
+              </tr>
               {% endfor %}
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+        <p class="sprint-totales" id="matriz-totales">0 campañas · 0 videos · 0 imágenes · costo estimado USD 0,00</p>
       </div>
-      <p class="sprint-totales" id="matriz-totales">0 campañas · 0 videos · 0 imágenes · costo estimado USD 0,00</p>
       <small class="vacio">Estimado con {{ estimado_sprint.modelo_video }} ({{ estimado_sprint.duracion_s }} s por video) y {{ estimado_sprint.modelo_imagen }}. Se confirma antes de generar; hoy no se gasta nada.</small>
       <div class="acciones">
         <button type="button" class="btn-sm" data-ir="1">← Atrás</button>
@@ -231,8 +237,10 @@
     var form = document.getElementById('form-sprint');
     if (!form) return;
     var costoV = parseFloat(form.dataset.estimadoVideo || '0'), costoI = parseFloat(form.dataset.estimadoImagen || '0');
-    var campanas = {};   // "persona|producto|temporada" -> {persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, funnel, nombres}
-    var selTemporada = document.getElementById('matriz-temporada'), selFunnel = document.getElementById('matriz-funnel');
+    var campanas = {};   // "persona|catalogo_id|temporada" -> {persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, funnel, nombres}
+    var selProducto = document.getElementById('matriz-producto'), selVariante = document.getElementById('matriz-variante'),
+        selTemporada = document.getElementById('matriz-temporada'), selFunnel = document.getElementById('matriz-funnel'),
+        matrizContainer = document.getElementById('matriz-container'), matrizVarianteTitulo = document.getElementById('matriz-variante-titulo');
 
     // Fechas por defecto: el mes siguiente completo.
     var hoy = new Date(), ini = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1), fin = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
@@ -243,30 +251,63 @@
     if (!form.nombre.value) form.nombre.value = 'Sprint ' + ini.toLocaleDateString('es', {month: 'long', year: 'numeric'});
 
     // Estado guardado (por si se crea una persona o temporada a mitad de camino y la página recarga).
-    try { var g = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (g) { campanas = g.campanas || {}; if (g.nombre) form.nombre.value = g.nombre; if (g.inicio) form.inicio.value = g.inicio; if (g.fin) form.fin.value = g.fin; } } catch (e) {}
+    try { var g = JSON.parse(sessionStorage.getItem(KEY) || 'null'); if (g) { campanas = g.campanas || {}; if (g.nombre) form.nombre.value = g.nombre; if (g.inicio) form.inicio.value = g.inicio; if (g.fin) form.fin.value = g.fin; } } catch (e) {} }
     function guardarEstado() { try { sessionStorage.setItem(KEY, JSON.stringify({campanas: campanas, nombre: form.nombre.value, inicio: form.inicio.value, fin: form.fin.value})); } catch (e) {} }
 
-    function clave(td) { return td.dataset.persona + '|' + td.dataset.producto + '|' + selTemporada.value; }
+    // Actualizar variantes cuando cambia el producto
+    selProducto.addEventListener('change', function () {
+      var opt = selProducto.options[selProducto.selectedIndex];
+      var variantes = opt.dataset.variantes ? JSON.parse(opt.dataset.variantes) : {};
+      selVariante.innerHTML = '<option value="">(elige una variante)</option>';
+      Object.keys(variantes).sort().forEach(function (k) {
+        var o = document.createElement('option');
+        o.value = selProducto.value + '/' + k;
+        o.textContent = variantes[k].nombre;
+        selVariante.appendChild(o);
+      });
+      selVariante.disabled = !Object.keys(variantes).length;
+      if (!selVariante.disabled) selVariante.value = '';
+      pintar();
+    });
+
+    selVariante.addEventListener('change', function () { pintar(); });
+
+    function clave(persona_id) { return persona_id + '|' + selVariante.value + '|' + selTemporada.value; }
     function pintar() {
-      var tNombre = selTemporada.options[selTemporada.selectedIndex].text;
+      matrizContainer.style.display = selVariante.value ? 'block' : 'none';
+      if (!selVariante.value) return;
+
+      var varianteParts = selVariante.value.split('/');
+      var productoNombre = '', varianteNombre = '';
+      Array.from(selProducto.options).forEach(function (opt) {
+        if (opt.value === varianteParts[0] && opt.dataset.variantes) {
+          productoNombre = opt.textContent;
+          var v = JSON.parse(opt.dataset.variantes);
+          if (v[varianteParts[1]]) varianteNombre = v[varianteParts[1]].nombre;
+        }
+      });
+      matrizVarianteTitulo.textContent = (varianteNombre || selVariante.value).substring(0, 30);
+
       form.querySelectorAll('.sprint-celda').forEach(function (td) {
-        var c = campanas[clave(td)];
-        var enOtra = Object.keys(campanas).some(function (k) { return k.indexOf(td.dataset.persona + '|' + td.dataset.producto + '|') === 0 && k !== clave(td); });
+        var k = clave(td.dataset.persona);
+        var c = campanas[k];
         td.classList.toggle('activa', !!c);
-        td.classList.toggle('en-otra', !c && enOtra);
         td.querySelector('.sprint-celda-campos').hidden = !c;
         td.querySelector('.sprint-celda-btn').textContent = c ? '✓' : '+';
         if (c) { td.querySelector('.celda-videos').value = c.n_videos; td.querySelector('.celda-imagenes').value = c.n_imagenes; }
       });
+
       var n = 0, v = 0, i = 0;
       Object.keys(campanas).forEach(function (k) { n++; v += +campanas[k].n_videos; i += +campanas[k].n_imagenes; });
       document.getElementById('matriz-totales').textContent = n + ' campañas · ' + v + ' videos · ' + i + ' imágenes · costo estimado USD ' + (v * costoV + i * costoI).toFixed(2).replace('.', ',');
+
       var ul = document.getElementById('resumen-campanas'); ul.innerHTML = '';
       Object.keys(campanas).forEach(function (k) {
         var c = campanas[k], li = document.createElement('li');
-        li.textContent = c.persona_nombre + ' · ' + c.producto_nombre + ' · ' + c.temporada_nombre + ': ' + c.n_videos + ' videos, ' + c.n_imagenes + ' imágenes';
+        li.textContent = c.persona_nombre + ' · ' + c.catalogo_id + ' · ' + (c.temporada_nombre || '(sin temporada)') + ': ' + c.n_videos + ' videos, ' + c.n_imagenes + ' imágenes';
         ul.appendChild(li);
       });
+
       document.getElementById('campanas-json').value = JSON.stringify(Object.keys(campanas).map(function (k) {
         var c = campanas[k]; return {persona_id: c.persona_id, catalogo_id: c.catalogo_id, temporada_id: c.temporada_id, n_videos: c.n_videos, n_imagenes: c.n_imagenes, funnel: c.funnel};
       }));
@@ -274,20 +315,21 @@
     }
     form.querySelectorAll('.sprint-celda').forEach(function (td) {
       td.querySelector('.sprint-celda-btn').addEventListener('click', function () {
-        var k = clave(td);
+        if (!selVariante.value) { alert('Elige producto y variante primero'); return; }
+        var k = clave(td.dataset.persona);
         if (campanas[k]) { delete campanas[k]; }
         else {
-          campanas[k] = {persona_id: +td.dataset.persona, catalogo_id: td.dataset.producto,
+          campanas[k] = {persona_id: +td.dataset.persona, catalogo_id: selVariante.value,
                          temporada_id: selTemporada.value ? +selTemporada.value : null,
                          n_videos: 5, n_imagenes: 5, funnel: selFunnel.value,
-                         persona_nombre: td.dataset.personaNombre, producto_nombre: td.dataset.productoNombre,
+                         persona_nombre: td.dataset.personaNombre,
                          temporada_nombre: selTemporada.options[selTemporada.selectedIndex].text};
         }
         pintar();
       });
       ['.celda-videos', '.celda-imagenes'].forEach(function (sel, idx) {
         td.querySelector(sel).addEventListener('input', function (e) {
-          var c = campanas[clave(td)]; if (!c) return;
+          var c = campanas[clave(td.dataset.persona)]; if (!c) return;
           c[idx === 0 ? 'n_videos' : 'n_imagenes'] = Math.max(0, parseInt(e.target.value || '0', 10)); pintar();
         });
       });
