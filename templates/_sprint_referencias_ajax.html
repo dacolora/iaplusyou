@@ -1,10 +1,10 @@
 {# Contenido de referencias para desplegable AJAX #}
 <div class="sprint-ajax-contenido referencias">
-  <p class="vacio">{{ campana.referencias_listas }}/{{ campana.referencias_objetivo }} referencias · {{ cobertura }}% cobertura</p>
+  <p class="sprint-progreso">{{ campana.referencias_listas }}/{{ campana.referencias_objetivo }} referencias · {{ cobertura }}% cobertura</p>
 
-  <form method="post" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="sprint-form-referencias">
-    <fieldset>
-      <legend>Subir referencia</legend>
+  <details class="sprint-agregar-ref" style="margin-bottom: 2rem;">
+    <summary style="cursor: pointer; font-weight: bold;">+ Agregar referencia</summary>
+    <form method="post" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="sprint-form-referencias" style="margin-top: 1rem; padding: 1rem; background: #f9f9f9; border-radius: 4px;">
       <label>Archivo o link
         <input type="file" name="archivo" accept="image/*,video/*">
         <small>o</small>
@@ -13,36 +13,39 @@
       <label>Descripción
         <textarea name="descripcion" rows="2" placeholder="Qué se busca: estilo, composición, etc."></textarea>
       </label>
-      <div class="checks">
+      <div class="checks" style="margin: 0.75rem 0;">
         <span class="campo-label">Intención</span>
         {% for k in intenciones_sprint %}
         <label><input type="checkbox" name="intencion" value="{{ k }}"> {{ intenciones_sprint[k] }}</label>
         {% endfor %}
       </div>
       <button type="submit" class="btn-generar btn-sm">Agregar</button>
-    </fieldset>
-  </form>
+    </form>
+  </details>
 
   {% if referencias %}
   <div class="sprint-referencias-lista">
-    <h4>Referencias subidas</h4>
     {% for r in referencias %}
-    <div class="sprint-referencia-item">
-      <small>{{ r.creado_en | replace("T", " ") }}</small>
-      {% if r.frame_url %}<img src="{{ r.frame_url }}" alt="" class="sprint-ref-mini">{% endif %}
-      <strong>{{ r.titulo or "Sin título" }}</strong>
-      {% if r.descripcion %}<p>{{ r.descripcion }}</p>{% endif %}
-    </div>
+    <details class="sprint-ref-desplegable" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
+      <summary style="cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 0.75rem;">
+        {% if r.frame_url %}
+          <img src="{{ r.frame_url }}" alt="" style="width: 80px; height: auto; border-radius: 2px; object-fit: cover;">
+        {% endif %}
+        <span>{{ r.titulo or "Sin título" }}</span>
+      </summary>
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+        {% if r.descripcion %}<p><strong>Descripción:</strong> {{ r.descripcion }}</p>{% endif %}
+        {% if r.intencion %}
+        <p style="margin: 0.5rem 0;"><strong>Intención:</strong>
+          {% for tag in r.intencion %}<span class="tag-estado">{{ intenciones_sprint.get(tag, tag) }}</span>{% endfor %}
+        </p>
+        {% endif %}
+        <small class="vacio">{{ r.creado_en | replace("T", " ") }}</small>
+      </div>
+    </details>
     {% endfor %}
   </div>
   {% else %}
   <p class="vacio">No hay referencias todavía. Sube una para empezar.</p>
   {% endif %}
 </div>
-
-<style>
-.sprint-ajax-contenido { padding: 1rem; }
-.sprint-referencias-lista { margin-top: 1.5rem; }
-.sprint-referencia-item { margin: 0.75rem 0; padding: 0.75rem; background: #f9f9f9; border-radius: 4px; }
-.sprint-ref-mini { width: 60px; height: auto; border-radius: 2px; margin-right: 0.5rem; }
-</style>
