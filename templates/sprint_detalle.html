@@ -195,12 +195,8 @@
         // Si ya se cargó, no cargar de nuevo
         if (contenedor.textContent.trim()) return;
 
-        // Validar flujo
-        if (tipo === 'ideas' && !document.querySelector('.sprint-campana[id="campana-' + cid + '"] .sprint-desplegable[data-desplegable="referencias"]').open) {
-          alert('Debes completar las referencias primero');
-          this.open = false;
-          return;
-        }
+        // Validar flujo: Ideas solo si hay referencias completadas
+        // (Se valida en el servidor, aquí solo es una guía visual)
 
         // Cargar contenido
         var url = '/cliente/{{ cliente }}/sprints/' + sid + '/campanas/' + cid + '/' + tipo + '-ajax';
