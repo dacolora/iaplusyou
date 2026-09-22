@@ -42,7 +42,7 @@ def registrar_local(cliente, local_path, titulo):
         frame_url = r2_uploader.upload_image(frame_path, key + FRAME_SUFFIX)
         return {"tipo": "video", "url": url, "frame_url": frame_url, "ruta_local": local_path, "titulo": titulo}
     url = r2_uploader.upload_image(local_path, key)
-    return {"tipo": "imagen", "url": url, "frame_url": None, "ruta_local": local_path, "titulo": titulo}
+    return {"tipo": "imagen", "url": url, "frame_url": url, "ruta_local": local_path, "titulo": titulo}
 
 
 def guardar_subida(cliente, archivo):
