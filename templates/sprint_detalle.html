@@ -137,12 +137,6 @@
 </details>
 {% endif %}
 
-<h2>Línea de tiempo</h2>
-<ul class="exp-eventos sprint-eventos">
-  {% for e in sprint.eventos %}
-  <li><small>{{ e.creado_en | replace("T", " ") }}</small> {{ e.mensaje }}{% if e.campana_id %} <small>(campaña #{{ e.campana_id }})</small>{% endif %}</li>
-  {% else %}<li class="vacio">Sin eventos todavía.</li>{% endfor %}
-</ul>
 
 {% include "_sprint_lote_modal.html" %}
 
