@@ -152,9 +152,12 @@ def leer_producto(clave: str, item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if clave == "amazon":
         if not item.get("asin") or not item.get("title"):
             return None
-        # Parsear precio como "USD 19.99"
-        precio_str = item.get("price") or ""
-        precio = float(precio_str.replace("USD ", "").replace(",", "")) if "USD" in precio_str else 0
+        # Parsear precio como "USD 19.99" o float directo
+        precio_raw = item.get("price") or 0
+        if isinstance(precio_raw, (int, float)):
+            precio = float(precio_raw)
+        else:
+            precio = float(precio_raw.replace("USD ", "").replace(",", "")) if "USD" in str(precio_raw) else 0
         return {
             "fuente_id": item["asin"],
             "titulo": item["title"][:300],
