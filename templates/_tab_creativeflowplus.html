@@ -189,7 +189,23 @@
           {% endif %}
         </div>
         {% elif item.estado == "prompt_listo" %}
-        <div class="generado-velo"><span class="generado-estado">Prompt listo — revísalo</span></div>
+        <div class="fe-seccion" style="background:#f5f5f5;padding:0.8rem;border-radius:4px;margin-bottom:0.8rem;">
+          <p class="campo-label" style="margin:0 0 0.4rem 0;">✏️ Super prompt (editable)</p>
+          {% if item.director and item.director.estado == "fallback" %}
+          <p class="vacio" style="padding:0;font-size:.75rem;color:#c00;">⚠️ La IA no pudo armar los planos ({{ item.director.aviso }}). Aquí va el prompt básico que puedes editar.</p>
+          {% else %}
+          <p class="vacio" style="padding:0;font-size:.75rem;">Revisa, edita si quieres y haz clic en «Generar video».</p>
+          {% endif %}
+          <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}" style="margin-top:.4rem;">
+            <textarea name="prompt_a" rows="6" style="width:100%;font-size:.8rem;font-family:monospace;padding:.4rem;">{{ item.prompt_relleno }}</textarea>
+            <div style="display:flex;gap:.4rem;margin-top:.3rem;">
+              <button type="submit" class="btn-guardar btn-sm">💾 Guardar cambios</button>
+              <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit="return confirm('Rearmar con IA sobrescribe el prompt. ¿Seguir?');">
+                <button type="submit" class="btn-sm">🔄 Rearmar con IA</button>
+              </form>
+            </div>
+          </form>
+        </div>
         {% elif item.trabajo_guion %}
         {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
            <template> del detalle, cuyos <script> clonados nunca corren) para
@@ -402,7 +418,10 @@
               {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
               <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> Generar también la versión B (dos videos)</label>
               {% endif %}
-              <button type="submit" class="btn-guardar btn-sm fp-generar-btn">{% if item.estado == "error" %}Reintentar{% else %}Generar{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
+              {% if item.estado == "prompt_listo" %}
+              <p class="vacio" style="padding:0;font-size:.75rem;color:#0088cc;margin-bottom:.4rem;">👆 Revisa el prompt arriba antes de generar</p>
+              {% endif %}
+              <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}Reintentar{% elif item.estado == "prompt_listo" %}Generar video{% else %}Generar{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
             </form>
             {% endif %}
             {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
