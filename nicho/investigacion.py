@@ -1,10 +1,15 @@
 """
-State machine para Nicho Parte 3 (investigación automática).
+State machine pura para Nicho Parte 3 (spec §1, §2, §5–§6).
 
 Funciones puras que leen/escriben el diccionario extra.investigacion.
 El worker y Flask usan estas para avanzar la cadena sin lógica duplicada.
+
+Las tres tareas principales (consultas, buscar, seleccionar) caen en
+max_intentos=2 (Claude, barato); búsquedas y reseñas en max_intentos=1
+(Apify, de pago).
 """
-from typing import Optional
+from datetime import datetime
+from typing import Optional, Dict, Any, List
 
 # ------ Enums y constantes ------
 
@@ -41,40 +46,51 @@ PLATAFORMAS_POR_PAIS = {
     "tiktok_shop": {"*": None}  # worldwide
 }
 
-
 # ------ API pura ------
 
-def siguiente_paso(investigacion: dict) -> Optional[str]:
+def siguiente_paso(investigacion: Dict[str, Any]) -> Optional[str]:
     """
     Lee investigacion.estado y pasos. Devuelve el próximo paso pendiente o None.
+
     Lógica:
     - Si estado es detenida/interrumpida/lista: None (no avanzar)
+    - Si estado es en_curso (ej "buscando"), devuelve el paso activo
     - Si un paso de la cadena está pendiente, devuelve ése (en orden)
-    - Si todos están hechos, devuelve None
+    - Si todos están hechos o ausentes, devuelve None
     """
     estado = investigacion.get("estado")
     pasos = investigacion.get("pasos", {})
-    
+
     if estado in ("lista", "detenida", "interrumpida"):
         return None
-    
+
     # Recorrer la cadena en orden
     for paso in PASOS_CADENA:
         info = pasos.get(paso, {})
         paso_estado = info.get("estado")
-        
+
         if paso_estado is None:  # nunca hecho
             return paso
         elif paso_estado == "en_curso":  # retomar este
             return paso
         # else: "hecho", "error", "vacio" -> continuar
-    
+
     return None  # todos hechos
 
 
-def marcar_paso(investigacion: dict, paso: str, estado: str, **kwargs) -> dict:
+def marcar_paso(investigacion: Dict[str, Any], paso: str, estado: str, **kwargs) -> Dict[str, Any]:
     """
-    Crea una copia con pasos[paso].estado actualizado + kwargs adicionales.
+    Crea una copia con pasos[paso].estado actualizado + kwargs adicionales
+    (usd, productos, relevantes, resenas, aviso, etc).
+
+    Args:
+        investigacion: dict actual de investigacion
+        paso: nombre del paso (ej "consultas", "buscar:amazon")
+        estado: "hecho", "en_curso", "error", "vacio"
+        **kwargs: campos adicionales (usd, productos, etc)
+
+    Returns:
+        investigacion con pasos actualizado
     """
     inv = dict(investigacion)
     pasos = dict(inv.get("pasos", {}))
@@ -83,16 +99,16 @@ def marcar_paso(investigacion: dict, paso: str, estado: str, **kwargs) -> dict:
     return inv
 
 
-def resumen(investigacion: dict) -> dict:
+def resumen(investigacion: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Construye un dict con todo lo que la UI necesita para mostrar el resumen.
+    Construye un dict con todo lo que la UI necesita para mostrar
+    el resumen: consultas usadas, productos por plataforma, etc.
     """
     consultas = investigacion.get("consultas", [])
     pasos = investigacion.get("pasos", {})
     gastado = investigacion.get("gastado_usd", 0)
     aprobado = investigacion.get("aprobado_usd", 0)
-    estado = investigacion.get("estado", "")
-    
+
     # Contar productos y relevantes por plataforma
     productos_total = 0
     relevantes_total = 0
@@ -101,16 +117,17 @@ def resumen(investigacion: dict) -> dict:
             productos_total += info.get("productos", 0)
         elif paso == "seleccionar":
             relevantes_total = info.get("relevantes", 0)
-    
+
     return {
         "consultas": consultas,
         "productos": productos_total,
         "relevantes": relevantes_total,
         "gastado": gastado,
         "aprobado": aprobado,
-        "estado": estado,
         "detenida_por": investigacion.get("detenida_por"),
-        "pasos": pasos
+        "pasos": pasos,
+        "estado": investigacion.get("estado"),
+        "ultimo_error": investigacion.get("ultimo_error")
     }
 
 
@@ -119,53 +136,96 @@ def puede_reanudar(estado: str) -> bool:
     return estado in ("detenida", "interrumpida")
 
 
-def estimar(estudio: dict, pais: str, plataformas: list, redes: list, topes: dict) -> dict:
+def estimar(estudio: Dict[str, Any], pais: str, plataformas: List[str],
+            redes: List[str], topes: Dict[str, int]) -> Dict[str, Any]:
     """
-    Devuelve desglose de costos.
-    {"filas": [...], "claude_usd", "avatares_usd", "total_usd"}
+    Devuelve desglose de costos:
+    {"filas": [{"clave", "nombre", "busqueda_usd", "resenas_usd"}],
+     "claude_usd", "avatares_usd", "total_usd", "texto"}
+
+    Args:
+        estudio: dict con el estudio (pais puede venir del estudio o del param)
+        pais: código de país (ej "SE", "CO")
+        plataformas: list["amazon", "meli", "tiktok_shop"]
+        redes: list["reddit", "youtube"]
+        topes: dict con limites (consultas, productos_por_consulta, etc)
+
+    Returns:
+        dict con estructura de costos
     """
+    from nicho.fuentes import plataformas as plat_module
+
     filas = []
     total = 0.0
-    
-    # Cada plataforma: búsqueda + reseñas
-    for plat in plataformas:
-        busqueda = 0.15
-        resenas = 1.20
+
+    # Iterar plataformas y estimar costos
+    for plat_clave in plataformas:
+        busqueda_usd = plat_module.estimar_busqueda(
+            plat_clave,
+            topes.get("consultas", TOPES_DEFECTO["consultas"]),
+            topes.get("productos_por_consulta", TOPES_DEFECTO["productos_por_consulta"])
+        )
+        resenas_usd = plat_module.estimar_resenas(
+            plat_clave,
+            topes.get("productos_elegidos", TOPES_DEFECTO["productos_elegidos"]),
+            topes.get("resenas_por_producto", TOPES_DEFECTO["resenas_por_producto"])
+        )
+
         filas.append({
-            "clave": plat, "nombre": plat.replace("_", " ").title(),
-            "busqueda_usd": busqueda, "resenas_usd": resenas,
+            "clave": plat_clave,
+            "nombre": plat_module.PLATAFORMAS.get(plat_clave, {}).get("nombre", plat_clave.title()),
+            "busqueda_usd": round(busqueda_usd, 2),
+            "resenas_usd": round(resenas_usd, 2),
             "texto": f"Búsqueda + reseñas"
         })
-        total += busqueda + resenas
-    
-    # Claude: consultas + selección
-    claude = 0.05
-    total += claude
-    
-    # Avatares
-    avatares = 1.20
-    total += avatares
-    
+        total += busqueda_usd + resenas_usd
+
+    # Claude: consultas (~$0.03) + selección (~$0.02)
+    claude_usd = 0.05
+    total += claude_usd
+
+    # Avatares: ~US$ 1.20
+    avatares_usd = 1.20
+    total += avatares_usd
+
     return {
         "filas": filas,
-        "claude_usd": claude,
-        "avatares_usd": avatares,
+        "claude_usd": round(claude_usd, 2),
+        "avatares_usd": round(avatares_usd, 2),
         "total_usd": round(total, 2),
-        "texto": f"Investigación: {len(plataformas)} plataforma(s)"
+        "texto": f"Investigación: {len(plataformas)} plataforma(s), {len(redes)} red(es)"
     }
 
 
-def inicializar() -> dict:
-    """Crea un dict investigacion vacío."""
+def crear_inicial(tema: str, pais: str, plataformas: List[str],
+                  redes: List[str], topes: Dict[str, int]) -> Dict[str, Any]:
+    """
+    Crea el dict inicial de investigacion antes de encolar.
+
+    Args:
+        tema: descripción del nicho
+        pais: código de país
+        plataformas: list de plataformas seleccionadas
+        redes: list de redes sociales seleccionadas
+        topes: dict con limites de búsqueda
+
+    Returns:
+        dict investigacion listo para guardar en estudio.extra
+    """
+    ahora = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+
     return {
         "version": 1,
-        "estado": "",
+        "estado": "consultas",
+        "tema": tema,
+        "pais": pais,
+        "plataformas": plataformas,
+        "redes": redes,
+        "topes": topes,
         "consultas": [],
-        "plataformas": [],
-        "redes": [],
         "pasos": {},
+        "creado_en": ahora,
+        "actualizado_en": ahora,
         "gastado_usd": 0.0,
-        "aprobado_usd": 0.0,
-        "ultimo_error": None,
-        "detenida_por": None
+        "aprobado_usd": estimar({}, pais, plataformas, redes, topes).get("total_usd", 0.0)
     }
