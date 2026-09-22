@@ -25,9 +25,9 @@
 
 <details class="swap-card" id="nuevo-sprint" {% if not sprints_lista %}open{% endif %}>
   <summary class="swap-card-resumen">+ Nuevo sprint</summary>
-  {% if not personas_sprint or not productos_sprint or not temporadas_sprint %}
+  {% if not personas_sprint or not productos_sprint %}
   <p class="tag-estado sprint-aviso">Para armar la matriz hacen falta
-    {% if not personas_sprint %}personas{% endif %}{% if not productos_sprint %} · productos en el catálogo{% endif %}{% if not temporadas_sprint %} · temporadas{% endif %}. Créalos más abajo.</p>
+    {% if not personas_sprint %}personas{% endif %}{% if not productos_sprint %} · productos en el catálogo{% endif %}. Créalos primero.</p>
   {% else %}
   <form method="post" action="{{ url_for('sprints.crear', cliente=cliente) }}" id="form-sprint"
         data-estimado-video="{{ estimado_sprint.video }}" data-estimado-imagen="{{ estimado_sprint.imagen }}">

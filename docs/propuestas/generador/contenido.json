@@ -1,0 +1,413 @@
+{
+  "meta": {
+    "numero": "PC-2026-002",
+    "ciudad_fecha": "[Ciudad], 12 de septiembre de 2026",
+    "fecha": "12 de septiembre de 2026",
+    "titulo": "Propuesta comercial",
+    "subtitulo": "Servicio de producción mensual de contenido audiovisual con inteligencia artificial para redes sociales",
+    "cliente": "[Nombre del cliente]",
+    "cliente_desc": "Empresa dedicada a la comercialización e instalación de vidrios y espejos",
+    "proveedor": "Creatv Grow",
+    "proveedor_desc": "Producción de contenido con inteligencia artificial",
+    "razon_social": "[Razón social del proveedor]",
+    "nit": "NIT [número]",
+    "contacto": "Daniel Colorado",
+    "cargo": "[Cargo]",
+    "correo": "[correo electrónico]",
+    "telefono": "[teléfono]",
+    "web": "app.creatvmachine.com",
+    "vigencia": "15 días calendario",
+    "valor": "$ 3.000.000",
+    "moneda": "COP",
+    "periodo": "mensual"
+  },
+  "carta": {
+    "destinatario": [
+      "Señores",
+      "[NOMBRE DEL CLIENTE]",
+      "Atención: [Nombre del contacto], [Cargo]",
+      "[Ciudad]"
+    ],
+    "asunto": "Propuesta comercial para el servicio de producción mensual de contenido audiovisual con inteligencia artificial.",
+    "saludo": "Respetados señores:",
+    "parrafos": [
+      "Por medio de la presente, Creatv Grow somete a su consideración la propuesta comercial para la prestación del servicio de producción mensual de contenido audiovisual para redes sociales, generado con inteligencia artificial y ajustado a la identidad de su marca.",
+      "El servicio contempla la entrega mensual de aproximadamente treinta (30) videos cortos, junto con imágenes de apoyo, con un mínimo garantizado de treinta (30) piezas, producidas bajo un esquema de aprobación previa por parte de su empresa en cada etapa del proceso, de manera que ninguna pieza se produce ni se entrega sin su autorización.",
+      "En el presente documento se describen el objeto, el alcance, la metodología, los entregables, el valor y las condiciones comerciales del servicio. Quedamos atentos a resolver cualquier inquietud y agradecemos la oportunidad de presentar esta propuesta."
+    ],
+    "despedida": "Cordialmente,",
+    "firmante": [
+      "Daniel Colorado",
+      "[Cargo]",
+      "Creatv Grow"
+    ]
+  },
+  "secciones": [
+    {
+      "titulo": "Alcance del servicio",
+      "bloques": [
+        {
+          "sub": "Servicios incluidos",
+          "bloques": [
+            {
+              "lista": [
+                "Producción mensual de aproximadamente treinta (30) videos cortos e imágenes de apoyo, con un mínimo garantizado de treinta (30) piezas.",
+                "Construcción de la guía de estilo de marca (colores, escenarios, tono y restricciones) durante el primer mes, aplicada de forma automática a todas las piezas.",
+                "Definición de personajes y escenarios propios de la marca (vocero, showroom, obras terminadas), consistentes entre piezas.",
+                "Integración de los productos de EL CLIENTE (espejos, vidrio templado, divisiones de baño, ventanería y fachadas) en las escenas generadas.",
+                "Texto sugerido de publicación para cada pieza.",
+                "Acceso a la plataforma Creatv Grow con usuario propio para revisar, aprobar, rechazar y descargar las piezas.",
+                "Calendario mensual de ideas de contenido.",
+                "Reemplazo de las piezas rechazadas dentro del volumen mensual, sin costo adicional.",
+                "Acompañamiento por correo electrónico y WhatsApp en horario hábil."
+              ]
+            }
+          ]
+        },
+        {
+          "sub": "Servicios no incluidos",
+          "bloques": [
+            {
+              "lista": [
+                "Publicación del contenido en redes sociales (ver numeral 1.3).",
+                "Pauta publicitaria e inversión en anuncios.",
+                "Fotografía o grabación en sitio.",
+                "Gestión de comunidad (respuesta a comentarios y mensajes).",
+                "Diseño de logotipo o identidad corporativa."
+              ]
+            }
+          ]
+        },
+        {
+          "sub": "Publicación del contenido",
+          "bloques": [
+            {
+              "p": "Durante la presente etapa del servicio, la publicación de las piezas en las cuentas de Facebook, Instagram y demás redes sociales estará a cargo de EL CLIENTE, quien las descargará desde la plataforma en formatos listos para publicar. La funcionalidad de publicación directa desde la plataforma se encuentra en desarrollo y se habilitará conforme a lo indicado en el numeral 4."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Entregables",
+      "bloques": [
+        {
+          "tabla": {
+            "cols": [
+              "Entregable",
+              "Descripción",
+              "Cantidad y periodicidad"
+            ],
+            "anchos": [
+              22,
+              50,
+              28
+            ],
+            "filas": [
+              [
+                "Videos cortos",
+                "Formato vertical 9:16, duración de 5 a 10 segundos, archivo MP4 apto para Reels, Stories, TikTok y YouTube Shorts.",
+                "Aproximadamente 30 por mes"
+              ],
+              [
+                "Imágenes",
+                "Piezas para el feed y las historias, en formato JPG o PNG.",
+                "Las necesarias para completar el mínimo de 30 piezas mensuales"
+              ],
+              [
+                "Guía de estilo de marca",
+                "Documento con colores, escenarios, tono y restricciones, aprobado por EL CLIENTE.",
+                "Una (1), durante el primer mes"
+              ],
+              [
+                "Personajes y escenarios",
+                "Referencias visuales aprobadas del vocero de marca, el showroom y las obras terminadas.",
+                "Definidos en el primer mes; ajustables"
+              ],
+              [
+                "Texto sugerido de publicación",
+                "Texto corto en el tono de la marca para acompañar cada pieza.",
+                "Uno por pieza"
+              ],
+              [
+                "Calendario de ideas",
+                "Listado de temas y formatos propuestos para el mes.",
+                "Uno por mes"
+              ],
+              [
+                "Acceso a la plataforma",
+                "Usuario y contraseña para la aprobación y descarga de las piezas.",
+                "Durante la vigencia del servicio"
+              ]
+            ]
+          }
+        },
+        {
+          "p": "Las piezas se entregan semanalmente a través de la plataforma, hasta completar el volumen del mes, en formatos listos para su publicación."
+        }
+      ]
+    },
+    {
+      "titulo": "Metodología de trabajo",
+      "bloques": [
+        {
+          "sub": "Etapa de implementación (primer mes)",
+          "bloques": [
+            {
+              "pasos": [
+                "Reunión de inicio, de una (1) hora, para definir la guía de estilo, los personajes y las primeras ideas.",
+                "Recopilación del material de marca suministrado por EL CLIENTE.",
+                "Construcción y aprobación de la guía de estilo y de los personajes.",
+                "Producción de las primeras piezas para aprobación, dentro de los diez (10) días hábiles siguientes a la reunión de inicio."
+              ]
+            }
+          ]
+        },
+        {
+          "sub": "Ciclo de producción de cada pieza",
+          "bloques": [
+            {
+              "tabla": {
+                "cols": [
+                  "Etapa",
+                  "Actividad",
+                  "Aprueba"
+                ],
+                "anchos": [
+                  18,
+                  62,
+                  20
+                ],
+                "numerada": true,
+                "filas": [
+                  [
+                    "Idea",
+                    "EL PROVEEDOR propone un calendario mensual de ideas (productos, instalaciones antes y después, consejos de cuidado, tendencias de decoración, promociones). EL CLIENTE puede incorporar las suyas.",
+                    "EL CLIENTE"
+                  ],
+                  [
+                    "Guion",
+                    "Para cada idea aprobada se generan cinco (5) propuestas de escena.",
+                    "EL CLIENTE elige una"
+                  ],
+                  [
+                    "Imagen candidata",
+                    "Se produce la imagen base de la escena elegida.",
+                    "EL CLIENTE"
+                  ],
+                  [
+                    "Video final",
+                    "Se genera el video únicamente a partir de la imagen aprobada.",
+                    "EL CLIENTE"
+                  ],
+                  [
+                    "Entrega",
+                    "La pieza aprobada queda disponible para descarga en la plataforma.",
+                    "No aplica"
+                  ]
+                ]
+              }
+            },
+            {
+              "p": "Cada etapa requiere la aprobación expresa de EL CLIENTE a través de la plataforma. Ninguna pieza avanza a la etapa siguiente, ni se entrega, sin dicha aprobación."
+            }
+          ]
+        },
+        {
+          "sub": "Rechazos y ajustes",
+          "bloques": [
+            {
+              "p": "Las piezas rechazadas en cualquier etapa se reemplazan dentro del volumen del mes, sin costo adicional para EL CLIENTE. Las solicitudes de ajuste se gestionan a través de la misma plataforma."
+            }
+          ]
+        },
+        {
+          "sub": "Tiempos de respuesta",
+          "bloques": [
+            {
+              "lista": [
+                "Primeras piezas para aprobación: dentro de los diez (10) días hábiles siguientes a la reunión de inicio.",
+                "Entregas: semanales, hasta completar el volumen del mes.",
+                "Aprobaciones de EL CLIENTE: dentro de los dos (2) días hábiles siguientes a cada solicitud, a fin de mantener el ritmo de producción.",
+                "Acompañamiento: días hábiles, en horario de oficina."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Evolución de la plataforma",
+      "bloques": [
+        {
+          "p": "El plan contratado incluye el acceso a las nuevas funcionalidades de la plataforma Creatv Grow a medida que sean liberadas, sin costo adicional. Las siguientes funcionalidades se encuentran en desarrollo:"
+        },
+        {
+          "lista_titulada": [
+            [
+              "Publicación directa en Meta",
+              "Conexión de las cuentas de Facebook e Instagram para publicar o programar las piezas desde la plataforma; posteriormente, TikTok y YouTube Shorts."
+            ],
+            [
+              "Diagnóstico de desempeño",
+              "Lectura de alcance, interacción y resultados por publicación, con recomendaciones sobre los formatos y temas a producir."
+            ],
+            [
+              "Contenido para pauta",
+              "Creación de anuncios a partir de las piezas producidas y lanzamiento de campañas desde la plataforma, con seguimiento de inversión y resultados."
+            ],
+            [
+              "Catálogo de productos",
+              "Carga de fotografías reales de los productos de EL CLIENTE para su inclusión en las escenas."
+            ],
+            [
+              "Calendario editorial",
+              "Planeación del mes completo con fechas, formatos y estado de cada pieza."
+            ]
+          ]
+        },
+        {
+          "p": "EL PROVEEDOR informará a EL CLIENTE la disponibilidad de cada funcionalidad. Las fechas de liberación son estimadas y no constituyen una obligación contractual. Los servicios de terceros asociados, como la inversión en pauta, serán asumidos por EL CLIENTE."
+        }
+      ]
+    },
+    {
+      "titulo": "Valor y forma de pago",
+      "bloques": [
+        {
+          "sub": "Valor del servicio",
+          "bloques": [
+            {
+              "precio": {
+                "filas": [
+                  [
+                    "Plan mensual de contenido con inteligencia artificial (numerales 1 y 2)",
+                    "$ 3.000.000"
+                  ]
+                ],
+                "total": [
+                  "Valor mensual",
+                  "$ 3.000.000 COP"
+                ],
+                "nota": "Valores expresados en pesos colombianos. No incluyen IVA; en caso de aplicar, se liquidará en la factura correspondiente conforme al régimen tributario vigente."
+              }
+            },
+            {
+              "p": "El valor incluye la producción descrita, la implementación inicial (guía de estilo, personajes y configuración de la plataforma), los créditos de generación necesarios para el volumen indicado y el acceso a la plataforma."
+            }
+          ]
+        },
+        {
+          "sub": "Forma de pago",
+          "bloques": [
+            {
+              "lista": [
+                "Facturación mensual anticipada. El periodo de producción inicia con la confirmación del pago.",
+                "Pago dentro de los cinco (5) días calendario siguientes a la emisión de la factura o cuenta de cobro, mediante transferencia bancaria a la cuenta indicada en el documento.",
+                "El primer pago se realiza a la aceptación de la propuesta y da inicio a la etapa de implementación."
+              ]
+            }
+          ]
+        },
+        {
+          "sub": "Volumen adicional",
+          "bloques": [
+            {
+              "p": "Si en un mes determinado EL CLIENTE requiere un volumen superior al contratado, EL PROVEEDOR presentará una cotización específica antes de iniciar la producción adicional."
+            }
+          ]
+        },
+        {
+          "sub": "Reajuste",
+          "bloques": [
+            {
+              "p": "El valor se mantendrá durante los primeros doce (12) meses de servicio. A partir del segundo año podrá reajustarse anualmente de común acuerdo, tomando como referencia el Índice de Precios al Consumidor (IPC) certificado por el DANE."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Condiciones comerciales",
+      "bloques": [
+        {
+          "sub": "Vigencia de la propuesta",
+          "bloques": [
+            {
+              "p": "La presente propuesta tiene una vigencia de quince (15) días calendario contados a partir de su fecha de emisión."
+            }
+          ]
+        },
+        {
+          "sub": "Duración y terminación",
+          "bloques": [
+            {
+              "p": "El servicio se contrata por periodos mensuales con renovación automática. Cualquiera de las partes podrá darlo por terminado mediante comunicación escrita con una antelación mínima de treinta (30) días calendario, sin lugar a penalidad. Las piezas aprobadas y pagadas hasta la fecha de terminación serán entregadas en su totalidad."
+            }
+          ]
+        },
+        {
+          "sub": "Obligaciones de EL CLIENTE",
+          "bloques": [
+            {
+              "lista": [
+                "Suministrar el logotipo, los colores y el material de marca disponible, así como entre diez (10) y veinte (20) fotografías de productos, instalaciones y showroom.",
+                "Designar una persona de contacto con facultad para aprobar las piezas en los plazos indicados.",
+                "Publicar el contenido en sus propias cuentas durante la presente etapa.",
+                "Garantizar que el material suministrado es de su propiedad o cuenta con las autorizaciones necesarias para su uso."
+              ]
+            }
+          ]
+        },
+        {
+          "sub": "Propiedad y uso del contenido",
+          "bloques": [
+            {
+              "p": "Las piezas aprobadas y pagadas podrán ser utilizadas por EL CLIENTE en sus canales propios sin límite de tiempo. La plataforma Creatv Grow, sus flujos de trabajo, configuraciones y desarrollos son propiedad de EL PROVEEDOR y no se transfieren con esta propuesta."
+            }
+          ]
+        },
+        {
+          "sub": "Contenido generado con inteligencia artificial",
+          "bloques": [
+            {
+              "p": "EL CLIENTE reconoce que las piezas se producen con herramientas de inteligencia artificial y que, salvo las fotografías que él mismo suministre, las imágenes y videos son representaciones generadas y no fotografías reales de sus productos o instalaciones. EL PROVEEDOR aplicará la guía de estilo aprobada y el esquema de aprobación por etapas, de modo que cada pieza cuente con la conformidad de EL CLIENTE antes de su entrega."
+            }
+          ]
+        },
+        {
+          "sub": "Confidencialidad",
+          "bloques": [
+            {
+              "p": "Las partes mantendrán la confidencialidad de la información comercial, técnica y de marca a la que tengan acceso con ocasión del servicio, y la utilizarán exclusivamente para los fines de esta propuesta."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "titulo": "Aceptación",
+      "bloques": [
+        {
+          "p": "En señal de aceptación de la presente propuesta y de sus condiciones, firman:"
+        },
+        {
+          "firmas": {
+            "partes": [
+              "Por EL CLIENTE",
+              "Por EL PROVEEDOR"
+            ],
+            "campos": [
+              "Nombre",
+              "Documento de identidad o NIT",
+              "Cargo",
+              "Empresa",
+              "Fecha",
+              "Firma"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
