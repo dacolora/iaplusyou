@@ -440,11 +440,8 @@ def investigacion_iniciar(cliente, eid):
             datos.actualizar_estudio(cliente, eid, pais=pais)
         
         # Inicializar investigación
-        inv_nueva = investigacion.inicializar()
-        inv_nueva["estado"] = "consultas"
-        inv_nueva["pais"] = pais
-        inv_nueva["plataformas"] = plataformas
-        inv_nueva["redes"] = redes
+        inv_nueva = investigacion.crear_inicial(est.get("tema", ""), pais, plataformas, redes,
+                                               investigacion.TOPES_DEFECTO)
         inv_nueva["aprobado_usd"] = presupuesto_usd
         
         # Guardar en BD
