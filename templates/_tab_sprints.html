@@ -37,15 +37,14 @@
         <label>Nombre <input name="nombre" required maxlength="200" placeholder="Sprint octubre"></label>
         <label>Inicio <input type="date" name="inicio" required></label>
         <label>Fin <input type="date" name="fin" required></label>
-        <label>Referencias por campaña <input type="number" name="referencias_objetivo" value="5" min="1" class="mini-input"></label>
       </div>
+      <label>Descripción <textarea name="notas" rows="3" placeholder="Qué se va a hacer, contexto, etc."></textarea></label>
       <div class="fe-destinos checks-plataformas" style="display: none">
         <span class="campo-label">Destinos (idioma · país)</span>
         {% for d in destinos_sprint %}
         <label class="fe-destino"><input type="checkbox" name="destinos" value="{{ d.codigo }}" {% if d.codigo == "es_CO" %}checked{% endif %}> {{ d.bandera }} {{ d.nombre }} <small>({{ d.idioma }})</small></label>
         {% endfor %}
       </div>
-      <label>Notas <textarea name="notas" rows="2"></textarea></label>
       <button type="button" class="btn-generar btn-sm" data-ir="2">Siguiente: la matriz →</button>
     </fieldset>
 
@@ -111,120 +110,6 @@
   </form>
   {% endif %}
 </details>
-
-<h3 class="sprint-subtitulo">Personas</h3>
-<div class="sprints-personas">
-  {% for p in personas_sprint %}
-  <details class="swap-card sprint-persona">
-    <summary class="swap-card-resumen"><span class="sprint-punto" style="background: {{ p.color or 'var(--accent)' }}"></span> <strong>{{ p.nombre }}</strong>
-      <small class="vacio">{{ p.resumen }}{% if p.edad_rango %} · {{ p.edad_rango }}{% endif %}{% if p.origen == "sugerida_ia" %} · sugerida por IA{% endif %}{% if p.origen == "investigada" %} · investigada (con evidencia){% endif %}</small></summary>
-    <form method="post" action="{{ url_for('sprints.persona_editar', cliente=cliente, pid=p.id) }}" class="form-experimento">
-      <div class="fe-opciones">
-        <label>Nombre <input name="nombre" value="{{ p.nombre }}" required></label>
-        <label>Resumen <input name="resumen" value="{{ p.resumen or '' }}" maxlength="200"></label>
-        <label>Edad <input name="edad_rango" value="{{ p.edad_rango or '' }}" placeholder="30-45" class="mini-input"></label>
-        <label>Color <input type="color" name="color" value="{{ p.color or '#4d8dff' }}"></label>
-      </div>
-      <label>Descripción (quién es, qué le importa, qué le duele) <textarea name="descripcion" rows="3">{{ p.descripcion or '' }}</textarea></label>
-      <label>Tono (cómo hablarle) <input name="tono" value="{{ p.tono or '' }}"></label>
-      <label>Señales visuales (separadas por coma) <input name="senales_visuales" value="{{ (p.senales_visuales or []) | join(', ') }}"></label>
-      <label>Palabras clave <input name="palabras_clave" value="{{ (p.palabras_clave or []) | join(', ') }}"></label>
-      <div class="acciones">
-        <button type="submit" class="btn-generar btn-sm">Guardar</button>
-        <button type="submit" class="btn-sm btn-peligro" formaction="{{ url_for('sprints.persona_archivar', cliente=cliente, pid=p.id) }}">Archivar</button>
-      </div>
-    </form>
-  </details>
-  {% else %}<p class="vacio">Sin personas todavía.</p>{% endfor %}
-</div>
-<div class="acciones">
-  <details class="swap-card inline">
-    <summary class="swap-card-resumen">+ Nueva persona</summary>
-    <form method="post" action="{{ url_for('sprints.persona_crear', cliente=cliente) }}" class="form-experimento">
-      <div class="fe-opciones">
-        <label>Nombre <input name="nombre" required placeholder="Cliente Premium"></label>
-        <label>Resumen <input name="resumen" maxlength="200" placeholder="Busca calidad y diseño"></label>
-        <label>Edad <input name="edad_rango" placeholder="30-45" class="mini-input"></label>
-        <label>Color <input type="color" name="color" value="#4d8dff"></label>
-      </div>
-      <label>Descripción <textarea name="descripcion" rows="3"></textarea></label>
-      <label>Tono <input name="tono" placeholder="cercano y experto"></label>
-      <label>Señales visuales (coma) <input name="senales_visuales" placeholder="cocina moderna, luz natural"></label>
-      <label>Palabras clave (coma) <input name="palabras_clave"></label>
-      <button type="submit" class="btn-generar btn-sm">Crear persona</button>
-    </form>
-  </details>
-  <form method="post" action="{{ url_for('sprints.personas_sugerir', cliente=cliente) }}" class="inline">
-    <input type="hidden" name="cuantas" value="3">
-    <button type="submit" class="btn-sm" {% if trabajo_sugerir %}disabled{% endif %}>Sugerir personas con IA</button>
-  </form>
-  {% if trabajo_sugerir %}
-  <div class="barra-progreso" id="trabajo-{{ trabajo_sugerir.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
-  <script>iniciarPolling({{ trabajo_sugerir.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_sugerir.job_id) | tojson }});</script>
-  {% endif %}
-</div>
-
-<h3 class="sprint-subtitulo">Temporadas</h3>
-<div class="sprints-temporadas">
-  {% for t in temporadas_sprint %}
-  <details class="swap-card sprint-temporada">
-    <summary class="swap-card-resumen"><strong>{{ t.nombre }}</strong> <small class="vacio">{{ t.inicio }} → {{ t.fin }} · {{ t.tipo }}</small>
-      <span class="sprint-paleta">{% for c in (t.mood_visual or {}).get("paleta", []) %}<span style="background: {{ c }}" title="{{ c }}"></span>{% endfor %}</span></summary>
-    <form method="post" action="{{ url_for('sprints.temporada_editar', cliente=cliente, tid=t.id) }}" class="form-experimento">
-      <div class="fe-opciones">
-        <label>Nombre <input name="nombre" value="{{ t.nombre }}" required></label>
-        <label>Inicio <input type="date" name="inicio" value="{{ t.inicio }}"></label>
-        <label>Fin <input type="date" name="fin" value="{{ t.fin }}"></label>
-        <label>Tipo <select name="tipo">{% for tt in tipos_temporada %}<option value="{{ tt }}" {% if tt == t.tipo %}selected{% endif %}>{{ tt }}</option>{% endfor %}</select></label>
-      </div>
-      <label>Contexto <textarea name="contexto" rows="2">{{ t.contexto or '' }}</textarea></label>
-      <div class="fe-opciones">
-        <label>Paleta (hex, coma) <input name="paleta" value="{{ (t.mood_visual or {}).get('paleta', []) | join(', ') }}"></label>
-        <label>Luz <input name="luz" value="{{ (t.mood_visual or {}).get('luz', '') }}"></label>
-        <label>Elementos (coma) <input name="elementos" value="{{ (t.mood_visual or {}).get('elementos', []) | join(', ') }}"></label>
-      </div>
-      <div class="acciones">
-        <button type="submit" class="btn-generar btn-sm">Guardar</button>
-        <button type="submit" class="btn-sm btn-peligro" formaction="{{ url_for('sprints.temporada_archivar', cliente=cliente, tid=t.id) }}">Archivar</button>
-      </div>
-    </form>
-  </details>
-  {% else %}<p class="vacio">Sin temporadas todavía. Adopta una del calendario o crea la tuya.</p>{% endfor %}
-</div>
-<div class="sprint-calendario">
-  <form method="post" action="{{ url_for('sprints.calendario_pais', cliente=cliente) }}" class="inline">
-    <label>Calendario comercial de
-      <select name="pais" onchange="this.form.submit()">{% for p in paises_calendario %}<option value="{{ p }}" {% if p == pais_calendario %}selected{% endif %}>{{ p }}</option>{% endfor %}</select>
-    </label>
-    {% if calendario_fallback %}<small class="vacio">(este país no tiene calendario propio; se muestra el de Colombia)</small>{% endif %}
-  </form>
-  <div class="sprint-presets">
-    {% for pr in presets_temporadas %}
-    <form method="post" action="{{ url_for('sprints.temporada_adoptar', cliente=cliente) }}" class="inline">
-      <input type="hidden" name="clave" value="{{ pr.clave }}">
-      <button type="submit" class="btn-xs" title="{{ pr.inicio }} → {{ pr.fin }}">+ {{ pr.nombre }}</button>
-    </form>
-    {% endfor %}
-  </div>
-  <details class="swap-card inline">
-    <summary class="swap-card-resumen">+ Nueva temporada propia</summary>
-    <form method="post" action="{{ url_for('sprints.temporada_crear', cliente=cliente) }}" class="form-experimento">
-      <div class="fe-opciones">
-        <label>Nombre <input name="nombre" required placeholder="Lanzamiento línea baño"></label>
-        <label>Inicio <input type="date" name="inicio" required></label>
-        <label>Fin <input type="date" name="fin" required></label>
-        <label>Tipo <select name="tipo">{% for tt in tipos_temporada %}<option value="{{ tt }}" {% if tt == "propia" %}selected{% endif %}>{{ tt }}</option>{% endfor %}</select></label>
-      </div>
-      <label>Contexto (qué pasa, qué se vende, qué emoción) <textarea name="contexto" rows="2"></textarea></label>
-      <div class="fe-opciones">
-        <label>Paleta (hex, coma) <input name="paleta" placeholder="#1B2A41, #F2C14E"></label>
-        <label>Luz <input name="luz" placeholder="cálida, de tarde"></label>
-        <label>Elementos (coma) <input name="elementos"></label>
-      </div>
-      <button type="submit" class="btn-generar btn-sm">Crear temporada</button>
-    </form>
-  </details>
-</div>
 
 <script>
   (function () {
