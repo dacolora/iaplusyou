@@ -35,13 +35,51 @@ TIPOS_PIEZA = ("video", "imagen")
 ESTADOS_IDEA = ("propuesta", "aprobada", "descartada")
 REVISIONES = ("pendiente", "aprobada", "rechazada")
 PLATAFORMAS = ("instagram", "tiktok", "facebook", "youtube")
+FUNNELS = ("tof", "mof", "bof")
+FUNNELS_NOMBRE = {"tof": "Top of Funnel", "mof": "Middle of Funnel", "bof": "Bottom of Funnel"}
+
+PERSONAJES_PREDETERMINADOS = [
+    {
+        "nombre": "Melissa",
+        "resumen": "Thoughtful Giver",
+        "descripcion": "30-50 años, principalmente mujeres (70%), viviendo en áreas suburbanas o urbanas. Buscan equilibrar familia, trabajo y vida social.",
+        "edad_rango": "30-50",
+        "tono": "Thoughtful, caring, reliable",
+        "senales_visuales": ["Comfort", "Practical", "Warm"],
+        "palabras_clave": ["Thoughtful gifts", "comfort", "personal", "genuine"],
+        "color": "#6C5CE7",
+        "origen": "manual",
+    },
+    {
+        "nombre": "Marijke",
+        "resumen": "Graceful Ageless",
+        "descripcion": "Mujer de 60-75 años, jubilada o semi-jubilada, viviendo en área tranquila suburbana o rural. Activa a través de jardinería, caminatas y tiempo con familia.",
+        "edad_rango": "60-75",
+        "tono": "Stylish, independent, graceful",
+        "senales_visuales": ["Elegant", "Quality", "Timeless"],
+        "palabras_clave": ["Comfort", "style", "independence", "quality"],
+        "color": "#00B894",
+        "origen": "manual",
+    },
+    {
+        "nombre": "Sophia",
+        "resumen": "Busy Mom",
+        "descripcion": "Mujer de 32-45 años viviendo en vecindario suburbano, balanceando trabajo de tiempo completo o parcial con vida familiar. Constantemente en movimiento cuidando a sus hijos.",
+        "edad_rango": "32-45",
+        "tono": "Reliable, composed, nurturing, capable",
+        "senales_visuales": ["Practical", "Comfortable", "Strong"],
+        "palabras_clave": ["Reliable", "comfort", "support", "practical"],
+        "color": "#FDCB6E",
+        "origen": "manual",
+    },
+]
 
 _PERSONA_COLS = ("nombre", "resumen", "descripcion", "edad_rango", "tono", "senales_visuales", "palabras_clave",
                  "color", "origen", "archivada", "extra")
 _TEMPORADA_COLS = ("nombre", "inicio", "fin", "contexto", "mood_visual", "tipo", "archivada", "extra")
 _SPRINT_COLS = ("nombre", "inicio", "fin", "estado", "destinos", "referencias_objetivo_defecto", "notas",
                 "archivado", "extra")
-_CAMPANA_COLS = ("n_videos", "n_imagenes", "referencias_objetivo", "estado", "orden", "extra", "producto_id")
+_CAMPANA_COLS = ("n_videos", "n_imagenes", "referencias_objetivo", "estado", "orden", "extra", "producto_id", "funnel")
 _REFERENCIA_COLS = ("titulo", "intencion", "intencion_otro", "descripcion", "analisis", "analisis_estado", "orden",
                     "extra", "frame_url", "ruta_local")
 _IDEA_COLS = ("titulo", "escena", "sonido", "enfoque", "gancho", "referencias_ids", "duracion_s", "plataformas",
@@ -207,6 +245,23 @@ def persona(cliente, persona_id):
     with db.conectar() as con:
         f = _fila(con, db.persona, persona_id, cliente)
     return _a_dict(f) if f else None
+
+
+def asegurar_personajes_predeterminados(cliente):
+    """Crea los 3 personajes predeterminados (Melissa, Marijke, Sophia) si no existen ya."""
+    with db.conectar() as con:
+        p = db.persona
+        for pd in PERSONAJES_PREDETERMINADOS:
+            existente = con.execute(sa.select(p.c.id).where(
+                p.c.cliente == cliente, p.c.nombre == pd["nombre"])).scalar()
+            if not existente:
+                ahora = db.ahora()
+                con.execute(p.insert().values(
+                    cliente=cliente, creado_en=ahora, actualizado_en=ahora,
+                    nombre=pd["nombre"], resumen=pd["resumen"], descripcion=pd["descripcion"],
+                    edad_rango=pd["edad_rango"], tono=pd["tono"],
+                    senales_visuales=pd["senales_visuales"], palabras_clave=pd["palabras_clave"],
+                    color=pd["color"], origen=pd["origen"], archivada=False, extra={}))
 
 
 # --------------------------------------------------------- temporadas ---
@@ -430,11 +485,13 @@ def validar_cantidades(n_videos, n_imagenes):
 
 
 def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n_videos, n_imagenes,
-                    referencias_objetivo=None):
+                    referencias_objetivo=None, funnel="tof"):
     n_videos, n_imagenes = _cantidades(n_videos, n_imagenes)
     catalogo_id = _texto(catalogo_id, 120)
     if not catalogo_id:
         raise ErrorDatos("Elige un producto.")
+    if funnel not in FUNNELS:
+        raise ErrorDatos(f"Funnel inválido: {funnel}. Opciones: {FUNNELS}")
     ahora = db.ahora()
     with db.conectar() as con:
         sp = _fila(con, db.sprint, sprint_id, cliente)
@@ -442,7 +499,7 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n
             raise ErrorDatos("Ese sprint no existe.")
         if not _fila(con, db.persona, persona_id, cliente):
             raise ErrorDatos("Esa persona no existe en este proyecto.")
-        if not _fila(con, db.temporada, temporada_id, cliente):
+        if temporada_id and not _fila(con, db.temporada, temporada_id, cliente):
             raise ErrorDatos("Esa temporada no existe en este proyecto.")
         c = db.campana
         repetida = con.execute(sa.select(c.c.orden).where(
@@ -463,12 +520,12 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n
                 cliente=cliente, creado_en=ahora, actualizado_en=ahora, sprint_id=sprint_id, persona_id=persona_id,
                 catalogo_id=catalogo_id, producto_id=None, temporada_id=temporada_id, n_videos=n_videos,
                 n_imagenes=n_imagenes, referencias_objetivo=max(1, objetivo), estado="planeada", orden=orden,
-                extra={})).inserted_primary_key[0]
+                funnel=funnel, extra={})).inserted_primary_key[0]
         except sa.exc.IntegrityError:
             raise CampanaDuplicada("Esa combinación de persona, producto y temporada ya existe en este sprint.")
         _evento(con, cliente, sprint_id, cid, "campana_agregada", "Campaña agregada",
                 {"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id,
-                 "n_videos": n_videos, "n_imagenes": n_imagenes})
+                 "n_videos": n_videos, "n_imagenes": n_imagenes, "funnel": funnel})
         con.execute(db.sprint.update().where(db.sprint.c.id == sprint_id).values(actualizado_en=ahora))
     return cid
 

@@ -238,7 +238,7 @@ def _campana_o_404(cliente, sid, cid):
 
 def _campanas_desde_form():
     """El asistente manda las campañas como JSON en `campanas_json`:
-    [{persona_id, catalogo_id, temporada_id, n_videos, n_imagenes}]. El
+    [{persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, funnel}]. El
     formulario simple manda una sola con los campos sueltos."""
     crudo = request.form.get("campanas_json")
     if crudo:
@@ -253,7 +253,8 @@ def _campanas_desde_form():
         return [{"persona_id": request.form.get("persona_id"), "catalogo_id": request.form.get("catalogo_id"),
                  "temporada_id": request.form.get("temporada_id"), "n_videos": request.form.get("n_videos"),
                  "n_imagenes": request.form.get("n_imagenes"),
-                 "referencias_objetivo": request.form.get("referencias_objetivo")}]
+                 "referencias_objetivo": request.form.get("referencias_objetivo"),
+                 "funnel": request.form.get("funnel", "tof")}]
     return []
 
 
@@ -266,12 +267,13 @@ def _validar_campanas(cliente, lista):
         if not isinstance(c, dict):
             raise datos.ErrorDatos(f"Campaña {i}: formato inválido.")
         try:
-            persona_id, temporada_id = int(c.get("persona_id") or 0), int(c.get("temporada_id") or 0)
+            persona_id = int(c.get("persona_id") or 0)
+            temporada_id = int(c.get("temporada_id") or 0) if c.get("temporada_id") else 0
         except (TypeError, ValueError):
             raise datos.ErrorDatos(f"Campaña {i}: persona o temporada inválida.")
         if not datos.persona(cliente, persona_id):
             raise datos.ErrorDatos(f"Campaña {i}: esa persona no existe en este proyecto.")
-        if not datos.temporada(cliente, temporada_id):
+        if temporada_id and not datos.temporada(cliente, temporada_id):
             raise datos.ErrorDatos(f"Campaña {i}: esa temporada no existe en este proyecto.")
         catalogo_id = (c.get("catalogo_id") or "").strip()
         if catalogo_id not in ids:
@@ -280,13 +282,16 @@ def _validar_campanas(cliente, lista):
             n_videos, n_imagenes = datos.validar_cantidades(c.get("n_videos"), c.get("n_imagenes"))
         except datos.ErrorDatos as e:
             raise datos.ErrorDatos(f"Campaña {i}: {e}")
+        funnel = c.get("funnel", "tof")
+        if funnel not in datos.FUNNELS:
+            raise datos.ErrorDatos(f"Campaña {i}: funnel inválido ({funnel}).")
         clave = (persona_id, catalogo_id, temporada_id)
         if clave in vistas:
             raise datos.ErrorDatos(f"Campaña {i}: esa combinación de persona, producto y temporada está repetida.")
         vistas.add(clave)
-        limpias.append({"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id,
+        limpias.append({"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id or None,
                         "n_videos": n_videos, "n_imagenes": n_imagenes,
-                        "referencias_objetivo": c.get("referencias_objetivo") or None})
+                        "referencias_objetivo": c.get("referencias_objetivo") or None, "funnel": funnel})
     return limpias
 
 
@@ -303,7 +308,7 @@ def crear(cliente):
         try:
             for c in campanas:
                 datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
-                                      c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"])
+                                      c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"], funnel=c["funnel"])
         except datos.ErrorDatos:
             datos.archivar_sprint(cliente, sid)
             raise
@@ -318,6 +323,7 @@ def crear(cliente):
 
 @bp.get("/<int:sid>")
 def ver(cliente, sid):
+    datos.asegurar_personajes_predeterminados(cliente)
     sp = _sprint_o_404(cliente, sid)
     for c in sp["campanas"]:
         c["progreso"] = progreso.progreso_campana(c)
@@ -376,7 +382,7 @@ def campana_agregar(cliente, sid):
             raise datos.ErrorDatos("Faltan los datos de la campaña.")
         c = lista[0]
         datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
-                              c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"])
+                              c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"], funnel=c["funnel"])
         estado.recalcular(cliente, sid)
         flash("Campaña agregada.", "ok")
     except datos.ErrorDatos as e:

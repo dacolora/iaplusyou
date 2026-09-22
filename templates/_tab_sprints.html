@@ -39,7 +39,7 @@
         <label>Fin <input type="date" name="fin" required></label>
         <label>Referencias por campaña <input type="number" name="referencias_objetivo" value="5" min="1" class="mini-input"></label>
       </div>
-      <div class="fe-destinos checks-plataformas">
+      <div class="fe-destinos checks-plataformas" style="display: none">
         <span class="campo-label">Destinos (idioma · país)</span>
         {% for d in destinos_sprint %}
         <label class="fe-destino"><input type="checkbox" name="destinos" value="{{ d.codigo }}" {% if d.codigo == "es_CO" %}checked{% endif %}> {{ d.bandera }} {{ d.nombre }} <small>({{ d.idioma }})</small></label>
@@ -52,10 +52,17 @@
     <fieldset class="sprint-paso" data-paso="2" hidden>
       <legend>2. Matriz persona × producto</legend>
       <div class="fe-opciones">
-        <label>Temporada
-          <select id="matriz-temporada">{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }} → {{ t.fin }})</option>{% endfor %}</select>
+        <label>Temporada (opcional)
+          <select id="matriz-temporada"><option value="">(ninguna)</option>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }} → {{ t.fin }})</option>{% endfor %}</select>
         </label>
-        <small class="vacio">Haz clic en una celda para agregar esa campaña a la temporada elegida y fija sus videos e imágenes. Las celdas grises ya existen en esa temporada.</small>
+        <label>Funnel
+          <select id="matriz-funnel">
+            <option value="tof">Top of Funnel (TOF) - Conciencia</option>
+            <option value="mof">Middle of Funnel (MOF) - Consideración</option>
+            <option value="bof">Bottom of Funnel (BOF) - Conversión</option>
+          </select>
+        </label>
+        <small class="vacio">Haz clic en una celda para agregar esa campaña. Las celdas grises ya existen para esta persona + producto.</small>
       </div>
       <div class="sprint-matriz-scroll">
         <table class="sprint-matriz" id="matriz">
@@ -68,8 +75,8 @@
               <td class="sprint-celda" data-persona="{{ pe.id }}" data-producto="{{ p.id }}" data-persona-nombre="{{ pe.nombre }}" data-producto-nombre="{{ p.nombre }}">
                 <button type="button" class="sprint-celda-btn">+</button>
                 <div class="sprint-celda-campos" hidden>
-                  <label>V <input type="number" min="0" value="5" class="mini-input celda-videos"></label>
-                  <label>I <input type="number" min="0" value="5" class="mini-input celda-imagenes"></label>
+                  <label>Videos <input type="number" min="0" value="5" class="mini-input celda-videos"></label>
+                  <label>Imágenes <input type="number" min="0" value="5" class="mini-input celda-imagenes"></label>
                 </div>
               </td>
               {% endfor %}
@@ -224,8 +231,8 @@
     var form = document.getElementById('form-sprint');
     if (!form) return;
     var costoV = parseFloat(form.dataset.estimadoVideo || '0'), costoI = parseFloat(form.dataset.estimadoImagen || '0');
-    var campanas = {};   // "persona|producto|temporada" -> {persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, nombres}
-    var selTemporada = document.getElementById('matriz-temporada');
+    var campanas = {};   // "persona|producto|temporada" -> {persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, funnel, nombres}
+    var selTemporada = document.getElementById('matriz-temporada'), selFunnel = document.getElementById('matriz-funnel');
 
     // Fechas por defecto: el mes siguiente completo.
     var hoy = new Date(), ini = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1), fin = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
@@ -261,7 +268,7 @@
         ul.appendChild(li);
       });
       document.getElementById('campanas-json').value = JSON.stringify(Object.keys(campanas).map(function (k) {
-        var c = campanas[k]; return {persona_id: c.persona_id, catalogo_id: c.catalogo_id, temporada_id: c.temporada_id, n_videos: c.n_videos, n_imagenes: c.n_imagenes};
+        var c = campanas[k]; return {persona_id: c.persona_id, catalogo_id: c.catalogo_id, temporada_id: c.temporada_id, n_videos: c.n_videos, n_imagenes: c.n_imagenes, funnel: c.funnel};
       }));
       guardarEstado();
     }
@@ -270,8 +277,10 @@
         var k = clave(td);
         if (campanas[k]) { delete campanas[k]; }
         else {
-          campanas[k] = {persona_id: +td.dataset.persona, catalogo_id: td.dataset.producto, temporada_id: +selTemporada.value,
-                         n_videos: 5, n_imagenes: 5, persona_nombre: td.dataset.personaNombre, producto_nombre: td.dataset.productoNombre,
+          campanas[k] = {persona_id: +td.dataset.persona, catalogo_id: td.dataset.producto,
+                         temporada_id: selTemporada.value ? +selTemporada.value : null,
+                         n_videos: 5, n_imagenes: 5, funnel: selFunnel.value,
+                         persona_nombre: td.dataset.personaNombre, producto_nombre: td.dataset.productoNombre,
                          temporada_nombre: selTemporada.options[selTemporada.selectedIndex].text};
         }
         pintar();
@@ -284,6 +293,7 @@
       });
     });
     selTemporada.addEventListener('change', pintar);
+    selFunnel.addEventListener('change', function () { Object.keys(campanas).forEach(function (k) { if (campanas[k]) campanas[k].funnel = selFunnel.value; }); pintar(); });
     ['nombre', 'inicio', 'fin'].forEach(function (n) { form[n].addEventListener('input', guardarEstado); });
     form.querySelectorAll('[data-ir]').forEach(function (b) {
       b.addEventListener('click', function () {
