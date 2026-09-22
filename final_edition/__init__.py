@@ -31,6 +31,7 @@ import requests
 
 import catalogo_productos
 import creative_flow
+import db
 import gastos
 import marca
 import proyectos
@@ -212,6 +213,132 @@ def _opciones(opciones):
     return o
 
 
+# ---------------------------------------------------------------- Triple Whale ---
+
+def _canal_optimo_triple_whale(cliente, cf_id):
+    """Detecta si el concepto está en un experimento con atribución triple_whale
+    y retorna el canal óptimo (mayor ROAS) con su rendimiento.
+
+    Retorna: {"canal": "google_ads|tiktok|...", "roas": 3.5, "duracion_sugerida_s": 6, "razon": "..."}
+    o None si no hay triple_whale o no hay métricas."""
+    import sqlalchemy as sa
+
+    try:
+        # Buscar el concepto por cliente y legado_id (cf_id)
+        with db.conectar() as con:
+            concepto = con.execute(
+                sa.select(db.concepto.c.id).where(
+                    db.concepto.c.cliente == cliente,
+                    db.concepto.c.legado_id == cf_id
+                )
+            ).first()
+
+            if not concepto:
+                return None
+
+            concepto_id = concepto[0]
+
+            # Buscar experimentos que incluyan piezas de este concepto
+            # Subquery: piezas del concepto
+            piezas_query = sa.select(db.pieza.c.id).where(db.pieza.c.concepto_id == concepto_id)
+
+            # Buscar experimento_pieza que referencie estas piezas
+            ep_query = sa.select(db.experimento_pieza.c.experimento_id).where(
+                db.experimento_pieza.c.pieza_id.in_(piezas_query)
+            ).distinct()
+
+            # Buscar experimentos con atribución triple_whale
+            exp_ids = con.execute(ep_query).fetchall()
+            if not exp_ids:
+                return None
+
+            exp_query = sa.select(db.experimento.c.id, db.experimento.c.atribucion).where(
+                db.experimento.c.id.in_([r[0] for r in exp_ids]),
+                db.experimento.c.cliente == cliente,
+                db.experimento.c.atribucion == "triple_whale"
+            )
+
+            exp_rows = con.execute(exp_query).fetchall()
+            if not exp_rows:
+                return None
+
+            # Tomar el primer experimento con triple_whale
+            exp_id = exp_rows[0][0]
+
+            # Buscar experimento_pieza de este experimento para obtener piezas
+            ep_rows = con.execute(
+                sa.select(db.experimento_pieza.c.id).where(
+                    db.experimento_pieza.c.experimento_id == exp_id,
+                    db.experimento_pieza.c.pieza_id.in_(piezas_query)
+                )
+            ).fetchall()
+
+            if not ep_rows:
+                return None
+
+            # Buscar la métrica más reciente por canal
+            canales_metrics = {}
+            for ep_id_row in ep_rows:
+                ep_id = ep_id_row[0]
+                snap = con.execute(
+                    sa.select(db.metrica_snapshot).where(
+                        db.metrica_snapshot.c.experimento_pieza_id == ep_id
+                    ).order_by(db.metrica_snapshot.c.id.desc()).limit(1)
+                ).first()
+
+                if snap:
+                    roas = snap[db.metrica_snapshot.c.roas] or 0
+                    extra = snap[db.metrica_snapshot.c.extra] or {}
+                    canal = extra.get("channel", "desconocido")
+
+                    if canal not in canales_metrics or canales_metrics[canal]["roas"] < roas:
+                        canales_metrics[canal] = {
+                            "roas": roas,
+                            "gasto": snap[db.metrica_snapshot.c.gasto] or 0,
+                            "compras": snap[db.metrica_snapshot.c.compras] or 0
+                        }
+    except Exception as e:
+        # No bloquea si hay error en triple_whale: devuelve None
+        import sys
+        print(f"Advertencia en _canal_optimo_triple_whale: {e}", file=sys.stderr)
+        return None
+
+    # Encontrar el canal con mayor ROAS > 1.0
+    mejor_canal = None
+    mejor_roas = 0
+    for canal, metricas in canales_metrics.items():
+        roas = metricas.get("roas", 0)
+        if roas > mejor_roas and roas > 1.0:
+            mejor_roas = roas
+            mejor_canal = canal
+
+    if not mejor_canal or mejor_roas <= 0:
+        return None
+
+    # Mapear canal a duraciones y estrategias sugeridas
+    duraciones_por_canal = {
+        "Google Ads": 6,
+        "google_ads": 6,
+        "TikTok": 9,
+        "tiktok": 9,
+        "Instagram": 7,
+        "instagram": 7,
+        "Pinterest": 8,
+        "pinterest": 8,
+        "Facebook": 7,
+        "facebook": 7,
+    }
+
+    duracion_sugerida = duraciones_por_canal.get(mejor_canal, 8)
+
+    return {
+        "canal": mejor_canal.lower().replace(" ", "_"),
+        "roas": round(mejor_roas, 2),
+        "duracion_sugerida_s": duracion_sugerida,
+        "razon": f"ROAS {mejor_roas:.1f}x en {mejor_canal}"
+    }
+
+
 # ------------------------------------------------------------------- API ---
 
 def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
@@ -232,13 +359,18 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     enfoque = entry.get("enfoque") or "producto"
 
     costo_whisper = costo
+    # Detectar canal óptimo de Triple Whale si existe
+    canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
     guion_base, costo_guion = guion_mod.generar_guion_base(
         producto, referencia, enfoque, float(duracion_s), idioma_base,
-        _guia_marca(cliente), entry.get("tono") or "")
+        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo)
     costo += float(costo_guion or 0.0)
     # El precio escrito al preparar viaja con el guion base para prellenar el
     # destino del país base al producir (los demás países piden el suyo).
     guion_base["precio_base"] = o.get("precio")
+    # Guardar contexto de canal óptimo si lo hay
+    if canal_optimo:
+        guion_base["canal_optimo"] = canal_optimo
     creative_flow.guardar_guion_base(cliente, cf_id, guion_base)
     # Cobro real del guion base (Claude + whisper de la referencia si la hubo).
     # Referencia por sesión + tarea (`ref_sufijo`): dos escrituras de la MISMA
