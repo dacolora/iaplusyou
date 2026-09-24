@@ -196,3 +196,15 @@ def test_estimar_adaptar_referente():
     import gastos
     assert gastos.estimar("adaptar_referente") == {"usd": 0.01, "texto": "US$ 0,01 aprox.", "detalle": "una llamada corta a Claude"}
     assert "adaptar_referente" in gastos.TIPOS
+
+
+def test_estimar_sugerir_ia():
+    import gastos
+    r = gastos.estimar("sugerir_ia")
+    assert r["usd"] == 0.02
+    assert "0,02" in r["texto"]
+
+
+def test_sugerir_ia_en_tipos():
+    import gastos
+    assert "sugerir_ia" in gastos.TIPOS
