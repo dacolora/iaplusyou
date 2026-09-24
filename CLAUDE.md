@@ -233,6 +233,24 @@ plantilla de la hoja "Personas" (`nicho/exportar.py`). UI: pestaña **Nicho**
 (`_tab_nicho.html`) y página propia del estudio (`nicho_estudio.html`), Blueprint
 `nicho/rutas.py` bajo `/cliente/<cliente>/nicho/...`.
 
+**Biblioteca de referentes** (`referentes/` + `tareas/referentes.py`, spec
+`docs/superpowers/specs/2026-09-23-biblioteca-referentes-design.md`): anuncios
+reales clasificados por etapa (TOF/MOF/BOF), consciencia, familia (190 de
+copycoders + las que Claude proponga como `EMERGING`), dolor y firma («por qué
+funciona»). Tablas `referente` (`anuncio_id` = id del Ad Library de Meta, UNIQUE
+global; `cliente` NULL = global de Creatv, `<cliente>` = solo ese proyecto; solo
+se lista con `estado_imagen=ok`, la copia en R2 `referentes/<anuncio_id>.jpg`),
+`referente_familia` y `barrido`. `referentes/datos.py` es el único escritor.
+Bloque 1: importación del swipe file de copycoders (`referentes/copycoders.py`
+lee `const DATA=[...]` del HTML público; tarea `referentes_importar_copycoders`
+por fases `anuncios → imagenes → traducir` con continuaciones `__cont`, la única
+llamada pagada es la traducción de firmas, gasto tipo `otro` bajo `_creatv`) desde
+`/admin/referentes`, y la pestaña **Referentes** (`_tab_referentes.html`, Blueprint
+`referentes/rutas.py`: `grid` y `ficha` como fragmentos por fetch, filtros en el
+hash `#referentes?etapa=TOF&…`). Los bloques siguientes agregan «Recrear con mi
+producto», la puerta desde Sprints y los barridos Atria/Apify con clasificación
+Claude; hasta entonces la biblioteca es de solo lectura.
+
 **Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field
 `modo_prompt`). **Default = direct generation** (the "generación tradicional" clients rely
 on, restored 2026-09-21 after the director had become the only path): the person's text
