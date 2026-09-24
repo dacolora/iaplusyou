@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Referentes (admin){% endblock %}
+{% block content %}
+{# Panel admin de la biblioteca de referentes (dashboard.admin_referentes).
+   Contexto: url_swipe, trabajo ({job_id}|None), ultimo (barrido|None),
+   historial, imagenes ({ok,pendiente,error}), total (referentes globales con
+   imagen), familias. #}
+<section class="hero aparece">
+  <div class="hero-texto">
+    <span class="eyebrow">Panel de administrador</span>
+    <h1>Biblioteca de referentes.</h1>
+    <p class="hero-sub">La semilla es el swipe file de copycoders: se importa desde su página pública, las imágenes se copian a nuestro R2 y las firmas se traducen (≈ US$1 una sola vez). Se puede volver a importar cuando ellos publiquen un barrido nuevo: solo entra lo nuevo.</p>
+    <p class="hero-sub"><a href="{{ url_for('panel') }}">← Volver al panel</a></p>
+  </div>
+  <div class="hero-stats">
+    <div class="stat"><span class="stat-num">{{ total }}</span><span class="stat-label">referente{{ 's' if total != 1 }} con imagen</span></div>
+    <div class="stat"><span class="stat-num">{{ familias | length }}</span><span class="stat-label">familia{{ 's' if familias | length != 1 }}</span></div>
+    <div class="stat"><span class="stat-num">{{ imagenes.pendiente }}</span><span class="stat-label">imágenes por bajar</span></div>
+    <div class="stat"><span class="stat-num">{{ imagenes.error }}</span><span class="stat-label">imágenes fallidas</span></div>
+  </div>
+</section>
+
+<section class="admin-bloque">
+  <div class="admin-cabecera"><h2>Swipe file de copycoders</h2></div>
+  <form method="post" action="{{ url_for('admin_referentes_importar') }}" class="agencia-form">
+    <label>URL <input type="url" name="url" value="{{ url_swipe }}" style="min-width:32rem"></label>
+    <button type="submit" class="btn-generar btn-sm" {% if trabajo %}disabled{% endif %}>Importar</button>
+  </form>
+  <p class="vacio">Última importación:
+    {% if ultimo %}{{ ultimo.creado_en }} · estado <strong>{{ ultimo.estado }}</strong> · {{ ultimo.traidos }} leídos · {{ ultimo.nuevos }} nuevos · {{ ultimo.con_imagen }} con imagen{% if ultimo.usd_real %} · US$ {{ '%.2f' | format(ultimo.usd_real) }}{% endif %}{% if ultimo.aviso %} · {{ ultimo.aviso }}{% endif %}
+    {% else %}nunca{% endif %}</p>
+  {% if trabajo %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div></div>
+  <div class="progreso-texto"></div>
+  <script>iniciarPolling({{ trabajo.job_id | tojson }}, {{ ("trabajo-" ~ trabajo.job_id) | tojson }});</script>
+  {% endif %}
+  {% if historial | length > 1 %}
+  <details><summary>Importaciones anteriores</summary>
+    <div class="admin-scroll"><table class="tabla-admin">
+      <tr><th>Fecha</th><th>Estado</th><th>Leídos</th><th>Nuevos</th><th>Con imagen</th><th>Aviso</th></tr>
+      {% for b in historial[1:] %}<tr><td>{{ b.creado_en }}</td><td>{{ b.estado }}</td><td>{{ b.traidos }}</td><td>{{ b.nuevos }}</td><td>{{ b.con_imagen }}</td><td>{{ b.aviso or '' }}</td></tr>{% endfor %}
+    </table></div>
+  </details>
+  {% endif %}
+</section>
+
+<section class="admin-bloque">
+  <div class="admin-cabecera"><h2>Familias ({{ familias | length }})</h2></div>
+  <div class="admin-scroll"><table class="tabla-admin">
+    <tr><th>Familia</th><th>Descripción</th><th>Referentes</th><th>Origen</th></tr>
+    {% for f in familias %}<tr><td>{{ f.nombre }}</td><td>{{ f.descripcion or '—' }}</td><td>{{ f.n }}</td><td>{{ f.origen }}</td></tr>{% endfor %}
+  </table></div>
+</section>
+{% endblock %}

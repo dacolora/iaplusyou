@@ -86,3 +86,32 @@ def test_cliente_sin_permiso_no_entra(app):
         s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
     r = c.get("/cliente/acme/referentes/grid")
     assert r.status_code == 302 and "/cliente/otro" in r.headers["Location"]
+
+
+def test_admin_referentes_importar(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tr
+    c = app["c"]
+    llamadas = []
+    monkeypatch.setattr(tr.trabajos, "encolar", lambda job_id, tipo, payload, **kw: llamadas.append(payload) or True)
+    monkeypatch.setattr(tr.trabajos, "en_curso", lambda job_id: False)
+    html = c.get("/admin/referentes").data.decode()
+    assert "Importar" in html and "nunca" in html
+    r = c.post("/admin/referentes/importar", data={}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin/referentes")
+    assert llamadas[0]["url"] == tr.copycoders.URL_SWIPE and llamadas[0]["fase"] == "anuncios"
+    b = datos.barridos(None, "copycoders")[0]
+    assert b["pedido_por"] == "admin" and b["consulta"]["url"] == tr.copycoders.URL_SWIPE
+    r = c.post("/admin/referentes/importar", data={"url": "https://malo.example/x"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and len(llamadas) == 1
+    datos.actualizar_barrido(b["id"], estado="listo", traidos=5587, nuevos=5587, con_imagen=5580)
+    html = c.get("/admin/referentes").data.decode()
+    assert "5587" in html and "5580" in html
+
+
+def test_admin_referentes_solo_admin(app):
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
+    assert c.get("/admin/referentes").status_code == 302
+    assert c.post("/admin/referentes/importar", data={}, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 302

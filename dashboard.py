@@ -3405,6 +3405,39 @@ def admin_meta_solicitud_descartar(cliente):
     return _volver_admin_meta()
 
 
+# ---------------------------------------------------- admin: referentes ---
+
+@app.route("/admin/referentes")
+@requiere_admin
+def admin_referentes():
+    """Biblioteca de referentes (spec 2026-09-23 §7-§8): importar copycoders y ver totales."""
+    from referentes import datos as ref_datos
+    from tareas import referentes as tareas_ref
+    historial = ref_datos.barridos(None, "copycoders")
+    return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
+                           trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
+                           ultimo=(historial[0] if historial else None), historial=historial[:10],
+                           imagenes=ref_datos.contar_imagenes("copycoders"), total=ref_datos.opciones(None)["total"],
+                           familias=ref_datos.familias())
+
+
+@app.route("/admin/referentes/importar", methods=["POST"])
+@requiere_admin
+def admin_referentes_importar():
+    if not _mismo_origen():
+        abort(403)
+    from tareas import referentes as tareas_ref
+    url = (request.form.get("url") or "").strip() or tareas_ref.copycoders.URL_SWIPE
+    if not url.startswith("https://go.copycoders.ai/"):
+        flash("Solo se importa desde go.copycoders.ai.", "error")
+        return redirect(url_for("admin_referentes"))
+    if tareas_ref.encolar_importar_copycoders(url, pedido_por=_sesion().get("usuario")):
+        flash("Importando el swipe file; la página se recarga sola cuando termine cada fase.", "ok")
+    else:
+        flash("Ya hay una importación en curso.", "error")
+    return redirect(url_for("admin_referentes"))
+
+
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
 def publicar_ad(cliente):
     """Publicar un anuncio suelto ya no tiene UI: Campañas se fundió en
