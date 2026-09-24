@@ -1,0 +1,25 @@
+{# Ficha de un referente (referentes.ficha), cargada en el <dialog> de la
+   pestaña. Contexto: cliente, r (referente), familia (dict|None), etiquetas_*.
+   Los botones de «Recrear con mi producto» llegan en el bloque 2. #}
+<div class="generado-modal-cuerpo ref-ficha">
+  <div class="detalle-media"><img src="{{ r.imagen_url }}" alt=""></div>
+  <div class="detalle-info">
+    <h3>{{ r.titular or '(sin titular)' }}</h3>
+    <p class="ref-etiquetas">
+      <span class="tag-estado ref-marca">{{ r.marca }}</span>
+      {% if r.consciencia %}<span class="tag-estado">{{ etiquetas_consciencia.get(r.consciencia, r.consciencia) }}</span>{% endif %}
+      {% if r.etapa %}<span class="tag-estado">{{ etiquetas_etapa.get(r.etapa, r.etapa) }}</span>{% endif %}
+      {% if r.dolor %}<span class="tag-estado">dolor: {{ r.dolor }}</span>{% endif %}
+    </p>
+    {% if r.familia %}
+    <p><strong>Formato:</strong> {{ r.familia }}{% if familia and familia.descripcion %} — {{ familia.descripcion }}{% endif %}</p>
+    {% endif %}
+    {% if r.firma %}<p><strong>Por qué funciona:</strong> {{ r.firma }}</p>{% endif %}
+    {% if r.cuerpo %}<details><summary>Copy del anuncio</summary><p class="ref-cuerpo">{{ r.cuerpo }}</p></details>{% endif %}
+    <p class="vacio">{% if r.dias %}{{ r.dias }} días corriendo{% endif %}{% if r.variantes %} · {{ r.variantes }} variante{{ 's' if r.variantes != 1 }}{% endif %} · fuente: {{ r.fuente }}{% if r.extra and r.extra.sweep %} · barrido {{ r.extra.sweep }}{% endif %}</p>
+    <div class="detalle-acciones">
+      {% if r.url_anuncio %}<a class="btn-guardar btn-sm" href="{{ r.url_anuncio }}" target="_blank" rel="noopener">Ver en Ad Library →</a>{% endif %}
+      {% if r.url_marca %}<a class="btn-guardar btn-sm" href="{{ r.url_marca }}" target="_blank" rel="noopener">Librería viva de la marca →</a>{% endif %}
+    </div>
+  </div>
+</div>

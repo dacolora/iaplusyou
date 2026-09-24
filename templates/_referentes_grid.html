@@ -1,0 +1,29 @@
+{# Fragmento del grid de Referentes (referentes.grid). Contexto: cliente, pagina
+   ({items,total,pagina,paginas}), filtros, por_pagina, etiquetas_*. El JS de
+   _tab_referentes.html lo pide por fetch y lo mete en #ref-grid (o anexa las
+   tarjetas cuando viene de «Mostrar más»). #}
+<p class="ref-conteo" data-total="{{ pagina.total }}">{{ pagina.total }} referente{{ 's' if pagina.total != 1 }}</p>
+<div class="ref-tarjetas">
+  {% for r in pagina["items"] %}
+  <article class="ref-tarjeta" data-id="{{ r.id }}">
+    <button type="button" class="ref-tarjeta-media" data-ficha="{{ url_for('referentes.ficha', cliente=cliente, rid=r.id) }}" title="Ver ficha">
+      <img src="{{ r.imagen_url }}" alt="" loading="lazy">
+    </button>
+    <div class="ref-tarjeta-texto">
+      <strong title="{{ r.titular }}">{{ r.titular or '(sin titular)' }}</strong>
+      <div class="ref-etiquetas">
+        <span class="tag-estado ref-marca">{{ r.marca }}</span>
+        {% if r.consciencia %}<span class="tag-estado">{{ etiquetas_consciencia.get(r.consciencia, r.consciencia) }}</span>{% endif %}
+        {% if r.etapa %}<span class="tag-estado">{{ etiquetas_etapa.get(r.etapa, r.etapa) }}</span>{% endif %}
+        {% if r.familia %}<span class="tag-estado ref-familia">{{ r.familia }}</span>{% endif %}
+      </div>
+      <small>{% if r.dias %}{{ r.dias }} d{% endif %}{% if r.variantes %} · {{ r.variantes }} variante{{ 's' if r.variantes != 1 }}{% endif %} · {{ r.fuente }}</small>
+    </div>
+  </article>
+  {% else %}
+  <p class="vacio">Ningún referente coincide con esos filtros.</p>
+  {% endfor %}
+</div>
+{% if pagina.pagina < pagina.paginas %}
+<p class="ref-mas"><button type="button" class="btn-guardar btn-sm" data-siguiente="{{ pagina.pagina + 1 }}">Mostrar más</button></p>
+{% endif %}
