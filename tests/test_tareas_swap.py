@@ -24,6 +24,7 @@ def test_registro_contiene_swap_generar(base_temporal):
         "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar", "exp_refrescar_todos",
         "final_guion", "final_producir",
         "flowplus_director", "flowplus_imagen", "flowplus_video", "materiales_limpiar", "meta_publicar", "meta_refrescar", "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas", "nicho_inv_seleccionar", "nicho_recolectar", "organico_publicar", "producto_vincular",
+        "referentes_importar_copycoders",
         "sprint_analizar_referencia", "sprint_empaquetar", "sprint_proponer_ideas", "sprint_qa_pendientes", "sprint_qa_pieza",
         "sprint_referencia_link", "sprint_sugerir_personas", "swap_generar",
         "tienda_sync_pedidos", "tienda_sync_pedidos_todas", "tienda_sync_productos", "tienda_sync_productos_todas",
