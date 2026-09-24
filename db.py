@@ -383,6 +383,77 @@ gasto = Table("gasto", metadata,
     sa.Index("ix_gasto_cliente_creado", "cliente", "creado_en"),
 )
 
+# ---------------------------------------------------- referentes ---
+# Biblioteca de referentes (spec 2026-09-23 §3). `cliente` NULL = global de
+# Creatv; por eso no usa _comunes() (que exige cliente NOT NULL).
+
+referente_familia = Table("referente_familia", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("nombre", String(120), nullable=False, unique=True),
+    Column("descripcion", Text),
+    Column("origen", String(12), nullable=False, default="copycoders"),     # copycoders|claude|admin
+    Column("creado_en", String(19), nullable=False),
+)
+
+barrido = Table("barrido", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), index=True),                              # NULL = global (admin)
+    Column("creado_en", String(19), nullable=False),
+    Column("actualizado_en", String(19), nullable=False),
+    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify
+    Column("consulta", JSON, default=dict),
+    Column("tope", Integer, default=0),
+    Column("estado", String(12), nullable=False, default="en_cola"),        # en_cola|trayendo|guardando|clasificando|listo|parcial|error
+    Column("traidos", Integer, default=0),
+    Column("nuevos", Integer, default=0),
+    Column("clasificados", Integer, default=0),
+    Column("pendientes", Integer, default=0),
+    Column("con_imagen", Integer, default=0),
+    Column("usd_estimado", Float, default=0.0),
+    Column("usd_real", Float, default=0.0),
+    Column("llamadas_fuente", Integer, default=0),
+    Column("tarea_id", Integer),
+    Column("pedido_por", String(40)),
+    Column("aviso", Text),
+    Column("extra", JSON, default=dict),
+)
+
+referente = Table("referente", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("cliente", String(80), index=True),                              # NULL = global
+    Column("creado_en", String(19), nullable=False),
+    Column("actualizado_en", String(19), nullable=False),
+    Column("anuncio_id", String(40), nullable=False, unique=True),          # id del Ad Library de Meta
+    Column("pagina_id", String(40), index=True),                            # id de página de Meta (marca)
+    Column("fuente", String(12), nullable=False),                           # copycoders|atria|apify
+    Column("marca", String(160)),
+    Column("url_anuncio", Text),
+    Column("url_marca", Text),
+    Column("titular", Text),
+    Column("cuerpo", Text),
+    Column("idioma", String(5)),
+    Column("pais", String(2)),
+    Column("tipo", String(8), nullable=False, default="imagen"),            # imagen|video|carrusel
+    Column("imagen_url", Text),                                             # copia en R2
+    Column("imagen_origen", Text),
+    Column("estado_imagen", String(10), nullable=False, default="pendiente"),   # ok|pendiente|error
+    Column("dias", Integer),
+    Column("variantes", Integer),
+    Column("primera_vez", String(10)),
+    Column("ultima_vez", String(10)),
+    Column("activo", Boolean),
+    Column("etiquetas_fuente", JSON, default=dict),
+    Column("etapa", String(3)),                                             # TOF|MOF|BOF
+    Column("consciencia", String(16)),                                      # unaware|problem-aware|solution-aware|product-aware|most-aware
+    Column("familia", String(120)),
+    Column("dolor", String(120)),
+    Column("firma", Text),
+    Column("clasificacion", String(10), nullable=False, default="pendiente"),   # fuente|claude|pendiente|error
+    Column("barrido_id", Integer, sa.ForeignKey("barrido.id"), index=True),
+    Column("extra", JSON, default=dict),
+    sa.Index("ix_referente_filtros", "cliente", "etapa", "consciencia", "familia"),
+)
+
 kv = Table("kv", metadata,
     Column("clave", String(120), primary_key=True),
     Column("valor", Text),
