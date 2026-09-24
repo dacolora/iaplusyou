@@ -1,0 +1,133 @@
+{# Pestaña Referentes (spec 2026-09-23 §8), solo lectura en el bloque 1.
+   Contexto (referentes.rutas.contexto): ref_opciones ({total, familias, marcas,
+   dolores, fuentes} con conteos), ref_etapas, ref_consciencias,
+   ref_etiquetas_etapa, ref_etiquetas_consciencia, ref_fuentes. El grid y la
+   ficha se piden por fetch a referentes.grid / referentes.ficha. #}
+<div class="panel-cabecera">
+  <h2>Referentes</h2>
+  <p class="vacio">Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas.</p>
+</div>
+
+{% if not ref_opciones.total %}
+<p class="vacio">Todavía no hay referentes. Creatv importa la biblioteca inicial desde el panel de administrador; después aparecen aquí.</p>
+{% else %}
+<section class="ref-panel" id="ref-panel" data-grid="{{ url_for('referentes.grid', cliente=cliente) }}">
+  <div class="exp-filtros ref-chips" data-filtro="etapa">
+    <button type="button" class="chip activo" data-valor="">Todos</button>
+    {% for e in ref_etapas %}<button type="button" class="chip" data-valor="{{ e }}">{{ ref_etiquetas_etapa[e] | capitalize }}</button>{% endfor %}
+  </div>
+  <div class="exp-filtros ref-chips" data-filtro="consciencia">
+    <button type="button" class="chip activo" data-valor="">Cualquier consciencia</button>
+    {% for c in ref_consciencias %}<button type="button" class="chip" data-valor="{{ c }}">{{ ref_etiquetas_consciencia[c] | capitalize }}</button>{% endfor %}
+  </div>
+  <div class="ref-selects">
+    <select data-filtro="marca"><option value="">Todas las marcas</option>{% for m, n in ref_opciones.marcas %}<option value="{{ m }}">{{ m }} ({{ n }})</option>{% endfor %}</select>
+    <select data-filtro="familia"><option value="">Todas las familias</option>{% for f, n in ref_opciones.familias %}<option value="{{ f }}">{{ f }} ({{ n }})</option>{% endfor %}</select>
+    <select data-filtro="dolor"><option value="">Cualquier dolor</option>{% for d, n in ref_opciones.dolores %}<option value="{{ d }}">{{ d }} ({{ n }})</option>{% endfor %}</select>
+    <select data-filtro="fuente"><option value="">Todas las fuentes</option>{% for f, n in ref_opciones.fuentes %}<option value="{{ f }}">{{ f }} ({{ n }})</option>{% endfor %}<option value="mios">Solo míos</option></select>
+    <input type="search" data-filtro="q" placeholder="Buscar en titular, firma o marca" maxlength="80">
+  </div>
+  <div id="ref-grid" class="ref-grid"><p class="vacio">Cargando referentes…</p></div>
+</section>
+
+<dialog class="generado-modal" id="ref-modal">
+  <button type="button" class="generado-cerrar" id="ref-modal-cerrar" aria-label="Cerrar">×</button>
+  <div id="ref-modal-cuerpo"></div>
+</dialog>
+
+<script>
+  (function () {
+    var panel = document.getElementById('ref-panel');
+    if (!panel) return;
+    var grid = document.getElementById('ref-grid');
+    var modal = document.getElementById('ref-modal');
+    var cuerpo = document.getElementById('ref-modal-cuerpo');
+    var urlGrid = panel.dataset.grid;
+    var filtros = {};
+    var cargado = false;
+
+    function leerHash() {
+      var h = location.hash || '';
+      if (h.indexOf('#referentes') !== 0 || h.indexOf('?') < 0) return {};
+      var q = new URLSearchParams(h.slice(h.indexOf('?') + 1)), out = {};
+      q.forEach(function (v, k) { if (v) out[k] = v; });
+      return out;
+    }
+    function escribirHash() {
+      var q = new URLSearchParams();
+      Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
+      var s = q.toString();
+      history.replaceState(null, '', '#referentes' + (s ? '?' + s : ''));
+    }
+    function pintarControles() {
+      panel.querySelectorAll('.ref-chips').forEach(function (g) {
+        var v = filtros[g.dataset.filtro] || '';
+        g.querySelectorAll('.chip').forEach(function (b) { b.classList.toggle('activo', b.dataset.valor === v); });
+      });
+      panel.querySelectorAll('select[data-filtro], input[data-filtro]').forEach(function (el) {
+        el.value = filtros[el.dataset.filtro] || '';
+      });
+    }
+    function pedir(pagina, anexar) {
+      var q = new URLSearchParams();
+      Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
+      if (pagina > 1) q.set('pagina', pagina);
+      fetch(urlGrid + '?' + q.toString(), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.text(); })
+        .then(function (html) {
+          if (!anexar) { grid.innerHTML = html; return; }
+          var tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          var tarjetas = grid.querySelector('.ref-tarjetas');
+          tmp.querySelectorAll('.ref-tarjeta').forEach(function (t) { tarjetas.appendChild(t); });
+          var viejo = grid.querySelector('.ref-mas');
+          if (viejo) viejo.remove();
+          var nuevo = tmp.querySelector('.ref-mas');
+          if (nuevo) grid.appendChild(nuevo);
+        })
+        .catch(function () { grid.innerHTML = '<p class="vacio">No se pudo cargar la biblioteca. Recarga la página.</p>'; });
+    }
+    function recargar() { escribirHash(); pedir(1, false); }
+
+    panel.querySelectorAll('.ref-chips .chip').forEach(function (b) {
+      b.addEventListener('click', function () {
+        filtros[b.closest('.ref-chips').dataset.filtro] = b.dataset.valor;
+        pintarControles(); recargar();
+      });
+    });
+    panel.querySelectorAll('select[data-filtro]').forEach(function (s) {
+      s.addEventListener('change', function () { filtros[s.dataset.filtro] = s.value; recargar(); });
+    });
+    var buscador = panel.querySelector('input[data-filtro="q"]'), temporizador = null;
+    buscador.addEventListener('input', function () {
+      clearTimeout(temporizador);
+      temporizador = setTimeout(function () { filtros.q = buscador.value.trim(); recargar(); }, 350);
+    });
+    grid.addEventListener('click', function (ev) {
+      var mas = ev.target.closest('[data-siguiente]');
+      if (mas) { pedir(parseInt(mas.dataset.siguiente, 10), true); return; }
+      var media = ev.target.closest('[data-ficha]');
+      if (!media) return;
+      fetch(media.dataset.ficha, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) { cuerpo.innerHTML = html; modal.showModal(); })
+        .catch(function () { alert('No se pudo abrir la ficha.'); });
+    });
+    document.getElementById('ref-modal-cerrar').addEventListener('click', function () { modal.close(); });
+    modal.addEventListener('click', function (ev) { if (ev.target === modal) modal.close(); });
+
+    function iniciar() {
+      if (cargado) return;
+      cargado = true;
+      filtros = leerHash();
+      pintarControles();
+      pedir(1, false);
+    }
+    // La pestaña se activa desde cliente.html (clase .activo en #tab-referentes).
+    var tab = document.getElementById('tab-referentes');
+    if (tab.classList.contains('activo')) iniciar();
+    new MutationObserver(function () { if (tab.classList.contains('activo')) iniciar(); })
+      .observe(tab, { attributes: true, attributeFilter: ['class'] });
+  })();
+</script>
+{% endif %}
