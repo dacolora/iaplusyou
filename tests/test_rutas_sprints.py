@@ -340,6 +340,22 @@ def test_campana_referencias_biblioteca_404_campana_ajena(app):
     assert r.status_code == 404
 
 
+def test_campana_ver_renderiza_referencia_biblioteca_sin_paleta(app, monkeypatch):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
+        "id": rid, "estado_imagen": "ok", "imagen_url": "https://cdn/ref.jpg", "titular": "T",
+        "firma": "Por qué funciona", "familia": None, "etapa": "TOF", "consciencia": None, "dolor": None,
+    })
+    monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [])
+    datos.agregar_referencia_biblioteca("acme", cid, 5)
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert b"Por qu\xc3\xa9 funciona" in r.data or "Por qué funciona".encode() in r.data
+
+
 def test_referencias_subir_una_falla_al_guardar_no_pierde_las_demas(app, monkeypatch):
     from sprints import archivos, datos
     pid, tid = _base(datos)

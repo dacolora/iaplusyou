@@ -48,6 +48,8 @@
   <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
     <button type="submit" class="btn-sm">Traer las fotos del producto</button>
   </form>
+  <a class="btn-sm" href="#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}"
+     onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Elegir de la biblioteca</a>
   {% if otras_campanas %}
   <details class="inline sprint-reutilizar">
     <summary class="btn-sm">Reutilizar de otra campaña</summary>
@@ -86,7 +88,7 @@
       <div class="sprint-ref-analisis" data-estado="{{ r.analisis_estado }}">
         {% if r.analisis_estado == "listo" and r.analisis %}
           <p>{{ r.analisis.resumen }}</p>
-          <div class="sprint-paleta">{% for c in r.analisis.paleta %}<span title="{{ c }}" style="background: {{ c }}"></span>{% endfor %}</div>
+          <div class="sprint-paleta">{% for c in (r.analisis.paleta or []) %}<span title="{{ c }}" style="background: {{ c }}"></span>{% endfor %}</div>
           <details><summary>Ver análisis completo</summary>
             <dl class="sprint-analisis-dl">
               <dt>Composición</dt><dd>{{ r.analisis.composicion }}</dd>
@@ -95,7 +97,7 @@
               <dt>Tipografía</dt><dd>{{ r.analisis.tipografia }}</dd>
               <dt>Estética</dt><dd>{{ r.analisis.estetica }}</dd>
               <dt>Storytelling</dt><dd>{{ r.analisis.storytelling }}</dd>
-              <dt>Elementos</dt><dd>{{ r.analisis.elementos | join(", ") }}</dd>
+              <dt>Elementos</dt><dd>{{ (r.analisis.elementos or []) | join(", ") }}</dd>
             </dl>
           </details>
         {% elif r.analisis_estado == "error" %}
