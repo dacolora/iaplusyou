@@ -102,8 +102,10 @@ def familia_actualizar(familia_id, descripcion):
 def listar_por_familia(familia, limite=3):
     t = db.referente
     with db.conectar() as con:
-        return [_a_dict(r) for r in con.execute(sa.select(t).where(t.c.familia == familia, t.c.firma.isnot(None))
-                                                   .order_by(sa.desc(t.c.variantes).nulls_last()).limit(limite))]
+        return [_a_dict(r) for r in con.execute(
+            sa.select(t).where(t.c.familia == familia, t.c.cliente.is_(None), t.c.estado_imagen == "ok",
+                              t.c.firma.isnot(None))
+            .order_by(sa.desc(t.c.variantes).nulls_last()).limit(limite))]
 
 
 # -------------------------------------------------------------- referentes ---
@@ -256,12 +258,21 @@ def contar_imagenes(fuente=None):
 # ------------------------------------------------------------ traducciones ---
 
 def sin_traducir(limite=100):
+    # Filtro en SQL (no en Python) para que LIMIT devuelva exactamente lo pedido:
+    # con miles de filas, un filtro post-LIMIT puede agotar la ventana en filas
+    # ya traducidas y devolver [] aunque queden filas reales sin traducir más
+    # abajo en el orden de id. json_extract sobre un booleano da el entero
+    # 0/1 de SQLite, nunca True/False de Python — de ahí el `== 0` y el
+    # `.is_(None)` en vez de `== False` (que no matchearía).
     t = db.referente
-    q = (sa.select(t).where(t.c.fuente == "copycoders", t.c.firma.isnot(None), t.c.firma != "")
-         .order_by(t.c.id).limit(limite * 4))
+    cond_no_traducida = sa.or_(
+        sa.func.json_extract(t.c.extra, "$.traducida").is_(None),
+        sa.func.json_extract(t.c.extra, "$.traducida") == 0,
+    )
+    q = (sa.select(t).where(t.c.fuente == "copycoders", t.c.firma.isnot(None), t.c.firma != "", cond_no_traducida)
+         .order_by(t.c.id).limit(limite))
     with db.conectar() as con:
-        filas = [_a_dict(r) for r in con.execute(q)]
-    return [r for r in filas if not (r.get("extra") or {}).get("traducida")][:limite]
+        return [_a_dict(r) for r in con.execute(q)]
 
 
 def marcar_traducidas(pares):

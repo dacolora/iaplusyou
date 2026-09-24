@@ -43,13 +43,13 @@ def encolar_importar_copycoders(url=copycoders.URL_SWIPE, pedido_por=None):
         return False
     bid = datos.crear_barrido(None, "copycoders", {"url": url}, 0, pedido_por=pedido_por)
     return trabajos.encolar(JOB_IMPORTAR, TIPO_IMPORTAR, {"url": url, "barrido_id": bid, "fase": "anuncios"},
-                            duracion_estimada=2400, etapas=ETAPAS_IMPORTAR, max_intentos=1, prioridad=8)
+                            duracion_estimada=2400, etapas=ETAPAS_IMPORTAR, max_intentos=1, prioridad=2)
 
 
 def _continuar(tarea, payload):
     cuando = (datetime.now() + timedelta(seconds=ESPERA_CONT)).isoformat(timespec="seconds")
     cola.encolar(TIPO_IMPORTAR, payload, job_id=_job_continuacion(tarea.get("job_id") or JOB_IMPORTAR),
-                 duracion_estimada=2400, etapas=ETAPAS_IMPORTAR, ejecutar_desde=cuando, max_intentos=1, prioridad=8)
+                 duracion_estimada=2400, etapas=ETAPAS_IMPORTAR, ejecutar_desde=cuando, max_intentos=1, prioridad=2)
 
 
 def _fase_anuncios(tarea, p, bid, avanzar):
@@ -80,7 +80,10 @@ def _fase_imagenes(tarea, p, bid, avanzar):
         try:
             url = imagenes.guardar_en_r2(r["anuncio_id"], r["imagen_origen"], CARPETA)
             datos.marcar_imagen(r["id"], "ok", url)
-        except imagenes.ImagenInvalida:
+        except Exception:
+            # No solo ImagenInvalida: guardar_en_r2 también puede lanzar un
+            # error transitorio de R2/red (botocore, requests) — una imagen
+            # mala no debe abortar el tramo entero (max_intentos=1).
             datos.marcar_imagen(r["id"], "error")
         c = datos.contar_imagenes("copycoders")
         total = sum(c.values()) or 1
@@ -107,12 +110,14 @@ def _registrar_traduccion(tarea, bid, lote, ent, sal, detalle):
 
 def _fase_traducir(tarea, p, bid, avanzar):
     avanzar("Traduciendo")
+    progreso = False
     for lote in range(LOTES_TRADUCCION):
         pendientes = datos.sin_traducir(limite=TRAMO)
         if not pendientes:
             break
         trad, ent, sal = copycoders.traducir_firmas([(r["id"], r["firma"]) for r in pendientes])
-        datos.marcar_traducidas(list(trad.items()))
+        if datos.marcar_traducidas(list(trad.items())):
+            progreso = True
         _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, "traducción de firmas copycoders")
         if not trad:
             break
@@ -126,12 +131,23 @@ def _fase_traducir(tarea, p, bid, avanzar):
             if f["nombre"] in desc:
                 datos.familia_actualizar(f["id"], desc[f["nombre"]])
         _registrar_traduccion(tarea, bid, f"familias{len(familias)}", ent, sal, "descripción de familias copycoders")
-    if datos.sin_traducir(limite=1) or len(familias) > FAMILIAS_POR_LLAMADA:
+    quedan = bool(datos.sin_traducir(limite=1))
+    # Solo re-encolar por firmas si esta pasada avanzó algo: si una pasada
+    # completa no tradujo ni una fila (Claude omitió las mismas otra vez), la
+    # próxima pasada pegaría contra las mismas filas para siempre — un
+    # re-encolado (y una llamada pagada) cada ESPERA_CONT segundos sin fin.
+    if (quedan and progreso) or len(familias) > FAMILIAS_POR_LLAMADA:
         _continuar(tarea, {**p, "fase": "traducir"})
         return "Traduciendo firmas…"
     c = datos.contar_imagenes("copycoders")
-    aviso = f"{c['error']} imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir." if c["error"] else None
-    datos.actualizar_barrido(bid, estado="parcial" if c["error"] else "listo", con_imagen=c["ok"], aviso=aviso)
+    avisos = []
+    if quedan:
+        avisos.append(f"{len(datos.sin_traducir(limite=9999))} firmas no se pudieron traducir; "
+                      "reintenta la importación más tarde.")
+    if c["error"]:
+        avisos.append(f"{c['error']} imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.")
+    estado = "parcial" if (quedan or c["error"]) else "listo"
+    datos.actualizar_barrido(bid, estado=estado, con_imagen=c["ok"], aviso=" ".join(avisos) or None)
     return f"Importación terminada: {c['ok']} referentes con imagen."
 
 

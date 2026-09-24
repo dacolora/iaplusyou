@@ -142,6 +142,35 @@ def test_imagenes_y_traducciones(base_temporal):
     assert datos.sin_traducir() == []
 
 
+def test_sin_traducir_es_exacto_y_no_se_salta_filas_por_orden(base_temporal):
+    from referentes import datos
+    ids = []
+    for i in range(8):
+        # Las primeras 5 (menor id) ya traducidas; con la ventana vieja
+        # (limite*4 filtrado en Python) un limite=1 sólo miraba las 4
+        # primeras filas y las encontraba todas traducidas, devolviendo []
+        # aunque quedaran 3 filas reales sin traducir más abajo.
+        rid, _ = datos.guardar_referente(_anuncio(anuncio_id=f"st-{i}", firma=f"firma {i}",
+                                                  extra={"traducida": i < 5}))
+        ids.append(rid)
+    pendiente = datos.sin_traducir(limite=1)
+    assert len(pendiente) == 1 and pendiente[0]["id"] == ids[5]
+    assert [r["id"] for r in datos.sin_traducir(limite=2)] == ids[5:7]
+    assert len(datos.sin_traducir(limite=100)) == 3
+
+
+def test_listar_por_familia_no_devuelve_referentes_privados(base_temporal):
+    from referentes import datos
+    rid_global, _ = datos.guardar_referente(_anuncio(anuncio_id="fam-global", familia="Price Slash Hero",
+                                                     firma="firma global"))
+    datos.marcar_imagen(rid_global, "ok", "https://r2/fam-global.jpg")
+    rid_privado, _ = datos.guardar_referente(_anuncio(anuncio_id="fam-privado", familia="Price Slash Hero",
+                                                      firma="firma privada"), cliente="acme")
+    datos.marcar_imagen(rid_privado, "ok", "https://r2/fam-privado.jpg")
+    resultado = datos.listar_por_familia("Price Slash Hero")
+    assert [r["id"] for r in resultado] == [rid_global]
+
+
 def test_barridos(base_temporal):
     from referentes import datos
     bid = datos.crear_barrido(None, "copycoders", {"url": "https://x"}, 0, pedido_por="admin")

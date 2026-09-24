@@ -42,6 +42,20 @@ def test_normalizar():
     assert c["dolor"] is None and c["firma"] is None and c["titular"] == "" and c["extra"]["traducida"] is True
 
 
+def test_normalizar_rechaza_url_con_esquema_no_http(monkeypatch):
+    from referentes import copycoders
+    filas = copycoders.extraer_datos(_html())
+    fila = dict(filas[0])
+    # Mismo id vía ?id=... para que la extracción de anuncio_id no cambie,
+    # pero con un esquema que no debe terminar en un <a href> clicable.
+    fila["lib"] = "javascript:alert(1)?id=1931355470987046"
+    fila["blib"] = "javascript:alert(2)?id=555"
+    a = copycoders.normalizar(fila, copycoders.URL_SWIPE)
+    assert a["anuncio_id"] == "1931355470987046"
+    assert a["url_anuncio"] is None and a["url_marca"] is None
+    assert a["marca"] == "Lulutox Tea" and a["titular"] == "WE'RE SAYING GOODBYE"   # el resto de la fila normaliza igual
+
+
 def test_normalizar_descarta_sin_id_o_sin_imagen():
     from referentes import copycoders
     base = {"img": "https://cdn.tryatria.com/x.jpeg", "brand": "M", "headline": "H", "aw": "unaware", "stage": "TOF",

@@ -65,6 +65,14 @@ def _dolor(v):
     return DOLOR_ESPECIAL.get(v, v)
 
 
+def _url_segura(v):
+    """Solo http(s): la página de origen no está controlada y esto termina
+    directo en un <a href> — sin esto, un `javascript:...?id=` que igual
+    matchee _RE_ID quedaría guardado y clicable."""
+    v = datos._texto(v)
+    return v if v.startswith(("http://", "https://")) else None
+
+
 def normalizar(fila, base_url):
     m = _RE_ID.search(fila.get("lib") or "")
     img = datos._texto(fila.get("img"))
@@ -76,8 +84,8 @@ def normalizar(fila, base_url):
     consciencia = fila.get("aw") if fila.get("aw") in datos.CONSCIENCIAS else None
     return {
         "anuncio_id": m.group(1), "pagina_id": pagina.group(1) if pagina else None, "fuente": "copycoders",
-        "marca": datos._texto(fila.get("brand"), 160), "url_anuncio": datos._texto(fila.get("lib")),
-        "url_marca": datos._texto(fila.get("blib")) or None, "titular": datos._texto(fila.get("headline")),
+        "marca": datos._texto(fila.get("brand"), 160), "url_anuncio": _url_segura(fila.get("lib")),
+        "url_marca": _url_segura(fila.get("blib")), "titular": datos._texto(fila.get("headline")),
         "cuerpo": "", "idioma": "en", "pais": None, "tipo": "imagen", "imagen_origen": urljoin(base_url, img),
         "dias": datos._entero(fila.get("days")), "variantes": datos._entero(fila.get("variants")),
         "primera_vez": None, "ultima_vez": None, "activo": not bool(fila.get("retired")),

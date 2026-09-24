@@ -41,6 +41,18 @@ def test_guardar_en_r2_rechaza_lo_que_no_es_imagen(monkeypatch, tmp_path):
         assert os.listdir(carpeta) == []
 
 
+def test_guardar_en_r2_rechaza_url_interna(monkeypatch, tmp_path):
+    from referentes import imagenes
+    carpeta = tmp_path / "salida"
+    # Dirección literal: host_permitido la rechaza sin resolver DNS ni tocar
+    # la red (ver tests/test_conectores_archivo_url.py), así que esto corre
+    # offline. No se monkeypatchea `_bajar`: se ejercita la guarda real.
+    monkeypatch.setattr(imagenes.r2_uploader, "upload_image", lambda local, clave: pytest.fail("no debe subir"))
+    with pytest.raises(imagenes.ImagenInvalida):
+        imagenes.guardar_en_r2("1", "http://169.254.169.254/latest/meta-data/", str(carpeta))
+    assert not os.path.exists(carpeta)
+
+
 def test_guardar_en_r2_propaga_fallo_de_descarga(monkeypatch, tmp_path):
     from referentes import imagenes
     carpeta = tmp_path / "salida"
