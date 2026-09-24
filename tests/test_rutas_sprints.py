@@ -782,3 +782,41 @@ def test_referencias_ajax_muestra_los_avisos_de_cobertura_como_texto(app):
     assert "Te faltan referencias de movimiento de cámara o transiciones" in html
     assert "% cobertura" not in html and "['" not in html
     assert "0/5 referencias" in html
+
+
+def test_campana_sugerir_ia_encola_tarea(app, monkeypatch):
+    from sprints import datos, rutas
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    llamadas = []
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_sugerir_biblioteca",
+                        lambda cliente_, cid_: llamadas.append((cliente_, cid_)) or True)
+    r = app["c"].post(f"/cliente/acme/sprints/campanas/{cid}/sugerir_ia", follow_redirects=False)
+    assert r.status_code == 302
+    assert f"/sprints/{sid}/campanas/{cid}" in r.headers["Location"]
+    assert llamadas == [("acme", cid)]
+
+
+def test_campana_sugerir_ia_ya_en_curso(app, monkeypatch):
+    from sprints import datos, rutas
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_sugerir_biblioteca", lambda cliente_, cid_: False)
+    r = app["c"].post(f"/cliente/acme/sprints/campanas/{cid}/sugerir_ia", follow_redirects=True)
+    assert r.status_code == 200
+    assert "Ya hay una sugerencia en curso para esta campaña." in r.data.decode()
+
+
+def test_campana_ver_muestra_candidatos_ia(app, monkeypatch):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    datos.actualizar_campana("acme", cid, extra={"sugerencias_ia": [{"referente_id": 5, "razon": "buena razón"}]})
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
+        "id": rid, "imagen_url": "https://cdn/5.jpg", "titular": "Candidato IA", "familia": "ugc",
+    } if rid == 5 else None)
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert b"Candidato IA" in r.data
+    assert "buena razón".encode() in r.data

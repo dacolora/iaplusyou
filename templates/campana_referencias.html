@@ -54,6 +54,20 @@
     <summary class="btn-sm">Sugerir de la biblioteca (gratis)</summary>
     {{ candidatos_biblioteca(candidatos_gratis, campana.id, cliente) }}
   </details>
+  <details class="inline sprint-reutilizar" {% if candidatos_ia %}open{% endif %}>
+    <summary class="btn-sm">Sugerir con IA ({{ precio_sugerir_ia.texto }})</summary>
+    {% if candidatos_ia %}
+      {{ candidatos_biblioteca(candidatos_ia, campana.id, cliente, con_razon=True) }}
+    {% else %}
+      <form method="post" action="{{ url_for('sprints.campana_sugerir_ia', cliente=cliente, cid=campana.id) }}" class="inline">
+        <button type="submit" class="btn-generar btn-sm">Pedirle a Claude que sugiera</button>
+      </form>
+    {% endif %}
+    {% if trabajo_sugerir_ia %}
+    <div class="barra-progreso" id="trabajo-{{ trabajo_sugerir_ia.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+    <script>iniciarPolling({{ trabajo_sugerir_ia.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_sugerir_ia.job_id) | tojson }});</script>
+    {% endif %}
+  </details>
   {% if otras_campanas %}
   <details class="inline sprint-reutilizar">
     <summary class="btn-sm">Reutilizar de otra campaña</summary>

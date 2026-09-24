@@ -15,10 +15,12 @@ from flask import (Blueprint, abort, flash, has_request_context, jsonify, redire
                    session, url_for)
 
 import catalogo_productos
+import gastos
 import proyectos
 import trabajos
 from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
+from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
 from sprints import archivos, calendario, datos, entrega, estado, ideas, produccion, progreso, revision as revision_mod
 from tareas import sprints as tareas_sprints
@@ -480,11 +482,20 @@ def campana_ver(cliente, sid, cid):
     ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs} - {None}
     objetivo_restante = max(1, (c.get("referencias_objetivo") or 1) - len(refs))
     candidatos_gratis = referentes_sugerir.sugerir(cliente, c["funnel"].upper(), ya_ids, objetivo_restante)
+    sugerencias_ia_crudas = (c.get("extra") or {}).get("sugerencias_ia") or []
+    candidatos_ia = []
+    for item in sugerencias_ia_crudas:
+        ref = referentes_datos.referente(cliente, item.get("referente_id"))
+        if ref:
+            candidatos_ia.append({**ref, "razon": item.get("razon") or ""})
+    job_sugerir_ia = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
     return render_template("campana_referencias.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, campana=c, referencias=refs, producto=producto, otras_campanas=otras,
                            intenciones_sprint=datos.INTENCIONES_NOMBRE, cobertura=progreso.cobertura(c, refs),
                            trabajo_link={"job_id": job_link} if trabajos.en_curso(job_link) else None,
-                           candidatos_gratis=candidatos_gratis)
+                           candidatos_gratis=candidatos_gratis, candidatos_ia=candidatos_ia,
+                           trabajo_sugerir_ia={"job_id": job_sugerir_ia} if trabajos.en_curso(job_sugerir_ia) else None,
+                           precio_sugerir_ia=gastos.estimar("sugerir_ia"))
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/referencias")
@@ -597,6 +608,22 @@ def campana_referencias_biblioteca(cliente, cid):
         flash(f"{n} referente(s) agregado(s) desde la biblioteca.", "ok")
     else:
         flash("No se agregó ningún referente.", "error")
+    return _volver(cliente, c["sprint_id"], cid)
+
+
+@bp.post("/campanas/<int:cid>/sugerir_ia")
+def campana_sugerir_ia(cliente, cid):
+    """Encola `referentes_sugerir_ia` (Task 7): Claude propone candidatos de
+    la biblioteca para esta campaña, escritos luego en
+    `campana.extra['sugerencias_ia']`. Sin `sid` en la URL por la misma
+    razón que `campana_referencias_biblioteca`."""
+    c = datos.campana(cliente, cid)
+    if not c:
+        abort(404)
+    if tareas_sprints.encolar_sugerir_biblioteca(cliente, cid):
+        flash("Claude está buscando referentes de la biblioteca; aparecerán aquí en unos segundos.", "ok")
+    else:
+        flash("Ya hay una sugerencia en curso para esta campaña.", "error")
     return _volver(cliente, c["sprint_id"], cid)
 
 
