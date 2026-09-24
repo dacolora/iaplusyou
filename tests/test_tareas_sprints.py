@@ -296,3 +296,77 @@ def test_empaquetar_tarea(base_temporal, monkeypatch):
     encolados = []
     monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload, kw)) or True)
     assert ts.encolar_zip("acme", 4) is True and encolados[0][0] == "acme__sprint4__zip" and encolados[0][3]["max_intentos"] == 2
+
+
+def test_job_id_y_encolar_sugerir_biblioteca(base_temporal, monkeypatch):
+    import trabajos
+    from tareas import sprints as ts
+    assert ts.job_id_sugerir_biblioteca("acme", 9) == "acme__campana9__sugerir_biblioteca"
+    encolados = []
+    monkeypatch.setattr(trabajos, "encolar", lambda job_id, tipo, payload, **kw: encolados.append((job_id, tipo, payload, kw)) or True)
+    assert ts.encolar_sugerir_biblioteca("acme", 9) is True
+    job_id, tipo, payload, kw = encolados[0]
+    assert job_id == "acme__campana9__sugerir_biblioteca" and tipo == "referentes_sugerir_ia"
+    assert payload == {"cliente": "acme", "campana_id": 9} and kw["max_intentos"] == 1 and kw["cliente"] == "acme"
+
+
+def test_ejecutar_sugerir_biblioteca_guarda_sugerencias(base_temporal, monkeypatch):
+    import gastos
+    import tareas
+    import referentes.sugerir as referentes_sugerir
+    from sprints import datos
+    sid, cid, rid = _referencia(datos)
+    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [
+        {"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2},
+    ])
+    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo: (
+        [{"referente_id": 5, "razon": "encaja"}], 100, 20))
+    tareas.cargar_todas()
+    tarea = {"id": 1, "payload": {"cliente": "acme", "campana_id": cid}}
+    resultado = tareas.REGISTRO["referentes_sugerir_ia"](tarea)
+    assert "1" in resultado
+    c = datos.campana("acme", cid)
+    assert c["extra"]["sugerencias_ia"] == [{"referente_id": 5, "razon": "encaja"}]
+    filas = [f for f in gastos.historial("acme") if f["tipo"] == "sugerir_ia"]
+    assert len(filas) == 1 and filas[0]["usd"] > 0
+
+
+def test_ejecutar_sugerir_biblioteca_sin_candidatos(base_temporal, monkeypatch):
+    import tareas
+    import referentes.sugerir as referentes_sugerir
+    from sprints import datos
+    sid, cid, rid = _referencia(datos)
+    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [])
+    tareas.cargar_todas()
+    tarea = {"id": 1, "payload": {"cliente": "acme", "campana_id": cid}}
+    resultado = tareas.REGISTRO["referentes_sugerir_ia"](tarea)
+    assert "biblioteca" in resultado.lower() or "candidatos" in resultado.lower()
+    c = datos.campana("acme", cid)
+    assert not (c.get("extra") or {}).get("sugerencias_ia")
+
+
+def test_ejecutar_sugerir_biblioteca_respuesta_invalida_registra_gasto_y_relanza(base_temporal, monkeypatch):
+    """Autorrevisión: una respuesta de Claude que no parsea (`SugerenciaInvalida`)
+    igual cobra los tokens ya gastados, y la excepción sigue subiendo para que
+    la cola marque la tarea en error en vez de darla por buena en silencio."""
+    import gastos
+    import tareas
+    import referentes.sugerir as referentes_sugerir
+    from sprints import datos
+    sid, cid, rid = _referencia(datos)
+    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [
+        {"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2},
+    ])
+    def rompe(cands, p, pr, t, objetivo):
+        e = referentes_sugerir.SugerenciaInvalida("no parsea")
+        e.tokens_entrada, e.tokens_salida = 90, 15
+        raise e
+    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", rompe)
+    tareas.cargar_todas()
+    tarea = {"id": 2, "payload": {"cliente": "acme", "campana_id": cid}}
+    with pytest.raises(referentes_sugerir.SugerenciaInvalida):
+        tareas.REGISTRO["referentes_sugerir_ia"](tarea)
+    c = datos.campana("acme", cid)
+    assert not (c.get("extra") or {}).get("sugerencias_ia")
+    filas = [f for f in gastos.historial("acme") if f["tipo"] == "sugerir_ia"]
+    assert len(filas) == 1 and filas[0]["usd"] > 0 and filas[0]["detalle"] == "respuesta inválida"

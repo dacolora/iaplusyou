@@ -6,15 +6,22 @@ con el prompt maestro (Parte 2, también solo texto) y el control de calidad
 automático de una pieza ya generada (también Parte 2, centavos de visión).
 
 Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
-  sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"   (max_intentos=3)
-  sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"      (max_intentos=2)
-  sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"      (max_intentos=2)
-  sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"     (max_intentos=2)
-  sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                  (max_intentos=3)
+  sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"          (max_intentos=3)
+  sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=2)
+  sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"             (max_intentos=2)
+  sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=2)
+  sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=3)
+  referentes_sugerir_ia      -> f"{cliente}__campana{campana_id}__sugerir_biblioteca" (max_intentos=1)
 
 `sprint_qa_pendientes` es la periódica (worker.PERIODICAS, cada 300 s) que
 encola sprint_qa_pieza para toda pieza lista sin qa, y avisa (notificaciones)
 cuando un lote de producción (sprints/produccion.py) termina.
+
+`referentes_sugerir_ia` es la puerta paga («Sugerir con IA») de la biblioteca
+de referentes (spec 2026-09-23 §10): candidatos de `referentes.sugerir` +
+Claude eligen hasta lo que falta para el objetivo de referencias de la
+campaña, con el gasto real registrado tanto si acierta como si la respuesta
+no parsea.
 """
 import os
 from datetime import datetime
@@ -22,15 +29,19 @@ from datetime import datetime
 import sqlalchemy as sa
 
 import bitacora
+import catalogo_productos
 import cola
 import creative_flow
 import db
+import gastos
 import notificaciones
 import proyectos
 import referencias_link
 import trabajos
+from nicho.avatares import costo_real, modelo_actual
+from referentes import sugerir as referentes_sugerir
 from sprints import analisis, archivos, datos, entrega, estado, ideas, produccion, qa, sugerencias
-from tareas import al_interrumpir, registrar
+from tareas import al_interrumpir, ref_sufijo, registrar
 
 
 def job_id_analizar(cliente, referencia_id):
@@ -135,6 +146,64 @@ def ejecutar_proponer_ideas(tarea):
     if c:
         estado.recalcular(cliente, c["sprint_id"])
     return f"{len(creadas)} ideas propuestas — revísalas y aprueba las que sirvan."
+
+
+def job_id_sugerir_biblioteca(cliente, campana_id):
+    return f"{cliente}__campana{campana_id}__sugerir_biblioteca"
+
+
+def encolar_sugerir_biblioteca(cliente, campana_id):
+    return trabajos.encolar(job_id_sugerir_biblioteca(cliente, campana_id), "referentes_sugerir_ia",
+                            {"cliente": cliente, "campana_id": int(campana_id)}, cliente=cliente,
+                            duracion_estimada=20, max_intentos=1)
+
+
+@registrar("referentes_sugerir_ia")
+def ejecutar_sugerir_biblioteca(tarea):
+    """«Sugerir con IA» de la biblioteca de referentes (spec §10): candidatos
+    de la misma etapa que el funnel de la campaña, sin repetir lo ya usado
+    (`referencia.extra.referente_id`), y Claude elige hasta lo que falta para
+    el objetivo de referencias. El gasto real se registra tanto si Claude
+    acierta como si la respuesta no parsea (`SugerenciaInvalida` trae los
+    tokens ya gastados) — y en ese caso la excepción sigue subiendo para que
+    la cola marque la tarea en error en vez de darla por buena en silencio."""
+    p = tarea["payload"]
+    cliente, cid = p["cliente"], int(p["campana_id"])
+    c = datos.campana(cliente, cid)
+    if not c:
+        return "Esa campaña ya no existe."
+    persona = datos.persona(cliente, c["persona_id"]) or {}
+    producto = catalogo_productos.encontrar(cliente, c["catalogo_id"], categoria="producto") or {}
+    temporada = datos.temporada(cliente, c["temporada_id"]) or {}
+    refs_actuales = datos.referencias(cliente, cid)
+    ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs_actuales} - {None}
+    candidatos = referentes_sugerir.candidatos(cliente, c["funnel"].upper(), ya_ids, limite=60)
+    if not candidatos:
+        return "No hay candidatos nuevos en la biblioteca para esta etapa."
+    objetivo = max(1, (c.get("referencias_objetivo") or 1) - len(refs_actuales))
+    persona_texto = ". ".join(x for x in (persona.get("resumen"), persona.get("descripcion"), persona.get("tono")) if x)
+    producto_texto = ". ".join(x for x in (producto.get("nombre"), producto.get("descripcion")) if x)
+    temporada_texto = ". ".join(x for x in (temporada.get("nombre"), temporada.get("contexto")) if x)
+    try:
+        elegidos, ent, sal = referentes_sugerir.sugerir_ia(candidatos, persona_texto, producto_texto,
+                                                            temporada_texto, objetivo)
+    except referentes_sugerir.SugerenciaInvalida as e:
+        ent = getattr(e, "tokens_entrada", 0) or 0
+        sal = getattr(e, "tokens_salida", 0) or 0
+        if ent or sal:
+            usd = costo_real(ent, sal)
+            gastos.registrar_seguro(cliente, "sugerir_ia", usd, f"referentes:sugerir_ia:{cid}{ref_sufijo(tarea)}",
+                                    detalle="respuesta inválida", proveedor="anthropic",
+                                    extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+        raise
+    usd = costo_real(ent, sal)
+    gastos.registrar_seguro(cliente, "sugerir_ia", usd, f"referentes:sugerir_ia:{cid}{ref_sufijo(tarea)}",
+                            detalle=f"{len(elegidos)} sugerencia(s)", proveedor="anthropic",
+                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+    extra_actual = dict(c.get("extra") or {})
+    extra_actual["sugerencias_ia"] = elegidos
+    datos.actualizar_campana(cliente, cid, extra=extra_actual)
+    return f"{len(elegidos)} sugerencia(s) de la biblioteca lista(s) para revisar."
 
 
 def job_id_qa(cliente, cp_id):
