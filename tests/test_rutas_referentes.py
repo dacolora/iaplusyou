@@ -15,12 +15,16 @@ def app(base_temporal, monkeypatch, tmp_path):
     import dashboard
     import catalogo_productos
     import proyectos
-    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [
-        {"id": "espejo_led", "nombre": "Espejo LED", "descripcion": "redondo", "representativa_url": "https://r2/e.jpg"}])
+    productos = [{"id": "espejo_led", "nombre": "Espejo LED", "descripcion": "redondo",
+                 "representativa_url": "https://r2/e.jpg", "regla": "Reprodúcelo idéntico: marco negro mate.",
+                 "referencias": ["/x/a.jpg", "/x/b.jpg"]}]
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": productos)
+    monkeypatch.setattr(catalogo_productos, "encontrar",
+                        lambda c, pid, categoria=None: next((p for p in productos if p["id"] == pid), None))
     monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
     (tmp_path / "clientes" / "acme").mkdir(parents=True)
     (tmp_path / "clientes" / "otro").mkdir(parents=True)
-    return {"dashboard": dashboard, "c": _cliente_admin(dashboard)}
+    return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "productos": productos}
 
 
 def _anuncio(aid, **extra):
@@ -115,3 +119,32 @@ def test_admin_referentes_solo_admin(app):
         s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
     assert c.get("/admin/referentes").status_code == 302
     assert c.post("/admin/referentes/importar", data={}, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 302
+
+
+def test_recrear_formulario_precio_y_prompt(app):
+    from referentes import datos
+    ids = _sembrar()
+    c = app["c"]
+    html = c.get(f"/cliente/acme/referentes/{ids[0]}/recrear").data.decode()
+    assert "Espejo LED" in html and 'selected' in html
+    assert "Image 1" in html and "Image 2 y 3" in html and "Titular 0" in html
+    assert "Generar imagen" in html and "Como video" in html and "Adaptar con IA" in html
+    html_video = c.get(f"/cliente/acme/referentes/{ids[0]}/recrear?tipo=video").data.decode()
+    assert "Generar video" in html_video and "Cámara fija" in html_video
+    assert c.get(f"/cliente/acme/referentes/{ids[0]}/recrear?producto_id=espejo_led").status_code == 200
+
+
+def test_recrear_sin_productos_lleva_a_catalogo(app, monkeypatch):
+    from referentes import datos
+    import catalogo_productos
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    ids = _sembrar()
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/recrear").data.decode()
+    assert "Todavía no tienes productos" in html and "Ir a Catálogo" in html
+
+
+def test_recrear_referente_inexistente_o_sin_imagen_404(app):
+    from referentes import datos
+    rid, _ = datos.guardar_referente(_anuncio("500"))
+    assert app["c"].get(f"/cliente/acme/referentes/{rid}/recrear").status_code == 404
+    assert app["c"].get("/cliente/acme/referentes/999999/recrear").status_code == 404

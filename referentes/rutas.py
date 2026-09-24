@@ -6,7 +6,12 @@ bloque 1: fragmentos HTML para el grid (filtros + paginación) y la ficha.
 """
 from flask import Blueprint, abort, render_template, request
 
-from referentes import datos
+import catalogo_productos
+import gastos
+import marca as marca_mod
+import proyectos
+from providers import flowplus_modelos
+from referentes import datos, recrear
 
 bp = Blueprint("referentes", __name__, url_prefix="/cliente/<cliente>/referentes")
 _FILTROS = ("etapa", "consciencia", "familia", "dolor", "marca", "fuente", "q")
@@ -37,6 +42,62 @@ def grid(cliente):
     pagina = datos.listar(cliente, filtros, pagina=_entero(request.args.get("pagina"), 1), por_pagina=por_pagina)
     return render_template("_referentes_grid.html", cliente=cliente, pagina=pagina, filtros=filtros, por_pagina=por_pagina,
                            etiquetas_etapa=datos.ETIQUETAS_ETAPA, etiquetas_consciencia=datos.ETIQUETAS_CONSCIENCIA)
+
+
+def _producto_para(cliente, request_args_o_form):
+    productos = catalogo_productos.listar(cliente, "producto")
+    pid = request_args_o_form.get("producto_id") or (productos[0]["id"] if productos else None)
+    producto = catalogo_productos.encontrar(cliente, pid, categoria="producto") if pid else None
+    return productos, producto
+
+
+def _url_opcional(endpoint, **valores):
+    """`url_for` que no revienta si el endpoint todavía no existe:
+    `referentes.recrear_generar`/`referentes.recrear_adaptar` se agregan recién en
+    las Tareas 6 y 7 de este mismo bloque, pero la plantilla de la Tarea 5 ya los
+    referencia (botones «Generar»/«Adaptar con IA»). Import local a propósito: no
+    toca la línea de import de `flask` de arriba, así que la instrucción de la
+    Tarea 7 de sumar `url_for` a esa línea sigue aplicando tal cual cuando llegue."""
+    from flask import url_for
+    from werkzeug.routing import BuildError
+    try:
+        return url_for(endpoint, **valores)
+    except BuildError:
+        return "#"
+
+
+@bp.get("/<int:rid>/recrear")
+def recrear_form(cliente, rid):
+    r = datos.referente(cliente, rid)
+    if not r or r.get("estado_imagen") != "ok":
+        abort(404)
+    productos, producto = _producto_para(cliente, request.args)
+    tipo = request.args.get("tipo") if request.args.get("tipo") in ("imagen", "video") else "imagen"
+    formato = request.args.get("formato") or flowplus_modelos.FORMATO_DEFECTO
+    titular = request.args.get("titular")
+    if titular is None:
+        titular = r.get("titular") or ""
+    familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
+    prefs_sonido = proyectos.preferencias_sonido(cliente)
+    prompt = precio = None
+    if producto:
+        guia = marca_mod.guia_efectiva(cliente)
+        prompt = recrear.armar_prompt(r, familia, producto, guia, titular, formato, tipo=tipo,
+                                      con_sonido=prefs_sonido["con_sonido"])
+        n_refs = 1 + max(1, min(2, len(producto.get("referencias") or [1])))
+        if tipo == "imagen":
+            precio = gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs)
+        else:
+            duracion = proyectos.preferencias_flowplus(cliente)["duracion_defecto"]
+            precio = gastos.estimar("video", modelo=flowplus_modelos.VIDEO_POR_DEFECTO, duracion=duracion,
+                                    con_sonido=prefs_sonido["con_sonido"])
+    return render_template(
+        "_referente_recrear.html", cliente=cliente, r=r, productos=productos, producto=producto, tipo=tipo,
+        formato=formato, titular=titular, prompt=prompt or "", precio=precio,
+        precio_adaptar=gastos.estimar("adaptar_referente"),
+        formatos=flowplus_modelos.IMAGEN[flowplus_modelos.IMAGEN_POR_DEFECTO]["formatos"],
+        url_generar=_url_opcional("referentes.recrear_generar", cliente=cliente, rid=rid),
+        url_adaptar=_url_opcional("referentes.recrear_adaptar", cliente=cliente, rid=rid))
 
 
 @bp.get("/<int:rid>/ficha")

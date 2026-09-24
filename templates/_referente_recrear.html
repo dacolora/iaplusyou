@@ -1,0 +1,49 @@
+{# Formulario «Recrear con mi producto» (referentes.recrear_form), cargado en
+   el mismo <dialog> que la ficha. Contexto: cliente, r (referente), productos
+   (catalogo_productos.listar, solo con fotos), producto (elegido o None),
+   tipo (imagen|video), formato, formatos, titular, prompt, precio
+   (gastos.estimar o None sin producto), precio_adaptar. url_generar/url_adaptar
+   vienen ya resueltos de la ruta (referentes.rutas._url_opcional): apuntan a
+   POST /recrear/generar y /recrear/adaptar, que llegan en las Tareas 6 y 7 —
+   hasta entonces caen a "#". #}
+<div class="ref-recrear">
+  <p class="ref-recrear-titulo"><strong>Recrear «{{ r.titular or r.id }}» con mi producto</strong></p>
+  {% if not productos %}
+  <p class="vacio">Todavía no tienes productos con fotos en el catálogo.
+    <a href="#catalogo" onclick="document.querySelector('.sidebar-item[data-tab=catalogo]').click(); return false;">Ir a Catálogo →</a></p>
+  {% else %}
+  <form method="post" action="{{ url_generar }}" class="form-nueva-idea ref-recrear-form"
+        data-recrear="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}"
+        data-adaptar="{{ url_adaptar }}">
+    <input type="hidden" name="tipo" value="{{ tipo }}">
+    <div class="fe-opciones">
+      <label>Producto
+        <select name="producto_id" data-recrear-campo="producto_id">
+          {% for p in productos %}<option value="{{ p.id }}" {% if producto and p.id == producto.id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Formato
+        <select name="formato" data-recrear-campo="formato">
+          {% for f in formatos %}<option value="{{ f }}" {% if f == formato %}selected{% endif %}>{{ f }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Titular
+      <input type="text" name="titular" maxlength="200" value="{{ titular }}" data-recrear-campo="titular">
+    </label>
+    <label>Prompt
+      <textarea name="prompt" rows="6" data-recrear-campo="prompt">{{ prompt }}</textarea>
+    </label>
+    <div class="ref-recrear-acciones">
+      <button type="button" class="btn-guardar btn-sm" data-recrear-adaptar>Adaptar con IA{% if precio_adaptar.usd is not none %} ≈ {{ precio_adaptar.usd | usd }}{% endif %}</button>
+      {% if tipo == "imagen" %}
+      <button type="submit" class="btn-generar btn-sm">Generar imagen{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="video">Como video ▸</button>
+      {% else %}
+      <button type="submit" class="btn-generar btn-sm">Generar video{% if precio and precio.usd is not none %} ≈ {{ precio.usd | usd }}{% endif %}</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-tipo="imagen">← Como imagen</button>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
+</div>
