@@ -5,7 +5,6 @@ datos — `sprints.rutas`/`tareas.sprints` deciden cuándo llamarlo y cómo
 usar el resultado. `sugerir_ia` es la única función que llama a Claude.
 """
 import json
-import os
 
 import anthropic
 

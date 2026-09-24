@@ -48,8 +48,7 @@
   <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
     <button type="submit" class="btn-sm">Traer las fotos del producto</button>
   </form>
-  <a class="btn-sm" href="#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}"
-     onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Elegir de la biblioteca</a>
+  <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}">Elegir de la biblioteca</a>
   <details class="inline sprint-reutilizar">
     <summary class="btn-sm">Sugerir de la biblioteca (gratis)</summary>
     {{ candidatos_biblioteca(candidatos_gratis, campana.id, cliente) }}

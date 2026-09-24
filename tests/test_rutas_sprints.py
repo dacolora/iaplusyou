@@ -370,6 +370,21 @@ def test_campana_ver_muestra_candidatos_gratis(app, monkeypatch):
     assert b'value="9"' in r.data
 
 
+def test_campana_ver_enlace_biblioteca_apunta_a_ver_cliente(app):
+    """C1: el enlace «Elegir de la biblioteca» debe navegar a la página del
+    proyecto (ver_cliente) con el hash de Referentes — esta página es
+    standalone (no vive dentro de cliente.html), así que un simple
+    location.hash + reload nunca llega a la pestaña."""
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert f'href="/cliente/acme#referentes?etapa=' in html
+    assert 'href="#referentes?etapa=' not in html
+
+
 def test_referencias_subir_una_falla_al_guardar_no_pierde_las_demas(app, monkeypatch):
     from sprints import archivos, datos
     pid, tid = _base(datos)
@@ -820,3 +835,25 @@ def test_campana_ver_muestra_candidatos_ia(app, monkeypatch):
     assert r.status_code == 200
     assert b"Candidato IA" in r.data
     assert "buena razón".encode() in r.data
+
+
+def test_campana_ver_no_muestra_sugerencia_ia_ya_agregada(app, monkeypatch):
+    """I1: una sugerencia de IA cuyo referente ya está en las referencias de la
+    campaña (ya agregado con «Agregar las marcadas») no debe seguir apareciendo
+    como candidato — si no se filtra contra ya_ids, la sugerencia queda repintada
+    y pre-marcada tras el redirect aunque agregarla de nuevo ya no haga nada."""
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
+        "id": rid, "estado_imagen": "ok", "imagen_url": "https://cdn/5.jpg", "titular": "Candidato repetido",
+        "firma": "", "familia": None, "etapa": "TOF", "consciencia": None, "dolor": None,
+    })
+    monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [])
+    datos.agregar_referencia_biblioteca("acme", cid, 5)
+    datos.actualizar_campana("acme", cid, extra={"sugerencias_ia": [{"referente_id": 5, "razon": "buena razón"}]})
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert "buena razón".encode() not in r.data
+    assert b'name="referente_ids" value="5"' not in r.data

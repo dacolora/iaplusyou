@@ -486,7 +486,7 @@ def campana_ver(cliente, sid, cid):
     candidatos_ia = []
     for item in sugerencias_ia_crudas:
         ref = referentes_datos.referente(cliente, item.get("referente_id"))
-        if ref:
+        if ref and ref["id"] not in ya_ids:
             candidatos_ia.append({**ref, "razon": item.get("razon") or ""})
     job_sugerir_ia = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
     return render_template("campana_referencias.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
