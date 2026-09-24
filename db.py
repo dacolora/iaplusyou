@@ -466,6 +466,7 @@ campana = Table("campana", metadata,
     Column("estado", String(20), nullable=False, default="planeada"),
     Column("orden", Integer, default=0),
     Column("extra", JSON, default=dict),
+    Column("funnel", String(3), default="tof"),                          # tof|mof|bof (migración 0014)
     sa.UniqueConstraint("sprint_id", "persona_id", "catalogo_id", "temporada_id", name="uq_campana_combinacion"),
 )
 

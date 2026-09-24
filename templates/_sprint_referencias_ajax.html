@@ -1,6 +1,7 @@
 {# Contenido de referencias para desplegable AJAX #}
 <div class="sprint-ajax-contenido referencias">
-  <p class="sprint-progreso">{{ campana.referencias_listas }}/{{ campana.referencias_objetivo }} referencias · {{ cobertura }}% cobertura</p>
+  <p class="sprint-progreso">{{ campana.referencias_listas }}/{{ campana.referencias_objetivo }} referencias listas</p>
+  {% for aviso in cobertura %}<p class="tag-estado sprint-aviso">{{ aviso }}</p>{% endfor %}
 
   <details class="sprint-agregar-ref" style="margin-bottom: 2rem;">
     <summary style="cursor: pointer; font-weight: bold;">+ Agregar referencia</summary>
@@ -26,14 +27,24 @@
   {% if referencias %}
   <div class="sprint-referencias-lista">
     {% for r in referencias %}
+    {# Las imágenes anteriores al 2026-09-22 no tienen frame_url: la miniatura sale de url. #}
+    {% set mini = r.frame_url or (r.url if r.tipo == "imagen" else None) %}
     <details class="sprint-ref-desplegable" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
       <summary style="cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 0.75rem;">
-        {% if r.frame_url %}
-          <img src="{{ r.frame_url }}" alt="" style="width: 80px; height: auto; border-radius: 2px; object-fit: cover;">
+        {% if mini %}
+          <img src="{{ mini }}" alt="" style="width: 80px; height: auto; border-radius: 2px; object-fit: cover;">
         {% endif %}
         <span>{{ r.titulo or "Sin título" }}</span>
+        <span class="tag-estado">{{ r.estado }}</span>
       </summary>
       <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+        <div class="sprint-ref-media" style="margin-bottom: 0.75rem;">
+          {% if r.tipo == "video" %}
+          <video src="{{ r.url }}" poster="{{ r.frame_url or '' }}" controls muted preload="none" style="max-width: 100%; max-height: 360px; border-radius: 4px;"></video>
+          {% else %}
+          <a href="{{ r.url }}" target="_blank" rel="noopener"><img src="{{ r.url }}" alt="{{ r.titulo or '' }}" style="max-width: 100%; max-height: 360px; border-radius: 4px;"></a>
+          {% endif %}
+        </div>
         {% if r.descripcion %}<p><strong>Descripción:</strong> {{ r.descripcion }}</p>{% endif %}
         {% if r.intencion %}
         <p style="margin: 0.5rem 0;"><strong>Intención:</strong>

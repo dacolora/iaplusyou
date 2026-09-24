@@ -141,7 +141,7 @@ def test_avatar_editar_aprobar_descartar(app):
     assert r.status_code == 302 and r.headers["Location"].endswith(f"/nicho/{eid}")
     a = datos.avatar("acme", sid)
     assert a["estado"] == "aprobado" and sd.persona("acme", a["persona_id"])["nombre"] == "Ana"
-    assert "investigada (con evidencia)" in c.get("/cliente/acme").data.decode()
+    assert sd.persona("acme", a["persona_id"])["origen"] == "investigada"      # la pestaña Sprints ya no lista personas (37ab05e)
     c.post(f"/cliente/acme/nicho/avatar/{sid}/descartar")
     assert datos.avatar("acme", sid)["estado"] == "descartado" and sd.persona("acme", a["persona_id"])["archivada"] is True
     nucleo_id = datos.avatares("acme", eid)[0]["id"]
@@ -156,7 +156,7 @@ def test_pagina_del_estudio(app):
     from nicho import datos
     eid, sid = _con_avatares(datos)
     html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
-    for frag in ("Detergente", "Regenerar avatares", "US$", "25 comentario(s)", "Núcleo 1: Sin peso", "Ana / La que carga",
+    for frag in ("Detergente", "Regenerar avatares", "US$", "Texto pegado: 25", "Núcleo 1: Sin peso", "Ana / La que carga",
                  "«la garrafa pesa demasiado»", "Aprobar → persona", "Exportar Excel", "Pegar texto", "Subir CSV o Excel", "Excluir",
                  "Beliefs about self"):
         assert frag in html, frag

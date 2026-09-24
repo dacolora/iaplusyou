@@ -17,7 +17,7 @@ def test_guardar_subida_imagen(tmp_path, monkeypatch):
     _r2_falso(monkeypatch, subidas)
     info = archivos.guardar_subida("acme", FileStorage(io.BytesIO(b"png"), filename="ref uno.PNG"))
     assert info["tipo"] == "imagen" and info["url"].startswith("https://r2/clientes/acme/sprints/referencias/")
-    assert info["frame_url"] is None and info["titulo"] == "ref_uno.PNG" and os.path.exists(info["ruta_local"])
+    assert info["frame_url"] == info["url"] and info["titulo"] == "ref_uno.PNG" and os.path.exists(info["ruta_local"])   # imagen: la miniatura es la propia imagen
     assert subidas[0][0] == "imagen"
     assert archivos.guardar_subida("acme", FileStorage(io.BytesIO(b"x"), filename="doc.pdf")) is None
 

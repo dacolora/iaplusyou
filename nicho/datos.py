@@ -543,15 +543,16 @@ def actualizar_investigacion(cliente, estudio_id, fn):
     
     fn recibe el dict investigacion actual y retorna uno actualizado.
     """
-    _bloquear_estudio(cliente, estudio_id)
     with db.conectar() as con:
+        if not _bloquear(con, db.estudio, int(estudio_id), cliente):       # lock de escritura ANTES de leer
+            return
         est = con.execute(sa.select(db.estudio).where(
             (db.estudio.c.id == int(estudio_id)) &
             (db.estudio.c.cliente == cliente)
         )).first()
         if not est:
             return
-        extra = est["extra"] or {}
+        extra = est._mapping["extra"] or {}
         inv_actual = extra.get("investigacion", {})
         inv_nueva = fn(inv_actual)
         extra["investigacion"] = inv_nueva
@@ -571,7 +572,7 @@ def investigacion(cliente, estudio_id):
             (db.estudio.c.cliente == cliente)
         )).first()
         if est:
-            return (est["extra"] or {}).get("investigacion", {})
+            return (est._mapping["extra"] or {}).get("investigacion", {})
         return {}
 
 

@@ -81,7 +81,9 @@ def test_contexto_trae_lo_que_usa_la_pestana(app):
     from sprints import datos, rutas
     datos.crear_persona("acme", "Premium")
     ctx = rutas.contexto("acme")
-    assert ctx["personas_sprint"][0]["nombre"] == "Premium" and ctx["sprints_lista"] == []
+    nombres = [p["nombre"] for p in ctx["personas_sprint"]]
+    assert "Premium" in nombres and ctx["sprints_lista"] == []
+    assert {"Melissa", "Marijke", "Sophia"} <= set(nombres)          # personajes predeterminados (a557c6c)
     assert [p["id"] for p in ctx["productos_sprint"]] == ["espejo_led", "division_bano"]
     assert ctx["pais_calendario"] == "CO" and any(p["clave"] == "navidad" for p in ctx["presets_temporadas"])
     assert ctx["estimado_sprint"]["video"] > 0 and ctx["estimado_sprint"]["imagen"] > 0
@@ -96,8 +98,7 @@ def test_contexto_avisa_cuando_el_pais_no_tiene_calendario_propio(app):
     ctx = rutas.contexto("acme")
     assert ctx["calendario_fallback"] is True and ctx["pais_calendario"] == "US"
     assert [p["clave"] for p in ctx["presets_temporadas"]] == [p["clave"] for p in rutas.calendario.presets("CO")]
-    html = app["c"].get("/cliente/acme").data.decode()
-    assert "no tiene calendario propio" in html
+    assert app["c"].get("/cliente/acme").status_code == 200        # la pestaña ya no muestra el aviso (37ab05e); el contexto sí lo trae
     proyectos.guardar_pais("acme", "CO")
     assert "no tiene calendario propio" not in app["c"].get("/cliente/acme").data.decode()
 
@@ -142,14 +143,18 @@ def test_crear_sprint_limpia_el_borrador_del_asistente_una_sola_vez(app):
     from sprints import datos
     pid, tid = _base(datos)
     campanas = [{"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid, "n_videos": 1, "n_imagenes": 0}]
+    from sprints import rutas
     c = app["c"]
-    assert "sessionStorage.removeItem(KEY)" not in c.get("/cliente/acme").data.decode()
     r = c.post("/cliente/acme/sprints/nuevo", data={"nombre": "Octubre", "inicio": "2026-10-01", "fin": "2026-10-31",
                                                     "campanas_json": json.dumps(campanas)})
     assert r.status_code == 302 and datos.sprints("acme")
-    html = c.get("/cliente/acme").data.decode()
-    assert "sessionStorage.removeItem(KEY)" in html and "sprint-asistente-" in html
-    assert "sessionStorage.removeItem(KEY)" not in c.get("/cliente/acme").data.decode()   # solo la primera vez
+    with c.session_transaction() as s:
+        assert s.get("sprint_creado") is True
+    assert c.get("/cliente/acme").status_code == 200                # el contexto consume el aviso...
+    with c.session_transaction() as s:
+        assert "sprint_creado" not in s                              # ...una sola vez
+    with app["dashboard"].app.test_request_context():
+        assert rutas.contexto("acme")["sprint_recien_creado"] is False
 
 
 def test_crear_sprint_fallido_no_limpia_el_borrador(app):
@@ -427,7 +432,7 @@ def test_pestana_sprints_se_renderiza(app):
     html = r.data.decode()
     assert 'id="tab-sprints"' in html and 'data-tab="sprints"' in html
     assert "Octubre" in html and "Premium" in html and "Verano" in html and "Nuevo sprint" in html
-    assert "campanas_json" in html and "Sugerir personas" in html and "Black Friday" in html
+    assert "campanas_json" in html          # «Sugerir personas» y los presets del calendario salieron de la pestaña en 37ab05e
 
 
 @pytest.fixture()
@@ -696,3 +701,29 @@ def test_cerrar_y_zip_se_niegan_fuera_de_estado_y_la_entrega_muestra_el_zip(con_
     html = c.get(f"/cliente/acme/sprints/{sid}/entrega").data.decode()
     assert "https://r2/z.zip" in html and "Zip del 2026-09-17 10:00:00 (1 piezas)" in html
     assert "iniciarPolling" in html and rutas.tareas_sprints.job_id_zip("acme", sid) in html
+
+
+def test_referencias_ajax_muestra_imagenes_y_videos(app):
+    """Las referencias de imagen anteriores al 2026-09-22 quedaron con frame_url
+    vacío (registrar_local devolvía None): el desplegable tiene que mostrarlas
+    igual, con la miniatura y la imagen completa salidas de `url`."""
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    datos.agregar_referencia("acme", cid, "imagen", "https://r2/vieja.png", frame_url=None, titulo="vieja.png")
+    datos.agregar_referencia("acme", cid, "video", "https://r2/clip.mp4", frame_url="https://r2/clip.mp4.frame.jpg", titulo="clip.mp4")
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias-ajax").data.decode()
+    assert html.count('src="https://r2/vieja.png"') >= 2           # miniatura + imagen completa
+    assert 'poster="https://r2/clip.mp4.frame.jpg"' in html and 'src="https://r2/clip.mp4"' in html
+
+
+def test_referencias_ajax_muestra_los_avisos_de_cobertura_como_texto(app):
+    """`progreso.cobertura` devuelve una lista de avisos; el desplegable la
+    imprimía cruda («['Te faltan…']% cobertura»)."""
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)                                  # 2 videos, 1 imagen planeados, sin referencias
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias-ajax").data.decode()
+    assert "Te faltan referencias de movimiento de cámara o transiciones" in html
+    assert "% cobertura" not in html and "['" not in html
+    assert "0/5 referencias" in html

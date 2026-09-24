@@ -347,3 +347,17 @@ def test_persona_investigada_con_extra(base_temporal):
     p = datos.persona("acme", pid)
     assert p["origen"] == "investigada" and p["extra"] == {"avatar_id": 7}
     assert datos.crear_persona("acme", "Sin extra") and datos.persona("acme", pid + 1)["extra"] == {}
+
+
+def test_campana_guarda_y_actualiza_el_funnel(base_temporal):
+    """Regresión del 2026-09-23: la migración 0014 creó `campana.funnel` pero la
+    Table de db.py no lo declaraba, y cada inserción reventaba con
+    CompileError («Unconsumed column names: funnel»)."""
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 1, 0, funnel="bof")
+    assert datos.campana("acme", cid)["funnel"] == "bof"
+    assert datos.actualizar_campana("acme", cid, funnel="mof")
+    assert datos.campana("acme", cid)["funnel"] == "mof"
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_campana("acme", sid, pid, "division_bano", tid, 1, 0, funnel="xxx")

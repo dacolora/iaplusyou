@@ -78,7 +78,7 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
                         lambda cliente, categoria="producto": [{"id": "chancla_rose", "nombre": "Chancla Rose",
                                                                 "descripcion": "Chancla cómoda", "tipo": "calzado"}])
 
-    def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint):
+    def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None):
         llamadas["generar"] = dict(producto=producto, referencia=referencia, enfoque=enfoque,
                                    duracion_s=duracion_s, idioma_base=idioma_base, marca=marca)
         return dict(GUION_BASE), 0.01

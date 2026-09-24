@@ -191,3 +191,15 @@ def test_actualizar_avatar_valida(base_temporal):
     assert a["soluciones_previas"] == [{"que": "Pods", "por_que_fallo": []}]
     assert a["identidad"] == {"quiere_que_vean": "", "cree_de_si": "fuerte", "quiere_lograr": ""} and a["palabras_clave"] == []
     assert datos.actualizar_avatar("otro", sid, nombre="X") is False
+
+
+def test_investigacion_se_lee_y_actualiza(base_temporal):
+    """Regresión del 2026-09-23: `investigacion()` indexaba la fila de SQLAlchemy
+    con una cadena (`est["extra"]`) y reventaba con TypeError al iniciar una
+    investigación."""
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "Detergente")
+    assert datos.investigacion("acme", eid) == {}
+    datos.actualizar_investigacion("acme", eid, lambda inv: {**inv, "estado": "buscando"})
+    assert datos.investigacion("acme", eid)["estado"] == "buscando"
+    assert datos.investigacion("otro", eid) == {}

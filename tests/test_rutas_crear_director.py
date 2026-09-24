@@ -256,7 +256,7 @@ def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app)
     proyectos.guardar_preferencias_flowplus("acme", "wan3", "seedream_v5_pro", idioma_prompt="es", duracion_defecto=8)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     # Desde 2026-09-21 el botón principal genera; «Armar prompt con IA» es la ayuda opcional.
-    assert "Generar video" in html and "Armar prompt con IA (gratis)" in html
+    assert "Generar video" in html and "Crear super prompt con IA (gratis)" in html     # texto del botón desde a8b1c9b
     assert 'id="fp-calidad"' in html and 'name="calidad" value="borrador"' in html
     assert '<option value="8" selected>8 s</option>' in html and 'id="fp-duracion-larga"' in html
     assert "exactamente lo que recibe el modelo" not in html
@@ -287,7 +287,7 @@ def test_tarjeta_lista_trae_el_editor_rearmar_y_version_b(app):
     assert f'action="/cliente/acme/creative_flow/{cf_id}/prompt"' in html and 'name="prompt_a"' in html and 'name="prompt_b"' in html
     assert f'action="/cliente/acme/creative_flow/{cf_id}/rearmar"' in html
     assert 'name="version_b" value="si"' in html and "otro" in html      # diferencia_b visible
-    assert "Generar ≈ US$ 0,80" in html          # 8 s x 0,10, formato de gastos.formatear
+    assert "Generar video ≈ US$ 0,80" in html    # 8 s x 0,10, formato de gastos.formatear; texto desde 74eba25
     cf.actualizar("acme", cf_id, director={"estado": "fallback", "aviso": "Anthropic caído", "prompt_b": None})
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     assert "no pudo armar los planos" in html and "Anthropic caído" in html and 'name="version_b"' not in html
@@ -360,7 +360,7 @@ def test_formulario_ofrece_generar_y_armar_prompt(app):
     crear = html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-sprints"')]
     form = crear[crear.index('id="form-flowplus"'):crear.index("</form>", crear.index('id="form-flowplus"'))]
     assert 'name="modo_prompt" value="directo"' in form and 'id="fp-generar"' in form
-    assert 'name="modo_prompt" value="director"' in form and "Armar prompt con IA" in form
+    assert 'name="modo_prompt" value="director"' in form and "Crear super prompt con IA" in form
     # El botón principal genera; el del director es la ayuda, no al revés.
     assert form.index('value="directo"') < form.index('value="director"')
-    assert "pulsa <strong>Generar</strong>" in crear
+    assert "<strong>Generar video</strong>" in crear      # la intro explica primero el camino directo
