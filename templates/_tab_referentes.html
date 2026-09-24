@@ -47,7 +47,7 @@
     var cargado = false;
 
     function cargarEnDialogo(url) {
-      fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+      return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
         .then(function (html) { cuerpo.innerHTML = html; })
         .catch(function () { alert('No se pudo cargar.'); });
@@ -118,8 +118,7 @@
       if (mas) { pedir(parseInt(mas.dataset.siguiente, 10), true); return; }
       var media = ev.target.closest('[data-ficha]');
       if (!media) return;
-      cargarEnDialogo(media.dataset.ficha);
-      modal.showModal();
+      cargarEnDialogo(media.dataset.ficha).then(function () { modal.showModal(); });
     });
     cuerpo.addEventListener('click', function (ev) {
       var abrir = ev.target.closest('[data-recrear-abrir]');
