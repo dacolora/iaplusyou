@@ -60,3 +60,44 @@ def test_sugerir_combina_candidatos_y_elegir(monkeypatch):
     monkeypatch.setattr(referentes_datos, "listar", lambda cliente, filtros, pagina, por_pagina: {"items": filas})
     out = sugerir.sugerir("cliente-x", "TOF", excluir_ids=set(), objetivo=1)
     assert len(out) == 1 and out[0]["id"] == 1
+
+
+class _RespuestaFalsa:
+    def __init__(self, texto):
+        self.content = [type("Bloque", (), {"text": texto})()]
+        self.usage = type("Uso", (), {"input_tokens": 111, "output_tokens": 22})()
+
+
+def test_sugerir_ia_valida_contra_candidatos(monkeypatch):
+    cands = [_cand(1, "ugc"), _cand(2, "unboxing")]
+    respuesta = _RespuestaFalsa('{"elegidos": [{"referente_id": 1, "razon": "encaja con la persona"}, '
+                                '{"referente_id": 999, "razon": "id inventado, debe descartarse"}]}')
+
+    class _ClienteFalso:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                return respuesta
+
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
+    elegidos, ent, sal = sugerir.sugerir_ia(cands, "persona", "producto", "temporada", objetivo=2)
+    assert elegidos == [{"referente_id": 1, "razon": "encaja con la persona"}]
+    assert ent == 111 and sal == 22
+
+
+def test_sugerir_ia_respuesta_no_json_lanza(monkeypatch):
+    respuesta = _RespuestaFalsa("esto no es json")
+
+    class _ClienteFalso:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                return respuesta
+
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
+    import pytest
+    with pytest.raises(sugerir.SugerenciaInvalida) as exc:
+        sugerir.sugerir_ia([_cand(1, "ugc")], "p", "pr", "t", objetivo=1)
+    assert exc.value.tokens_entrada == 111 and exc.value.tokens_salida == 22
