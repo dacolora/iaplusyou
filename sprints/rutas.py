@@ -19,6 +19,7 @@ import proyectos
 import trabajos
 from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
+from referentes import sugerir as referentes_sugerir
 from sprints import archivos, calendario, datos, entrega, estado, ideas, produccion, progreso, revision as revision_mod
 from tareas import sprints as tareas_sprints
 
@@ -476,10 +477,14 @@ def campana_ver(cliente, sid, cid):
              for oc in sp["campanas"] if oc["id"] != cid]
     producto = next((p for p in _productos(cliente) if p["id"] == c["catalogo_id"]), None)
     job_link = tareas_sprints.job_id_link(cliente, cid)
+    ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs} - {None}
+    objetivo_restante = max(1, (c.get("referencias_objetivo") or 1) - len(refs))
+    candidatos_gratis = referentes_sugerir.sugerir(cliente, c["funnel"].upper(), ya_ids, objetivo_restante)
     return render_template("campana_referencias.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, campana=c, referencias=refs, producto=producto, otras_campanas=otras,
                            intenciones_sprint=datos.INTENCIONES_NOMBRE, cobertura=progreso.cobertura(c, refs),
-                           trabajo_link={"job_id": job_link} if trabajos.en_curso(job_link) else None)
+                           trabajo_link={"job_id": job_link} if trabajos.en_curso(job_link) else None,
+                           candidatos_gratis=candidatos_gratis)
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/referencias")

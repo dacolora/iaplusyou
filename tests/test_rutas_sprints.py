@@ -356,6 +356,20 @@ def test_campana_ver_renderiza_referencia_biblioteca_sin_paleta(app, monkeypatch
     assert b"Por qu\xc3\xa9 funciona" in r.data or "Por qué funciona".encode() in r.data
 
 
+def test_campana_ver_muestra_candidatos_gratis(app, monkeypatch):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    import referentes.sugerir as referentes_sugerir
+    monkeypatch.setattr(referentes_sugerir, "sugerir", lambda cliente_, etapa, excluir, objetivo: [
+        {"id": 9, "titular": "Candidato de prueba", "familia": "ugc", "imagen_url": "https://cdn/9.jpg"},
+    ])
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert b"Candidato de prueba" in r.data
+    assert b'value="9"' in r.data
+
+
 def test_referencias_subir_una_falla_al_guardar_no_pierde_las_demas(app, monkeypatch):
     from sprints import archivos, datos
     pid, tid = _base(datos)

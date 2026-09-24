@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_sprint_macros.html" import chip_estado, barra %}
+{% from "_sprint_macros.html" import chip_estado, barra, candidatos_biblioteca %}
 {% block title %}Referencias · {{ sprint.nombre }}{% endblock %}
 {% block content %}
 {% include "_sprint_nav.html" %}
@@ -50,6 +50,10 @@
   </form>
   <a class="btn-sm" href="#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}"
      onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Elegir de la biblioteca</a>
+  <details class="inline sprint-reutilizar">
+    <summary class="btn-sm">Sugerir de la biblioteca (gratis)</summary>
+    {{ candidatos_biblioteca(candidatos_gratis, campana.id, cliente) }}
+  </details>
   {% if otras_campanas %}
   <details class="inline sprint-reutilizar">
     <summary class="btn-sm">Reutilizar de otra campaña</summary>

@@ -15,3 +15,24 @@
 {% macro barra(pct, texto) -%}
 <div class="sprint-barra" title="{{ texto }}"><div class="sprint-barra-fill" style="width: {{ pct }}%"></div><span>{{ texto }}</span></div>
 {%- endmacro %}
+
+{% macro candidatos_biblioteca(candidatos, campana_id, cliente, con_razon=False) -%}
+{% if candidatos %}
+<form method="post" action="{{ url_for('sprints.campana_referencias_biblioteca', cliente=cliente, cid=campana_id) }}" class="ref-candidatos">
+  <div class="ref-tarjetas">
+    {% for c in candidatos %}
+    <label class="ref-tarjeta ref-tarjeta-candidato">
+      <input type="checkbox" name="referente_ids" value="{{ c.id }}" checked>
+      <img src="{{ c.imagen_url }}" alt="" loading="lazy">
+      <strong>{{ c.titular or '(sin titular)' }}</strong>
+      {% if c.familia %}<small>{{ c.familia }}</small>{% endif %}
+      {% if con_razon and c.razon %}<small class="vacio">{{ c.razon }}</small>{% endif %}
+    </label>
+    {% endfor %}
+  </div>
+  <button type="submit" class="btn-generar btn-sm">Agregar las marcadas</button>
+</form>
+{% else %}
+<p class="vacio">No hay candidatos nuevos en la biblioteca para esta etapa por ahora.</p>
+{% endif %}
+{%- endmacro %}
