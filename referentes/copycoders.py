@@ -45,20 +45,9 @@ def extraer_datos(html):
     inicio = html.find("[", i)
     if inicio < 0:
         raise FormatoInvalido("El dataset no empieza con un arreglo.")
-    profundidad, fin = 0, -1
-    for j in range(inicio, len(html)):
-        c = html[j]
-        if c == "[":
-            profundidad += 1
-        elif c == "]":
-            profundidad -= 1
-            if profundidad == 0:
-                fin = j
-                break
-    if fin < 0:
-        raise FormatoInvalido("El arreglo del dataset no cierra.")
+    decoder = json.JSONDecoder()
     try:
-        filas = json.loads(html[inicio:fin + 1])
+        filas, _ = decoder.raw_decode(html, inicio)
     except ValueError as e:
         raise FormatoInvalido(f"El dataset no es JSON válido: {e}") from e
     if not isinstance(filas, list) or not filas or not isinstance(filas[0], dict):
