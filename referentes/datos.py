@@ -99,6 +99,13 @@ def familia_actualizar(familia_id, descripcion):
         return con.execute(t.update().where(t.c.id == familia_id).values(descripcion=_texto(descripcion))).rowcount == 1
 
 
+def listar_por_familia(familia, limite=3):
+    t = db.referente
+    with db.conectar() as con:
+        return [_a_dict(r) for r in con.execute(sa.select(t).where(t.c.familia == familia, t.c.firma.isnot(None))
+                                                   .order_by(sa.desc(t.c.variantes).nulls_last()).limit(limite))]
+
+
 # -------------------------------------------------------------- referentes ---
 
 def _validar_anuncio(a):
