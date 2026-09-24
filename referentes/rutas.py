@@ -4,12 +4,15 @@ bloque 1: fragmentos HTML para el grid (filtros + paginación) y la ficha.
 `dashboard._guard_por_cliente` protege estas rutas porque la URL lleva
 `<cliente>`; la visibilidad (global + propios) la aplica referentes.datos.
 """
-from flask import Blueprint, abort, render_template, request
+from uuid import uuid4
+
+from flask import Blueprint, abort, jsonify, render_template, request
 
 import catalogo_productos
 import gastos
 import marca as marca_mod
 import proyectos
+from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
 from referentes import datos, recrear
 
@@ -98,6 +101,31 @@ def recrear_form(cliente, rid):
         formatos=flowplus_modelos.IMAGEN[flowplus_modelos.IMAGEN_POR_DEFECTO]["formatos"],
         url_generar=_url_opcional("referentes.recrear_generar", cliente=cliente, rid=rid),
         url_adaptar=_url_opcional("referentes.recrear_adaptar", cliente=cliente, rid=rid))
+
+
+@bp.post("/<int:rid>/recrear/adaptar")
+def recrear_adaptar(cliente, rid):
+    r = datos.referente(cliente, rid)
+    if not r or r.get("estado_imagen") != "ok":
+        return jsonify({"error": "Ese referente no existe."}), 404
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        return jsonify({"error": "Cuerpo inválido."}), 400
+    producto = catalogo_productos.encontrar(cliente, cuerpo.get("producto_id"), categoria="producto") if cuerpo.get("producto_id") else None
+    if not producto:
+        return jsonify({"error": "Elige un producto primero."}), 400
+    familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
+    try:
+        resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""))
+    except recrear.AdaptacionInvalida as e:
+        return jsonify({"error": str(e)}), 502
+    except Exception as e:
+        return jsonify({"error": f"No se pudo adaptar ({type(e).__name__})."}), 502
+    usd = costo_real(ent, sal)
+    gastos.registrar_seguro(cliente, "adaptar_referente", usd, f"referentes:adaptar:{rid}:{uuid4().hex[:12]}",
+                            detalle=f"{producto['nombre']} · {r.get('familia') or ''}", proveedor="anthropic",
+                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+    return jsonify(resultado)
 
 
 @bp.get("/<int:rid>/ficha")

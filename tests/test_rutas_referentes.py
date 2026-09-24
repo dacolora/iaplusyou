@@ -148,3 +148,29 @@ def test_recrear_referente_inexistente_o_sin_imagen_404(app):
     rid, _ = datos.guardar_referente(_anuncio("500"))
     assert app["c"].get(f"/cliente/acme/referentes/{rid}/recrear").status_code == 404
     assert app["c"].get("/cliente/acme/referentes/999999/recrear").status_code == 404
+
+
+def test_recrear_adaptar_devuelve_json_y_registra_gasto(app, monkeypatch):
+    from referentes import datos, recrear
+    import gastos
+    ids = _sembrar()
+    monkeypatch.setattr(recrear, "_llamar",
+                        lambda texto, max_tokens: ('{"titular": "SE ACABA HOY", "prompt": "Con Image 1 e Image 2..."}', 150, 40))
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar",
+                      json={"producto_id": "espejo_led", "titular": "viejo"})
+    assert r.status_code == 200
+    body = r.get_json()
+    assert body == {"titular": "SE ACABA HOY", "prompt": "Con Image 1 e Image 2..."}
+    gasto = gastos.historial("acme", limite=1)[0]
+    assert gasto["tipo"] == "adaptar_referente" and gasto["usd"] > 0
+
+
+def test_recrear_adaptar_sin_producto_o_referente_da_error(app, monkeypatch):
+    from referentes import datos, recrear
+    ids = _sembrar()
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "", "titular": ""})
+    assert r.status_code == 400
+    assert app["c"].post("/cliente/acme/referentes/999999/recrear/adaptar", json={"producto_id": "espejo_led"}).status_code == 404
+    monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: ("no es json", 10, 5))
+    r2 = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
+    assert r2.status_code == 502
