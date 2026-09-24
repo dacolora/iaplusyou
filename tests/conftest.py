@@ -54,16 +54,12 @@ def sembrar_usuarios(ruta, nombres=None):
 
 
 @pytest.fixture(autouse=True)
-def usuarios_tmp(tmp_path, monkeypatch, request):
+def usuarios_tmp(tmp_path, monkeypatch):
     """usuarios.json temporal por test, con USUARIOS_PRUEBA sembrados: ningún
     test lee ni escribe el usuarios.json real del repo, y las sesiones falsas
     de los tests de rutas (admin, alguien, user_acme, otro) pasan el guard.
     Devuelve el módulo `usuarios`; un test que quiera el archivo vacío lo
-    repunta con monkeypatch (tests/test_cuentas.py, test_rutas_cuentas.py).
-    Se salta para tests que necesitan tmp_path vacío (referentes.imagenes)."""
-    # Skip for referentes imagenes tests (need clean tmp_path)
-    if 'test_referentes_imagenes' in request.node.nodeid:
-        return None
+    repunta con monkeypatch (tests/test_cuentas.py, test_rutas_cuentas.py)."""
     import usuarios
     ruta = tmp_path / "usuarios_prueba.json"
     monkeypatch.setattr(usuarios, "_path", lambda: str(ruta))
