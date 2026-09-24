@@ -88,6 +88,18 @@ def _referencias_texto(refs):
     lineas = []
     for r in refs:
         a = r.get("analisis") or {}
+        if r.get("origen") == "biblioteca":
+            familia = a.get("familia") or "formato sin clasificar"
+            desc_familia = f" — {a['descripcion_familia']}" if a.get("descripcion_familia") else ""
+            partes = [f"Formato: {familia}{desc_familia}"]
+            if a.get("firma"):
+                partes.append(f"funciona porque: {a['firma']}")
+            if a.get("dolor"):
+                partes.append(f"dolor: {a['dolor']}")
+            if a.get("etapa"):
+                partes.append(f"etapa: {a['etapa']}")
+            lineas.append(f"- ref {r['id']} ({r['tipo']}): " + "; ".join(partes))
+            continue
         que = a.get("resumen") or r.get("descripcion") or r.get("titulo") or ""
         extra = []
         if a.get("movimiento") and a["movimiento"] != "sin movimiento":

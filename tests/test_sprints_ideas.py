@@ -103,3 +103,19 @@ def test_proponer_sin_faltantes_no_llama(base_temporal, monkeypatch):
     assert ideas.proponer("acme", cid) == []
     with pytest.raises(datos.ErrorDatos):
         ideas.proponer("acme", 999)
+
+
+def test_referencias_texto_describe_biblioteca_con_familia_y_etapa():
+    from sprints import ideas
+    refs = [{
+        "id": 1, "tipo": "imagen", "origen": "biblioteca", "descripcion": "", "intencion": ["formato"],
+        "analisis": {"familia": "ugc_testimonial", "descripcion_familia": "Testimonio grabado con el celular",
+                     "etapa": "TOF", "dolor": "no confía en la marca", "firma": "Antes/después con el mismo encuadre",
+                     "resumen": "Antes/después con el mismo encuadre"},
+    }]
+    texto = ideas._referencias_texto(refs)
+    assert "Formato: ugc_testimonial" in texto
+    assert "Testimonio grabado con el celular" in texto
+    assert "funciona porque: Antes/después con el mismo encuadre" in texto
+    assert "dolor: no confía en la marca" in texto
+    assert "etapa: TOF" in texto
