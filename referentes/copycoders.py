@@ -86,3 +86,80 @@ def normalizar(fila, base_url):
         "clasificacion": "fuente",
         "extra": {"sweep": datos._texto(fila.get("sweep"), 12), "firma_original": firma or "", "traducida": firma is None},
     }
+
+
+# ------------------------------------------------------------ Claude ---
+
+PROMPT_TRADUCIR = """Traduce al español neutro (Latinoamérica) estas descripciones de por qué funciona un anuncio estático. Son frases cortas de marketing; conserva el sentido, los nombres de marca y los términos técnicos (GLP-1, ROAS). Máximo 40 palabras cada una.
+
+Responde SOLO con un objeto JSON: la misma clave (el número) y la traducción como valor. Sin texto antes ni después.
+
+{entrada}"""
+
+PROMPT_FAMILIAS = """Eres director creativo de anuncios estáticos. Cada "familia" es un formato de anuncio recurrente. Para cada una escribe UNA línea en español (máximo 25 palabras) que explique en qué consiste el formato, a partir de su nombre y de las descripciones de ejemplo.
+
+Responde SOLO con un objeto JSON: el nombre exacto de la familia como clave y la descripción como valor. Sin texto antes ni después.
+
+{entrada}"""
+
+
+def _llamar(texto, max_tokens=4000):
+    """Una llamada de texto a Claude; devuelve (texto, tokens_entrada, tokens_salida)."""
+    import anthropic
+    from generador_prompts import MODEL, _api_key
+    client = anthropic.Anthropic(api_key=_api_key())
+    resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
+                                  messages=[{"role": "user", "content": texto}])
+    uso = getattr(resp, "usage", None)
+    entrada = int(getattr(uso, "input_tokens", 0) or 0)
+    salida = int(getattr(uso, "output_tokens", 0) or 0)
+    if resp.stop_reason == "refusal":
+        raise FormatoInvalido("Claude rechazó la solicitud.")
+    return "".join(b.text for b in resp.content if b.type == "text").strip(), entrada, salida
+
+
+def _parsear_json(texto):
+    t = (texto or "").strip()
+    if t.startswith("```"):
+        t = t.strip("`").strip()
+        if t.lower().startswith("json"):
+            t = t[4:]
+    try:
+        data = json.loads(t)
+    except ValueError:
+        ini, fin = t.find("{"), t.rfind("}")
+        if ini < 0 or fin <= ini:
+            raise FormatoInvalido("Claude no devolvió JSON.")
+        try:
+            data = json.loads(t[ini:fin + 1])
+        except ValueError:
+            raise FormatoInvalido("Claude no devolvió JSON válido.")
+    if not isinstance(data, dict):
+        raise FormatoInvalido("Claude no devolvió un objeto JSON.")
+    return data
+
+
+def traducir_firmas(pares):
+    if not pares:
+        return {}, 0, 0
+    entrada = json.dumps({str(rid): firma for rid, firma in pares}, ensure_ascii=False, indent=0)
+    texto, ent, sal = _llamar(PROMPT_TRADUCIR.format(entrada=entrada), max_tokens=max(800, 60 * len(pares)))
+    data = _parsear_json(texto)
+    validos = {rid for rid, _ in pares}
+    resultado = {}
+    for k, v in data.items():
+        rid = datos._entero(k)
+        v = datos._texto(v)
+        if rid in validos and v:
+            resultado[rid] = " ".join(v.split()[:40])
+    return resultado, ent, sal
+
+
+def describir_familias(familias):
+    if not familias:
+        return {}, 0, 0
+    entrada = json.dumps({nombre: list(ejemplos)[:3] for nombre, ejemplos in familias}, ensure_ascii=False, indent=0)
+    texto, ent, sal = _llamar(PROMPT_FAMILIAS.format(entrada=entrada), max_tokens=max(800, 80 * len(familias)))
+    data = _parsear_json(texto)
+    nombres = {nombre for nombre, _ in familias}
+    return {k: datos._texto(v) for k, v in data.items() if k in nombres and datos._texto(v)}, ent, sal

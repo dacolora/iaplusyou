@@ -50,3 +50,32 @@ def test_normalizar_descarta_sin_id_o_sin_imagen():
     assert copycoders.normalizar({**base, "lib": "https://www.facebook.com/ads/library/"}, copycoders.URL_SWIPE) is None
     assert copycoders.normalizar({**base, "img": ""}, copycoders.URL_SWIPE) is None
     assert copycoders.normalizar({**base, "aw": "rara", "stage": "XXX"}, copycoders.URL_SWIPE)["consciencia"] is None
+
+
+def test_traducir_firmas(monkeypatch):
+    from referentes import copycoders
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return ('```json\n{"7": "Titular gigante de despedida", "9": "Lista de síntomas"}\n```', 120, 30)
+    monkeypatch.setattr(copycoders, "_llamar", falso)
+    trad, ent, sal = copycoders.traducir_firmas([(7, "giant breakup headline"), (9, "symptom checklist"), (11, "x")])
+    assert trad == {7: "Titular gigante de despedida", 9: "Lista de síntomas"} and (ent, sal) == (120, 30)
+    assert '"7": "giant breakup headline"' in pedido["texto"] and "español" in pedido["texto"]
+
+
+def test_traducir_firmas_respuesta_rota(monkeypatch):
+    from referentes import copycoders
+    monkeypatch.setattr(copycoders, "_llamar", lambda texto, max_tokens: ("no es json", 5, 5))
+    with pytest.raises(copycoders.FormatoInvalido):
+        copycoders.traducir_firmas([(1, "a")])
+    assert copycoders.traducir_firmas([]) == ({}, 0, 0)
+
+
+def test_describir_familias(monkeypatch):
+    from referentes import copycoders
+    monkeypatch.setattr(copycoders, "_llamar",
+                        lambda texto, max_tokens: ('{"Blame Transplant": "Culpa a otra cosa.", "Otra": "x"}', 50, 20))
+    desc, ent, sal = copycoders.describir_familias([("Blame Transplant", ["you are not lazy", "stop blaming the food"])])
+    assert desc == {"Blame Transplant": "Culpa a otra cosa."} and ent == 50
