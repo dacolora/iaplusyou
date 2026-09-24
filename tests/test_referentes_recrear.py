@@ -94,3 +94,38 @@ def test_adaptar_respuesta_rota_lanza(monkeypatch):
     monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: ("no es json", 10, 5))
     with pytest.raises(recrear.AdaptacionInvalida):
         recrear.adaptar(_referente(), _familia(), _producto(), "")
+
+
+def test_referencias_para_ordena_referente_primero(monkeypatch):
+    from referentes import recrear
+    subidas = []
+    monkeypatch.setattr(recrear.r2_uploader, "upload_image",
+                        lambda local, clave: subidas.append((local, clave)) or f"https://r2/{clave}")
+    urls = recrear.referencias_para("acme", _referente(), _producto())
+    assert urls[0] == "https://r2/referentes/1.jpg"
+    assert len(urls) == 3 and urls[1].startswith("https://r2/clientes/acme/productos/espejo_led/")
+    assert subidas[0][0] == "/x/a.jpg" and subidas[1][0] == "/x/b.jpg"
+
+
+def test_referencias_para_una_sola_foto(monkeypatch):
+    from referentes import recrear
+    monkeypatch.setattr(recrear.r2_uploader, "upload_image", lambda local, clave: f"https://r2/{clave}")
+    urls = recrear.referencias_para("acme", _referente(), _producto(referencias=["/x/a.jpg"]))
+    assert len(urls) == 2
+
+
+def test_usos_cuenta_solo_las_del_cliente(base_temporal):
+    from referentes import recrear
+    import creative_flow
+    cf1 = creative_flow.crear("acme", [], ["Espejo LED"], [], "X", 0, "", "A")
+    creative_flow.actualizar("acme", cf1, referente_id=7)
+    cf2 = creative_flow.crear("acme", [], ["Espejo LED"], [], "Y", 0, "", "A")
+    creative_flow.actualizar("acme", cf2, referente_id=7)
+    cf3 = creative_flow.crear("acme", [], ["Otro"], [], "Z", 0, "", "A")
+    creative_flow.actualizar("acme", cf3, referente_id=99)
+    cf4 = creative_flow.crear("otro", [], ["Espejo LED"], [], "W", 0, "", "A")
+    creative_flow.actualizar("otro", cf4, referente_id=7)
+    assert recrear.usos("acme", 7) == 2
+    assert recrear.usos("acme", 99) == 1
+    assert recrear.usos("acme", 5) == 0
+    assert recrear.usos("otro", 7) == 1

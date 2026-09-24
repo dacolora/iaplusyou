@@ -5,6 +5,12 @@ Crear que ya existe. `armar_prompt` es determinista (nunca llama a Claude) —
 «Adaptar con IA» es un paso aparte, opcional, que solo propone (`adaptar`).
 """
 import json
+import os
+import sqlalchemy as sa
+
+import db
+import catalogo_productos
+from storage import r2_uploader
 
 SIN_VOZ_NI_MUSICA = "Sin diálogo hablado ni música de fondo."
 SONIDO_AMBIENTE = "ambiente natural de la escena"
@@ -129,3 +135,23 @@ def adaptar(referente, familia, producto, titular_actual):
     if not titular or not prompt:
         raise AdaptacionInvalida("Claude no devolvió titular y prompt.")
     return {"titular": titular, "prompt": prompt}, ent, sal
+
+
+def referencias_para(cliente, referente, producto):
+    """URLs en el orden que asume armar_prompt: Image 1 es el referente, Image
+    2(/3) son hasta 2 fotos del producto, subidas a R2 si hacen falta."""
+    urls = [referente["imagen_url"]]
+    carpeta = catalogo_productos.CATEGORIAS["producto"]["carpeta"]
+    for ruta in (producto.get("referencias") or [])[:2]:
+        clave = f"clientes/{cliente}/{carpeta}/{producto['id']}/{os.path.basename(ruta)}"
+        urls.append(r2_uploader.upload_image(ruta, clave))
+    return urls
+
+
+def usos(cliente, referente_id):
+    """Cuántas veces se generó una pieza de Crear desde este referente (spec §9)."""
+    q = (sa.select(sa.func.count()).select_from(db.concepto)
+         .where(db.concepto.c.cliente == cliente,
+                sa.func.json_extract(db.concepto.c.extra, "$.referente_id") == referente_id))
+    with db.conectar() as con:
+        return con.execute(q).scalar() or 0
