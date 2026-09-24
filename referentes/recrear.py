@@ -4,7 +4,6 @@ se convierte en imagen o video del producto del cliente sobre el pipeline de
 Crear que ya existe. `armar_prompt` es determinista (nunca llama a Claude) —
 «Adaptar con IA» es un paso aparte, opcional, que solo propone (`adaptar`).
 """
-# Imports for future functions (adaptar, upload, etc) will go here
 
 SIN_VOZ_NI_MUSICA = "Sin diálogo hablado ni música de fondo."
 SONIDO_AMBIENTE = "ambiente natural de la escena"
@@ -33,7 +32,7 @@ def armar_prompt(referente, familia, producto, guia, titular, formato, tipo="ima
     if dolor and not dolor.startswith("ninguno-"):
         partes.append(f"Dolor que ataca: {dolor}.")
     partes.append(
-        (f"Producto: el de {ref_producto}: {producto.get('nombre') or ''} {producto.get('descripcion') or ''} "
+        (f"Producto: el de {ref_producto}: {producto.get('nombre') or ''}. {producto.get('descripcion') or ''} "
          f"{producto.get('regla') or ''}").strip()
     )
     partes.append("Sustituye por completo el producto y la marca de la referencia.")
