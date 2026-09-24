@@ -183,7 +183,7 @@ is pure. Routes live in the Blueprint `sprints/rutas.py`
 adds `sprints_rutas.contexto(cliente)` to the project page. Uploading a
 reference enqueues `sprint_analizar_referencia` (Claude vision, cents); "Sugerir
 personas" enqueues `sprint_sugerir_personas`; a pasted link goes through
-`sprint_referencia_link` (yt-dlp via `referencias_link.descargar`). Parte 2 (producción): `sprints/ideas.py` asks Claude for ideas per campaign
+`sprint_referencia_link` (yt-dlp via `referencias_link.descargar`). A reference can also come straight from the referentes library (`origen='biblioteca'`, pre-analyzed, no `sprint_analizar_referencia`): `sprints.datos.agregar_referencia_biblioteca` (deduped per campaign), the Referentes grid's `?campana=` selection mode, `referentes/sugerir.py` (deterministic + optional Claude pick, task `referentes_sugerir_ia`, tariff `sugerir_ia`), and 'Usar en sprint' from a referente's ficha. Parte 2 (producción): `sprints/ideas.py` asks Claude for ideas per campaign
 (prompt maestro: persona + producto + temporada + reference analyses + brand
 guide + banco de prompts) stored as `campana_pieza` rows; "Generar lote"
 (`sprints/produccion.py`) shows the estimated cost first, then creates one
