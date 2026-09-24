@@ -48,6 +48,23 @@ def _sembrar(cliente=None):
     return ids
 
 
+def test_grid_modo_seleccion_con_campana(app):
+    _sembrar()
+    c = app["c"]
+    r = c.get("/cliente/acme/referentes/grid?campana=7")
+    assert r.status_code == 200
+    assert b'name="referente_ids"' in r.data
+    assert b'type="checkbox"' in r.data
+
+
+def test_grid_sin_campana_no_muestra_checkboxes(app):
+    _sembrar()
+    c = app["c"]
+    r = c.get("/cliente/acme/referentes/grid")
+    assert r.status_code == 200
+    assert b'name="referente_ids"' not in r.data
+
+
 def test_grid_filtra_y_pagina(app):
     _sembrar()
     c = app["c"]

@@ -30,6 +30,11 @@
   <div id="ref-grid" class="ref-grid"><p class="vacio">Cargando referentes…</p></div>
 </section>
 
+<div class="ref-barra" id="ref-barra" hidden>
+  <span id="ref-barra-texto">0 elegidos</span>
+  <button type="button" class="btn-generar btn-sm" id="ref-barra-agregar">Agregar a la campaña</button>
+</div>
+
 <dialog class="generado-modal" id="ref-modal">
   <button type="button" class="generado-cerrar" id="ref-modal-cerrar" aria-label="Cerrar">×</button>
   <div id="ref-modal-cuerpo"></div>
@@ -93,7 +98,7 @@
       fetch(urlGrid + '?' + q.toString(), { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
         .then(function (html) {
-          if (!anexar) { grid.innerHTML = html; return; }
+          if (!anexar) { grid.innerHTML = html; refrescarBarra(); return; }
           var tmp = document.createElement('div');
           tmp.innerHTML = html;
           var tarjetas = grid.querySelector('.ref-tarjetas');
@@ -102,6 +107,7 @@
           if (viejo) viejo.remove();
           var nuevo = tmp.querySelector('.ref-mas');
           if (nuevo) grid.appendChild(nuevo);
+          refrescarBarra();
         })
         .catch(function () {
           if (anexar) { alert('No se pudo cargar más referentes.'); return; }
@@ -130,6 +136,35 @@
       var media = ev.target.closest('[data-ficha]');
       if (!media) return;
       cargarEnDialogo(media.dataset.ficha).then(function (ok) { if (ok) modal.showModal(); });
+    });
+    var barra = document.getElementById('ref-barra');
+    var barraTexto = document.getElementById('ref-barra-texto');
+    var btnAgregar = document.getElementById('ref-barra-agregar');
+    function refrescarBarra() {
+      var marcados = grid.querySelectorAll('input[name="referente_ids"]:checked');
+      if (filtros.campana && marcados.length) {
+        barra.hidden = false;
+        barraTexto.textContent = marcados.length + (marcados.length === 1 ? ' elegido' : ' elegidos');
+      } else {
+        barra.hidden = true;
+      }
+    }
+    grid.addEventListener('change', function (ev) {
+      if (ev.target.matches('input[name="referente_ids"]')) refrescarBarra();
+    });
+    btnAgregar.addEventListener('click', function () {
+      var marcados = grid.querySelectorAll('input[name="referente_ids"]:checked');
+      if (!marcados.length || !filtros.campana) return;
+      var form = document.createElement('form');
+      form.method = 'post';
+      form.action = '/cliente/{{ cliente }}/sprints/campanas/' + encodeURIComponent(filtros.campana) + '/referencias_biblioteca';
+      marcados.forEach(function (cb) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = 'referente_ids'; inp.value = cb.value;
+        form.appendChild(inp);
+      });
+      document.body.appendChild(form);
+      form.submit();
     });
     cuerpo.addEventListener('change', function (ev) {
       var campo = ev.target.closest('[data-recrear-campo="producto_id"], [data-recrear-campo="formato"]');

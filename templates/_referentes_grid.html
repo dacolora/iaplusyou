@@ -6,6 +6,7 @@
 <div class="ref-tarjetas">
   {% for r in pagina["items"] %}
   <article class="ref-tarjeta" data-id="{{ r.id }}">
+    {% if campana %}<label class="ref-check" onclick="event.stopPropagation();"><input type="checkbox" name="referente_ids" value="{{ r.id }}"></label>{% endif %}
     <button type="button" class="ref-tarjeta-media" data-ficha="{{ url_for('referentes.ficha', cliente=cliente, rid=r.id) }}" title="Ver ficha">
       <img src="{{ r.imagen_url }}" alt="" loading="lazy">
     </button>
