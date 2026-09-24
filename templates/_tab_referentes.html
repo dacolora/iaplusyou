@@ -73,7 +73,7 @@
       Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
       if (pagina > 1) q.set('pagina', pagina);
       fetch(urlGrid + '?' + q.toString(), { headers: { 'X-Requested-With': 'fetch' } })
-        .then(function (r) { return r.text(); })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
         .then(function (html) {
           if (!anexar) { grid.innerHTML = html; return; }
           var tmp = document.createElement('div');
@@ -85,7 +85,10 @@
           var nuevo = tmp.querySelector('.ref-mas');
           if (nuevo) grid.appendChild(nuevo);
         })
-        .catch(function () { grid.innerHTML = '<p class="vacio">No se pudo cargar la biblioteca. Recarga la página.</p>'; });
+        .catch(function () {
+          if (anexar) { alert('No se pudo cargar más referentes.'); return; }
+          grid.innerHTML = '<p class="vacio">No se pudo cargar la biblioteca. Recarga la página.</p>';
+        });
     }
     function recargar() { escribirHash(); pedir(1, false); }
 
