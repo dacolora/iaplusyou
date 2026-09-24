@@ -224,3 +224,16 @@ def test_recrear_generar_sin_producto_o_prompt_no_crea_nada(app):
     app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
                   data={"producto_id": "espejo_led", "formato": "1:1", "titular": "X", "prompt": "", "tipo": "imagen"})
     assert creative_flow.cargar("acme") == {}
+
+
+def test_ficha_tiene_botones_de_recrear_y_usos(app):
+    from referentes import datos
+    import creative_flow
+    ids = _sembrar()
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/ficha").data.decode()
+    assert f"/cliente/acme/referentes/{ids[0]}/recrear" in html and "Recrear con mi producto" in html and "Como video" in html
+    assert "Usado" not in html
+    cf_id = creative_flow.crear("acme", [], ["Espejo LED"], [], "X", 0, "", "A")
+    creative_flow.actualizar("acme", cf_id, referente_id=ids[0])
+    html2 = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/ficha").data.decode()
+    assert "Usado 1 vez" in html2

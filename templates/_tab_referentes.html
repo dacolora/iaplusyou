@@ -46,6 +46,13 @@
     var filtros = {};
     var cargado = false;
 
+    function cargarEnDialogo(url) {
+      fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) { cuerpo.innerHTML = html; })
+        .catch(function () { alert('No se pudo cargar.'); });
+    }
+
     function leerHash() {
       var h = location.hash || '';
       if (h.indexOf('#referentes') !== 0 || h.indexOf('?') < 0) return {};
@@ -111,10 +118,44 @@
       if (mas) { pedir(parseInt(mas.dataset.siguiente, 10), true); return; }
       var media = ev.target.closest('[data-ficha]');
       if (!media) return;
-      fetch(media.dataset.ficha, { headers: { 'X-Requested-With': 'fetch' } })
-        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-        .then(function (html) { cuerpo.innerHTML = html; modal.showModal(); })
-        .catch(function () { alert('No se pudo abrir la ficha.'); });
+      cargarEnDialogo(media.dataset.ficha);
+      modal.showModal();
+    });
+    cuerpo.addEventListener('click', function (ev) {
+      var abrir = ev.target.closest('[data-recrear-abrir]');
+      if (abrir) { cargarEnDialogo(abrir.dataset.recrearAbrir); return; }
+      var tipoBtn = ev.target.closest('[data-recrear-tipo]');
+      if (tipoBtn) {
+        var form = tipoBtn.closest('form');
+        var u = new URL(form.dataset.recrear, location.origin);
+        u.searchParams.set('tipo', tipoBtn.dataset.recrearTipo);
+        ['producto_id', 'formato', 'titular'].forEach(function (campo) {
+          var el = form.querySelector('[data-recrear-campo="' + campo + '"]');
+          if (el && el.value) u.searchParams.set(campo, el.value);
+        });
+        cargarEnDialogo(u.pathname + u.search);
+        return;
+      }
+      var adaptarBtn = ev.target.closest('[data-recrear-adaptar]');
+      if (adaptarBtn) {
+        var f = adaptarBtn.closest('form');
+        var productoSel = f.querySelector('[data-recrear-campo="producto_id"]');
+        var titularEl = f.querySelector('[data-recrear-campo="titular"]');
+        var promptEl = f.querySelector('[data-recrear-campo="prompt"]');
+        adaptarBtn.disabled = true;
+        fetch(f.dataset.adaptar, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'fetch' },
+          body: JSON.stringify({ producto_id: productoSel ? productoSel.value : '', titular: titularEl ? titularEl.value : '' })
+        })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (res) {
+            if (!res.ok) { alert(res.d.error || 'No se pudo adaptar.'); return; }
+            if (titularEl) titularEl.value = res.d.titular;
+            if (promptEl) promptEl.value = res.d.prompt;
+          })
+          .catch(function () { alert('No se pudo adaptar.'); })
+          .finally(function () { adaptarBtn.disabled = false; });
+      }
     });
     document.getElementById('ref-modal-cerrar').addEventListener('click', function () { modal.close(); });
     modal.addEventListener('click', function (ev) { if (ev.target === modal) modal.close(); });

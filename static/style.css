@@ -1758,3 +1758,9 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-ficha .detalle-media img { width:100%; height:auto; border-radius:8px; }
 .ref-cuerpo { white-space:pre-wrap; font-size:.82rem; }
 @media (max-width: 640px) { .ref-tarjetas { grid-template-columns:repeat(2, 1fr); } .ref-selects select, .ref-selects input { max-width:100%; } }
+
+/* Recrear con mi producto (spec 2026-09-23 §9) */
+.ref-recrear-titulo { margin: 0 0 .6rem; }
+.ref-recrear-form textarea { width: 100%; font-size: .82rem; }
+.ref-recrear-acciones { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
+.ref-usos { margin-top: .4rem; }

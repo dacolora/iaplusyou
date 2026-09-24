@@ -18,8 +18,13 @@
     {% if r.cuerpo %}<details><summary>Copy del anuncio</summary><p class="ref-cuerpo">{{ r.cuerpo }}</p></details>{% endif %}
     <p class="vacio">{% if r.dias %}{{ r.dias }} días corriendo{% endif %}{% if r.variantes %} · {{ r.variantes }} variante{{ 's' if r.variantes != 1 }}{% endif %} · fuente: {{ r.fuente }}{% if r.extra and r.extra.sweep %} · barrido {{ r.extra.sweep }}{% endif %}</p>
     <div class="detalle-acciones">
+      <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}">Recrear con mi producto</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id, tipo='video') }}">Como video</button>
       {% if r.url_anuncio %}<a class="btn-guardar btn-sm" href="{{ r.url_anuncio }}" target="_blank" rel="noopener">Ver en Ad Library →</a>{% endif %}
       {% if r.url_marca %}<a class="btn-guardar btn-sm" href="{{ r.url_marca }}" target="_blank" rel="noopener">Librería viva de la marca →</a>{% endif %}
     </div>
+    {% if usos %}
+    <p class="vacio ref-usos"><a href="#creativeflowplus" onclick="document.querySelector('.sidebar-item[data-tab=creativeflowplus]').click(); return false;">Usado {{ usos }} {{ 'vez' if usos == 1 else 'veces' }} →</a></p>
+    {% endif %}
   </div>
 </div>

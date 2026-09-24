@@ -167,4 +167,5 @@ def ficha(cliente, rid):
         abort(404)
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
     return render_template("_referente_ficha.html", cliente=cliente, r=r, familia=familia,
-                           etiquetas_etapa=datos.ETIQUETAS_ETAPA, etiquetas_consciencia=datos.ETIQUETAS_CONSCIENCIA)
+                           etiquetas_etapa=datos.ETIQUETAS_ETAPA, etiquetas_consciencia=datos.ETIQUETAS_CONSCIENCIA,
+                           usos=recrear.usos(cliente, rid))
