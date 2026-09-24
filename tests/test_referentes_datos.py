@@ -78,3 +78,80 @@ def test_referente_privado_solo_lo_ve_su_cliente(base_temporal):
     rid, _ = datos.guardar_referente(_anuncio(anuncio_id="777"), cliente="acme")
     assert datos.referente("acme", rid)["cliente"] == "acme"
     assert datos.referente("otro", rid) is None
+
+
+def _sembrar(datos):
+    ids = []
+    for i, (etapa, cons, fam, dolor, marca) in enumerate([
+            ("TOF", "problem-aware", "Villain Made Visible", "bloating", "Primal Queen"),
+            ("TOF", "problem-aware", "Blame Transplant", "fatiga", "Neurotoned"),
+            ("BOF", "most-aware", "Price Slash Hero", "ninguno-oferta", "Lulutox Tea"),
+            ("MOF", "solution-aware", "Value Stack", "bloating", "Primal Queen")]):
+        rid, _ = datos.guardar_referente(_anuncio(anuncio_id=str(100 + i), etapa=etapa, consciencia=cons, familia=fam,
+                                                  dolor=dolor, marca=marca, titular=f"Titular {i}", dias=10 * (i + 1),
+                                                  firma=f"firma {fam}"))
+        datos.marcar_imagen(rid, "ok", f"https://r2/referentes/{100 + i}.jpg")
+        ids.append(rid)
+    rid, _ = datos.guardar_referente(_anuncio(anuncio_id="200", titular="Sin imagen"))   # pendiente: no se lista
+    ids.append(rid)
+    rid, _ = datos.guardar_referente(_anuncio(anuncio_id="300", titular="De otro", fuente="atria"), cliente="otro")
+    datos.marcar_imagen(rid, "ok", "https://r2/referentes/300.jpg")
+    return ids
+
+
+def test_listar_filtra_pagina_y_respeta_visibilidad(base_temporal):
+    from referentes import datos
+    _sembrar(datos)
+    todo = datos.listar("acme")
+    assert todo["total"] == 4 and [r["titular"] for r in todo["items"]] == ["Titular 3", "Titular 2", "Titular 1", "Titular 0"]
+    assert datos.listar("acme", {"etapa": "TOF"})["total"] == 2
+    assert datos.listar("acme", {"consciencia": "most-aware"})["items"][0]["marca"] == "Lulutox Tea"
+    assert datos.listar("acme", {"familia": "Value Stack"})["total"] == 1
+    assert datos.listar("acme", {"dolor": "bloating"})["total"] == 2
+    assert datos.listar("acme", {"marca": "Primal Queen"})["total"] == 2
+    assert datos.listar("acme", {"q": "blame"})["total"] == 1          # busca en firma
+    assert datos.listar("acme", {"fuente": "mios"})["total"] == 0 and datos.listar("otro", {"fuente": "mios"})["total"] == 1
+    assert datos.listar("otro")["total"] == 5 and datos.listar("acme", {"fuente": "atria"})["total"] == 0
+    assert datos.listar("acme", {"etapa": "XXX"})["total"] == 4          # filtro inválido = sin filtro
+    p = datos.listar("acme", pagina=2, por_pagina=3)
+    assert p["paginas"] == 2 and p["pagina"] == 2 and len(p["items"]) == 1
+    assert datos.listar("acme", pagina=99, por_pagina=3)["pagina"] == 2
+
+
+def test_opciones(base_temporal):
+    from referentes import datos
+    _sembrar(datos)
+    o = datos.opciones("acme")
+    assert o["total"] == 4 and o["familias"][0][1] == 1 and len(o["familias"]) == 4
+    assert o["marcas"][0] == ("Primal Queen", 2) and ("bloating", 2) in o["dolores"] and o["fuentes"] == [("copycoders", 4)]
+
+
+def test_imagenes_y_traducciones(base_temporal):
+    from referentes import datos
+    rid, _ = datos.guardar_referente(_anuncio(extra={"firma_original": "giant headline", "traducida": False}))
+    assert datos.contar_imagenes() == {"ok": 0, "pendiente": 1, "error": 0}
+    assert [r["id"] for r in datos.pendientes_imagen(fuente="copycoders")] == [rid]
+    assert datos.marcar_imagen(rid, "error")
+    assert datos.pendientes_imagen() == [] and datos.contar_imagenes()["error"] == 1
+    with pytest.raises(datos.ErrorDatos):
+        datos.marcar_imagen(rid, "rara")
+    assert [r["id"] for r in datos.sin_traducir()] == [rid]
+    assert datos.marcar_traducidas([(rid, "Titular gigante estilo ruptura")]) == 1
+    r = datos.referente("acme", rid)
+    assert r["firma"] == "Titular gigante estilo ruptura" and r["extra"]["traducida"] is True and r["extra"]["firma_original"] == "giant headline"
+    assert datos.sin_traducir() == []
+
+
+def test_barridos(base_temporal):
+    from referentes import datos
+    bid = datos.crear_barrido(None, "copycoders", {"url": "https://x"}, 0, pedido_por="admin")
+    b = datos.barrido(bid)
+    assert b["estado"] == "en_cola" and b["cliente"] is None and b["consulta"]["url"] == "https://x"
+    assert datos.actualizar_barrido(bid, estado="listo", traidos=3, nuevos=2, aviso=None)
+    assert datos.barridos(None, fuente="copycoders")[0]["traidos"] == 3 and datos.barridos("acme") == []
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_barrido(bid, cliente="acme")
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_barrido(bid, estado="volando")
+    with pytest.raises(datos.ErrorDatos):
+        datos.crear_barrido("acme", "otra", {}, 10)

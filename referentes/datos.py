@@ -155,3 +155,163 @@ def referente(cliente, referente_id):
     with db.conectar() as con:
         f = con.execute(sa.select(t).where(t.c.id == referente_id, _visible(t, cliente))).first()
         return _a_dict(f) if f else None
+
+
+def _condiciones(cliente, filtros):
+    f = filtros or {}
+    t = db.referente
+    cond = [_visible(t, cliente), t.c.estado_imagen == "ok"]
+    if f.get("etapa") in ETAPAS:
+        cond.append(t.c.etapa == f["etapa"])
+    if f.get("consciencia") in CONSCIENCIAS:
+        cond.append(t.c.consciencia == f["consciencia"])
+    for campo in ("familia", "dolor", "marca"):
+        v = _texto(f.get(campo), 160)
+        if v:
+            cond.append(getattr(t.c, campo) == v)
+    fuente = f.get("fuente")
+    if fuente == "mios":
+        cond.append(t.c.cliente == cliente)
+    elif fuente in FUENTES:
+        cond.append(t.c.fuente == fuente)
+    q = _texto(f.get("q"), 80)
+    if q:
+        like = f"%{q}%"
+        cond.append(sa.or_(t.c.titular.ilike(like), t.c.firma.ilike(like), t.c.marca.ilike(like)))
+    return cond
+
+
+def listar(cliente, filtros=None, pagina=1, por_pagina=POR_PAGINA):
+    t = db.referente
+    cond = _condiciones(cliente, filtros)
+    por_pagina = max(1, int(por_pagina))
+    with db.conectar() as con:
+        total = con.execute(sa.select(sa.func.count()).select_from(t).where(*cond)).scalar() or 0
+        paginas = max(1, math.ceil(total / por_pagina))
+        pagina = min(max(1, _entero(pagina) or 1), paginas)
+        filas = con.execute(sa.select(t).where(*cond)
+                            .order_by(sa.desc(t.c.dias).nulls_last(), sa.desc(t.c.variantes).nulls_last(), t.c.id.desc())
+                            .limit(por_pagina).offset((pagina - 1) * por_pagina))
+        items = [_a_dict(r) for r in filas]
+    return {"items": items, "total": int(total), "pagina": pagina, "paginas": paginas}
+
+
+def opciones(cliente):
+    t = db.referente
+    base = [_visible(t, cliente), t.c.estado_imagen == "ok"]
+
+    def _grupo(con, col):
+        q = (sa.select(col, sa.func.count().label("n")).where(*base, col.isnot(None), col != "")
+             .group_by(col).order_by(sa.desc("n"), col))
+        return [(r[0], int(r[1])) for r in con.execute(q)]
+
+    with db.conectar() as con:
+        total = con.execute(sa.select(sa.func.count()).select_from(t).where(*base)).scalar() or 0
+        return {"total": int(total), "familias": _grupo(con, t.c.familia), "marcas": _grupo(con, t.c.marca),
+                "dolores": _grupo(con, t.c.dolor), "fuentes": _grupo(con, t.c.fuente)}
+
+
+# ---------------------------------------------------------------- imágenes ---
+
+def marcar_imagen(referente_id, estado, imagen_url=None):
+    if estado not in ESTADOS_IMAGEN:
+        raise ErrorDatos(f"Estado de imagen inválido: {estado}")
+    t = db.referente
+    valores = {"estado_imagen": estado, "actualizado_en": db.ahora()}
+    if imagen_url:
+        valores["imagen_url"] = imagen_url
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == referente_id).values(**valores)).rowcount == 1
+
+
+def pendientes_imagen(fuente=None, limite=100):
+    t = db.referente
+    q = sa.select(t).where(t.c.estado_imagen == "pendiente")
+    if fuente:
+        q = q.where(t.c.fuente == fuente)
+    with db.conectar() as con:
+        return [_a_dict(r) for r in con.execute(q.order_by(t.c.id).limit(limite))]
+
+
+def contar_imagenes(fuente=None):
+    t = db.referente
+    q = sa.select(t.c.estado_imagen, sa.func.count()).group_by(t.c.estado_imagen)
+    if fuente:
+        q = q.where(t.c.fuente == fuente)
+    conteo = {e: 0 for e in ESTADOS_IMAGEN}
+    with db.conectar() as con:
+        for estado, n in con.execute(q):
+            if estado in conteo:
+                conteo[estado] = int(n)
+    return conteo
+
+
+# ------------------------------------------------------------ traducciones ---
+
+def sin_traducir(limite=100):
+    t = db.referente
+    q = (sa.select(t).where(t.c.fuente == "copycoders", t.c.firma.isnot(None), t.c.firma != "")
+         .order_by(t.c.id).limit(limite * 4))
+    with db.conectar() as con:
+        filas = [_a_dict(r) for r in con.execute(q)]
+    return [r for r in filas if not (r.get("extra") or {}).get("traducida")][:limite]
+
+
+def marcar_traducidas(pares):
+    t = db.referente
+    n = 0
+    with db.conectar() as con:
+        for rid, firma in pares:
+            firma = _texto(firma)
+            if not firma:
+                continue
+            f = con.execute(sa.select(t.c.extra).where(t.c.id == rid)).first()
+            if not f:
+                continue
+            extra = dict(f.extra or {})
+            extra["traducida"] = True
+            n += con.execute(t.update().where(t.c.id == rid)
+                             .values(firma=firma, extra=extra, actualizado_en=db.ahora())).rowcount
+    return n
+
+
+# ---------------------------------------------------------------- barridos ---
+
+def crear_barrido(cliente, fuente, consulta, tope, pedido_por=None, usd_estimado=0.0):
+    if fuente not in FUENTES:
+        raise ErrorDatos(f"Fuente desconocida: {fuente}")
+    ahora = db.ahora()
+    with db.conectar() as con:
+        return con.execute(db.barrido.insert().values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, fuente=fuente, consulta=dict(consulta or {}),
+            tope=int(tope or 0), estado="en_cola", traidos=0, nuevos=0, clasificados=0, pendientes=0, con_imagen=0,
+            usd_estimado=float(usd_estimado or 0.0), usd_real=0.0, llamadas_fuente=0,
+            pedido_por=_texto(pedido_por, 40) or None, extra={})).inserted_primary_key[0]
+
+
+def actualizar_barrido(barrido_id, **campos):
+    malos = set(campos) - set(_BARRIDO_COLS)
+    if malos:
+        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+    if "estado" in campos and campos["estado"] not in ESTADOS_BARRIDO:
+        raise ErrorDatos(f"Estado de barrido inválido: {campos['estado']}")
+    t = db.barrido
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == barrido_id)
+                           .values(actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
+def barrido(barrido_id):
+    t = db.barrido
+    with db.conectar() as con:
+        f = con.execute(sa.select(t).where(t.c.id == barrido_id)).first()
+        return _a_dict(f) if f else None
+
+
+def barridos(cliente=None, fuente=None):
+    t = db.barrido
+    q = sa.select(t).where(t.c.cliente.is_(None) if cliente is None else t.c.cliente == cliente)
+    if fuente:
+        q = q.where(t.c.fuente == fuente)
+    with db.conectar() as con:
+        return [_a_dict(r) for r in con.execute(q.order_by(t.c.id.desc()))]
