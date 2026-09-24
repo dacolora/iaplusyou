@@ -174,3 +174,53 @@ def test_recrear_adaptar_sin_producto_o_referente_da_error(app, monkeypatch):
     monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: ("no es json", 10, 5))
     r2 = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
     assert r2.status_code == 502
+
+
+def test_recrear_generar_imagen_crea_sesion_y_lanza(app, monkeypatch):
+    from referentes import datos
+    import creative_flow
+    import flowplus_lanzar
+    ids = _sembrar()
+    subidos = []
+    monkeypatch.setattr("referentes.recrear.r2_uploader.upload_image",
+                        lambda local, clave: subidos.append(clave) or f"https://r2/{clave}")
+    lanzado = {}
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzado.update(cliente=cliente, cf_id=cf_id, entry=entry) or True)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                      data={"producto_id": "espejo_led", "formato": "1:1", "titular": "SE ACABA HOY",
+                            "prompt": "Anuncio con Image 1 e Image 2...", "tipo": "imagen"})
+    assert r.status_code == 302 and "creativeflowplus" in r.headers["Location"]
+    cf_id = lanzado["cf_id"]
+    entry = creative_flow.cargar("acme")[cf_id]
+    assert entry["prompt_relleno"] == "Anuncio con Image 1 e Image 2..." and entry["tipo"] == "imagen"
+    assert entry["aspect_ratio"] == "1:1" and entry["referencias_urls"][0] == "https://r2/referentes/0.jpg"
+    assert len(entry["referencias_urls"]) == 3 and entry["referente_id"] == ids[0]
+    assert entry["modelo"] == "seedream_v5_pro"
+
+
+def test_recrear_generar_video_usa_preferencias_del_proyecto(app, monkeypatch):
+    import creative_flow
+    import flowplus_lanzar
+    import proyectos
+    ids = _sembrar()
+    monkeypatch.setattr("referentes.recrear.r2_uploader.upload_image", lambda local, clave: f"https://r2/{clave}")
+    monkeypatch.setattr(proyectos, "preferencias_flowplus", lambda c: {**proyectos.DEFAULTS_FLOWPLUS, "duracion_defecto": 12})
+    monkeypatch.setattr(proyectos, "preferencias_sonido", lambda c: {"con_sonido": False, "musica_al_crear": ""})
+    lanzado = {}
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzado.update(cf_id=cf_id) or True)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                      data={"producto_id": "espejo_led", "formato": "9:16", "titular": "X", "prompt": "P", "tipo": "video"})
+    assert r.status_code == 302
+    entry = creative_flow.cargar("acme")[lanzado["cf_id"]]
+    assert entry["tipo"] == "video" and entry["modelo"] == "wan3" and entry["duracion_objetivo"] == 12
+    assert entry["con_sonido"] is False
+
+
+def test_recrear_generar_sin_producto_o_prompt_no_crea_nada(app):
+    import creative_flow
+    ids = _sembrar()
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "", "formato": "1:1", "titular": "X", "prompt": "P", "tipo": "imagen"})
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar",
+                  data={"producto_id": "espejo_led", "formato": "1:1", "titular": "X", "prompt": "", "tipo": "imagen"})
+    assert creative_flow.cargar("acme") == {}

@@ -6,9 +6,11 @@ bloque 1: fragmentos HTML para el grid (filtros + paginación) y la ficha.
 """
 from uuid import uuid4
 
-from flask import Blueprint, abort, jsonify, render_template, request
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 import catalogo_productos
+import creative_flow
+import flowplus_lanzar
 import gastos
 import marca as marca_mod
 import proyectos
@@ -126,6 +128,53 @@ def recrear_adaptar(cliente, rid):
                             detalle=f"{producto['nombre']} · {r.get('familia') or ''}", proveedor="anthropic",
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     return jsonify(resultado)
+
+
+@bp.post("/<int:rid>/recrear/generar")
+def recrear_generar(cliente, rid):
+    r = datos.referente(cliente, rid)
+    if not r or r.get("estado_imagen") != "ok":
+        flash("Ese referente no existe.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    tipo = request.form.get("tipo") if request.form.get("tipo") in ("imagen", "video") else "imagen"
+    producto = catalogo_productos.encontrar(cliente, request.form.get("producto_id"), categoria="producto") \
+        if request.form.get("producto_id") else None
+    if not producto:
+        flash("Elige un producto con fotos.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    titular = (request.form.get("titular") or "").strip()[:200]
+    prompt = (request.form.get("prompt") or "").strip()
+    if not prompt:
+        flash("El prompt no puede quedar vacío.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    formato_pedido = request.form.get("formato") or flowplus_modelos.FORMATO_DEFECTO
+    try:
+        referencias_urls = recrear.referencias_para(cliente, r, producto)
+    except Exception as e:
+        flash(f"No se pudieron preparar las referencias ({type(e).__name__}).", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    prefs_sonido = proyectos.preferencias_sonido(cliente)
+    if tipo == "imagen":
+        modelo = flowplus_modelos.IMAGEN_POR_DEFECTO
+        formato = flowplus_modelos.ajustar_formato(modelo, formato_pedido, tipo="imagen")
+        duracion_objetivo = 0
+    else:
+        modelo = flowplus_modelos.VIDEO_POR_DEFECTO
+        duracion_objetivo = flowplus_modelos.ajustar_duracion(
+            modelo, proyectos.preferencias_flowplus(cliente)["duracion_defecto"])
+        formato = flowplus_modelos.ajustar_formato(modelo, formato_pedido)
+    cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [],
+                                titular or f"Recrear: {r.get('titular') or r['id']}",
+                                duracion_objetivo, "", "A", referencias_urls=referencias_urls, platforms=[])
+    creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt, aspect_ratio=formato, tipo=tipo, modelo=modelo,
+                             con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
+                             calidad="final", referente_id=rid)
+    entry = creative_flow.cargar(cliente)[cf_id]
+    if flowplus_lanzar.lanzar(cliente, cf_id, entry):
+        flash("Generando desde el referente…", "ok")
+    else:
+        flash("Ya había algo generándose para esta sesión.", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 @bp.get("/<int:rid>/ficha")
