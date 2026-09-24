@@ -56,21 +56,6 @@ def _producto_para(cliente, request_args_o_form):
     return productos, producto
 
 
-def _url_opcional(endpoint, **valores):
-    """`url_for` que no revienta si el endpoint todavía no existe:
-    `referentes.recrear_generar`/`referentes.recrear_adaptar` se agregan recién en
-    las Tareas 6 y 7 de este mismo bloque, pero la plantilla de la Tarea 5 ya los
-    referencia (botones «Generar»/«Adaptar con IA»). Import local a propósito: no
-    toca la línea de import de `flask` de arriba, así que la instrucción de la
-    Tarea 7 de sumar `url_for` a esa línea sigue aplicando tal cual cuando llegue."""
-    from flask import url_for
-    from werkzeug.routing import BuildError
-    try:
-        return url_for(endpoint, **valores)
-    except BuildError:
-        return "#"
-
-
 @bp.get("/<int:rid>/recrear")
 def recrear_form(cliente, rid):
     r = datos.referente(cliente, rid)
@@ -100,9 +85,7 @@ def recrear_form(cliente, rid):
         "_referente_recrear.html", cliente=cliente, r=r, productos=productos, producto=producto, tipo=tipo,
         formato=formato, titular=titular, prompt=prompt or "", precio=precio,
         precio_adaptar=gastos.estimar("adaptar_referente"),
-        formatos=flowplus_modelos.IMAGEN[flowplus_modelos.IMAGEN_POR_DEFECTO]["formatos"],
-        url_generar=_url_opcional("referentes.recrear_generar", cliente=cliente, rid=rid),
-        url_adaptar=_url_opcional("referentes.recrear_adaptar", cliente=cliente, rid=rid))
+        formatos=flowplus_modelos.IMAGEN[flowplus_modelos.IMAGEN_POR_DEFECTO]["formatos"])
 
 
 @bp.post("/<int:rid>/recrear/adaptar")

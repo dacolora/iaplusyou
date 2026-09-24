@@ -2,19 +2,16 @@
    el mismo <dialog> que la ficha. Contexto: cliente, r (referente), productos
    (catalogo_productos.listar, solo con fotos), producto (elegido o None),
    tipo (imagen|video), formato, formatos, titular, prompt, precio
-   (gastos.estimar o None sin producto), precio_adaptar. url_generar/url_adaptar
-   vienen ya resueltos de la ruta (referentes.rutas._url_opcional): apuntan a
-   POST /recrear/generar y /recrear/adaptar, que llegan en las Tareas 6 y 7 —
-   hasta entonces caen a "#". #}
+   (gastos.estimar o None sin producto), precio_adaptar. #}
 <div class="ref-recrear">
   <p class="ref-recrear-titulo"><strong>Recrear «{{ r.titular or r.id }}» con mi producto</strong></p>
   {% if not productos %}
   <p class="vacio">Todavía no tienes productos con fotos en el catálogo.
     <a href="#catalogo" onclick="document.querySelector('.sidebar-item[data-tab=catalogo]').click(); return false;">Ir a Catálogo →</a></p>
   {% else %}
-  <form method="post" action="{{ url_generar }}" class="form-nueva-idea ref-recrear-form"
+  <form method="post" action="{{ url_for('referentes.recrear_generar', cliente=cliente, rid=r.id) }}" class="form-nueva-idea ref-recrear-form"
         data-recrear="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}"
-        data-adaptar="{{ url_adaptar }}">
+        data-adaptar="{{ url_for('referentes.recrear_adaptar', cliente=cliente, rid=r.id) }}">
     <input type="hidden" name="tipo" value="{{ tipo }}">
     <div class="fe-opciones">
       <label>Producto
