@@ -1753,6 +1753,8 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-tarjeta-candidato input[type=checkbox] { margin-bottom:.3rem; }
 .ref-tarjeta-candidato img { width:100%; aspect-ratio:1/1; object-fit:cover; border-radius:8px; }
 .ref-candidatos { margin-top:.6rem; }
+.ref-usar-sprint-lista { list-style:none; margin:.6rem 0 0; padding:0; display:flex; flex-direction:column; gap:.4rem; }
+.ref-usar-sprint-lista li { display:flex; align-items:center; justify-content:space-between; gap:.6rem; padding:.4rem .2rem; border-bottom:1px solid var(--border); font-size:.85rem; }
 .ref-barra { position:sticky; bottom:0; display:flex; gap:1rem; align-items:center; justify-content:space-between; background:var(--panel); border-top:1px solid var(--border); padding:.6rem 1rem; margin-top:.8rem; z-index:5; }
 .ref-barra[hidden] { display:none; }
 .ref-tarjeta-media { display:block; width:100%; aspect-ratio:1/1; overflow:hidden; border-radius:8px; background:#111; border:0; padding:0; cursor:zoom-in; }

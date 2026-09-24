@@ -266,3 +266,29 @@ def test_ficha_tiene_botones_de_recrear_y_usos(app):
     creative_flow.actualizar("acme", cf_id, referente_id=ids[0])
     html2 = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/ficha").data.decode()
     assert "Usado 1 vez" in html2
+
+
+def test_ficha_tiene_boton_usar_en_sprint(app):
+    ids = _sembrar()
+    html = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/ficha").data.decode()
+    assert f"/cliente/acme/referentes/{ids[0]}/usar_en_sprint" in html and "Usar en sprint" in html
+    assert "data-recrear-abrir" in html
+
+
+def test_usar_en_sprint_lista_campanas_elegibles(app, monkeypatch):
+    ids = _sembrar()
+    import sprints.datos as sprints_datos
+    monkeypatch.setattr(sprints_datos, "sprints", lambda cliente_: [
+        {"id": 1, "nombre": "Sprint de octubre", "estado": "planeando",
+         "campanas": [{"id": 10, "orden": 0, "funnel": "tof", "persona_nombre": "Melissa"}]},
+        {"id": 2, "nombre": "Sprint cerrado", "estado": "completado",
+         "campanas": [{"id": 20, "orden": 0, "funnel": "tof", "persona_nombre": "Carlos"}]},
+    ])
+    r = app["c"].get(f"/cliente/acme/referentes/{ids[0]}/usar_en_sprint")
+    assert r.status_code == 200
+    assert b"Sprint de octubre" in r.data
+    assert b"Sprint cerrado" not in r.data
+
+
+def test_usar_en_sprint_referente_inexistente_404(app):
+    assert app["c"].get("/cliente/acme/referentes/999999/usar_en_sprint").status_code == 404

@@ -20,6 +20,7 @@ import proyectos
 from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
 from referentes import datos, recrear
+from sprints import datos as sprints_datos
 
 bp = Blueprint("referentes", __name__, url_prefix="/cliente/<cliente>/referentes")
 _FILTROS = ("etapa", "consciencia", "familia", "dolor", "marca", "fuente", "q")
@@ -183,3 +184,20 @@ def ficha(cliente, rid):
     return render_template("_referente_ficha.html", cliente=cliente, r=r, familia=familia,
                            etiquetas_etapa=datos.ETIQUETAS_ETAPA, etiquetas_consciencia=datos.ETIQUETAS_CONSCIENCIA,
                            usos=recrear.usos(cliente, rid))
+
+
+@bp.get("/<int:rid>/usar_en_sprint")
+def usar_en_sprint(cliente, rid):
+    r = datos.referente(cliente, rid)
+    if not r or r.get("estado_imagen") != "ok":
+        abort(404)
+    elegibles = []
+    for sp in sprints_datos.sprints(cliente):
+        if sp["estado"] not in ("planeando", "referencias"):
+            continue
+        for c in sp["campanas"]:
+            elegibles.append({"sprint_nombre": sp["nombre"], "campana_id": c["id"],
+                              "campana_n": int(c["orden"]) + 1, "funnel": c["funnel"],
+                              "persona_nombre": c.get("persona_nombre")})
+    return render_template("_referente_usar_en_sprint.html", cliente=cliente, r=r, elegibles=elegibles,
+                           etiquetas_funnel=sprints_datos.FUNNELS_NOMBRE)

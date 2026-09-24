@@ -19,6 +19,7 @@
     <div class="detalle-acciones">
       <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}">Recrear con mi producto</button>
       <button type="button" class="btn-guardar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id, tipo='video') }}">Como video</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-abrir="{{ url_for('referentes.usar_en_sprint', cliente=cliente, rid=r.id) }}">Usar en sprint</button>
       {% if r.url_anuncio %}<a class="btn-guardar btn-sm" href="{{ r.url_anuncio }}" target="_blank" rel="noopener">Ver en Ad Library →</a>{% endif %}
       {% if r.url_marca %}<a class="btn-guardar btn-sm" href="{{ r.url_marca }}" target="_blank" rel="noopener">Librería viva de la marca →</a>{% endif %}
     </div>

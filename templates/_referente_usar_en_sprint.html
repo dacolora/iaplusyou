@@ -1,0 +1,21 @@
+{# Elegir una campaña para traer este referente (referentes.usar_en_sprint).
+   Contexto: cliente, r (referente), elegibles (lista de {sprint_nombre,
+   campana_id, campana_n, funnel, persona_nombre}), etiquetas_funnel. #}
+<div class="generado-modal-cuerpo">
+  <h3>Usar «{{ r.titular or r.id }}» en un sprint</h3>
+  {% if not elegibles %}
+  <p class="vacio">No hay campañas en «Planeando referencias» ahora mismo.</p>
+  {% else %}
+  <ul class="ref-usar-sprint-lista">
+    {% for e in elegibles %}
+    <li>
+      <span>{{ e.sprint_nombre }} · Campaña {{ e.campana_n }}{% if e.persona_nombre %} · {{ e.persona_nombre }}{% endif %} · {{ etiquetas_funnel.get(e.funnel, e.funnel) }}</span>
+      <form method="post" action="{{ url_for('sprints.campana_referencias_biblioteca', cliente=cliente, cid=e.campana_id) }}" class="inline">
+        <input type="hidden" name="referente_ids" value="{{ r.id }}">
+        <button type="submit" class="btn-xs">Usar aquí</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+</div>
