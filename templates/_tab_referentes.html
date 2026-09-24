@@ -49,8 +49,19 @@
     function cargarEnDialogo(url) {
       return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-        .then(function (html) { cuerpo.innerHTML = html; })
-        .catch(function () { alert('No se pudo cargar.'); });
+        .then(function (html) { cuerpo.innerHTML = html; return true; })
+        .catch(function () { alert('No se pudo cargar.'); return false; });
+    }
+
+    function recargarFormularioRecrear(form, tipoNuevo) {
+      var u = new URL(form.dataset.recrear, location.origin);
+      var tipoActual = form.querySelector('input[name="tipo"]');
+      u.searchParams.set('tipo', tipoNuevo || (tipoActual ? tipoActual.value : 'imagen'));
+      ['producto_id', 'formato', 'titular'].forEach(function (campo) {
+        var el = form.querySelector('[data-recrear-campo="' + campo + '"]');
+        if (el && el.value) u.searchParams.set(campo, el.value);
+      });
+      cargarEnDialogo(u.pathname + u.search);
     }
 
     function leerHash() {
@@ -118,21 +129,19 @@
       if (mas) { pedir(parseInt(mas.dataset.siguiente, 10), true); return; }
       var media = ev.target.closest('[data-ficha]');
       if (!media) return;
-      cargarEnDialogo(media.dataset.ficha).then(function () { modal.showModal(); });
+      cargarEnDialogo(media.dataset.ficha).then(function (ok) { if (ok) modal.showModal(); });
+    });
+    cuerpo.addEventListener('change', function (ev) {
+      var campo = ev.target.closest('[data-recrear-campo="producto_id"], [data-recrear-campo="formato"]');
+      if (!campo) return;
+      recargarFormularioRecrear(campo.closest('form'));
     });
     cuerpo.addEventListener('click', function (ev) {
       var abrir = ev.target.closest('[data-recrear-abrir]');
       if (abrir) { cargarEnDialogo(abrir.dataset.recrearAbrir); return; }
       var tipoBtn = ev.target.closest('[data-recrear-tipo]');
       if (tipoBtn) {
-        var form = tipoBtn.closest('form');
-        var u = new URL(form.dataset.recrear, location.origin);
-        u.searchParams.set('tipo', tipoBtn.dataset.recrearTipo);
-        ['producto_id', 'formato', 'titular'].forEach(function (campo) {
-          var el = form.querySelector('[data-recrear-campo="' + campo + '"]');
-          if (el && el.value) u.searchParams.set(campo, el.value);
-        });
-        cargarEnDialogo(u.pathname + u.search);
+        recargarFormularioRecrear(tipoBtn.closest('form'), tipoBtn.dataset.recrearTipo);
         return;
       }
       var adaptarBtn = ev.target.closest('[data-recrear-adaptar]');

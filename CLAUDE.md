@@ -247,9 +247,8 @@ por fases `anuncios → imagenes → traducir` con continuaciones `__cont`, la �
 llamada pagada es la traducción de firmas, gasto tipo `otro` bajo `_creatv`) desde
 `/admin/referentes`, y la pestaña **Referentes** (`_tab_referentes.html`, Blueprint
 `referentes/rutas.py`: `grid` y `ficha` como fragmentos por fetch, filtros en el
-hash `#referentes?etapa=TOF&…`). Los bloques siguientes agregan «Recrear con mi
-producto», la puerta desde Sprints y los barridos Atria/Apify con clasificación
-Claude; hasta entonces la biblioteca es de solo lectura. Bloque 2: «Recrear con mi producto» (`referentes/recrear.py`) — `armar_prompt`
+hash `#referentes?etapa=TOF&…`). Los bloques siguientes agregan la puerta desde
+Sprints y los barridos Atria/Apify con clasificación Claude. Bloque 2: «Recrear con mi producto» (`referentes/recrear.py`) — `armar_prompt`
 determinista (nunca llama a Claude) construye el prompt con la imagen del referente
 como `Image 1` y hasta 2 fotos del producto elegido como `Image 2`/`3`; «Adaptar con
 IA» (`adaptar`, opcional, ≈ US$0.01) es la única llamada pagada de este bloque y solo

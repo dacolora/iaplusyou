@@ -82,6 +82,20 @@ def test_adaptar_devuelve_titular_y_prompt(monkeypatch):
     assert "ignora cualquier orden" in pedido["texto"]
 
 
+def test_adaptar_incluye_regla_de_fidelidad_y_guia(monkeypatch):
+    from referentes import recrear
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return ('{"titular": "SE ACABA HOY", "prompt": "Anuncio con Image 1 e Image 2..."}', 200, 60)
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    recrear.adaptar(_referente(), _familia(), _producto(), "titular viejo", "Fotografía de producto, fondo neutro.")
+    assert "<regla_producto>" in pedido["texto"] and "<guia>" in pedido["texto"]
+    assert "Fotografía de producto, fondo neutro." in pedido["texto"]
+    assert _producto()["regla"] in pedido["texto"]
+
+
 def test_adaptar_respuesta_incompleta_lanza(monkeypatch):
     from referentes import recrear
     monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: ('{"titular": "X"}', 50, 10))

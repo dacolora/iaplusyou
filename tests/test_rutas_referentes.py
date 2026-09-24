@@ -176,6 +176,18 @@ def test_recrear_adaptar_sin_producto_o_referente_da_error(app, monkeypatch):
     assert r2.status_code == 502
 
 
+def test_recrear_adaptar_falla_pero_registra_lo_gastado(app, monkeypatch):
+    from referentes import datos, recrear
+    import gastos
+    ids = _sembrar()
+    monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: ("no es json", 80, 20))
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar",
+                      json={"producto_id": "espejo_led", "titular": "viejo"})
+    assert r.status_code == 502
+    gasto = gastos.historial("acme", limite=1)[0]
+    assert gasto["tipo"] == "adaptar_referente" and gasto["usd"] > 0
+
+
 def test_recrear_generar_imagen_crea_sesion_y_lanza(app, monkeypatch):
     from referentes import datos
     import creative_flow

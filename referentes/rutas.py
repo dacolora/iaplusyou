@@ -1,8 +1,11 @@
 """
-Blueprint de la pestaña Referentes (spec 2026-09-23 §8). Solo lectura en el
-bloque 1: fragmentos HTML para el grid (filtros + paginación) y la ficha.
+Blueprint de la pestaña Referentes (spec 2026-09-23 §8). Bloque 1: fragmentos
+HTML para el grid (filtros + paginación) y la ficha, solo lectura.
 `dashboard._guard_por_cliente` protege estas rutas porque la URL lleva
 `<cliente>`; la visibilidad (global + propios) la aplica referentes.datos.
+Bloque 2 agrega `recrear_form`/`recrear_adaptar`/`recrear_generar` («Recrear
+con mi producto»); los créditos de generación se gastan a través del pipeline
+de Crear que ya existe (`creative_flow` + `flowplus_lanzar`), no se reimplementan aquí.
 """
 from uuid import uuid4
 
@@ -101,8 +104,17 @@ def recrear_adaptar(cliente, rid):
         return jsonify({"error": "Elige un producto primero."}), 400
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
     try:
-        resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""))
+        resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""),
+                                              marca_mod.guia_efectiva(cliente))
     except recrear.AdaptacionInvalida as e:
+        ent = getattr(e, "tokens_entrada", 0) or 0
+        sal = getattr(e, "tokens_salida", 0) or 0
+        if ent or sal:
+            usd = costo_real(ent, sal)
+            gastos.registrar_seguro(cliente, "adaptar_referente", usd, f"referentes:adaptar:{rid}:{uuid4().hex[:12]}",
+                                    detalle=f"{producto['nombre']} · {r.get('familia') or ''} · respuesta inválida",
+                                    proveedor="anthropic",
+                                    extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         return jsonify({"error": str(e)}), 502
     except Exception as e:
         return jsonify({"error": f"No se pudo adaptar ({type(e).__name__})."}), 502
