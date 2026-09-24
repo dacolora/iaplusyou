@@ -190,3 +190,9 @@ def test_tipo_recoleccion_es_conocido(base_temporal):
     import gastos
     gastos.registrar("acme", "recoleccion", 0.6, "recoleccion:3:t9", detalle="Apify tiktok: 1200 resultado(s) aprox.", proveedor="apify")
     assert gastos.historial("acme")[0]["tipo"] == "recoleccion"
+
+
+def test_estimar_adaptar_referente():
+    import gastos
+    assert gastos.estimar("adaptar_referente") == {"usd": 0.01, "texto": "US$ 0,01 aprox.", "detalle": "una llamada corta a Claude"}
+    assert "adaptar_referente" in gastos.TIPOS
