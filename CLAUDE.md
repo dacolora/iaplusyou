@@ -249,7 +249,16 @@ llamada pagada es la traducción de firmas, gasto tipo `otro` bajo `_creatv`) de
 `referentes/rutas.py`: `grid` y `ficha` como fragmentos por fetch, filtros en el
 hash `#referentes?etapa=TOF&…`). Los bloques siguientes agregan «Recrear con mi
 producto», la puerta desde Sprints y los barridos Atria/Apify con clasificación
-Claude; hasta entonces la biblioteca es de solo lectura.
+Claude; hasta entonces la biblioteca es de solo lectura. Bloque 2: «Recrear con mi producto» (`referentes/recrear.py`) — `armar_prompt`
+determinista (nunca llama a Claude) construye el prompt con la imagen del referente
+como `Image 1` y hasta 2 fotos del producto elegido como `Image 2`/`3`; «Adaptar con
+IA» (`adaptar`, opcional, ≈ US$0.01) es la única llamada pagada de este bloque y solo
+propone texto, nunca genera. Generar reutiliza el pipeline de Crear tal cual
+(`creative_flow.crear` + `flowplus_lanzar.lanzar`, `productos_ids` guarda el nombre
+visible del producto como en el resto de Crear): la pieza aparece en la pestaña Crear
+con su barra de progreso y su Aprobar/Rechazar de siempre. `pieza.extra.referente_id`
+(en realidad `concepto.extra.referente_id`, por cómo `creative_flow.actualizar` guarda
+los campos que no son columnas propias) es lo que cuenta «Usado N veces» en la ficha.
 
 **Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field
 `modo_prompt`). **Default = direct generation** (the "generación tradicional" clients rely
