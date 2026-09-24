@@ -172,11 +172,12 @@ def referencias_sesion(cliente, campana, idea, modelo_video="wan3"):
         if r["tipo"] == "video":
             n_vid += 1
             referencias.append({"tipo": "video", "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
-                                "etiqueta": f"@Video {n_vid}", "origen": r.get("origen")})
+                                "etiqueta": f"@Video {n_vid}", "origen": r.get("origen"),
+                                "referente_id": (r.get("extra") or {}).get("referente_id")})
         else:
             n_img += 1
             referencias.append({"tipo": "imagen", "url": r["url"], "frame_url": r["url"], "etiqueta": f"@Imagen {n_img}",
-                                "origen": r.get("origen")})
+                                "origen": r.get("origen"), "referente_id": (r.get("extra") or {}).get("referente_id")})
     logos = [{"tipo": "imagen", "url": l["url"], "frame_url": l["url"], "etiqueta": f"@Logo {i}", "logo": True}
              for i, l in enumerate(_logos(cliente)[:2], start=1)]
     referencias = (referencias + logos)[:MAX_REFERENCIAS]
@@ -223,11 +224,20 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
         persona.get("tono") or "", "A", referencias_urls=referencias_urls, platforms=plataformas,
         extra_sprint={"sprint_id": sprint["id"], "sprint_nombre": sprint["nombre"], "campana_id": campana["id"],
                       "campana_n": int(campana["orden"]) + 1, "cp_id": idea["id"]})
-    creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt, aspect_ratio=_aspect_ratio(plataformas), tipo=idea["tipo"],
+    # Si alguna referencia de la sesión vino de la biblioteca de referentes
+    # (Bloque 2), se propaga su id para que `referentes.recrear.usos()` (ya
+    # genérico) también cuente esta pieza. `referencias` ya viene ordenada
+    # con las citadas por la idea primero (ver `referencias_sesion`), así que
+    # el primer `referente_id` encontrado prioriza una citada.
+    referente_id = next((r["referente_id"] for r in referencias if r.get("referente_id")), None)
+    campos_actualizar = dict(prompt_relleno=prompt, aspect_ratio=_aspect_ratio(plataformas), tipo=idea["tipo"],
                              modelo=modelo_video if idea["tipo"] == "video" else modelo_imagen, referencias=referencias,
                              con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
                              con_sonido=con_sonido, sonido_texto=sonido_texto,
                              musica_estilo=(prefs_sonido["musica_al_crear"] if es_video else ""))
+    if referente_id:
+        campos_actualizar["referente_id"] = referente_id
+    creative_flow.actualizar(cliente, cf_id, **campos_actualizar)
     # `lanzar_lote` ya reservó cf_id con un placeholder antes de llamar acá,
     # así que el vínculo final es el mismo compare-and-swap (evita que una
     # idea tenga dos sesiones si dos lotes corrieron a la vez). Si la reserva

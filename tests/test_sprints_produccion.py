@@ -431,3 +431,41 @@ def test_crear_sesion_recorta_la_duracion_de_la_idea_al_modelo(escenario):
     assert abs(e_kling["usd"] - (flowplus_modelos.estimate_video("kling_o3_pro", 15)["usd"] + imagen)) < 1e-6
     cf_id = produccion.crear_sesion("acme", sp, c, datos.idea("acme", escenario["iv"]), "kling_o3_pro", "seedream_v5_pro")
     assert creative_flow.cargar("acme")[cf_id]["duracion_objetivo"] == 15
+
+
+def test_crear_sesion_propaga_referente_id_de_biblioteca(escenario, monkeypatch):
+    """Una idea que cita una referencia traída de la biblioteca (Bloque 2,
+    `agregar_referencia_biblioteca`) debe dejar `referente_id` en la sesión
+    de Crear, para que `referentes.recrear.usos()` cuente también las piezas
+    que salieron de Sprints."""
+    import creative_flow
+    import referentes.datos as referentes_datos
+    from sprints import datos, produccion
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
+        "id": rid, "estado_imagen": "ok", "imagen_url": "https://cdn/ref.jpg", "titular": "T",
+        "firma": "F", "familia": None, "etapa": "TOF", "consciencia": None, "dolor": None,
+    })
+    monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [])
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    rid = datos.agregar_referencia_biblioteca("acme", c["id"], 42)
+    cp_id = datos.crear_idea("acme", c["id"], "imagen", "Con referente", "Plano cercano", enfoque="producto",
+                             referencias_ids=[rid], estado_idea="aprobada")
+    idea = datos.idea("acme", cp_id)
+    cf_id = produccion.crear_sesion("acme", sp, c, idea, "wan3", "seedream_v5_pro")
+    e = creative_flow.cargar("acme")[cf_id]
+    assert e["referente_id"] == 42
+
+
+def test_crear_sesion_sin_referencia_de_biblioteca_no_manda_referente_id(escenario):
+    """Sin ninguna referencia de biblioteca en la campaña, `crear_sesion` no
+    debe escribir `referente_id` en absoluto (ni siquiera en None) para no
+    ensuciar `concepto.extra` de toda sesión que no viene de un referente."""
+    import creative_flow
+    from sprints import datos, produccion
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    idea = datos.idea("acme", escenario["ii"])
+    cf_id = produccion.crear_sesion("acme", sp, c, idea, "wan3", "seedream_v5_pro")
+    e = creative_flow.cargar("acme")[cf_id]
+    assert "referente_id" not in e
