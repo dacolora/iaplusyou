@@ -315,6 +315,31 @@ def test_referencias_link_catalogo_y_reutilizar(app, monkeypatch):
     assert datos.referencias("acme", cid2)[0]["origen"] == "reutilizada"
 
 
+def test_campana_referencias_biblioteca_agrega_y_redirige(app, monkeypatch):
+    from sprints import datos
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
+        "id": rid, "estado_imagen": "ok", "imagen_url": "https://cdn/ref.jpg", "titular": "T",
+        "firma": "F", "familia": None, "etapa": "TOF", "consciencia": None, "dolor": None,
+    })
+    monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [])
+    r = app["c"].post(f"/cliente/acme/sprints/campanas/{cid}/referencias_biblioteca",
+                      data={"referente_ids": ["7", "8"]}, follow_redirects=False)
+    assert r.status_code == 302
+    assert f"/sprints/{sid}/campanas/{cid}" in r.headers["Location"]
+    refs = datos.referencias("acme", cid)
+    assert len(refs) == 2
+    assert {x["extra"]["referente_id"] for x in refs} == {7, 8}
+
+
+def test_campana_referencias_biblioteca_404_campana_ajena(app):
+    r = app["c"].post("/cliente/acme/sprints/campanas/999999/referencias_biblioteca",
+                      data={"referente_ids": ["7"]})
+    assert r.status_code == 404
+
+
 def test_referencias_subir_una_falla_al_guardar_no_pierde_las_demas(app, monkeypatch):
     from sprints import archivos, datos
     pid, tid = _base(datos)

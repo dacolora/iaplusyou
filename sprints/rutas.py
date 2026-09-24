@@ -565,6 +565,36 @@ def referencias_reutilizar(cliente, sid, cid):
     return _volver(cliente, sid, cid)
 
 
+@bp.post("/campanas/<int:cid>/referencias_biblioteca")
+def campana_referencias_biblioteca(cliente, cid):
+    """Trae uno o más referentes de la biblioteca (`referentes.datos`) como
+    referencias ya analizadas de la campaña — sin `sid` en la URL porque
+    también se llama desde la ficha de un referente, donde no se navegó
+    pasando por el sprint."""
+    c = datos.campana(cliente, cid)
+    if not c:
+        abort(404)
+    ids = []
+    for x in request.form.getlist("referente_ids"):
+        try:
+            ids.append(int(x))
+        except ValueError:
+            continue
+    n = 0
+    for rid in ids:
+        try:
+            datos.agregar_referencia_biblioteca(cliente, cid, rid)
+            n += 1
+        except datos.ErrorDatos:
+            continue
+    estado.recalcular(cliente, c["sprint_id"])
+    if n:
+        flash(f"{n} referente(s) agregado(s) desde la biblioteca.", "ok")
+    else:
+        flash("No se agregó ningún referente.", "error")
+    return _volver(cliente, c["sprint_id"], cid)
+
+
 @bp.get("/<int:sid>/campanas/<int:cid>/referencias/estado")
 def referencias_estado(cliente, sid, cid):
     c = _campana_o_404(cliente, sid, cid)

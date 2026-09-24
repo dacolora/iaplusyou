@@ -174,6 +174,60 @@ def test_reutilizar_referencia_sin_analisis_conserva_intencion_otro_y_estado(bas
     assert b["intencion_otro"] == "textura" and b["analisis_estado"] == "error" and b["analisis"] is None
 
 
+def test_agregar_referencia_biblioteca_crea_fila_lista(base_temporal, monkeypatch):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 2)
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
+        "id": rid, "estado_imagen": "ok", "imagen_url": "https://cdn/ref.jpg", "titular": "Titular del anuncio",
+        "firma": "Antes/después con el mismo encuadre", "familia": "ugc_testimonial", "etapa": "TOF",
+        "consciencia": "unaware", "dolor": "no confía en la marca",
+    })
+    monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [
+        {"nombre": "ugc_testimonial", "descripcion": "Testimonio grabado con el celular"},
+    ])
+    rid = datos.agregar_referencia_biblioteca("acme", cid, 42)
+    r = datos.referencia("acme", rid)
+    assert r["origen"] == "biblioteca"
+    assert r["url"] == "https://cdn/ref.jpg" and r["frame_url"] == "https://cdn/ref.jpg"
+    assert r["titulo"] == "Titular del anuncio"
+    assert r["descripcion"] == "Antes/después con el mismo encuadre"
+    assert r["intencion"] == ["formato"]
+    assert r["estado"] == "lista"
+    assert r["analisis_estado"] == "listo"
+    assert r["analisis"]["familia"] == "ugc_testimonial"
+    assert r["analisis"]["descripcion_familia"] == "Testimonio grabado con el celular"
+    assert r["analisis"]["resumen"] == "Antes/después con el mismo encuadre"
+    assert r["extra"]["referente_id"] == 42
+
+
+def test_agregar_referencia_biblioteca_no_duplica(base_temporal, monkeypatch):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 2)
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
+        "id": rid, "estado_imagen": "ok", "imagen_url": "https://cdn/ref.jpg", "titular": "T",
+        "firma": "F", "familia": None, "etapa": "TOF", "consciencia": None, "dolor": None,
+    })
+    monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [])
+    rid1 = datos.agregar_referencia_biblioteca("acme", cid, 42)
+    rid2 = datos.agregar_referencia_biblioteca("acme", cid, 42)
+    assert rid1 == rid2
+    assert len(datos.referencias("acme", cid)) == 1
+
+
+def test_agregar_referencia_biblioteca_referente_inexistente(base_temporal, monkeypatch):
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 2, 2)
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: None)
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_referencia_biblioteca("acme", cid, 999)
+
+
 def test_orden_de_campana_no_se_repite_tras_borrar_una_intermedia(base_temporal):
     from sprints import datos
     pid, tid, sid = _base(datos)

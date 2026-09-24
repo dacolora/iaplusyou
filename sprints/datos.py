@@ -13,23 +13,24 @@ from datetime import date
 import sqlalchemy as sa
 
 import db
+from referentes import datos as referentes_datos
 
 # Un color CSS hexadecimal (#rgb, #rrggbb, #rrggbbaa…). Todo lo que se pinta con
 # style="background: …" en las plantillas pasa por aquí antes de guardarse.
 COLOR_HEX = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 
 INTENCIONES = ("estilo_visual", "composicion", "paleta", "movimiento_camara", "tipografia",
-               "transiciones", "storytelling", "iluminacion", "angulo_producto", "otro")
+               "transiciones", "storytelling", "iluminacion", "angulo_producto", "formato", "otro")
 INTENCIONES_NOMBRE = {
     "estilo_visual": "Estilo visual", "composicion": "Composición", "paleta": "Paleta de colores",
     "movimiento_camara": "Movimiento de cámara", "tipografia": "Tipografía", "transiciones": "Transiciones",
     "storytelling": "Storytelling", "iluminacion": "Iluminación", "angulo_producto": "Ángulo de producto",
-    "otro": "Otro",
+    "formato": "Formato", "otro": "Otro",
 }
 ESTADOS_SPRINT = ("planeando", "referencias", "listo_para_generar", "generando", "revision", "completado")
 ESTADOS_CAMPANA = ("planeada", "referencias", "ideas_propuestas", "ideas_aprobadas", "generando", "revision", "completada")
 TIPOS_TEMPORADA = ("comercial", "estacional", "propia")
-ORIGENES_REFERENCIA = ("archivo", "link", "catalogo", "reutilizada")
+ORIGENES_REFERENCIA = ("archivo", "link", "catalogo", "reutilizada", "biblioteca")
 ORIGENES_PERSONA = ("manual", "sugerida_ia", "investigada")
 TIPOS_PIEZA = ("video", "imagen")
 ESTADOS_IDEA = ("propuesta", "aprobada", "descartada")
@@ -677,6 +678,30 @@ def reutilizar_referencia(cliente, referencia_id, campana_destino_id):
     actualizar_referencia(cliente, rid, analisis=origen.get("analisis"),
                           analisis_estado=origen.get("analisis_estado") or "pendiente",
                           intencion_otro=origen.get("intencion_otro"))
+    return rid
+
+
+def agregar_referencia_biblioteca(cliente, campana_id, referente_id):
+    """Trae un referente de la biblioteca (`referentes.datos`) como referencia
+    ya analizada de la campaña (spec §10): no se encola `sprint_analizar_referencia`.
+    Un mismo referente no entra dos veces a la misma campaña — si ya está, devuelve
+    la fila existente en vez de duplicar."""
+    ya = [r for r in referencias(cliente, campana_id) if (r.get("extra") or {}).get("referente_id") == referente_id]
+    if ya:
+        return ya[0]["id"]
+    ref = referentes_datos.referente(cliente, referente_id)
+    if not ref or ref.get("estado_imagen") != "ok":
+        raise ErrorDatos("Ese referente no existe.")
+    familia = next((f for f in referentes_datos.familias(cliente) if f["nombre"] == ref.get("familia")), None)
+    firma = ref.get("firma") or ""
+    rid = agregar_referencia(cliente, campana_id, "imagen", ref["imagen_url"], frame_url=ref["imagen_url"],
+                             origen="biblioteca", titulo=ref.get("titular") or "", intencion=["formato"],
+                             descripcion=firma)
+    actualizar_referencia(cliente, rid, analisis={
+        "familia": ref.get("familia"), "descripcion_familia": familia.get("descripcion") if familia else None,
+        "etapa": ref.get("etapa"), "consciencia": ref.get("consciencia"), "dolor": ref.get("dolor"),
+        "firma": firma, "resumen": firma,
+    }, analisis_estado="listo", extra={"referente_id": referente_id})
     return rid
 
 
