@@ -9,7 +9,7 @@ de Crear que ya existe (`creative_flow` + `flowplus_lanzar`), no se reimplementa
 """
 from uuid import uuid4
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
 
 import catalogo_productos
 import creative_flow
@@ -19,8 +19,10 @@ import marca as marca_mod
 import proyectos
 from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
-from referentes import datos, recrear
+from referentes import datos, fuentes, recrear
+from referentes.fuentes.base import ErrorFuente
 from sprints import datos as sprints_datos
+from tareas import referentes as tareas_referentes
 
 bp = Blueprint("referentes", __name__, url_prefix="/cliente/<cliente>/referentes")
 _FILTROS = ("etapa", "consciencia", "familia", "dolor", "marca", "fuente", "q")
@@ -60,6 +62,68 @@ def _producto_para(cliente, request_args_o_form):
     pid = request_args_o_form.get("producto_id") or (productos[0]["id"] if productos else None)
     producto = catalogo_productos.encontrar(cliente, pid, categoria="producto") if pid else None
     return productos, producto
+
+
+def _consulta_desde(args):
+    return {
+        "modo": args.get("modo") if args.get("modo") in ("marca", "palabra") else "palabra",
+        "pagina_id": (args.get("pagina_id") or "").strip() or None,
+        "palabra": (args.get("palabra") or "").strip() or None,
+        "idioma": (args.get("idioma") or "es").strip()[:5],
+        "formato": args.get("formato") if args.get("formato") in ("imagen", "video") else "imagen",
+        "solo_activos": args.get("solo_activos") not in (None, "", "0", "false"),
+        "min_dias": _entero(args.get("min_dias"), None),
+        "min_variantes": _entero(args.get("min_variantes"), None),
+    }
+
+
+@bp.get("/traer")
+def traer_form(cliente):
+    fuente = request.args.get("fuente") if request.args.get("fuente") in fuentes.tipos() else (fuentes.tipos()[0] if fuentes.tipos() else None)
+    tope = min(max(1, _entero(request.args.get("tope"), 200)), 2000)
+    consulta = _consulta_desde(request.args)
+    precio = None
+    llaves_faltantes = fuentes.llaves_faltantes(fuente) if fuente else []
+    if fuente and not llaves_faltantes and (consulta.get("pagina_id") or consulta.get("palabra")):
+        modulo = fuentes.por_tipo(fuente)
+        est_fuente = modulo.estimar(consulta, tope)
+        est_clasificacion = gastos.estimar("clasificacion", n=tope)
+        precio = {"fuente": est_fuente, "clasificacion": est_clasificacion,
+                  "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
+    return render_template("_referentes_traer.html", cliente=cliente, fuentes_tipos=fuentes.tipos(),
+                           fuentes_nombres=fuentes.NOMBRES, fuente=fuente, consulta=consulta, tope=tope,
+                           precio=precio, llaves_faltantes=llaves_faltantes,
+                           fuente_llaves_faltantes={t: fuentes.llaves_faltantes(t) for t in fuentes.tipos()})
+
+
+@bp.post("/traer")
+def traer_post(cliente):
+    fuente = request.form.get("fuente")
+    if fuente not in fuentes.tipos():
+        flash("Elige una fuente.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    if fuentes.llaves_faltantes(fuente):
+        flash("Esa fuente no está configurada.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    consulta = _consulta_desde(request.form)
+    if consulta["modo"] == "marca" and not consulta["pagina_id"]:
+        flash("Pega un link del Ad Library o el id de la página.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    if consulta["modo"] == "palabra" and not consulta["palabra"]:
+        flash("Escribe una palabra clave.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
+    modulo = fuentes.por_tipo(fuente)
+    try:
+        est_fuente = modulo.estimar(consulta, tope)
+    except ErrorFuente as e:
+        flash(e.usuario, "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    est_clasificacion = gastos.estimar("clasificacion", n=tope)
+    usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
+    tareas_referentes.encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=session.get("usuario"))
+    flash("Trayendo referentes; aparecerán en «Mis barridos» a medida que avanza.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
 
 
 @bp.get("/<int:rid>/recrear")

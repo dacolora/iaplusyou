@@ -1,0 +1,49 @@
+{# Formulario «Traer referentes» (referentes.traer_form / referentes.traer_post),
+   cargado como fragmento en el mismo <dialog> que la ficha. Contexto:
+   cliente, fuentes_tipos, fuentes_nombres, fuente, consulta, tope, precio
+   ({fuente:{usd_fuente,llamadas,detalle}, clasificacion:{usd,texto}, total_usd}|None),
+   llaves_faltantes (de la fuente elegida), fuente_llaves_faltantes ({tipo: [...]}). #}
+<div class="generado-modal-cuerpo">
+  <h3>Traer referentes</h3>
+  <form method="post" action="{{ url_for('referentes.traer_post', cliente=cliente) }}" id="form-traer" data-precio="{{ url_for('referentes.traer_form', cliente=cliente) }}">
+    <div class="fe-opciones">
+      {% for t in fuentes_tipos %}
+      <label class="fe-check">
+        <input type="radio" name="fuente" value="{{ t }}" {% if t == fuente %}checked{% endif %}
+               {% if fuente_llaves_faltantes.get(t) %}disabled{% endif %} data-recrear-campo="fuente">
+        {{ fuentes_nombres.get(t, t) }}{% if fuente_llaves_faltantes.get(t) %} (falta {{ fuente_llaves_faltantes[t] | join(', ') }}){% endif %}
+      </label>
+      {% endfor %}
+    </div>
+    {% if not fuentes_tipos %}<p class="vacio">Ninguna fuente configurada todavía.</p>{% endif %}
+    <div class="fe-opciones">
+      <label><input type="radio" name="modo" value="palabra" {% if consulta.modo == 'palabra' %}checked{% endif %} data-recrear-campo="modo"> Palabra clave</label>
+      <label><input type="radio" name="modo" value="marca" {% if consulta.modo == 'marca' %}checked{% endif %} data-recrear-campo="modo"> Marca (link del Ad Library)</label>
+    </div>
+    <div class="fe-opciones">
+      <label>Palabra clave <input type="text" name="palabra" value="{{ consulta.palabra or '' }}" data-recrear-campo="palabra" maxlength="120"></label>
+      <label>Idioma <input type="text" name="idioma" value="{{ consulta.idioma or 'es' }}" data-recrear-campo="idioma" maxlength="5" style="width:4rem"></label>
+      <label>Marca / link del Ad Library <input type="text" name="pagina_id" value="{{ consulta.pagina_id or '' }}" data-recrear-campo="pagina_id" placeholder="id de página o view_all_page_id"></label>
+    </div>
+    <div class="fe-opciones">
+      <label>Formato
+        <select name="formato" data-recrear-campo="formato">
+          <option value="imagen" {% if consulta.formato == 'imagen' %}selected{% endif %}>Imagen</option>
+          <option value="video" {% if consulta.formato == 'video' %}selected{% endif %}>Video</option>
+        </select>
+      </label>
+      <label class="fe-check"><input type="checkbox" name="solo_activos" {% if consulta.solo_activos %}checked{% endif %} data-recrear-campo="solo_activos"> Solo activos</label>
+      <label>Mínimo de días <input type="number" name="min_dias" value="{{ consulta.min_dias or '' }}" min="0" style="width:5rem" data-recrear-campo="min_dias"></label>
+      <label>Mínimo de variantes <input type="number" name="min_variantes" value="{{ consulta.min_variantes or '' }}" min="0" style="width:5rem" data-recrear-campo="min_variantes"></label>
+      <label>Tope <input type="number" name="tope" value="{{ tope }}" min="1" max="2000" style="width:6rem" data-recrear-campo="tope"></label>
+    </div>
+    {% if precio %}
+    <p class="vacio">
+      Fuente: {{ precio.fuente.detalle }} ·
+      Clasificar {{ tope }} con Claude: {{ precio.clasificacion.texto }} ·
+      <strong>Total ≈ US$ {{ '%.2f' | format(precio.total_usd) }}</strong>
+    </p>
+    {% endif %}
+    <button type="submit" class="btn-generar btn-sm" {% if not fuentes_tipos %}disabled{% endif %}>Traer y clasificar</button>
+  </form>
+</div>

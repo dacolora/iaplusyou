@@ -292,3 +292,71 @@ def test_usar_en_sprint_lista_campanas_elegibles(app, monkeypatch):
 
 def test_usar_en_sprint_referente_inexistente_404(app):
     assert app["c"].get("/cliente/acme/referentes/999999/usar_en_sprint").status_code == 404
+
+
+def test_traer_form_muestra_precio(app, monkeypatch):
+    from referentes.fuentes import atria
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(atria, "estimar", lambda consulta, tope: {"usd_fuente": 0.0, "llamadas": 4,
+                                                                  "detalle": "4 llamadas del plan de Atria"})
+    c = app["c"]
+    r = c.get("/cliente/acme/referentes/traer?fuente=atria&modo=palabra&palabra=protein&idioma=en&tope=200",
+              headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200
+    assert b"llamadas del plan de Atria" in r.data
+    assert b"Clasificar" in r.data
+
+
+def test_traer_form_fuente_sin_llave_aparece_apagada(app, monkeypatch):
+    monkeypatch.delenv("ATRIA_API_KEY", raising=False)
+    c = app["c"]
+    r = c.get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200
+    assert b"ATRIA_API_KEY" in r.data or "no está configurad".encode() in r.data
+
+
+def test_traer_post_crea_barrido_y_encola(app, monkeypatch):
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append((a, kw)) or 42)
+    c = app["c"]
+    r = c.post("/cliente/acme/referentes/traer", data={
+        "fuente": "atria", "modo": "palabra", "palabra": "protein", "idioma": "en", "tope": "200",
+        "solo_activos": "on",
+    }, follow_redirects=False)
+    assert r.status_code == 302
+    assert llamadas and llamadas[0][0][0] == "acme"
+
+
+def test_traer_post_tope_excede_2000_se_recorta(app, monkeypatch):
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 1)
+    c = app["c"]
+    c.post("/cliente/acme/referentes/traer", data={
+        "fuente": "atria", "modo": "palabra", "palabra": "x", "idioma": "en", "tope": "999999",
+    })
+    assert llamadas[0][3] <= 2000  # el 4to posicional de encolar_barrer(cliente, fuente, consulta, tope, ...) es tope
+
+
+def test_traer_post_sin_marca_ni_palabra_falla(app, monkeypatch):
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    c = app["c"]
+    r = c.post("/cliente/acme/referentes/traer", data={"fuente": "atria", "modo": "marca", "tope": "50"},
+              follow_redirects=True)
+    assert r.status_code == 200
+
+
+def test_traer_post_fuente_sin_llave_no_encola(app, monkeypatch):
+    from tareas import referentes as tareas_referentes
+    monkeypatch.delenv("ATRIA_API_KEY", raising=False)
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 1)
+    c = app["c"]
+    r = c.post("/cliente/acme/referentes/traer", data={
+        "fuente": "atria", "modo": "palabra", "palabra": "protein", "idioma": "en", "tope": "50",
+    }, follow_redirects=False)
+    assert r.status_code == 302
+    assert not llamadas
