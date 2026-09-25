@@ -37,7 +37,7 @@
     <p class="modal-form-aviso">Todavía no hay ninguna fuente de anuncios configurada.</p>
     {% elif fuentes_tipos | length == 1 %}
     {% set t = fuentes_tipos[0] %}
-    <input type="hidden" name="fuente" value="{{ t }}">
+    <input type="radio" name="fuente" value="{{ t }}" checked hidden>
     <p class="ref-traer-fuente">Fuente: <strong>{{ fuentes_nombres.get(t, t) }}</strong></p>
     {% else %}
     <div class="modal-form-seccion">
@@ -87,6 +87,17 @@
         </label>
       </div>
 
+      <div class="modal-form-fila" data-solo-fuente="apify">
+        <label class="modal-form-campo">País de los anuncios
+          <select name="pais">
+            {% set opciones_pais = [('ALL', 'Todos los países'), ('CO', 'Colombia'), ('MX', 'México'), ('AR', 'Argentina'), ('CL', 'Chile'), ('PE', 'Perú'), ('EC', 'Ecuador'), ('US', 'Estados Unidos'), ('ES', 'España')] %}
+            {% set pais = consulta.pais or 'ALL' %}
+            {% for cod, nombre in opciones_pais %}<option value="{{ cod }}" {% if cod == pais %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+            {% if pais not in opciones_pais | map('first') | list %}<option value="{{ pais }}" selected>{{ pais }}</option>{% endif %}
+          </select>
+        </label>
+      </div>
+
       <div data-solo="marca">
         <label class="modal-form-campo">Link de la marca en la biblioteca de anuncios
           <input type="text" name="pagina_id" value="{{ consulta.pagina_id or '' }}" placeholder="https://www.facebook.com/ads/library/?view_all_page_id=…">
@@ -109,7 +120,7 @@
           <span>Solo anuncios que siguen activos</span>
         </label>
       </div>
-      <div class="modal-form-fila">
+      <div class="modal-form-fila" data-solo-fuente="atria">
         <label class="modal-form-campo">Al aire hace al menos
           <span class="con-unidad"><input type="number" name="min_dias" value="{{ consulta.min_dias or '' }}" min="0" placeholder="—"><em>días</em></span>
         </label>
@@ -117,7 +128,7 @@
           <span class="con-unidad"><input type="number" name="min_variantes" value="{{ consulta.min_variantes or '' }}" min="0" placeholder="—"><em>variantes</em></span>
         </label>
       </div>
-      <p class="modal-form-ayuda">Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar.</p>
+      <p class="modal-form-ayuda" data-solo-fuente="atria">Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar.</p>
     </section>
 
     <section class="modal-form-seccion">

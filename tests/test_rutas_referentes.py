@@ -439,6 +439,38 @@ def test_traer_post_fuente_sin_llave_no_encola(app, monkeypatch):
     assert not llamadas
 
 
+def test_traer_form_apify_configurada_muestra_pais(app, monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "tok_test")
+    monkeypatch.delenv("ATRIA_API_KEY", raising=False)
+    html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert 'name="pais"' in html
+    assert 'data-solo-fuente="apify"' in html
+
+
+def test_traer_form_solo_atria_no_muestra_pais(app, monkeypatch):
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.delenv("APIFY_TOKEN", raising=False)
+    html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert 'name="fuente" value="atria"' in html or 'name="fuente"' not in html  # única fuente: radio o hidden, según el conteo
+    assert 'name="min_dias"' in html
+
+
+def test_traer_post_apify_encola_barrer(app, monkeypatch):
+    monkeypatch.setenv("APIFY_TOKEN", "tok_test")
+    llamadas = []
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append((a, kw)))
+    monkeypatch.setattr("referentes.fuentes.apify_adlibrary.estimar", lambda consulta, tope: {"usd_fuente": 1.16, "resultados": tope, "detalle": "x"})
+    r = app["c"].post("/cliente/acme/referentes/traer", data={
+        "fuente": "apify", "modo": "palabra", "palabra": "sandalias", "idioma": "es", "pais": "CO", "tope": "200",
+    })
+    assert r.status_code == 302
+    assert len(llamadas) == 1
+    args, kw = llamadas[0]
+    assert args[0] == "acme" and args[1] == "apify"
+    assert args[2]["pais"] == "CO"
+
+
 def test_barridos_lista_los_del_cliente(app):
     from referentes import datos
     # No se afirma sobre str(bid): la fila no incrusta el id salvo en las

@@ -93,6 +93,7 @@ def _consulta_desde(args):
         "pagina_id": _pagina_id_desde(args.get("pagina_id")),
         "palabra": (args.get("palabra") or "").strip() or None,
         "idioma": (args.get("idioma") or "es").strip()[:5],
+        "pais": (args.get("pais") or "ALL").strip().upper()[:5],
         "formato": args.get("formato") if args.get("formato") in ("imagen", "video") else "imagen",
         "solo_activos": args.get("solo_activos") not in (None, "", "0", "false"),
         "min_dias": _entero(args.get("min_dias"), None),
