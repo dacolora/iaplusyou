@@ -657,6 +657,38 @@ avatar = Table("avatar", metadata,
     Column("extra", JSON, default=dict),
 )
 
+# --- Flow Plus en Crear: prompts que se corrigen conversando con Claude antes de generar (migración 0018) ---
+
+guion_prompt = Table("guion_prompt", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("origen", String(12), nullable=False, default="manual"),     # manual|pipeline
+    Column("tipo", String(12), nullable=False, default="libre"),        # clip|imagen|libre
+    Column("titulo", String(200)),
+    Column("contexto", Text),                                           # guion o notas que Claude debe conocer
+    Column("texto_fijo", JSON, default=list),                           # fragmentos que van literales en toda versión
+    Column("texto_original", Text, nullable=False),
+    Column("texto_vigente", Text, nullable=False),
+    Column("version_n", Integer, nullable=False, default=1),            # CAS de usar/editar
+    Column("estado", String(12), nullable=False, default="abierto"),    # abierto|aprobado
+    Column("extra", JSON, default=dict),                                # el pipeline guarda video_id/clip_index
+    sa.Index("ix_guion_prompt_cliente_actualizado", "cliente", "actualizado_en"),
+)
+
+guion_mensaje = Table("guion_mensaje", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("prompt_id", Integer, sa.ForeignKey("guion_prompt.id"), nullable=False, index=True),
+    Column("creado_en", String(19), nullable=False),
+    Column("rol", String(8), nullable=False),                           # persona|claude
+    Column("usuario", String(40)),
+    Column("contenido", Text),
+    Column("propuesta", Text),                                          # prompt COMPLETO propuesto; NULL = sin cambio
+    Column("problemas", JSON, default=list),
+    Column("estado", String(12), nullable=False, default="ok"),         # ok|pendiente|error
+    Column("aplicada", Boolean, default=False),
+    Column("usd", Float, default=0.0),
+)
+
 
 def crear_todo():
     """Solo para tests y scripts locales. En producción manda Alembic."""

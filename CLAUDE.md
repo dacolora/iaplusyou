@@ -305,6 +305,27 @@ degradable (the paid video is never lost) — it only reports, never regenerates
 `docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1 (done except
 `proveedor_v2a` and style previews, which belong to S3/S5).
 
+**Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
+(`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
+because `flowplus_*` already names Crear's own pipeline). It will host the guion → clip
+prompts → reference-image prompts pipeline (spec in the client's `workflow-automation-spec.md`,
+not built yet); what exists is the correction chat for a resulting prompt BEFORE generation.
+Tables `guion_prompt` (`texto_original`, `texto_vigente`, `version_n` CAS, `texto_fijo` =
+fragments that must stay literal — the approved guion's exact dialogue —, `estado`
+`abierto|aprobado`, `origen` `manual|pipeline`, `extra` for the pipeline's video/clip ids) and
+`guion_mensaje` (migration 0018). `guiones/refinador.py` is the only writer: `pedir_cambio`
+stores the person's message plus a `pendiente` Claude row, the route runs `responder` on a
+`trabajos.iniciar` thread (not the worker queue: a chat must not wait behind renders) and the
+page polls `GET .../prompts/<id>`; a `pendiente` older than 3 min becomes `error`. Claude
+(`generador_prompts.MODEL`) returns JSON `{respuesta, prompt}` — the FULL revised prompt, in
+English — and `validar` (pure: texto_fijo present, clip header 5–15 s, `FINAL CLIP` needs
+`HARD CUT`, no un-negated fade to black; `imagen` only checks texto_fijo) marks proposals that
+break the non-negotiables; those can't be used or approved. Nothing is applied on its own: the
+person picks «Usar esta versión» (or goes back to the original, or edits by hand) and approves.
+Every Claude call is registered as gasto `refinar_prompt` (`guiones:refinar:<mensaje_id>`),
+also when the answer was unusable. JSON routes in the Blueprint `guiones/rutas.py`
+(`/cliente/<cliente>/guiones/prompts...`, same-origin check on every POST).
+
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with
