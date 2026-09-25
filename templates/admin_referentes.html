@@ -45,10 +45,144 @@
 </section>
 
 <section class="admin-bloque">
+  <div class="admin-cabecera"><h2>Traer referentes globales</h2></div>
+  <p class="vacio">Igual que «Traer referentes» de un proyecto, pero sin dueño: quedan visibles para todos los proyectos.</p>
+  <form method="get" action="{{ url_for('admin_referentes') }}" class="agencia-form">
+    <div class="fe-opciones">
+      {% for t in fuentes_tipos %}
+      <label class="fe-check">
+        <input type="radio" name="fuente" value="{{ t }}" {% if t == fuente %}checked{% endif %} {% if fuente_llaves_faltantes.get(t) %}disabled{% endif %}>
+        {{ fuentes_nombres.get(t, t) }}{% if fuente_llaves_faltantes.get(t) %} (falta {{ fuente_llaves_faltantes[t] | join(', ') }}){% endif %}
+      </label>
+      {% endfor %}
+    </div>
+    <div class="fe-opciones">
+      <label><input type="radio" name="modo" value="palabra" {% if consulta_traer.modo == 'palabra' %}checked{% endif %}> Palabra clave</label>
+      <label><input type="radio" name="modo" value="marca" {% if consulta_traer.modo == 'marca' %}checked{% endif %}> Marca (link del Ad Library)</label>
+    </div>
+    <div class="fe-opciones">
+      <label>Palabra clave <input type="text" name="palabra" value="{{ consulta_traer.palabra or '' }}" maxlength="120"></label>
+      <label>Idioma <input type="text" name="idioma" value="{{ consulta_traer.idioma or 'es' }}" maxlength="5" style="width:4rem"></label>
+      <label>Marca / link del Ad Library <input type="text" name="pagina_id" value="{{ consulta_traer.pagina_id or '' }}" placeholder="id de página o view_all_page_id"></label>
+    </div>
+    <div class="fe-opciones">
+      <label>País (solo Apify) <input type="text" name="pais" value="{{ consulta_traer.pais or 'ALL' }}" maxlength="5" style="width:5rem"></label>
+      <label>Formato
+        <select name="formato">
+          <option value="imagen" {% if consulta_traer.formato != 'video' %}selected{% endif %}>Imagen</option>
+          <option value="video" {% if consulta_traer.formato == 'video' %}selected{% endif %}>Video</option>
+        </select>
+      </label>
+      <label class="fe-check"><input type="checkbox" name="solo_activos" {% if consulta_traer.solo_activos %}checked{% endif %}> Solo activos</label>
+    </div>
+    <div class="fe-opciones">
+      <label>Mínimo de días (solo Atria) <input type="number" name="min_dias" value="{{ consulta_traer.min_dias or '' }}" min="0" style="width:5rem"></label>
+      <label>Mínimo de variantes (solo Atria) <input type="number" name="min_variantes" value="{{ consulta_traer.min_variantes or '' }}" min="0" style="width:5rem"></label>
+      <label>Tope <input type="number" name="tope" value="{{ tope_traer }}" min="1" max="2000" style="width:6rem"></label>
+    </div>
+    {% if precio_traer %}
+    <p class="vacio">Fuente: {{ precio_traer.fuente.detalle }} · Clasificar {{ tope_traer }} con Claude: {{ precio_traer.clasificacion.texto }} ·
+      <strong>Total ≈ US$ {{ '%.2f' | format(precio_traer.total_usd) }}</strong></p>
+    {% else %}
+    <p class="vacio">Completa los datos y pulsa «Ver precio» para calcular el costo antes de traer.</p>
+    {% endif %}
+    <button type="submit" class="btn-xs">Ver precio</button>
+  </form>
+  {% if precio_traer %}
+  <form method="post" action="{{ url_for('admin_referentes_traer') }}" class="agencia-form">
+    <input type="hidden" name="fuente" value="{{ fuente }}">
+    <input type="hidden" name="modo" value="{{ consulta_traer.modo }}">
+    <input type="hidden" name="palabra" value="{{ consulta_traer.palabra or '' }}">
+    <input type="hidden" name="idioma" value="{{ consulta_traer.idioma or 'es' }}">
+    <input type="hidden" name="pagina_id" value="{{ consulta_traer.pagina_id or '' }}">
+    <input type="hidden" name="pais" value="{{ consulta_traer.pais or 'ALL' }}">
+    <input type="hidden" name="formato" value="{{ consulta_traer.formato or 'imagen' }}">
+    <input type="hidden" name="solo_activos" value="{{ '1' if consulta_traer.solo_activos else '' }}">
+    <input type="hidden" name="min_dias" value="{{ consulta_traer.min_dias or '' }}">
+    <input type="hidden" name="min_variantes" value="{{ consulta_traer.min_variantes or '' }}">
+    <input type="hidden" name="tope" value="{{ tope_traer }}">
+    <button type="submit" class="btn-generar btn-sm">Traer y clasificar ≈ US$ {{ '%.2f' | format(precio_traer.total_usd) }}</button>
+  </form>
+  {% endif %}
+</section>
+
+<section class="admin-bloque">
+  <div class="admin-cabecera"><h2>Totales</h2></div>
+  <div class="hero-stats">
+    {% for f, n in fuentes_totales %}
+    <div class="stat"><span class="stat-num">{{ n }}</span><span class="stat-label">{{ fuentes_nombres.get(f, f) }}</span></div>
+    {% endfor %}
+  </div>
+  <p class="vacio">Atria: {{ atria_llamadas }}/{{ atria_limite }} llamadas este mes.</p>
+</section>
+
+<section class="admin-bloque">
+  <div class="admin-cabecera"><h2>Barridos globales (Atria, Apify)</h2></div>
+  {% if not barridos_otras_fuentes %}
+  <p class="vacio">Todavía no se ha traído ningún barrido global fuera de copycoders.</p>
+  {% else %}
+  <div class="admin-scroll"><table class="tabla-admin">
+    <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th><th>Acciones</th></tr>
+    {% for b in barridos_otras_fuentes %}
+    <tr>
+      <td>{{ b.creado_en }}</td>
+      <td>{{ fuentes_nombres.get(b.fuente, b.fuente) }}</td>
+      <td>{{ b.consulta.palabra or b.consulta.pagina_id or '' }}</td>
+      <td>{{ b.estado }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
+      <td>{{ b.traidos }}/{{ b.tope }}</td>
+      <td>{{ b.clasificados }}</td>
+      <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>
+      <td>
+        {# Reparo del bloque 6: un barrido global «parcial» quedaba sin forma
+           de reintentarse -- su propio `aviso` invita a «Clasificar
+           pendientes»/«Reintentar imágenes», pero esas rutas por-cliente
+           siempre 404 para un barrido con cliente=None. Mismo patrón que
+           `_referentes_barridos.html` (trabajo en curso -> barra de
+           progreso; si no, un botón por acción disponible), pero esta
+           página es un render normal (extends base.html, nunca llega por
+           fetch+innerHTML) así que el <script>iniciarPolling(...)</script>
+           inline SÍ corre -- igual que el bloque de copycoders más arriba
+           en esta misma plantilla -- y no hace falta `data-poll-job`. #}
+        {% if b.trabajo %}
+        <div class="barra-progreso" id="trabajo-{{ b.trabajo }}"><div class="barra-progreso-fill"></div></div>
+        <div class="progreso-texto"></div>
+        <script>iniciarPolling({{ b.trabajo | tojson }}, {{ ("trabajo-" ~ b.trabajo) | tojson }});</script>
+        {% else %}
+          {% if b.pendientes %}
+          <form method="post" action="{{ url_for('admin_referentes_clasificar', barrido_id=b.id) }}" class="inline">
+            <button type="submit" class="btn-xs">Clasificar pendientes{% if b.precio_clasificar %} ({{ b.precio_clasificar }}){% endif %}</button>
+          </form>
+          {% endif %}
+          {% if b.imagenes_error %}
+          <form method="post" action="{{ url_for('admin_referentes_reintentar_imagenes', barrido_id=b.id) }}" class="inline">
+            <button type="submit" class="btn-xs">Reintentar imágenes</button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+</section>
+
+<section class="admin-bloque">
   <div class="admin-cabecera"><h2>Familias ({{ familias | length }})</h2></div>
   <div class="admin-scroll"><table class="tabla-admin">
-    <tr><th>Familia</th><th>Descripción</th><th>Referentes</th><th>Origen</th></tr>
-    {% for f in familias %}<tr><td>{{ f.nombre }}</td><td>{{ f.descripcion or '—' }}</td><td>{{ f.n }}</td><td>{{ f.origen }}</td></tr>{% endfor %}
+    <tr><th>Familia</th><th>Descripción</th><th>Referentes</th><th>Origen</th><th></th></tr>
+    {% for f in familias %}
+    <tr>
+      <td>{{ f.nombre }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin_referentes_familia', familia_id=f.id) }}" class="inline">
+          <input type="text" name="descripcion" value="{{ f.descripcion or '' }}" style="width:22rem">
+          <button type="submit" class="btn-xs">Guardar</button>
+        </form>
+      </td>
+      <td>{{ f.n }}</td>
+      <td>{{ f.origen }}</td>
+    </tr>
+    {% endfor %}
   </table></div>
 </section>
 {% endblock %}

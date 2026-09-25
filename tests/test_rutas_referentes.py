@@ -138,6 +138,57 @@ def test_admin_referentes_solo_admin(app):
     assert c.post("/admin/referentes/importar", data={}, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 302
 
 
+def test_admin_referentes_traer_muestra_precio(app, monkeypatch):
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr("referentes.fuentes.atria.estimar", lambda consulta, tope: {"usd_fuente": 0.0, "llamadas": 2, "detalle": "2 llamadas del plan de Atria"})
+    c = app["c"]
+    html = c.get("/admin/referentes?fuente=atria&modo=palabra&palabra=zapatos&tope=100").data.decode()
+    assert "US$" in html
+    assert 'name="tope"' in html
+    # "Traer y clasificar ≈ US$" solo renderiza dentro de {% if precio_traer %}
+    # (el botón de lanzar) -- "US$" solo no basta, aparece también en el texto
+    # estático del hero ("≈ US$1 una sola vez") sin importar si hubo precio.
+    assert "Traer y clasificar ≈ US$" in html
+    # Sin palabra/pagina_id no hay consulta que estimar: precio_traer queda
+    # None y el botón de lanzar no debe aparecer -- prueba que el gate arriba
+    # de verdad gatea algo, no que el texto esté siempre presente.
+    html_sin_consulta = c.get("/admin/referentes").data.decode()
+    assert "Traer y clasificar ≈ US$" not in html_sin_consulta
+
+
+def test_admin_referentes_traer_lanza_barrido_global(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tr
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append((a, kw)) or True)
+    c = app["c"]
+    r = c.post("/admin/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "zapatos", "idioma": "es", "tope": "50"},
+              headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin/referentes")
+    assert len(llamadas) == 1
+    args, kw = llamadas[0]
+    assert args[0] is None            # cliente=None: barrido global
+    assert args[1] == "atria"
+    assert args[2]["palabra"] == "zapatos"
+
+
+def test_admin_referentes_traer_sin_fuente_no_lanza(app):
+    c = app["c"]
+    r = c.post("/admin/referentes/traer", data={"fuente": "no-existe"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302
+    from referentes import datos
+    assert datos.barridos(None, "no-existe") == []
+
+
+def test_admin_referentes_traer_solo_admin(app):
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
+    assert c.get("/admin/referentes").status_code == 302
+    assert c.post("/admin/referentes/traer", data={}, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 302
+
+
 def test_recrear_formulario_precio_y_prompt(app):
     from referentes import datos
     ids = _sembrar()
@@ -679,3 +730,179 @@ def test_barridos_sin_gasto_muestran_raya(app):
     html = _barridos_html(app)
     assert "US$ 0,00" not in html
     assert "—" in html
+
+
+def test_admin_referentes_muestra_totales_y_cuota_atria(app, monkeypatch):
+    from referentes.fuentes import atria as atria_mod
+    monkeypatch.setattr(atria_mod, "llamadas_este_mes", lambda: 37)
+    monkeypatch.setattr(atria_mod, "limite_mensual", lambda: 1200)
+    html = app["c"].get("/admin/referentes").data.decode()
+    assert "37" in html and "1200" in html
+
+
+def test_admin_referentes_lista_barridos_de_otras_fuentes(app):
+    from referentes import datos
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "sandalias"}, 50)
+    datos.actualizar_barrido(bid, estado="listo", traidos=12, clasificados=10, usd_real=0.32)
+    html = app["c"].get("/admin/referentes").data.decode()
+    assert "sandalias" in html and "atria" in html
+
+
+def test_admin_referentes_familia_actualizar(app):
+    from referentes import datos
+    fid = datos.familia_asegurar("Price Slash Hero", "vieja descripción")
+    c = app["c"]
+    r = c.post(f"/admin/referentes/familias/{fid}", data={"descripcion": "Escalera de precios tachados"},
+              headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin/referentes")
+    familia = [f for f in datos.familias() if f["id"] == fid][0]
+    assert familia["descripcion"] == "Escalera de precios tachados"
+
+
+def test_admin_referentes_familia_actualizar_inexistente(app):
+    c = app["c"]
+    r = c.post("/admin/referentes/familias/999999", data={"descripcion": "x"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302   # no revienta con un id que no existe
+
+
+def test_admin_referentes_familia_actualizar_solo_admin(app):
+    from referentes import datos
+    fid = datos.familia_asegurar("Comic Strip", "original")
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
+    r = c.post(f"/admin/referentes/familias/{fid}", data={"descripcion": "hackeado"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302
+    familia = [f for f in datos.familias() if f["id"] == fid][0]
+    assert familia["descripcion"] == "original"
+
+
+# --- reparo bloque 6: un barrido global «parcial» no tenía forma de
+# reintentarse desde /admin/referentes (las rutas por-cliente que ya hacían
+# esto -- referentes.rutas.clasificar_pendientes/reintentar_imagenes --
+# siempre 404 para un barrido con cliente=None, spec Important del review
+# final). Estas rutas son el equivalente admin: mismo comportamiento, pero
+# gateadas por "es global" en vez de "es de este proyecto".
+
+def test_admin_referentes_clasificar_encola(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, estado="parcial", pendientes=3,
+                             aviso="3 referentes no se pudieron clasificar; «Clasificar pendientes» los vuelve a pedir.")
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_clasificar_pendientes", lambda c, b: llamadas.append((c, b)) or True)
+    r = app["c"].post(f"/admin/referentes/barridos/{bid}/clasificar", headers={"Sec-Fetch-Site": "same-origin"},
+                      follow_redirects=False)
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin/referentes")
+    assert llamadas == [(None, bid)]
+
+
+def test_admin_referentes_reintentar_imagenes_encola(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, estado="parcial",
+                             aviso="1 imagen no se pudo bajar; «Reintentar imágenes» las vuelve a pedir.")
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_reintentar_imagenes", lambda c, b: llamadas.append((c, b)) or True)
+    r = app["c"].post(f"/admin/referentes/barridos/{bid}/reintentar-imagenes", headers={"Sec-Fetch-Site": "same-origin"},
+                      follow_redirects=False)
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin/referentes")
+    assert llamadas == [(None, bid)]
+
+
+def test_admin_referentes_clasificar_barrido_inexistente_404(app):
+    r = app["c"].post("/admin/referentes/barridos/999999/clasificar", headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 404
+
+
+def test_admin_referentes_reintentar_imagenes_barrido_inexistente_404(app):
+    r = app["c"].post("/admin/referentes/barridos/999999/reintentar-imagenes", headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 404
+
+
+def test_admin_referentes_clasificar_barrido_de_cliente_404(app):
+    """Nunca una puerta trasera: un barrido con dueño real (cliente="acme")
+    no es global y estas rutas admin deben rechazarlo igual que
+    `referentes.rutas.clasificar_pendientes` rechaza uno ajeno."""
+    from referentes import datos
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    r = app["c"].post(f"/admin/referentes/barridos/{bid}/clasificar", headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 404
+
+
+def test_admin_referentes_reintentar_imagenes_barrido_de_cliente_404(app):
+    from referentes import datos
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    r = app["c"].post(f"/admin/referentes/barridos/{bid}/reintentar-imagenes", headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 404
+
+
+def test_admin_referentes_clasificar_solo_admin(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_clasificar_pendientes", lambda c, b: llamadas.append((c, b)) or True)
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
+    r = c.post(f"/admin/referentes/barridos/{bid}/clasificar", headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302
+    assert llamadas == []
+
+
+def test_admin_referentes_reintentar_imagenes_solo_admin(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_reintentar_imagenes", lambda c, b: llamadas.append((c, b)) or True)
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
+    r = c.post(f"/admin/referentes/barridos/{bid}/reintentar-imagenes", headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302
+    assert llamadas == []
+
+
+def test_admin_referentes_ofrece_reintentos_en_barrido_global_parcial(app, monkeypatch):
+    """La página en sí ofrece los botones (el hueco original: la tabla no
+    tenía ninguno) cuando el barrido global tiene algo que reintentar."""
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "sandalias", "idioma": "es"}, 50)
+    rid, _ = datos.guardar_referente({"anuncio_id": "img-err-glob", "fuente": "atria", "imagen_origen": "https://x/9.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente=None, barrido_id=bid)
+    datos.marcar_imagen(rid, "error")
+    datos.actualizar_barrido(bid, estado="parcial", pendientes=2,
+                             aviso="2 referentes no se pudieron clasificar; «Clasificar pendientes» los vuelve a pedir. "
+                                   "1 imagen no se pudo bajar; «Reintentar imágenes» las vuelve a pedir.")
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/admin/referentes").data.decode()
+    assert f"/admin/referentes/barridos/{bid}/clasificar" in html and "Clasificar pendientes" in html
+    assert f"/admin/referentes/barridos/{bid}/reintentar-imagenes" in html and "Reintentar imágenes" in html
+
+
+def test_admin_referentes_muestra_progreso_y_oculta_botones_si_hay_trabajo(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, pendientes=3)
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: f"referentes:barrer:{b}")
+    html = app["c"].get("/admin/referentes").data.decode()
+    assert f"iniciarPolling(\"referentes:barrer:{bid}\"" in html
+    assert "Clasificar pendientes" not in html
+    assert "Reintentar imágenes" not in html
+
+
+def test_admin_referentes_sin_pendientes_ni_errores_no_ofrece_botones(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)  # pendientes=0, sin errores
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/admin/referentes").data.decode()
+    assert "Clasificar pendientes" not in html
+    assert "Reintentar imágenes" not in html

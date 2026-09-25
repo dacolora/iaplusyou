@@ -1701,8 +1701,8 @@ SERVICIOS_LLAVES = (
     },
     {
         "id": "apify",
-        "nombre": "Apify (Nicho: reseñas de Amazon y comentarios de TikTok)",
-        "para_que": "Corre los actores de Apify que traen reseñas de Amazon o comentarios de TikTok a un estudio de Nicho.",
+        "nombre": "Apify (Nicho: reseñas/comentarios · Referentes: Ad Library)",
+        "para_que": "Corre los actores de Apify: en Nicho trae reseñas de Amazon o comentarios de TikTok; en la biblioteca de referentes trae anuncios de la Ad Library de Meta (alternativa a Atria, sí cubre Latinoamérica).",
         "costo": "Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic.",
         "url": "https://console.apify.com/account/integrations",
         "url_texto": "console.apify.com › Settings › Integrations",
@@ -1713,6 +1713,22 @@ SERVICIOS_LLAVES = (
             "Crea la cuenta en apify.com (trae crédito gratis mensual) y agrega una tarjeta si vas a pasar de ese crédito.",
             "En «Settings» › «Integrations» copia el «Personal API token».",
             "Pégalo como APIFY_TOKEN en el .env del servidor y reinicia los dos servicios.",
+        ],
+    },
+    {
+        "id": "atria",
+        "nombre": "Atria (biblioteca de referentes: Ad Library de Meta)",
+        "para_que": "Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea.",
+        "costo": "Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin).",
+        "url": "https://tryatria.com",
+        "url_texto": "tryatria.com",
+        "variables": ["ATRIA_API_KEY"],
+        "nota": "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token.",
+        "opcional": True,
+        "pasos": [
+            "Crea la cuenta en tryatria.com y elige un plan.",
+            "Copia la API key desde el panel de Atria.",
+            "Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios.",
         ],
     },
 )
@@ -3410,15 +3426,55 @@ def admin_meta_solicitud_descartar(cliente):
 @app.route("/admin/referentes")
 @requiere_admin
 def admin_referentes():
-    """Biblioteca de referentes (spec 2026-09-23 §7-§8): importar copycoders y ver totales."""
-    from referentes import datos as ref_datos
+    """Biblioteca de referentes (spec 2026-09-23 §7-§8): importar copycoders,
+    traer un barrido global (cliente=NULL) de Atria/Apify, y ver totales."""
+    from referentes import datos as ref_datos, fuentes
+    from referentes.fuentes.atria import limite_mensual, llamadas_este_mes
+    from referentes.rutas import _consulta_desde, _entero
+    import gastos
     from tareas import referentes as tareas_ref
+
     historial = ref_datos.barridos(None, "copycoders")
+
+    fuente = request.args.get("fuente") if request.args.get("fuente") in fuentes.tipos() else (fuentes.tipos()[0] if fuentes.tipos() else None)
+    tope_traer = min(max(1, _entero(request.args.get("tope"), 200)), 2000)
+    consulta_traer = _consulta_desde(request.args)
+    fuente_llaves_faltantes = {t: fuentes.llaves_faltantes(t) for t in fuentes.tipos()}
+    llaves_faltantes = fuentes.llaves_faltantes(fuente) if fuente else []
+    precio_traer = None
+    if fuente and not llaves_faltantes and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra")):
+        modulo = fuentes.por_tipo(fuente)
+        try:
+            est_fuente = modulo.estimar(consulta_traer, tope_traer)
+        except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la página
+            est_fuente = None
+        if est_fuente:
+            est_clasificacion = gastos.estimar("clasificacion", n=tope_traer)
+            precio_traer = {"fuente": est_fuente, "clasificacion": est_clasificacion,
+                            "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
+
+    # Mismo cálculo por fila que `referentes.rutas.barridos` (per-cliente
+    # «Mis barridos»): `trabajo` para la barra de progreso, `imagenes_error`
+    # para ofrecer «Reintentar imágenes» solo cuando de verdad hay algo que
+    # reintentar, `precio_clasificar` porque «Clasificar pendientes»
+    # re-factura (spec §11) igual que en el panel por-cliente.
+    barridos_otras_fuentes = [b for b in ref_datos.barridos(None) if b["fuente"] != "copycoders"]
+    for b in barridos_otras_fuentes:
+        b["trabajo"] = tareas_ref.trabajo_barrer(b["id"])
+        b["imagenes_error"] = ref_datos.contar_imagenes_de_barrido(b["id"])[2]
+        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
+
     return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
                            trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
                            ultimo=(historial[0] if historial else None), historial=historial[:10],
                            imagenes=ref_datos.contar_imagenes("copycoders"), total=ref_datos.opciones(None)["total"],
-                           familias=ref_datos.familias())
+                           familias=ref_datos.familias(),
+                           fuentes_tipos=fuentes.tipos(), fuentes_nombres=fuentes.NOMBRES,
+                           fuente=fuente, consulta_traer=consulta_traer, tope_traer=tope_traer,
+                           precio_traer=precio_traer, fuente_llaves_faltantes=fuente_llaves_faltantes,
+                           atria_llamadas=llamadas_este_mes(), atria_limite=limite_mensual(),
+                           fuentes_totales=ref_datos.opciones(None)["fuentes"],
+                           barridos_otras_fuentes=barridos_otras_fuentes)
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])
@@ -3435,6 +3491,105 @@ def admin_referentes_importar():
         flash("Importando el swipe file; la página se recarga sola cuando termine cada fase.", "ok")
     else:
         flash("Ya hay una importación en curso.", "error")
+    return redirect(url_for("admin_referentes"))
+
+
+@app.route("/admin/referentes/traer", methods=["POST"])
+@requiere_admin
+def admin_referentes_traer():
+    if not _mismo_origen():
+        abort(403)
+    from referentes import fuentes
+    from referentes.fuentes.base import ErrorFuente
+    from referentes.rutas import _consulta_desde, _entero
+    import gastos
+    from tareas import referentes as tareas_ref
+
+    fuente = request.form.get("fuente")
+    if fuente not in fuentes.tipos():
+        flash("Elige una fuente.", "error")
+        return redirect(url_for("admin_referentes"))
+    if fuentes.llaves_faltantes(fuente):
+        flash("Esa fuente no está configurada.", "error")
+        return redirect(url_for("admin_referentes"))
+    consulta = _consulta_desde(request.form)
+    if consulta["modo"] == "marca" and not consulta["pagina_id"]:
+        flash("Pega un link del Ad Library o el id de la página.", "error")
+        return redirect(url_for("admin_referentes"))
+    if consulta["modo"] == "palabra" and not consulta["palabra"]:
+        flash("Escribe una palabra clave.", "error")
+        return redirect(url_for("admin_referentes"))
+    tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
+    modulo = fuentes.por_tipo(fuente)
+    try:
+        est_fuente = modulo.estimar(consulta, tope)
+    except ErrorFuente as e:
+        flash(e.usuario, "error")
+        return redirect(url_for("admin_referentes"))
+    est_clasificacion = gastos.estimar("clasificacion", n=tope)
+    usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
+    tareas_ref.encolar_barrer(None, fuente, consulta, tope, usd_estimado, pedido_por=_sesion().get("usuario"))
+    flash("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza.", "ok")
+    return redirect(url_for("admin_referentes"))
+
+
+@app.route("/admin/referentes/familias/<int:familia_id>", methods=["POST"])
+@requiere_admin
+def admin_referentes_familia(familia_id):
+    if not _mismo_origen():
+        abort(403)
+    from referentes import datos as ref_datos
+    ref_datos.familia_actualizar(familia_id, request.form.get("descripcion") or "")
+    return redirect(url_for("admin_referentes"))
+
+
+def _barrido_global_o_404(ref_datos, barrido_id):
+    """Igual que `referentes.rutas._barrido_del_cliente_o_404`, pero para el
+    lado admin: un barrido GLOBAL (`cliente is None`) en vez de uno de un
+    proyecto puntual. Nunca deja pasar un barrido con dueño real -- estas
+    rutas admin no son una puerta trasera al barrido de un cliente."""
+    b = ref_datos.barrido(barrido_id)
+    if not b or b.get("cliente") is not None:
+        abort(404)
+    return b
+
+
+@app.route("/admin/referentes/barridos/<int:barrido_id>/clasificar", methods=["POST"])
+@requiere_admin
+def admin_referentes_clasificar(barrido_id):
+    """Reparo del hueco de Bloque 6: un barrido GLOBAL «parcial» (lanzado
+    desde «Traer referentes globales») no tenía ningún botón para reintentar
+    su clasificación -- su propio aviso invita a «Clasificar pendientes»,
+    pero esa ruta es `referentes.rutas.clasificar_pendientes`, que exige
+    `b.cliente == cliente` y por lo tanto siempre 404 para un barrido con
+    `cliente=None`. Mismo comportamiento que la versión por-cliente, solo que
+    gateada por "es global" en vez de "es de este proyecto"."""
+    if not _mismo_origen():
+        abort(403)
+    from referentes import datos as ref_datos
+    from tareas import referentes as tareas_ref
+    _barrido_global_o_404(ref_datos, barrido_id)
+    if tareas_ref.encolar_clasificar_pendientes(None, barrido_id):
+        flash("Clasificando lo pendiente; la tabla se actualiza sola.", "ok")
+    else:
+        flash("Ya hay algo en curso para este barrido.", "error")
+    return redirect(url_for("admin_referentes"))
+
+
+@app.route("/admin/referentes/barridos/<int:barrido_id>/reintentar-imagenes", methods=["POST"])
+@requiere_admin
+def admin_referentes_reintentar_imagenes(barrido_id):
+    """Mismo reparo que `admin_referentes_clasificar`, para «Reintentar
+    imágenes» de un barrido global."""
+    if not _mismo_origen():
+        abort(403)
+    from referentes import datos as ref_datos
+    from tareas import referentes as tareas_ref
+    _barrido_global_o_404(ref_datos, barrido_id)
+    if tareas_ref.encolar_reintentar_imagenes(None, barrido_id):
+        flash("Reintentando las imágenes que fallaron.", "ok")
+    else:
+        flash("Ya hay algo en curso para este barrido.", "error")
     return redirect(url_for("admin_referentes"))
 
 
