@@ -8,6 +8,44 @@
   <p class="vacio">Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas.</p>
 </div>
 
+<p class="acciones">
+  <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
+  <button type="button" class="btn-sm" data-recrear-abrir="{{ url_for('referentes.barridos', cliente=cliente) }}">Mis barridos</button>
+</p>
+
+<dialog class="generado-modal" id="ref-modal">
+  <button type="button" class="generado-cerrar" id="ref-modal-cerrar" aria-label="Cerrar">×</button>
+  <div id="ref-modal-cuerpo"></div>
+</dialog>
+
+<script>
+  (function () {
+    // Este diálogo y el botón «Traer referentes»/«Mis barridos» viven FUERA
+    // del condicional de biblioteca vacía/no vacía de más abajo, a propósito:
+    // "Traer referentes" es justo lo que un proyecto sin referentes necesita
+    // primero. Por eso el listener de
+    // `[data-recrear-abrir]` va delegado en `document` (no en `cuerpo`, como
+    // antes): así cubre tanto estos botones de arriba como cualquier
+    // `[data-recrear-abrir]` que aparezca DENTRO del fragmento ya cargado
+    // (ficha → «Recrear con mi producto» / «Usar en sprint», o el enlace del
+    // estado vacío de «Mis barridos»), sin duplicar el fetch.
+    var modal = document.getElementById('ref-modal');
+    var cuerpo = document.getElementById('ref-modal-cuerpo');
+    function cargarEnDialogo(url) {
+      return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) { cuerpo.innerHTML = html; return true; })
+        .catch(function () { alert('No se pudo cargar.'); return false; });
+    }
+    document.addEventListener('click', function (ev) {
+      var abrir = ev.target.closest('[data-recrear-abrir]');
+      if (abrir) cargarEnDialogo(abrir.dataset.recrearAbrir).then(function (ok) { if (ok) modal.showModal(); });
+    });
+    document.getElementById('ref-modal-cerrar').addEventListener('click', function () { modal.close(); });
+    modal.addEventListener('click', function (ev) { if (ev.target === modal) modal.close(); });
+  })();
+</script>
+
 {% if not ref_opciones.total %}
 <p class="vacio">Todavía no hay referentes. Creatv importa la biblioteca inicial desde el panel de administrador; después aparecen aquí.</p>
 {% else %}
@@ -34,11 +72,6 @@
   <span id="ref-barra-texto">0 elegidos</span>
   <button type="button" class="btn-generar btn-sm" id="ref-barra-agregar">Agregar a la campaña</button>
 </div>
-
-<dialog class="generado-modal" id="ref-modal">
-  <button type="button" class="generado-cerrar" id="ref-modal-cerrar" aria-label="Cerrar">×</button>
-  <div id="ref-modal-cuerpo"></div>
-</dialog>
 
 <script>
   (function () {
@@ -172,8 +205,9 @@
       recargarFormularioRecrear(campo.closest('form'));
     });
     cuerpo.addEventListener('click', function (ev) {
-      var abrir = ev.target.closest('[data-recrear-abrir]');
-      if (abrir) { cargarEnDialogo(abrir.dataset.recrearAbrir); return; }
+      // «Abrir» ([data-recrear-abrir]) se maneja arriba con un delegado
+      // global en `document` (cubre también los botones de fuera del
+      // diálogo) — acá solo lo que manipula un formulario YA abierto.
       var tipoBtn = ev.target.closest('[data-recrear-tipo]');
       if (tipoBtn) {
         recargarFormularioRecrear(tipoBtn.closest('form'), tipoBtn.dataset.recrearTipo);
@@ -200,8 +234,6 @@
           .finally(function () { adaptarBtn.disabled = false; });
       }
     });
-    document.getElementById('ref-modal-cerrar').addEventListener('click', function () { modal.close(); });
-    modal.addEventListener('click', function (ev) { if (ev.target === modal) modal.close(); });
 
     function iniciar() {
       if (cargado) return;

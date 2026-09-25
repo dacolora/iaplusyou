@@ -250,6 +250,41 @@ def ficha(cliente, rid):
                            usos=recrear.usos(cliente, rid))
 
 
+@bp.get("/barridos")
+def barridos(cliente):
+    lista = datos.barridos(cliente=cliente)
+    for b in lista:
+        b["trabajo"] = tareas_referentes.trabajo_barrer(b["id"])
+    return render_template("_referentes_barridos.html", cliente=cliente, barridos=lista)
+
+
+def _barrido_del_cliente_o_404(cliente, bid):
+    b = datos.barrido(bid)
+    if not b or b.get("cliente") != cliente:
+        abort(404)
+    return b
+
+
+@bp.post("/<int:bid>/clasificar_pendientes")
+def clasificar_pendientes(cliente, bid):
+    _barrido_del_cliente_o_404(cliente, bid)
+    if tareas_referentes.encolar_clasificar_pendientes(cliente, bid):
+        flash("Clasificando lo pendiente; la lista se actualiza sola.", "ok")
+    else:
+        flash("Ya hay algo en curso para este barrido.", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+
+
+@bp.post("/<int:bid>/reintentar_imagenes")
+def reintentar_imagenes(cliente, bid):
+    _barrido_del_cliente_o_404(cliente, bid)
+    if tareas_referentes.encolar_reintentar_imagenes(cliente, bid):
+        flash("Reintentando las imágenes que fallaron.", "ok")
+    else:
+        flash("Ya hay algo en curso para este barrido.", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+
+
 @bp.get("/<int:rid>/usar_en_sprint")
 def usar_en_sprint(cliente, rid):
     r = datos.referente(cliente, rid)

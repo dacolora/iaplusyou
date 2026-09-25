@@ -1,0 +1,38 @@
+{# «Mis barridos» (referentes.barridos), fragmento cargado en el <dialog>.
+   Contexto: cliente, barridos (lista, cada uno con `trabajo`: job_id|None). #}
+<div class="generado-modal-cuerpo">
+  <h3>Mis barridos</h3>
+  {% if not barridos %}
+  <p class="vacio">Todavía no has traído referentes. <a data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes →</a></p>
+  {% else %}
+  <table class="tabla-admin">
+    <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th><th></th></tr>
+    {% for b in barridos %}
+    <tr>
+      <td>{{ b.creado_en }}</td>
+      <td>{{ b.fuente }}</td>
+      <td>{{ b.consulta.palabra or b.consulta.pagina_id or '' }}</td>
+      <td>{{ b.estado }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
+      <td>{{ b.traidos }}/{{ b.tope }}</td>
+      <td>{{ b.clasificados }}</td>
+      <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>
+      <td>
+        {% if b.trabajo %}
+        <div class="barra-progreso" id="trabajo-{{ b.trabajo }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+        <script>iniciarPolling({{ b.trabajo | tojson }}, {{ ("trabajo-" ~ b.trabajo) | tojson }});</script>
+        {% else %}
+          {% if b.pendientes %}
+          <form method="post" action="{{ url_for('referentes.clasificar_pendientes', cliente=cliente, bid=b.id) }}" class="inline">
+            <button type="submit" class="btn-xs">Clasificar pendientes</button>
+          </form>
+          {% endif %}
+          <form method="post" action="{{ url_for('referentes.reintentar_imagenes', cliente=cliente, bid=b.id) }}" class="inline">
+            <button type="submit" class="btn-xs">Reintentar imágenes</button>
+          </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>

@@ -360,3 +360,106 @@ def test_traer_post_fuente_sin_llave_no_encola(app, monkeypatch):
     }, follow_redirects=False)
     assert r.status_code == 302
     assert not llamadas
+
+
+def test_barridos_lista_los_del_cliente(app):
+    from referentes import datos
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 50)
+    r = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200
+    assert str(bid).encode() in r.data
+    assert b"protein" in r.data
+
+
+def test_barridos_no_lista_los_de_otro_cliente(app):
+    from referentes import datos
+    ajeno = datos.crear_barrido("otro", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    r = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200
+    assert str(ajeno).encode() not in r.data
+
+
+def test_barridos_muestra_progreso_y_oculta_botones_si_hay_trabajo(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, pendientes=3)
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: f"referentes:barrer:{b}")
+    html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "iniciarPolling" in html
+    assert "Clasificar pendientes" not in html
+    assert "Reintentar imágenes" not in html
+
+
+def test_barridos_muestra_botones_si_no_hay_trabajo_en_curso(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, pendientes=3)
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "iniciarPolling" not in html
+    assert "Clasificar pendientes" in html
+    assert "Reintentar imágenes" in html
+
+
+def test_barridos_sin_pendientes_no_ofrece_clasificar(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)  # pendientes=0
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "Clasificar pendientes" not in html
+    assert "Reintentar imágenes" in html
+
+
+def test_clasificar_pendientes_encola(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_clasificar_pendientes", lambda c, b: llamadas.append((c, b)) or True)
+    r = app["c"].post(f"/cliente/acme/referentes/{bid}/clasificar_pendientes", follow_redirects=False)
+    assert r.status_code == 302
+    assert llamadas == [("acme", bid)]
+
+
+def test_reintentar_imagenes_encola(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_reintentar_imagenes", lambda c, b: llamadas.append((c, b)) or True)
+    r = app["c"].post(f"/cliente/acme/referentes/{bid}/reintentar_imagenes", follow_redirects=False)
+    assert r.status_code == 302
+    assert llamadas == [("acme", bid)]
+
+
+def test_clasificar_pendientes_barrido_inexistente_404(app):
+    assert app["c"].post("/cliente/acme/referentes/999999/clasificar_pendientes").status_code == 404
+
+
+def test_clasificar_pendientes_barrido_ajeno_404(app):
+    from referentes import datos
+    bid = datos.crear_barrido("otro", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    assert app["c"].post(f"/cliente/acme/referentes/{bid}/clasificar_pendientes").status_code == 404
+
+
+def test_reintentar_imagenes_barrido_inexistente_404(app):
+    assert app["c"].post("/cliente/acme/referentes/999999/reintentar_imagenes").status_code == 404
+
+
+def test_reintentar_imagenes_barrido_ajeno_404(app):
+    from referentes import datos
+    bid = datos.crear_barrido("otro", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    assert app["c"].post(f"/cliente/acme/referentes/{bid}/reintentar_imagenes").status_code == 404
+
+
+def test_pestana_muestra_botones_traer_y_barridos_con_o_sin_referentes(app):
+    c = app["c"]
+    html_vacio = c.get("/cliente/acme").data.decode()
+    assert "Todavía no hay referentes" in html_vacio
+    assert "Traer referentes" in html_vacio and "Mis barridos" in html_vacio
+    _sembrar()
+    html_lleno = c.get("/cliente/acme").data.decode()
+    assert "Traer referentes" in html_lleno and "Mis barridos" in html_lleno
