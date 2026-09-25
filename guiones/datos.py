@@ -291,11 +291,14 @@ def empezar(cliente, video_id, estado_nuevo, desde):
 
 def terminar_recorte(video_id, propuesta, motivos, quitadas, usd):
     v = db.guion_video
+    con_motivos = {k: v for k, v in (motivos or {}).items() if k != "1"}
+    con_propuesta = [n for n in (propuesta or []) if n != 1]
+    con_quitadas = [n for n in (quitadas or []) if n != 1]
     with db.conectar() as con:
         con.execute(v.update().where(v.c.id == video_id).values(usd=v.c.usd + float(usd or 0)))
         r = con.execute(v.update().where(v.c.id == video_id, v.c.estado == "recortando").values(
-            estado="configurando", recorte={"propuesta": list(propuesta), "motivos": dict(motivos),
-                                            "quitadas": sorted(quitadas)}, actualizado_en=db.ahora()))
+            estado="configurando", recorte={"propuesta": con_propuesta, "motivos": con_motivos,
+                                            "quitadas": sorted(con_quitadas)}, actualizado_en=db.ahora()))
         return r.rowcount == 1
 
 

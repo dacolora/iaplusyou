@@ -77,3 +77,12 @@ def test_guardar_config_y_quitadas_solo_configurando(base_temporal):
     datos.empezar("acme", vid, "armando", ("configurando",))
     with pytest.raises(Conflicto):
         datos.guardar_config("acme", vid, CONFIG)
+
+
+def test_terminar_recorte_filtra_linea_1(base_temporal):
+    from guiones import datos
+    _, vid = video_nuevo()
+    datos.empezar("acme", vid, "recortando", ("configurando",))
+    assert datos.terminar_recorte(vid, [1, 3], {"1": "x", "3": "y"}, [1, 3], 0.0) is True
+    v = datos.video("acme", vid)
+    assert v["recorte"] == {"propuesta": [3], "motivos": {"3": "y"}, "quitadas": [3]}
