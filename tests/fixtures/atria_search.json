@@ -1,0 +1,51 @@
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "items": [
+      {
+        "id": "m2896048200759341",
+        "platform_native_id": "2896048200759341",
+        "status": "active",
+        "brand_id": "m110811200743559",
+        "brand_name": "WholeSupp",
+        "display_format": "image",
+        "title": "Free Shaker & 21% Off",
+        "body": "13 Superfoods. 31g Protein.",
+        "link_url": "https://wholesupp.com/products/shake",
+        "images": [{"url": "https://cdn.tryatria.com/adfiles/m2896048200759341_ZgP2u6NjwwQ.jpeg", "width": 600, "height": 600}],
+        "videos": [],
+        "start_date": "2026-09-24T07:00:00+00:00",
+        "last_seen_date": "2026-09-24",
+        "days_running": 12,
+        "creative_duplicates": 4,
+        "language": "en",
+        "themes": ["Features/Benefits"],
+        "brand_industries": ["profile"]
+      },
+      {
+        "id": "m2438467946558867",
+        "platform_native_id": "2438467946558867",
+        "status": "active",
+        "brand_id": "m110811200743559",
+        "brand_name": "WholeSupp",
+        "display_format": "video",
+        "title": "Before and after 30 days",
+        "body": "",
+        "link_url": "https://wholesupp.com",
+        "images": [],
+        "videos": [{"url": "https://cdn.tryatria.com/adfiles/m2438467946558867_x.mp4", "preview_image_url": "https://cdn.tryatria.com/adfiles/m2438467946558867_prev.jpeg", "width": 720, "height": 1280, "duration": 19.5}],
+        "start_date": "2026-09-20T07:00:00+00:00",
+        "last_seen_date": "2026-09-24",
+        "days_running": 4,
+        "creative_duplicates": 1,
+        "language": "en",
+        "themes": [],
+        "brand_industries": []
+      }
+    ],
+    "total": 10000,
+    "cursor": "eyJjdCI6MywiZGciOiI3NWYwNTU4ZDJlYjBlNzk4ODBhZDcxMWQ5Y2M5NTU0YmNlNDViNzVhNzhiMjBjNTFkMGVjYjFmNTJkMmMyZmZlIn0=",
+    "page_size": 2
+  }
+}

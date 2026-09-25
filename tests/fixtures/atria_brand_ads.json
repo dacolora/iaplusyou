@@ -1,0 +1,31 @@
+{
+  "code": 0,
+  "message": "ok",
+  "data": {
+    "items": [
+      {
+        "id": "m1454047146782406",
+        "platform_native_id": "1454047146782406",
+        "status": "active",
+        "brand_id": "m110811200743559",
+        "brand_name": "WholeSupp",
+        "display_format": "image",
+        "title": "New flavor just dropped",
+        "body": "Try our new chocolate shake.",
+        "link_url": "https://wholesupp.com/chocolate",
+        "images": [{"url": "https://cdn.tryatria.com/adfiles/m1454047146782406_y.jpeg", "width": 600, "height": 600}],
+        "videos": [],
+        "start_date": "2026-09-22T07:00:00+00:00",
+        "last_seen_date": "2026-09-24",
+        "days_running": 2,
+        "creative_duplicates": 2,
+        "language": "en",
+        "themes": [],
+        "brand_industries": []
+      }
+    ],
+    "total": 1,
+    "cursor": "eyJjdCI6MSwiZW5kIjp0cnVlfQ==",
+    "page_size": 50
+  }
+}
