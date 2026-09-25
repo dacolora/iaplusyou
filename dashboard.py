@@ -3506,6 +3506,16 @@ def admin_referentes_traer():
     return redirect(url_for("admin_referentes"))
 
 
+@app.route("/admin/referentes/familias/<int:familia_id>", methods=["POST"])
+@requiere_admin
+def admin_referentes_familia(familia_id):
+    if not _mismo_origen():
+        abort(403)
+    from referentes import datos as ref_datos
+    ref_datos.familia_actualizar(familia_id, request.form.get("descripcion") or "")
+    return redirect(url_for("admin_referentes"))
+
+
 @app.route("/cliente/<cliente>/ads/publicar", methods=["POST"])
 def publicar_ad(cliente):
     """Publicar un anuncio suelto ya no tiene UI: Campañas se fundió en

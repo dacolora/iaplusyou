@@ -141,8 +141,20 @@
 <section class="admin-bloque">
   <div class="admin-cabecera"><h2>Familias ({{ familias | length }})</h2></div>
   <div class="admin-scroll"><table class="tabla-admin">
-    <tr><th>Familia</th><th>Descripción</th><th>Referentes</th><th>Origen</th></tr>
-    {% for f in familias %}<tr><td>{{ f.nombre }}</td><td>{{ f.descripcion or '—' }}</td><td>{{ f.n }}</td><td>{{ f.origen }}</td></tr>{% endfor %}
+    <tr><th>Familia</th><th>Descripción</th><th>Referentes</th><th>Origen</th><th></th></tr>
+    {% for f in familias %}
+    <tr>
+      <td>{{ f.nombre }}</td>
+      <td>
+        <form method="post" action="{{ url_for('admin_referentes_familia', familia_id=f.id) }}" class="inline">
+          <input type="text" name="descripcion" value="{{ f.descripcion or '' }}" style="width:22rem">
+          <button type="submit" class="btn-xs">Guardar</button>
+        </form>
+      </td>
+      <td>{{ f.n }}</td>
+      <td>{{ f.origen }}</td>
+    </tr>
+    {% endfor %}
   </table></div>
 </section>
 {% endblock %}

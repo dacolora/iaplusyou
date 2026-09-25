@@ -746,3 +746,32 @@ def test_admin_referentes_lista_barridos_de_otras_fuentes(app):
     datos.actualizar_barrido(bid, estado="listo", traidos=12, clasificados=10, usd_real=0.32)
     html = app["c"].get("/admin/referentes").data.decode()
     assert "sandalias" in html and "atria" in html
+
+
+def test_admin_referentes_familia_actualizar(app):
+    from referentes import datos
+    fid = datos.familia_asegurar("Price Slash Hero", "vieja descripción")
+    c = app["c"]
+    r = c.post(f"/admin/referentes/familias/{fid}", data={"descripcion": "Escalera de precios tachados"},
+              headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin/referentes")
+    familia = [f for f in datos.familias() if f["id"] == fid][0]
+    assert familia["descripcion"] == "Escalera de precios tachados"
+
+
+def test_admin_referentes_familia_actualizar_inexistente(app):
+    c = app["c"]
+    r = c.post("/admin/referentes/familias/999999", data={"descripcion": "x"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302   # no revienta con un id que no existe
+
+
+def test_admin_referentes_familia_actualizar_solo_admin(app):
+    from referentes import datos
+    fid = datos.familia_asegurar("Comic Strip", "original")
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
+    r = c.post(f"/admin/referentes/familias/{fid}", data={"descripcion": "hackeado"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302
+    familia = [f for f in datos.familias() if f["id"] == fid][0]
+    assert familia["descripcion"] == "original"
