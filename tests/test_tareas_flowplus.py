@@ -488,3 +488,33 @@ def test_ejecutar_imagen_registra_el_gasto_real(base_temporal, monkeypatch, tmp_
     assert g["referencia"] == f"imagen:{cid}:t3" and g["tipo"] == "imagen" and g["usd"] == 0.093
     assert g["proveedor"] == "wavespeed" and g["detalle"] == "seedream_v5_pro · 2 referencia(s)"
     assert g["extra"] == {"modelo": "seedream_v5_pro", "usd_modelo": 0.093, "usd_musica": 0.0, "credits": 2}
+
+
+def test_ejecutar_video_mezcla_una_cancion_propia_desde_su_segundo(base_temporal, monkeypatch, tmp_path):
+    """Mi música: `mat:<id>` va por pista_propia (costo 0, con inicio_s), nunca
+    por obtener_pista; la capa guarda qué canción y desde qué segundo."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    cid = _sesion_lista_para_generar(cf, monkeypatch, fp, tmp_path, con_sonido=True, sonido_texto="",
+                                     musica_estilo="mat:3", musica_inicio_s=12)
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.musica, "obtener_pista", lambda *a, **k: pytest.fail("no es un estilo IA"))
+    pedidas = []
+    monkeypatch.setattr(fp.musica, "pista_propia",
+                        lambda cliente, valor, inicio_s=0, carpeta_cache=None: (pedidas.append((cliente, valor, inicio_s)) or
+                        ({"archivo": "/tmp/p.wav", "url": "https://r2/clientes/acme/materiales/h.mp3", "estilo": "Mi jingle",
+                          "generada": False, "material_id": 3, "inicio_s": 12, "fuente": "subida"}, 0)))
+    monkeypatch.setattr(fp.cortes, "duracion", lambda p: 5.0)
+
+    def _mezclar(video_in, pista, salida, duracion_s, volumenes=None):
+        with open(salida, "wb") as f:
+            f.write(b"MIX")
+        return {"archivo": salida, "con_sonido": True, "duracion_s": duracion_s, "volumenes": {"musica": 0.45}}
+    monkeypatch.setattr(fp.mezcla, "mezclar_musica", _mezclar)
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j1"})
+    e = cf.cargar("acme")[cid]
+    assert pedidas == [("acme", "mat:3", 12)]
+    assert e["capas"]["musica"] == {"estilo": "Mi jingle", "url": "https://r2/clientes/acme/materiales/h.mp3",
+                                    "costo_usd": 0.0, "estado": "ok", "material_id": 3, "inicio_s": 12, "fuente": "subida"}
+    assert e["usd"] == pytest.approx(0.7)
