@@ -1,0 +1,41 @@
+{# Mi música (spec 2026-09-25): canciones propias del proyecto. Vive DENTRO
+   del formulario de Crear (junto al selector de música): por eso no lleva
+   <form> ni inputs con `name` — todo va por fetch desde el JS de
+   _tab_creativeflowplus.html, y las rutas mm_* devuelven este parcial entero. #}
+<div id="mm-panel" class="mm-panel"
+     data-url-subir="{{ url_for('mm_subir', cliente=cliente) }}"
+     data-url-crear="{{ url_for('mm_crear', cliente=cliente) }}"
+     data-url-lista="{{ url_for('mm_lista', cliente=cliente) }}">
+  <div style="display:flex;gap:.4rem;flex-wrap:wrap;align-items:center;margin-top:.5rem;">
+    <label class="btn-guardar btn-sm" style="cursor:pointer;">Subir canción
+      <input type="file" id="mm-archivo" accept=".mp3,.wav,.m4a,.aac,.ogg,audio/*" hidden>
+    </label>
+    <button type="button" class="btn-sm" id="mm-abrir-crear">Crear canción con IA (ElevenLabs)</button>
+  </div>
+  <div id="mm-crear" hidden style="margin-top:.5rem;">
+    <input type="text" id="mm-prompt" maxlength="400" placeholder="ej. reguetón suave con guitarra, alegre, para un anuncio de verano" style="width:100%;">
+    <label class="fe-check"><input type="checkbox" id="mm-instrumental" checked> Instrumental (sin voz cantada)</label>
+    <button type="button" class="btn-generar btn-sm" id="mm-crear-btn">Crear canción{% if precio_musica_ia and precio_musica_ia.usd is not none %} ≈ {{ precio_musica_ia.usd | usd }}{% endif %}</button>
+    <p class="vacio" style="font-size:.74rem;padding:0;">60 s de música a medida. No nombres artistas, canciones ni sellos: ElevenLabs lo rechaza.</p>
+  </div>
+  {% if trabajo_musica %}
+  <div class="barra-progreso" id="mm-progreso" data-job="{{ trabajo_musica.job_id }}"
+       data-estado="{{ url_for('estado_trabajo', job_id=trabajo_musica.job_id) }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+  <div class="progreso-texto">Creando la canción con ElevenLabs…</div>
+  {% endif %}
+  <p class="campo-error" id="mm-error" hidden></p>
+  <p class="vacio" id="mm-subida" style="font-size:.78rem;padding:0;" hidden></p>
+  {% if mi_musica %}
+  <ul class="mm-lista" style="list-style:none;padding:0;margin:.5rem 0;">
+    {% for c in mi_musica %}
+    <li style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;margin:.3rem 0;">
+      <span>{{ c.nombre }}</span>
+      <small class="vacio" style="padding:0;">{{ "%.0f"|format(c.duracion_s) }} s{% if c.fuente == "elevenlabs" %} · ElevenLabs{% endif %}</small>
+      <audio src="{{ c.url }}" controls preload="none" style="height:28px;"></audio>
+      <button type="button" class="btn-rechazar btn-sm mm-borrar" data-url="{{ url_for('mm_borrar', cliente=cliente, mid=c.id) }}" data-nombre="{{ c.nombre }}">Borrar</button>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <p class="vacio" style="font-size:.74rem;padding:0;">Sube solo música tuya o con licencia: Meta silencia o rechaza anuncios con canciones protegidas.</p>
+</div>

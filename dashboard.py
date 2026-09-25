@@ -48,6 +48,8 @@ import meta_conexion
 import meta_agencia
 import flowplus_prompt
 import referencias_flowplus
+import materiales
+import mi_musica
 import referencias_link
 import generador_prompts
 from providers import image_provider
@@ -85,6 +87,7 @@ from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
 from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
+from tareas import musica as tareas_musica
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
@@ -5885,6 +5888,68 @@ def fp_vaciar_referencias(cliente):
     if _quiere_json():
         return _respuesta_bandeja(cliente)
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+# --- Mi música (spec 2026-09-25): canciones propias y creadas con ElevenLabs ---
+
+def _contexto_mi_musica(cliente):
+    jid = tareas_musica.job_id(cliente)
+    return {"mi_musica": mi_musica.listar(cliente),
+            "trabajo_musica": {"job_id": jid} if trabajos.en_curso(jid) else None,
+            "precio_musica_ia": gastos.estimar("musica_elevenlabs")}
+
+
+def _respuesta_mi_musica(cliente, error=None, mensaje=None, nuevo_id=None, job_id=None):
+    ctx = _contexto_mi_musica(cliente)
+    html = render_template("_mi_musica.html", cliente=cliente, **ctx)
+    return jsonify({"ok": error is None, "html": html, "canciones": ctx["mi_musica"], "error": error,
+                    "mensaje": mensaje, "nuevo_id": nuevo_id, "job_id": job_id}), (400 if error else 200)
+
+
+@app.route("/cliente/<cliente>/musica/subir", methods=["POST"])
+def mm_subir(cliente):
+    archivo = request.files.get("cancion")
+    if not archivo or not archivo.filename:
+        return _respuesta_mi_musica(cliente, error="Elige un archivo de audio.")
+    try:
+        c = mi_musica.subir(cliente, archivo, os.path.join(_client_dir(cliente), "tmp_musica"))
+    except mi_musica.SubidaInvalida as e:
+        return _respuesta_mi_musica(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, archivo.filename, "mi_musica", "error", str(e))
+        return _respuesta_mi_musica(cliente, error=f"No pude subir la canción ({type(e).__name__}).")
+    return _respuesta_mi_musica(cliente, mensaje=f"«{c['nombre']}» quedó en Mi música.", nuevo_id=c["id"])
+
+
+@app.route("/cliente/<cliente>/musica/<int:mid>/borrar", methods=["POST"])
+def mm_borrar(cliente, mid):
+    try:
+        mi_musica.borrar(cliente, mid)
+    except materiales.MaterialEnUso as e:
+        return _respuesta_mi_musica(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, str(mid), "mi_musica", "error", str(e))
+        return _respuesta_mi_musica(cliente, error=f"No pude borrarla ({type(e).__name__}); intenta de nuevo.")
+    return _respuesta_mi_musica(cliente)
+
+
+@app.route("/cliente/<cliente>/musica/crear", methods=["POST"])
+def mm_crear(cliente):
+    prompt = " ".join((request.form.get("prompt") or "").split())[:400]
+    if not prompt:
+        return _respuesta_mi_musica(cliente, error="Describe la música que quieres.")
+    jid = tareas_musica.job_id(cliente)
+    encolado = trabajos.encolar(jid, "musica_generar",
+                                {"cliente": cliente, "prompt": prompt, "instrumental": request.form.get("instrumental") == "si"},
+                                duracion_estimada=90, etapas=list(tareas_musica.ETAPAS), cliente=cliente, max_intentos=1)
+    if not encolado:
+        return _respuesta_mi_musica(cliente, error="Ya se está creando una canción — espera a que termine.")
+    return _respuesta_mi_musica(cliente, mensaje="Creando la canción con ElevenLabs…", job_id=jid)
+
+
+@app.route("/cliente/<cliente>/musica/lista")
+def mm_lista(cliente):
+    return _respuesta_mi_musica(cliente)
 
 
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
