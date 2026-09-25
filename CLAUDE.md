@@ -256,8 +256,14 @@ UE) e idioma, una sola corrida por barrido sin cursor que retomar, reporta
 su costo real por resultado a `gastos` bajo el tipo `recoleccion`).
 `traer()` ahora entrega `(pagina, cursor_siguiente, meta)`: `meta` es `{}`
 para Atria (solo consume cupo del plan) o `{"costo_real": ...}` para una
-fuente que cobra por resultado real. El panel admin completo con barridos
-globales (bloque 6) sigue pendiente. Bloque 2: «Recrear con mi producto» (`referentes/recrear.py`) — `armar_prompt`
+fuente que cobra por resultado real. Bloque 6: panel admin completo
+(`/admin/referentes`) -- «Traer referentes globales» (mismo formulario y
+mecánica que el de un proyecto, pero `cliente=NULL`: el barrido queda
+visible para todos), totales por fuente, contador «Atria: N/1200 llamadas
+este mes», tabla de familias editable (`datos.familia_actualizar`, sin usar
+desde el bloque 1) y las tarjetas de `ATRIA_API_KEY`/`APIFY_TOKEN` en Puesta
+a punto. Con esto los seis bloques del diseño original (spec 2026-09-23 §17)
+están en `main`. Bloque 2: «Recrear con mi producto» (`referentes/recrear.py`) — `armar_prompt`
 determinista (nunca llama a Claude) construye el prompt con la imagen del referente
 como `Image 1` y hasta 2 fotos del producto elegido como `Image 2`/`3`; «Adaptar con
 IA» (`adaptar`, opcional, ≈ US$0.01) es la única llamada pagada de este bloque y solo
