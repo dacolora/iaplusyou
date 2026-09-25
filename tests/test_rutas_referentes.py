@@ -441,10 +441,14 @@ def test_traer_post_fuente_sin_llave_no_encola(app, monkeypatch):
 
 def test_barridos_lista_los_del_cliente(app):
     from referentes import datos
-    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 50)
+    # No se afirma sobre str(bid): la fila no incrusta el id salvo en las
+    # acciones condicionales (clasificar pendientes / reintentar imágenes),
+    # que no aplican a un barrido recién creado -- afirmar contra str(bid)
+    # dependía de que la marca de tiempo (no determinista) trajera el dígito
+    # por casualidad, y fallaba en cualquier segundo sin un "1".
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 50)
     r = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"})
     assert r.status_code == 200
-    assert str(bid).encode() in r.data
     assert b"protein" in r.data
 
 
