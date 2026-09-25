@@ -66,6 +66,7 @@ TARIFAS = {
     "clasificacion": 0.012,
     "voz": 0.05,
     "musica": 0.02,
+    "musica_elevenlabs": 0.60,   # canción de 60 s con ElevenLabs vía fal (US$ 0,60 por minuto empezado)
     "whisper": 0.01,
     "final": 0.10,
 }
@@ -175,6 +176,7 @@ _ESTIMADORES = {
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "clasificacion": lambda n=1, **_: (TARIFAS["clasificacion"] * max(1, int(n)), f"{max(1, int(n))} anuncio(s) con Claude"),
+    "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
 }
 
 

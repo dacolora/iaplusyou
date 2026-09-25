@@ -10,6 +10,8 @@ docs/superpowers/plans/2026-09-15-motor-bloque2-final-edition.md > Global Constr
   Stable Audio -> {"audio_file": {"url": ...}}
 `fal-ai/wizper` NO acepta chunk_level="word" — por eso se usa fal-ai/whisper.
 """
+import math
+
 from providers import fal_client
 
 MODELO_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
@@ -20,6 +22,12 @@ MODELO_MUSICA = "fal-ai/stable-audio"
 COSTO_USD_POR_CARACTER = 0.0003
 COSTO_USD_POR_MINUTO_AUDIO = 0.002
 COSTO_USD_POR_PISTA_MUSICA = 0.02
+
+# Eleven Music vía fal (verificado en fal.ai/models/fal-ai/elevenlabs/music el
+# 2026-09-25): prompt + music_length_ms (3 000–600 000) + force_instrumental;
+# responde {"audio": {"url"}}; cobra US$ 0,60 por minuto empezado.
+MODELO_MUSICA_ELEVENLABS = "fal-ai/elevenlabs/music"
+COSTO_USD_POR_MINUTO_ELEVENLABS = 0.60
 
 # Voces premade multilingües de ElevenLabs disponibles vía fal. Todas sirven
 # para es/en/pt (multilingües); Rachel primero en las tres por ser la más
@@ -101,3 +109,19 @@ def musica(prompt, segundos, on_progreso=None):
         raise RuntimeError(f"fal.ai ({MODELO_MUSICA}) no devolvió una URL de audio: {data}")
 
     return {"url": url, "costo_usd": COSTO_USD_POR_PISTA_MUSICA}
+
+
+def costo_elevenlabs(segundos):
+    """fal cobra por minuto empezado: 30 s cuesta lo mismo que 60 s."""
+    return round(COSTO_USD_POR_MINUTO_ELEVENLABS * math.ceil(int(segundos) / 60), 2)
+
+
+def musica_elevenlabs(prompt, segundos=60, instrumental=True, on_progreso=None):
+    """Canción a medida con Eleven Music. Devuelve {"url": mp3 público, "costo_usd"}."""
+    segundos = max(3, min(600, int(segundos)))
+    payload = {"prompt": prompt, "music_length_ms": segundos * 1000, "force_instrumental": bool(instrumental)}
+    data = fal_client.llamar(MODELO_MUSICA_ELEVENLABS, payload, timeout=600, on_progreso=on_progreso)
+    url = (data.get("audio") or {}).get("url")
+    if not url:
+        raise RuntimeError(f"fal.ai ({MODELO_MUSICA_ELEVENLABS}) no devolvió una URL de audio: {data}")
+    return {"url": url, "costo_usd": costo_elevenlabs(segundos)}
