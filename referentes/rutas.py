@@ -274,10 +274,38 @@ def ficha(cliente, rid):
                            usos=recrear.usos(cliente, rid))
 
 
+_MESES_CORTOS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+
+
+def _vista_barrido(b):
+    """Lo que «Mis barridos» muestra de un barrido, en texto normal (nada de
+    `en_cola`, fechas ISO ni `12/50`). La fecha es la hora local del servidor
+    (`db.ahora`, TZ=America/Bogota en el VPS)."""
+    creado = b.get("creado_en") or ""
+    try:
+        fecha = f"{int(creado[8:10])} {_MESES_CORTOS[int(creado[5:7]) - 1]} · {creado[11:16]}"
+    except (ValueError, IndexError):
+        fecha = creado
+    estado, tono = datos.ETIQUETAS_ESTADO_BARRIDO.get(b.get("estado"), (b.get("estado") or "", "en-curso"))
+    consulta = b.get("consulta") or {}
+    detalle = [fuentes.NOMBRES.get(b.get("fuente"), b.get("fuente") or "").split(" (")[0].capitalize(),
+               "Video" if consulta.get("formato") == "video" else "Imagen"]
+    if consulta.get("pais") and consulta.get("pais") != "ALL":
+        detalle.append(consulta["pais"])
+    if consulta.get("modo") == "marca":
+        busqueda, enlace = "Una marca", ("https://www.facebook.com/ads/library/?active_status=all&ad_type=all"
+                                        f"&view_all_page_id={consulta.get('pagina_id') or ''}")
+    else:
+        busqueda, enlace = f"«{consulta.get('palabra') or ''}»", None
+    return {"fecha": fecha, "estado": estado, "tono": tono, "busqueda": busqueda, "enlace": enlace,
+            "detalle": " · ".join(d for d in detalle if d)}
+
+
 @bp.get("/barridos")
 def barridos(cliente):
     lista = datos.barridos(cliente=cliente)
     for b in lista:
+        b["vista"] = _vista_barrido(b)
         b["trabajo"] = tareas_referentes.trabajo_barrer(b["id"])
         # «Reintentar imágenes» solo tiene sentido -- y solo se ofrece -- si
         # de verdad hay algo en error que reintentar (mismo criterio que

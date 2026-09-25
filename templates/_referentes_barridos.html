@@ -19,16 +19,22 @@
   {% else %}
   <div class="modal-form-tabla">
   <table class="tabla-admin">
-    <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th><th></th></tr>
+    <tr><th>Fecha</th><th>Búsqueda</th><th>Estado</th><th>Anuncios</th><th>Clasificados</th><th>Costo</th><th></th></tr>
     {% for b in barridos %}
-    <tr>
-      <td>{{ b.creado_en }}</td>
-      <td>{{ b.fuente }}</td>
-      <td>{{ b.consulta.palabra or b.consulta.pagina_id or '' }}</td>
-      <td>{{ b.estado }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
-      <td>{{ b.traidos }}/{{ b.tope }}</td>
-      <td>{{ b.clasificados }}</td>
-      <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>
+    {% set v = b.vista %}
+    <tr id="barrido-{{ b.id }}">
+      <td class="barrido-fecha">{{ v.fecha }}</td>
+      <td>
+        {{ v.busqueda }}{% if v.enlace %} · <a href="{{ v.enlace }}" target="_blank" rel="noopener">ver en Meta ↗</a>{% endif %}
+        <small class="barrido-sub">{{ v.detalle }}</small>
+      </td>
+      <td>
+        <span class="tag-estado tag-{{ v.tono }}">{{ v.estado }}</span>
+        {% if b.aviso %}<small class="barrido-sub">{{ b.aviso }}</small>{% endif %}
+      </td>
+      <td class="num">{{ b.traidos }} de {{ b.tope }}</td>
+      <td class="num">{{ b.clasificados }}{% if b.pendientes %}<small class="barrido-sub">{{ b.pendientes }} sin clasificar</small>{% endif %}</td>
+      <td class="num">{{ b.usd_real | usd if b.usd_real else '—' }}</td>
       <td>
         {% if b.trabajo %}
         <div class="barra-progreso" id="trabajo-{{ b.trabajo }}" data-poll-job="{{ b.trabajo }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>

@@ -21,6 +21,11 @@ CLASIFICACIONES = ("fuente", "claude", "pendiente", "error")
 ESTADOS_IMAGEN = ("ok", "pendiente", "error")
 TIPOS = ("imagen", "video", "carrusel")
 ESTADOS_BARRIDO = ("en_cola", "trayendo", "guardando", "clasificando", "listo", "parcial", "error")
+# Lo que ve la persona en «Mis barridos» (texto, tono de la etiqueta).
+ETIQUETAS_ESTADO_BARRIDO = {"en_cola": ("En cola", "en-curso"), "trayendo": ("Trayendo anuncios", "en-curso"),
+                            "guardando": ("Guardando imágenes", "en-curso"),
+                            "clasificando": ("Clasificando", "en-curso"), "listo": ("Listo", "en-uso"),
+                            "parcial": ("Incompleto", "advertencia"), "error": ("Falló", "descartado")}
 ETIQUETAS_ETAPA = {"TOF": "arriba del funnel", "MOF": "medio del funnel", "BOF": "abajo del funnel"}
 ETIQUETAS_CONSCIENCIA = {"unaware": "inconsciente", "problem-aware": "consciente del problema",
                          "solution-aware": "consciente de la solución", "product-aware": "consciente del producto",

@@ -630,3 +630,52 @@ def test_pestana_muestra_botones_traer_y_barridos_con_o_sin_referentes(app):
     _sembrar()
     html_lleno = c.get("/cliente/acme").data.decode()
     assert "Traer referentes" in html_lleno and "Mis barridos" in html_lleno
+
+
+# «Mis barridos» en texto normal: nada de `en_cola`, fechas ISO ni `12/50`.
+
+def _barridos_html(app):
+    return app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
+
+
+def test_barridos_muestran_fecha_legible(app, monkeypatch):
+    import db
+    from referentes import datos
+    monkeypatch.setattr(db, "ahora", lambda: "2026-09-25T15:04:09")
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 50)
+    html = _barridos_html(app)
+    assert "25 sep · 15:04" in html
+    assert "2026-09-25T15:04" not in html
+
+
+def test_barridos_muestran_estado_busqueda_cantidades_y_costo_legibles(app):
+    from referentes import datos
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "crema antiarrugas", "idioma": "es",
+                                                "formato": "video"}, 50)
+    datos.actualizar_barrido(bid, estado="parcial", traidos=12, clasificados=10, pendientes=2, usd_real=0.06,
+                             aviso="Se detuvo de traer más anuncios: se acabó el cupo mensual de Atria.")
+    html = _barridos_html(app)
+    assert "Incompleto" in html and ">parcial<" not in html
+    assert "«crema antiarrugas»" in html
+    assert "Atria · Video" in html
+    assert "12 de 50" in html
+    assert "2 sin clasificar" in html
+    assert "US$ 0,06" in html
+    assert "se acabó el cupo mensual de Atria" in html
+
+
+def test_barridos_de_marca_enlazan_la_pagina_en_meta(app):
+    from referentes import datos
+    datos.crear_barrido("acme", "apify", {"modo": "marca", "pagina_id": "110811200743559", "pais": "CO"}, 100)
+    html = _barridos_html(app)
+    assert "En cola" in html and ">en_cola<" not in html
+    assert "view_all_page_id=110811200743559" in html
+    assert "Apify · Imagen · CO" in html
+
+
+def test_barridos_sin_gasto_muestran_raya(app):
+    from referentes import datos
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "es"}, 10)
+    html = _barridos_html(app)
+    assert "US$ 0,00" not in html
+    assert "—" in html

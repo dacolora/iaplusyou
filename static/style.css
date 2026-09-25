@@ -1808,6 +1808,9 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .modal-form-precio button { align-self: flex-start; margin-top: .3rem; }
 .modal-form-tabla { overflow-x: auto; margin-bottom: 1.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .modal-form > .vacio { padding-bottom: 1.6rem; }
+.tag-en-curso { color: var(--accent); background: rgba(124, 58, 237, .1); }
+.barrido-fecha { white-space: nowrap; }
+.barrido-sub { display: block; margin-top: .2rem; font-size: .72rem; color: var(--muted); line-height: 1.4; }
 
 /* Opciones excluyentes: control segmentado (pastillas) y tarjetas. El radio
    queda encima, invisible, para que el clic y el teclado sigan siendo suyos. */
