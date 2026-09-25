@@ -31,6 +31,7 @@ import db
 import estado
 import experimentos
 import meta_conexion
+from referentes import datos as referentes_datos
 import tablero
 
 MESES_HISTORIAL = 6
@@ -290,22 +291,24 @@ def _celda(v):
 
 
 def csv_mes(clientes, ahora_iso=None):
-    """CSV (`;`, BOM) con todos los cobros del mes de los proyectos dados:
-    las mismas columnas que gastos.csv_mes más la del proyecto."""
+    """CSV (`;`, BOM) con todos los cobros del mes de los proyectos dados, más
+    el gasto interno de _creatv (importaciones, barridos globales — nunca de
+    ningún proyecto): las mismas columnas que gastos.csv_mes más la del
+    proyecto."""
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
     w.writerow(ENCABEZADO_CSV)
-    if clientes:
-        g = db.gasto
-        q = (sa.select(g).where(g.c.cliente.in_(list(clientes)), g.c.creado_en >= desde, g.c.creado_en <= hasta)
-             .order_by(g.c.creado_en.asc(), g.c.id.asc()))
-        with db.conectar() as con:
-            for r in con.execute(q):
-                f = _cobro(r)
-                w.writerow([_celda(f["cliente"]), _celda(f["creado_en"]), _celda(f["tipo"]), _celda(f.get("proveedor")),
-                            _celda(f["referencia"]), _celda(f.get("detalle")), f"{f['usd']:.4f}".replace(".", ",")])
+    todos = list(clientes) + [referentes_datos.CLIENTE_CREATV]
+    g = db.gasto
+    q = (sa.select(g).where(g.c.cliente.in_(todos), g.c.creado_en >= desde, g.c.creado_en <= hasta)
+         .order_by(g.c.creado_en.asc(), g.c.id.asc()))
+    with db.conectar() as con:
+        for r in con.execute(q):
+            f = _cobro(r)
+            w.writerow([_celda(f["cliente"]), _celda(f["creado_en"]), _celda(f["tipo"]), _celda(f.get("proveedor")),
+                        _celda(f["referencia"]), _celda(f.get("detalle")), f"{f['usd']:.4f}".replace(".", ",")])
     return "﻿" + buf.getvalue()
 
 
@@ -313,11 +316,15 @@ def csv_mes(clientes, ahora_iso=None):
 
 def resumen(clientes, nombres=None, ahora_iso=None):
     """Lo que pinta el panel: proyectos (uno por cliente, con sus números del
-    mes), totales, historial por mes, últimos cobros y salud del worker."""
+    mes), totales, historial por mes, últimos cobros y salud del worker. El
+    gasto interno de _creatv (importaciones, barridos globales) nunca es de
+    ningún proyecto real: llega aparte en totales["creatv_usd"] y en
+    meses[i]["creatv"], nunca sumado a generacion_usd/meses[i]["total"]."""
     clientes = list(clientes or [])
     hasta = _ahora(ahora_iso)
     desde = _inicio_mes(hasta)
     gen = generacion_mes(clientes, hasta)
+    creatv_gen = generacion_mes([referentes_datos.CLIENTE_CREATV], hasta)[referentes_datos.CLIENTE_CREATV]
     pauta = pauta_mes(clientes, hasta)
     piezas = piezas_mes(clientes, hasta)
     exps = experimentos_corriendo(clientes)
@@ -350,7 +357,12 @@ def resumen(clientes, nombres=None, ahora_iso=None):
         "publicado": sum(p["publicado"] for p in proyectos),
         "rechazado": sum(p["rechazado"] for p in proyectos),
         "experimentos_corriendo": sum(p["experimentos_corriendo"] for p in proyectos),
+        "creatv_usd": creatv_gen["usd"], "creatv_cobros": creatv_gen["cobros"], "creatv_por_tipo": creatv_gen["por_tipo"],
     }
+    meses = gasto_meses(clientes, ahora_iso=hasta)
+    creatv_meses = {m["mes"]: m["total"] for m in gasto_meses([referentes_datos.CLIENTE_CREATV], ahora_iso=hasta)}
+    for m in meses:
+        m["creatv"] = creatv_meses.get(m["mes"], 0.0)
     return {"desde": desde, "hasta": hasta, "proyectos": proyectos, "totales": totales,
-            "meses": gasto_meses(clientes, ahora_iso=hasta), "ultimos_cobros": ultimos_cobros(),
+            "meses": meses, "ultimos_cobros": ultimos_cobros(),
             "worker": salud_worker(hasta)}
