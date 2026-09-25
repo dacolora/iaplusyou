@@ -38,6 +38,10 @@ def app(base_temporal, tmp_path, monkeypatch):
     monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
     for v in TODAS:
         monkeypatch.delenv(v, raising=False)
+    # Llave opcional que puede estar puesta en el .env real de quien corre los
+    # tests (p. ej. para probar Referentes a mano): aislarla para que
+    # test_render_todo_falta no vea su tarjeta como «configurada».
+    monkeypatch.delenv("ATRIA_API_KEY", raising=False)
     monkeypatch.setattr(dashboard, "_client_dir", lambda cliente: str(tmp_path / "clientes" / cliente))
     monkeypatch.setattr(catalogo_productos, "BASE_DIR", str(tmp_path))
     monkeypatch.setattr(dashboard.meta_conexion, "cargar", lambda c: {"moneda": "COP"})
@@ -71,7 +75,7 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli", "reddit", "youtube_api", "apify"]
+    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli", "reddit", "youtube_api", "apify", "atria"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
@@ -108,7 +112,7 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
         assert 'target="_blank" rel="noopener"' in t
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
-    assert cfg.count('class="llave-tarjeta') == 10
+    assert cfg.count('class="llave-tarjeta') == 11
     # Orden de las tarjetas.
     pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli")]
     assert pos == sorted(pos)
@@ -372,6 +376,18 @@ def test_llaves_de_nicho_son_opcionales_y_solo_miran_presencia(app, monkeypatch)
     assert "id-secreto-123" not in plano and "apify_secreto_456" not in plano
 
 
+def test_atria_tiene_tarjeta_en_puesta_a_punto(app, monkeypatch):
+    import dashboard as d
+    monkeypatch.delenv("ATRIA_API_KEY", raising=False)
+    atria = {l["id"]: l for l in d._estado_llaves()}["atria"]
+    assert atria["estado"] == "falta" and atria["opcional"]
+    assert atria["variables"] == ["ATRIA_API_KEY"]
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    atria = {l["id"]: l for l in d._estado_llaves()}["atria"]
+    assert atria["estado"] == "configurada"
+    assert "atria-sk_test" not in repr(atria)
+
+
 # ---- Qué ve un cliente en Puesta a punto -----------------------------------
 # Las llaves de Anthropic, fal, Higgsfield, R2, SMTP, MELI y las fuentes de
 # Nicho las pone Creatv en el .env del servidor: un cliente no puede hacer
@@ -417,5 +433,5 @@ def test_cliente_solo_ve_en_puesta_a_punto_lo_que_le_toca(app, monkeypatch):
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
     puesta = _puesta_a_punto(_config(app["c"].get("/cliente/acme").data.decode()))
-    assert puesta.count('class="llave-tarjeta') == 10
+    assert puesta.count('class="llave-tarjeta') == 11
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")

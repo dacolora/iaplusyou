@@ -1701,8 +1701,8 @@ SERVICIOS_LLAVES = (
     },
     {
         "id": "apify",
-        "nombre": "Apify (Nicho: reseñas de Amazon y comentarios de TikTok)",
-        "para_que": "Corre los actores de Apify que traen reseñas de Amazon o comentarios de TikTok a un estudio de Nicho.",
+        "nombre": "Apify (Nicho: reseñas/comentarios · Referentes: Ad Library)",
+        "para_que": "Corre los actores de Apify: en Nicho trae reseñas de Amazon o comentarios de TikTok; en la biblioteca de referentes trae anuncios de la Ad Library de Meta (alternativa a Atria, sí cubre Latinoamérica).",
         "costo": "Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic.",
         "url": "https://console.apify.com/account/integrations",
         "url_texto": "console.apify.com › Settings › Integrations",
@@ -1713,6 +1713,22 @@ SERVICIOS_LLAVES = (
             "Crea la cuenta en apify.com (trae crédito gratis mensual) y agrega una tarjeta si vas a pasar de ese crédito.",
             "En «Settings» › «Integrations» copia el «Personal API token».",
             "Pégalo como APIFY_TOKEN en el .env del servidor y reinicia los dos servicios.",
+        ],
+    },
+    {
+        "id": "atria",
+        "nombre": "Atria (biblioteca de referentes: Ad Library de Meta)",
+        "para_que": "Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea.",
+        "costo": "Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin).",
+        "url": "https://tryatria.com",
+        "url_texto": "tryatria.com",
+        "variables": ["ATRIA_API_KEY"],
+        "nota": "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token.",
+        "opcional": True,
+        "pasos": [
+            "Crea la cuenta en tryatria.com y elige un plan.",
+            "Copia la API key desde el panel de Atria.",
+            "Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios.",
         ],
     },
 )
