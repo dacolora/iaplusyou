@@ -122,7 +122,7 @@
   <p class="vacio">Todavía no se ha traído ningún barrido global fuera de copycoders.</p>
   {% else %}
   <div class="admin-scroll"><table class="tabla-admin">
-    <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th></tr>
+    <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th><th>Acciones</th></tr>
     {% for b in barridos_otras_fuentes %}
     <tr>
       <td>{{ b.creado_en }}</td>
@@ -132,6 +132,34 @@
       <td>{{ b.traidos }}/{{ b.tope }}</td>
       <td>{{ b.clasificados }}</td>
       <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>
+      <td>
+        {# Reparo del bloque 6: un barrido global «parcial» quedaba sin forma
+           de reintentarse -- su propio `aviso` invita a «Clasificar
+           pendientes»/«Reintentar imágenes», pero esas rutas por-cliente
+           siempre 404 para un barrido con cliente=None. Mismo patrón que
+           `_referentes_barridos.html` (trabajo en curso -> barra de
+           progreso; si no, un botón por acción disponible), pero esta
+           página es un render normal (extends base.html, nunca llega por
+           fetch+innerHTML) así que el <script>iniciarPolling(...)</script>
+           inline SÍ corre -- igual que el bloque de copycoders más arriba
+           en esta misma plantilla -- y no hace falta `data-poll-job`. #}
+        {% if b.trabajo %}
+        <div class="barra-progreso" id="trabajo-{{ b.trabajo }}"><div class="barra-progreso-fill"></div></div>
+        <div class="progreso-texto"></div>
+        <script>iniciarPolling({{ b.trabajo | tojson }}, {{ ("trabajo-" ~ b.trabajo) | tojson }});</script>
+        {% else %}
+          {% if b.pendientes %}
+          <form method="post" action="{{ url_for('admin_referentes_clasificar', barrido_id=b.id) }}" class="inline">
+            <button type="submit" class="btn-xs">Clasificar pendientes{% if b.precio_clasificar %} ({{ b.precio_clasificar }}){% endif %}</button>
+          </form>
+          {% endif %}
+          {% if b.imagenes_error %}
+          <form method="post" action="{{ url_for('admin_referentes_reintentar_imagenes', barrido_id=b.id) }}" class="inline">
+            <button type="submit" class="btn-xs">Reintentar imágenes</button>
+          </form>
+          {% endif %}
+        {% endif %}
+      </td>
     </tr>
     {% endfor %}
   </table></div>

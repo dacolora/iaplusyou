@@ -3453,6 +3453,17 @@ def admin_referentes():
             precio_traer = {"fuente": est_fuente, "clasificacion": est_clasificacion,
                             "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
 
+    # Mismo cálculo por fila que `referentes.rutas.barridos` (per-cliente
+    # «Mis barridos»): `trabajo` para la barra de progreso, `imagenes_error`
+    # para ofrecer «Reintentar imágenes» solo cuando de verdad hay algo que
+    # reintentar, `precio_clasificar` porque «Clasificar pendientes»
+    # re-factura (spec §11) igual que en el panel por-cliente.
+    barridos_otras_fuentes = [b for b in ref_datos.barridos(None) if b["fuente"] != "copycoders"]
+    for b in barridos_otras_fuentes:
+        b["trabajo"] = tareas_ref.trabajo_barrer(b["id"])
+        b["imagenes_error"] = ref_datos.contar_imagenes_de_barrido(b["id"])[2]
+        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
+
     return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
                            trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
                            ultimo=(historial[0] if historial else None), historial=historial[:10],
@@ -3463,7 +3474,7 @@ def admin_referentes():
                            precio_traer=precio_traer, fuente_llaves_faltantes=fuente_llaves_faltantes,
                            atria_llamadas=llamadas_este_mes(), atria_limite=limite_mensual(),
                            fuentes_totales=ref_datos.opciones(None)["fuentes"],
-                           barridos_otras_fuentes=[b for b in ref_datos.barridos(None) if b["fuente"] != "copycoders"])
+                           barridos_otras_fuentes=barridos_otras_fuentes)
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])
@@ -3529,6 +3540,56 @@ def admin_referentes_familia(familia_id):
         abort(403)
     from referentes import datos as ref_datos
     ref_datos.familia_actualizar(familia_id, request.form.get("descripcion") or "")
+    return redirect(url_for("admin_referentes"))
+
+
+def _barrido_global_o_404(ref_datos, barrido_id):
+    """Igual que `referentes.rutas._barrido_del_cliente_o_404`, pero para el
+    lado admin: un barrido GLOBAL (`cliente is None`) en vez de uno de un
+    proyecto puntual. Nunca deja pasar un barrido con dueño real -- estas
+    rutas admin no son una puerta trasera al barrido de un cliente."""
+    b = ref_datos.barrido(barrido_id)
+    if not b or b.get("cliente") is not None:
+        abort(404)
+    return b
+
+
+@app.route("/admin/referentes/barridos/<int:barrido_id>/clasificar", methods=["POST"])
+@requiere_admin
+def admin_referentes_clasificar(barrido_id):
+    """Reparo del hueco de Bloque 6: un barrido GLOBAL «parcial» (lanzado
+    desde «Traer referentes globales») no tenía ningún botón para reintentar
+    su clasificación -- su propio aviso invita a «Clasificar pendientes»,
+    pero esa ruta es `referentes.rutas.clasificar_pendientes`, que exige
+    `b.cliente == cliente` y por lo tanto siempre 404 para un barrido con
+    `cliente=None`. Mismo comportamiento que la versión por-cliente, solo que
+    gateada por "es global" en vez de "es de este proyecto"."""
+    if not _mismo_origen():
+        abort(403)
+    from referentes import datos as ref_datos
+    from tareas import referentes as tareas_ref
+    _barrido_global_o_404(ref_datos, barrido_id)
+    if tareas_ref.encolar_clasificar_pendientes(None, barrido_id):
+        flash("Clasificando lo pendiente; la tabla se actualiza sola.", "ok")
+    else:
+        flash("Ya hay algo en curso para este barrido.", "error")
+    return redirect(url_for("admin_referentes"))
+
+
+@app.route("/admin/referentes/barridos/<int:barrido_id>/reintentar-imagenes", methods=["POST"])
+@requiere_admin
+def admin_referentes_reintentar_imagenes(barrido_id):
+    """Mismo reparo que `admin_referentes_clasificar`, para «Reintentar
+    imágenes» de un barrido global."""
+    if not _mismo_origen():
+        abort(403)
+    from referentes import datos as ref_datos
+    from tareas import referentes as tareas_ref
+    _barrido_global_o_404(ref_datos, barrido_id)
+    if tareas_ref.encolar_reintentar_imagenes(None, barrido_id):
+        flash("Reintentando las imágenes que fallaron.", "ok")
+    else:
+        flash("Ya hay algo en curso para este barrido.", "error")
     return redirect(url_for("admin_referentes"))
 
 
