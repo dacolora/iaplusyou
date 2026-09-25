@@ -217,14 +217,19 @@ def trabajo_barrer(barrido_id):
     return None
 
 
-def _job_continuacion_barrer(job_id, barrido_id):
-    base = job_id_barrer(barrido_id)
-    return base[:-len(SUFIJO_CONT)] if job_id.endswith(SUFIJO_CONT) else base + SUFIJO_CONT
+def _job_continuacion_barrer(job_id):
+    """Igual que `_job_continuacion` (copycoders): alterna el job_id VIVO
+    entre base y base+SUFIJO_CONT. Debe operar sobre `job_id` (el que de
+    verdad viene de la tarea/continuación anterior), nunca sobre un
+    `job_id_barrer(bid)` recalculado desde cero — ese jamás lleva el sufijo,
+    así que recortarle el final en vez de al `job_id` real trunca la cadena
+    (bug real: colisionaba entre barridos distintos, p. ej. "referentes:ba")."""
+    return job_id[:-len(SUFIJO_CONT)] if job_id.endswith(SUFIJO_CONT) else job_id + SUFIJO_CONT
 
 
 def _continuar_barrer(tarea, payload, bid, tipo=TIPO_BARRER):
     cuando = (datetime.now() + timedelta(seconds=ESPERA_CONT)).isoformat(timespec="seconds")
-    cola.encolar(tipo, payload, job_id=_job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid), bid),
+    cola.encolar(tipo, payload, job_id=_job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid)),
                 duracion_estimada=1800, etapas=ETAPAS_BARRER, ejecutar_desde=cuando, max_intentos=1, prioridad=2)
 
 
@@ -371,22 +376,31 @@ def _clasificar_uno(cliente, r):
 
 
 def _fase_clasificando(tarea, p, bid, avanzar):
-    """Compartida por `referentes_barrer` (su propia fase 3) y
-    `referentes_clasificar` (standalone, solo esta fase) — por eso re-encola
-    con `tipo=tarea.get("tipo")`: cada una debe seguir re-encolándose como el
-    tipo con el que arrancó, nunca cruzarse a la otra.
+    """Compartida por `referentes_barrer` (su propia fase 3, automática) y
+    `referentes_clasificar` (standalone, un clic explícito de "Clasificar
+    pendientes") — por eso re-encola con `tipo=tipo_actual`: cada una debe
+    seguir re-encolándose como el tipo con el que arrancó, nunca cruzarse a
+    la otra.
 
-    `pendientes_clasificacion` trae `pendiente` Y `error` (un fallo de Claude
-    se reintenta solo en la próxima pasada) — así que, igual que
+    `pendientes_clasificacion` puede traer `pendiente` Y `error` (un fallo de
+    Claude se reintenta en una pasada futura) — pero el tramo AUTOMÁTICO
+    (dentro de `referentes_barrer`) pide `incluir_error=False`: el costo de
+    un barrido ya se aprobó una vez al lanzarlo, así que no debe re-facturar
+    la MISMA fila en error en cada tramo si Claude sigue fallando igual —
+    esa fila queda para que la persona la reintente ella misma con
+    "Clasificar pendientes" (que sí pide con `error` incluido, spec §11
+    "sus filas pendiente/error"). Independientemente de eso, igual que
     `_fase_traducir` con las traducciones, una pasada que no clasifica NADA
-    (Claude vuelve a fallar exactamente en los mismos referentes) no debe
-    re-encolarse: sin la bandera `avanzo`, un referente permanentemente
-    problemático (imagen no interpretable, prompt que Claude nunca cumple)
-    reencolaría —y pagaría una llamada— cada ESPERA_CONT segundos para
-    siempre, sin que el barrido llegue nunca a un estado final."""
+    tampoco debe re-encolarse: sin la bandera `avanzo`, un referente
+    permanentemente problemático (imagen no interpretable, prompt que Claude
+    nunca cumple) reencolaría —y pagaría una llamada, en el caso standalone—
+    cada ESPERA_CONT segundos para siempre, sin que el barrido llegue nunca a
+    un estado final."""
     avanzar("Clasificando")
     cliente = p.get("cliente")
-    pendientes = datos.pendientes_clasificacion(barrido_id=bid, limite=TRAMO)
+    tipo_actual = tarea.get("tipo") or TIPO_BARRER
+    automatico = tipo_actual != TIPO_CLASIFICAR
+    pendientes = datos.pendientes_clasificacion(barrido_id=bid, limite=TRAMO, incluir_error=not automatico)
     b = datos.barrido(bid) or {}
     clasificados = int(b.get("clasificados") or 0)
     avanzo = False
@@ -403,16 +417,20 @@ def _fase_clasificando(tarea, p, bid, avanzar):
         clasificados += int(ok)
         cola.reportar(tarea.get("job_id") or job_id_barrer(bid), progreso=100.0 * i / max(1, len(pendientes)),
                       detalle=f"{i}/{len(pendientes)}")
+    # `pendientes_total` cuenta TODO lo que aún no está clasificado (pendiente
+    # + error, `incluir_error` por defecto) — es la estadística que ve la
+    # persona (columna `pendientes`, aviso final), independiente de cuáles de
+    # esas filas el tramo automático está dispuesto a reintentar por su cuenta.
     pendientes_total = len(datos.pendientes_clasificacion(barrido_id=bid, limite=9999))
     datos.actualizar_barrido(bid, clasificados=clasificados, pendientes=pendientes_total)
     if pendientes_total and avanzo:
-        _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tarea.get("tipo") or TIPO_BARRER)
+        _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tipo_actual)
         return f"Clasificando… {clasificados} listos."
     _, sin_imagen = datos.contar_imagenes_de_barrido(bid)
     avisos = []
     if pendientes_total:
         avisos.append(f"{pendientes_total} referentes no se pudieron clasificar; "
-                      "«Reintentar clasificación» los vuelve a pedir.")
+                      "«Clasificar pendientes» los vuelve a pedir.")
     if sin_imagen:
         avisos.append(f"{sin_imagen} imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.")
     aviso = " ".join(avisos) or None
@@ -426,7 +444,14 @@ def ejecutar_barrer(tarea):
     bid = int(p["barrido_id"])
     fase = p.get("fase") or "trayendo"
 
-    def avanzar(etapa, detalle=None):
+    # `etapa=None` por defecto: `referentes.fuentes.atria.traer()` llama a
+    # este `avanzar` con SOLO `detalle=` (nunca `etapa`, spec Task 2) para
+    # reportar progreso dentro de la fase "Trayendo anuncios" ya fijada más
+    # arriba — con `etapa` obligatorio, esa llamada real revienta con
+    # TypeError en el primer reporte de progreso de cualquier barrido real
+    # (los dobles falsos de `traer` en las pruebas nunca llaman `avanzar`
+    # así, por eso no se veía antes).
+    def avanzar(etapa=None, detalle=None):
         cola.reportar(tarea.get("job_id") or job_id_barrer(bid), etapa=etapa, detalle=detalle)
 
     try:
@@ -452,7 +477,7 @@ def ejecutar_clasificar(tarea):
     p = tarea["payload"]
     bid = int(p["barrido_id"])
 
-    def avanzar(etapa, detalle=None):
+    def avanzar(etapa=None, detalle=None):
         cola.reportar(tarea.get("job_id") or job_id_barrer(bid), etapa=etapa, detalle=detalle)
 
     try:

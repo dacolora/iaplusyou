@@ -267,9 +267,16 @@ def pendientes_imagen(fuente=None, barrido_id=None, limite=100):
         return [_a_dict(r) for r in con.execute(q.order_by(t.c.id).limit(limite))]
 
 
-def pendientes_clasificacion(barrido_id=None, limite=100):
+def pendientes_clasificacion(barrido_id=None, limite=100, incluir_error=True):
+    """`incluir_error=False` deja afuera los referentes que ya fallaron una
+    clasificación (`clasificacion="error"`) — lo usa el tramo AUTOMÁTICO de
+    `referentes_barrer` para no re-facturar por siempre la misma fila si
+    Claude sigue fallando igual; la tarea standalone `referentes_clasificar`
+    ("Clasificar pendientes", un clic explícito) sigue pidiendo con el
+    default `True` (pendiente Y error, spec §11)."""
     t = db.referente
-    q = sa.select(t).where(t.c.estado_imagen == "ok", t.c.clasificacion.in_(("pendiente", "error")))
+    estados = ("pendiente", "error") if incluir_error else ("pendiente",)
+    q = sa.select(t).where(t.c.estado_imagen == "ok", t.c.clasificacion.in_(estados))
     if barrido_id:
         q = q.where(t.c.barrido_id == barrido_id)
     with db.conectar() as con:

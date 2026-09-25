@@ -242,6 +242,63 @@ def test_ejecutar_barrer_fase_trayendo_guarda_y_re_encola(tmp_path, monkeypatch)
     b = datos.barrido(bid)
     assert b["traidos"] == 3
     assert len(llamadas_cola) == 1  # se re-encoló (tope=5, solo trajo 3)
+    # El job_id de la continuación debe ser el REAL job_id_barrer(bid)+__cont,
+    # no un truncado (bug real: _job_continuacion_barrer recortaba un
+    # job_id_barrer(bid) recalculado, que nunca lleva el sufijo, en vez de
+    # recortar el job_id de verdad).
+    assert llamadas_cola[0][1]["job_id"] == tareas_ref.job_id_barrer(bid) + tareas_ref.SUFIJO_CONT
+
+
+def test_job_continuacion_barrer_alterna_sin_colisionar_entre_barridos(tmp_path, monkeypatch):
+    """Reproduce el bug real de _job_continuacion_barrer: recortaba SIEMPRE un
+    job_id_barrer(bid) recién calculado (que nunca lleva el sufijo __cont) en
+    vez del job_id real de la tarea -- para bids de un solo dígito, esto
+    colisionaba TODOS los barridos en el mismo string truncado
+    ("referentes:ba"). Corre 3 tramos reales (sin mockear
+    _job_continuacion_barrer) para dos barridos distintos y confirma que la
+    cadena alterna base/__cont correctamente y nunca se cruza entre ellos."""
+    from referentes import datos
+    from tareas import referentes as tareas_ref
+
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+
+    def _traer_una_pagina(consulta, tope, avanzar, cursor=None):
+        # Siempre trae 1 y dice "hay más" (cursor real) -> nunca termina
+        # solo, así se queda varios tramos seguidos en fase "trayendo".
+        n = int(cursor or 0)
+        yield ([{"anuncio_id": f"{consulta['fuente']}-{n}-{cliente}", "pagina_id": "1", "marca": "M", "titular": "T",
+                "cuerpo": "", "idioma": "en", "pais": None, "tipo": "imagen", "imagen_origen": f"https://x/{n}.jpg",
+                "dias": 1, "variantes": 1, "primera_vez": "2026-09-24", "ultima_vez": "2026-09-24",
+                "activo": True, "url_anuncio": "", "url_marca": "", "etiquetas_fuente": {}, "extra": {}}],
+               str(n + 1))
+
+    import referentes.fuentes as fuentes
+    monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_una_pagina)}))
+
+    encolados = []
+    monkeypatch.setattr("cola.encolar", lambda tipo, payload, **kw: encolados.append(kw["job_id"]) or 1)
+
+    def _correr_tramos(bid, n_tramos):
+        job_id = tareas_ref.job_id_barrer(bid)
+        secuencia = []
+        for _ in range(n_tramos):
+            tarea = {"id": 1, "job_id": job_id, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
+                     "consulta": {"fuente": "atria"}, "tope": 1000}}
+            tareas_ref.ejecutar_barrer(tarea)
+            job_id = encolados[-1]
+            secuencia.append(job_id)
+        return secuencia
+
+    bid1 = datos.crear_barrido(cliente, "atria", {}, 1000)
+    bid2 = datos.crear_barrido(cliente, "atria", {}, 1000)
+    sec1 = _correr_tramos(bid1, 3)
+    sec2 = _correr_tramos(bid2, 3)
+
+    base1, cont1 = tareas_ref.job_id_barrer(bid1), tareas_ref.job_id_barrer(bid1) + tareas_ref.SUFIJO_CONT
+    base2, cont2 = tareas_ref.job_id_barrer(bid2), tareas_ref.job_id_barrer(bid2) + tareas_ref.SUFIJO_CONT
+    assert sec1 == [cont1, base1, cont1]
+    assert sec2 == [cont2, base2, cont2]
+    assert set(sec1).isdisjoint(sec2)  # nunca colisionan entre barridos distintos
 
 
 def test_ejecutar_barrer_sin_nada_traido_marca_error(tmp_path, monkeypatch):
@@ -263,6 +320,59 @@ def test_ejecutar_barrer_sin_nada_traido_marca_error(tmp_path, monkeypatch):
     with pytest.raises(fuentes_base.ErrorFuente):
         tareas_ref.ejecutar_barrer(tarea)
     assert datos.barrido(bid)["estado"] == "error"
+
+
+def test_ejecutar_barrer_fase_trayendo_con_atria_real_no_revienta_por_avanzar(tmp_path, monkeypatch):
+    """Bug real: `referentes.fuentes.atria.traer()` (Task 2, ya en main) llama
+    `avanzar(detalle=...)` SIN pasar `etapa` — con `avanzar(etapa, detalle=None)`
+    (etapa obligatorio, sin default) esto revienta con TypeError en la primera
+    página real de CUALQUIER barrido, después de ya haber gastado una llamada
+    contra el cupo mensual de Atria. Los `traer` de doble falso a mano en las
+    otras pruebas nunca invocan `avanzar` así, por eso no lo agarraban — este
+    usa el módulo `referentes.fuentes.atria` REAL, con solo `_sesion`
+    mockeada (mismo patrón que tests/test_referentes_fuentes_atria.py)."""
+    import json
+    import time as time_mod
+
+    import referentes.fuentes.atria as atria
+    from referentes import datos
+    from tareas import referentes as tareas_ref
+
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(time_mod, "sleep", lambda s: None)
+    fixture_search = json.load(open("tests/fixtures/atria_search.json"))
+
+    class _RespuestaFalsa:
+        def __init__(self, cuerpo, status=200):
+            self._cuerpo = cuerpo
+            self.status_code = status
+
+        def json(self):
+            return self._cuerpo
+
+    class _SesionFalsa:
+        def __init__(self, respuestas):
+            self._respuestas = list(respuestas)
+
+        def get(self, url, params=None, headers=None, timeout=None):
+            return self._respuestas.pop(0)
+
+    # FIXTURE_SEARCH trae exactamente 2 anuncios con page_size=2 (hay_mas=True
+    # sin importar el tope) — con tope=2 el propio `while traidos < tope` de
+    # `atria.traer` corta ANTES de pedir una segunda página, así que una sola
+    # respuesta mockeada alcanza (ver test_referentes_fuentes_atria.py).
+    monkeypatch.setattr(atria, "_sesion", lambda: _SesionFalsa([_RespuestaFalsa(fixture_search)]))
+
+    bid = datos.crear_barrido(cliente, "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 2)
+    tarea = {"id": 1, "job_id": tareas_ref.job_id_barrer(bid),
+             "payload": {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
+                        "consulta": {"fuente": "atria", "modo": "palabra", "palabra": "protein", "idioma": "en"},
+                        "tope": 2}}
+    resultado = tareas_ref.ejecutar_barrer(tarea)  # antes del fix: TypeError acá mismo
+    assert isinstance(resultado, str)
+    b = datos.barrido(bid)
+    assert b["traidos"] == 2 and b["estado"] == "guardando"
 
 
 def test_fase_clasificando_registra_gasto_y_actualiza_referente(tmp_path, monkeypatch):
@@ -332,6 +442,135 @@ def test_fase_clasificando_claude_invalido_deja_error_y_no_reencola_para_siempre
     assert llamadas_cola == []
     b = datos.barrido(bid)
     assert b["estado"] == "parcial" and "no se pudieron clasificar" in b["aviso"]
+
+
+def test_fase_clasificando_automatica_nunca_re_factura_un_referente_en_error(tmp_path, monkeypatch):
+    """Important 3: el tramo AUTOMÁTICO de `referentes_barrer` (una tarea sin
+    "tipo", o con tipo=TIPO_BARRER -- como la deja `cola.reclamar()` para
+    cualquier tarea `referentes_barrer` real) pide `pendientes_clasificacion`
+    con `incluir_error=False`, así que un referente que ya falló nunca debe
+    volver a pasar por `clasificar.clasificar` -- ni facturarse otra vez --
+    en ningún tramo posterior, aunque la fase se siga re-encolando para
+    procesar OTROS referentes que sí van avanzando.
+
+    Fuerza TRAMO=1 (monkeypatch del módulo) para que cada llamada a
+    `ejecutar_barrer` sea de verdad un tramo que solo toca UN referente --
+    así se puede intercalar tramos que sí avanzan (y por lo tanto sí se
+    re-encolarían en producción) con tramos que ya no tocan a rid_malo,
+    usando un contador de llamadas explícito por id en vez de inferir el
+    comportamiento solo de los estados finales."""
+    from collections import defaultdict
+
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    monkeypatch.setattr(tareas_ref, "TRAMO", 1)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+
+    # Orden de creación == orden de id == orden en que `pendientes_clasificacion`
+    # (ORDER BY id) los entrega con TRAMO=1: bueno1, luego malo, luego bueno2.
+    rid_bueno1, _ = datos.guardar_referente({"anuncio_id": "40", "fuente": "atria", "imagen_origen": "https://x/40.jpg",
+                                             "marca": "M", "titular": "B1", "cuerpo": "", "idioma": "en"},
+                                            cliente=cliente, barrido_id=bid)
+    rid_malo, _ = datos.guardar_referente({"anuncio_id": "41", "fuente": "atria", "imagen_origen": "https://x/41.jpg",
+                                           "marca": "M", "titular": "Malo", "cuerpo": "", "idioma": "en"},
+                                          cliente=cliente, barrido_id=bid)
+    rid_bueno2, _ = datos.guardar_referente({"anuncio_id": "42", "fuente": "atria", "imagen_origen": "https://x/42.jpg",
+                                             "marca": "M", "titular": "B2", "cuerpo": "", "idioma": "en"},
+                                            cliente=cliente, barrido_id=bid)
+    for rid in (rid_bueno1, rid_malo, rid_bueno2):
+        datos.marcar_imagen(rid, "ok", f"https://r2/{rid}.jpg")
+
+    llamadas = defaultdict(int)
+
+    def _clasificar_falso(referente, vocabulario):
+        llamadas[referente["id"]] += 1
+        if referente["id"] == rid_malo:
+            e = clasificar.ClasificacionInvalida("Claude no devolvió JSON.")
+            e.tokens_entrada, e.tokens_salida = 50, 0
+            raise e
+        return ({"etapa": "TOF", "consciencia": "unaware", "familia": None,
+                 "familia_nueva": {"nombre": f"F{referente['id']}", "descripcion": "d"}, "dolor": "dolor", "firma": "f"},
+                80, 20)
+
+    monkeypatch.setattr(clasificar, "clasificar", _clasificar_falso)
+    monkeypatch.setattr("cola.encolar", lambda *a, **kw: None)  # no nos importa el re-encolado real, solo el estado
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                                  "consulta": {"fuente": "atria"}, "tope": 5}}
+    # Sin "tipo": tal como llega una tarea `referentes_barrer` real a
+    # `_fase_clasificando` (tipo_actual cae a TIPO_BARRER, el default).
+
+    # Tramo 1: toca rid_bueno1 (menor id, sigue "pendiente") -> avanza.
+    tareas_ref.ejecutar_barrer(tarea)
+    assert llamadas == {rid_bueno1: 1}
+    assert datos.referente(cliente, rid_bueno1)["clasificacion"] == "claude"
+
+    # Tramo 2: el siguiente "pendiente" es rid_malo -> falla, queda en error.
+    tareas_ref.ejecutar_barrer(tarea)
+    assert llamadas[rid_malo] == 1
+    assert datos.referente(cliente, rid_malo)["clasificacion"] == "error"
+
+    # Tramo 3: rid_malo YA está en error -> el automático (incluir_error=False)
+    # ya no lo trae; el siguiente "pendiente" real es rid_bueno2 -> avanza.
+    tareas_ref.ejecutar_barrer(tarea)
+    assert llamadas[rid_malo] == 1          # nunca se reintentó ni se re-facturó
+    assert llamadas[rid_bueno2] == 1
+    assert datos.referente(cliente, rid_bueno2)["clasificacion"] == "claude"
+
+    # Tramo 4: no queda nada "pendiente" (solo rid_malo en error, que el
+    # automático sigue ignorando) -> ni siquiera se llama a clasificar.clasificar.
+    resultado_final = tareas_ref.ejecutar_barrer(tarea)
+    assert llamadas == {rid_bueno1: 1, rid_malo: 1, rid_bueno2: 1}
+    b = datos.barrido(bid)
+    assert b["estado"] == "parcial" and "no se pudieron clasificar" in b["aviso"]
+    assert isinstance(resultado_final, str)
+
+
+def test_ejecutar_clasificar_standalone_si_reintenta_referente_en_error(tmp_path, monkeypatch):
+    """Companion del test anterior: la tarea STANDALONE `referentes_clasificar`
+    (el botón explícito "Clasificar pendientes") SÍ debe recoger y reintentar
+    un referente que quedó en clasificacion="error" de un intento previo --
+    eso es justamente lo que permite `incluir_error=True` (default) en
+    `pendientes_clasificacion` para esta tarea, a diferencia del tramo
+    automático de arriba. La tarea lleva "tipo": TIPO_CLASIFICAR (tal como lo
+    deja `cola.reclamar()` en producción para toda tarea encolada con ese
+    tipo, ver cola.py/`encolar_clasificar_pendientes`) para que
+    `_fase_clasificando` calcule `automatico=False` de verdad, no por un
+    default accidental de la prueba."""
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+    rid_error, _ = datos.guardar_referente({"anuncio_id": "50", "fuente": "atria", "imagen_origen": "https://x/50.jpg",
+                                            "marca": "M", "titular": "Reintento", "cuerpo": "", "idioma": "en"},
+                                           cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid_error, "ok", "https://r2/50.jpg")
+    # Simula el estado que deja un intento previo fallido (ver
+    # `_clasificar_uno` ante un ClasificacionInvalida, y el test de arriba).
+    datos.actualizar_referente(rid_error, clasificacion="error",
+                               extra={"error_clasificacion": "Claude no devolvió JSON."})
+    assert datos.referente(cliente, rid_error)["clasificacion"] == "error"
+
+    llamadas = []
+
+    def _clasificar_ok(referente, vocabulario):
+        llamadas.append(referente["id"])
+        return ({"etapa": "TOF", "consciencia": "unaware", "familia": None,
+                 "familia_nueva": {"nombre": "Reintentado", "descripcion": "d"}, "dolor": "dolor", "firma": "f"},
+                80, 20)
+
+    monkeypatch.setattr(clasificar, "clasificar", _clasificar_ok)
+    monkeypatch.setattr("cola.encolar", lambda *a, **kw: None)
+    tarea = {"id": 1, "tipo": tareas_ref.TIPO_CLASIFICAR, "job_id": tareas_ref.job_id_barrer(bid),
+             "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                        "consulta": {"fuente": "atria"}, "tope": 5}}
+    tareas_ref.ejecutar_clasificar(tarea)
+
+    assert llamadas == [rid_error]  # el standalone SÍ recogió y reintentó la fila en error
+    r = datos.referente(cliente, rid_error)
+    assert r["clasificacion"] == "claude" and r["familia"] == "EMERGING: Reintentado"
 
 
 def test_encolar_reintentar_imagenes_resetea_error_a_pendiente(tmp_path, monkeypatch):
