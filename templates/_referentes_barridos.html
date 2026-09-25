@@ -1,5 +1,14 @@
 {# «Mis barridos» (referentes.barridos), fragmento cargado en el <dialog>.
-   Contexto: cliente, barridos (lista, cada uno con `trabajo`: job_id|None). #}
+   Contexto: cliente, barridos (lista, cada uno con `trabajo`: job_id|None,
+   `imagenes_error`: cuántas imágenes de ESE barrido quedaron en error).
+
+   Este fragmento SIEMPRE llega por fetch + `cuerpo.innerHTML = html`
+   (_tab_referentes.html) -- un <script> insertado así nunca corre, así que
+   la barra de progreso usa `data-poll-job` (el mismo patrón ya establecido
+   en _organico_publicar.html / _tab_creativeflowplus.html) en vez de un
+   <script>iniciarPolling(...)</script> inline que jamás se ejecutaba
+   (Important 3): _tab_referentes.html escanea `[data-poll-job]` después de
+   cada innerHTML y llama iniciarPolling por su cuenta. #}
 <div class="generado-modal-cuerpo">
   <h3>Mis barridos</h3>
   {% if not barridos %}
@@ -18,17 +27,18 @@
       <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>
       <td>
         {% if b.trabajo %}
-        <div class="barra-progreso" id="trabajo-{{ b.trabajo }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
-        <script>iniciarPolling({{ b.trabajo | tojson }}, {{ ("trabajo-" ~ b.trabajo) | tojson }});</script>
+        <div class="barra-progreso" id="trabajo-{{ b.trabajo }}" data-poll-job="{{ b.trabajo }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
         {% else %}
           {% if b.pendientes %}
           <form method="post" action="{{ url_for('referentes.clasificar_pendientes', cliente=cliente, bid=b.id) }}" class="inline">
-            <button type="submit" class="btn-xs">Clasificar pendientes</button>
+            <button type="submit" class="btn-xs">Clasificar pendientes{% if b.precio_clasificar %} ({{ b.precio_clasificar }}){% endif %}</button>
           </form>
           {% endif %}
+          {% if b.imagenes_error %}
           <form method="post" action="{{ url_for('referentes.reintentar_imagenes', cliente=cliente, bid=b.id) }}" class="inline">
             <button type="submit" class="btn-xs">Reintentar imágenes</button>
           </form>
+          {% endif %}
         {% endif %}
       </td>
     </tr>

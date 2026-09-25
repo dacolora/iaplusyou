@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
-from referentes.fuentes.base import ErrorFuente
+from referentes.fuentes.base import AVISO_CUOTA_AGOTADA, ErrorFuente
 
 BASE_URL = "https://api.tryatria.com/open/v1"
 PAGE_SIZE = 50
@@ -74,6 +74,18 @@ def _sesion():
     return requests.Session()
 
 
+def _get(sesion, ruta, params, llave):
+    """Una petición GET real a Atria. Un `requests.RequestException` (timeout,
+    error de conexión) se envuelve como `ErrorFuente` en vez de dejarlo
+    escapar crudo: sin esto, un blip transitorio de red no entra por el
+    camino de entrega parcial que `traer()` ya tiene para el 42901 -- revienta
+    la tarea entera aunque ya hubiera avance real guardado (spec §12)."""
+    try:
+        return sesion.get(f"{BASE_URL}{ruta}", params=params, headers={"X-API-Key": llave}, timeout=TIMEOUT)
+    except requests.RequestException as e:
+        raise ErrorFuente(f"No se pudo conectar con Atria: {type(e).__name__}.") from e
+
+
 def _pedir(sesion, ruta, params):
     """Una llamada real a Atria (espaciada, cuenta para el contador mensual).
     Ante `code 42901` espera ESPERA_LIMITE y reintenta una vez; si vuelve a
@@ -83,7 +95,7 @@ def _pedir(sesion, ruta, params):
     if not llave:
         raise ErrorFuente("Atria no está configurado (falta ATRIA_API_KEY).")
     time.sleep(ESPERA_ENTRE_LLAMADAS)
-    r = sesion.get(f"{BASE_URL}{ruta}", params=params, headers={"X-API-Key": llave}, timeout=TIMEOUT)
+    r = _get(sesion, ruta, params, llave)
     if r.status_code == 401:
         raise ErrorFuente("Atria no aceptó la llave (ATRIA_API_KEY).")
     _incrementar_contador()
@@ -95,7 +107,7 @@ def _pedir(sesion, ruta, params):
     if codigo == 42901:
         time.sleep(ESPERA_LIMITE)
         time.sleep(ESPERA_ENTRE_LLAMADAS)
-        r2 = sesion.get(f"{BASE_URL}{ruta}", params=params, headers={"X-API-Key": llave}, timeout=TIMEOUT)
+        r2 = _get(sesion, ruta, params, llave)
         _incrementar_contador()
         sobre = r2.json()
         codigo = sobre.get("code")
@@ -194,6 +206,12 @@ def traer(consulta, tope, avanzar, cursor=None):
         except _LimiteExcedido:
             if traidos == 0:
                 raise ErrorFuente("Atria: se acabaron las llamadas del plan este mes.")
+            # Entrega parcial "graciosa" (spec §12): no se lanza porque ya se
+            # trajo algo en ESTA llamada, pero `traer()` no tiene forma de
+            # decirle al llamador POR QUÉ dejó de traer -- `([], None)` es la
+            # misma forma que una búsqueda genuinamente agotada. `avanzar` con
+            # este detalle reservado es la única señal fuera de banda.
+            avanzar(detalle=AVISO_CUOTA_AGOTADA)
             yield [], None
             return
         items_originales = data.get("items") or []

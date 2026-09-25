@@ -297,17 +297,25 @@ def contar_imagenes(fuente=None):
 
 
 def contar_imagenes_de_barrido(barrido_id):
-    """(ok, pendiente) para UN barrido — la usa `referentes_barrer` para saber
-    cuándo pasar de la fase de imágenes a la de clasificación, y al terminar
-    para avisar si algo quedó sin bajar. A diferencia de `contar_imagenes`
-    (global, por fuente) esto nunca mezcla el progreso de otro barrido."""
+    """(ok, pendiente, error) para UN barrido — la usa `referentes_barrer` para
+    saber cuándo pasar de la fase de imágenes a la de clasificación (con
+    `pendiente`), y al terminar para avisar si algo quedó sin bajar Y para
+    ofrecer «Reintentar imágenes» solo cuando de verdad hay algo que
+    reintentar (con `error` — a diferencia de `pendiente`, que a esa altura
+    ya está siempre en 0: la fase de imágenes solo termina cuando no queda
+    ninguna). A diferencia de `contar_imagenes` (global, por fuente) esto
+    nunca mezcla el progreso de otro barrido."""
     t = db.referente
+
+    def _contar(con, estado):
+        return int(con.execute(sa.select(sa.func.count()).select_from(t)
+                               .where(t.c.barrido_id == barrido_id, t.c.estado_imagen == estado)).scalar() or 0)
+
     with db.conectar() as con:
-        ok = con.execute(sa.select(sa.func.count()).select_from(t)
-                         .where(t.c.barrido_id == barrido_id, t.c.estado_imagen == "ok")).scalar() or 0
-        pendiente = con.execute(sa.select(sa.func.count()).select_from(t)
-                                .where(t.c.barrido_id == barrido_id, t.c.estado_imagen == "pendiente")).scalar() or 0
-    return int(ok), int(pendiente)
+        ok = _contar(con, "ok")
+        pendiente = _contar(con, "pendiente")
+        error = _contar(con, "error")
+    return ok, pendiente, error
 
 
 # ------------------------------------------------------------ traducciones ---

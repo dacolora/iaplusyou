@@ -6,7 +6,16 @@ de nivel de módulo: `estimar(consulta, tope)`, `probar()`,
 fuente deja escapar hacia la ruta o el worker: `.usuario` (== `str(e)`) es un
 mensaje en español apto para mostrarse tal cual y nunca lleva llaves ni HTML
 ajeno.
-"""
+
+`AVISO_CUOTA_AGOTADA`: valor que una fuente puede pasar como `detalle` a
+`avanzar()` (nunca como excepción) para señalar que dejó de traer páginas
+porque se acabó su cupo — no porque la búsqueda esté genuinamente agotada
+(`traer()` sigue devolviendo `([], None)` en los dos casos, indistinguibles
+por su forma; `avanzar` es la única señal fuera de banda). `_fase_trayendo`
+(tareas/referentes.py) lo intercepta para dejar un aviso en el barrido en vez
+de tragárselo en silencio (spec §12)."""
+
+AVISO_CUOTA_AGOTADA = "cuota_agotada"
 
 
 class ErrorFuente(Exception):

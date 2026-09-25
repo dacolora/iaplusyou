@@ -301,6 +301,94 @@ def test_job_continuacion_barrer_alterna_sin_colisionar_entre_barridos(tmp_path,
     assert set(sec1).isdisjoint(sec2)  # nunca colisionan entre barridos distintos
 
 
+def test_fase_trayendo_error_con_avance_previo_deja_aviso_en_extra(tmp_path, monkeypatch):
+    """Important 6.1 (primera parte, "swallowed once something's been
+    fetched"): si `traer()` lanza ErrorFuente pero el barrido YA traía algo de
+    tramos anteriores, `_fase_trayendo` no debe abortar (correcto, sigue
+    siendo entrega parcial) -- pero antes tampoco dejaba NINGÚN rastro del
+    porqué. Debe quedar en `extra.aviso_trayendo`."""
+    from referentes import datos
+    from referentes.fuentes import base as fuentes_base
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, traidos=5, nuevos=5, estado="trayendo")
+
+    def _traer_falla(consulta, tope, avanzar, cursor=None):
+        raise fuentes_base.ErrorFuente("Atria: se acabaron las llamadas del plan este mes.")
+        yield  # pragma: no cover (nunca se alcanza; hace de esta func un generador)
+
+    import referentes.fuentes as fuentes
+    monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_falla)}))
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
+                                  "consulta": {"fuente": "atria", "modo": "palabra", "palabra": "x", "idioma": "en"},
+                                  "tope": 50}}
+    resultado = tareas_ref.ejecutar_barrer(tarea)  # no debe lanzar: ya había avance (traidos=5)
+    assert isinstance(resultado, str)
+    b = datos.barrido(bid)
+    assert b["estado"] == "guardando"  # sigue de largo a imágenes, entrega parcial
+    assert "se acabaron las llamadas del plan este mes" in b["extra"]["aviso_trayendo"]
+
+
+def test_fase_trayendo_cuota_agotada_a_mitad_de_tramo_deja_aviso(tmp_path, monkeypatch):
+    """Important 6.1 (segunda parte, "documented ran out of monthly quota
+    mid-fetch" behavior): cuando `traer()` NO lanza nada -- ya trajo algo EN
+    esta misma llamada y por eso entrega `([], None)` en silencio, como ya
+    hacía antes de este fix -- la única señal de que la causa fue el cupo
+    mensual (y no que la búsqueda esté genuinamente agotada) es el
+    `avanzar(detalle=AVISO_CUOTA_AGOTADA)` que la fuente manda. Debe quedar
+    igual en `extra.aviso_trayendo`."""
+    from referentes import datos
+    from referentes.fuentes.base import AVISO_CUOTA_AGOTADA
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+
+    def _traer_cuota_agotada(consulta, tope, avanzar, cursor=None):
+        yield ([{"anuncio_id": "cuota-1", "pagina_id": "1", "marca": "M", "titular": "T", "cuerpo": "",
+                "idioma": "en", "pais": None, "tipo": "imagen", "imagen_origen": "https://x/1.jpg",
+                "dias": 1, "variantes": 1, "primera_vez": "2026-09-24", "ultima_vez": "2026-09-24",
+                "activo": True, "url_anuncio": "", "url_marca": "", "etiquetas_fuente": {}, "extra": {}}],
+               "cursor-1")
+        avanzar(detalle=AVISO_CUOTA_AGOTADA)
+        yield [], None
+
+    import referentes.fuentes as fuentes
+    monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_cuota_agotada)}))
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
+                                  "consulta": {"fuente": "atria", "modo": "palabra", "palabra": "x", "idioma": "en"},
+                                  "tope": 50}}
+    tareas_ref.ejecutar_barrer(tarea)
+    b = datos.barrido(bid)
+    assert b["traidos"] == 1 and b["estado"] == "guardando"
+    assert "cupo mensual de Atria" in b["extra"]["aviso_trayendo"]
+
+
+def test_fase_clasificando_suma_el_aviso_de_trayendo_al_final(tmp_path, monkeypatch):
+    """El aviso que dejó la fase "trayendo" (arriba) no debe perderse cuando
+    la fase final ("clasificando") arma SU aviso -- antes cada fase pisaba a
+    la anterior con `actualizar_barrido(..., aviso=...)`."""
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+    datos.actualizar_barrido(bid, extra={"aviso_trayendo": "Se detuvo de traer más anuncios: se acabó el cupo mensual de Atria."})
+    rid, _ = datos.guardar_referente({"anuncio_id": "80", "fuente": "atria", "imagen_origen": "https://x/80.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid, "ok", "https://r2/80.jpg")
+    monkeypatch.setattr(clasificar, "clasificar",
+                        lambda referente, vocabulario: ({"etapa": "TOF", "consciencia": "unaware", "familia": None,
+                                                         "familia_nueva": {"nombre": "W", "descripcion": "d"},
+                                                         "dolor": "dolor", "firma": "f"}, 80, 20))
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                                  "consulta": {"fuente": "atria"}, "tope": 5}}
+    tareas_ref.ejecutar_barrer(tarea)
+    b = datos.barrido(bid)
+    assert b["estado"] == "parcial"
+    assert "cupo mensual de Atria" in b["aviso"]
+
+
 def test_ejecutar_barrer_sin_nada_traido_marca_error(tmp_path, monkeypatch):
     from referentes import datos
     from referentes.fuentes import base as fuentes_base
@@ -373,6 +461,87 @@ def test_ejecutar_barrer_fase_trayendo_con_atria_real_no_revienta_por_avanzar(tm
     assert isinstance(resultado, str)
     b = datos.barrido(bid)
     assert b["traidos"] == 2 and b["estado"] == "guardando"
+
+
+def _bad_request_error(mensaje="could not process image"):
+    import httpx
+
+    import anthropic
+    peticion = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    respuesta = httpx.Response(400, request=peticion, json={"error": {"message": mensaje}})
+    return anthropic.BadRequestError(mensaje, response=respuesta, body=None)
+
+
+def test_fase_clasificando_bad_request_deja_error_y_no_bloquea_el_resto(tmp_path, monkeypatch):
+    """Important 4: un anthropic.BadRequestError (p. ej. "no pude procesar la
+    imagen") en UN referente antes reventaba el tramo entero -- y como esa
+    fila queda `clasificacion=pendiente` y ordena primero por id, CADA
+    intento posterior (automático Y "Clasificar pendientes") volvía a pegar
+    contra la MISMA fila y fallaba igual, bloqueando PERMANENTEMENTE el resto
+    del barrido. Debe tratarse igual que ClasificacionInvalida: esa fila queda
+    en error, y el tramo sigue con las demás."""
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+    rid_malo, _ = datos.guardar_referente({"anuncio_id": "60", "fuente": "atria", "imagen_origen": "https://x/60.jpg",
+                                           "marca": "M", "titular": "Imagen rota", "cuerpo": "", "idioma": "en"},
+                                          cliente=cliente, barrido_id=bid)
+    rid_bueno, _ = datos.guardar_referente({"anuncio_id": "61", "fuente": "atria", "imagen_origen": "https://x/61.jpg",
+                                            "marca": "M", "titular": "T2", "cuerpo": "", "idioma": "en"},
+                                           cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid_malo, "ok", "https://r2/60.jpg")
+    datos.marcar_imagen(rid_bueno, "ok", "https://r2/61.jpg")
+
+    def _clasificar_falso(referente, vocabulario):
+        if referente["id"] == rid_malo:
+            raise _bad_request_error()
+        return ({"etapa": "TOF", "consciencia": "unaware", "familia": None,
+                 "familia_nueva": {"nombre": "Z", "descripcion": "d"}, "dolor": "dolor", "firma": "f"}, 80, 20)
+
+    monkeypatch.setattr(clasificar, "clasificar", _clasificar_falso)
+    gastos_registrados = []
+    monkeypatch.setattr(tareas_ref.gastos, "registrar_seguro", lambda *a, **k: gastos_registrados.append((a, k)))
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                                  "consulta": {"fuente": "atria"}, "tope": 5}}
+    tareas_ref.ejecutar_barrer(tarea)
+    assert datos.referente(cliente, rid_malo)["clasificacion"] == "error"
+    assert datos.referente(cliente, rid_bueno)["clasificacion"] == "claude"
+    assert datos.barrido(bid)["clasificados"] == 1
+    # Nada facturado por la fila que reventó (0 tokens: la llamada nunca llegó
+    # a completarse del lado de Anthropic).
+    assert not any("60" in str(a) for a, k in gastos_registrados)
+
+
+def test_fase_clasificando_rate_limit_sigue_abortando_el_tramo(tmp_path, monkeypatch):
+    """Companion del test anterior: Important 4 pide explícitamente NO
+    ampliar el catch a cualquier excepción -- un 429 (u otro error que no sea
+    BadRequestError) sí debe seguir abortando el tramo entero, porque a
+    diferencia de una imagen ilegible, tiene sentido reintentarlo más tarde."""
+    import anthropic
+
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+    rid, _ = datos.guardar_referente({"anuncio_id": "70", "fuente": "atria", "imagen_origen": "https://x/70.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid, "ok", "https://r2/70.jpg")
+
+    def _clasificar_429(referente, vocabulario):
+        import httpx
+        peticion = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+        respuesta = httpx.Response(429, request=peticion, json={"error": {"message": "rate limited"}})
+        raise anthropic.RateLimitError("rate limited", response=respuesta, body=None)
+
+    monkeypatch.setattr(clasificar, "clasificar", _clasificar_429)
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                                  "consulta": {"fuente": "atria"}, "tope": 5}}
+    with pytest.raises(anthropic.RateLimitError):
+        tareas_ref.ejecutar_barrer(tarea)
+    assert datos.referente(cliente, rid)["clasificacion"] == "pendiente"
+    assert datos.barrido(bid)["estado"] == "parcial"
 
 
 def test_fase_clasificando_registra_gasto_y_actualiza_referente(tmp_path, monkeypatch):

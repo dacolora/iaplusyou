@@ -7,6 +7,7 @@ Bloque 2 agrega `recrear_form`/`recrear_adaptar`/`recrear_generar` («Recrear
 con mi producto»); los créditos de generación se gastan a través del pipeline
 de Crear que ya existe (`creative_flow` + `flowplus_lanzar`), no se reimplementan aquí.
 """
+import re
 from uuid import uuid4
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
@@ -26,6 +27,12 @@ from tareas import referentes as tareas_referentes
 
 bp = Blueprint("referentes", __name__, url_prefix="/cliente/<cliente>/referentes")
 _FILTROS = ("etapa", "consciencia", "familia", "dolor", "marca", "fuente", "q")
+# El placeholder del campo "Marca / link del Ad Library" invita a pegar la URL
+# completa (spec §4.1 idem UI), pero solo el id numérico sirve para armar la
+# ruta de Atria (`/brand-library/m<id>/ads`) — sin extraer esto, una URL
+# pegada tal cual produce una ruta rota (`/brand-library/mhttps://...`) que
+# igual gasta una llamada real contra Atria antes de fallar (Important 2).
+_RE_VIEW_ALL_PAGE_ID = re.compile(r"view_all_page_id=(\d+)")
 
 
 def contexto(cliente):
@@ -64,10 +71,26 @@ def _producto_para(cliente, request_args_o_form):
     return productos, producto
 
 
+def _pagina_id_desde(v):
+    """Acepta un id de página tal cual (solo dígitos) o un link del Ad
+    Library con `view_all_page_id=<dígitos>` -- lo primero que alguien
+    probablemente pegue, dado el placeholder del campo. Cualquier otro texto
+    no es ni lo uno ni lo otro: se descarta a `None` para que la validación
+    ya existente ("Pega un link del Ad Library o el id de la página") dispare
+    sola, en vez de mandarle ese texto tal cual a Atria como si fuera un id."""
+    v = (v or "").strip()
+    if not v:
+        return None
+    m = _RE_VIEW_ALL_PAGE_ID.search(v)
+    if m:
+        return m.group(1)
+    return v if v.isdigit() else None
+
+
 def _consulta_desde(args):
     return {
         "modo": args.get("modo") if args.get("modo") in ("marca", "palabra") else "palabra",
-        "pagina_id": (args.get("pagina_id") or "").strip() or None,
+        "pagina_id": _pagina_id_desde(args.get("pagina_id")),
         "palabra": (args.get("palabra") or "").strip() or None,
         "idioma": (args.get("idioma") or "es").strip()[:5],
         "formato": args.get("formato") if args.get("formato") in ("imagen", "video") else "imagen",
@@ -255,6 +278,16 @@ def barridos(cliente):
     lista = datos.barridos(cliente=cliente)
     for b in lista:
         b["trabajo"] = tareas_referentes.trabajo_barrer(b["id"])
+        # «Reintentar imágenes» solo tiene sentido -- y solo se ofrece -- si
+        # de verdad hay algo en error que reintentar (mismo criterio que
+        # «Clasificar pendientes» con b.pendientes, Important 6.3): antes se
+        # mostraba siempre que no hubiera trabajo en curso, y un clic sin
+        # nada que reintentar igual reseteaba el barrido a un estado que no
+        # es error, borrando su aviso.
+        b["imagenes_error"] = datos.contar_imagenes_de_barrido(b["id"])[2]
+        # «Clasificar pendientes» re-factura (spec §11): el precio va en el
+        # botón igual que en cualquier otro click pagado del panel (Critical 1).
+        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
     return render_template("_referentes_barridos.html", cliente=cliente, barridos=lista)
 
 

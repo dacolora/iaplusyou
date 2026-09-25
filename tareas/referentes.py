@@ -18,12 +18,14 @@ tipo `clasificacion`, una fila por referente (spec §11).
 import os
 from datetime import datetime, timedelta
 
+import anthropic
+
 import cola
 import gastos
 import trabajos
 from nicho.avatares import costo_real, modelo_actual
 from referentes import clasificar, copycoders, datos, fuentes, imagenes
-from referentes.fuentes.base import ErrorFuente
+from referentes.fuentes.base import AVISO_CUOTA_AGOTADA, ErrorFuente
 from tareas import al_interrumpir, ref_sufijo, registrar
 
 TIPO_IMPORTAR = "referentes_importar_copycoders"
@@ -284,7 +286,14 @@ def _fase_trayendo(tarea, p, bid, avanzar):
     pedir lo mismo). Un `ErrorFuente` sin nada traído todavía es un error real
     (nunca se llegó a guardar nada); si ya se trajo algo, se trata igual que
     el fin natural de la fuente (cursor_final=None) — Atria documenta que así
-    señala una entrega parcial (p. ej. se acabó el cupo del mes a mitad)."""
+    señala una entrega parcial (p. ej. se acabó el cupo del mes a mitad).
+
+    Esa entrega parcial (por excepción, atrapada acá abajo, O por el
+    `AVISO_CUOTA_AGOTADA` que `traer()` manda por `avanzar` cuando ya venía
+    trayendo algo EN esta misma llamada) antes no dejaba rastro: el barrido
+    seguía a imágenes/clasificación como si la búsqueda se hubiera agotado
+    sola. Se guarda en `extra.aviso_trayendo` para que `_fase_clasificando`
+    (la fase final) lo sume a su propio aviso en vez de pisarlo (spec §12)."""
     avanzar("Trayendo anuncios")
     b = datos.barrido(bid) or {}
     consulta = p["consulta"]
@@ -294,8 +303,18 @@ def _fase_trayendo(tarea, p, bid, avanzar):
     nuevos_total = int(b.get("nuevos") or 0)
     fuente_mod = fuentes.por_tipo(consulta["fuente"])
     cursor_final = cursor
+    aviso_parcial = None
+    cuota_agotada = False
+
+    def avanzar_trayendo(etapa=None, detalle=None):
+        nonlocal cuota_agotada
+        if detalle == AVISO_CUOTA_AGOTADA:
+            cuota_agotada = True
+            return
+        avanzar(etapa=etapa, detalle=detalle)
+
     try:
-        for pagina, cursor_siguiente in fuente_mod.traer(consulta, tope - traidos_total, avanzar, cursor=cursor):
+        for pagina, cursor_siguiente in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, cursor=cursor):
             for a in pagina:
                 if not a or not a.get("anuncio_id") or not a.get("imagen_origen"):
                     continue
@@ -311,8 +330,13 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             datos.actualizar_barrido(bid, estado="error", aviso=cola.recortar(str(e), 300))
             raise
         cursor_final = None
+        aviso_parcial = f"Se detuvo de traer más anuncios: {e}."
+    if not aviso_parcial and cuota_agotada:
+        aviso_parcial = "Se detuvo de traer más anuncios: se acabó el cupo mensual de Atria."
     extra = dict(b.get("extra") or {})
     extra["cursor_atria"] = cursor_final
+    if aviso_parcial:
+        extra["aviso_trayendo"] = cola.recortar(aviso_parcial, 300)
     datos.actualizar_barrido(bid, traidos=traidos_total, nuevos=nuevos_total, extra=extra, tarea_id=tarea.get("id"))
     if traidos_total >= tope or not cursor_final:
         datos.actualizar_barrido(bid, estado="guardando")
@@ -336,7 +360,7 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
             # Igual que en copycoders: una imagen mala no debe abortar el
             # tramo entero (max_intentos=1) ni las que vengan después.
             datos.marcar_imagen(r["id"], "error")
-    con_imagen, pendientes_img = datos.contar_imagenes_de_barrido(bid)
+    con_imagen, pendientes_img, _errores_img = datos.contar_imagenes_de_barrido(bid)
     datos.actualizar_barrido(bid, con_imagen=con_imagen)
     if pendientes_img:
         _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)
@@ -348,10 +372,17 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
 def _clasificar_uno(cliente, r):
     """Clasifica un referente y actualiza sus columnas; un fallo de Claude
     (`ClasificacionInvalida`) deja `clasificacion=error` y el llamador sigue
-    con el siguiente sin abortar el tramo. Un fallo de otro tipo (red/API de
-    Anthropic) SÍ se deja subir — lo atrapa el wrapper de `ejecutar_barrer`/
+    con el siguiente sin abortar el tramo. Lo mismo un `anthropic.BadRequestError`
+    (4xx del propio proveedor, p. ej. "no pude procesar la imagen" — no tiene
+    sentido reintentar la MISMA fila con la MISMA imagen): sin esto, un solo
+    referente problemático revienta el tramo entero y, como queda
+    `clasificacion=pendiente` y ordena primero por id, bloquea PERMANENTEMENTE
+    todo lo demás del barrido (automático Y "Clasificar pendientes" pegan
+    contra la misma fila cada vez). Un fallo de otro tipo (429, timeout, red)
+    SÍ se deja subir — lo atrapa el wrapper de `ejecutar_barrer`/
     `ejecutar_clasificar`, que marca el barrido y corta el tramo (nada raro:
-    max_intentos=1, no tiene sentido seguir gastando si la API está caída).
+    max_intentos=1, no tiene sentido seguir gastando si la API está caída, y
+    ese tipo de error SÍ suele resolverse solo en un reintento posterior).
     Devuelve (ok: bool, tokens_entrada, tokens_salida)."""
     vocabulario = [f["nombre"] for f in datos.familias()]
     try:
@@ -363,6 +394,14 @@ def _clasificar_uno(cliente, r):
         extra["error_clasificacion"] = str(e)
         datos.actualizar_referente(r["id"], clasificacion="error", extra=extra)
         return False, ent, sal
+    except anthropic.BadRequestError as e:
+        # Un 400 no trae uso facturado (la llamada nunca llegó a completarse
+        # del lado de Anthropic) — 0 tokens, así que el llamador (que solo
+        # registra gasto si ent o sal son verdaderos) no registra nada.
+        extra = dict(r.get("extra") or {})
+        extra["error_clasificacion"] = cola.sin_token(str(e))
+        datos.actualizar_referente(r["id"], clasificacion="error", extra=extra)
+        return False, 0, 0
     familia = resultado["familia"]
     if resultado.get("familia_nueva"):
         fn = resultado["familia_nueva"]
@@ -426,8 +465,19 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     if pendientes_total and avanzo:
         _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tipo_actual)
         return f"Clasificando… {clasificados} listos."
-    _, sin_imagen = datos.contar_imagenes_de_barrido(bid)
+    # `error` (no `pendiente`, que a esta altura la fase de imágenes ya dejó
+    # siempre en 0 — Important 1) es lo que de verdad hay que avisar y lo que
+    # gatilla «Reintentar imágenes» en la plantilla.
+    _, _pendiente_img, sin_imagen = datos.contar_imagenes_de_barrido(bid)
     avisos = []
+    # El aviso de la fase "trayendo" (entrega parcial de Atria, ya sea por
+    # cupo agotado o por un ErrorFuente con algo ya traído — spec §12) va
+    # PRIMERO: si no se concatena acá, este `actualizar_barrido(..., aviso=)`
+    # lo pisa en silencio con lo que esta fase encuentre.
+    b_final = datos.barrido(bid) or {}
+    aviso_trayendo = (b_final.get("extra") or {}).get("aviso_trayendo")
+    if aviso_trayendo:
+        avisos.append(aviso_trayendo)
     if pendientes_total:
         avisos.append(f"{pendientes_total} referentes no se pudieron clasificar; "
                       "«Clasificar pendientes» los vuelve a pedir.")

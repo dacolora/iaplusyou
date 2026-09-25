@@ -34,7 +34,17 @@
     function cargarEnDialogo(url) {
       return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
-        .then(function (html) { cuerpo.innerHTML = html; return true; })
+        .then(function (html) {
+          cuerpo.innerHTML = html;
+          // Un fragmento cargado así nunca corre sus <script> (p. ej. «Mis
+          // barridos» con una barra de trabajo en curso): [data-poll-job] es
+          // el reemplazo ya establecido en este código (_organico_publicar.html,
+          // _tab_creativeflowplus.html) para arrancar el polling desde afuera.
+          cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
+            if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
+          });
+          return true;
+        })
         .catch(function () { alert('No se pudo cargar.'); return false; });
     }
     document.addEventListener('click', function (ev) {
@@ -43,6 +53,63 @@
     });
     document.getElementById('ref-modal-cerrar').addEventListener('click', function () { modal.close(); });
     modal.addEventListener('click', function (ev) { if (ev.target === modal) modal.close(); });
+
+    // Precio en vivo de «Traer referentes» (Critical 1): el formulario
+    // (#form-traer, en _referentes_traer.html) se carga y se recarga siempre
+    // dentro de este mismo `cuerpo`, así que el listener va delegado acá --
+    // sobrevive a que el fragmento entero se reemplace. NO reutiliza
+    // `recargarFormularioRecrear` (esa función es del formulario «Recrear con
+    // mi producto», con sus propios campos/URL; mezclar los dos formularios
+    // en el mismo mecanismo fue justo el bug del atributo `data-recrear-campo`
+    // sobrante que este fix también limpia en la plantilla).
+    var temporizadorPrecioTraer = null;
+    function refrescarPrecioTraer(form, inmediato) {
+      if (!form || !form.dataset.precio) return;
+      clearTimeout(temporizadorPrecioTraer);
+      var ejecutar = function () {
+        // El fetch reemplaza TODO #form-traer (más simple que un endpoint de
+        // precio aparte, y `_consulta_desde` ya vuelca de nuevo cada valor
+        // enviado en `value=`/`checked` -- por eso alcanza con recuperar foco
+        // y cursor del campo que se estaba editando).
+        var activo = document.activeElement;
+        var nombreActivo = (activo && form.contains(activo) && activo.name) ? activo.name : null;
+        var cursor = (nombreActivo && typeof activo.selectionStart === 'number') ? activo.selectionStart : null;
+        var url = form.dataset.precio + '?' + new URLSearchParams(new FormData(form)).toString();
+        fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
+          .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+          .then(function (html) {
+            cuerpo.innerHTML = html;
+            if (nombreActivo) {
+              var nuevo = cuerpo.querySelector('[name="' + nombreActivo + '"]');
+              if (nuevo) {
+                nuevo.focus();
+                if (cursor !== null && typeof nuevo.setSelectionRange === 'function') {
+                  try { nuevo.setSelectionRange(cursor, cursor); } catch (e) { /* tipos sin selección (number, checkbox) */ }
+                }
+              }
+            }
+          })
+          .catch(function () { /* el precio queda como estaba; no interrumpe el llenado del formulario */ });
+      };
+      if (inmediato) ejecutar(); else temporizadorPrecioTraer = setTimeout(ejecutar, 400);
+    }
+    cuerpo.addEventListener('input', function (ev) {
+      var form = ev.target.closest('#form-traer');
+      if (!form || ev.target.tagName === 'SELECT') return;
+      if (ev.target.type === 'checkbox' || ev.target.type === 'radio') return;   // los maneja 'change', inmediato
+      refrescarPrecioTraer(form, false);
+    });
+    cuerpo.addEventListener('change', function (ev) {
+      var form = ev.target.closest('#form-traer');
+      if (!form) return;
+      if (ev.target.tagName === 'SELECT' || ev.target.type === 'checkbox' || ev.target.type === 'radio') {
+        refrescarPrecioTraer(form, true);
+      }
+    });
+    cuerpo.addEventListener('click', function (ev) {
+      var boton = ev.target.closest('#traer-ver-precio');
+      if (boton) refrescarPrecioTraer(boton.closest('form'), true);
+    });
   })();
 </script>
 

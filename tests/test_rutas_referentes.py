@@ -307,6 +307,83 @@ def test_traer_form_muestra_precio(app, monkeypatch):
     assert b"Clasificar" in r.data
 
 
+def test_traer_form_no_lleva_data_recrear_campo(app, monkeypatch):
+    """Side bug de Critical 1: `data-recrear-campo` es del formulario «Recrear
+    con mi producto» -- su listener delegado en _tab_referentes.html reacciona
+    a CUALQUIER elemento con ese atributo, en cualquier formulario cargado en
+    el mismo diálogo. Si quedaba copiado acá (como en `formato`), cambiarlo en
+    ESTE formulario disparaba el refresco de ESE OTRO contra una URL rota."""
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "data-recrear-campo" not in html
+
+
+def test_traer_form_sin_consulta_ofrece_boton_ver_precio(app, monkeypatch):
+    """Critical 1: primera carga sin query params -> sin precio todavía, pero
+    con un botón explícito para pedirlo (antes no había nada, ni precio ni
+    forma de pedirlo sin tocar un campo)."""
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert 'id="traer-ver-precio"' in html
+    assert "elige una fuente y completa los datos" in html.lower()
+    assert 'data-precio="' in html
+
+
+def test_traer_form_pagina_id_con_link_extrae_solo_el_id(app, monkeypatch):
+    """Important 2: pegar el link completo del Ad Library en el campo de
+    marca (el placeholder invita a hacerlo) debe extraer solo el
+    view_all_page_id -- antes se mandaba a Atria tal cual, produciendo una
+    ruta rota (`/brand-library/mhttps://...`) y gastando una llamada real
+    antes de fallar."""
+    from referentes.fuentes import atria
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    llamadas = []
+    monkeypatch.setattr(atria, "estimar", lambda consulta, tope: llamadas.append(consulta) or
+                        {"usd_fuente": 0.0, "llamadas": 1, "detalle": "1 llamada del plan de Atria"})
+    url_pegada = "https://www.facebook.com/ads/library/?active_status=all&view_all_page_id=110811200743559&id=1"
+    r = app["c"].get("/cliente/acme/referentes/traer",
+                     query_string={"fuente": "atria", "modo": "marca", "pagina_id": url_pegada},
+                     headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200
+    assert llamadas and llamadas[0]["pagina_id"] == "110811200743559"
+    # El campo se re-pinta con el id ya extraído, no con la URL pegada.
+    assert 'value="110811200743559"' in r.data.decode()
+    assert url_pegada not in r.data.decode()
+
+
+def test_traer_post_pagina_id_con_link_extrae_solo_el_id(app, monkeypatch):
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 1)
+    r = app["c"].post("/cliente/acme/referentes/traer", data={
+        "fuente": "atria", "modo": "marca",
+        "pagina_id": "https://www.facebook.com/ads/library/?view_all_page_id=110811200743559", "tope": "50",
+    }, follow_redirects=False)
+    assert r.status_code == 302
+    consulta = llamadas[0][2]  # encolar_barrer(cliente, fuente, consulta, tope, ...)
+    assert consulta["pagina_id"] == "110811200743559"
+
+
+def test_traer_post_pagina_id_invalido_no_encola_ni_gasta_llamada(app, monkeypatch):
+    """Important 2: un texto que no es ni un id numérico ni un link con
+    view_all_page_id se descarta -- nunca llega a `estimar`/`encolar_barrer`
+    (que gastaría una llamada real contra Atria antes de fallar)."""
+    from referentes.fuentes import atria
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    llamadas_estimar = []
+    monkeypatch.setattr(atria, "estimar", lambda consulta, tope: llamadas_estimar.append(consulta) or
+                        {"usd_fuente": 0.0, "llamadas": 1, "detalle": "x"})
+    llamadas_encolar = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas_encolar.append(a) or 1)
+    r = app["c"].post("/cliente/acme/referentes/traer", data={
+        "fuente": "atria", "modo": "marca", "pagina_id": "no es ni un link ni un id", "tope": "50",
+    }, follow_redirects=True)
+    assert r.status_code == 200
+    assert not llamadas_estimar and not llamadas_encolar
+
+
 def test_traer_form_fuente_sin_llave_aparece_apagada(app, monkeypatch):
     monkeypatch.delenv("ATRIA_API_KEY", raising=False)
     c = app["c"]
@@ -386,7 +463,11 @@ def test_barridos_muestra_progreso_y_oculta_botones_si_hay_trabajo(app, monkeypa
     datos.actualizar_barrido(bid, pendientes=3)
     monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: f"referentes:barrer:{b}")
     html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
-    assert "iniciarPolling" in html
+    # Important 3: ya no hay <script>iniciarPolling(...)> inline (nunca corría,
+    # el fragmento siempre llega por fetch + innerHTML) -- data-poll-job es lo
+    # que _tab_referentes.html escanea desde afuera para arrancarlo.
+    assert "iniciarPolling" not in html
+    assert f'data-poll-job="referentes:barrer:{bid}"' in html
     assert "Clasificar pendientes" not in html
     assert "Reintentar imágenes" not in html
 
@@ -396,11 +477,30 @@ def test_barridos_muestra_botones_si_no_hay_trabajo_en_curso(app, monkeypatch):
     from tareas import referentes as tareas_referentes
     bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
     datos.actualizar_barrido(bid, pendientes=3)
+    rid, _ = datos.guardar_referente({"anuncio_id": "img-err-1", "fuente": "atria", "imagen_origen": "https://x/1.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente="acme", barrido_id=bid)
+    datos.marcar_imagen(rid, "error")
     monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
     html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
-    assert "iniciarPolling" not in html
+    assert "data-poll-job" not in html
     assert "Clasificar pendientes" in html
     assert "Reintentar imágenes" in html
+
+
+def test_barridos_muestra_precio_de_clasificar_pendientes(app, monkeypatch):
+    """Critical 1 (segunda parte): «Clasificar pendientes» re-factura (spec
+    §11) -- antes no mostraba nada. El precio sale de gastos.estimar,
+    calculado en la ruta y pasado a la plantilla."""
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    import gastos
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, pendientes=3)
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
+    precio = gastos.estimar("clasificacion", n=3)["texto"]
+    assert precio in html
 
 
 def test_barridos_sin_pendientes_no_ofrece_clasificar(app, monkeypatch):
@@ -410,7 +510,38 @@ def test_barridos_sin_pendientes_no_ofrece_clasificar(app, monkeypatch):
     monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
     html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
     assert "Clasificar pendientes" not in html
+    # Important 6.3: sin ninguna imagen en error, «Reintentar imágenes» tampoco
+    # se ofrece -- antes se mostraba siempre que no hubiera trabajo en curso,
+    # y un clic sin nada que reintentar igual reseteaba el barrido.
+    assert "Reintentar imágenes" not in html
+
+
+def test_barridos_con_imagenes_en_error_ofrece_reintentar(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    rid, _ = datos.guardar_referente({"anuncio_id": "img-err-2", "fuente": "atria", "imagen_origen": "https://x/2.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente="acme", barrido_id=bid)
+    datos.marcar_imagen(rid, "error")
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
     assert "Reintentar imágenes" in html
+
+
+def test_barridos_estado_error_sin_imagenes_no_ofrece_reintentar(app, monkeypatch):
+    """Important 6.3: un barrido que falló ANTES de traer ninguna fila (p. ej.
+    error de la fuente en la fase "trayendo") no tiene ninguna imagen que
+    reintentar -- «Reintentar imágenes» no debe ofrecerse ahí tampoco, aunque
+    su estado sea "error", porque el único trabajo de ese botón es reintentar
+    descargas de imagen, no reintentar el barrido entero."""
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+    bid = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 50)
+    datos.actualizar_barrido(bid, estado="error", aviso="Atria no aceptó la llave (ATRIA_API_KEY).")
+    monkeypatch.setattr(tareas_referentes, "trabajo_barrer", lambda b: None)
+    html = app["c"].get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).data.decode()
+    assert "Reintentar imágenes" not in html
 
 
 def test_clasificar_pendientes_encola(app, monkeypatch):

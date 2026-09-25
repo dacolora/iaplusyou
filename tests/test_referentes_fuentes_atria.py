@@ -2,6 +2,7 @@ import json
 import time
 
 import pytest
+import requests
 
 import referentes.fuentes.atria as atria
 from referentes.fuentes.base import ErrorFuente
@@ -50,6 +51,67 @@ def test_probar_401_lanza_error_fuente(monkeypatch):
     with pytest.raises(ErrorFuente) as exc:
         atria.probar()
     assert "llave" in exc.value.usuario.lower()
+
+
+class _SesionQueFallaRed:
+    """Simula un timeout/error de conexión de verdad: `requests.Session.get`
+    lanza `requests.RequestException` (o una subclase) en vez de devolver
+    algo con `.json()`."""
+
+    def __init__(self, excepcion):
+        self._excepcion = excepcion
+
+    def get(self, url, params=None, headers=None, timeout=None):
+        raise self._excepcion
+
+
+def test_pedir_envuelve_timeout_como_error_fuente(monkeypatch):
+    """Important 6.2: un `requests.RequestException` crudo (timeout, error de
+    conexión) no debe escapar de `_pedir` sin envolver -- antes de este fix,
+    eso NO era un `ErrorFuente`, así que `_fase_trayendo` no lo trataba como
+    entrega parcial: un blip transitorio de red marcaba el barrido entero
+    `error`, aunque ya hubiera avance real guardado."""
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    monkeypatch.setattr(atria, "_sesion", lambda: _SesionQueFallaRed(requests.exceptions.Timeout("timed out")))
+    with pytest.raises(ErrorFuente) as exc:
+        atria._pedir(atria._sesion(), "/ad-library/search", {"page_size": 1})
+    assert "atria" in exc.value.usuario.lower()
+
+
+def test_pedir_envuelve_error_de_conexion_como_error_fuente(monkeypatch):
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    monkeypatch.setattr(atria, "_sesion", lambda: _SesionQueFallaRed(requests.exceptions.ConnectionError("boom")))
+    with pytest.raises(ErrorFuente):
+        atria._pedir(atria._sesion(), "/ad-library/search", {"page_size": 1})
+
+
+def test_traer_con_error_de_red_a_mitad_de_paginacion_no_pierde_lo_ya_traido(monkeypatch, base_temporal):
+    """Un error de red en la SEGUNDA página no debe perder ni revertir la
+    primera página, ya entregada al llamador -- lo que sigue después (subir a
+    ErrorFuente, nunca crudo) es lo que le permite a `_fase_trayendo` (spec
+    §12, mismo camino que ya existía para el 42901) tratarlo como entrega
+    parcial en vez de una excepción no reconocida que tira todo el barrido a
+    `error` sin importar el avance ya guardado."""
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+
+    class _SesionMixta:
+        def __init__(self):
+            self._respuestas = [_RespuestaFalsa(FIXTURE_SEARCH)]
+
+        def get(self, url, params=None, headers=None, timeout=None):
+            if self._respuestas:
+                return self._respuestas.pop(0)
+            raise requests.exceptions.ConnectionError("se cayó la red")
+
+    monkeypatch.setattr(atria, "_sesion", lambda: _SesionMixta())
+    gen = atria.traer({"modo": "palabra", "palabra": "protein", "idioma": "en"}, 10, lambda **kw: None)
+    pagina1, cursor1 = next(gen)
+    assert len(pagina1) == 2
+    with pytest.raises(ErrorFuente):
+        next(gen)
 
 
 def test_traer_sin_llave_lanza_error_fuente(monkeypatch):

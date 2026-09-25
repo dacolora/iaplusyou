@@ -272,12 +272,15 @@ def test_contar_imagenes_de_barrido_no_mezcla_otros_barridos(base_temporal):
     from referentes import datos
     bid1, rid1 = _con_barrido(datos, anuncio_id="ci-1", estado_imagen="ok")
     bid2, rid2 = _con_barrido(datos, anuncio_id="ci-2", estado_imagen="pendiente")
-    # Una segunda fila del MISMO barrido 2, en error: no debe contarse como ok ni pendiente.
+    # Una segunda fila del MISMO barrido 2, en error: no debe contarse como ok ni pendiente,
+    # pero SÍ como error (Important 1: antes el llamador leía este lugar del tuple como
+    # si fuera "pendiente", que a la altura de clasificar siempre es 0 -- nunca veía los
+    # errores reales).
     rid3, _ = datos.guardar_referente(_anuncio(anuncio_id="ci-3", fuente="atria"), barrido_id=bid2)
     datos.marcar_imagen(rid3, "error")
-    assert datos.contar_imagenes_de_barrido(bid1) == (1, 0)
-    assert datos.contar_imagenes_de_barrido(bid2) == (0, 1)
-    assert datos.contar_imagenes_de_barrido(999999) == (0, 0)
+    assert datos.contar_imagenes_de_barrido(bid1) == (1, 0, 0)
+    assert datos.contar_imagenes_de_barrido(bid2) == (0, 1, 1)
+    assert datos.contar_imagenes_de_barrido(999999) == (0, 0, 0)
 
 
 def test_reintentar_imagenes_resetea_solo_error_de_ese_barrido(base_temporal):
