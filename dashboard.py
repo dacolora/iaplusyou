@@ -5697,7 +5697,8 @@ def fe_producir(cliente, cf_id):
     if voz not in voces_validas:
         voz = (fal_audio.VOCES.get(idioma_base) or fal_audio.VOCES["es"])[0]
     estilo = request.form.get("estilo_musica") or ""
-    if estilo not in fe_tipos.ESTILOS_MUSICA:
+    cancion = mi_musica.resolver(cliente, estilo)
+    if not cancion and estilo not in fe_tipos.ESTILOS_MUSICA:
         estilo = "energetico"
     # Solo los destinos con precio escrito: un campo vacío no debe tapar el
     # precio base del país base (lo resuelve final_edition.producir).
@@ -5720,6 +5721,8 @@ def fe_producir(cliente, cf_id):
         "sonido": "nativo",
         "mezcla": request.form.get("mezcla") if request.form.get("mezcla") in fe_mezcla.PRESETS else fe_mezcla.PRESET_DEFECTO,
     }
+    if cancion:
+        opciones["musica_inicio_s"] = mi_musica.inicio_valido(cancion, request.form.get("musica_inicio_s"))
     encolados = 0
     for idioma, pais in destinos:
         job_id = tareas_fe.job_id_final(cliente, cf_id, idioma, pais)
@@ -5984,6 +5987,7 @@ def fp_reusar(cliente, cf_id):
         "con_sonido": entry.get("con_sonido", True) is not False,
         "sonido_texto": entry.get("sonido_texto") or "",
         "musica_estilo": entry.get("musica_estilo") or "",
+        "musica_inicio_s": entry.get("musica_inicio_s") or 0,
         "calidad": entry.get("calidad") or "final",
         "preset_camara": entry.get("preset_camara"),
         "plantilla": entry.get("plantilla"),
@@ -6026,7 +6030,12 @@ def cf_crear_video(cliente):
     con_sonido = tipo == "video" and request.form.get("con_sonido") == "si"
     sonido_texto = " ".join((request.form.get("sonido") or "").split())[:200] if tipo == "video" else ""
     musica_estilo = (request.form.get("musica_estilo") or "").strip() if tipo == "video" else ""
-    if musica_estilo not in fe_tipos.ESTILOS_MUSICA:
+    # Mi música: `mat:<id>` de una canción de este proyecto, desde su segundo de inicio.
+    musica_inicio_s = 0
+    cancion = mi_musica.resolver(cliente, musica_estilo)
+    if cancion:
+        musica_inicio_s = mi_musica.inicio_valido(cancion, request.form.get("musica_inicio_s"))
+    elif musica_estilo not in fe_tipos.ESTILOS_MUSICA:
         musica_estilo = ""
     prefs = proyectos.preferencias_flowplus(cliente)
     modelo = (request.form.get("modelo") or "").strip()
@@ -6130,7 +6139,7 @@ def cf_crear_video(cliente):
     campos = dict(
         aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias,
         con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
-        con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo,
+        con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo, musica_inicio_s=musica_inicio_s,
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=prefs["idioma_prompt"],
         preset_camara=None, plantilla=None,
     )

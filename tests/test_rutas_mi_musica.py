@@ -78,3 +78,55 @@ def test_crear_con_una_ya_en_curso_avisa(app, monkeypatch):
 def test_lista_muestra_el_precio_de_la_cancion_ia(app):
     d = app["c"].get("/cliente/acme/musica/lista", headers=FETCH).get_json()
     assert d["canciones"] == [] and "Crear canción" in d["html"] and "0,60" in d["html"]
+
+
+def _crear_video(app, monkeypatch, **campos):
+    import referencias_flowplus
+    monkeypatch.setattr(referencias_flowplus, "listar", lambda c: [])
+    monkeypatch.setattr(referencias_flowplus, "vaciar", lambda c: None)
+    monkeypatch.setattr(app["dashboard"], "_lanzar_video_cf", lambda c, cf_id, entry: True)
+    datos = {"accion_central": "una mujer camina", "tipo": "video", "modelo": "wan3", "duracion_objetivo": "8", "aspect_ratio": "9:16"}
+    datos.update(campos)
+    assert app["c"].post("/cliente/acme/creative_flow/crear", data=datos).status_code == 302
+
+
+def _sesiones():
+    import creative_flow as cf
+    return [e for _, e in sorted(cf.cargar("acme").items())]
+
+
+def test_crear_video_con_cancion_propia_guarda_valor_e_inicio(app, monkeypatch):
+    mid = _subir(app).get_json()["nuevo_id"]          # dura 30 s
+    _crear_video(app, monkeypatch, musica_estilo=f"mat:{mid}", musica_inicio_s="12")
+    _crear_video(app, monkeypatch, musica_estilo=f"mat:{mid}", musica_inicio_s="45")   # fuera de rango
+    _crear_video(app, monkeypatch, musica_estilo="mat:9999", musica_inicio_s="3")      # no existe
+    _crear_video(app, monkeypatch, musica_estilo="calmado")
+    a, b, c, d = _sesiones()
+    assert (a["musica_estilo"], a["musica_inicio_s"]) == (f"mat:{mid}", 12)
+    assert (b["musica_estilo"], b["musica_inicio_s"]) == (f"mat:{mid}", 0)
+    assert (c["musica_estilo"], c["musica_inicio_s"]) == ("", 0)
+    assert (d["musica_estilo"], d["musica_inicio_s"]) == ("calmado", 0)
+
+
+def test_editar_y_crear_otra_precarga_el_segundo(app, monkeypatch):
+    mid = _subir(app).get_json()["nuevo_id"]
+    _crear_video(app, monkeypatch, musica_estilo=f"mat:{mid}", musica_inicio_s="12")
+    import creative_flow as cf
+    (cf_id, _), = cf.cargar("acme").items()
+    app["c"].post(f"/cliente/acme/flowplus/reusar/{cf_id}")
+    with app["c"].session_transaction() as s:
+        assert s["fp_prefill"]["musica_estilo"] == f"mat:{mid}" and s["fp_prefill"]["musica_inicio_s"] == 12
+
+
+def test_producir_final_con_cancion_propia(app):
+    import creative_flow as cf
+    from tests.test_rutas_final_edition import GUION_BASE
+    cf_id = cf.crear("acme", [], ["X"], [], "camina", 8, "", "A")
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", enfoque="producto")
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    mid = _subir(app).get_json()["nuevo_id"]
+    base = {"destinos": ["es_CO"], "voz": "Daniel", "con_musica": "si"}
+    app["c"].post(f"/cliente/acme/creative_flow/{cf_id}/final/producir",
+                  data=dict(base, estilo_musica=f"mat:{mid}", musica_inicio_s="7"))
+    t = [t for t in app["encolados"] if t["tipo"] == "final_producir"][-1]
+    assert t["payload"]["opciones"]["estilo_musica"] == f"mat:{mid}" and t["payload"]["opciones"]["musica_inicio_s"] == 7
