@@ -5,12 +5,13 @@ acciones como POST JSON. Mismo prefijo y mismas reglas que guiones/rutas.py
 (el chat): mismo origen en todo POST, cuerpo JSON obligatorio, errores en
 español, 404 para lo de otro proyecto.
 """
-from flask import Blueprint, jsonify, render_template, request
+from flask import Blueprint, Response, jsonify, render_template, request
 
 import catalogo_productos
 import gastos
+import proyectos
 import trabajos
-from guiones import config, datos, lectura, recorte
+from guiones import clips, config, datos, duracion, lectura, plantillas, recorte, refinador
 from guiones.refinador import Conflicto, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
@@ -37,6 +38,16 @@ def _contexto(cliente, guion_id=None, video_id=None):
         ctx["config_defecto"] = config.defecto(cliente)
     if v is not None:
         ctx["recorte_info"] = recorte.resumen(v)
+    if g and g["estado"] == "confirmado":
+        propio = proyectos.bloque_global_flowplus(cliente)
+        ctx["bloque_global"] = {"texto": propio or plantillas.BLOQUE_GLOBAL_FABRICA, "propio": bool(propio)}
+    if v is not None:
+        textos = duracion.textos_efectivos(v["guion"]["lectura"], v["config"].get("hook", "original"))
+        palabras = sum(duracion.palabras(t) for _, t in duracion.conservadas(textos, v["recorte"].get("quitadas", [])))
+        ctx["costos"]["armar"] = _costo("armar", palabras)
+        ctx["prompts"] = {f"{(p['extra'] or {}).get('variante')}:{(p['extra'] or {}).get('clip_index')}":
+                          {"id": p["id"], "estado": p["estado"]}
+                          for p in datos.prompts_de_video(v["id"]) if p["tipo"] == "clip"}
     return ctx
 
 
@@ -189,3 +200,73 @@ def video_recorte(cliente, vid):
     except ErrorRefinador as e:
         return _error(e)
     return jsonify({"video_id": vid})
+
+
+@bp.post("/videos/<int:vid>/armar")
+def video_armar(cliente, vid):
+    if _cuerpo() is None:
+        return _sin_cuerpo()
+    try:
+        datos.empezar(cliente, vid, "armando", ("configurando", "invalido", "error"))
+    except ErrorRefinador as e:
+        return _error(e)
+    trabajos.iniciar(f"guion_armar_{vid}", lambda: clips.armar(vid), duracion_estimada=120)
+    return jsonify({"video_id": vid}), 202
+
+
+@bp.post("/videos/<int:vid>/nueva-version")
+def video_nueva_version(cliente, vid):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    try:
+        v = _video_o_404(cliente, vid)
+        if cuerpo.get("tipo") == "bloque":
+            bloque = {k: cuerpo.get(f"bloque_{k}") for k in clips.DEFECTOS_BLOQUE}
+            nuevo = clips.version_con_bloque(cliente, vid, bloque)
+        else:
+            nuevo = datos.nueva_version(cliente, vid, config=config.desde_formulario(cliente, cuerpo, v["guion"]["lectura"]))
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"guion_id": v["guion_id"], "video_id": nuevo}), 201
+
+
+@bp.get("/videos/<int:vid>")
+def video_ver(cliente, vid):
+    v = datos.video(cliente, vid)
+    if v is None:
+        return jsonify({"error": "Esa versión no existe."}), 404
+    prompts = [{k: p[k] for k in ("id", "titulo", "tipo", "estado", "extra")} for p in datos.prompts_de_video(vid)]
+    return jsonify({"video": v, "prompts": prompts})
+
+
+@bp.get("/videos/<int:vid>/documento.md")
+def video_documento(cliente, vid):
+    v = datos.video(cliente, vid)
+    if v is None:
+        return jsonify({"error": "Esa versión no existe."}), 404
+    if v["estado"] != "armado":
+        return jsonify({"error": "El documento sale cuando la versión está armada."}), 409
+    md = plantillas.documento_md(v, datos.prompts_de_video(vid))
+    return Response(md, mimetype="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{plantillas.nombre_documento(v)}"'})
+
+
+@bp.get("/bloque-global")
+def bloque_global_ver(cliente):
+    propio = proyectos.bloque_global_flowplus(cliente)
+    return jsonify({"texto": propio or plantillas.BLOQUE_GLOBAL_FABRICA, "propio": bool(propio)})
+
+
+@bp.post("/bloque-global")
+def bloque_global_guardar(cliente):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    texto = str(cuerpo.get("texto") or "").strip()[:8000]
+    if texto:
+        problemas = refinador.validar(texto, (), "clip")
+        if problemas:
+            return jsonify({"error": "El bloque global rompe reglas que no se negocian.", "problemas": problemas}), 422
+    proyectos.guardar_bloque_global_flowplus(cliente, texto)
+    return jsonify({"ok": True})

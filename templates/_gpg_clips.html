@@ -1,0 +1,82 @@
+{# Paso 3: clips armados, validaciones y prompts (fragmento dentro de _gpg_video.html). #}
+{% from "_gpg_macros.html" import form_config %}
+{% if video.estado == 'armando' %}
+  <p class="gp-ayuda">Claude está planeando los clips… Esto tarda uno o dos minutos.</p>
+{% endif %}
+
+{% if video.estado in ('configurando', 'invalido', 'error') %}
+  <div class="gp-botones">
+    <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/armar">
+      {{ 'Volver a armar' if video.estado != 'configurando' else 'Armar clips' }} · {{ costos.armar }}</button>
+  </div>
+  {% if video.estado == 'configurando' %}<p class="gp-ayuda">Claude agrupa las líneas en clips de 5 a 15 s; el código pega el diálogo exacto, calcula los tiempos y valida todo antes de mostrarte nada.</p>{% endif %}
+{% endif %}
+
+{% if video.validaciones %}
+  <h5>Validaciones</h5>
+  <table class="gpg-tabla">
+    <thead><tr><th>Regla</th><th>Resultado</th></tr></thead>
+    <tbody>
+      {% for x in video.validaciones %}
+      <tr><td>{{ x.regla }}</td>
+          <td class="{{ 'gpg-ok' if x.ok else 'gpg-mal' }}">{{ '✓ Pasa' if x.ok else '✗ ' ~ x.detalle }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if video.estado == 'invalido' %}<p class="gp-ayuda">Al volver a armar, Claude recibe esta lista para corregirla.</p>{% endif %}
+{% endif %}
+{% for a in video.avisos %}<p class="flash warn">{{ a }}</p>{% endfor %}
+
+{% if video.estado == 'armado' %}
+  <h5>Clips · {{ video.clips | sum(attribute='duracion') }} s en total</h5>
+  <table class="gpg-tabla">
+    <thead><tr><th>Clip</th><th>Duración</th><th>Palabras</th><th>Título</th><th>Prompt</th></tr></thead>
+    <tbody>
+      {% for c in video.clips %}{% set p = prompts.get('principal:' ~ c.indice) %}
+      <tr><td>{{ c.indice }}</td><td>{{ c.duracion }} s</td><td>{{ c.palabras }}</td><td>{{ c.titulo }}</td>
+          <td>{% if p %}<button type="button" class="btn-guardar btn-xs" data-abrir-prompt="{{ p.id }}">
+              {{ 'Aprobado' if p.estado == 'aprobado' else 'Abrir en el chat' }}</button>{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if video.hooks_alt %}
+  <h5>Clip 1 con otros hooks</h5>
+  <table class="gpg-tabla">
+    <thead><tr><th>Hook</th><th>Clip 1</th><th>Video completo</th><th>Prompt</th></tr></thead>
+    <tbody>
+      {% for hid, h in video.hooks_alt.items() %}{% set p = prompts.get('hook:' ~ hid ~ ':1') %}
+      <tr><td>{{ hid }}</td><td>{{ h.duracion }} s</td><td>{{ h.duracion_total_video }} s</td>
+          <td>{% if p %}<button type="button" class="btn-guardar btn-xs" data-abrir-prompt="{{ p.id }}">Abrir en el chat</button>{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  <div class="gp-botones">
+    <a class="btn-guardar btn-sm" href="/cliente/{{ cliente | urlencode }}/guiones/videos/{{ video.id }}/documento.md">Descargar documento (.md)</a>
+  </div>
+
+  <details>
+    <summary>Bloque del video (se repite en cada clip)</summary>
+    <form class="gpg-form" data-gpg-post="/videos/{{ video.id }}/nueva-version">
+      <input type="hidden" name="tipo" value="bloque">
+      <p class="gp-ayuda">Cambiarlo crea una versión nueva con los mismos clips, sin llamar a Claude (gratis). Esta versión y sus prompts quedan como están.</p>
+      {% set bv = video.plan.bloque_video %}
+      {% for campo, etiqueta in (('conteo_objetos', 'Conteo exacto de personajes y objetos'), ('disposicion_inicial', 'Disposición inicial (opcional)'),
+                                  ('props', 'Cómo se ve cada prop'), ('quien_sostiene', 'Quién sostiene qué'), ('voz', 'Voz (solo en diálogo)')) %}
+      <label class="campo-label" for="gpg-bv-{{ campo }}">{{ etiqueta }}</label>
+      <textarea id="gpg-bv-{{ campo }}" name="bloque_{{ campo }}" rows="2">{{ bv[campo] }}</textarea>
+      {% endfor %}
+      <div class="gpg-error flash error" hidden></div>
+      <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">Crear versión con este bloque</button></div>
+    </form>
+  </details>
+{% endif %}
+
+{% if video.estado in ('armado', 'invalido', 'error') %}
+  <details>
+    <summary>Nueva versión con otra configuración</summary>
+    {{ form_config("gpg-form-version", "/videos/" ~ video.id ~ "/nueva-version", video.config, guion.lectura, activos, formatos, "Crear versión nueva") }}
+  </details>
+{% endif %}

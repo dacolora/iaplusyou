@@ -156,3 +156,42 @@ def test_video_de_otro_proyecto_es_404(app, catalogo_vacio):
     gid = _confirmado(app)
     vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=FORM_VIDEO).get_json()["video_id"]
     assert app["c"].post(f"/cliente/otro/guiones/videos/{vid}/recorte", json={"quitadas": []}).status_code == 404
+
+
+def _video_armado(app):
+    from guiones import clips
+    from tests.fixtures_guiones import PLAN
+    gid = _confirmado(app)
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(FORM_VIDEO, duracion_objetivo="")).get_json()["video_id"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/armar", json={}).status_code == 202
+    assert app["iniciados"][-1][0] == f"guion_armar_{vid}"
+    assert app["c"].post(f"{BASE}/videos/{vid}/armar", json={}).status_code == 409
+    clips.armar(vid, llamar=fake(PLAN))
+    return gid, vid
+
+
+def test_armar_y_panel_de_clips(app, catalogo_vacio):
+    gid, vid = _video_armado(app)
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "data-abrir-prompt=" in html and "V1 fidelidad" in html and "Descargar documento" in html
+    d = app["c"].get(f"{BASE}/videos/{vid}").get_json()
+    assert d["video"]["estado"] == "armado" and len(d["prompts"]) == 4
+    r = app["c"].get(f"{BASE}/videos/{vid}/documento.md")
+    assert r.status_code == 200 and "attachment" in r.headers["Content-Disposition"] and "## Clips" in r.get_data(as_text=True)
+
+
+def test_nueva_version_con_bloque(app, catalogo_vacio):
+    gid, vid = _video_armado(app)
+    cuerpo = {"tipo": "bloque", "bloque_conteo_objetos": "Exactly TWO flip-flops.", "bloque_disposicion_inicial": "",
+              "bloque_props": "Black rubber.", "bloque_quien_sostiene": "Only he holds them.", "bloque_voz": ""}
+    r = app["c"].post(f"{BASE}/videos/{vid}/nueva-version", json=cuerpo)
+    assert r.status_code == 201 and r.get_json()["video_id"] != vid
+
+
+def test_bloque_global_valida(app):
+    r = app["c"].post(f"{BASE}/bloque-global", json={"texto": "CLOSING RULES\nAlways fade to black."})
+    assert r.status_code == 422 and r.get_json()["problemas"]
+    assert app["c"].post(f"{BASE}/bloque-global", json={"texto": "CLOSING RULES\nNever fade to black."}).status_code == 200
+    assert app["c"].get(f"{BASE}/bloque-global").get_json()["propio"] is True
+    assert app["c"].post(f"{BASE}/bloque-global", json={"texto": ""}).status_code == 200
+    assert app["c"].get(f"{BASE}/bloque-global").get_json()["propio"] is False

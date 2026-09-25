@@ -68,6 +68,19 @@
       </div>
       {% endif %}
     {% endif %}
+
+    {% include "_gpg_clips.html" %}
   </section>
   {% endif %}
+
+  <details class="gpg-avanzado" data-gpg-caja>
+    <summary>Avanzado: bloque global del proyecto</summary>
+    <form class="gpg-form" data-gpg-post="/bloque-global">
+      <p class="gp-ayuda">Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica.
+        {% if not bloque_global.propio %}Ahora se usa el de fábrica.{% endif %}</p>
+      <textarea name="texto" rows="10" class="gp-mono">{{ bloque_global.texto }}</textarea>
+      <div class="gpg-error flash error" hidden></div>
+      <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">Guardar bloque global</button></div>
+    </form>
+  </details>
 </section>

@@ -6,6 +6,7 @@ de fábrica pasa `refinador.validar` (por eso las negaciones del fundido van
 pegadas a la frase: «Never fade to black»).
 """
 import proyectos
+from guiones import duracion
 
 ETIQUETA = {"personaje": "character", "entorno": "environment", "producto": "hero object"}
 ENCABEZADO_DIALOGO = "DIALOGUE (exact words, natural unhurried pace, lip-sync exactly):"
@@ -85,3 +86,53 @@ def bloque_clip(clip, config):
 
 def prompt_clip(bloque_video_txt, clip, config, bloque_global_txt):
     return "\n\n".join([bloque_video_txt, bloque_clip(clip, config), bloque_global_txt.strip()])
+
+
+def _celda(t):
+    return str(t or "").replace("|", "\\|").replace("\n", " ")
+
+
+def nombre_documento(video):
+    dur = video["config"].get("duracion_objetivo")
+    return f"batch-{video['guion']['lote_id']}-videos-prompts-{f'{dur}s' if dur else 'completo'}-v{video['version_n']}.md"
+
+
+def documento_md(video, prompts):
+    """Documento del spec del cliente §2.7 con el texto VIGENTE de cada prompt del chat."""
+    vigente = {}
+    for p in prompts:
+        ex = p.get("extra") or {}
+        if p.get("tipo") == "clip":
+            vigente[(ex.get("variante"), ex.get("clip_index"))] = p["texto_vigente"]
+    lec, cfg = video["guion"]["lectura"], video["config"]
+    cs, hooks = video["clips"], video["hooks_alt"]
+    textos = duracion.textos_efectivos(lec, cfg.get("hook", "original"))
+    total = sum(c["duracion"] for c in cs)
+    L = [f"# {video['guion']['titulo']} — {video['nombre']}", "",
+         "| Video | Guion | Palabras (original → usadas) | Clips | Duración |", "|---|---|---|---|---|",
+         f"| v{video['version_n']} | {_celda(video['guion']['titulo'])} | {lec.get('palabras', 0)} → "
+         f"{sum(c['palabras'] for c in cs)} | {len(cs)} | {total} s |", "",
+         "## Cómo funciona esto", "",
+         "- El diálogo de cada clip es un subconjunto exacto y en orden del guion; si hubo que acortar, se quitaron líneas completas.",
+         "- Cada clip dura entre 5 y 15 segundos. El último termina con HARD CUT sobre un cuadro sostenido, sin logo ni fundido a negro.",
+         "- Cada prompt es: bloque del video + bloque del clip + bloque global. Los prompts van en inglés.",
+         "", "## Frases quitadas", ""]
+    bloques = duracion.bloques_quitados(textos, video["recorte"].get("quitadas", []))
+    L += [f"- «{b}»" for b in bloques] or ["Ninguna: se usa el guion completo."]
+    L += ["", "## Bloque del video", "", "````text", bloque_video(cfg, video["plan"]["bloque_video"]), "````", "",
+          "## Hooks alternativos", ""]
+    if hooks:
+        L += ["| Hook | Clip 1 | Video completo |", "|---|---|---|"]
+        L += [f"| {hid} | {h['duracion']} s | {h['duracion_total_video']} s |" for hid, h in hooks.items()]
+        for hid, h in hooks.items():
+            L += ["", f"### Clip 1 con {hid} — {h['duracion']} s", "", "````text",
+                  vigente.get((f"hook:{hid}", 1), "(sin prompt)"), "````"]
+    else:
+        L.append("Este guion no tiene hooks alternativos.")
+    L += ["", "## Clips", ""]
+    for c in cs:
+        L += [f"### Clip {c['indice']} de {c['total']} — {c['duracion']} s — {c['titulo']}", "", "````text",
+              vigente.get(("principal", c["indice"]), "(sin prompt)"), "````", ""]
+    L += ["## Resumen de clips", "", "| Clip | Duración | Palabras | Título |", "|---|---|---|---|"]
+    L += [f"| {c['indice']} | {c['duracion']} s | {c['palabras']} | {_celda(c['titulo'])} |" for c in cs]
+    return "\n".join(L) + "\n"
