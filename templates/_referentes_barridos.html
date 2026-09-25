@@ -9,11 +9,15 @@
    <script>iniciarPolling(...)</script> inline que jamás se ejecutaba
    (Important 3): _tab_referentes.html escanea `[data-poll-job]` después de
    cada innerHTML y llama iniciarPolling por su cuenta. #}
-<div class="generado-modal-cuerpo">
-  <h3>Mis barridos</h3>
+<div class="modal-form ancho">
+  <header class="modal-form-cab">
+    <h3>Mis barridos</h3>
+    <p>Cada búsqueda que hiciste con «Traer referentes», con lo que trajo y lo que costó.</p>
+  </header>
   {% if not barridos %}
   <p class="vacio">Todavía no has traído referentes. <a data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes →</a></p>
   {% else %}
+  <div class="modal-form-tabla">
   <table class="tabla-admin">
     <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th><th></th></tr>
     {% for b in barridos %}
@@ -44,5 +48,6 @@
     </tr>
     {% endfor %}
   </table>
+  </div>
   {% endif %}
 </div>

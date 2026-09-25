@@ -80,7 +80,9 @@
           .then(function (html) {
             cuerpo.innerHTML = html;
             if (nombreActivo) {
-              var nuevo = cuerpo.querySelector('[name="' + nombreActivo + '"]');
+              // En un grupo de radios, el elegido (si no, el foco caería en el primero).
+              var nuevo = cuerpo.querySelector('[name="' + nombreActivo + '"]:checked') ||
+                          cuerpo.querySelector('[name="' + nombreActivo + '"]');
               if (nuevo) {
                 nuevo.focus();
                 if (cursor !== null && typeof nuevo.setSelectionRange === 'function') {

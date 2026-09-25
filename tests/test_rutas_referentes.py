@@ -325,7 +325,7 @@ def test_traer_form_sin_consulta_ofrece_boton_ver_precio(app, monkeypatch):
     monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
     html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
     assert 'id="traer-ver-precio"' in html
-    assert "elige una fuente y completa los datos" in html.lower()
+    assert "completa los datos para ver el precio" in html.lower()
     assert 'data-precio="' in html
 
 

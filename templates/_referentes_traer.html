@@ -4,6 +4,16 @@
    ({fuente:{usd_fuente,llamadas,detalle}, clasificacion:{usd,texto}, total_usd}|None),
    llaves_faltantes (de la fuente elegida), fuente_llaves_faltantes ({tipo: [...]}).
 
+   Envoltura `.modal-form` (una columna con su propio padding), NUNCA
+   `.generado-modal-cuerpo`: esa es la rejilla de dos columnas de la ficha
+   (imagen | datos) y metía el título en la columna de la imagen y el
+   formulario apretado en la otra.
+
+   Campos por modo: los dos campos (palabra/idioma y pagina_id) están siempre
+   en el DOM -- el refresco de precio reemplaza el fragmento entero y así
+   ninguno pierde lo escrito al cambiar de modo --; el CSS (`:has` sobre el
+   radio `modo`) muestra solo los `[data-solo]` del modo elegido.
+
    El precio en vivo (Critical 1) lo maneja el script de _tab_referentes.html
    (delegado sobre #ref-modal-cuerpo, ver `refrescarPrecioTraer`): NINGÚN
    campo de este formulario lleva `data-recrear-campo` -- ese atributo es del
@@ -13,51 +23,122 @@
    quedó copiado por error en `formato`) hace que cambiar el formato de ESTE
    formulario dispare el refresco de ESE OTRO, contra una URL rota
    (`/undefined`) que termina en "No se pudo cargar.". #}
-<div class="generado-modal-cuerpo">
-  <h3>Traer referentes</h3>
+{% set es_admin = session.get('rol') == 'admin' %}
+{% set idiomas = [('es', 'Español'), ('en', 'Inglés'), ('pt', 'Portugués'), ('fr', 'Francés'), ('it', 'Italiano'), ('de', 'Alemán')] %}
+{% set fuente_lista = fuentes_tipos and not fuente_llaves_faltantes.get(fuente) %}
+<div class="modal-form ref-traer">
+  <header class="modal-form-cab">
+    <h3>Traer referentes</h3>
+    <p>Busca anuncios reales en la biblioteca de anuncios de Meta. Creatv guarda cada imagen y la clasifica por etapa, consciencia y dolor para que la uses como referencia.</p>
+  </header>
+
   <form method="post" action="{{ url_for('referentes.traer_post', cliente=cliente) }}" id="form-traer" data-precio="{{ url_for('referentes.traer_form', cliente=cliente) }}">
-    <div class="fe-opciones">
-      {% for t in fuentes_tipos %}
-      <label class="fe-check">
-        <input type="radio" name="fuente" value="{{ t }}" {% if t == fuente %}checked{% endif %}
-               {% if fuente_llaves_faltantes.get(t) %}disabled{% endif %}>
-        {{ fuentes_nombres.get(t, t) }}{% if fuente_llaves_faltantes.get(t) %} (falta {{ fuente_llaves_faltantes[t] | join(', ') }}){% endif %}
-      </label>
-      {% endfor %}
-    </div>
-    {% if not fuentes_tipos %}<p class="vacio">Ninguna fuente configurada todavía.</p>{% endif %}
-    <div class="fe-opciones">
-      <label><input type="radio" name="modo" value="palabra" {% if consulta.modo == 'palabra' %}checked{% endif %}> Palabra clave</label>
-      <label><input type="radio" name="modo" value="marca" {% if consulta.modo == 'marca' %}checked{% endif %}> Marca (link del Ad Library)</label>
-    </div>
-    <div class="fe-opciones">
-      <label>Palabra clave <input type="text" name="palabra" value="{{ consulta.palabra or '' }}" maxlength="120"></label>
-      <label>Idioma <input type="text" name="idioma" value="{{ consulta.idioma or 'es' }}" maxlength="5" style="width:4rem"></label>
-      <label>Marca / link del Ad Library <input type="text" name="pagina_id" value="{{ consulta.pagina_id or '' }}" placeholder="id de página o view_all_page_id"></label>
-    </div>
-    <div class="fe-opciones">
-      <label>Formato
-        <select name="formato">
-          <option value="imagen" {% if consulta.formato == 'imagen' %}selected{% endif %}>Imagen</option>
-          <option value="video" {% if consulta.formato == 'video' %}selected{% endif %}>Video</option>
-        </select>
-      </label>
-      <label class="fe-check"><input type="checkbox" name="solo_activos" {% if consulta.solo_activos %}checked{% endif %}> Solo activos</label>
-      <label>Mínimo de días <input type="number" name="min_dias" value="{{ consulta.min_dias or '' }}" min="0" style="width:5rem"></label>
-      <label>Mínimo de variantes <input type="number" name="min_variantes" value="{{ consulta.min_variantes or '' }}" min="0" style="width:5rem"></label>
-      <label>Tope <input type="number" name="tope" value="{{ tope }}" min="1" max="2000" style="width:6rem"></label>
-    </div>
-    {% if precio %}
-    <p class="vacio" id="traer-precio">
-      Fuente: {{ precio.fuente.detalle }} ·
-      Clasificar {{ tope }} con Claude: {{ precio.clasificacion.texto }} ·
-      <strong>Total ≈ US$ {{ '%.2f' | format(precio.total_usd) }}</strong>
-    </p>
+    {% if not fuentes_tipos %}
+    <p class="modal-form-aviso">Todavía no hay ninguna fuente de anuncios configurada.</p>
+    {% elif fuentes_tipos | length == 1 %}
+    {% set t = fuentes_tipos[0] %}
+    <input type="hidden" name="fuente" value="{{ t }}">
+    <p class="ref-traer-fuente">Fuente: <strong>{{ fuentes_nombres.get(t, t) }}</strong></p>
     {% else %}
-    <p class="vacio" id="traer-precio">Elige una fuente y completa los datos para ver el precio.
-      <button type="button" class="btn-xs" id="traer-ver-precio">Ver precio</button>
+    <div class="modal-form-seccion">
+      <span class="modal-form-titulo">Fuente</span>
+      <div class="segmentado" role="radiogroup" aria-label="Fuente">
+        {% for t in fuentes_tipos %}
+        <label>
+          <input type="radio" name="fuente" value="{{ t }}" {% if t == fuente %}checked{% endif %} {% if fuente_llaves_faltantes.get(t) %}disabled{% endif %}>
+          <span>{{ fuentes_nombres.get(t, t) }}</span>
+        </label>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if fuentes_tipos and fuente_llaves_faltantes.get(fuente) %}
+    <p class="modal-form-aviso">
+      {{ fuentes_nombres.get(fuente, fuente) }} todavía no está configurada{% if es_admin %}: falta {{ fuente_llaves_faltantes[fuente] | join(', ') }} en el .env del servidor{% else %}. Avísale al equipo de Creatv para activarla{% endif %}.
     </p>
     {% endif %}
-    <button type="submit" class="btn-generar btn-sm" {% if not fuentes_tipos %}disabled{% endif %}>Traer y clasificar</button>
+
+    <section class="modal-form-seccion">
+      <span class="modal-form-titulo"><b>1</b> ¿Qué quieres buscar?</span>
+      <div class="opcion-tarjetas" role="radiogroup" aria-label="Tipo de búsqueda">
+        <label class="opcion-tarjeta">
+          <input type="radio" name="modo" value="palabra" {% if consulta.modo == 'palabra' %}checked{% endif %}>
+          <strong>Por palabra clave</strong>
+          <small>Anuncios que hablan de un tema o producto</small>
+        </label>
+        <label class="opcion-tarjeta">
+          <input type="radio" name="modo" value="marca" {% if consulta.modo == 'marca' %}checked{% endif %}>
+          <strong>De una marca</strong>
+          <small>Todos los anuncios de una página de Facebook</small>
+        </label>
+      </div>
+
+      <div class="modal-form-fila" data-solo="palabra">
+        <label class="modal-form-campo crece">Palabra clave
+          <input type="text" name="palabra" value="{{ consulta.palabra or '' }}" maxlength="120" placeholder="Ej.: crema antiarrugas, sandalias, proteína">
+        </label>
+        <label class="modal-form-campo">Idioma de los anuncios
+          <select name="idioma">
+            {% set idioma = consulta.idioma or 'es' %}
+            {% for cod, nombre in idiomas %}<option value="{{ cod }}" {% if cod == idioma %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+            {% if idioma not in idiomas | map('first') | list %}<option value="{{ idioma }}" selected>{{ idioma }}</option>{% endif %}
+          </select>
+        </label>
+      </div>
+
+      <div data-solo="marca">
+        <label class="modal-form-campo">Link de la marca en la biblioteca de anuncios
+          <input type="text" name="pagina_id" value="{{ consulta.pagina_id or '' }}" placeholder="https://www.facebook.com/ads/library/?view_all_page_id=…">
+        </label>
+        <p class="modal-form-ayuda">Abre la marca en <a href="https://www.facebook.com/ads/library/" target="_blank" rel="noopener">facebook.com/ads/library</a>, copia el link de la barra del navegador y pégalo aquí. También sirve el id de la página.</p>
+      </div>
+    </section>
+
+    <section class="modal-form-seccion">
+      <span class="modal-form-titulo"><b>2</b> Filtros</span>
+      <div class="modal-form-fila">
+        <div class="modal-form-campo">Formato
+          <div class="segmentado" role="radiogroup" aria-label="Formato">
+            <label><input type="radio" name="formato" value="imagen" {% if consulta.formato != 'video' %}checked{% endif %}><span>Imagen</span></label>
+            <label><input type="radio" name="formato" value="video" {% if consulta.formato == 'video' %}checked{% endif %}><span>Video</span></label>
+          </div>
+        </div>
+        <label class="modal-form-check">
+          <input type="checkbox" name="solo_activos" {% if consulta.solo_activos %}checked{% endif %}>
+          <span>Solo anuncios que siguen activos</span>
+        </label>
+      </div>
+      <div class="modal-form-fila">
+        <label class="modal-form-campo">Al aire hace al menos
+          <span class="con-unidad"><input type="number" name="min_dias" value="{{ consulta.min_dias or '' }}" min="0" placeholder="—"><em>días</em></span>
+        </label>
+        <label class="modal-form-campo">Con al menos
+          <span class="con-unidad"><input type="number" name="min_variantes" value="{{ consulta.min_variantes or '' }}" min="0" placeholder="—"><em>variantes</em></span>
+        </label>
+      </div>
+      <p class="modal-form-ayuda">Un anuncio que lleva semanas al aire, o que la marca duplicó en muchas variantes, casi siempre es uno que está vendiendo. Déjalos vacíos para no filtrar.</p>
+    </section>
+
+    <section class="modal-form-seccion">
+      <span class="modal-form-titulo"><b>3</b> ¿Cuántos?</span>
+      <label class="modal-form-campo">Máximo de anuncios a traer
+        <span class="con-unidad"><input type="number" name="tope" value="{{ tope }}" min="1" max="2000"><em>anuncios</em></span>
+      </label>
+      <p class="modal-form-ayuda">Cada anuncio que llega se clasifica con Claude; ese es el costo que ves abajo.</p>
+    </section>
+
+    <footer class="modal-form-pie">
+      <div class="modal-form-precio" id="traer-precio">
+        {% if precio %}
+        <strong>≈ US$ {{ '%.2f' | format(precio.total_usd) }}</strong>
+        <small>{{ precio.fuente.detalle }} · Clasificar {{ tope }} con Claude: {{ precio.clasificacion.texto }}</small>
+        {% else %}
+        <small>Escribe qué buscar y completa los datos para ver el precio.</small>
+        <button type="button" class="btn-xs btn-guardar" id="traer-ver-precio">Ver precio</button>
+        {% endif %}
+      </div>
+      <button type="submit" class="btn-generar" {% if not fuente_lista %}disabled{% endif %}>Traer y clasificar</button>
+    </footer>
   </form>
 </div>

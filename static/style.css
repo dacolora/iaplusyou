@@ -397,10 +397,13 @@ textarea, select, input[type="number"], input[type="text"], input[type="password
   font: inherit; font-size: .87rem;
   transition: border-color .15s, box-shadow .15s;
 }
-textarea:focus, select:focus, input:focus {
+/* Radios y casillas quedan fuera: el borde + halo de un campo de texto se
+   pintaba como un recuadro alrededor del circulito. Ellos usan outline. */
+textarea:focus, select:focus, input:not([type="radio"]):not([type="checkbox"]):focus {
   outline: none; border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(253, 183, 22, .15);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, .15);
 }
+input[type="radio"]:focus-visible, input[type="checkbox"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 textarea { resize: vertical; }
 input[type="file"] { color: var(--muted); font-size: .82rem; }
 
@@ -1109,7 +1112,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 
 .generado-modal { border: 0; border-radius: 16px; padding: 0; width: min(960px, 94vw); max-height: 92vh; background: var(--panel); color: var(--text); box-shadow: 0 30px 80px rgba(0,0,0,.25); }
 .generado-modal::backdrop { background: rgba(17,17,24,.55); backdrop-filter: blur(3px); }
-.generado-cerrar { position: absolute; right: .6rem; top: .5rem; z-index: 2; width: 34px; height: 34px; border-radius: 50%; border: 0; background: rgba(17,17,24,.7); color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer; }
+.generado-cerrar { position: absolute; right: .6rem; top: .5rem; z-index: 2; width: 34px; height: 34px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 0; background: rgba(17,17,24,.7); color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer; }
 .generado-modal-cuerpo { display: grid; grid-template-columns: minmax(260px, 44%) 1fr; max-height: 92vh; }
 .detalle-media { background: #0e0e14; display: flex; align-items: center; justify-content: center; min-height: 320px; }
 .detalle-media img, .detalle-media video { max-width: 100%; max-height: 92vh; object-fit: contain; }
@@ -1774,3 +1777,65 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .ref-recrear-form textarea { width: 100%; font-size: .82rem; }
 .ref-recrear-acciones { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .6rem; }
 .ref-usos { margin-top: .4rem; }
+
+/* Formularios dentro de un <dialog class="generado-modal"> (Traer referentes,
+   Mis barridos). Una columna con padding propio: `.generado-modal-cuerpo` es
+   la rejilla imagen | datos de la ficha y NO sirve para un formulario. */
+.generado-modal:has(.modal-form) { width: min(620px, 94vw); }
+.generado-modal:has(.modal-form.ancho) { width: min(960px, 94vw); }
+.modal-form { max-height: 92vh; overflow: auto; padding: 1.6rem 1.6rem 0; }
+.modal-form-cab { padding-right: 2.6rem; margin-bottom: 1.2rem; }
+.modal-form-cab h3 { margin: 0 0 .35rem; font-family: var(--font-display); font-size: 1.3rem; }
+.modal-form-cab p { margin: 0; color: var(--muted); font-size: .86rem; line-height: 1.5; }
+.modal-form-seccion { padding: 1.1rem 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: .8rem; }
+.modal-form-titulo { font-family: var(--font-display); font-weight: 600; font-size: .95rem; display: flex; align-items: center; gap: .5rem; }
+.modal-form-titulo b { width: 22px; height: 22px; border-radius: 50%; background: var(--accent-grad); color: #fff; font-size: .72rem; display: inline-flex; align-items: center; justify-content: center; }
+.modal-form-fila { display: flex; flex-wrap: wrap; gap: .8rem 1rem; align-items: flex-end; }
+.modal-form-campo { display: flex; flex-direction: column; gap: .35rem; font-size: .78rem; font-weight: 600; color: var(--muted); }
+.modal-form-campo.crece { flex: 1 1 240px; }
+.modal-form-campo select { width: auto; min-width: 9rem; }
+.modal-form-ayuda { margin: 0; font-size: .76rem; color: var(--muted); line-height: 1.5; }
+.modal-form-aviso { margin: 0 0 1rem; padding: .7rem .9rem; border-radius: var(--radius-sm); background: rgba(232, 179, 57, .12); border: 1px solid rgba(232, 179, 57, .35); font-size: .82rem; }
+.modal-form-check { display: inline-flex; align-items: center; gap: .5rem; font-size: .84rem; cursor: pointer; padding-bottom: .55rem; }
+.modal-form-check input { width: 1.05rem; height: 1.05rem; accent-color: var(--accent); margin: 0; }
+.con-unidad { display: inline-flex; align-items: center; gap: .45rem; }
+.con-unidad input { width: 6.5rem; }
+.con-unidad em { font-style: normal; font-weight: 400; color: var(--muted); font-size: .82rem; }
+.modal-form-pie { position: sticky; bottom: 0; background: var(--panel); border-top: 1px solid var(--border); margin: 0 -1.6rem; padding: 1rem 1.6rem 1.2rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.modal-form-precio { display: flex; flex-direction: column; gap: .15rem; min-width: 0; flex: 1 1 200px; }
+.modal-form-precio strong { font-family: var(--font-display); font-size: 1.15rem; }
+.modal-form-precio small { color: var(--muted); font-size: .74rem; line-height: 1.4; }
+.modal-form-precio button { align-self: flex-start; margin-top: .3rem; }
+.modal-form-tabla { overflow-x: auto; margin-bottom: 1.6rem; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.modal-form > .vacio { padding-bottom: 1.6rem; }
+
+/* Opciones excluyentes: control segmentado (pastillas) y tarjetas. El radio
+   queda encima, invisible, para que el clic y el teclado sigan siendo suyos. */
+.segmentado { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 999px; }
+.segmentado label { position: relative; cursor: pointer; }
+.segmentado input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.segmentado span { display: block; padding: .42rem 1rem; border-radius: 999px; font-size: .82rem; font-weight: 600; color: var(--muted); transition: background .15s, color .15s; }
+.segmentado input:checked + span { background: var(--panel); color: var(--text); box-shadow: var(--shadow-soft); }
+.segmentado input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 1px; }
+.segmentado input:disabled + span { opacity: .5; cursor: not-allowed; }
+.opcion-tarjetas { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.opcion-tarjeta { position: relative; display: flex; flex-direction: column; gap: .2rem; padding: .8rem .95rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); cursor: pointer; transition: border-color .15s, box-shadow .15s, background .15s; }
+.opcion-tarjeta:hover { border-color: var(--muted-2); }
+.opcion-tarjeta input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.opcion-tarjeta strong { font-size: .88rem; }
+.opcion-tarjeta small { font-size: .76rem; color: var(--muted); }
+.opcion-tarjeta:has(input:checked) { border-color: var(--accent); background: rgba(124, 58, 237, .05); box-shadow: 0 0 0 1px var(--accent); }
+.opcion-tarjeta:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Traer referentes: solo el campo del modo elegido (los dos siguen en el DOM). */
+.ref-traer-fuente { margin: 0 0 1rem; font-size: .8rem; color: var(--muted); }
+.ref-traer-fuente strong { color: var(--text); font-weight: 600; }
+.ref-traer form:has(input[name="modo"][value="marca"]:checked) [data-solo="palabra"],
+.ref-traer form:has(input[name="modo"][value="palabra"]:checked) [data-solo="marca"] { display: none; }
+.ref-traer [data-solo="marca"] { display: flex; flex-direction: column; gap: .4rem; }
+@media (max-width: 520px) {
+  .modal-form { padding: 1.2rem 1rem 0; }
+  .modal-form-pie { margin: 0 -1rem; padding: .9rem 1rem 1rem; }
+  .opcion-tarjetas { grid-template-columns: 1fr; }
+  .modal-form-pie .btn-generar { width: 100%; }
+}
