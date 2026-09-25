@@ -30,7 +30,7 @@ import db
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -57,6 +57,7 @@ TARIFAS = {
     "caption_organico": 0.01,
     "adaptar_referente": 0.01,
     "sugerir_ia": 0.02,
+    "clasificacion": 0.006,
     "voz": 0.05,
     "musica": 0.02,
     "whisper": 0.01,
@@ -167,6 +168,7 @@ _ESTIMADORES = {
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
+    "clasificacion": lambda n=1, **_: (TARIFAS["clasificacion"] * max(1, int(n)), f"{max(1, int(n))} anuncio(s) con Claude"),
 }
 
 

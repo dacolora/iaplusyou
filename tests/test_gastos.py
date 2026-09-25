@@ -208,3 +208,21 @@ def test_estimar_sugerir_ia():
 def test_sugerir_ia_en_tipos():
     import gastos
     assert "sugerir_ia" in gastos.TIPOS
+
+
+def test_estimar_clasificacion_por_cantidad():
+    import gastos
+    r = gastos.estimar("clasificacion", n=500)
+    assert abs(r["usd"] - 3.0) < 0.001
+    assert "0,006" in r["texto"] or "3,00" in r["texto"] or "aprox" in r["texto"].lower()
+
+
+def test_estimar_clasificacion_defecto_uno():
+    import gastos
+    r = gastos.estimar("clasificacion")
+    assert abs(r["usd"] - 0.006) < 0.0001
+
+
+def test_clasificacion_en_tipos():
+    import gastos
+    assert "clasificacion" in gastos.TIPOS
