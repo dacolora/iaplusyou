@@ -338,6 +338,16 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             if traidos_total - int(b.get("traidos") or 0) >= TRAMO:
                 break
     except ErrorFuente as e:
+        # Una corrida ya cobrada (p. ej. Apify) que además falla sin entregar
+        # nada debe registrar igual lo que se pagó -- "on failure after
+        # paying, register what was paid with a detalle" (CLAUDE.md). Esto va
+        # ANTES de decidir si es error total o entrega parcial: el costo se
+        # registra en los dos casos.
+        costo_real = getattr(e, "costo_real", None)
+        if costo_real:
+            gastos.registrar_seguro(p["cliente"], "recoleccion", costo_real,
+                                    f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
+                                    detalle=f"{consulta['fuente']}: corrida cobrada pero no se pudo leer del todo")
         if traidos_total == 0:
             datos.actualizar_barrido(bid, estado="error", aviso=cola.recortar(str(e), 300))
             raise

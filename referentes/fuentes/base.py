@@ -30,8 +30,16 @@ AVISO_CUOTA_AGOTADA = "cuota_agotada"
 
 class ErrorFuente(Exception):
     """Error mostrable al usuario. `usuario` es el mensaje en español (sin
-    llaves, sin HTML) y `str(e)` devuelve exactamente lo mismo."""
+    llaves, sin HTML) y `str(e)` devuelve exactamente lo mismo. `costo_real`
+    (opcional) es el monto ya cobrado por el proveedor cuando la corrida
+    falló DESPUÉS de pagar (p. ej. Apify: la corrida se factura aunque su
+    dataset no se pueda leer) -- `None` cuando la fuente no cobró nada o no
+    cobra por resultado (Atria). `_fase_trayendo` (tareas/referentes.py) lo
+    lee con `getattr(e, "costo_real", None)` para registrarlo en `gastos`
+    incluso cuando el barrido termina en error total, siguiendo la regla de
+    CLAUDE.md: "on failure after paying, register what was paid"."""
 
-    def __init__(self, usuario):
+    def __init__(self, usuario, costo_real=None):
         self.usuario = str(usuario)
+        self.costo_real = costo_real
         super().__init__(self.usuario)

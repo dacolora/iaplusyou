@@ -128,9 +128,13 @@ def test_traer_dataset_no_entregado_lanza_error_fuente(monkeypatch):
     # de leer_dataset puede consumir hasta 2 respuestas -- ver
     # tests/test_providers_apify.py::test_leer_dataset_agota_intentos, que usa
     # el mismo × 2.
+    # + una respuesta más para el `contar_dataset` que `traer()` llama cuando
+    # `crudos is None` (Importante 2 del review): la corrida ya se pagó, así
+    # que necesita el itemCount para registrar el costo real igual.
     sesion = _Sesion([
         _Resp({"data": {"id": "run1", "defaultDatasetId": "ds1", "status": "SUCCEEDED"}}, status=201),
         *([_Resp({}, status=500)] * (apify_api.INTENTOS_DATASET * 2)),
+        _Resp({"data": {"itemCount": 3}}),
     ])
     monkeypatch.setattr(apify_adlibrary, "_sesion", lambda: sesion)
     monkeypatch.setattr(apify_api, "PAUSA_SONDEO", 0)
@@ -138,6 +142,47 @@ def test_traer_dataset_no_entregado_lanza_error_fuente(monkeypatch):
     gen = apify_adlibrary.traer({"modo": "marca", "pagina_id": "1", "pais": "ALL"}, 10, lambda **kw: None)
     with pytest.raises(ErrorFuente):
         next(gen)
+
+
+def test_traer_item_malformado_no_revienta_el_lote(monkeypatch):
+    """Un ítem sin datos usables en snapshot (images/cards con null, u otra
+    forma a medio llenar) no debe reventar todo `traer()` -- Apify ya cobró
+    por el lote completo, así que perder los ítems buenos por culpa de uno
+    malo perdería trabajo ya pagado (Importante 1 del review)."""
+    monkeypatch.setenv("APIFY_TOKEN", "tok_test")
+    item_malo = {"adArchiveId": "bad1", "snapshot": {"images": [None], "cards": [None]}}
+    sesion = _Sesion([
+        _Resp({"data": {"id": "run1", "defaultDatasetId": "ds1", "status": "SUCCEEDED"}}, status=201),
+        _Resp([FIXTURE_ITEM, item_malo]),
+    ])
+    monkeypatch.setattr(apify_adlibrary, "_sesion", lambda: sesion)
+    gen = apify_adlibrary.traer({"modo": "marca", "pagina_id": "16453004404", "pais": "CO"}, 10, lambda **kw: None)
+    pagina, cursor, meta = next(gen)
+    buenos = [a for a in pagina if a]
+    assert len(buenos) == 1
+    assert buenos[0]["anuncio_id"] == "1229350099285014"
+    assert meta["costo_real"] == pytest.approx(round(2 * apify_actores_precio(), 4))
+
+
+def test_traer_dataset_no_entregado_registra_costo_real_por_contar_dataset(monkeypatch):
+    """Cuando la corrida terminó SUCCEEDED (ya cobrada) pero su dataset no se
+    puede leer tras agotar los intentos, `contar_dataset` da el itemCount
+    real cobrado y `traer()` lo manda como `ErrorFuente(...,
+    costo_real=...)` para que `_fase_trayendo` lo registre en gastos incluso
+    en error total (Importante 2 del review)."""
+    monkeypatch.setenv("APIFY_TOKEN", "tok_test")
+    sesion = _Sesion([
+        _Resp({"data": {"id": "run1", "defaultDatasetId": "ds1", "status": "SUCCEEDED"}}, status=201),
+        *([_Resp({}, status=500)] * (apify_api.INTENTOS_DATASET * 2)),
+        _Resp({"data": {"itemCount": 5}}),
+    ])
+    monkeypatch.setattr(apify_adlibrary, "_sesion", lambda: sesion)
+    monkeypatch.setattr(apify_api, "PAUSA_SONDEO", 0)
+    monkeypatch.setattr(apify_api._http, "dormir", lambda s: None)
+    gen = apify_adlibrary.traer({"modo": "marca", "pagina_id": "1", "pais": "ALL"}, 10, lambda **kw: None)
+    with pytest.raises(ErrorFuente) as exc:
+        next(gen)
+    assert exc.value.costo_real == pytest.approx(round(5 * apify_actores_precio(), 4))
 
 
 def test_arrancar_401_se_traduce_al_error_fuente_de_referentes(monkeypatch):

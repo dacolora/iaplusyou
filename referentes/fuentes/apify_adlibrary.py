@@ -54,14 +54,14 @@ def _url_ad_library(consulta):
     """Arma la URL de la Ad Library de Meta que el actor de Apify recorre
     (spec §4.2): país, idioma y formato son filtros de META, no de Apify --
     van adentro de esta URL, igual que en un link copiado del navegador."""
-    pais = (consulta.get("pais") or "ALL").strip().upper()[:5] or "ALL"
+    pais = quote((consulta.get("pais") or "ALL").strip().upper()[:5] or "ALL")
     formato = {"imagen": "image", "video": "video"}.get(consulta.get("formato") or "imagen", "image")
     activo = "active" if consulta.get("solo_activos", True) else "all"
     if consulta.get("modo") == "marca":
         return (f"https://www.facebook.com/ads/library/?active_status={activo}&ad_type=all"
                 f"&country={pais}&media_type={formato}&search_type=page"
                 f"&view_all_page_id={consulta['pagina_id']}")
-    idioma = (consulta.get("idioma") or "es").strip()[:5] or "es"
+    idioma = quote((consulta.get("idioma") or "es").strip()[:5] or "es")
     palabra = consulta.get("palabra") or ""
     return (f"https://www.facebook.com/ads/library/?active_status={activo}&ad_type=all"
             f"&content_languages[0]={idioma}&country={pais}&media_type={formato}"
@@ -70,37 +70,71 @@ def _url_ad_library(consulta):
 
 def _texto_snapshot(snap):
     """El texto real vive en snapshot.body.text (pieza única) o en
-    snapshot.cards[0] (carrusel/DCO) -- nunca en los dos a la vez."""
+    snapshot.cards[0] (carrusel/DCO) -- nunca en los dos a la vez. `cards[0]`
+    que no sea un dict (p. ej. `cards: [null]`, un item de Apify a medio
+    llenar) se trata como "sin texto", nunca como error: un solo ítem
+    malformado no debe reventar el resto del lote ya pagado."""
     cuerpo = snap.get("body")
     if isinstance(cuerpo, dict) and (cuerpo.get("text") or "").strip():
         return "", cuerpo["text"]
     cartas = snap.get("cards") or []
-    if cartas:
-        c = cartas[0] or {}
+    c = cartas[0] if cartas else None
+    if isinstance(c, dict):
         return (c.get("title") or ""), (c.get("body") or "")
     return "", ""
 
 
 def _imagen_snapshot(snap):
-    imagenes = snap.get("images") or []
-    if imagenes:
-        return imagenes[0].get("originalImageUrl") or imagenes[0].get("resizedImageUrl")
+    """Primera URL de imagen usable en toda la pieza (imagen suelta, carrusel
+    o miniatura de video), probando cada fuente EN ORDEN hasta encontrar una
+    -- si `images` viene pero ninguna de sus entradas tiene URL usable, sigue
+    con `cards` y luego `videos` en vez de rendirse ahí. Cualquier entrada
+    que no sea un dict (`images: [null]`, `cards: [null]`, …) se salta: un
+    ítem de Apify a medio llenar no debe reventar `_normalizar` ni el lote
+    entero ya pagado -- solo cuenta como "sin imagen" para ESE ítem."""
+    for im in (snap.get("images") or []):
+        if not isinstance(im, dict):
+            continue
+        url = im.get("originalImageUrl") or im.get("resizedImageUrl")
+        if url:
+            return url
     for c in (snap.get("cards") or []):
+        if not isinstance(c, dict):
+            continue
         if c.get("originalImageUrl"):
             return c["originalImageUrl"]
         if c.get("videoPreviewImageUrl"):
             return c["videoPreviewImageUrl"]
-    videos = snap.get("videos") or []
-    if videos:
-        return videos[0].get("videoPreviewImageUrl")
+    for v in (snap.get("videos") or []):
+        if not isinstance(v, dict):
+            continue
+        if v.get("videoPreviewImageUrl"):
+            return v["videoPreviewImageUrl"]
     return None
+
+
+def _tipo_item(snap):
+    """`atria.py` mapea el display_format que Atria ya clasifica
+    (image/video/carousel); Apify no manda un campo equivalente, así que se
+    infiere: video real gana siempre, luego un ítem con más de una carta o
+    sin `body.text` propio en el nivel superior es un carrusel/DCO, y lo
+    demás es una imagen suelta."""
+    if snap.get("videos"):
+        return "video"
+    cartas = snap.get("cards") or []
+    cuerpo = snap.get("body")
+    tiene_texto_propio = isinstance(cuerpo, dict) and bool((cuerpo.get("text") or "").strip())
+    if cartas and (len(cartas) > 1 or not tiene_texto_propio):
+        return "carrusel"
+    return "imagen"
 
 
 def _normalizar(item):
     anuncio_id = str(item.get("adArchiveId") or item.get("adArchiveID") or "") or None
     if not anuncio_id:
         return None
-    snap = item.get("snapshot") or {}
+    snap = item.get("snapshot")
+    snap = snap if isinstance(snap, dict) else {}
     imagen_origen = _imagen_snapshot(snap)
     if not imagen_origen:
         return None
@@ -115,7 +149,7 @@ def _normalizar(item):
         "cuerpo": cuerpo,
         "idioma": None,
         "pais": None,
-        "tipo": "video" if (snap.get("videos") or []) else "imagen",
+        "tipo": _tipo_item(snap),
         "imagen_origen": imagen_origen,
         "dias": None,
         "variantes": item.get("collationCount"),
@@ -158,8 +192,18 @@ def traer(consulta, tope, avanzar, cursor=None):
     except _ErrorApify as e:
         raise ErrorFuente(e.usuario) from e
     if crudos is None:
+        # La corrida ya se pagó aunque su dataset no se haya podido leer --
+        # `contar_dataset` da el itemCount real cobrado; si tampoco se puede
+        # leer, `tope` es la cota superior de lo que Apify pudo cobrar (mismo
+        # respaldo que ya usa `nicho/fuentes/apify.py::FuenteApify.recolectar`
+        # para el mismo caso). CLAUDE.md: "on failure after paying, register
+        # what was paid" -- `costo_real` va en la excepción para que
+        # `_fase_trayendo` lo registre en gastos aunque el barrido termine en
+        # error total.
+        contados = apify_api.contar_dataset(sesion, token, dataset_id)
+        costo_real = round((contados if contados is not None else tope) * apify_actores.USD_POR_RESULTADO, 4)
         raise ErrorFuente(f"Apify no entregó los resultados ({motivo}); corrida {run_id}, "
-                          f"dataset {dataset_id}: revísalos en console.apify.com.")
+                          f"dataset {dataset_id}: revísalos en console.apify.com.", costo_real=costo_real)
     if not crudos:
         if estado != "SUCCEEDED":
             raise ErrorFuente(f"Apify {apify_api.frase_estado(estado)} sin resultados (corrida {run_id}); "
