@@ -447,3 +447,22 @@ def test_producir_no_registra_gasto_si_falla_antes_de_cobrar(entorno, monkeypatc
     with pytest.raises(RuntimeError, match="claude caído"):
         final_edition.producir("acme", entorno["cf_id"], "es", "CO")
     assert [f["tipo"] for f in gastos.historial("acme")] == ["guion"]
+
+
+def test_producir_con_cancion_propia_usa_su_tramo_sin_costo(entorno, monkeypatch, tmp_path):
+    import creative_flow as cf
+    vistos = []
+
+    def fake_propia(cliente, valor, inicio_s=0, carpeta_cache=None):
+        vistos.append((cliente, valor, inicio_s))
+        return {"archivo": _wav(str(tmp_path / "propia.wav")), "url": "https://r2/clientes/acme/materiales/h.mp3",
+                "estilo": "Jingle", "generada": False, "material_id": 3, "inicio_s": 12, "fuente": "elevenlabs"}, 0
+    monkeypatch.setattr(musica, "pista_propia", fake_propia)
+    final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"estilo_musica": "mat:3", "musica_inicio_s": 12})
+    assert vistos == [("acme", "mat:3", 12)]
+    assert "musica" not in entorno                    # obtener_pista (fake_musica) no se llamó
+    f = cf.finales("acme", entorno["cf_id"])[0]
+    assert f["capas"]["musica"]["proveedor"] == "elevenlabs" and f["capas"]["musica"]["costo_usd"] == 0.0
+    assert f["capas"]["musica"]["parametros"] == {"estilo": "Jingle", "url": "https://r2/clientes/acme/materiales/h.mp3",
+                                                  "material_id": 3, "inicio_s": 12}
+    assert entorno["render"]["musica"].endswith("propia.wav")
