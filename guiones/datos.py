@@ -313,6 +313,44 @@ def fallar(video_id, aviso, usd=0.0):
                     .values(estado="error", aviso=aviso, actualizado_en=ahora))
 
 
+def terminar_armado(video_id, plan, clips, hooks_alt, validaciones, avisos, estado, usd):
+    """Guarda el resultado solo si el video sigue `armando`; False si llegó tarde."""
+    v = db.guion_video
+    with db.conectar() as con:
+        con.execute(v.update().where(v.c.id == video_id).values(usd=v.c.usd + float(usd or 0)))
+        r = con.execute(v.update().where(v.c.id == video_id, v.c.estado == "armando").values(
+            plan=plan, clips=clips, hooks_alt=hooks_alt, validaciones=validaciones, avisos=avisos, estado=estado,
+            aviso=None, actualizado_en=db.ahora()))
+        return r.rowcount == 1
+
+
+def avisar(video_id, aviso):
+    v = db.guion_video
+    with db.conectar() as con:
+        con.execute(v.update().where(v.c.id == video_id).values(aviso=aviso, actualizado_en=db.ahora()))
+
+
+def nueva_version(cliente, video_id, config=None, plan=None):
+    """Versión nueva del mismo guion; la anterior y sus prompts no se tocan. El
+    recorte se copia si no cambian la duración objetivo ni el hook."""
+    base = video(cliente, video_id)
+    if base is None:
+        raise NoExiste("Esa versión no existe.")
+    cfg = config or base["config"]
+    mismo = (cfg.get("duracion_objetivo") == base["config"].get("duracion_objetivo")
+             and cfg.get("hook") == base["config"].get("hook"))
+    return crear_video(cliente, base["guion_id"], cfg, recorte=dict(base["recorte"]) if mismo else {},
+                       plan=plan, estado="armando" if plan else "configurando")
+
+
+def prompts_de_video(video_id):
+    p = db.guion_prompt
+    with db.conectar() as con:
+        filas = con.execute(sa.select(p.c.id, p.c.titulo, p.c.tipo, p.c.estado, p.c.texto_vigente, p.c.version_n, p.c.extra)
+                            .where(sa.func.json_extract(p.c.extra, "$.video_id") == int(video_id)).order_by(p.c.id))
+        return [_dict(f) for f in filas]
+
+
 def guardar_quitadas(cliente, video_id, quitadas):
     try:
         ns = sorted({int(n) for n in quitadas})
