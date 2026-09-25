@@ -324,6 +324,13 @@ def _fase_trayendo(tarea, p, bid, avanzar):
                 nuevos_total += int(creado)
             cursor_final = cursor_siguiente
             costo_real = (meta or {}).get("costo_real")
+            # La referencia no varía por página dentro de esta misma tarea: si una
+            # fuente futura reportara costo_real en MÁS de una página en una sola
+            # llamada, gastos.registrar() (upsert por referencia) pisaría el costo
+            # de páginas anteriores en vez de sumarlo. Ninguna fuente actual lo hace
+            # (Atria: meta siempre {}; toda fuente de pago futura debe reportar
+            # costo_real en, a lo sumo, un yield por llamada a traer(), o la
+            # referencia necesita variar por página).
             if costo_real:
                 gastos.registrar_seguro(p["cliente"], "recoleccion", costo_real,
                                         f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
