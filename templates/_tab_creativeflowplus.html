@@ -2,8 +2,8 @@
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 <p class="vacio" style="padding-top:0;">
-  Sube las imágenes de referencia (producto, persona, lugar — las que quieras) y escribe qué tiene que pasar.
-  Dos caminos:
+  Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.
+  Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:
 </p>
 <ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.95rem;">
   <li><strong>Generar video</strong>: Tu texto va tal cual al modelo (Wan 3.0, Kling O3 Pro o Seedance 2.5).</li>
@@ -12,7 +12,7 @@
 <p class="vacio" style="padding-top:0;margin-top:0.5rem;">Las imágenes van solas a Seedream V5 Pro. Ninguna genera costos hasta que pulses "Generar".</p>
 
 <div class="form-nueva-idea" style="margin-top:1rem;">
-  <label class="campo-label">Referencias</label>
+  <label class="campo-label">Referencias <span class="vacio" style="display:inline;padding:0;font-weight:normal;">(opcional)</span></label>
   <p class="vacio" style="padding-top:0;font-size:.78rem;">
     Sube imágenes y videos, o pega un link (TrendTrack, TikTok, Instagram, YouTube). Cada uno queda como
     <code>@Imagen N</code> / <code>@Video N</code> y puedes nombrarlo en el texto. Un video de link sirve como referencia
@@ -35,11 +35,10 @@
   <div id="fp-bandeja-wrap">
     {% include "_flowplus_bandeja.html" %}
   </div>
-  <p class="campo-error" id="fp-refs-error" hidden>Sube al menos una imagen o un video, pega un link, o elige un producto del catálogo.</p>
 </div>
 
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
-  <label class="campo-label" style="margin-top:1rem;display:block;">Del catálogo: productos, personajes, entornos</label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">Del catálogo: productos, personajes, entornos <span class="vacio" style="display:inline;padding:0;font-weight:normal;">(opcional)</span></label>
   {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
   {% include "_selector_productos.html" %}
   {% endwith %}
@@ -51,11 +50,12 @@
 
   <p class="vacio" style="font-size:.78rem;">
     Una pieza por clic. Sale solo el producto; si eliges un personaje del catálogo, la escena lo lleva a él.
+    Sin referencias ni catálogo, el modelo recibe tu texto tal cual (sin logos ni guía de marca).
   </p>
   {% if logos %}
-  <p class="vacio" style="font-size:.76rem;">Se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
+  <p class="vacio" style="font-size:.76rem;">Con referencias o catálogo se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
   {% else %}
-  <p class="vacio" style="font-size:.76rem;">Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación (evita marcas inventadas).</p>
+  <p class="vacio" style="font-size:.76rem;">Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación con referencias o catálogo (evita marcas inventadas).</p>
   {% endif %}
 
   <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué quieres generar?</label>
@@ -68,7 +68,7 @@
     <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de video</label>
     <div class="checks-plataformas">
       {% for id, m in modelos_flowplus_video.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
+      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
       {% endfor %}
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
@@ -89,7 +89,7 @@
           <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
           {% endfor %}
         </select>
-        <p class="vacio" id="fp-formato-nota" style="font-size:.74rem;padding:0;" hidden>Este modelo no elige formato: sigue el de la imagen de referencia.</p>
+        <p class="vacio" id="fp-formato-nota" style="font-size:.74rem;padding:0;" hidden>Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen.</p>
       </div>
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
@@ -138,7 +138,7 @@
      quien tiene una idea pero quiere que la IA arme los planos — revisa, edita y regenera antes de generar. #}
   <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo" style="margin-top:1.2rem;">Generar video</button>
   <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.">Crear super prompt con IA (gratis)</button>
-  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.</p>
+  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Se cobra al generar, no antes.</p>
 </form>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
@@ -649,6 +649,12 @@
     var formatoImagen = document.getElementById('fp-formato-imagen');
     var notaFormato = document.getElementById('fp-formato-nota');
     var notaDuracion = document.getElementById('fp-duracion-nota');
+    var ta = document.getElementById('fp-texto');
+    // Referencias y catálogo son opcionales: sin nada adjunto la pieza es de
+    // solo texto (y Seedance, sin imagen de arranque, sí elige formato).
+    function sinAdjuntos() {
+      return !document.querySelector('#fp-bandeja-wrap #fp-bandeja') && !form.querySelector('input[name=productos_catalogo]:checked');
+    }
 
     // "Editar y crear otra a partir de esta": el servidor deja el texto y los
     // ajustes de la pieza original; acá se cargan en el formulario.
@@ -682,7 +688,7 @@
     }
     function ajustarSegunModelo(m, esImagen) {
       if (!m) return;
-      var formatos = (m.dataset.formatos || '').split(',').filter(Boolean);
+      var formatos = ((!esImagen && sinAdjuntos() ? m.dataset.formatosTexto : m.dataset.formatos) || '').split(',').filter(Boolean);
       if (esImagen) {
         if (formatoImagen) limitarSelect(formatoImagen, function (v) { return formatos.indexOf(v) !== -1; }, '9:16');
         // Borrador es solo de Wan 3.0 video: no debe sobrevivir a un cambio a Imagen.
@@ -730,14 +736,15 @@
       if (btnArmar) btnArmar.hidden = esImagen;
       if (esImagen) {
         botonGenerar.textContent = 'Generar imagen' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. Se cobra al generar, no antes.';
+        if (ayudaBoton) ayudaBoton.textContent = 'Se cobra al generar, no antes.';
       } else {
         botonGenerar.textContent = 'Generar video' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = 'Hace falta al menos una imagen: de referencia o de un producto del catálogo. «Generar» manda tu texto tal cual y se cobra al generar; «Armar prompt con IA» es gratis y te deja revisar el prompt antes de gastar.';
+        if (ayudaBoton) ayudaBoton.textContent = '«Generar» manda tu texto tal cual y se cobra al generar; «Crear super prompt» es gratis y te deja revisar el prompt antes de gastar.';
       }
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
+    form.addEventListener('change', function (e) { if (e.target.name === 'productos_catalogo') refrescar(); });
     ['fp-con-sonido', 'fp-musica', 'fp-calidad'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
@@ -750,7 +757,7 @@
     // «Sugerir» sonido de la escena: Claude describe qué se oye (centavos, solo texto).
     var btnSugerir = document.getElementById('fp-sugerir-sonido');
     if (btnSugerir) btnSugerir.addEventListener('click', function () {
-      var enfoque = form.querySelector('input[name=productos_catalogo][value^="personaje:"]:checked') ? 'persona' : 'producto';
+      var enfoque = form.querySelector('input[name=productos_catalogo][value^="personaje:"]:checked') ? 'persona' : (sinAdjuntos() ? 'libre' : 'producto');
       btnSugerir.disabled = true; btnSugerir.textContent = 'Pensando…';
       fetch(btnSugerir.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
                                      body: JSON.stringify({escena: texto.value, enfoque: enfoque})})
@@ -786,7 +793,7 @@
     var subidaTexto = document.getElementById('fp-subida-texto');
     var pollLink = null;
     function aplicar(d) {
-      if (d.html !== undefined) { wrap.innerHTML = d.html; engancharBandeja(); }
+      if (d.html !== undefined) { wrap.innerHTML = d.html; engancharBandeja(); refrescar(); }
       if (d.etiquetas) pintarChips(d.etiquetas);
       if (d.error) { subidaTexto.textContent = d.error; subida.style.display = 'block'; subidaBarra.style.width = '0%'; }
       vigilarLink();
@@ -868,15 +875,13 @@
     engancharBandeja();
 
     // Validación en sitio: el error se muestra en rojo junto al cuadro, no arriba.
+    // Solo el texto es obligatorio: referencias y catálogo son opcionales.
     var textoError = document.getElementById('fp-texto-error');
-    var refsError = document.getElementById('fp-refs-error');
     form.addEventListener('submit', function (e) {
       var vacio = !texto.value.trim();
       texto.classList.toggle('con-error', vacio);
       textoError.hidden = !vacio;
-      var sinRefs = !wrap.querySelector('#fp-bandeja') && !form.querySelector('input[name=productos_catalogo]:checked');
-      refsError.hidden = !sinRefs;
-      if (vacio || sinRefs) { e.preventDefault(); (sinRefs ? refsError : texto).scrollIntoView({block: 'center'}); if (vacio) texto.focus(); }
+      if (vacio) { e.preventDefault(); texto.scrollIntoView({block: 'center'}); texto.focus(); }
     });
     texto.addEventListener('input', function () {
       if (texto.value.trim()) { texto.classList.remove('con-error'); textoError.hidden = true; }

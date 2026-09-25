@@ -208,7 +208,7 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     escribe si sigue ahí."""
     referencias, referencias_urls, productos_sel = referencias_sesion(cliente, campana, idea, modelo_video)
     contexto, persona = _contexto(cliente, campana)
-    enfoque = idea.get("enfoque") if idea.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
+    enfoque = idea.get("enfoque") if idea.get("enfoque") in flowplus_prompt.ORDEN_ENFOQUES else "producto"
     info = flowplus_prompt.ENFOQUES[enfoque]
     es_video = idea["tipo"] == "video"
     prefs_sonido = proyectos.preferencias_sonido(cliente)

@@ -774,7 +774,7 @@ def campana_ideas(cliente, sid, cid):
 
 def flowplus_prompt_enfoques():
     import flowplus_prompt
-    return {k: v["nombre"] for k, v in flowplus_prompt.ENFOQUES.items()}
+    return {k: flowplus_prompt.ENFOQUES[k]["nombre"] for k in flowplus_prompt.ORDEN_ENFOQUES}
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/ideas/proponer")

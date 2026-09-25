@@ -28,6 +28,15 @@ de 30) y 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3-15 s y 9:16/16:9/1:1; Seedance
 Seedream V5 Pro acepta `aspect_ratio` (sin él sigue a la primera imagen).
 `min_duracion`/`max_duracion` y `formatos` de cada entrada son lo que la UI
 ofrece y lo que `ajustar_duracion`/`ajustar_formato` imponen antes de gastar.
+
+Solo texto (2026-09-25): en Crear las referencias y el catálogo son
+opcionales. Sin ninguna imagen ni video cada modelo va a su ruta de texto
+(`path_texto`, verificadas en wavespeed.ai/docs el 2026-09-25, mismos precios
+que la ruta con referencias): alibaba/wan-3.0/text-to-video (480p/720p,
+`enable_audio`), kwaivgi/kling-video-o3-pro/text-to-video (sin resolución,
+`sound`), bytedance/seedance-2.5/text-to-video (a diferencia de image-to-video
+SÍ elige formato: `formatos_texto`, `generate_audio`) y
+bytedance/seedream-v5.0-pro (text-to-image, sin sufijo).
 """
 import requests
 
@@ -38,6 +47,7 @@ VIDEO = {
         "nombre": "Wan 3.0",
         "familia": "wan",
         "path": wan3_client.MODEL_PATH,
+        "path_texto": "alibaba/wan-3.0/text-to-video",
         "max_referencias": 10,
         "usd_por_segundo": wan3_client.COSTO_USD_POR_SEGUNDO["720p"],
         "duraciones": (5, 8, 10, 12, 15, 20, 25, 30),
@@ -52,6 +62,7 @@ VIDEO = {
         "nombre": "Kling O3 Pro",
         "familia": "kling",
         "path": "kwaivgi/kling-video-o3-pro/reference-to-video",
+        "path_texto": "kwaivgi/kling-video-o3-pro/text-to-video",
         "max_referencias": 7,
         "usd_por_segundo": 0.112,
         "duraciones": (5, 8, 10, 12, 15),
@@ -66,12 +77,14 @@ VIDEO = {
         "nombre": "Seedance 2.5",
         "familia": "seedance",
         "path": "bytedance/seedance-2.5/image-to-video",
+        "path_texto": "bytedance/seedance-2.5/text-to-video",
         "max_referencias": 1,
         "usd_por_segundo": 0.36,
         "duraciones": (5, 8, 10, 12, 15, 20, 25, 30),
         "min_duracion": 4,
         "max_duracion": 30,
         "formatos": (),   # el formato sigue a la imagen de referencia: no se elige
+        "formatos_texto": ("9:16", "16:9", "1:1", "4:3", "3:4"),   # sin imagen sí se elige
         "max_videos": 0,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
         "nota": "Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido.",
@@ -82,6 +95,7 @@ IMAGEN = {
     "seedream_v5_pro": {
         "nombre": "Seedream V5.0 Pro",
         "path": wavespeed_imagen.MODELO_SEEDREAM,
+        "path_texto": "bytedance/seedream-v5.0-pro",
         "max_referencias": wavespeed_imagen.MAX_IMAGENES_SEEDREAM,
         "usd": wavespeed_imagen.COSTO_USD_SEEDREAM["2k"],
         "formatos": ("9:16", "1:1", "4:5", "16:9", "3:4", "4:3"),
@@ -114,12 +128,13 @@ def ajustar_duracion(modelo_id, duracion):
     return max(int(info["min_duracion"]), min(int(info["max_duracion"]), d))
 
 
-def ajustar_formato(modelo_id, formato, tipo="video"):
+def ajustar_formato(modelo_id, formato, tipo="video", solo_texto=False):
     """Formato que se le pide al modelo: el elegido si lo admite; si no, el
     vertical (o el primero que admita). None cuando el modelo no elige formato
-    (Seedance: sigue a la imagen de referencia)."""
+    (Seedance: sigue a la imagen de referencia). solo_texto: la pieza no lleva
+    ninguna imagen, así que vale `formatos_texto` si el modelo lo declara."""
     info = (IMAGEN if tipo == "imagen" else VIDEO)[modelo_id]
-    formatos = tuple(info.get("formatos") or ())
+    formatos = tuple((solo_texto and info.get("formatos_texto")) or info.get("formatos") or ())
     if not formatos:
         return None
     if formato in formatos:
@@ -204,11 +219,12 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
     de videos de referencia — solo Wan 3.0 los recibe tal cual; para los demás
     el llamador ya convirtió cada video en un fotograma dentro de `referencias`.
     con_sonido: pide el audio nativo del modelo (sonido de la escena); True
-    salvo que la pieza se quiera muda a propósito."""
+    salvo que la pieza se quiera muda a propósito. Sin imágenes ni videos va a
+    la ruta de solo texto del modelo (`path_texto`)."""
     info = VIDEO[modelo_id]
     videos = list(videos or [])[: info.get("max_videos", 0)]
     if not referencias and not videos:
-        raise ValueError(f"{info['nombre']} necesita al menos una imagen de referencia.")
+        return _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso, con_sonido, calidad)
     refs = list(referencias)[: info["max_referencias"]]
     if modelo_id == "wan3":
         return wan3_client.generar_video(
@@ -231,12 +247,32 @@ def generar_video(modelo_id, prompt, referencias, duration, aspect_ratio="9:16",
     raise ValueError(f"Modelo de video desconocido: {modelo_id}")
 
 
+def _generar_video_texto(modelo_id, prompt, duration, aspect_ratio, on_progreso, con_sonido, calidad):
+    """Solo texto: el mismo modelo por su ruta text-to-video. El parámetro de
+    audio va siempre explícito (Kling lo trae apagado por defecto); Kling no
+    acepta resolución; sin `aspect_ratio` el modelo usa el suyo (16:9)."""
+    info = VIDEO[modelo_id]
+    payload = {"prompt": prompt, "duration": int(duration)}
+    if modelo_id == "wan3":
+        payload["resolution"] = _resolucion_wan(calidad)
+    elif modelo_id == "seedance25":
+        payload["resolution"] = "720p"
+    if aspect_ratio:
+        payload["aspect_ratio"] = aspect_ratio
+    payload[info["audio_nativo"]["parametro"]] = bool(con_sonido)
+    return _lanzar(info["path_texto"], payload, info["nombre"], on_progreso=on_progreso)
+
+
 def generar_imagen(modelo_id, prompt, referencias, on_progreso=None, aspect_ratio=None):
     """Devuelve la URL pública de la imagen generada. aspect_ratio: uno de
-    `IMAGEN[modelo]["formatos"]` o None (el modelo sigue a la primera imagen)."""
+    `IMAGEN[modelo]["formatos"]` o None (el modelo sigue a la primera imagen).
+    Sin referencias va a la ruta de solo texto del modelo (`path_texto`)."""
     info = IMAGEN[modelo_id]
     if not referencias:
-        raise ValueError(f"{info['nombre']} necesita al menos una imagen de referencia.")
+        payload = {"prompt": prompt, "resolution": "2k"}
+        if aspect_ratio:
+            payload["aspect_ratio"] = aspect_ratio
+        return _lanzar(info["path_texto"], payload, info["nombre"], on_progreso=on_progreso)
     if modelo_id == "seedream_v5_pro":
         return wavespeed_imagen.editar_imagen_seedream(
             referencias[0], prompt, referencias_urls=list(referencias[1:]),

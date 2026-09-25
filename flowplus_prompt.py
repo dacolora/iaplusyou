@@ -110,6 +110,14 @@ ENFOQUES = {
             "parte del cuerpo; el producto es lo que la cámara busca."
         ),
     },
+    # Crear sin referencias ni producto (2026-09-25): no rota con los demás
+    # (ORDEN_ENFOQUES) y armar() devuelve el texto de la persona tal cual.
+    "libre": {
+        "nombre": "Solo texto",
+        "descripcion": "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos.",
+        "con_persona": False,
+        "bloque": None,
+    },
 }
 ORDEN_ENFOQUES = ("producto", "persona", "unboxing")
 
@@ -257,7 +265,21 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
     `Shot N` sustituye a `ESCENA:` y a la línea `SONIDO:`.
     cierre_sonido: frase literal del fabricante (`flowplus_modelos.cierre_sonido`)
     que cierra el sonido; None = sin cierre (prompt idéntico al anterior).
+    Con enfoque `libre` (solo texto) el prompt es el texto de la persona (o los
+    planos del director) y, si se pide, la línea de sonido: sin marca, sin
+    reglas de producto ni EVITAR.
     Devuelve el prompt completo (str)."""
+    if enfoque == "libre":
+        if planos:
+            partes = _bloque_planos(planos, con_sonido)
+            if con_sonido and cierre_sonido:
+                partes.append(cierre_sonido)
+        else:
+            partes = [texto.strip()]
+            linea_sonido = _linea_sonido(sonido, con_sonido, cierre=cierre_sonido)
+            if linea_sonido:
+                partes.append(linea_sonido)
+        return "\n".join(partes)
     partes = []
     info_enfoque = ENFOQUES.get(enfoque) if enfoque else None
     if info_enfoque:

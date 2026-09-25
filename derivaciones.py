@@ -153,10 +153,15 @@ def modelo_regeneracion(sesion, k):
 
 def _item_regeneracion(cliente, cf_id, k, idiomas):
     """Sesión nueva (k-ésima regeneración, k >= 0) con otro modelo de video y
-    otro enfoque que el original; el clon se genera en `avanzar`."""
+    otro enfoque que el original; el clon se genera en `avanzar`. Una pieza de
+    solo texto (enfoque `libre`) conserva su enfoque: sin producto, los otros
+    le meterían reglas de un producto que no existe."""
     sesion = creative_flow.cargar(cliente).get(cf_id) or {}
     modelo = modelo_regeneracion(sesion, k)
-    enfoque = _otro(ENFOQUES, sesion.get("enfoque") or ENFOQUES[0], k)
+    if sesion.get("enfoque") == "libre":
+        enfoque = "libre"
+    else:
+        enfoque = _otro(ENFOQUES, sesion.get("enfoque") or ENFOQUES[0], k)
     nuevo = creative_flow.duplicar(cliente, cf_id, modelo=modelo, enfoque=enfoque)
     return {"clase": "regeneracion", "variante": None, "variante_tipo": None, "cf_id": nuevo,
             "paises": list(idiomas), "idiomas": dict(idiomas), "estado": "produciendo_clon",

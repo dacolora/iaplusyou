@@ -117,7 +117,10 @@ def _mensaje(sesion, idioma):
         rol = "logo oficial" if r.get("logo") else (r.get("categoria") or ("video de referencia" if r.get("tipo") == "video" else "imagen de referencia"))
         nombre = r.get("activo") or r.get("etiqueta") or ""
         lineas.append(f"- {r['token']} → {rol} → {nombre} → {r.get('regla') or ''}".rstrip(" →"))
-    lineas.append(f"ENFOQUE: {sesion.get('enfoque') or 'producto'}")
+    if sesion.get("enfoque") == "libre":
+        lineas.append("ENFOQUE: libre — sin producto ni activos; la escena sale solo de la IDEA")
+    else:
+        lineas.append(f"ENFOQUE: {sesion.get('enfoque') or 'producto'}")
     if sesion.get("guia_marca"):
         lineas.append(f"MARCA: {sesion['guia_marca']}")
     con_sonido = bool(sesion.get("con_sonido"))

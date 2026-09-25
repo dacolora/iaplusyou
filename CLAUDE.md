@@ -282,6 +282,11 @@ prompt determinista, nunca bloquea) -> `prompt_listo` (la persona edita con
 `creative_flow.duplicar(prompt_relleno=, variante="B")`) -> `flowplus_lanzar.lanzar`
 -> worker `tareas/flowplus.py` -> `providers/flowplus_modelos.py`, todo vía WaveSpeed).
 Never make the director mandatory again: a client's own prompt always wins.
+References and catalog are optional (2026-09-25): with nothing attached the piece is
+`enfoque="libre"` («Solo texto») — no logos, no brand guide, `flowplus_prompt.armar` returns
+the person's text as-is (+ the SONIDO line), and each model goes through its `path_texto`
+(WaveSpeed text-to-video / text-to-image, same prices; Seedance then does take a format,
+`formatos_texto`). Sprints and derivations never use `libre` (they rotate `ORDEN_ENFOQUES`).
 Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
 por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;

@@ -231,8 +231,10 @@ def datos_para_director(cliente, entry):
     """La `sesion` que espera `director.compilar`: lo de la sesión más la guía
     y el negative de la marca (se leen aquí para que el director no toque
     marca.py ni la base). `con_sonido` sigue la misma regla que
-    `armar_prompt_sesion` para sesiones anteriores al campo."""
+    `armar_prompt_sesion` para sesiones anteriores al campo. Una sesión de
+    solo texto (enfoque `libre`) no lleva guía ni negative de la marca."""
     import marca as marca_mod
+    libre = entry.get("enfoque") == "libre"
     if "con_sonido" in entry:
         con_sonido = bool(entry["con_sonido"])
     else:
@@ -248,8 +250,8 @@ def datos_para_director(cliente, entry):
         "contexto": entry.get("contexto"),
         "preset_camara": entry.get("preset_camara"),
         "plantilla": entry.get("plantilla"),
-        "guia_marca": marca_mod.guia_efectiva(cliente),
-        "negative_marca": marca_mod.negative_prompt_efectivo(cliente),
+        "guia_marca": "" if libre else marca_mod.guia_efectiva(cliente),
+        "negative_marca": None if libre else marca_mod.negative_prompt_efectivo(cliente),
     }
 
 

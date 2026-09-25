@@ -5874,25 +5874,33 @@ def cf_crear_video(cliente):
             })
         productos_sel.append(activo["nombre"])
 
-    # Logos oficiales del proyecto: referencia extra, siempre, para que la marca
-    # salga como es y no inventada. Cuentan para el tope de imágenes del modelo.
+    # Referencias y catálogo son opcionales (2026-09-25): sin nada adjunto la
+    # pieza es de solo texto (enfoque `libre`) — el texto tal cual, sin logos
+    # ni marca, por la ruta text-to-video/-image del mismo modelo.
+    solo_texto = not referencias
+    # Logos oficiales del proyecto: referencia extra, siempre que haya otra
+    # referencia, para que la marca salga como es y no inventada. Cuentan para
+    # el tope de imágenes del modelo.
     logos = []
-    for i, l in enumerate(_logos(cliente)[:2], start=1):
+    for i, l in enumerate([] if solo_texto else _logos(cliente)[:2], start=1):
         logos.append({"tipo": "imagen", "url": l["url"], "frame_url": l["url"], "etiqueta": f"@Logo {i}", "logo": True})
     referencias = (referencias + logos)[:15]
     if tipo == "video":
         flowplus_prompt.asignar_tokens(referencias, modelo)
+        if solo_texto:
+            # Sin imagen de arranque Seedance sí elige formato (formatos_texto).
+            aspect_ratio = flowplus_modelos.ajustar_formato(modelo, request.form.get("aspect_ratio") or "", solo_texto=True)
     # referencias_urls sigue siendo la lista plana de IMÁGENES (los videos van por
     # su fotograma) — es lo que consumen los modelos que no aceptan video.
     referencias_urls = [r["frame_url"] for r in referencias][:10]
-    if not referencias:
-        flash("Sube al menos una imagen o un video, o elige un producto del catálogo: el modelo necesita una referencia.", "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not accion_central:
         flash("Escribe qué tiene que pasar en el video.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
-    enfoque = "persona" if any(r.get("categoria") == "personaje" for r in referencias) else "producto"
+    if solo_texto:
+        enfoque = "libre"
+    else:
+        enfoque = "persona" if any(r.get("categoria") == "personaje" for r in referencias) else "producto"
     info = flowplus_prompt.ENFOQUES[enfoque]
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [],
@@ -6054,7 +6062,7 @@ def cf_generar_video(cliente, cf_id):
     if entry.get("estado") not in ("prompt_listo", "error"):
         flash("Este video ya se generó o se está generando — no se puede volver a disparar.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    if not (entry.get("referencias_urls") or []):
+    if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
         flash("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     nombre_modelo = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "el modelo")

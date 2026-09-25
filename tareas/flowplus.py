@@ -165,9 +165,11 @@ def _preparar(cliente, cf_id):
     else:
         modelo = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
         # Última barrera antes de gastar: nunca se pide una duración o un formato
-        # que el modelo rechaza (Kling llega a 15 s; Seedance no elige formato).
+        # que el modelo rechaza (Kling llega a 15 s; Seedance no elige formato
+        # salvo sin ninguna imagen, cuando va por su ruta de solo texto).
         duracion = flowplus_modelos.ajustar_duracion(modelo, duracion)
-        aspect_ratio = flowplus_modelos.ajustar_formato(modelo, aspect_ratio)
+        aspect_ratio = flowplus_modelos.ajustar_formato(modelo, aspect_ratio,
+                                                        solo_texto=not referencias and not videos_ref)
     calidad = entry.get("calidad") if entry.get("calidad") in flowplus_modelos.CALIDADES else "final"
     return entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo, calidad
 

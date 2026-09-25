@@ -142,7 +142,7 @@ def armar_prompt(ctx, n_videos, n_imagenes):
         temporada=_temporada_texto(ctx.get("temporada")), guia=ctx.get("guia") or "", referencias=_referencias_texto(ctx.get("referencias") or []),
         banco=banco, existentes=", ".join(ctx.get("ideas_existentes") or []) or "ninguna",
         descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna", n_videos=int(n_videos), n_imagenes=int(n_imagenes),
-        enfoques=", ".join(f'"{e}"' for e in flowplus_prompt.ENFOQUES), duraciones=list(ctx.get("duraciones") or (8,)),
+        enfoques=", ".join(f'"{e}"' for e in flowplus_prompt.ORDEN_ENFOQUES), duraciones=list(ctx.get("duraciones") or (8,)),
         plataformas=", ".join(f'"{p}"' for p in datos.PLATAFORMAS))
 
 
@@ -183,7 +183,7 @@ def parsear(texto, referencias_ids_validos, duraciones):
         tipo = c.get("tipo")
         if not titulo or not escena or tipo not in datos.TIPOS_PIEZA:
             continue
-        enfoque = c.get("enfoque") if c.get("enfoque") in flowplus_prompt.ENFOQUES else "producto"
+        enfoque = c.get("enfoque") if c.get("enfoque") in flowplus_prompt.ORDEN_ENFOQUES else "producto"
         refs = [int(x) for x in (c.get("referencias_ids") or []) if isinstance(x, (int, float, str)) and str(x).lstrip("-").isdigit()]
         refs = [r for r in refs if r in referencias_ids_validos]
         limpias.append({

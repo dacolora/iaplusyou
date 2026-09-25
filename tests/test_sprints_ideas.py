@@ -119,3 +119,14 @@ def test_referencias_texto_describe_biblioteca_con_familia_y_etapa():
     assert "funciona porque: Antes/después con el mismo encuadre" in texto
     assert "dolor: no confía en la marca" in texto
     assert "etapa: TOF" in texto
+
+
+def test_sprints_nunca_usa_el_enfoque_solo_texto(base_temporal, monkeypatch):
+    """«libre» (Crear sin referencias ni producto) no es un enfoque de
+    campaña: ni se le ofrece a Claude ni se acepta si lo devuelve."""
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    p = ideas.armar_prompt(ideas.contexto_campana("acme", datos.campana("acme", cid)), 1, 1)
+    assert '"libre"' not in p and '"producto"' in p
+    (i,) = ideas.parsear(json.dumps({"ideas": [dict(IDEA_V, enfoque="libre")]}), set(), (8,))
+    assert i["enfoque"] == "producto"
