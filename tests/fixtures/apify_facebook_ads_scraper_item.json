@@ -1,0 +1,16 @@
+{
+  "adArchiveId": "1229350099285014",
+  "pageId": "16453004404",
+  "startDateFormatted": "2026-03-16T07:00:00.000Z",
+  "collationCount": 3,
+  "isActive": true,
+  "snapshot": {
+    "pageName": "Sandalias Andina",
+    "body": {"text": "Cómodas, livianas y hechas a mano. Envío a toda Colombia."},
+    "cards": [],
+    "images": [
+      {"originalImageUrl": "https://scontent.xx.fbcdn.net/v/sandalias_ad1.jpg", "resizedImageUrl": "https://scontent.xx.fbcdn.net/v/sandalias_ad1_small.jpg"}
+    ],
+    "videos": []
+  }
+}
