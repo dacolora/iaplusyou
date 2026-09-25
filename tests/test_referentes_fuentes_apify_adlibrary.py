@@ -1,4 +1,5 @@
 import json
+from datetime import date
 
 import pytest
 
@@ -51,7 +52,7 @@ def test_traer_modo_palabra_arma_la_url_de_ad_library(monkeypatch):
                                  "formato": "imagen", "solo_activos": True}, 5, lambda **kw: None)
     pagina, cursor, meta = next(gen)
     metodo, url, kw = sesion.llamadas[0]
-    assert url == f"{apify_api.URL_API}/actors/apify/facebook-ads-scraper/runs"
+    assert url == f"{apify_api.URL_API}/actors/apify~facebook-ads-scraper/runs"
     body = kw["json"]
     ad_lib_url = body["startUrls"][0]["url"]
     assert "country=CO" in ad_lib_url
@@ -213,3 +214,31 @@ def test_probar_token_malo_lanza_error_fuente(monkeypatch):
     monkeypatch.setattr(apify_adlibrary, "_sesion", lambda: sesion)
     with pytest.raises(ErrorFuente):
         apify_adlibrary.probar()
+
+
+def test_dias_activo_solo_con_fecha_de_inicio_cuenta_hasta_hoy():
+    """Sin `endDateFormatted` (anuncio sigue corriendo): `dias` se cuenta
+    desde `startDateFormatted` hasta hoy (Important 2 del review final)."""
+    item = dict(FIXTURE_ITEM, isActive=True)
+    item.pop("endDateFormatted", None)
+    a = apify_adlibrary._normalizar(item)
+    esperado = (date.today() - date(2026, 3, 16)).days
+    assert isinstance(a["dias"], int) and a["dias"] >= 0
+    assert a["dias"] == esperado
+
+
+def test_dias_inactivo_con_fecha_de_cierre_cuenta_los_dias_exactos():
+    """Anuncio ya parado con `endDateFormatted`: `dias` es la diferencia real
+    entre inicio y cierre, no hasta hoy."""
+    item = dict(FIXTURE_ITEM, isActive=False, endDateFormatted="2026-07-09T07:00:00.000Z")
+    a = apify_adlibrary._normalizar(item)
+    assert a["dias"] == (date(2026, 7, 9) - date(2026, 3, 16)).days
+
+
+def test_dias_sin_fecha_de_inicio_es_none():
+    """Sin `startDateFormatted` no hay nada que calcular -- nunca se inventa
+    un número."""
+    item = dict(FIXTURE_ITEM)
+    item.pop("startDateFormatted", None)
+    a = apify_adlibrary._normalizar(item)
+    assert a["dias"] is None

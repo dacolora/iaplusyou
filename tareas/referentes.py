@@ -335,6 +335,12 @@ def _fase_trayendo(tarea, p, bid, avanzar):
                 gastos.registrar_seguro(p["cliente"], "recoleccion", costo_real,
                                         f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                         detalle=f"{consulta['fuente']}: {len(pagina)} anuncio(s) reales")
+                # Mismo mecanismo que `_fase_clasificando` con su gasto de
+                # Claude (Important 1 del review final): sin esto, el costo
+                # real de Apify queda solo en `gastos` y "Mis barridos"
+                # sigue mostrando Costo 0.00 aunque ya se haya pagado.
+                b2 = datos.barrido(bid) or {}
+                datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + costo_real, 4))
             if traidos_total - int(b.get("traidos") or 0) >= TRAMO:
                 break
     except ErrorFuente as e:
@@ -348,6 +354,11 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             gastos.registrar_seguro(p["cliente"], "recoleccion", costo_real,
                                     f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                     detalle=f"{consulta['fuente']}: corrida cobrada pero no se pudo leer del todo")
+            # Mismo motivo que en el bucle de arriba: esto también es plata
+            # ya pagada y debe verse en "Mis barridos", aunque la corrida
+            # haya terminado en error total.
+            b2 = datos.barrido(bid) or {}
+            datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + costo_real, 4))
         if traidos_total == 0:
             datos.actualizar_barrido(bid, estado="error", aviso=cola.recortar(str(e), 300))
             raise

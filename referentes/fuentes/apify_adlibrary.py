@@ -19,6 +19,7 @@ de la Ad Library acepta cualquier ISO-2 real -- CO, MX, AR, lo que sea --
 así que esta fuente sí sirve para anuncios de Latinoamérica.
 """
 import os
+from datetime import date
 from urllib.parse import quote
 
 import providers.apify as apify_api
@@ -129,6 +130,38 @@ def _tipo_item(snap):
     return "imagen"
 
 
+def _dias(item, fecha):
+    """Equivalente al `days_running` que manda Atria (Important 2 del review
+    final): Apify no lo entrega hecho, pero `startDateFormatted`/
+    `endDateFormatted` (ISO, verificados en vivo contra la salida real de
+    Apify -- no solo el fixture) alcanzan para calcularlo. Sin esto un
+    anuncio de Apify siempre cae al final en el orden por defecto de la
+    grilla (`dias DESC NULLS LAST`) y en el ranking de `sugerir.py`.
+
+    `fecha` es el mismo recorte `startDateFormatted[:10]` que ya usa
+    `primera_vez`/`ultima_vez` -- si esa fecha falta o no parsea, no hay
+    nada que calcular y `dias` se queda en `None` (nunca se inventa un
+    número). Con inicio válido: un anuncio inactivo con `endDateFormatted`
+    usa esa fecha de cierre real; cualquier otro caso (activo, o inactivo
+    sin fecha de cierre utilizable) cuenta hasta hoy. `max(0, ...)` cubre
+    una fecha mala/futura que daría una resta negativa."""
+    if not fecha:
+        return None
+    try:
+        inicio = date.fromisoformat(fecha)
+    except ValueError:
+        return None
+    fin = date.today()
+    if not item.get("isActive"):
+        fin_str = (item.get("endDateFormatted") or "")[:10]
+        if fin_str:
+            try:
+                fin = date.fromisoformat(fin_str)
+            except ValueError:
+                fin = date.today()
+    return max(0, (fin - inicio).days)
+
+
 def _normalizar(item):
     anuncio_id = str(item.get("adArchiveId") or item.get("adArchiveID") or "") or None
     if not anuncio_id:
@@ -151,7 +184,7 @@ def _normalizar(item):
         "pais": None,
         "tipo": _tipo_item(snap),
         "imagen_origen": imagen_origen,
-        "dias": None,
+        "dias": _dias(item, fecha),
         "variantes": item.get("collationCount"),
         "primera_vez": fecha,
         "ultima_vez": fecha,

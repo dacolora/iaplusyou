@@ -2,7 +2,7 @@ from referentes.fuentes import apify_actores
 
 
 def test_actor_y_precio_verificados():
-    assert apify_actores.ACTOR == "apify/facebook-ads-scraper"
+    assert apify_actores.ACTOR == "apify~facebook-ads-scraper"
     assert apify_actores.USD_POR_RESULTADO == 0.0058
 
 

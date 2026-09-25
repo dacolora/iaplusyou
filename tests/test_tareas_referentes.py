@@ -808,3 +808,33 @@ def test_fase_trayendo_registra_gasto_real_cuando_la_fuente_lo_reporta(tmp_path,
     assert len(filas) == 1
     assert filas[0]["usd"] == 0.029
     assert f"referentes:barrer:{bid}:apify:t999" in filas[0]["referencia"]
+
+
+def test_fase_trayendo_suma_el_costo_real_a_usd_real_del_barrido(tmp_path, monkeypatch):
+    """El gasto en `gastos` (Important 1 del review final) no basta: "Mis
+    barridos" lee `barrido.usd_real`, así que `_fase_trayendo` debe sumarle
+    el costo real de Apify igual que `_fase_clasificando` ya hace con el
+    suyo (mismo mecanismo: releer el barrido y sumar con
+    `datos.actualizar_barrido(bid, usd_real=...)`)."""
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "apify", {"modo": "palabra", "palabra": "sandalias"}, 5)
+
+    def traer_falso(consulta, tope, avanzar, cursor=None):
+        avanzar("Buscando en Apify", "1 anuncios")
+        yield [{"anuncio_id": "a1", "imagen_origen": "https://x/a1.jpg", "marca": "X", "titular": "", "cuerpo": "",
+                "tipo": "imagen", "pais": None, "idioma": None, "dias": None, "variantes": None,
+                "primera_vez": None, "ultima_vez": None, "activo": True, "url_anuncio": "", "url_marca": "",
+                "etiquetas_fuente": {}, "extra": {}, "pagina_id": None}], None, {"costo_real": 0.029}
+
+    class _ModuloFalso:
+        traer = staticmethod(traer_falso)
+
+    monkeypatch.setattr(tareas_referentes.fuentes, "por_tipo", lambda tipo: _ModuloFalso())
+    tarea = {"id": 999, "job_id": None, "payload": {"barrido_id": bid, "cliente": cliente,
+             "consulta": {"modo": "palabra", "palabra": "sandalias", "fuente": "apify"}, "tope": 5, "fase": "trayendo"}}
+    tareas_referentes.ejecutar_barrer(tarea)
+
+    assert datos.barrido(bid)["usd_real"] == pytest.approx(0.029)

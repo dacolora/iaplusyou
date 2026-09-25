@@ -4,6 +4,10 @@ referentes (spec bloque 5, 2026-09-23 §4.2): el oficial de Apify para la Ad
 Library de Meta. Verificado EN VIVO 2026-09-25 en apify.com:
 
   apify/facebook-ads-scraper — Ad Library de Meta y páginas de Facebook.
+    El id llamable por API lleva tilde entre dueño y actor
+    (`apify~facebook-ads-scraper`, como el resto de actores de este repo,
+    ver `nicho/fuentes/apify_actores.py`) -- distinto de la URL de la
+    tienda, que usa `/` (`apify.com/apify/facebook-ads-scraper`).
     Entrada real (input schema de la tienda, NO el resumen del README):
       startUrls: [{"url": "..."}]  -- REQUERIDO. Una URL completa del Ad
         Library o de una página de Facebook, tal cual se pega del navegador
@@ -26,7 +30,7 @@ Library de Meta. Verificado EN VIVO 2026-09-25 en apify.com:
 """
 import math
 
-ACTOR = "apify/facebook-ads-scraper"
+ACTOR = "apify~facebook-ads-scraper"
 USD_POR_RESULTADO = 0.0058          # plan Free, US$5.80/1000 -- ver docstring
 MAX_RESULTADOS = 2000                # mismo tope que ya ofrece el formulario de Traer referentes
 
