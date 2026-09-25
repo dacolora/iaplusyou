@@ -107,6 +107,38 @@
 </section>
 
 <section class="admin-bloque">
+  <div class="admin-cabecera"><h2>Totales</h2></div>
+  <div class="hero-stats">
+    {% for f, n in fuentes_totales %}
+    <div class="stat"><span class="stat-num">{{ n }}</span><span class="stat-label">{{ fuentes_nombres.get(f, f) }}</span></div>
+    {% endfor %}
+  </div>
+  <p class="vacio">Atria: {{ atria_llamadas }}/{{ atria_limite }} llamadas este mes.</p>
+</section>
+
+<section class="admin-bloque">
+  <div class="admin-cabecera"><h2>Barridos globales (Atria, Apify)</h2></div>
+  {% if not barridos_otras_fuentes %}
+  <p class="vacio">Todavía no se ha traído ningún barrido global fuera de copycoders.</p>
+  {% else %}
+  <div class="admin-scroll"><table class="tabla-admin">
+    <tr><th>Fecha</th><th>Fuente</th><th>Consulta</th><th>Estado</th><th>Traídos</th><th>Clasificados</th><th>Costo</th></tr>
+    {% for b in barridos_otras_fuentes %}
+    <tr>
+      <td>{{ b.creado_en }}</td>
+      <td>{{ fuentes_nombres.get(b.fuente, b.fuente) }}</td>
+      <td>{{ b.consulta.palabra or b.consulta.pagina_id or '' }}</td>
+      <td>{{ b.estado }}{% if b.aviso %} · {{ b.aviso }}{% endif %}</td>
+      <td>{{ b.traidos }}/{{ b.tope }}</td>
+      <td>{{ b.clasificados }}</td>
+      <td>{% if b.usd_real %}US$ {{ '%.2f' | format(b.usd_real) }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+</section>
+
+<section class="admin-bloque">
   <div class="admin-cabecera"><h2>Familias ({{ familias | length }})</h2></div>
   <div class="admin-scroll"><table class="tabla-admin">
     <tr><th>Familia</th><th>Descripción</th><th>Referentes</th><th>Origen</th></tr>

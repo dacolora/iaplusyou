@@ -730,3 +730,19 @@ def test_barridos_sin_gasto_muestran_raya(app):
     html = _barridos_html(app)
     assert "US$ 0,00" not in html
     assert "—" in html
+
+
+def test_admin_referentes_muestra_totales_y_cuota_atria(app, monkeypatch):
+    from referentes.fuentes import atria as atria_mod
+    monkeypatch.setattr(atria_mod, "llamadas_este_mes", lambda: 37)
+    monkeypatch.setattr(atria_mod, "limite_mensual", lambda: 1200)
+    html = app["c"].get("/admin/referentes").data.decode()
+    assert "37" in html and "1200" in html
+
+
+def test_admin_referentes_lista_barridos_de_otras_fuentes(app):
+    from referentes import datos
+    bid = datos.crear_barrido(None, "atria", {"modo": "palabra", "palabra": "sandalias"}, 50)
+    datos.actualizar_barrido(bid, estado="listo", traidos=12, clasificados=10, usd_real=0.32)
+    html = app["c"].get("/admin/referentes").data.decode()
+    assert "sandalias" in html and "atria" in html
