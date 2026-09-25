@@ -52,3 +52,29 @@ def video_nuevo(cliente="acme", config=None):
     from guiones import datos
     gid = guion_confirmado(cliente)
     return gid, datos.crear_video(cliente, gid, dict(config or CONFIG))
+
+
+def _m(dice, aire, visual):
+    return {"dice": dice, "aire": aire, "visual": visual}
+
+
+BLOQUE = {"conteo_objetos": "Exactly one podiatrist and one pair of thin black flip-flops.", "disposicion_inicial": "",
+          "props": "The flip-flops are thin black rubber in every clip.",
+          "quien_sostiene": "Only the podiatrist holds the flip-flops; set down, they stay where they are.",
+          "voz": "Calm British English male voice"}
+CLIP1 = {"titulo": "The hook", "lineas": [1, 2], "estado_inicio": "Hands empty.", "estado_fin": "Hands empty.",
+         "entornos": [2], "momentos": [_m([1], 0.5, "Medium shot, he looks at camera."),
+                                      _m([2], 0.5, "He gestures to the hard floor.")]}
+CLIP2 = {"titulo": "The thin sole", "lineas": [3, 4, 5, 6], "estado_inicio": "Hands empty.",
+         "estado_fin": "Holding ONE flip-flop.", "entornos": [2],
+         "momentos": [_m([3], 0.3, "He lifts ONE flip-flop."), _m([4], 0.3, "Insert macro: the paper-thin edge."),
+                      _m([5, 6], 0.5, "He smiles."), _m(None, 1.0, "Held frame: the flip-flop in his hand.")]}
+
+
+def hook_clip(titulo):
+    return {"titulo": titulo, "lineas": [1, 2], "estado_inicio": "Hands empty.", "estado_fin": "Hands empty.",
+            "entornos": [2], "momentos": [_m([1], 0.5, "Close-up, he leans in."), _m([2], 0.5, "He gestures to the hard floor.")]}
+
+
+PLAN = {"bloque_video": BLOQUE, "clips": [CLIP1, CLIP2],
+        "hooks": {"hook_2": hook_clip("Tired feet"), "hook_3": hook_clip("On your feet")}}
