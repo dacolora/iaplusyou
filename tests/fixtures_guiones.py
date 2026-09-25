@@ -30,9 +30,25 @@ def fake(respuesta, ent=1000, sal=800, registro=None):
     return llamar
 
 
+CONFIG = {"modo": "lipsync", "duracion_objetivo": None, "formato": "9:16", "palabras_por_segundo": 2.4,
+          "aire_por_linea": 0.6, "hook": "original",
+          "referencias": [
+              {"tipo": "personaje", "activo_id": None, "nombre": "", "descripcion": "the AI podiatrist, adult British man (~45)",
+               "casting": {"edad": "45", "vestuario": "white clinic coat", "paleta": "white, navy"}, "fotos": 0},
+              {"tipo": "entorno", "activo_id": None, "nombre": "", "descripcion": "modern bright podiatry clinic",
+               "casting": {}, "fotos": 0}],
+          "estilo": "ultra-photorealistic live-action", "voz": ""}
+
+
 def guion_confirmado(cliente="acme"):
     from guiones import datos, lectura
     lid = datos.crear_lote(cliente, TEXTO)
     [gid] = datos.terminar_lectura(lid, [lectura.numerar(GUION_CRUDO, TEXTO)], 0.01)
     datos.confirmar(cliente, gid)
     return gid
+
+
+def video_nuevo(cliente="acme", config=None):
+    from guiones import datos
+    gid = guion_confirmado(cliente)
+    return gid, datos.crear_video(cliente, gid, dict(config or CONFIG))

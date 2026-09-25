@@ -181,3 +181,146 @@ def duplicar(cliente, guion_id):
                                             lote_id=fila.lote_id, orden=orden + 1, titulo=titulo,
                                             lectura=lectura, estado="leido", extra={}))
         return int(r.inserted_primary_key[0])
+
+
+# --------------------------------------------------------------- videos ---
+
+def nombre_version(config, version_n):
+    dur = config.get("duracion_objetivo")
+    modo = "voz en off" if config.get("modo") == "voiceover" else "diálogo"
+    return f"{f'{dur} s' if dur else 'Completo'} · {modo} · v{version_n}"
+
+
+_DEFECTOS_VIDEO = (("config", dict), ("recorte", dict), ("clips", list), ("hooks_alt", dict),
+                   ("validaciones", list), ("avisos", list), ("imagenes", dict), ("extra", dict))
+
+
+def _vencer_video(con, video_id):
+    v, lim = db.guion_video, _limite()
+    con.execute(v.update().where(v.c.id == video_id, v.c.estado == "recortando", v.c.iniciado_en < lim)
+                .values(estado="configurando", aviso=INTERRUMPIDO))
+    con.execute(v.update().where(v.c.id == video_id, v.c.estado == "armando", v.c.iniciado_en < lim)
+                .values(estado="error", aviso=INTERRUMPIDO))
+    con.execute(v.update().where(v.c.id == video_id, v.c.estado_imagenes == "escribiendo", v.c.iniciado_en < lim)
+                .values(estado_imagenes="error", aviso_imagenes=INTERRUMPIDO))
+
+
+def _video_completo(con, video_id):
+    d = _dict(con.execute(sa.select(db.guion_video).where(db.guion_video.c.id == video_id)).first())
+    if d is None:
+        return None
+    g = db.guion
+    d["guion"] = _dict(con.execute(sa.select(g.c.id, g.c.titulo, g.c.lectura, g.c.lote_id)
+                                   .where(g.c.id == d["guion_id"])).first())
+    d["guion"]["lectura"] = d["guion"]["lectura"] or {}
+    for clave, fabrica in _DEFECTOS_VIDEO:
+        if d.get(clave) is None:
+            d[clave] = fabrica()
+    return d
+
+
+def _bloquear_video(con, cliente, video_id):
+    """Toma el lock de escritura de SQLite antes de leer (como experimentos._bloquear)."""
+    v = db.guion_video
+    r = con.execute(v.update().where(v.c.id == video_id, v.c.cliente == cliente)
+                    .values(actualizado_en=v.c.actualizado_en))
+    if r.rowcount != 1:
+        raise NoExiste("Esa versión no existe.")
+    _vencer_video(con, video_id)
+    return con.execute(sa.select(v).where(v.c.id == video_id)).first()
+
+
+def crear_video(cliente, guion_id, config, recorte=None, plan=None, estado="configurando"):
+    g, v = db.guion, db.guion_video
+    with db.conectar() as con:
+        r = con.execute(g.update().where(g.c.id == guion_id, g.c.cliente == cliente)
+                        .values(actualizado_en=g.c.actualizado_en))
+        if r.rowcount != 1:
+            raise NoExiste("Ese guion no existe.")
+        if con.execute(sa.select(g.c.estado).where(g.c.id == guion_id)).scalar() != "confirmado":
+            raise Conflicto("Confirma el guion antes de armar un video.")
+        n = (con.execute(sa.select(sa.func.max(v.c.version_n)).where(v.c.guion_id == guion_id)).scalar() or 0) + 1
+        ahora = db.ahora()
+        r = con.execute(sa.insert(v).values(
+            cliente=cliente, creado_en=ahora, actualizado_en=ahora, guion_id=guion_id, version_n=n,
+            nombre=nombre_version(config, n), config=config, recorte=recorte or {}, plan=plan, estado=estado,
+            estado_imagenes="ninguno", iniciado_en=ahora if estado == "armando" else None, usd=0.0, extra={}))
+        return int(r.inserted_primary_key[0])
+
+
+def video(cliente, video_id):
+    v = db.guion_video
+    with db.conectar() as con:
+        if con.execute(sa.select(v.c.id).where(v.c.id == video_id, v.c.cliente == cliente)).first() is None:
+            return None
+        _vencer_video(con, video_id)
+        return _video_completo(con, video_id)
+
+
+def video_para_trabajo(video_id):
+    with db.conectar() as con:
+        _vencer_video(con, video_id)
+        return _video_completo(con, video_id)
+
+
+def guardar_config(cliente, video_id, config):
+    v = db.guion_video
+    with db.conectar() as con:
+        fila = _bloquear_video(con, cliente, video_id)
+        if fila.estado != "configurando":
+            raise Conflicto("Esta versión ya no se puede cambiar; crea una versión nueva.")
+        con.execute(v.update().where(v.c.id == video_id).values(
+            config=config, nombre=nombre_version(config, fila.version_n), aviso=None, actualizado_en=db.ahora()))
+
+
+_YA_TRABAJANDO = {"recortando": "Claude está proponiendo qué quitar; espera a que termine.",
+                  "armando": "Claude está armando los clips; espera a que termine.",
+                  "armado": "Esta versión ya está armada; crea una versión nueva para cambiarla."}
+
+
+def empezar(cliente, video_id, estado_nuevo, desde):
+    v = db.guion_video
+    with db.conectar() as con:
+        fila = _bloquear_video(con, cliente, video_id)
+        if fila.estado not in desde:
+            raise Conflicto(_YA_TRABAJANDO.get(fila.estado, "Esta versión no admite esa acción ahora."))
+        ahora = db.ahora()
+        con.execute(v.update().where(v.c.id == video_id)
+                    .values(estado=estado_nuevo, aviso=None, iniciado_en=ahora, actualizado_en=ahora))
+
+
+def terminar_recorte(video_id, propuesta, motivos, quitadas, usd):
+    v = db.guion_video
+    with db.conectar() as con:
+        con.execute(v.update().where(v.c.id == video_id).values(usd=v.c.usd + float(usd or 0)))
+        r = con.execute(v.update().where(v.c.id == video_id, v.c.estado == "recortando").values(
+            estado="configurando", recorte={"propuesta": list(propuesta), "motivos": dict(motivos),
+                                            "quitadas": sorted(quitadas)}, actualizado_en=db.ahora()))
+        return r.rowcount == 1
+
+
+def fallar(video_id, aviso, usd=0.0):
+    v = db.guion_video
+    ahora = db.ahora()
+    with db.conectar() as con:
+        con.execute(v.update().where(v.c.id == video_id).values(usd=v.c.usd + float(usd or 0)))
+        con.execute(v.update().where(v.c.id == video_id, v.c.estado == "recortando")
+                    .values(estado="configurando", aviso=aviso, actualizado_en=ahora))
+        con.execute(v.update().where(v.c.id == video_id, v.c.estado == "armando")
+                    .values(estado="error", aviso=aviso, actualizado_en=ahora))
+
+
+def guardar_quitadas(cliente, video_id, quitadas):
+    try:
+        ns = sorted({int(n) for n in quitadas})
+    except (TypeError, ValueError):
+        raise DatoInvalido("Las líneas a quitar tienen que ser números.") from None
+    if 1 in ns:
+        raise DatoInvalido("La línea 1 (el hook) no se puede quitar.")
+    v = db.guion_video
+    with db.conectar() as con:
+        fila = _bloquear_video(con, cliente, video_id)
+        if fila.estado != "configurando":
+            raise Conflicto("Esta versión ya no se puede cambiar; crea una versión nueva.")
+        recorte = dict(fila.recorte or {}, quitadas=ns)
+        con.execute(v.update().where(v.c.id == video_id).values(recorte=recorte, actualizado_en=db.ahora()))
