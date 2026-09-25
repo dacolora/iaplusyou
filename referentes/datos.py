@@ -35,6 +35,7 @@ _ACTUALIZABLES = ("dias", "variantes", "ultima_vez", "activo")
 _CLASIFICACION = ("etapa", "consciencia", "familia", "dolor", "firma")
 _BARRIDO_COLS = ("estado", "traidos", "nuevos", "clasificados", "pendientes", "con_imagen", "usd_estimado", "usd_real",
                  "llamadas_fuente", "tarea_id", "aviso", "extra", "consulta", "tope")
+_REFERENTE_EDITABLES = ("etapa", "consciencia", "familia", "dolor", "firma", "clasificacion", "extra")
 
 
 class ErrorDatos(ValueError):
@@ -159,6 +160,18 @@ def guardar_referente(anuncio, cliente=None, barrido_id=None):
         return con.execute(t.insert().values(**valores)).inserted_primary_key[0], True
 
 
+def actualizar_referente(referente_id, **campos):
+    malos = set(campos) - set(_REFERENTE_EDITABLES)
+    if malos:
+        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+    if "clasificacion" in campos and campos["clasificacion"] not in CLASIFICACIONES:
+        raise ErrorDatos(f"Clasificación inválida: {campos['clasificacion']}")
+    t = db.referente
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.id == referente_id)
+                           .values(actualizado_en=db.ahora(), **campos)).rowcount == 1
+
+
 def referente(cliente, referente_id):
     t = db.referente
     with db.conectar() as con:
@@ -233,11 +246,22 @@ def marcar_imagen(referente_id, estado, imagen_url=None):
         return con.execute(t.update().where(t.c.id == referente_id).values(**valores)).rowcount == 1
 
 
-def pendientes_imagen(fuente=None, limite=100):
+def pendientes_imagen(fuente=None, barrido_id=None, limite=100):
     t = db.referente
     q = sa.select(t).where(t.c.estado_imagen == "pendiente")
     if fuente:
         q = q.where(t.c.fuente == fuente)
+    if barrido_id:
+        q = q.where(t.c.barrido_id == barrido_id)
+    with db.conectar() as con:
+        return [_a_dict(r) for r in con.execute(q.order_by(t.c.id).limit(limite))]
+
+
+def pendientes_clasificacion(barrido_id=None, limite=100):
+    t = db.referente
+    q = sa.select(t).where(t.c.estado_imagen == "ok", t.c.clasificacion.in_(("pendiente", "error")))
+    if barrido_id:
+        q = q.where(t.c.barrido_id == barrido_id)
     with db.conectar() as con:
         return [_a_dict(r) for r in con.execute(q.order_by(t.c.id).limit(limite))]
 

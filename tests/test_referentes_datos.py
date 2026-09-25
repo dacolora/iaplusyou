@@ -184,3 +184,83 @@ def test_barridos(base_temporal):
         datos.actualizar_barrido(bid, estado="volando")
     with pytest.raises(datos.ErrorDatos):
         datos.crear_barrido("acme", "otra", {}, 10)
+
+
+# ---- actualizar_referente / pendientes_clasificacion / pendientes_imagen(barrido_id=) ---
+
+def _con_barrido(datos, cliente=None, fuente="atria", clasificacion="pendiente", estado_imagen="ok",
+                  anuncio_id=None):
+    """Crea un barrido y un referente colgado de él. `estado_imagen` se aplica
+    con `marcar_imagen` después del alta porque `guardar_referente` siempre
+    inserta en 'pendiente'. Devuelve (barrido_id, referente_id)."""
+    bid = datos.crear_barrido(cliente, fuente, {}, 10)
+    rid, _ = datos.guardar_referente(_anuncio(anuncio_id=anuncio_id or f"bar-{bid}", fuente=fuente,
+                                              clasificacion=clasificacion),
+                                     cliente=cliente, barrido_id=bid)
+    if estado_imagen == "ok":
+        datos.marcar_imagen(rid, "ok", "https://r2/referentes/x.jpg")
+    elif estado_imagen == "error":
+        datos.marcar_imagen(rid, "error")
+    return bid, rid
+
+
+def test_actualizar_referente_columnas_permitidas(base_temporal):
+    from referentes import datos
+    rid, _ = datos.guardar_referente(_anuncio(anuncio_id="upd-1", etapa=None, consciencia=None, familia=None,
+                                              dolor=None, firma=None, clasificacion="pendiente"))
+    assert datos.actualizar_referente(rid, etapa="TOF", consciencia="unaware", familia="X",
+                                      dolor="d", firma="f", clasificacion="claude")
+    r = datos.referente("acme", rid)
+    assert r["etapa"] == "TOF" and r["consciencia"] == "unaware" and r["familia"] == "X"
+    assert r["dolor"] == "d" and r["firma"] == "f" and r["clasificacion"] == "claude"
+
+
+def test_actualizar_referente_columna_no_editable_lanza():
+    from referentes import datos
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_referente(1, anuncio_id="otro")
+
+
+def test_actualizar_referente_clasificacion_invalida_lanza(base_temporal):
+    from referentes import datos
+    rid, _ = datos.guardar_referente(_anuncio(anuncio_id="upd-2"))
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_referente(rid, clasificacion="volando")
+
+
+def test_pendientes_clasificacion_filtra_por_barrido(base_temporal):
+    from referentes import datos
+    bid1, rid1 = _con_barrido(datos, anuncio_id="pc-1")
+    bid2, rid2 = _con_barrido(datos, anuncio_id="pc-2")
+    pend = datos.pendientes_clasificacion(barrido_id=bid1)
+    ids = [r["id"] for r in pend]
+    assert rid1 in ids and rid2 not in ids
+
+
+def test_pendientes_clasificacion_excluye_sin_imagen(base_temporal):
+    from referentes import datos
+    bid, rid = _con_barrido(datos, anuncio_id="pc-3", estado_imagen="pendiente")
+    assert rid not in [r["id"] for r in datos.pendientes_clasificacion(barrido_id=bid)]
+
+
+def test_pendientes_clasificacion_excluye_ya_clasificados(base_temporal):
+    from referentes import datos
+    bid, rid = _con_barrido(datos, anuncio_id="pc-4", clasificacion="claude", estado_imagen="ok")
+    assert rid not in [r["id"] for r in datos.pendientes_clasificacion(barrido_id=bid)]
+
+
+def test_pendientes_imagen_filtra_por_barrido(base_temporal):
+    from referentes import datos
+    bid1, rid1 = _con_barrido(datos, anuncio_id="pi-1", estado_imagen="pendiente")
+    bid2, rid2 = _con_barrido(datos, anuncio_id="pi-2", estado_imagen="pendiente")
+    pend = datos.pendientes_imagen(barrido_id=bid1)
+    ids = [r["id"] for r in pend]
+    assert rid1 in ids and rid2 not in ids
+
+
+def test_pendientes_imagen_sin_filtro_sigue_funcionando_por_fuente(base_temporal):
+    # Comportamiento existente (block 1, copycoders): sin barrido_id, filtra solo por fuente.
+    from referentes import datos
+    bid, rid = _con_barrido(datos, fuente="copycoders", anuncio_id="pi-3", estado_imagen="pendiente")
+    pend = datos.pendientes_imagen(fuente="copycoders")
+    assert rid in [r["id"] for r in pend]
