@@ -20,6 +20,11 @@ import providers.apify as apify_api
 from nicho.fuentes import _http, apify_actores
 from nicho.fuentes.base import ErrorFuente, Fuente, normalizar_comentario
 
+# Copias de solo lectura, re-exportadas para quien ya importaba estos nombres
+# desde este módulo. OJO: son copias tomadas una vez al importar — parchear un
+# atributo de ESTE módulo (p.ej. `apify.PAUSA_SONDEO` en un test) NO cambia el
+# comportamiento real, que lee las variables propias de `providers.apify`
+# (`apify_api.PAUSA_SONDEO`, etc.); para eso hay que parchear `apify_api`.
 URL_API = apify_api.URL_API
 PAUSA_SONDEO = apify_api.PAUSA_SONDEO
 MAX_ESPERA_S = apify_api.MAX_ESPERA_S

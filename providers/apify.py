@@ -4,11 +4,18 @@ un estado terminal, leer su dataset, contarlo) — extraída de
 `nicho/fuentes/apify.py` (spec bloque 5, 2026-09-23 §4.2) para que
 `referentes/fuentes/apify_adlibrary.py` no la duplique. Cada actor/entrada es
 cosa de quien llama: este módulo no sabe qué actor está corriendo, solo habla
-con la API v2 de Apify. Una corrida se paga aunque termine mal, así que
-después de `arrancar()` nada se abandona: se sondea hasta un estado terminal
-(o hasta que vence el reloj local) y el dataset se lee igual, tolerando
-fallos pasajeros — perder la lectura de un dataset ya pagado sería peor que
-reintentarla.
+con la API v2 de Apify. API v2 verificada 2026-09-20:
+  POST /v2/actors/<usuario~actor>/runs (entrada JSON; ?timeout= segundos,
+       ?maxItems= ítems cobrados, ?maxTotalChargeUsd= tope de cobro)
+       -> data.id, data.status, data.defaultDatasetId
+  GET  /v2/actor-runs/<id> -> data.status (READY, RUNNING, SUCCEEDED, FAILED,
+       TIMING-OUT, TIMED-OUT, ABORTING, ABORTED)
+  GET  /v2/datasets/<id>/items?clean=true&format=json&limit=N -> lista de ítems
+  GET  /v2/datasets/<id> -> data.itemCount
+Una corrida se paga aunque termine mal, así que después de `arrancar()` nada
+se abandona: se sondea hasta un estado terminal (o hasta que vence el reloj
+local) y el dataset se lee igual, tolerando fallos pasajeros — perder la
+lectura de un dataset ya pagado sería peor que reintentarla.
 """
 from nicho.fuentes import _http
 from nicho.fuentes.base import ErrorFuente
@@ -56,11 +63,13 @@ def probar_token(sesion, token):
 def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_ids=None):
     """POST de la corrida. `max_items`/`max_total_charge_usd` son el tope de
     cobro del lado de Apify — lo que se le mostró a la persona antes de
-    lanzar, nada más. Devuelve (run_id, dataset_id, estado). Si Apify
-    contestó con un id de corrida (aunque falte el dataset, o la corrida no
-    se pueda usar), `on_ids(run_id, dataset_id)` se llama ANTES de lanzar el
-    error — quien llama pudo haber sido cobrado y necesita guardar el id
-    aunque `arrancar` no vaya a devolverlo."""
+    lanzar, nada más. Devuelve (run_id, dataset_id, estado). `on_ids(run_id,
+    dataset_id)`, si se da, se llama en TODA respuesta 2xx ya parseada —
+    traiga ambos ids, uno solo o ninguno, incluida una corrida exitosa — y
+    SIEMPRE antes de decidir si hace falta lanzar el error de "sin ids". No
+    es una señal exclusiva de error: sirve para que quien llama guarde el id
+    de una corrida que ya pudo cobrar, tanto si `arrancar` devuelve como si
+    termina lanzando."""
     r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
                     params={"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd},
                     json=entrada)

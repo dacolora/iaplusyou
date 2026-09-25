@@ -76,6 +76,38 @@ def test_arrancar_sin_ids_lanza_error_fuente():
         apify_api.arrancar(sesion, "tok", "apify~actor", {}, 10, 0.1)
 
 
+def test_arrancar_sin_dataset_avisa_on_ids_antes_de_lanzar():
+    """El run_id que sí llegó se avisa por `on_ids` ANTES del error de "sin ids":
+    la corrida pudo cobrar y quien llama necesita guardarlo aunque `arrancar` no
+    vaya a devolverlo (termina lanzando)."""
+    sesion = _Sesion([_Resp({"data": {"id": "run_x", "status": "READY"}}, status=201)])
+    vistos = []
+    with pytest.raises(ErrorFuente):
+        apify_api.arrancar(sesion, "tok", "apify~actor", {}, 10, 0.1, on_ids=lambda r, d: vistos.append((r, d)))
+    assert vistos == [("run_x", None)]
+
+
+def test_arrancar_ok_tambien_avisa_on_ids():
+    """Una corrida exitosa TAMBIÉN dispara `on_ids`, con los mismos ids que
+    `arrancar` devuelve — no es una señal exclusiva del camino de error."""
+    sesion = _Sesion([_Resp({"data": {"id": "run1", "defaultDatasetId": "ds1", "status": "READY"}}, status=201)])
+    vistos = []
+    run_id, dataset_id, estado = apify_api.arrancar(
+        sesion, "tok", "apify~actor", {}, 10, 0.1, on_ids=lambda r, d: vistos.append((r, d)))
+    assert vistos == [("run1", "ds1")]
+    assert (run_id, dataset_id, estado) == ("run1", "ds1", "READY")
+
+
+def test_arrancar_401_no_llama_on_ids():
+    """Un 401/403 falla ANTES de leer ningún id de la respuesta: `on_ids` no se
+    llama (no hay nada que avisar todavía)."""
+    sesion = _Sesion([_Resp({}, status=401)])
+    vistos = []
+    with pytest.raises(ErrorFuente):
+        apify_api.arrancar(sesion, "tok", "apify~actor", {}, 10, 0.1, on_ids=lambda r, d: vistos.append((r, d)))
+    assert vistos == []
+
+
 def test_sondear_hasta_terminal(monkeypatch):
     monkeypatch.setattr(apify_api._http, "dormir", lambda s: None)
     sesion = _Sesion([_Resp({"data": {"status": "RUNNING"}}), _Resp({"data": {"status": "SUCCEEDED"}})])
