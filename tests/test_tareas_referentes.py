@@ -228,7 +228,7 @@ def test_ejecutar_barrer_fase_trayendo_guarda_y_re_encola(tmp_path, monkeypatch)
                        for i in range(3)]
 
     def _traer_falso(consulta, tope, avanzar, cursor=None):
-        yield anuncios_falsos, None
+        yield anuncios_falsos, None, {}
 
     import referentes.fuentes as fuentes
     monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_falso)}))
@@ -270,7 +270,7 @@ def test_job_continuacion_barrer_alterna_sin_colisionar_entre_barridos(tmp_path,
                 "cuerpo": "", "idioma": "en", "pais": None, "tipo": "imagen", "imagen_origen": f"https://x/{n}.jpg",
                 "dias": 1, "variantes": 1, "primera_vez": "2026-09-24", "ultima_vez": "2026-09-24",
                 "activo": True, "url_anuncio": "", "url_marca": "", "etiquetas_fuente": {}, "extra": {}}],
-               str(n + 1))
+               str(n + 1), {})
 
     import referentes.fuentes as fuentes
     monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_una_pagina)}))
@@ -349,9 +349,9 @@ def test_fase_trayendo_cuota_agotada_a_mitad_de_tramo_deja_aviso(tmp_path, monke
                 "idioma": "en", "pais": None, "tipo": "imagen", "imagen_origen": "https://x/1.jpg",
                 "dias": 1, "variantes": 1, "primera_vez": "2026-09-24", "ultima_vez": "2026-09-24",
                 "activo": True, "url_anuncio": "", "url_marca": "", "etiquetas_fuente": {}, "extra": {}}],
-               "cursor-1")
+               "cursor-1", {})
         avanzar(detalle=AVISO_CUOTA_AGOTADA)
-        yield [], None
+        yield [], None, {}
 
     import referentes.fuentes as fuentes
     monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_cuota_agotada)}))
@@ -775,3 +775,36 @@ def test_encolar_clasificar_pendientes_sin_barrido_devuelve_false(tmp_path, monk
     from tareas import referentes as tareas_ref
     cliente = _cliente_de_prueba(tmp_path, monkeypatch)
     assert tareas_ref.encolar_clasificar_pendientes(cliente, 999999) is False
+
+
+def test_fase_trayendo_registra_gasto_real_cuando_la_fuente_lo_reporta(tmp_path, monkeypatch):
+    import sqlalchemy as sa
+
+    import db
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "apify", {"modo": "palabra", "palabra": "sandalias"}, 5)
+
+    def traer_falso(consulta, tope, avanzar, cursor=None):
+        avanzar("Buscando en Apify", "1 anuncios")
+        yield [{"anuncio_id": "a1", "imagen_origen": "https://x/a1.jpg", "marca": "X", "titular": "", "cuerpo": "",
+                "tipo": "imagen", "pais": None, "idioma": None, "dias": None, "variantes": None,
+                "primera_vez": None, "ultima_vez": None, "activo": True, "url_anuncio": "", "url_marca": "",
+                "etiquetas_fuente": {}, "extra": {}, "pagina_id": None}], None, {"costo_real": 0.029}
+
+    class _ModuloFalso:
+        traer = staticmethod(traer_falso)
+
+    monkeypatch.setattr(tareas_referentes.fuentes, "por_tipo", lambda tipo: _ModuloFalso())
+    tarea = {"id": 999, "job_id": None, "payload": {"barrido_id": bid, "cliente": cliente,
+             "consulta": {"modo": "palabra", "palabra": "sandalias", "fuente": "apify"}, "tope": 5, "fase": "trayendo"}}
+    tareas_referentes.ejecutar_barrer(tarea)
+
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente,
+                                                       db.gasto.c.tipo == "recoleccion")).mappings().all()
+    assert len(filas) == 1
+    assert filas[0]["usd"] == 0.029
+    assert f"referentes:barrer:{bid}:apify:t999" in filas[0]["referencia"]

@@ -108,7 +108,7 @@ def test_traer_con_error_de_red_a_mitad_de_paginacion_no_pierde_lo_ya_traido(mon
 
     monkeypatch.setattr(atria, "_sesion", lambda: _SesionMixta())
     gen = atria.traer({"modo": "palabra", "palabra": "protein", "idioma": "en"}, 10, lambda **kw: None)
-    pagina1, cursor1 = next(gen)
+    pagina1, cursor1, meta1 = next(gen)
     assert len(pagina1) == 2
     with pytest.raises(ErrorFuente):
         next(gen)
@@ -128,7 +128,7 @@ def test_traer_modo_palabra_normaliza_y_pagina(monkeypatch, base_temporal):
     monkeypatch.setattr(atria, "_sesion", lambda: sesion)
     avisos = []
     gen = atria.traer({"modo": "palabra", "palabra": "protein", "idioma": "en"}, 3, lambda **kw: avisos.append(kw))
-    pagina1, cursor1 = next(gen)
+    pagina1, cursor1, meta1 = next(gen)
     assert len(pagina1) == 2
     assert pagina1[0]["anuncio_id"] == "2896048200759341"
     assert pagina1[0]["pagina_id"] == "110811200743559"
@@ -142,9 +142,11 @@ def test_traer_modo_palabra_normaliza_y_pagina(monkeypatch, base_temporal):
     assert pagina1[1]["imagen_origen"] == "https://cdn.tryatria.com/adfiles/m2438467946558867_prev.jpeg"
     assert pagina1[1]["extra"]["video_url"] == "https://cdn.tryatria.com/adfiles/m2438467946558867_x.mp4"
     assert cursor1 == FIXTURE_SEARCH["data"]["cursor"]
-    pagina2, cursor2 = next(gen)
+    assert meta1 == {}
+    pagina2, cursor2, meta2 = next(gen)
     assert len(pagina2) == 1  # tope=3, ya trajo 2, pide 1 más
     assert cursor2 is None  # última página (1 item < page_size implícito, o sin más)
+    assert meta2 == {}
     with pytest.raises(StopIteration):
         next(gen)
     assert sesion.llamadas[0][1]["query"] == "protein" and sesion.llamadas[0][1]["language"] == "en"
@@ -158,8 +160,9 @@ def test_traer_modo_marca_usa_brand_library(monkeypatch, base_temporal):
     sesion = _SesionFalsa([_RespuestaFalsa(FIXTURE_BRAND)])
     monkeypatch.setattr(atria, "_sesion", lambda: sesion)
     gen = atria.traer({"modo": "marca", "pagina_id": "110811200743559"}, 10, lambda **kw: None)
-    pagina, cursor = next(gen)
+    pagina, cursor, meta = next(gen)
     assert len(pagina) == 1
+    assert meta == {}
     assert "/brand-library/m110811200743559/ads" in sesion.llamadas[0][0]
     assert sesion.llamadas[0][1]["order"] == "most_active"
 
@@ -182,10 +185,10 @@ def test_traer_42901_con_algo_ya_traido_entrega_parcial(monkeypatch, base_tempor
                            _RespuestaFalsa({"code": 42901, "message": "limit"})])
     monkeypatch.setattr(atria, "_sesion", lambda: sesion)
     gen = atria.traer({"modo": "palabra", "palabra": "protein", "idioma": "en"}, 10, lambda **kw: None)
-    pagina1, cursor1 = next(gen)
+    pagina1, cursor1, meta1 = next(gen)
     assert len(pagina1) == 2
-    pagina2, cursor2 = next(gen)
-    assert pagina2 == [] and cursor2 is None
+    pagina2, cursor2, meta2 = next(gen)
+    assert pagina2 == [] and cursor2 is None and meta2 == {}
     with pytest.raises(StopIteration):
         next(gen)
 

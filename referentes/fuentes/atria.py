@@ -181,13 +181,15 @@ def _params(consulta, cursor):
 
 def traer(consulta, tope, avanzar, cursor=None):
     """Itera páginas de hasta PAGE_SIZE anuncios normalizados (o None para un
-    ítem sin `platform_native_id`), reanudable desde `cursor` (el
-    `barrido.extra.cursor_atria` de la corrida anterior). Cada página se
-    entrega como (anuncios, cursor_siguiente); `cursor_siguiente` es None
-    cuando ya no hay más. Ante el límite mensual agotado a mitad de camino,
-    entrega una página vacía con cursor None (entrega parcial) en vez de
-    lanzar — a menos que no se haya traído nada todavía en esta llamada, en
-    cuyo caso levanta ErrorFuente."""
+    ítem sin platform_native_id), reanudable desde cursor (el
+    barrido.extra.cursor_atria de la corrida anterior). Cada página se
+    entrega como (anuncios, cursor_siguiente, meta) -- meta siempre {} para
+    Atria, que no tiene costo propio por llamada (solo consume el cupo
+    mensual del plan; ver referentes.fuentes.base para el contrato general de
+    meta). `cursor_siguiente` es None cuando ya no hay más. Ante el límite
+    mensual agotado a mitad de camino, entrega una página vacía con cursor
+    None (entrega parcial) en vez de lanzar — a menos que no se haya traído
+    nada todavía en esta llamada, en cuyo caso levanta ErrorFuente."""
     modo = consulta.get("modo")
     sesion = _sesion()
     traidos = 0
@@ -212,11 +214,11 @@ def traer(consulta, tope, avanzar, cursor=None):
             # misma forma que una búsqueda genuinamente agotada. `avanzar` con
             # este detalle reservado es la única señal fuera de banda.
             avanzar(detalle=AVISO_CUOTA_AGOTADA)
-            yield [], None
+            yield [], None, {}
             return
         items_originales = data.get("items") or []
         if not items_originales:
-            yield [], None
+            yield [], None, {}
             return
         # "Hay más" se decide contra el page_size que la PROPIA respuesta
         # declara (data.page_size) y sobre la cuenta ANTES de recortar por
@@ -230,7 +232,7 @@ def traer(consulta, tope, avanzar, cursor=None):
         traidos += len(items)
         cursor_siguiente = data.get("cursor") if hay_mas else None
         avanzar(detalle=f"{min(traidos, tope)}/{tope}")
-        yield pagina, cursor_siguiente
+        yield pagina, cursor_siguiente, {}
         if not cursor_siguiente:
             return
         cursor = cursor_siguiente

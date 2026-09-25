@@ -314,7 +314,7 @@ def _fase_trayendo(tarea, p, bid, avanzar):
         avanzar(etapa=etapa, detalle=detalle)
 
     try:
-        for pagina, cursor_siguiente in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, cursor=cursor):
+        for pagina, cursor_siguiente, meta in fuente_mod.traer(consulta, tope - traidos_total, avanzar_trayendo, cursor=cursor):
             for a in pagina:
                 if not a or not a.get("anuncio_id") or not a.get("imagen_origen"):
                     continue
@@ -323,6 +323,11 @@ def _fase_trayendo(tarea, p, bid, avanzar):
                 traidos_total += 1
                 nuevos_total += int(creado)
             cursor_final = cursor_siguiente
+            costo_real = (meta or {}).get("costo_real")
+            if costo_real:
+                gastos.registrar_seguro(p["cliente"], "recoleccion", costo_real,
+                                        f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
+                                        detalle=f"{consulta['fuente']}: {len(pagina)} anuncio(s) reales")
             if traidos_total - int(b.get("traidos") or 0) >= TRAMO:
                 break
     except ErrorFuente as e:
