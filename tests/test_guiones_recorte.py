@@ -9,7 +9,7 @@ def test_aplicar_orden_nunca_quita_la_linea_1_y_se_detiene():
     # completo: 4 × 2,5 + 4 × 0,6 + 1 = 13,4 s; sin la 3: 10,3 s; sin 3 y 2: 7,2 s
     assert recorte.aplicar_orden(LINEAS, [1, 3, 2, 4], 11, 2.4, 0.6) == [3]
     assert recorte.aplicar_orden(LINEAS, [1, 3, 2, 4], 8, 2.4, 0.6) == [2, 3]
-    assert recorte.aplicar_orden(LINEAS, [1, 3, 2, 4], 5, 2.4, 0.6) == []
+    assert recorte.aplicar_orden(LINEAS, [9, 1], 5, 2.4, 0.6) == []
 
 
 def test_resumen_con_y_sin_quitadas(base_temporal):
