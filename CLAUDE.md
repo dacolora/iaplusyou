@@ -247,8 +247,7 @@ por fases `anuncios → imagenes → traducir` con continuaciones `__cont`, la �
 llamada pagada es la traducción de firmas, gasto tipo `otro` bajo `_creatv`) desde
 `/admin/referentes`, y la pestaña **Referentes** (`_tab_referentes.html`, Blueprint
 `referentes/rutas.py`: `grid` y `ficha` como fragmentos por fetch, filtros en el
-hash `#referentes?etapa=TOF&…`). Los bloques siguientes agregan la puerta desde
-Sprints y los barridos Atria/Apify con clasificación Claude. Bloque 2: «Recrear con mi producto» (`referentes/recrear.py`) — `armar_prompt`
+hash `#referentes?etapa=TOF&…`). Bloque 3: la puerta desde Sprints (`sprints.datos.agregar_referencia_biblioteca`, el modo selección del grid, `referentes/sugerir.py`, «Usar en sprint»). Bloque 4: barridos en vivo — `referentes/fuentes/` (registro perezoso por módulo, no por clase: `referentes.fuentes.por_tipo(tipo)` devuelve el módulo con `estimar/probar/traer`), `referentes/fuentes/atria.py` (Ad Library de Meta vía la REST de Atria, `X-API-Key`, 20 llamadas/min, contador mensual en `kv`), `referentes/clasificar.py` (una llamada de visión por anuncio: etapa/consciencia/familia/dolor/firma, familias nuevas entran como `EMERGING: <nombre>`), tarea del worker `referentes_barrer` (tramos de 100, reanudable por `barrido.extra.cursor_atria`, tres fases: trayendo → guardando imágenes → clasificando) y `referentes_clasificar` (reclasifica solo lo pendiente de un barrido). El conector Apify (bloque 5) y el panel admin completo con barridos globales (bloque 6) siguen pendientes. Bloque 2: «Recrear con mi producto» (`referentes/recrear.py`) — `armar_prompt`
 determinista (nunca llama a Claude) construye el prompt con la imagen del referente
 como `Image 1` y hasta 2 fotos del producto elegido como `Image 2`/`3`; «Adaptar con
 IA» (`adaptar`, opcional, ≈ US$0.01) es la única llamada pagada de este bloque y solo
