@@ -124,6 +124,18 @@ def _registrar_traduccion(tarea, bid, lote, ent, sal, detalle):
     datos.actualizar_barrido(bid, usd_real=round(float(b.get("usd_real") or 0.0) + usd, 4))
 
 
+def _pagada_aunque_falle(tarea, bid, lote, detalle, llamada, *args):
+    """Corre una llamada a Claude; si su respuesta no sirve pero ya se cobró
+    (`FormatoInvalido` con tokens), registra ese gasto antes de repropagar."""
+    try:
+        return llamada(*args)
+    except copycoders.FormatoInvalido as e:
+        if e.tokens_entrada or e.tokens_salida:
+            _registrar_traduccion(tarea, bid, f"{lote}:fallida", e.tokens_entrada, e.tokens_salida,
+                                  f"{detalle} (respuesta inutilizable: {e})")
+        raise
+
+
 def _fase_traducir(tarea, p, bid, avanzar):
     avanzar("Traduciendo")
     progreso = False
@@ -131,7 +143,8 @@ def _fase_traducir(tarea, p, bid, avanzar):
         pendientes = datos.sin_traducir(limite=TRAMO)
         if not pendientes:
             break
-        trad, ent, sal = copycoders.traducir_firmas([(r["id"], r["firma"]) for r in pendientes])
+        trad, ent, sal = _pagada_aunque_falle(tarea, bid, f"firmas{lote}", "traducción de firmas copycoders",
+                                              copycoders.traducir_firmas, [(r["id"], r["firma"]) for r in pendientes])
         if datos.marcar_traducidas(list(trad.items())):
             progreso = True
         _registrar_traduccion(tarea, bid, f"firmas{lote}", ent, sal, "traducción de firmas copycoders")
@@ -142,7 +155,9 @@ def _fase_traducir(tarea, p, bid, avanzar):
         ejemplos = {}
         for f in familias[:FAMILIAS_POR_LLAMADA]:
             ejemplos[f["nombre"]] = [r["firma"] for r in datos.listar_por_familia(f["nombre"], limite=3) if r.get("firma")]
-        desc, ent, sal = copycoders.describir_familias(list(ejemplos.items()))
+        desc, ent, sal = _pagada_aunque_falle(tarea, bid, f"familias{len(familias)}",
+                                              "descripción de familias copycoders",
+                                              copycoders.describir_familias, list(ejemplos.items()))
         for f in familias:
             if f["nombre"] in desc:
                 datos.familia_actualizar(f["id"], desc[f["nombre"]])

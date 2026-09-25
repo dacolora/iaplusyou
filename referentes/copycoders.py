@@ -22,7 +22,28 @@ _RE_PAGINA = re.compile(r"view_all_page_id=(\d+)")
 
 
 class FormatoInvalido(RuntimeError):
-    """La página no trae el dataset como lo conocemos; no se toca nada."""
+    """La página no trae el dataset como lo conocemos, o Claude no devolvió
+    algo usable; no se toca nada. Cuando Claude ya cobró la llamada, los
+    tokens van puestos para que el llamador registre el gasto igual."""
+    tokens_entrada = 0
+    tokens_salida = 0
+
+
+def _con_tokens(e, entrada, salida):
+    e.tokens_entrada, e.tokens_salida = entrada, salida
+    return e
+
+
+# Tope de salida por llamada: Claude Sonnet 5 piensa antes de responder aunque
+# no se le pida, y lo que piensa sale del mismo max_tokens. Medido en
+# producción (2026-09-25): ~64 tokens por firma entre texto y pensamiento; con
+# 60 por firma, 100 firmas se cortaron en la 92. Por encima de 16 000 el SDK
+# exige streaming.
+_TOPE_SALIDA = 16000
+
+
+def _tope(n, por_item):
+    return min(_TOPE_SALIDA, 2000 + por_item * n)
 
 
 def descargar_html(url):
@@ -122,7 +143,9 @@ def _llamar(texto, max_tokens=4000):
     entrada = int(getattr(uso, "input_tokens", 0) or 0)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason == "refusal":
-        raise FormatoInvalido("Claude rechazó la solicitud.")
+        raise _con_tokens(FormatoInvalido("Claude rechazó la solicitud."), entrada, salida)
+    if resp.stop_reason == "max_tokens":
+        raise _con_tokens(FormatoInvalido("La respuesta de Claude se cortó por largo (max_tokens)."), entrada, salida)
     return "".join(b.text for b in resp.content if b.type == "text").strip(), entrada, salida
 
 
@@ -151,8 +174,11 @@ def traducir_firmas(pares):
     if not pares:
         return {}, 0, 0
     entrada = json.dumps({str(rid): firma for rid, firma in pares}, ensure_ascii=False, indent=0)
-    texto, ent, sal = _llamar(PROMPT_TRADUCIR.format(entrada=entrada), max_tokens=max(800, 60 * len(pares)))
-    data = _parsear_json(texto)
+    texto, ent, sal = _llamar(PROMPT_TRADUCIR.format(entrada=entrada), max_tokens=_tope(len(pares), 100))
+    try:
+        data = _parsear_json(texto)
+    except FormatoInvalido as e:
+        raise _con_tokens(e, ent, sal)
     validos = {rid for rid, _ in pares}
     resultado = {}
     for k, v in data.items():
@@ -167,7 +193,10 @@ def describir_familias(familias):
     if not familias:
         return {}, 0, 0
     entrada = json.dumps({nombre: list(ejemplos)[:3] for nombre, ejemplos in familias}, ensure_ascii=False, indent=0)
-    texto, ent, sal = _llamar(PROMPT_FAMILIAS.format(entrada=entrada), max_tokens=max(800, 80 * len(familias)))
-    data = _parsear_json(texto)
+    texto, ent, sal = _llamar(PROMPT_FAMILIAS.format(entrada=entrada), max_tokens=_tope(len(familias), 120))
+    try:
+        data = _parsear_json(texto)
+    except FormatoInvalido as e:
+        raise _con_tokens(e, ent, sal)
     nombres = {nombre for nombre, _ in familias}
     return {k: datos._texto(v) for k, v in data.items() if k in nombres and datos._texto(v)}, ent, sal

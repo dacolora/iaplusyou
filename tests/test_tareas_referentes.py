@@ -838,3 +838,26 @@ def test_fase_trayendo_suma_el_costo_real_a_usd_real_del_barrido(tmp_path, monke
     tareas_referentes.ejecutar_barrer(tarea)
 
     assert datos.barrido(bid)["usd_real"] == pytest.approx(0.029)
+
+
+def test_fase_traducir_fallida_registra_lo_pagado(entorno, monkeypatch):
+    """Una respuesta inutilizable (cortada, rechazada, JSON roto) ya se cobró:
+    el gasto se anota igual, con su propia referencia, y el barrido queda
+    parcial con el motivo."""
+    from referentes import copycoders, datos
+    tr = entorno["tr"]
+    bid = datos.crear_barrido(None, "copycoders", {"url": tr.copycoders.URL_SWIPE}, 0)
+    _sembrar_sin_traducir(datos, bid, 3, prefijo="fa")
+
+    def cortada(pares):
+        e = copycoders.FormatoInvalido("La respuesta de Claude se cortó por largo (max_tokens).")
+        e.tokens_entrada, e.tokens_salida = 4848, 6000
+        raise e
+    monkeypatch.setattr(copycoders, "traducir_firmas", cortada)
+    with pytest.raises(copycoders.FormatoInvalido):
+        tr.ejecutar_importar(_tarea({"url": tr.copycoders.URL_SWIPE, "barrido_id": bid, "fase": "traducir"}, tid=77))
+    (args, kw), = entorno["gastos"]
+    assert args[2] > 0 and "fallida" in args[3] and "t77" in args[3]
+    assert kw["extra"]["tokens_salida"] == 6000
+    b = datos.barrido(bid)
+    assert b["estado"] == "parcial" and "se cortó" in b["aviso"] and b["usd_real"] > 0

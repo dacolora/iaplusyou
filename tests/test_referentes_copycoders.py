@@ -93,3 +93,77 @@ def test_describir_familias(monkeypatch):
                         lambda texto, max_tokens: ('{"Blame Transplant": "Culpa a otra cosa.", "Otra": "x"}', 50, 20))
     desc, ent, sal = copycoders.describir_familias([("Blame Transplant", ["you are not lazy", "stop blaming the food"])])
     assert desc == {"Blame Transplant": "Culpa a otra cosa."} and ent == 50
+
+
+# --- Traducción cortada por largo (producción 2026-09-25, tarea 3906): con 100
+# firmas y max_tokens=60×100, Claude Sonnet 5 (que piensa antes de responder
+# aunque no se le pida) llegó a `stop_reason: max_tokens` en la firma 92; el
+# JSON quedó sin la llave de cierre y el error decía «no devolvió JSON». La
+# llamada se cobró y el gasto no quedó en ningún lado.
+
+class _RespuestaFalsa:
+    def __init__(self, texto, stop_reason, entrada=4848, salida=6000):
+        self.content = [type("B", (), {"type": "thinking", "thinking": ""})(),
+                        type("B", (), {"type": "text", "text": texto})()]
+        self.stop_reason = stop_reason
+        self.usage = type("U", (), {"input_tokens": entrada, "output_tokens": salida})()
+
+
+def _claude_falso(monkeypatch, respuesta):
+    import anthropic
+    import generador_prompts
+    monkeypatch.setattr(generador_prompts, "_api_key", lambda: "sk-test")
+    pedidos = []
+
+    class Cliente:
+        def __init__(self, **kw):
+            self.messages = self
+
+        def create(self, **kw):
+            pedidos.append(kw)
+            return respuesta
+    monkeypatch.setattr(anthropic, "Anthropic", Cliente)
+    return pedidos
+
+
+def test_llamar_cortada_por_max_tokens_avisa_y_lleva_los_tokens_cobrados(monkeypatch):
+    from referentes import copycoders
+    _claude_falso(monkeypatch, _RespuestaFalsa('```json\n{\n"1": "titular gigante', "max_tokens"))
+    with pytest.raises(copycoders.FormatoInvalido, match="se cortó") as e:
+        copycoders._llamar("traduce", max_tokens=6000)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (4848, 6000)
+
+
+def test_llamar_rechazada_lleva_los_tokens_cobrados(monkeypatch):
+    from referentes import copycoders
+    _claude_falso(monkeypatch, _RespuestaFalsa("", "refusal", entrada=300, salida=2))
+    with pytest.raises(copycoders.FormatoInvalido, match="rechazó") as e:
+        copycoders._llamar("traduce")
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (300, 2)
+
+
+def test_traducir_firmas_da_espacio_para_pensar_y_responder(monkeypatch):
+    """Medido en producción: ~64 tokens de salida por firma (texto + lo que
+    piensa). El tope debe dejar holgura para 100 firmas sin pasar de 16 000
+    (por encima, el SDK exige streaming)."""
+    from referentes import copycoders
+    topes = []
+    monkeypatch.setattr(copycoders, "_llamar", lambda texto, max_tokens: topes.append(max_tokens) or ("{}", 1, 1))
+    copycoders.traducir_firmas([(i, f"firma {i}") for i in range(100)])
+    assert 64 * 100 * 1.5 <= topes[0] <= 16000
+
+
+def test_describir_familias_da_espacio_para_pensar_y_responder(monkeypatch):
+    from referentes import copycoders
+    topes = []
+    monkeypatch.setattr(copycoders, "_llamar", lambda texto, max_tokens: topes.append(max_tokens) or ("{}", 1, 1))
+    copycoders.describir_familias([(f"Familia {i}", ["a", "b"]) for i in range(40)])
+    assert 60 * 40 * 1.5 <= topes[0] <= 16000
+
+
+def test_traducir_firmas_respuesta_rota_lleva_los_tokens_cobrados(monkeypatch):
+    from referentes import copycoders
+    monkeypatch.setattr(copycoders, "_llamar", lambda texto, max_tokens: ("no es json", 5, 7))
+    with pytest.raises(copycoders.FormatoInvalido) as e:
+        copycoders.traducir_firmas([(1, "a")])
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (5, 7)
