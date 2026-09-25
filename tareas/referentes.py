@@ -486,6 +486,7 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     un estado final."""
     avanzar("Clasificando")
     cliente = p.get("cliente")
+    cliente_gasto = cliente or datos.CLIENTE_CREATV
     tipo_actual = tarea.get("tipo") or TIPO_BARRER
     automatico = tipo_actual != TIPO_CLASIFICAR
     pendientes = datos.pendientes_clasificacion(barrido_id=bid, limite=TRAMO, incluir_error=not automatico)
@@ -497,7 +498,7 @@ def _fase_clasificando(tarea, p, bid, avanzar):
         avanzo = avanzo or ok
         if ent or sal:
             usd = costo_real(ent, sal)
-            gastos.registrar_seguro(cliente, "clasificacion", usd, f"referentes:clasificar:{r['id']}{ref_sufijo(tarea)}",
+            gastos.registrar_seguro(cliente_gasto, "clasificacion", usd, f"referentes:clasificar:{r['id']}{ref_sufijo(tarea)}",
                                     detalle=r.get("titular") or r.get("marca") or "", proveedor="anthropic",
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
             b2 = datos.barrido(bid) or {}

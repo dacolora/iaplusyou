@@ -565,6 +565,37 @@ def test_fase_clasificando_registra_gasto_y_actualiza_referente(tmp_path, monkey
     assert any(f["nombre"] == "EMERGING: X" for f in datos.familias())
 
 
+def test_fase_clasificando_barrido_global_registra_gasto_bajo_creatv(monkeypatch, base_temporal):
+    """Mismo bug que ya se corrigió en `_fase_trayendo`: la clasificación de
+    un barrido global (cliente=NULL, disparado desde el panel admin) es el
+    costo REAL dominante -- Atria es gratis, la llamada a Claude no -- y
+    tampoco puede intentar registrarse con cliente=None (db.gasto.c.cliente
+    es NOT NULL). Debe caer en el mismo comodín CLIENTE_CREATV."""
+    import sqlalchemy as sa
+
+    import db
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+
+    bid = datos.crear_barrido(None, "atria", {}, 5)
+    rid, _ = datos.guardar_referente({"anuncio_id": "9", "fuente": "atria", "imagen_origen": "https://x/9.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente=None, barrido_id=bid)
+    datos.marcar_imagen(rid, "ok", "https://r2/9.jpg")
+    monkeypatch.setattr(clasificar, "clasificar",
+                        lambda referente, vocabulario: ({"etapa": "TOF", "consciencia": "unaware",
+                                                         "familia": None, "familia_nueva": {"nombre": "X", "descripcion": "d"},
+                                                         "dolor": "bloating", "firma": "f"}, 900, 60))
+    tarea = {"id": 1, "payload": {"cliente": None, "barrido_id": bid, "fase": "clasificando",
+                                  "consulta": {"fuente": "atria"}, "tope": 5}}
+    tareas_ref.ejecutar_barrer(tarea)
+
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.gasto).where(db.gasto.c.tipo == "clasificacion")).mappings().all()
+    assert len(filas) == 1
+    assert filas[0]["cliente"] == datos.CLIENTE_CREATV
+
+
 def test_fase_clasificando_claude_invalido_deja_error_y_no_reencola_para_siempre(tmp_path, monkeypatch):
     """Un ClasificacionInvalida en UN referente no debe abortar el tramo (el
     siguiente se clasifica igual) NI, si Claude sigue fallando siempre en el

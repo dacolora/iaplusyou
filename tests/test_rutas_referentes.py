@@ -145,6 +145,15 @@ def test_admin_referentes_traer_muestra_precio(app, monkeypatch):
     html = c.get("/admin/referentes?fuente=atria&modo=palabra&palabra=zapatos&tope=100").data.decode()
     assert "US$" in html
     assert 'name="tope"' in html
+    # "Traer y clasificar ≈ US$" solo renderiza dentro de {% if precio_traer %}
+    # (el botón de lanzar) -- "US$" solo no basta, aparece también en el texto
+    # estático del hero ("≈ US$1 una sola vez") sin importar si hubo precio.
+    assert "Traer y clasificar ≈ US$" in html
+    # Sin palabra/pagina_id no hay consulta que estimar: precio_traer queda
+    # None y el botón de lanzar no debe aparecer -- prueba que el gate arriba
+    # de verdad gatea algo, no que el texto esté siempre presente.
+    html_sin_consulta = c.get("/admin/referentes").data.decode()
+    assert "Traer y clasificar ≈ US$" not in html_sin_consulta
 
 
 def test_admin_referentes_traer_lanza_barrido_global(app, monkeypatch):
