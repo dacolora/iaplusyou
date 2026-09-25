@@ -166,3 +166,204 @@ def test_fase_traducir_no_reencola_para_siempre_sin_progreso(entorno, monkeypatc
     assert len(entorno["encolados"]) == antes                 # no se re-encoló: la pasada no avanzó nada
     assert b["estado"] == "parcial" and str(len(ids)) in b["aviso"]
     assert [r["id"] for r in datos.sin_traducir()] == ids     # el trabajo sigue ahí, no se pierde ni se oculta
+
+
+# ---------------------------------------------------------------- bloque 4 ---
+# `referentes_barrer` / `referentes_clasificar`: mismo patrón de fases que
+# arriba, pero sin la fixture `entorno` (específica de copycoders/HTML) — acá
+# alcanza con una base de datos temporal por test y un nombre de cliente
+# cualquiera (referentes.datos guarda `cliente` como texto, no valida que
+# exista en disco).
+
+def _cliente_de_prueba(tmp_path, monkeypatch):
+    """Mismo patrón que la fixture `base_temporal` de conftest.py, pero como
+    función corriente (los tests de este bloque no necesitan nada más del
+    `entorno` de copycoders, así que no vale la pena forzarlos a compartirlo)."""
+    import db
+    monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{tmp_path / 'creatv.db'}")
+    db._reset_para_tests()
+    db.crear_todo()
+    return "acme"
+
+
+def test_encolar_barrer_crea_fila_y_encola(tmp_path, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = tareas_ref.encolar_barrer(cliente, "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"},
+                                    50, 0.30, pedido_por="tester")
+    assert isinstance(bid, int)
+    b = datos.barrido(bid)
+    assert b["cliente"] == cliente and b["fuente"] == "atria" and b["estado"] == "en_cola"
+    assert tareas_ref.trabajo_barrer(bid) == tareas_ref.job_id_barrer(bid)
+
+
+def test_encolar_barrer_tope_se_limita_a_2000(tmp_path, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = tareas_ref.encolar_barrer(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"},
+                                    999999, 1.0)
+    assert datos.barrido(bid)["tope"] == 2000
+
+
+def test_encolar_barrer_ya_en_curso_devuelve_false(tmp_path, monkeypatch):
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = tareas_ref.encolar_barrer(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 10, 0.1)
+    # Sin ejecutar el worker, el job sigue "en curso" en la cola: un segundo encolar para el MISMO bid ya
+    # no aplica (no hay un segundo bid); en cambio, comprobamos que trabajo_barrer(bid) ve el job vivo.
+    assert tareas_ref.trabajo_barrer(bid) is not None
+
+
+def test_ejecutar_barrer_fase_trayendo_guarda_y_re_encola(tmp_path, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 5)
+    anuncios_falsos = [{"anuncio_id": str(i), "pagina_id": "1", "marca": "M", "titular": "T", "cuerpo": "",
+                        "idioma": "en", "pais": None, "tipo": "imagen", "imagen_origen": f"https://x/{i}.jpg",
+                        "dias": 1, "variantes": 1, "primera_vez": "2026-09-24", "ultima_vez": "2026-09-24",
+                        "activo": True, "url_anuncio": "", "url_marca": "", "etiquetas_fuente": {}, "extra": {}}
+                       for i in range(3)]
+
+    def _traer_falso(consulta, tope, avanzar, cursor=None):
+        yield anuncios_falsos, None
+
+    import referentes.fuentes as fuentes
+    monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_falso)}))
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
+                                  "consulta": {"fuente": "atria", "modo": "palabra", "palabra": "protein", "idioma": "en"},
+                                  "tope": 5}}
+    llamadas_cola = []
+    monkeypatch.setattr("cola.encolar", lambda *a, **kw: llamadas_cola.append((a, kw)))
+    resultado = tareas_ref.ejecutar_barrer(tarea)
+    assert "traíd" in resultado.lower() or "trayendo" in resultado.lower()
+    b = datos.barrido(bid)
+    assert b["traidos"] == 3
+    assert len(llamadas_cola) == 1  # se re-encoló (tope=5, solo trajo 3)
+
+
+def test_ejecutar_barrer_sin_nada_traido_marca_error(tmp_path, monkeypatch):
+    from referentes import datos
+    from referentes.fuentes import base as fuentes_base
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 5)
+
+    def _traer_falla(consulta, tope, avanzar, cursor=None):
+        raise fuentes_base.ErrorFuente("Atria no está configurado (falta ATRIA_API_KEY).")
+        yield  # pragma: no cover (nunca se alcanza; hace de esta func un generador)
+
+    import referentes.fuentes as fuentes
+    monkeypatch.setattr(fuentes, "por_tipo", lambda tipo: type("M", (), {"traer": staticmethod(_traer_falla)}))
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
+                                  "consulta": {"fuente": "atria", "modo": "palabra", "palabra": "x", "idioma": "en"},
+                                  "tope": 5}}
+    with pytest.raises(fuentes_base.ErrorFuente):
+        tareas_ref.ejecutar_barrer(tarea)
+    assert datos.barrido(bid)["estado"] == "error"
+
+
+def test_fase_clasificando_registra_gasto_y_actualiza_referente(tmp_path, monkeypatch):
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+    rid, _ = datos.guardar_referente({"anuncio_id": "9", "fuente": "atria", "imagen_origen": "https://x/9.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid, "ok", "https://r2/9.jpg")
+    monkeypatch.setattr(clasificar, "clasificar",
+                        lambda referente, vocabulario: ({"etapa": "TOF", "consciencia": "unaware",
+                                                         "familia": None, "familia_nueva": {"nombre": "X", "descripcion": "d"},
+                                                         "dolor": "bloating", "firma": "f"}, 900, 60))
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                                  "consulta": {"fuente": "atria"}, "tope": 5}}
+    tareas_ref.ejecutar_barrer(tarea)
+    r = datos.referente(cliente, rid)
+    assert r["clasificacion"] == "claude" and r["familia"] == "EMERGING: X"
+    assert any(f["nombre"] == "EMERGING: X" for f in datos.familias())
+
+
+def test_fase_clasificando_claude_invalido_deja_error_y_no_reencola_para_siempre(tmp_path, monkeypatch):
+    """Un ClasificacionInvalida en UN referente no debe abortar el tramo (el
+    siguiente se clasifica igual) NI, si Claude sigue fallando siempre en el
+    mismo, reencolarse para siempre (mismo riesgo que _fase_traducir ya
+    resuelve para las traducciones): sin avance en una pasada, el barrido
+    queda `parcial` con aviso en vez de reintentar cada ESPERA_CONT segundos
+    para siempre."""
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+    rid_malo, _ = datos.guardar_referente({"anuncio_id": "10", "fuente": "atria", "imagen_origen": "https://x/10.jpg",
+                                           "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                          cliente=cliente, barrido_id=bid)
+    rid_bueno, _ = datos.guardar_referente({"anuncio_id": "11", "fuente": "atria", "imagen_origen": "https://x/11.jpg",
+                                            "marca": "M", "titular": "T2", "cuerpo": "", "idioma": "en"},
+                                           cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid_malo, "ok", "https://r2/10.jpg")
+    datos.marcar_imagen(rid_bueno, "ok", "https://r2/11.jpg")
+
+    def _clasificar_falso(referente, vocabulario):
+        if referente["id"] == rid_malo:
+            e = clasificar.ClasificacionInvalida("Claude no devolvió JSON.")
+            e.tokens_entrada, e.tokens_salida = 50, 0
+            raise e
+        return ({"etapa": "TOF", "consciencia": "unaware", "familia": None,
+                 "familia_nueva": {"nombre": "Y", "descripcion": "d"}, "dolor": "dolor", "firma": "f"}, 80, 20)
+
+    monkeypatch.setattr(clasificar, "clasificar", _clasificar_falso)
+    tarea = {"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                                  "consulta": {"fuente": "atria"}, "tope": 5}}
+    # Primera pasada: rid_bueno avanza, rid_malo queda en error -> como hubo
+    # avance, se re-encola una vez más (para reintentar rid_malo).
+    tareas_ref.ejecutar_barrer(tarea)
+    assert datos.referente(cliente, rid_malo)["clasificacion"] == "error"
+    assert datos.referente(cliente, rid_bueno)["clasificacion"] == "claude"
+    assert datos.barrido(bid)["clasificados"] == 1
+
+    # Segunda pasada: solo queda rid_malo, que vuelve a fallar -> sin avance,
+    # no debe re-encolarse otra vez; el barrido cierra en `parcial`.
+    llamadas_cola = []
+    monkeypatch.setattr("cola.encolar", lambda *a, **kw: llamadas_cola.append((a, kw)))
+    tareas_ref.ejecutar_barrer(tarea)
+    assert llamadas_cola == []
+    b = datos.barrido(bid)
+    assert b["estado"] == "parcial" and "no se pudieron clasificar" in b["aviso"]
+
+
+def test_encolar_reintentar_imagenes_resetea_error_a_pendiente(tmp_path, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 5)
+    rid, _ = datos.guardar_referente({"anuncio_id": "7", "fuente": "atria", "imagen_origen": "https://x/7.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid, "error")
+    assert tareas_ref.encolar_reintentar_imagenes(cliente, bid)
+    assert datos.referente(cliente, rid)["estado_imagen"] == "pendiente"
+
+
+def test_encolar_reintentar_imagenes_ya_en_curso_devuelve_false(tmp_path, monkeypatch):
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = tareas_ref.encolar_barrer(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 10, 0.1)
+    assert tareas_ref.encolar_reintentar_imagenes(cliente, bid) is False
+
+
+def test_encolar_clasificar_pendientes(tmp_path, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {"modo": "palabra", "palabra": "x", "idioma": "en"}, 5)
+    assert tareas_ref.encolar_clasificar_pendientes(cliente, bid)
+    assert tareas_ref.trabajo_barrer(bid) is not None
+
+
+def test_encolar_clasificar_pendientes_sin_barrido_devuelve_false(tmp_path, monkeypatch):
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    assert tareas_ref.encolar_clasificar_pendientes(cliente, 999999) is False

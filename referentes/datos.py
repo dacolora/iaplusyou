@@ -246,6 +246,16 @@ def marcar_imagen(referente_id, estado, imagen_url=None):
         return con.execute(t.update().where(t.c.id == referente_id).values(**valores)).rowcount == 1
 
 
+def reintentar_imagenes(barrido_id):
+    """Vuelve a poner en `pendiente` las imágenes en `error` de un barrido —
+    la usa `referentes_barrer`/`tareas.referentes.encolar_reintentar_imagenes`
+    antes de re-encolar la fase de imágenes. Devuelve cuántas filas tocó."""
+    t = db.referente
+    with db.conectar() as con:
+        return con.execute(t.update().where(t.c.barrido_id == barrido_id, t.c.estado_imagen == "error")
+                           .values(estado_imagen="pendiente", actualizado_en=db.ahora())).rowcount
+
+
 def pendientes_imagen(fuente=None, barrido_id=None, limite=100):
     t = db.referente
     q = sa.select(t).where(t.c.estado_imagen == "pendiente")
@@ -277,6 +287,20 @@ def contar_imagenes(fuente=None):
             if estado in conteo:
                 conteo[estado] = int(n)
     return conteo
+
+
+def contar_imagenes_de_barrido(barrido_id):
+    """(ok, pendiente) para UN barrido — la usa `referentes_barrer` para saber
+    cuándo pasar de la fase de imágenes a la de clasificación, y al terminar
+    para avisar si algo quedó sin bajar. A diferencia de `contar_imagenes`
+    (global, por fuente) esto nunca mezcla el progreso de otro barrido."""
+    t = db.referente
+    with db.conectar() as con:
+        ok = con.execute(sa.select(sa.func.count()).select_from(t)
+                         .where(t.c.barrido_id == barrido_id, t.c.estado_imagen == "ok")).scalar() or 0
+        pendiente = con.execute(sa.select(sa.func.count()).select_from(t)
+                                .where(t.c.barrido_id == barrido_id, t.c.estado_imagen == "pendiente")).scalar() or 0
+    return int(ok), int(pendiente)
 
 
 # ------------------------------------------------------------ traducciones ---

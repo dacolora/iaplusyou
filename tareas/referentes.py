@@ -5,6 +5,15 @@ la página y guardar filas), `imagenes` (tramos de TRAMO copias a R2) y
 `traducir` (firmas y descripciones de familias con Claude) — cada tramo se
 re-encola a sí mismo (patrón tareas/tiendas.py) para no bloquear al worker.
 La única llamada pagada es la traducción: gasto tipo `otro` bajo `_creatv`.
+
+Bloque 4: `referentes_barrer` hace lo mismo por fases (`trayendo` -> Atria u
+otra fuente de `referentes.fuentes`, `imagenes` -> R2, `clasificando` ->
+Claude vía `referentes.clasificar`) para un `barrido` de un proyecto — un solo
+job por `barrido_id` (no uno fijo como copycoders), reanudable desde el cursor
+que la fuente devuelva. `referentes_clasificar` reutiliza la fase de
+clasificación sola, para reintentar los pendientes/error de un barrido ya
+traído. La única llamada pagada de este bloque es la clasificación: gasto
+tipo `clasificacion`, una fila por referente (spec §11).
 """
 import os
 from datetime import datetime, timedelta
@@ -13,7 +22,8 @@ import cola
 import gastos
 import trabajos
 from nicho.avatares import costo_real, modelo_actual
-from referentes import copycoders, datos, imagenes
+from referentes import clasificar, copycoders, datos, fuentes, imagenes
+from referentes.fuentes.base import ErrorFuente
 from tareas import al_interrumpir, ref_sufijo, registrar
 
 TIPO_IMPORTAR = "referentes_importar_copycoders"
@@ -24,6 +34,10 @@ LOTES_TRADUCCION = 3
 FAMILIAS_POR_LLAMADA = 40
 ESPERA_CONT = 5
 ETAPAS_IMPORTAR = [("Leyendo la página", 1), ("Guardando anuncios", 2), ("Guardando imágenes", 12), ("Traduciendo", 3)]
+
+TIPO_BARRER = "referentes_barrer"
+TIPO_CLASIFICAR = "referentes_clasificar"
+ETAPAS_BARRER = [("Trayendo anuncios", 1), ("Guardando imágenes", 12), ("Clasificando", 3)]
 CARPETA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "salidas", "referentes")
 
 
@@ -178,3 +192,283 @@ def interrumpida_importar(tarea, mensaje):
     p = tarea.get("payload") or {}
     if p.get("barrido_id"):
         datos.actualizar_barrido(int(p["barrido_id"]), estado="parcial", aviso=cola.recortar(mensaje, 300))
+
+
+# ---------------------------------------------------------------- bloque 4 ---
+# `referentes_barrer`: trae un barrido de una fuente (`referentes.fuentes`,
+# hoy solo Atria) por fases, con un job por `barrido_id` (a diferencia del job
+# fijo de copycoders arriba, acá puede haber varios barridos vivos a la vez,
+# uno por cliente/consulta). `referentes_clasificar` reutiliza solo la fase de
+# clasificación para reintentar los pendientes/error de un barrido ya traído.
+
+def job_id_barrer(barrido_id):
+    return f"referentes:barrer:{barrido_id}"
+
+
+def trabajo_barrer(barrido_id):
+    """job_id vivo (pendiente o en_curso) de ESTE barrido, sea que lo esté
+    corriendo `referentes_barrer` (trayendo/imagenes/clasificando) o
+    `referentes_clasificar` (clasificando solo) — ambos comparten el mismo
+    job_id por barrido_id, así que nunca hay dos a la vez."""
+    base = job_id_barrer(barrido_id)
+    for job in (base, base + SUFIJO_CONT):
+        if trabajos.en_curso(job):
+            return job
+    return None
+
+
+def _job_continuacion_barrer(job_id, barrido_id):
+    base = job_id_barrer(barrido_id)
+    return base[:-len(SUFIJO_CONT)] if job_id.endswith(SUFIJO_CONT) else base + SUFIJO_CONT
+
+
+def _continuar_barrer(tarea, payload, bid, tipo=TIPO_BARRER):
+    cuando = (datetime.now() + timedelta(seconds=ESPERA_CONT)).isoformat(timespec="seconds")
+    cola.encolar(tipo, payload, job_id=_job_continuacion_barrer(tarea.get("job_id") or job_id_barrer(bid), bid),
+                duracion_estimada=1800, etapas=ETAPAS_BARRER, ejecutar_desde=cuando, max_intentos=1, prioridad=2)
+
+
+def encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=None):
+    """Crea el `barrido` y encola su primera fase (`trayendo`). `tope` se
+    limita a 2000 acá (no solo en la ruta) porque esta función es el único
+    punto de entrada real — cualquier ruta que la llame queda cubierta."""
+    tope = min(int(tope or 0), 2000)
+    bid = datos.crear_barrido(cliente, fuente, consulta, tope, pedido_por=pedido_por, usd_estimado=usd_estimado)
+    trabajos.encolar(job_id_barrer(bid), TIPO_BARRER,
+                     {"cliente": cliente, "barrido_id": bid, "fase": "trayendo",
+                      "consulta": {**consulta, "fuente": fuente}, "tope": tope},
+                     duracion_estimada=1800, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2)
+    return bid
+
+
+def encolar_clasificar_pendientes(cliente, barrido_id):
+    """Reintenta solo la clasificación de los referentes `pendiente`/`error`
+    de un barrido ya traído. `False` si el barrido no existe o ya hay un job
+    vivo para él (trayendo, guardando imágenes o clasificando)."""
+    if trabajo_barrer(barrido_id):
+        return False
+    b = datos.barrido(barrido_id)
+    if not b:
+        return False
+    trabajos.encolar(job_id_barrer(barrido_id), TIPO_CLASIFICAR,
+                     {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
+                      "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
+                     duracion_estimada=600, etapas=[("Clasificando", 1)], max_intentos=1, prioridad=2)
+    return True
+
+
+def encolar_reintentar_imagenes(cliente, barrido_id):
+    """Vuelve a `pendiente` las imágenes en `error` de un barrido y re-encola
+    la fase de imágenes. `False` si el barrido no existe o ya hay un job vivo."""
+    if trabajo_barrer(barrido_id):
+        return False
+    b = datos.barrido(barrido_id)
+    if not b:
+        return False
+    datos.reintentar_imagenes(barrido_id)
+    trabajos.encolar(job_id_barrer(barrido_id), TIPO_BARRER,
+                     {"cliente": cliente, "barrido_id": barrido_id, "fase": "imagenes",
+                      "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
+                     duracion_estimada=600, etapas=ETAPAS_BARRER, max_intentos=1, prioridad=2)
+    return True
+
+
+def _fase_trayendo(tarea, p, bid, avanzar):
+    """Trae hasta `tope` anuncios de la fuente, retomando desde el cursor
+    guardado en `barrido.extra.cursor_atria` (así una continuación no vuelve a
+    pedir lo mismo). Un `ErrorFuente` sin nada traído todavía es un error real
+    (nunca se llegó a guardar nada); si ya se trajo algo, se trata igual que
+    el fin natural de la fuente (cursor_final=None) — Atria documenta que así
+    señala una entrega parcial (p. ej. se acabó el cupo del mes a mitad)."""
+    avanzar("Trayendo anuncios")
+    b = datos.barrido(bid) or {}
+    consulta = p["consulta"]
+    tope = int(p["tope"])
+    cursor = (b.get("extra") or {}).get("cursor_atria")
+    traidos_total = int(b.get("traidos") or 0)
+    nuevos_total = int(b.get("nuevos") or 0)
+    fuente_mod = fuentes.por_tipo(consulta["fuente"])
+    cursor_final = cursor
+    try:
+        for pagina, cursor_siguiente in fuente_mod.traer(consulta, tope - traidos_total, avanzar, cursor=cursor):
+            for a in pagina:
+                if not a or not a.get("anuncio_id") or not a.get("imagen_origen"):
+                    continue
+                a = dict(a, fuente=consulta["fuente"])
+                _, creado = datos.guardar_referente(a, cliente=p["cliente"], barrido_id=bid)
+                traidos_total += 1
+                nuevos_total += int(creado)
+            cursor_final = cursor_siguiente
+            if traidos_total - int(b.get("traidos") or 0) >= TRAMO:
+                break
+    except ErrorFuente as e:
+        if traidos_total == 0:
+            datos.actualizar_barrido(bid, estado="error", aviso=cola.recortar(str(e), 300))
+            raise
+        cursor_final = None
+    extra = dict(b.get("extra") or {})
+    extra["cursor_atria"] = cursor_final
+    datos.actualizar_barrido(bid, traidos=traidos_total, nuevos=nuevos_total, extra=extra, tarea_id=tarea.get("id"))
+    if traidos_total >= tope or not cursor_final:
+        datos.actualizar_barrido(bid, estado="guardando")
+        _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)
+        return f"{traidos_total} anuncios traídos ({nuevos_total} nuevos); siguen las imágenes."
+    _continuar_barrer(tarea, {**p, "fase": "trayendo"}, bid)
+    return f"Trayendo… {traidos_total}/{tope}."
+
+
+def _fase_imagenes_barrer(tarea, p, bid, avanzar):
+    """Igual que `_fase_imagenes` (copycoders) pero acotada a ESTE barrido
+    (`barrido_id=bid`, nunca todas las pendientes globales) — nombre propio
+    a propósito: un solo `_fase_imagenes` para los dos bloques pisaría la
+    función de copycoders (mismo nombre de módulo) y rompería su import."""
+    avanzar("Guardando imágenes")
+    for r in datos.pendientes_imagen(barrido_id=bid, limite=TRAMO):
+        try:
+            url = imagenes.guardar_en_r2(r["anuncio_id"], r["imagen_origen"], CARPETA)
+            datos.marcar_imagen(r["id"], "ok", url)
+        except Exception:
+            # Igual que en copycoders: una imagen mala no debe abortar el
+            # tramo entero (max_intentos=1) ni las que vengan después.
+            datos.marcar_imagen(r["id"], "error")
+    con_imagen, pendientes_img = datos.contar_imagenes_de_barrido(bid)
+    datos.actualizar_barrido(bid, con_imagen=con_imagen)
+    if pendientes_img:
+        _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)
+        return f"Imágenes: {con_imagen} listas, {pendientes_img} por bajar."
+    _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid)
+    return f"Imágenes listas: {con_imagen}. Sigue la clasificación."
+
+
+def _clasificar_uno(cliente, r):
+    """Clasifica un referente y actualiza sus columnas; un fallo de Claude
+    (`ClasificacionInvalida`) deja `clasificacion=error` y el llamador sigue
+    con el siguiente sin abortar el tramo. Un fallo de otro tipo (red/API de
+    Anthropic) SÍ se deja subir — lo atrapa el wrapper de `ejecutar_barrer`/
+    `ejecutar_clasificar`, que marca el barrido y corta el tramo (nada raro:
+    max_intentos=1, no tiene sentido seguir gastando si la API está caída).
+    Devuelve (ok: bool, tokens_entrada, tokens_salida)."""
+    vocabulario = [f["nombre"] for f in datos.familias()]
+    try:
+        resultado, ent, sal = clasificar.clasificar(r, vocabulario)
+    except clasificar.ClasificacionInvalida as e:
+        ent = getattr(e, "tokens_entrada", 0) or 0
+        sal = getattr(e, "tokens_salida", 0) or 0
+        extra = dict(r.get("extra") or {})
+        extra["error_clasificacion"] = str(e)
+        datos.actualizar_referente(r["id"], clasificacion="error", extra=extra)
+        return False, ent, sal
+    familia = resultado["familia"]
+    if resultado.get("familia_nueva"):
+        fn = resultado["familia_nueva"]
+        nombre_nuevo = f"EMERGING: {fn['nombre']}"
+        datos.familia_asegurar(nombre_nuevo, fn.get("descripcion") or "", origen="claude")
+        familia = nombre_nuevo
+    datos.actualizar_referente(r["id"], etapa=resultado["etapa"], consciencia=resultado["consciencia"],
+                               familia=familia, dolor=resultado["dolor"], firma=resultado["firma"],
+                               clasificacion="claude")
+    return True, ent, sal
+
+
+def _fase_clasificando(tarea, p, bid, avanzar):
+    """Compartida por `referentes_barrer` (su propia fase 3) y
+    `referentes_clasificar` (standalone, solo esta fase) — por eso re-encola
+    con `tipo=tarea.get("tipo")`: cada una debe seguir re-encolándose como el
+    tipo con el que arrancó, nunca cruzarse a la otra.
+
+    `pendientes_clasificacion` trae `pendiente` Y `error` (un fallo de Claude
+    se reintenta solo en la próxima pasada) — así que, igual que
+    `_fase_traducir` con las traducciones, una pasada que no clasifica NADA
+    (Claude vuelve a fallar exactamente en los mismos referentes) no debe
+    re-encolarse: sin la bandera `avanzo`, un referente permanentemente
+    problemático (imagen no interpretable, prompt que Claude nunca cumple)
+    reencolaría —y pagaría una llamada— cada ESPERA_CONT segundos para
+    siempre, sin que el barrido llegue nunca a un estado final."""
+    avanzar("Clasificando")
+    cliente = p.get("cliente")
+    pendientes = datos.pendientes_clasificacion(barrido_id=bid, limite=TRAMO)
+    b = datos.barrido(bid) or {}
+    clasificados = int(b.get("clasificados") or 0)
+    avanzo = False
+    for i, r in enumerate(pendientes, 1):
+        ok, ent, sal = _clasificar_uno(cliente, r)
+        avanzo = avanzo or ok
+        if ent or sal:
+            usd = costo_real(ent, sal)
+            gastos.registrar_seguro(cliente, "clasificacion", usd, f"referentes:clasificar:{r['id']}{ref_sufijo(tarea)}",
+                                    detalle=r.get("titular") or r.get("marca") or "", proveedor="anthropic",
+                                    extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+            b2 = datos.barrido(bid) or {}
+            datos.actualizar_barrido(bid, usd_real=round(float(b2.get("usd_real") or 0.0) + usd, 4))
+        clasificados += int(ok)
+        cola.reportar(tarea.get("job_id") or job_id_barrer(bid), progreso=100.0 * i / max(1, len(pendientes)),
+                      detalle=f"{i}/{len(pendientes)}")
+    pendientes_total = len(datos.pendientes_clasificacion(barrido_id=bid, limite=9999))
+    datos.actualizar_barrido(bid, clasificados=clasificados, pendientes=pendientes_total)
+    if pendientes_total and avanzo:
+        _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tarea.get("tipo") or TIPO_BARRER)
+        return f"Clasificando… {clasificados} listos."
+    _, sin_imagen = datos.contar_imagenes_de_barrido(bid)
+    avisos = []
+    if pendientes_total:
+        avisos.append(f"{pendientes_total} referentes no se pudieron clasificar; "
+                      "«Reintentar clasificación» los vuelve a pedir.")
+    if sin_imagen:
+        avisos.append(f"{sin_imagen} imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.")
+    aviso = " ".join(avisos) or None
+    datos.actualizar_barrido(bid, estado="parcial" if aviso else "listo", aviso=aviso)
+    return f"Barrido terminado: {clasificados} referentes clasificados."
+
+
+@registrar(TIPO_BARRER)
+def ejecutar_barrer(tarea):
+    p = tarea["payload"]
+    bid = int(p["barrido_id"])
+    fase = p.get("fase") or "trayendo"
+
+    def avanzar(etapa, detalle=None):
+        cola.reportar(tarea.get("job_id") or job_id_barrer(bid), etapa=etapa, detalle=detalle)
+
+    try:
+        if fase == "trayendo":
+            return _fase_trayendo(tarea, p, bid, avanzar)
+        if fase == "imagenes":
+            return _fase_imagenes_barrer(tarea, p, bid, avanzar)
+        return _fase_clasificando(tarea, p, bid, avanzar)
+    except Exception as e:
+        # Mismo patrón que ejecutar_importar (y el resto de tareas/*.py): sin
+        # esto, una excepción que no sea el ErrorFuente ya manejado adentro de
+        # _fase_trayendo (p. ej. un bug de verdad, o la API de Anthropic caída
+        # en medio de _fase_clasificando) deja la tarea en `error` pero el
+        # barrido colgado para siempre en su estado anterior, sin aviso ni
+        # forma de reintentar desde la UI.
+        datos.actualizar_barrido(bid, estado="error" if fase == "trayendo" else "parcial",
+                                 aviso=cola.recortar(cola.sin_token(e), 300))
+        raise
+
+
+@registrar(TIPO_CLASIFICAR)
+def ejecutar_clasificar(tarea):
+    p = tarea["payload"]
+    bid = int(p["barrido_id"])
+
+    def avanzar(etapa, detalle=None):
+        cola.reportar(tarea.get("job_id") or job_id_barrer(bid), etapa=etapa, detalle=detalle)
+
+    try:
+        return _fase_clasificando(tarea, p, bid, avanzar)
+    except Exception as e:
+        datos.actualizar_barrido(bid, estado="parcial", aviso=cola.recortar(cola.sin_token(e), 300))
+        raise
+
+
+@al_interrumpir(TIPO_BARRER)
+def interrumpida_barrer(tarea, mensaje):
+    p = tarea.get("payload") or {}
+    if p.get("barrido_id"):
+        datos.actualizar_barrido(int(p["barrido_id"]), estado="parcial", aviso=cola.recortar(mensaje, 300))
+
+
+@al_interrumpir(TIPO_CLASIFICAR)
+def interrumpida_clasificar(tarea, mensaje):
+    interrumpida_barrer(tarea, mensaje)
