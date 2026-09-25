@@ -143,3 +143,36 @@ def test_usos_cuenta_solo_las_del_cliente(base_temporal):
     assert recrear.usos("acme", 99) == 1
     assert recrear.usos("acme", 5) == 0
     assert recrear.usos("otro", 7) == 1
+
+
+# --- Topes de salida (2026-09-25): medido en producción, «Adaptar con IA» usó
+# 591 y 571 tokens de salida con el tope viejo de 600 — al borde del corte.
+
+def test_adaptar_da_espacio_para_pensar_y_responder(monkeypatch):
+    from referentes import recrear
+    topes = []
+    monkeypatch.setattr(recrear, "_llamar",
+                        lambda texto, max_tokens: topes.append(max_tokens) or ('{"titular": "T", "prompt": "P"}', 1, 1))
+    recrear.adaptar({"familia": "F", "firma": "x", "titular": "T"}, None, {"nombre": "N"}, "T")
+    assert 591 * 4 <= topes[0] <= 16000
+
+
+def test_llamar_cortada_por_max_tokens_lanza_con_tokens(monkeypatch):
+    import anthropic
+    from referentes import recrear
+    import generador_prompts
+    monkeypatch.setattr(generador_prompts, "_api_key", lambda: "sk-test")
+    respuesta = type("R", (), {"content": [type("B", (), {"type": "text", "text": '{"titular": "T", "prompt": "Usando'})()],
+                               "stop_reason": "max_tokens",
+                               "usage": type("U", (), {"input_tokens": 1204, "output_tokens": 600})()})()
+
+    class Cliente:
+        def __init__(self, **kw):
+            self.messages = self
+
+        def create(self, **kw):
+            return respuesta
+    monkeypatch.setattr(anthropic, "Anthropic", Cliente)
+    with pytest.raises(recrear.AdaptacionInvalida, match="se cortó") as exc:
+        recrear._llamar("adapta", 600)
+    assert (exc.value.tokens_entrada, exc.value.tokens_salida) == (1204, 600)

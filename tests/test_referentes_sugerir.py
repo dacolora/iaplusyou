@@ -101,3 +101,35 @@ def test_sugerir_ia_respuesta_no_json_lanza(monkeypatch):
     with pytest.raises(sugerir.SugerenciaInvalida) as exc:
         sugerir.sugerir_ia([_cand(1, "ugc")], "p", "pr", "t", objetivo=1)
     assert exc.value.tokens_entrada == 111 and exc.value.tokens_salida == 22
+
+
+# --- Topes de salida (2026-09-25): medido en producción, «Sugerir con IA» con
+# 60 candidatos y objetivo 5 usó 1 704 y 1 679 tokens de salida (casi todo
+# pensamiento) con un tope de 800 — se cortaba siempre.
+
+def _cliente_que_responde(monkeypatch, respuesta, pedidos):
+    class _ClienteFalso:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                pedidos.append(kw)
+                return respuesta
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
+
+
+def test_sugerir_ia_da_espacio_para_pensar_y_responder(monkeypatch):
+    pedidos = []
+    _cliente_que_responde(monkeypatch, _RespuestaFalsa('{"elegidos": []}'), pedidos)
+    sugerir.sugerir_ia([_cand(1, "ugc")], "p", "pr", "t", objetivo=5)
+    assert 1704 * 2.5 <= pedidos[0]["max_tokens"] <= 16000
+
+
+def test_sugerir_ia_cortada_por_max_tokens_lanza_con_tokens(monkeypatch):
+    import pytest
+    respuesta = _RespuestaFalsa('{"elegidos": [{"referente_id": 1, "razon": "encaja')
+    respuesta.stop_reason = "max_tokens"
+    _cliente_que_responde(monkeypatch, respuesta, [])
+    with pytest.raises(sugerir.SugerenciaInvalida, match="se cortó") as exc:
+        sugerir.sugerir_ia([_cand(1, "ugc")], "p", "pr", "t", objetivo=1)
+    assert exc.value.tokens_entrada == 111 and exc.value.tokens_salida == 22

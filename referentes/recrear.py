@@ -96,7 +96,13 @@ class AdaptacionInvalida(RuntimeError):
     """Claude no devolvió titular+prompt; el formulario se queda con el prompt determinista."""
 
 
-def _llamar(texto, max_tokens=600):
+# Tope de salida de «Adaptar con IA»: Claude Sonnet 5 piensa antes de
+# responder y eso sale del mismo max_tokens. Medido en producción
+# (2026-09-25): 591 y 571 tokens con el tope viejo de 600 — al borde del corte.
+MAX_TOKENS_ADAPTAR = 3000
+
+
+def _llamar(texto, max_tokens=MAX_TOKENS_ADAPTAR):
     """Una llamada de texto a Claude; devuelve (texto, tokens_entrada, tokens_salida)."""
     import anthropic
     from generador_prompts import MODEL, _api_key
@@ -106,8 +112,10 @@ def _llamar(texto, max_tokens=600):
     uso = getattr(resp, "usage", None)
     entrada = int(getattr(uso, "input_tokens", 0) or 0)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
-    if resp.stop_reason == "refusal":
-        e = AdaptacionInvalida("Claude rechazó la solicitud.")
+    motivo = {"refusal": "Claude rechazó la solicitud.",
+              "max_tokens": "La respuesta de Claude se cortó por largo (max_tokens)."}.get(resp.stop_reason)
+    if motivo:
+        e = AdaptacionInvalida(motivo)
         e.tokens_entrada, e.tokens_salida = entrada, salida
         raise e
     return "".join(b.text for b in resp.content if b.type == "text").strip(), entrada, salida
@@ -146,7 +154,7 @@ def adaptar(referente, familia, producto, titular_actual, guia=""):
         regla_producto=_sin_cierre(producto.get("regla"), "regla_producto"),
         guia=_sin_cierre(guia, "guia"),
     )
-    respuesta, ent, sal = _llamar(texto, 600)
+    respuesta, ent, sal = _llamar(texto, MAX_TOKENS_ADAPTAR)
     try:
         data = _parsear_json(respuesta)
         titular = str(data.get("titular") or "").strip()[:80]

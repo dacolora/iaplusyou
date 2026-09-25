@@ -94,9 +94,20 @@ def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, obje
         objetivo=max(1, int(objetivo)),
     )
     cliente_ia = anthropic.Anthropic(api_key=_api_key())
-    respuesta = cliente_ia.messages.create(model=MODEL, max_tokens=800, messages=[{"role": "user", "content": texto}])
+    # Claude Sonnet 5 piensa antes de responder y eso sale del mismo
+    # max_tokens. Medido en producción (2026-09-25): 60 candidatos y objetivo 5
+    # usaron ~1 700 tokens (casi todo pensamiento) con un tope viejo de 800 —
+    # se cortaba siempre. Por encima de 16 000 el SDK exigiría streaming.
+    tope = min(16000, 4000 + 200 * max(1, int(objetivo)))
+    respuesta = cliente_ia.messages.create(model=MODEL, max_tokens=tope, messages=[{"role": "user", "content": texto}])
     ent = getattr(respuesta.usage, "input_tokens", 0) or 0
     sal = getattr(respuesta.usage, "output_tokens", 0) or 0
+    motivo = {"refusal": "Claude rechazó la solicitud.",
+              "max_tokens": "La respuesta de Claude se cortó por largo (max_tokens)."}.get(getattr(respuesta, "stop_reason", None))
+    if motivo:
+        e = SugerenciaInvalida(motivo)
+        e.tokens_entrada, e.tokens_salida = ent, sal
+        raise e
     crudo = "".join(getattr(b, "text", "") for b in respuesta.content).strip()
     try:
         inicio, fin = crudo.index("{"), crudo.rindex("}") + 1

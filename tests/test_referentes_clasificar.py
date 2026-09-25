@@ -90,3 +90,52 @@ def test_clasificar_json_invalido_lanza_con_tokens(monkeypatch):
     with pytest.raises(clasificar.ClasificacionInvalida) as exc:
         clasificar.clasificar(referente, [])
     assert exc.value.tokens_entrada == 900 and exc.value.tokens_salida == 60
+
+
+# --- Topes de salida (2026-09-25): Claude Sonnet 5 piensa antes de responder y
+# eso sale del mismo max_tokens. Medido en producción: una clasificación usó
+# 162 y 299 tokens de salida (tope viejo: 500).
+
+class _RespuestaCortada:
+    def __init__(self, texto, stop_reason):
+        self.content = [type("Bloque", (), {"type": "text", "text": texto})()]
+        self.stop_reason = stop_reason
+        self.usage = type("Uso", (), {"input_tokens": 3976, "output_tokens": 500})()
+
+
+def _con_cliente(monkeypatch, respuesta, pedidos=None):
+    class _ClienteFalso:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                if pedidos is not None:
+                    pedidos.append(kw)
+                return respuesta
+    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.clasificar._api_key", lambda: "sk-test")
+
+
+_REFERENTE = {"marca": "M", "titular": "T", "cuerpo": "C", "idioma": "en", "imagen_url": "https://cdn.example/x.jpg"}
+
+
+def test_clasificar_cortada_por_max_tokens_lanza_con_tokens(monkeypatch):
+    _con_cliente(monkeypatch, _RespuestaCortada('{"etapa": "TOF", "consciencia": "unaware", "firma": "Muestra', "max_tokens"))
+    with pytest.raises(clasificar.ClasificacionInvalida, match="se cortó") as exc:
+        clasificar.clasificar(_REFERENTE, [])
+    assert (exc.value.tokens_entrada, exc.value.tokens_salida) == (3976, 500)
+
+
+def test_clasificar_rechazada_lanza_con_tokens(monkeypatch):
+    _con_cliente(monkeypatch, _RespuestaCortada("", "refusal"))
+    with pytest.raises(clasificar.ClasificacionInvalida, match="rechazó") as exc:
+        clasificar.clasificar(_REFERENTE, [])
+    assert exc.value.tokens_entrada == 3976
+
+
+def test_clasificar_da_espacio_para_pensar_y_responder(monkeypatch):
+    pedidos = []
+    _con_cliente(monkeypatch, _RespuestaFalsa('{"etapa": "TOF", "consciencia": "unaware", "familia": null, '
+                                              '"familia_nueva": {"nombre": "N", "descripcion": "d"}, '
+                                              '"dolor": "x", "firma": "y"}'), pedidos)
+    clasificar.clasificar(_REFERENTE, [])
+    assert 299 * 5 <= pedidos[0]["max_tokens"] <= 16000

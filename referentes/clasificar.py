@@ -53,11 +53,24 @@ def _sin_cierre(texto, etiqueta):
     return (texto or "").replace(f"</{etiqueta}>", "")
 
 
-def _llamar(content, max_tokens=500):
+# Tope de salida: Claude Sonnet 5 piensa antes de responder aunque no se le
+# pida, y eso sale del mismo max_tokens. Medido en producción (2026-09-25):
+# una clasificación usó 162 y 299 tokens; el tope viejo (500) iba justo.
+MAX_TOKENS = 2000
+
+
+def _llamar(content, max_tokens=MAX_TOKENS):
     client = anthropic.Anthropic(api_key=_api_key())
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens, messages=[{"role": "user", "content": content}])
+    entrada, salida = resp.usage.input_tokens, resp.usage.output_tokens
+    motivo = {"refusal": "Claude rechazó la solicitud.",
+              "max_tokens": "La respuesta de Claude se cortó por largo (max_tokens)."}.get(getattr(resp, "stop_reason", None))
+    if motivo:
+        e = ClasificacionInvalida(motivo)
+        e.tokens_entrada, e.tokens_salida = entrada, salida
+        raise e
     texto = "".join(b.text for b in resp.content if b.type == "text").strip()
-    return texto, resp.usage.input_tokens, resp.usage.output_tokens
+    return texto, entrada, salida
 
 
 def _parsear(texto):

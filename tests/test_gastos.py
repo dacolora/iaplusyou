@@ -201,8 +201,10 @@ def test_estimar_adaptar_referente():
 def test_estimar_sugerir_ia():
     import gastos
     r = gastos.estimar("sugerir_ia")
-    assert r["usd"] == 0.02
-    assert "0,02" in r["texto"]
+    # Medido en producción (2026-09-25): ~US$ 0,030 con 60 candidatos y
+    # objetivo 5 (casi toda la salida es pensamiento); redondeado hacia arriba.
+    assert r["usd"] == 0.04
+    assert "0,04" in r["texto"]
 
 
 def test_sugerir_ia_en_tipos():
@@ -213,14 +215,16 @@ def test_sugerir_ia_en_tipos():
 def test_estimar_clasificacion_por_cantidad():
     import gastos
     r = gastos.estimar("clasificacion", n=500)
-    assert abs(r["usd"] - 3.0) < 0.001
-    assert "0,006" in r["texto"] or "3,00" in r["texto"] or "aprox" in r["texto"].lower()
+    # Medido en producción (2026-09-25): ~US$ 0,0103 por anuncio (la entrada
+    # lleva el vocabulario de ~190 familias); redondeado hacia arriba.
+    assert abs(r["usd"] - 6.0) < 0.001
+    assert "6,00" in r["texto"]
 
 
 def test_estimar_clasificacion_defecto_uno():
     import gastos
     r = gastos.estimar("clasificacion")
-    assert abs(r["usd"] - 0.006) < 0.0001
+    assert abs(r["usd"] - 0.012) < 0.0001
 
 
 def test_clasificacion_en_tipos():

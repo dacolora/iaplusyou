@@ -51,13 +51,19 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    nicho/avatares.estimar_costo por tokens; el real sale de usage.
 #  - recoleccion (Apify): resultados × precio por resultado del actor
 #    (nicho/fuentes/apify_actores.py), "aprox." porque Apify suma cómputo.
+#  - referentes, medido en producción el 2026-09-25 (claude-sonnet-5 piensa
+#    antes de responder y eso se cobra como salida): clasificar un anuncio
+#    ~US$ 0,0103 (entrada ~4.000 tokens con el vocabulario de ~190 familias,
+#    salida 160-300); «Sugerir con IA» ~US$ 0,030 (60 candidatos, objetivo 5,
+#    ~1.700 tokens de salida, casi todo pensamiento); «Adaptar con IA»
+#    ~US$ 0,008.
 TARIFAS = {
     "guion": 0.02,
     "regla_producto": 0.01,
     "caption_organico": 0.01,
     "adaptar_referente": 0.01,
-    "sugerir_ia": 0.02,
-    "clasificacion": 0.006,
+    "sugerir_ia": 0.04,
+    "clasificacion": 0.012,
     "voz": 0.05,
     "musica": 0.02,
     "whisper": 0.01,
