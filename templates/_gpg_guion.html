@@ -1,0 +1,57 @@
+{% set lec = guion.lectura %}
+<section class="gpg-guion" data-gpg-caja aria-label="Guion elegido">
+  <div class="gpg-lote-cab">
+    <h4>{{ guion.titulo }}</h4>
+    <span class="tag-estado">{{ 'Confirmado' if guion.estado == 'confirmado' else 'Por revisar' }}</span>
+  </div>
+  <p class="gp-ayuda">{{ lec.palabras or 0 }} palabras · unos {{ (lec.segundos_estimados or 0) | round | int }} s leído completo a ritmo natural.</p>
+  {% if lec.notas_estilo %}<p><strong>Notas de estilo:</strong> {{ lec.notas_estilo }}</p>{% endif %}
+  {% if lec.hook_con_estilo_distinto %}<p class="gp-ayuda">El hook tiene un estilo visual distinto al resto del video.</p>{% endif %}
+  {% if lec.video_referencia_url %}<p><a href="{{ lec.video_referencia_url }}" target="_blank" rel="noopener noreferrer">Ver el video de referencia</a></p>{% endif %}
+
+  <h5>Personajes</h5>
+  <ul>
+    {% for p in lec.personajes or [] %}<li><strong>{{ p.nombre }}</strong>{% if p.descripcion %}: {{ p.descripcion }}{% endif %}</li>
+    {% else %}<li class="vacio">Sin personajes.</li>{% endfor %}
+  </ul>
+  <h5>Líneas</h5>
+  <ol class="gpg-lineas">
+    {% for l in lec.lineas or [] %}<li value="{{ l.n }}">{{ l.texto }}{% if not l.literal %} <span class="gpg-marca">no aparece tal cual en el guion</span>{% endif %}</li>{% endfor %}
+  </ol>
+  <h5>Hooks alternativos</h5>
+  <ul>
+    {% for h in lec.hooks or [] %}<li><strong>{{ h.id }}</strong>: {{ h.texto }}{% if not h.literal %} <span class="gpg-marca">no aparece tal cual en el guion</span>{% endif %}</li>
+    {% else %}<li class="vacio">Sin hooks alternativos.</li>{% endfor %}
+  </ul>
+
+  <div class="gpg-error flash error" hidden></div>
+  {% if guion.estado == 'leido' %}
+    <p class="gp-ayuda">Revisa que las líneas sean exactamente las del guion: de aquí salen los diálogos de cada clip, palabra por palabra.</p>
+    <div class="gp-botones">
+      <button type="button" class="btn-aprobar btn-sm" data-gpg-accion="/guiones/{{ guion.id }}/confirmar">Confirmar guion</button>
+      <button type="button" class="btn-guardar btn-sm" data-gpg-mostrar="gpg-editar-lectura">Corregir la lectura</button>
+    </div>
+    <form class="gpg-form" id="gpg-editar-lectura" data-gpg-post="/guiones/{{ guion.id }}/lectura" hidden>
+      <label class="campo-label" for="gpg-l-titulo">Título</label>
+      <input type="text" id="gpg-l-titulo" name="titulo" value="{{ lec.titulo }}" maxlength="200">
+      <label class="campo-label" for="gpg-l-lineas">Líneas, una por renglón y en orden</label>
+      <textarea id="gpg-l-lineas" name="lineas" rows="12" class="gp-mono">{{ (lec.lineas or []) | map(attribute='texto') | join('\n') }}</textarea>
+      <label class="campo-label" for="gpg-l-hooks">Hooks alternativos, uno por renglón</label>
+      <textarea id="gpg-l-hooks" name="hooks" rows="3" class="gp-mono">{{ (lec.hooks or []) | map(attribute='texto') | join('\n') }}</textarea>
+      <label class="campo-label" for="gpg-l-personajes">Personajes: «Nombre: descripción», uno por renglón</label>
+      <textarea id="gpg-l-personajes" name="personajes" rows="3">{% for p in lec.personajes or [] %}{{ p.nombre }}: {{ p.descripcion }}{% if not loop.last %}
+{% endif %}{% endfor %}</textarea>
+      <label class="campo-label" for="gpg-l-notas">Notas de estilo</label>
+      <textarea id="gpg-l-notas" name="notas_estilo" rows="2">{{ lec.notas_estilo }}</textarea>
+      <label><input type="checkbox" name="hook_con_estilo_distinto" value="on" {% if lec.hook_con_estilo_distinto %}checked{% endif %}>
+        El hook tiene un estilo visual distinto al resto</label>
+      <div class="gpg-error flash error" hidden></div>
+      <div class="gp-botones"><button type="submit" class="btn-generar btn-sm">Guardar la lectura</button></div>
+    </form>
+  {% else %}
+    <p class="gp-ayuda">La lectura está confirmada. Para cambiarla, duplica el guion: la copia se puede editar.</p>
+    <div class="gp-botones">
+      <button type="button" class="btn-guardar btn-sm" data-gpg-accion="/guiones/{{ guion.id }}/duplicar">Duplicar guion</button>
+    </div>
+  {% endif %}
+</section>

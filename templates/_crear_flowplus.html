@@ -18,6 +18,9 @@
     desde aquí; cada mensaje a Claude tiene un costo pequeño que ves en el botón.
   </p>
 
+  {% include "_crear_flowplus_guiones.html" %}
+  <h3 class="gp-sub">Prompts</h3>
+
   <div class="gp-layout">
     <aside class="gp-col-lista" aria-label="Tus prompts">
       <button type="button" class="btn-guardar btn-sm gp-nuevo-btn" id="gp-nuevo-btn"
@@ -998,6 +1001,13 @@
       if (!activo) { pararSondeo(); return; }
       if (!estado.listaCargada) { cargarLista(true); return; }
       if (estado.sel !== null) { sondeo.inicio = 0; sondeo.agotado = false; cargarDetalle(estado.sel, true); }
+    });
+
+    // El panel de guiones pide abrir un prompt del pipeline en este chat.
+    document.addEventListener('gp:abrir-prompt', function (e) {
+      var id = e.detail && e.detail.id;
+      if (id === undefined || id === null) return;
+      cargarLista(false).then(function () { seleccionar(id, true); });
     });
 
     pintarControles();

@@ -1962,3 +1962,23 @@ textarea.gp-mono { font-size: .8rem; line-height: 1.5; }
   .gp-dif-linea { padding-left: 1.4rem; padding-right: .5rem; }
   .gp-dif-marca { left: .35rem; }
 }
+
+/* ---- Flow Plus › Guiones (gpg-) ---- */
+.gpg { margin: 0 0 2rem; padding: 0 0 1.5rem; border-bottom: 1px solid var(--border); }
+.gpg-cab, .gpg-lote-cab { display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
+.gpg-form { display: grid; gap: .5rem; margin: .8rem 0; }
+.gpg-form textarea, .gpg-form input[type=text], .gpg-form input[type=number], .gpg-form select { width: 100%; box-sizing: border-box; }
+.gpg-lotes { list-style: none; padding: 0; margin: .8rem 0; display: grid; gap: .6rem; }
+.gpg-lote, .gpg-guion, .gpg-video { border: 1px solid var(--border); border-radius: 10px; background: var(--panel); padding: .8rem; }
+.gpg-guiones { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .4rem; }
+.gpg-guion-btn { border: 1px solid var(--border); background: transparent; color: var(--text); border-radius: 999px; padding: .3rem .7rem; font: inherit; font-size: .82rem; cursor: pointer; }
+.gpg-guion-btn.activo { border-color: var(--accent); color: var(--accent); }
+.gpg-lineas li { margin: .2rem 0; overflow-wrap: anywhere; }
+.gpg-marca { font-size: .75rem; color: var(--muted); border: 1px dashed var(--border); border-radius: 6px; padding: 0 .3rem; }
+.gp-sub { margin: 1.5rem 0 .6rem; }
+.gpg-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.gpg-tabla th, .gpg-tabla td { text-align: left; padding: .35rem .4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.gpg-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: .6rem; }
+.gpg-ok { color: var(--ok); }
+.gpg-mal { color: var(--error); }
+@media (max-width: 600px) { .gpg-tabla { font-size: .78rem; } }

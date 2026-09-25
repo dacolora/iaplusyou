@@ -1,0 +1,54 @@
+{# Panel de guiones de Flow Plus (fragmento; lo pide _crear_flowplus_guiones.html).
+   Todo con autoescape de Jinja: nunca |safe con datos de la persona o de Claude. #}
+{% set trabajando = (lotes | selectattr('estado', 'equalto', 'leyendo') | list | length > 0)
+   or (video is not none and (video.estado in ('recortando', 'armando') or video.estado_imagenes == 'escribiendo')) %}
+<div class="gpg-panel" data-gpg-raiz data-guion="{{ guion.id if guion else '' }}"
+     data-trabajando="{{ '1' if trabajando else '0' }}">
+  <div class="gpg-cab">
+    <h3>Guiones</h3>
+    <button type="button" class="btn-guardar btn-sm" data-gpg-mostrar="gpg-nuevo">+ Nuevo guion</button>
+  </div>
+  <p class="gp-ayuda">Pega un guion con sus diálogos, hooks y personajes: Flow Plus lo convierte en los prompts
+    de cada clip y de las imágenes de referencia. Cada paso espera tu aprobación y cada llamada a Claude
+    muestra su precio antes del clic.</p>
+
+  <form class="gpg-form" id="gpg-nuevo" data-gpg-post="/lotes" {% if lotes %}hidden{% endif %}>
+    <label class="campo-label" for="gpg-texto">Guion</label>
+    <textarea id="gpg-texto" name="texto" rows="10" required
+              placeholder="Pega aquí el guion tal como está en Notion o en tu documento"></textarea>
+    <div class="gpg-error flash error" hidden></div>
+    <div class="gp-botones">
+      <button type="submit" class="btn-generar btn-sm">Leer guion · {{ costos.leer }}</button>
+    </div>
+    <p class="gp-ayuda">Ese precio es para un guion de unas 750 palabras; uno más largo cuesta un poco más.</p>
+  </form>
+
+  {% if lotes %}
+  <ul class="gpg-lotes">
+    {% for l in lotes %}
+    <li class="gpg-lote" data-gpg-caja>
+      <div class="gpg-lote-cab">
+        <strong>{{ l.titulo }}</strong>
+        <span class="tag-estado">{{ {'leyendo': 'Leyendo…', 'leido': 'Leído', 'error': 'Error'}.get(l.estado, l.estado) }}</span>
+      </div>
+      {% if l.estado == 'leyendo' %}<p class="gp-ayuda">Claude está leyendo el guion…</p>{% endif %}
+      {% if l.estado == 'error' %}
+        <p class="flash error">{{ l.aviso }}</p>
+        <button type="button" class="btn-guardar btn-xs" data-gpg-accion="/lotes/{{ l.id }}/reintentar">Reintentar · {{ costos.leer }}</button>
+      {% endif %}
+      <div class="gpg-error flash error" hidden></div>
+      <div class="gpg-guiones">
+        {% for g in l.guiones %}
+        <button type="button" class="gpg-guion-btn{% if guion and guion.id == g.id %} activo{% endif %}"
+                data-gpg-ir data-guion="{{ g.id }}" data-video="">
+          {{ g.titulo }} · {{ 'Confirmado' if g.estado == 'confirmado' else 'Por revisar' }}{% if g.n_videos %} · {{ g.n_videos }} video{{ 's' if g.n_videos != 1 }}{% endif %}
+        </button>
+        {% endfor %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  {% if guion %}{% include "_gpg_guion.html" %}{% endif %}
+</div>

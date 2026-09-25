@@ -1,0 +1,138 @@
+{# Crear › Flow Plus › Guiones (spec 2026-09-25). El panel lo arma el servidor
+   (_gpg_panel.html, Jinja escapa todo); este script lo pide, lo reemplaza, manda
+   los formularios como JSON y consulta cada 2 s mientras haya un trabajo en
+   curso. El único innerHTML es ese fragmento del servidor; lo que viene de una
+   respuesta JSON se pinta con textContent. #}
+<section class="gpg" id="gpg" aria-label="Guiones">
+  <div id="gpg-panel" aria-live="polite"><p class="vacio">Cargando tus guiones…</p></div>
+</section>
+<script>
+  (function () {
+    'use strict';
+    var panel = document.getElementById('gpg-panel');
+    if (!panel) return;
+    var CLIENTE = {{ cliente | tojson }};
+    var BASE = '/cliente/' + encodeURIComponent(CLIENTE) + '/guiones';
+    var CLAVE = 'gpg-sel-' + CLIENTE;
+    var SONDEO_MS = 2000, SONDEO_MAX_MS = 6 * 60 * 1000;
+    var sel = leerSel(), timer = null, inicioSondeo = 0, activo = false;
+
+    function leerSel() { try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch (e) { return {}; } }
+    function guardarSel() { try { localStorage.setItem(CLAVE, JSON.stringify(sel)); } catch (e) {} }
+    function parar() { if (timer) { clearTimeout(timer); timer = null; } }
+    function numero(v) { var n = Number(v); return v && isFinite(n) ? n : null; }
+
+    function errorEn(caja, texto, problemas) {
+      var destino = (caja && caja.querySelector('.gpg-error')) || caja || panel;
+      while (destino.firstChild) destino.removeChild(destino.firstChild);
+      destino.hidden = false;
+      var p = document.createElement('p');
+      p.textContent = texto;
+      destino.appendChild(p);
+      if (problemas && problemas.length) {
+        var ul = document.createElement('ul');
+        problemas.forEach(function (x) { var li = document.createElement('li'); li.textContent = String(x); ul.appendChild(li); });
+        destino.appendChild(ul);
+      }
+    }
+
+    function cargar() {
+      parar();
+      var q = [];
+      if (sel.guion) q.push('guion=' + encodeURIComponent(sel.guion));
+      if (sel.video) q.push('video=' + encodeURIComponent(sel.video));
+      return fetch(BASE + '/panel' + (q.length ? '?' + q.join('&') : ''), { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function (html) {
+          panel.innerHTML = html;  // fragmento del servidor, ya escapado por Jinja
+          var raiz = panel.querySelector('[data-gpg-raiz]');
+          if (raiz && sel.guion && raiz.dataset.guion === '') { sel = {}; guardarSel(); }
+          if (raiz && raiz.dataset.trabajando === '1' && activo) {
+            if (!inicioSondeo) inicioSondeo = Date.now();
+            if (Date.now() - inicioSondeo < SONDEO_MAX_MS) timer = setTimeout(cargar, SONDEO_MS);
+          } else {
+            inicioSondeo = 0;
+          }
+        })
+        .catch(function () { errorEn(panel, 'No se pudo cargar el panel de guiones. Recarga la página.'); });
+    }
+
+    function datosDe(form) {
+      var obj = {};
+      form.querySelectorAll('[data-gpg-lista]').forEach(function (n) { obj[n.name] = []; });
+      new FormData(form).forEach(function (v, k) { if (Array.isArray(obj[k])) obj[k].push(v); else obj[k] = v; });
+      return obj;
+    }
+
+    function enviar(ruta, cuerpo) {
+      return fetch(BASE + ruta, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(cuerpo || {})
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
+      });
+    }
+
+    function post(ruta, cuerpo, caja, boton) {
+      if (boton) boton.disabled = true;
+      return enviar(ruta, cuerpo).then(function (res) {
+        if (!res.ok) {
+          errorEn(caja, res.d.error || ('Algo salió mal (HTTP ' + res.status + ').'), res.d.problemas);
+          if (boton) boton.disabled = false;
+          return;
+        }
+        if (res.d.guion_id) { sel.guion = res.d.guion_id; sel.video = null; }
+        if (res.d.video_id) sel.video = res.d.video_id;
+        guardarSel();
+        inicioSondeo = 0;
+        cargar();
+      }, function () {
+        errorEn(caja, 'No hay conexión con el servidor.');
+        if (boton) boton.disabled = false;
+      });
+    }
+
+    panel.addEventListener('submit', function (e) {
+      var f = e.target.closest('form[data-gpg-post]');
+      if (!f) return;
+      e.preventDefault();
+      post(f.dataset.gpgPost, datosDe(f), f, f.querySelector('[type=submit]'));
+    });
+
+    panel.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b || !panel.contains(b)) return;
+      if (b.hasAttribute('data-gpg-ir')) {
+        sel = { guion: numero(b.dataset.guion), video: numero(b.dataset.video) };
+        guardarSel();
+        cargar();
+      } else if (b.dataset.gpgAccion) {
+        post(b.dataset.gpgAccion, {}, b.closest('[data-gpg-caja]') || panel, b);
+      } else if (b.dataset.abrirPrompt) {
+        document.dispatchEvent(new CustomEvent('gp:abrir-prompt', { detail: { id: Number(b.dataset.abrirPrompt) } }));
+        var chat = document.getElementById('gp-detalle');
+        if (chat && chat.scrollIntoView) chat.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (b.dataset.gpgMostrar) {
+        var n = document.getElementById(b.dataset.gpgMostrar);
+        if (n) n.hidden = !n.hidden;
+      }
+    });
+
+    panel.addEventListener('change', function (e) {
+      var f = e.target.closest('form[data-gpg-calcular]');
+      if (!f) return;
+      var salida = f.querySelector('[data-gpg-estimado]');
+      enviar(f.dataset.gpgCalcular, datosDe(f)).then(function (res) {
+        if (salida && res.ok && typeof res.d.texto === 'string') salida.textContent = res.d.texto;
+      });
+    });
+
+    document.addEventListener('crear:modo', function (e) {
+      var ahora = !!(e.detail && e.detail.modo === 'flowplus');
+      if (ahora === activo) return;
+      activo = ahora;
+      if (activo) cargar(); else parar();
+    });
+  })();
+</script>
