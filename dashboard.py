@@ -3410,15 +3410,44 @@ def admin_meta_solicitud_descartar(cliente):
 @app.route("/admin/referentes")
 @requiere_admin
 def admin_referentes():
-    """Biblioteca de referentes (spec 2026-09-23 §7-§8): importar copycoders y ver totales."""
-    from referentes import datos as ref_datos
+    """Biblioteca de referentes (spec 2026-09-23 §7-§8): importar copycoders,
+    traer un barrido global (cliente=NULL) de Atria/Apify, y ver totales."""
+    from referentes import datos as ref_datos, fuentes
+    from referentes.fuentes.atria import limite_mensual, llamadas_este_mes
+    from referentes.rutas import _consulta_desde, _entero
+    import gastos
     from tareas import referentes as tareas_ref
+
     historial = ref_datos.barridos(None, "copycoders")
+
+    fuente = request.args.get("fuente") if request.args.get("fuente") in fuentes.tipos() else (fuentes.tipos()[0] if fuentes.tipos() else None)
+    tope_traer = min(max(1, _entero(request.args.get("tope"), 200)), 2000)
+    consulta_traer = _consulta_desde(request.args)
+    fuente_llaves_faltantes = {t: fuentes.llaves_faltantes(t) for t in fuentes.tipos()}
+    llaves_faltantes = fuentes.llaves_faltantes(fuente) if fuente else []
+    precio_traer = None
+    if fuente and not llaves_faltantes and (consulta_traer.get("pagina_id") or consulta_traer.get("palabra")):
+        modulo = fuentes.por_tipo(fuente)
+        try:
+            est_fuente = modulo.estimar(consulta_traer, tope_traer)
+        except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la página
+            est_fuente = None
+        if est_fuente:
+            est_clasificacion = gastos.estimar("clasificacion", n=tope_traer)
+            precio_traer = {"fuente": est_fuente, "clasificacion": est_clasificacion,
+                            "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
+
     return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
                            trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
                            ultimo=(historial[0] if historial else None), historial=historial[:10],
                            imagenes=ref_datos.contar_imagenes("copycoders"), total=ref_datos.opciones(None)["total"],
-                           familias=ref_datos.familias())
+                           familias=ref_datos.familias(),
+                           fuentes_tipos=fuentes.tipos(), fuentes_nombres=fuentes.NOMBRES,
+                           fuente=fuente, consulta_traer=consulta_traer, tope_traer=tope_traer,
+                           precio_traer=precio_traer, fuente_llaves_faltantes=fuente_llaves_faltantes,
+                           atria_llamadas=llamadas_este_mes(), atria_limite=limite_mensual(),
+                           fuentes_totales=ref_datos.opciones(None)["fuentes"],
+                           barridos_otras_fuentes=[b for b in ref_datos.barridos(None) if b["fuente"] != "copycoders"])
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])
@@ -3435,6 +3464,45 @@ def admin_referentes_importar():
         flash("Importando el swipe file; la página se recarga sola cuando termine cada fase.", "ok")
     else:
         flash("Ya hay una importación en curso.", "error")
+    return redirect(url_for("admin_referentes"))
+
+
+@app.route("/admin/referentes/traer", methods=["POST"])
+@requiere_admin
+def admin_referentes_traer():
+    if not _mismo_origen():
+        abort(403)
+    from referentes import fuentes
+    from referentes.fuentes.base import ErrorFuente
+    from referentes.rutas import _consulta_desde, _entero
+    import gastos
+    from tareas import referentes as tareas_ref
+
+    fuente = request.form.get("fuente")
+    if fuente not in fuentes.tipos():
+        flash("Elige una fuente.", "error")
+        return redirect(url_for("admin_referentes"))
+    if fuentes.llaves_faltantes(fuente):
+        flash("Esa fuente no está configurada.", "error")
+        return redirect(url_for("admin_referentes"))
+    consulta = _consulta_desde(request.form)
+    if consulta["modo"] == "marca" and not consulta["pagina_id"]:
+        flash("Pega un link del Ad Library o el id de la página.", "error")
+        return redirect(url_for("admin_referentes"))
+    if consulta["modo"] == "palabra" and not consulta["palabra"]:
+        flash("Escribe una palabra clave.", "error")
+        return redirect(url_for("admin_referentes"))
+    tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
+    modulo = fuentes.por_tipo(fuente)
+    try:
+        est_fuente = modulo.estimar(consulta, tope)
+    except ErrorFuente as e:
+        flash(e.usuario, "error")
+        return redirect(url_for("admin_referentes"))
+    est_clasificacion = gastos.estimar("clasificacion", n=tope)
+    usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
+    tareas_ref.encolar_barrer(None, fuente, consulta, tope, usd_estimado, pedido_por=_sesion().get("usuario"))
+    flash("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza.", "ok")
     return redirect(url_for("admin_referentes"))
 
 

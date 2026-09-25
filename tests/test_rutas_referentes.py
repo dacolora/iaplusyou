@@ -138,6 +138,48 @@ def test_admin_referentes_solo_admin(app):
     assert c.post("/admin/referentes/importar", data={}, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 302
 
 
+def test_admin_referentes_traer_muestra_precio(app, monkeypatch):
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr("referentes.fuentes.atria.estimar", lambda consulta, tope: {"usd_fuente": 0.0, "llamadas": 2, "detalle": "2 llamadas del plan de Atria"})
+    c = app["c"]
+    html = c.get("/admin/referentes?fuente=atria&modo=palabra&palabra=zapatos&tope=100").data.decode()
+    assert "US$" in html
+    assert 'name="tope"' in html
+
+
+def test_admin_referentes_traer_lanza_barrido_global(app, monkeypatch):
+    from referentes import datos
+    from tareas import referentes as tr
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append((a, kw)) or True)
+    c = app["c"]
+    r = c.post("/admin/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "zapatos", "idioma": "es", "tope": "50"},
+              headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin/referentes")
+    assert len(llamadas) == 1
+    args, kw = llamadas[0]
+    assert args[0] is None            # cliente=None: barrido global
+    assert args[1] == "atria"
+    assert args[2]["palabra"] == "zapatos"
+
+
+def test_admin_referentes_traer_sin_fuente_no_lanza(app):
+    c = app["c"]
+    r = c.post("/admin/referentes/traer", data={"fuente": "no-existe"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert r.status_code == 302
+    from referentes import datos
+    assert datos.barridos(None, "no-existe") == []
+
+
+def test_admin_referentes_traer_solo_admin(app):
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "otro"; s["rol"] = "cliente"; s["cliente"] = "otro"
+    assert c.get("/admin/referentes").status_code == 302
+    assert c.post("/admin/referentes/traer", data={}, headers={"Sec-Fetch-Site": "same-origin"}).status_code == 302
+
+
 def test_recrear_formulario_precio_y_prompt(app):
     from referentes import datos
     ids = _sembrar()

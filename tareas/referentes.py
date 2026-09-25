@@ -317,6 +317,7 @@ def _fase_trayendo(tarea, p, bid, avanzar):
     traidos_total = int(b.get("traidos") or 0)
     nuevos_total = int(b.get("nuevos") or 0)
     fuente_mod = fuentes.por_tipo(consulta["fuente"])
+    cliente_gasto = p.get("cliente") or datos.CLIENTE_CREATV
     cursor_final = cursor
     aviso_parcial = None
     cuota_agotada = False
@@ -347,7 +348,7 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             # costo_real en, a lo sumo, un yield por llamada a traer(), o la
             # referencia necesita variar por página).
             if costo_real:
-                gastos.registrar_seguro(p["cliente"], "recoleccion", costo_real,
+                gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                         f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                         detalle=f"{consulta['fuente']}: {len(pagina)} anuncio(s) reales")
                 # Mismo mecanismo que `_fase_clasificando` con su gasto de
@@ -366,7 +367,7 @@ def _fase_trayendo(tarea, p, bid, avanzar):
         # registra en los dos casos.
         costo_real = getattr(e, "costo_real", None)
         if costo_real:
-            gastos.registrar_seguro(p["cliente"], "recoleccion", costo_real,
+            gastos.registrar_seguro(cliente_gasto, "recoleccion", costo_real,
                                     f"referentes:barrer:{bid}:{consulta['fuente']}:t{tarea.get('id')}",
                                     detalle=f"{consulta['fuente']}: corrida cobrada pero no se pudo leer del todo")
             # Mismo motivo que en el bucle de arriba: esto también es plata

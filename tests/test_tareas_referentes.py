@@ -840,6 +840,41 @@ def test_fase_trayendo_suma_el_costo_real_a_usd_real_del_barrido(tmp_path, monke
     assert datos.barrido(bid)["usd_real"] == pytest.approx(0.029)
 
 
+def test_fase_trayendo_barrido_global_registra_gasto_bajo_creatv(monkeypatch, base_temporal):
+    """El costo real de un barrido global (cliente=NULL, disparado desde el
+    panel admin) no puede intentar registrarse con cliente=None: db.gasto.c.cliente
+    es NOT NULL. Debe caer en el mismo comodín que ya usa la importación de
+    copycoders (datos.CLIENTE_CREATV = "_creatv"), no perderse en silencio."""
+    import sqlalchemy as sa
+
+    import db
+    from referentes import datos
+    from tareas import referentes as tareas_referentes
+
+    bid = datos.crear_barrido(None, "apify", {"modo": "palabra", "palabra": "sandalias"}, 5)
+
+    def traer_falso(consulta, tope, avanzar, cursor=None):
+        avanzar("Buscando en Apify", "1 anuncios")
+        yield [{"anuncio_id": "g1", "imagen_origen": "https://x/g1.jpg", "marca": "X", "titular": "", "cuerpo": "",
+                "tipo": "imagen", "pais": None, "idioma": None, "dias": None, "variantes": None,
+                "primera_vez": None, "ultima_vez": None, "activo": True, "url_anuncio": "", "url_marca": "",
+                "etiquetas_fuente": {}, "extra": {}, "pagina_id": None}], None, {"costo_real": 0.031}
+
+    class _ModuloFalso:
+        traer = staticmethod(traer_falso)
+
+    monkeypatch.setattr(tareas_referentes.fuentes, "por_tipo", lambda tipo: _ModuloFalso())
+    tarea = {"id": 4321, "job_id": None, "payload": {"barrido_id": bid, "cliente": None,
+             "consulta": {"modo": "palabra", "palabra": "sandalias", "fuente": "apify"}, "tope": 5, "fase": "trayendo"}}
+    tareas_referentes.ejecutar_barrer(tarea)
+
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.gasto).where(db.gasto.c.tipo == "recoleccion")).mappings().all()
+    assert len(filas) == 1
+    assert filas[0]["cliente"] == datos.CLIENTE_CREATV
+    assert filas[0]["usd"] == 0.031
+
+
 def test_fase_traducir_fallida_registra_lo_pagado(entorno, monkeypatch):
     """Una respuesta inutilizable (cortada, rechazada, JSON roto) ya se cobró:
     el gasto se anota igual, con su propia referencia, y el barrido queda
