@@ -88,3 +88,71 @@ def test_post_de_otro_sitio_se_rechaza(app):
     r = app["c"].post(f"{BASE}/lotes", json={"texto": TEXTO}, headers={"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403
     assert app["c"].post(f"{BASE}/lotes", data="no json", content_type="text/plain").status_code == 400
+
+
+FORM_VIDEO = {"modo": "lipsync", "duracion_objetivo": "15", "formato": "9:16", "palabras_por_segundo": "2.4",
+              "hook": "original", "estilo": "ultra-photorealistic live-action", "voz": "",
+              "ref_tipo_1": "personaje", "ref_activo_1": "", "ref_desc_1": "the AI podiatrist",
+              "ref_tipo_2": "entorno", "ref_activo_2": "", "ref_desc_2": "bright clinic"}
+
+
+@pytest.fixture()
+def catalogo_vacio(monkeypatch):
+    import catalogo_productos
+    import marca
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None: None)
+    monkeypatch.setattr(marca, "guia_efectiva", lambda c: "")
+
+
+def _confirmado(app):
+    gid = _leido(app)
+    assert app["c"].post(f"{BASE}/guiones/{gid}/confirmar", json={}).status_code == 200
+    return gid
+
+
+def test_crear_video_y_panel_con_recorte(app, catalogo_vacio):
+    gid = _confirmado(app)
+    r = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=FORM_VIDEO)
+    assert r.status_code == 201, r.get_json()
+    vid = r.get_json()["video_id"]
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "15 s · diálogo · v1" in html and 'name="quitadas"' in html and "Proponer qué quitar" in html
+    assert app["c"].post(f"{BASE}/guiones/{gid}/videos", json=dict(FORM_VIDEO, modo="x")).status_code == 400
+
+
+def test_calcular_es_gratis_y_no_guarda(app, catalogo_vacio):
+    from guiones import datos
+    gid = _confirmado(app)
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=FORM_VIDEO).get_json()["video_id"]
+    r = app["c"].post(f"{BASE}/videos/{vid}/calcular", json={"quitadas": ["2", "3"]})
+    d = r.get_json()
+    assert r.status_code == 200 and d["objetivo"] == 15 and "Estimado" in d["texto"]
+    assert datos.video("acme", vid)["recorte"] == {}
+
+
+def test_proponer_y_guardar_recorte(app, catalogo_vacio):
+    from guiones import datos
+    gid = _confirmado(app)
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=FORM_VIDEO).get_json()["video_id"]
+    r = app["c"].post(f"{BASE}/videos/{vid}/recorte/proponer", json={})
+    assert r.status_code == 202 and app["iniciados"][-1][0] == f"guion_recorte_{vid}"
+    assert datos.video("acme", vid)["estado"] == "recortando"
+    assert app["c"].post(f"{BASE}/videos/{vid}/recorte/proponer", json={}).status_code == 409
+    datos.fallar(vid, "x")
+    assert app["c"].post(f"{BASE}/videos/{vid}/recorte", json={"quitadas": ["3"]}).status_code == 200
+    assert datos.video("acme", vid)["recorte"]["quitadas"] == [3]
+    assert app["c"].post(f"{BASE}/videos/{vid}/recorte", json={"quitadas": ["1"]}).status_code == 400
+
+
+def test_proponer_sin_objetivo_es_409(app, catalogo_vacio):
+    gid = _confirmado(app)
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos",
+                        json=dict(FORM_VIDEO, duracion_objetivo="")).get_json()["video_id"]
+    assert app["c"].post(f"{BASE}/videos/{vid}/recorte/proponer", json={}).status_code == 409
+
+
+def test_video_de_otro_proyecto_es_404(app, catalogo_vacio):
+    gid = _confirmado(app)
+    vid = app["c"].post(f"{BASE}/guiones/{gid}/videos", json=FORM_VIDEO).get_json()["video_id"]
+    assert app["c"].post(f"/cliente/otro/guiones/videos/{vid}/recorte", json={"quitadas": []}).status_code == 404

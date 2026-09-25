@@ -7,11 +7,13 @@ español, 404 para lo de otro proyecto.
 """
 from flask import Blueprint, jsonify, render_template, request
 
+import catalogo_productos
 import gastos
 import trabajos
-from guiones import datos, lectura
-from guiones.refinador import ErrorRefinador, NoExiste
+from guiones import config, datos, lectura, recorte
+from guiones.refinador import Conflicto, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
+from providers import flowplus_modelos
 
 bp = Blueprint("guiones_pipeline", __name__, url_prefix="/cliente/<cliente>/guiones")
 bp.before_request(_solo_mismo_origen)
@@ -23,8 +25,19 @@ def _costo(paso, palabras=0):
 
 def _contexto(cliente, guion_id=None, video_id=None):
     g = datos.guion(cliente, guion_id) if guion_id else None
-    return {"cliente": cliente, "lotes": datos.lotes(cliente), "guion": g, "video": None,
-            "costos": {"leer": _costo("leer", 750)}}
+    v = datos.video(cliente, video_id) if (g and video_id) else None
+    if v is not None and v["guion_id"] != g["id"]:
+        v = None
+    ctx = {"cliente": cliente, "lotes": datos.lotes(cliente), "guion": g, "video": v,
+           "costos": {"leer": _costo("leer", 750), "recorte": _costo("recorte")}}
+    if g and g["estado"] == "confirmado":
+        ctx["activos"] = {t: [{"id": a["id"], "nombre": a["nombre"]} for a in catalogo_productos.listar(cliente, t)]
+                          for t in config.TIPOS_REF}
+        ctx["formatos"] = flowplus_modelos.FORMATOS_NOMBRES
+        ctx["config_defecto"] = config.defecto(cliente)
+    if v is not None:
+        ctx["recorte_info"] = recorte.resumen(v)
+    return ctx
 
 
 @bp.get("/panel")
@@ -102,3 +115,77 @@ def guion_duplicar(cliente, gid):
     except ErrorRefinador as e:
         return _error(e)
     return jsonify({"guion_id": nuevo}), 201
+
+
+def _video_o_404(cliente, vid):
+    v = datos.video(cliente, vid)
+    if v is None:
+        raise NoExiste("Esa versión no existe.")
+    return v
+
+
+@bp.post("/guiones/<int:gid>/videos")
+def video_crear(cliente, gid):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    try:
+        g = _guion_o_404(cliente, gid)
+        vid = datos.crear_video(cliente, gid, config.desde_formulario(cliente, cuerpo, g["lectura"]))
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"guion_id": gid, "video_id": vid}), 201
+
+
+@bp.post("/videos/<int:vid>/config")
+def video_config(cliente, vid):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    try:
+        v = _video_o_404(cliente, vid)
+        datos.guardar_config(cliente, vid, config.desde_formulario(cliente, cuerpo, v["guion"]["lectura"]))
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"video_id": vid})
+
+
+@bp.post("/videos/<int:vid>/calcular")
+def video_calcular(cliente, vid):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    try:
+        v = _video_o_404(cliente, vid)
+    except ErrorRefinador as e:
+        return _error(e)
+    quitadas = cuerpo.get("quitadas") if isinstance(cuerpo.get("quitadas"), list) else []
+    return jsonify(recorte.resumen(v, quitadas=quitadas))
+
+
+@bp.post("/videos/<int:vid>/recorte/proponer")
+def video_recorte_proponer(cliente, vid):
+    if _cuerpo() is None:
+        return _sin_cuerpo()
+    try:
+        v = _video_o_404(cliente, vid)
+        if not v["config"].get("duracion_objetivo"):
+            raise Conflicto("Pon una duración objetivo para poder recortar.")
+        datos.empezar(cliente, vid, "recortando", ("configurando",))
+    except ErrorRefinador as e:
+        return _error(e)
+    trabajos.iniciar(f"guion_recorte_{vid}", lambda: recorte.proponer(vid), duracion_estimada=40)
+    return jsonify({"video_id": vid}), 202
+
+
+@bp.post("/videos/<int:vid>/recorte")
+def video_recorte(cliente, vid):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    quitadas = cuerpo.get("quitadas") if isinstance(cuerpo.get("quitadas"), list) else []
+    try:
+        datos.guardar_quitadas(cliente, vid, quitadas)
+    except ErrorRefinador as e:
+        return _error(e)
+    return jsonify({"video_id": vid})

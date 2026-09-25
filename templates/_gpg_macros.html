@@ -1,0 +1,61 @@
+{# Macros del panel de guiones de Flow Plus. #}
+{% macro form_config(id, ruta, cfg, lectura, activos, formatos, boton) %}
+<form class="gpg-form" id="{{ id }}" data-gpg-post="{{ ruta }}">
+  <fieldset>
+    <legend>Modo</legend>
+    <label><input type="radio" name="modo" value="lipsync" {% if cfg.modo != 'voiceover' %}checked{% endif %}>
+      Diálogo a cámara: el personaje dice las líneas</label>
+    <label><input type="radio" name="modo" value="voiceover" {% if cfg.modo == 'voiceover' %}checked{% endif %}>
+      Voz en off: la voz se agrega después</label>
+  </fieldset>
+  <label class="campo-label" for="{{ id }}-dur">Duración objetivo en segundos (vacío = guion completo)</label>
+  <input type="number" id="{{ id }}-dur" name="duracion_objetivo" min="5" max="600" value="{{ cfg.duracion_objetivo or '' }}">
+  <label class="campo-label" for="{{ id }}-formato">Formato</label>
+  <select id="{{ id }}-formato" name="formato">
+    {% for k, n in formatos.items() %}<option value="{{ k }}" {% if cfg.formato == k %}selected{% endif %}>{{ n }}</option>{% endfor %}
+  </select>
+  <label class="campo-label" for="{{ id }}-wps">Ritmo de lectura (palabras por segundo; 2,4 es natural)</label>
+  <input type="number" id="{{ id }}-wps" name="palabras_por_segundo" min="1.5" max="4" step="0.1" value="{{ cfg.palabras_por_segundo }}">
+  <label class="campo-label" for="{{ id }}-hook">Hook</label>
+  <select id="{{ id }}-hook" name="hook">
+    <option value="original">Línea 1 del guion{% if lectura.lineas %}: {{ lectura.lineas[0].texto }}{% endif %}</option>
+    {% for h in lectura.hooks or [] %}<option value="{{ h.id }}" {% if cfg.hook == h.id %}selected{% endif %}>{{ h.id }}: {{ h.texto }}</option>{% endfor %}
+  </select>
+  <fieldset>
+    <legend>Referencias: Image 1, Image 2…</legend>
+    <p class="gp-ayuda">Lo que el generador recibe como imagen, en este orden. Elige un activo del Catálogo o describe
+      lo que falta: queda «por crear» y en el paso de imágenes sale su prompt.</p>
+    {% for i in range(1, 8) %}
+    {% set r = cfg.referencias[i - 1] if (cfg.referencias | length) >= i else {} %}
+    <div class="gpg-ref">
+      <strong>Image {{ i }}</strong>
+      <select name="ref_tipo_{{ i }}" aria-label="Tipo de Image {{ i }}">
+        <option value="">— sin usar —</option>
+        {% for t, n in (('personaje', 'Personaje'), ('entorno', 'Entorno'), ('producto', 'Producto')) %}
+        <option value="{{ t }}" {% if r.tipo == t %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+      <select name="ref_activo_{{ i }}" aria-label="Activo del Catálogo para Image {{ i }}">
+        <option value="">Por crear (lo describo)</option>
+        {% for t, n in (('personaje', 'Personajes'), ('entorno', 'Entornos'), ('producto', 'Productos')) %}
+        <optgroup label="{{ n }}">{% for a in activos[t] %}<option value="{{ a.id }}" {% if r.activo_id == a.id %}selected{% endif %}>{{ a.nombre }}</option>{% endfor %}</optgroup>
+        {% endfor %}
+      </select>
+      <input type="text" name="ref_desc_{{ i }}" maxlength="600" value="{{ r.descripcion if r.tipo and not r.activo_id else '' }}"
+             placeholder="Descripción en inglés; p. ej. modern bright podiatry clinic" aria-label="Descripción de Image {{ i }}">
+      <details>
+        <summary>Casting (personajes por crear)</summary>
+        <input type="text" name="ref_edad_{{ i }}" maxlength="40" placeholder="Edad" value="{{ (r.casting or {}).edad or '' }}" aria-label="Edad">
+        <input type="text" name="ref_vestuario_{{ i }}" maxlength="200" placeholder="Vestuario" value="{{ (r.casting or {}).vestuario or '' }}" aria-label="Vestuario">
+        <input type="text" name="ref_paleta_{{ i }}" maxlength="200" placeholder="Paleta de color" value="{{ (r.casting or {}).paleta or '' }}" aria-label="Paleta de color">
+      </details>
+    </div>
+    {% endfor %}
+  </fieldset>
+  <label class="campo-label" for="{{ id }}-estilo">Estilo visual, en inglés</label>
+  <textarea id="{{ id }}-estilo" name="estilo" rows="3">{{ cfg.estilo }}</textarea>
+  <label class="campo-label" for="{{ id }}-voz">Voz, en inglés (opcional: si la dejas vacía sale de la descripción del personaje)</label>
+  <input type="text" id="{{ id }}-voz" name="voz" maxlength="300" value="{{ cfg.voz }}">
+  <div class="gpg-error flash error" hidden></div>
+  <div class="gp-botones"><button type="submit" class="btn-generar btn-sm">{{ boton }}</button></div>
+</form>
+{% endmacro %}
