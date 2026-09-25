@@ -11,10 +11,12 @@ import os
 
 REGISTRO = {
     "atria": "referentes.fuentes.atria",
+    "apify": "referentes.fuentes.apify_adlibrary",
 }
-NOMBRES = {"atria": "Atria (Ad Library de Meta)"}
+NOMBRES = {"atria": "Atria (Ad Library de Meta)", "apify": "Apify (Ad Library de Meta)"}
 LLAVES = {
     "atria": ("ATRIA_API_KEY",),
+    "apify": ("APIFY_TOKEN",),
 }
 
 

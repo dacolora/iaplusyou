@@ -22,3 +22,16 @@ def test_llaves_faltantes_atria(monkeypatch):
     assert fuentes.llaves_faltantes("atria") == ["ATRIA_API_KEY"]
     monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
     assert fuentes.llaves_faltantes("atria") == []
+
+
+def test_apify_registrado():
+    assert "apify" in fuentes.tipos()
+    assert fuentes.por_tipo("apify").__name__ == "referentes.fuentes.apify_adlibrary"
+    assert "Apify" in fuentes.NOMBRES["apify"]
+
+
+def test_apify_llaves_faltantes(monkeypatch):
+    monkeypatch.delenv("APIFY_TOKEN", raising=False)
+    assert fuentes.llaves_faltantes("apify") == ["APIFY_TOKEN"]
+    monkeypatch.setenv("APIFY_TOKEN", "tok")
+    assert fuentes.llaves_faltantes("apify") == []
