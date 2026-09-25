@@ -53,10 +53,14 @@ def probar_token(sesion, token):
     return {"ok": True, "detalle": "Apify aceptó el token."}
 
 
-def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd):
+def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd, on_ids=None):
     """POST de la corrida. `max_items`/`max_total_charge_usd` son el tope de
     cobro del lado de Apify — lo que se le mostró a la persona antes de
-    lanzar, nada más. Devuelve (run_id, dataset_id, estado)."""
+    lanzar, nada más. Devuelve (run_id, dataset_id, estado). Si Apify
+    contestó con un id de corrida (aunque falte el dataset, o la corrida no
+    se pueda usar), `on_ids(run_id, dataset_id)` se llama ANTES de lanzar el
+    error — quien llama pudo haber sido cobrado y necesita guardar el id
+    aunque `arrancar` no vaya a devolverlo."""
     r = _http.pedir(sesion, "POST", f"{URL_API}/actors/{actor}/runs", "Apify", headers=cabeceras(token),
                     params={"timeout": MAX_ESPERA_S, "maxItems": max_items, "maxTotalChargeUsd": max_total_charge_usd},
                     json=entrada)
@@ -68,6 +72,8 @@ def arrancar(sesion, token, actor, entrada, max_items, max_total_charge_usd):
         raise ErrorFuente(f"Apify no arrancó la corrida ({r.status_code}).")
     corrida = (r.json() or {}).get("data") or {}
     run_id, dataset_id = corrida.get("id") or None, corrida.get("defaultDatasetId") or None
+    if on_ids:
+        on_ids(run_id, dataset_id)
     if not run_id or not dataset_id:
         # Si el id sí vino, la corrida pudo arrancar (y cobrar) igual.
         raise ErrorFuente(f"Apify no devolvió los ids de la corrida (corrida {run_id or '?'}, "
