@@ -26,6 +26,7 @@ import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response
+from flask_babel import Babel, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -43,6 +44,7 @@ import prompt_swap
 import proyectos
 import trabajos
 import usuarios
+import idiomas
 import cuentas
 import meta_conexion
 import meta_agencia
@@ -114,6 +116,13 @@ FRAME_SUFFIX = ".frame.jpg"
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
+
+# Idioma (spec 2026-09-26-idioma-y-modo-oscuro §B1): el español es la fuente;
+# el inglés sale de translations/ (catalogo_i18n.py). idiomas.de_peticion elige.
+app.config["BABEL_DEFAULT_LOCALE"] = "es"
+app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
+Babel(app, locale_selector=idiomas.de_peticion)
+app.jinja_env.filters["traducir"] = idiomas.traducir
 
 
 @app.url_defaults

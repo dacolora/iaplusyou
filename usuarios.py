@@ -22,6 +22,7 @@ Cada usuario tiene además (plan 2026-09-19, cuentas con correo verificado):
   - "session_version": entero que sube al cambiar la contraseña; la sesión
     de Flask guarda el valor con el que entró y el guard cierra las que no
     coincidan (así restablecer la contraseña saca a quien la tuviera abierta).
+  - "idioma": "en" | "es", o ausente (= idiomas.DEFECTO; lo valida idiomas.guardar_de_usuario).
 Los registros viejos no traen esas llaves: todo lector pasa por `_completar`,
 que rellena correo=None, correo_verificado=False, session_version=1.
 """
@@ -43,7 +44,7 @@ USUARIO_REGEX = re.compile(r"^[a-z0-9._-]{3,40}$")
 # puede escribir password_hash, porque es la única que sube session_version
 # (si actualizar() pudiera tocarla, una ruta podría cambiar la contraseña sin
 # cerrar las sesiones abiertas con la vieja).
-CAMPOS_ACTUALIZABLES = ("correo", "correo_verificado", "session_version")
+CAMPOS_ACTUALIZABLES = ("correo", "correo_verificado", "session_version", "idioma")
 
 
 def _path():
@@ -224,6 +225,8 @@ def actualizar(usuario, **campos):
         entry["correo_verificado"] = bool(campos.pop("correo_verificado"))
     if "session_version" in campos:
         entry["session_version"] = int(campos.pop("session_version"))
+    if "idioma" in campos:
+        entry["idioma"] = campos.pop("idioma")
     guardar(data)
     return entry
 

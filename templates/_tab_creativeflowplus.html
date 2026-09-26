@@ -344,7 +344,7 @@
 
               {% set _finales_por_destino = {} %}
               {% for f in item.finales if f.estado in ("listo", "degradada") %}
-              {% set _ = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
+              {% set _nada = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
               {% endfor %}
               <h5 class="fe-subtitulo">Producir finales</h5>
               <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir"
