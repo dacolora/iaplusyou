@@ -623,13 +623,14 @@ en el guion, la misma ronda del guion con errores no bloqueantes—; si la corre
 primera respuesta con `faltantes` «error: …» vía `doctrina.anotar_errores`, que los pone primero para que ningún tope
 —ni el de volver a validarlo— los corte: nunca se pierde lo pagado). Vive en `campana_pieza.extra.angulo`
 (ideas) → `concepto.extra.angulo` (sesión; `duplicar` lo copia; «Adaptar» y el guion lo crean solo si la sesión no
-tiene, y el guion solo si trae promesa y gancho) → director, guion, captions; las variantes guardan `capas.guion.parametros.angulo` (`lead` y `gancho`
-nuevos). `doctrina.verificar_cifras`: ninguna cifra fuerte (2+ dígitos, %, moneda, «3x», «N de cada M») que no esté
-en los datos que Claude recibió; del ángulo solo cuenta como dato `doctrina.texto_verificable` (las pruebas, y el
-resto solo si ningún `faltantes` es un «error: …»; nunca `faltantes`). En el guion base y las variantes es bloqueante (va a
-la corrección y, si persiste, `GuionInvalido`); localizar no verifica cifras (convierte unidades y precio y el base ya
-se verificó); en ideas y «Adaptar» queda en `faltantes`. Sin precio escrito, el precio de la tienda solo entra al
-guion como `precio_base` si su moneda es la del país base; si no, el guion no recibe precio. Vocabulario único:
+tiene, y el guion solo si trae promesa y gancho) → director, guion, captions; las variantes guardan
+`capas.guion.parametros.angulo` (`lead` y `gancho` nuevos). `doctrina.verificar_cifras`: ninguna cifra fuerte (2+
+dígitos, %, moneda, «3x», «N de cada M») que no esté en los datos que Claude recibió; del ángulo solo cuenta como dato
+`doctrina.texto_verificable` (las pruebas, y el resto solo si ningún `faltantes` es un «error: …»; nunca
+`faltantes`). En el guion base y las variantes es bloqueante (va a la corrección y, si persiste, `GuionInvalido`);
+localizar no verifica cifras (convierte unidades y precio y el base ya se verificó); en ideas y «Adaptar» queda en
+`faltantes`. Sin precio escrito, el precio de la tienda solo entra al guion como `precio_base` si su moneda es la del
+país base; si no, el guion no recibe precio. Vocabulario único:
 `doctrina.CONSCIENCIAS` (el de Nicho; `normalizar_consciencia` traduce el inglés de referentes y
 `referentes.sugerir.NIVEL_A_CONSCIENCIA` se deriva de ahí), `LEADS`, `SOFISTICACIONES`. Nada de esto agrega pantallas
 ni migraciones (bloque 1 de 4; los bloques 2–4 están en el §14 del spec).
