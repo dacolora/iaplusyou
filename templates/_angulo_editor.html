@@ -46,7 +46,7 @@
         <option value="">(sin elegir)</option>
         {% for clave, texto in LEADS_NOMBRE.items() %}<option value="{{ clave }}" {% if a.get('lead') == clave %}selected{% endif %}>{{ texto }}{% if clave in recomendados %} (recomendado){% endif %}</option>{% endfor %}
       </select></label>
-    <label class="campo-label">Gancho <small class="vacio angulo-cuenta-gancho"></small>
+    <label class="campo-label">Gancho <a href="{{ doctrina_url }}#gancho" target="_blank" rel="noopener">¿Por qué?</a> <small class="vacio angulo-cuenta-gancho"></small>
       <input data-angulo-campo="gancho" value="{{ a.get('gancho') or '' }}" {{ dis }}></label>
     {% set faltantes = [] %}
     {% for f in a.get('faltantes') or [] %}{% if f is string and not f.startswith(PREFIJO_ERROR) %}{% set _ = faltantes.append(f) %}{% endif %}{% endfor %}

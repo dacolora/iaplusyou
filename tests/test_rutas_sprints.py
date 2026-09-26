@@ -1001,6 +1001,7 @@ def test_editar_el_angulo_de_una_idea(con_ideas):
     assert "/static/angulo.js" in html and "/cliente/acme/doctrina#angulo" in html
     # Verificar que los links de documentación están presentes en la plantilla
     assert html.count("/cliente/acme/doctrina#angulo") >= 7, f"Esperaba >= 7 links #angulo, encontré {html.count('/cliente/acme/doctrina#angulo')}"
+    assert html.count("/cliente/acme/doctrina#gancho") >= 2, f"Esperaba >= 2 links #gancho (Arranque y Gancho), encontré {html.count('/cliente/acme/doctrina#gancho')}"
     nuevo = dict(ANGULO_IDEA, sofisticacion="4", gancho="Tu baño nuevo en una tarde sin obra ni polvo ni ruido ni más", lead="secreto")
     nuevo.pop("faltantes")
     r = c.post(f"/cliente/acme/sprints/ideas/{ii}/angulo", json={"angulo": nuevo})
