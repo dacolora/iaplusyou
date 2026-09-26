@@ -177,7 +177,7 @@
         {% if item.estado == "video_listo" and item.tipo == "imagen" %}
         <img src="{{ item.video_url }}" alt="" loading="lazy">
         {% elif item.estado == "video_listo" %}
-        <video src="{{ item.video_url }}" muted playsinline preload="metadata"></video>
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="metadata"></video>
         {% else %}
         {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
         {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
@@ -474,7 +474,7 @@
         {% elif f.url_miniatura %}
         <img src="{{ f.url_miniatura }}" alt="" loading="lazy" class="generado-portada">
         {% else %}
-        <video src="{{ item.video_url }}" muted playsinline preload="metadata" class="generado-portada"></video>
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="metadata" class="generado-portada"></video>
         {% endif %}
         <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
         {% if f.estado == "generando" %}

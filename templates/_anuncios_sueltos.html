@@ -21,7 +21,7 @@
       <span class="idea-chevron">▸</span>
       <span class="swap-thumb">
         {% if entry.contenido_tipo == "video" %}
-        <video src="{{ entry.contenido_url }}" muted></video>
+        <video src="{{ entry.contenido_url }}#t=0.1" muted playsinline preload="metadata"></video>
         {% else %}
         <img src="{{ entry.contenido_url }}" alt="{{ entry.nombre }}">
         {% endif %}
@@ -119,7 +119,7 @@
     {% set elegible = (elegibles_exp | selectattr("url_video", "equalto", entry.contenido_url) | list | first) if elegibles_exp else none %}
     <li class="exp-pieza anuncio-suelto-en-cola" id="ad-{{ ad_id }}">
       <span class="exp-pieza-mini">
-        {% if entry.contenido_tipo == "video" %}<video src="{{ entry.contenido_url }}" muted></video>{% else %}<img src="{{ entry.contenido_url }}" alt="">{% endif %}
+        {% if entry.contenido_tipo == "video" %}<video src="{{ entry.contenido_url }}#t=0.1" muted playsinline preload="metadata"></video>{% else %}<img src="{{ entry.contenido_url }}" alt="">{% endif %}
       </span>
       <span class="exp-pieza-nombre">{{ entry.nombre }} <small>({{ entry.fuente }})</small> <span class="tag-estado">en cola</span></span>
       {% if elegible and experimentos_armando %}
