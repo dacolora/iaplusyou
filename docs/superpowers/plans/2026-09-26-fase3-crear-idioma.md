@@ -447,7 +447,7 @@ Y un test por blueprint que provoque un error conocido en inglés (p. ej. un POS
 
 - [ ] **Step 2: Envolver**
 
-Mismo patrón. `_crear_flowplus.html` tiene ~390 literales en JS: todos por `{{ _('…')|tojson }}`; si un texto se arma con variables en JS, traducir las partes fijas por separado o pasar la plantilla con `%(x)s` y reemplazar en JS (`{{ _('Versión %(n)s')|tojson }}.replace('%(n)s', n)`) — nunca concatenar palabras sueltas de una frase. Los mensajes de validación en Python con `gettext`, armados en el idioma de la persona que mira (rutas) o del proyecto (hilos, dentro de `idiomas.en_idioma`).
+Mismo patrón. `_crear_flowplus.html` tiene ~390 literales en JS: todos por `{{ _('…')|tojson }}`; si un texto se arma con variables en JS, traducir las partes fijas por separado o pasar la plantilla con un marcador y reemplazarlo en JS: `{{ _('Versión %(n)s', n='__N__')|tojson }}.replace('__N__', n)` — el marcador va como variable porque Jinja «newstyle» SIEMPRE aplica `%` (`_('Versión %(n)s')` sin variables lanza KeyError); nunca meter datos del usuario como variable de `_()` antes de `|tojson` (el Markup los escapa y `tojson` los vuelve a escapar: `'` → `&#39;`); nunca `tojson` dentro de un atributo `onclick="…"` (sus comillas rompen el atributo: usar `data-*` o una variable en `<script>`) — nunca concatenar palabras sueltas de una frase. Los mensajes de validación en Python con `gettext`, armados en el idioma de la persona que mira (rutas) o del proyecto (hilos, dentro de `idiomas.en_idioma`).
 
 - [ ] **Step 3: Catálogo, guardias, suite y commit**
 
