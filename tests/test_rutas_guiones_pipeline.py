@@ -216,3 +216,48 @@ def test_bloque_global_valida(app):
     assert app["c"].get(f"{BASE}/bloque-global").get_json()["propio"] is True
     assert app["c"].post(f"{BASE}/bloque-global", json={"texto": ""}).status_code == 200
     assert app["c"].get(f"{BASE}/bloque-global").get_json()["propio"] is False
+
+
+PID = "1a2b3c4d5e6f47a8b9c0d1e2f3a4b5c6"
+
+
+@pytest.fixture()
+def secreto(monkeypatch):
+    monkeypatch.setenv("FLASK_SECRET_KEY", "clave-de-prueba-larga-1234567890")
+
+
+def test_conectar_notion_y_crear_lote_desde_link(app, secreto, monkeypatch):
+    from guiones import notion
+    assert app["c"].post(f"{BASE}/lotes", json={"notion_url": f"https://notion.so/x-{PID}"}).status_code == 409
+    monkeypatch.setattr(notion, "probar", lambda llave, http=None: None)
+    assert app["c"].post(f"{BASE}/notion", json={"llave": "ntn_abc"}).status_code == 200
+    assert app["c"].get(f"{BASE}/notion").get_json() == {"conectado": True}
+    assert app["c"].post(f"{BASE}/lotes", json={"notion_url": "https://notion.so/sin-id"}).status_code == 400
+    r = app["c"].post(f"{BASE}/lotes", json={"notion_url": f"https://notion.so/x-{PID}"})
+    assert r.status_code == 202 and app["iniciados"][-1][0] == f"guion_leer_{r.get_json()['lote_id']}"
+    html = app["c"].get(f"{BASE}/panel").get_data(as_text=True)
+    assert "ntn_abc" not in html and "Link de Notion" in html
+    assert app["c"].post(f"{BASE}/notion/borrar", json={}).status_code == 200
+    assert app["c"].get(f"{BASE}/notion").get_json() == {"conectado": False}
+
+
+def test_llave_rechazada_por_notion(app, secreto, monkeypatch):
+    from guiones import notion
+
+    def rechaza(llave, http=None):
+        raise notion.ErrorNotion("La llave de Notion no sirve; vuelve a conectarla.")
+    monkeypatch.setattr(notion, "probar", rechaza)
+    r = app["c"].post(f"{BASE}/notion", json={"llave": "ntn_mala"})
+    assert r.status_code == 400 and "llave" in r.get_json()["error"] and "ntn_mala" not in r.get_json()["error"]
+
+
+def test_notion_exige_correo_verificado(app, secreto, monkeypatch):
+    import usuarios
+    from guiones import notion
+    monkeypatch.setattr(notion, "probar", lambda llave, http=None: None)
+    with app["c"].session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    real = usuarios.obtener
+    monkeypatch.setattr(usuarios, "obtener", lambda u: dict(real(u) or {}, correo_verificado=False))
+    r = app["c"].post(f"{BASE}/notion", json={"llave": "ntn_abc"})
+    assert r.status_code == 403 and "correo" in r.get_json()["error"]

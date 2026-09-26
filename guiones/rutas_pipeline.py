@@ -5,14 +5,15 @@ acciones como POST JSON. Mismo prefijo y mismas reglas que guiones/rutas.py
 (el chat): mismo origen en todo POST, cuerpo JSON obligatorio, errores en
 español, 404 para lo de otro proyecto.
 """
-from flask import Blueprint, Response, jsonify, render_template, request
+from flask import Blueprint, Response, jsonify, render_template, request, session
 
 import catalogo_productos
 import gastos
 import proyectos
 import trabajos
-from guiones import clips, config, datos, duracion, imagenes, lectura, plantillas, recorte, refinador
-from guiones.refinador import Conflicto, ErrorRefinador, NoExiste
+import usuarios
+from guiones import clips, config, datos, duracion, imagenes, lectura, notion, plantillas, recorte, refinador
+from guiones.refinador import Conflicto, DatoInvalido, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
 
@@ -30,6 +31,7 @@ def _contexto(cliente, guion_id=None, video_id=None):
     if v is not None and v["guion_id"] != g["id"]:
         v = None
     ctx = {"cliente": cliente, "lotes": datos.lotes(cliente), "guion": g, "video": v,
+           "notion_conectado": notion.conectado(cliente),
            "costos": {"leer": _costo("leer", 750), "recorte": _costo("recorte")}}
     if g and g["estado"] == "confirmado":
         ctx["activos"] = {t: [{"id": a["id"], "nombre": a["nombre"]} for a in catalogo_productos.listar(cliente, t)]
@@ -72,11 +74,58 @@ def lote_crear(cliente):
     if cuerpo is None:
         return _sin_cuerpo()
     try:
-        lote_id = datos.crear_lote(cliente, cuerpo.get("texto"))
+        if str(cuerpo.get("notion_url") or "").strip():
+            if not notion.conectado(cliente):
+                raise Conflicto("Conecta Notion primero.")
+            page_id = notion.extraer_id(cuerpo["notion_url"])
+            if not page_id:
+                raise DatoInvalido("Ese link no parece de una página de Notion.")
+            lote_id = datos.crear_lote(cliente, "", fuente="notion", notion_page_id=page_id)
+        else:
+            lote_id = datos.crear_lote(cliente, cuerpo.get("texto"))
     except ErrorRefinador as e:
         return _error(e)
     _lanzar_lectura(lote_id)
     return jsonify({"lote_id": lote_id}), 202
+
+
+def _correo_verificado():
+    """Mismo criterio que dashboard._requiere_correo_verificado: admin, o cliente con correo verificado."""
+    if session.get("rol") == "admin":
+        return True
+    entry = usuarios.obtener(session.get("usuario") or "")
+    return bool(entry and entry.get("correo_verificado"))
+
+
+@bp.get("/notion")
+def notion_estado(cliente):
+    return jsonify({"conectado": notion.conectado(cliente)})
+
+
+@bp.post("/notion")
+def notion_conectar(cliente):
+    cuerpo = _cuerpo()
+    if cuerpo is None:
+        return _sin_cuerpo()
+    if not _correo_verificado():
+        return jsonify({"error": "Confirma tu correo primero (Configuración › Cuenta)."}), 403
+    llave = str(cuerpo.get("llave") or "").strip()
+    if not llave or len(llave) > 200:
+        return jsonify({"error": "Pega la llave de tu integración de Notion."}), 400
+    try:
+        notion.probar(llave)
+    except notion.ErrorNotion as e:
+        return jsonify({"error": str(e)}), 400
+    notion.guardar_llave(cliente, llave)
+    return jsonify({"ok": True})
+
+
+@bp.post("/notion/borrar")
+def notion_borrar(cliente):
+    if _cuerpo() is None:
+        return _sin_cuerpo()
+    notion.borrar(cliente)
+    return jsonify({"ok": True})
 
 
 @bp.post("/lotes/<int:lid>/reintentar")

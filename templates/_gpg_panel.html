@@ -7,6 +7,7 @@
   <div class="gpg-cab">
     <h3>Guiones</h3>
     <button type="button" class="btn-guardar btn-sm" data-gpg-mostrar="gpg-nuevo">+ Nuevo guion</button>
+    <button type="button" class="btn-guardar btn-sm" data-gpg-mostrar="gpg-nuevo-notion">Desde Notion</button>
   </div>
   <p class="gp-ayuda">Pega un guion con sus diálogos, hooks y personajes: Flow Plus lo convierte en los prompts
     de cada clip y de las imágenes de referencia. Cada paso espera tu aprobación y cada llamada a Claude
@@ -22,6 +23,7 @@
     </div>
     <p class="gp-ayuda">Ese precio es para un guion de unas 750 palabras; uno más largo cuesta un poco más.</p>
   </form>
+  <div {% if lotes %}hidden{% endif %} id="gpg-nuevo-notion">{% include "_gpg_notion.html" %}</div>
 
   {% if lotes %}
   <ul class="gpg-lotes">
