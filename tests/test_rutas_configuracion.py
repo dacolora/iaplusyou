@@ -113,9 +113,12 @@ def test_render_siete_tarjetas_con_badge_y_sin_valores(app, monkeypatch):
         assert "Cómo conseguirla" in t
         assert "no se escriben desde aquí" in t
     assert cfg.count('class="llave-tarjeta') == 11
-    # Orden de las tarjetas.
-    pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli")]
+    # Orden de las tarjetas: las del servidor en «Puesta a punto»; la de Meta,
+    # desde 2026-09-26, a todo el ancho en «Conexiones» (después).
+    pos = [cfg.index(f'id="llave-{sid}"') for sid in ("anthropic", "fal", "higgsfield", "r2", "smtp", "meli")]
     assert pos == sorted(pos)
+    assert cfg.index('id="config-ap-puesta"') < pos[0] and pos[-1] < cfg.index('id="config-ap-conexiones"')
+    assert cfg.index('id="config-ap-conexiones"') < cfg.index('id="llave-meta"')
     # Parcial dice qué falta, y las variables van en <code>.
     assert "<code>R2_SECRET_ACCESS_KEY</code>" in _tarjeta(cfg, "r2") and "Faltan:" in _tarjeta(cfg, "r2")
     assert '<code class="llave-var">ANTHROPIC_API_KEY</code>' in _tarjeta(cfg, "anthropic")
@@ -180,9 +183,12 @@ def test_render_tienda_meli_configurado(app, monkeypatch):
 
 def test_orden_de_secciones_y_enlace_a_reglas(app):
     cfg = _config(app["c"].get("/cliente/acme").data.decode())
-    orden = ["Puesta a punto", 'id="config-tienda"', 'id="config-pixel"', 'id="config-correo"',
-             "Nombre del proyecto", "Modelos por defecto — Cambiar producto", "Modelos por defecto — FlowPlus",
-             "Logos oficiales"]
+    # Orden de los apartados (2026-09-26): Puesta a punto (admin) → Conexiones
+    # (tienda, Pixel) → Marca (nombre, logos) → Generación (modelos) → Cuenta y
+    # avisos (correo) → Gasto.
+    orden = ['id="config-puesta-a-punto"', 'id="config-tienda"', 'id="config-pixel"',
+             "<h2>Nombre del proyecto</h2>", "<h2>Logos oficiales</h2>", "Modelos por defecto — Cambiar producto",
+             "Modelos por defecto — FlowPlus", 'id="config-correo"', 'id="config-gasto"']
     pos = [cfg.index(x) for x in orden]
     assert pos == sorted(pos), list(zip(orden, pos))
     # Formularios existentes intactos.
@@ -231,8 +237,11 @@ def _sembrar_gasto(monkeypatch):
 
 
 def _seccion_gasto(html):
+    """El apartado «Gasto» (el último de Configuración desde 2026-09-26)."""
     cfg = _config(html)
-    return cfg[cfg.index('id="config-gasto"'):cfg.index('id="config-tienda"')]
+    ini = cfg.index('id="config-ap-gasto"')
+    sig = cfg.find('class="config-apartado"', ini + 10)
+    return cfg[ini:sig if sig > 0 else len(cfg)]
 
 
 def _sidebar(html):
@@ -244,8 +253,8 @@ def test_gasto_seccion_render(app, monkeypatch):
     _sembrar_gasto(monkeypatch)
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _config(html)
-    # Va justo después de Puesta a punto y antes de Conectar tu tienda.
-    assert cfg.index("Puesta a punto") < cfg.index('id="config-gasto"') < cfg.index('id="config-tienda"')
+    # Vive en su propio apartado «Gasto» (el último), no mezclado con las conexiones.
+    assert 'id="config-gasto"' in _seccion_gasto(html) and 'id="config-tienda"' not in _seccion_gasto(html)
     gasto = _seccion_gasto(html)
     # Tiles: generación del mes (sin el cobro de agosto ni el de «otro») y pauta.
     assert "Generación este mes" in gasto and "US$ 0,94" in gasto and "3 cobro(s)" in gasto
@@ -402,7 +411,11 @@ def _cliente_rol_cliente(dashboard):
 
 
 def _puesta_a_punto(cfg):
-    return cfg[cfg.index('id="config-puesta-a-punto"'):cfg.index('id="config-cuenta"')]
+    """Lo que el cliente ve de las llaves: desde 2026-09-26 (Configuración en
+    apartados) la tarjeta de Meta vive en «Conexiones» y el cliente no tiene
+    «Puesta a punto»; se mira desde el apartado hasta «Conectar tu tienda»."""
+    ini = cfg.index('id="config-ap-conexiones"')
+    return cfg[ini:cfg.index('id="config-tienda"', ini)]
 
 
 def test_cliente_solo_ve_en_puesta_a_punto_lo_que_le_toca(app, monkeypatch):
@@ -432,6 +445,10 @@ def test_cliente_solo_ve_en_puesta_a_punto_lo_que_le_toca(app, monkeypatch):
 
 
 def test_admin_sigue_viendo_todas_las_tarjetas_de_puesta_a_punto(app):
-    puesta = _puesta_a_punto(_config(app["c"].get("/cliente/acme").data.decode()))
-    assert puesta.count('class="llave-tarjeta') == 11
+    # Desde 2026-09-26 las 11 tarjetas se reparten: 10 en «Puesta a punto»
+    # (solo admin) y la de Meta a todo el ancho en «Conexiones».
+    cfg = _config(app["c"].get("/cliente/acme").data.decode())
+    puesta = cfg[cfg.index('id="config-ap-puesta"'):cfg.index('id="config-ap-conexiones"')]
+    assert puesta.count('class="llave-tarjeta') == 10
+    assert _puesta_a_punto(cfg).count('class="llave-tarjeta') == 1
     assert "no se escriben desde aquí" in _tarjeta(puesta, "anthropic")

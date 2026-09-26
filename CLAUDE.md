@@ -591,8 +591,11 @@ UI: there is NO Productos tab — products live in **Catálogo › Productos** (
 `manual`, `fuente_id = activo id`, created on the fly by `tiendas.asegurar_manual`) that holds
 precio/moneda/url_compra/en_prueba/prioridad; importing (CSV/URL) is the "Traer productos de…"
 details, imported products without photos sit in "Importados sin fotos" until `prod_fotos_subir`
-or `prod_vincular` creates their activo. Store connections and the Pixel check are in
-Configuración, whose first section "Puesta a punto" (`dashboard._estado_llaves`) lists every
+or `prod_vincular` creates their activo. Configuración (`_tab_settings.html`) shows one
+apartado at a time (pills, last one remembered, `window.irAConfig(id)` opens the apartado
+holding `id`): Puesta a punto (admin only), Conexiones (Meta full width, store, Pixel, organic
+channels), Marca, Generación, Cuenta y avisos, Gasto. The key cards (`_llave_tarjeta.html`,
+`dashboard._estado_llaves`) list every
 paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
 computed from `bool(os.environ.get(...))` only, values are never rendered. Since 2026-09-20 that
 full list is admin-only: `dashboard._llaves_visibles` gives a cliente just the `por_proyecto`
@@ -653,6 +656,16 @@ admins exempt); admins can mark a user verified from the panel. Rate limits (`cu
 one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
 Lax, Secure when the platform URL is https. Emails go through `notificaciones.enviar(html=)` —
 if SMTP is missing the flows still work and the admin panel shows the warning.
+
+**UI base** (2026-09-25/26, specs `2026-09-25-base-visual-comun` and `2026-09-26-movil`): the
+block «Base visual común (2026-09-25)» at the END of `static/style.css` is the source of truth for
+fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.btn`/classless
+`button` = secondary), `summary`, the tab header (`.panel-cabecera` > text div with `h2` +
+`.panel-cabecera-desc`, plus `.panel-cabecera-acciones`) and `.estado-vacio`; new screens reuse
+those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
+top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
+screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
+(`tests/test_base_visual.py`, `tests/test_movil.py`).
 
 ## Agent skills
 

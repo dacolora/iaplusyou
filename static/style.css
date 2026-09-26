@@ -2182,3 +2182,9 @@ textarea.gp-mono { font-size: .8rem; line-height: 1.5; }
 .gpg-ok { color: var(--ok); }
 .gpg-mal { color: var(--error); }
 @media (max-width: 600px) { .gpg-tabla { font-size: .78rem; } }
+
+/* Configuración en apartados (spec 2026-09-26-configuracion-apartados):
+   pastillas como las de Catálogo; Meta a todo el ancho en Conexiones. */
+.config-apartados { margin: 0 0 1.4rem; }
+.config-apartado > h2:first-child { margin-top: .4rem; }
+.llaves-tarjetas-ancha { grid-template-columns: minmax(0, 1fr); }
