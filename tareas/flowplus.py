@@ -277,12 +277,20 @@ def ejecutar_video(tarea):
             # cortes.duracion es gratis y puede reventar con una descarga corrupta —
             # se prueba antes de pagar por obtener_pista, nunca después.
             duracion_real = cortes.duracion(out_path)
-            pista, c = musica.obtener_pista(estilo_musica, float(duracion))
+            propia = musica.es_propia(estilo_musica)
+            if propia:
+                # Mi música: la canción del cliente desde su segundo de inicio (costo 0).
+                pista, c = musica.pista_propia(cliente, estilo_musica, entry.get("musica_inicio_s") or 0)
+            else:
+                pista, c = musica.obtener_pista(estilo_musica, float(duracion))
             usd_musica = float(c or 0.0)  # ya se cobró al obtener la pista, se cuenta aunque falle la mezcla
             mezclado = os.path.join(out_dir, f"{cf_id}_musica.mp4")
             resultado = mezcla.mezclar_musica(out_path, pista["archivo"], mezclado, duracion_real)
             archivo_final = mezclado
-            capas["musica"] = {"estilo": estilo_musica, "url": pista.get("url"), "costo_usd": usd_musica, "estado": "ok"}
+            capas["musica"] = {"estilo": pista["estilo"] if propia else estilo_musica, "url": pista.get("url"),
+                               "costo_usd": usd_musica, "estado": "ok"}
+            if propia:
+                capas["musica"].update(material_id=pista["material_id"], inicio_s=pista["inicio_s"], fuente=pista["fuente"])
             capas["mezcla"] = {"loudnorm": mezcla.LOUDNORM, "volumenes": resultado["volumenes"]}
             bitacora.registrar(cliente, cf_id, "musica", "ok", f"{estilo_musica} (USD {usd_musica:.2f})")
         except Exception as e:
@@ -315,7 +323,7 @@ def ejecutar_video(tarea):
         credits=costo.get("credits"), usd=round(float(costo.get("usd") or 0.0) + usd_musica, 4),
         capas=capas,
     )
-    if estilo_musica:
+    if estilo_musica and not musica.es_propia(estilo_musica):
         estado_musica = (capas.get("musica") or {}).get("estado")
         detalle_gasto += f" + música {estilo_musica}" + (" (falló la mezcla; la pista ya se cobró)"
                                                           if estado_musica == "error" else "")

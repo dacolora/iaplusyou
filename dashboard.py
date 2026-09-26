@@ -48,6 +48,8 @@ import meta_conexion
 import meta_agencia
 import flowplus_prompt
 import referencias_flowplus
+import materiales
+import mi_musica
 import referencias_link
 import generador_prompts
 from providers import image_provider
@@ -85,6 +87,7 @@ from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
 from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
+from tareas import musica as tareas_musica
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
@@ -1482,6 +1485,7 @@ def ver_cliente(cliente):
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
+        **_contexto_mi_musica(cliente),
         presets_mezcla=list(fe_mezcla.PRESETS),
         experimentos=experimentos_exp,
         experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
@@ -5694,7 +5698,8 @@ def fe_producir(cliente, cf_id):
     if voz not in voces_validas:
         voz = (fal_audio.VOCES.get(idioma_base) or fal_audio.VOCES["es"])[0]
     estilo = request.form.get("estilo_musica") or ""
-    if estilo not in fe_tipos.ESTILOS_MUSICA:
+    cancion = mi_musica.resolver(cliente, estilo)
+    if not cancion and estilo not in fe_tipos.ESTILOS_MUSICA:
         estilo = "energetico"
     # Solo los destinos con precio escrito: un campo vacío no debe tapar el
     # precio base del país base (lo resuelve final_edition.producir).
@@ -5717,6 +5722,8 @@ def fe_producir(cliente, cf_id):
         "sonido": "nativo",
         "mezcla": request.form.get("mezcla") if request.form.get("mezcla") in fe_mezcla.PRESETS else fe_mezcla.PRESET_DEFECTO,
     }
+    if cancion:
+        opciones["musica_inicio_s"] = mi_musica.inicio_valido(cancion, request.form.get("musica_inicio_s"))
     encolados = 0
     for idioma, pais in destinos:
         job_id = tareas_fe.job_id_final(cliente, cf_id, idioma, pais)
@@ -5887,6 +5894,68 @@ def fp_vaciar_referencias(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
+# --- Mi música (spec 2026-09-25): canciones propias y creadas con ElevenLabs ---
+
+def _contexto_mi_musica(cliente):
+    jid = tareas_musica.job_id(cliente)
+    return {"mi_musica": mi_musica.listar(cliente),
+            "trabajo_musica": {"job_id": jid} if trabajos.en_curso(jid) else None,
+            "precio_musica_ia": gastos.estimar("musica_elevenlabs")}
+
+
+def _respuesta_mi_musica(cliente, error=None, mensaje=None, nuevo_id=None, job_id=None):
+    ctx = _contexto_mi_musica(cliente)
+    html = render_template("_mi_musica.html", cliente=cliente, **ctx)
+    return jsonify({"ok": error is None, "html": html, "canciones": ctx["mi_musica"], "error": error,
+                    "mensaje": mensaje, "nuevo_id": nuevo_id, "job_id": job_id}), (400 if error else 200)
+
+
+@app.route("/cliente/<cliente>/musica/subir", methods=["POST"])
+def mm_subir(cliente):
+    archivo = request.files.get("cancion")
+    if not archivo or not archivo.filename:
+        return _respuesta_mi_musica(cliente, error="Elige un archivo de audio.")
+    try:
+        c = mi_musica.subir(cliente, archivo, os.path.join(_client_dir(cliente), "tmp_musica"))
+    except mi_musica.SubidaInvalida as e:
+        return _respuesta_mi_musica(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, archivo.filename, "mi_musica", "error", str(e))
+        return _respuesta_mi_musica(cliente, error=f"No pude subir la canción ({type(e).__name__}).")
+    return _respuesta_mi_musica(cliente, mensaje=f"«{c['nombre']}» quedó en Mi música.", nuevo_id=c["id"])
+
+
+@app.route("/cliente/<cliente>/musica/<int:mid>/borrar", methods=["POST"])
+def mm_borrar(cliente, mid):
+    try:
+        mi_musica.borrar(cliente, mid)
+    except materiales.MaterialEnUso as e:
+        return _respuesta_mi_musica(cliente, error=str(e))
+    except Exception as e:
+        bitacora.registrar(cliente, str(mid), "mi_musica", "error", str(e))
+        return _respuesta_mi_musica(cliente, error=f"No pude borrarla ({type(e).__name__}); intenta de nuevo.")
+    return _respuesta_mi_musica(cliente)
+
+
+@app.route("/cliente/<cliente>/musica/crear", methods=["POST"])
+def mm_crear(cliente):
+    prompt = " ".join((request.form.get("prompt") or "").split())[:400]
+    if not prompt:
+        return _respuesta_mi_musica(cliente, error="Describe la música que quieres.")
+    jid = tareas_musica.job_id(cliente)
+    encolado = trabajos.encolar(jid, "musica_generar",
+                                {"cliente": cliente, "prompt": prompt, "instrumental": request.form.get("instrumental") == "si"},
+                                duracion_estimada=90, etapas=list(tareas_musica.ETAPAS), cliente=cliente, max_intentos=1)
+    if not encolado:
+        return _respuesta_mi_musica(cliente, error="Ya se está creando una canción — espera a que termine.")
+    return _respuesta_mi_musica(cliente, mensaje="Creando la canción con ElevenLabs…", job_id=jid)
+
+
+@app.route("/cliente/<cliente>/musica/lista")
+def mm_lista(cliente):
+    return _respuesta_mi_musica(cliente)
+
+
 @app.route("/cliente/<cliente>/flowplus/reusar/<cf_id>", methods=["POST"])
 def fp_reusar(cliente, cf_id):
     """"Editar y crear otra a partir de esta": las referencias de esa pieza (sin
@@ -5919,6 +5988,7 @@ def fp_reusar(cliente, cf_id):
         "con_sonido": entry.get("con_sonido", True) is not False,
         "sonido_texto": entry.get("sonido_texto") or "",
         "musica_estilo": entry.get("musica_estilo") or "",
+        "musica_inicio_s": entry.get("musica_inicio_s") or 0,
         "calidad": entry.get("calidad") or "final",
         "preset_camara": entry.get("preset_camara"),
         "plantilla": entry.get("plantilla"),
@@ -5961,7 +6031,12 @@ def cf_crear_video(cliente):
     con_sonido = tipo == "video" and request.form.get("con_sonido") == "si"
     sonido_texto = " ".join((request.form.get("sonido") or "").split())[:200] if tipo == "video" else ""
     musica_estilo = (request.form.get("musica_estilo") or "").strip() if tipo == "video" else ""
-    if musica_estilo not in fe_tipos.ESTILOS_MUSICA:
+    # Mi música: `mat:<id>` de una canción de este proyecto, desde su segundo de inicio.
+    musica_inicio_s = 0
+    cancion = mi_musica.resolver(cliente, musica_estilo)
+    if cancion:
+        musica_inicio_s = mi_musica.inicio_valido(cancion, request.form.get("musica_inicio_s"))
+    elif musica_estilo not in fe_tipos.ESTILOS_MUSICA:
         musica_estilo = ""
     prefs = proyectos.preferencias_flowplus(cliente)
     modelo = (request.form.get("modelo") or "").strip()
@@ -6065,7 +6140,7 @@ def cf_crear_video(cliente):
     campos = dict(
         aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias,
         con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
-        con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo,
+        con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo, musica_inicio_s=musica_inicio_s,
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=prefs["idioma_prompt"],
         preset_camara=None, plantilla=None,
     )

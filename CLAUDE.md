@@ -326,6 +326,18 @@ degradable (the paid video is never lost) — it only reports, never regenerates
 `docs/superpowers/specs/2026-09-16-final-edition-estudio-design.md` S1 (done except
 `proveedor_v2a` and style previews, which belong to S3/S5).
 
+**Mi música** (`mi_musica.py`, spec `docs/superpowers/specs/2026-09-25-mi-musica-design.md`): the
+client's own songs — uploaded (mp3/wav/m4a/aac/ogg, ≤ 20 MB, ≤ 10 min) or created with ElevenLabs
+via fal (`fal_audio.musica_elevenlabs`, `fal-ai/elevenlabs/music`, always 60 s, US$ 0.60 per started
+minute, worker task `musica_generar`, `max_intentos=1`, gasto tipo `musica`) — are `material` rows
+(tipo `audio`, origen `subida`|`musica`, R2 `clientes/<c>/materiales/<hash><ext>`); `mi_musica` is
+their only writer. Forms pick a song with the value `mat:<id>` (in «Música al crear» and in
+«Producir finales») plus `musica_inicio_s`; `final_edition.musica.pista_propia` downloads it, cuts
+from that second to a cached WAV and hands it to the same mixes (`mezclar_musica`, `render.componer`),
+at cost 0. IA styles keep going through `obtener_pista` untouched. The panel `_mi_musica.html` lives
+inside the Crear form, so it has no `<form>`: routes `mm_subir/mm_borrar/mm_crear/mm_lista` answer JSON
+with the re-rendered panel and the song list. Voice cloning is NOT here (fal has no ElevenLabs clone).
+
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with

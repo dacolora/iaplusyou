@@ -578,18 +578,27 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
                 # Otro estilo que el de la final original del destino.
                 estilo = _siguiente(tipos.ESTILOS_MUSICA,
                                     _parametro_capa_original(cliente, cf_id, idioma, pais, "musica", "estilo") or estilo)
+        propia = musica.es_propia(estilo)
         if not o.get("con_musica", True):
-            capa("musica", "fal/stable-audio", {"estilo": estilo}, estado="omitida")
+            capa("musica", "propia" if propia else "fal/stable-audio", {"estilo": estilo}, estado="omitida")
         else:
             try:
-                pista, c = musica.obtener_pista(estilo, duracion_final)
+                if propia:
+                    # Mi música: la canción del cliente desde su segundo de inicio (costo 0).
+                    pista, c = musica.pista_propia(cliente, estilo, o.get("musica_inicio_s") or 0)
+                    proveedor = "elevenlabs" if pista["fuente"] == "elevenlabs" else "propia"
+                    parametros = {"estilo": pista["estilo"], "url": pista.get("url"),
+                                  "material_id": pista["material_id"], "inicio_s": pista["inicio_s"]}
+                else:
+                    pista, c = musica.obtener_pista(estilo, duracion_final)
+                    proveedor, parametros = "fal/stable-audio", {"estilo": estilo, "url": pista.get("url")}
                 pista_musica = pista.get("archivo")
                 costo += float(c or 0.0)
-                capa("musica", "fal/stable-audio", {"estilo": estilo, "url": pista.get("url")}, c)
+                capa("musica", proveedor, parametros, c)
             except Exception as e:
                 degradada = True
                 pista_musica = None
-                capa("musica", "fal/stable-audio", {"estilo": estilo}, estado="error", error=str(e))
+                capa("musica", "propia" if propia else "fal/stable-audio", {"estilo": estilo}, estado="error", error=str(e))
 
         # 4. Texto en pantalla + 5. Render
         avisar(ETAPAS_FINAL[4][0])
