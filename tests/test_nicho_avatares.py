@@ -214,3 +214,37 @@ def test_generar_nucleo_cortado_por_llamar_cuenta_sus_tokens(base_temporal, monk
     assert len(r["nucleos"][1]["sub_avatares"]) == 1
     res = r["resumen"]
     assert res["tokens_entrada"] == 1000 + 500 + 700 and res["tokens_salida"] == 200 + 8000 + 300
+
+
+def test_llamar_manda_la_doctrina_de_investigar(monkeypatch):
+    import anthropic
+    import doctrina
+    from nicho import avatares
+    vistos = []
+
+    class _M:
+        def create(self, **kw):
+            vistos.append(kw)
+            return type("R", (), {"content": [type("B", (), {"type": "text", "text": "{}"})()], "stop_reason": "end_turn",
+                                  "usage": type("U", (), {"input_tokens": 1, "output_tokens": 1})()})()
+
+    class _A:
+        def __init__(self, api_key=None):
+            self.messages = _M()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr(anthropic, "Anthropic", _A)
+    avatares._llamar("hola", 100)
+    assert vistos[0]["system"][0]["text"] == doctrina.texto("investigar")
+
+
+def test_prompts_de_avatares_piden_aplicar_la_doctrina():
+    from nicho import avatares
+    est = {"producto": "p", "tema": "t", "idioma": "es"}
+    assert "doctrina de investigación" in avatares.armar_prompt_nucleos(est, [])
+    assert "doctrina de investigación" in avatares.armar_prompt_subs(est, {"nombre": "n", "deseo": "d"}, [])
+
+
+def test_el_estimado_de_costo_incluye_la_doctrina():
+    import doctrina
+    from nicho import avatares
+    assert avatares.TOKENS_PROMPT > 800 + len(doctrina.texto("investigar").split())
