@@ -657,6 +657,89 @@ avatar = Table("avatar", metadata,
     Column("extra", JSON, default=dict),
 )
 
+# --- Flow Plus en Crear: prompts que se corrigen conversando con Claude antes de generar (migración 0018) ---
+
+guion_prompt = Table("guion_prompt", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("origen", String(12), nullable=False, default="manual"),     # manual|pipeline
+    Column("tipo", String(12), nullable=False, default="libre"),        # clip|imagen|libre
+    Column("titulo", String(200)),
+    Column("contexto", Text),                                           # guion o notas que Claude debe conocer
+    Column("texto_fijo", JSON, default=list),                           # fragmentos que van literales en toda versión
+    Column("texto_original", Text, nullable=False),
+    Column("texto_vigente", Text, nullable=False),
+    Column("version_n", Integer, nullable=False, default=1),            # CAS de usar/editar
+    Column("estado", String(12), nullable=False, default="abierto"),    # abierto|aprobado
+    Column("extra", JSON, default=dict),                                # el pipeline guarda video_id/clip_index
+    sa.Index("ix_guion_prompt_cliente_actualizado", "cliente", "actualizado_en"),
+)
+
+guion_mensaje = Table("guion_mensaje", metadata,
+    Column("id", Integer, primary_key=True),
+    Column("prompt_id", Integer, sa.ForeignKey("guion_prompt.id"), nullable=False, index=True),
+    Column("creado_en", String(19), nullable=False),
+    Column("rol", String(8), nullable=False),                           # persona|claude
+    Column("usuario", String(40)),
+    Column("contenido", Text),
+    Column("propuesta", Text),                                          # prompt COMPLETO propuesto; NULL = sin cambio
+    Column("problemas", JSON, default=list),
+    Column("estado", String(12), nullable=False, default="ok"),         # ok|pendiente|error
+    Column("aplicada", Boolean, default=False),
+    Column("usd", Float, default=0.0),
+)
+
+# --- Flow Plus: pipeline guion -> prompts (spec 2026-09-25, migración 0019) ---
+
+guion_lote = Table("guion_lote", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("fuente", String(10), nullable=False, default="texto"),       # texto|notion
+    Column("notion_page_id", String(40)),
+    Column("titulo", String(200)),
+    Column("texto_crudo", Text, nullable=False, default=""),
+    Column("estado", String(12), nullable=False, default="leyendo"),     # leyendo|leido|error
+    Column("aviso", Text),
+    Column("usd", Float, default=0.0),
+    Column("iniciado_en", String(19)),                                   # vencimiento del trabajo
+    Column("extra", JSON, default=dict),
+)
+
+guion = Table("guion", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("lote_id", Integer, sa.ForeignKey("guion_lote.id"), nullable=False, index=True),
+    Column("orden", Integer, nullable=False, default=0),
+    Column("titulo", String(200)),
+    Column("lectura", JSON, default=dict),
+    Column("estado", String(12), nullable=False, default="leido"),       # leido|confirmado
+    Column("extra", JSON, default=dict),
+)
+
+guion_video = Table("guion_video", metadata,
+    Column("id", Integer, primary_key=True),
+    *_comunes(),
+    Column("guion_id", Integer, sa.ForeignKey("guion.id"), nullable=False, index=True),
+    Column("version_n", Integer, nullable=False),
+    Column("nombre", String(120)),
+    Column("config", JSON, default=dict),
+    Column("recorte", JSON, default=dict),
+    Column("plan", JSON),
+    Column("clips", JSON),
+    Column("hooks_alt", JSON),
+    Column("validaciones", JSON),
+    Column("avisos", JSON),
+    Column("imagenes", JSON),
+    Column("estado", String(12), nullable=False, default="configurando"),  # configurando|recortando|armando|armado|invalido|error
+    Column("estado_imagenes", String(12), nullable=False, default="ninguno"),  # ninguno|escribiendo|listo|error
+    Column("aviso", Text),
+    Column("aviso_imagenes", Text),
+    Column("iniciado_en", String(19)),
+    Column("usd", Float, default=0.0),
+    Column("extra", JSON, default=dict),
+    sa.UniqueConstraint("guion_id", "version_n", name="uq_guion_video_version"),
+)
+
 
 def crear_todo():
     """Solo para tests y scripts locales. En producción manda Alembic."""

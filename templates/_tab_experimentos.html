@@ -19,9 +19,11 @@
    muestran el texto redactado, editable, antes de aprobar. #}
 {% from "_organico_publicar.html" import bloque_organico, propuesta_organica with context %}
 <div class="panel-cabecera">
-  <h2>Experimentos</h2>
-  <p class="vacio">Un experimento con una pieza y un país es un anuncio; con varias piezas y países, el motor decide cuál gana.</p>
-  <p class="vacio">Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Todo nace en pausa: lanzar crea los anuncios, activar empieza a gastar.</p>
+  <div>
+    <h2>Experimentos</h2>
+    <p class="panel-cabecera-desc">Un experimento con una pieza y un país es un anuncio; con varias piezas y países, el motor decide cuál gana.</p>
+    <p class="panel-cabecera-desc">Cada experimento es 1 campaña en Meta → 1 conjunto por país → 1 anuncio por pieza. Todo nace en pausa: lanzar crea los anuncios, activar empieza a gastar.</p>
+  </div>
 </div>
 
 {% include "_meta_conectar.html" %}
@@ -37,7 +39,11 @@
     </div>
   </div>
   {% if not elegibles_exp %}
-  <p class="vacio">Todavía no hay videos ni imágenes listos. Genera algo en Crear o en un sprint y vuelve.</p>
+  <div class="estado-vacio">
+    <p class="estado-vacio-titulo">Todavía no hay piezas para probar</p>
+    <p class="estado-vacio-texto">Genera un video o una imagen en Crear o en un sprint y vuelve aquí para probarlo en Meta.</p>
+    <a class="btn-generar btn-sm" href="#creativeflowplus">Ir a Crear</a>
+  </div>
   {% endif %}
   <div class="exp-tarjetas">
     {% for el in elegibles_exp %}

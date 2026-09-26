@@ -1,10 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ nombre_proyecto }}{% endblock %}
 {% block content %}
-<div class="pagina-cabecera">
-  <h1 id="titulo-seccion">{{ nombre_proyecto }}</h1>
-</div>
-
 <section id="tab-tablero" class="tab-panel" role="tabpanel">
   {% include "_tab_tablero.html" %}
 </section>
@@ -59,15 +55,22 @@
     };
     var STORAGE_KEY = 'tab-activa-{{ cliente }}';
 
-    function activar(tab) {
+    function activar(tab, subir) {
       botones.forEach(function (b) { b.classList.toggle('activo', b.dataset.tab === tab); });
       Object.keys(paneles).forEach(function (t) { paneles[t].classList.toggle('activo', t === tab); });
       try { localStorage.setItem(STORAGE_KEY, tab); } catch (e) {}
+      // En celular la barra superior dice en qué pestaña estás.
+      var nombre = document.getElementById('header-pestana');
+      var itemTab = document.querySelector('.sidebar-item[data-tab="' + tab + '"]');
+      if (nombre && itemTab) nombre.textContent = itemTab.title;
+      // Al cambiar de pestaña se empieza arriba (antes quedaba a la altura
+      // de la pestaña anterior); la carga inicial no se toca.
+      if (subir) window.scrollTo(0, 0);
     }
 
     botones.forEach(function (b) {
       b.addEventListener('click', function () {
-        activar(b.dataset.tab);
+        activar(b.dataset.tab, true);
         history.replaceState(null, '', '#' + b.dataset.tab);
       });
     });
@@ -94,6 +97,10 @@
         try { localStorage.setItem('crear-modo-{{ cliente }}', 'cambiar'); } catch (e) {}
         return 'creativeflowplus';
       }
+      if (t === 'flowplus') {
+        try { localStorage.setItem('crear-modo-{{ cliente }}', 'flowplus'); } catch (e) {}
+        return 'creativeflowplus';
+      }
       return t;
     }
     // Sin hash ni pestaña recordada, la página abre en el Tablero (Bloque 6):
@@ -101,6 +108,26 @@
     var inicial = resolver(desdeHash) || '';
     if (!paneles[inicial]) inicial = resolver(desdeStorage) || '';
     activar(paneles[inicial] ? inicial : 'tablero');
+
+    // Un enlace a «#settings» (alertas del Tablero, «Ir a Configuración →»,
+    // Crear → «#experimentos?piezas=…») cambia solo el hash: sin esto la
+    // pestaña no cambiaba estando ya en la página. Un hash que no es
+    // pestaña (#nuevo-sprint…) se ignora.
+    window.addEventListener('hashchange', function () {
+      var t = resolver(location.hash.replace('#', '').split('?')[0]);
+      if (paneles[t]) activar(t, true);
+    });
+
+    // Botón que abre un <details> de la página (estado vacío / encabezado:
+    // «+ Nuevo sprint», «+ Nuevo estudio») y lo trae a la vista.
+    document.addEventListener('click', function (ev) {
+      var b = ev.target.closest('[data-abrir-detalle]');
+      if (!b) return;
+      var d = document.getElementById(b.dataset.abrirDetalle);
+      if (!d) return;
+      d.open = true;
+      d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   })();
 
   // Barra lateral plegable; el estado se recuerda por navegador.

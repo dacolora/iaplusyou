@@ -60,3 +60,11 @@ def quitar(cliente, rid):
 
 def vaciar(cliente):
     _guardar(cliente, [])
+
+
+def quitar_varios(cliente, ids):
+    """Quita solo esas referencias: la bandeja es del proyecto y la comparten
+    todas las personas que trabajan en él, así que al crear no se toca lo que
+    otra persona tenga cargado."""
+    ids = set(ids)
+    _guardar(cliente, [r for r in listar(cliente) if r["id"] not in ids])

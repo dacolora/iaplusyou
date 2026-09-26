@@ -174,3 +174,15 @@ def guardar_pais(cliente, pais_nuevo):
     datos = cargar(cliente)
     datos["pais"] = pais_nuevo
     _json_store.guardar(_path(cliente), datos)
+
+
+# Bloque global de los prompts de Flow Plus (spec 2026-09-25 §7.3): vacío =
+# el de fábrica de guiones/plantillas.py.
+def bloque_global_flowplus(cliente):
+    return (cargar(cliente).get("flowplus_bloque_global") or "").strip()
+
+
+def guardar_bloque_global_flowplus(cliente, texto):
+    datos = cargar(cliente)
+    datos["flowplus_bloque_global"] = (texto or "").strip()
+    _json_store.guardar(_path(cliente), datos)

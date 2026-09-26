@@ -183,6 +183,12 @@ app.register_blueprint(nicho_rutas.bp)
 from referentes import rutas as referentes_rutas  # noqa: E402  (Blueprint de la pestaña Referentes)
 app.register_blueprint(referentes_rutas.bp)
 
+from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
+app.register_blueprint(guiones_rutas.bp)
+
+from guiones import rutas_pipeline as guiones_pipeline  # noqa: E402  (panel de guiones de Flow Plus)
+app.register_blueprint(guiones_pipeline.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -3907,7 +3913,7 @@ def tab_descargar_csv(cliente):
 NOMBRES_TIPO_GASTO = {
     "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
     "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
-    "musica": "Música", "otro": "Otros",
+    "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)", "otro": "Otros",
 }
 
 
@@ -5769,6 +5775,16 @@ def _lanzar_video_cf(cliente, cf_id, entry):
     return flowplus_lanzar.lanzar(cliente, cf_id, entry)
 
 
+def _consumir_bandeja(cliente, usadas):
+    """Tras crear en Crear: quita de la bandeja solo lo que se usó (`usadas`,
+    los `ref_ids` que el formulario mostraba). None = formulario sin
+    `bandeja_vista`: toda la bandeja, como antes."""
+    if usadas is None:
+        referencias_flowplus.vaciar(cliente)
+    else:
+        referencias_flowplus.quitar_varios(cliente, usadas)
+
+
 def _job_id_link(cliente):
     return f"{cliente}__flowplus_link"
 
@@ -6068,8 +6084,22 @@ def cf_crear_video(cliente):
 
     # Las referencias vienen de la bandeja (archivos subidos y links ya
     # descargados), en el orden en que se agregaron, con sus etiquetas.
+    bandeja = referencias_flowplus.listar(cliente)
+    usadas = None      # sin `bandeja_vista` (scripts/tests viejos): toda la bandeja, como antes
+    if request.form.get("bandeja_vista"):
+        # Lo que ves es lo que se usa: la bandeja es del proyecto y la comparten
+        # todas sus personas (incidente 2026-09-25: un «solo texto» se llevó las
+        # referencias que otra acababa de cargar). Solo cuentan los `ref_ids`
+        # que el formulario mostraba; si alguno ya no está, no se genera nada.
+        usadas = request.form.getlist("ref_ids")
+        en_bandeja = {r["id"] for r in bandeja}
+        if any(rid not in en_bandeja for rid in usadas):
+            flash("Tu bandeja de referencias cambió (alguien más del proyecto la usó o la vació). "
+                  "Revisa las referencias y vuelve a generar — no se cobró nada.", "error")
+            return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+        bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
-    for r in referencias_flowplus.listar(cliente):
+    for r in bandeja:
         referencias.append({"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
                             "etiqueta": r["etiqueta"], "origen": r.get("origen")})
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
@@ -6108,13 +6138,9 @@ def cf_crear_video(cliente):
     # pieza es de solo texto (enfoque `libre`) — el texto tal cual, sin logos
     # ni marca, por la ruta text-to-video/-image del mismo modelo.
     solo_texto = not referencias
-    # Logos oficiales del proyecto: referencia extra, siempre que haya otra
-    # referencia, para que la marca salga como es y no inventada. Cuentan para
-    # el tope de imágenes del modelo.
-    logos = []
-    for i, l in enumerate([] if solo_texto else _logos(cliente)[:2], start=1):
-        logos.append({"tipo": "imagen", "url": l["url"], "frame_url": l["url"], "etiqueta": f"@Logo {i}", "logo": True})
-    referencias = (referencias + logos)[:15]
+    # Incidente 2026-09-26: nada se agrega de fondo (tampoco los logos del
+    # proyecto): el modelo recibe solo lo que la persona adjuntó y escribió.
+    referencias = referencias[:15]
     if tipo == "video":
         flowplus_prompt.asignar_tokens(referencias, modelo)
         if solo_texto:
@@ -6144,36 +6170,28 @@ def cf_crear_video(cliente):
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=prefs["idioma_prompt"],
         preset_camara=None, plantilla=None,
     )
+    directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else "Tu texto, tal cual")
     if tipo == "imagen":
-        # La imagen no pasa por el director (spec §2.2): el prompt es el de siempre.
-        prompt_final = flowplus_prompt.armar(
-            accion_central, referencias, con_persona=info["con_persona"],
-            guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
-            logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, sonido=None, con_sonido=False,
-        )
-        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **campos)
+        # La imagen no pasa por el director (spec §2.2): va el texto tal cual.
+        prompt_final = flowplus_prompt.tal_cual(accion_central, referencias)
+        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **directo)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
-        referencias_flowplus.vaciar(cliente)
+        _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.IMAGEN[modelo]["nombre"]
         flash(f"Generando la imagen con {nombre_modelo}{' · ' + aspect_ratio if aspect_ratio else ''}…" if lanzado
               else "Ya se estaba generando eso — espera a que termine.", "ok" if lanzado else "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if request.form.get("modo_prompt") != "director":
-        # Generación directa: el prompt determinista con el texto íntegro de la
-        # persona (el mismo que usa el worker como fallback del director).
-        prompt_final = flowplus_prompt.armar(
-            accion_central, referencias, con_persona=info["con_persona"],
-            guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
-            logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
-            sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido,
-            cierre_sonido=flowplus_modelos.cierre_sonido(modelo),
-        )
-        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **campos)
+        # Generación directa: el texto de la persona tal cual; el sonido solo si
+        # ella lo escribió (el check sigue pidiendo el audio nativo del modelo).
+        prompt_final = flowplus_prompt.tal_cual(
+            accion_central, referencias, sonido=(sonido_texto or None) if con_sonido else None)
+        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **directo)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
-        referencias_flowplus.vaciar(cliente)
+        _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.VIDEO[modelo]["nombre"]
         if lanzado:
             detalle = f" · {aspect_ratio}" if aspect_ratio else ""
@@ -6186,7 +6204,7 @@ def cf_crear_video(cliente):
 
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", **campos)
     encolado = _encolar_director(cliente, cf_id)
-    referencias_flowplus.vaciar(cliente)
+    _consumir_bandeja(cliente, usadas)
     if encolado:
         flash("Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes.", "ok")
         if aviso_duracion is not None:

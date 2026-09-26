@@ -1,8 +1,13 @@
 {# Pestaña Nicho. Contexto de nicho.rutas.contexto(cliente): estudios_nicho,
    productos_nicho, idiomas_nicho, min_comentarios_nicho. #}
 <div class="panel-cabecera">
-  <h2>Nicho</h2>
-  <p class="vacio">Un estudio recoge comentarios reales de la gente sobre un producto o nicho y Claude los convierte en avatares con evidencia. Aprobar un sub-avatar crea una persona para Sprints y Crear. Nada se genera sin ver el costo antes.</p>
+  <div>
+    <h2>Nicho</h2>
+    <p class="panel-cabecera-desc">Un estudio recoge comentarios reales de la gente sobre un producto o nicho y Claude los convierte en avatares con evidencia. Aprobar un sub-avatar crea una persona para Sprints y Crear. Nada se genera sin ver el costo antes.</p>
+  </div>
+  <div class="panel-cabecera-acciones">
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-estudio">+ Nuevo estudio</button>
+  </div>
 </div>
 
 <div class="sprints-lista">
@@ -16,7 +21,10 @@
     </div>
   </a>
   {% else %}
-  <p class="vacio">Todavía no hay estudios. Crea el primero abajo: con {{ min_comentarios_nicho }} comentarios pegados a mano ya salen avatares.</p>
+  <div class="estado-vacio">
+    <p class="estado-vacio-titulo">Todavía no hay estudios</p>
+    <p class="estado-vacio-texto">Con {{ min_comentarios_nicho }} comentarios pegados a mano ya salen avatares: el formulario está justo abajo.</p>
+  </div>
   {% endfor %}
 </div>
 

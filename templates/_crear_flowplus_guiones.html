@@ -1,0 +1,214 @@
+{# Crear › Flow Plus › Guiones (spec 2026-09-25). El panel lo arma el servidor
+   (_gpg_panel.html, Jinja escapa todo); este script lo pide, lo reemplaza, manda
+   los formularios como JSON y consulta cada 2 s mientras haya un trabajo en
+   curso. El único innerHTML es ese fragmento del servidor; lo que viene de una
+   respuesta JSON se pinta con textContent. #}
+<section class="gpg" id="gpg" aria-label="Guiones">
+  <div id="gpg-panel" aria-live="polite"><p class="vacio">Cargando tus guiones…</p></div>
+</section>
+<script>
+  (function () {
+    'use strict';
+    var panel = document.getElementById('gpg-panel');
+    if (!panel) return;
+    var CLIENTE = {{ cliente | tojson }};
+    var BASE = '/cliente/' + encodeURIComponent(CLIENTE) + '/guiones';
+    var CLAVE = 'gpg-sel-' + CLIENTE;
+    var SONDEO_MS = 2000, SONDEO_MAX_MS = 6 * 60 * 1000;
+    var sel = leerSel(), timer = null, inicioSondeo = 0, activo = false;
+    var ultimoHTML = null, peticionN = 0, revelados = {}, sucios = {};
+
+    function leerSel() { try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch (e) { return {}; } }
+    function guardarSel() { try { localStorage.setItem(CLAVE, JSON.stringify(sel)); } catch (e) {} }
+    function parar() { if (timer) { clearTimeout(timer); timer = null; } }
+    function numero(v) { var n = Number(v); return v && isFinite(n) ? n : null; }
+
+    function esMarcable(campo) { return campo.type === 'checkbox' || campo.type === 'radio'; }
+    function claveDe(campo) { return esMarcable(campo) ? campo.name + '\u0000' + campo.value : campo.name; }
+
+    // Solo se restaura lo que la persona tocó: lo demás lo decide el servidor (p. ej. una propuesta nueva de Claude).
+    function anotarCambio(e) {
+      var c = e.target;
+      if (!c || !c.name || !c.form || !c.form.id || !panel.contains(c.form)) return;
+      (sucios[c.form.id] = sucios[c.form.id] || {})[claveDe(c)] = esMarcable(c) ? c.checked : c.value;
+    }
+
+    function olvidarCambiosEn(caja) {
+      if (!caja || caja === panel) { sucios = {}; return; }
+      if (caja.tagName === 'FORM' && caja.id) delete sucios[caja.id];
+      caja.querySelectorAll('form[id]').forEach(function (f) { delete sucios[f.id]; });
+      for (var n = caja; n && n !== panel; n = n.parentElement) { if (n.id) delete revelados[n.id]; }
+    }
+
+    function capturarEstado() {
+      var abiertos = [];
+      panel.querySelectorAll('details[id]').forEach(function (d) { if (d.open) abiertos.push(d.id); });
+      return { abiertos: abiertos };
+    }
+
+    function restaurarEstado(estado) {
+      estado.abiertos.forEach(function (id) {
+        var d = document.getElementById(id);
+        if (d && d.tagName === 'DETAILS') d.open = true;
+      });
+      Object.keys(revelados).forEach(function (id) {
+        if (!revelados[id]) return;
+        var n = document.getElementById(id);
+        if (n) n.hidden = false;
+      });
+      Object.keys(sucios).forEach(function (fid) {
+        var f = document.getElementById(fid);
+        if (!f || f.tagName !== 'FORM') { delete sucios[fid]; return; }
+        var campos = sucios[fid], restaurado = false;
+        f.querySelectorAll('input[name], textarea[name], select[name]').forEach(function (c) {
+          var clave = claveDe(c);
+          if (!(clave in campos)) return;
+          if (esMarcable(c)) c.checked = campos[clave]; else c.value = campos[clave];
+          restaurado = true;
+        });
+        if (restaurado && f.hasAttribute('data-gpg-calcular')) f.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+    }
+
+    function errorEn(caja, texto, problemas) {
+      var destino = (caja && caja.querySelector('.gpg-error')) || caja || panel;
+      while (destino.firstChild) destino.removeChild(destino.firstChild);
+      destino.hidden = false;
+      var p = document.createElement('p');
+      p.textContent = texto;
+      destino.appendChild(p);
+      if (problemas && problemas.length) {
+        var ul = document.createElement('ul');
+        problemas.forEach(function (x) { var li = document.createElement('li'); li.textContent = String(x); ul.appendChild(li); });
+        destino.appendChild(ul);
+      }
+    }
+
+    function cargar() {
+      parar();
+      var miPeticion = ++peticionN;
+      var q = [];
+      if (sel.guion) q.push('guion=' + encodeURIComponent(sel.guion));
+      if (sel.video) q.push('video=' + encodeURIComponent(sel.video));
+      return fetch(BASE + '/panel' + (q.length ? '?' + q.join('&') : ''), { credentials: 'same-origin' })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+        .then(function (html) {
+          if (miPeticion !== peticionN) return;  // llegó tarde: una petición más nueva ya está en curso o resuelta
+          if (html !== ultimoHTML) {
+            var estado = capturarEstado();
+            ultimoHTML = html;
+            panel.innerHTML = html;  // fragmento del servidor, ya escapado por Jinja
+            restaurarEstado(estado);
+          }
+          var raiz = panel.querySelector('[data-gpg-raiz]');
+          if (raiz && sel.guion && raiz.dataset.guion === '') { sel = {}; guardarSel(); }
+          if (raiz && raiz.dataset.trabajando === '1' && activo) {
+            if (!inicioSondeo) inicioSondeo = Date.now();
+            if (Date.now() - inicioSondeo < SONDEO_MAX_MS) timer = setTimeout(cargar, SONDEO_MS);
+          } else {
+            inicioSondeo = 0;
+          }
+        })
+        .catch(function () {
+          if (miPeticion !== peticionN) return;
+          errorEn(panel, 'No se pudo cargar el panel de guiones. Recarga la página.');
+        });
+    }
+
+    function datosDe(form) {
+      var obj = {};
+      form.querySelectorAll('[data-gpg-lista]').forEach(function (n) { obj[n.name] = []; });
+      new FormData(form).forEach(function (v, k) { if (Array.isArray(obj[k])) obj[k].push(v); else obj[k] = v; });
+      return obj;
+    }
+
+    function enviar(ruta, cuerpo) {
+      return fetch(BASE + ruta, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(cuerpo || {})
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, status: r.status, d: d }; });
+      });
+    }
+
+    function post(ruta, cuerpo, caja, boton) {
+      if (boton) boton.disabled = true;
+      return enviar(ruta, cuerpo).then(function (res) {
+        if (!res.ok) {
+          errorEn(caja, res.d.error || ('Algo salió mal (HTTP ' + res.status + ').'), res.d.problemas);
+          if (boton) boton.disabled = false;
+          return;
+        }
+        var antes = sel.guion + ':' + sel.video;
+        if (res.d.guion_id) { sel.guion = res.d.guion_id; sel.video = null; }
+        if (res.d.video_id) sel.video = res.d.video_id;
+        guardarSel();
+        inicioSondeo = 0;
+        if (sel.guion + ':' + sel.video !== antes) sucios = {}; else olvidarCambiosEn(caja);
+        cargar();
+      }, function () {
+        errorEn(caja, 'No hay conexión con el servidor.');
+        if (boton) boton.disabled = false;
+      });
+    }
+
+    panel.addEventListener('submit', function (e) {
+      var f = e.target.closest('form[data-gpg-post]');
+      if (!f) return;
+      e.preventDefault();
+      post(f.dataset.gpgPost, datosDe(f), f, f.querySelector('[type=submit]'));
+    });
+
+    panel.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b || !panel.contains(b)) return;
+      if (b.hasAttribute('data-gpg-ir')) {
+        sel = { guion: numero(b.dataset.guion), video: numero(b.dataset.video) };
+        guardarSel();
+        sucios = {};
+        cargar();
+      } else if (b.dataset.gpgAccion) {
+        post(b.dataset.gpgAccion, {}, b.closest('[data-gpg-caja]') || panel, b);
+      } else if (b.dataset.abrirPrompt) {
+        document.dispatchEvent(new CustomEvent('gp:abrir-prompt', { detail: { id: Number(b.dataset.abrirPrompt) } }));
+        var chat = document.getElementById('gp-detalle');
+        if (chat && chat.scrollIntoView) chat.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else if (b.dataset.gpgMostrar) {
+        var n = document.getElementById(b.dataset.gpgMostrar);
+        if (n) { n.hidden = !n.hidden; revelados[b.dataset.gpgMostrar] = !n.hidden; }
+      }
+    });
+
+    panel.addEventListener('input', anotarCambio);
+    panel.addEventListener('change', anotarCambio);
+
+    panel.addEventListener('change', function (e) {
+      var f = e.target.closest('form[data-gpg-calcular]');
+      if (!f) return;
+      var salida = f.querySelector('[data-gpg-estimado]');
+      var lista = f.querySelector('[data-gpg-bloques]');
+      var etiqueta = f.querySelector('[data-gpg-bloques-etiqueta]');
+      enviar(f.dataset.gpgCalcular, datosDe(f)).then(function (res) {
+        if (!res.ok) return;
+        if (salida && typeof res.d.texto === 'string') salida.textContent = res.d.texto;
+        if (lista && Array.isArray(res.d.bloques)) {
+          while (lista.firstChild) lista.removeChild(lista.firstChild);
+          res.d.bloques.forEach(function (b) {
+            var li = document.createElement('li');
+            li.textContent = '«' + b + '»';
+            lista.appendChild(li);
+          });
+          if (etiqueta) etiqueta.hidden = res.d.bloques.length === 0;
+        }
+      });
+    });
+
+    document.addEventListener('crear:modo', function (e) {
+      var ahora = !!(e.detail && e.detail.modo === 'flowplus');
+      if (ahora === activo) return;
+      activo = ahora;
+      if (activo) cargar(); else parar();
+    });
+  })();
+</script>

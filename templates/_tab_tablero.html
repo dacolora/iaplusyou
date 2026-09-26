@@ -11,9 +11,11 @@
 <div class="panel-cabecera tb-cabecera">
   <div>
     <h2>Tablero · {{ tb.mes }} {{ tb.anio }}</h2>
-    <p class="vacio">Gasto y ventas del mes en curso (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker.</p>
+    <p class="panel-cabecera-desc">Gasto y ventas del mes en curso (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker.</p>
   </div>
-  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
+  <div class="panel-cabecera-acciones">
+    <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
+  </div>
 </div>
 
 {# ---------- tiles ---------- #}

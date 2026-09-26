@@ -4,14 +4,15 @@
    ref_etiquetas_etapa, ref_etiquetas_consciencia, ref_fuentes. El grid y la
    ficha se piden por fetch a referentes.grid / referentes.ficha. #}
 <div class="panel-cabecera">
-  <h2>Referentes</h2>
-  <p class="vacio">Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas.</p>
+  <div>
+    <h2>Referentes</h2>
+    <p class="panel-cabecera-desc">Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas.</p>
+  </div>
+  <div class="panel-cabecera-acciones">
+    <button type="button" id="btn-traer-referentes" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
+    <button type="button" class="btn-sm" data-recrear-abrir="{{ url_for('referentes.barridos', cliente=cliente) }}">Mis barridos</button>
+  </div>
 </div>
-
-<p class="acciones">
-  <button type="button" id="btn-traer-referentes" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
-  <button type="button" class="btn-sm" data-recrear-abrir="{{ url_for('referentes.barridos', cliente=cliente) }}">Mis barridos</button>
-</p>
 
 <dialog class="generado-modal" id="ref-modal">
   <button type="button" class="generado-cerrar" id="ref-modal-cerrar" aria-label="Cerrar">×</button>
@@ -134,7 +135,11 @@
 </script>
 
 {% if not ref_opciones.total %}
-<p class="vacio">Todavía no hay referentes. Creatv importa la biblioteca inicial desde el panel de administrador; después aparecen aquí.</p>
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">Todavía no hay referentes</p>
+  <p class="estado-vacio-texto">Creatv importa la biblioteca inicial desde el panel de administrador; también puedes traer anuncios de una marca o palabra clave.</p>
+  <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
+</div>
 {% else %}
 <section class="ref-panel" id="ref-panel" data-grid="{{ url_for('referentes.grid', cliente=cliente) }}">
   <div class="exp-filtros ref-chips" data-filtro="etapa">

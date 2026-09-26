@@ -264,8 +264,14 @@
   <div class="fondo-ambiente" aria-hidden="true"></div>
   {% if request.view_args and request.view_args.cliente %}
   {% include "_sidebar.html" %}
+  <div class="sidebar-fondo" id="sidebar-fondo"></div>
   {% endif %}
   <header>
+    {% if request.view_args and request.view_args.cliente %}
+    <button type="button" class="menu-movil" id="menu-movil" aria-controls="sidebar" aria-expanded="false" aria-label="Abrir el menú">
+      <span aria-hidden="true">☰</span> Menú
+    </button>
+    {% endif %}
     <a class="marca-header" href="{{ url_for('index') }}">
       <span class="marca-mark"></span>
       <span class="marca-texto">Creatv<span class="marca-punto">Flow</span></span>
@@ -277,6 +283,7 @@
       <span class="header-sep">/</span>
       {% endif %}
       <span class="header-actual">{{ nombre_proyecto or request.view_args.cliente }}</span>
+      <span class="header-pestana" id="header-pestana"></span>
     </nav>
     {% endif %}
     {% if session.get('usuario') %}
@@ -319,5 +326,27 @@
     {% endif %}
     {% block content %}{% endblock %}
   </main>
+  {% if request.view_args and request.view_args.cliente %}
+  <script>
+    // Menú del celular (spec 2026-09-26): ☰ abre la barra lateral encima de la
+    // página; se cierra con la ✕, tocando el fondo, con Escape o al elegir algo.
+    (function () {
+      var boton = document.getElementById('menu-movil');
+      var sidebar = document.getElementById('sidebar');
+      if (!boton || !sidebar) return;
+      function poner(abierto) {
+        document.body.classList.toggle('menu-abierto', abierto);
+        boton.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+      }
+      boton.addEventListener('click', function () { poner(!document.body.classList.contains('menu-abierto')); });
+      document.getElementById('sidebar-fondo').addEventListener('click', function () { poner(false); });
+      document.getElementById('sidebar-cerrar').addEventListener('click', function () { poner(false); });
+      document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') poner(false); });
+      sidebar.addEventListener('click', function (ev) {
+        if (ev.target.closest('.sidebar-item, .sidebar-gasto')) poner(false);
+      });
+    })();
+  </script>
+  {% endif %}
 </body>
 </html>
