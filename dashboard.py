@@ -1485,6 +1485,7 @@ def ver_cliente(cliente):
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
+        **_contexto_mi_musica(cliente),
         presets_mezcla=list(fe_mezcla.PRESETS),
         experimentos=experimentos_exp,
         experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],

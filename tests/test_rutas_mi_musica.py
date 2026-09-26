@@ -130,3 +130,16 @@ def test_producir_final_con_cancion_propia(app):
                   data=dict(base, estilo_musica=f"mat:{mid}", musica_inicio_s="7"))
     t = [t for t in app["encolados"] if t["tipo"] == "final_producir"][-1]
     assert t["payload"]["opciones"]["estilo_musica"] == f"mat:{mid}" and t["payload"]["opciones"]["musica_inicio_s"] == 7
+
+
+def test_la_pagina_lista_mi_musica_en_crear_y_en_la_final(app):
+    import creative_flow as cf
+    from tests.test_rutas_final_edition import GUION_BASE
+    mid = _subir(app).get_json()["nuevo_id"]
+    cf_id = cf.crear("acme", [], ["X"], [], "camina", 8, "", "A")
+    cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", enfoque="producto")
+    cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    assert html.count(f'value="mat:{mid}"') == 2                 # «Música al crear» + «Producir finales»
+    assert html.count('class="mm-opciones"') == 2
+    assert 'id="mm-panel"' in html and 'id="fp-musica-inicio"' in html and 'name="musica_inicio_s"' in html

@@ -105,9 +105,24 @@
         <label class="campo-label">Música al crear</label>
         <select name="musica_estilo" id="fp-musica">
           <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>ninguna</option>
-          {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+          <optgroup label="Estilos IA">
+            {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+          </optgroup>
+          <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+            {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
+          </optgroup>
         </select>
-        <p class="vacio" style="font-size:.74rem;padding:0;">Se mezcla debajo del sonido (USD 0,02 la primera vez por estilo y duración).</p>
+        <p class="vacio" style="font-size:.74rem;padding:0;">Se mezcla debajo del sonido. Estilos IA: USD 0,02 la primera vez por estilo y duración. Mi música: gratis.</p>
+        <div id="fp-musica-inicio-wrap" hidden style="margin-top:.4rem;">
+          <audio id="fp-musica-audio" controls preload="none" style="width:100%;height:32px;"></audio>
+          <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-top:.3rem;">
+            <label style="font-size:.8rem;">Empieza en el segundo
+              <input type="number" name="musica_inicio_s" id="fp-musica-inicio" min="0" step="1" value="0" style="width:5rem;">
+            </label>
+            <button type="button" class="btn-sm" id="fp-musica-usar">Usar donde va el reproductor</button>
+          </div>
+        </div>
+        <div id="mm-wrap">{% include "_mi_musica.html" %}</div>
       </div>
     </div>
     <div style="margin-top:.8rem;" id="fp-calidad-wrap">
@@ -359,7 +374,13 @@
                       {% for e in estilos_fe %}
                       <option value="{{ e }}">{{ e }}</option>
                       {% endfor %}
+                      <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+                        {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
+                      </optgroup>
                     </select>
+                  </label>
+                  <label>Empieza en el segundo <small>(Mi música)</small>
+                    <input type="number" name="musica_inicio_s" min="0" step="1" value="0" style="width:5rem;">
                   </label>
                   <label>Precio base <input type="number" name="precio" min="0" step="any"
                          placeholder="opcional, país base" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
@@ -650,6 +671,13 @@
     var notaFormato = document.getElementById('fp-formato-nota');
     var notaDuracion = document.getElementById('fp-duracion-nota');
     var ta = document.getElementById('fp-texto');
+    // Mi música: canción propia (`mat:<id>`) con su segundo de inicio.
+    var musicaSel = document.getElementById('fp-musica');
+    var inicioWrap = document.getElementById('fp-musica-inicio-wrap');
+    var inicioInput = document.getElementById('fp-musica-inicio');
+    var audioPrev = document.getElementById('fp-musica-audio');
+    var mmWrap = document.getElementById('mm-wrap');
+    function esPropia(v) { return !!v && v.indexOf('mat:') === 0; }
     // Referencias y catálogo son opcionales: sin nada adjunto la pieza es de
     // solo texto (y Seedance, sin imagen de arranque, sí elige formato).
     function sinAdjuntos() {
@@ -672,6 +700,7 @@
       var cs = document.getElementById('fp-con-sonido'); if (cs && typeof prefill.con_sonido === 'boolean') cs.checked = prefill.con_sonido;
       var st = document.getElementById('fp-sonido'); if (st && prefill.sonido_texto) st.value = prefill.sonido_texto;
       var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
+      if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
       var ca = document.getElementById('fp-calidad'); if (ca) ca.checked = prefill.calidad === 'borrador';
       setTimeout(function () { form.scrollIntoView({behavior: 'smooth', block: 'start'}); if (ta) ta.focus(); }, 50);
     }
@@ -718,7 +747,6 @@
       ajustarSegunModelo(m, esImagen);
       var usd = 0;
       var conSonido = document.getElementById('fp-con-sonido');
-      var musicaSel = document.getElementById('fp-musica');
       if (m) {
         if (esImagen) {
           usd = parseFloat(m.dataset.usd);
@@ -726,7 +754,7 @@
           var seg = parseFloat(m.dataset.usdSeg);
           var calidad = document.getElementById('fp-calidad'); if (calidad && calidad.checked && m.value === 'wan3') seg = seg - parseFloat(m.dataset.usdSeg) + 0.05; // tarifa 480p de Wan (wan3_client.COSTO_USD_POR_SEGUNDO)
           if (conSonido && !conSonido.checked) seg -= parseFloat(m.dataset.recargo || '0');
-          usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value) ? 0.02 : 0);
+          usd = seg * parseInt(duracion.value, 10) + ((musicaSel && musicaSel.value && !esPropia(musicaSel.value)) ? 0.02 : 0);
         }
       }
       // «Generar» (video o imagen) cobra al generar con el texto de la persona;
@@ -872,6 +900,124 @@
         .catch(function () { estadoDescribir.textContent = 'No se pudo describir (red).'; })
         .finally(function () { btnDescribir.disabled = false; });
     }
+
+    // --- Mi música: elegir, subir, crear con ElevenLabs, borrar (sin recargar) ---
+    function mostrarInicio() {
+      var o = musicaSel.selectedOptions[0];
+      var propia = !!(o && esPropia(o.value));
+      inicioWrap.hidden = !propia;
+      if (propia) {
+        if (audioPrev.dataset.src !== o.dataset.url) { audioPrev.src = o.dataset.url; audioPrev.dataset.src = o.dataset.url; }
+        inicioInput.max = Math.max(0, Math.floor(parseFloat(o.dataset.duracion || '0')) - 1);
+      } else {
+        audioPrev.pause();
+      }
+    }
+    musicaSel.addEventListener('change', function () { inicioInput.value = 0; mostrarInicio(); refrescar(); });
+    document.getElementById('fp-musica-usar').addEventListener('click', function () {
+      inicioInput.value = Math.floor(audioPrev.currentTime || 0);
+    });
+    // Los dos selectores (Crear y, dentro de cada <template> de detalle, «Producir finales»).
+    function pintarCanciones(canciones) {
+      var grupos = Array.prototype.slice.call(document.querySelectorAll('optgroup.mm-opciones'));
+      document.querySelectorAll('template.generado-detalle').forEach(function (t) {
+        grupos = grupos.concat(Array.prototype.slice.call(t.content.querySelectorAll('optgroup.mm-opciones')));
+      });
+      grupos.forEach(function (g) {
+        var sel = g.parentElement, elegido = sel ? sel.value : '';
+        g.innerHTML = '';
+        canciones.forEach(function (c) {
+          var o = document.createElement('option');
+          o.value = 'mat:' + c.id; o.textContent = c.nombre; o.dataset.url = c.url; o.dataset.duracion = c.duracion_s;
+          g.appendChild(o);
+        });
+        g.hidden = !canciones.length;
+        if (sel && elegido) { sel.value = elegido; if (sel.selectedIndex < 0) sel.value = ''; }
+      });
+    }
+    function aplicarMusica(d, elegirNuevo) {
+      if (d.html !== undefined) mmWrap.innerHTML = d.html;
+      if (d.canciones) pintarCanciones(d.canciones);
+      if (elegirNuevo && d.nuevo_id) { musicaSel.value = 'mat:' + d.nuevo_id; inicioInput.value = 0; }
+      mostrarInicio(); refrescar();
+      var err = document.getElementById('mm-error');
+      if (d.error && err) { err.textContent = d.error; err.hidden = false; }
+      var aviso = document.getElementById('mm-subida');
+      if (d.mensaje && aviso) { aviso.textContent = d.mensaje; aviso.hidden = false; }
+      vigilarCancion();
+    }
+    function enviarMusica(url, body) {
+      return fetch(url, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
+        .then(function (r) { return r.json(); })
+        .then(function (d) { aplicarMusica(d, false); })
+        .catch(function () { aplicarMusica({error: 'Se perdió la conexión; recarga la página.'}, false); });
+    }
+    // La canción de ElevenLabs se crea en el worker: se consulta su estado y al
+    // terminar se refresca solo el panel (recargar borraría lo que ya escribiste).
+    function vigilarCancion() {
+      var barra = document.getElementById('mm-progreso');
+      if (!barra || barra.dataset.vigilando) return;
+      barra.dataset.vigilando = '1';
+      var t = setInterval(function () {
+        fetch(barra.dataset.estado).then(function (r) { return r.json(); }).then(function (e) {
+          if (e.estado === 'en_progreso') return;
+          clearInterval(t);
+          fetch(document.getElementById('mm-panel').dataset.urlLista, {headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (e.estado === 'error') d.error = e.mensaje || 'No se pudo crear la canción.';
+              else d.mensaje = 'Canción lista en Mi música.';
+              aplicarMusica(d, false);
+            });
+        }).catch(function () {});
+      }, 4000);
+    }
+    mmWrap.addEventListener('change', function (e) {
+      if (e.target.id !== 'mm-archivo' || !e.target.files.length) return;
+      var fd = new FormData();
+      fd.append('cancion', e.target.files[0]);
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', document.getElementById('mm-panel').dataset.urlSubir);
+      xhr.setRequestHeader('X-Requested-With', 'fetch');
+      var aviso = document.getElementById('mm-subida');
+      aviso.hidden = false; aviso.textContent = 'Subiendo… 0%';
+      xhr.upload.onprogress = function (ev) {
+        if (!ev.lengthComputable) return;
+        var p = Math.round(ev.loaded * 100 / ev.total);
+        aviso.textContent = p < 100 ? 'Subiendo… ' + p + '%' : 'Revisando el audio…';
+      };
+      xhr.onload = function () {
+        try { aplicarMusica(JSON.parse(xhr.responseText), true); }
+        catch (err) { aviso.textContent = 'Error al subir; recarga la página.'; }
+      };
+      xhr.onerror = function () { aviso.textContent = 'Error de red al subir.'; };
+      xhr.send(fd);
+    });
+    mmWrap.addEventListener('click', function (e) {
+      if (e.target.id === 'mm-abrir-crear') {
+        var caja = document.getElementById('mm-crear');
+        caja.hidden = !caja.hidden;
+        if (!caja.hidden) document.getElementById('mm-prompt').focus();
+        return;
+      }
+      if (e.target.id === 'mm-crear-btn') {
+        var prompt = document.getElementById('mm-prompt');
+        if (!prompt.value.trim()) { prompt.focus(); return; }
+        var fd = new FormData();
+        fd.append('prompt', prompt.value);
+        fd.append('instrumental', document.getElementById('mm-instrumental').checked ? 'si' : 'no');
+        e.target.disabled = true;
+        enviarMusica(document.getElementById('mm-panel').dataset.urlCrear, fd);
+        return;
+      }
+      var borrar = e.target.closest('.mm-borrar');
+      if (borrar && confirm('¿Borrar «' + borrar.dataset.nombre + '» de Mi música? Los videos ya hechos conservan su audio.')) {
+        enviarMusica(borrar.dataset.url, new FormData());
+      }
+    });
+    mostrarInicio();
+    vigilarCancion();
+
     engancharBandeja();
 
     // Validación en sitio: el error se muestra en rojo junto al cuadro, no arriba.
