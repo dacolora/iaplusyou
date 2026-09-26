@@ -170,7 +170,7 @@ def test_detalle_progreso_listo_y_campanas(app):
     sid, cid = _sprint(datos, pid, tid)
     c = app["c"]
     r = c.get(f"/cliente/acme/sprints/{sid}")
-    assert r.status_code == 200 and b"Espejo LED" in r.data and b"Premium" in r.data and b"Verano" in r.data
+    assert r.status_code == 200 and b"Espejo LED" in r.data and b"Premium" in r.data
     assert c.get("/cliente/acme/sprints/999").status_code == 404
     j = c.get(f"/cliente/acme/sprints/{sid}/progreso").get_json()
     assert j["estado"] == "planeando" and j["campanas"][0]["etapa"] == "referencias" and j["sprint"]["planeadas"] == 3
@@ -639,7 +639,7 @@ def test_reserva_vencida_vuelve_a_ofrecer_generar_lote(con_ideas):
     assert "Generar lote de esta campaña" not in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
     datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv, ahora=1))  # vencida
     html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
-    assert "Generar lote del sprint (1)" in html and "Generar lote (1)" in html
+    assert "Generar lote (1)" in html  # el tablero (2026-09-26) ya no dice «… del sprint»
     html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
     assert "Generar lote de esta campaña (1)" in html and "Otra idea" in html
 

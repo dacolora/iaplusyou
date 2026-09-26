@@ -1,45 +1,78 @@
 {% extends "base.html" %}
-{% from "_sprint_macros.html" import anillo, chip_estado, barra %}
+{% from "_sprint_macros.html" import chip_estado %}
 {% block title %}{{ sprint.nombre }} · Sprints{% endblock %}
 {% block content %}
 {% include "_sprint_nav.html" %}
+{# Tablero del sprint (spec 2026-09-26): cabecera editable, una tarjeta por
+   campaña y el panel lateral de la campaña (fragmento de
+   sprints.campana_panel, cargado por fetch). Todo el JS del panel vive aquí:
+   los <script> de un fragmento cargado por fetch nunca corren. #}
 
-<div class="pagina-cabecera sprint-cabecera">
+{% set pendientes_sprint = sprint.campanas | map(attribute='ideas') | sum(start=[]) | rejectattr('estado_idea', 'equalto', 'descartada') | selectattr('estado_idea', 'equalto', 'aprobada') | selectattr('sin_sesion') | list %}
+<div class="panel-cabecera tablero-cabecera">
   <div>
-    <h1>{{ sprint.nombre }}</h1>
-    <p class="vacio">{{ sprint.inicio }} → {{ sprint.fin }} · {{ chip_estado(sprint.estado) }}
-      · {{ sprint.campanas | length }} campaña(s) · {{ sprint.progreso.planeadas }} piezas planeadas
-      {% if sprint.destinos %}· destinos: {{ sprint.destinos | join(", ") }}{% endif %}</p>
+    <h1 class="tablero-titulo">{{ sprint.nombre }} {{ chip_estado(sprint.estado) }}</h1>
+    <p class="panel-cabecera-desc" id="tablero-linea">{{ linea }}</p>
+    <p class="tablero-resumen" id="tablero-resumen">{{ resumen }}</p>
   </div>
-  <div class="sprint-cabecera-derecha">
-    {{ anillo(sprint.progreso.porcentaje, 72) }}
-    <small class="vacio" id="sprint-progreso-texto">{{ sprint.progreso.texto }}</small>
+  <div class="panel-cabecera-acciones">
+    <button type="button" class="btn-generar btn-sm" data-nueva-campana>+ Campaña</button>
+    {% if pendientes_sprint %}
+    <button type="button" class="btn-sm" onclick="abrirLote('')">Generar lote ({{ pendientes_sprint | length }})</button>
+    {% endif %}
+    {% if lote and (lote.listas or lote.error or lote.generando or lote.encoladas) %}
+    <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}">Revisar ({{ lote.aprobadas }}/{{ lote.listas }} listas)</a>
+    {% endif %}
+    <details class="tablero-mas">
+      <summary class="btn-sm">Más</summary>
+      <div class="tablero-mas-menu">
+        {% if sprint.estado in ("planeando", "referencias") and sprint.campanas %}
+        <form method="post" action="{{ url_for('sprints.marcar_listo', cliente=cliente, sid=sprint.id) }}"
+              onsubmit="return confirm('¿Marcar el sprint como listo para generar aunque falten referentes?');">
+          <button type="submit" class="btn-sm">Marcar listo para generar</button>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('sprints.archivar', cliente=cliente, sid=sprint.id) }}"
+              onsubmit="return confirm('¿Archivar este sprint? Se puede desarchivar después.');">
+          <button type="submit" class="btn-sm">Archivar</button>
+        </form>
+        <form method="post" action="{{ url_for('sprints.eliminar', cliente=cliente, sid=sprint.id) }}"
+              onsubmit="return confirm('¿Eliminar este sprint PERMANENTEMENTE? Se borran sus campañas, ideas y referencias. No se puede deshacer.');">
+          <button type="submit" class="btn-sm btn-rechazar">Eliminar permanentemente</button>
+        </form>
+      </div>
+    </details>
   </div>
 </div>
 
-<div class="acciones sprint-acciones">
-  {% if sprint.estado in ("planeando", "referencias") %}
-  <form method="post" action="{{ url_for('sprints.marcar_listo', cliente=cliente, sid=sprint.id) }}" class="inline"
-        onsubmit="return confirm('¿Marcar el sprint como listo para generar aunque falten referencias?');">
-    <button type="submit" class="btn-generar btn-sm">Marcar listo para generar</button>
-  </form>
-  {% endif %}
-  {% set pendientes_sprint = sprint.campanas | map(attribute='ideas') | sum(start=[]) | rejectattr('estado_idea', 'equalto', 'descartada') | selectattr('estado_idea', 'equalto', 'aprobada') | selectattr('sin_sesion') | list %}
-  {% if pendientes_sprint %}
-  <button type="button" class="btn-generar btn-sm" onclick="abrirLote('')">Generar lote del sprint ({{ pendientes_sprint | length }})</button>
-  {% endif %}
-  {% if lote and (lote.listas or lote.error or lote.generando or lote.encoladas) %}
-  <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}">Revisar ({{ lote.aprobadas }}/{{ lote.listas }} listas)</a>
-  {% endif %}
-  <form method="post" action="{{ url_for('sprints.archivar', cliente=cliente, sid=sprint.id) }}" class="inline"
-        onsubmit="return confirm('¿Archivar este sprint? Se puede desarchivar después.');">
-    <button type="submit" class="btn-sm btn-peligro">Archivar</button>
-  </form>
-  <form method="post" action="{{ url_for('sprints.eliminar', cliente=cliente, sid=sprint.id) }}" class="inline"
-        onsubmit="return confirm('⚠️ ¿Eliminar este sprint PERMANENTEMENTE? Se borran todas las campañas, ideas y referencias. No se puede deshacer.');">
-    <button type="submit" class="btn-sm btn-rechazar">Eliminar permanentemente</button>
-  </form>
-</div>
+<details class="swap-card tablero-editar" id="tablero-editar">
+  <summary class="swap-card-resumen">✎ Datos del sprint (se guardan solos)</summary>
+  <div class="tablero-editar-campos" data-sprint-campos
+       data-url="{{ url_for('sprints.sprint_campo', cliente=cliente, sid=sprint.id) }}">
+    <label>Nombre <input data-campo="nombre" value="{{ sprint.nombre }}" maxlength="200">
+      <small class="campo-error" hidden></small></label>
+    <label>Inicio <input type="date" data-campo="inicio" value="{{ sprint.inicio }}">
+      <small class="campo-error" hidden></small></label>
+    <label>Fin <input type="date" data-campo="fin" value="{{ sprint.fin }}">
+      <small class="campo-error" hidden></small></label>
+    <label>País <select data-campo="pais">
+        <option value="">Sin país</option>
+        {% for p in paises %}<option value="{{ p.codigo }}" {% if p.codigo == sprint.pais %}selected{% endif %}>{{ p.bandera }} {{ p.nombre }}</option>{% endfor %}
+      </select><small class="campo-error" hidden></small></label>
+    <label>Idioma de los textos <select data-campo="idioma">
+        {% for cod, nombre in idiomas.items() %}<option value="{{ cod }}" {% if cod == sprint.idioma %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+      </select><small class="campo-error" hidden></small></label>
+    <label>Momento del mes <select data-campo="momento">
+        <option value="">Ninguno</option>
+        {% for p in presets %}<option value="{{ p.clave }}" {% if p.clave == momento_valor %}selected{% endif %}>{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
+        <option value="propio" {% if momento_valor == 'propio' %}selected{% endif %}>Otro (escríbelo)…</option>
+      </select>
+      <input data-momento-texto maxlength="120" placeholder="Tu momento" value="{{ sprint.momento.nombre if momento_valor == 'propio' else '' }}" {% if momento_valor != 'propio' %}hidden{% endif %}>
+      <small class="campo-error" hidden></small></label>
+    <label class="ancho">Marcas a imitar <small class="vacio">(una por línea; con el link de su Ad Library si lo tienes)</small>
+      <textarea data-campo="marcas" rows="2">{{ marcas_texto }}</textarea><small class="campo-error" hidden></small></label>
+  </div>
+</details>
 
 {% if lote and lote.planeadas %}
 <p class="vacio sprint-lote-resumen" id="sprint-lote-resumen">
@@ -47,163 +80,210 @@
 </p>
 {% endif %}
 
-<h2>Campañas</h2>
-{% if not sprint.campanas %}<p class="vacio">Este sprint no tiene campañas todavía.</p>{% endif %}
-<div class="sprint-tablero">
-  {% for c in sprint.campanas %}
-  <article class="swap-card sprint-campana" id="campana-{{ c.id }}" data-cid="{{ c.id }}">
-    <header class="sprint-campana-cab">
-      <span class="sprint-punto" style="background: {{ c.persona_color or 'var(--accent)' }}"></span>
-      <strong>{{ c.persona_nombre }}</strong>
-      <span class="sprint-sep">·</span>
-      {% set prod = productos_por_id.get(c.catalogo_id) %}
-      {% if prod and prod.representativa_url %}<img class="sprint-mini" src="{{ prod.representativa_url }}" alt="">{% endif %}
-      <strong>{{ prod.nombre if prod else c.catalogo_id }}</strong>
-      <span class="sprint-sep">·</span>
-      <span>{{ c.temporada_nombre or "sin temporada" }}</span>
-      {{ chip_estado(c.estado) }}
-    </header>
-    <div class="sprint-campana-cuerpo">
-      <form method="post" action="{{ url_for('sprints.campana_editar', cliente=cliente, sid=sprint.id, cid=c.id) }}" class="sprint-cantidades">
-        <label>Videos <input type="number" name="n_videos" value="{{ c.n_videos }}" min="0" class="mini-input"></label>
-        <label>Imágenes <input type="number" name="n_imagenes" value="{{ c.n_imagenes }}" min="0" class="mini-input"></label>
-        <label>Ref. objetivo <input type="number" name="referencias_objetivo" value="{{ c.referencias_objetivo }}" min="1" class="mini-input"></label>
-        <button type="submit" class="btn-xs">Guardar</button>
-      </form>
-      <div class="sprint-campana-progreso" data-cid="{{ c.id }}">
-        {{ barra(c.progreso.porcentaje, c.progreso.texto) }}
-      </div>
-      {% set vivas = c.ideas | rejectattr('estado_idea', 'equalto', 'descartada') | list %}
-      {% set aprobadas = vivas | selectattr('estado_idea', 'equalto', 'aprobada') | list %}
-      {% set pendientes_lote = aprobadas | selectattr('sin_sesion') | list %}
-
-      <details class="sprint-desplegable" data-desplegable="referencias" data-cid="{{ c.id }}" data-sid="{{ sprint.id }}">
-        <summary>
-          📎 Referencias {% if c.referencias_total > 0 %}({{ c.referencias_listas }}/{{ c.referencias_objetivo }}){% endif %}
-        </summary>
-        <div class="sprint-contenido" id="referencias-{{ c.id }}"></div>
-      </details>
-
-      <details class="sprint-desplegable" data-desplegable="ideas" data-cid="{{ c.id }}" data-sid="{{ sprint.id }}" {% if c.referencias_total == 0 %}disabled{% endif %}>
-        <summary>
-          💡 Ideas {% if aprobadas %}({{ aprobadas | length }}/{{ c.n_videos + c.n_imagenes }}){% endif %}
-        </summary>
-        <div class="sprint-contenido" id="ideas-{{ c.id }}"></div>
-      </details>
-
-      <details class="sprint-desplegable" data-desplegable="revision" data-cid="{{ c.id }}" data-sid="{{ sprint.id }}" {% if not aprobadas %}disabled{% endif %}>
-        <summary>
-          ✓ Revisar {% if c.piezas %}({{ c.piezas_aprobadas }}/{{ c.piezas | length }}){% endif %}
-        </summary>
-        <div class="sprint-contenido" id="revision-{{ c.id }}"></div>
-      </details>
-
-      <div class="sprint-campana-acciones">
-        {% if pendientes_lote %}
-        <button type="button" class="btn-generar btn-sm" onclick="abrirLote({{ c.id }})">Generar lote ({{ pendientes_lote | length }})</button>
-        {% endif %}
-        <form method="post" action="{{ url_for('sprints.campana_eliminar', cliente=cliente, sid=sprint.id, cid=c.id) }}" class="inline"
-              onsubmit="return confirm('¿Eliminar esta campaña y sus referencias?');">
-          <button type="submit" class="btn-xs btn-peligro">Eliminar</button>
-        </form>
-      </div>
-    </div>
-  </article>
-  {% endfor %}
+{% if not sprint.campanas %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">Este sprint todavía no tiene campañas</p>
+  <p class="estado-vacio-texto">Cada campaña es una persona con un producto y los anuncios que va a seguir. Empieza con «+ Campaña».</p>
+</div>
+{% endif %}
+<div class="tablero-grid" id="tablero-grid">
+  {% for c in sprint.campanas %}{% include "_sprint_tarjeta.html" %}{% endfor %}
+  <button type="button" class="tablero-tarjeta tablero-tarjeta-nueva" data-nueva-campana>
+    <strong>+ Campaña</strong><small class="vacio">eliges persona y producto; lo demás en el panel</small>
+  </button>
 </div>
 
-{% if sprint.estado in ("planeando", "referencias", "listo_para_generar") %}
-<details class="swap-card" id="agregar-campana">
-  <summary class="swap-card-resumen">+ Agregar campaña</summary>
-  <form method="post" action="{{ url_for('sprints.campana_agregar', cliente=cliente, sid=sprint.id) }}" class="form-experimento" id="form-agregar-campana"
-        data-combinaciones='{{ combinaciones | tojson }}'>
-    <div class="fe-opciones">
-      <label>Persona
-        <select name="persona_id" required>{% for p in personas_sprint %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}</select>
-      </label>
-      <label>Producto
-        <select name="catalogo_id" required>{% for p in productos_sprint %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}</select>
-      </label>
-      <label>Temporada
-        <select name="temporada_id"><option value="">(ninguna)</option>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }})</option>{% endfor %}</select>
-      </label>
-      <label>Videos <input type="number" name="n_videos" value="5" min="0"></label>
-      <label>Imágenes <input type="number" name="n_imagenes" value="5" min="0"></label>
-      <label>Ref. objetivo <input type="number" name="referencias_objetivo" value="{{ sprint.referencias_objetivo_defecto }}" min="1"></label>
-    </div>
-    <p class="campo-error" id="aviso-combinacion" hidden>Esa combinación ya existe en este sprint.</p>
-    <button type="submit" class="btn-generar btn-sm">Agregar</button>
-  </form>
-</details>
-{% endif %}
+<div class="tablero-fondo" id="tablero-fondo" hidden></div>
+<aside class="tablero-panel" id="tablero-panel" hidden aria-label="Campaña"
+       data-url-base="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id) }}"
+       data-panel-inicial="{{ panel_inicial or '' }}">
+  <div id="tablero-panel-cuerpo"></div>
+</aside>
 
+<template id="tablero-nueva">
+  <div class="panel-campana panel-nueva">
+    <header class="panel-campana-cab">
+      <div><h2>Nueva campaña</h2><small class="vacio">Primero la persona y el producto; lo demás lo ajustas después.</small></div>
+      <button type="button" class="btn-xs" data-panel-cerrar aria-label="Cerrar">✕</button>
+    </header>
+    <form data-nueva action="{{ url_for('sprints.campana_agregar', cliente=cliente, sid=sprint.id) }}" class="panel-seccion">
+      <label>Persona
+        <select name="persona_id" data-nueva-persona required>
+          <option value="">Elige una persona</option>
+          {% for p in personas_sprint %}<option value="{{ p.id }}">{{ p.nombre }}{% if p.origen == 'investigada' %} · del Nicho{% endif %}</option>{% endfor %}
+        </select></label>
+      <label>Producto
+        <select name="catalogo_id" required>
+          <option value="">Elige un producto</option>
+          {% for p in productos_sprint %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}
+        </select></label>
+      <p class="campo-error" data-error hidden></p>
+      <button type="submit" class="btn-generar">Crear campaña</button>
+    </form>
+    <details class="panel-persona-rapida">
+      <summary class="btn-xs">+ Crear persona rápida</summary>
+      <form data-persona-rapida action="{{ url_for('sprints.persona_crear', cliente=cliente) }}">
+        <input name="nombre" required maxlength="120" placeholder="Nombre (p. ej. Mamá práctica)">
+        <input name="resumen" maxlength="200" placeholder="Una línea: qué quiere o qué le duele">
+        <button type="submit" class="btn-sm">Crear y usar</button>
+        <small class="campo-error" hidden></small>
+      </form>
+    </details>
+    {% if not productos_sprint %}<p class="vacio">No hay productos en el catálogo: agrégalos en Catálogo › Productos.</p>{% endif %}
+  </div>
+</template>
 
 {% include "_sprint_lote_modal.html" %}
 
 <script>
   (function () {
-    // La combinación repetida se avisa antes de enviar (el servidor la rechaza igual).
-    var form = document.getElementById('form-agregar-campana');
-    if (form) {
-      var usadas = JSON.parse(form.dataset.combinaciones || '[]').map(function (c) { return c.join('|'); });
-      function revisar() {
-        var clave = [form.persona_id.value, form.catalogo_id.value, form.temporada_id.value].join('|');
-        var repetida = usadas.indexOf(clave) >= 0;
-        document.getElementById('aviso-combinacion').hidden = !repetida;
-        form.querySelector('button[type=submit]').disabled = repetida;
-      }
-      ['persona_id', 'catalogo_id', 'temporada_id'].forEach(function (n) { form[n].addEventListener('change', revisar); });
-      revisar();
+    var panel = document.getElementById('tablero-panel');
+    var cuerpo = document.getElementById('tablero-panel-cuerpo');
+    var fondo = document.getElementById('tablero-fondo');
+    var grid = document.getElementById('tablero-grid');
+    var base = panel.dataset.urlBase;
+    var H = {'X-Requested-With': 'fetch'};
+    var HJ = {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'};
+
+    function json(r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo guardar.'); return j; }); }
+    function mensaje(e) { return e instanceof TypeError ? 'Sin conexión: no se guardó. Intenta de nuevo.' : e.message; }
+    function marcarUrl(cid) {
+      var u = new URL(location.href);
+      if (cid) u.searchParams.set('panel', cid); else u.searchParams.delete('panel');
+      history.replaceState(null, '', u);
     }
-    // Progreso agregado: mientras el sprint genera, el tablero se actualiza solo (Parte 2 lo usa de verdad).
-    var estado = {{ sprint.estado | tojson }};
-    if (estado === 'generando') {
+    function marcarActiva(cid) {
+      grid.querySelectorAll('.tablero-tarjeta.activa').forEach(function (t) { t.classList.remove('activa'); });
+      var t = cid && document.getElementById('campana-' + cid);
+      if (t) t.classList.add('activa');
+    }
+    function mostrar() { panel.hidden = false; fondo.hidden = false; document.body.classList.add('panel-abierto'); }
+    function cerrar() {
+      panel.hidden = true; fondo.hidden = true; cuerpo.innerHTML = '';
+      document.body.classList.remove('panel-abierto'); marcarUrl(null); marcarActiva(null);
+    }
+    function noExiste() {
+      cuerpo.innerHTML = '<div class="estado-vacio"><p class="estado-vacio-titulo">Esta campaña ya no existe</p>' +
+        '<p class="estado-vacio-texto">Pudo borrarse en otra pestaña.</p><a class="btn-sm" href="' + base + '">Volver al tablero</a></div>';
+    }
+    function refrescarTarjeta(cid) {
+      return fetch(base + '/campanas/' + cid + '/tarjeta', {headers: H})
+        .then(function (r) { return r.ok ? r.text() : null; })
+        .then(function (html) {
+          var t = document.getElementById('campana-' + cid);
+          if (html && t) { t.outerHTML = html; marcarActiva(cid); }
+        }).catch(function () {});
+    }
+    function abrir(cid) {
+      mostrar(); marcarUrl(cid); marcarActiva(cid);
+      cuerpo.innerHTML = '<p class="vacio">Cargando la campaña…</p>';
+      return fetch(base + '/campanas/' + cid + '/panel', {headers: H})
+        .then(function (r) {
+          if (r.status === 404) { noExiste(); return null; }
+          if (!r.ok) throw new Error();
+          return r.text();
+        })
+        .then(function (html) {
+          if (html === null) return;
+          cuerpo.innerHTML = html;
+          if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo();
+        })
+        .catch(function () { cuerpo.innerHTML = '<p class="campo-error">No se pudo abrir la campaña. Revisa tu conexión e intenta de nuevo.</p>'; });
+    }
+    function abrirNueva() {
+      mostrar(); marcarUrl(null); marcarActiva(null);
+      cuerpo.innerHTML = document.getElementById('tablero-nueva').innerHTML;
+    }
+    window.tablero = {abrir: abrir, abrirNueva: abrirNueva, cerrar: cerrar, refrescarTarjeta: refrescarTarjeta,
+                      json: json, mensaje: mensaje, cuerpo: cuerpo, panel: panel, base: base};
+
+    document.addEventListener('click', function (ev) {
+      if (ev.target.closest('[data-nueva-campana]')) { abrirNueva(); return; }
+      if (ev.target.closest('[data-panel-cerrar]')) { cerrar(); return; }
+      var t = ev.target.closest('.tablero-tarjeta[data-cid]');
+      if (t && grid.contains(t)) abrir(t.dataset.cid);
+    });
+    grid.addEventListener('keydown', function (ev) {
+      var t = ev.target.closest('.tablero-tarjeta[data-cid]');
+      if (t && (ev.key === 'Enter' || ev.key === ' ')) { ev.preventDefault(); abrir(t.dataset.cid); }
+    });
+    fondo.addEventListener('click', cerrar);
+    document.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && !panel.hidden) cerrar(); });
+
+    // Nueva campaña y persona rápida (en el modo «nueva» y en el panel completo).
+    panel.addEventListener('submit', function (ev) {
+      var f = ev.target;
+      if (f.matches('[data-nueva]')) {
+        ev.preventDefault();
+        var err = f.querySelector('[data-error]');
+        err.hidden = true;
+        fetch(f.action, {method: 'POST', headers: HJ,
+                         body: JSON.stringify({persona_id: f.persona_id.value, catalogo_id: f.catalogo_id.value})})
+          .then(json).then(function (j) { location.href = j.url; })
+          .catch(function (e) { err.textContent = mensaje(e); err.hidden = false; });
+      } else if (f.matches('[data-persona-rapida]')) {
+        ev.preventDefault();
+        var errP = f.querySelector('.campo-error');
+        errP.hidden = true;
+        fetch(f.action, {method: 'POST', headers: H, body: new FormData(f)})
+          .then(json).then(function (j) {
+            var sel = cuerpo.querySelector('[data-nueva-persona], [data-campo="persona_id"]');
+            if (sel) {
+              sel.add(new Option(j.nombre, j.id, true, true));
+              sel.dispatchEvent(new Event('change', {bubbles: true}));
+            }
+            f.reset();
+            var d = f.closest('details'); if (d) d.open = false;
+          })
+          .catch(function (e) { errP.textContent = mensaje(e); errP.hidden = false; });
+      }
+    });
+
+    // Cabecera del sprint: cada dato se guarda solo.
+    var campos = document.querySelector('[data-sprint-campos]');
+    campos.querySelectorAll('[data-campo]').forEach(function (el) { el.dataset.guardado = el.value; });
+    function guardarSprint(el, valor) {
+      var err = el.closest('label').querySelector('.campo-error');
+      err.hidden = true;
+      fetch(campos.dataset.url, {method: 'POST', headers: HJ, body: JSON.stringify({campo: el.dataset.campo, valor: valor})})
+        .then(json).then(function (j) {
+          el.dataset.guardado = el.value;
+          document.getElementById('tablero-linea').textContent = j.linea;
+          document.getElementById('tablero-resumen').textContent = j.resumen;
+          if (el.dataset.campo === 'pais') location.reload();
+        })
+        .catch(function (e) { el.value = el.dataset.guardado || ''; err.textContent = mensaje(e); err.hidden = false; });
+    }
+    campos.addEventListener('change', function (ev) {
+      var texto = campos.querySelector('[data-momento-texto]');
+      var momento = campos.querySelector('[data-campo="momento"]');
+      if (ev.target === texto) {
+        if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim());
+        return;
+      }
+      var el = ev.target.closest('[data-campo]');
+      if (!el) return;
+      if (el === momento) {
+        texto.hidden = momento.value !== 'propio';
+        if (momento.value === 'propio') { if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim()); else texto.focus(); return; }
+      }
+      guardarSprint(el, el.value);
+    });
+
+    // Mientras el sprint genera, el resumen del lote se actualiza solo.
+    if ({{ sprint.estado | tojson }} === 'generando') {
       setInterval(function () {
-        fetch({{ url_for('sprints.progreso_json', cliente=cliente, sid=sprint.id) | tojson }}, {headers: {'X-Requested-With': 'fetch'}})
+        fetch({{ url_for('sprints.progreso_json', cliente=cliente, sid=sprint.id) | tojson }}, {headers: H})
           .then(function (r) { return r.json(); })
           .then(function (j) {
-            document.getElementById('sprint-progreso-texto').textContent = j.sprint.texto;
             var res = document.getElementById('sprint-lote-resumen');
             if (res && j.lote) res.textContent = j.lote.listas + ' listas · ' + j.lote.generando + ' generando · ' + j.lote.encoladas + ' en cola · ' + j.lote.error + ' con error · ' + j.lote.aprobadas + ' aprobadas · USD ' + j.lote.costo_usd.toFixed(2) + ' gastado';
-            j.campanas.forEach(function (c) {
-              var caja = document.querySelector('.sprint-campana-progreso[data-cid="' + c.id + '"]');
-              if (!caja) return;
-              caja.querySelector('.sprint-barra-fill').style.width = c.porcentaje + '%';
-              caja.querySelector('span').textContent = c.texto;
-            });
             if (j.estado !== 'generando') location.reload();
           }).catch(function () {});
-      }, 5000);
+      }, 10000);
     }
 
-    // Manejar desplegables con carga AJAX
-    document.querySelectorAll('.sprint-desplegable').forEach(function (details) {
-      details.addEventListener('toggle', function () {
-        if (!this.open) return;
-
-        var tipo = this.dataset.desplegable;
-        var cid = this.dataset.cid;
-        var sid = this.dataset.sid;
-        var contenedor = document.getElementById(tipo + '-' + cid);
-
-        // Si ya se cargó, no cargar de nuevo
-        if (contenedor.textContent.trim()) return;
-
-        // Validar flujo: Ideas solo si hay referencias completadas
-        // (Se valida en el servidor, aquí solo es una guía visual)
-
-        // Cargar contenido
-        var url = '/cliente/{{ cliente }}/sprints/' + sid + '/campanas/' + cid + '/' + tipo + '-ajax';
-        fetch(url, {headers: {'X-Requested-With': 'fetch'}})
-          .then(function (r) { return r.text(); })
-          .then(function (html) {
-            contenedor.innerHTML = html;
-          })
-          .catch(function (err) {
-            contenedor.innerHTML = '<p class="error">Error cargando ' + tipo + '</p>';
-          });
-      });
-    });
+    if (panel.dataset.panelInicial) abrir(panel.dataset.panelInicial);
   })();
 </script>
 {% endblock %}

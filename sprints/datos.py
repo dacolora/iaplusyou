@@ -566,14 +566,6 @@ def sprint(cliente, sprint_id, con_eventos=True):
 
 # ----------------------------------------------------------- campañas ---
 
-def combinaciones(cliente, sprint_id):
-    c = db.campana
-    with db.conectar() as con:
-        return {(f.persona_id, f.catalogo_id, f.temporada_id) for f in con.execute(
-            sa.select(c.c.persona_id, c.c.catalogo_id, c.c.temporada_id)
-            .where(c.c.cliente == cliente, c.c.sprint_id == sprint_id))}
-
-
 def _cantidades(n_videos, n_imagenes):
     try:
         n_videos, n_imagenes = int(n_videos or 0), int(n_imagenes or 0)
