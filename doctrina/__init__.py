@@ -172,10 +172,20 @@ def _texto(valor, tope=MAX_CARACTERES_CAMPO):
 def validar_angulo(angulo, datos_texto=None):
     """(ángulo limpio, errores) según el spec §4.2. Nunca lanza: quien llama
     decide si pide corrección (errores) o guarda igual con los faltantes."""
-    a = dict(angulo or {})
+    # Convertir angulo a dict, tratando no-dict como {}
+    if isinstance(angulo, dict):
+        a = dict(angulo)
+    else:
+        a = {}
     limpio = angulo_vacio()
     errores = []
-    faltantes = [_texto(f) for f in (a.get("faltantes") or []) if isinstance(f, str) and f.strip()]
+    # Normalizar faltantes: si es string, envolver; si no es list, usar []
+    faltantes_raw = a.get("faltantes")
+    if isinstance(faltantes_raw, str):
+        faltantes_raw = [faltantes_raw]
+    elif not isinstance(faltantes_raw, list):
+        faltantes_raw = []
+    faltantes = [_texto(f) for f in faltantes_raw if isinstance(f, str) and f.strip()]
     for k in _CAMPOS_TEXTO:
         limpio[k] = _texto(a.get(k)) or None if k == "mecanismo" else _texto(a.get(k))
     limpio["consciencia"] = normalizar_consciencia(a.get("consciencia"))
@@ -198,6 +208,11 @@ def validar_angulo(angulo, datos_texto=None):
         if limpio.get(campo) in (None, ""):
             errores.append(f"campo_faltante:{campo}")
     promesa = limpio["promesa"]
+    # Spec §4.2: promesa es una sola frase (≤ 200 caracteres, sin punto interno ni «;»)
+    # Verificar la longitud del promesa RAW antes de truncación
+    promesa_raw = " ".join(str(a.get("promesa") or "").split())
+    if promesa_raw and len(promesa_raw) > MAX_CARACTERES_CAMPO:
+        errores.append("promesa_multiple")
     # Dos frases = dos promesas (Regla de Uno). «89.900» no es un punto de
     # frase: solo cuenta un signo de cierre seguido de espacio y más texto.
     if promesa and (";" in promesa or _RE_VARIAS_FRASES.search(promesa.rstrip(".!? "))):
@@ -206,8 +221,14 @@ def validar_angulo(angulo, datos_texto=None):
         errores.append("mecanismo_obligatorio")
     if limpio["gancho"] and len(limpio["gancho"].split()) > MAX_PALABRAS_GANCHO:
         errores.append("gancho_largo")
+    # Normalizar pruebas: si es dict, envolver; si no es list, usar []
+    pruebas_raw = a.get("pruebas")
+    if isinstance(pruebas_raw, dict):
+        pruebas_raw = [pruebas_raw]
+    elif not isinstance(pruebas_raw, list):
+        pruebas_raw = []
     pruebas = []
-    for p in (a.get("pruebas") or [])[:MAX_PRUEBAS * 2]:
+    for p in pruebas_raw[:MAX_PRUEBAS * 2]:
         if not isinstance(p, dict):
             continue
         texto_p, fuente = _texto(p.get("texto")), _texto(p.get("fuente")).lower()

@@ -183,3 +183,41 @@ def test_angulo_vacio_tiene_todas_las_claves():
     v = doctrina.angulo_vacio()
     assert set(v) == {"version", "audiencia", "consciencia", "sofisticacion", "deseo", "promesa", "mecanismo",
                       "pruebas", "lead", "gancho", "faltantes"}
+
+
+def test_validar_angulo_promesa_mas_de_200_caracteres_es_promesa_multiple():
+    import doctrina
+    # Una promesa de 250 caracteres (una sola frase, sin puntos ni «;»)
+    promesa_larga = "Una chancla que durará toda la vida y tu hija la heredará y tal vez la hija de tu hija y es tan resistente que solo la rompes si le das con un martillo desde el espacio exterior " + "z" * 72
+    assert len(promesa_larga) > doctrina.MAX_CARACTERES_CAMPO
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, promesa=promesa_larga))
+    assert "promesa_multiple" in e
+
+
+def test_validar_angulo_no_lanza_con_angulo_malformado():
+    import doctrina
+    # No-dict: string
+    limpio, e = doctrina.validar_angulo("texto")
+    assert isinstance(limpio, dict) and isinstance(e, list)
+    assert "campo_faltante:audiencia" in e  # Falta todo
+    # No-dict: list
+    limpio, e = doctrina.validar_angulo(["a"])
+    assert isinstance(limpio, dict) and isinstance(e, list)
+    assert "campo_faltante:audiencia" in e
+    # pruebas como dict en lugar de list
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, pruebas={"texto": "durabilidad", "fuente": "ficha"}))
+    assert isinstance(limpio, dict) and isinstance(e, list)
+    # La prueba dentro del dict debe ser envuelta como lista
+    assert len(limpio["pruebas"]) == 1 and limpio["pruebas"][0]["texto"] == "durabilidad"
+    # faltantes como string en lugar de list
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, faltantes="algo falta"))
+    assert isinstance(limpio, dict) and isinstance(e, list)
+    assert "algo falta" in limpio["faltantes"]
+    # faltantes como int
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, faltantes=42))
+    assert isinstance(limpio, dict) and isinstance(e, list)
+    assert limpio["faltantes"] == []
+    # pruebas como int
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, pruebas=42))
+    assert isinstance(limpio, dict) and isinstance(e, list)
+    assert limpio["pruebas"] == []
