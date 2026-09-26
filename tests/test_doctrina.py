@@ -40,3 +40,47 @@ def test_lead_por_consciencia_sigue_la_tabla_de_great_leads():
     assert doctrina.lead_por_consciencia("problem-aware") == doctrina.lead_por_consciencia("consciente_del_problema")
     assert doctrina.lead_por_consciencia("rara") == ()
     assert doctrina.lead_por_consciencia(None) == ()
+
+
+def test_cada_rebanada_existe_y_respeta_su_presupuesto():
+    import doctrina
+    for nombre in doctrina.REBANADAS:
+        t = doctrina._cargar(nombre)
+        assert t.strip(), nombre
+        assert "TODO" not in t and "TBD" not in t, nombre
+        assert doctrina.palabras(nombre) <= doctrina.PRESUPUESTO[nombre], (nombre, doctrina.palabras(nombre))
+    for combo, rebanadas in doctrina.COMBINACIONES.items():
+        total = len(doctrina.texto(*rebanadas).split())
+        assert total <= doctrina.TOPE_COMBINACION, (combo, total)
+
+
+def test_texto_pone_base_primero_y_no_la_repite():
+    import doctrina
+    t = doctrina.texto("gancho", "base", "angulo")
+    assert t.startswith(doctrina.ENCABEZADO)
+    base = doctrina._cargar("base").strip()
+    assert t.count(base) == 1
+    assert t.index(base) < t.index(doctrina._cargar("angulo").strip())
+    assert t.index(doctrina._cargar("angulo").strip()) > t.index(doctrina._cargar("gancho").strip())
+    with pytest.raises(ValueError):
+        doctrina.texto("inventada")
+
+
+def test_bloque_system_lleva_cache_y_extra_aparte():
+    import doctrina
+    bloques = doctrina.bloque_system("caption", extra="INSTRUCCIONES DEL SITIO")
+    assert len(bloques) == 2
+    assert bloques[0]["type"] == "text" and bloques[0]["cache_control"] == {"type": "ephemeral"}
+    assert bloques[0]["text"] == doctrina.texto("caption")
+    assert bloques[1] == {"type": "text", "text": "INSTRUCCIONES DEL SITIO"}
+    assert len(doctrina.bloque_system("video")) == 1
+
+
+def test_cada_principio_cita_su_fuente():
+    """Cada rebanada nombra al menos dos de los autores entre paréntesis: así
+    quien lea el .md puede ir al libro (spec §3.1)."""
+    import doctrina
+    autores = ("Kennedy", "Hopkins", "Ogilvy", "Great Leads", "Schwartz", "Theriot")
+    for nombre in doctrina.REBANADAS:
+        t = doctrina._cargar(nombre)
+        assert sum(1 for a in autores if a in t) >= 2, nombre
