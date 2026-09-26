@@ -1,9 +1,14 @@
-{# Crear: la página de creación, con dos modos.
+{# Crear: la página de creación, con tres modos.
      · Desde referencias (FlowPlus): imágenes/videos/links + catálogo -> video o imagen nuevos.
      · Cambiar producto (lo que era FlowClone): una foto o video real -> la misma
        pieza con el producto reemplazado. Vivía en su propia pestaña; ahora es un
        modo de Crear porque es el mismo trabajo con otro punto de partida.
-   El modo se recuerda por navegador; #cambiar (o el viejo #calzado) lo abre. #}
+     · Flow Plus (_crear_flowplus.html): corregir con Claude un prompt que salió
+       mal ANTES de mandarlo a generar. Más adelante recibirá los prompts del
+       pipeline automático (guion -> prompts de clips -> prompts de imágenes).
+   El modo se recuerda por navegador; #cambiar (o el viejo #calzado) y #flowplus
+   lo abren. Cada cambio de modo avisa con el evento `crear:modo` (detail.modo)
+   para que un modo pueda parar lo que tenga corriendo (el sondeo de Flow Plus). #}
 
 <div class="panel-cabecera">
   <div>
@@ -15,6 +20,7 @@
 <div class="crear-modos" role="tablist" id="crear-modos">
   <button type="button" class="crear-modo activo" data-modo="referencias" role="tab">Desde referencias</button>
   <button type="button" class="crear-modo" data-modo="cambiar" role="tab">Cambiar producto en foto o video</button>
+  <button type="button" class="crear-modo" data-modo="flowplus" role="tab">Flow Plus</button>
 </div>
 
 <div id="crear-modo-referencias" class="crear-panel activo">
@@ -31,24 +37,33 @@
   {% include "_tab_cambiar_calzado.html" %}
 </div>
 
+<div id="crear-modo-flowplus" class="crear-panel">
+  <h2>Corregir prompts con Claude</h2>
+  {% include "_crear_flowplus.html" %}
+</div>
+
 <script>
   (function () {
     var KEY = 'crear-modo-{{ cliente }}';
     var botones = document.querySelectorAll('#crear-modos .crear-modo');
     var paneles = {
       referencias: document.getElementById('crear-modo-referencias'),
-      cambiar: document.getElementById('crear-modo-cambiar')
+      cambiar: document.getElementById('crear-modo-cambiar'),
+      flowplus: document.getElementById('crear-modo-flowplus')
     };
     function activar(m) {
       if (!paneles[m]) m = 'referencias';
       botones.forEach(function (b) { b.classList.toggle('activo', b.dataset.modo === m); });
       Object.keys(paneles).forEach(function (k) { paneles[k].classList.toggle('activo', k === m); });
       try { localStorage.setItem(KEY, m); } catch (e) {}
+      try { document.dispatchEvent(new CustomEvent('crear:modo', { detail: { modo: m } })); } catch (e) {}
     }
     botones.forEach(function (b) { b.addEventListener('click', function () { activar(b.dataset.modo); }); });
-    var h = location.hash.replace('#', '');
+    var h = location.hash.replace('#', '').split('?')[0];
     var guardado = null;
     try { guardado = localStorage.getItem(KEY); } catch (e) {}
-    activar((h === 'cambiar' || h === 'calzado') ? 'cambiar' : (guardado || 'referencias'));
+    // #flowplus: este script abre el modo; el de cliente.html abre la pestaña Crear.
+    activar((h === 'cambiar' || h === 'calzado') ? 'cambiar'
+      : (h === 'flowplus' ? 'flowplus' : (guardado || 'referencias')));
   })();
 </script>

@@ -338,6 +338,47 @@ at cost 0. IA styles keep going through `obtener_pista` untouched. The panel `_m
 inside the Crear form, so it has no `<form>`: routes `mm_subir/mm_borrar/mm_crear/mm_lista` answer JSON
 with the re-rendered panel and the song list. Voice cloning is NOT here (fal has no ElevenLabs clone).
 
+**Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
+(`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
+because `flowplus_*` already names Crear's own pipeline). This paragraph covers the correction
+chat for a resulting prompt BEFORE generation; the guion → clip prompts → reference-image
+prompts pipeline that feeds it is «Flow Plus: del guion a los prompts» below.
+Tables `guion_prompt` (`texto_original`, `texto_vigente`, `version_n` CAS, `texto_fijo` =
+fragments that must stay literal — the approved guion's exact dialogue —, `estado`
+`abierto|aprobado`, `origen` `manual|pipeline`, `extra` for the pipeline's video/clip ids) and
+`guion_mensaje` (migration 0018). `guiones/refinador.py` is the only writer: `pedir_cambio`
+stores the person's message plus a `pendiente` Claude row, the route runs `responder` on a
+`trabajos.iniciar` thread (not the worker queue: a chat must not wait behind renders) and the
+page polls `GET .../prompts/<id>`; a `pendiente` older than 3 min becomes `error`. Claude
+(`generador_prompts.MODEL`) returns JSON `{respuesta, prompt}` — the FULL revised prompt, in
+English — and `validar` (pure: texto_fijo present, clip header 5–15 s, `FINAL CLIP` needs
+`HARD CUT`, no un-negated fade to black; `imagen` only checks texto_fijo) marks proposals that
+break the non-negotiables; those can't be used or approved. Nothing is applied on its own: the
+person picks «Usar esta versión» (or goes back to the original, or edits by hand) and approves.
+Every Claude call is registered as gasto `refinar_prompt` (`guiones:refinar:<mensaje_id>`),
+also when the answer was unusable. JSON routes in the Blueprint `guiones/rutas.py`
+(`/cliente/<cliente>/guiones/prompts...`, same-origin check on every POST).
+
+**Flow Plus: del guion a los prompts** (`guiones/` pipeline, spec
+`docs/superpowers/specs/2026-09-25-flowplus-pipeline-guiones-design.md`, migración 0019): Parte A del
+spec del cliente (`docs/flowplus/workflow-automation-spec.md`). Tablas `guion_lote` (texto pegado o una
+página de Notion, `leyendo|leido|error`), `guion` (un script: `lectura` con líneas numeradas y
+`literal`, `leido|confirmado`) y `guion_video` (una versión: `config`, `recorte`, `plan`, `clips`,
+`hooks_alt`, `validaciones`, `avisos`, `imagenes`; `configurando|recortando|armando|armado|invalido|error`
+y `estado_imagenes`). `guiones/datos.py` es el único escritor; un trabajo con `iniciado_en` de más de
+6 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
+pasan a `error`, y un video `recortando` vuelve a `configurando`. Claude planea y el código escribe: `lectura.py` (copia literal verificada),
+`recorte.py` (orden de prescindibles; nunca la línea 1), `clips.py` (plan por números de línea →
+`duracion.calcular_clip` → `plantillas.prompt_clip` → validaciones V1-V6/E1-E4 que bloquean; los
+prompts entran al chat con `refinador.crear(origen="pipeline", texto_fijo=líneas exactas)`),
+`imagenes.py` (hojas de personaje, entornos, producto con sus fotos; tabla imagen↔clip; checklist).
+Todo prompt de fábrica pasa `refinador.validar`. Una llamada por paso vía `guiones/claude.py`
+(`pedir_json`, gasto `guion_clips` también si la respuesta no sirvió), en un hilo
+(`trabajos.iniciar`). Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
+video, `clips.version_con_bloque` no llama a Claude). Notion: llave de integración cifrada en `kv`
+(`notion:<cliente>`), solo `api.notion.com`, exige correo verificado. UI: `/panel` como fragmento
+(`_gpg_*.html`) + `_crear_flowplus_guiones.html`; «Abrir en el chat» emite `gp:abrir-prompt`.
+
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with

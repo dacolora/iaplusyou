@@ -22,6 +22,7 @@ Lecturas: `resumen_mes`, `historial`, `serie_diaria`, `csv_mes`,
 import csv
 import io
 import logging
+import math
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -30,7 +31,7 @@ import db
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -57,6 +58,11 @@ TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption
 #    salida 160-300); «Sugerir con IA» ~US$ 0,030 (60 candidatos, objetivo 5,
 #    ~1.700 tokens de salida, casi todo pensamiento); «Adaptar con IA»
 #    ~US$ 0,008.
+#  - refinar_prompt (un mensaje del chat de Flow Plus): el prompt vigente de
+#    un clip (~2-3k tokens) + contexto e historial entran (~5k, US$ 0,01) y
+#    sale el prompt completo revisado más el razonamiento (~4k, US$ 0,04).
+#  - guion_clips (pipeline de Flow Plus): leer/recorte/armar/imágenes; el
+#    estimado redondea hacia arriba y se revisa contra `gasto` con uso real.
 TARIFAS = {
     "guion": 0.02,
     "regla_producto": 0.01,
@@ -64,6 +70,7 @@ TARIFAS = {
     "adaptar_referente": 0.01,
     "sugerir_ia": 0.04,
     "clasificacion": 0.012,
+    "refinar_prompt": 0.05,
     "voz": 0.05,
     "musica": 0.02,
     "musica_elevenlabs": 0.60,   # canción de 60 s con ElevenLabs vía fal (US$ 0,60 por minuto empezado)
@@ -163,6 +170,19 @@ def _estimar_final(paises=1, **_):
     return usd, f"{n} país(es): guion localizado, voz, música y whisper"
 
 
+def _estimar_guion_clips(paso="armar", palabras=0, **_):
+    p = max(0, int(palabras or 0))
+    if paso == "leer":
+        return 0.02 + 0.01 * math.ceil(p / 500), "leer el guion con Claude"
+    if paso == "recorte":
+        return 0.02, "proponer qué quitar con Claude"
+    if paso == "armar":
+        return 0.06 + 0.02 * math.ceil(p / 100), "planear los clips con Claude"
+    if paso == "imagenes":
+        return 0.04, "escribir los prompts de imágenes con Claude"
+    raise ValueError(f"paso desconocido: {paso}")
+
+
 _ESTIMADORES = {
     "video": _estimar_video,
     "regeneracion": _estimar_video,
@@ -175,8 +195,10 @@ _ESTIMADORES = {
     "caption_organico": lambda **_: (TARIFAS["caption_organico"], "una llamada a Claude"),
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
+    "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
     "clasificacion": lambda n=1, **_: (TARIFAS["clasificacion"] * max(1, int(n)), f"{max(1, int(n))} anuncio(s) con Claude"),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
+    "guion_clips": _estimar_guion_clips,
 }
 
 

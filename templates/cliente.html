@@ -93,6 +93,10 @@
         try { localStorage.setItem('crear-modo-{{ cliente }}', 'cambiar'); } catch (e) {}
         return 'creativeflowplus';
       }
+      if (t === 'flowplus') {
+        try { localStorage.setItem('crear-modo-{{ cliente }}', 'flowplus'); } catch (e) {}
+        return 'creativeflowplus';
+      }
       return t;
     }
     // Sin hash ni pestaña recordada, la página abre en el Tablero (Bloque 6):

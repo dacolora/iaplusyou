@@ -183,6 +183,12 @@ app.register_blueprint(nicho_rutas.bp)
 from referentes import rutas as referentes_rutas  # noqa: E402  (Blueprint de la pestaña Referentes)
 app.register_blueprint(referentes_rutas.bp)
 
+from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
+app.register_blueprint(guiones_rutas.bp)
+
+from guiones import rutas_pipeline as guiones_pipeline  # noqa: E402  (panel de guiones de Flow Plus)
+app.register_blueprint(guiones_pipeline.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -3907,7 +3913,7 @@ def tab_descargar_csv(cliente):
 NOMBRES_TIPO_GASTO = {
     "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
     "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
-    "musica": "Música", "otro": "Otros",
+    "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)", "otro": "Otros",
 }
 
 
