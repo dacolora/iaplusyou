@@ -642,6 +642,8 @@ def test_fase_clasificando_claude_invalido_deja_error_y_no_reencola_para_siempre
     assert llamadas_cola == []
     b = datos.barrido(bid)
     assert b["estado"] == "parcial" and "no se pudieron clasificar" in b["aviso"]
+    # La fila de «Mis barridos» dice por qué, no solo cuántos.
+    assert "Motivo: Claude no devolvió JSON." in b["aviso"]
 
 
 def test_fase_clasificando_automatica_nunca_re_factura_un_referente_en_error(tmp_path, monkeypatch):
