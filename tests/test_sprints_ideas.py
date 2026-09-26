@@ -261,3 +261,34 @@ def test_proponer_con_cinco_faltantes_y_varios_errores_no_pierde_ningun_error(ba
     assert len(errores) == 6 and faltantes[:6] == errores
     assert any(f.startswith("error: cifra_no_verificada:47") for f in errores)
     assert "error: gancho_largo" in errores
+
+
+def test_armar_prompt_muestra_los_precios_grandes_enteros_nunca_en_notacion_cientifica(base_temporal, monkeypatch):
+    """Fix 4: `:g` escribía 1299000 como «1.299e+06» en los DATOS (y Claude
+    no podía citarlo, ni el verificador reconocerlo)."""
+    import tiendas
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    pid = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED", "redondo con luz")
+    tiendas.marcar_producto("acme", pid, precio=1299000, moneda="COP")
+    p = ideas.armar_prompt(ideas.contexto_campana("acme", datos.campana("acme", cid)), 1, 0)
+    assert "Precio: 1299000 COP" in p and "e+" not in p
+    tiendas.marcar_producto("acme", pid, precio=89.9, moneda="USD")
+    p = ideas.armar_prompt(ideas.contexto_campana("acme", datos.campana("acme", cid)), 1, 0)
+    assert "Precio: 89.90 USD" in p
+
+
+def test_proponer_una_correccion_con_menos_ideas_no_reemplaza_a_la_primera(base_temporal, monkeypatch):
+    """Spec §5.1: si la corrección del ángulo trae MENOS ideas que la primera
+    respuesta, se quedan las de la primera (ya pagadas), con su error anotado."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    mala = dict(IDEA_V, angulo=dict(ANGULO, sofisticacion=4, mecanismo=None))
+    buena = dict(IDEA_V, titulo="Corregida", angulo=dict(ANGULO, sofisticacion=4, mecanismo="luz LED en el borde"))
+    respuestas = [json.dumps({"ideas": [mala, IDEA_I]}), json.dumps({"ideas": [buena]})]
+    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700, system=None: respuestas.pop(0))
+    creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=1)
+    assert respuestas == [] and len(creadas) == 2
+    video, imagen = (datos.idea("acme", i) for i in creadas)
+    assert video["titulo"] == IDEA_V["titulo"] and imagen["titulo"] == IDEA_I["titulo"]
+    assert "error: mecanismo_obligatorio" in video["extra"]["angulo"]["faltantes"]

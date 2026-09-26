@@ -156,6 +156,14 @@ def _producto_fila(cliente, catalogo_id):
         return {}
 
 
+def _precio_texto(precio):
+    """1299000 → «1299000», 89.9 → «89.90»: nunca `:g` (daba «1.299e+06»,
+    que Claude no puede citar ni el verificador de cifras reconocer). El
+    número va tal cual, sin separadores ni conversión de moneda."""
+    valor = float(precio)
+    return str(int(valor)) if valor.is_integer() else f"{valor:.2f}"
+
+
 def _producto_texto(ctx):
     prod = ctx.get("producto") or {}
     texto = (prod.get("nombre") or "(producto)") + (f": {prod['descripcion']}" if prod.get("descripcion") else "")
@@ -163,7 +171,7 @@ def _producto_texto(ctx):
         texto += f". Regla de fidelidad: {prod['regla']}"
     fila = ctx.get("producto_fila") or {}
     if fila.get("precio") is not None:
-        texto += f". Precio: {float(fila['precio']):g} {fila.get('moneda') or ''}".rstrip()
+        texto += f". Precio: {_precio_texto(fila['precio'])} {fila.get('moneda') or ''}".rstrip()
     if fila.get("url_compra"):
         texto += f". Se compra en: {fila['url_compra']}"
     return texto
