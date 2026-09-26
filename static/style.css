@@ -1976,7 +1976,7 @@ textarea.gp-mono { font-size: .8rem; line-height: 1.5; }
 .gpg-lineas li { margin: .2rem 0; overflow-wrap: anywhere; }
 .gpg-marca { font-size: .75rem; color: var(--muted); border: 1px dashed var(--border); border-radius: 6px; padding: 0 .3rem; }
 .gp-sub { margin: 1.5rem 0 .6rem; }
-.gpg-tabla { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.gpg-tabla { display: block; overflow-x: auto; max-width: 100%; width: 100%; border-collapse: collapse; font-size: .85rem; }
 .gpg-tabla th, .gpg-tabla td { text-align: left; padding: .35rem .4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 .gpg-pre { white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: .6rem; }
 .gpg-ok { color: var(--ok); }

@@ -307,9 +307,9 @@ degradable (the paid video is never lost) — it only reports, never regenerates
 
 **Flow Plus en Crear** (`guiones/`, since 2026-09-25): Crear's third mode «Flow Plus»
 (`_tab_flowplus.html` → `_crear_flowplus.html`, hash `#flowplus`; the package is `guiones`
-because `flowplus_*` already names Crear's own pipeline). It will host the guion → clip
-prompts → reference-image prompts pipeline (spec in the client's `workflow-automation-spec.md`,
-not built yet); what exists is the correction chat for a resulting prompt BEFORE generation.
+because `flowplus_*` already names Crear's own pipeline). This paragraph covers the correction
+chat for a resulting prompt BEFORE generation; the guion → clip prompts → reference-image
+prompts pipeline that feeds it is «Flow Plus: del guion a los prompts» below.
 Tables `guion_prompt` (`texto_original`, `texto_vigente`, `version_n` CAS, `texto_fijo` =
 fragments that must stay literal — the approved guion's exact dialogue —, `estado`
 `abierto|aprobado`, `origen` `manual|pipeline`, `extra` for the pipeline's video/clip ids) and
@@ -333,7 +333,8 @@ página de Notion, `leyendo|leido|error`), `guion` (un script: `lectura` con lí
 `literal`, `leido|confirmado`) y `guion_video` (una versión: `config`, `recorte`, `plan`, `clips`,
 `hooks_alt`, `validaciones`, `avisos`, `imagenes`; `configurando|recortando|armando|armado|invalido|error`
 y `estado_imagenes`). `guiones/datos.py` es el único escritor; un trabajo con `iniciado_en` de más de
-6 min se lee como error. Claude planea y el código escribe: `lectura.py` (copia literal verificada),
+6 min se da por interrumpido: un lote `leyendo` y un video `armando` o con imágenes `escribiendo`
+pasan a `error`, y un video `recortando` vuelve a `configurando`. Claude planea y el código escribe: `lectura.py` (copia literal verificada),
 `recorte.py` (orden de prescindibles; nunca la línea 1), `clips.py` (plan por números de línea →
 `duracion.calcular_clip` → `plantillas.prompt_clip` → validaciones V1-V6/E1-E4 que bloquean; los
 prompts entran al chat con `refinador.crear(origen="pipeline", texto_fijo=líneas exactas)`),

@@ -63,6 +63,24 @@ def test_bloque_video():
     assert "STARTING LAYOUT\nHe stands left." in plantillas.bloque_video(cfg, dict(BLOQUE, disposicion_inicial="He stands left."))
 
 
+def test_linea_referencia_producto_con_regla_propia():
+    ref = {"tipo": "producto", "activo_id": "hf", "nombre": "HappyFlops Original", "descripcion": "EVA slipper",
+           "casting": {}, "fotos": 2, "regla": "Logo en el talón."}
+    assert plantillas.linea_referencia(3, ref) == (
+        "Image 3 = hero object — HappyFlops Original: EVA slipper. Preserve its exact geometry, proportions, "
+        "materials and construction; never redesign it. Catalog fidelity rule: Logo en el talón.")
+
+
+def test_linea_referencia_producto_sin_regla_no_cambia():
+    ref = {"tipo": "producto", "activo_id": "hf", "nombre": "HappyFlops Original", "descripcion": "EVA slipper",
+           "casting": {}, "fotos": 2, "regla": ""}
+    assert plantillas.linea_referencia(3, ref) == (
+        "Image 3 = hero object — HappyFlops Original: EVA slipper. Preserve its exact geometry, proportions, "
+        "materials and construction; never redesign it.")
+    ref_sin_clave = {k: v for k, v in ref.items() if k != "regla"}
+    assert plantillas.linea_referencia(3, ref_sin_clave) == plantillas.linea_referencia(3, ref)
+
+
 def test_todo_prompt_de_fabrica_pasa_el_validador_del_chat():
     assert refinador.validar(plantillas.BLOQUE_GLOBAL_FABRICA, (), "clip") == []
     bv = plantillas.bloque_video(CONFIG, BLOQUE)

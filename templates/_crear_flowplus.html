@@ -9,7 +9,10 @@
    (evento `crear:modo` de _tab_flowplus.html).
 
    SEGURIDAD: los prompts y las respuestas de Claude son datos no confiables.
-   Todo se pinta con textContent/createElement, NUNCA con innerHTML. #}
+   Todo se pinta con textContent/createElement, NUNCA con innerHTML. Excepción:
+   el panel de guiones incluido abajo (_crear_flowplus_guiones.html) sí usa
+   innerHTML, pero solo con el fragmento que arma el servidor, ya escapado
+   por Jinja. #}
 
 <div class="gp" id="gp">
   <p class="vacio gp-intro">

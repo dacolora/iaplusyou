@@ -8,7 +8,7 @@ from guiones.refinador import DatoInvalido
 from tests.fixtures_guiones import GUION_CRUDO, TEXTO
 
 ACTIVOS = {("producto", "hf"): {"id": "hf", "nombre": "HappyFlops Original", "descripcion": "EVA slipper",
-                                "referencias": ["/x/1.jpg", "/x/2.jpg"]}}
+                                "referencias": ["/x/1.jpg", "/x/2.jpg"], "regla_propia": "Logo en el talón"}}
 
 
 @pytest.fixture(autouse=True)
@@ -45,7 +45,8 @@ def test_desde_formulario_valido():
     assert [r["tipo"] for r in cfg["referencias"]] == ["personaje", "producto"]
     assert cfg["referencias"][0]["casting"] == {"edad": "45", "vestuario": "white coat", "paleta": ""}
     assert cfg["referencias"][1] == {"tipo": "producto", "activo_id": "hf", "nombre": "HappyFlops Original",
-                                     "descripcion": "EVA slipper", "casting": {}, "fotos": 2}
+                                     "descripcion": "EVA slipper", "casting": {}, "fotos": 2,
+                                     "regla": "Logo en el talón"}
 
 
 def test_duracion_vacia_es_guion_completo():
@@ -72,6 +73,15 @@ def test_desde_formulario_invalido(cambio, mensaje):
 def test_maximo_siete_referencias():
     extra = {}
     for i in range(1, 9):
+        extra.update({f"ref_tipo_{i}": "entorno", f"ref_activo_{i}": "", f"ref_desc_{i}": f"room {i}"})
+    with pytest.raises(DatoInvalido) as e:
+        config.desde_formulario("acme", _form(**extra), _lectura())
+    assert "máximo 7 referencias" in str(e.value).lower()
+
+
+def test_siete_referencias_exactas_pasan():
+    extra = {}
+    for i in range(1, 8):
         extra.update({f"ref_tipo_{i}": "entorno", f"ref_activo_{i}": "", f"ref_desc_{i}": f"room {i}"})
     cfg = config.desde_formulario("acme", _form(**extra), _lectura())
     assert len(cfg["referencias"]) == 7

@@ -118,6 +118,8 @@ def leer_lote(lote_id, llamar=None):
                 return
             datos.poner_texto_lote(lote_id, titulo, texto)
             lote = datos.lote_para_leer(lote_id)
+            if lote is None or lote["estado"] != "leyendo" or not lote["texto_crudo"]:
+                return
         data, usd, error = claude.pedir_json(
             lote["cliente"], "leer", lote_id, SISTEMA, _mensajes(lote["texto_crudo"]),
             f"Leer guion · {(lote['titulo'] or '')[:60]}", llamar_fn=llamar, max_tokens=16000, timeout=240)

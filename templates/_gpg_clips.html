@@ -59,7 +59,7 @@
 
   {% include "_gpg_imagenes.html" %}
 
-  <details>
+  <details id="gpg-det-bloque-{{ video.id }}">
     <summary>Bloque del video (se repite en cada clip)</summary>
     <form class="gpg-form" data-gpg-post="/videos/{{ video.id }}/nueva-version">
       <input type="hidden" name="tipo" value="bloque">
@@ -77,7 +77,7 @@
 {% endif %}
 
 {% if video.estado in ('armado', 'invalido', 'error') %}
-  <details>
+  <details id="gpg-det-version-{{ video.id }}">
     <summary>Nueva versión con otra configuración</summary>
     {{ form_config("gpg-form-version", "/videos/" ~ video.id ~ "/nueva-version", video.config, guion.lectura, activos, formatos, "Crear versión nueva") }}
   </details>

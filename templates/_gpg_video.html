@@ -8,8 +8,9 @@
   </div>
   <div class="gpg-guiones">
     {% for x in guion.videos %}
+    {% set estado_x = video.estado if (video and video.id == x.id) else x.estado %}
     <button type="button" class="gpg-guion-btn{% if video and video.id == x.id %} activo{% endif %}"
-            data-gpg-ir data-guion="{{ guion.id }}" data-video="{{ x.id }}">{{ x.nombre }} · {{ ESTADOS.get(x.estado, x.estado) }}</button>
+            data-gpg-ir data-guion="{{ guion.id }}" data-video="{{ x.id }}">{{ x.nombre }} · {{ ESTADOS.get(estado_x, estado_x) }}</button>
     {% else %}<p class="vacio">Todavía no hay videos. Crea el primero: eliges duración, modo, hook y referencias.</p>{% endfor %}
   </div>
   <div id="gpg-nuevo-video" {% if guion.videos %}hidden{% endif %} data-gpg-caja>
@@ -33,7 +34,7 @@
     {% if video.estado == 'recortando' %}<p class="gp-ayuda">Claude está eligiendo qué líneas quitar…</p>{% endif %}
 
     {% if video.estado == 'configurando' %}
-      <details>
+      <details id="gpg-det-config-{{ video.id }}">
         <summary>Cambiar la configuración</summary>
         {{ form_config("gpg-form-config", "/videos/" ~ video.id ~ "/config", video.config, guion.lectura, activos, formatos, "Guardar configuración") }}
       </details>
@@ -58,10 +59,8 @@
             {% endfor %}
           </ul>
           <p data-gpg-estimado>{{ recorte_info.texto }}</p>
-          {% if recorte_info.bloques %}
-          <p>Lo que sale:</p>
-          <ul>{% for b in recorte_info.bloques %}<li>«{{ b }}»</li>{% endfor %}</ul>
-          {% endif %}
+          <p data-gpg-bloques-etiqueta {% if not recorte_info.bloques %}hidden{% endif %}>Lo que sale:</p>
+          <ul data-gpg-bloques>{% for b in recorte_info.bloques %}<li>«{{ b }}»</li>{% endfor %}</ul>
           <div class="gpg-error flash error" hidden></div>
           <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">Guardar qué se quita</button></div>
         </form>
@@ -73,7 +72,7 @@
   </section>
   {% endif %}
 
-  <details class="gpg-avanzado" data-gpg-caja>
+  <details class="gpg-avanzado" data-gpg-caja id="gpg-det-global">
     <summary>Avanzado: bloque global del proyecto</summary>
     <form class="gpg-form" data-gpg-post="/bloque-global">
       <p class="gp-ayuda">Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica.

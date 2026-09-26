@@ -37,7 +37,11 @@ def linea_referencia(i, ref):
     cuerpo = f"{quien}: {desc}" if quien and desc else (quien or desc)
     linea = f"{token} = {ETIQUETA[ref['tipo']]} — {cuerpo}."
     if ref["tipo"] == "producto":
-        return f"{linea} Preserve its exact geometry, proportions, materials and construction; never redesign it."
+        linea += " Preserve its exact geometry, proportions, materials and construction; never redesign it."
+        regla = (ref.get("regla") or "").strip().rstrip(".")
+        if regla:
+            linea += f" Catalog fidelity rule: {regla}."
+        return linea
     casting = ref.get("casting") or {}
     partes = [p for p in (f"age {casting['edad']}" if casting.get("edad") else "",
                           f"wardrobe: {casting['vestuario']}" if casting.get("vestuario") else "",

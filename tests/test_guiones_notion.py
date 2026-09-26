@@ -95,6 +95,28 @@ def test_leer_lote_de_notion_trae_la_pagina(base_temporal, monkeypatch):
     assert lote["estado"] == "leido" and lote["titulo"] == "Batch" and lote["guiones"]
 
 
+def test_leer_lote_de_notion_expirado_no_llama_a_claude(base_temporal, monkeypatch):
+    """La página tardó tanto en traerse que el trabajo ya venció: no se paga a Claude."""
+    from datetime import datetime, timedelta
+
+    from guiones import datos, lectura
+    from tests.fixtures_guiones import TEXTO, fake
+
+    def vencido(llave, pid, http=None):
+        limite = (datetime.now() - timedelta(minutes=10)).isoformat(timespec="seconds")
+        with base_temporal.conectar() as con:
+            con.execute(base_temporal.guion_lote.update().values(iniciado_en=limite))
+        return "Batch", TEXTO
+
+    monkeypatch.setattr(notion, "llave", lambda c: LLAVE)
+    monkeypatch.setattr(notion, "leer_pagina", vencido)
+    lid = datos.crear_lote("acme", "", fuente="notion", notion_page_id=PID)
+    registro = []
+    lectura.leer_lote(lid, llamar=fake({}, registro=registro))
+    assert registro == []
+    assert datos.lotes("acme")[0]["estado"] == "error"
+
+
 def test_leer_lote_de_notion_con_error(base_temporal, monkeypatch):
     from guiones import datos, lectura
     from tests.fixtures_guiones import fake

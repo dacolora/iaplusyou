@@ -16,11 +16,51 @@
     var CLAVE = 'gpg-sel-' + CLIENTE;
     var SONDEO_MS = 2000, SONDEO_MAX_MS = 6 * 60 * 1000;
     var sel = leerSel(), timer = null, inicioSondeo = 0, activo = false;
+    var ultimoHTML = null, peticionN = 0, revelados = {}, formSinRestaurar = null;
 
     function leerSel() { try { return JSON.parse(localStorage.getItem(CLAVE)) || {}; } catch (e) { return {}; } }
     function guardarSel() { try { localStorage.setItem(CLAVE, JSON.stringify(sel)); } catch (e) {} }
     function parar() { if (timer) { clearTimeout(timer); timer = null; } }
     function numero(v) { var n = Number(v); return v && isFinite(n) ? n : null; }
+
+    function esMarcable(campo) { return campo.type === 'checkbox' || campo.type === 'radio'; }
+
+    function capturarEstado() {
+      var abiertos = [];
+      panel.querySelectorAll('details[id]').forEach(function (d) { if (d.open) abiertos.push(d.id); });
+      var formularios = {};
+      panel.querySelectorAll('form[id]').forEach(function (f) {
+        var campos = {};
+        f.querySelectorAll('input[name], textarea[name], select[name]').forEach(function (c) {
+          campos[esMarcable(c) ? c.name + '\u0000' + c.value : c.name] = esMarcable(c) ? c.checked : c.value;
+        });
+        formularios[f.id] = campos;
+      });
+      return { abiertos: abiertos, formularios: formularios };
+    }
+
+    function restaurarEstado(estado, formExcluido) {
+      estado.abiertos.forEach(function (id) {
+        var d = document.getElementById(id);
+        if (d && d.tagName === 'DETAILS') d.open = true;
+      });
+      Object.keys(revelados).forEach(function (id) {
+        if (!revelados[id]) return;
+        var n = document.getElementById(id);
+        if (n) n.hidden = false;
+      });
+      Object.keys(estado.formularios).forEach(function (fid) {
+        if (fid === formExcluido) return;
+        var f = document.getElementById(fid);
+        if (!f) return;
+        var campos = estado.formularios[fid];
+        f.querySelectorAll('input[name], textarea[name], select[name]').forEach(function (c) {
+          var clave = esMarcable(c) ? c.name + '\u0000' + c.value : c.name;
+          if (!(clave in campos)) return;
+          if (esMarcable(c)) c.checked = campos[clave]; else c.value = campos[clave];
+        });
+      });
+    }
 
     function errorEn(caja, texto, problemas) {
       var destino = (caja && caja.querySelector('.gpg-error')) || caja || panel;
@@ -38,13 +78,22 @@
 
     function cargar() {
       parar();
+      var miPeticion = ++peticionN;
       var q = [];
       if (sel.guion) q.push('guion=' + encodeURIComponent(sel.guion));
       if (sel.video) q.push('video=' + encodeURIComponent(sel.video));
       return fetch(BASE + '/panel' + (q.length ? '?' + q.join('&') : ''), { credentials: 'same-origin' })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
         .then(function (html) {
-          panel.innerHTML = html;  // fragmento del servidor, ya escapado por Jinja
+          if (miPeticion !== peticionN) return;  // llegó tarde: una petición más nueva ya está en curso o resuelta
+          var formExcluido = formSinRestaurar;
+          formSinRestaurar = null;
+          if (html !== ultimoHTML) {
+            var estado = capturarEstado();
+            ultimoHTML = html;
+            panel.innerHTML = html;  // fragmento del servidor, ya escapado por Jinja
+            restaurarEstado(estado, formExcluido);
+          }
           var raiz = panel.querySelector('[data-gpg-raiz]');
           if (raiz && sel.guion && raiz.dataset.guion === '') { sel = {}; guardarSel(); }
           if (raiz && raiz.dataset.trabajando === '1' && activo) {
@@ -54,7 +103,10 @@
             inicioSondeo = 0;
           }
         })
-        .catch(function () { errorEn(panel, 'No se pudo cargar el panel de guiones. Recarga la página.'); });
+        .catch(function () {
+          if (miPeticion !== peticionN) return;
+          errorEn(panel, 'No se pudo cargar el panel de guiones. Recarga la página.');
+        });
     }
 
     function datosDe(form) {
@@ -86,6 +138,7 @@
         if (res.d.video_id) sel.video = res.d.video_id;
         guardarSel();
         inicioSondeo = 0;
+        if (caja && caja.tagName === 'FORM' && caja.id) formSinRestaurar = caja.id;
         cargar();
       }, function () {
         errorEn(caja, 'No hay conexión con el servidor.');
@@ -115,7 +168,7 @@
         if (chat && chat.scrollIntoView) chat.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else if (b.dataset.gpgMostrar) {
         var n = document.getElementById(b.dataset.gpgMostrar);
-        if (n) n.hidden = !n.hidden;
+        if (n) { n.hidden = !n.hidden; revelados[b.dataset.gpgMostrar] = !n.hidden; }
       }
     });
 
@@ -123,8 +176,20 @@
       var f = e.target.closest('form[data-gpg-calcular]');
       if (!f) return;
       var salida = f.querySelector('[data-gpg-estimado]');
+      var lista = f.querySelector('[data-gpg-bloques]');
+      var etiqueta = f.querySelector('[data-gpg-bloques-etiqueta]');
       enviar(f.dataset.gpgCalcular, datosDe(f)).then(function (res) {
-        if (salida && res.ok && typeof res.d.texto === 'string') salida.textContent = res.d.texto;
+        if (!res.ok) return;
+        if (salida && typeof res.d.texto === 'string') salida.textContent = res.d.texto;
+        if (lista && Array.isArray(res.d.bloques)) {
+          while (lista.firstChild) lista.removeChild(lista.firstChild);
+          res.d.bloques.forEach(function (b) {
+            var li = document.createElement('li');
+            li.textContent = '«' + b + '»';
+            lista.appendChild(li);
+          });
+          if (etiqueta) etiqueta.hidden = res.d.bloques.length === 0;
+        }
       });
     });
 

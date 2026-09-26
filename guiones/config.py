@@ -44,7 +44,8 @@ def _referencias(cliente, form):
                 raise DatoInvalido(f"No encuentro «{activo_id}» entre {NOMBRES_TIPO[tipo]} del Catálogo.")
             ref = {"tipo": tipo, "activo_id": activo_id, "nombre": activo.get("nombre") or activo_id,
                    "descripcion": (activo.get("descripcion") or "").strip()[:600], "casting": {},
-                   "fotos": len(activo.get("referencias") or [])}
+                   "fotos": len(activo.get("referencias") or []),
+                   "regla": (activo.get("regla_propia") or "").strip()[:600]}
         else:
             desc = _texto(form, f"ref_desc_{i}")
             if not desc:
@@ -53,11 +54,14 @@ def _referencias(cliente, form):
             if tipo == "personaje":
                 casting = {"edad": _texto(form, f"ref_edad_{i}", 40), "vestuario": _texto(form, f"ref_vestuario_{i}", 200),
                            "paleta": _texto(form, f"ref_paleta_{i}", 200)}
-            ref = {"tipo": tipo, "activo_id": None, "nombre": "", "descripcion": desc, "casting": casting, "fotos": 0}
+            ref = {"tipo": tipo, "activo_id": None, "nombre": "", "descripcion": desc, "casting": casting, "fotos": 0,
+                   "regla": ""}
         refs.append(ref)
     if not refs:
         raise DatoInvalido("Agrega al menos una referencia (personaje, entorno o producto).")
-    return refs[:MAX_REFERENCIAS]
+    if len(refs) > MAX_REFERENCIAS:
+        raise DatoInvalido("Máximo 7 referencias (Image 1 a Image 7).")
+    return refs
 
 
 def desde_formulario(cliente, form, lectura):
