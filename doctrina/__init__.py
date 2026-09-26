@@ -115,3 +115,156 @@ def bloque_system(*rebanadas, extra=""):
     if extra:
         bloques.append({"type": "text", "text": extra})
     return bloques
+
+
+# ---------------------------------------------------------------- ángulo ---
+
+MAX_PALABRAS_GANCHO = 12
+MAX_CARACTERES_CAMPO = 200
+MAX_PRUEBAS = 3
+MAX_FALTANTES = 5
+_CAMPOS_TEXTO = ("audiencia", "deseo", "promesa", "mecanismo", "gancho")
+_OBLIGATORIOS = ("audiencia", "consciencia", "sofisticacion", "deseo", "promesa", "lead", "gancho")
+
+# Cifras «fuertes» (spec §4.3): dos o más dígitos; cualquier número con %;
+# con moneda antes o después; multiplicadores; «N de cada M». Un solo dígito
+# suelto («3 pasos») no se verifica a propósito.
+_RE_CIFRAS = re.compile(
+    r"\d+\s*de\s*cada\s*\d+"
+    r"|\d+(?:[.,]\d+)*\s*%"
+    r"|[$€]\s*\d+(?:[.,]\d+)*"
+    r"|\d+(?:[.,]\d+)*\s*(?:usd|cop|mxn|eur|€)\b"
+    r"|\d+(?:[.,]\d+)*\s*(?:x|veces)\b"
+    r"|\d(?:[.,]?\d){1,}",
+    re.IGNORECASE)
+_RE_NUMERO = re.compile(r"\d+(?:[.,]\d+)*")
+_RE_VARIAS_FRASES = re.compile(r"[.!?]\s+\S")
+
+
+def _numeros(texto):
+    """Cada número del texto normalizado a solo dígitos («89.900» → «89900»)."""
+    return [re.sub(r"\D", "", m.group(0)) for m in _RE_NUMERO.finditer(texto or "")]
+
+
+def verificar_cifras(texto, datos_texto):
+    """Cifras fuertes de `texto` con algún número que NO aparece como número
+    en `datos_texto` (se comparan números completos sin separadores, nunca
+    subcadenas: «28» no se verifica con un «289900»). Devuelve los fragmentos
+    tal como aparecen en `texto`, sin repetir."""
+    conocidos = set(_numeros(datos_texto))
+    salida = []
+    for m in _RE_CIFRAS.finditer(texto or ""):
+        frag = m.group(0).strip()
+        if any(n not in conocidos for n in _numeros(frag)) and frag not in salida:
+            salida.append(frag)
+    return salida
+
+
+def angulo_vacio():
+    return {"version": ANGULO_VERSION, "audiencia": "", "consciencia": None, "sofisticacion": None, "deseo": "",
+            "promesa": "", "mecanismo": None, "pruebas": [], "lead": None, "gancho": "", "faltantes": []}
+
+
+def _texto(valor, tope=MAX_CARACTERES_CAMPO):
+    return " ".join(str(valor if valor is not None else "").split())[:tope]
+
+
+def validar_angulo(angulo, datos_texto=None):
+    """(ángulo limpio, errores) según el spec §4.2. Nunca lanza: quien llama
+    decide si pide corrección (errores) o guarda igual con los faltantes."""
+    a = dict(angulo or {})
+    limpio = angulo_vacio()
+    errores = []
+    faltantes = [_texto(f) for f in (a.get("faltantes") or []) if isinstance(f, str) and f.strip()]
+    for k in _CAMPOS_TEXTO:
+        limpio[k] = _texto(a.get(k)) or None if k == "mecanismo" else _texto(a.get(k))
+    limpio["consciencia"] = normalizar_consciencia(a.get("consciencia"))
+    if a.get("consciencia") and limpio["consciencia"] is None:
+        errores.append("valor_invalido:consciencia")
+    try:
+        limpio["sofisticacion"] = int(a.get("sofisticacion")) if a.get("sofisticacion") not in (None, "") else None
+    except (TypeError, ValueError):
+        limpio["sofisticacion"] = None
+        errores.append("valor_invalido:sofisticacion")
+    if limpio["sofisticacion"] is not None and limpio["sofisticacion"] not in SOFISTICACIONES:
+        errores.append("valor_invalido:sofisticacion")
+        limpio["sofisticacion"] = None
+    lead = _texto(a.get("lead")).lower().replace("-", "_").replace(" ", "_") or None
+    if lead and lead not in LEADS:
+        errores.append("valor_invalido:lead")
+        lead = None
+    limpio["lead"] = lead
+    for campo in _OBLIGATORIOS:
+        if limpio.get(campo) in (None, ""):
+            errores.append(f"campo_faltante:{campo}")
+    promesa = limpio["promesa"]
+    # Dos frases = dos promesas (Regla de Uno). «89.900» no es un punto de
+    # frase: solo cuenta un signo de cierre seguido de espacio y más texto.
+    if promesa and (";" in promesa or _RE_VARIAS_FRASES.search(promesa.rstrip(".!? "))):
+        errores.append("promesa_multiple")
+    if limpio["sofisticacion"] is not None and limpio["sofisticacion"] >= 3 and not limpio["mecanismo"]:
+        errores.append("mecanismo_obligatorio")
+    if limpio["gancho"] and len(limpio["gancho"].split()) > MAX_PALABRAS_GANCHO:
+        errores.append("gancho_largo")
+    pruebas = []
+    for p in (a.get("pruebas") or [])[:MAX_PRUEBAS * 2]:
+        if not isinstance(p, dict):
+            continue
+        texto_p, fuente = _texto(p.get("texto")), _texto(p.get("fuente")).lower()
+        if not texto_p:
+            continue
+        if fuente not in FUENTES_PRUEBA:
+            faltantes.append(f"prueba sin fuente: {texto_p}")
+            continue
+        if datos_texto is not None:
+            malas = verificar_cifras(texto_p, datos_texto)
+            if malas:
+                faltantes.append(f"prueba con cifra no verificada ({', '.join(malas)}): {texto_p}")
+                continue
+        pruebas.append({"texto": texto_p, "fuente": fuente})
+    limpio["pruebas"] = pruebas[:MAX_PRUEBAS]
+    if datos_texto is not None:
+        for campo in ("gancho", "promesa", "mecanismo"):
+            for cifra in verificar_cifras(limpio.get(campo) or "", datos_texto):
+                errores.append(f"cifra_no_verificada:{cifra}")
+    recomendados = lead_por_consciencia(limpio["consciencia"])
+    if limpio["lead"] and recomendados and limpio["lead"] not in recomendados:
+        faltantes.append(f"arranque fuera de lo recomendado: {LEADS_NOMBRE[limpio['lead']]} "
+                         f"(para {CONSCIENCIAS_NOMBRE[limpio['consciencia']]} se recomienda "
+                         f"{', '.join(LEADS_NOMBRE[r] for r in recomendados)})")
+    limpio["faltantes"] = faltantes[:MAX_FALTANTES]
+    # errores sin repetir, en orden de aparición
+    vistos, unicos = set(), []
+    for e in errores:
+        if e not in vistos:
+            vistos.add(e)
+            unicos.append(e)
+    return limpio, unicos
+
+
+def angulo_a_texto(angulo):
+    """Bloque «ÁNGULO» para los prompts; "" si no hay ángulo."""
+    if not angulo:
+        return ""
+    a = angulo
+    lineas = ["ÁNGULO (decidido antes; escribe a partir de esto, no lo cambies):"]
+    cons = CONSCIENCIAS_NOMBRE.get(a.get("consciencia"), a.get("consciencia") or "")
+    if a.get("audiencia"):
+        lineas.append(f"- Audiencia: {a['audiencia']}" + (f" (consciencia: {cons})" if cons else ""))
+    if a.get("sofisticacion"):
+        lineas.append(f"- Sofisticación: {a['sofisticacion']} — {SOFISTICACIONES_NOMBRE.get(a['sofisticacion'], '')}")
+    if a.get("deseo"):
+        lineas.append(f"- Deseo: {a['deseo']}")
+    if a.get("promesa"):
+        lineas.append(f"- Promesa única: {a['promesa']}")
+    if a.get("mecanismo"):
+        lineas.append(f"- Mecanismo: {a['mecanismo']}")
+    if a.get("pruebas"):
+        lineas.append("- Pruebas: " + "; ".join(f"{p['texto']} [{p['fuente']}]" for p in a["pruebas"]))
+    if a.get("lead"):
+        lineas.append(f"- Arranque: {LEADS_NOMBRE.get(a['lead'], a['lead'])}")
+    if a.get("gancho"):
+        lineas.append(f"- Gancho: {a['gancho']}")
+    if a.get("faltantes"):
+        lineas.append("- Faltantes (no inventes esto): " + "; ".join(a["faltantes"]))
+    return "\n".join(lineas)

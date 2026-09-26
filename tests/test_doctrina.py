@@ -84,3 +84,102 @@ def test_cada_principio_cita_su_fuente():
     for nombre in doctrina.REBANADAS:
         t = doctrina._cargar(nombre)
         assert sum(1 for a in autores if a in t) >= 2, nombre
+
+
+ANGULO_OK = {
+    "audiencia": "mujer 30-45 que ya rompió tres pares de chanclas baratas este verano",
+    "consciencia": "consciente_del_problema", "sofisticacion": 3,
+    "deseo": "dejar de comprar chanclas cada verano",
+    "promesa": "las últimas chanclas que compras este verano",
+    "mecanismo": "suela de doble densidad cosida, no pegada",
+    "pruebas": [{"texto": "suela cosida a mano, garantía de 2 años", "fuente": "ficha"},
+                {"texto": "se ve la suela doblarse y volver sin marca", "fuente": "demostracion"}],
+    "lead": "problema_solucion",
+    "gancho": "Si ya se te rompió la tercera chancla este verano, mira esto",
+    "faltantes": ["no hay ninguna cita de compradores sobre durabilidad"],
+}
+DATOS = "Chancla Rose. Suela de doble densidad cosida a mano. Garantía de 2 años. Precio 89.900 COP."
+
+
+def test_validar_angulo_limpia_y_acepta_uno_bueno():
+    import doctrina
+    limpio, errores = doctrina.validar_angulo(dict(ANGULO_OK, consciencia="Problem-aware", sofisticacion="3"), DATOS)
+    assert errores == []
+    assert limpio["consciencia"] == "consciente_del_problema" and limpio["sofisticacion"] == 3
+    assert limpio["version"] == doctrina.ANGULO_VERSION
+    assert len(limpio["pruebas"]) == 2 and limpio["faltantes"] == ANGULO_OK["faltantes"]
+
+
+def test_validar_angulo_reporta_cada_regla():
+    import doctrina
+    _, e = doctrina.validar_angulo({k: v for k, v in ANGULO_OK.items() if k != "promesa"})
+    assert "campo_faltante:promesa" in e
+    _, e = doctrina.validar_angulo(dict(ANGULO_OK, consciencia="dormido", lead="grito", sofisticacion=9))
+    assert {"valor_invalido:consciencia", "valor_invalido:lead", "valor_invalido:sofisticacion"} <= set(e)
+    _, e = doctrina.validar_angulo(dict(ANGULO_OK, promesa="Dura más. Y además es más cómoda"))
+    assert "promesa_multiple" in e
+    _, e = doctrina.validar_angulo(dict(ANGULO_OK, sofisticacion=4, mecanismo=""))
+    assert "mecanismo_obligatorio" in e
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, sofisticacion=2, mecanismo=None))
+    assert e == [] and limpio["mecanismo"] is None
+    _, e = doctrina.validar_angulo(dict(ANGULO_OK, gancho=" ".join(["palabra"] * 13)))
+    assert "gancho_largo" in e
+
+
+def test_validar_angulo_descarta_pruebas_sin_fuente_y_las_anota():
+    import doctrina
+    pruebas = [{"texto": "dura 10 años", "fuente": "me lo imagino"}, {"texto": "", "fuente": "ficha"},
+               {"texto": "garantía de 2 años", "fuente": "ficha"}]
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, pruebas=pruebas))
+    assert e == []
+    assert limpio["pruebas"] == [{"texto": "garantía de 2 años", "fuente": "ficha"}]
+    assert any("prueba sin fuente" in f and "dura 10 años" in f for f in limpio["faltantes"])
+
+
+def test_validar_angulo_verifica_cifras_contra_los_datos():
+    import doctrina
+    con_cifra = dict(ANGULO_OK, promesa="47 % menos roturas este verano",
+                     pruebas=[{"texto": "el 90 % de las compradoras repite", "fuente": "comentarios"},
+                              {"texto": "garantía de 2 años", "fuente": "ficha"}])
+    limpio, e = doctrina.validar_angulo(con_cifra, DATOS)
+    assert "cifra_no_verificada:47 %" in e or "cifra_no_verificada:47%" in e
+    assert limpio["pruebas"] == [{"texto": "garantía de 2 años", "fuente": "ficha"}]
+    assert any("90" in f for f in limpio["faltantes"])
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, promesa="por 89.900 pesos, las últimas del verano"), DATOS)
+    assert e == []
+
+
+def test_validar_angulo_anota_el_lead_fuera_de_lo_recomendado():
+    import doctrina
+    limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, lead="oferta"))
+    assert e == [] and any("arranque fuera de lo recomendado" in f for f in limpio["faltantes"])
+
+
+def test_verificar_cifras():
+    import doctrina
+    assert doctrina.verificar_cifras("baja un 47 % en 3 pasos", DATOS) == ["47 %"]
+    assert doctrina.verificar_cifras("garantía de 2 años y 89900 COP", DATOS) == []
+    assert doctrina.verificar_cifras("3x más duradera", DATOS) == ["3x"]
+    assert doctrina.verificar_cifras("2 de cada 3 repiten", DATOS) == ["2 de cada 3"]
+    assert doctrina.verificar_cifras("lista para 2026", "lanzamiento 2026") == []
+    assert doctrina.verificar_cifras("$120 hoy", "precio: 120 USD") == []
+    assert doctrina.verificar_cifras("sin cifras aquí", "") == []
+
+
+def test_angulo_a_texto_muestra_los_campos_con_nombre_y_omite_vacios():
+    import doctrina
+    limpio, _ = doctrina.validar_angulo(dict(ANGULO_OK, mecanismo=None, sofisticacion=2, faltantes=[]))
+    t = doctrina.angulo_a_texto(limpio)
+    assert t.startswith("ÁNGULO")
+    for frag in ("Audiencia:", "consciente del problema", "Sofisticación: 2", "Deseo:", "Promesa única:",
+                 "Pruebas:", "[ficha]", "Arranque: problema-solución", "Gancho:"):
+        assert frag in t, frag
+    assert "Mecanismo" not in t and "Faltantes" not in t
+    assert doctrina.angulo_a_texto(None) == ""
+
+
+def test_angulo_vacio_tiene_todas_las_claves():
+    import doctrina
+    v = doctrina.angulo_vacio()
+    assert set(v) == {"version", "audiencia", "consciencia", "sofisticacion", "deseo", "promesa", "mecanismo",
+                      "pruebas", "lead", "gancho", "faltantes"}
