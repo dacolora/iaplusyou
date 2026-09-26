@@ -251,6 +251,15 @@ def test_llave_rechazada_por_notion(app, secreto, monkeypatch):
     assert r.status_code == 400 and "llave" in r.get_json()["error"] and "ntn_mala" not in r.get_json()["error"]
 
 
+def test_conectar_notion_como_cliente_verificado(app, secreto, monkeypatch):
+    from guiones import notion
+    monkeypatch.setattr(notion, "probar", lambda llave, http=None: None)
+    with app["c"].session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    assert app["c"].post(f"{BASE}/notion", json={"llave": "ntn_abc"}).status_code == 200
+    assert app["c"].get(f"{BASE}/notion").get_json() == {"conectado": True}
+
+
 def test_notion_exige_correo_verificado(app, secreto, monkeypatch):
     import usuarios
     from guiones import notion
