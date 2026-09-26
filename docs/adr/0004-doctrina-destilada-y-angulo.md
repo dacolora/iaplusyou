@@ -16,7 +16,8 @@ recibió.
 
 - **RAG sobre los libros**: un buscador por similitud no encuentra el principio correcto a partir de una ficha de
   producto; pegar pasajes literales diluye las instrucciones, cuesta más por llamada y reproduce texto con derechos.
-- **Los libros en el repo o en el servidor**: cuatro tienen derechos de autor y el proyecto será público.
+- **Los libros en el repo o en el servidor**: cuatro tienen derechos de autor, y la app no los necesita: le basta
+  la doctrina destilada.
 - **Campos nuevos con migración**: el bloque 1 no muestra nada; los `extra` alcanzan y `duplicar` ya copia
   `concepto.extra`. El bloque 2 decidirá qué campos se vuelven columnas editables.
 
