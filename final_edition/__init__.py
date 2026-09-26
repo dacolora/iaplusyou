@@ -157,6 +157,16 @@ def _fila_producto(cliente, activo_id):
         return {}
 
 
+def _precio_entero(precio):
+    """89900.0 → 89900: el precio escrito (`_precio_form`) y el de la tienda
+    (columna Float) llegan como float, y Claude no debe ver «89900.0» — el
+    verificador de cifras lo leería como 899000 y el precio real saldría
+    «inventado». Un precio con decimales (89.9) queda igual."""
+    if isinstance(precio, float) and precio.is_integer():
+        return int(precio)
+    return precio
+
+
 def _producto(cliente, entry, precio):
     """{"nombre","descripcion","regla","precio","moneda","url_compra","tipo"}
     desde el catálogo (y su fila de tienda) o desde la acción central.
@@ -165,7 +175,9 @@ def _producto(cliente, entry, precio):
     y luego por nombre (`catalogo_productos.encontrar_por_id_o_nombre`). Si
     nada resuelve, se cae a la primera referencia con categoria=="producto" y
     luego a la acción central. El precio escrito por la persona manda; si no
-    hay, el de la tienda con SU moneda (nunca una moneda para un precio escrito)."""
+    hay, el de la tienda con SU moneda (nunca una moneda para un precio escrito).
+    Un precio entero va como int (`_precio_entero`), nunca «89900.0»."""
+    precio = _precio_entero(precio)
     p, visto = None, None
     for x in entry.get("productos_ids") or []:
         p = catalogo_productos.encontrar_por_id_o_nombre(cliente, x, "producto")
@@ -176,7 +188,7 @@ def _producto(cliente, entry, precio):
         fila = _fila_producto(cliente, p.get("id"))
         usa_tienda = precio is None and fila.get("precio") is not None
         return {"nombre": p.get("nombre") or visto, "descripcion": p.get("descripcion") or "",
-                "regla": p.get("regla") or "", "precio": fila.get("precio") if usa_tienda else precio,
+                "regla": p.get("regla") or "", "precio": _precio_entero(fila.get("precio")) if usa_tienda else precio,
                 "moneda": fila.get("moneda") if usa_tienda else None, "url_compra": fila.get("url_compra"),
                 "tipo": p.get("tipo")}
     for r in entry.get("referencias") or []:

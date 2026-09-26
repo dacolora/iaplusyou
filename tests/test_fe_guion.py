@@ -384,6 +384,42 @@ def test_el_precio_del_producto_si_puede_aparecer(monkeypatch):
     assert len(reg.kwargs) == 1
 
 
+@pytest.mark.parametrize("voz", ["Hoy por 89.900 pesos.", "Hoy por $89.900.", "Hoy por 89900."])
+def test_el_precio_en_float_del_producto_si_puede_aparecer(monkeypatch, voz):
+    """Fix 1: el precio llega como float (`_precio_form`, columna Float);
+    `json.dumps` lo volvía «89900.0» → «899000» y el precio real se flageaba
+    como cifra inventada (corrección pagada de más, o GuionInvalido)."""
+    from final_edition import guion
+    con_precio = dict(_guion_valido(), angulo=ANG)
+    con_precio["bloques"][4]["texto_voz"] = voz
+    reg = _instalar_fake(monkeypatch, [json.dumps(con_precio)])
+    g, costo = guion.generar_guion_base(dict(PRODUCTO, precio=89900.0), None, "producto", 10.0, "es", "", "")
+    assert len(reg.kwargs) == 1 and costo == 0.01
+    assert g["bloques"][4]["texto_voz"] == voz
+
+
+def test_variar_con_precio_base_en_float_no_flagea_el_precio(monkeypatch):
+    """Fix 1: el guion base guarda `precio_base: 89900.0` (float escrito al
+    preparar); la variante que dice «89.900» no inventa nada."""
+    from final_edition import guion
+    base = dict(_guion_valido(), precio_base=89900.0)
+    variante = dict(_guion_valido(), angulo_variante={"lead": "oferta", "gancho": "Nuevo gancho"})
+    variante["bloques"][4]["texto_voz"] = "Llévalas hoy por 89.900 pesos."
+    reg = _instalar_fake(monkeypatch, [json.dumps(variante)])
+    v, costo = guion.variar_guion(base, "hook", "", angulo=ANG)
+    assert len(reg.kwargs) == 1 and costo == 0.01
+    assert v["precio_base"] == 89900.0
+
+
+def test_precio_verificable_da_los_digitos_y_el_formato_del_pais():
+    from final_edition import guion
+    assert guion._precio_verificable(89900.0, "CO") == "89900 $ 89.900"
+    assert guion._precio_verificable(89900, "CO") == "89900 $ 89.900"
+    assert guion._precio_verificable(89.9, "US") == "$89.90"
+    assert guion._precio_verificable(None, "CO") == ""
+    assert guion._precio_verificable("no es precio", "CO") == ""
+
+
 def test_localizar_conserva_el_angulo(monkeypatch):
     from final_edition import guion
     reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="en", pais="US"))])

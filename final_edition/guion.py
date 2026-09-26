@@ -315,6 +315,27 @@ def _datos_verificables(*partes):
     return "\n".join(p if isinstance(p, str) else json.dumps(p, ensure_ascii=False) for p in partes if p)
 
 
+def _precio_verificable(precio, pais):
+    """El precio como lo puede decir el guion, para sumarlo a los datos que se
+    verifican: sus dígitos enteros (si es entero) y el formato del país
+    (`tipos.formatear_precio`, el mismo que usa localizar). Sin esto un
+    precio float llega a los datos como «89900.0» (→ 899000) y el precio
+    real dicho en la voz («89.900 pesos», «$89.900», «89900») se tomaría
+    por inventado. "" si no hay precio o no se puede leer."""
+    if precio is None or isinstance(precio, bool):
+        return ""
+    try:
+        valor = float(precio)
+    except (TypeError, ValueError):
+        return ""
+    partes = [str(int(valor))] if valor.is_integer() else []
+    try:
+        partes.append(tipos.formatear_precio(valor, pais))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        pass
+    return " ".join(partes)
+
+
 def _errores_de_cifras(guion, datos_texto):
     errores = []
     for b in guion.get("bloques") or []:
@@ -394,7 +415,8 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
         return g
 
     datos = _datos_verificables(producto, (referencia or {}).get("transcripcion"), cliente_hint, marca,
-                                doctrina.texto_verificable(angulo))
+                                doctrina.texto_verificable(angulo),
+                                _precio_verificable((producto or {}).get("precio"), pais_base))
 
     errores_extra = None
     if not angulo:
@@ -529,7 +551,8 @@ def variar_guion(guion_base, variante_tipo, marca, angulo=None):
     return _generar_con_correccion(
         doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE),
         _mensaje_variar(base, variante_tipo, marca, angulo=angulo),
-        duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo)),
+        duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo),
+                                                 _precio_verificable(base.get("precio_base"), pais)),
     )
 
 

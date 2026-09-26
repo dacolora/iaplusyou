@@ -226,6 +226,27 @@ def test_preparar_guion_lleva_regla_y_precio_de_la_tienda(entorno, monkeypatch):
     assert g["precio_base"] == 99000
 
 
+def test_preparar_guion_le_pasa_a_claude_el_precio_entero_sin_punto_cero(entorno, monkeypatch):
+    """Fix 1: el precio escrito (`_precio_form` da float) y el de la tienda
+    (columna Float) llegan como 89900.0; Claude nunca debe ver «89900.0»
+    — el verificador de cifras lo leería como 899000."""
+    import json
+    import catalogo_productos
+    import tiendas
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [
+        {"id": "chancla_rose", "nombre": "Chancla Rose", "descripcion": "Chancla cómoda", "tipo": "calzado"}])
+    pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
+    tiendas.marcar_producto("acme", pid, precio=89900.0, moneda="COP", url_compra="https://tienda.co/rose")
+    final_edition.preparar_guion("acme", entorno["cf_id"])                      # el de la tienda
+    p = entorno["generar"]["producto"]
+    assert p["precio"] == 89900 and isinstance(p["precio"], int) and "89900.0" not in json.dumps(p)
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 99000.0})  # el escrito
+    p = entorno["generar"]["producto"]
+    assert p["precio"] == 99000 and isinstance(p["precio"], int)
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89.9})     # con decimales, igual
+    assert entorno["generar"]["producto"]["precio"] == 89.9
+
+
 def test_preparar_guion_ignora_el_precio_de_la_tienda_si_su_moneda_no_es_la_del_pais_base(entorno, monkeypatch):
     """D: sin precio escrito, si la moneda de la tienda no es la del país base
     del idioma (es -> CO -> COP), ni el producto ni `precio_base` la llevan —
