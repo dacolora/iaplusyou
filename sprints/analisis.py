@@ -34,13 +34,16 @@ class AnalisisInvalido(RuntimeError):
     pass
 
 
-def _llamar(content, max_tokens=700):
-    """Una llamada a Claude con bloques de texto e imagen; devuelve el texto."""
+def _llamar(content, max_tokens=700, system=None):
+    """Una llamada a Claude con bloques de texto e imagen; devuelve el texto.
+    `system` (str o lista de bloques, p. ej. `doctrina.bloque_system(...)`)
+    solo se manda si viene."""
     import anthropic
     from generador_prompts import MODEL, _api_key
     client = anthropic.Anthropic(api_key=_api_key())
+    extra = {"system": system} if system else {}
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
-                                  messages=[{"role": "user", "content": content}])
+                                  messages=[{"role": "user", "content": content}], **extra)
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 

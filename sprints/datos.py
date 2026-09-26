@@ -760,7 +760,7 @@ def _validar_idea(campos):
 
 
 def crear_idea(cliente, campana_id, tipo, titulo, escena, sonido="", enfoque=None, gancho="", referencias_ids=None,
-               duracion_s=None, plataformas=None, estado_idea="propuesta"):
+               duracion_s=None, plataformas=None, estado_idea="propuesta", extra=None):
     campos = _validar_idea({"tipo": tipo, "titulo": titulo, "escena": escena, "sonido": sonido, "gancho": gancho,
                             "referencias_ids": referencias_ids, "duracion_s": duracion_s, "plataformas": plataformas,
                             "estado_idea": estado_idea})
@@ -778,7 +778,8 @@ def crear_idea(cliente, campana_id, tipo, titulo, escena, sonido="", enfoque=Non
             titulo=campos["titulo"], escena=campos["escena"], sonido=campos["sonido"] or None, enfoque=enfoque,
             gancho=campos["gancho"] or None, referencias_ids=campos["referencias_ids"], duracion_s=campos["duracion_s"],
             plataformas=campos["plataformas"], estado_idea=campos["estado_idea"], cf_id=None, qa=None,
-            revision="pendiente", revision_motivo=None, textos=None, orden=orden, extra={})).inserted_primary_key[0]
+            revision="pendiente", revision_motivo=None, textos=None, orden=orden,
+            extra=dict(extra) if isinstance(extra, dict) else {})).inserted_primary_key[0]
         _evento(con, cliente, c.sprint_id, campana_id, "idea_creada", f"Idea «{campos['titulo']}» ({campos['tipo']})",
                 {"cp_id": cp_id})
     return cp_id

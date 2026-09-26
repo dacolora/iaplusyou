@@ -98,6 +98,28 @@ def test_sugerir_personas_rechaza_json_malo(monkeypatch):
         sugerencias.sugerir_personas("acme")
 
 
+def test_llamar_pasa_el_system_solo_si_viene(monkeypatch):
+    import anthropic
+    from sprints import analisis
+    vistos = []
+
+    class _M:
+        def create(self, **kw):
+            vistos.append(kw)
+            return type("R", (), {"content": [type("B", (), {"type": "text", "text": "ok"})()]})()
+
+    class _A:
+        def __init__(self, api_key=None):
+            self.messages = _M()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr(anthropic, "Anthropic", _A)
+    assert analisis._llamar([{"type": "text", "text": "x"}]) == "ok"
+    assert "system" not in vistos[0]
+    analisis._llamar([{"type": "text", "text": "x"}], system=[{"type": "text", "text": "S"}])
+    assert vistos[1]["system"] == [{"type": "text", "text": "S"}]
+
+
 def test_sugerir_personas_coerciona_nombre_no_string(monkeypatch):
     from sprints import analisis, sugerencias
     import catalogo_productos, marca, proyectos
