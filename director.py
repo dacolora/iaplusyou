@@ -17,6 +17,7 @@ import re
 
 import anthropic
 
+import doctrina
 import flowplus_prompt
 from providers import flowplus_modelos
 
@@ -110,7 +111,14 @@ def _system(familia, cierre, n, duracion, idioma):
 def _mensaje(sesion, idioma):
     refs = list(sesion.get("referencias") or [])
     idea = flowplus_prompt.sustituir_tokens(sesion.get("accion_central") or "", refs)
-    lineas = [f"IDEA: {idea}", "ACTIVOS (token → rol → nombre → regla):"]
+    lineas = [f"IDEA: {idea}"]
+    angulo_txt = doctrina.angulo_a_texto(sesion.get("angulo"))
+    if angulo_txt:
+        lineas += [angulo_txt,
+                   "Traduce el ángulo a planos: el producto aparece pronto; el mecanismo, si lo hay, se demuestra en "
+                   "cámara; la prueba es algo que se ve pasar; el gancho puede ser lo que se lee en el primer plano. "
+                   "La IDEA sigue mandando en sujetos, lugar y orden de los hechos."]
+    lineas.append("ACTIVOS (token → rol → nombre → regla):")
     for r in refs:
         if not r.get("token"):
             continue
@@ -224,7 +232,7 @@ def compilar(cliente, sesion, idioma="es"):
     n = n_planos(duracion)
     cierre = flowplus_modelos.cierre_sonido(modelo)
     idioma = "en" if idioma == "en" else "es"
-    system = _system(familia, cierre, n, duracion, idioma)
+    system = doctrina.bloque_system("video", extra=_system(familia, cierre, n, duracion, idioma))
     mensajes = [{"role": "user", "content": _mensaje(sesion, idioma)}]
     client = anthropic.Anthropic(api_key=_api_key())
     ultimo_error = None
