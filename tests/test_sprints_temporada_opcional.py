@@ -27,12 +27,12 @@ def test_campana_sin_temporada_se_crea_y_se_lista(base_temporal):
     assert [x["id"] for x in datos.sprint("acme", sid)["campanas"]] == [cid]
 
 
-def test_campana_sin_temporada_no_se_repite(base_temporal):
+def test_campana_sin_temporada_puede_repetirse(base_temporal):
     from sprints import datos
     pid, sid = _sprint(datos)
     datos.agregar_campana("acme", sid, pid, "espejo_led", None, 2, 1)
-    with pytest.raises(datos.CampanaDuplicada):
-        datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0)
+    otra = datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0)
+    assert datos.campanas_identicas("acme", otra) == [1]
 
 
 def test_crear_sprint_en_un_proyecto_sin_temporadas(app):

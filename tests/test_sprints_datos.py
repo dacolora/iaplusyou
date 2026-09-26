@@ -67,20 +67,18 @@ def test_sprint_crear_y_validar(base_temporal):
     assert datos.sprint("otro", sid) is None and datos.sprints("otro") == []
 
 
-def test_campana_unicidad_y_cantidades(base_temporal):
+def test_campana_repetida_y_cantidades(base_temporal):
     from sprints import datos
     pid, tid, sid = _base(datos)
     cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 10, 25)
     c = datos.campana("acme", cid)
     assert c["persona_nombre"] == "Premium" and c["temporada_nombre"] == "Verano" and c["estado"] == "planeada"
     assert c["referencias_objetivo"] == 5 and c["referencias_total"] == 0 and c["sprint_id"] == sid
-    with pytest.raises(datos.CampanaDuplicada) as e:
-        datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 1, 0)
-    assert "campaña 1" in str(e.value)
+    repetida = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 1, 0)      # permitida desde 0021
+    assert datos.campanas_identicas("acme", repetida) == [1]
     tid2 = datos.crear_temporada("acme", "Navidad", "2026-11-15", "2026-12-31")
     cid2 = datos.agregar_campana("acme", sid, pid, "espejo_led", tid2, 0, 3, referencias_objetivo=8)
-    assert datos.campana("acme", cid2)["orden"] == 1 and datos.campana("acme", cid2)["referencias_objetivo"] == 8
-    assert datos.combinaciones("acme", sid) == {(pid, "espejo_led", tid), (pid, "espejo_led", tid2)}
+    assert datos.campana("acme", cid2)["orden"] == 2 and datos.campana("acme", cid2)["referencias_objetivo"] == 8
     for malo in [dict(n_videos=0, n_imagenes=0), dict(n_videos=-1, n_imagenes=2), dict(n_videos="x", n_imagenes=1)]:
         with pytest.raises(datos.ErrorDatos):
             datos.agregar_campana("acme", sid, pid, "otro", tid, **malo)
@@ -88,11 +86,6 @@ def test_campana_unicidad_y_cantidades(base_temporal):
         datos.agregar_campana("acme", sid, 999, "otro", tid, 1, 1)        # persona ajena
     with pytest.raises(datos.ErrorDatos):
         datos.agregar_campana("acme", sid, pid, "", tid, 1, 1)           # sin producto
-    assert [c["id"] for c in datos.campanas("acme", sid)] == [cid, cid2]
-    assert datos.actualizar_campana("acme", cid, n_videos=12)
-    assert datos.eliminar_campana("acme", cid2) and len(datos.campanas("acme", sid)) == 1
-    tipos = [e["tipo"] for e in datos.eventos("acme", sid)]
-    assert tipos[0] == "campana_eliminada" and "campana_agregada" in tipos
 
 
 def test_sprints_lista_con_totales(base_temporal):

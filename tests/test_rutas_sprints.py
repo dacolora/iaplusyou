@@ -83,7 +83,7 @@ def test_contexto_trae_lo_que_usa_la_pestana(app):
     ctx = rutas.contexto("acme")
     nombres = [p["nombre"] for p in ctx["personas_sprint"]]
     assert "Premium" in nombres and ctx["sprints_lista"] == []
-    assert {"Melissa", "Marijke", "Sophia"} <= set(nombres)          # personajes predeterminados (a557c6c)
+    assert not {"Melissa", "Marijke", "Sophia"} & set(nombres)          # ya no se crean solas (2026-09-26)
     assert [p["id"] for p in ctx["productos_sprint"]] == ["espejo_led", "division_bano"]
     assert ctx["pais_calendario"] == "CO" and any(p["clave"] == "navidad" for p in ctx["presets_temporadas"])
     assert ctx["estimado_sprint"]["video"] > 0 and ctx["estimado_sprint"]["imagen"] > 0
@@ -178,12 +178,9 @@ def test_crear_sprint_con_campanas_malformadas_no_crea_nada(app):
     assert str(exc.value) == "Campaña 1: formato inválido."
 
 
-def test_crear_sprint_rechaza_duplicados_y_productos_ajenos(app):
+def test_crear_sprint_rechaza_productos_ajenos_y_cantidades_cero(app):
     from sprints import datos
     pid, tid = _base(datos)
-    dup = [{"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid, "n_videos": 1, "n_imagenes": 0}] * 2
-    app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": json.dumps(dup)})
-    assert datos.sprints("acme") == []
     ajeno = [{"persona_id": pid, "catalogo_id": "no_existe", "temporada_id": tid, "n_videos": 1, "n_imagenes": 0}]
     app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": json.dumps(ajeno)})
     assert datos.sprints("acme") == []
@@ -218,14 +215,14 @@ def test_detalle_progreso_listo_y_campanas(app):
                                                          "n_videos": "1", "n_imagenes": "1"})
     assert len(datos.campanas("acme", sid)) == 2
     c.post(f"/cliente/acme/sprints/{sid}/campanas", data={"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid,
-                                                         "n_videos": "1", "n_imagenes": "1"})       # duplicada
-    assert len(datos.campanas("acme", sid)) == 2
+                                                         "n_videos": "1", "n_imagenes": "1"})       # repetida: se permite con aviso
+    assert len(datos.campanas("acme", sid)) == 3
     c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}", data={"n_videos": "7"})
     assert datos.campana("acme", cid)["n_videos"] == 7
     otro_sid = datos.crear_sprint("acme", "Otro", "2026-11-01", "2026-11-30")
     assert c.post(f"/cliente/acme/sprints/{otro_sid}/campanas/{cid}", data={"n_videos": "1"}).status_code == 404
     c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/eliminar")
-    assert len(datos.campanas("acme", sid)) == 1
+    assert len(datos.campanas("acme", sid)) == 2
     c.post(f"/cliente/acme/sprints/{sid}/archivar")
     assert datos.sprints("acme") == [datos.sprints("acme")[0]] and datos.sprints("acme")[0]["id"] == otro_sid
 

@@ -110,7 +110,6 @@ def _sprint_recien_creado():
 
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
-    datos.asegurar_personajes_predeterminados(cliente)
     prefs = proyectos.preferencias_flowplus(cliente)
     modelo_video, modelo_imagen = prefs["modelo_video"], prefs["modelo_imagen"]
     lista = []
@@ -299,7 +298,7 @@ def _validar_campanas(cliente, lista):
     """Producto en el catálogo, cantidades válidas y sin combinaciones
     repetidas dentro del mismo envío. Devuelve la lista normalizada."""
     ids = {p["id"] for p in catalogo_productos.listar(cliente, "producto")}
-    vistas, limpias = set(), []
+    limpias = []
     for i, c in enumerate(lista, 1):
         if not isinstance(c, dict):
             raise datos.ErrorDatos(f"Campaña {i}: formato inválido.")
@@ -322,10 +321,6 @@ def _validar_campanas(cliente, lista):
         funnel = c.get("funnel", "tof")
         if funnel not in datos.FUNNELS:
             raise datos.ErrorDatos(f"Campaña {i}: funnel inválido ({funnel}).")
-        clave = (persona_id, catalogo_id, temporada_id)
-        if clave in vistas:
-            raise datos.ErrorDatos(f"Campaña {i}: esa combinación de persona, producto y temporada está repetida.")
-        vistas.add(clave)
         limpias.append({"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id or None,
                         "n_videos": n_videos, "n_imagenes": n_imagenes,
                         "referencias_objetivo": c.get("referencias_objetivo") or None, "funnel": funnel})
@@ -363,7 +358,6 @@ def crear(cliente):
 
 @bp.get("/<int:sid>")
 def ver(cliente, sid):
-    datos.asegurar_personajes_predeterminados(cliente)
     sp = _sprint_o_404(cliente, sid)
     for c in sp["campanas"]:
         c["progreso"] = progreso.progreso_campana(c)
