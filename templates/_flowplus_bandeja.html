@@ -10,6 +10,8 @@
     <figure style="margin:0;text-align:center;position:relative;">
       <img src="{{ r.frame_url }}" alt="" title="{{ r.titulo or '' }}" style="width:84px;height:84px;object-fit:cover;border-radius:6px;background:#fff;{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
       <figcaption class="vacio" style="padding:0;font-size:.7rem;">{{ r.etiqueta }}{% if r.origen not in ('archivo', None) %} · {{ r.origen }}{% endif %}</figcaption>
+      {# Lo que ves es lo que se usa: viaja con el formulario de Crear (la bandeja es del proyecto). #}
+      <input type="hidden" name="ref_ids" value="{{ r.id }}" form="form-flowplus">
       <form method="post" action="{{ url_for('fp_quitar_referencia', cliente=cliente, rid=r.id) }}" data-fp="quitar"><button type="submit" class="btn-rechazar btn-sm" title="Quitar">✕</button></form>
     </figure>
     {% endfor %}
