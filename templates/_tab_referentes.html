@@ -34,16 +34,16 @@
     var cuerpo = document.getElementById('ref-modal-cuerpo');
 
     // Prellenado desde una campaña de Sprints: el link "Traer referentes
-    // nuevos" de campana_referencias.html manda `palabra`/`pais` en el hash
-    // (#referentes?campana=...&palabra=...&pais=...). Si están, el botón
-    // "Traer referentes" abre ya con el formulario prellenado -- sigue
-    // siendo un clic manual y el mismo precio en vivo de siempre; nada se
-    // lanza solo.
+    // nuevos" de campana_referencias.html manda `palabra`/`pais` (y `idioma`,
+    // `modo`, `pagina_id`) en el hash (#referentes?campana=...&palabra=...&pais=...).
+    // Si están, el botón "Traer referentes" abre ya con el formulario
+    // prellenado -- sigue siendo un clic manual y el mismo precio en vivo de
+    // siempre; nada se lanza solo.
     var botonTraer = document.getElementById('btn-traer-referentes');
     if (botonTraer && location.hash.indexOf('?') >= 0) {
       var previos = new URLSearchParams(location.hash.slice(location.hash.indexOf('?') + 1));
       var extra = new URLSearchParams();
-      ['palabra', 'pais'].forEach(function (k) {
+      ['palabra', 'pais', 'idioma', 'modo', 'pagina_id'].forEach(function (k) {
         if (previos.get(k)) extra.set(k, previos.get(k));
       });
       var qs = extra.toString();

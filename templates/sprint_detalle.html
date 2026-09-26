@@ -286,4 +286,135 @@
     if (panel.dataset.panelInicial) abrir(panel.dataset.panelInicial);
   })();
 </script>
+<script>
+  // Panel de la campaña: autoguardado campo por campo, familias, referentes
+  // (agregar/quitar), sugeridos gratis y «Sugerir con IA». Usa window.tablero.
+  (function () {
+    var T = window.tablero, panel = T.panel, cuerpo = T.cuerpo;
+    var H = {'X-Requested-With': 'fetch'};
+    var HJ = {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'};
+
+    function raiz() { return cuerpo.querySelector('.panel-campana[data-cid]'); }
+    function valorDe(el) {
+      if (el.dataset.tipo === 'radio') { var x = el.querySelector('input:checked'); return x ? x.value : ''; }
+      if (el.dataset.tipo === 'familias') {
+        return Array.prototype.map.call(el.querySelectorAll('[data-familia]'), function (s) { return s.dataset.familia; });
+      }
+      return el.value;
+    }
+    function ponerValor(el, v) {
+      if (el.dataset.tipo === 'radio') { el.querySelectorAll('input').forEach(function (i) { i.checked = i.value === v; }); return; }
+      if (el.dataset.tipo !== 'familias') el.value = v == null ? '' : v;
+    }
+    function errorDe(el) {
+      var caja = el.closest('[data-campo-caja]') || el.closest('label') || el.parentElement;
+      return caja ? caja.querySelector('.campo-error') : null;
+    }
+    function avisar(texto) {
+      var a = cuerpo.querySelector('[data-aviso]');
+      if (a) { a.textContent = texto; a.hidden = !texto; }
+    }
+    function cargarSugeridos(extra) {
+      var r = raiz(), caja = cuerpo.querySelector('[data-sugeridos]');
+      if (!r || !caja) return;
+      caja.innerHTML = '<p class="vacio">Buscando referentes para esta campaña…</p>';
+      fetch(r.dataset.urlSugeridos + (extra || ''), {headers: H})
+        .then(function (x) { return x.ok ? x.text() : Promise.reject(); })
+        .then(function (html) { caja.innerHTML = html; })
+        .catch(function () { caja.innerHTML = '<p class="campo-error">No se pudieron cargar los sugeridos.</p>'; });
+    }
+    window.tableroPanelListo = function () {
+      cuerpo.querySelectorAll('[data-campo]').forEach(function (el) { el.dataset.guardado = JSON.stringify(valorDe(el)); });
+      cargarSugeridos();
+      cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
+        if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
+      });
+    };
+    function guardar(el, valor) {
+      var r = raiz();
+      if (!r) return Promise.resolve();
+      var err = errorDe(el);
+      if (err) { err.hidden = true; err.textContent = ''; }
+      return fetch(r.dataset.urlCampo, {method: 'POST', headers: HJ, body: JSON.stringify({campo: el.dataset.campo, valor: valor})})
+        .then(T.json)
+        .then(function (j) {
+          el.dataset.guardado = JSON.stringify(valor);
+          var t = document.getElementById('campana-' + r.dataset.cid);
+          if (t && j.tarjeta) {
+            t.outerHTML = j.tarjeta;
+            var nueva = document.getElementById('campana-' + r.dataset.cid);
+            if (nueva) nueva.classList.add('activa');
+          }
+          var resumen = document.getElementById('tablero-resumen');
+          if (resumen && j.resumen) resumen.textContent = j.resumen;
+          if (j.recargar_panel) return T.abrir(r.dataset.cid);
+          avisar(j.aviso || '');
+        })
+        .catch(function (e) {
+          ponerValor(el, JSON.parse(el.dataset.guardado || 'null'));
+          if (err) { err.textContent = T.mensaje(e); err.hidden = false; }
+        });
+    }
+    function cajaFamilias() { return cuerpo.querySelector('[data-campo="familias"]'); }
+    function familias() { return valorDe(cajaFamilias()); }
+
+    panel.addEventListener('change', function (ev) {
+      var t = ev.target;
+      if (!raiz() || t.closest('form')) return;
+      if (t.matches('[data-agregar-familia]')) {
+        var v = t.value.trim();
+        if (!v) return;
+        var existe = Array.prototype.some.call(cuerpo.querySelectorAll('#familias-biblioteca option'),
+                                               function (o) { return o.value === v; });
+        if (!existe) {
+          var err = errorDe(cajaFamilias());
+          if (err) { err.textContent = 'Elige una familia de la lista.'; err.hidden = false; }
+          return;
+        }
+        t.value = '';
+        if (familias().indexOf(v) < 0) guardar(cajaFamilias(), familias().concat([v]));
+        return;
+      }
+      var el = t.closest('[data-campo]');
+      if (el) guardar(el, valorDe(el));
+    });
+
+    function recargarTodo() {
+      var cid = raiz().dataset.cid;
+      T.refrescarTarjeta(cid);
+      return T.abrir(cid);
+    }
+    panel.addEventListener('click', function (ev) {
+      if (!raiz()) return;
+      var b;
+      if ((b = ev.target.closest('[data-quitar-familia]'))) {
+        var f = b.closest('[data-familia]').dataset.familia;
+        guardar(cajaFamilias(), familias().filter(function (x) { return x !== f; }));
+      } else if ((b = ev.target.closest('[data-sumar-familia]'))) {
+        if (familias().indexOf(b.dataset.sumarFamilia) < 0) guardar(cajaFamilias(), familias().concat([b.dataset.sumarFamilia]));
+      } else if ((b = ev.target.closest('[data-poner]'))) {
+        var campo = cuerpo.querySelector('[data-campo="' + b.dataset.poner + '"]');
+        campo.value = b.dataset.valor;
+        guardar(campo, campo.value);
+      } else if ((b = ev.target.closest('[data-sumar-ref]'))) {
+        b.disabled = true;
+        var fd = new FormData();
+        fd.append('referente_ids', b.dataset.sumarRef);
+        fetch(b.dataset.url, {method: 'POST', headers: H, body: fd}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-quitar-ref]'))) {
+        b.disabled = true;
+        fetch(b.dataset.quitarRef, {method: 'POST', headers: H}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-sugerir-ia]'))) {
+        b.disabled = true;
+        fetch(b.dataset.sugerirIa, {method: 'POST', headers: H}).then(T.json)
+          .then(function () { return T.abrir(raiz().dataset.cid); })
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if (ev.target.closest('[data-aflojar]')) {
+        cargarSugeridos('?todas=1');
+      }
+    });
+  })();
+</script>
 {% endblock %}

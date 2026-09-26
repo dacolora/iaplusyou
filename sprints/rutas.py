@@ -10,6 +10,7 @@ al render de cliente.html para la pestaña.
 import json
 import os
 from datetime import date
+from urllib.parse import urlencode
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
@@ -305,6 +306,127 @@ def _aviso_identica(cliente, cid):
     numeros = ", ".join(str(n) for n in iguales)
     return (f"Ojo: la campaña {numeros} tiene la misma persona, producto, etapa, consciencia y formato. "
             "Si es a propósito, cambia algo para que no salgan piezas repetidas.")
+
+
+CAMPOS_CAMPANA = ("persona_id", "catalogo_id", "funnel", "consciencia", "dolor", "familias", "pais", "idioma",
+                  "marcas", "n_videos", "n_imagenes", "referencias_objetivo")
+# Cambiar estos datos cambia más que la tarjeta (familias sugeridas, lo heredado,
+# los sugeridos, los enlaces): el panel se vuelve a cargar entero.
+CAMPOS_RECARGAN_PANEL = ("persona_id", "catalogo_id", "funnel", "consciencia", "familias", "pais", "idioma", "marcas",
+                         "referencias_objetivo")
+
+
+def _campana_del_sprint(cliente, sid, cid):
+    sp = _sprint_o_404(cliente, sid)
+    c = next((x for x in sp["campanas"] if x["id"] == cid), None)
+    if not c:
+        abort(404)
+    return sp, c
+
+
+def _enlaces(cliente, sp, c):
+    """«Buscar en la biblioteca» (grid en modo selección, ya filtrado por etapa
+    y consciencia) y «Traer nuevos de Meta» (formulario prellenado con país,
+    idioma y la primera marca con página, o el producto como palabra clave)."""
+    ef = c.get("efectivos") or datos.efectivos(sp, c)
+    filtros = {"etapa": (c.get("funnel") or "tof").upper(), "campana": c["id"]}
+    cons = referentes_sugerir.consciencia_en(c.get("consciencia"))
+    if cons:
+        filtros["consciencia"] = cons
+    traer = {"campana": c["id"], "pais": ef["pais"] or proyectos.pais(cliente), "idioma": ef["idioma"]}
+    con_pagina = next((m for m in ef["marcas"] if m.get("pagina_id")), None)
+    if con_pagina:
+        traer.update(modo="marca", pagina_id=con_pagina["pagina_id"])
+    else:
+        producto = (c.get("producto") or {}).get("nombre") or c["catalogo_id"]
+        traer.update(modo="palabra", palabra=producto.split(" — ")[0])
+    base = url_for("ver_cliente", cliente=cliente)
+    return {"biblioteca": f"{base}#referentes?{urlencode(filtros)}", "traer": f"{base}#referentes?{urlencode(traer)}"}
+
+
+def _volver_campana(cliente, sid, cid):
+    """Las acciones de referencias vuelven al panel del tablero cuando se
+    pidieron desde ahí (`volver=tablero`), si no a la página de la campaña."""
+    if request.form.get("volver") == "tablero":
+        return redirect(url_for("sprints.ver", cliente=cliente, sid=sid, panel=cid))
+    return _volver(cliente, sid, cid)
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/panel")
+def campana_panel(cliente, sid, cid):
+    """Panel lateral de una campaña (fragmento por fetch). Abrirlo no gasta nada."""
+    sp, c = _campana_del_sprint(cliente, sid, cid)
+    productos = _productos_planos(cliente)
+    _campana_tablero(cliente, sp, c, {p["id"]: p for p in productos})
+    personas_ = datos.personas(cliente)
+    if c["persona_id"] not in {p["id"] for p in personas_}:
+        archivada = datos.persona(cliente, c["persona_id"])
+        if archivada:
+            personas_.append(archivada)
+    ya_ids = {(r.get("extra") or {}).get("referente_id") for r in c["referencias_lista"]} - {None}
+    candidatos_ia = []
+    for item in (c.get("extra") or {}).get("sugerencias_ia") or []:
+        ref = referentes_datos.referente(cliente, item.get("referente_id"))
+        if ref and ref["id"] not in ya_ids:
+            candidatos_ia.append({**ref, "razon": item.get("razon") or ""})
+    familias = sorted(referentes_datos.familias(cliente), key=lambda f: (-int(f.get("n") or 0), f["nombre"]))
+    sugeridas = referentes_datos.familias_frecuentes(cliente, etapa=(c.get("funnel") or "tof").upper(),
+                                                    consciencia=referentes_sugerir.consciencia_en(c.get("consciencia")))
+    job = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
+    pais_sprint = fe_tipos.PAISES.get(sp.get("pais") or "") or {}
+    return render_template(
+        "_sprint_panel.html", cliente=cliente, sprint=sp, c=c, personas=personas_, productos=productos,
+        consciencias=doctrina.CONSCIENCIAS_NOMBRE, funnels=datos.FUNNELS_NOMBRE,
+        sugerencias_dolor=tablero.sugerencias_dolor(datos.persona(cliente, c["persona_id"])),
+        familias=familias, familias_sugeridas=[f for f in sugeridas if f not in (c.get("familias") or [])],
+        paises=_paises(), idiomas=datos.IDIOMAS_NOMBRE,
+        pais_sprint=" ".join(x for x in (pais_sprint.get("bandera"), pais_sprint.get("nombre")) if x) or "sin país",
+        marcas_texto=tablero.marcas_texto(c.get("marcas")), candidatos_ia=candidatos_ia,
+        trabajo_sugerir_ia={"job_id": job} if trabajos.en_curso(job) else None,
+        precio_sugerir_ia=gastos.estimar("sugerir_ia"), aviso=_aviso_identica(cliente, cid),
+        enlaces=_enlaces(cliente, sp, c))
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/sugeridos")
+def campana_sugeridos(cliente, sid, cid):
+    """Sugeridos gratis (sin Claude) según el enfoque de la campaña.
+    `?todas=1` deja de filtrar por etapa (el «aflojar filtros» del estado vacío)."""
+    sp, c = _campana_del_sprint(cliente, sid, cid)
+    refs = datos.referencias(cliente, cid)
+    ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs} - {None}
+    ef = c["efectivos"]
+    todas = request.args.get("todas") == "1"
+    enfoque = {"etapa": None if todas else (c.get("funnel") or "tof").upper(), "consciencia": c.get("consciencia"),
+               "familias": c.get("familias") or [], "idioma": ef["idioma"], "marcas": ef["marcas"]}
+    faltan = int(c.get("referencias_objetivo") or 1) - len(refs)
+    r = referentes_sugerir.sugerir_campana(cliente, enfoque, ya_ids, min(8, faltan) if faltan > 0 else 4)
+    c["producto"] = next((p for p in _productos_planos(cliente) if p["id"] == c["catalogo_id"]), None)
+    return render_template("_sprint_sugeridos.html", cliente=cliente, sprint=sp, c=c, sugeridos=r["items"],
+                           aflojado=r["aflojado"] + (["etapa"] if todas else []), todas=todas,
+                           precio_sugerir_ia=gastos.estimar("sugerir_ia"), enlaces=_enlaces(cliente, sp, c))
+
+
+@bp.post("/<int:sid>/campanas/<int:cid>/campo")
+def campana_campo(cliente, sid, cid):
+    """Autoguardado de un dato del panel: `datos` valida, y se devuelve la
+    tarjeta ya actualizada y si el panel debe recargarse."""
+    _campana_o_404(cliente, sid, cid)
+    cuerpo = _json_cuerpo()
+    if not cuerpo or cuerpo.get("campo") not in CAMPOS_CAMPANA or not _valor_simple(cuerpo.get("valor")):
+        return jsonify({"ok": False, "error": "Ese dato no se puede editar aquí."}), 400
+    campo, valor = cuerpo["campo"], cuerpo.get("valor")
+    try:
+        if campo == "catalogo_id" and valor not in {p["id"] for p in _productos_planos(cliente)}:
+            raise datos.ErrorDatos("Ese producto no está en el catálogo.")
+        datos.actualizar_campana(cliente, cid, **{campo: valor})
+    except datos.ErrorDatos as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+    sp = estado.recalcular(cliente, sid)
+    c = next(x for x in sp["campanas"] if x["id"] == cid)
+    _campana_tablero(cliente, sp, c, {p["id"]: p for p in _productos_planos(cliente)})
+    return jsonify({"ok": True, "aviso": _aviso_identica(cliente, cid), "resumen": tablero.resumen(sp),
+                    "tarjeta": render_template("_sprint_tarjeta.html", cliente=cliente, sprint=sp, c=c),
+                    "recargar_panel": campo in CAMPOS_RECARGAN_PANEL})
 
 
 def _json_cuerpo():
@@ -653,7 +775,7 @@ def referencias_subir(cliente, sid, cid):
     estado.recalcular(cliente, sid)
     if _quiere_json():
         return jsonify({"ok": True, "subidas": subidas, "rechazadas": rechazadas})
-    return _volver(cliente, sid, cid)
+    return _volver_campana(cliente, sid, cid)
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/referencias/catalogo")
@@ -665,7 +787,7 @@ def referencias_catalogo(cliente, sid, cid):
     producto = catalogo_productos.encontrar(cliente, c["catalogo_id"], "producto")
     if not producto:
         flash("El producto de la campaña ya no está en el catálogo.", "error")
-        return _volver(cliente, sid, cid)
+        return _volver_campana(cliente, sid, cid)
     existentes = {r["url"] for r in datos.referencias(cliente, cid)}
     base = (os.environ.get("R2_PUBLIC_BASE_URL") or "").rstrip("/")
     carpeta = catalogo_productos.CATEGORIAS["producto"]["carpeta"]
@@ -681,7 +803,7 @@ def referencias_catalogo(cliente, sid, cid):
         nuevas += 1
     flash(f"{nuevas} foto(s) del producto traídas del catálogo." if nuevas else "Las fotos del producto ya estaban.", "ok")
     estado.recalcular(cliente, sid)
-    return _volver(cliente, sid, cid)
+    return _volver_campana(cliente, sid, cid)
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/referencias/reutilizar")
@@ -701,7 +823,8 @@ def campana_referencias_biblioteca(cliente, cid):
     """Trae uno o más referentes de la biblioteca (`referentes.datos`) como
     referencias ya analizadas de la campaña — sin `sid` en la URL porque
     también se llama desde la ficha de un referente, donde no se navegó
-    pasando por el sprint."""
+    pasando por el sprint. Vuelve al tablero con el panel de la campaña
+    abierto."""
     c = datos.campana(cliente, cid)
     if not c:
         abort(404)
@@ -719,11 +842,13 @@ def campana_referencias_biblioteca(cliente, cid):
         except datos.ErrorDatos:
             continue
     estado.recalcular(cliente, c["sprint_id"])
+    if _quiere_json():
+        return jsonify({"ok": n > 0, "agregados": n, "error": None if n else "No se pudo agregar ese referente."})
     if n:
         flash(f"{n} referente(s) agregado(s) desde la biblioteca.", "ok")
     else:
         flash("No se agregó ningún referente.", "error")
-    return _volver(cliente, c["sprint_id"], cid)
+    return redirect(url_for("sprints.ver", cliente=cliente, sid=c["sprint_id"], panel=cid))
 
 
 @bp.post("/campanas/<int:cid>/sugerir_ia")
@@ -735,11 +860,15 @@ def campana_sugerir_ia(cliente, cid):
     c = datos.campana(cliente, cid)
     if not c:
         abort(404)
-    if tareas_sprints.encolar_sugerir_biblioteca(cliente, cid):
+    ok = tareas_sprints.encolar_sugerir_biblioteca(cliente, cid)
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_sugerir_biblioteca(cliente, cid),
+                        "error": None if ok else "Ya hay una sugerencia en curso para esta campaña."})
+    if ok:
         flash("Claude está buscando referentes de la biblioteca; aparecerán aquí en unos segundos.", "ok")
     else:
         flash("Ya hay una sugerencia en curso para esta campaña.", "error")
-    return _volver(cliente, c["sprint_id"], cid)
+    return redirect(url_for("sprints.ver", cliente=cliente, sid=c["sprint_id"], panel=cid))
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/referencias/estado")
@@ -748,43 +877,6 @@ def referencias_estado(cliente, sid, cid):
     return jsonify({"listas": c["referencias_listas"], "objetivo": c["referencias_objetivo"],
                     "referencias": [{"id": r["id"], "analisis_estado": r["analisis_estado"], "analisis": r["analisis"],
                                      "estado": r["estado"]} for r in datos.referencias(cliente, cid)]})
-
-
-# --------------------------------------------------- desplegables ajax ---
-
-@bp.get("/<int:sid>/campanas/<int:cid>/referencias-ajax")
-def referencias_ajax(cliente, sid, cid):
-    sp = _sprint_o_404(cliente, sid)
-    c = _campana_o_404(cliente, sid, cid)
-    refs = datos.referencias(cliente, cid)
-    c["progreso"] = progreso.progreso_campana(c)
-    return render_template("_sprint_referencias_ajax.html", cliente=cliente, sprint=sp, campana=c,
-                           referencias=refs, intenciones_sprint=datos.INTENCIONES_NOMBRE,
-                           cobertura=progreso.cobertura(c, refs))
-
-
-@bp.get("/<int:sid>/campanas/<int:cid>/ideas-ajax")
-def ideas_ajax(cliente, sid, cid):
-    sp = _sprint_o_404(cliente, sid)
-    c = _campana_o_404(cliente, sid, cid)
-    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
-    lista = datos.ideas(cliente, cid)
-    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
-    faltan_v, faltan_i = ideas.faltantes(c)
-    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
-              "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
-              "faltan_videos": faltan_v, "faltan_imagenes": faltan_i}
-    return render_template("_sprint_ideas_ajax.html", cliente=cliente, sprint=sp, campana=c,
-                           ideas=lista, referencias_por_id=refs, conteo=conteo,
-                           enfoques=flowplus_prompt_enfoques())
-
-
-@bp.get("/<int:sid>/campanas/<int:cid>/revision-ajax")
-def revision_ajax(cliente, sid, cid):
-    sp = _sprint_o_404(cliente, sid)
-    c = _campana_o_404(cliente, sid, cid)
-    piezas = [p for p in c.get("piezas", []) if p.get("estado") != "descartada"]
-    return render_template("_sprint_revision_ajax.html", cliente=cliente, sprint=sp, campana=c, piezas=piezas)
 
 
 @bp.post("/referencias/<int:rid>")

@@ -188,3 +188,176 @@ def test_tarjeta_de_una_campana(app):
     assert html.lstrip().startswith("<article") and f'id="campana-{cid}"' in html
     otro = _sprint(datos)
     assert app["c"].get(f"/cliente/acme/sprints/{otro}/campanas/{cid}/tarjeta").status_code == 404
+
+
+# --------------------------------------------------------------- panel ---
+
+def _referente(n, familia, etapa="TOF", consciencia="problem-aware", marca="", idioma="en"):
+    from referentes import datos as rdatos
+    rdatos.familia_asegurar(familia, "")
+    rid, _ = rdatos.guardar_referente({"anuncio_id": f"p{n}", "fuente": "atria", "imagen_origen": "https://o/x.jpg",
+                                       "marca": marca, "idioma": idioma})
+    rdatos.marcar_imagen(rid, "ok", f"https://r2/ref{n}.jpg")
+    rdatos.actualizar_referente(rid, etapa=etapa, consciencia=consciencia, familia=familia, clasificacion="claude")
+    return rid
+
+
+def test_panel_muestra_las_siete_secciones(app):
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel")
+    html = r.data.decode()
+    assert r.status_code == 200
+    for frag in ("Audiencia y producto", "Enfoque", "Formato de los anuncios", "Mercado y marcas", "Piezas",
+                 "Referentes · 0 de 5 elegidos", 'data-campo="persona_id"', 'data-campo="catalogo_id"',
+                 'data-campo="funnel"', 'data-campo="consciencia"', 'data-campo="dolor"', 'data-campo="familias"',
+                 'data-campo="pais"', 'data-campo="idioma"', 'data-campo="marcas"', 'data-campo="n_videos"',
+                 'data-campo="n_imagenes"', 'data-campo="referencias_objetivo"', "Sugerir con IA",
+                 "Buscar en la biblioteca", "Traer nuevos de Meta", 'name="volver" value="tablero"',
+                 "Eliminar campaña", f"/sprints/{sid}/campanas/{cid}/ideas", "Crear persona rápida", "data-sugeridos"):
+        assert frag in html, frag
+    assert "<script" not in html                      # el JS vive en sprint_detalle.html
+
+
+def test_panel_de_otra_campana_o_sprint_da_404(app):
+    from sprints import datos
+    sid, otro = _sprint(datos), _sprint(datos)
+    cid = _campana(datos, sid)
+    assert app["c"].get(f"/cliente/acme/sprints/{otro}/campanas/{cid}/panel").status_code == 404
+    assert app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/999/panel").status_code == 404
+
+
+def test_panel_trae_lo_de_nicho_y_lo_heredado(app):
+    from sprints import datos
+    pid = datos.crear_persona("acme", "Melissa", resumen="Comodidad al llegar", origen="investigada",
+                              extra={"conciencia": {"nivel": "consciente del problema"},
+                                     "encaje_producto": "Abriga sin sudar"})
+    sid = _sprint(datos, pais="MX", marcas="Crocs")
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", None, 2, 1)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
+    assert 'value="consciente_del_problema" checked' in html
+    assert 'data-valor="Abriga sin sudar"' in html and "Melissa · del Nicho" in html
+    assert "Del sprint (🇲🇽 México)" in html and "Del sprint: Crocs" in html
+    assert "#referentes?" in html and "etapa=TOF" in html and "consciencia=problem-aware" in html
+    assert "pais=MX" in html and "palabra=Espejo+LED" in html
+
+
+def test_panel_muestra_referencias_viejas_sin_frame(app):
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    datos.agregar_referencia("acme", cid, "imagen", "https://r2/vieja.png", frame_url=None, titulo="vieja.png")
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
+    assert 'src="https://r2/vieja.png"' in html and "falta describir" in html
+
+
+def test_guardar_un_campo_de_la_campana(app):
+    from referentes import datos as rdatos
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    rdatos.familia_asegurar("UGC", "")
+    url = f"/cliente/acme/sprints/{sid}/campanas/{cid}/campo"
+    j = _json(app["c"], url, {"campo": "dolor", "valor": "pies fríos"}).get_json()
+    assert j["ok"] and "«pies fríos»" in j["tarjeta"] and j["recargar_panel"] is False
+    j = _json(app["c"], url, {"campo": "familias", "valor": ["UGC"]}).get_json()
+    assert j["ok"] and j["recargar_panel"] is True and datos.campana("acme", cid)["familias"] == ["UGC"]
+    j = _json(app["c"], url, {"campo": "n_videos", "valor": "7"}).get_json()
+    assert j["ok"] and "7 videos" in j["tarjeta"] and "8 piezas planeadas" in j["resumen"]
+    for malo in ({"campo": "consciencia", "valor": "x"}, {"campo": "familias", "valor": ["No existe"]},
+                 {"campo": "n_videos", "valor": -1}, {"campo": "catalogo_id", "valor": "no_existe"},
+                 {"campo": "estado", "valor": "x"}, {"campo": "dolor", "valor": {"a": 1}},
+                 {"campo": "funnel", "valor": True}):
+        r = _json(app["c"], url, malo)
+        assert r.status_code == 400 and r.get_json()["error"], malo
+    assert datos.campana("acme", cid)["n_videos"] == 7
+
+
+def test_guardar_repetida_devuelve_el_aviso(app):
+    from sprints import datos
+    sid = _sprint(datos)
+    pid = datos.crear_persona("acme", "Premium")
+    datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0, funnel="mof")
+    j = _json(app["c"], f"/cliente/acme/sprints/{sid}/campanas/{cid}/campo", {"campo": "funnel", "valor": "tof"}).get_json()
+    assert j["ok"] and "campaña 1" in j["aviso"]
+
+
+def test_sugeridos_siguen_el_enfoque_y_avisan_lo_aflojado(app):
+    from sprints import datos
+    uno = _referente(1, "UGC")
+    dos = _referente(2, "Antes y después")
+    _referente(3, "Lista", consciencia="unaware")
+    _referente(4, "Otra etapa", etapa="MOF")
+    sid = _sprint(datos)
+    cid = _campana(datos, sid, consciencia="consciente_del_problema", familias=["UGC"])
+    datos.actualizar_campana("acme", cid, referencias_objetivo=1)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/sugeridos").data.decode()
+    assert f'data-sumar-ref="{uno}"' in html and "ya no filtran por" not in html
+    datos.actualizar_campana("acme", cid, referencias_objetivo=5)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/sugeridos").data.decode()
+    assert f'data-sumar-ref="{dos}"' in html and "ya no filtran por" in html and "las familias de formato" in html
+    assert "Otra etapa" not in html
+
+
+def test_sugeridos_vacios_ofrecen_tres_salidas(app):
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/sugeridos").data.decode()
+    for frag in ("No hay referentes para sugerir", "data-aflojar", "data-sugerir-ia", "Traer nuevos de Meta"):
+        assert frag in html, frag
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/sugeridos?todas=1").data.decode()
+    assert "data-aflojar" not in html
+
+
+def test_agregar_de_la_biblioteca_por_fetch_y_por_formulario(app):
+    from sprints import datos
+    uno, dos = _referente(1, "UGC"), _referente(2, "Lista")
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    url = f"/cliente/acme/sprints/campanas/{cid}/referencias_biblioteca"
+    r = app["c"].post(url, data={"referente_ids": [str(uno)]}, headers={"X-Requested-With": "fetch"})
+    assert r.get_json() == {"ok": True, "agregados": 1, "error": None}
+    r = app["c"].post(url, data={"referente_ids": [str(dos)]})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}")
+    assert len(datos.referencias("acme", cid)) == 2
+    j = app["c"].post(url, data={"referente_ids": ["999"]}, headers={"X-Requested-With": "fetch"}).get_json()
+    assert j["ok"] is False and j["error"]
+
+
+def test_sugerir_ia_por_fetch(app, monkeypatch):
+    from sprints import datos, rutas
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    url = f"/cliente/acme/sprints/campanas/{cid}/sugerir_ia"
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_sugerir_biblioteca", lambda cliente_, cid_: True)
+    j = app["c"].post(url, headers={"X-Requested-With": "fetch"}).get_json()
+    assert j["ok"] and j["job_id"] == f"acme__campana{cid}__sugerir_biblioteca"
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_sugerir_biblioteca", lambda cliente_, cid_: False)
+    j = app["c"].post(url, headers={"X-Requested-With": "fetch"}).get_json()
+    assert j["ok"] is False and "en curso" in j["error"]
+
+
+def test_fotos_del_producto_vuelven_al_panel(app, monkeypatch):
+    import catalogo_productos
+    from sprints import datos, rutas
+    monkeypatch.setattr(catalogo_productos, "encontrar",
+                        lambda c, pid, cat=None: {"id": "espejo_led", "nombre": "Espejo LED", "imagenes": ["a.jpg"]})
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_analisis", lambda cliente_, rid: True)
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    url = f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias/catalogo"
+    r = app["c"].post(url, data={"volver": "tablero"})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}")
+    r = app["c"].post(url)
+    assert r.headers["Location"].endswith(f"/sprints/{sid}/campanas/{cid}")
+
+
+def test_las_mini_pantallas_viejas_ya_no_existen(app):
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    for tipo in ("referencias", "ideas", "revision"):
+        assert app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/{tipo}-ajax").status_code == 404

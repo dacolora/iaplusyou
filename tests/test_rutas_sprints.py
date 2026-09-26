@@ -292,7 +292,7 @@ def test_campana_referencias_biblioteca_agrega_y_redirige(app, monkeypatch):
     r = app["c"].post(f"/cliente/acme/sprints/campanas/{cid}/referencias_biblioteca",
                       data={"referente_ids": ["7", "8"]}, follow_redirects=False)
     assert r.status_code == 302
-    assert f"/sprints/{sid}/campanas/{cid}" in r.headers["Location"]
+    assert r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}")
     refs = datos.referencias("acme", cid)
     assert len(refs) == 2
     assert {x["extra"]["referente_id"] for x in refs} == {7, 8}
@@ -819,32 +819,6 @@ def test_cerrar_y_zip_se_niegan_fuera_de_estado_y_la_entrega_muestra_el_zip(con_
     assert "iniciarPolling" in html and rutas.tareas_sprints.job_id_zip("acme", sid) in html
 
 
-def test_referencias_ajax_muestra_imagenes_y_videos(app):
-    """Las referencias de imagen anteriores al 2026-09-22 quedaron con frame_url
-    vacío (registrar_local devolvía None): el desplegable tiene que mostrarlas
-    igual, con la miniatura y la imagen completa salidas de `url`."""
-    from sprints import datos
-    pid, tid = _base(datos)
-    sid, cid = _sprint(datos, pid, tid)
-    datos.agregar_referencia("acme", cid, "imagen", "https://r2/vieja.png", frame_url=None, titulo="vieja.png")
-    datos.agregar_referencia("acme", cid, "video", "https://r2/clip.mp4", frame_url="https://r2/clip.mp4.frame.jpg", titulo="clip.mp4")
-    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias-ajax").data.decode()
-    assert html.count('src="https://r2/vieja.png"') >= 2           # miniatura + imagen completa
-    assert 'poster="https://r2/clip.mp4.frame.jpg"' in html and 'src="https://r2/clip.mp4"' in html
-
-
-def test_referencias_ajax_muestra_los_avisos_de_cobertura_como_texto(app):
-    """`progreso.cobertura` devuelve una lista de avisos; el desplegable la
-    imprimía cruda («['Te faltan…']% cobertura»)."""
-    from sprints import datos
-    pid, tid = _base(datos)
-    sid, cid = _sprint(datos, pid, tid)                                  # 2 videos, 1 imagen planeados, sin referencias
-    html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/referencias-ajax").data.decode()
-    assert "Te faltan referencias de movimiento de cámara o transiciones" in html
-    assert "% cobertura" not in html and "['" not in html
-    assert "0/5 referencias" in html
-
-
 def test_campana_sugerir_ia_encola_tarea(app, monkeypatch):
     from sprints import datos, rutas
     pid, tid = _base(datos)
@@ -854,7 +828,7 @@ def test_campana_sugerir_ia_encola_tarea(app, monkeypatch):
                         lambda cliente_, cid_: llamadas.append((cliente_, cid_)) or True)
     r = app["c"].post(f"/cliente/acme/sprints/campanas/{cid}/sugerir_ia", follow_redirects=False)
     assert r.status_code == 302
-    assert f"/sprints/{sid}/campanas/{cid}" in r.headers["Location"]
+    assert r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}")
     assert llamadas == [("acme", cid)]
 
 

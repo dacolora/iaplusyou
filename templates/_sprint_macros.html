@@ -36,3 +36,13 @@
 <p class="vacio">No hay candidatos nuevos en la biblioteca para esta etapa por ahora.</p>
 {% endif %}
 {%- endmacro %}
+
+{% macro sugerido(s, cliente, campana_id, razon=None) -%}
+<figure class="panel-sugerido">
+  <img src="{{ s.imagen_url }}" alt="" loading="lazy">
+  <figcaption>{{ s.familia or 'sin familia' }}{% if s.marca %} · {{ s.marca }}{% endif %}{% if razon %}<br><small class="vacio">{{ razon }}</small>{% endif %}</figcaption>
+  <button type="button" class="panel-sumar" data-sumar-ref="{{ s.id }}"
+          data-url="{{ url_for('sprints.campana_referencias_biblioteca', cliente=cliente, cid=campana_id) }}"
+          aria-label="Agregar este referente a la campaña" title="Agregar a la campaña">+</button>
+</figure>
+{%- endmacro %}
