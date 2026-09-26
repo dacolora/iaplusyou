@@ -403,6 +403,24 @@ def test_campana_ver_persona_sin_conciencia_pasa_none(app, monkeypatch):
     assert vistos == [None]
 
 
+def test_campana_ver_normaliza_la_consciencia_con_espacios_y_mayusculas(app, monkeypatch):
+    """Un nivel escrito «Consciente del problema» (espacios, mayúscula inicial
+    — como lo escribiría alguien a mano, a diferencia del snake_case que deja
+    Nicho) debe normalizarse igual que el camino de IA (`doctrina.normalizar_consciencia`)
+    antes de buscarlo en `NIVEL_A_CONSCIENCIA`."""
+    from sprints import datos
+    pid = datos.crear_persona("acme", "Investigada", extra={"conciencia": {"nivel": "Consciente del problema"}})
+    tid = datos.crear_temporada("acme", "Verano", "2026-06-01", "2026-07-15")
+    sid, cid = _sprint(datos, pid, tid)
+    import referentes.sugerir as referentes_sugerir
+    vistos = []
+    monkeypatch.setattr(referentes_sugerir, "sugerir", lambda cliente_, etapa, excluir, objetivo, consciencia=None:
+                         vistos.append(consciencia) or [])
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert vistos == ["problem-aware"]
+
+
 def test_campana_ver_enlace_traer_prellena_producto_y_pais(app):
     """Bloque 7: el link «Traer referentes nuevos» debe navegar a Referentes
     con `palabra` (nombre del producto) y `pais` (del proyecto) en el hash, y

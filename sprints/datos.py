@@ -700,7 +700,7 @@ def agregar_referencia_biblioteca(cliente, campana_id, referente_id):
     actualizar_referencia(cliente, rid, analisis={
         "familia": ref.get("familia"), "descripcion_familia": familia.get("descripcion") if familia else None,
         "etapa": ref.get("etapa"), "consciencia": ref.get("consciencia"), "dolor": ref.get("dolor"),
-        "firma": firma, "resumen": firma,
+        "firma": firma, "resumen": firma, "lead": (ref.get("extra") or {}).get("lead"),
     }, analisis_estado="listo", extra={"referente_id": referente_id})
     return rid
 
