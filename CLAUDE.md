@@ -326,6 +326,25 @@ Every Claude call is registered as gasto `refinar_prompt` (`guiones:refinar:<men
 also when the answer was unusable. JSON routes in the Blueprint `guiones/rutas.py`
 (`/cliente/<cliente>/guiones/prompts...`, same-origin check on every POST).
 
+**Flow Plus: del guion a los prompts** (`guiones/` pipeline, spec
+`docs/superpowers/specs/2026-09-25-flowplus-pipeline-guiones-design.md`, migración 0019): Parte A del
+spec del cliente (`docs/flowplus/workflow-automation-spec.md`). Tablas `guion_lote` (texto pegado o una
+página de Notion, `leyendo|leido|error`), `guion` (un script: `lectura` con líneas numeradas y
+`literal`, `leido|confirmado`) y `guion_video` (una versión: `config`, `recorte`, `plan`, `clips`,
+`hooks_alt`, `validaciones`, `avisos`, `imagenes`; `configurando|recortando|armando|armado|invalido|error`
+y `estado_imagenes`). `guiones/datos.py` es el único escritor; un trabajo con `iniciado_en` de más de
+6 min se lee como error. Claude planea y el código escribe: `lectura.py` (copia literal verificada),
+`recorte.py` (orden de prescindibles; nunca la línea 1), `clips.py` (plan por números de línea →
+`duracion.calcular_clip` → `plantillas.prompt_clip` → validaciones V1-V6/E1-E4 que bloquean; los
+prompts entran al chat con `refinador.crear(origen="pipeline", texto_fijo=líneas exactas)`),
+`imagenes.py` (hojas de personaje, entornos, producto con sus fotos; tabla imagen↔clip; checklist).
+Todo prompt de fábrica pasa `refinador.validar`. Una llamada por paso vía `guiones/claude.py`
+(`pedir_json`, gasto `guion_clips` también si la respuesta no sirvió), en un hilo
+(`trabajos.iniciar`). Cambiar una versión armada crea otra (`nueva_version`; con solo el bloque del
+video, `clips.version_con_bloque` no llama a Claude). Notion: llave de integración cifrada en `kv`
+(`notion:<cliente>`), solo `api.notion.com`, exige correo verificado. UI: `/panel` como fragmento
+(`_gpg_*.html`) + `_crear_flowplus_guiones.html`; «Abrir en el chat» emite `gp:abrir-prompt`.
+
 **Final edition** (`final_edition/`): a second pipeline that takes an already-approved
 CreativeFlowPlus video (`creative_flow.py`) and turns it into a localized, narrated,
 subtitled, scored final ad per idioma/país (`fe_preparar` writes one guion base with
