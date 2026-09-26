@@ -314,6 +314,26 @@ def test_recrear_generar_guarda_el_angulo_validado(app, monkeypatch):
     assert "angulo" not in creative_flow.cargar("acme")[lanzados[1]]
 
 
+def test_recrear_generar_no_pierde_los_errores_del_angulo_al_revalidarlo(app, monkeypatch):
+    """Fix 2: el ángulo que devuelve el navegador ya trae sus «error: …»
+    (después de 5 faltantes de Claude); al revalidarlo en la ruta van
+    primero y ninguno se cae por el tope."""
+    import json
+    import creative_flow
+    import flowplus_lanzar
+    ids = _sembrar()
+    monkeypatch.setattr("referentes.recrear.r2_uploader.upload_image", lambda local, clave: f"https://r2/{clave}")
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(cf_id) or True)
+    errores = ["error: gancho_largo", "error: cifra_no_verificada:47 %", "error: mecanismo_obligatorio"]
+    angulo = {"audiencia": "a", "consciencia": "consciente_del_producto", "sofisticacion": 2, "deseo": "d",
+              "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "promesa", "gancho": "g",
+              "faltantes": [f"falta {n}" for n in range(5)] + errores}
+    base = {"producto_id": "espejo_led", "formato": "1:1", "titular": "T", "prompt": "P", "tipo": "imagen"}
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar", data=dict(base, angulo=json.dumps(angulo)))
+    assert creative_flow.cargar("acme")[lanzados[0]]["angulo"]["faltantes"][:3] == errores
+
+
 def test_recrear_generar_sin_producto_o_prompt_no_crea_nada(app):
     import creative_flow
     ids = _sembrar()

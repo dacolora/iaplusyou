@@ -365,6 +365,21 @@ def test_angulo_con_cifra_rechazada_no_blanquea_la_cifra(monkeypatch):
     assert "47 %" in correccion and "3x" in correccion
 
 
+def test_angulo_decidido_con_cinco_faltantes_y_varios_errores_no_pierde_ningun_error(monkeypatch):
+    """Fix 2: igual que en ideas y «Adaptar», los «error: …» del ángulo que
+    decide el guion van primero y el tope no corta la cifra rechazada."""
+    from final_edition import guion
+    malo = dict(ANG, consciencia="dormido", lead="grito", gancho=" ".join(["palabra"] * 13),
+                promesa="47 % menos roturas", faltantes=[f"falta {n}" for n in range(5)])
+    respuesta = json.dumps(dict(_guion_valido(), angulo=malo))
+    _instalar_fake(monkeypatch, [respuesta, respuesta])
+    g, _ = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    faltantes = g["angulo"]["faltantes"]
+    errores = [f for f in faltantes if f.startswith("error: ")]
+    assert len(errores) == 6 and faltantes[:6] == errores
+    assert any(f.startswith("error: cifra_no_verificada:47") for f in errores)
+
+
 def test_una_cifra_inventada_dos_veces_no_se_guarda(monkeypatch):
     from final_edition import guion
     inventado = _guion_valido()

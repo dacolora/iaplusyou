@@ -243,3 +243,21 @@ def test_proponer_guarda_la_primera_respuesta_si_la_correccion_falla_por_algo_aj
     assert len(llamadas) == 2 and len(creadas) == 1
     ang = datos.idea("acme", creadas[0])["extra"]["angulo"]
     assert any(f.startswith("error: mecanismo_obligatorio") for f in ang["faltantes"])
+
+
+def test_proponer_con_cinco_faltantes_y_varios_errores_no_pierde_ningun_error(base_temporal, monkeypatch):
+    """Fix 2: con 5 faltantes de Claude y 6 errores, el viejo `[:8]` cortaba
+    el `error: cifra_no_verificada` (va último) y el ángulo quedaba sin
+    marcador. Los errores van primero y ninguno se cae."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    mala = dict(IDEA_V, angulo=dict(ANGULO, consciencia="dormido", lead="grito", gancho=" ".join(["palabra"] * 13),
+                                    promesa="47 % más luz en tu baño", faltantes=[f"falta {n}" for n in range(5)]))
+    respuestas = [json.dumps({"ideas": [mala]}), json.dumps({"ideas": [mala]})]
+    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700, system=None: respuestas.pop(0))
+    creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
+    faltantes = datos.idea("acme", creadas[0])["extra"]["angulo"]["faltantes"]
+    errores = [f for f in faltantes if f.startswith("error: ")]
+    assert len(errores) == 6 and faltantes[:6] == errores
+    assert any(f.startswith("error: cifra_no_verificada:47") for f in errores)
+    assert "error: gancho_largo" in errores

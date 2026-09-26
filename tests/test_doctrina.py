@@ -235,14 +235,54 @@ def test_texto_verificable_nunca_incluye_los_faltantes():
         assert p["texto"] in t
 
 
-def test_texto_verificable_omite_los_campos_de_texto_si_hay_una_cifra_rechazada_pero_deja_las_pruebas():
+@pytest.mark.parametrize("marca", ["error: cifra_no_verificada:47", "error: mecanismo_obligatorio",
+                                   "error: gancho_largo", "error: campo_faltante:deseo"])
+def test_texto_verificable_omite_los_campos_de_texto_si_hay_cualquier_error_pero_deja_las_pruebas(marca):
+    """Fix 2: cualquier «error: …» en faltantes (no solo la cifra rechazada)
+    deja fuera audiencia/deseo/promesa/mecanismo/gancho — si el marcador de
+    la cifra se hubiera cortado, otro error basta para no re-blanquearla."""
     import doctrina
     limpio, _ = doctrina.validar_angulo(ANGULO_OK, DATOS)
-    con_rechazo = dict(limpio, faltantes=["error: cifra_no_verificada:47"])
+    con_rechazo = dict(limpio, faltantes=["no hay citas de compradores", marca])
     t = doctrina.texto_verificable(con_rechazo)
-    assert limpio["promesa"] not in t and limpio["gancho"] not in t and limpio["audiencia"] not in t
+    for campo in ("audiencia", "deseo", "promesa", "mecanismo", "gancho"):
+        assert limpio[campo] not in t, campo
     for p in limpio["pruebas"]:
         assert p["texto"] in t
+    sin_error = dict(limpio, faltantes=["no hay citas de compradores", "arranque fuera de lo recomendado: oferta"])
+    assert limpio["promesa"] in doctrina.texto_verificable(sin_error)
+
+
+def test_anotar_errores_pone_los_errores_primero_sin_repetir_y_con_tope():
+    import doctrina
+    ang = dict(doctrina.angulo_vacio(), faltantes=["a", "error: x", "b"])
+    nuevo = doctrina.anotar_errores(ang, ["y", "x"])
+    assert nuevo["faltantes"] == ["error: x", "error: y", "a", "b"]
+    assert ang["faltantes"] == ["a", "error: x", "b"]          # pura: no toca el que recibe
+    assert doctrina.MAX_FALTANTES_CON_ERRORES == doctrina.MAX_FALTANTES + 3
+    lleno = dict(ang, faltantes=[f"falta {n}" for n in range(doctrina.MAX_FALTANTES)])
+    errores = ["uno", "dos", "tres", "cifra_no_verificada:47 %"]
+    nuevo = doctrina.anotar_errores(lleno, errores)
+    assert len(nuevo["faltantes"]) == doctrina.MAX_FALTANTES_CON_ERRORES
+    assert nuevo["faltantes"][:4] == [f"error: {e}" for e in errores]     # 5 faltantes + 4 errores: ninguno se cae
+    assert nuevo["faltantes"][4:] == ["falta 0", "falta 1", "falta 2", "falta 3"]
+    assert doctrina.anotar_errores(dict(ang, faltantes=None), [])["faltantes"] == []
+
+
+def test_validar_angulo_revalidado_conserva_los_errores_aunque_pasen_del_tope():
+    """Fix 2: la ruta de «Recrear» vuelve a validar el ángulo que devuelve el
+    navegador; sus «error: …» (anotados después de los faltantes de Claude)
+    no se pueden caer por el tope de `validar_angulo`."""
+    import doctrina
+    errores = ["error: gancho_largo", "error: cifra_no_verificada:47 %", "error: mecanismo_obligatorio"]
+    faltantes = [f"falta {n}" for n in range(5)] + errores
+    limpio, _ = doctrina.validar_angulo(dict(ANGULO_OK, faltantes=faltantes))
+    assert limpio["faltantes"][:3] == errores
+    muchos = [f"error: campo_faltante:{c}" for c in ("audiencia", "deseo", "promesa", "lead", "gancho", "consciencia")]
+    limpio, _ = doctrina.validar_angulo(dict(ANGULO_OK, faltantes=["falta 0", "falta 1"] + muchos))
+    assert limpio["faltantes"][:6] == muchos
+    limpio, _ = doctrina.validar_angulo(dict(ANGULO_OK, faltantes=[f"falta {n}" for n in range(7)]))
+    assert limpio["faltantes"] == [f"falta {n}" for n in range(doctrina.MAX_FALTANTES)]   # sin errores, tope de siempre
 
 
 def test_texto_verificable_vacio_para_none_o_no_dict():

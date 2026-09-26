@@ -123,6 +123,10 @@ MAX_PALABRAS_GANCHO = 12
 MAX_CARACTERES_CAMPO = 200
 MAX_PRUEBAS = 3
 MAX_FALTANTES = 5
+# Con los «error: …» anotados (`anotar_errores`) caben unos más: los errores
+# van primero y ningún tope los puede cortar antes que los faltantes de Claude.
+MAX_FALTANTES_CON_ERRORES = MAX_FALTANTES + 3
+PREFIJO_ERROR = "error: "
 _CAMPOS_TEXTO = ("audiencia", "deseo", "promesa", "mecanismo", "gancho")
 _OBLIGATORIOS = ("audiencia", "consciencia", "sofisticacion", "deseo", "promesa", "lead", "gancho")
 
@@ -186,6 +190,11 @@ def validar_angulo(angulo, datos_texto=None):
     elif not isinstance(faltantes_raw, list):
         faltantes_raw = []
     faltantes = [_texto(f) for f in faltantes_raw if isinstance(f, str) and f.strip()]
+    # Un ángulo ya anotado (p. ej. el que devuelve el navegador en «Recrear»)
+    # trae sus «error: …»: van primero y con el tope ampliado, para que
+    # volver a validarlo nunca los corte.
+    errores_previos = [f for f in faltantes if f.startswith(PREFIJO_ERROR)]
+    faltantes = errores_previos + [f for f in faltantes if not f.startswith(PREFIJO_ERROR)]
     for k in _CAMPOS_TEXTO:
         limpio[k] = _texto(a.get(k)) or None if k == "mecanismo" else _texto(a.get(k))
     limpio["consciencia"] = normalizar_consciencia(a.get("consciencia"))
@@ -253,7 +262,7 @@ def validar_angulo(angulo, datos_texto=None):
         faltantes.append(f"arranque fuera de lo recomendado: {LEADS_NOMBRE[limpio['lead']]} "
                          f"(para {CONSCIENCIAS_NOMBRE[limpio['consciencia']]} se recomienda "
                          f"{', '.join(LEADS_NOMBRE[r] for r in recomendados)})")
-    limpio["faltantes"] = faltantes[:MAX_FALTANTES]
+    limpio["faltantes"] = faltantes[:MAX_FALTANTES_CON_ERRORES if errores_previos else MAX_FALTANTES]
     # errores sin repetir, en orden de aparición
     vistos, unicos = set(), []
     for e in errores:
@@ -261,6 +270,26 @@ def validar_angulo(angulo, datos_texto=None):
             vistos.add(e)
             unicos.append(e)
     return limpio, unicos
+
+
+def anotar_errores(angulo, errores):
+    """Copia de `angulo` con los `errores` de `validar_angulo` anotados en
+    `faltantes` como «error: …» (así se guarda lo ya pagado aunque la
+    corrección no los arregle). Orden: los «error: …» que ya traía, los
+    nuevos (sin repetir), y después el resto de los faltantes; tope
+    `MAX_FALTANTES_CON_ERRORES`. Los errores van siempre primero: el tope
+    nunca corta un marcador (`texto_verificable` depende de él) antes que
+    un faltante de Claude."""
+    nuevo = dict(angulo)
+    previos = [f for f in (angulo.get("faltantes") or []) if isinstance(f, str)]
+    lineas = [f for f in previos if f.startswith(PREFIJO_ERROR)]
+    for e in errores or []:
+        linea = f"{PREFIJO_ERROR}{e}"
+        if linea not in lineas:
+            lineas.append(linea)
+    lineas += [f for f in previos if not f.startswith(PREFIJO_ERROR)]
+    nuevo["faltantes"] = lineas[:MAX_FALTANTES_CON_ERRORES]
+    return nuevo
 
 
 def angulo_a_texto(angulo):
@@ -296,18 +325,18 @@ def texto_verificable(angulo):
     `datos_texto` (nunca en lo que se le MUESTRA a Claude: eso sigue siendo
     `angulo_a_texto`). Las `pruebas` siempre — `validar_angulo` ya botó las que
     no traían fuente o traían una cifra sin verificar. audiencia/deseo/
-    promesa/mecanismo/gancho SOLO si ningún `faltantes` es una cifra
-    rechazada (`error: cifra_no_verificada...`): si el ángulo ya tiene una
-    cifra rechazada, esos campos no entran — de lo contrario el propio
-    `faltantes` (que sí se le muestra a Claude en `angulo_a_texto`) volvería
-    a blanquear esa misma cifra en la próxima vuelta. Nunca los `faltantes`
-    en sí, nunca encabezados. "" si `angulo` no es un dict."""
+    promesa/mecanismo/gancho SOLO si ningún `faltantes` es un «error: …»
+    (cualquiera, no solo `cifra_no_verificada`): un ángulo que quedó con
+    errores no cuenta como verificado — de lo contrario el propio
+    `faltantes` (que sí se le muestra a Claude en `angulo_a_texto`) podría
+    volver a blanquear una cifra rechazada en la próxima vuelta. Nunca los
+    `faltantes` en sí, nunca encabezados. "" si `angulo` no es un dict."""
     if not isinstance(angulo, dict):
         return ""
     partes = [p.get("texto", "") for p in (angulo.get("pruebas") or []) if isinstance(p, dict)]
     faltantes = angulo.get("faltantes") or []
-    cifra_rechazada = any(str(f).startswith("error: cifra_no_verificada") for f in faltantes)
-    if not cifra_rechazada:
+    con_errores = any(str(f).startswith(PREFIJO_ERROR) for f in faltantes)
+    if not con_errores:
         for campo in ("audiencia", "deseo", "promesa", "mecanismo", "gancho"):
             valor = angulo.get(campo)
             if valor:

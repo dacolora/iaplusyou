@@ -438,8 +438,7 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
         crudo = guion.get("angulo") if isinstance(guion.get("angulo"), dict) else {}
         limpio, errores_angulo = doctrina.validar_angulo(crudo, datos)
         limpio["origen"] = "guion"
-        limpio["faltantes"] = (limpio["faltantes"] + [f"error: {e}" for e in errores_angulo])[:8]
-        guion["angulo"] = limpio
+        guion["angulo"] = doctrina.anotar_errores(limpio, errores_angulo)
     return guion, costo
 
 

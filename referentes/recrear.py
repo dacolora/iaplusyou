@@ -202,7 +202,7 @@ def adaptar(referente, familia, producto, titular_actual, guia=""):
             # se pagó y sigue siendo usable, así que no se pierde.
             pass
     angulo["origen"] = "recrear"
-    angulo["faltantes"] = (angulo["faltantes"] + [f"error: {e}" for e in errores])[:8]
+    angulo = doctrina.anotar_errores(angulo, errores)
     return {"titular": titular, "prompt": prompt, "angulo": angulo}, ent, sal
 
 

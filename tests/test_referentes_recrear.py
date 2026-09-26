@@ -246,6 +246,21 @@ def test_adaptar_no_pierde_la_primera_respuesta_si_la_correccion_falla_por_otro_
     assert "error: mecanismo_obligatorio" in resultado["angulo"]["faltantes"]
 
 
+def test_adaptar_con_cinco_faltantes_y_varios_errores_no_pierde_ningun_error(monkeypatch):
+    """Fix 2: los «error: …» van antes que los faltantes de Claude y el tope
+    ya no los corta (antes `[:8]` dejaba fuera la cifra rechazada)."""
+    from referentes import recrear
+    malo = dict(ANGULO_RECREAR, consciencia="dormido", lead="grito", gancho=" ".join(["palabra"] * 13),
+                promesa="47 % más luz en tu baño", faltantes=[f"falta {n}" for n in range(5)])
+    respuestas = [(_respuesta(angulo=malo), 100, 30), (_respuesta(angulo=malo), 100, 30)]
+    monkeypatch.setattr(recrear, "_llamar", lambda texto, max_tokens: respuestas.pop(0))
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), _producto(), "")
+    faltantes = resultado["angulo"]["faltantes"]
+    errores = [f for f in faltantes if f.startswith("error: ")]
+    assert len(errores) == 6 and faltantes[:6] == errores
+    assert any(f.startswith("error: cifra_no_verificada:47") for f in errores)
+
+
 def test_llamar_manda_la_doctrina_de_angulo_y_gancho(monkeypatch):
     import anthropic
     import doctrina

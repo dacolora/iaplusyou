@@ -316,8 +316,7 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
         except Exception:  # noqa: BLE001 — JSON inválido, error de la API o de red: lo pagado no se
             pass    # pierde, quedan las ideas de la primera respuesta, con sus errores anotados
     for i in lista:
-        errores = i.pop("errores_angulo")
-        i["angulo"]["faltantes"] = (i["angulo"]["faltantes"] + [f"error: {e}" for e in errores])[:8]
+        i["angulo"] = doctrina.anotar_errores(i["angulo"], i.pop("errores_angulo"))
     videos = [i for i in lista if i["tipo"] == "video"][:n_videos]
     imagenes = [i for i in lista if i["tipo"] == "imagen"][:n_imagenes]
     creadas = []
