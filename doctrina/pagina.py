@@ -61,9 +61,12 @@ def a_html(texto):
             tipo_lista = tipo
             lista.append(_en_linea((vineta or numero).group(1).strip()))
             continue
-        if lista:                                # línea que sigue a un ítem: es parte de él
-            lista[-1] += " " + _en_linea(linea.strip())
-            continue
+        if lista:                                # línea indentada que sigue a un ítem: es parte de él
+            if linea and linea[0] in (' ', '\t'):
+                lista[-1] += " " + _en_linea(linea.strip())
+                continue
+            else:
+                cerrar()                         # línea sin indentar cierra la lista
         parrafo.append(_en_linea(linea.strip()))
     cerrar()
     return Markup("\n".join(salida))

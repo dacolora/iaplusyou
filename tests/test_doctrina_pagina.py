@@ -44,3 +44,28 @@ def test_ruta_de_la_doctrina_exige_acceso_al_proyecto(base_temporal, monkeypatch
     with c.session_transaction() as s:
         s["usuario"] = "admin"; s["rol"] = "admin"; s["cliente"] = None
     assert 'href="/cliente/acme/doctrina"' in c.get("/cliente/acme").data.decode()
+
+
+def test_lista_sin_indentar_no_continua():
+    """Una línea sin indentar después de una lista la cierra y abre párrafo."""
+    from doctrina import pagina
+    html = str(pagina.a_html("- uno\n- dos\nResumen final."))
+    assert html == "<ul><li>uno</li><li>dos</li></ul>\n<p>Resumen final.</p>"
+
+
+def test_angulo_resumen_fuera_de_lista():
+    """En angulo.md, la frase 'Un gancho hecho...' tras la lista no va dentro de <li>."""
+    import doctrina
+    from doctrina import pagina
+    html = str(pagina.a_html(doctrina._cargar("angulo")))
+    assert "caduca.</li>" not in html, "La frase 'caduca.' no debe estar dentro de un <li>"
+    assert "</li></ul>" in html and "Un gancho" in html, "La frase 'Un gancho' debe estar fuera de la lista"
+
+
+def test_guion_bloque_fuera_de_lista():
+    """En guion.md, la frase 'En los cinco bloques...' tras la lista no va dentro de <li>."""
+    import doctrina
+    from doctrina import pagina
+    html = str(pagina.a_html(doctrina._cargar("guion")))
+    assert "</li></ul>\n<p>En los cinco bloques del guion" in html, \
+        "La frase 'En los cinco bloques del guion' debe estar en un párrafo fuera de la lista"
