@@ -2339,6 +2339,17 @@ def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, de
     return pid
 
 
+@app.route("/cliente/<cliente>/doctrina")
+def doctrina_pagina(cliente):
+    """«Cómo escribe Creatv» (doctrina, bloque 2, §6): las nueve rebanadas de
+    `doctrina/textos/*.md`, de solo lectura, para cualquier usuario con acceso
+    al proyecto (lo exige `_guard_por_cliente`). Lee los mismos archivos que
+    recibe Claude: la página nunca se desincroniza de lo que está en uso."""
+    from doctrina import pagina as doctrina_pagina_mod
+    return render_template("doctrina.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           secciones=doctrina_pagina_mod.secciones())
+
+
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
 def crear_producto(cliente):
     # "volver": pestaña que abrió el alta rápida (FlowClone, FlowPlus o FlowCatálogo).
