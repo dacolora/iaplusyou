@@ -42,24 +42,24 @@
 </div>
 {% endif %}
 
-<nav class="cat-tabs config-apartados" role="tablist" aria-label="Apartados de Configuración">
-  {% if es_admin %}<button type="button" class="cat-tab" data-apartado="puesta">Puesta a punto</button>{% endif %}
-  <button type="button" class="cat-tab" data-apartado="conexiones">Conexiones</button>
-  <button type="button" class="cat-tab" data-apartado="marca">Marca</button>
-  <button type="button" class="cat-tab" data-apartado="generacion">Generación</button>
-  <button type="button" class="cat-tab" data-apartado="cuenta">Cuenta y avisos</button>
-  <button type="button" class="cat-tab" data-apartado="gasto">Gasto</button>
+<nav class="cat-tabs config-apartados" role="tablist" aria-label="{{ _('Apartados de Configuración') }}">
+  {% if es_admin %}<button type="button" class="cat-tab" data-apartado="puesta">{{ _('Puesta a punto') }}</button>{% endif %}
+  <button type="button" class="cat-tab" data-apartado="conexiones">{{ _('Conexiones') }}</button>
+  <button type="button" class="cat-tab" data-apartado="marca">{{ _('Marca') }}</button>
+  <button type="button" class="cat-tab" data-apartado="generacion">{{ _('Generación') }}</button>
+  <button type="button" class="cat-tab" data-apartado="cuenta">{{ _('Cuenta y avisos') }}</button>
+  <button type="button" class="cat-tab" data-apartado="gasto">{{ _('Gasto') }}</button>
 </nav>
 
 {% if es_admin %}
 <section class="config-apartado" id="config-ap-puesta" data-apartado="puesta">
-<h2 id="config-puesta-a-punto">Puesta a punto</h2>
+<h2 id="config-puesta-a-punto">{{ _('Puesta a punto') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar
+  {{ _('Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar
   anuncios, en el orden en que se usa. Cada tarjeta dice para qué sirve, cómo se
   paga y cómo conseguir la llave. Las llaves las pone quien administra el
   servidor en el archivo <code>.env</code>; aquí solo se ve si están o faltan,
-  nunca su valor.
+  nunca su valor.') }}
 </p>
 <div class="llaves-tarjetas">
   {% for l in llaves if l.id != "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
@@ -70,82 +70,82 @@
 <section class="config-apartado" id="config-ap-conexiones" data-apartado="conexiones">
 <h2 id="config-meta">Meta</h2>
 <p class="vacio" style="padding-top:0;">
-  Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de
+  {{ _('Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de
   generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la
-  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada.
+  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada.') }}
 </p>
 <div class="llaves-tarjetas llaves-tarjetas-ancha">
   {% for l in llaves if l.id == "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
 </div>
 
 {# ---- Bloque 5: Conectar tu tienda ---- #}
-<h2 id="config-tienda">Conectar tu tienda</h2>
+<h2 id="config-tienda">{{ _('Conectar tu tienda') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Conecta tu tienda para traer el catálogo solo (cada 6 h) y, en Shopify y
+  {{ _('Conecta tu tienda para traer el catálogo solo (cada 6 h) y, en Shopify y
   WooCommerce, leer los pedidos que llegan con una pieza en la URL — así un
   experimento sabe qué vendió aunque no haya Pixel. Solo lectura: nunca se
-  cambia nada en la tienda.
+  cambia nada en la tienda.') }}
 </p>
 
 {% if not cifrado_ok %}
-<p class="tag-error">Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de tiendas. Ponla y reinicia para habilitar estos formularios.</p>
+<p class="tag-error">{{ _('Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de tiendas. Ponla y reinicia para habilitar estos formularios.') }}</p>
 {% endif %}
 
 <div class="tienda-pasos">
   <details class="tienda-paso-a-paso" id="pasos-shopify">
-    <summary>Shopify, paso a paso</summary>
+    <summary>{{ _('Shopify, paso a paso') }}</summary>
     <ol>
-      <li>En el admin de Shopify ve a <em>Configuración › Apps y canales de venta › Desarrollar apps</em> y pulsa <em>Crear una app</em> (ponle un nombre, por ejemplo «creatv»).</li>
-      <li>En <em>Configurar alcances de la API de administrador</em> marca <code>read_products</code> y <code>read_orders</code>; nada más.</li>
-      <li>Pulsa <em>Instalar app</em> y confirma.</li>
-      <li>Copia el <em>Admin API access token</em> (empieza por <code>shpat_</code>): Shopify lo muestra una sola vez.</li>
-      <li>Abajo, en <em>Conectar tienda › Shopify</em>, pega el token junto con el dominio <code>xxx.myshopify.com</code>.</li>
+      <li>{{ _('En el admin de Shopify ve a <em>Configuración › Apps y canales de venta › Desarrollar apps</em> y pulsa <em>Crear una app</em> (ponle un nombre, por ejemplo «creatv»).') }}</li>
+      <li>{{ _('En <em>Configurar alcances de la API de administrador</em> marca <code>read_products</code> y <code>read_orders</code>; nada más.') }}</li>
+      <li>{{ _('Pulsa <em>Instalar app</em> y confirma.') }}</li>
+      <li>{{ _('Copia el <em>Admin API access token</em> (empieza por <code>shpat_</code>): Shopify lo muestra una sola vez.') }}</li>
+      <li>{{ _('Abajo, en <em>Conectar tienda › Shopify</em>, pega el token junto con el dominio <code>xxx.myshopify.com</code>.') }}</li>
     </ol>
-    <p class="vacio" style="padding-top:0;"><strong>Qué trae:</strong> productos y pedidos con UTM — los experimentos se pueden decidir por ventas aunque no haya Pixel.</p>
+    <p class="vacio" style="padding-top:0;">{{ _('<strong>Qué trae:</strong> productos y pedidos con UTM — los experimentos se pueden decidir por ventas aunque no haya Pixel.') }}</p>
   </details>
   <details class="tienda-paso-a-paso" id="pasos-woo">
-    <summary>WooCommerce, paso a paso</summary>
+    <summary>{{ _('WooCommerce, paso a paso') }}</summary>
     <ol>
-      <li>En WordPress ve a <em>WooCommerce › Ajustes › Avanzado › REST API</em> y pulsa <em>Añadir clave</em>.</li>
-      <li>Descripción «creatv», usuario un administrador, permisos <em>Lectura</em>. Pulsa <em>Generar clave de API</em>.</li>
-      <li>Copia la <em>Consumer key</em> (<code>ck_…</code>) y el <em>Consumer secret</em> (<code>cs_…</code>): también se muestran una sola vez.</li>
-      <li>Abajo, en <em>Conectar tienda › WooCommerce</em>, pégalos con la URL de la tienda, que tiene que ir por <code>https://</code>.</li>
+      <li>{{ _('En WordPress ve a <em>WooCommerce › Ajustes › Avanzado › REST API</em> y pulsa <em>Añadir clave</em>.') }}</li>
+      <li>{{ _('Descripción «creatv», usuario un administrador, permisos <em>Lectura</em>. Pulsa <em>Generar clave de API</em>.') }}</li>
+      <li>{{ _('Copia la <em>Consumer key</em> (<code>ck_…</code>) y el <em>Consumer secret</em> (<code>cs_…</code>): también se muestran una sola vez.') }}</li>
+      <li>{{ _('Abajo, en <em>Conectar tienda › WooCommerce</em>, pégalos con la URL de la tienda, que tiene que ir por <code>https://</code>.') }}</li>
     </ol>
-    <p class="vacio" style="padding-top:0;"><strong>Qué trae:</strong> productos y pedidos con UTM — los experimentos se pueden decidir por ventas aunque no haya Pixel.</p>
+    <p class="vacio" style="padding-top:0;">{{ _('<strong>Qué trae:</strong> productos y pedidos con UTM — los experimentos se pueden decidir por ventas aunque no haya Pixel.') }}</p>
   </details>
   <details class="tienda-paso-a-paso" id="pasos-meli">
-    <summary>MercadoLibre, paso a paso</summary>
+    <summary>{{ _('MercadoLibre, paso a paso') }}</summary>
     {% if meli_configurado %}
     <ol>
-      <li>Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>.</li>
-      <li>Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token.</li>
-      <li>Al volver, la tienda queda conectada y se sincroniza sola cada 6 h.</li>
+      <li>{{ _('Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>.') }}</li>
+      <li>{{ _('Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token.') }}</li>
+      <li>{{ _('Al volver, la tienda queda conectada y se sincroniza sola cada 6 h.') }}</li>
     </ol>
     {% else %}
-    <p class="tag-error">Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>{{ url_for('meli_callback', _external=True) }}</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>.</p>
+    <p class="tag-error">{{ _('Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>.', redirect=url_for('meli_callback', _external=True)) }}</p>
     <ol>
-      <li>Cuando las variables estén, aquí aparece el botón <em>Conectar con MercadoLibre</em>.</li>
-      <li>Inicias sesión con la cuenta de la tienda y autorizas la app: no se pega ningún token.</li>
+      <li>{{ _('Cuando las variables estén, aquí aparece el botón <em>Conectar con MercadoLibre</em>.') }}</li>
+      <li>{{ _('Inicias sesión con la cuenta de la tienda y autorizas la app: no se pega ningún token.') }}</li>
     </ol>
     {% endif %}
-    <p class="vacio" style="padding-top:0;"><strong>Qué trae:</strong> solo productos (publicaciones activas). MercadoLibre no deja instalar código en una publicación, así que sus experimentos se deciden por tráfico.</p>
+    <p class="vacio" style="padding-top:0;">{{ _('<strong>Qué trae:</strong> solo productos (publicaciones activas). MercadoLibre no deja instalar código en una publicación, así que sus experimentos se deciden por tráfico.') }}</p>
   </details>
 </div>
 
 {% if tiendas_cliente %}
 <div style="overflow-x:auto;">
 <table class="tabla-tiendas">
-  <thead><tr><th>Tipo</th><th>Tienda</th><th>Estado</th><th>Últimas sincronizaciones</th><th></th></tr></thead>
+  <thead><tr><th>{{ _('Tipo') }}</th><th>{{ _('Tienda') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Últimas sincronizaciones') }}</th><th></th></tr></thead>
   <tbody>
     {% for t in tiendas_cliente %}
     <tr>
       <td><span class="tag-estado badge-fuente badge-fuente-{{ t.tipo }}">{{ t.tipo }}</span></td>
       <td><strong>{{ t.nombre or t.dominio or "—" }}</strong>{% if t.nombre and t.dominio %}<br><small class="vacio" style="padding:0;">{{ t.dominio }}</small>{% endif %}</td>
       <td>
-        {% if t.estado == "rota" %}<span class="tag-estado tag-descartado">rota</span>{% if t.error %}<br><small class="tag-error">{{ t.error }}</small>{% endif %}
+        {% if t.estado == "rota" %}<span class="tag-estado tag-descartado">{{ _('rota') }}</span>{% if t.error %}<br><small class="tag-error">{{ t.error }}</small>{% endif %}
         {% else %}<span class="tag-estado tag-en-uso">{{ t.estado }}</span>{% endif %}
       </td>
-      <td><small>productos: {{ (t.ultima_sync_productos or "nunca")[:16] }}<br>pedidos: {{ (t.ultima_sync_pedidos or "nunca")[:16] }}</small>
+      <td><small>{{ _('productos:') }} {{ (t.ultima_sync_productos or "nunca")[:16] }}<br>{{ _('pedidos:') }} {{ (t.ultima_sync_pedidos or "nunca")[:16] }}</small>
         {% set trabajo_t = trabajos_prod.tiendas.get(t.id) %}
         {% if trabajo_t %}
         <div class="barra-progreso" id="trabajo-{{ trabajo_t.job_id }}"><div class="barra-progreso-fill"></div></div>
@@ -154,8 +154,8 @@
         {% endif %}
       </td>
       <td class="tienda-acciones">
-        <form method="post" action="{{ url_for('tienda_sync', cliente=cliente, tid=t.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_t %}disabled{% endif %}>Sincronizar</button></form>
-        <form method="post" action="{{ url_for('tienda_desconectar', cliente=cliente, tid=t.id) }}" class="inline" onsubmit="return confirm('¿Desconectar esta tienda? Sus productos quedan archivados; no se borra nada en la tienda.');"><button class="btn-rechazar btn-xs">Desconectar</button></form>
+        <form method="post" action="{{ url_for('tienda_sync', cliente=cliente, tid=t.id) }}" class="inline"><button class="btn-guardar btn-xs" {% if trabajo_t %}disabled{% endif %}>{{ _('Sincronizar') }}</button></form>
+        <form method="post" action="{{ url_for('tienda_desconectar', cliente=cliente, tid=t.id) }}" class="inline" onsubmit='return confirm({{ _('¿Desconectar esta tienda? Sus productos quedan archivados; no se borra nada en la tienda.')|tojson }});'><button class="btn-rechazar btn-xs">{{ _('Desconectar') }}</button></form>
       </td>
     </tr>
     {% endfor %}
@@ -163,11 +163,11 @@
 </table>
 </div>
 {% else %}
-<p class="vacio">Ninguna tienda conectada todavía.</p>
+<p class="vacio">{{ _('Ninguna tienda conectada todavía.') }}</p>
 {% endif %}
 
 <details class="swap-card tienda-conectar" {% if not tiendas_cliente %}open{% endif %}>
-  <summary class="swap-card-resumen">+ Conectar tienda</summary>
+  <summary class="swap-card-resumen">+ {{ _('Conectar tienda') }}</summary>
   <div class="cat-tabs tienda-tipos" role="tablist">
     {% for tipo in tipos_tienda %}
     <button type="button" class="cat-tab tienda-tipo-btn{% if loop.first %} activo{% endif %}" data-tienda-tipo="{{ tipo }}">{{ {"shopify": "Shopify", "woo": "WooCommerce", "meli": "MercadoLibre"}.get(tipo, tipo) }}</button>
@@ -177,45 +177,45 @@
   <div class="tienda-tipo-panel" data-tienda-panel="shopify">
     <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
       <input type="hidden" name="tipo" value="shopify">
-      <label class="campo-label">Dominio de la tienda</label>
+      <label class="campo-label">{{ _('Dominio de la tienda') }}</label>
       <input type="text" name="dominio" placeholder="mitienda.myshopify.com" required {% if not cifrado_ok %}disabled{% endif %}>
       <label class="campo-label">Admin API access token</label>
       <input type="password" name="token" placeholder="shpat_…" autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}>
       <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
-        En Shopify: <em>Configuración › Apps y canales de venta › Desarrollar apps › Crear app</em>.
+        {{ _('En Shopify: <em>Configuración › Apps y canales de venta › Desarrollar apps › Crear app</em>.
         Dale los permisos <code>read_products</code> y <code>read_orders</code>, instálala y copia el
-        <em>Admin API access token</em> (se muestra una sola vez).
+        <em>Admin API access token</em> (se muestra una sola vez).') }}
       </p>
-      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>Conectar Shopify</button>
+      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Shopify') }}</button>
     </form>
   </div>
 
   <div class="tienda-tipo-panel" data-tienda-panel="woo" hidden>
     <form method="post" action="{{ url_for('tienda_conectar', cliente=cliente) }}" class="form-nueva-idea">
       <input type="hidden" name="tipo" value="woo">
-      <label class="campo-label">URL de la tienda</label>
+      <label class="campo-label">{{ _('URL de la tienda') }}</label>
       <input type="url" name="url" placeholder="https://mitienda.com" required {% if not cifrado_ok %}disabled{% endif %}>
       <div class="fila-campos-idea">
         <div><label class="campo-label">Consumer key</label><input type="password" name="ck" placeholder="ck_…" autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}></div>
         <div><label class="campo-label">Consumer secret</label><input type="password" name="cs" placeholder="cs_…" autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}></div>
       </div>
       <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
-        En WordPress: <em>WooCommerce › Ajustes › Avanzado › REST API › Añadir clave</em>, con
-        permisos de <em>lectura</em>. La tienda tiene que ir por <code>https://</code>.
+        {{ _('En WordPress: <em>WooCommerce › Ajustes › Avanzado › REST API › Añadir clave</em>, con
+        permisos de <em>lectura</em>. La tienda tiene que ir por <code>https://</code>.') }}
       </p>
-      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>Conectar WooCommerce</button>
+      <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar WooCommerce') }}</button>
     </form>
   </div>
 
   <div class="tienda-tipo-panel" data-tienda-panel="meli" hidden>
     {% if meli_configurado and cifrado_ok %}
-    <p class="vacio" style="padding-top:0;font-size:.8rem;">Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token.</p>
-    <a class="btn-generar btn-sm" href="{{ url_for('tienda_meli_iniciar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">Conectar con MercadoLibre</a>
+    <p class="vacio" style="padding-top:0;font-size:.8rem;">{{ _('Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token.') }}</p>
+    <a class="btn-generar btn-sm" href="{{ url_for('tienda_meli_iniciar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">{{ _('Conectar con MercadoLibre') }}</a>
     {% elif not meli_configurado %}
-    <p class="tag-error">Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>{{ url_for('meli_callback', _external=True) }}</code>).</p>
+    <p class="tag-error">{{ _('Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>).', redirect=url_for('meli_callback', _external=True)) }}</p>
     {% else %}
-    <p class="tag-error">Para conectar MercadoLibre falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar cifrados los tokens que devuelve MercadoLibre.</p>
-    <a class="btn-generar btn-sm" aria-disabled="true" style="display:inline-block;text-decoration:none;opacity:.5;pointer-events:none;">Conectar con MercadoLibre</a>
+    <p class="tag-error">{{ _('Para conectar MercadoLibre falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar cifrados los tokens que devuelve MercadoLibre.') }}</p>
+    <a class="btn-generar btn-sm" aria-disabled="true" style="display:inline-block;text-decoration:none;opacity:.5;pointer-events:none;">{{ _('Conectar con MercadoLibre') }}</a>
     {% endif %}
   </div>
 </details>
@@ -234,78 +234,78 @@
 </script>
 
 {# ---- Bloque 5: Pixel de Meta ---- #}
-<h2 id="config-pixel" style="margin-top:2rem;">Pixel de Meta</h2>
+<h2 id="config-pixel" style="margin-top:2rem;">{{ _('Pixel de Meta') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Con el Pixel instalado en tu tienda, Meta reporta compras y ROAS por anuncio
+  {{ _('Con el Pixel instalado en tu tienda, Meta reporta compras y ROAS por anuncio
   y los experimentos se deciden por ventas. Sin Pixel, se usan los pedidos de
-  la tienda conectada (Shopify/WooCommerce) o, si no hay, el tráfico.
+  la tienda conectada (Shopify/WooCommerce) o, si no hay, el tráfico.') }}
 </p>
 {% if estado_pixel %}
 <div class="pixel-estado pixel-estado-{{ estado_pixel.estado }}">
-  {% if estado_pixel.estado == "ok" %}<span class="tag-estado tag-en-uso">Pixel activo</span>
-  {% elif estado_pixel.estado == "sin_datos" %}<span class="tag-estado tag-advertencia">Pixel sin datos</span>
-  {% elif estado_pixel.estado == "sin_pixel" %}<span class="tag-estado tag-descartado">Sin Pixel</span>
-  {% elif estado_pixel.estado == "error" %}<span class="tag-estado tag-descartado">No se pudo comprobar</span>
+  {% if estado_pixel.estado == "ok" %}<span class="tag-estado tag-en-uso">{{ _('Pixel activo') }}</span>
+  {% elif estado_pixel.estado == "sin_datos" %}<span class="tag-estado tag-advertencia">{{ _('Pixel sin datos') }}</span>
+  {% elif estado_pixel.estado == "sin_pixel" %}<span class="tag-estado tag-descartado">{{ _('Sin Pixel') }}</span>
+  {% elif estado_pixel.estado == "error" %}<span class="tag-estado tag-descartado">{{ _('No se pudo comprobar') }}</span>
   {% else %}<span class="tag-estado">{{ estado_pixel.estado }}</span>{% endif %}
   {% if estado_pixel.nombre %}<strong>{{ estado_pixel.nombre }}</strong>{% endif %}
   {% if estado_pixel.pixel_id %}<small class="vacio" style="padding:0;">id {{ estado_pixel.pixel_id }}</small>{% endif %}
-  {% if estado_pixel.ultimo_disparo %}<small>· último disparo {{ estado_pixel.ultimo_disparo[:16] }}</small>{% endif %}
+  {% if estado_pixel.ultimo_disparo %}<small>· {{ _('último disparo') }} {{ estado_pixel.ultimo_disparo[:16] }}</small>{% endif %}
   {% if estado_pixel.detalle %}<small class="vacio" style="padding:0;display:block;">{{ estado_pixel.detalle }}</small>{% endif %}
-  <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Volver a comprobar</button></form>
+  <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Volver a comprobar') }}</button></form>
 </div>
 {% elif meta_conectado %}
 {# Meta conectado pero nada en caché: esta página nunca va a Graph; solo el botón (POST) lo consulta. #}
 <div class="pixel-estado pixel-estado-sin_comprobar">
-  <span class="tag-estado">sin comprobar</span>
-  <small class="vacio" style="padding:0;display:block;">Todavía no consultamos el Pixel de esta cuenta. Comprobarlo tarda unos segundos y también actualiza la atribución sugerida al crear experimentos.</small>
-  <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">Comprobar Pixel</button></form>
+  <span class="tag-estado">{{ _('sin comprobar') }}</span>
+  <small class="vacio" style="padding:0;display:block;">{{ _('Todavía no consultamos el Pixel de esta cuenta. Comprobarlo tarda unos segundos y también actualiza la atribución sugerida al crear experimentos.') }}</small>
+  <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Comprobar Pixel') }}</button></form>
 </div>
 {% else %}
-<p class="vacio"><span class="tag-estado">sin conexión</span> Conecta Meta arriba, en la tarjeta <a href="#llave-meta">Meta (anuncios)</a> de Puesta a punto (o en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;">Experimentos</a>), para comprobar el Pixel.</p>
+<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta arriba, en la tarjeta <a href="#llave-meta">Meta (anuncios)</a> de Puesta a punto (o en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a>), para comprobar el Pixel.') }}</p>
 {% endif %}
 <details class="pixel-ayuda">
-  <summary>Cómo instalar el Pixel según tu plataforma</summary>
+  <summary>{{ _('Cómo instalar el Pixel según tu plataforma') }}</summary>
   <ul class="vacio" style="font-size:.8rem;">
-    <li><strong>Shopify:</strong> instala la app <em>Facebook &amp; Instagram</em> desde la tienda de apps y, en <em>Data sharing</em>, elige tu Pixel y el nivel «Máximo». Shopify manda las compras solo.</li>
-    <li><strong>WooCommerce:</strong> instala el plugin <em>Facebook for WooCommerce</em> y conéctalo con tu Business Manager; el Pixel y los eventos de compra quedan puestos.</li>
-    <li><strong>Otra tienda o landing propia:</strong> en Meta Events Manager copia el <em>código base del Pixel</em> y pégalo dentro del <code>&lt;head&gt;</code> de todas las páginas; en la página de gracias agrega el evento <code>Purchase</code>.</li>
-    <li><strong>MercadoLibre:</strong> no aplica — no se puede instalar código en una publicación. Los experimentos de MELI se deciden por tráfico.</li>
+    <li>{{ _('<strong>Shopify:</strong> instala la app <em>Facebook &amp; Instagram</em> desde la tienda de apps y, en <em>Data sharing</em>, elige tu Pixel y el nivel «Máximo». Shopify manda las compras solo.') }}</li>
+    <li>{{ _('<strong>WooCommerce:</strong> instala el plugin <em>Facebook for WooCommerce</em> y conéctalo con tu Business Manager; el Pixel y los eventos de compra quedan puestos.') }}</li>
+    <li>{{ _('<strong>Otra tienda o landing propia:</strong> en Meta Events Manager copia el <em>código base del Pixel</em> y pégalo dentro del <code>&lt;head&gt;</code> de todas las páginas; en la página de gracias agrega el evento <code>Purchase</code>.') }}</li>
+    <li>{{ _('<strong>MercadoLibre:</strong> no aplica — no se puede instalar código en una publicación. Los experimentos de MELI se deciden por tráfico.') }}</li>
   </ul>
 </details>
 
 {# ---- Triple Whale (atribución alternativa) ---- #}
-<h2 id="config-triple-whale" style="margin-top:2rem;">Triple Whale (atribución)</h2>
+<h2 id="config-triple-whale" style="margin-top:2rem;">{{ _('Triple Whale (atribución)') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Conecta tu cuenta de Triple Whale para traer métricas de anuncios por canal y
+  {{ _('Conecta tu cuenta de Triple Whale para traer métricas de anuncios por canal y
   modelo de atribución. Los experimentos pueden usar estas métricas en lugar de
-  los datos de Meta Pixel o la tienda para decidir ganadores y perdedores.
+  los datos de Meta Pixel o la tienda para decidir ganadores y perdedores.') }}
 </p>
 {% if not cifrado_ok %}
-<p class="tag-error">Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de Triple Whale. Ponla y reinicia para habilitar este formulario.</p>
+<p class="tag-error">{{ _('Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de Triple Whale. Ponla y reinicia para habilitar este formulario.') }}</p>
 {% endif %}
 
 {% if triple_whale_conectado %}
 <div class="pixel-estado pixel-estado-ok">
-  <span class="tag-estado tag-en-uso">conectado</span>
+  <span class="tag-estado tag-en-uso">{{ _('conectado') }}</span>
   <strong>{{ triple_whale_conectado.dominio_tienda }}</strong>
   <small class="vacio" style="padding:0;display:block;margin-top:.3rem;">
-    Modelo: {{ triple_whale_conectado.modelo_atribucion }}<br>
-    Ventana: {{ triple_whale_conectado.ventana_atribucion }}
+    {{ _('Modelo:') }} {{ triple_whale_conectado.modelo_atribucion }}<br>
+    {{ _('Ventana:') }} {{ triple_whale_conectado.ventana_atribucion }}
   </small>
   <div style="margin-top:.5rem;">
-    <form method="post" action="{{ url_for('cfg_triple_whale_probar', cliente=cliente) }}" class="inline"><button class="btn-guardar btn-xs">Probar conexión</button></form>
-    <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" onsubmit="return confirm('¿Desconectar Triple Whale? Se quita la atribución por este canal.');"><button class="btn-rechazar btn-xs">Desconectar</button></form>
+    <form method="post" action="{{ url_for('cfg_triple_whale_probar', cliente=cliente) }}" class="inline"><button class="btn-guardar btn-xs">{{ _('Probar conexión') }}</button></form>
+    <form method="post" action="{{ url_for('cfg_triple_whale_desconectar', cliente=cliente) }}" class="inline" onsubmit='return confirm({{ _('¿Desconectar Triple Whale? Se quita la atribución por este canal.')|tojson }});'><button class="btn-rechazar btn-xs">{{ _('Desconectar') }}</button></form>
   </div>
 </div>
 {% else %}
 <details class="swap-card">
-  <summary class="swap-card-resumen">+ Conectar Triple Whale</summary>
+  <summary class="swap-card-resumen">+ {{ _('Conectar Triple Whale') }}</summary>
   <form method="post" action="{{ url_for('cfg_triple_whale_conectar', cliente=cliente) }}" class="form-nueva-idea" id="form-triple-whale">
-    <label class="campo-label">Llave API de Triple Whale</label>
+    <label class="campo-label">{{ _('Llave API de Triple Whale') }}</label>
     <input type="password" name="llave_api" placeholder="tw_..." autocomplete="off" required {% if not cifrado_ok %}disabled{% endif %}>
-    <label class="campo-label" style="margin-top:.6rem;">Dominio de la tienda (Shopify)</label>
+    <label class="campo-label" style="margin-top:.6rem;">{{ _('Dominio de la tienda (Shopify)') }}</label>
     <input type="text" name="dominio_tienda" placeholder="mitienda.myshopify.com" {% if not cifrado_ok %}disabled{% endif %}>
-    <label class="campo-label" style="margin-top:.6rem;">Moneda</label>
+    <label class="campo-label" style="margin-top:.6rem;">{{ _('Moneda') }}</label>
     <select name="moneda" {% if not cifrado_ok %}disabled{% endif %}>
       <option value="USD" selected>USD</option>
       <option value="EUR">EUR</option>
@@ -315,62 +315,62 @@
       <option value="MXN">MXN</option>
       <option value="COP">COP</option>
     </select>
-    <label class="campo-label" style="margin-top:.6rem;">Modelo de atribución</label>
+    <label class="campo-label" style="margin-top:.6rem;">{{ _('Modelo de atribución') }}</label>
     <select name="modelo_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
       <option value="Triple Attribution" selected>Triple Attribution</option>
       <option value="First Touch">First Touch</option>
       <option value="Last Touch">Last Touch</option>
     </select>
-    <label class="campo-label" style="margin-top:.6rem;">Ventana de atribución</label>
+    <label class="campo-label" style="margin-top:.6rem;">{{ _('Ventana de atribución') }}</label>
     <select name="ventana_atribucion" {% if not cifrado_ok %}disabled{% endif %}>
       <option value="lifetime" selected>Lifetime</option>
-      <option value="7">7 días</option>
-      <option value="30">30 días</option>
+      <option value="7">{{ _('7 días') }}</option>
+      <option value="30">{{ _('30 días') }}</option>
     </select>
     <p class="vacio" style="padding-top:.3rem;font-size:.76rem;">
-      Tu llave API se guarda cifrada. Obtenla en <a href="https://app.triplewhale.com/settings/api-keys" target="_blank" rel="noopener">Triple Whale › Settings › API Keys</a>.
+      {{ _('Tu llave API se guarda cifrada. Obtenla en <a href="https://app.triplewhale.com/settings/api-keys" target="_blank" rel="noopener">Triple Whale › Settings › API Keys</a>.') }}
     </p>
-    <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>Conectar Triple Whale</button>
+    <button type="submit" class="btn-generar btn-sm" {% if not cifrado_ok %}disabled{% endif %}>{{ _('Conectar Triple Whale') }}</button>
   </form>
 </details>
 {% endif %}
 
 {# ---- Bloque 6: Canales orgánicos ---- #}
-<h2 id="config-canales-organicos" style="margin-top:2rem;">Canales orgánicos</h2>
+<h2 id="config-canales-organicos" style="margin-top:2rem;">{{ _('Canales orgánicos') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Dónde sale la ganadora de un experimento (o cualquier final que elijas) como
+  {{ _('Dónde sale la ganadora de un experimento (o cualquier final que elijas) como
   contenido orgánico, sin pauta: Instagram Reels, Facebook (Página), TikTok y
   YouTube Shorts. Solo se ofrecen los canales conectados; publicar siempre
-  pide tu clic (o la propuesta del motor, con el texto a la vista).
+  pide tu clic (o la propuesta del motor, con el texto a la vista).') }}
 </p>
 <ul class="org-canales-config">
   {% for c in canales_org %}
   <li class="org-canal-config{% if c.disponible %} org-canal-config-ok{% endif %}" id="canal-{{ c.plataforma }}">
     <div class="org-canal-cab">
-      <strong>{{ c.nombre }}</strong>
-      {% if c.disponible %}<span class="tag-estado tag-en-uso">conectado</span>
-      {% else %}<span class="tag-estado tag-advertencia">falta</span> <small class="vacio" style="padding:0;">{{ c.motivo }}</small>{% endif %}
+      <strong>{{ c.nombre|traducir }}</strong>
+      {% if c.disponible %}<span class="tag-estado tag-en-uso">{{ _('conectado') }}</span>
+      {% else %}<span class="tag-estado tag-advertencia">{{ _('falta') }}</span> <small class="vacio" style="padding:0;">{{ c.motivo|traducir }}</small>{% endif %}
     </div>
     <details class="llave-pasos">
-      <summary>Cómo activarlo</summary>
+      <summary>{{ _('Cómo activarlo') }}</summary>
       <ol>
         {% if c.plataforma == "facebook" %}
-        <li>Conecta Meta en <a href="#llave-meta">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica.</li>
-        <li>Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro.</li>
+        <li>{{ _('Conecta Meta en <a href="#llave-meta">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
+        <li>{{ _('Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro.') }}</li>
         {% elif c.plataforma == "instagram" %}
-        <li>Primero Facebook (arriba): Instagram publica a través de la Página.</li>
-        <li>En Instagram, pasa la cuenta a <strong>profesional</strong> (creador o empresa) y vincúlala a esa Página (Configuración › Cuenta › Compartir en otras apps / Business Suite).</li>
-        <li>La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación.</li>
-        <li>Vuelve a conectar Meta para que se guarde el <code>ig_user_id</code> de la cuenta vinculada.</li>
+        <li>{{ _('Primero Facebook (arriba): Instagram publica a través de la Página.') }}</li>
+        <li>{{ _('En Instagram, pasa la cuenta a <strong>profesional</strong> (creador o empresa) y vincúlala a esa Página (Configuración › Cuenta › Compartir en otras apps / Business Suite).') }}</li>
+        <li>{{ _('La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación.') }}</li>
+        <li>{{ _('Vuelve a conectar Meta para que se guarde el <code>ig_user_id</code> de la cuenta vinculada.') }}</li>
         {% elif c.plataforma == "youtube" %}
-        <li>La autorización se hace <strong>en tu Mac</strong> (abre un navegador y escucha en localhost; no funciona en el servidor): <code>venv/bin/python auth/auth_youtube.py</code> con la cuenta dueña del canal.</li>
-        <li>Copia el <code>token_youtube.json</code> que genera a <code>clientes/{{ cliente }}/</code> en el servidor (por ejemplo con <code>scp</code>).</li>
-        <li>Recarga esta página: el canal pasa a «conectado». Los Shorts salen con el título y la descripción que redactes.</li>
+        <li>{{ _('La autorización se hace <strong>en tu Mac</strong> (abre un navegador y escucha en localhost; no funciona en el servidor): <code>venv/bin/python auth/auth_youtube.py</code> con la cuenta dueña del canal.') }}</li>
+        <li>{{ _('Copia el <code>token_youtube.json</code> que genera a <code>clientes/%(cliente)s/</code> en el servidor (por ejemplo con <code>scp</code>).', cliente=cliente) }}</li>
+        <li>{{ _('Recarga esta página: el canal pasa a «conectado». Los Shorts salen con el título y la descripción que redactes.') }}</li>
         {% elif c.plataforma == "tiktok" %}
-        <li>Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto.</li>
-        <li>Copia el <code>token_tiktok.json</code> resultante a <code>clientes/{{ cliente }}/</code> en el servidor.</li>
-        <li>Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»).</li>
-        <li><strong>Mientras la app de TikTok no pase la auditoría de la Content Posting API</strong>, el video sale como <strong>«Solo yo»</strong> (privado) en la cuenta autorizada aunque acá diga «conectado» y «publicada». TikTok tampoco devuelve enlace, solo un id; se confirma que terminó de procesar y, si TikTok lo rechaza, la fila queda en error con el motivo. Ver SETUP.md › TikTok.</li>
+        <li>{{ _('Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto.') }}</li>
+        <li>{{ _('Copia el <code>token_tiktok.json</code> resultante a <code>clientes/%(cliente)s/</code> en el servidor.', cliente=cliente) }}</li>
+        <li>{{ _('Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»).') }}</li>
+        <li>{{ _('<strong>Mientras la app de TikTok no pase la auditoría de la Content Posting API</strong>, el video sale como <strong>«Solo yo»</strong> (privado) en la cuenta autorizada aunque acá diga «conectado» y «publicada». TikTok tampoco devuelve enlace, solo un id; se confirma que terminó de procesar y, si TikTok lo rechaza, la fila queda en error con el motivo. Ver SETUP.md › TikTok.') }}</li>
         {% endif %}
       </ol>
     </details>
@@ -379,7 +379,7 @@
 </ul>
 
 {# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor». #}
-<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;">Experimentos →</a></p>
+<p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">{{ _('Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); document.getElementById(\'reglas-motor\').open = true; return false;">Experimentos →</a>') }}</p>
 </section>
 
 <section class="config-apartado" id="config-ap-marca" data-apartado="marca">

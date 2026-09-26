@@ -1728,196 +1728,196 @@ def ver_cliente(cliente):
 SERVICIOS_LLAVES = (
     {
         "id": "anthropic",
-        "nombre": "Anthropic (guiones y prompts)",
-        "para_que": "Escribe los 5 prompts por idea y los guiones de las finales.",
-        "costo": "Se paga por uso: centavos por guion.",
+        "nombre": idiomas.N_("Anthropic (guiones y prompts)"),
+        "para_que": idiomas.N_("Escribe los 5 prompts por idea y los guiones de las finales."),
+        "costo": idiomas.N_("Se paga por uso: centavos por guion."),
         "url": "https://console.anthropic.com/settings/keys",
         "url_texto": "console.anthropic.com › API keys",
         "variables": ["ANTHROPIC_API_KEY"],
-        "nota": "Sin ella no hay prompts ni guiones.",
+        "nota": idiomas.N_("Sin ella no hay prompts ni guiones."),
         "pasos": [
-            "Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa).",
-            "En «Billing» carga saldo o pon una tarjeta: sin saldo la llave existe pero no responde.",
-            "Ve a «API keys» › «Create key», ponle un nombre (por ejemplo «creatv») y cópiala: solo se muestra una vez.",
-            "Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios.",
+            idiomas.N_("Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa)."),
+            idiomas.N_("En «Billing» carga saldo o pon una tarjeta: sin saldo la llave existe pero no responde."),
+            idiomas.N_("Ve a «API keys» › «Create key», ponle un nombre (por ejemplo «creatv») y cópiala: solo se muestra una vez."),
+            idiomas.N_("Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios."),
         ],
     },
     {
         "id": "fal",
-        "nombre": "fal.ai (voz y música)",
-        "para_que": "Voz en off (ElevenLabs), subtítulos por palabra (Whisper) y música (Stable Audio) de las finales.",
-        "costo": "Se paga por uso: alrededor de $0.05 por final.",
+        "nombre": idiomas.N_("fal.ai (voz y música)"),
+        "para_que": idiomas.N_("Voz en off (ElevenLabs), subtítulos por palabra (Whisper) y música (Stable Audio) de las finales."),
+        "costo": idiomas.N_("Se paga por uso: alrededor de $0.05 por final."),
         "url": "https://fal.ai/dashboard/keys",
         "url_texto": "fal.ai › Dashboard › Keys",
         "variables": ["FAL_KEY"],
-        "nota": "Sin ella las finales salen sin voz ni música.",
+        "nota": idiomas.N_("Sin ella las finales salen sin voz ni música."),
         "pasos": [
-            "Regístrate en fal.ai (con Google o GitHub; no pide verificación de negocio).",
-            "En «Billing» agrega una tarjeta o saldo prepago.",
-            "Ve a «Keys» › «Add key», elige alcance «API» y copia la llave.",
-            "Pégala como FAL_KEY en el .env del servidor y reinicia.",
+            idiomas.N_("Regístrate en fal.ai (con Google o GitHub; no pide verificación de negocio)."),
+            idiomas.N_("En «Billing» agrega una tarjeta o saldo prepago."),
+            idiomas.N_("Ve a «Keys» › «Add key», elige alcance «API» y copia la llave."),
+            idiomas.N_("Pégala como FAL_KEY en el .env del servidor y reinicia."),
         ],
     },
     {
         "id": "higgsfield",
-        "nombre": "Higgsfield (video e imagen)",
-        "para_que": "Genera la imagen candidata y el video de cada pieza.",
-        "costo": "Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes.",
+        "nombre": idiomas.N_("Higgsfield (video e imagen)"),
+        "para_que": idiomas.N_("Genera la imagen candidata y el video de cada pieza."),
+        "costo": idiomas.N_("Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes."),
         "url": "https://higgsfield.ai/",
         "url_texto": "higgsfield.ai › API",
         "variables": ["HF_API_KEY_ID", "HF_API_KEY_SECRET"],
-        "nota": "Sin ella no se generan piezas.",
+        "nota": idiomas.N_("Sin ella no se generan piezas."),
         "pasos": [
-            "Inicia sesión en higgsfield.ai y compra un paquete de créditos en «Billing».",
-            "Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva.",
-            "Copia los dos valores: el Key ID y el Key Secret (el secreto solo se muestra una vez).",
-            "Pégalos como HF_API_KEY_ID y HF_API_KEY_SECRET en el .env del servidor y reinicia.",
+            idiomas.N_("Inicia sesión en higgsfield.ai y compra un paquete de créditos en «Billing»."),
+            idiomas.N_("Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva."),
+            idiomas.N_("Copia los dos valores: el Key ID y el Key Secret (el secreto solo se muestra una vez)."),
+            idiomas.N_("Pégalos como HF_API_KEY_ID y HF_API_KEY_SECRET en el .env del servidor y reinicia."),
         ],
     },
     {
         "id": "r2",
-        "nombre": "Cloudflare R2 (almacenamiento)",
-        "para_que": "Guarda cada imagen y video generado y les da una URL pública permanente.",
-        "costo": "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga.",
+        "nombre": idiomas.N_("Cloudflare R2 (almacenamiento)"),
+        "para_que": idiomas.N_("Guarda cada imagen y video generado y les da una URL pública permanente."),
+        "costo": idiomas.N_("Casi gratis: 10 GB al mes sin costo y sin cobro por descarga."),
         "url": "https://dash.cloudflare.com/?to=/:account/r2",
         "url_texto": "dash.cloudflare.com › R2 › Manage API tokens",
         "variables": ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET_NAME", "R2_PUBLIC_BASE_URL"],
-        "nota": "Sin ella los videos no tienen URL pública y Meta no puede usarlos.",
+        "nota": idiomas.N_("Sin ella los videos no tienen URL pública y Meta no puede usarlos."),
         "pasos": [
-            "En dash.cloudflare.com entra a «R2» y crea un bucket (ese nombre es R2_BUCKET_NAME).",
-            "En «Settings» del bucket activa «Public access» (r2.dev o un dominio propio): esa URL es R2_PUBLIC_BASE_URL.",
-            "Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write».",
-            "Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2.",
-            "Pega las cinco variables en el .env del servidor y reinicia.",
+            idiomas.N_("En dash.cloudflare.com entra a «R2» y crea un bucket (ese nombre es R2_BUCKET_NAME)."),
+            idiomas.N_("En «Settings» del bucket activa «Public access» (r2.dev o un dominio propio): esa URL es R2_PUBLIC_BASE_URL."),
+            idiomas.N_("Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write»."),
+            idiomas.N_("Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2."),
+            idiomas.N_("Pega las cinco variables en el .env del servidor y reinicia."),
         ],
     },
     {
         "id": "meta",
-        "nombre": "Meta (anuncios)",
-        "para_que": "Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas.",
-        "costo": "La pauta se cobra en tu cuenta publicitaria; la API no cuesta.",
+        "nombre": idiomas.N_("Meta (anuncios)"),
+        "para_que": idiomas.N_("Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas."),
+        "costo": idiomas.N_("La pauta se cobra en tu cuenta publicitaria; la API no cuesta."),
         "url": "https://business.facebook.com/settings/payment-methods",
-        "url_texto": "business.facebook.com › Facturación",
+        "url_texto": idiomas.N_("business.facebook.com › Facturación"),
         "variables": [],
         "por_proyecto": True,
         # Lo único de esta tarjeta que le toca al cliente (el resto es del admin).
-        "cliente_hace": "Agrega un método de pago a tu cuenta publicitaria (enlace de abajo): sin él Meta no "
-                        "activa ningún anuncio. La conexión se hace en el bloque «¿Cómo quieres conectar Meta?».",
-        "nota": "No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta».",
+        "cliente_hace": idiomas.N_("Agrega un método de pago a tu cuenta publicitaria (enlace de abajo): sin él Meta no "
+                        "activa ningún anuncio. La conexión se hace en el bloque «¿Cómo quieres conectar Meta?»."),
+        "nota": idiomas.N_("No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta»."),
         "pasos": [
-            "En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login.",
-            "Pégalos en «Conecta tu cuenta de Meta» (abajo, o en Experimentos): el secret se guarda en el servidor y nunca vuelve a pantalla.",
-            "En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio.",
-            "Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página.",
-            "Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app.",
+            idiomas.N_("En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login."),
+            idiomas.N_("Pégalos en «Conecta tu cuenta de Meta» (abajo, o en Experimentos): el secret se guarda en el servidor y nunca vuelve a pantalla."),
+            idiomas.N_("En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio."),
+            idiomas.N_("Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página."),
+            idiomas.N_("Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app."),
         ],
     },
     {
         "id": "smtp",
-        "nombre": "Correo de la plataforma (cuentas y avisos)",
-        "para_que": "Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; "
-                    "también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos).",
-        "costo": "Depende del proveedor de correo; con una cuenta normal no cuesta.",
+        "nombre": idiomas.N_("Correo de la plataforma (cuentas y avisos)"),
+        "para_que": idiomas.N_("Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; "
+                    "también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos)."),
+        "costo": idiomas.N_("Depende del proveedor de correo; con una cuenta normal no cuesta."),
         "url": "https://support.google.com/accounts/answer/185833",
-        "url_texto": "Google › Contraseñas de aplicación",
+        "url_texto": idiomas.N_("Google › Contraseñas de aplicación"),
         "variables": ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM", "PLATAFORMA_URL"],
-        "nota": "Sin esto nadie puede confirmar su correo ni recuperar la contraseña solo (el administrador "
-                "tiene que marcar las cuentas a mano en el panel) y los avisos solo quedan en la bitácora.",
+        "nota": idiomas.N_("Sin esto nadie puede confirmar su correo ni recuperar la contraseña solo (el administrador "
+                "tiene que marcar las cuentas a mano en el panel) y los avisos solo quedan en la bitácora."),
         "opcional": True,
         "pasos": [
-            "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio).",
-            "Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, "
+            idiomas.N_("Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio)."),
+            idiomas.N_("Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, "
             "en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS "
-            "(no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma.",
-            "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS).",
-            "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor, junto con "
+            "(no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma."),
+            idiomas.N_("Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."),
+            idiomas.N_("Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor, junto con "
             "PLATAFORMA_URL (la dirección pública del sitio, p. ej. https://app.creatvmachine.com: es la base de "
-            "los enlaces que van en los correos), y reinicia los dos servicios.",
-            "Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. "
-            "Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto.",
+            "los enlaces que van en los correos), y reinicia los dos servicios."),
+            idiomas.N_("Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. "
+            "Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto."),
         ],
     },
     {
         "id": "meli",
-        "nombre": "MercadoLibre (opcional)",
-        "para_que": "Trae las publicaciones activas de una tienda de MercadoLibre al catálogo.",
-        "costo": "Gratis: solo lectura de tus publicaciones.",
+        "nombre": idiomas.N_("MercadoLibre (opcional)"),
+        "para_que": idiomas.N_("Trae las publicaciones activas de una tienda de MercadoLibre al catálogo."),
+        "costo": idiomas.N_("Gratis: solo lectura de tus publicaciones."),
         "url": "https://developers.mercadolibre.com/",
         "url_texto": "developers.mercadolibre.com",
         "variables": ["MELI_APP_ID", "MELI_SECRET"],
-        "nota": "Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda.",
+        "nota": idiomas.N_("Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda."),
         "opcional": True,
         "pasos": [
-            "En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación».",
-            "Marca los permisos de lectura y «offline_access» (para renovar el token solo).",
-            "En «URI de redirect» pon exactamente {callback_meli}.",
-            "Copia el App ID y la Secret Key y pégalos como MELI_APP_ID y MELI_SECRET en el .env del servidor; reinicia.",
-            "Luego, en «Conectar tu tienda» › MercadoLibre, pulsa «Conectar con MercadoLibre».",
+            idiomas.N_("En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación»."),
+            idiomas.N_("Marca los permisos de lectura y «offline_access» (para renovar el token solo)."),
+            idiomas.N_("En «URI de redirect» pon exactamente {callback_meli}."),
+            idiomas.N_("Copia el App ID y la Secret Key y pégalos como MELI_APP_ID y MELI_SECRET en el .env del servidor; reinicia."),
+            idiomas.N_("Luego, en «Conectar tu tienda» › MercadoLibre, pulsa «Conectar con MercadoLibre»."),
         ],
     },
     {
         "id": "reddit",
-        "nombre": "Reddit (Nicho: comentarios reales)",
-        "para_que": "Trae posts y comentarios de Reddit a un estudio de Nicho para armar avatares con evidencia.",
-        "costo": "Gratis para uso propio (100 llamadas por minuto). Si el producto se vende, Reddit pide permiso comercial.",
+        "nombre": idiomas.N_("Reddit (Nicho: comentarios reales)"),
+        "para_que": idiomas.N_("Trae posts y comentarios de Reddit a un estudio de Nicho para armar avatares con evidencia."),
+        "costo": idiomas.N_("Gratis para uso propio (100 llamadas por minuto). Si el producto se vende, Reddit pide permiso comercial."),
         "url": "https://www.reddit.com/prefs/apps",
         "url_texto": "reddit.com › preferences › apps",
         "variables": ["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT"],
-        "nota": "Sin ellas la tarjeta Reddit de cada estudio queda apagada; el resto de Nicho funciona.",
+        "nota": idiomas.N_("Sin ellas la tarjeta Reddit de cada estudio queda apagada; el resto de Nicho funciona."),
         "opcional": True,
         "pasos": [
-            "Entra a reddit.com/prefs/apps con la cuenta de la empresa y pulsa «create another app…».",
-            "Tipo «script», nombre «creatv-machine», redirect uri http://localhost:8080 (no se usa) y crea la app.",
-            "Copia el id (bajo el nombre de la app) como REDDIT_CLIENT_ID y el «secret» como REDDIT_CLIENT_SECRET.",
-            "Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios.",
+            idiomas.N_("Entra a reddit.com/prefs/apps con la cuenta de la empresa y pulsa «create another app…»."),
+            idiomas.N_("Tipo «script», nombre «creatv-machine», redirect uri http://localhost:8080 (no se usa) y crea la app."),
+            idiomas.N_("Copia el id (bajo el nombre de la app) como REDDIT_CLIENT_ID y el «secret» como REDDIT_CLIENT_SECRET."),
+            idiomas.N_("Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."),
         ],
     },
     {
         "id": "youtube_api",
-        "nombre": "YouTube Data API (Nicho: comentarios de videos)",
-        "para_que": "Busca videos por palabras clave y trae sus comentarios a un estudio de Nicho. Es una llave distinta del OAuth de publicación.",
-        "costo": "Gratis: 100 búsquedas por día por proyecto de Google y 10 000 unidades para leer comentarios.",
+        "nombre": idiomas.N_("YouTube Data API (Nicho: comentarios de videos)"),
+        "para_que": idiomas.N_("Busca videos por palabras clave y trae sus comentarios a un estudio de Nicho. Es una llave distinta del OAuth de publicación."),
+        "costo": idiomas.N_("Gratis: 100 búsquedas por día por proyecto de Google y 10 000 unidades para leer comentarios."),
         "url": "https://console.cloud.google.com/apis/credentials",
-        "url_texto": "console.cloud.google.com › APIs y servicios › Credenciales",
+        "url_texto": idiomas.N_("console.cloud.google.com › APIs y servicios › Credenciales"),
         "variables": ["YOUTUBE_API_KEY"],
-        "nota": "Sin ella la tarjeta YouTube de cada estudio queda apagada.",
+        "nota": idiomas.N_("Sin ella la tarjeta YouTube de cada estudio queda apagada."),
         "opcional": True,
         "pasos": [
-            "En el proyecto de Google Cloud donde ya está habilitada «YouTube Data API v3» (SETUP.md §2), ve a «Credenciales».",
-            "«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3.",
-            "Cópiala como YOUTUBE_API_KEY en el .env del servidor y reinicia los dos servicios.",
+            idiomas.N_("En el proyecto de Google Cloud donde ya está habilitada «YouTube Data API v3» (SETUP.md §2), ve a «Credenciales»."),
+            idiomas.N_("«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3."),
+            idiomas.N_("Cópiala como YOUTUBE_API_KEY en el .env del servidor y reinicia los dos servicios."),
         ],
     },
     {
         "id": "apify",
-        "nombre": "Apify (Nicho: reseñas/comentarios · Referentes: Ad Library)",
-        "para_que": "Corre los actores de Apify: en Nicho trae reseñas de Amazon o comentarios de TikTok; en la biblioteca de referentes trae anuncios de la Ad Library de Meta (alternativa a Atria, sí cubre Latinoamérica).",
-        "costo": "Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic.",
+        "nombre": idiomas.N_("Apify (Nicho: reseñas/comentarios · Referentes: Ad Library)"),
+        "para_que": idiomas.N_("Corre los actores de Apify: en Nicho trae reseñas de Amazon o comentarios de TikTok; en la biblioteca de referentes trae anuncios de la Ad Library de Meta (alternativa a Atria, sí cubre Latinoamérica)."),
+        "costo": idiomas.N_("Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic."),
         "url": "https://console.apify.com/account/integrations",
         "url_texto": "console.apify.com › Settings › Integrations",
         "variables": ["APIFY_TOKEN"],
-        "nota": "Sin él la tarjeta Amazon / TikTok de cada estudio queda apagada. Zona gris de términos de uso de esas plataformas: es responsabilidad de quien pone el token.",
+        "nota": idiomas.N_("Sin él la tarjeta Amazon / TikTok de cada estudio queda apagada. Zona gris de términos de uso de esas plataformas: es responsabilidad de quien pone el token."),
         "opcional": True,
         "pasos": [
-            "Crea la cuenta en apify.com (trae crédito gratis mensual) y agrega una tarjeta si vas a pasar de ese crédito.",
-            "En «Settings» › «Integrations» copia el «Personal API token».",
-            "Pégalo como APIFY_TOKEN en el .env del servidor y reinicia los dos servicios.",
+            idiomas.N_("Crea la cuenta en apify.com (trae crédito gratis mensual) y agrega una tarjeta si vas a pasar de ese crédito."),
+            idiomas.N_("En «Settings» › «Integrations» copia el «Personal API token»."),
+            idiomas.N_("Pégalo como APIFY_TOKEN en el .env del servidor y reinicia los dos servicios."),
         ],
     },
     {
         "id": "atria",
-        "nombre": "Atria (biblioteca de referentes: Ad Library de Meta)",
-        "para_que": "Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea.",
-        "costo": "Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin).",
+        "nombre": idiomas.N_("Atria (biblioteca de referentes: Ad Library de Meta)"),
+        "para_que": idiomas.N_("Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea."),
+        "costo": idiomas.N_("Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin)."),
         "url": "https://tryatria.com",
         "url_texto": "tryatria.com",
         "variables": ["ATRIA_API_KEY"],
-        "nota": "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token.",
+        "nota": idiomas.N_("Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."),
         "opcional": True,
         "pasos": [
-            "Crea la cuenta en tryatria.com y elige un plan.",
-            "Copia la API key desde el panel de Atria.",
-            "Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios.",
+            idiomas.N_("Crea la cuenta en tryatria.com y elige un plan."),
+            idiomas.N_("Copia la API key desde el panel de Atria."),
+            idiomas.N_("Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios."),
         ],
     },
 )
@@ -1925,13 +1925,13 @@ SERVICIOS_LLAVES = (
 
 # Tarjeta Meta cuando el proyecto está en modo agencia: no hay app ni llave
 # que conseguir; lo único que cuenta es que la agencia esté conectada.
-NOTA_META_AGENCIA = ("Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta "
+NOTA_META_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta "
                      "nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el "
                      "panel; pídele a él cualquier cambio.")
 PASOS_META_AGENCIA = [
-    "No tienes que conseguir ninguna llave: Creatv conecta su Business Manager una sola vez y te asigna la cuenta y la Página.",
-    "Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador.",
-    "Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio.",
+    idiomas.N_("No tienes que conseguir ninguna llave: Creatv conecta su Business Manager una sola vez y te asigna la cuenta y la Página."),
+    idiomas.N_("Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador."),
+    idiomas.N_("Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio."),
 ]
 
 
@@ -1972,21 +1972,26 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
             estado = "falta"
         else:
             estado = "parcial"
+        # Ojo: gettext(s["nombre"]) confunde al extractor de Babel (agarra el
+        # literal "nombre" del subíndice como si fuera el mensaje) — por eso
+        # cada valor pasa primero por una variable antes de traducirse.
+        nombre_valor, para_que_valor, costo_valor = s["nombre"], s["para_que"], s["costo"]
+        url_texto_valor, cliente_hace_valor = s["url_texto"], s.get("cliente_hace", "")
         tarjetas.append({
             "id": s["id"],
-            "nombre": s["nombre"],
-            "para_que": s["para_que"],
-            "costo": s["costo"],
+            "nombre": gettext(nombre_valor),
+            "para_que": gettext(para_que_valor),
+            "costo": gettext(costo_valor),
             "estado": estado,
             "url": s["url"],
-            "url_texto": s["url_texto"],
+            "url_texto": gettext(url_texto_valor),
             "variables": list(s["variables"]),
             "faltan": faltan,
-            "nota": nota,
+            "nota": gettext(nota),
             "opcional": bool(s.get("opcional")),
             "por_proyecto": bool(s.get("por_proyecto")),
-            "cliente_hace": s.get("cliente_hace", ""),
-            "pasos": [p.replace("{callback_meli}", callback) for p in pasos],
+            "cliente_hace": gettext(cliente_hace_valor) if cliente_hace_valor else "",
+            "pasos": [gettext(p).replace("{callback_meli}", callback) for p in pasos],
         })
     return tarjetas
 
@@ -3002,7 +3007,7 @@ def _ir_a_flowmarketing(cliente):
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
-MENSAJE_MODO_AGENCIA = ("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
+MENSAJE_MODO_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» "
                         "en Configuración › Meta (con nada en marcha).")
 
 
@@ -3015,7 +3020,7 @@ def _bloqueo_modo_agencia(cliente):
     decirle que no puede. None si el proyecto está en modo propia."""
     if meta_conexion.modo(cliente) != meta_conexion.MODO_AGENCIA:
         return None
-    flash(MENSAJE_MODO_AGENCIA, "error")
+    flash(gettext(MENSAJE_MODO_AGENCIA), "error")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3033,13 +3038,13 @@ def meta_app_guardar(cliente):
             "login_config_id": request.form.get("login_config_id"),
         })
     except meta_conexion.ModoAgenciaError:
-        flash(MENSAJE_MODO_AGENCIA, "error")
+        flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     except meta_conexion.MetaConexionError as e:
         flash(str(e), "error")
         return _ir_a_flowmarketing(cliente)
     bitacora.registrar(cliente, "meta", "app", "ok", f"app {request.form.get('app_id', '').strip()} registrada")
-    flash("App de Meta registrada para este proyecto. Ahora sí: Conectar con Meta.", "ok")
+    flash(gettext("App de Meta registrada para este proyecto. Ahora sí: Conectar con Meta."), "ok")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3050,7 +3055,7 @@ def meta_app_borrar(cliente):
         return bloqueo
     meta_conexion.borrar_app(cliente)
     bitacora.registrar(cliente, "meta", "app", "ok", "app de Meta quitada")
-    flash("App de Meta quitada de este proyecto. La conexión existente sigue hasta que la desconectes.", "ok")
+    flash(gettext("App de Meta quitada de este proyecto. La conexión existente sigue hasta que la desconectes."), "ok")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3065,7 +3070,7 @@ def meta_conectar(cliente):
         return redirect(meta_conexion.url_dialogo(cliente, state))
     except meta_conexion.ModoAgenciaError:
         session.pop("meta_oauth", None)
-        flash(MENSAJE_MODO_AGENCIA, "error")
+        flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     except meta_conexion.MetaConexionError as e:
         session.pop("meta_oauth", None)
@@ -3149,7 +3154,7 @@ def meta_elegir(cliente):
         # Un admin asignó el proyecto a la agencia mientras el cliente elegía:
         # la asignación manda; la autorización a medias se descarta.
         meta_conexion.borrar_pendiente(cliente)
-        flash(MENSAJE_MODO_AGENCIA, "error")
+        flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", f"{cuenta.get('name')} · {pagina.get('name')}")
@@ -3198,14 +3203,14 @@ def meta_desconectar(cliente):
     try:
         meta_conexion.borrar(cliente)
     except meta_conexion.ModoAgenciaError:
-        flash(MENSAJE_MODO_AGENCIA, "error")
+        flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_flowmarketing(cliente)
     meta_conexion.borrar_pendiente(cliente)
     bitacora.registrar(cliente, "meta", "conexion", "ok", "desconectado" + (" y revocado en Meta" if revocado else ""))
     if revocado:
-        flash("Meta desconectado de este proyecto y acceso revocado en Meta.", "ok")
+        flash(gettext("Meta desconectado de este proyecto y acceso revocado en Meta."), "ok")
     else:
-        flash("Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio.", "ok")
+        flash(gettext("Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio."), "ok")
     return _ir_a_flowmarketing(cliente)
 
 
@@ -3253,13 +3258,13 @@ def meta_forma(cliente):
         abort(403)
     forma = (request.form.get("forma") or "").strip()
     if forma not in proyectos.FORMAS_META:
-        flash("Elige una de las dos formas de conectar.", "error")
+        flash(gettext("Elige una de las dos formas de conectar."), "error")
         return _ir_a_meta(cliente)
     if forma == "agencia" and not meta_agencia.conectada():
-        flash("Esa opción todavía no está disponible: Creatv está terminando de activarla.", "error")
+        flash(gettext("Esa opción todavía no está disponible: Creatv está terminando de activarla."), "error")
         return _ir_a_meta(cliente)
     if meta_conexion.modo(cliente) == meta_conexion.MODO_AGENCIA:
-        flash(MENSAJE_MODO_AGENCIA, "error")
+        flash(gettext(MENSAJE_MODO_AGENCIA), "error")
         return _ir_a_meta(cliente)
     if (meta_conexion.cargar(cliente) or {}).get("token") and forma != proyectos.meta_forma(cliente):
         motivo = _bloqueo_cambio_forma(cliente)
@@ -3269,9 +3274,9 @@ def meta_forma(cliente):
     proyectos.guardar_meta_forma(cliente, forma)
     bitacora.registrar(cliente, "meta", "forma", "ok", f"forma elegida: {forma} (por {session.get('usuario')})")
     if forma == "agencia":
-        flash("Que Creatv lo gestione: sigue los pasos de la tarjeta de Meta.", "ok")
+        flash(gettext("Que Creatv lo gestione: sigue los pasos de la tarjeta de Meta."), "ok")
     else:
-        flash("Con tu propia app: sigue los pasos de la tarjeta de Meta.", "ok")
+        flash(gettext("Con tu propia app: sigue los pasos de la tarjeta de Meta."), "ok")
     return _ir_a_meta(cliente)
 
 
@@ -3284,7 +3289,7 @@ def meta_agencia_buscar(cliente):
         abort(403)
     portafolio = _portafolio_valido(request.form.get("portafolio_id"))
     if not portafolio:
-        flash("Escribe el id de tu portafolio comercial (solo números).", "error")
+        flash(gettext("Escribe el id de tu portafolio comercial (solo números)."), "error")
         return _ir_a_meta(cliente)
     extra = {"refrescar": "1"} if request.form.get("refrescar") == "1" else {}
     return redirect(url_for("ver_cliente", cliente=cliente, agencia_portafolio=portafolio, _anchor="settings", **extra))
@@ -3301,36 +3306,36 @@ def meta_agencia_conectar(cliente):
     if bloqueo:
         return bloqueo
     if not meta_agencia.conectada():
-        flash("Creatv todavía no activó esta opción; inténtalo más tarde.", "error")
+        flash(gettext("Creatv todavía no activó esta opción; inténtalo más tarde."), "error")
         return _ir_a_meta(cliente)
     portafolio = _portafolio_valido(request.form.get("portafolio_id"))
     ad_account_id = (request.form.get("ad_account_id") or "").strip()
     page_id = (request.form.get("page_id") or "").strip() or None
     page_id_manual = (request.form.get("page_id_manual") or "").strip() or None
     if not portafolio or not ad_account_id:
-        flash("Falta el id de tu portafolio o la cuenta publicitaria.", "error")
+        flash(gettext("Falta el id de tu portafolio o la cuenta publicitaria."), "error")
         return _ir_a_meta(cliente)
     try:
         activos = meta_agencia.activos_de_portafolio(portafolio, cliente=cliente)
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude leer tus activos: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude leer tus activos: %(error)s", error=cola.sin_token(str(e))), "error")
         return _ir_a_meta(cliente)
     if ad_account_id not in {a["id"] for a in activos["ad_accounts"]}:
-        flash("Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar.", "error")
+        flash(gettext("Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar."), "error")
         return _ir_a_meta(cliente)
     if page_id and page_id not in {p["id"] for p in activos["pages"]}:
-        flash("Esa Página no aparece entre las de tu portafolio; vuelve a buscar.", "error")
+        flash(gettext("Esa Página no aparece entre las de tu portafolio; vuelve a buscar."), "error")
         return _ir_a_meta(cliente)
     if not page_id and page_id_manual:
         if not activos["paginas_sin_dueno"] or not meta_agencia.pagina_de_socio(page_id_manual):
-            flash("Esa Página no está compartida con Creatv; revisa el paso 2 de la guía.", "error")
+            flash(gettext("Esa Página no está compartida con Creatv; revisa el paso 2 de la guía."), "error")
             return _ir_a_meta(cliente)
         page_id = page_id_manual
     try:
         detalle = meta_agencia.asignar(cliente, ad_account_id, page_id,
                                        asignado_por=f"cliente:{session.get('usuario')}", portafolio_id=portafolio)
     except meta_conexion.MetaConexionError as e:
-        flash(f"No pude conectar: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude conectar: %(error)s", error=cola.sin_token(str(e))), "error")
         return _ir_a_meta(cliente)
     proyectos.guardar_meta_forma(cliente, "agencia")
     nombre = proyectos.nombre_visible(cliente)
@@ -3342,13 +3347,13 @@ def meta_agencia_conectar(cliente):
         f"El proyecto {nombre} ({cliente}) conectó por su cuenta: cuenta {cuenta} ({detalle.get('ad_account_id')}) · "
         f"Página {pagina} · portafolio {portafolio}.\nRevísalo en el panel de administración › Meta (agencia).",
         cliente=cliente)
-    flash(f"Listo: Creatv ya gestiona tu Meta con {cuenta} · {pagina}.", "ok")
+    flash(gettext("Listo: Creatv ya gestiona tu Meta con %(cuenta)s · %(pagina)s.", cuenta=cuenta, pagina=pagina), "ok")
     if detalle.get("cambio_cuenta"):
-        flash("La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse.", "warn")
+        flash(gettext("La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."), "warn")
     if page_id and not detalle.get("ig_username"):
-        flash("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook.", "warn")
+        flash(gettext("Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."), "warn")
     if not page_id:
-        flash("Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada.", "warn")
+        flash(gettext("Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada."), "warn")
     return _ir_a_meta(cliente)
 
 
@@ -3363,7 +3368,7 @@ def meta_agencia_avisar(cliente):
         return bloqueo
     portafolio = _portafolio_valido(request.form.get("portafolio_id"))
     if not portafolio:
-        flash("Escribe el id de tu portafolio comercial (solo números).", "error")
+        flash(gettext("Escribe el id de tu portafolio comercial (solo números)."), "error")
         return _ir_a_meta(cliente)
     try:
         sol = meta_agencia.solicitar(cliente, portafolio, ad_account_id=request.form.get("ad_account_id"),
@@ -3382,7 +3387,7 @@ def meta_agencia_avisar(cliente):
         f"Portafolio {portafolio} · cuenta {sol['ad_account_id'] or 'no indicada'} · Página {sol['page_id'] or 'no indicada'}.\n"
         f"Nota: {sol['nota'] or '—'}\nAsígnalo en el panel de administración › Meta (agencia).",
         cliente=cliente)
-    flash("Listo: Creatv recibió tu solicitud y te avisa por correo cuando quede conectado.", "ok")
+    flash(gettext("Listo: Creatv recibió tu solicitud y te avisa por correo cuando quede conectado."), "ok")
     return _ir_a_meta(cliente)
 
 
@@ -3392,9 +3397,9 @@ def meta_agencia_avisar_cancelar(cliente):
         abort(403)
     if meta_agencia.borrar_solicitud(cliente):
         bitacora.registrar(cliente, "meta", "agencia", "ok", f"solicitud cancelada por {session.get('usuario')}")
-        flash("Solicitud cancelada.", "ok")
+        flash(gettext("Solicitud cancelada."), "ok")
     else:
-        flash("No había ninguna solicitud pendiente.", "warn")
+        flash(gettext("No había ninguna solicitud pendiente."), "warn")
     return _ir_a_meta(cliente)
 
 
@@ -3405,7 +3410,7 @@ def meta_agencia_salir(cliente):
     if not _mismo_origen():
         abort(403)
     if meta_conexion.modo(cliente) != meta_conexion.MODO_AGENCIA:
-        flash("Este proyecto no está en modo agencia.", "warn")
+        flash(gettext("Este proyecto no está en modo agencia."), "warn")
         return _ir_a_meta(cliente)
     motivo = _bloqueo_cambio_forma(cliente)
     if motivo:
@@ -3420,8 +3425,8 @@ def meta_agencia_salir(cliente):
                                 f"El proyecto {nombre} ({cliente}) volvió a usar su propia app de Meta"
                                 + (" (su conexión anterior se restauró)." if restaurada else " (sin conexión todavía)."),
                                 cliente=cliente)
-    flash("Listo: este proyecto vuelve a usar su propia app de Meta. "
-          + ("Tu conexión anterior se restauró." if restaurada else "Sigue los pasos para registrar tu app y conectar."), "ok")
+    detalle_restaurada = gettext("Tu conexión anterior se restauró.") if restaurada else gettext("Sigue los pasos para registrar tu app y conectar.")
+    flash(gettext("Listo: este proyecto vuelve a usar su propia app de Meta. %(detalle)s", detalle=detalle_restaurada), "ok")
     return _ir_a_meta(cliente)
 
 
@@ -5362,8 +5367,8 @@ def _encolar_sync_tienda(cliente, tienda_id, tipo, con_pedidos=True):
 
 
 def _flash_sin_cifrado():
-    flash("Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar las "
-          "credenciales de una tienda.", "error")
+    flash(gettext("Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar las "
+          "credenciales de una tienda."), "error")
 
 
 @app.route("/cliente/<cliente>/config/tienda/conectar", methods=["POST"])
@@ -5385,22 +5390,22 @@ def tienda_conectar(cliente):
         dominio = re.sub(r"^https?://", "", url).strip("/").split("/")[0]
         creds = {"url": url, "ck": (request.form.get("ck") or "").strip(), "cs": (request.form.get("cs") or "").strip()}
     else:
-        flash("Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón).", "error")
+        flash(gettext("Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón)."), "error")
         return _volver_config(cliente)
     try:
         resultado = conectores.por_tipo(tipo)(creds).probar()
     except (ErrorConector, ValueError) as e:
-        flash(f"No pude conectar la tienda: {cola.sin_token(str(e))}", "error")
+        flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e))), "error")
         return _volver_config(cliente)
     except Exception as e:  # noqa: BLE001 — un fallo de red/parseo también se muestra, nunca se guarda a ciegas
-        flash(f"No pude conectar la tienda: {cola.sin_token(str(e) or type(e).__name__)}", "error")
+        flash(gettext("No pude conectar la tienda: %(error)s", error=cola.sin_token(str(e) or type(e).__name__)), "error")
         return _volver_config(cliente)
     nombre = str((resultado or {}).get("nombre") or "").strip() or None
     tid = tiendas.conectar(cliente, tipo, creds, nombre=nombre, dominio=dominio or None)
     n = _encolar_sync_tienda(cliente, tid, tipo)
     detalle = str((resultado or {}).get("detalle") or "").strip()
-    flash(f"Tienda {nombre or dominio} conectada. {detalle} "
-          + ("Sincronizando el catálogo…" if n else "Ya había una sincronización en curso."), "ok")
+    extra = gettext("Sincronizando el catálogo…") if n else gettext("Ya había una sincronización en curso.")
+    flash(gettext("Tienda %(nombre)s conectada. %(detalle)s %(extra)s", nombre=(nombre or dominio), detalle=detalle, extra=extra), "ok")
     return _volver_config(cliente)
 
 
@@ -5416,8 +5421,8 @@ def tienda_meli_iniciar(cliente):
         return _volver_config(cliente)
     faltan = [v for v in ("MELI_APP_ID", "MELI_SECRET") if not (os.environ.get(v) or "").strip()]
     if faltan:
-        flash("Falta configurar " + " y ".join(faltan) + " en el .env del servidor "
-              "(app de developers.mercadolibre.com).", "error")
+        flash(gettext("Falta configurar %(vars)s en el .env del servidor (app de developers.mercadolibre.com).",
+                      vars=" y ".join(faltan)), "error")
         return _volver_config(cliente)
     state = secrets.token_urlsafe(32)
     session["meli_oauth"] = {"state": state, "cliente": cliente}
@@ -5438,14 +5443,14 @@ def meli_callback():
     cliente = pendiente.get("cliente")
     state_ok = bool(pendiente.get("state")) and request.args.get("state") == pendiente.get("state")
     if not cliente or not state_ok:
-        flash("La autorización con MercadoLibre no coincide con esta sesión — vuelve a intentarlo desde Configuración.", "error")
+        flash(gettext("La autorización con MercadoLibre no coincide con esta sesión — vuelve a intentarlo desde Configuración."), "error")
         return _volver_config(cliente) if cliente else redirect(url_for("index"))
     if not usuarios.puede_acceder(_sesion(), cliente):
-        flash("No tienes acceso a ese proyecto.", "error")
+        flash(gettext("No tienes acceso a ese proyecto."), "error")
         return redirect(url_for("index"))
     if request.args.get("error"):
         detalle = request.args.get("error_description") or request.args.get("error")
-        flash(f"MercadoLibre no autorizó la conexión: {detalle}", "error")
+        flash(gettext("MercadoLibre no autorizó la conexión: %(detalle)s", detalle=detalle), "error")
         return _volver_config(cliente)
     if not cifrado.disponible():
         _flash_sin_cifrado()
@@ -5458,8 +5463,9 @@ def meli_callback():
     nombre = str(creds.get("nickname") or "").strip() or None
     tid = tiendas.conectar(cliente, "meli", creds, nombre=nombre, dominio=None)
     n = _encolar_sync_tienda(cliente, tid, "meli")
-    flash(f"MercadoLibre conectado{(' (' + nombre + ')') if nombre else ''}. "
-          + ("Sincronizando las publicaciones…" if n else "Ya había una sincronización en curso."), "ok")
+    extra = gettext("Sincronizando las publicaciones…") if n else gettext("Ya había una sincronización en curso.")
+    sufijo_nombre = f" ({nombre})" if nombre else ""
+    flash(gettext("MercadoLibre conectado%(sufijo)s. %(extra)s", sufijo=sufijo_nombre, extra=extra), "ok")
     return _volver_config(cliente)
 
 
@@ -5469,28 +5475,28 @@ def tienda_sync(cliente, tid):
     sincronizar es como la persona comprueba que ya se arregló."""
     t = tiendas.obtener(cliente, tid)
     if not t:
-        flash("Esa tienda no existe.", "error")
+        flash(gettext("Esa tienda no existe."), "error")
         return _volver_config(cliente)
     n = _encolar_sync_tienda(cliente, tid, t["tipo"])
-    flash("Sincronizando…" if n else "Ya se está sincronizando esa tienda.", "ok" if n else "warn")
+    flash(gettext("Sincronizando…") if n else gettext("Ya se está sincronizando esa tienda."), "ok" if n else "warn")
     return _volver_config(cliente)
 
 
 @app.route("/cliente/<cliente>/config/tienda/<int:tid>/desconectar", methods=["POST"])
 def tienda_desconectar(cliente, tid):
     if tiendas.desconectar(cliente, tid):
-        flash("Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada).", "ok")
+        flash(gettext("Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."), "ok")
     else:
-        flash("Esa tienda no existe.", "error")
+        flash(gettext("Esa tienda no existe."), "error")
     return _volver_config(cliente)
 
 
 PIXEL_ESTADOS_TEXTO = {
-    "ok": "El Pixel está disparando.",
-    "sin_datos": "El Pixel existe pero no ha disparado en los últimos días.",
-    "sin_pixel": "La cuenta publicitaria no tiene ningún Pixel.",
-    "sin_conexion": "Meta no está conectado.",
-    "error": "No pude consultar el Pixel.",
+    "ok": idiomas.N_("El Pixel está disparando."),
+    "sin_datos": idiomas.N_("El Pixel existe pero no ha disparado en los últimos días."),
+    "sin_pixel": idiomas.N_("La cuenta publicitaria no tiene ningún Pixel."),
+    "sin_conexion": idiomas.N_("Meta no está conectado."),
+    "error": idiomas.N_("No pude consultar el Pixel."),
 }
 
 
@@ -5499,7 +5505,7 @@ def cfg_pixel_refrescar(cliente):
     meta_conexion.invalidar_pixel(cliente)
     r = meta_conexion.estado_pixel(cliente) or {}
     estado = r.get("estado") or "error"
-    texto = PIXEL_ESTADOS_TEXTO.get(estado, estado)
+    texto = gettext(PIXEL_ESTADOS_TEXTO.get(estado, estado))
     if estado == "error" and r.get("detalle"):
         texto += f" {r['detalle']}"
     flash(texto, "ok" if estado == "ok" else "warn")
@@ -6664,12 +6670,12 @@ def cfg_triple_whale_conectar(cliente):
     llave = request.form.get("llave_api", "").strip()
     dominio = request.form.get("dominio_tienda", "").strip()
     if not llave or not dominio:
-        flash("Llave y dominio de tienda son requeridos.", "error")
+        flash(gettext("Llave y dominio de tienda son requeridos."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
 
     # Validar llave
     if not triple_whale.validar_llave(llave):
-        flash("Llave inválida, revocada o sin scope 'Data Out'.", "error")
+        flash(gettext("Llave inválida, revocada o sin scope 'Data Out'."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
 
     moneda = request.form.get("moneda", "USD").strip().upper()
@@ -6681,9 +6687,9 @@ def cfg_triple_whale_conectar(cliente):
             cliente, llave, dominio, moneda=moneda,
             modelo_atribucion=modelo, ventana_atribucion=ventana
         )
-        flash("Triple Whale conectado correctamente.", "ok")
+        flash(gettext("Triple Whale conectado correctamente."), "ok")
     except Exception as e:
-        flash(f"Error al conectar: {str(e)}", "error")
+        flash(gettext("Error al conectar: %(error)s", error=str(e)), "error")
 
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
 
@@ -6697,14 +6703,14 @@ def cfg_triple_whale_probar(cliente):
     
     config = triple_whale_tiendas.obtener(cliente)
     if not config:
-        return jsonify({"error": "Triple Whale no configurado"}), 404
-    
+        return jsonify({"error": gettext("Triple Whale no configurado")}), 404
+
     llave = triple_whale_tiendas.obtener_llave(cliente)
     if not llave:
-        return jsonify({"error": "No se puede recuperar la llave (descifrado falló)"}), 500
-    
+        return jsonify({"error": gettext("No se puede recuperar la llave (descifrado falló)")}), 500
+
     if not triple_whale.validar_llave(llave):
-        return jsonify({"error": "Llave inválida o revocada"}), 401
+        return jsonify({"error": gettext("Llave inválida o revocada")}), 401
     
     return jsonify({"ok": True, "dominio": config["dominio_tienda"], "moneda": config["moneda"]})
 
@@ -6716,7 +6722,7 @@ def cfg_triple_whale_desconectar(cliente):
     from flask import flash, redirect, url_for
 
     triple_whale_tiendas.desconectar(cliente)
-    flash("Triple Whale desconectado.", "ok")
+    flash(gettext("Triple Whale desconectado."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
 
 if __name__ == "__main__":

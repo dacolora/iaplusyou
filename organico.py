@@ -33,6 +33,7 @@ import db
 import experimentos
 import gastos
 import generador_prompts
+import idiomas
 import meta_conexion
 import publicador
 import tiendas
@@ -44,7 +45,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 PLATAFORMAS = {
     "instagram": {"nombre": "Instagram Reels", "links": False, "max_caption": 2200},
-    "facebook": {"nombre": "Facebook (Página)", "links": True, "max_caption": 5000},
+    "facebook": {"nombre": idiomas.N_("Facebook (Página)"), "links": True, "max_caption": 5000},
     "tiktok": {"nombre": "TikTok", "links": False, "max_caption": 2200, "max_titulo": 150},
     "youtube": {"nombre": "YouTube Shorts", "links": True, "max_caption": 5000, "max_titulo": 100},
 }
@@ -113,16 +114,16 @@ def canales(cliente):
     for p in ORDEN:
         disponible, motivo = True, ""
         if p == "facebook" and not tiene_pagina:
-            disponible, motivo = False, "Conecta Meta con una Página"
+            disponible, motivo = False, idiomas.N_("Conecta Meta con una Página")
         elif p == "instagram":
             if not tiene_pagina:
-                disponible, motivo = False, "Conecta Meta con una Página"
+                disponible, motivo = False, idiomas.N_("Conecta Meta con una Página")
             elif not meta.get("ig_user_id"):
-                disponible, motivo = False, "La cuenta de Instagram no está vinculada a la Página"
+                disponible, motivo = False, idiomas.N_("La cuenta de Instagram no está vinculada a la Página")
         elif p == "youtube" and not os.path.exists(tokens["youtube"]):
-            disponible, motivo = False, "Falta token_youtube.json (autoriza desde tu Mac con auth/auth_youtube.py)"
+            disponible, motivo = False, idiomas.N_("Falta token_youtube.json (autoriza desde tu Mac con auth/auth_youtube.py)")
         elif p == "tiktok" and not os.path.exists(tokens["tiktok"]):
-            disponible, motivo = False, "Falta token_tiktok.json (autoriza desde tu Mac con auth/auth_tiktok.py)"
+            disponible, motivo = False, idiomas.N_("Falta token_tiktok.json (autoriza desde tu Mac con auth/auth_tiktok.py)")
         out.append({"plataforma": p, "nombre": PLATAFORMAS[p]["nombre"], "disponible": disponible, "motivo": motivo})
     return out
 

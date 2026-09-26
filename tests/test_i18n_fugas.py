@@ -96,3 +96,13 @@ def test_panel_en_ingles(admin_en):
 def test_esqueleto_del_proyecto_en_ingles(admin_en):
     fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("sidebar", "barra-superior"))
     assert not fugas, fugas[:15]
+
+
+def test_config_puesta_y_conexiones_admin(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("config-ap-puesta", "config-ap-conexiones"))
+    assert not fugas, fugas[:15]
+
+
+def test_config_conexiones_cliente(cliente_en):
+    fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("config-ap-conexiones",))
+    assert not fugas, fugas[:15]

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Creatv VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-26 17:46-0500\n"
+"POT-Creation-Date: 2026-09-26 18:39-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -71,8 +71,26 @@ msgid_plural "%(num)d rechazados"
 msgstr[0] "%(num)d rejected"
 msgstr[1] "%(num)d rejected"
 
+msgid "(los que no aparezcan, agrégalos primero desde <em>Casos de uso › Personalizar</em>). Copia el <strong>identificador de configuración</strong>."
+msgstr "(add any that don't appear first from <em>Use cases › Customize</em>). Copy the <strong>configuration id</strong>."
+
+msgid ". Estaba conectado a"
+msgstr ". It was connected to"
+
 msgid "12 de septiembre de 2026"
 msgstr "September 12, 2026"
+
+msgid "30 días"
+msgstr "30 days"
+
+msgid "7 días"
+msgstr "7 days"
+
+msgid ": avísale al administrador."
+msgstr ": let the admin know."
+
+msgid ": los anuncios y la publicación orgánica esperan a que el administrador la vuelva a conectar."
+msgstr ": ads and organic posting wait for the admin to reconnect it."
 
 #, python-format
 msgid "<a href=\"%(url)s\">Mapa del código →</a> cómo está construida la plataforma, archivo por archivo."
@@ -86,6 +104,24 @@ msgstr "<a href=\"%(url)s\">Meta (agency) →</a> connect Creatv's Business and 
 msgid "<a href=\"%(url)s\">Referentes →</a> importar el swipe file de copycoders y ver la biblioteca global."
 msgstr "<a href=\"%(url)s\">Swipe file →</a> import copycoders' swipe file and see the global library."
 
+msgid "<strong>Arriba del panel, «Modo de la app»: pásala de Desarrollo a Live.</strong> Sin esto Meta rechaza cada anuncio (subcódigo 1885183). En Live sin App Review solo pueden usar la app las personas con rol en ella: conecta con el Facebook que la administra."
+msgstr "<strong>At the top of the panel, “App mode”: switch it from Development to Live.</strong> Without this Meta rejects every ad (subcode 1885183). In Live without App Review only people with a role on the app can use it: connect with the Facebook that administers it."
+
+msgid "<strong>MercadoLibre:</strong> no aplica — no se puede instalar código en una publicación. Los experimentos de MELI se deciden por tráfico."
+msgstr "<strong>MercadoLibre:</strong> doesn't apply — you can't install code on a listing. MELI experiments are decided by traffic."
+
+msgid "<strong>Mientras la app de TikTok no pase la auditoría de la Content Posting API</strong>, el video sale como <strong>«Solo yo»</strong> (privado) en la cuenta autorizada aunque acá diga «conectado» y «publicada». TikTok tampoco devuelve enlace, solo un id; se confirma que terminó de procesar y, si TikTok lo rechaza, la fila queda en error con el motivo. Ver SETUP.md › TikTok."
+msgstr "<strong>While the TikTok app hasn't passed the Content Posting API audit</strong>, the video goes out as <strong>“Only me”</strong> (private) on the authorized account even if it says “connected” and “published” here. TikTok also doesn't return a link, only an id; it's confirmed once processing finishes, and if TikTok rejects it, the row is left in error with the reason. See SETUP.md › TikTok."
+
+msgid "<strong>Otra tienda o landing propia:</strong> en Meta Events Manager copia el <em>código base del Pixel</em> y pégalo dentro del <code>&lt;head&gt;</code> de todas las páginas; en la página de gracias agrega el evento <code>Purchase</code>."
+msgstr "<strong>Another store or your own landing page:</strong> in Meta Events Manager copy the <em>Pixel base code</em> and paste it inside the <code>&lt;head&gt;</code> of every page; on the thank-you page add the <code>Purchase</code> event."
+
+msgid "<strong>Qué trae:</strong> productos y pedidos con UTM — los experimentos se pueden decidir por ventas aunque no haya Pixel."
+msgstr "<strong>What it brings:</strong> products and orders with UTM — experiments can be decided by sales even without a Pixel."
+
+msgid "<strong>Qué trae:</strong> solo productos (publicaciones activas). MercadoLibre no deja instalar código en una publicación, así que sus experimentos se deciden por tráfico."
+msgstr "<strong>What it brings:</strong> only products (active listings). MercadoLibre doesn't let you install code on a listing, so its experiments are decided by traffic."
+
 msgid ""
 "<strong>SMTP sin configurar.</strong> Nadie puede confirmar su correo ni recuperar la contraseña por su cuenta:\n"
 "    pon SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el <code>.env</code> del servidor (ver «Correo de la\n"
@@ -95,14 +131,89 @@ msgstr ""
 "    set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and SMTP_FROM in the server's <code>.env</code> (see “Platform\n"
 "    email” in any project's Settings) or mark accounts as verified by hand."
 
+msgid "<strong>Shopify:</strong> instala la app <em>Facebook &amp; Instagram</em> desde la tienda de apps y, en <em>Data sharing</em>, elige tu Pixel y el nivel «Máximo». Shopify manda las compras solo."
+msgstr "<strong>Shopify:</strong> install the <em>Facebook &amp; Instagram</em> app from the app store and, in <em>Data sharing</em>, choose your Pixel and the “Maximum” level. Shopify sends purchases only."
+
+msgid "<strong>Variables en el <code>.env</code> del servidor:</strong>"
+msgstr "<strong>Variables in the server's <code>.env</code>:</strong>"
+
+msgid "<strong>WooCommerce:</strong> instala el plugin <em>Facebook for WooCommerce</em> y conéctalo con tu Business Manager; el Pixel y los eventos de compra quedan puestos."
+msgstr "<strong>WooCommerce:</strong> install the <em>Facebook for WooCommerce</em> plugin and connect it to your Business Manager; the Pixel and the purchase events get set up."
+
+msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
+msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
+
+msgid "Abajo, en <em>Conectar tienda › Shopify</em>, pega el token junto con el dominio <code>xxx.myshopify.com</code>."
+msgstr "Below, in <em>Connect store › Shopify</em>, paste the token along with the <code>xxx.myshopify.com</code> domain."
+
+msgid "Abajo, en <em>Conectar tienda › WooCommerce</em>, pégalos con la URL de la tienda, que tiene que ir por <code>https://</code>."
+msgstr "Below, in <em>Connect store › WooCommerce</em>, paste them with the store's URL, which has to be over <code>https://</code>."
+
+msgid "Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva."
+msgstr "Open the “API” (or “Developers”) section of your account and create a new key."
+
 msgid "Abrir el menú"
 msgstr "Open the menu"
+
+msgid "Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio."
+msgstr "Add a payment method to the ad account in business.facebook.com › Settings › Billing: without it Meta won't activate any ad."
+
+msgid "Agrega un método de pago a tu cuenta publicitaria (enlace de abajo): sin él Meta no activa ningún anuncio. La conexión se hace en el bloque «¿Cómo quieres conectar Meta?»."
+msgstr "Add a payment method to your ad account (link below): without it Meta won't activate any ad. The connection happens in the “How do you want to connect Meta?” block."
+
+msgid "Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro."
+msgstr "When connecting, choose that Page: its page token (<code>page_id</code>) gets saved to publish videos on the wall."
+
+msgid "Al volver, la tienda queda conectada y se sincroniza sola cada 6 h."
+msgstr "When you come back, the store is connected and syncs on its own every 6 h."
+
+msgid "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."
+msgstr "Note the server and the port (Gmail: smtp.gmail.com and 587, STARTTLS)."
+
+msgid "Anthropic (guiones y prompts)"
+msgstr "Anthropic (scripts and prompts)"
+
+msgid "Apartados de Configuración"
+msgstr "Settings sections"
+
+msgid "Apify (Nicho: reseñas/comentarios · Referentes: Ad Library)"
+msgstr "Apify (Niche: reviews/comments · Swipe file: Ad Library)"
+
+msgid "App de Meta del proyecto:"
+msgstr "Project's Meta app:"
+
+msgid "App de Meta quitada de este proyecto. La conexión existente sigue hasta que la desconectes."
+msgstr "Meta app removed from this project. The existing connection stays until you disconnect it."
+
+msgid "App de Meta registrada para este proyecto. Ahora sí: Conectar con Meta."
+msgstr "Meta app registered for this project. Now: Connect with Meta."
+
+msgid "Atria (biblioteca de referentes: Ad Library de Meta)"
+msgstr "Atria (swipe file: Meta's Ad Library)"
+
+msgid "Avisar a Creatv"
+msgstr "Let Creatv know"
+
+msgid "Avisar a Creatv para que lo termine a mano"
+msgstr "Let Creatv know to finish it by hand"
+
+msgid "Busca videos por palabras clave y trae sus comentarios a un estudio de Nicho. Es una llave distinta del OAuth de publicación."
+msgstr "Searches videos by keyword and brings their comments into a Niche study. It's a different key from the publishing OAuth."
+
+msgid "Buscar mis activos"
+msgstr "Search my assets"
 
 msgid "Cambia el idioma de las pantallas y de todo lo que se genera en tu proyecto."
 msgstr "Changes the language of the screens and of everything generated in your project."
 
 msgid "Cambia solo tu idioma. El del proyecto está en Generación."
 msgstr "Changes only your language. The project's is under Generation."
+
+msgid "Cambiar de forma: que Creatv lo gestione"
+msgstr "Change form: let Creatv manage it"
+
+msgid "Cambiar de forma: usar mi propia app"
+msgstr "Change form: use my own app"
 
 msgid "Cambiar producto"
 msgstr "Change product"
@@ -117,8 +228,20 @@ msgstr "Campaigns"
 msgid "Campos no actualizables: %(campos)s"
 msgstr "Non-updatable fields: %(campos)s"
 
+msgid "Canales orgánicos"
+msgstr "Organic channels"
+
+msgid "Cancelar solicitud"
+msgstr "Cancel request"
+
 msgid "Carga tu catálogo"
 msgstr "Upload your catalog"
+
+msgid "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga."
+msgstr "Almost free: 10 GB a month at no cost and no charge for downloads."
+
+msgid "Casos de uso: <em>Crear y administrar anuncios (API de marketing)</em>, <em>Medir datos de rendimiento</em>, <em>Administrar todos los aspectos de tu Página</em> y, si vas a publicar Reels, <em>Administrar mensajes y contenido en Instagram</em>."
+msgstr "Use cases: <em>Create and manage ads (Marketing API)</em>, <em>Measure performance data</em>, <em>Manage every aspect of your Page</em> and, if you're going to publish Reels, <em>Manage Instagram messages and content</em>."
 
 msgid "Catálogo"
 msgstr "Catalog"
@@ -132,14 +255,106 @@ msgstr "Close the menu"
 msgid "Cerrar sesión"
 msgstr "Log out"
 
+msgid "Cinco minutos. No creas nada en Meta."
+msgstr "Five minutes. You don't create anything on Meta."
+
+msgid "Clave secreta de la app"
+msgstr "App secret"
+
+msgid "Cloudflare R2 (almacenamiento)"
+msgstr "Cloudflare R2 (storage)"
+
+msgid "Comparte tu cuenta publicitaria y tu Página con Creatv desde tu Business Suite, como con cualquier agencia. Creatv solo ve lo que compartas y lo puedes revocar cuando quieras."
+msgstr "Share your ad account and your Page with Creatv from your Business Suite, just like with any agency. Creatv only sees what you share and you can revoke it whenever you want."
+
+msgid "Comprobar Pixel"
+msgstr "Check Pixel"
+
+msgid ""
+"Con el Pixel instalado en tu tienda, Meta reporta compras y ROAS por anuncio\n"
+"  y los experimentos se deciden por ventas. Sin Pixel, se usan los pedidos de\n"
+"  la tienda conectada (Shopify/WooCommerce) o, si no hay, el tráfico."
+msgstr ""
+"With the Pixel installed in your store, Meta reports purchases and ROAS per ad\n"
+"  and experiments are decided by sales. Without a Pixel, the connected\n"
+"  store's orders are used (Shopify/WooCommerce) or, if there's none, traffic."
+
 msgid "Con el usuario y la contraseña de tu empresa."
 msgstr "With your company's username and password."
+
+msgid "Con mi propia app de Meta"
+msgstr "With my own Meta app"
 
 msgid "Con persona"
 msgstr "With a person"
 
+msgid "Con tu propia app: sigue los pasos de la tarjeta de Meta."
+msgstr "With your own app: follow the steps on the Meta card."
+
+msgid "Conecta Meta arriba, en la tarjeta <a href=\"#llave-meta\">Meta (anuncios)</a> de Puesta a punto (o en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a>), para comprobar el Pixel."
+msgstr "Connect Meta above, in the <a href=\"#llave-meta\">Meta (ads)</a> card in Setup (or in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a>), to check the Pixel."
+
+msgid "Conecta Meta con una Página"
+msgstr "Connect Meta with a Page"
+
+msgid "Conecta Meta en <a href=\"#llave-meta\">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica."
+msgstr "Connect Meta in <a href=\"#llave-meta\">Setup › Meta (ads)</a> with an account that administers the <strong>Page</strong> where it publishes."
+
+msgid "Conecta tu cuenta de Meta"
+msgstr "Connect your Meta account"
+
 msgid "Conecta tu cuenta de Meta, arma la campaña con lo que generaste y publica. Siempre en pausa al crearse; tú decides cuándo gasta y ves los resultados aquí."
 msgstr "Connect your Meta account, build the campaign with what you generated and publish it. It's always paused when created; you decide when it spends and you see the results here."
+
+msgid ""
+"Conecta tu cuenta de Triple Whale para traer métricas de anuncios por canal y\n"
+"  modelo de atribución. Los experimentos pueden usar estas métricas en lugar de\n"
+"  los datos de Meta Pixel o la tienda para decidir ganadores y perdedores."
+msgstr ""
+"Connect your Triple Whale account to bring in ad metrics by channel and\n"
+"  attribution model. Experiments can use these metrics instead of\n"
+"  Meta Pixel or store data to decide winners and losers."
+
+msgid ""
+"Conecta tu tienda para traer el catálogo solo (cada 6 h) y, en Shopify y\n"
+"  WooCommerce, leer los pedidos que llegan con una pieza en la URL — así un\n"
+"  experimento sabe qué vendió aunque no haya Pixel. Solo lectura: nunca se\n"
+"  cambia nada en la tienda."
+msgstr ""
+"Connect your store to bring in the catalog only (every 6 h) and, on Shopify and\n"
+"  WooCommerce, read the orders that arrive with a piece in the URL — so an\n"
+"  experiment knows what sold even without a Pixel. Read-only: nothing ever\n"
+"  changes in the store."
+
+msgid "Conectar"
+msgstr "Connect"
+
+msgid "Conectar Shopify"
+msgstr "Connect Shopify"
+
+msgid "Conectar Triple Whale"
+msgstr "Connect Triple Whale"
+
+msgid "Conectar WooCommerce"
+msgstr "Connect WooCommerce"
+
+msgid "Conectar con MercadoLibre"
+msgstr "Connect with MercadoLibre"
+
+msgid "Conectar con Meta"
+msgstr "Connect with Meta"
+
+msgid "Conectar la agencia →"
+msgstr "Connect the agency →"
+
+msgid "Conectar tienda"
+msgstr "Connect store"
+
+msgid "Conectar tu tienda"
+msgstr "Connect your store"
+
+msgid "Conexiones"
+msgstr "Connections"
 
 msgid "Configuración"
 msgstr "Settings"
@@ -160,6 +375,47 @@ msgstr "Password changed. Log in with the new one."
 msgid "Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron."
 msgstr "Password changed. Other sessions open with the previous one were closed."
 
+msgid "Control total. Media hora."
+msgstr "Full control. Half an hour."
+
+#, python-format
+msgid "Copia el <code>token_tiktok.json</code> resultante a <code>clientes/%(cliente)s/</code> en el servidor."
+msgstr "Copy the resulting <code>token_tiktok.json</code> to <code>clientes/%(cliente)s/</code> on the server."
+
+#, python-format
+msgid "Copia el <code>token_youtube.json</code> que genera a <code>clientes/%(cliente)s/</code> en el servidor (por ejemplo con <code>scp</code>)."
+msgstr "Copy the <code>token_youtube.json</code> it generates to <code>clientes/%(cliente)s/</code> on the server (for example with <code>scp</code>)."
+
+msgid "Copia el <em>Admin API access token</em> (empieza por <code>shpat_</code>): Shopify lo muestra una sola vez."
+msgstr "Copy the <em>Admin API access token</em> (starts with <code>shpat_</code>): Shopify only shows it once."
+
+msgid "Copia el <strong>ID de tu portafolio comercial</strong>: <em>Configuración del negocio</em> › <em>Información del negocio</em>."
+msgstr "Copy your <strong>business portfolio's ID</strong>: <em>Business settings</em> › <em>Business info</em>."
+
+msgid "Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2."
+msgstr "Copy the Access Key ID and the Secret Access Key; the Account ID is in R2's sidebar."
+
+msgid "Copia el App ID y la Secret Key y pégalos como MELI_APP_ID y MELI_SECRET en el .env del servidor; reinicia."
+msgstr "Copy the App ID and the Secret Key and paste them as MELI_APP_ID and MELI_SECRET in the server's .env; restart."
+
+msgid "Copia el id (bajo el nombre de la app) como REDDIT_CLIENT_ID y el «secret» como REDDIT_CLIENT_SECRET."
+msgstr "Copy the id (under the app's name) as REDDIT_CLIENT_ID and the “secret” as REDDIT_CLIENT_SECRET."
+
+msgid "Copia la <em>Consumer key</em> (<code>ck_…</code>) y el <em>Consumer secret</em> (<code>cs_…</code>): también se muestran una sola vez."
+msgstr "Copy the <em>Consumer key</em> (<code>ck_…</code>) and the <em>Consumer secret</em> (<code>cs_…</code>): they're also only shown once."
+
+msgid "Copia la API key desde el panel de Atria."
+msgstr "Copy the API key from Atria's panel."
+
+msgid "Copia los dos valores: el Key ID y el Key Secret (el secreto solo se muestra una vez)."
+msgstr "Copy both values: the Key ID and the Key Secret (the secret is only shown once)."
+
+msgid "Copiar"
+msgstr "Copy"
+
+msgid "Corre los actores de Apify: en Nicho trae reseñas de Amazon o comentarios de TikTok; en la biblioteca de referentes trae anuncios de la Ad Library de Meta (alternativa a Atria, sí cubre Latinoamérica)."
+msgstr "Runs Apify's actors: in Niche it brings Amazon reviews or TikTok comments; in the swipe file it brings ads from Meta's Ad Library (an alternative to Atria that does cover Latin America)."
+
 msgid "Correcciones de prompt (Flow Plus)"
 msgstr "Prompt corrections (Flow Plus)"
 
@@ -168,6 +424,9 @@ msgstr "Email"
 
 msgid "Correo confirmado. ¡Gracias!"
 msgstr "Email confirmed. Thanks!"
+
+msgid "Correo de la plataforma (cuentas y avisos)"
+msgstr "Platform email (accounts and notices)"
 
 #, python-format
 msgid "Correo guardado. Si %(correo)s es correcto, te llega el enlace de confirmación en unos minutos."
@@ -181,6 +440,18 @@ msgstr "Email saved: %(correo)s. The server doesn't have email configured, so we
 msgid "Correo guardado: %(correo)s. Espera un momento antes de pedir el enlace de confirmación."
 msgstr "Email saved: %(correo)s. Wait a moment before requesting the confirmation link."
 
+msgid "Crea la app (tipo <strong>Negocio</strong>) y elige tu <strong>portafolio comercial</strong>."
+msgstr "Create the app (type <strong>Business</strong>) and choose your <strong>business portfolio</strong>."
+
+msgid "Crea la cuenta en apify.com (trae crédito gratis mensual) y agrega una tarjeta si vas a pasar de ese crédito."
+msgstr "Create the account at apify.com (it comes with free monthly credit) and add a card if you're going to go over that credit."
+
+msgid "Crea la cuenta en tryatria.com y elige un plan."
+msgstr "Create the account at tryatria.com and choose a plan."
+
+msgid "Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas."
+msgstr "Creates the campaigns, ad sets and ads for each experiment and reads their metrics."
+
 msgid "Crea tu proyecto en un minuto. Sin tarjeta: pagas solo lo que generas."
 msgstr "Create your project in a minute. No card: you only pay for what you generate."
 
@@ -193,11 +464,47 @@ msgstr "Create my project"
 msgid "Crear mi proyecto →"
 msgstr "Create my project →"
 
+msgid "Creas una app en developers.facebook.com y la pasas a modo Live."
+msgstr "You create an app at developers.facebook.com and switch it to Live mode."
+
+msgid "Creatv solo ve lo que compartas y lo puedes revocar cuando quieras desde tu Business Suite."
+msgstr "Creatv only sees what you share and you can revoke it whenever you want from your Business Suite."
+
+msgid "Creatv todavía no activó esta opción; inténtalo más tarde."
+msgstr "Creatv hasn't activated this option yet; try again later."
+
+msgid "Cuando las variables estén, aquí aparece el botón <em>Conectar con MercadoLibre</em>."
+msgstr "Once the variables are set, the <em>Connect with MercadoLibre</em> button shows up here."
+
+msgid "Cuenta publicitaria"
+msgstr "Ad account"
+
+msgid "Cuenta y avisos"
+msgstr "Account and notices"
+
 msgid "Cuándo"
 msgstr "When"
 
+msgid "Cómo activarlo"
+msgstr "How to activate it"
+
+msgid "Cómo conseguirla"
+msgstr "How to get it"
+
+msgid "Cómo instalar el Pixel según tu plataforma"
+msgstr "How to install the Pixel depending on your platform"
+
+msgid "Cómo se paga:"
+msgstr "How it's paid:"
+
+msgid "Cópiala como YOUTUBE_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Copy it as YOUTUBE_API_KEY in the server's .env and restart both services."
+
 msgid "Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."
 msgstr "Too many sign-ups in a row from this connection. Wait a while and try again."
+
+msgid "Depende del proveedor de correo; con una cuenta normal no cuesta."
+msgstr "Depends on the email provider; with a normal account it costs nothing."
 
 msgid "Descarga, edita a partir del resultado, o lánzalo como anuncio."
 msgstr "Download it, edit from the result, or launch it as an ad."
@@ -205,8 +512,46 @@ msgstr "Download it, edit from the result, or launch it as an ad."
 msgid "Descargar CSV del mes"
 msgstr "Download this month's CSV"
 
+msgid "Desconectar"
+msgstr "Disconnect"
+
+msgid "Descripción «creatv», usuario un administrador, permisos <em>Lectura</em>. Pulsa <em>Generar clave de API</em>."
+msgstr "Description “creatv”, user an admin, permissions <em>Read</em>. Press <em>Generate API key</em>."
+
 msgid "Detalle"
 msgstr "Detail"
+
+msgid "Disponible en cuanto Creatv termine de activarlo."
+msgstr "Available as soon as Creatv finishes activating it."
+
+msgid "Dominio de la tienda"
+msgstr "Store domain"
+
+msgid "Dominio de la tienda (Shopify)"
+msgstr "Store domain (Shopify)"
+
+msgid ""
+"Dónde sale la ganadora de un experimento (o cualquier final que elijas) como\n"
+"  contenido orgánico, sin pauta: Instagram Reels, Facebook (Página), TikTok y\n"
+"  YouTube Shorts. Solo se ofrecen los canales conectados; publicar siempre\n"
+"  pide tu clic (o la propuesta del motor, con el texto a la vista)."
+msgstr ""
+"Where an experiment's winner (or any final you choose) goes out as\n"
+"  organic content, with no ad spend: Instagram Reels, Facebook (Page), TikTok and\n"
+"  YouTube Shorts. Only connected channels are offered; publishing always\n"
+"  asks for your click (or the engine's proposal, with the text in view)."
+
+msgid "El Pixel está disparando."
+msgstr "The Pixel is firing."
+
+msgid "El Pixel existe pero no ha disparado en los últimos días."
+msgstr "The Pixel exists but hasn't fired in the last few days."
+
+msgid "El acceso fue revocado o expiró"
+msgstr "Access was revoked or expired"
+
+msgid "El acceso no caduca."
+msgstr "Access doesn't expire."
 
 msgid "El correo no es válido."
 msgstr "The email isn't valid."
@@ -225,8 +570,14 @@ msgstr "The server doesn't have email configured; let the administrator know so 
 msgid "El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, números, puntos, guiones y guiones bajos."
 msgstr "The username must be between 3 and 40 characters: only lowercase letters, numbers, dots, hyphens and underscores."
 
+msgid "Elegir"
+msgstr "Choose"
+
 msgid "Elegir nueva contraseña"
 msgstr "Choose new password"
+
+msgid "Elige la cuenta que va a enviar (Gmail, Outlook o el correo del dominio)."
+msgstr "Choose the account that will send it (Gmail, Outlook or the domain's email)."
 
 msgid "Elige tu nueva contraseña"
 msgstr "Choose your new password"
@@ -234,20 +585,101 @@ msgstr "Choose your new password"
 msgid "Elige un usuario y una contraseña para entrar a tu proyecto."
 msgstr "Choose a username and a password to enter your project."
 
+msgid "Elige una de las dos formas de conectar."
+msgstr "Choose one of the two ways to connect."
+
 msgid "Eliminación de datos"
 msgstr "Data deletion"
 
 msgid "Empieza hoy"
 msgstr "Get started today"
 
+msgid "En <em>Configuración › Básica</em>: nombre, correo de contacto, URL de términos, URL de política de privacidad, ícono 1024×1024 sin logos de Meta, categoría, propósito y «Eliminación de datos» (URL con instrucciones). Copia el <strong>identificador de la app</strong> y la <strong>clave secreta</strong>."
+msgstr "In <em>Settings › Basic</em>: name, contact email, terms URL, privacy policy URL, a 1024×1024 icon with no Meta logos, category, purpose and “Data deletion” (URL with instructions). Copy the <strong>app id</strong> and the <strong>app secret</strong>."
+
+msgid "En <em>Configurar alcances de la API de administrador</em> marca <code>read_products</code> y <code>read_orders</code>; nada más."
+msgstr "In <em>Configure Admin API scopes</em> check <code>read_products</code> and <code>read_orders</code>; nothing else."
+
+msgid "En <em>Inicio de sesión con Facebook para empresas › Configuraciones</em>, crea una configuración con <strong>token de usuario</strong> (el de usuario del sistema no sirve: Meta lo excluye para el portafolio dueño de la app), activos Páginas y Cuentas publicitarias (e Instagram si aplica) y los permisos"
+msgstr "In <em>Facebook Login for Business › Configurations</em>, create a configuration with a <strong>user token</strong> (the system-user one doesn't work: Meta excludes it for the portfolio that owns the app), Page and ad account assets (and Instagram if it applies) and the permissions"
+
+#, python-format
+msgid "En <em>Inicio de sesión con Facebook para empresas › Configurar</em>, agrega como URI de redireccionamiento válido: <code>%(redirect)s</code>"
+msgstr "In <em>Facebook Login for Business › Settings</em>, add as a valid redirect URI: <code>%(redirect)s</code>"
+
+msgid "En Instagram, pasa la cuenta a <strong>profesional</strong> (creador o empresa) y vincúlala a esa Página (Configuración › Cuenta › Compartir en otras apps / Business Suite)."
+msgstr "On Instagram, switch the account to <strong>professional</strong> (creator or business) and link it to that Page (Settings › Account › Sharing to other apps / Business Suite)."
+
+msgid ""
+"En Shopify: <em>Configuración › Apps y canales de venta › Desarrollar apps › Crear app</em>.\n"
+"        Dale los permisos <code>read_products</code> y <code>read_orders</code>, instálala y copia el\n"
+"        <em>Admin API access token</em> (se muestra una sola vez)."
+msgstr ""
+"In Shopify: <em>Settings › Apps and sales channels › Develop apps › Create app</em>.\n"
+"        Give it the <code>read_products</code> and <code>read_orders</code> permissions, install it and copy the\n"
+"        <em>Admin API access token</em> (shown only once)."
+
+msgid "En WordPress ve a <em>WooCommerce › Ajustes › Avanzado › REST API</em> y pulsa <em>Añadir clave</em>."
+msgstr "In WordPress go to <em>WooCommerce › Settings › Advanced › REST API</em> and press <em>Add key</em>."
+
+msgid ""
+"En WordPress: <em>WooCommerce › Ajustes › Avanzado › REST API › Añadir clave</em>, con\n"
+"        permisos de <em>lectura</em>. La tienda tiene que ir por <code>https://</code>."
+msgstr ""
+"In WordPress: <em>WooCommerce › Settings › Advanced › REST API › Add key</em>, with\n"
+"        <em>read</em> permissions. The store has to be over <code>https://</code>."
+
+msgid "En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio."
+msgstr "In business.facebook.com › Settings › Billing add a payment method to the ad account: without it Meta won't activate any ad."
+
 msgid "En curso"
 msgstr "In progress"
+
+msgid "En dash.cloudflare.com entra a «R2» y crea un bucket (ese nombre es R2_BUCKET_NAME)."
+msgstr "In dash.cloudflare.com go to “R2” and create a bucket (that name is R2_BUCKET_NAME)."
+
+msgid "En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login."
+msgstr "In developers.facebook.com create a Business-type app with “Facebook Login for Business” and “Marketing API”; note the App ID, the App Secret and the Login configuration id."
+
+msgid "En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación»."
+msgstr "In developers.mercadolibre.com log in with the store's account and go to “My apps” › “Create new application”."
+
+msgid "En el admin de Shopify ve a <em>Configuración › Apps y canales de venta › Desarrollar apps</em> y pulsa <em>Crear una app</em> (ponle un nombre, por ejemplo «creatv»)."
+msgstr "In the Shopify admin go to <em>Settings › Apps and sales channels › Develop apps</em> and press <em>Create an app</em> (give it a name, for example “creatv”)."
+
+msgid "En el proyecto de Google Cloud donde ya está habilitada «YouTube Data API v3» (SETUP.md §2), ve a «Credenciales»."
+msgstr "In the Google Cloud project where “YouTube Data API v3” is already enabled (SETUP.md §2), go to “Credentials”."
 
 msgid "En error"
 msgstr "Failed"
 
+msgid "En «Billing» agrega una tarjeta o saldo prepago."
+msgstr "In “Billing” add a card or prepaid balance."
+
+msgid "En «Billing» carga saldo o pon una tarjeta: sin saldo la llave existe pero no responde."
+msgstr "In “Billing” add balance or a card: without balance the key exists but doesn't respond."
+
+msgid "En «Settings» del bucket activa «Public access» (r2.dev o un dominio propio): esa URL es R2_PUBLIC_BASE_URL."
+msgstr "In the bucket's “Settings” turn on “Public access” (r2.dev or your own domain): that URL is R2_PUBLIC_BASE_URL."
+
+msgid "En «Settings» › «Integrations» copia el «Personal API token»."
+msgstr "In “Settings” › “Integrations” copy the “Personal API token”."
+
+#, python-brace-format
+msgid "En «URI de redirect» pon exactamente {callback_meli}."
+msgstr "In “Redirect URI” put exactly {callback_meli}."
+
 msgid "Enlace vencido"
 msgstr "Expired link"
+
+msgid "Entra a <a href=\"https://business.facebook.com/settings/partners\" target=\"_blank\" rel=\"noopener\">business.facebook.com</a> › <em>Configuración del negocio</em> › <em>Socios</em> › <em>Agregar</em> › <em>Dar acceso a un socio a tus activos</em> y pega el ID de Creatv. Si Meta te pide activar la autenticación en dos pasos del portafolio, hazlo: es requisito suyo para compartir."
+msgstr "Go to <a href=\"https://business.facebook.com/settings/partners\" target=\"_blank\" rel=\"noopener\">business.facebook.com</a> › <em>Business settings</em> › <em>Partners</em> › <em>Add</em> › <em>Give a partner access to your assets</em> and paste Creatv's ID. If Meta asks you to turn on two-step verification for the portfolio, do it: it's their requirement for sharing."
+
+msgid "Entra a console.anthropic.com e inicia sesión (o crea la cuenta de la empresa)."
+msgstr "Go to console.anthropic.com and log in (or create the company's account)."
+
+msgid "Entra a reddit.com/prefs/apps con la cuenta de la empresa y pulsa «create another app…»."
+msgstr "Go to reddit.com/prefs/apps with the company's account and press “create another app…”."
 
 msgid "Entrar"
 msgstr "Log in"
@@ -264,14 +696,42 @@ msgstr "Send me the link"
 msgid "Error"
 msgstr "Error"
 
+#, python-format
+msgid "Error al conectar: %(error)s"
+msgstr "Error connecting: %(error)s"
+
 msgid "Error:"
 msgstr "Error:"
+
+msgid "Esa Página no aparece entre las de tu portafolio; vuelve a buscar."
+msgstr "That Page doesn't show up among your portfolio's; search again."
+
+msgid "Esa Página no está compartida con Creatv; revisa el paso 2 de la guía."
+msgstr "That Page isn't shared with Creatv; check step 2 of the guide."
+
+msgid "Esa Página no tiene Instagram vinculado: los Reels no se van a publicar hasta que lo vincules en Facebook."
+msgstr "That Page has no Instagram linked: Reels won't publish until you link it on Facebook."
+
+msgid "Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a buscar."
+msgstr "That ad account doesn't show up among your portfolio's; search again."
+
+msgid "Esa opción todavía no está disponible: Creatv está terminando de activarla."
+msgstr "That option isn't available yet: Creatv is still finishing activating it."
 
 msgid "Esa página es solo para el administrador."
 msgstr "That page is only for the administrator."
 
+msgid "Esa tienda no existe."
+msgstr "That store doesn't exist."
+
 msgid "Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva. Vence en 1 hora."
 msgstr "Enter your account's email and we'll send you a link to choose a new one. It expires in 1 hour."
+
+msgid "Escribe el id de tu portafolio comercial (solo números)."
+msgstr "Write your business portfolio's id (numbers only)."
+
+msgid "Escribe los 5 prompts por idea y los guiones de las finales."
+msgstr "Writes the 5 prompts per idea and the scripts for the finals."
 
 msgid "Escribe qué tiene que pasar"
 msgstr "Describe what should happen"
@@ -297,11 +757,17 @@ msgstr "That link was already used or its time passed. Request a new one and ope
 msgid "Ese nombre no genera un identificador de proyecto válido."
 msgstr "That name doesn't produce a valid project identifier."
 
+msgid "Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón)."
+msgstr "That store type doesn't connect from here (Shopify or WooCommerce; MercadoLibre has its own button)."
+
 msgid "Ese ya es tu correo y está confirmado."
 msgstr "That's already your email and it's confirmed."
 
 msgid "Espera un momento antes de pedir otro correo de verificación."
 msgstr "Wait a moment before requesting another verification email."
+
+msgid "Estado"
+msgstr "Status"
 
 msgid "Este mes"
 msgstr "This month"
@@ -310,11 +776,51 @@ msgstr "This month"
 msgid "Este mes: %(gasto)s"
 msgstr "This month: %(gasto)s"
 
+msgid "Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el panel; pídele a él cualquier cambio."
+msgstr "Creatv manages this project on Meta (agency mode): it doesn't register an app or connect anything here. The admin assigns the ad account and the Page from the panel; ask them for any change."
+
+msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Configuración › Meta (con nada en marcha)."
+msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Settings › Meta (with nothing running)."
+
+msgid "Este proyecto no está en modo agencia."
+msgstr "This project isn't in agency mode."
+
+msgid "Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada."
+msgstr "This project uses Creatv's agency connection: you don't have to register an app or connect anything."
+
 msgid "Experimentos"
 msgstr "Experiments"
 
 msgid "Experimentos corriendo"
 msgstr "Experiments running"
+
+msgid "Facebook (Página)"
+msgstr "Facebook (Page)"
+
+msgid "Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de Triple Whale. Ponla y reinicia para habilitar este formulario."
+msgstr "Missing <code>FLASK_SECRET_KEY</code> in the server's <code>.env</code>: without it Triple Whale credentials can't be saved. Set it and restart to enable this form."
+
+msgid "Falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar credenciales de tiendas. Ponla y reinicia para habilitar estos formularios."
+msgstr "Missing <code>FLASK_SECRET_KEY</code> in the server's <code>.env</code>: without it store credentials can't be saved. Set it and restart to enable these forms."
+
+msgid "Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar las credenciales de una tienda."
+msgstr "Missing FLASK_SECRET_KEY in the server's .env: without it a store's credentials can't be saved."
+
+#, python-format
+msgid "Falta configurar %(vars)s en el .env del servidor (app de developers.mercadolibre.com)."
+msgstr "%(vars)s still need to be set in the server's .env (developers.mercadolibre.com app)."
+
+msgid "Falta el id de tu portafolio o la cuenta publicitaria."
+msgstr "Missing your portfolio's id or the ad account."
+
+msgid "Falta token_tiktok.json (autoriza desde tu Mac con auth/auth_tiktok.py)"
+msgstr "Missing token_tiktok.json (authorize from your Mac with auth/auth_tiktok.py)"
+
+msgid "Falta token_youtube.json (autoriza desde tu Mac con auth/auth_youtube.py)"
+msgstr "Missing token_youtube.json (authorize from your Mac with auth/auth_youtube.py)"
+
+msgid "Faltan:"
+msgstr "Missing:"
 
 msgid "Finales"
 msgstr "Final cuts"
@@ -322,11 +828,20 @@ msgstr "Final cuts"
 msgid "Fotos del producto, tus personajes, tus espacios y el logo."
 msgstr "Photos of the product, your characters, your spaces and the logo."
 
+msgid "Gasto"
+msgstr "Spend"
+
 msgid "Gasto del mes (US$)"
 msgstr "Spend this month (US$)"
 
+msgid "Genera la imagen candidata y el video de cada pieza."
+msgstr "Generates the candidate image and the video for each piece."
+
 msgid "Genera y publica"
 msgstr "Generate and publish"
+
+msgid "Generación"
+msgstr "Generation"
 
 msgid "Generación (IA)"
 msgstr "Generation (AI)"
@@ -343,8 +858,32 @@ msgstr "Generation by month (US$)"
 msgid "Generando…"
 msgstr "Generating…"
 
+msgid "Gestionado por Creatv"
+msgstr "Managed by Creatv"
+
+msgid "Gestionar la conexión de agencia →"
+msgstr "Manage the agency connection →"
+
+msgid "Google › Contraseñas de aplicación"
+msgstr "Google › App passwords"
+
+msgid "Gratis para uso propio (100 llamadas por minuto). Si el producto se vende, Reddit pide permiso comercial."
+msgstr "Free for your own use (100 calls per minute). If the product is sold, Reddit requires commercial permission."
+
+msgid "Gratis: 100 búsquedas por día por proyecto de Google y 10 000 unidades para leer comentarios."
+msgstr "Free: 100 searches a day per Google project and 10 000 units to read comments."
+
+msgid "Gratis: solo lectura de tus publicaciones."
+msgstr "Free: read-only access to your listings."
+
+msgid "Guarda cada imagen y video generado y les da una URL pública permanente."
+msgstr "Stores every generated image and video and gives them a permanent public URL."
+
 msgid "Guardar"
 msgstr "Save"
+
+msgid "Guardar app de Meta"
+msgstr "Save Meta app"
 
 msgid "Guardar contraseña"
 msgstr "Save password"
@@ -357,6 +896,9 @@ msgstr "Scripts"
 
 msgid "Guiones a clips (Flow Plus)"
 msgstr "Scripts to clips (Flow Plus)"
+
+msgid "Higgsfield (video e imagen)"
+msgstr "Higgsfield (video and image)"
 
 msgid "Historial"
 msgstr "History"
@@ -381,6 +923,27 @@ msgstr ""
 "\n"
 "To finish creating your account at %(plataforma)s confirm this email is yours by opening this link:"
 
+msgid "ID de Creatv"
+msgstr "Creatv's ID"
+
+msgid "ID de tu Página (Meta no nos dijo de quién es cada Página compartida)"
+msgstr "Your Page's ID (Meta didn't tell us who owns each shared Page)"
+
+msgid "ID de tu Página (opcional)"
+msgstr "Your Page's ID (optional)"
+
+msgid "ID de tu cuenta publicitaria (opcional, empieza por act_)"
+msgstr "Your ad account's ID (optional, starts with act_)"
+
+msgid "ID de tu portafolio comercial"
+msgstr "Your business portfolio's ID"
+
+msgid "Identificador de configuración de inicio de sesión"
+msgstr "Login configuration id"
+
+msgid "Identificador de la app"
+msgstr "App id"
+
 msgid "Idioma del proyecto"
 msgstr "Project language"
 
@@ -390,11 +953,23 @@ msgstr "Project language saved."
 msgid "Idioma guardado."
 msgstr "Language saved."
 
+msgid "Igual que YouTube, <strong>en tu Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> con la cuenta de TikTok del proyecto."
+msgstr "Same as YouTube, <strong>on your Mac</strong>: <code>venv/bin/python auth/auth_tiktok.py</code> with the project's TikTok account."
+
 msgid "Imagen"
 msgstr "Image"
 
 msgid "Imágenes"
 msgstr "Images"
+
+msgid "Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin)."
+msgstr "Included in Atria's monthly plan (1 200 calls/month); it doesn't charge per result. The usage counter is in Swipe file (admin)."
+
+msgid "Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token."
+msgstr "Log in with the store's account and authorize the app: no token gets pasted."
+
+msgid "Inicia sesión en higgsfield.ai y compra un paquete de créditos en «Billing»."
+msgstr "Log in to higgsfield.ai and buy a credit package in “Billing”."
 
 msgid "Inicia sesión para cambiar tu contraseña."
 msgstr "Log in to change your password."
@@ -411,8 +986,23 @@ msgstr "Log in to resend the verification."
 msgid "Iniciar sesión"
 msgstr "Log in"
 
+msgid "Inicias sesión con la cuenta de la tienda y autorizas la app: no se pega ningún token."
+msgstr "You log in with the store's account and authorize the app: no token gets pasted."
+
 msgid "Interno (Creatv)"
 msgstr "Internal (Creatv)"
+
+msgid "La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación."
+msgstr "The Meta app needs the <code>instagram_content_publish</code> permission approved in <strong>App Review</strong>; without it Meta rejects the post."
+
+msgid "La autorización con MercadoLibre no coincide con esta sesión — vuelve a intentarlo desde Configuración."
+msgstr "The MercadoLibre authorization doesn't match this session — try again from Settings."
+
+msgid "La autorización se hace <strong>en tu Mac</strong> (abre un navegador y escucha en localhost; no funciona en el servidor): <code>venv/bin/python auth/auth_youtube.py</code> con la cuenta dueña del canal."
+msgstr "Authorization happens <strong>on your Mac</strong> (it opens a browser and listens on localhost; it doesn't work on the server): <code>venv/bin/python auth/auth_youtube.py</code> with the account that owns the channel."
+
+msgid "La conexión de agencia no está activa ahora mismo"
+msgstr "The agency connection isn't active right now"
 
 msgid "La contraseña actual no es correcta."
 msgstr "The current password isn't correct."
@@ -421,8 +1011,49 @@ msgstr "The current password isn't correct."
 msgid "La contraseña debe tener al menos %(minimo)d caracteres."
 msgstr "The password must be at least %(minimo)d characters long."
 
+msgid "La cuenta de Instagram no está vinculada a la Página"
+msgstr "The Instagram account isn't linked to the Page"
+
+msgid "La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."
+msgstr "The ad account changed: previous experiments stop refreshing."
+
+msgid "La cuenta publicitaria no tiene ningún Pixel."
+msgstr "The ad account doesn't have any Pixel."
+
+msgid "La pauta se cobra en tu cuenta publicitaria; la API no cuesta."
+msgstr "Ad spend is charged to your ad account; the API itself is free."
+
 msgid "Las dos contraseñas no coinciden."
 msgstr "The two passwords don't match."
+
+msgid "Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí."
+msgstr "Whoever administers the server sets them in the <code>.env</code> file; they're not written from here."
+
+msgid "Las reglas del decisor están en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experimentos →</a>"
+msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experiments →</a>"
+
+msgid "Listo: Creatv recibió tu solicitud y te avisa por correo cuando quede conectado."
+msgstr "Done: Creatv received your request and will email you once it's connected."
+
+#, python-format
+msgid "Listo: Creatv ya gestiona tu Meta con %(cuenta)s · %(pagina)s."
+msgstr "Done: Creatv now manages your Meta with %(cuenta)s · %(pagina)s."
+
+#, python-format
+msgid "Listo: este proyecto vuelve a usar su propia app de Meta. %(detalle)s"
+msgstr "Done: this project is back to using its own Meta app. %(detalle)s"
+
+msgid "Llave API de Triple Whale"
+msgstr "Triple Whale API key"
+
+msgid "Llave inválida o revocada"
+msgstr "Invalid or revoked key"
+
+msgid "Llave inválida, revocada o sin scope 'Data Out'."
+msgstr "Invalid or revoked key, or missing the 'Data Out' scope."
+
+msgid "Llave y dominio de tienda son requeridos."
+msgstr "API key and store domain are required."
 
 msgid "Lo pagado a los proveedores de IA este mes, todos los proyectos"
 msgstr "What was paid to AI providers this month, all projects"
@@ -430,8 +1061,23 @@ msgstr "What was paid to AI providers this month, all projects"
 msgid "Lo que escribe la IA y los anuncios de este proyecto salen en este idioma."
 msgstr "What the AI writes and this project's ads come out in this language."
 
+msgid "Luego, en «Conectar tu tienda» › MercadoLibre, pulsa «Conectar con MercadoLibre»."
+msgstr "Then, in “Connect your store” › MercadoLibre, press “Connect with MercadoLibre”."
+
+msgid "Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos)."
+msgstr "Sends the link to confirm each account's email and the password-recovery one; also the notices (pending proposals, winners, Meta rejections, failed launches)."
+
 msgid "Mapa del código"
 msgstr "Code map"
+
+msgid "Marca"
+msgstr "Brand"
+
+msgid "Marca lo que Creatv va a operar: en <em>Cuentas publicitarias</em>, tu cuenta con <strong>Administrar campañas</strong>; en <em>Páginas</em>, tu Página con <strong>Crear anuncios</strong> y, si quieres publicar Reels y posts, también <strong>Crear contenido</strong>; en <em>Cuentas de Instagram</em>, tu cuenta con lo mismo (opcional)."
+msgstr "Check what Creatv is going to operate: in <em>Ad accounts</em>, your account with <strong>Manage campaigns</strong>; in <em>Pages</em>, your Page with <strong>Create ads</strong> and, if you want to publish Reels and posts, also <strong>Create content</strong>; in <em>Instagram accounts</em>, your account with the same (optional)."
+
+msgid "Marca los permisos de lectura y «offline_access» (para renovar el token solo)."
+msgstr "Check the read permissions and “offline_access” (to renew the token on its own)."
 
 msgid "Marcar verificado"
 msgstr "Mark verified"
@@ -439,8 +1085,52 @@ msgstr "Mark verified"
 msgid "Menú"
 msgstr "Menu"
 
+msgid "MercadoLibre (opcional)"
+msgstr "MercadoLibre (optional)"
+
+#, python-format
+msgid "MercadoLibre conectado%(sufijo)s. %(extra)s"
+msgstr "MercadoLibre connected%(sufijo)s. %(extra)s"
+
+#, python-format
+msgid "MercadoLibre no autorizó la conexión: %(detalle)s"
+msgstr "MercadoLibre didn't authorize the connection: %(detalle)s"
+
+msgid "MercadoLibre, paso a paso"
+msgstr "MercadoLibre, step by step"
+
 msgid "Mes"
 msgstr "Month"
+
+msgid "Meta (anuncios)"
+msgstr "Meta (ads)"
+
+msgid "Meta conectado:"
+msgstr "Meta connected:"
+
+msgid "Meta desconectado de este proyecto y acceso revocado en Meta."
+msgstr "Meta disconnected from this project and access revoked on Meta."
+
+msgid "Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio."
+msgstr "Meta disconnected from this project. The app stays authorized on your Facebook until you remove it in Settings › Business Integrations."
+
+msgid "Meta no está conectado."
+msgstr "Meta isn't connected."
+
+msgid "Meta ya no acepta la conexión de este proyecto"
+msgstr "Meta no longer accepts this project's connection"
+
+msgid "Meta ya no acepta la conexión de la agencia"
+msgstr "Meta no longer accepts the agency's connection"
+
+msgid "Modelo de atribución"
+msgstr "Attribution model"
+
+msgid "Modelo:"
+msgstr "Model:"
+
+msgid "Moneda"
+msgstr "Currency"
 
 msgid "Monto"
 msgstr "Amount"
@@ -454,25 +1144,64 @@ msgstr "Music"
 msgid "Nicho"
 msgstr "Niche"
 
+msgid "Ninguna tienda conectada todavía."
+msgstr "No store connected yet."
+
 #, python-format
 msgid "No existe el usuario '%(usuario)s'."
 msgstr "User '%(usuario)s' doesn't exist."
+
+msgid "No había ninguna solicitud pendiente."
+msgstr "There was no pending request."
 
 msgid "No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento."
 msgstr "I couldn't calculate the panel this time. The detail was logged on the server; reload in a moment."
 
 #, python-format
+msgid "No pude conectar la tienda: %(error)s"
+msgstr "Couldn't connect the store: %(error)s"
+
+#, python-format
+msgid "No pude conectar: %(error)s"
+msgstr "Couldn't connect: %(error)s"
+
+#, python-format
 msgid "No pude confirmar el correo: %(error)s"
 msgstr "I couldn't confirm the email: %(error)s"
+
+msgid "No pude consultar el Pixel."
+msgstr "Couldn't check the Pixel."
+
+msgid "No pude leer tus activos:"
+msgstr "Couldn't read your assets:"
+
+#, python-format
+msgid "No pude leer tus activos: %(error)s"
+msgstr "Couldn't read your assets: %(error)s"
 
 msgid "No se pudo completar el trabajo."
 msgstr "The task couldn't be completed."
 
+msgid "No se pudo comprobar"
+msgstr "Couldn't check"
+
+msgid "No se puede recuperar la llave (descifrado falló)"
+msgstr "Can't retrieve the key (decryption failed)"
+
 msgid "No tienes acceso a ese proyecto."
 msgstr "You don't have access to that project."
 
+msgid "No tienes que conseguir ninguna llave: Creatv conecta su Business Manager una sola vez y te asigna la cuenta y la Página."
+msgstr "You don't have to get any key: Creatv connects its Business Manager once and assigns you the account and the Page."
+
+msgid "No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta»."
+msgstr "It doesn't go in the .env: each project registers its own Meta app (id, secret and Facebook Login configuration) in the “Connect your Meta account” block below, and presses “Connect with Meta” right there."
+
 msgid "Nombre de tu empresa o marca"
 msgstr "Your company or brand name"
+
+msgid "Nota (opcional)"
+msgstr "Note (optional)"
 
 msgid "Nueva contraseña"
 msgstr "New password"
@@ -489,6 +1218,40 @@ msgstr "Admin panel"
 msgid "Panel — Proyectos"
 msgstr "Panel — Projects"
 
+msgid "Para conectar MercadoLibre falta <code>FLASK_SECRET_KEY</code> en el <code>.env</code> del servidor: sin ella no se pueden guardar cifrados los tokens que devuelve MercadoLibre."
+msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the server's <code>.env</code>: without it the tokens MercadoLibre returns can't be saved encrypted."
+
+#, python-format
+msgid "Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>)."
+msgstr "To connect MercadoLibre, <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code> (app at developers.mercadolibre.com with <code>offline_access</code> permission and redirect <code>%(redirect)s</code>)."
+
+msgid ""
+"Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de\n"
+"  generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la\n"
+"  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada."
+msgstr ""
+"To launch ads and publish on your Facebook Page and Instagram. The generation\n"
+"  services (scripts, image and video, voice and music, storage) and the platform's\n"
+"  email are set by Creatv on the server: there's nothing you need to do there."
+
+msgid "Para publicar anuncios y contenido en tu Página de Facebook y tu Instagram. Elige una forma; puedes cambiarla después."
+msgstr "To publish ads and content on your Facebook Page and your Instagram. Choose a form; you can change it later."
+
+msgid ""
+"Para publicar anuncios y también contenido orgánico en tu Página de Facebook y tu Instagram.\n"
+"    Vas a iniciar sesión con tu Facebook y elegir tu cuenta publicitaria y tu Página — nunca ves ni pegas un token.\n"
+"    Inicia sesión con el Facebook que administra esa app."
+msgstr ""
+"To publish ads and also organic content on your Facebook Page and your Instagram.\n"
+"    You're going to log in with your Facebook and choose your ad account and your Page — you never see or paste a token.\n"
+"    Log in with the Facebook that administers that app."
+
+msgid "Para que Creatv lo gestione,"
+msgstr "For Creatv to manage it,"
+
+msgid "Para volver a tu propia app,"
+msgstr "To go back to your own app,"
+
 msgid "Pauta"
 msgstr "Ad spend"
 
@@ -501,6 +1264,15 @@ msgstr "Meta ad spend this month, in the ad account's currency"
 msgid "Pedir otro enlace"
 msgstr "Request another link"
 
+msgid "Pega SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el .env del servidor, junto con PLATAFORMA_URL (la dirección pública del sitio, p. ej. https://app.creatvmachine.com: es la base de los enlaces que van en los correos), y reinicia los dos servicios."
+msgstr "Paste SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and SMTP_FROM in the server's .env, along with PLATAFORMA_URL (the site's public address, e.g. https://app.creatvmachine.com: it's the base of the links that go in the emails), and restart both services."
+
+msgid "Pega las cinco variables en el .env del servidor y reinicia."
+msgstr "Paste the five variables in the server's .env and restart."
+
+msgid "Pega los tres datos aquí, guarda y pulsa «Conectar con Meta»."
+msgstr "Paste the three values here, save and press “Connect with Meta”."
+
 msgid "Piezas"
 msgstr "Pieces"
 
@@ -510,14 +1282,29 @@ msgstr "Pieces generated"
 msgid "Pipeline"
 msgstr "Pipeline"
 
+msgid "Pixel activo"
+msgstr "Pixel active"
+
+msgid "Pixel de Meta"
+msgstr "Meta Pixel"
+
+msgid "Pixel sin datos"
+msgstr "Pixel with no data"
+
 msgid "Plegar / desplegar"
 msgstr "Collapse / expand"
 
 msgid "Política de privacidad"
 msgstr "Privacy policy"
 
+msgid "Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."
+msgstr "Set REDDIT_USER_AGENT to the form “creatv-machine/1.0 (by u/your_username)” and restart both services."
+
 msgid "Ponle un nombre a la empresa."
 msgstr "Give the company a name."
+
+msgid "Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes."
+msgstr "By credits: ~1.5 per image and ~8 per video; bought in packages."
 
 msgid "Por revisar"
 msgstr "To review"
@@ -525,11 +1312,20 @@ msgstr "To review"
 msgid "Por tipo"
 msgstr "By type"
 
+msgid "Primero Facebook (arriba): Instagram publica a través de la Página."
+msgstr "First Facebook (above): Instagram publishes through the Page."
+
 msgid "Primero escribe tu correo en Configuración › Cuenta."
 msgstr "First enter your email in Settings › Account."
 
+msgid "Primero registra tu app de Meta arriba."
+msgstr "First register your Meta app above."
+
 msgid "Privacidad"
 msgstr "Privacy"
+
+msgid "Probar conexión"
+msgstr "Test connection"
 
 msgid "Procesando…"
 msgstr "Processing…"
@@ -559,14 +1355,71 @@ msgstr "Project '%(nombre)s' created. We sent an email to %(correo)s to confirm 
 msgid "Proyectos"
 msgstr "Projects"
 
+msgid "Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto."
+msgstr "Test it with “Resend” in Settings › Account: the confirmation email should arrive. Below, in “Notice email”, write which address gets this project's notices."
+
 msgid "Publicados"
 msgstr "Published"
+
+msgid "Puesta a punto"
+msgstr "Setup"
+
+msgid "Pulsa <em>Instalar app</em> y confirma."
+msgstr "Press <em>Install app</em> and confirm."
+
+msgid "Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página."
+msgstr "Press “Connect with Meta” below, log in with your Facebook and choose the ad account and the Page."
+
+msgid "Página"
+msgstr "Page"
+
+msgid "Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as ANTHROPIC_API_KEY in the server's .env and restart both services."
+
+msgid "Pégala como ATRIA_API_KEY en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as ATRIA_API_KEY in the server's .env and restart both services."
+
+msgid "Pégala como FAL_KEY en el .env del servidor y reinicia."
+msgstr "Paste it as FAL_KEY in the server's .env and restart."
+
+msgid "Pégalo aquí y pulsa <strong>Buscar mis activos</strong>."
+msgstr "Paste it here and press <strong>Search my assets</strong>."
+
+msgid "Pégalo como APIFY_TOKEN en el .env del servidor y reinicia los dos servicios."
+msgstr "Paste it as APIFY_TOKEN in the server's .env and restart both services."
+
+msgid "Pégalos como HF_API_KEY_ID y HF_API_KEY_SECRET en el .env del servidor y reinicia."
+msgstr "Paste them as HF_API_KEY_ID and HF_API_KEY_SECRET in the server's .env and restart."
+
+msgid "Pégalos en «Conecta tu cuenta de Meta» (abajo, o en Experimentos): el secret se guarda en el servidor y nunca vuelve a pantalla."
+msgstr "Paste them in “Connect your Meta account” (below, or in Experiments): the secret is stored on the server and never comes back to the screen."
+
+msgid "Que Creatv lo gestione"
+msgstr "Let Creatv manage it"
+
+msgid "Que Creatv lo gestione: sigue los pasos de la tarjeta de Meta."
+msgstr "Let Creatv manage it: follow the steps on the Meta card."
+
+msgid "Quitar app"
+msgstr "Remove app"
+
+msgid "Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»)."
+msgstr "Reload this page. TikTok has no separate title: the post's text is the full caption (no links; “Link in bio” gets added)."
+
+msgid "Recarga esta página: el canal pasa a «conectado». Los Shorts salen con el título y la descripción que redactes."
+msgstr "Reload this page: the channel becomes “connected”. Shorts go out with the title and description you write."
 
 msgid "Recargar ahora"
 msgstr "Reload now"
 
+msgid "Recomendada"
+msgstr "Recommended"
+
 msgid "Recuperar contraseña"
 msgstr "Recover password"
+
+msgid "Reddit (Nicho: comentarios reales)"
+msgstr "Reddit (Niche: real comments)"
 
 msgid "Referencias, un texto y listo: varias versiones de un mismo concepto — solo producto, con persona, unboxing — con el modelo que elijas. Pega un link de TikTok o TrendTrack y recréalo con tu marca."
 msgstr "References, a text and that's it: several versions of the same concept — product only, with a person, unboxing — with the model you choose. Paste a TikTok or TrendTrack link and recreate it with your brand."
@@ -574,8 +1427,14 @@ msgstr "References, a text and that's it: several versions of the same concept �
 msgid "Referentes"
 msgstr "Swipe file"
 
+msgid "Registra tu app de Meta"
+msgstr "Register your Meta app"
+
 msgid "Reglas de producto (IA)"
 msgstr "Product rules (AI)"
+
+msgid "Regístrate en fal.ai (con Google o GitHub; no pide verificación de negocio)."
+msgstr "Sign up at fal.ai (with Google or GitHub; no business verification required)."
 
 msgid "Repítela"
 msgstr "Repeat it"
@@ -597,6 +1456,18 @@ msgstr "Log out"
 msgid "Salud del sistema"
 msgstr "System health"
 
+msgid "Se crea una sola vez en <a href=\"https://developers.facebook.com/apps/creation/\" target=\"_blank\" rel=\"noopener\">developers.facebook.com</a>."
+msgstr "It's created once, at <a href=\"https://developers.facebook.com/apps/creation/\" target=\"_blank\" rel=\"noopener\">developers.facebook.com</a>."
+
+msgid "Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic."
+msgstr "Pay per result (Amazon ≈ US$ 3 per 1 000 reviews; TikTok ≈ US$ 0,50 per 1 000 comments) plus compute; the estimate is shown before every click."
+
+msgid "Se paga por uso: alrededor de $0.05 por final."
+msgstr "Pay per use: around $0.05 per final."
+
+msgid "Se paga por uso: centavos por guion."
+msgstr "Pay per use: cents per script."
+
 msgid "Se perdió el rastro de esta generación (¿se reinició el servidor?). Recargando…"
 msgstr "Lost track of this generation (did the server restart?). Reloading…"
 
@@ -609,12 +1480,88 @@ msgstr "Lost the connection to the server."
 msgid "Sesión cerrada."
 msgstr "Session closed."
 
+msgid "Shopify, paso a paso"
+msgstr "Shopify, step by step"
+
 #, python-format
 msgid "Si %(correo)s es correcto, te llega el enlace en unos minutos (revisa también el spam)."
 msgstr "If %(correo)s is correct, the link will arrive in a few minutes (check spam too)."
 
+msgid "Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app."
+msgstr "If Meta shows a permissions error, ask them to add your Facebook as a tester of the app."
+
+msgid "Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS (no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma."
+msgstr "If it's Gmail: in myaccount.google.com › Security turn on “2-Step Verification” and then, in “App passwords”, create one for “Creatv”: the 16 characters it gives you are SMTP_PASS (not the account's normal password). SMTP_USER is the full address and SMTP_FROM the same one."
+
 msgid "Si ese correo está registrado, te llegará un enlace para restablecer la contraseña (vence en 1 hora; revisa también el spam)."
 msgstr "If that email is registered, a link to reset the password will arrive (expires in 1 hour; check spam too)."
+
+msgid "Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador."
+msgstr "If you want to change ad account or Page, or go back to using your own Meta app, ask the admin."
+
+msgid "Sigue los pasos para registrar tu app y conectar."
+msgstr "Follow the steps to register your app and connect."
+
+msgid "Sin Pixel"
+msgstr "No Pixel"
+
+msgid "Sin Página (solo anuncios)"
+msgstr "No Page (ads only)"
+
+msgid "Sin Página solo se pueden pautar anuncios; la publicación orgánica queda apagada."
+msgstr "Without a Page you can only run ads; organic posting stays off."
+
+msgid "Sin ella la fuente Atria queda apagada en «Traer referentes» (por proyecto y en el panel admin); Apify sigue disponible si tiene su propio token."
+msgstr "Without it the Atria source stays off in “Fetch references” (per project and in the admin panel); Apify is still available if it has its own token."
+
+msgid "Sin ella la tarjeta YouTube de cada estudio queda apagada."
+msgstr "Without it the YouTube card of each study stays off."
+
+msgid "Sin ella las finales salen sin voz ni música."
+msgstr "Without it the finals come out with no voice or music."
+
+msgid "Sin ella los videos no tienen URL pública y Meta no puede usarlos."
+msgstr "Without it the videos have no public URL and Meta can't use them."
+
+msgid "Sin ella no hay prompts ni guiones."
+msgstr "Without it there are no prompts or scripts."
+
+msgid "Sin ella no se generan piezas."
+msgstr "Without it no pieces get generated."
+
+msgid "Sin ellas la tarjeta Reddit de cada estudio queda apagada; el resto de Nicho funciona."
+msgstr "Without them the Reddit card of each study stays off; the rest of Niche still works."
+
+msgid "Sin esto nadie puede confirmar su correo ni recuperar la contraseña solo (el administrador tiene que marcar las cuentas a mano en el panel) y los avisos solo quedan en la bitácora."
+msgstr "Without this nobody can confirm their email or recover their password on their own (the admin has to mark accounts by hand in the panel) and notices only stay in the log."
+
+msgid "Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda."
+msgstr "Without this the “Connect with MercadoLibre” button doesn't show up in Store."
+
+msgid "Sin verificar ahora (Meta no respondió)."
+msgstr "Not verified right now (Meta didn't respond)."
+
+msgid "Sin él la tarjeta Amazon / TikTok de cada estudio queda apagada. Zona gris de términos de uso de esas plataformas: es responsabilidad de quien pone el token."
+msgstr "Without it the Amazon / TikTok card of each study stays off. Gray area of those platforms' terms of use: it's the responsibility of whoever sets the token."
+
+msgid "Sincronizando el catálogo…"
+msgstr "Syncing the catalog…"
+
+msgid "Sincronizando las publicaciones…"
+msgstr "Syncing the listings…"
+
+msgid "Sincronizando…"
+msgstr "Syncing…"
+
+msgid "Sincronizar"
+msgstr "Sync"
+
+msgid "Solicitud cancelada."
+msgstr "Request canceled."
+
+#, python-format
+msgid "Solicitud enviada el %(fecha)s: Creatv la está revisando y te avisa por correo."
+msgstr "Request sent on %(fecha)s: Creatv is reviewing it and will email you."
 
 msgid "Solo producto"
 msgstr "Product only"
@@ -652,6 +1599,16 @@ msgstr "Finished with an error."
 msgid "Textos orgánicos (IA)"
 msgstr "Organic captions (AI)"
 
+msgid "Tienda"
+msgstr "Store"
+
+#, python-format
+msgid "Tienda %(nombre)s conectada. %(detalle)s %(extra)s"
+msgstr "Store %(nombre)s connected. %(detalle)s %(extra)s"
+
+msgid "Tienda desconectada. Sus productos quedaron archivados y sus pedidos se conservan (no se borró nada)."
+msgstr "Store disconnected. Its products were archived and its orders are kept (nothing was deleted)."
+
 msgid "Tiendas"
 msgstr "Stores"
 
@@ -661,6 +1618,12 @@ msgstr "You have unsaved changes, so it didn't reload on its own."
 msgid "Tipo"
 msgstr "Type"
 
+msgid "Tipo «script», nombre «creatv-machine», redirect uri http://localhost:8080 (no se usa) y crea la app."
+msgstr "Type “script”, name “creatv-machine”, redirect uri http://localhost:8080 (not used) and create the app."
+
+msgid "Todavía no consultamos el Pixel de esta cuenta. Comprobarlo tarda unos segundos y también actualiza la atribución sugerida al crear experimentos."
+msgstr "We haven't checked this account's Pixel yet. Checking it takes a few seconds and also updates the suggested attribution when creating experiments."
+
 msgid "Todavía no hay cobros registrados."
 msgstr "No charges recorded yet."
 
@@ -669,6 +1632,27 @@ msgstr "No projects yet."
 
 msgid "Todavía no hay usuarios."
 msgstr "No users yet."
+
+#, python-format
+msgid "Todavía no se puede: faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor. Quien lo administra crea la app en developers.mercadolibre.com (permiso <code>offline_access</code>, redirect <code>%(redirect)s</code>) — ver la tarjeta MercadoLibre en <em>Puesta a punto</em>."
+msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code>. Whoever administers it creates the app at developers.mercadolibre.com (<code>offline_access</code> permission, redirect <code>%(redirect)s</code>) — see the MercadoLibre card in <em>Setup</em>."
+
+#, python-format
+msgid "Todavía no vemos activos compartidos desde el portafolio %(portafolio)s. A veces Meta tarda unos minutos: revisa que el ID de Creatv sea el de arriba y que hayas marcado la cuenta y la Página."
+msgstr "We still don't see assets shared from portfolio %(portafolio)s. Meta sometimes takes a few minutes: check that Creatv's ID is the one above and that you checked the account and the Page."
+
+msgid ""
+"Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar\n"
+"  anuncios, en el orden en que se usa. Cada tarjeta dice para qué sirve, cómo se\n"
+"  paga y cómo conseguir la llave. Las llaves las pone quien administra el\n"
+"  servidor en el archivo <code>.env</code>; aquí solo se ve si están o faltan,\n"
+"  nunca su valor."
+msgstr ""
+"Everything the project needs to generate pieces, store them and pay for\n"
+"  ads, in the order it's used. Each card says what it's for, how it's\n"
+"  paid and how to get the key. The keys are set by whoever administers the\n"
+"  server in the <code>.env</code> file; here you only see whether they're present or missing,\n"
+"  never their value."
 
 msgid "Todos los proyectos"
 msgstr "All projects"
@@ -682,14 +1666,53 @@ msgstr "Total projects"
 msgid "Trabajo interno de Creatv sobre la biblioteca de referentes: importaciones, barridos globales, pruebas — no es de ningún proyecto"
 msgstr "Creatv's internal work on the swipe file library: imports, global sweeps, tests — not part of any project"
 
+msgid "Trae anuncios reales de la Ad Library de Meta para la biblioteca de referentes -- la fuente cubre la Unión Europea."
+msgstr "Brings real ads from Meta's Ad Library into the swipe file -- this source covers the European Union."
+
+msgid "Trae las publicaciones activas de una tienda de MercadoLibre al catálogo."
+msgstr "Brings a MercadoLibre store's active listings into the catalog."
+
+msgid "Trae posts y comentarios de Reddit a un estudio de Nicho para armar avatares con evidencia."
+msgstr "Brings Reddit posts and comments into a Niche study to build avatars with evidence."
+
+msgid "Triple Whale (atribución)"
+msgstr "Triple Whale (attribution)"
+
+msgid "Triple Whale conectado correctamente."
+msgstr "Triple Whale connected successfully."
+
+msgid "Triple Whale desconectado."
+msgstr "Triple Whale disconnected."
+
+msgid "Triple Whale no configurado"
+msgstr "Triple Whale not configured"
+
+msgid "Tu Página"
+msgstr "Your Page"
+
+msgid "Tu acceso caduca a los 60 días: cuando pase, esta tarjeta dirá «Meta ya no acepta la conexión» y con «Volver a conectar» queda listo."
+msgstr "Your access expires after 60 days: when it does, this card will say “Meta no longer accepts the connection” and “Reconnect” sorts it out."
+
+msgid "Tu conexión anterior se restauró."
+msgstr "Your previous connection was restored."
+
 msgid "Tu correo"
 msgstr "Your email"
 
 msgid "Tu correo ya está confirmado."
 msgstr "Your email is already confirmed."
 
+msgid "Tu cuenta publicitaria"
+msgstr "Your ad account"
+
+msgid "Tu llave API se guarda cifrada. Obtenla en <a href=\"https://app.triplewhale.com/settings/api-keys\" target=\"_blank\" rel=\"noopener\">Triple Whale › Settings › API Keys</a>."
+msgstr "Your API key is stored encrypted. Get it at <a href=\"https://app.triplewhale.com/settings/api-keys\" target=\"_blank\" rel=\"noopener\">Triple Whale › Settings › API Keys</a>."
+
 msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
 msgstr "Your AI content machine.<br>From the product photo to the published ad."
+
+msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
+msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
 
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
@@ -699,6 +1722,9 @@ msgstr "Terms"
 
 msgid "Términos del servicio"
 msgstr "Terms of service"
+
+msgid "URL de la tienda"
+msgstr "Store URL"
 
 msgid "Un usuario con rol 'cliente' necesita un proyecto asignado."
 msgstr "A user with the 'cliente' role needs an assigned project."
@@ -719,6 +1745,21 @@ msgstr "Incorrect username or password."
 msgid "Usuarios"
 msgstr "Users"
 
+msgid "Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token."
+msgstr "You're going to log in to MercadoLibre and authorize the app: we bring in your active listings and your sales. No token gets pasted."
+
+msgid "Ve a «API keys» › «Create key», ponle un nombre (por ejemplo «creatv») y cópiala: solo se muestra una vez."
+msgstr "Go to “API keys” › “Create key”, give it a name (for example “creatv”) and copy it: it's only shown once."
+
+msgid "Ve a «Keys» › «Add key», elige alcance «API» y copia la llave."
+msgstr "Go to “Keys” › “Add key”, choose scope “API” and copy the key."
+
+msgid "Ventana de atribución"
+msgstr "Attribution window"
+
+msgid "Ventana:"
+msgstr "Window:"
+
 msgid "Ver el detalle en Configuración › Gasto"
 msgstr "See the detail in Settings › Spend"
 
@@ -734,8 +1775,32 @@ msgstr "Video · 8s"
 msgid "Videos"
 msgstr "Videos"
 
+msgid "Volver a buscar"
+msgstr "Search again"
+
+msgid "Volver a comprobar"
+msgstr "Check again"
+
+msgid "Volver a conectar"
+msgstr "Reconnect"
+
 msgid "Volver a iniciar sesión"
 msgstr "Back to log in"
+
+msgid "Voz en off (ElevenLabs), subtítulos por palabra (Whisper) y música (Stable Audio) de las finales."
+msgstr "Voice-over (ElevenLabs), word-level subtitles (Whisper) and music (Stable Audio) for the finals."
+
+msgid "Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write»."
+msgstr "Go back to R2 › “Manage R2 API tokens” › “Create API token” with “Object Read & Write” permission."
+
+msgid "Vuelve a conectar Meta para que se guarde el <code>ig_user_id</code> de la cuenta vinculada."
+msgstr "Reconnect Meta so the linked account's <code>ig_user_id</code> gets saved."
+
+msgid "Vuelves a conectar cada 60 días."
+msgstr "You reconnect every 60 days."
+
+msgid "WooCommerce, paso a paso"
+msgstr "WooCommerce, step by step"
 
 #, python-format
 msgid "Ya existe un proyecto con el identificador '%(cid)s' — elige otro nombre."
@@ -749,18 +1814,45 @@ msgstr "A user '%(usuario)s' already exists — choose another."
 msgid "Ya existe un usuario '%(usuario)s'."
 msgstr "User '%(usuario)s' already exists."
 
+msgid "Ya había una sincronización en curso."
+msgstr "A sync was already running."
+
+msgid "Ya se está sincronizando esa tienda."
+msgstr "That store is already syncing."
+
 msgid "Ya tengo cuenta"
 msgstr "I already have an account"
+
+msgid "YouTube Data API (Nicho: comentarios de videos)"
+msgstr "YouTube Data API (Niche: video comments)"
 
 msgid "ahora mismo"
 msgstr "right now"
 
+msgid "business.facebook.com › Facturación"
+msgstr "business.facebook.com › Billing"
+
 msgid "conectada"
 msgstr "connected"
+
+msgid "conectado"
+msgstr "connected"
+
+msgid "configuración"
+msgstr "configuration"
+
+msgid "configurada"
+msgstr "configured"
+
+msgid "console.cloud.google.com › APIs y servicios › Credenciales"
+msgstr "console.cloud.google.com › APIs & Services › Credentials"
 
 #, python-format
 msgid "del %(desde)s al %(hasta)s · todos los proyectos"
 msgstr "from %(desde)s to %(hasta)s · all projects"
+
+msgid "desde"
+msgstr "since"
 
 msgid "ej. Happy Flops"
 msgstr "e.g. Happy Flops"
@@ -777,6 +1869,12 @@ msgstr "waiting for an approval"
 msgid "experimentos y anuncios sueltos"
 msgstr "experiments and standalone ads"
 
+msgid "fal.ai (voz y música)"
+msgstr "fal.ai (voice and music)"
+
+msgid "falta"
+msgstr "missing"
+
 msgid "generación este mes"
 msgstr "generation this month"
 
@@ -786,8 +1884,17 @@ msgstr "this month's numbers, project by project"
 msgid "no"
 msgstr "no"
 
+msgid "parcial"
+msgstr "partial"
+
+msgid "pedidos:"
+msgstr "orders:"
+
 msgid "por revisar"
 msgstr "to review"
+
+msgid "productos:"
+msgstr "products:"
 
 msgid "proyecto"
 msgid_plural "proyectos"
@@ -797,7 +1904,22 @@ msgstr[1] "projects"
 msgid "publicados"
 msgstr "published"
 
+msgid "rota"
+msgstr "broken"
+
+msgid "sin Instagram vinculado"
+msgstr "no Instagram linked"
+
+msgid "sin Página (solo anuncios)"
+msgstr "no Page (ads only)"
+
+msgid "sin comprobar"
+msgstr "not checked"
+
 msgid "sin conectar"
+msgstr "not connected"
+
+msgid "sin conexión"
 msgstr "not connected"
 
 msgid "sin contar anuncios sueltos"
@@ -808,6 +1930,9 @@ msgstr "no spend measured this month"
 
 msgid "sin más reintentos"
 msgstr "no more retries"
+
+msgid "sin verificar ahora (Meta no respondió)"
+msgstr "not verified right now (Meta didn't respond)"
 
 msgid "sí"
 msgstr "yes"
@@ -821,6 +1946,24 @@ msgstr "videos, images and final cuts ready"
 msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."
 
+msgid "«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3."
+msgstr "“Create credentials” › “API key”; in “API restrictions” limit it to YouTube Data API v3."
+
+msgid "¿Cambiar de forma? Tu conexión actual sigue viva hasta que conectes por la agencia; ahí queda guardada como respaldo."
+msgstr "Change form? Your current connection stays alive until you connect through the agency; then it's kept as a backup."
+
+msgid "¿Cómo quieres conectar Meta?"
+msgstr "How do you want to connect Meta?"
+
+msgid "¿Desconectar Meta de este proyecto? No se borra nada en Meta."
+msgstr "Disconnect Meta from this project? Nothing gets deleted on Meta."
+
+msgid "¿Desconectar Triple Whale? Se quita la atribución por este canal."
+msgstr "Disconnect Triple Whale? Attribution through this channel is removed."
+
+msgid "¿Desconectar esta tienda? Sus productos quedan archivados; no se borra nada en la tienda."
+msgstr "Disconnect this store? Its products get archived; nothing is deleted in the store."
+
 #, python-format
 msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"
 msgstr "Mark %(usuario)s as verified without them opening the email link?"
@@ -831,6 +1974,18 @@ msgstr "Don't have a project yet? <a href=\"%(url)s\">Create one in a minute</a>
 
 msgid "¿Olvidaste tu contraseña?"
 msgstr "Forgot your password?"
+
+msgid "¿Prefieres que Creatv lo gestione? Cambiar"
+msgstr "Prefer that Creatv manage it? Change"
+
+msgid "¿Prefieres usar tu propia app? Cambiar"
+msgstr "Prefer to use your own app? Change"
+
+msgid "¿Quitar la app de Meta de este proyecto? Tendrás que registrarla de nuevo para volver a conectar."
+msgstr "Remove this project's Meta app? You'll have to register it again to reconnect."
+
+msgid "¿Volver a usar tu propia app de Meta? Creatv deja de operar este proyecto; si tenías tu propia conexión se restaura."
+msgstr "Go back to using your own Meta app? Creatv stops operating this project; if you had your own connection it's restored."
 
 #, python-format
 msgid "¿Ya tienes uno? <a href=\"%(url)s\">Iniciar sesión</a>"
@@ -846,6 +2001,12 @@ msgstr "Last updated: %(fecha)s"
 msgid "Última terminada"
 msgstr "Last one done"
 
+msgid "Últimas sincronizaciones"
+msgstr "Latest syncs"
+
 msgid "Últimos cobros"
 msgstr "Latest charges"
+
+msgid "último disparo"
+msgstr "last fired"
 
