@@ -52,3 +52,23 @@ def test_clases_de_encabezado_y_estado_vacio():
     bloque = _bloque_base()
     for clase in (".panel-cabecera-desc", ".panel-cabecera-acciones", ".estado-vacio-titulo", ".estado-vacio-texto"):
         assert clase in bloque
+
+
+PESTANAS = [("tablero", "Tablero"), ("nicho", "Nicho"), ("referentes", "Referentes"),
+            ("creativeflowplus", "Crear"), ("experimentos", "Experimentos"), ("sprints", "Sprints"),
+            ("catalogo", "Catálogo"), ("settings", "Configuración")]
+
+
+def test_cada_pestana_abre_con_su_encabezado(app):
+    html = _pagina(app)
+    for tab, titulo in PESTANAS:
+        p = _pestana(html, tab)
+        assert 'class="panel-cabecera' in p, tab
+        assert p.index('class="panel-cabecera') < p.index("<h2"), tab
+        assert f"<h2>{titulo}" in p, tab
+        assert 'class="panel-cabecera-desc"' in p, tab
+    assert 'data-abrir-detalle="nuevo-sprint"' in _pestana(html, "sprints")
+    assert 'data-abrir-detalle="nuevo-estudio"' in _pestana(html, "nicho")
+    rf = _pestana(html, "referentes")
+    cabecera = rf[rf.index('class="panel-cabecera'):rf.index("<dialog")]
+    assert 'id="btn-traer-referentes"' in cabecera and "panel-cabecera-acciones" in cabecera

@@ -4,14 +4,15 @@
    ref_etiquetas_etapa, ref_etiquetas_consciencia, ref_fuentes. El grid y la
    ficha se piden por fetch a referentes.grid / referentes.ficha. #}
 <div class="panel-cabecera">
-  <h2>Referentes</h2>
-  <p class="vacio">Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas.</p>
+  <div>
+    <h2>Referentes</h2>
+    <p class="panel-cabecera-desc">Anuncios reales que ya funcionaron, clasificados por etapa del funnel, nivel de consciencia, formato y dolor. Elige uno y úsalo como referencia para tus piezas.</p>
+  </div>
+  <div class="panel-cabecera-acciones">
+    <button type="button" id="btn-traer-referentes" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
+    <button type="button" class="btn-sm" data-recrear-abrir="{{ url_for('referentes.barridos', cliente=cliente) }}">Mis barridos</button>
+  </div>
 </div>
-
-<p class="acciones">
-  <button type="button" id="btn-traer-referentes" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
-  <button type="button" class="btn-sm" data-recrear-abrir="{{ url_for('referentes.barridos', cliente=cliente) }}">Mis barridos</button>
-</p>
 
 <dialog class="generado-modal" id="ref-modal">
   <button type="button" class="generado-cerrar" id="ref-modal-cerrar" aria-label="Cerrar">×</button>

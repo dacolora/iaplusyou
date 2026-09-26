@@ -9,6 +9,13 @@
    proyecto (dashboard._llaves_visibles) y de cada una solo su parte:
    sin variables, sin nota del .env y sin pasos para conseguir llaves. ---- #}
 {% set es_admin = session.get('rol') == 'admin' %}
+<div class="panel-cabecera">
+  <div>
+    <h2>Configuración</h2>
+    <p class="panel-cabecera-desc">Llaves y conexiones del proyecto, tu cuenta, tiendas, canales y gasto.</p>
+  </div>
+</div>
+
 <h2 id="config-puesta-a-punto">Puesta a punto</h2>
 {% if es_admin %}
 <p class="vacio" style="padding-top:0;">
