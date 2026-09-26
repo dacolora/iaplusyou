@@ -516,6 +516,10 @@ def test_editor_del_angulo_se_inicializa_al_abrir_la_pieza():
     # <template> de origen (si no, la próxima apertura re-clona el HTML viejo
     # del servidor y el guardado anterior se pierde).
     assert "generado-detalle" in js and ".angulo-editor" in js
+    # cloneNode no copia la opción elegida de un <select> (vuelve a la del
+    # atributo `selected`): la escritura en la <template> fija los atributos.
+    assert "setAttribute('selected'" in js and "removeAttribute('selected')" in js
+    assert "setAttribute('value'" in js and "textContent = valor" in js
 
 
 def test_guardar_el_angulo_de_una_pieza(base_temporal, monkeypatch):

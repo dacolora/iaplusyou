@@ -24,24 +24,44 @@
     lista.hidden = !(avisos && avisos.length);
   }
 
-  function escribirEnPlantillaOriginal(url, angulo) {
+  function fijarEnPlantilla(el, valor) {
+    // cloneNode copia el valor de un input o textarea, pero NO la opción
+    // elegida de un <select>: el clon vuelve a la del atributo `selected`.
+    // Por eso se escriben los atributos (lo que el clon sí hereda).
+    valor = valor == null ? '' : String(valor);
+    if (el.tagName === 'SELECT') {
+      Array.prototype.forEach.call(el.options, function (o) {
+        if (o.value === valor) o.setAttribute('selected', ''); else o.removeAttribute('selected');
+      });
+    } else if (el.tagName === 'TEXTAREA') {
+      el.textContent = valor;
+    } else {
+      el.setAttribute('value', valor);
+    }
+    el.value = valor;
+  }
+
+  function escribirEnPlantillaOriginal(url, angulo, avisos, resumen) {
     // Bug crítico (doctrina, bloque 2, revisión final): el modal de Crear
     // clona su <template class="generado-detalle"> de cero cada vez que se
     // abre, así que sin esto el siguiente guardado revertiría el anterior en
     // cuanto se reabriera la pieza. Busca la <template> cuyo editor tiene la
-    // misma data-url y le deja los mismos valores.
+    // misma data-url y le deja los mismos valores, avisos y resumen.
     document.querySelectorAll('template.generado-detalle').forEach(function (tpl) {
       var editor = tpl.content.querySelector('.angulo-editor[data-url="' + url + '"]');
       if (!editor) return;
       editor.querySelectorAll('[data-angulo-campo]').forEach(function (el) {
-        el.value = (angulo && angulo[el.dataset.anguloCampo]) || '';
+        fijarEnPlantilla(el, angulo && angulo[el.dataset.anguloCampo]);
       });
       var pruebas = (angulo && angulo.pruebas) || [];
       editor.querySelectorAll('[data-angulo-prueba]').forEach(function (fila, i) {
         var p = pruebas[i] || {};
-        fila.querySelector('[data-prueba-texto]').value = p.texto || '';
-        fila.querySelector('[data-prueba-fuente]').value = p.fuente || '';
+        fijarEnPlantilla(fila.querySelector('[data-prueba-texto]'), p.texto);
+        fijarEnPlantilla(fila.querySelector('[data-prueba-fuente]'), p.fuente);
       });
+      pintarAvisos(editor, avisos);
+      var r = editor.querySelector('.angulo-resumen');
+      if (r && resumen) r.textContent = resumen;
     });
   }
 
@@ -68,7 +88,7 @@
           pintarAvisos(caja, j.avisos);
           var resumen = caja.querySelector('.angulo-resumen');
           if (resumen && j.resumen) resumen.textContent = j.resumen;
-          escribirEnPlantillaOriginal(caja.dataset.url, j.angulo);
+          escribirEnPlantillaOriginal(caja.dataset.url, j.angulo, j.avisos, j.resumen);
           // Gancho sync: copy saved gancho back to the idea card (doctrina, bloque 2, §3.3)
           var tarjeta = caja.closest('.sprint-idea');
           var ganchoTarjeta = tarjeta ? tarjeta.querySelector('input[name="gancho"]') : null;
