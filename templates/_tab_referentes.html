@@ -9,7 +9,7 @@
 </div>
 
 <p class="acciones">
-  <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
+  <button type="button" id="btn-traer-referentes" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
   <button type="button" class="btn-sm" data-recrear-abrir="{{ url_for('referentes.barridos', cliente=cliente) }}">Mis barridos</button>
 </p>
 
@@ -31,6 +31,24 @@
     // estado vacío de «Mis barridos»), sin duplicar el fetch.
     var modal = document.getElementById('ref-modal');
     var cuerpo = document.getElementById('ref-modal-cuerpo');
+
+    // Prellenado desde una campaña de Sprints: el link "Traer referentes
+    // nuevos" de campana_referencias.html manda `palabra`/`pais` en el hash
+    // (#referentes?campana=...&palabra=...&pais=...). Si están, el botón
+    // "Traer referentes" abre ya con el formulario prellenado -- sigue
+    // siendo un clic manual y el mismo precio en vivo de siempre; nada se
+    // lanza solo.
+    var botonTraer = document.getElementById('btn-traer-referentes');
+    if (botonTraer && location.hash.indexOf('?') >= 0) {
+      var previos = new URLSearchParams(location.hash.slice(location.hash.indexOf('?') + 1));
+      var extra = new URLSearchParams();
+      ['palabra', 'pais'].forEach(function (k) {
+        if (previos.get(k)) extra.set(k, previos.get(k));
+      });
+      var qs = extra.toString();
+      if (qs) botonTraer.dataset.recrearAbrir = botonTraer.dataset.recrearAbrir + '?' + qs;
+    }
+
     function cargarEnDialogo(url) {
       return fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.ok ? r.text() : Promise.reject(); })

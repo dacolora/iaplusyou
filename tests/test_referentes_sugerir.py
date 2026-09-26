@@ -62,6 +62,88 @@ def test_sugerir_combina_candidatos_y_elegir(monkeypatch):
     assert len(out) == 1 and out[0]["id"] == 1
 
 
+def test_candidatos_pasa_consciencia_valida_a_listar(monkeypatch):
+    vistos = []
+    import referentes.datos as referentes_datos
+
+    def _listar(cliente, filtros, pagina, por_pagina):
+        vistos.append(dict(filtros))
+        return {"items": []}
+    monkeypatch.setattr(referentes_datos, "listar", _listar)
+    sugerir.candidatos("cliente-x", "TOF", consciencia="problem-aware")
+    assert vistos == [{"etapa": "TOF", "consciencia": "problem-aware"}]
+
+
+def test_candidatos_ignora_consciencia_invalida(monkeypatch):
+    vistos = []
+    import referentes.datos as referentes_datos
+
+    def _listar(cliente, filtros, pagina, por_pagina):
+        vistos.append(dict(filtros))
+        return {"items": []}
+    monkeypatch.setattr(referentes_datos, "listar", _listar)
+    sugerir.candidatos("cliente-x", "TOF", consciencia="no-existe")
+    assert vistos == [{"etapa": "TOF"}]   # ni rastro de "consciencia": comportamiento de siempre
+
+
+def test_sugerir_prioriza_consciencia_y_rellena_con_etapa_sola(monkeypatch):
+    con_consciencia = [
+        {"id": 1, "clasificacion": "fuente", "variantes": 5, "dias": 5, "familia": "a", "dolor": "", "firma": "",
+         "etapa": "TOF", "consciencia": "problem-aware", "titular": "", "imagen_url": ""},
+    ]
+    solo_etapa = con_consciencia + [
+        {"id": 2, "clasificacion": "fuente", "variantes": 1, "dias": 1, "familia": "b", "dolor": "", "firma": "",
+         "etapa": "TOF", "consciencia": "unaware", "titular": "", "imagen_url": ""},
+    ]
+    import referentes.datos as referentes_datos
+
+    def _listar(cliente, filtros, pagina, por_pagina):
+        if filtros.get("consciencia"):
+            return {"items": con_consciencia}
+        return {"items": solo_etapa}
+    monkeypatch.setattr(referentes_datos, "listar", _listar)
+
+    out = sugerir.sugerir("cliente-x", "TOF", excluir_ids=set(), objetivo=2, consciencia="problem-aware")
+
+    assert [c["id"] for c in out] == [1, 2]   # #1 de la consciencia pedida primero, #2 de relleno
+
+
+def test_sugerir_no_rellena_si_ya_alcanzo_el_objetivo_con_consciencia(monkeypatch):
+    con_consciencia = [
+        {"id": 1, "clasificacion": "fuente", "variantes": 5, "dias": 5, "familia": "a", "dolor": "", "firma": "",
+         "etapa": "TOF", "consciencia": "problem-aware", "titular": "", "imagen_url": ""},
+    ]
+    llamadas = []
+    import referentes.datos as referentes_datos
+
+    def _listar(cliente, filtros, pagina, por_pagina):
+        llamadas.append(dict(filtros))
+        return {"items": con_consciencia}
+    monkeypatch.setattr(referentes_datos, "listar", _listar)
+
+    out = sugerir.sugerir("cliente-x", "TOF", excluir_ids=set(), objetivo=1, consciencia="problem-aware")
+
+    assert [c["id"] for c in out] == [1]
+    assert len(llamadas) == 1   # objetivo ya alcanzado: nunca hace la segunda consulta de relleno
+
+
+def test_sugerir_con_consciencia_none_es_igual_que_antes(monkeypatch):
+    filas = [
+        {"id": 1, "clasificacion": "fuente", "variantes": 3, "dias": 3, "familia": "a", "dolor": "", "firma": "",
+         "etapa": "TOF", "titular": "", "imagen_url": ""},
+    ]
+    import referentes.datos as referentes_datos
+    monkeypatch.setattr(referentes_datos, "listar", lambda cliente, filtros, pagina, por_pagina: {"items": filas})
+    out = sugerir.sugerir("cliente-x", "TOF", excluir_ids=set(), objetivo=1)
+    assert [c["id"] for c in out] == [1]
+
+
+def test_nivel_a_consciencia_traduce_los_cinco_niveles_de_nicho():
+    import referentes.datos as referentes_datos
+    assert set(sugerir.NIVEL_A_CONSCIENCIA.values()) == set(referentes_datos.CONSCIENCIAS)
+    assert sugerir.NIVEL_A_CONSCIENCIA["consciente_del_problema"] == "problem-aware"
+
+
 class _RespuestaFalsa:
     def __init__(self, texto):
         self.content = [type("Bloque", (), {"text": texto})()]

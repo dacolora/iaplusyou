@@ -361,13 +361,78 @@ def test_campana_ver_muestra_candidatos_gratis(app, monkeypatch):
     pid, tid = _base(datos)
     sid, cid = _sprint(datos, pid, tid)
     import referentes.sugerir as referentes_sugerir
-    monkeypatch.setattr(referentes_sugerir, "sugerir", lambda cliente_, etapa, excluir, objetivo: [
+    monkeypatch.setattr(referentes_sugerir, "sugerir", lambda cliente_, etapa, excluir, objetivo, consciencia=None: [
         {"id": 9, "titular": "Candidato de prueba", "familia": "ugc", "imagen_url": "https://cdn/9.jpg"},
     ])
     r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
     assert r.status_code == 200
     assert b"Candidato de prueba" in r.data
     assert b'value="9"' in r.data
+
+
+def test_campana_ver_pasa_consciencia_de_la_persona_a_sugerir(app, monkeypatch):
+    """Una persona nacida de un avatar de Nicho trae `extra.conciencia.nivel`
+    en español; campana_ver la traduce y se la pasa a sugerir() ya en el
+    vocabulario de referentes."""
+    from sprints import datos
+    pid = datos.crear_persona("acme", "Investigada", extra={"conciencia": {"nivel": "consciente_del_problema"}})
+    tid = datos.crear_temporada("acme", "Verano", "2026-06-01", "2026-07-15")
+    sid, cid = _sprint(datos, pid, tid)
+    import referentes.sugerir as referentes_sugerir
+    vistos = []
+    monkeypatch.setattr(referentes_sugerir, "sugerir", lambda cliente_, etapa, excluir, objetivo, consciencia=None:
+                         vistos.append(consciencia) or [])
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert vistos == ["problem-aware"]
+
+
+def test_campana_ver_persona_sin_conciencia_pasa_none(app, monkeypatch):
+    """La mayoría de personas (creadas a mano, sin avatar) no tienen
+    `extra.conciencia`: sugerir() recibe consciencia=None, igual que antes de
+    este cambio."""
+    from sprints import datos
+    pid, tid = _base(datos)   # persona "Premium" manual, sin extra
+    sid, cid = _sprint(datos, pid, tid)
+    import referentes.sugerir as referentes_sugerir
+    vistos = []
+    monkeypatch.setattr(referentes_sugerir, "sugerir", lambda cliente_, etapa, excluir, objetivo, consciencia=None:
+                         vistos.append(consciencia) or [])
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert vistos == [None]
+
+
+def test_campana_ver_enlace_traer_prellena_producto_y_pais(app):
+    """Bloque 7: el link «Traer referentes nuevos» debe navegar a Referentes
+    con `palabra` (nombre del producto) y `pais` (del proyecto) en el hash, y
+    también standalone como «Elegir de la biblioteca» (mismo motivo: esta
+    página no vive dentro de cliente.html)."""
+    from sprints import datos
+    import proyectos
+    proyectos.guardar_pais("acme", "MX")
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    html = r.data.decode()
+    assert 'href="/cliente/acme#referentes?etapa=' in html
+    assert "Traer referentes nuevos" in html
+    assert "palabra=Espejo+LED" in html or "palabra=Espejo%20LED" in html
+    assert "pais=MX" in html
+
+
+def test_campana_ver_enlace_traer_sin_producto_no_revienta(app, monkeypatch):
+    """Si el producto de la campaña ya no existe en el catálogo (borrado o
+    renombrado), `palabra_sugerida` queda vacía en vez de romper la página."""
+    import catalogo_productos
+    from sprints import datos
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [])
+    pid, tid = _base(datos)
+    sid, cid = _sprint(datos, pid, tid)
+    r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}")
+    assert r.status_code == 200
+    assert "palabra=&" in r.data.decode() or "palabra=\"" in r.data.decode()
 
 
 def test_campana_ver_enlace_biblioteca_apunta_a_ver_cliente(app):

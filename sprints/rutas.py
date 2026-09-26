@@ -481,7 +481,15 @@ def campana_ver(cliente, sid, cid):
     job_link = tareas_sprints.job_id_link(cliente, cid)
     ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs} - {None}
     objetivo_restante = max(1, (c.get("referencias_objetivo") or 1) - len(refs))
-    candidatos_gratis = referentes_sugerir.sugerir(cliente, c["funnel"].upper(), ya_ids, objetivo_restante)
+    persona_ = datos.persona(cliente, c["persona_id"]) if c.get("persona_id") else None
+    nivel_conciencia = ((persona_ or {}).get("extra") or {}).get("conciencia") or {}
+    if isinstance(nivel_conciencia, dict):
+        nivel_conciencia = nivel_conciencia.get("nivel")
+    consciencia = referentes_sugerir.NIVEL_A_CONSCIENCIA.get(nivel_conciencia)
+    candidatos_gratis = referentes_sugerir.sugerir(cliente, c["funnel"].upper(), ya_ids, objetivo_restante,
+                                                    consciencia=consciencia)
+    palabra_sugerida = (producto or {}).get("nombre") or ""
+    pais_sugerido = proyectos.pais(cliente)
     sugerencias_ia_crudas = (c.get("extra") or {}).get("sugerencias_ia") or []
     candidatos_ia = []
     for item in sugerencias_ia_crudas:
@@ -495,7 +503,8 @@ def campana_ver(cliente, sid, cid):
                            trabajo_link={"job_id": job_link} if trabajos.en_curso(job_link) else None,
                            candidatos_gratis=candidatos_gratis, candidatos_ia=candidatos_ia,
                            trabajo_sugerir_ia={"job_id": job_sugerir_ia} if trabajos.en_curso(job_sugerir_ia) else None,
-                           precio_sugerir_ia=gastos.estimar("sugerir_ia"))
+                           precio_sugerir_ia=gastos.estimar("sugerir_ia"),
+                           palabra_sugerida=palabra_sugerida, pais_sugerido=pais_sugerido)
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/referencias")

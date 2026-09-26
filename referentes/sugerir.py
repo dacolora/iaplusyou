@@ -13,6 +13,19 @@ from referentes import datos as referentes_datos
 
 CLASIFICACIONES_USABLES = ("fuente", "claude")
 
+# Nicho guarda el nivel de consciencia de un avatar en español
+# (nicho/datos.py, spec 2026-09-18 §avatar); referentes lo clasifica en
+# inglés (referentes/datos.py:CONSCIENCIAS) -- mismo concepto (Schwartz),
+# vocabularios distintos. Traducción para poder filtrar sugerir() por la
+# consciencia de la persona de una campaña cuando viene de un avatar.
+NIVEL_A_CONSCIENCIA = {
+    "inconsciente": "unaware",
+    "consciente_del_problema": "problem-aware",
+    "consciente_de_la_solucion": "solution-aware",
+    "consciente_del_producto": "product-aware",
+    "muy_consciente": "most-aware",
+}
+
 
 class SugerenciaInvalida(RuntimeError):
     """La respuesta de Claude no trae una lista de ids usable."""
@@ -45,12 +58,18 @@ def _sin_cierre(texto, etiqueta):
     return (texto or "").replace(f"</{etiqueta}>", "")
 
 
-def candidatos(cliente, etapa, excluir_ids=None, limite=200):
+def candidatos(cliente, etapa, excluir_ids=None, limite=200, consciencia=None):
     """Referentes visibles de esa etapa, ya clasificados (`fuente`/`claude`) y
     fuera de `excluir_ids`, en el orden que ya usa `referentes.datos.listar`
-    (más días primero). No aplica el desempate por familia — eso es `elegir`."""
+    (más días primero). Cuando `consciencia` es uno de
+    `referentes.datos.CONSCIENCIAS` también filtra por ese nivel — el
+    llamador (`sugerir`) decide si además rellena con `consciencia=None`. No
+    aplica el desempate por familia — eso es `elegir`."""
     excluir = set(excluir_ids or ())
-    filas = referentes_datos.listar(cliente, {"etapa": etapa}, pagina=1, por_pagina=limite)["items"]
+    filtros = {"etapa": etapa}
+    if consciencia in referentes_datos.CONSCIENCIAS:
+        filtros["consciencia"] = consciencia
+    filas = referentes_datos.listar(cliente, filtros, pagina=1, por_pagina=limite)["items"]
     return [r for r in filas if r["id"] not in excluir and r.get("clasificacion") in CLASIFICACIONES_USABLES]
 
 
@@ -71,10 +90,23 @@ def elegir(candidatos_, objetivo):
     return elegidos
 
 
-def sugerir(cliente, etapa, excluir_ids, objetivo):
+def sugerir(cliente, etapa, excluir_ids, objetivo, consciencia=None):
     """Atajo: `elegir(candidatos(...), objetivo)` — la puerta «Sugerir de la
-    biblioteca (gratis)»."""
-    return elegir(candidatos(cliente, etapa, excluir_ids), objetivo)
+    biblioteca (gratis)». Cuando se pasa `consciencia` (nivel de la persona de
+    la campaña, ya traducido con `NIVEL_A_CONSCIENCIA`) prioriza candidatos de
+    esa etapa+consciencia, y solo rellena con etapa sola si no alcanzan para
+    `objetivo` — nunca devuelve menos que sin el filtro, y con
+    `consciencia=None` (el default) el comportamiento es idéntico al de
+    siempre."""
+    objetivo = max(1, int(objetivo))
+    excluir_ids = set(excluir_ids or ())
+    consciencia_valida = consciencia if consciencia in referentes_datos.CONSCIENCIAS else None
+    elegidos = elegir(candidatos(cliente, etapa, excluir_ids, consciencia=consciencia_valida), objetivo)
+    faltan = objetivo - len(elegidos)
+    if consciencia_valida and faltan > 0:
+        ya = excluir_ids | {c["id"] for c in elegidos}
+        elegidos = elegidos + elegir(candidatos(cliente, etapa, ya), faltan)
+    return elegidos
 
 
 def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, objetivo):

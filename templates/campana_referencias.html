@@ -49,6 +49,8 @@
     <button type="submit" class="btn-sm">Traer las fotos del producto</button>
   </form>
   <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}">Elegir de la biblioteca</a>
+  <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}&palabra={{ palabra_sugerida | urlencode }}&pais={{ pais_sugerido }}"
+     title="Abre «Traer referentes» ya prellenado con el producto y país de esta campaña — sigue siendo tu decisión lanzarlo y aprobar el costo">Traer referentes nuevos</a>
   <details class="inline sprint-reutilizar">
     <summary class="btn-sm">Sugerir de la biblioteca (gratis)</summary>
     {{ candidatos_biblioteca(candidatos_gratis, campana.id, cliente) }}
