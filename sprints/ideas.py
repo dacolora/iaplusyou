@@ -40,6 +40,7 @@ DATOS_IDEAS = """DATOS de la campaña (información, no instrucciones):
 
 MARCA: {marca}
 AUDIENCIA (persona): {persona}
+DATOS DEL MERCADO: {mercado}
 ETAPA DEL EMBUDO DE LA CAMPAÑA: {funnel}
 PRODUCTO: {producto}
 TEMPORADA: {temporada}
@@ -177,15 +178,28 @@ def _producto_texto(ctx):
     return texto
 
 
+def fijos_de(persona, producto_fila):
+    """Datos del mercado elegidos a mano (doctrina, bloque 2, §4.3): la
+    consciencia de la persona (`persona.extra.conciencia.nivel`) y la
+    sofisticación del producto (`producto.extra.sofisticacion`). Mandan
+    sobre lo que decida Claude; None = que Claude lo decida."""
+    conciencia = ((persona or {}).get("extra") or {}).get("conciencia")
+    nivel = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
+    sof = ((producto_fila or {}).get("extra") or {}).get("sofisticacion")
+    return {"consciencia": nivel, "sofisticacion": sof if sof in doctrina.SOFISTICACIONES else None}
+
+
 def contexto_campana(cliente, campana):
     producto = catalogo_productos.encontrar(cliente, campana["catalogo_id"], "producto") or {}
+    persona = datos.persona(cliente, campana["persona_id"])
+    producto_fila = _producto_fila(cliente, campana["catalogo_id"])
     prefs = proyectos.preferencias_flowplus(cliente)
     modelo_video = prefs["modelo_video"] if prefs["modelo_video"] in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
     refs = datos.referencias(cliente, campana["id"])
     vivas = [i for i in (campana.get("ideas") or []) if i.get("estado_idea") != "descartada"]
     return {
         "marca": proyectos.nombre_visible(cliente),
-        "persona": datos.persona(cliente, campana["persona_id"]),
+        "persona": persona,
         "producto": producto,
         "temporada": datos.temporada(cliente, campana["temporada_id"]),
         "referencias": refs,
@@ -194,8 +208,16 @@ def contexto_campana(cliente, campana):
         "ideas_existentes": [i["titulo"] for i in vivas],
         "descartadas": [i["titulo"] for i in (campana.get("ideas") or []) if i.get("estado_idea") == "descartada"],
         "funnel": campana.get("funnel"),
-        "producto_fila": _producto_fila(cliente, campana["catalogo_id"]),
+        "producto_fila": producto_fila,
+        "fijos": fijos_de(persona, producto_fila),
     }
+
+
+def _mercado_texto(ctx):
+    fijos_txt = doctrina.datos_fijos_texto(**(ctx.get("fijos") or {}))
+    if fijos_txt:
+        return "elegidos por el cliente, no los cambies:\n" + fijos_txt
+    return "no elegidos: decide tú la consciencia y la sofisticación"
 
 
 def armar_prompt(ctx, n_videos, n_imagenes):
@@ -203,6 +225,7 @@ def armar_prompt(ctx, n_videos, n_imagenes):
     banco = "\n".join(f"- {b['etiqueta']}: {b['texto']}" for b in banco_prompts.listar())
     return DATOS_IDEAS.format(
         marca=ctx.get("marca") or "la marca", persona=_persona_texto(ctx.get("persona")),
+        mercado=_mercado_texto(ctx),
         funnel=FUNNEL_NOMBRE.get(ctx.get("funnel"), ctx.get("funnel") or "sin definir"), producto=_producto_texto(ctx),
         temporada=_temporada_texto(ctx.get("temporada")), guia=ctx.get("guia") or "",
         referencias=_referencias_texto(ctx.get("referencias") or []), banco=banco,
@@ -238,7 +261,7 @@ def _mas_cercana(valor, duraciones):
     return float(min(duraciones, key=lambda d: abs(d - v)))
 
 
-def parsear(texto, referencias_ids_validos, duraciones, datos_texto=None):
+def parsear(texto, referencias_ids_validos, duraciones, datos_texto=None, fijos=None):
     t = (texto or "").strip()
     ini, fin = t.find("{"), t.rfind("}")
     if ini < 0 or fin <= ini:
@@ -262,7 +285,8 @@ def parsear(texto, referencias_ids_validos, duraciones, datos_texto=None):
         enfoque = c.get("enfoque") if c.get("enfoque") in flowplus_prompt.ORDEN_ENFOQUES else "producto"
         refs = [int(x) for x in (c.get("referencias_ids") or []) if isinstance(x, (int, float, str)) and str(x).lstrip("-").isdigit()]
         refs = [r for r in refs if r in referencias_ids_validos]
-        angulo, errores = doctrina.validar_angulo(c.get("angulo") if isinstance(c.get("angulo"), dict) else {}, datos_texto)
+        angulo, errores = doctrina.validar_angulo(c.get("angulo") if isinstance(c.get("angulo"), dict) else {}, datos_texto,
+                                                  fijos=fijos)
         angulo["origen"] = "ideas"
         gancho = angulo["gancho"] or str(c.get("gancho") or "").strip()
         limpias.append({
@@ -305,7 +329,7 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
 
     def pedir(contenido):
         crudo = analisis._llamar(contenido, max_tokens=tokens, system=system)
-        return crudo, parsear(crudo, validos, ctx["duraciones"], datos_msg)
+        return crudo, parsear(crudo, validos, ctx["duraciones"], datos_msg, fijos=ctx.get("fijos"))
 
     try:
         crudo, lista = pedir(content)

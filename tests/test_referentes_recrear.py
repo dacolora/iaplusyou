@@ -280,3 +280,19 @@ def test_llamar_manda_la_doctrina_de_angulo_y_gancho(monkeypatch):
     monkeypatch.setattr(anthropic, "Anthropic", _A)
     recrear._llamar("hola")
     assert vistos[0]["system"][0]["text"] == doctrina.texto("angulo", "gancho")
+
+
+def test_adaptar_respeta_la_sofisticacion_elegida(monkeypatch):
+    """Doctrina, bloque 2 (§4.3)."""
+    from referentes import recrear
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return (_respuesta(), 200, 60)
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), dict(_producto(), sofisticacion=1), "titular viejo")
+    assert "<mercado>- Sofisticación del mercado (fija, no la cambies): 1" in pedido["texto"]
+    assert resultado["angulo"]["sofisticacion"] == 1
+    recrear.adaptar(_referente(), _familia(), _producto(), "titular viejo")
+    assert "<mercado>no elegidos: decide tú la sofisticación</mercado>" in pedido["texto"]

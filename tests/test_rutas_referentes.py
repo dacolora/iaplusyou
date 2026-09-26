@@ -944,3 +944,20 @@ def test_admin_referentes_sin_pendientes_ni_errores_no_ofrece_botones(app, monke
     html = app["c"].get("/admin/referentes").data.decode()
     assert "Clasificar pendientes" not in html
     assert "Reintentar imágenes" not in html
+
+
+def test_recrear_adaptar_le_pasa_la_sofisticacion_del_catalogo(app, monkeypatch):
+    """Doctrina, bloque 2: la ruta lee la sofisticación de la fila `producto`."""
+    import tiendas
+    from referentes import recrear
+    ids = _sembrar()
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    tiendas.anotar_extra("acme", fila, sofisticacion=5)
+    visto = {}
+
+    def falso(texto, max_tokens):
+        visto["texto"] = texto
+        return '{"titular": "SE ACABA HOY", "prompt": "Con Image 1 e Image 2..."}', 150, 40
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
+    assert "Sofisticación del mercado (fija, no la cambies): 5" in visto["texto"]

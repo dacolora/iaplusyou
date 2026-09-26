@@ -505,3 +505,15 @@ def test_variar_hook_conserva_el_cta_y_pide_no_repetir_el_gancho_anterior(monkey
     mensaje = kw["messages"][0]["content"]
     assert "hook" in mensaje.lower() and "CTA" in mensaje
     assert "no repitas" in _sys(kw).lower()
+
+
+def test_la_sofisticacion_elegida_manda_en_el_angulo_del_guion(monkeypatch):
+    """Doctrina, bloque 2 (§4.3): con la sofisticación del producto elegida,
+    el guion la recibe como fija y el ángulo que decide Claude la respeta."""
+    from final_edition import guion
+    producto = dict(PRODUCTO, sofisticacion=4)
+    reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=dict(ANG, sofisticacion=2)))])
+    g, _ = guion.generar_guion_base(producto, None, "producto", 10.0, "es", "", "")
+    mensaje = reg.kwargs[0]["messages"][0]["content"]
+    assert "Sofisticación del mercado (fija, no la cambies): 4" in mensaje
+    assert g["angulo"]["sofisticacion"] == 4

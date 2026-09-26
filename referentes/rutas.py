@@ -20,6 +20,7 @@ import flowplus_lanzar
 import gastos
 import marca as marca_mod
 import proyectos
+import tiendas
 from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
 from referentes import datos, fuentes, recrear
@@ -195,6 +196,9 @@ def recrear_adaptar(cliente, rid):
     producto = catalogo_productos.encontrar(cliente, cuerpo.get("producto_id"), categoria="producto") if cuerpo.get("producto_id") else None
     if not producto:
         return jsonify({"error": "Elige un producto primero."}), 400
+    # Doctrina, bloque 2: la sofisticación elegida en Catálogo manda en el ángulo.
+    fila = tiendas.por_activo(cliente).get(producto.get("id")) or {}
+    producto = dict(producto, sofisticacion=(fila.get("extra") or {}).get("sofisticacion"))
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
     try:
         resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""),

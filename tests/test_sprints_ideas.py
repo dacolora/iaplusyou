@@ -292,3 +292,37 @@ def test_proponer_una_correccion_con_menos_ideas_no_reemplaza_a_la_primera(base_
     video, imagen = (datos.idea("acme", i) for i in creadas)
     assert video["titulo"] == IDEA_V["titulo"] and imagen["titulo"] == IDEA_I["titulo"]
     assert "error: mecanismo_obligatorio" in video["extra"]["angulo"]["faltantes"]
+
+
+def test_los_datos_del_mercado_elegidos_mandan_en_las_ideas(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (§4.3): la consciencia de la persona y la
+    sofisticación del producto elegidas a mano van como fijas en los DATOS y
+    reemplazan lo que responda Claude."""
+    import tiendas
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    pid = datos.campana("acme", cid)["persona_id"]
+    datos.actualizar_persona("acme", pid, extra={"conciencia": {"nivel": "consciente_del_problema"}})
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    tiendas.anotar_extra("acme", fila, sofisticacion=4)
+    contenidos = []
+    idea = dict(IDEA_V, angulo=dict(ANGULO, lead="problema_solucion", mecanismo="luz LED en el borde del marco"))
+
+    def _llamar_falso(content, max_tokens=700, system=None):
+        contenidos.append(content[0]["text"])
+        return json.dumps({"ideas": [idea]})
+    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
+    assert len(contenidos) == 1
+    assert "Consciencia de la persona (fija, no la cambies): consciente del problema" in contenidos[0]
+    assert "Sofisticación del mercado (fija, no la cambies): 4" in contenidos[0]
+    angulo = datos.idea("acme", creadas[0])["extra"]["angulo"]
+    assert angulo["consciencia"] == "consciente_del_problema" and angulo["sofisticacion"] == 4
+
+
+def test_sin_datos_del_mercado_claude_los_decide(base_temporal, monkeypatch):
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    assert ctx["fijos"] == {"consciencia": None, "sofisticacion": None}
+    assert "DATOS DEL MERCADO: no elegidos: decide tú la consciencia y la sofisticación" in ideas.armar_prompt(ctx, 1, 0)
