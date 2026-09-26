@@ -339,6 +339,20 @@ def test_angulo_desde_formulario_no_verifica_cifras_de_la_persona():
     assert limpio["promesa"].startswith("dura 3 años") and not any("cifra" in a for a in avisos)
 
 
+def test_angulo_desde_formulario_avisa_si_la_cifra_marcada_sigue_ahi():
+    """Doctrina, bloque 2 (revisión final #2): §11 dice «la interfaz lo dice»
+    — si la persona deja la cifra que Claude no pudo verificar, se avisa que
+    se usará tal cual; si la cambió, no hay nada que avisar."""
+    import doctrina
+    guardados = ["error: cifra_no_verificada:47", "faltan comentarios reales"]
+    con_la_cifra = dict(ANGULO_OK, promesa="el 47 % de las clientas repite")
+    limpio, avisos = doctrina.angulo_desde_formulario(con_la_cifra, guardados, ahora="t")
+    assert any("«47»" in a and "tal cual" in a for a in avisos)
+    sin_la_cifra = dict(ANGULO_OK, promesa="la mayoría de las clientas repite")
+    limpio2, avisos2 = doctrina.angulo_desde_formulario(sin_la_cifra, guardados, ahora="t")
+    assert not any("«47»" in a for a in avisos2)
+
+
 def test_texto_verificable_cuenta_lo_editado_a_mano_aunque_hubiera_errores():
     import doctrina
     a = dict(ANGULO_OK, faltantes=["error: cifra_no_verificada:47"], promesa="el 47 % repite")
@@ -379,7 +393,7 @@ def test_resumen_angulo_y_globales_de_plantilla():
                                                    "“Si ya se te rompió la tercera chancla este verano, mira esto”")
     g = doctrina.globales_plantilla()
     assert {"CONSCIENCIAS_CLIENTE", "SOFISTICACIONES_CLIENTE", "FUENTES_PRUEBA_CLIENTE", "LEADS_NOMBRE",
-            "PREFIJO_ERROR", "lead_por_consciencia", "resumen_angulo"} <= set(g)
+            "PREFIJO_ERROR", "lead_por_consciencia", "resumen_angulo", "mensaje_error"} <= set(g)
     assert set(doctrina.FUENTES_PRUEBA_CLIENTE) == set(doctrina.FUENTES_PRUEBA)
 
 def test_sofisticacion_infinity_no_explota():

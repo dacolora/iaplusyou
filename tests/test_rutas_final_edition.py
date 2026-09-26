@@ -489,6 +489,18 @@ def test_plantilla_muestra_el_editor_del_angulo_de_la_pieza():
     assert "Todavía no tiene ángulo: se decide al preparar el guion" in vacio
 
 
+def test_plantilla_muestra_la_cifra_no_verificada_antes_de_guardar():
+    """Doctrina, bloque 2 (revisión final #2): §11 dice «la interfaz lo dice»
+    — un `error: cifra_no_verificada:47` guardado se ve como aviso apenas se
+    abre el editor, no solo después de un guardado."""
+    env = _entorno_plantilla()
+    angulo = {"consciencia": "consciente_del_problema", "lead": "problema_solucion", "gancho": "¿Pies fríos en casa?",
+              "promesa": "pies calientes", "faltantes": ["error: cifra_no_verificada:47", "falta el precio"]}
+    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    assert "La cifra «47» no está en los datos del producto." in html
+    assert "cifra_no_verificada" not in html      # se muestra el mensaje, nunca el código
+
+
 def test_editor_del_angulo_se_inicializa_al_abrir_la_pieza():
     """Doctrina, bloque 2 (revisión final, bug crítico #1): el editor vive
     dentro de <template class="generado-detalle"> y `iniciarEditoresAngulo()`

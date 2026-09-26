@@ -389,15 +389,30 @@ def angulo_desde_formulario(datos, faltantes_guardados=None, ahora=None):
     hace cargo; la segunda la vuelve a poner `validar_angulo` si aplica, sin
     duplicarla). Las cifras NO se verifican: las escribió la persona. Los
     `avisos` son frases simples y nunca bloquean el guardado. Conserva
-    `origen` si viene y marca `editado_en` con `ahora`."""
+    `origen` si viene y marca `editado_en` con `ahora`.
+
+    §11 (revisión final #2): si una cifra que Claude había marcado como no
+    verificada (`error: cifra_no_verificada:X`) SIGUE apareciendo tal cual en
+    lo que la persona mandó, se avisa que se usará igual — de lo contrario
+    ese aviso solo existía escondido en `faltantes` y la interfaz nunca lo
+    mostraba antes de guardar."""
     d = dict(datos) if isinstance(datos, dict) else {}
-    d["faltantes"] = [f for f in (faltantes_guardados or []) if isinstance(f, str)
-                      and not f.startswith(PREFIJO_ERROR) and not f.startswith(_ARRANQUE_FUERA)]
+    guardados = [f for f in (faltantes_guardados or []) if isinstance(f, str)]
+    d["faltantes"] = [f for f in guardados if not f.startswith(PREFIJO_ERROR) and not f.startswith(_ARRANQUE_FUERA)]
     limpio, errores = validar_angulo(d)
     if d.get("origen") in ANGULO_ORIGENES:
         limpio["origen"] = d["origen"]
     limpio["editado_en"] = ahora
-    return limpio, [mensaje_error(e) for e in errores]
+    avisos = [mensaje_error(e) for e in errores]
+    texto_persona = " ".join(str(d.get(c) or "") for c in _CAMPOS_TEXTO)
+    texto_persona += " " + " ".join(str(p.get("texto") or "") for p in (d.get("pruebas") or []) if isinstance(p, dict))
+    prefijo_cifra = f"{PREFIJO_ERROR}cifra_no_verificada:"
+    for f in guardados:
+        if f.startswith(prefijo_cifra):
+            cifra = f[len(prefijo_cifra):]
+            if cifra and cifra in texto_persona:
+                avisos.append(f"{mensaje_error(f'cifra_no_verificada:{cifra}')} Si la dejas, se usa tal cual.")
+    return limpio, avisos
 
 
 def resumen_angulo(angulo):
@@ -423,7 +438,7 @@ def globales_plantilla():
     return {"CONSCIENCIAS_CLIENTE": CONSCIENCIAS_CLIENTE, "SOFISTICACIONES_CLIENTE": SOFISTICACIONES_CLIENTE,
             "FUENTES_PRUEBA_CLIENTE": FUENTES_PRUEBA_CLIENTE, "LEADS_NOMBRE": LEADS_NOMBRE,
             "PREFIJO_ERROR": PREFIJO_ERROR, "lead_por_consciencia": lead_por_consciencia,
-            "resumen_angulo": resumen_angulo}
+            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error}
 
 
 def datos_fijos_texto(consciencia=None, sofisticacion=None):

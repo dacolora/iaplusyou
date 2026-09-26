@@ -56,7 +56,11 @@
     </div>
     {% endif %}
     {% if a.get('editado_en') %}<small class="vacio">Editado a mano: las cifras que escribas aquí se usan tal cual. <a href="{{ doctrina_url }}#base" target="_blank" rel="noopener">¿Por qué?</a></small>{% endif %}
-    <ul class="angulo-avisos" hidden></ul>
+    {# Revisión final #2 (§11 «la interfaz lo dice»): los «error: …» guardados
+       se ven como aviso desde que se abre el editor, no solo tras guardar. #}
+    {% set avisos_guardados = [] %}
+    {% for f in a.get('faltantes') or [] %}{% if f is string and f.startswith(PREFIJO_ERROR) %}{% set _ = avisos_guardados.append(mensaje_error(f[(PREFIJO_ERROR | length):])) %}{% endif %}{% endfor %}
+    <ul class="angulo-avisos" {% if not avisos_guardados %}hidden{% endif %}>{% for texto in avisos_guardados %}<li>{{ texto }}</li>{% endfor %}</ul>
     <span class="angulo-guardado vacio" hidden>Guardado</span>
   </div>
 </details>
