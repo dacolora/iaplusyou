@@ -12,6 +12,7 @@ Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
   sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=2)
   sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=3)
   referentes_sugerir_ia      -> f"{cliente}__campana{campana_id}__sugerir_biblioteca" (max_intentos=1)
+  sprint_reescribir_idea     -> f"{cliente}__cp{cp_id}__reescribir"                   (max_intentos=1, pagada)
 
 `sprint_qa_pendientes` es la periódica (worker.PERIODICAS, cada 300 s) que
 encola sprint_qa_pieza para toda pieza lista sin qa, y avisa (notificaciones)
@@ -136,6 +137,37 @@ def encolar_ideas(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza
     return trabajos.encolar(job_id_ideas(cliente, campana_id), "sprint_proponer_ideas",
                             {"cliente": cliente, "campana_id": campana_id, "n_videos": n_videos, "n_imagenes": n_imagenes,
                              "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40, max_intentos=2)
+
+
+def job_id_reescribir(cliente, cp_id):
+    return f"{cliente}__cp{cp_id}__reescribir"
+
+
+def encolar_reescribir(cliente, cp_id):
+    """«Reescribir la idea con este ángulo» (doctrina, bloque 2): pagada, un
+    clic con precio a la vista, nunca se reintenta sola."""
+    return trabajos.encolar(job_id_reescribir(cliente, cp_id), "sprint_reescribir_idea",
+                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1)
+
+
+@registrar("sprint_reescribir_idea")
+def ejecutar_reescribir_idea(tarea):
+    p = tarea["payload"]
+    cliente, cp_id = p["cliente"], int(p["cp_id"])
+    referencia = f"idea:reescribir:{cp_id}{ref_sufijo(tarea)}"
+    try:
+        ent, sal = ideas.reescribir(cliente, cp_id)
+    except ideas.AnalisisInvalido as e:
+        ent, sal = getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0
+        if ent or sal:
+            gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
+                                    detalle="reescribir idea · respuesta inválida",
+                                    extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+        raise
+    gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
+                            detalle="reescribir idea desde su ángulo",
+                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+    return "Idea reescrita desde su ángulo."
 
 
 @registrar("sprint_proponer_ideas")

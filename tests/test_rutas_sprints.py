@@ -1048,3 +1048,21 @@ def test_gancho_sync_wiring(con_ideas):
         js_content = f.read()
     assert "closest('.sprint-idea')" in js_content, "Falta closest en static/angulo.js"
     assert "input[name=" in js_content and "gancho" in js_content, "Falta input[name=gancho] en static/angulo.js"
+
+
+def test_boton_reescribir_idea_con_su_precio(con_ideas, monkeypatch):
+    """Doctrina, bloque 2 (§3.5)."""
+    from sprints import datos, rutas
+    c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "Reescribir la idea con este ángulo" not in html          # sin ángulo no hay botón
+    datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA})
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "Reescribir la idea con este ángulo (US$ 0,06 aprox.)" in html
+    c.post(f"/cliente/acme/sprints/ideas/{ii}/reescribir")
+    t = con_ideas["encolados"][-1]
+    assert t["tipo"] == "sprint_reescribir_idea" and t["payload"] == {"cliente": "acme", "cp_id": ii}
+    assert t["max_intentos"] == 1 and t["job_id"] == f"acme__cp{ii}__reescribir"
+    monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: job_id == f"acme__cp{ii}__reescribir")
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert f'id="trabajo-acme__cp{ii}__reescribir"' in html

@@ -405,3 +405,26 @@ def test_sugerir_biblioteca_le_pasa_la_consciencia_de_la_persona(base_temporal, 
     tareas.cargar_todas()
     tareas.REGISTRO["referentes_sugerir_ia"]({"id": 2, "payload": {"cliente": "acme", "campana_id": cid}})
     assert "consciente del problema" in visto["persona"]
+
+
+def test_reescribir_idea_registra_el_gasto_real(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (§3.5): pagada, gasto tipo «ideas» con los tokens
+    reales — también cuando la respuesta no sirvió."""
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    tareas.cargar_todas()
+    monkeypatch.setattr(ideas, "reescribir", lambda cliente, cp_id: (1000, 2000))
+    tareas.REGISTRO["sprint_reescribir_idea"]({"id": 7, "payload": {"cliente": "acme", "cp_id": 3}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["tipo"] == "ideas" and g["referencia"] == "idea:reescribir:3:t7" and g["usd"] > 0
+
+    def falla(cliente, cp_id):
+        e = ideas.AnalisisInvalido("Claude no devolvió JSON.")
+        e.tokens_entrada, e.tokens_salida = 400, 50
+        raise e
+    monkeypatch.setattr(ideas, "reescribir", falla)
+    with pytest.raises(ideas.AnalisisInvalido):
+        tareas.REGISTRO["sprint_reescribir_idea"]({"id": 8, "payload": {"cliente": "acme", "cp_id": 3}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["referencia"] == "idea:reescribir:3:t8" and "inválida" in g["detalle"]

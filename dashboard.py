@@ -3951,7 +3951,8 @@ def tab_descargar_csv(cliente):
 NOMBRES_TIPO_GASTO = {
     "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
     "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
-    "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)", "otro": "Otros",
+    "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)",
+    "ideas": "Ideas de sprint (IA)", "pedidos": "Pedidos al cliente (IA)", "otro": "Otros",
 }
 
 

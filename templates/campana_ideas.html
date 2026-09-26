@@ -101,6 +101,14 @@
         {% if i.estado_idea != "aprobada" %}
         <form method="post" action="{{ url_for('sprints.idea_aprobar', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-generar btn-xs">Aprobar</button></form>
         {% endif %}
+        {% if ((i.extra or {}).get('angulo') or {}).get('promesa') %}
+          {% if i.id in reescribiendo %}
+          <div class="barra-progreso" id="trabajo-{{ reescribiendo[i.id] }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+          <script>iniciarPolling({{ reescribiendo[i.id] | tojson }}, {{ ("trabajo-" ~ reescribiendo[i.id]) | tojson }});</script>
+          {% else %}
+          <form method="post" action="{{ url_for('sprints.idea_reescribir', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-xs">Reescribir la idea con este ángulo ({{ precio_reescribir }})</button></form>
+          {% endif %}
+        {% endif %}
         {% if i.estado_idea != "descartada" %}
         <form method="post" action="{{ url_for('sprints.idea_otra', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-xs">Otra idea</button></form>
         <form method="post" action="{{ url_for('sprints.idea_descartar', cliente=cliente, cp_id=i.id) }}" class="inline"><button type="submit" class="btn-xs btn-peligro">Descartar</button></form>

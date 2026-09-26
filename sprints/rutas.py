@@ -819,6 +819,9 @@ def campana_ideas(cliente, sid, cid):
                            sprint=sp, campana=c, ideas=lista, referencias_por_id=refs, conteo=conteo,
                            enfoques=flowplus_prompt_enfoques(), trabajo_ideas={"job_id": job} if trabajos.en_curso(job) else None,
                            nivel_persona=nivel_persona, sof_producto=sof_producto,
+                           precio_reescribir=gastos.estimar("reescribir_idea")["texto"],
+                           reescribiendo={i["id"]: tareas_sprints.job_id_reescribir(cliente, i["id"]) for i in lista
+                                          if trabajos.en_curso(tareas_sprints.job_id_reescribir(cliente, i["id"]))},
                            **_contexto_lote(cliente))
 
 
@@ -912,6 +915,25 @@ def idea_aprobar(cliente, cp_id):
 
 
 MENSAJE_IDEA_CON_PIEZA = "Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión."
+
+
+@bp.post("/ideas/<int:cp_id>/reescribir")
+def idea_reescribir(cliente, cp_id):
+    """«Reescribir la idea con este ángulo» (doctrina, bloque 2, §3.5): encola
+    la tarea pagada; el precio ya está en el botón."""
+    i = _idea_o_404(cliente, cp_id)
+    if not i["sin_sesion"]:
+        flash(MENSAJE_IDEA_CON_PIEZA, "error")
+        return _volver_ideas(i)
+    angulo = (i.get("extra") or {}).get("angulo")
+    if not (isinstance(angulo, dict) and angulo.get("promesa")):
+        flash("Esta idea todavía no tiene un ángulo con promesa.", "error")
+        return _volver_ideas(i)
+    if tareas_sprints.encolar_reescribir(cliente, cp_id):
+        flash("Reescribiendo la idea desde su ángulo…", "ok")
+    else:
+        flash("Ya se está reescribiendo esta idea.", "error")
+    return _volver_ideas(i)
 
 
 @bp.post("/ideas/<int:cp_id>/angulo")

@@ -50,9 +50,16 @@ REFERENCIAS QUE INSPIRAN ESTA CAMPAÑA (id: qué se ve y qué reutilizar):
 EJEMPLOS DEL TIPO DE ESCENA QUE FUNCIONA (inspiración de estilo, no los copies):
 {banco}
 IDEAS QUE YA EXISTEN EN ESTA CAMPAÑA (no las repitas): {existentes}
-IDEAS DESCARTADAS (evita ese camino): {descartadas}
+IDEAS DESCARTADAS (evita ese camino): {descartadas}"""
+PEDIDO_IDEAS = """
 
 Propón {n_videos} ideas de VIDEO y {n_imagenes} ideas de IMAGEN, distintas entre sí, pensadas para esta audiencia y esta temporada, con el producto como protagonista."""
+
+INSTRUCCIONES_REESCRIBIR = """Reescribe UNA idea de la campaña a partir de su ÁNGULO, que ya está decidido y no se cambia: \
+mismo público, misma promesa, mismo mecanismo, mismas pruebas, mismo arranque y el mismo gancho. Ajusta el título, la escena \
+y, si es video, el sonido para que cuenten exactamente ese ángulo con el producto en uso y el resultado a la vista. La escena \
+describe lo que se ve y cómo se mueve la cámara, sin texto en pantalla ni marcas de otros. Nada de lo que no esté en los DATOS.
+Responde SOLO un JSON: {"titulo": "...", "escena": "...", "sonido": "..."} (sonido vacío si la idea es una imagen)."""
 
 FUNNEL_NOMBRE = {"tof": "TOF (arriba: aún no conocen la marca)", "mof": "MOF (medio: comparan soluciones)",
                  "bof": "BOF (abajo: listos para comprar)"}
@@ -221,7 +228,13 @@ def _mercado_texto(ctx):
 
 
 def armar_prompt(ctx, n_videos, n_imagenes):
-    """El mensaje de DATOS. Las instrucciones y la doctrina van en el system."""
+    """El mensaje de DATOS + el pedido de ideas. Las instrucciones y la doctrina van en el system."""
+    return armar_datos(ctx) + PEDIDO_IDEAS.format(n_videos=int(n_videos), n_imagenes=int(n_imagenes))
+
+
+def armar_datos(ctx):
+    """Solo el bloque de DATOS de la campaña (sin el pedido de ideas): lo usa
+    también «Reescribir la idea con este ángulo»."""
     banco = "\n".join(f"- {b['etiqueta']}: {b['texto']}" for b in banco_prompts.listar())
     return DATOS_IDEAS.format(
         marca=ctx.get("marca") or "la marca", persona=_persona_texto(ctx.get("persona")),
@@ -230,8 +243,7 @@ def armar_prompt(ctx, n_videos, n_imagenes):
         temporada=_temporada_texto(ctx.get("temporada")), guia=ctx.get("guia") or "",
         referencias=_referencias_texto(ctx.get("referencias") or []), banco=banco,
         existentes=", ".join(ctx.get("ideas_existentes") or []) or "ninguna",
-        descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna",
-        n_videos=int(n_videos), n_imagenes=int(n_imagenes))
+        descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna")
 
 
 def instrucciones(ctx):
@@ -365,3 +377,44 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
                             "con_faltantes": sum(1 for i in videos + imagenes if i["angulo"]["faltantes"])},
                            campana_id=campana_id)
     return creadas
+
+
+def reescribir(cliente, cp_id):
+    """Doctrina, bloque 2 (§3.5): reescribe título, escena y sonido de una idea
+    desde su ángulo (editado a mano o no). El ángulo y el gancho no se tocan.
+    Devuelve (tokens_entrada, tokens_salida) de lo pagado. Si la respuesta no
+    sirve, la idea queda como estaba y se lanza `AnalisisInvalido` con
+    `tokens_entrada`/`tokens_salida` puestos (lo pagado se registra igual)."""
+    idea = datos.idea(cliente, cp_id)
+    if not idea:
+        raise datos.ErrorDatos("Esa idea no existe.")
+    angulo = (idea.get("extra") or {}).get("angulo")
+    if not (isinstance(angulo, dict) and angulo.get("promesa")):
+        raise datos.ErrorDatos("La idea todavía no tiene un ángulo con promesa.")
+    ctx = contexto_campana(cliente, datos.campana(cliente, idea["campana_id"]))
+    mensaje = (armar_datos(ctx) + "\n\n" + doctrina.angulo_a_texto(angulo)
+               + f"\n\nIDEA ACTUAL ({idea['tipo']}): {idea['titulo']} — {idea['escena']}")
+    crudo, ent, sal = analisis._llamar_contando([{"type": "text", "text": mensaje}], max_tokens=max_tokens_para(1),
+                                                system=doctrina.bloque_system("gancho", "video",
+                                                                              extra=INSTRUCCIONES_REESCRIBIR))
+    try:
+        t = (crudo or "").strip()
+        ini, fin = t.find("{"), t.rfind("}")
+        if ini < 0 or fin <= ini:
+            raise AnalisisInvalido("Claude no devolvió JSON.")
+        try:
+            data = json.loads(t[ini:fin + 1])
+        except ValueError as e:
+            raise AnalisisInvalido(f"JSON inválido: {e}")
+        titulo = str(data.get("titulo") or "").strip()[:200]
+        escena = str(data.get("escena") or "").strip()
+        if not titulo or not escena:
+            raise AnalisisInvalido("Claude no devolvió título y escena.")
+    except AnalisisInvalido as e:
+        e.tokens_entrada, e.tokens_salida = ent, sal
+        raise
+    campos = {"titulo": titulo, "escena": escena}
+    if idea["tipo"] == "video":
+        campos["sonido"] = str(data.get("sonido") or "").strip()
+    datos.actualizar_idea(cliente, cp_id, **campos)
+    return ent, sal

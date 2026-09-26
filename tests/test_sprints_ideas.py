@@ -326,3 +326,39 @@ def test_sin_datos_del_mercado_claude_los_decide(base_temporal, monkeypatch):
     ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
     assert ctx["fijos"] == {"consciencia": None, "sofisticacion": None}
     assert "DATOS DEL MERCADO: no elegidos: decide tú la consciencia y la sofisticación" in ideas.armar_prompt(ctx, 1, 0)
+
+
+def test_reescribir_la_idea_desde_su_angulo(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (§3.5): una llamada con la doctrina de gancho+video;
+    cambia título, escena y sonido; el ángulo y el gancho no se tocan."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    cp = datos.crear_idea("acme", cid, "video", "Vieja", "escena vieja", sonido="viejo", gancho=ANGULO["gancho"],
+                          extra={"angulo": dict(ANGULO, editado_en="t")})
+    vistos = []
+
+    def falso(content, max_tokens=700, system=None):
+        vistos.append({"texto": content[0]["text"], "system": system, "max_tokens": max_tokens})
+        return json.dumps({"titulo": "Nueva", "escena": "La luz del espejo revela el baño renovado.", "sonido": "agua"}), 900, 300
+    monkeypatch.setattr(analisis, "_llamar_contando", falso)
+    assert ideas.reescribir("acme", cp) == (900, 300)
+    idea = datos.idea("acme", cp)
+    assert (idea["titulo"], idea["escena"], idea["sonido"]) == ("Nueva", "La luz del espejo revela el baño renovado.", "agua")
+    assert idea["gancho"] == ANGULO["gancho"] and idea["extra"]["angulo"]["promesa"] == ANGULO["promesa"]
+    assert "ÁNGULO" in vistos[0]["texto"] and "IDEA ACTUAL (video): Vieja" in vistos[0]["texto"]
+    assert "Propón" not in vistos[0]["texto"] and "DOCTRINA DE VENTA" in vistos[0]["system"][0]["text"]
+    assert "Reescribe UNA idea" in vistos[0]["system"][1]["text"] and vistos[0]["max_tokens"] == ideas.max_tokens_para(1)
+
+
+def test_reescribir_con_respuesta_invalida_no_toca_la_idea_y_devuelve_lo_pagado(base_temporal, monkeypatch):
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    cp = datos.crear_idea("acme", cid, "video", "Vieja", "escena vieja", extra={"angulo": ANGULO})
+    monkeypatch.setattr(analisis, "_llamar_contando", lambda content, max_tokens=700, system=None: ("nada", 500, 40))
+    with pytest.raises(ideas.AnalisisInvalido) as e:
+        ideas.reescribir("acme", cp)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (500, 40)
+    assert datos.idea("acme", cp)["titulo"] == "Vieja"
+    sin_angulo = datos.crear_idea("acme", cid, "video", "Sin", "x")
+    with pytest.raises(datos.ErrorDatos):
+        ideas.reescribir("acme", sin_angulo)
