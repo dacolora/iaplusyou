@@ -57,14 +57,16 @@ def test_crear_no_genera_encola_el_director_y_deja_prompt_pendiente(app):
     assert t["max_intentos"] == 2
 
 
-def test_crear_borrador_solo_en_wan_y_logos_como_image_k(app, monkeypatch):
+def test_crear_borrador_solo_en_wan_y_sin_logos_de_fondo(app, monkeypatch):
     import creative_flow as cf
     monkeypatch.setattr(app["dashboard"], "_logos", lambda c: [{"url": "https://x/logo.png"}])
     _crear(app, calidad="borrador")
     _crear(app, calidad="borrador", modelo="kling_o3_pro", duracion_objetivo="8")
     items = sorted(cf.cargar("acme").values(), key=lambda e: e["creado_en"])
     assert items[0]["calidad"] == "borrador" and items[1]["calidad"] == "final"
-    assert [r["token"] for r in items[0]["referencias"]] == ["Image 1", "Image 2"] and items[0]["referencias"][1]["logo"] is True
+    # Incidente 2026-09-26: los logos del proyecto ya no se agregan de fondo.
+    assert [r["token"] for r in items[0]["referencias"]] == ["Image 1"]
+    assert not any(r.get("logo") for r in items[0]["referencias"])
 
 
 def test_guardar_prompt_solo_en_prompt_listo(app):

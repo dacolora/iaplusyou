@@ -250,6 +250,18 @@ def _linea_sonido(sonido, con_sonido, cierre=None):
     return None
 
 
+def tal_cual(texto, referencias, sonido=None):
+    """Prompt de la generación directa de Crear: el texto de la persona sin
+    nada agregado de fondo (ni marca, ni EVITAR, ni reglas, ni logos). Solo
+    cambia sus menciones @Imagen N por el token que ve el modelo y, si ella
+    escribió un sonido, lo agrega como línea SONIDO."""
+    partes = [sustituir_tokens(texto.strip(), referencias)]
+    texto_sonido = (sonido or "").strip().rstrip(".")
+    if texto_sonido:
+        partes.append(f"SONIDO: {texto_sonido}.")
+    return "\n".join(partes)
+
+
 def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=None, logos=None, enfoque=None,
           contexto=None, sonido=None, con_sonido=False, planos=None, cierre_sonido=None):
     """texto: lo que escribió la persona (se respeta íntegro).

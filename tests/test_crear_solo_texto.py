@@ -139,9 +139,8 @@ def test_video_sin_referencias_ni_producto_se_genera_con_el_texto_tal_cual(app):
     assert app["lanzadas"] == [cf_id]
     assert e["enfoque"] == "libre" and e["enfoque_nombre"] == "Solo texto"
     assert e["referencias"] == [] and e["referencias_urls"] == []          # sin logos
-    assert e["prompt_relleno"] == flowplus_prompt.armar(
-        "una mujer camina por la playa", [], enfoque="libre", sonido="olas", con_sonido=True,
-        cierre_sonido=fm.cierre_sonido("wan3"))
+    # Incidente 2026-09-26: el texto tal cual; el sonido solo porque la persona lo escribió.
+    assert e["prompt_relleno"] == "una mujer camina por la playa\nSONIDO: olas."
     assert "Colores pastel" not in e["prompt_relleno"]
 
 

@@ -6132,13 +6132,9 @@ def cf_crear_video(cliente):
     # pieza es de solo texto (enfoque `libre`) — el texto tal cual, sin logos
     # ni marca, por la ruta text-to-video/-image del mismo modelo.
     solo_texto = not referencias
-    # Logos oficiales del proyecto: referencia extra, siempre que haya otra
-    # referencia, para que la marca salga como es y no inventada. Cuentan para
-    # el tope de imágenes del modelo.
-    logos = []
-    for i, l in enumerate([] if solo_texto else _logos(cliente)[:2], start=1):
-        logos.append({"tipo": "imagen", "url": l["url"], "frame_url": l["url"], "etiqueta": f"@Logo {i}", "logo": True})
-    referencias = (referencias + logos)[:15]
+    # Incidente 2026-09-26: nada se agrega de fondo (tampoco los logos del
+    # proyecto): el modelo recibe solo lo que la persona adjuntó y escribió.
+    referencias = referencias[:15]
     if tipo == "video":
         flowplus_prompt.asignar_tokens(referencias, modelo)
         if solo_texto:
@@ -6168,14 +6164,11 @@ def cf_crear_video(cliente):
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=prefs["idioma_prompt"],
         preset_camara=None, plantilla=None,
     )
+    directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else "Tu texto, tal cual")
     if tipo == "imagen":
-        # La imagen no pasa por el director (spec §2.2): el prompt es el de siempre.
-        prompt_final = flowplus_prompt.armar(
-            accion_central, referencias, con_persona=info["con_persona"],
-            guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
-            logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, sonido=None, con_sonido=False,
-        )
-        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **campos)
+        # La imagen no pasa por el director (spec §2.2): va el texto tal cual.
+        prompt_final = flowplus_prompt.tal_cual(accion_central, referencias)
+        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **directo)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
         _consumir_bandeja(cliente, usadas)
@@ -6185,16 +6178,11 @@ def cf_crear_video(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if request.form.get("modo_prompt") != "director":
-        # Generación directa: el prompt determinista con el texto íntegro de la
-        # persona (el mismo que usa el worker como fallback del director).
-        prompt_final = flowplus_prompt.armar(
-            accion_central, referencias, con_persona=info["con_persona"],
-            guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
-            logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
-            sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido,
-            cierre_sonido=flowplus_modelos.cierre_sonido(modelo),
-        )
-        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **campos)
+        # Generación directa: el texto de la persona tal cual; el sonido solo si
+        # ella lo escribió (el check sigue pidiendo el audio nativo del modelo).
+        prompt_final = flowplus_prompt.tal_cual(
+            accion_central, referencias, sonido=(sonido_texto or None) if con_sonido else None)
+        creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **directo)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
         _consumir_bandeja(cliente, usadas)
