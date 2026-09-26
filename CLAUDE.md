@@ -276,8 +276,12 @@ los campos que no son columnas propias) es lo que cuenta «Usado N veces» en la
 
 **Crear (FlowPlus)**. Two paths from the same form (`cf_crear_video`, field
 `modo_prompt`). **Default = direct generation** (the "generación tradicional" clients rely
-on, restored 2026-09-21 after the director had become the only path): the person's text
-goes through the deterministic `flowplus_prompt.armar` and `_lanzar_video_cf` launches
+on, restored 2026-09-21 after the director had become the only path): since the
+2026-09-26 incident the person's text goes to the model AS-IS via `flowplus_prompt.tal_cual`
+(only `@Imagen N` → the model's token in video, plus `SONIDO: <texto>` when she typed a
+sound) — no brand guide, no EVITAR/«Recordatorio», no FIDELIDAD/catalog rules, no project
+logos. Never add anything in the background unless the person asks for it; `armar` is
+still what the director fallback, Sprints and derivations use. `_lanzar_video_cf` launches
 right away with the cost shown on the «Generar video» button. **Optional** «Armar prompt
 con IA (gratis)» (`modo_prompt=director`, for people who don't know what to write):
 sesión en `prompt_pendiente` -> worker

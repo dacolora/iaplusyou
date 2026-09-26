@@ -1055,12 +1055,50 @@ body.con-sidebar > header .header-logout { display: none; }
 .pagina-cabecera { margin-bottom: 1.2rem; }
 .con-sidebar .tab-panel.activo { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.6rem 1.8rem; box-shadow: var(--shadow-soft); }
 
+/* Celular (spec 2026-09-26-movil): la barra lateral sale de la pantalla y
+   entra con «☰ Menú» como panel encima de la página; el contenido usa todo
+   el ancho. En escritorio estos elementos no se ven. */
+.menu-movil, .sidebar-cerrar, .sidebar-fondo, .header-pestana { display: none; }
 @media (max-width: 760px) {
-  .con-sidebar { --sb: var(--sidebar-w-plegada); }
-  .con-sidebar .sidebar-texto { display: none; }
-  .con-sidebar .sidebar-item { justify-content: center; padding: .6rem 0; }
-  .con-sidebar main { padding: 1rem .9rem; }
-  .con-sidebar .tab-panel.activo { padding: 1rem; }
+  .con-sidebar, .con-sidebar.sidebar-plegada { --sb: 0px; }
+  .con-sidebar .sidebar {
+    width: min(84vw, 300px); z-index: 40; padding-top: 3.2rem; overflow-y: auto;
+    transform: translateX(-100%); transition: transform .2s ease;
+  }
+  body.menu-abierto .sidebar { transform: none; box-shadow: var(--shadow); }
+  body.menu-abierto { overflow: hidden; }
+  .sidebar-fondo { position: fixed; inset: 0; z-index: 35; background: rgba(17, 17, 24, .45); }
+  body.menu-abierto .sidebar-fondo { display: block; }
+  .sidebar-cerrar {
+    display: grid; place-items: center; position: absolute; top: .6rem; right: .6rem;
+    width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid var(--border);
+    background: var(--panel); color: var(--text); font-size: 1.3rem; line-height: 1; cursor: pointer;
+  }
+  .sidebar-colapsar { display: none; }
+  /* En el menú siempre con nombres, aunque en escritorio esté plegada. */
+  .con-sidebar.sidebar-plegada .sidebar-texto { display: revert; }
+  .con-sidebar.sidebar-plegada .sidebar-usuario-datos { display: flex; }
+  .con-sidebar.sidebar-plegada .sidebar-item { justify-content: flex-start; padding: .6rem .7rem; }
+  .con-sidebar.sidebar-plegada .sidebar-marca,
+  .con-sidebar.sidebar-plegada .sidebar-usuario { justify-content: flex-start; padding-left: .5rem; padding-right: .5rem; }
+  body.con-sidebar > header { margin-left: 0; padding: .6rem 1rem; gap: .6rem; flex-wrap: nowrap; }
+  body.con-sidebar > header .menu-movil {
+    display: inline-flex; align-items: center; gap: .4rem; flex: none; padding: .45rem .75rem; font-size: .85rem;
+  }
+  body.con-sidebar > header .header-nav { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* «Proyectos /» (admin) ya está dentro del menú: en la barra solo proyecto · pestaña. */
+  body.con-sidebar > header .header-nav > a, body.con-sidebar > header .header-sep { display: none; }
+  body.con-sidebar > header .header-pestana { display: inline; }
+  body.con-sidebar > header .header-pestana:not(:empty)::before { content: "·"; margin: 0 .4rem; color: var(--muted-2); }
+  .con-sidebar main { margin-left: 0; padding: 1rem; }
+  .con-sidebar .tab-panel.activo { padding: 1rem; border-radius: var(--radius); }
+  /* Nada desplaza la página de lado: las tablas anchas se desplazan en su caja,
+     las filas de campos se apilan y las filas de botones se envuelven. */
+  main table { display: block; max-width: 100%; overflow-x: auto; }
+  .fila-campos, .fila-campos-idea { grid-template-columns: minmax(0, 1fr); }
+  .form-subir-personaje { flex-wrap: wrap; }
+  /* Panel de admin (sin barra lateral): las cifras se envuelven. */
+  .hero-stats { flex: 1 1 100%; flex-wrap: wrap; gap: 1rem 1.6rem; }
 }
 
 /* Selector de archivos nativo: en tema claro se ve como un botón de la app. */
@@ -1861,6 +1899,10 @@ input[type="date"], input[type="time"], input[type="datetime-local"], input[type
   color: var(--text); padding: .6rem .75rem; font: inherit; font-size: .87rem;
   transition: border-color .15s, box-shadow .15s;
 }
+/* Dentro de una fila flex un campo con `flex: 1` no se achicaba por debajo de
+   su ancho propio (~20 caracteres) y empujaba el botón vecino fuera de la
+   pantalla en celular («Agregar link» en Crear). */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) { min-width: 0; }
 /* El control nativo mide su ancho sin contar el botón con estilo y recortaba
    «Sin archivos seleccionados» a «Sin archivo…leccionados». */
 input[type="file"] { width: 20rem; max-width: 100%; }
