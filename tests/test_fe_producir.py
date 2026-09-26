@@ -11,6 +11,9 @@ import pytest
 import final_edition
 from final_edition import cortes, guion as guion_mod, musica, render, texto, voz
 
+# El real, antes de que el fixture `entorno` lo reemplace por uno falso.
+_GENERAR_GUION_BASE_REAL = guion_mod.generar_guion_base
+
 pytestmark = pytest.mark.skipif(
     shutil.which(cortes.FFMPEG) is None or shutil.which(cortes.FFPROBE) is None,
     reason="ffmpeg/ffprobe no instalados",
@@ -205,6 +208,44 @@ def test_preparar_guion_guarda_el_angulo_nuevo_y_no_pisa_uno_existente(entorno, 
                         lambda *a, **k: (dict(GUION_BASE, angulo=dict(nuevo, promesa="otra")), 0.01))
     final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
     assert cf.cargar("acme")[entorno["cf_id"]]["angulo"]["promesa"] == "p"      # el ángulo de la sesión manda
+
+
+def test_preparar_guion_no_guarda_un_angulo_vacio_si_claude_no_lo_decidio(entorno, monkeypatch):
+    """Fix 5: si Claude omitió el ángulo en las dos vueltas, `generar_guion_base`
+    devuelve un cascarón lleno de `error: campo_faltante:…`; guardarlo haría
+    que todo guion, variante y caption posterior «escriba desde» la nada."""
+    import json
+    import creative_flow as cf
+
+    class _Bloque:
+        type = "text"
+
+        def __init__(self, texto):
+            self.text = texto
+
+    class _Resp:
+        def __init__(self, texto):
+            self.content = [_Bloque(texto)]
+
+    sin_angulo = json.dumps(GUION_BASE)       # guion válido, sin la clave "angulo"
+    llamadas = []
+
+    class _Messages:
+        def create(self, **kw):
+            llamadas.append(kw)
+            return _Resp(sin_angulo)
+
+    class FakeAnthropic:
+        def __init__(self, api_key=None):
+            self.messages = _Messages()
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "clave-test")
+    monkeypatch.setattr(guion_mod.anthropic, "Anthropic", FakeAnthropic)
+    monkeypatch.setattr(guion_mod, "generar_guion_base", _GENERAR_GUION_BASE_REAL)
+    g, _ = final_edition.preparar_guion("acme", entorno["cf_id"], {"duracion_s": 8})
+    assert len(llamadas) == 2                                     # pidió corregir el ángulo y siguió sin él
+    assert cf.guion_base("acme", entorno["cf_id"]) is not None    # el guion (pagado) sí queda
+    assert "angulo" not in g and "angulo" not in cf.cargar("acme")[entorno["cf_id"]]
 
 
 def test_preparar_guion_lleva_regla_y_precio_de_la_tienda(entorno, monkeypatch):

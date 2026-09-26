@@ -13,6 +13,7 @@ Forma del guion:
 """
 import copy
 import json
+import math
 import os
 
 import anthropic
@@ -103,15 +104,26 @@ _CANALES = {
 }
 
 
+def _roas_texto(canal_optimo):
+    """«ROAS 3.5x», o "" si el ROAS no es un número finito (None, "n/a", un
+    dict…): Triple Whale no siempre lo trae y un valor raro nunca tumba el
+    guion — se omite, igual que cuando falta."""
+    try:
+        roas = float(canal_optimo.get("roas"))
+    except (TypeError, ValueError):
+        return ""
+    return f"ROAS {roas:.1f}x" if math.isfinite(roas) else ""
+
+
 def _nota_canal(canal_optimo):
     """Antes esto era un f-string con llaves dobles y a Claude le llegaba
     literal «{canal_optimo["canal"]}»; además faltaba facebook."""
     if not canal_optimo or canal_optimo.get("canal") not in _CANALES:
         return ""
     duracion_defecto, reglas = _CANALES[canal_optimo["canal"]]
-    roas = canal_optimo.get("roas")
+    roas = _roas_texto(canal_optimo)
     lineas = [f"NOTA: Este video está optimizado para {canal_optimo['canal']}"
-              + (f" (ROAS {float(roas):.1f}x)." if roas is not None else ".")]
+              + (f" ({roas})." if roas else ".")]
     lineas += [f"- {r}" for r in reglas]
     lineas.append(f"- Duración sugerida: {canal_optimo.get('duracion_sugerida_s', duracion_defecto)} segundos.")
     return "\n" + "\n".join(lineas)
@@ -216,9 +228,8 @@ def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_h
         partes.append(_ENFOQUE_GUION[enfoque])
     partes.append(f"Duración objetivo: {duracion_s:g} segundos")
     if canal_optimo:
-        roas = canal_optimo.get("roas")
-        partes.append(f"Canal optimizado: {canal_optimo['canal']}"
-                      + (f" (ROAS {float(roas):.1f}x)" if roas is not None else ""))
+        roas = _roas_texto(canal_optimo)
+        partes.append(f"Canal optimizado: {canal_optimo['canal']}" + (f" ({roas})" if roas else ""))
     if marca and str(marca).strip():
         partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
     if cliente_hint and str(cliente_hint).strip():
@@ -408,8 +419,12 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
     pais_base = _pais_por_idioma(idioma_base)
 
     def ajustar(g):
-        g.setdefault("idioma", idioma_base)
-        g.setdefault("pais", pais_base)
+        # Idioma y país del base los fija el código (como en localizar): el
+        # ejemplo de FORMATO_JSON dice "CO" y, con un base en otro idioma,
+        # Claude puede copiarlo — `producir` prellenaría entonces el destino
+        # CO con un `precio_base` de otra moneda.
+        g["idioma"] = idioma_base
+        g["pais"] = pais_base
         g.setdefault("moneda", None)
         g.setdefault("precio_texto", None)
         return g

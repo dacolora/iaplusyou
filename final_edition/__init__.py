@@ -353,6 +353,12 @@ def _canal_optimo_triple_whale(cliente, cf_id):
 
 # ------------------------------------------------------------------- API ---
 
+def _angulo_con_contenido(angulo):
+    """Un ángulo que vale la pena guardar: dict con promesa y gancho."""
+    return (isinstance(angulo, dict) and bool(str(angulo.get("promesa") or "").strip())
+            and bool(str(angulo.get("gancho") or "").strip()))
+
+
 def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     """Guion base de la sesión (capa 0). Devuelve `(guion_base, costo_usd)` y
     lo deja guardado en el concepto (`creative_flow.guardar_guion_base`).
@@ -411,7 +417,10 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
     # F: el ángulo se guarda AL FINAL — si esto falla, el guion (ya pagado) y
     # su gasto ya quedaron a salvo; una tarea nueva no vuelve a pagar por él.
-    if not angulo_sesion and isinstance(nuevo, dict):
+    # Solo uno con promesa y gancho: si Claude lo omitió en las dos vueltas,
+    # llega un cascarón de «error: campo_faltante:…» y guardarlo haría que
+    # todo guion, variante y caption posterior «escriba desde» la nada.
+    if not angulo_sesion and _angulo_con_contenido(nuevo):
         creative_flow.actualizar(cliente, cf_id, angulo=nuevo)
     return guion_base, round(costo, 4)
 

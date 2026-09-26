@@ -272,6 +272,29 @@ def test_mensaje_generar_no_revienta_si_el_roas_del_canal_optimo_es_none():
     assert "tiktok" in texto and "ROAS" not in texto
 
 
+@pytest.mark.parametrize("roas", ["n/a", "", "sin datos", {"valor": 3}])
+def test_un_roas_no_numerico_se_trata_como_ausente(roas):
+    """Fix 6: Triple Whale puede mandar un ROAS que no es número; ni la nota
+    de canal ni el mensaje revientan: se omite, igual que con None."""
+    from final_edition import guion
+    canal = {"canal": "tiktok", "roas": roas}
+    nota = guion._nota_canal(canal)
+    texto = guion._mensaje_generar(PRODUCTO, None, "producto", 10.0, "", "", canal_optimo=canal)
+    assert "tiktok" in nota and "ROAS" not in nota
+    assert "tiktok" in texto and "ROAS" not in texto
+    assert "ROAS 3.2x" in guion._nota_canal({"canal": "tiktok", "roas": "3.2"})
+
+
+def test_el_guion_base_queda_en_el_idioma_y_pais_base_aunque_claude_diga_otro(monkeypatch):
+    """Fix 3: FORMATO_JSON trae `"pais": "CO"` de ejemplo; con base `en`,
+    Claude puede copiarlo y `producir` prellenaría el destino CO con un
+    `precio_base` en USD. El país (y el idioma) del base los fija el código."""
+    from final_edition import guion
+    _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(idioma="es", pais="CO"), angulo=ANG))])
+    g, _ = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "en", "", "")
+    assert g["pais"] == "US" and g["idioma"] == "en"
+
+
 def test_con_angulo_escribe_desde_el_y_no_lo_pide(monkeypatch):
     import doctrina
     from final_edition import guion
