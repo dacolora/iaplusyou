@@ -350,6 +350,35 @@ def test_reescribir_la_idea_desde_su_angulo(base_temporal, monkeypatch):
     assert "Reescribe UNA idea" in vistos[0]["system"][1]["text"] and vistos[0]["max_tokens"] == ideas.max_tokens_para(1)
 
 
+def test_reescribir_con_angulo_editado_no_contradice_los_fijos_ni_repite_su_propio_titulo(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (revisión final #5): un ángulo editado a mano manda
+    — no debe competir con los «datos del mercado» fijos del producto/persona
+    (podrían decir otra cosa), y la propia idea no debe salir en «ideas que
+    ya existen» (no tiene sentido pedirle a Claude que no se repita a sí
+    misma)."""
+    import tiendas
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    pid = datos.campana("acme", cid)["persona_id"]
+    datos.actualizar_persona("acme", pid, extra={"conciencia": {"nivel": "consciente_del_problema"}})
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    tiendas.anotar_extra("acme", fila, sofisticacion=4)
+    datos.crear_idea("acme", cid, "imagen", "Otra idea viva", "escena x")
+    cp = datos.crear_idea("acme", cid, "video", "Vieja", "escena vieja", sonido="viejo", gancho=ANGULO["gancho"],
+                          extra={"angulo": dict(ANGULO, editado_en="2026-09-26T10:00:00")})
+    vistos = []
+
+    def falso(content, max_tokens=700, system=None):
+        vistos.append(content[0]["text"])
+        return json.dumps({"titulo": "Nueva", "escena": "Escena nueva", "sonido": "agua"}), 900, 300
+    monkeypatch.setattr(analisis, "_llamar_contando", falso)
+    ideas.reescribir("acme", cp)
+    texto = vistos[0]
+    antes_de_idea_actual = texto.split("IDEA ACTUAL")[0]
+    assert "Otra idea viva" in antes_de_idea_actual and "Vieja" not in antes_de_idea_actual
+    assert "elegidos por el cliente, no los cambies" not in texto
+
+
 def test_reescribir_con_respuesta_invalida_no_toca_la_idea_y_devuelve_lo_pagado(base_temporal, monkeypatch):
     from sprints import analisis, datos, ideas
     sid, cid, rid = _ctx(monkeypatch, datos)
@@ -362,6 +391,29 @@ def test_reescribir_con_respuesta_invalida_no_toca_la_idea_y_devuelve_lo_pagado(
     sin_angulo = datos.crear_idea("acme", cid, "video", "Sin", "x")
     with pytest.raises(datos.ErrorDatos):
         ideas.reescribir("acme", sin_angulo)
+
+
+def test_reescribir_no_sobreescribe_si_generar_lote_ya_le_dio_pieza(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (revisión final #3): la ruta solo checa `sin_sesion`
+    al encolar; si «Generar lote» crea la sesión MIENTRAS Claude responde
+    (~40 s después), escribir encima perdería la pieza ya generada. Si al
+    momento de guardar la idea ya tiene sesión, no se escribe — se cuenta lo
+    pagado con `IdeaConPieza`."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    cp = datos.crear_idea("acme", cid, "video", "Vieja", "escena vieja", sonido="viejo", gancho=ANGULO["gancho"],
+                          extra={"angulo": ANGULO})
+
+    def falso(content, max_tokens=700, system=None):
+        # Mientras "Claude" responde, «Generar lote» crea la sesión de Crear.
+        datos.actualizar_idea("acme", cp, cf_id="cf_de_generar_lote")
+        return json.dumps({"titulo": "Nueva", "escena": "Otra escena", "sonido": "agua"}), 900, 300
+    monkeypatch.setattr(analisis, "_llamar_contando", falso)
+    with pytest.raises(ideas.IdeaConPieza) as e:
+        ideas.reescribir("acme", cp)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (900, 300)
+    idea = datos.idea("acme", cp)
+    assert (idea["titulo"], idea["escena"], idea["sonido"]) == ("Vieja", "escena vieja", "viejo")
 
 
 def test_reescribir_sin_sonido_en_json_mantiene_el_sonido_anterior(base_temporal, monkeypatch):

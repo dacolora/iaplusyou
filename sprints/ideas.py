@@ -383,12 +383,22 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     return creadas
 
 
+class IdeaConPieza(AnalisisInvalido):
+    """La idea ya tiene una sesión de Crear (revisión final #3): la ruta solo
+    checa `sin_sesion` al encolar, y «Generar lote» puede crear la sesión
+    mientras Claude responde (~40 s); escribir encima perdería la pieza ya
+    generada. Trae `tokens_entrada`/`tokens_salida`: lo pagado se registra
+    igual."""
+
+
 def reescribir(cliente, cp_id):
     """Doctrina, bloque 2 (§3.5): reescribe título, escena y sonido de una idea
     desde su ángulo (editado a mano o no). El ángulo y el gancho no se tocan.
     Devuelve (tokens_entrada, tokens_salida) de lo pagado. Si la respuesta no
     sirve, la idea queda como estaba y se lanza `AnalisisInvalido` con
-    `tokens_entrada`/`tokens_salida` puestos (lo pagado se registra igual)."""
+    `tokens_entrada`/`tokens_salida` puestos (lo pagado se registra igual).
+    Si para cuando toca guardar la idea ya tiene sesión de Crear (§3.5,
+    revisión final), tampoco se escribe: se lanza `IdeaConPieza`."""
     idea = datos.idea(cliente, cp_id)
     if not idea:
         raise datos.ErrorDatos("Esa idea no existe.")
@@ -396,7 +406,18 @@ def reescribir(cliente, cp_id):
     if not (isinstance(angulo, dict) and angulo.get("promesa")):
         raise datos.ErrorDatos("La idea todavía no tiene un ángulo con promesa.")
     ctx = contexto_campana(cliente, datos.campana(cliente, idea["campana_id"]))
-    mensaje = (armar_datos(ctx) + "\n\n" + doctrina.angulo_a_texto(angulo)
+    # Revisión final #5: para el DATOS de la reescritura, la propia idea no
+    # cuenta como «ya existe» (no tiene sentido pedirle a Claude que no se
+    # repita a sí misma) y, si el ángulo se editó a mano, los «datos del
+    # mercado» fijos del producto/persona se dejan fuera — podrían decir otra
+    # cosa distinta de lo que la persona ya fijó en el ángulo, que es lo que manda.
+    existentes = list(ctx["ideas_existentes"])
+    if idea["titulo"] in existentes:
+        existentes.remove(idea["titulo"])
+    ctx_reescribir = dict(ctx, ideas_existentes=existentes)
+    if angulo.get("editado_en"):
+        ctx_reescribir["fijos"] = None
+    mensaje = (armar_datos(ctx_reescribir) + "\n\n" + doctrina.angulo_a_texto(angulo)
                + f"\n\nIDEA ACTUAL ({idea['tipo']}): {idea['titulo']} — {idea['escena']}")
     crudo, ent, sal = analisis._llamar_contando([{"type": "text", "text": mensaje}], max_tokens=max_tokens_para(1),
                                                 system=doctrina.bloque_system("gancho", "video",
@@ -420,5 +441,12 @@ def reescribir(cliente, cp_id):
     campos = {"titulo": titulo, "escena": escena}
     if idea["tipo"] == "video" and "sonido" in data:
         campos["sonido"] = str(data.get("sonido") or "").strip()
+    # Recién ahora, justo antes de escribir: si «Generar lote» le dio sesión
+    # a la idea mientras Claude respondía, lo escrito aquí se perdería.
+    actual = datos.idea(cliente, cp_id)
+    if actual and not actual["sin_sesion"]:
+        e = IdeaConPieza("La idea ya tiene una pieza generada; no se reescribió.")
+        e.tokens_entrada, e.tokens_salida = ent, sal
+        raise e
     datos.actualizar_idea(cliente, cp_id, **campos)
     return ent, sal

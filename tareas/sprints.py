@@ -159,9 +159,11 @@ def ejecutar_reescribir_idea(tarea):
         ent, sal = ideas.reescribir(cliente, cp_id)
     except ideas.AnalisisInvalido as e:
         ent, sal = getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0
+        detalle = ("reescribir idea · la idea ya tenía pieza" if isinstance(e, ideas.IdeaConPieza)
+                   else "reescribir idea · respuesta inválida")
         if ent or sal:
             gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
-                                    detalle="reescribir idea · respuesta inválida",
+                                    detalle=detalle,
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         raise
     gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
