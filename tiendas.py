@@ -357,13 +357,17 @@ def _archivar_en(con, condiciones, por, ahora):
     cuántas."""
     p = db.producto
     ids = [pid for (pid,) in con.execute(sa.select(p.c.id).where(*condiciones)).all()]
+    n = 0
     for pid in ids:
-        if not _bloquear_producto(con, (p.c.id == pid,)):
+        # Las condiciones se vuelven a mirar con el lock tomado: una fila que
+        # otro archivó entre el SELECT de ids y este punto ya no se toca.
+        if not _bloquear_producto(con, (p.c.id == pid, *condiciones)):
             continue
         extra = dict(con.execute(sa.select(p.c.extra).where(p.c.id == pid)).scalar() or {})
         extra["archivado_por"] = por
         con.execute(p.update().where(p.c.id == pid).values(archivado=True, actualizado_en=ahora, extra=extra))
-    return len(ids)
+        n += 1
+    return n
 
 
 def archivar_faltantes(cliente, fuente, ids_vistos):

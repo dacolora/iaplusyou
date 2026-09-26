@@ -333,3 +333,24 @@ def test_anotar_extra_y_upsert_producto_no_pierden_escrituras_entre_hilos(base_t
 
     extra = tiendas.producto("acme", pid)["extra"]
     assert extra["handle"] == "a2" and extra["pruebas"][0]["texto"] == "t"
+
+
+def test_archivar_faltantes_no_pisa_un_archivado_manual_que_llega_en_medio(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (revisión final): un «Archivar» de la persona que se
+    confirma entre el SELECT de ids de la sync y el lock de esa fila no se
+    reescribe como `archivado_por = "sync"`, y no cuenta como archivado."""
+    import db
+    import tiendas
+    a = tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A", "precio": 1, "extra": {"handle": "a"}})
+    b = tiendas.upsert_producto("acme", "shopify", "b", {"nombre": "B", "precio": 1, "extra": {"handle": "b"}})
+    real = tiendas._bloquear_producto
+
+    def con_archivado_en_medio(con, condiciones):
+        con.execute(db.producto.update().where(db.producto.c.id == a)
+                    .values(archivado=True, extra={"handle": "a", "archivado_por": "manual"}))
+        return real(con, condiciones)
+
+    monkeypatch.setattr(tiendas, "_bloquear_producto", con_archivado_en_medio)
+    assert tiendas.archivar_faltantes("acme", "shopify", set()) == 1
+    assert tiendas.producto("acme", a)["extra"]["archivado_por"] == "manual"
+    assert tiendas.producto("acme", b)["extra"]["archivado_por"] == "sync"
