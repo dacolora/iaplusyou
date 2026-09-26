@@ -313,8 +313,8 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
             _, corregida = pedir(correccion)
             if len(corregida) >= len(lista):     # una corrección que trae menos ideas no reemplaza a la primera
                 lista = corregida
-        except AnalisisInvalido:
-            pass    # lo pagado no se pierde: quedan las ideas de la primera respuesta, con sus errores anotados
+        except Exception:  # noqa: BLE001 — JSON inválido, error de la API o de red: lo pagado no se
+            pass    # pierde, quedan las ideas de la primera respuesta, con sus errores anotados
     for i in lista:
         errores = i.pop("errores_angulo")
         i["angulo"]["faltantes"] = (i["angulo"]["faltantes"] + [f"error: {e}" for e in errores])[:8]

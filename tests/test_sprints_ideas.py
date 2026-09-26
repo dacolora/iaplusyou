@@ -222,3 +222,24 @@ def test_proponer_guarda_con_el_error_anotado_si_la_correccion_tampoco_cumple(ba
     assert len(creadas) == 1 and respuestas == []
     ang = datos.idea("acme", creadas[0])["extra"]["angulo"]
     assert any(f.startswith("error: cifra_no_verificada:47") for f in ang["faltantes"])
+
+
+def test_proponer_guarda_la_primera_respuesta_si_la_correccion_falla_por_algo_ajeno(base_temporal, monkeypatch):
+    """Spec §5.1: si la corrección falla (API caída, red, lo que sea — no solo
+    JSON inválido), lo primero que Claude respondió (ya pagado y válido salvo
+    el ángulo) no se pierde: se guarda con el error anotado en `faltantes`."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    mala = dict(IDEA_V, angulo=dict(ANGULO, sofisticacion=4, mecanismo=None))
+    llamadas = []
+
+    def _llamar_falso(content, max_tokens=700, system=None):
+        llamadas.append(content)
+        if len(llamadas) == 1:
+            return json.dumps({"ideas": [mala]})
+        raise RuntimeError("api caída")
+    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
+    assert len(llamadas) == 2 and len(creadas) == 1
+    ang = datos.idea("acme", creadas[0])["extra"]["angulo"]
+    assert any(f.startswith("error: mecanismo_obligatorio") for f in ang["faltantes"])
