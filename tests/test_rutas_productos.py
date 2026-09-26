@@ -887,3 +887,22 @@ def test_catalogo_muestra_el_selector_de_sofisticacion(app):
     html = c.get("/cliente/acme").data.decode()
     assert "Cuántas promesas parecidas vio ya tu cliente" in html
     assert 'value="4" selected' in html and "Que Claude lo decida" in html
+
+
+def test_pruebas_del_producto_desde_catalogo(app):
+    """Doctrina, bloque 2 (§5.4): agregar y borrar pruebas en la ficha del producto."""
+    c = app["c"]
+    _crear_activo(c)
+    pid = _fila_por_activo("cojin_azul")["id"]
+    r = c.post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "Relleno de 1.200 g", "fuente": "ficha"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#catalogo")
+    prueba = _fila_por_activo("cojin_azul")["extra"]["pruebas"][0]
+    assert prueba["texto"] == "Relleno de 1.200 g"
+    html = c.get("/cliente/acme").data.decode()
+    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
+    assert "Pruebas del producto" in tarjeta and "Relleno de 1.200 g" in tarjeta
+    c.post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "", "fuente": "ficha"})
+    assert any("Escribe la prueba" in m for m in _flashes(c))
+    c.post(f"/cliente/acme/productos/{pid}/pruebas/{prueba['id']}/borrar")
+    assert "pruebas" not in _fila_por_activo("cojin_azul")["extra"]
+    assert c.post("/cliente/acme/productos/9999/pruebas", data={"texto": "x", "fuente": "ficha"}).status_code == 302

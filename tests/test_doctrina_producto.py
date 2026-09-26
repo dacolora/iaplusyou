@@ -1,0 +1,38 @@
+"""Pruebas del producto (doctrina, bloque 2, §5)."""
+import pytest
+
+
+def _fila():
+    import tiendas
+    return tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "Pantufla", "extra": {"handle": "a"}})
+
+
+def test_agregar_listar_y_borrar_pruebas(base_temporal):
+    import tiendas
+    from doctrina import producto as dp
+    pid = _fila()
+    p = dp.agregar_prueba("acme", pid, "  El 95 %   repite la compra ", "comentarios")
+    assert p["texto"] == "El 95 % repite la compra" and p["fuente"] == "comentarios" and len(p["id"]) == 8
+    fila = tiendas.producto("acme", pid)
+    assert [x["texto"] for x in dp.pruebas(fila)] == ["El 95 % repite la compra"]
+    assert fila["extra"]["handle"] == "a"                                  # lo de la tienda no se toca
+    assert dp.pruebas_texto(dp.pruebas(fila)) == "- El 95 % repite la compra (comentario real de un comprador)"
+    assert dp.borrar_prueba("acme", pid, p["id"]) is True
+    assert "pruebas" not in tiendas.producto("acme", pid)["extra"]
+    assert dp.borrar_prueba("acme", 999, "x") is False
+
+
+def test_agregar_prueba_valida_y_tiene_tope(base_temporal):
+    from doctrina import producto as dp
+    pid = _fila()
+    with pytest.raises(dp.ErrorPrueba):
+        dp.agregar_prueba("acme", pid, "   ", "ficha")
+    with pytest.raises(dp.ErrorPrueba):
+        dp.agregar_prueba("acme", pid, "algo", "demostracion")      # eso es del video, no del producto
+    with pytest.raises(dp.ErrorPrueba):
+        dp.agregar_prueba("acme", 999, "algo", "ficha")
+    for n in range(dp.MAX_PRUEBAS_PRODUCTO):
+        dp.agregar_prueba("acme", pid, f"dato {n}", "ficha")
+    with pytest.raises(dp.ErrorPrueba):
+        dp.agregar_prueba("acme", pid, "uno más", "ficha")
+    assert dp.pruebas_texto([]) == ""

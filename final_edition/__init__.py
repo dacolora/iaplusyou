@@ -35,6 +35,7 @@ import catalogo_productos
 import creative_flow
 import db
 import doctrina
+from doctrina import producto as doctrina_producto
 import gastos
 import marca
 import proyectos
@@ -194,7 +195,8 @@ def _producto(cliente, entry, precio):
         return {"nombre": p.get("nombre") or visto, "descripcion": p.get("descripcion") or "",
                 "regla": p.get("regla") or "", "precio": _precio_entero(fila.get("precio")) if usa_tienda else precio,
                 "moneda": fila.get("moneda") if usa_tienda else None, "url_compra": fila.get("url_compra"),
-                "tipo": p.get("tipo"), "sofisticacion": sof if sof in doctrina.SOFISTICACIONES else None}
+                "tipo": p.get("tipo"), "sofisticacion": sof if sof in doctrina.SOFISTICACIONES else None,
+                "pruebas": [{"texto": x["texto"], "fuente": x["fuente"]} for x in doctrina_producto.pruebas(fila)]}
     for r in entry.get("referencias") or []:
         if r.get("categoria") == "producto" and r.get("activo"):
             return {"nombre": r["activo"], "descripcion": "", "regla": r.get("regla") or "", "precio": precio,

@@ -658,3 +658,16 @@ def test_un_angulo_a_medio_llenar_no_manda_en_el_guion(entorno):
     cf.actualizar("acme", entorno["cf_id"], angulo=completo)
     final_edition.preparar_guion("acme", entorno["cf_id"])
     assert entorno["generar"]["angulo"]["gancho"] == "¿Pies fríos?"
+
+
+def test_preparar_guion_lleva_las_pruebas_del_producto(entorno, monkeypatch):
+    """Doctrina, bloque 2 (§5.5)."""
+    import catalogo_productos
+    import tiendas
+    from doctrina import producto as dp
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [
+        {"id": "chancla_rose", "nombre": "Chancla Rose", "descripcion": "Chancla cómoda", "tipo": "calzado", "regla": ""}])
+    pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
+    dp.agregar_prueba("acme", pid, "Suela que dura 3 veranos", "ficha")
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["producto"]["pruebas"] == [{"texto": "Suela que dura 3 veranos", "fuente": "ficha"}]

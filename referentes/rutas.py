@@ -16,6 +16,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 import catalogo_productos
 import creative_flow
 import doctrina
+from doctrina import producto as doctrina_producto
 import flowplus_lanzar
 import gastos
 import marca as marca_mod
@@ -198,7 +199,8 @@ def recrear_adaptar(cliente, rid):
         return jsonify({"error": "Elige un producto primero."}), 400
     # Doctrina, bloque 2: la sofisticación elegida en Catálogo manda en el ángulo.
     fila = tiendas.por_activo(cliente).get(producto.get("id")) or {}
-    producto = dict(producto, sofisticacion=(fila.get("extra") or {}).get("sofisticacion"))
+    producto = dict(producto, sofisticacion=(fila.get("extra") or {}).get("sofisticacion"),
+                    pruebas=doctrina_producto.pruebas(fila))
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
     try:
         resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""),

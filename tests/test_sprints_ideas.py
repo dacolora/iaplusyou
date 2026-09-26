@@ -379,3 +379,24 @@ def test_reescribir_sin_sonido_en_json_mantiene_el_sonido_anterior(base_temporal
     idea = datos.idea("acme", cp)
     assert idea["titulo"] == "Nueva" and idea["escena"] == "Escena nueva"
     assert idea["sonido"] == "olas"  # Se mantiene el anterior
+
+
+def test_las_pruebas_del_producto_van_en_los_datos_y_verifican_cifras(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (§5.5): una cifra que está en una prueba real sí se puede decir."""
+    import tiendas
+    from doctrina import producto as dp
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    dp.agregar_prueba("acme", fila, "El 95 % de quienes lo instalan lo recomiendan", "comentarios")
+    contenidos = []
+    idea = dict(IDEA_V, angulo=dict(ANGULO, promesa="el 95 % lo recomienda"))
+
+    def _llamar_falso(content, max_tokens=700, system=None):
+        contenidos.append(content[0]["text"])
+        return json.dumps({"ideas": [idea]})
+    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
+    assert "Pruebas reales del producto" in contenidos[0] and "El 95 % de quienes lo instalan" in contenidos[0]
+    angulo = datos.idea("acme", creadas[0])["extra"]["angulo"]
+    assert not any("cifra_no_verificada" in f for f in angulo["faltantes"]) and len(contenidos) == 1

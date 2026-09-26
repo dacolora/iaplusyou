@@ -296,3 +296,17 @@ def test_adaptar_respeta_la_sofisticacion_elegida(monkeypatch):
     assert resultado["angulo"]["sofisticacion"] == 1
     recrear.adaptar(_referente(), _familia(), _producto(), "titular viejo")
     assert "<mercado>no elegidos: decide tú la sofisticación</mercado>" in pedido["texto"]
+
+
+def test_adaptar_lleva_las_pruebas_del_producto(monkeypatch):
+    from referentes import recrear
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return (_respuesta(angulo=dict(ANGULO_RECREAR, promesa="el 98 % repite")), 200, 60)
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    producto = dict(_producto(), pruebas=[{"texto": "El 98 % repite la compra", "fuente": "comentarios"}])
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), producto, "titular viejo")
+    assert "<pruebas_producto>- El 98 % repite la compra (comentario real de un comprador)</pruebas_producto>" in pedido["texto"]
+    assert not any("cifra_no_verificada" in f for f in resultado["angulo"]["faltantes"])

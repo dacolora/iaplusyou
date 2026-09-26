@@ -5052,6 +5052,31 @@ def prod_importar_url(cliente):
     return _volver_productos(cliente)
 
 
+@app.route("/cliente/<cliente>/productos/<int:pid>/pruebas", methods=["POST"])
+def prod_prueba_agregar(cliente, pid):
+    """Doctrina, bloque 2 (§5.4): agrega una prueba real al producto."""
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid):
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    try:
+        doctrina_producto.agregar_prueba(cliente, pid, request.form.get("texto"), request.form.get("fuente"))
+        flash("Prueba guardada: Claude ya la puede usar con este producto.", "ok")
+    except doctrina_producto.ErrorPrueba as e:
+        flash(str(e), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pruebas/<prueba_id>/borrar", methods=["POST"])
+def prod_prueba_borrar(cliente, pid, prueba_id):
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid) or not doctrina_producto.borrar_prueba(cliente, pid, prueba_id):
+        flash("No encontré ese producto.", "error")
+    else:
+        flash("Prueba borrada.", "ok")
+    return _volver_productos(cliente)
+
+
 @app.route("/cliente/<cliente>/productos/<int:pid>/marcar", methods=["POST"])
 def prod_marcar(cliente, pid):
     """Banderas del loop: en prueba, prioridad (0–100), URL de compra, precio

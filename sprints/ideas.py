@@ -9,6 +9,7 @@ import json
 import banco_prompts
 import catalogo_productos
 import doctrina
+from doctrina import producto as doctrina_producto
 import flowplus_prompt
 import marca
 import proyectos
@@ -182,6 +183,9 @@ def _producto_texto(ctx):
         texto += f". Precio: {_precio_texto(fila['precio'])} {fila.get('moneda') or ''}".rstrip()
     if fila.get("url_compra"):
         texto += f". Se compra en: {fila['url_compra']}"
+    pruebas_txt = doctrina_producto.pruebas_texto(doctrina_producto.pruebas(fila))
+    if pruebas_txt:
+        texto += f"\nPruebas reales del producto (datos verificados, puedes usarlos tal cual):\n{pruebas_txt}"
     return texto
 
 

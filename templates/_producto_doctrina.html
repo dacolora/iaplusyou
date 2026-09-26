@@ -1,0 +1,27 @@
+{# Doctrina, bloque 2 (§5): pruebas del producto (y, desde la tarea de pedidos,
+   «Lo que Claude necesita»). Va dentro de la ficha de un producto en Catálogo;
+   `comercial` es su fila `producto`. #}
+{% set pruebas_producto = ((comercial.extra or {}).get('pruebas') or []) %}
+<section class="producto-doctrina" id="doctrina-{{ comercial.id }}" style="margin-top:1rem;">
+  <h4 class="fe-titulo">Pruebas del producto</h4>
+  <p class="vacio" style="padding:0;font-size:.76rem;">Hechos reales que Claude puede decir en ideas, guiones y captions de este producto, cifras incluidas.</p>
+  {% if pruebas_producto %}
+  <ul class="producto-pruebas">
+    {% for pr in pruebas_producto %}
+    <li>{{ pr.texto }} <small class="vacio">({{ 'comentario real de un comprador' if pr.fuente == 'comentarios' else 'dato del producto' }})</small>
+      <form method="post" action="{{ url_for('prod_prueba_borrar', cliente=cliente, pid=comercial.id, prueba_id=pr.id) }}" class="inline">
+        <button type="submit" class="btn-xs" title="Borrar esta prueba">✕</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  <form method="post" action="{{ url_for('prod_prueba_agregar', cliente=cliente, pid=comercial.id) }}" class="form-nueva-idea">
+    <textarea name="texto" rows="2" maxlength="400" placeholder="Ej.: «Llevo tres inviernos con ellas y siguen igual de calientitas»" required></textarea>
+    <select name="fuente">
+      <option value="ficha">Es un dato del producto</option>
+      <option value="comentarios">Es un comentario real de un comprador</option>
+    </select>
+    <button type="submit" class="btn-sm">Agregar prueba</button>
+  </form>
+</section>
