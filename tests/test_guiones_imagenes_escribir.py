@@ -56,6 +56,26 @@ def test_empezar_imagenes_exige_armado_y_no_repite(armado):
         datos.empezar_imagenes("acme", otro)
 
 
+def test_refinador_crear_falla_a_medias_deja_listo_con_aviso(armado, monkeypatch):
+    from guiones import datos, imagenes, refinador
+    datos.empezar_imagenes("acme", armado)
+    original = refinador.crear
+    llamadas = []
+
+    def crear_falla(*args, **kwargs):
+        llamadas.append(1)
+        if len(llamadas) == 2:
+            raise RuntimeError("boom")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(refinador, "crear", crear_falla)
+    imagenes.escribir(armado, llamar=fake(RESPUESTA))
+    v = datos.video("acme", armado)
+    assert v["estado_imagenes"] == "listo"
+    assert v["aviso_imagenes"] == ("Los prompts de imágenes quedaron escritos pero no se pudieron pasar todos al "
+                                   "chat. Vuelve a escribirlos en una versión nueva.")
+
+
 def test_sin_imagenes_necesarias_no_llama_a_claude(base_temporal, tmp_path, monkeypatch):
     import proyectos
     from guiones import clips, datos, imagenes

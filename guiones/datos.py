@@ -381,6 +381,12 @@ def fallar_imagenes(video_id, aviso, usd=0.0):
             estado_imagenes="error", aviso_imagenes=aviso, actualizado_en=db.ahora()))
 
 
+def avisar_imagenes(video_id, aviso):
+    v = db.guion_video
+    with db.conectar() as con:
+        con.execute(v.update().where(v.c.id == video_id).values(aviso_imagenes=aviso, actualizado_en=db.ahora()))
+
+
 def guardar_quitadas(cliente, video_id, quitadas):
     try:
         ns = sorted({int(n) for n in quitadas})
