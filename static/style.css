@@ -1844,3 +1844,83 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
   .opcion-tarjetas { grid-template-columns: 1fr; }
   .modal-form-pie .btn-generar { width: 100%; }
 }
+
+/* ============================================================
+   Base visual común (2026-09-25) — spec:
+   docs/superpowers/specs/2026-09-25-base-visual-comun-design.md
+   Va al final a propósito: es la fuente de verdad de campos, botones,
+   encabezado de pestaña y estado vacío, y pisa reglas viejas por orden
+   sin tocarlas una por una.
+   ============================================================ */
+
+/* Campos: todo lo que se escribe o se elige se ve igual (el estilo de
+   arriba solo cubría text/number/password: 42 campos quedaban nativos). */
+input:not([type]), input[type="email"], input[type="url"], input[type="search"], input[type="tel"],
+input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"] {
+  width: 100%; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text); padding: .6rem .75rem; font: inherit; font-size: .87rem;
+  transition: border-color .15s, box-shadow .15s;
+}
+input[type="file"] { width: auto; max-width: 100%; }
+.campo-label { text-transform: none; letter-spacing: 0; font-size: .82rem; color: var(--text); }
+fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: .9rem 1.1rem 1.1rem; margin: 0 0 1rem; min-width: 0; }
+legend { font-family: var(--font-display); font-size: .95rem; font-weight: 600; color: var(--text); padding: 0 .4rem; }
+
+/* Botones: secundario por defecto; las variantes van DESPUÉS con la misma
+   especificidad para ganarle. */
+button:not([class]), .btn, .btn-secondary, .btn-sm, .btn-xs {
+  background: var(--panel); color: var(--text); border: 1px solid var(--border);
+}
+button:not([class]):hover:not(:disabled), .btn:hover:not(:disabled), .btn-secondary:hover:not(:disabled),
+.btn-sm:hover:not(:disabled), .btn-xs:hover:not(:disabled) { border-color: var(--muted-2); }
+a.btn, a.btn-sm, a.btn-xs, a.btn-generar, a.btn-guardar, a.btn-secondary, a.btn-primary {
+  display: inline-flex; align-items: center; text-decoration: none;
+}
+.btn-generar, .btn-aprobar, .btn-primary, .btn.primario {
+  background: var(--accent-grad); color: #fff; border: 1px solid transparent; box-shadow: var(--shadow-soft);
+}
+.btn-generar:hover:not(:disabled), .btn-aprobar:hover:not(:disabled), .btn-primary:hover:not(:disabled),
+.btn.primario:hover:not(:disabled) { filter: brightness(1.08); box-shadow: var(--shadow-glow); border-color: transparent; }
+.btn-guardar { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+.btn-rechazar { background: transparent; color: var(--error); border: 1px solid rgba(196, 63, 90, .35); }
+.btn-rechazar:hover:not(:disabled) { background: rgba(196, 63, 90, .1); border-color: rgba(196, 63, 90, .35); }
+.btn-peligro, .btn-eliminar-producto { background: rgba(196, 63, 90, .1); color: var(--error); border: 1px solid rgba(196, 63, 90, .4); }
+.btn-peligro:hover:not(:disabled), .btn-eliminar-producto:hover:not(:disabled) { background: rgba(196, 63, 90, .2); border-color: rgba(196, 63, 90, .4); }
+
+/* Desplegables: fila clicable con flecha (antes «+ Nuevo sprint» parecía
+   una caja de texto). Los que ya traen .idea-chevron no llevan otra. */
+summary { cursor: pointer; }
+.swap-card-resumen { font-weight: 600; }
+.swap-card-resumen:hover { color: var(--accent); }
+.swap-card-resumen:not(:has(.idea-chevron))::after {
+  content: ""; margin-left: auto; flex: none; width: .45rem; height: .45rem;
+  border-right: 2px solid var(--muted-2); border-bottom: 2px solid var(--muted-2);
+  transform: rotate(-45deg); transition: transform .15s;
+}
+.swap-card[open] > .swap-card-resumen:not(:has(.idea-chevron))::after { transform: rotate(45deg); }
+#nuevo-sprint > summary, #nuevo-estudio > summary { color: var(--accent); }
+
+/* Encabezado de pestaña: título grande, una línea, acciones a la derecha. */
+.panel-cabecera {
+  display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: .8rem 1.5rem;
+  margin: 0 0 1.6rem; padding-bottom: 1.2rem; border-bottom: 1px solid var(--border);
+}
+.panel-cabecera > :first-child { flex: 1 1 24rem; min-width: 0; }
+.panel-cabecera h2 {
+  display: block; margin: 0 0 .35rem; font-size: 1.6rem; font-weight: 700; color: var(--text);
+  text-transform: none; letter-spacing: -0.015em;
+}
+.panel-cabecera h2::before { display: none; }
+.panel-cabecera-desc { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; max-width: 72ch; }
+.panel-cabecera-desc + .panel-cabecera-desc { margin-top: .4rem; }
+.panel-cabecera-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: 0 0 auto; }
+
+/* Estado vacío: un título, una línea y (si aplica) el botón para empezar. */
+.estado-vacio {
+  display: flex; flex-direction: column; align-items: center; gap: .5rem; text-align: center;
+  margin: .5rem 0 1.2rem; padding: 2rem 1.5rem; border: 1px dashed var(--border); border-radius: var(--radius);
+  background: var(--bg);
+}
+.estado-vacio-titulo { margin: 0; font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; color: var(--text); }
+.estado-vacio-texto { margin: 0; max-width: 52ch; color: var(--muted); font-size: .88rem; line-height: 1.5; }
+.estado-vacio .btn-generar, .estado-vacio .btn-sm { margin-top: .5rem; }

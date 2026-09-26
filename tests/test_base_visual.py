@@ -26,3 +26,29 @@ def test_pestanas_escuchan_el_hash_suben_y_abren_detalles(app):
     assert "addEventListener('hashchange'" in html
     assert "window.scrollTo(0, 0)" in html
     assert "[data-abrir-detalle]" in html
+
+
+def _bloque_base():
+    css = open("static/style.css", encoding="utf-8").read()
+    marca = "Base visual común (2026-09-25)"
+    assert marca in css, "falta el bloque de la base visual al final de style.css"
+    return css[css.index(marca):]
+
+
+def test_estilo_base_cubre_todos_los_campos():
+    bloque = _bloque_base()
+    assert "input:not([type])" in bloque
+    for tipo in ("email", "url", "search", "date"):
+        assert f'input[type="{tipo}"]' in bloque
+
+
+def test_boton_principal_con_letra_blanca():
+    bloque = _bloque_base()
+    regla = re.search(r"\.btn-generar, \.btn-aprobar, \.btn-primary[^{]*\{([^}]*)\}", bloque)
+    assert regla and "color: #fff" in regla.group(1)
+
+
+def test_clases_de_encabezado_y_estado_vacio():
+    bloque = _bloque_base()
+    for clase in (".panel-cabecera-desc", ".panel-cabecera-acciones", ".estado-vacio-titulo", ".estado-vacio-texto"):
+        assert clase in bloque
