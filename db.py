@@ -530,7 +530,7 @@ campana = Table("campana", metadata,
     Column("persona_id", Integer, sa.ForeignKey("persona.id"), nullable=False),
     Column("catalogo_id", String(120), nullable=False),                  # carpeta del producto en el catálogo de Crear
     Column("producto_id", Integer, sa.ForeignKey("producto.id")),        # bloque 5, cuando enlace catálogo y tabla
-    Column("temporada_id", Integer, sa.ForeignKey("temporada.id"), nullable=False),
+    Column("temporada_id", Integer, sa.ForeignKey("temporada.id"), nullable=True),     # opcional desde 0020
     Column("n_videos", Integer, nullable=False, default=0),
     Column("n_imagenes", Integer, nullable=False, default=0),
     Column("referencias_objetivo", Integer, default=5),

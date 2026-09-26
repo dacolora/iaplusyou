@@ -412,7 +412,7 @@ def _campanas(con, cliente, sprint_id=None, campana_id=None):
                    t.c.fin.label("temporada_fin"),
                    sa.func.coalesce(conteo.c.total, 0).label("referencias_total"),
                    sa.func.coalesce(conteo.c.listas, 0).label("referencias_listas"))
-         .select_from(c.join(p, p.c.id == c.c.persona_id).join(t, t.c.id == c.c.temporada_id)
+         .select_from(c.join(p, p.c.id == c.c.persona_id).outerjoin(t, t.c.id == c.c.temporada_id)
                       .outerjoin(conteo, conteo.c.campana_id == c.c.id))
          .where(c.c.cliente == cliente))
     if sprint_id is not None:
@@ -488,6 +488,7 @@ def validar_cantidades(n_videos, n_imagenes):
 def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n_videos, n_imagenes,
                     referencias_objetivo=None, funnel="tof"):
     n_videos, n_imagenes = _cantidades(n_videos, n_imagenes)
+    temporada_id = temporada_id or None          # la temporada es opcional (migración 0020)
     catalogo_id = _texto(catalogo_id, 120)
     if not catalogo_id:
         raise ErrorDatos("Elige un producto.")
@@ -505,7 +506,8 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id, n
         c = db.campana
         repetida = con.execute(sa.select(c.c.orden).where(
             c.c.sprint_id == sprint_id, c.c.persona_id == persona_id, c.c.catalogo_id == catalogo_id,
-            c.c.temporada_id == temporada_id)).scalar()
+            # IS y no =: sin temporada (NULL) el UNIQUE de la tabla no choca nunca.
+            c.c.temporada_id.is_not_distinct_from(temporada_id))).scalar()
         if repetida is not None:
             raise CampanaDuplicada(
                 f"Esa combinación de persona, producto y temporada ya existe en la campaña {int(repetida) + 1}.")

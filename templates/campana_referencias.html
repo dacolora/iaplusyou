@@ -10,7 +10,7 @@
     <p class="vacio">
       <span class="sprint-punto" style="background: {{ campana.persona_color or 'var(--accent)' }}"></span> {{ campana.persona_nombre }}
       · {% if producto and producto.representativa_url %}<img class="sprint-mini" src="{{ producto.representativa_url }}" alt="">{% endif %}{{ producto.nombre if producto else campana.catalogo_id }}
-      · {{ campana.temporada_nombre }} · {{ campana.n_videos }} videos · {{ campana.n_imagenes }} imágenes · {{ chip_estado(campana.estado) }}
+      · {{ campana.temporada_nombre or "sin temporada" }} · {{ campana.n_videos }} videos · {{ campana.n_imagenes }} imágenes · {{ chip_estado(campana.estado) }}
     </p>
   </div>
 </div>

@@ -60,7 +60,7 @@
       {% if prod and prod.representativa_url %}<img class="sprint-mini" src="{{ prod.representativa_url }}" alt="">{% endif %}
       <strong>{{ prod.nombre if prod else c.catalogo_id }}</strong>
       <span class="sprint-sep">·</span>
-      <span>{{ c.temporada_nombre }}</span>
+      <span>{{ c.temporada_nombre or "sin temporada" }}</span>
       {{ chip_estado(c.estado) }}
     </header>
     <div class="sprint-campana-cuerpo">
@@ -125,7 +125,7 @@
         <select name="catalogo_id" required>{% for p in productos_sprint %}<option value="{{ p.id }}">{{ p.nombre }}</option>{% endfor %}</select>
       </label>
       <label>Temporada
-        <select name="temporada_id" required>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }})</option>{% endfor %}</select>
+        <select name="temporada_id"><option value="">(ninguna)</option>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }})</option>{% endfor %}</select>
       </label>
       <label>Videos <input type="number" name="n_videos" value="5" min="0"></label>
       <label>Imágenes <input type="number" name="n_imagenes" value="5" min="0"></label>
