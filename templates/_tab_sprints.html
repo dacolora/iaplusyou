@@ -1,18 +1,48 @@
 {% from "_sprint_macros.html" import anillo, chip_estado %}
 {# Pestaña Sprints. Contexto de sprints.rutas.contexto(cliente): sprints_lista,
-   personas_sprint, temporadas_sprint, presets_temporadas, pais_calendario,
-   calendario_fallback, paises_calendario, productos_sprint, destinos_sprint,
-   estimado_sprint, intenciones_sprint, tipos_temporada, trabajo_sugerir, hoy,
-   sprint_recien_creado. #}
+   pais_calendario, presets_temporadas, paises_sprint, idiomas_sprint,
+   inicio_defecto, fin_defecto. Aquí solo se crea el sprint con lo mínimo; las
+   campañas se arman en su tablero (sprint_detalle.html). #}
 <div class="panel-cabecera">
   <div>
     <h2>Sprints</h2>
-    <p class="panel-cabecera-desc">Un sprint planea un mes de contenido como una matriz persona × producto × temporada. Cada celda es una campaña con sus videos e imágenes; nada se genera sin tu aprobación y sin ver el costo antes.</p>
+    <p class="panel-cabecera-desc">Un sprint es el plan de contenido de un mes: pones el mes y el mercado, y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Nada se genera sin tu aprobación y sin ver el costo antes.</p>
   </div>
   <div class="panel-cabecera-acciones">
     <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-sprint">+ Nuevo sprint</button>
   </div>
 </div>
+
+<details class="swap-card sprint-nuevo" id="nuevo-sprint">
+  <summary class="swap-card-resumen">Nuevo sprint</summary>
+  <form method="post" action="{{ url_for('sprints.crear', cliente=cliente) }}" class="sprint-nuevo-form">
+    <label>Nombre
+      <input name="nombre" required maxlength="200" placeholder="Octubre"></label>
+    <label>Inicio
+      <input type="date" name="inicio" required value="{{ inicio_defecto }}"></label>
+    <label>Fin
+      <input type="date" name="fin" required value="{{ fin_defecto }}"></label>
+    <label>País
+      <select name="pais">
+        {% for p in paises_sprint %}<option value="{{ p.codigo }}" {% if p.codigo == pais_calendario %}selected{% endif %}>{{ p.bandera }} {{ p.nombre }}</option>{% endfor %}
+      </select></label>
+    <label>Idioma de los textos
+      <select name="idioma">
+        {% for cod, nombre in idiomas_sprint.items() %}<option value="{{ cod }}" {% if cod == 'es' %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+      </select></label>
+    <label>Momento del mes <small class="vacio">(opcional)</small>
+      <select name="momento" data-momento>
+        <option value="">Ninguno</option>
+        {% for p in presets_temporadas %}<option value="{{ p.clave }}">{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
+        <option value="propio">Otro (escríbelo)…</option>
+      </select></label>
+    <label data-momento-propio hidden>Tu momento
+      <input name="momento_texto" maxlength="120" placeholder="Lanzamiento de la colección"></label>
+    <label class="sprint-nuevo-ancho">Marcas a imitar <small class="vacio">(opcional: una por línea; si tienes el link de su Ad Library, pégalo al lado)</small>
+      <textarea name="marcas" rows="2" placeholder="Crocs&#10;Skechers https://www.facebook.com/ads/library/?view_all_page_id=…"></textarea></label>
+    <div class="sprint-nuevo-ancho"><button type="submit" class="btn-generar">Crear y armar campañas →</button></div>
+  </form>
+</details>
 
 <div class="sprints-lista">
   {% for sp in sprints_lista %}
@@ -26,324 +56,19 @@
   {% else %}
   <div class="estado-vacio">
     <p class="estado-vacio-titulo">Todavía no hay sprints</p>
-    <p class="estado-vacio-texto">Necesitas al menos una persona, un producto en el catálogo y una temporada. Arma el primero con «+ Nuevo sprint».</p>
+    <p class="estado-vacio-texto">Crea el primero con «+ Nuevo sprint»: pones el mes y el mercado, y agregas sus campañas en el tablero.</p>
   </div>
   {% endfor %}
 </div>
 
-<details class="swap-card" id="nuevo-sprint">
-  <summary class="swap-card-resumen">+ Nuevo sprint</summary>
-  {% if not personas_sprint or not productos_sprint %}
-  <p class="tag-estado sprint-aviso">Para armar la matriz hacen falta
-    {% if not personas_sprint %}personas{% endif %}{% if not productos_sprint %} · productos en el catálogo{% endif %}. Créalos primero.</p>
-  {% else %}
-  <form method="post" action="{{ url_for('sprints.crear', cliente=cliente) }}" id="form-sprint"
-        data-estimado-video="{{ estimado_sprint.video }}" data-estimado-imagen="{{ estimado_sprint.imagen }}">
-    <fieldset class="sprint-paso" data-paso="1">
-      <legend>1. Datos del sprint</legend>
-      <div class="fe-opciones">
-        <label>Nombre <input name="nombre" required maxlength="200" placeholder="Sprint octubre"></label>
-        <label>Inicio <input type="date" name="inicio" required></label>
-        <label>Fin <input type="date" name="fin" required></label>
-      </div>
-      <label>Descripción <textarea name="notas" rows="3" placeholder="Qué se va a hacer, contexto, etc."></textarea></label>
-      <div class="fe-destinos checks-plataformas" style="display: none">
-        <span class="campo-label">Destinos (idioma · país)</span>
-        {% for d in destinos_sprint %}
-        <label class="fe-destino"><input type="checkbox" name="destinos" value="{{ d.codigo }}" {% if d.codigo == "es_CO" %}checked{% endif %}> {{ d.bandera }} {{ d.nombre }} <small>({{ d.idioma }})</small></label>
-        {% endfor %}
-      </div>
-      <button type="button" class="btn-generar btn-sm" data-ir="2">Siguiente: la matriz →</button>
-    </fieldset>
-
-    <fieldset class="sprint-paso" data-paso="2" hidden>
-      <legend>2. Campaña(s)</legend>
-      <button type="button" class="btn-generar btn-sm" id="abrir-modal-campana">+ Agregar campaña</button>
-      <div id="campanas-resumen-paso2" style="margin-top: 1rem;"></div>
-    </fieldset>
-
-    <div id="modal-agregar-campana" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-      <div style="background: white; border-radius: 8px; padding: 2rem; max-width: 500px; margin: 2rem auto;">
-        <h3>Agregar campaña</h3>
-        <label style="display: block; margin: 1rem 0;">Persona
-          <select id="modal-persona"><option value="">(elige una persona)</option>{% for p in personas_sprint %}<option value="{{ p.id }}" data-resumen="{{ p.nombre }}, {{ p.edad_rango }}">{{ p.nombre }}</option>{% endfor %}</select>
-          <small id="persona-detalle" style="display: block; color: #666; margin-top: 0.5rem;"></small>
-        </label>
-        <label style="display: block; margin: 1rem 0;">Producto
-          <select id="modal-producto"><option value="">(elige un producto)</option>{% for p in productos_sprint %}{% if p.variantes %}<option value="{{ p.id }}" data-variantes='{{ p.variantes | tojson }}' data-tiene-variantes="1">{{ p.nombre }}</option>{% else %}<option value="{{ p.id }}" data-tiene-variantes="0">{{ p.nombre }}</option>{% endif %}{% endfor %}</select>
-        </label>
-        <label style="display: block; margin: 1rem 0;">Variante (opcional)
-          <select id="modal-variante" disabled><option value="">(ninguna)</option></select>
-        </label>
-        <label style="display: block; margin: 1rem 0;">Temporada (opcional)
-          <select id="modal-temporada"><option value="">(ninguna)</option>{% for t in temporadas_sprint %}<option value="{{ t.id }}">{{ t.nombre }} ({{ t.inicio }} → {{ t.fin }})</option>{% endfor %}</select>
-        </label>
-        <label style="display: block; margin: 1rem 0;">Funnel
-          <select id="modal-funnel">
-            <option value="tof">Top of Funnel (TOF) - Conciencia</option>
-            <option value="mof">Middle of Funnel (MOF) - Consideración</option>
-            <option value="bof">Bottom of Funnel (BOF) - Conversión</option>
-          </select>
-        </label>
-        <label style="display: inline-block; margin: 1rem 1rem 1rem 0; width: 45%;">Videos
-          <input type="number" id="modal-n-videos" value="5" min="0" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-        </label>
-        <label style="display: inline-block; margin: 1rem 0; width: 45%;">Imágenes
-          <input type="number" id="modal-n-imagenes" value="5" min="0" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
-        </label>
-        <div style="margin-top: 1.5rem;">
-          <button type="button" class="btn-sm" id="cerrar-modal-campana" style="margin-right: 0.5rem;">Cancelar</button>
-          <button type="button" class="btn-generar btn-sm" id="confirmar-campana">Agregar</button>
-        </div>
-      </div>
-    </div>
-      <div id="matriz-container" style="display: none;">
-        <div class="sprint-matriz-scroll">
-          <table class="sprint-matriz" id="matriz">
-            <thead><tr><th>Persona</th><th id="matriz-variante-titulo" style="text-align: center; font-weight: normal;">Elige variante arriba</th></tr></thead>
-            <tbody>
-              {% for pe in personas_sprint %}
-              <tr>
-                <th><span class="sprint-punto" style="background: {{ pe.color or 'var(--accent)' }}"></span> {{ pe.nombre }}</th>
-                <td class="sprint-celda" data-persona="{{ pe.id }}" data-persona-nombre="{{ pe.nombre }}">
-                  <button type="button" class="sprint-celda-btn">+</button>
-                  <div class="sprint-celda-campos" hidden>
-                    <label>Videos <input type="number" min="0" value="5" class="mini-input celda-videos"></label>
-                    <label>Imágenes <input type="number" min="0" value="5" class="mini-input celda-imagenes"></label>
-                  </div>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <p class="sprint-totales" id="matriz-totales">0 campañas · 0 videos · 0 imágenes · costo estimado USD 0,00</p>
-      </div>
-      <small class="vacio">Estimado con {{ estimado_sprint.modelo_video }} ({{ estimado_sprint.duracion_s }} s por video) y {{ estimado_sprint.modelo_imagen }}. Se confirma antes de generar; hoy no se gasta nada.</small>
-      <div class="acciones">
-        <button type="button" class="btn-sm" data-ir="1">← Atrás</button>
-        <button type="button" class="btn-generar btn-sm" data-ir="3">Siguiente: resumen →</button>
-      </div>
-    </fieldset>
-
-    <fieldset class="sprint-paso" data-paso="3" hidden>
-      <legend>3. Resumen</legend>
-      <ul id="resumen-campanas"></ul>
-      <input type="hidden" name="campanas_json" id="campanas-json">
-      <div class="acciones">
-        <button type="button" class="btn-sm" data-ir="2">← Atrás</button>
-        <button type="submit" class="btn-generar btn-sm">Crear sprint</button>
-      </div>
-    </fieldset>
-  </form>
-  {% endif %}
-</details>
-
 <script>
-  var form = document.getElementById('form-sprint');
-  if (form) {
-    var campanas = {};
-    var selPersona = document.getElementById('matriz-persona');
-    var selProducto = document.getElementById('matriz-producto');
-    var selVariante = document.getElementById('matriz-variante');
-    var selTemporada = document.getElementById('matriz-temporada');
-    var selFunnel = document.getElementById('matriz-funnel');
-    var agregarBtn = document.getElementById('agregar-campana-btn');
-    var resumenDiv = document.getElementById('campanas-resumen-paso2');
-    var campanasJsonInput = document.getElementById('campanas-json');
-
-    function actualizarVariantes() {
-      var opt = selProducto.options[selProducto.selectedIndex];
-      var variantes = opt && opt.dataset.variantes ? JSON.parse(opt.dataset.variantes) : {};
-      selVariante.innerHTML = '<option value="">(elige una variante)</option>';
-      Object.keys(variantes).sort().forEach(function (k) {
-        var o = document.createElement('option');
-        o.value = selProducto.value + '/' + k;
-        o.textContent = variantes[k].nombre;
-        selVariante.appendChild(o);
-      });
-      selVariante.disabled = !Object.keys(variantes).length;
-      if (!selVariante.disabled) selVariante.value = '';
-    }
-
-    function mostrarCampanas() {
-      resumenDiv.innerHTML = '';
-      Object.keys(campanas).forEach(function (k) {
-        var c = campanas[k];
-        var div = document.createElement('div');
-        div.style.cssText = 'padding: 0.5rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px;';
-        div.innerHTML = '<strong>' + c.persona_nombre + ' × ' + c.catalogo_id + '</strong><br>' +
-                        'Videos: <input type="number" value="' + c.n_videos + '" class="mini-input" data-key="' + k + '" data-type="n_videos"> ' +
-                        'Imágenes: <input type="number" value="' + c.n_imagenes + '" class="mini-input" data-key="' + k + '" data-type="n_imagenes"> ' +
-                        '<button class="btn-xs btn-peligro" onclick="delete campanas[' + JSON.stringify(k) + ']; mostrarCampanas(); actualizarJSON();">✕</button>';
-        resumenDiv.appendChild(div);
-      });
-      resumenDiv.querySelectorAll('.mini-input').forEach(function (inp) {
-        inp.addEventListener('change', function () {
-          campanas[inp.dataset.key][inp.dataset.type] = parseInt(inp.value) || 0;
-          actualizarJSON();
-        });
-      });
-      actualizarJSON();
-    }
-
-    function actualizarJSON() {
-      if (campanasJsonInput) {
-        campanasJsonInput.value = JSON.stringify(Object.keys(campanas).map(function (k) {
-          var c = campanas[k];
-          return {persona_id: c.persona_id, catalogo_id: c.catalogo_id, temporada_id: c.temporada_id, n_videos: c.n_videos, n_imagenes: c.n_imagenes, funnel: c.funnel};
-        }));
-      }
-    }
-
-    var modal = document.getElementById('modal-agregar-campana');
-    var abrirModalBtn = document.getElementById('abrir-modal-campana');
-    var cerrarModalBtn = document.getElementById('cerrar-modal-campana');
-    var confirmarBtn = document.getElementById('confirmar-campana');
-    var modalPersona = document.getElementById('modal-persona');
-    var modalProducto = document.getElementById('modal-producto');
-    var modalVariante = document.getElementById('modal-variante');
-    var modalTemporada = document.getElementById('modal-temporada');
-    var modalFunnel = document.getElementById('modal-funnel');
-
-    function actualizarVariantesModal() {
-      var opt = modalProducto.options[modalProducto.selectedIndex];
-      var tieneVariantes = opt && opt.dataset.tieneVariantes === '1';
-      var variantes = tieneVariantes ? JSON.parse(opt.dataset.variantes) : {};
-      modalVariante.innerHTML = '<option value="">(ninguna)</option>';
-      Object.keys(variantes).sort().forEach(function (k) {
-        var o = document.createElement('option');
-        o.value = modalProducto.value + '/' + k;
-        o.textContent = variantes[k].nombre;
-        modalVariante.appendChild(o);
-      });
-      modalVariante.disabled = !tieneVariantes;
-    }
-
-    abrirModalBtn.addEventListener('click', function () {
-      modal.style.display = 'block';
-    });
-
-    cerrarModalBtn.addEventListener('click', function () {
-      modal.style.display = 'none';
-    });
-
-    modal.addEventListener('click', function (e) {
-      if (e.target === modal) modal.style.display = 'none';
-    });
-
-    modalProducto.addEventListener('change', actualizarVariantesModal);
-
-    confirmarBtn.addEventListener('click', function () {
-      if (!modalPersona.value) { alert('Elige una persona'); return; }
-      if (!modalProducto.value) { alert('Elige un producto'); return; }
-      var catalogoId = modalVariante.value || modalProducto.value;
-      var k = modalPersona.value + '|' + catalogoId + '|' + (modalTemporada.value || 'null');
-      var editKey = modal.dataset.editKey;
-
-      if (!editKey && campanas[k]) { alert('Ya existe esa campaña'); return; }
-      if (editKey && editKey !== k && campanas[k]) { alert('Ya existe esa campaña'); return; }
-
-      if (editKey) delete campanas[editKey];
-
-      var personaNombre = modalPersona.options[modalPersona.selectedIndex].textContent;
-      var nVideos = parseInt(document.getElementById('modal-n-videos').value) || 5;
-      var nImagenes = parseInt(document.getElementById('modal-n-imagenes').value) || 5;
-      campanas[k] = {
-        persona_id: parseInt(modalPersona.value),
-        catalogo_id: catalogoId,
-        temporada_id: modalTemporada.value ? parseInt(modalTemporada.value) : null,
-        n_videos: nVideos,
-        n_imagenes: nImagenes,
-        funnel: modalFunnel.value,
-        persona_nombre: personaNombre
-      };
-      mostrarCampanas2();
-      modal.style.display = 'none';
-      delete modal.dataset.editKey;
-      modalPersona.value = '';
-      modalProducto.value = '';
-      modalVariante.value = '';
-      modalTemporada.value = '';
-      document.getElementById('modal-n-videos').value = 5;
-      document.getElementById('modal-n-imagenes').value = 5;
-      actualizarVariantesModal();
-    });
-
-    function mostrarCampanas2() {
-      resumenDiv.innerHTML = '';
-      Object.keys(campanas).forEach(function (k) {
-        var c = campanas[k];
-        var div = document.createElement('div');
-        div.style.cssText = 'padding: 0.75rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px;';
-        var labels = document.createElement('div');
-        labels.innerHTML = '<strong>' + c.persona_nombre + ' × ' + c.catalogo_id + '</strong><br>' +
-                          '<label style="display: inline-block; margin-right: 1rem; margin-top: 0.5rem;">Videos: <input type="number" value="' + c.n_videos + '" class="mini-input" data-key="' + k + '" data-type="n_videos" style="width: 50px;"></label>' +
-                          '<label style="display: inline-block; margin-right: 1rem;">Imágenes: <input type="number" value="' + c.n_imagenes + '" class="mini-input" data-key="' + k + '" data-type="n_imagenes" style="width: 50px;"></label>';
-        div.appendChild(labels);
-
-        var btnEdit = document.createElement('button');
-        btnEdit.className = 'btn-xs';
-        btnEdit.textContent = 'Editar';
-        btnEdit.style.marginRight = '0.5rem';
-        btnEdit.style.marginTop = '0.5rem';
-        btnEdit.addEventListener('click', function () {
-          modalPersona.value = c.persona_id;
-          modalProducto.value = c.catalogo_id.split('/')[0];
-          actualizarVariantesModal();
-          if (c.catalogo_id.includes('/')) {
-            modalVariante.value = c.catalogo_id;
-          }
-          modalTemporada.value = c.temporada_id || '';
-          modalFunnel.value = c.funnel;
-          document.getElementById('modal-n-videos').value = c.n_videos;
-          document.getElementById('modal-n-imagenes').value = c.n_imagenes;
-          modal.dataset.editKey = k;
-          modal.style.display = 'block';
-        });
-        div.appendChild(btnEdit);
-
-        var btnDel = document.createElement('button');
-        btnDel.className = 'btn-xs btn-peligro';
-        btnDel.textContent = '✕';
-        btnDel.addEventListener('click', function () {
-          delete campanas[k];
-          mostrarCampanas2();
-        });
-        div.appendChild(btnDel);
-        resumenDiv.appendChild(div);
-      });
-      resumenDiv.querySelectorAll('.mini-input').forEach(function (inp) {
-        inp.addEventListener('change', function () {
-          campanas[inp.dataset.key][inp.dataset.type] = Math.max(0, parseInt(inp.value) || 0);
-          actualizarJSON();
-        });
-      });
-      actualizarJSON();
-    }
-
-    form.querySelectorAll('[data-ir]').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var destino = b.dataset.ir;
-        // Validar Paso 1 antes de ir a Paso 2
-        if (destino === '2') {
-          var nombre = (form.querySelector('input[name="nombre"]') || {}).value || '';
-          var inicio = (form.querySelector('input[name="inicio"]') || {}).value || '';
-          var fin = (form.querySelector('input[name="fin"]') || {}).value || '';
-          if (!nombre.trim()) { alert('El nombre del sprint es requerido'); return; }
-          if (!inicio) { alert('La fecha de inicio es requerida'); return; }
-          if (!fin) { alert('La fecha de fin es requerida'); return; }
-        }
-        // Validar Paso 2 antes de ir a Paso 3
-        if (destino === '3' && !Object.keys(campanas).length) { alert('Agrega al menos una campaña'); return; }
-        form.querySelectorAll('.sprint-paso').forEach(function (p) {
-          p.hidden = (p.dataset.paso !== destino);
-        });
-      });
-    });
-
-    // Reemplazar mostrarCampanas original
-    window.mostrarCampanas = mostrarCampanas2;
-    actualizarVariantesModal();
-  }
+  (function () {
+    // «Otro (escríbelo)…» muestra el campo del momento propio.
+    var sel = document.querySelector('#nuevo-sprint [data-momento]');
+    var propio = document.querySelector('#nuevo-sprint [data-momento-propio]');
+    if (!sel || !propio) return;
+    function mostrar() { propio.hidden = sel.value !== 'propio'; }
+    sel.addEventListener('change', mostrar);
+    mostrar();
+  })();
 </script>

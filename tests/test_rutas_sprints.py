@@ -81,13 +81,9 @@ def test_contexto_trae_lo_que_usa_la_pestana(app):
     from sprints import datos, rutas
     datos.crear_persona("acme", "Premium")
     ctx = rutas.contexto("acme")
-    nombres = [p["nombre"] for p in ctx["personas_sprint"]]
-    assert "Premium" in nombres and ctx["sprints_lista"] == []
-    assert not {"Melissa", "Marijke", "Sophia"} & set(nombres)          # ya no se crean solas (2026-09-26)
-    assert [p["id"] for p in ctx["productos_sprint"]] == ["espejo_led", "division_bano"]
-    assert ctx["pais_calendario"] == "CO" and any(p["clave"] == "navidad" for p in ctx["presets_temporadas"])
-    assert ctx["estimado_sprint"]["video"] > 0 and ctx["estimado_sprint"]["imagen"] > 0
-    assert "es_CO" in [d["codigo"] for d in ctx["destinos_sprint"]] and ctx["trabajo_sugerir"] is None
+    assert ctx["sprints_lista"] == [] and ctx["pais_calendario"] == "CO"
+    assert any(p["clave"] == "navidad" for p in ctx["presets_temporadas"])
+    assert [p["nombre"] for p in datos.personas("acme")] == ["Premium"]      # sin genéricas (2026-09-26)
 
 
 def test_contexto_avisa_cuando_el_pais_no_tiene_calendario_propio(app):
@@ -105,7 +101,7 @@ def test_contexto_avisa_cuando_el_pais_no_tiene_calendario_propio(app):
 
 def test_contexto_fuera_de_una_peticion_no_revienta(app):
     from sprints import rutas
-    assert rutas.contexto("acme")["sprint_recien_creado"] is False
+    assert rutas.contexto("acme")["inicio_defecto"]
 
 
 def test_cliente_sin_permiso_no_entra(app):
@@ -139,33 +135,6 @@ def test_crear_sprint_con_matriz(app):
     assert sp["campanas"][0]["referencias_objetivo"] == 4 and sp["estado"] == "planeando"
 
 
-def test_crear_sprint_limpia_el_borrador_del_asistente_una_sola_vez(app):
-    from sprints import datos
-    pid, tid = _base(datos)
-    campanas = [{"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid, "n_videos": 1, "n_imagenes": 0}]
-    from sprints import rutas
-    c = app["c"]
-    r = c.post("/cliente/acme/sprints/nuevo", data={"nombre": "Octubre", "inicio": "2026-10-01", "fin": "2026-10-31",
-                                                    "campanas_json": json.dumps(campanas)})
-    assert r.status_code == 302 and datos.sprints("acme")
-    with c.session_transaction() as s:
-        assert s.get("sprint_creado") is True
-    assert c.get("/cliente/acme").status_code == 200                # el contexto consume el aviso...
-    with c.session_transaction() as s:
-        assert "sprint_creado" not in s                              # ...una sola vez
-    with app["dashboard"].app.test_request_context():
-        assert rutas.contexto("acme")["sprint_recien_creado"] is False
-
-
-def test_crear_sprint_fallido_no_limpia_el_borrador(app):
-    from sprints import datos
-    pid, tid = _base(datos)
-    c = app["c"]
-    c.post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": "[]"})
-    assert datos.sprints("acme") == []
-    assert "sessionStorage.removeItem(KEY)" not in c.get("/cliente/acme").data.decode()
-
-
 def test_crear_sprint_con_campanas_malformadas_no_crea_nada(app):
     from sprints import datos, rutas
     pid, tid = _base(datos)
@@ -183,8 +152,6 @@ def test_crear_sprint_rechaza_productos_ajenos_y_cantidades_cero(app):
     pid, tid = _base(datos)
     ajeno = [{"persona_id": pid, "catalogo_id": "no_existe", "temporada_id": tid, "n_videos": 1, "n_imagenes": 0}]
     app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": json.dumps(ajeno)})
-    assert datos.sprints("acme") == []
-    app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": "[]"})
     assert datos.sprints("acme") == []
     cero = [{"persona_id": pid, "catalogo_id": "espejo_led", "temporada_id": tid, "n_videos": 0, "n_imagenes": 0}]
     app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "X", "inicio": "2026-10-01", "fin": "2026-10-31", "campanas_json": json.dumps(cero)})
@@ -581,8 +548,7 @@ def test_pestana_sprints_se_renderiza(app):
     assert r.status_code == 200
     html = r.data.decode()
     assert 'id="tab-sprints"' in html and 'data-tab="sprints"' in html
-    assert "Octubre" in html and "Premium" in html and "Verano" in html and "Nuevo sprint" in html
-    assert "campanas_json" in html          # «Sugerir personas» y los presets del calendario salieron de la pestaña en 37ab05e
+    assert "Octubre" in html and "Nuevo sprint" in html and "Crear y armar campañas" in html
 
 
 @pytest.fixture()

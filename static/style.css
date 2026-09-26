@@ -2196,3 +2196,12 @@ img.img-rota { object-fit: contain; background: var(--panel-2); padding: 12%; }
 .config-apartados { margin: 0 0 1.4rem; }
 .config-apartado > h2:first-child { margin-top: .4rem; }
 .llaves-tarjetas-ancha { grid-template-columns: minmax(0, 1fr); }
+
+/* =====================================================================
+   Tablero de Sprints (2026-09-26) — spec
+   docs/superpowers/specs/2026-09-26-sprints-tablero-design.md.
+   Solo variables de :root (el modo oscuro las redefine).
+   ===================================================================== */
+.sprint-nuevo-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: .8rem 1rem; margin-top: .8rem; }
+.sprint-nuevo-ancho { grid-column: 1 / -1; }
+.sprint-nuevo-form label[hidden] { display: none; }

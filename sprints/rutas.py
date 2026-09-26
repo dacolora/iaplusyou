@@ -11,8 +11,7 @@ import json
 import os
 from datetime import date
 
-from flask import (Blueprint, abort, flash, has_request_context, jsonify, redirect, render_template, request,
-                   session, url_for)
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 import catalogo_productos
 import doctrina
@@ -23,13 +22,11 @@ from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
-from sprints import archivos, calendario, datos, entrega, estado, ideas, produccion, progreso, revision as revision_mod
+from sprints import (archivos, calendario, datos, entrega, estado, ideas, produccion, progreso,
+                     revision as revision_mod, tablero)
 from tareas import sprints as tareas_sprints
 
 bp = Blueprint("sprints", __name__, url_prefix="/cliente/<cliente>/sprints")
-
-DURACION_ESTIMADO_S = 8      # duración típica de un video del sprint para el costo en vivo
-N_REFERENCIAS_ESTIMADO = 3   # referencias por imagen para el estimado
 
 
 # ------------------------------------------------------------ helpers ---
@@ -99,49 +96,29 @@ def _productos(cliente):
     return list(productos_dict.values())
 
 
-def _sprint_recien_creado():
-    """True una sola vez, en la primera página después de que `crear` tuvo
-    éxito: la pestaña lo usa para descartar el borrador del asistente guardado
-    en sessionStorage. Fuera de una petición (pruebas, scripts) es False."""
-    if not has_request_context():
-        return False
-    return bool(session.pop("sprint_creado", False))
+def _paises():
+    return [{"codigo": codigo, "nombre": p["nombre"], "bandera": p["bandera"], "idioma": p["idioma"]}
+            for codigo, p in fe_tipos.PAISES.items()]
 
 
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
-    prefs = proyectos.preferencias_flowplus(cliente)
-    modelo_video, modelo_imagen = prefs["modelo_video"], prefs["modelo_imagen"]
     lista = []
     for sp in datos.sprints(cliente):
         sp["progreso"] = progreso.progreso_sprint(sp["campanas"])
         lista.append(sp)
     pais = proyectos.pais(cliente)
+    inicio, fin = tablero.mes_siguiente(date.today())
     return {
         "sprints_lista": lista,
-        "personas_sprint": datos.personas(cliente),
-        "temporadas_sprint": datos.temporadas(cliente),
-        "presets_temporadas": calendario.presets(pais),
         "pais_calendario": pais,
+        "presets_temporadas": calendario.presets(pais, int(inicio[:4])),
         "calendario_fallback": not calendario.tiene_calendario(pais),
-        "paises_calendario": proyectos.PAISES_CALENDARIO,
-        "productos_sprint": _productos(cliente),
-        "destinos_sprint": [{"codigo": f"{p['idioma']}_{codigo}", "nombre": p["nombre"], "bandera": p["bandera"],
-                             "idioma": p["idioma"]} for codigo, p in fe_tipos.PAISES.items()],
-        "estimado_sprint": {
-            "video": float((flowplus_modelos.estimate_video(modelo_video, DURACION_ESTIMADO_S) or {}).get("usd") or 0.0),
-            "imagen": float((flowplus_modelos.estimate_imagen(modelo_imagen, N_REFERENCIAS_ESTIMADO) or {}).get("usd") or 0.0),
-            "modelo_video": flowplus_modelos.VIDEO[modelo_video]["nombre"],
-            "modelo_imagen": flowplus_modelos.IMAGEN[modelo_imagen]["nombre"],
-            "duracion_s": DURACION_ESTIMADO_S,
-        },
-        "intenciones_sprint": datos.INTENCIONES_NOMBRE,
-        "tipos_temporada": datos.TIPOS_TEMPORADA,
-        "funnels_sprint": datos.FUNNELS_NOMBRE,
-        "trabajo_sugerir": ({"job_id": tareas_sprints.job_id_sugerir(cliente)}
-                            if trabajos.en_curso(tareas_sprints.job_id_sugerir(cliente)) else None),
+        "paises_sprint": _paises(),
+        "idiomas_sprint": datos.IDIOMAS_NOMBRE,
+        "inicio_defecto": inicio,
+        "fin_defecto": fin,
         "hoy": date.today().isoformat(),
-        "sprint_recien_creado": _sprint_recien_creado(),
     }
 
 
@@ -272,6 +249,25 @@ def _campana_o_404(cliente, sid, cid):
     return c
 
 
+def _momento_desde(cliente, valor, pais, inicio):
+    """Valor del selector «Momento del mes» -> lo que guarda `datos`: "" es
+    ninguno, "propio:<texto>" es uno escrito a mano y cualquier otra cosa es
+    la clave de un preset del calendario del país (año del inicio del sprint)."""
+    valor = (valor or "").strip() if isinstance(valor, str) else ""
+    if not valor:
+        return None
+    if valor.startswith("propio:"):
+        return valor[len("propio:"):]
+    try:
+        anio = int(str(inicio)[:4])
+    except ValueError:
+        anio = date.today().year
+    p = next((x for x in calendario.presets(pais or proyectos.pais(cliente), anio) if x["clave"] == valor), None)
+    if not p:
+        raise datos.ErrorDatos("Ese momento del calendario no existe.")
+    return {k: p[k] for k in ("clave", "nombre", "contexto", "inicio", "fin", "mood_visual")}
+
+
 def _campanas_desde_form():
     """El asistente manda las campañas como JSON en `campanas_json`:
     [{persona_id, catalogo_id, temporada_id, n_videos, n_imagenes, funnel}]. El
@@ -329,28 +325,32 @@ def _validar_campanas(cliente, lista):
 
 @bp.post("/nuevo")
 def crear(cliente):
+    """Formulario corto de la pestaña: el sprint se arma después en su tablero.
+    `campanas_json` sigue aceptándose (scripts y pruebas) pero ya no es obligatorio."""
     try:
         campanas = _validar_campanas(cliente, _campanas_desde_form())
-        if not campanas:
-            raise datos.ErrorDatos("Un sprint necesita al menos una campaña.")
-        sid = datos.crear_sprint(cliente, request.form.get("nombre"), request.form.get("inicio"),
-                                 request.form.get("fin"), destinos=[d for d in request.form.getlist("destinos") if d],
+        pais = request.form.get("pais") or proyectos.pais(cliente)
+        inicio = request.form.get("inicio")
+        momento = request.form.get("momento") or ""
+        if momento == "propio":
+            momento = "propio:" + (request.form.get("momento_texto") or "")
+        sid = datos.crear_sprint(cliente, request.form.get("nombre"), inicio, request.form.get("fin"),
+                                 destinos=[d for d in request.form.getlist("destinos") if d],
                                  referencias_objetivo_defecto=request.form.get("referencias_objetivo") or 5,
-                                 notas=request.form.get("notas"))
+                                 notas=request.form.get("notas"), pais=pais,
+                                 idioma=request.form.get("idioma") or "es", marcas=request.form.get("marcas") or "",
+                                 momento=_momento_desde(cliente, momento, pais, inicio))
         try:
-            primera_cid = None
             for c in campanas:
-                cid = datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
+                datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
                                       c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"], funnel=c["funnel"])
-                if primera_cid is None:
-                    primera_cid = cid
         except datos.ErrorDatos:
             datos.archivar_sprint(cliente, sid)
             raise
         estado.recalcular(cliente, sid)
-        session["sprint_creado"] = True     # la pestaña descarta el borrador del asistente al volver (contexto)
-        flash(f"Sprint creado con {len(campanas)} campaña(s). Ahora sube referencias a cada campaña.", "ok")
-        return _volver(cliente, sid, primera_cid)
+        flash(f"Sprint creado con {len(campanas)} campaña(s)." if campanas
+              else "Sprint creado. Ahora arma sus campañas con «+ Campaña».", "ok")
+        return _volver(cliente, sid)
     except datos.ErrorDatos as e:
         flash(str(e), "error")
         return _volver(cliente)
