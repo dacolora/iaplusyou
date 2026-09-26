@@ -1,8 +1,11 @@
 {% from "_sprint_macros.html" import anillo, chip_estado %}
 {# Pestaña Sprints. Contexto de sprints.rutas.contexto(cliente): sprints_lista,
-   pais_calendario, presets_temporadas, paises_sprint, idiomas_sprint,
-   inicio_defecto, fin_defecto. Aquí solo se crea el sprint con lo mínimo; las
-   campañas se arman en su tablero (sprint_detalle.html). #}
+   pais_calendario, presets_temporadas, presets_por_pais, paises_sprint,
+   idiomas_sprint, inicio_defecto, fin_defecto. Aquí solo se crea el sprint con
+   lo mínimo; las campañas se arman en su tablero (sprint_detalle.html).
+   `presets_por_pais` trae los presets de TODOS los países (no solo el
+   default) para que el select de «Momento del mes» pueda mostrar los del
+   país que la persona elija sin volver a pedirle nada al servidor. #}
 <div class="panel-cabecera">
   <div>
     <h2>Sprints</h2>
@@ -33,7 +36,7 @@
     <label>Momento del mes <small class="vacio">(opcional)</small>
       <select name="momento" data-momento>
         <option value="">Ninguno</option>
-        {% for p in presets_temporadas %}<option value="{{ p.clave }}">{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
+        {% for codigo, presets in presets_por_pais.items() %}{% for p in presets %}<option value="{{ p.clave }}" data-pais="{{ codigo }}" {% if codigo != pais_calendario %}hidden disabled{% endif %}>{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}{% endfor %}
         <option value="propio">Otro (escríbelo)…</option>
       </select></label>
     <label data-momento-propio hidden>Tu momento
@@ -66,9 +69,31 @@
     // «Otro (escríbelo)…» muestra el campo del momento propio.
     var sel = document.querySelector('#nuevo-sprint [data-momento]');
     var propio = document.querySelector('#nuevo-sprint [data-momento-propio]');
+    var selPais = document.querySelector('#nuevo-sprint select[name="pais"]');
     if (!sel || !propio) return;
     function mostrar() { propio.hidden = sel.value !== 'propio'; }
     sel.addEventListener('change', mostrar);
     mostrar();
+
+    // El país elegido decide qué presets del calendario se ofrecen: cada
+    // <option> con data-pais solo se ve/habilita si coincide con el país
+    // actual («Ninguno» y «Otro» no tienen data-pais y siempre se ven). Si el
+    // momento ya elegido pertenecía a otro país, se limpia la selección.
+    if (selPais) {
+      function actualizarMomentoPorPais() {
+        var pais = selPais.value;
+        var actual = sel.options[sel.selectedIndex];
+        var actualQuedaOculta = actual && actual.dataset.pais && actual.dataset.pais !== pais;
+        Array.prototype.forEach.call(sel.options, function (opt) {
+          if (!opt.dataset.pais) return;
+          var visible = opt.dataset.pais === pais;
+          opt.hidden = !visible;
+          opt.disabled = !visible;
+        });
+        if (actualQuedaOculta) sel.value = '';
+        mostrar();
+      }
+      selPais.addEventListener('change', actualizarMomentoPorPais);
+    }
   })();
 </script>

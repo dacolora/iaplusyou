@@ -1334,19 +1334,6 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .estado-sprint-generando { border-color: var(--warn); }
 .estado-sprint-revision { border-color: var(--accent-2); }
 .estado-sprint-completado, .estado-sprint-completada { border-color: var(--ok); color: var(--ok); }
-.sprint-paso { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .8rem 1rem; margin: .6rem 0; }
-.sprint-paso legend { font-weight: 700; padding: 0 .4rem; }
-.sprint-matriz-scroll { overflow-x: auto; }
-.sprint-matriz { border-collapse: collapse; min-width: 100%; }
-.sprint-matriz th, .sprint-matriz td { border: 1px solid var(--border); padding: .4rem .5rem; text-align: center; vertical-align: middle; }
-.sprint-matriz tbody th { text-align: left; white-space: nowrap; }
-.sprint-celda-btn { width: 2rem; height: 2rem; border-radius: 50%; border: 1px dashed var(--muted-2); background: transparent; color: var(--text); cursor: pointer; }
-.sprint-celda.activa { background: rgba(77, 141, 255, .12); }
-.sprint-celda.activa .sprint-celda-btn { border-style: solid; border-color: var(--accent); background: var(--accent); color: #fff; }
-.sprint-celda.en-otra { background: rgba(255, 255, 255, .03); color: var(--muted); }
-.sprint-celda-campos { display: flex; gap: .4rem; justify-content: center; margin-top: .3rem; }
-.sprint-celda-campos .mini-input { width: 3.2rem; }
-.sprint-totales { font-weight: 700; margin: .6rem 0 .2rem; }
 .sprint-subtitulo { margin-top: 1.6rem; }
 .sprint-punto { display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; vertical-align: middle; margin-right: .3rem; }
 .sprint-mini { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; vertical-align: middle; }

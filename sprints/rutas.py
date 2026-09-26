@@ -109,10 +109,12 @@ def contexto(cliente):
         lista.append(sp)
     pais = proyectos.pais(cliente)
     inicio, fin = tablero.mes_siguiente(date.today())
+    anio = int(inicio[:4])
     return {
         "sprints_lista": lista,
         "pais_calendario": pais,
-        "presets_temporadas": calendario.presets(pais, int(inicio[:4])),
+        "presets_temporadas": calendario.presets(pais, anio),
+        "presets_por_pais": {codigo: calendario.presets(codigo, anio) for codigo in fe_tipos.PAISES},
         "calendario_fallback": not calendario.tiene_calendario(pais),
         "paises_sprint": _paises(),
         "idiomas_sprint": datos.IDIOMAS_NOMBRE,
