@@ -331,11 +331,12 @@ def test_ejecutar_sugerir_biblioteca_guarda_sugerencias(base_temporal, monkeypat
     import referentes.sugerir as referentes_sugerir
     from sprints import datos
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [
-        {"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2},
-    ])
-    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo: (
-        [{"referente_id": 5, "razon": "encaja"}], 100, 20))
+    enfoques = []
+    monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: (
+        enfoques.append(enfoque) or [{"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}], []))
+    textos = []
+    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo, enfoque_texto="": (
+        textos.append((p, t, enfoque_texto)) or ([{"referente_id": 5, "razon": "encaja"}], 100, 20)))
     tareas.cargar_todas()
     tarea = {"id": 1, "payload": {"cliente": "acme", "campana_id": cid}}
     resultado = tareas.REGISTRO["referentes_sugerir_ia"](tarea)
@@ -344,6 +345,8 @@ def test_ejecutar_sugerir_biblioteca_guarda_sugerencias(base_temporal, monkeypat
     assert c["extra"]["sugerencias_ia"] == [{"referente_id": 5, "razon": "encaja"}]
     filas = [f for f in gastos.historial("acme") if f["tipo"] == "sugerir_ia"]
     assert len(filas) == 1 and filas[0]["usd"] > 0
+    assert enfoques[0]["etapa"] == "TOF" and enfoques[0]["idioma"] == "es"
+    assert "idioma de la audiencia: español" in textos[0][2]
 
 
 def test_ejecutar_sugerir_biblioteca_sin_candidatos(base_temporal, monkeypatch):
@@ -351,7 +354,7 @@ def test_ejecutar_sugerir_biblioteca_sin_candidatos(base_temporal, monkeypatch):
     import referentes.sugerir as referentes_sugerir
     from sprints import datos
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [])
+    monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: ([], []))
     tareas.cargar_todas()
     tarea = {"id": 1, "payload": {"cliente": "acme", "campana_id": cid}}
     resultado = tareas.REGISTRO["referentes_sugerir_ia"](tarea)
@@ -369,10 +372,9 @@ def test_ejecutar_sugerir_biblioteca_respuesta_invalida_registra_gasto_y_relanza
     import referentes.sugerir as referentes_sugerir
     from sprints import datos
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [
-        {"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2},
-    ])
-    def rompe(cands, p, pr, t, objetivo):
+    monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: (
+        [{"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}], []))
+    def rompe(cands, p, pr, t, objetivo, enfoque_texto=""):
         e = referentes_sugerir.SugerenciaInvalida("no parsea")
         e.tokens_entrada, e.tokens_salida = 90, 15
         raise e
@@ -394,14 +396,37 @@ def test_sugerir_biblioteca_le_pasa_la_consciencia_de_la_persona(base_temporal, 
     sid, cid, rid = _referencia(datos)
     datos.actualizar_persona("acme", datos.campana("acme", cid)["persona_id"],
                              extra={"conciencia": {"nivel": "consciente_del_problema", "detalle": "x"}})
-    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [
-        {"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}])
+    monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: (
+        [{"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}], []))
     visto = {}
 
-    def falso(cands, persona_texto, producto_texto, temporada_texto, objetivo):
+    def falso(cands, persona_texto, producto_texto, temporada_texto, objetivo, enfoque_texto=""):
         visto["persona"] = persona_texto
         return [], 10, 5
     monkeypatch.setattr(referentes_sugerir, "sugerir_ia", falso)
     tareas.cargar_todas()
     tareas.REGISTRO["referentes_sugerir_ia"]({"id": 2, "payload": {"cliente": "acme", "campana_id": cid}})
     assert "consciente del problema" in visto["persona"]
+
+
+def test_sugerir_biblioteca_usa_el_enfoque_de_la_campana(base_temporal, monkeypatch):
+    import tareas
+    import referentes.sugerir as referentes_sugerir
+    from referentes import datos as rdatos
+    from sprints import datos
+    sid, cid, rid = _referencia(datos)
+    rdatos.familia_asegurar("UGC", "")
+    datos.actualizar_sprint("acme", sid, idioma="en", marcas="Crocs", momento="Hot Sale")
+    datos.actualizar_campana("acme", cid, consciencia="consciente_del_problema", dolor="pies fríos", familias=["UGC"])
+    vistos = {}
+    monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: (
+        vistos.update(enfoque=enfoque) or [{"id": 5, "familia": "UGC"}], []))
+    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo, enfoque_texto="": (
+        vistos.update(persona=p, temporada=t, enfoque_texto=enfoque_texto) or ([], 10, 5)))
+    tareas.cargar_todas()
+    tareas.REGISTRO["referentes_sugerir_ia"]({"id": 1, "payload": {"cliente": "acme", "campana_id": cid}})
+    e = vistos["enfoque"]
+    assert (e["consciencia"], e["familias"], e["idioma"], e["marcas"]) == ("consciente_del_problema", ["UGC"], "en", [{"nombre": "Crocs"}])
+    assert "pies fríos" in vistos["persona"] and "consciente del problema" in vistos["persona"]
+    assert vistos["temporada"] == "Hot Sale"
+    assert "UGC" in vistos["enfoque_texto"] and "Crocs" in vistos["enfoque_texto"] and "inglés" in vistos["enfoque_texto"]

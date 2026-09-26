@@ -223,6 +223,19 @@ def listar(cliente, filtros=None, pagina=1, por_pagina=POR_PAGINA):
     return {"items": items, "total": int(total), "pagina": pagina, "paginas": paginas}
 
 
+def familias_frecuentes(cliente, etapa=None, consciencia=None, limite=6):
+    """Las familias con más anuncios visibles para esa etapa (TOF|MOF|BOF) y
+    consciencia (el inglés de `CONSCIENCIAS`), de más a menos: las «sugeridas
+    para esta etapa» del panel de una campaña de Sprints."""
+    t = db.referente
+    cond = _condiciones(cliente, {"etapa": etapa, "consciencia": consciencia})
+    q = (sa.select(t.c.familia, sa.func.count().label("n"))
+         .where(*cond, t.c.familia.isnot(None), t.c.familia != "")
+         .group_by(t.c.familia).order_by(sa.desc("n"), t.c.familia).limit(max(1, int(limite))))
+    with db.conectar() as con:
+        return [r[0] for r in con.execute(q)]
+
+
 def opciones(cliente):
     t = db.referente
     base = [_visible(t, cliente), t.c.estado_imagen == "ok"]
