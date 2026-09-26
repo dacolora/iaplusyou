@@ -166,6 +166,26 @@ def test_csv_del_mes_de_todos_los_proyectos(admin, base_temporal):
     assert "'=1+1" in lineas[1] and lineas[1].endswith("1,3000")
 
 
+def test_gasto_de_creatv_aparece_aparte_nunca_mezclado_con_proyectos(admin, base_temporal):
+    import gastos
+    from referentes.datos import CLIENTE_CREATV
+    gastos.registrar("acme", "video", 1.0, "v1", creado_en="2026-09-03T11:00:00")
+    gastos.registrar(CLIENTE_CREATV, "otro", 2.5, "copycoders:1", creado_en="2026-09-05T11:00:00")
+    gastos.registrar(CLIENTE_CREATV, "otro", 0.3, "copycoders:2", creado_en="2026-08-05T11:00:00")   # mes anterior
+
+    r = admin.resumen(["acme"], ahora_iso=AHORA)
+
+    assert r["totales"]["generacion_usd"] == 1.0   # _creatv nunca se mezcla con el gasto de proyectos
+    assert r["totales"]["creatv_usd"] == 2.5 and r["totales"]["creatv_cobros"] == 1
+    assert r["totales"]["creatv_por_tipo"] == {"otro": 2.5}
+    assert r["meses"][0]["mes"] == "2026-09" and r["meses"][0]["creatv"] == 2.5 and r["meses"][0]["total"] == 1.0
+    assert r["meses"][1]["mes"] == "2026-08" and r["meses"][1]["creatv"] == 0.3 and r["meses"][1]["total"] == 0.0
+
+    csv_ = admin.csv_mes(["acme"], ahora_iso=AHORA)
+    lineas = csv_.lstrip("﻿").splitlines()
+    assert any(l.startswith(f"{CLIENTE_CREATV};2026-09-05T11:00:00;otro;") for l in lineas)
+
+
 def test_hace_en_espanol(admin):
     assert admin.hace("2026-09-19T09:58:30", AHORA) == "hace 1 min"
     assert admin.hace("2026-09-19T07:00:00", AHORA) == "hace 3 h"

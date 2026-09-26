@@ -49,6 +49,13 @@
       <strong>{{ t.generacion_usd | usd }}</strong>
       <small>{{ t.cobros }} cobro{{ 's' if t.cobros != 1 }} a proveedores</small>
     </div>
+    {% if t.creatv_usd %}
+    <div class="kpi" title="Trabajo interno de Creatv sobre la biblioteca de referentes: importaciones, barridos globales, pruebas — no es de ningún proyecto">
+      <span>Interno (Creatv)</span>
+      <strong>{{ t.creatv_usd | usd }}</strong>
+      <small>{{ t.creatv_cobros }} cobro{{ 's' if t.creatv_cobros != 1 }} · no es de ningún proyecto</small>
+    </div>
+    {% endif %}
     {% if t.pauta %}
     {% for moneda, gasto in t.pauta.items() | sort %}
     <div class="kpi">
@@ -225,13 +232,14 @@
   <div class="admin-scroll">
     <table class="tabla-admin">
       <thead>
-        <tr><th>Mes</th>{% for p in datos.proyectos %}<th>{{ p.nombre }}</th>{% endfor %}<th>Total</th></tr>
+        <tr><th>Mes</th>{% for p in datos.proyectos %}<th>{{ p.nombre }}</th>{% endfor %}<th>Interno (Creatv)</th><th>Total proyectos</th></tr>
       </thead>
       <tbody>
       {% for m in datos.meses %}
       <tr>
         <td>{{ m.mes }}</td>
         {% for p in datos.proyectos %}<td class="num">{{ m.por_proyecto.get(p.id, 0) | usd }}</td>{% endfor %}
+        <td class="num">{{ m.creatv | usd }}</td>
         <td class="num"><strong>{{ m.total | usd }}</strong></td>
       </tr>
       {% endfor %}
