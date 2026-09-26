@@ -5769,6 +5769,16 @@ def _lanzar_video_cf(cliente, cf_id, entry):
     return flowplus_lanzar.lanzar(cliente, cf_id, entry)
 
 
+def _consumir_bandeja(cliente, usadas):
+    """Tras crear en Crear: quita de la bandeja solo lo que se usó (`usadas`,
+    los `ref_ids` que el formulario mostraba). None = formulario sin
+    `bandeja_vista`: toda la bandeja, como antes."""
+    if usadas is None:
+        referencias_flowplus.vaciar(cliente)
+    else:
+        referencias_flowplus.quitar_varios(cliente, usadas)
+
+
 def _job_id_link(cliente):
     return f"{cliente}__flowplus_link"
 
@@ -6068,8 +6078,22 @@ def cf_crear_video(cliente):
 
     # Las referencias vienen de la bandeja (archivos subidos y links ya
     # descargados), en el orden en que se agregaron, con sus etiquetas.
+    bandeja = referencias_flowplus.listar(cliente)
+    usadas = None      # sin `bandeja_vista` (scripts/tests viejos): toda la bandeja, como antes
+    if request.form.get("bandeja_vista"):
+        # Lo que ves es lo que se usa: la bandeja es del proyecto y la comparten
+        # todas sus personas (incidente 2026-09-25: un «solo texto» se llevó las
+        # referencias que otra acababa de cargar). Solo cuentan los `ref_ids`
+        # que el formulario mostraba; si alguno ya no está, no se genera nada.
+        usadas = request.form.getlist("ref_ids")
+        en_bandeja = {r["id"] for r in bandeja}
+        if any(rid not in en_bandeja for rid in usadas):
+            flash("Tu bandeja de referencias cambió (alguien más del proyecto la usó o la vació). "
+                  "Revisa las referencias y vuelve a generar — no se cobró nada.", "error")
+            return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+        bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
-    for r in referencias_flowplus.listar(cliente):
+    for r in bandeja:
         referencias.append({"tipo": r["tipo"], "url": r["url"], "frame_url": r.get("frame_url") or r["url"],
                             "etiqueta": r["etiqueta"], "origen": r.get("origen")})
     n_img = sum(1 for r in referencias if r["tipo"] == "imagen")
@@ -6154,7 +6178,7 @@ def cf_crear_video(cliente):
         creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **campos)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
-        referencias_flowplus.vaciar(cliente)
+        _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.IMAGEN[modelo]["nombre"]
         flash(f"Generando la imagen con {nombre_modelo}{' · ' + aspect_ratio if aspect_ratio else ''}…" if lanzado
               else "Ya se estaba generando eso — espera a que termine.", "ok" if lanzado else "warn")
@@ -6173,7 +6197,7 @@ def cf_crear_video(cliente):
         creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **campos)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
-        referencias_flowplus.vaciar(cliente)
+        _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.VIDEO[modelo]["nombre"]
         if lanzado:
             detalle = f" · {aspect_ratio}" if aspect_ratio else ""
@@ -6186,7 +6210,7 @@ def cf_crear_video(cliente):
 
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", **campos)
     encolado = _encolar_director(cliente, cf_id)
-    referencias_flowplus.vaciar(cliente)
+    _consumir_bandeja(cliente, usadas)
     if encolado:
         flash("Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes.", "ok")
         if aviso_duracion is not None:

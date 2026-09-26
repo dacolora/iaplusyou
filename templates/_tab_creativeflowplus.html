@@ -38,6 +38,8 @@
 </div>
 
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
+  {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
+  <input type="hidden" name="bandeja_vista" value="1">
   <label class="campo-label" style="margin-top:1rem;display:block;">Del catálogo: productos, personajes, entornos <span class="vacio" style="display:inline;padding:0;font-weight:normal;">(opcional)</span></label>
   {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
   {% include "_selector_productos.html" %}
