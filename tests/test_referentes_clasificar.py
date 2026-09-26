@@ -139,6 +139,7 @@ def test_clasificar_da_espacio_para_pensar_y_responder(monkeypatch):
                                               '"dolor": "x", "firma": "y"}'), pedidos)
     clasificar.clasificar(_REFERENTE, [])
     assert 299 * 5 <= pedidos[0]["max_tokens"] <= 16000
+    assert pedidos[0]["max_tokens"] == clasificar.MAX_TOKENS == 4000     # con doctrina, 2000 volvía solo pensamiento
 
 
 def test_validar_acepta_lead_y_descarta_el_raro():

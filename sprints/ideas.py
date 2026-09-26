@@ -222,10 +222,12 @@ def instrucciones(ctx):
 
 
 def max_tokens_para(n_ideas):
-    """Tope de salida según cuántas ideas se piden: cada idea trae ahora su
-    ángulo (~350-400 tokens con el pensamiento de Sonnet 5). Por encima de
-    16 000 el SDK exige streaming."""
-    return min(16000, 1000 + 400 * max(1, int(n_ideas)))
+    """Tope de salida según cuántas ideas se piden: el pensamiento adaptativo de
+    Sonnet 5 consume del mismo presupuesto que el texto, y con la doctrina en
+    el system prompt piensa más — una llamada real con este tope demasiado
+    bajo volvió solo bloques de pensamiento, sin texto. Por encima de 16 000
+    el SDK exige streaming."""
+    return min(16000, 4000 + 1200 * max(1, int(n_ideas)))
 
 
 def _mas_cercana(valor, duraciones):

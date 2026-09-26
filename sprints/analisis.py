@@ -117,7 +117,7 @@ def analizar(referencia, marca=""):
         raise AnalisisInvalido("La referencia no tiene imagen ni fotograma que analizar.")
     content = [{"type": "text", "text": texto}] + imagenes
     try:
-        return _parsear_json(_llamar(content, system=_system()))
+        return _parsear_json(_llamar(content, max_tokens=4000, system=_system()))
     except AnalisisInvalido as e:
         content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
-        return _parsear_json(_llamar(content, system=_system()))
+        return _parsear_json(_llamar(content, max_tokens=4000, system=_system()))

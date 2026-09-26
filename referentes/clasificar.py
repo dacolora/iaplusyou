@@ -57,8 +57,10 @@ def _sin_cierre(texto, etiqueta):
 
 # Tope de salida: Claude Sonnet 5 piensa antes de responder aunque no se le
 # pida, y eso sale del mismo max_tokens. Medido en producción (2026-09-25):
-# una clasificación usó 162 y 299 tokens; el tope viejo (500) iba justo.
-MAX_TOKENS = 2000
+# una clasificación usó 162 y 299 tokens; el tope viejo (500) iba justo. Con
+# la doctrina en el system prompt piensa más — una prueba real con 2000 volvió
+# solo pensamiento, sin texto — así que el tope sube a 4000.
+MAX_TOKENS = 4000
 
 
 def _llamar(content, max_tokens=MAX_TOKENS, system=None):

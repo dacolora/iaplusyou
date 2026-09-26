@@ -68,7 +68,7 @@ def sugerir_personas(cliente, cuantas=3):
     texto = PROMPT_PERSONAS.format(marca=proyectos.nombre_visible(cliente), guia=guia,
                                    productos=lista or "- (catálogo vacío)", cuantas=cuantas,
                                    niveles=", ".join(f'"{n}"' for n in doctrina.CONSCIENCIAS))
-    personas = _parsear(analisis._llamar([{"type": "text", "text": texto}], max_tokens=1500,
+    personas = _parsear(analisis._llamar([{"type": "text", "text": texto}], max_tokens=6000,
                                          system=doctrina.bloque_system("investigar")))[:cuantas]
     for i, p in enumerate(personas):
         p["color"] = COLORES[i % len(COLORES)]

@@ -94,9 +94,9 @@ def test_proponer_crea_ideas_y_reemplaza(base_temporal, monkeypatch):
 
 def test_max_tokens_para_escala_con_la_cantidad_de_ideas():
     from sprints import ideas
-    assert ideas.max_tokens_para(1) == 1400
-    assert ideas.max_tokens_para(35) == 15000
-    assert ideas.max_tokens_para(40) == 16000     # 17000 sin el tope: por encima el SDK exige streaming
+    assert ideas.max_tokens_para(1) == 5200
+    assert ideas.max_tokens_para(2) == 6400
+    assert ideas.max_tokens_para(15) == 16000     # 22000 sin el tope: por encima el SDK exige streaming
 
 
 def test_proponer_sin_faltantes_no_llama(base_temporal, monkeypatch):
