@@ -11,7 +11,7 @@ import catalogo_productos
 import gastos
 import proyectos
 import trabajos
-from guiones import clips, config, datos, duracion, lectura, plantillas, recorte, refinador
+from guiones import clips, config, datos, duracion, imagenes, lectura, plantillas, recorte, refinador
 from guiones.refinador import Conflicto, ErrorRefinador, NoExiste
 from guiones.rutas import _cuerpo, _entero, _error, _sin_cuerpo, _solo_mismo_origen
 from providers import flowplus_modelos
@@ -48,6 +48,11 @@ def _contexto(cliente, guion_id=None, video_id=None):
         ctx["prompts"] = {f"{(p['extra'] or {}).get('variante')}:{(p['extra'] or {}).get('clip_index')}":
                           {"id": p["id"], "estado": p["estado"]}
                           for p in datos.prompts_de_video(v["id"]) if p["tipo"] == "clip"}
+        ctx["costos"]["imagenes"] = _costo("imagenes")
+        todos = datos.prompts_de_video(v["id"])
+        ctx["prompts_img"] = {(p["extra"] or {}).get("imagen_id"): {"id": p["id"], "estado": p["estado"]}
+                              for p in todos if p["tipo"] == "imagen"}
+        ctx["checklist"] = imagenes.checklist(v["config"], (v["imagenes"] or {}).get("lista", []), todos)
     return ctx
 
 
@@ -250,6 +255,30 @@ def video_documento(cliente, vid):
     md = plantillas.documento_md(v, datos.prompts_de_video(vid))
     return Response(md, mimetype="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": f'attachment; filename="{plantillas.nombre_documento(v)}"'})
+
+
+@bp.post("/videos/<int:vid>/imagenes")
+def video_imagenes(cliente, vid):
+    if _cuerpo() is None:
+        return _sin_cuerpo()
+    try:
+        datos.empezar_imagenes(cliente, vid)
+    except ErrorRefinador as e:
+        return _error(e)
+    trabajos.iniciar(f"guion_imagenes_{vid}", lambda: imagenes.escribir(vid), duracion_estimada=60)
+    return jsonify({"video_id": vid}), 202
+
+
+@bp.get("/videos/<int:vid>/imagenes.md")
+def video_imagenes_md(cliente, vid):
+    v = datos.video(cliente, vid)
+    if v is None:
+        return jsonify({"error": "Esa versión no existe."}), 404
+    if v["estado_imagenes"] != "listo":
+        return jsonify({"error": "Primero escribe los prompts de imágenes."}), 409
+    md = imagenes.documento_md(v, datos.prompts_de_video(vid))
+    return Response(md, mimetype="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{imagenes.nombre_documento(v)}"'})
 
 
 @bp.get("/bloque-global")

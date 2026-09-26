@@ -188,6 +188,27 @@ def test_nueva_version_con_bloque(app, catalogo_vacio):
     assert r.status_code == 201 and r.get_json()["video_id"] != vid
 
 
+def test_imagenes_ruta_y_documento(app, catalogo_vacio):
+    from guiones import datos, imagenes, refinador
+    gid, vid = _video_armado(app)
+    assert app["c"].get(f"{BASE}/videos/{vid}/imagenes.md").status_code == 409
+    assert app["c"].post(f"{BASE}/videos/{vid}/imagenes", json={}).status_code == 202
+    assert app["iniciados"][-1][0] == f"guion_imagenes_{vid}"
+    imagenes.escribir(vid, llamar=fake({"imagenes": [{"id": "img_1", "prompt": "A man."}, {"id": "img_2", "prompt": "A room."}]}))
+    html = app["c"].get(f"{BASE}/panel?guion={gid}&video={vid}").get_data(as_text=True)
+    assert "Qué imagen va en cada clip" in html and "Antes de generar" in html
+    r = app["c"].get(f"{BASE}/videos/{vid}/imagenes.md")
+    md = r.get_data(as_text=True)
+    assert "## Prompts" in md and "No text, no logos, no watermark" in md
+    assert "attachment" in r.headers["Content-Disposition"] and "imagenes-referencia-prompts.md" in r.headers["Content-Disposition"]
+
+    prompts = [p for p in datos.prompts_de_video(vid) if p["tipo"] == "imagen"]
+    d = refinador.obtener("acme", prompts[0]["id"])
+    refinador.editar("acme", prompts[0]["id"], d["texto_vigente"] + "\nWarm golden light.", d["version_n"])
+    md2 = app["c"].get(f"{BASE}/videos/{vid}/imagenes.md").get_data(as_text=True)
+    assert "Warm golden light." in md2
+
+
 def test_bloque_global_valida(app):
     r = app["c"].post(f"{BASE}/bloque-global", json={"texto": "CLOSING RULES\nAlways fade to black."})
     assert r.status_code == 422 and r.get_json()["problemas"]

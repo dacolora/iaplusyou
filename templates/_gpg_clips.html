@@ -57,6 +57,8 @@
     <a class="btn-guardar btn-sm" href="/cliente/{{ cliente | urlencode }}/guiones/videos/{{ video.id }}/documento.md">Descargar documento (.md)</a>
   </div>
 
+  {% include "_gpg_imagenes.html" %}
+
   <details>
     <summary>Bloque del video (se repite en cada clip)</summary>
     <form class="gpg-form" data-gpg-post="/videos/{{ video.id }}/nueva-version">

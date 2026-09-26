@@ -351,6 +351,36 @@ def prompts_de_video(video_id):
         return [_dict(f) for f in filas]
 
 
+def empezar_imagenes(cliente, video_id):
+    v = db.guion_video
+    with db.conectar() as con:
+        fila = _bloquear_video(con, cliente, video_id)
+        if fila.estado != "armado":
+            raise Conflicto("Primero arma los clips de esta versión.")
+        if fila.estado_imagenes not in ("ninguno", "error"):
+            raise Conflicto("Los prompts de imágenes de esta versión ya están hechos o en camino.")
+        ahora = db.ahora()
+        con.execute(v.update().where(v.c.id == video_id).values(
+            estado_imagenes="escribiendo", aviso_imagenes=None, iniciado_en=ahora, actualizado_en=ahora))
+
+
+def guardar_imagenes(video_id, imagenes, usd):
+    v = db.guion_video
+    with db.conectar() as con:
+        con.execute(v.update().where(v.c.id == video_id).values(usd=v.c.usd + float(usd or 0)))
+        r = con.execute(v.update().where(v.c.id == video_id, v.c.estado_imagenes == "escribiendo").values(
+            imagenes=imagenes, estado_imagenes="listo", aviso_imagenes=None, actualizado_en=db.ahora()))
+        return r.rowcount == 1
+
+
+def fallar_imagenes(video_id, aviso, usd=0.0):
+    v = db.guion_video
+    with db.conectar() as con:
+        con.execute(v.update().where(v.c.id == video_id).values(usd=v.c.usd + float(usd or 0)))
+        con.execute(v.update().where(v.c.id == video_id, v.c.estado_imagenes == "escribiendo").values(
+            estado_imagenes="error", aviso_imagenes=aviso, actualizado_en=db.ahora()))
+
+
 def guardar_quitadas(cliente, video_id, quitadas):
     try:
         ns = sorted({int(n) for n in quitadas})

@@ -1,0 +1,43 @@
+{# Paso 4: imágenes de referencia (fragmento dentro de _gpg_clips.html, con el video armado). #}
+{% set im = video.imagenes or {} %}
+<h5>Imágenes de referencia</h5>
+{% if video.aviso_imagenes %}<p class="flash error">{{ video.aviso_imagenes }}</p>{% endif %}
+{% if video.estado_imagenes == 'escribiendo' %}
+  <p class="gp-ayuda">Claude está escribiendo los prompts de las imágenes…</p>
+{% elif video.estado_imagenes in ('ninguno', 'error') %}
+  <p class="gp-ayuda">Salen los prompts de lo que está «por crear» (personajes y entornos), del producto en el estilo
+    del video y la tabla de qué imagen va en cada clip.</p>
+  <div class="gp-botones">
+    <button type="button" class="btn-generar btn-sm" data-gpg-accion="/videos/{{ video.id }}/imagenes">
+      Escribir prompts de imágenes · {{ costos.imagenes }}</button>
+  </div>
+{% elif video.estado_imagenes == 'listo' %}
+  {% if im['lista'] %}
+  <table class="gpg-tabla">
+    <thead><tr><th>Imagen</th><th>Tipo</th><th>Para</th><th>Prompt</th></tr></thead>
+    <tbody>
+      {% for it in im['lista'] %}{% set p = prompts_img.get(it.id) %}
+      <tr><td>{{ it.id }} · {{ it.titulo }}</td>
+          <td>{{ {'personaje': 'Hoja de personaje', 'entorno': 'Entorno', 'producto': 'Producto', 'hook': 'Estilo del hook'}.get(it.tipo, it.tipo) }}</td>
+          <td>{{ 'Image ' ~ it.slot if it.slot else 'hook ' ~ it.hook_id }}</td>
+          <td>{% if p %}<button type="button" class="btn-guardar btn-xs" data-abrir-prompt="{{ p.id }}">
+              {{ 'Aprobado' if p.estado == 'aprobado' else 'Abrir en el chat' }}</button>{% endif %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="gp-ayuda">No hace falta generar imágenes: todas las referencias vienen del Catálogo.</p>
+  {% endif %}
+
+  <h5>Qué imagen va en cada clip</h5>
+  <table class="gpg-tabla">
+    <thead><tr><th>Clip</th><th>Imágenes</th></tr></thead>
+    <tbody>{% for f in im['tabla'] or [] %}<tr><td>{{ f.clip }} · {{ f.titulo }}</td><td>{{ f.imagenes | join(', ') }}</td></tr>{% endfor %}</tbody>
+  </table>
+
+  <h5>Antes de generar</h5>
+  <ul>{% for x in checklist %}<li>{{ x }}</li>{% else %}<li>Todo listo.</li>{% endfor %}</ul>
+  <div class="gp-botones">
+    <a class="btn-guardar btn-sm" href="/cliente/{{ cliente | urlencode }}/guiones/videos/{{ video.id }}/imagenes.md">Descargar documento de imágenes (.md)</a>
+  </div>
+{% endif %}
