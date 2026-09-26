@@ -203,8 +203,13 @@ def validar_angulo(angulo, datos_texto=None, fijos=None):
         a = dict(angulo)
     else:
         a = {}
+    # Convertir fijos a dict, tratando no-dict como {}
+    if isinstance(fijos, dict):
+        fijos_dict = fijos
+    else:
+        fijos_dict = {}
     for campo in ("consciencia", "sofisticacion"):
-        valor = (fijos or {}).get(campo)
+        valor = fijos_dict.get(campo)
         if valor not in (None, ""):
             a[campo] = valor
     limpio = angulo_vacio()
@@ -360,7 +365,7 @@ def mensaje_error(codigo):
     if base == "campo_faltante":
         return f"Falta {nombre}."
     if base == "valor_invalido":
-        return f"El valor de {nombre} no es válido."
+        return f"Revisa {nombre}: ese valor no es válido."
     if base == "promesa_multiple":
         return "La promesa tiene más de una idea o es muy larga: déjala en una sola frase."
     if base == "mecanismo_obligatorio":

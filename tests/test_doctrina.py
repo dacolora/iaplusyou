@@ -359,3 +359,14 @@ def test_etiquetas_para_el_cliente_cubren_todo_el_vocabulario():
     import doctrina
     assert set(doctrina.CONSCIENCIAS_CLIENTE) == set(doctrina.CONSCIENCIAS)
     assert set(doctrina.SOFISTICACIONES_CLIENTE) == set(doctrina.SOFISTICACIONES)
+
+
+def test_validar_angulo_nunca_lanza_con_fijos_no_dict():
+    import doctrina
+    limpio, errores = doctrina.validar_angulo(ANGULO_OK, fijos=["no", "dict"])
+    assert limpio["sofisticacion"] == 3  # sin cambios por fijos no-dict
+
+
+def test_mensaje_error_valor_invalido_correcta_gramatica():
+    import doctrina
+    assert doctrina.mensaje_error("valor_invalido:lead") == "Revisa el arranque: ese valor no es válido."
