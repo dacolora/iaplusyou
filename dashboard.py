@@ -1411,6 +1411,7 @@ def ver_cliente(cliente):
         motivo_bloqueo_forma = _bloqueo_cambio_forma(cliente, experimentos_lista=experimentos_exp)
     estado_pixel = meta_conexion.estado_pixel(cliente, solo_cache=True) if meta_conectado else None
     tiendas_cliente = tiendas.listar(cliente)
+    triple_whale_conectado = triple_whale_tiendas.obtener(cliente)
     # Catálogo › Productos: cada activo tiene su fila comercial (se crea al
     # vuelo si falta) y la fila se pinta en la tarjeta del activo.
     activos_producto = _productos_con_uso(cliente)
@@ -1514,6 +1515,7 @@ def ver_cliente(cliente):
         nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
         productos_tienda=productos_tienda,
         tiendas_cliente=tiendas_cliente,
+        triple_whale_conectado=triple_whale_conectado,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
         estado_pixel=estado_pixel,
         meta_conectado=meta_conectado,

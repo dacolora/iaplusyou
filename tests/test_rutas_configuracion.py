@@ -215,6 +215,63 @@ def test_guardar_preferencias_sonido(app, monkeypatch, tmp_path):
     assert 'name="musica_al_crear"' in html and "Sonido al crear" in html
 
 
+def test_triple_whale_formulario_de_conexion_vuelve_a_aparecer(app):
+    """El formulario se quitó de Configuración en 9d3c580 con la intención de
+    moverlo a Experimentos, pero nunca se volvió a agregar en ningún lado —
+    quedó sin ninguna forma de conectar Triple Whale desde la interfaz."""
+    cfg = _config(app["c"].get("/cliente/acme").data.decode())
+    assert 'id="config-triple-whale"' in cfg
+    assert "/cliente/acme/cfg_triple_whale/conectar" in cfg
+    assert 'name="llave_api"' in cfg and 'name="dominio_tienda"' in cfg
+    assert "conectado" not in _tarjeta_id(cfg, "config-triple-whale")
+
+
+def _tarjeta_id(html, id_):
+    ini = html.index(f'id="{id_}"')
+    fin = html.index('id="config-canales-organicos"', ini)
+    return html[ini:fin]
+
+
+def test_triple_whale_conectar_guarda_y_muestra_estado(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: True)
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                      data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com",
+                            "moneda": "cop", "modelo_atribucion": "First Touch", "ventana_atribucion": "30"},
+                      follow_redirects=False)
+    assert r.status_code == 302 and r.headers["Location"].endswith("#config-triple-whale")
+    conectado = triple_whale_tiendas.obtener("acme")
+    assert conectado["dominio_tienda"] == "acme.myshopify.com" and conectado["moneda"] == "COP"
+    assert triple_whale_tiendas.obtener_llave("acme") == "tw_prueba123"
+
+    html = app["c"].get("/cliente/acme").data.decode()
+    cfg = _tarjeta_id(_config(html), "config-triple-whale")
+    assert "acme.myshopify.com" in cfg and "conectado" in cfg
+    assert "/cliente/acme/cfg_triple_whale/desconectar" in cfg
+
+
+def test_triple_whale_conectar_sin_llave_valida_no_guarda(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: False)
+    app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                  data={"llave_api": "tw_mala", "dominio_tienda": "acme.myshopify.com"})
+    assert triple_whale_tiendas.obtener("acme") is None
+
+
+def test_triple_whale_desconectar(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: True)
+    app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                  data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
+    assert triple_whale_tiendas.obtener("acme") is not None
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/desconectar", follow_redirects=False)
+    assert r.status_code == 302
+    assert triple_whale_tiendas.obtener("acme") is None
+
+
 # ---- Gasto real (Task 3): Configuración › Gasto, CSV, sidebar, precios, panel ----
 
 AHORA_GASTO = "2026-09-18T12:00:00"
