@@ -173,6 +173,13 @@ def test_adaptar_da_espacio_para_pensar_y_responder(monkeypatch):
     assert 591 * 4 <= topes[0] <= 16000
 
 
+def test_max_tokens_adaptar_en_el_rango_de_claude_md(monkeypatch):
+    """Bloque 2, revisión final #6: 3000 seguía corto para el pensamiento
+    adaptativo de Sonnet 5 (CLAUDE.md pide 4 000-16 000 en estos sitios)."""
+    from referentes import recrear
+    assert 4000 <= recrear.MAX_TOKENS_ADAPTAR <= 16000
+
+
 def test_llamar_cortada_por_max_tokens_lanza_con_tokens(monkeypatch):
     import anthropic
     from referentes import recrear

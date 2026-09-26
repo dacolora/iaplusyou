@@ -34,7 +34,7 @@ class ErrorPedidos(RuntimeError):
 
 def _es_util(linea):
     return (isinstance(linea, str) and linea.strip() and not linea.startswith(doctrina.PREFIJO_ERROR)
-            and not linea.startswith("arranque fuera de lo recomendado") and not _INTERNOS.search(linea))
+            and not linea.startswith(doctrina._ARRANQUE_FUERA) and not _INTERNOS.search(linea))
 
 
 def faltantes_del_producto(cliente, fila):

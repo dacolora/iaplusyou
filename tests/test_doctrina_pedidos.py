@@ -38,6 +38,18 @@ def test_faltantes_del_producto_junta_ideas_y_sesiones_sin_ruido(base_temporal, 
     assert faltantes == ["faltan comentarios reales sobre la luz", "precio", "garantía del producto"]
 
 
+def test_es_util_usa_doctrina_arranque_fuera(monkeypatch):
+    """Bloque 2, revisión final #6: `_es_util` tenía el literal «arranque fuera
+    de lo recomendado» calcado a mano en vez de leer `doctrina._ARRANQUE_FUERA`
+    — si ese texto cambiara ahí, `pedidos` se habría quedado con el viejo sin
+    enterarse."""
+    import doctrina
+    from doctrina import pedidos
+    monkeypatch.setattr(doctrina, "_ARRANQUE_FUERA", "otro marcador cualquiera")
+    assert pedidos._es_util("arranque fuera de lo recomendado: x") is True
+    assert pedidos._es_util("otro marcador cualquiera: x") is False
+
+
 def test_resumir_escribe_los_pedidos_y_cuida_lo_ya_cerrado(base_temporal, monkeypatch):
     import tiendas
     from doctrina import pedidos, producto as dp

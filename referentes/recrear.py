@@ -110,7 +110,9 @@ class AdaptacionInvalida(RuntimeError):
 # Tope de salida de «Adaptar con IA»: Claude Sonnet 5 piensa antes de
 # responder y eso sale del mismo max_tokens. Medido en producción
 # (2026-09-25): 591 y 571 tokens con el tope viejo de 600 — al borde del corte.
-MAX_TOKENS_ADAPTAR = 3000
+# Bloque 2, revisión final #6: 3000 seguía corto para el pensamiento adaptativo
+# de Sonnet 5 (CLAUDE.md: presupuestos de 4 000-16 000 tokens en estos sitios).
+MAX_TOKENS_ADAPTAR = 6000
 
 
 def _llamar(texto, max_tokens=MAX_TOKENS_ADAPTAR):

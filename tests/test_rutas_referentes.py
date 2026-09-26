@@ -961,3 +961,24 @@ def test_recrear_adaptar_le_pasa_la_sofisticacion_del_catalogo(app, monkeypatch)
     monkeypatch.setattr(recrear, "_llamar", falso)
     app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
     assert "Sofisticación del mercado (fija, no la cambies): 5" in visto["texto"]
+
+
+def test_recrear_adaptar_descarta_una_sofisticacion_invalida_del_catalogo(app, monkeypatch):
+    """Bloque 2, revisión final #6: sofisticación fuera de 1-5 (dato corrupto
+    en `producto.extra`) se descarta en la ruta antes de fijarla en el
+    ángulo, igual que ya hacen ideas y el guion
+    (`sof if sof in doctrina.SOFISTICACIONES else None`)."""
+    import tiendas
+    from referentes import recrear
+    ids = _sembrar()
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    tiendas.anotar_extra("acme", fila, sofisticacion=9)
+    visto = {}
+
+    def falso_adaptar(referente, familia, producto, titular_actual, guia=""):
+        visto["sofisticacion"] = producto.get("sofisticacion")
+        return {"titular": "T", "prompt": "P", "angulo": {}}, 10, 5
+    monkeypatch.setattr(recrear, "adaptar", falso_adaptar)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
+    assert r.status_code == 200
+    assert visto["sofisticacion"] is None

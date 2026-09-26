@@ -196,7 +196,8 @@ def _producto(cliente, entry, precio):
                 "regla": p.get("regla") or "", "precio": _precio_entero(fila.get("precio")) if usa_tienda else precio,
                 "moneda": fila.get("moneda") if usa_tienda else None, "url_compra": fila.get("url_compra"),
                 "tipo": p.get("tipo"), "sofisticacion": sof if sof in doctrina.SOFISTICACIONES else None,
-                "pruebas": [{"texto": x["texto"], "fuente": x["fuente"]} for x in doctrina_producto.pruebas(fila)]}
+                "pruebas": [{"texto": x.get("texto"), "fuente": x.get("fuente")}
+                           for x in doctrina_producto.pruebas(fila) if x.get("texto")]}
     for r in entry.get("referencias") or []:
         if r.get("categoria") == "producto" and r.get("activo"):
             return {"nombre": r["activo"], "descripcion": "", "regla": r.get("regla") or "", "precio": precio,

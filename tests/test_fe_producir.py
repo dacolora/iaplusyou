@@ -671,3 +671,19 @@ def test_preparar_guion_lleva_las_pruebas_del_producto(entorno, monkeypatch):
     dp.agregar_prueba("acme", pid, "Suela que dura 3 veranos", "ficha")
     final_edition.preparar_guion("acme", entorno["cf_id"])
     assert entorno["generar"]["producto"]["pruebas"] == [{"texto": "Suela que dura 3 veranos", "fuente": "ficha"}]
+
+
+def test_preparar_guion_tolera_una_prueba_sin_fuente_y_omite_las_sin_texto(entorno, monkeypatch):
+    """Bloque 2, revisión final #6: `_producto` leía `x["texto"]`/`x["fuente"]`
+    a lo bruto; `producto.extra` es JSON libre (no todo pasa por
+    `doctrina.producto.agregar_prueba`, que sí exige fuente), así que una
+    prueba sin `fuente` tumbaba `preparar_guion` con un KeyError en vez de
+    solo dejarla sin fuente; una sin `texto` ni eso: se omite."""
+    import catalogo_productos
+    import tiendas
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [
+        {"id": "chancla_rose", "nombre": "Chancla Rose", "descripcion": "Chancla cómoda", "tipo": "calzado", "regla": ""}])
+    pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
+    tiendas.anotar_extra("acme", pid, pruebas=[{"texto": "sin fuente"}, {"fuente": "ficha"}])
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["producto"]["pruebas"] == [{"texto": "sin fuente", "fuente": None}]
