@@ -85,7 +85,7 @@ def metricas_por_anuncio(llave_api: str, shop_id: str, fecha_desde: str, fecha_h
     """Métricas de anuncios Meta por día (ads_table + pixel_joined_tvf).
     
     Retorna filas con: channel, ad_id, event_date, account_id, account_name, campaign_name,
-    adset_name, ad_name, spend, impressions, clicks, thruplay, conversions, conversion_value,
+    adset_name, ad_name, spend, impressions, clicks, thruplays, conversions, conversion_value,
     (pixel) pixel_roas, pixel_cpa, new_customer_orders, [country si aplica].
     
     Args:
@@ -93,6 +93,12 @@ def metricas_por_anuncio(llave_api: str, shop_id: str, fecha_desde: str, fecha_h
         modelo: atribución (ej: "Triple Attribution", "Last Click 7d", "Linear Paid 7d").
         ventana: "lifetime" o periodo fijo.
     """
+    # thruplays (plural) y pixel_joined_tvf() (función de tabla, con paréntesis)
+    # son los nombres reales confirmados en docs/triple-whale/investigacion-api-2026.md
+    # §3.2(a) contra el "Data Dictionary" de Triple Whale -- el resto de esta
+    # consulta (el LEFT JOIN filtrando modelo/ventana en el ON, para conservar
+    # los anuncios sin dato de píxel con coalesce a 0) es una decisión nuestra,
+    # sin probar todavía contra una cuenta real.
     consulta = """
     SELECT
         ads.channel,
@@ -106,7 +112,7 @@ def metricas_por_anuncio(llave_api: str, shop_id: str, fecha_desde: str, fecha_h
         ads.spend,
         ads.impressions,
         ads.clicks,
-        ads.thruplay,
+        ads.thruplays,
         ads.conversions,
         ads.conversion_value,
         coalesce(pixel.pixel_roas, 0) AS pixel_roas,
@@ -114,7 +120,7 @@ def metricas_por_anuncio(llave_api: str, shop_id: str, fecha_desde: str, fecha_h
         coalesce(pixel.new_customer_orders, 0) AS new_customer_orders,
         ads.country
     FROM ads_table AS ads
-    LEFT JOIN pixel_joined_tvf AS pixel
+    LEFT JOIN pixel_joined_tvf() AS pixel
         ON ads.ad_id = pixel.ad_id
         AND ads.event_date = pixel.event_date
         AND pixel.model = @modelo

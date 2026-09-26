@@ -611,7 +611,8 @@ not in Configuración.
 **Tablero y OUTCOME_SALES** (`tablero.py`): the first tab. Every figure is a **delta of
 cumulative snapshots** (`metrica_snapshot` stores Meta's lifetime totals per ad, so a period
 is `valor_en(hasta) − valor_en(desde)`, negatives truncated to 0) grouped by account
-currency; revenue only counts snapshots attributed by Meta Pixel or store. `tablero.contexto`
+currency; revenue only counts snapshots attributed by Meta Pixel, store, or Triple Whale
+(`tablero.FUENTES_VENTAS`). `tablero.contexto`
 loads each piece's snapshots once (bounded by `experimentos.snapshots(ep_id, desde=)`, which
 also returns the last row before the window) and derives the month tiles, the 30-day
 series, the top-5 winners and the alerts; `dashboard._contexto_tablero` caches it 60 s per
@@ -622,6 +623,28 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 `OUTCOME_SALES`; `lanzador.lanzar` then re-checks the Pixel before touching Meta and sends
 `promoted_object={pixel_id, PURCHASE}` on every adset (`meta_ads/adset.py` refuses SALES
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
+
+**Triple Whale** (`triple_whale.py`, `triple_whale_tiendas.py`, table `triple_whale`): an
+optional, per-project alternative to Meta Pixel/store attribution, connected from
+Configuración › Conexiones (Fernet-encrypted API key, same pattern as Shopify/WooCommerce —
+the connect/probar/desconectar form was accidentally removed for ~4 days in 2026-09 by an
+abandoned "move to Experimentos" refactor that never got its second half; restored where it
+was, since Meta never moved either). A project picks `atribucion="triple_whale"` on its
+experiment the same way it picks `pixel`/`tienda`; `lanzador._obtener_metricas_triple_whale`
+calls `triple_whale.metricas_por_anuncio` (Triple Whale's `ads_table`+`pixel_joined_tvf()` SQL,
+one row per ad per day), filters to the piece's `meta_ad_id`, and SUMS the days into a
+lifetime-cumulative snapshot (never averaging the API's own per-day `pixel_roas`/`pixel_cpa`,
+which are ratios) — ctr/cpc/cpm/thruplay_rate are computed from those sums with the same
+formula `meta_ads/insights.py` uses. `"triple_whale"` is a first-class member of
+`tablero.FUENTES_VENTAS` and of `decisor.py`'s `con_atribucion` sales-gate tuple, so a
+Triple-Whale-attributed experiment can win/lose on ROAS/CPA exactly like `pixel`/`tienda` —
+until 2026-09-26 it silently could not (a parameter-name mismatch in the metrics call always
+raised, caught by a broad `except Exception`, so it fell back to Meta Pixel every time; even
+fixed, the missing `FUENTES_VENTAS`/`con_atribucion` entries would still have zeroed revenue
+and blocked the sales gate). The exact SQL (column names, whether the model/window filter
+belongs in the `JOIN ... ON` or the `WHERE`) is Creatv's own best reading of Triple Whale's
+public "Data Dictionary" docs (`docs/triple-whale/investigacion-api-2026.md`) — flagged there
+as **never verified against a real connected store**.
 
 **Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): there are no
 credits or balances — the product shows the real provider price. Every paying task registers

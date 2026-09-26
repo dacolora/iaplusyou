@@ -39,9 +39,10 @@ import propuestas
 # Copia local de lanzador.ESTADOS_META_RECHAZO: importar lanzador arrastra
 # meta_ads/requests y el tablero es solo datos.
 ESTADOS_META_RECHAZO = ("DISAPPROVED", "WITH_ISSUES")
-# Solo estas fuentes cuentan como ingresos medibles (pixel de Meta o pedidos
-# de la tienda): con `ninguna` no hay ventas atribuidas aunque venga un número.
-FUENTES_VENTAS = ("meta", "tienda")
+# Solo estas fuentes cuentan como ingresos medibles (pixel de Meta, pedidos
+# de la tienda o Triple Whale): con `ninguna` no hay ventas atribuidas aunque
+# venga un número.
+FUENTES_VENTAS = ("meta", "tienda", "triple_whale")
 HORAS_SIN_METRICAS = 6
 DIAS_SERIE = 30
 MONEDA_POR_DEFECTO = "USD"

@@ -79,6 +79,18 @@ def test_puerta_2_ventas_espera_72h_y_decide_por_roas_o_cpa():
     assert v["veredicto"] == "perdedor" and v["puerta"] == 2 and v["accion"] == "rescatar"
 
 
+def test_puerta_2_ventas_con_triple_whale_decide_igual_que_pixel_o_tienda():
+    """con_atribucion incluye "triple_whale" desde este arreglo: antes, un
+    experimento con esa atribución nunca podía pasar de la puerta de tráfico
+    (quedaba como "sin ventas medibles" pasara lo que pasara en roas/cpa)."""
+    r = decisor.reglas_efectivas(None, {"cpc_max": 0.5, "roas_min": 2.0, "cpa_max": 8.0})
+    bien = [snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=30.0, compras=5, cpa=6.0, roas=3.0, thruplay_rate=0.3)]
+    ctx = dict(CTX, atribucion="triple_whale")
+    v = decisor.decidir(bien, r, dict(ctx, horas_activo=80))
+    assert v["veredicto"] == "ganador" and v["puerta"] == 2 and "roas" in v["motivo"].lower()
+    assert "sin ventas medibles" not in v["motivo"]
+
+
 def test_thruplay_cero_es_senal_de_falla_real():
     r = decisor.reglas_efectivas(None, {"cpc_max": 0.5})
     v = decisor.decidir([snap(impresiones=3000, clics_enlace=90, ctr=3.0, cpc=0.3, gasto=27.0, thruplay_rate=0.0)], r, CTX)

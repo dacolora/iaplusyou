@@ -533,9 +533,18 @@ def _avisar_moneda_no_comparable(cliente, ex, ajenas):
 
 
 def _obtener_metricas_triple_whale(cliente, ex, pz):
-    """Obtiene métricas de Triple Whale para una pieza y las mapea al formato de snapshot."""
+    """Obtiene métricas de Triple Whale para una pieza y arma un snapshot
+    ACUMULADO (mismo contrato que el resto del pipeline: metrica_snapshot
+    guarda totales de por vida, tablero.py calcula deltas restando dos
+    snapshots). `triple_whale.metricas_por_anuncio` entrega una fila por día
+    para el rango pedido, así que se suman desde que se creó la pieza hasta
+    hoy, filtrando por el `ad_id` de esta pieza -- ctr/cpc/cpm/thruplay_rate/
+    roas/cpa se calculan sobre esos totales (nunca promediando los
+    pixel_roas/pixel_cpa por día que devuelve la API, que son proporciones,
+    no sumables), con la misma fórmula que ya usa el camino de Meta
+    (meta_ads/insights.py: ctr en %, thruplay_rate en fracción 0-1)."""
     config_tw = triple_whale_tiendas.obtener(cliente)
-    if not config_tw:
+    if not config_tw or not pz.get("meta_ad_id"):
         return None
 
     try:
@@ -543,37 +552,32 @@ def _obtener_metricas_triple_whale(cliente, ex, pz):
         if not llave:
             return None
 
-        # Obtener métricas de Triple Whale
-        metricas = triple_whale.metricas_por_anuncio(
-            llave_api=llave,
-            shop_id=config_tw["dominio_tienda"],
-            consulta=None,  # Usa la consulta predeterminada
-            parametros={
-                "modelo_atribucion": config_tw["modelo_atribucion"],
-                "ventana_atribucion": config_tw["ventana_atribucion"]
-            }
-        )
+        filas = triple_whale.metricas_por_anuncio(
+            llave_api=llave, shop_id=config_tw["dominio_tienda"],
+            fecha_desde=(pz.get("creado_en") or db.ahora())[:10], fecha_hasta=db.ahora()[:10],
+            modelo=config_tw["modelo_atribucion"], ventana=config_tw["ventana_atribucion"])
 
-        if not metricas:
+        propias = [f for f in (filas or []) if str(f.get("ad_id")) == str(pz["meta_ad_id"])]
+        if not propias:
             return None
 
-        # Buscar métrica que coincida con el ad_id de la pieza
-        # (triple_whale devuelve ad_id del canal, mapear si es necesario)
-        for fila in metricas:
-            # Mapear campos de TW a snapshot
-            snap = {
-                "impresiones": fila.get("impressions", 0),
-                "clics": fila.get("clicks", 0),
-                "thruplay": fila.get("thruplay", 0),
-                "compras": fila.get("conversions", 0),
-                "gasto": fila.get("spend", 0),
-                "roas": fila.get("pixel_roas", 0),
-                "cpa": fila.get("pixel_cpa", 0),
-                "fuente_ventas": "triple_whale" if (fila.get("conversions") or 0) > 0 else "ninguna"
-            }
-            return snap
-
-        return None
+        impresiones = sum(int(f.get("impressions") or 0) for f in propias)
+        clics = sum(int(f.get("clicks") or 0) for f in propias)
+        thruplay = sum(int(f.get("thruplays") or 0) for f in propias)
+        gasto = sum(float(f.get("spend") or 0) for f in propias)
+        compras = sum(int(f.get("conversions") or 0) for f in propias)
+        ingresos = sum(float(f.get("conversion_value") or 0) for f in propias)
+        return {
+            "impresiones": impresiones, "clics": clics, "thruplay": thruplay,
+            "ctr": round(clics / impresiones * 100, 4) if impresiones else 0.0,
+            "cpc": round(gasto / clics, 4) if clics else 0.0,
+            "cpm": round(gasto / impresiones * 1000, 4) if impresiones else 0.0,
+            "thruplay_rate": round(thruplay / impresiones, 4) if impresiones else 0.0,
+            "gasto": round(gasto, 2), "compras": compras, "ingresos": round(ingresos, 2),
+            "roas": round(ingresos / gasto, 4) if gasto else 0.0,
+            "cpa": round(gasto / compras, 2) if compras else 0.0,
+            "fuente_ventas": "triple_whale" if compras > 0 else "ninguna",
+        }
     except Exception as e:
         experimentos.registrar_evento(
             cliente, ex["id"], "error",

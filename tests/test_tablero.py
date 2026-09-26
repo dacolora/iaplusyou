@@ -95,6 +95,27 @@ def test_resumen_mes_excluye_lo_anterior_y_separa_fuentes(base_temporal, sin_red
     assert r["piezas_activas"] == 2
 
 
+def test_resumen_mes_cuenta_ventas_de_triple_whale(base_temporal, sin_red):
+    """FUENTES_VENTAS incluye "triple_whale" desde este arreglo: antes, un
+    experimento atribuido a Triple Whale siempre mostraba ingresos/ROAS en
+    cero en el Tablero aunque los datos sí llegaran (mismo hueco que hacía
+    que decisor.py nunca pudiera decidir por ventas -- ver test_decisor.py)."""
+    import experimentos as ex
+    import tablero
+    eid = _experimento(base_temporal, atribucion="triple_whale")
+    ep = _pieza_en(base_temporal, eid, "CO")
+    ex.snapshot(ep, {"gasto": 100, "compras": 2, "ingresos": 8000, "impresiones": 500, "clics_enlace": 20,
+                     "fuente_ventas": "triple_whale"}, tomado_en="2026-08-30T10:00:00")
+    ex.snapshot(ep, {"gasto": 300, "compras": 5, "ingresos": 20000, "impresiones": 1200, "clics_enlace": 45,
+                     "fuente_ventas": "triple_whale"}, tomado_en="2026-09-10T10:00:00")
+
+    r = tablero.resumen_mes("acme", ahora_iso=AHORA)
+
+    g = r["por_moneda"]["COP"]
+    assert g["gasto"] == 200 and g["compras"] == 3 and g["ingresos"] == 12000
+    assert g["roas"] == round(12000 / 200, 2)
+
+
 def test_resumen_mes_agrupa_por_moneda(base_temporal, sin_red):
     import experimentos as ex
     import tablero

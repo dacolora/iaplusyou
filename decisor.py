@@ -145,7 +145,7 @@ def decidir(snapshots, reglas, contexto):
         return _resultado("perdedor", "No pasó la puerta de tráfico: " + "; ".join(fallas) + ".", accion, 1, numeros)
 
     # Puerta 2: ventas (solo con atribución y al menos un umbral de venta activo).
-    con_atribucion = c.get("atribucion") in ("pixel", "tienda")
+    con_atribucion = c.get("atribucion") in ("pixel", "tienda", "triple_whale")
     sin_umbrales_venta = r["roas_min"] is None and r["cpa_max"] is None
     if con_atribucion and not sin_umbrales_venta:
         if horas < r["ventana_ventas_horas"]:

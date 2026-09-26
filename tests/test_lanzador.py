@@ -177,6 +177,97 @@ def test_refrescar_guarda_snapshots(entorno):
     assert m["estado_meta_texto"] == "Activo" and e["piezas"][0]["estado_meta"] == "ACTIVE"
 
 
+def test_refrescar_con_triple_whale_suma_los_dias_y_calcula_tasas(entorno, monkeypatch):
+    """La API entrega una fila por día; refrescar() debe sumarlas (snapshot
+    ACUMULADO, mismo contrato que Meta) y calcular ctr/cpc/cpm/thruplay_rate/
+    roas/cpa sobre los totales -- nunca promediando los pixel_roas/pixel_cpa
+    por día."""
+    ex, lz = entorno["ex"], entorno["lanzador"]
+    eid = entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    ad_id = ex.obtener("acme", eid)["piezas"][0]["meta_ad_id"]
+
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {
+        "dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution", "ventana_atribucion": "lifetime"})
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener_llave", lambda cliente: "tw_prueba")
+
+    llamada = {}
+
+    def _metricas_falsas(**kw):
+        llamada.update(kw)
+        return [
+            {"ad_id": ad_id, "impressions": 1000, "clicks": 20, "thruplays": 100, "spend": 50.0,
+             "conversions": 1, "conversion_value": 80.0},
+            {"ad_id": ad_id, "impressions": 500, "clicks": 10, "thruplays": 40, "spend": 25.0,
+             "conversions": 1, "conversion_value": 40.0},
+            {"ad_id": "otro_anuncio_no_es_este", "impressions": 99999, "clicks": 999, "thruplays": 999,
+             "spend": 999.0, "conversions": 999, "conversion_value": 999.0},
+        ]
+    monkeypatch.setattr(lz.triple_whale, "metricas_por_anuncio", _metricas_falsas)
+
+    assert lz.refrescar("acme", eid) == 3
+    assert llamada["modelo"] == "Triple Attribution" and llamada["ventana"] == "lifetime"
+    assert llamada["shop_id"] == "acme.myshopify.com"
+
+    m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
+    assert m["impresiones"] == 1500 and m["clics"] == 30 and m["thruplay"] == 140
+    assert m["gasto"] == 75.0 and m["compras"] == 2 and m["ingresos"] == 120.0
+    assert m["roas"] == round(120.0 / 75.0, 4)
+    assert m["cpa"] == round(75.0 / 2, 2)
+    assert m["ctr"] == round(30 / 1500 * 100, 4)
+    assert m["cpc"] == round(75.0 / 30, 4)
+    assert m["thruplay_rate"] == round(140 / 1500, 4)
+    assert m["fuente_ventas"] == "triple_whale"
+
+
+def test_refrescar_con_triple_whale_sin_conectar_cae_a_meta(entorno):
+    """Sin cuenta de Triple Whale conectada, el fallback a Meta Pixel debe
+    seguir funcionando exactamente igual que antes de este cambio."""
+    ex, lz = entorno["ex"], entorno["lanzador"]
+    eid = entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    assert lz.refrescar("acme", eid) == 3
+    m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
+    assert m["impresiones"] == 100 and m["gasto"] == 2.0   # valores de MetaFalsa, no de Triple Whale
+
+
+def test_refrescar_con_triple_whale_sin_anuncio_propio_cae_a_meta(entorno, monkeypatch):
+    """Si Triple Whale no trae ninguna fila para el ad_id de esta pieza (aún
+    no hay datos, o el anuncio es de otro canal), cae a Meta en vez de perder
+    la métrica del todo."""
+    ex, lz = entorno["ex"], entorno["lanzador"]
+    eid = entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {
+        "dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution", "ventana_atribucion": "lifetime"})
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener_llave", lambda cliente: "tw_prueba")
+    monkeypatch.setattr(lz.triple_whale, "metricas_por_anuncio", lambda **kw: [])
+    assert lz.refrescar("acme", eid) == 3
+    m = ex.obtener("acme", eid)["piezas"][0]["metricas"]
+    assert m["impresiones"] == 100 and m["gasto"] == 2.0   # cayó a Meta
+
+
+def test_refrescar_con_triple_whale_error_registra_evento_y_cae_a_meta(entorno, monkeypatch):
+    ex, lz = entorno["ex"], entorno["lanzador"]
+    eid = entorno["eid"]
+    ex.actualizar("acme", eid, atribucion="triple_whale")
+    lz.lanzar("acme", eid)
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener", lambda cliente: {
+        "dominio_tienda": "acme.myshopify.com", "modelo_atribucion": "Triple Attribution", "ventana_atribucion": "lifetime"})
+    monkeypatch.setattr(lz.triple_whale_tiendas, "obtener_llave", lambda cliente: "tw_prueba")
+
+    def _revienta(**kw):
+        raise lz.triple_whale.ErrorTripleWhale("límite de tasa")
+    monkeypatch.setattr(lz.triple_whale, "metricas_por_anuncio", _revienta)
+
+    assert lz.refrescar("acme", eid) == 3
+    eventos = ex.eventos("acme", eid)
+    assert any("Triple Whale" in (e.get("mensaje") or "") for e in eventos)
+
+
 def test_cambiar_estado_activa_campana_al_activar_un_pais_pausado(entorno):
     """Activar un solo país mientras la campaña sigue en pausa en Meta no debe
     quedar como 'corriendo' sin entregar: hay que activar también la campaña."""
