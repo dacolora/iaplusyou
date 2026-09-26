@@ -124,7 +124,7 @@ def _ranking(piezas_pais, atribucion):
     CPC ascendente (sin CPC al final) o, con atribución y alguna compra, por
     ROAS descendente. Devuelve la lista ordenada de ep_id."""
     con_metricas = [p for p in piezas_pais if p.get("meta_ad_id") and p.get("metricas")]
-    por_ventas = atribucion in ("pixel", "tienda") and any(
+    por_ventas = atribucion in ("pixel", "tienda", "triple_whale") and any(
         int((p["metricas"] or {}).get("compras") or 0) > 0 for p in con_metricas)
     if por_ventas:
         clave = lambda p: -float((p["metricas"] or {}).get("roas") or 0)  # noqa: E731

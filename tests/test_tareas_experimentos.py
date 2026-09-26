@@ -9,6 +9,26 @@ def test_job_ids():
     assert te.job_id_refrescar("acme", 3) == "acme__exp3__refrescar"
 
 
+def _pieza_con_metricas(id_, compras, roas, cpc):
+    return {"id": id_, "meta_ad_id": f"ad_{id_}", "metricas": {"compras": compras, "roas": roas, "cpc": cpc}}
+
+
+def test_ranking_por_triple_whale_ordena_por_roas():
+    """Regresión: _ranking() todavía excluía "triple_whale" de por_ventas
+    (`in ("pixel", "tienda")`) aunque decisor.py ya lo tratara como una
+    atribución de ventas real -- un experimento con Triple Whale conectado
+    seguía rankeando por CPC crudo en vez de por ROAS, ignorando las ventas
+    reales que ya llegaban."""
+    from tareas import experimentos as te
+    piezas = [
+        _pieza_con_metricas(1, compras=0, roas=0.0, cpc=0.10),   # mejor CPC, pero sin ventas
+        _pieza_con_metricas(2, compras=3, roas=4.5, cpc=0.50),   # peor CPC, mejores ventas
+        _pieza_con_metricas(3, compras=1, roas=1.2, cpc=0.30),
+    ]
+    assert te._ranking(piezas, "triple_whale") == [2, 3, 1]   # por ROAS descendente
+    assert te._ranking(piezas, "ninguna") == [1, 3, 2]         # sin atribución: por CPC ascendente
+
+
 def test_exp_lanzar_llama_lanzador_y_reporta(base_temporal, monkeypatch):
     import tareas
     import trabajos

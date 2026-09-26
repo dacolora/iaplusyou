@@ -9,8 +9,11 @@
     {% endif %}
   </div>
 
-  {% if not investigacion.estado or investigacion.estado in ('lista', 'detenida', 'interrumpida') %}
-    {# Formulario para iniciar investigación #}
+  {% if not investigacion.estado %}
+    {# Formulario para iniciar investigación. "lista"/"detenida"/"interrumpida"
+       tienen su propia rama más abajo (con su botón de reanudar/reintentar) --
+       antes esta condición los interceptaba a todos aquí primero, dejando esas
+       ramas dedicadas como código muerto que nunca se alcanzaba. #}
     <form method="post" action="{{ url_for('nicho.investigacion_iniciar', cliente=cliente, eid=estudio.id) }}" class="form-investigacion">
       <fieldset>
         <legend>Configura tu investigación</legend>

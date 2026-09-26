@@ -25,6 +25,7 @@ from nicho.fuentes import reddit as fuente_reddit
 from nicho.fuentes import texto as fuente_texto
 from nicho.fuentes import youtube as fuente_youtube
 from nicho.fuentes.base import ErrorFuente
+from tareas import investigacion as tareas_investigacion
 from tareas import nicho as tareas_nicho
 
 bp = Blueprint("nicho", __name__, url_prefix="/cliente/<cliente>/nicho")
@@ -147,7 +148,8 @@ def ver(cliente, eid):
         actores_apify=[{"clave": k, "nombre": a["nombre"], "usd_por_resultado": a["usd_por_resultado"], "ayuda": a["ayuda"]}
                        for k, a in apify_actores.ACTORES.items()],
         recolecciones=list(reversed((est["extra"].get("recolecciones") or [])[-5:])),
-        periodos_reddit=fuente_reddit.PERIODOS, max_apify=apify_actores.MAX_RESULTADOS, region_defecto=proyectos.pais(cliente) or "")
+        periodos_reddit=fuente_reddit.PERIODOS, max_apify=apify_actores.MAX_RESULTADOS, region_defecto=proyectos.pais(cliente) or "",
+        investigacion=investigacion.resumen(datos.investigacion(cliente, eid)), price_estimate="")
 
 
 @bp.post("/<int:eid>/editar")
@@ -472,17 +474,23 @@ def investigacion_reanudar(cliente, eid):
         return _volver(cliente, eid)
     
     try:
-        # Reanudar el siguiente paso
-        paso = investigacion.siguiente_paso(inv_actual)
+        # ¿Queda algún paso pendiente? Hay que preguntarlo con un estado ya
+        # no terminal -- si no, siguiente_paso() siempre devuelve None por
+        # seguir viendo "detenida"/"interrumpida" en inv_actual, así que
+        # "Reanudar" nunca pasaba de "la investigación ya está completa".
+        paso = investigacion.siguiente_paso({**inv_actual, "estado": "consultas"})
         if paso is None:
             flash("La investigación ya está completa.", "ok")
             return _volver(cliente, eid)
-        
-        # Cambiar estado a activo
+
+        # Cambiar estado a activo y encolar el paso pendiente -- antes solo
+        # cambiaba el campo estado sin encolar nada, así que "Reanudar" no
+        # volvía a arrancar la cadena.
         datos.actualizar_investigacion(cliente, eid, lambda inv: {
-            **inv, "estado": "consultas", "ultimo_error": None
+            **inv, "estado": "consultas", "ultimo_error": None, "detenida_por": None
         })
-        
+        tareas_investigacion.avanzar(cliente, eid)
+
         flash("Investigación reanudada.", "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")

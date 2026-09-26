@@ -68,15 +68,16 @@ MODELOS_VIDEO = {
 # acá con la palabra "calzado" incrustada.
 
 
-def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls,
+def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls, tipo, mapa,
                   foto_local_path=None, on_progreso=None):
     """Edita foto_url reemplazando el calzado por el producto mostrado en
-    referencias_urls, con el modelo_id indicado (ver MODELOS_IMAGEN). Si se pasa
-    foto_local_path, se detecta el encuadre real de esa foto y se le pide al
-    modelo que lo respete (si no, cada uno elige su propio encuadre por default
-    y el resultado sale recortado respecto al original). Devuelve la URL
-    pública de la imagen resultante. on_progreso se propaga a la cola de fal.ai
-    (ver fal_client.llamar) para poder mostrar en qué fase va."""
+    referencias_urls, con el modelo_id indicado (ver MODELOS_IMAGEN). `tipo`/
+    `mapa` arman el prompt según el tipo de producto (prompt_swap.py). Si se
+    pasa foto_local_path, se detecta el encuadre real de esa foto y se le pide
+    al modelo que lo respete (si no, cada uno elige su propio encuadre por
+    default y el resultado sale recortado respecto al original). Devuelve la
+    URL pública de la imagen resultante. on_progreso se propaga a la cola de
+    fal.ai (ver fal_client.llamar) para poder mostrar en qué fase va."""
     info = MODELOS_IMAGEN[modelo_id]
     referencias_lista = "\n".join(
         f"Imagen {i + 2}: referencia del producto (mismo producto, otro ángulo)."
@@ -99,9 +100,10 @@ def editar_imagen(modelo_id, foto_url, descripcion_producto, referencias_urls,
     return imagenes_resultado[0]["url"]
 
 
-def editar_video(modelo_id, video_url, descripcion_producto, referencia_imagen_url, on_progreso=None):
+def editar_video(modelo_id, video_url, descripcion_producto, referencia_imagen_url, tipo, mapa, on_progreso=None):
     """Edita video_url reemplazando el calzado por el producto mostrado en
     referencia_imagen_url, con el modelo_id indicado (ver MODELOS_VIDEO).
+    `tipo`/`mapa` arman el prompt según el tipo de producto (prompt_swap.py).
     Devuelve la URL pública del video resultante. on_progreso se propaga a la
     cola de fal.ai (ver fal_client.llamar)."""
     info = MODELOS_VIDEO[modelo_id]

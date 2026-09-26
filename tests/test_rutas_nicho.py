@@ -292,3 +292,47 @@ def test_pagina_tarjetas_con_llaves(app, llaves):
     assert 'id="form-apify"' in html and "Reseñas de Amazon" in html and "Comentarios de TikTok" in html
     assert f"/cliente/acme/nicho/{eid}/recolectar/apify/estimar" in html and "Traer (se cobra)" in html
     assert "(falta " not in html
+
+
+def test_ver_pasa_investigacion_real_a_la_plantilla(app):
+    """Regresión: `ver()` nunca pasaba `investigacion=` al render -- la
+    tarjeta de investigación automática mostraba "Sin iniciar" sin importar
+    el estado real (corriendo, detenida, terminada)."""
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "X")
+
+    html_vacio = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'badge-neutral">Sin iniciar' in html_vacio
+
+    datos.actualizar_investigacion("acme", eid, lambda inv: {
+        "estado": "detenida", "detenida_por": "Búsqueda automática en amazon todavía no está implementada.",
+        "consultas": ["mejor termo"], "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.01, "aprobado_usd": 5.0,
+    })
+    html = app["c"].get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert 'badge-detenida">DETENIDA' in html
+    assert "Búsqueda automática en amazon todavía no está implementada." in html
+    assert 'badge-neutral">Sin iniciar' not in html
+
+
+def test_investigacion_reanudar_vuelve_a_encolar(app, monkeypatch):
+    """Regresión: `investigacion_reanudar` cambiaba el estado a "consultas"
+    pero nunca encolaba nada -- "Reanudar" no hacía absolutamente nada."""
+    from nicho import datos
+    from tareas import investigacion as tareas_investigacion
+    eid = datos.crear_estudio("acme", "X")
+    datos.actualizar_investigacion("acme", eid, lambda inv: {
+        "estado": "detenida", "detenida_por": "Búsqueda automática en amazon todavía no está implementada.",
+        "consultas": ["mejor termo"], "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.01, "aprobado_usd": 5.0,
+    })
+    encolados = []
+    monkeypatch.setattr(tareas_investigacion.trabajos, "encolar",
+                         lambda job_id, tarea, payload, **kw: encolados.append((job_id, tarea, payload)) or True)
+
+    r = app["c"].post(f"/cliente/acme/nicho/{eid}/investigacion/reanudar", follow_redirects=False)
+
+    assert r.status_code == 302
+    assert len(encolados) == 1
+    job_id, tarea, payload = encolados[0]
+    assert tarea == "nicho_inv_buscar" and payload["plataforma"] == "amazon"
+    inv = datos.investigacion("acme", eid)
+    assert inv["estado"] == "consultas" and inv["detenida_por"] is None
