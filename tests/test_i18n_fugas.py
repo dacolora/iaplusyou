@@ -71,3 +71,5 @@ def test_la_deteccion_funciona():
     html = '<div id="a"><p>Hello</p><input placeholder="Escribe aquí"></div><div id="b"><p>Guardar</p></div>'
     assert espanol_visible(html, ("a",)) == ["Escribe aquí"]
     assert espanol_visible(html) == ["Escribe aquí", "Guardar"]
+    # Void element with matching id must have its attributes inspected
+    assert espanol_visible('<input id="campo" placeholder="Escribe aquí">', ("campo",)) == ["Escribe aquí"]

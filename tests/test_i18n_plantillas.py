@@ -20,6 +20,12 @@ def test_la_deteccion_funciona(tmp_path):
                     encoding="utf-8")
     assert espanol_en_plantilla(str(ruta)) == ["Guardar cambios", "'¿Seguro?'"]
 
+    # Test that strings containing // are not truncated
+    ruta2 = tmp_path / "y.html"
+    ruta2.write_text("<script>var m = 'Ver mas // detalles, más info'; // comentario en español</script>",
+                     encoding="utf-8")
+    assert espanol_en_plantilla(str(ruta2)) == ["'Ver mas // detalles, más info'"]
+
 
 @pytest.mark.parametrize("nombre", PLANTILLAS_TRADUCIDAS)
 def test_plantilla_sin_espanol_suelto(nombre):

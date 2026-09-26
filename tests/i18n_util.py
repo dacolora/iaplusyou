@@ -33,11 +33,14 @@ class _Visible(HTMLParser):
     def handle_starttag(self, tag, attrs):
         a = {k: v for k, v in attrs if v is not None}
         abre = bool(self.ids) and a.get("id") in self.ids
-        if tag not in VACIOS:
+        is_void = tag in VACIOS
+        if not is_void:
             self.pila.append((tag, abre))
             self.region += abre
             self.oculto += tag in ("script", "style", "template")
-        if self.region and not self.oculto:
+        # Inspect attributes if we're in a region, OR if this is a void element with matching id
+        should_inspect = (self.region and not self.oculto) or (abre and is_void and not self.oculto)
+        if should_inspect:
             self.trozos += [a[k] for k in ATRIBUTOS if a.get(k)]
             if tag in ("input", "button") and a.get("type") in ("submit", "button") and a.get("value"):
                 self.trozos.append(a["value"])
@@ -70,7 +73,13 @@ def espanol_visible(html, ids=None):
     return [t for t in p.trozos if _con_marca(t)]
 
 
-_LITERAL_JS = re.compile(r"'(?:[^'\\\n]|\\.)*'|\"(?:[^\"\\\n]|\\.)*\"|`(?:[^`\\]|\\.)*`")
+_SCRIPT_TOKEN = re.compile(
+    r"'(?:[^'\\\n]|\\.)*'|"  # single-quoted string
+    r'"(?:[^\"\\\n]|\\.)*"|'  # double-quoted string
+    r"`(?:[^`\\]|\\.)*`|"     # template literal
+    r"//[^\n]*|"              # line comment
+    r"/\*.*?\*/",             # block comment
+    re.S)
 
 
 def espanol_en_plantilla(ruta):
@@ -82,7 +91,7 @@ def espanol_en_plantilla(ruta):
     src = re.sub(r"<!--.*?-->", " ", src, flags=re.S)
     hallazgos = espanol_visible(src)
     for bloque in re.findall(r"<script\b[^>]*>(.*?)</script>", src, flags=re.S | re.I):
-        bloque = re.sub(r"/\*.*?\*/", " ", bloque, flags=re.S)
-        bloque = re.sub(r"(?<![:'\"\\])//[^\n]*", " ", bloque)
-        hallazgos += [lit for lit in _LITERAL_JS.findall(bloque) if _con_marca(lit)]
+        tokens = _SCRIPT_TOKEN.findall(bloque)
+        # Keep only string literals (start with ', ", or `) that have Spanish marks
+        hallazgos += [t for t in tokens if t[0] in ("'", '"', "`") and _con_marca(t)]
     return hallazgos
