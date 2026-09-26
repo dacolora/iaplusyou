@@ -144,6 +144,14 @@ def test_nivel_a_consciencia_traduce_los_cinco_niveles_de_nicho():
     assert sugerir.NIVEL_A_CONSCIENCIA["consciente_del_problema"] == "problem-aware"
 
 
+def test_nivel_a_consciencia_es_el_inverso_exacto_de_doctrina():
+    import doctrina
+    assert set(sugerir.NIVEL_A_CONSCIENCIA) == set(doctrina.CONSCIENCIAS)
+    for nivel_es in doctrina.CONSCIENCIAS:
+        en = sugerir.NIVEL_A_CONSCIENCIA[nivel_es]
+        assert doctrina.CONSCIENCIA_DESDE_INGLES[en] == nivel_es
+
+
 class _RespuestaFalsa:
     def __init__(self, texto):
         self.content = [type("Bloque", (), {"text": texto})()]
@@ -215,3 +223,24 @@ def test_sugerir_ia_cortada_por_max_tokens_lanza_con_tokens(monkeypatch):
     with pytest.raises(sugerir.SugerenciaInvalida, match="se cortó") as exc:
         sugerir.sugerir_ia([_cand(1, "ugc")], "p", "pr", "t", objetivo=1)
     assert exc.value.tokens_entrada == 111 and exc.value.tokens_salida == 22
+
+
+def test_sugerir_ia_muestra_consciencia_y_arranque_y_manda_la_doctrina(monkeypatch):
+    import doctrina
+    vistos = []
+    respuesta = _RespuestaFalsa('{"elegidos": [{"referente_id": 1, "razon": "mismo arranque"}]}')
+
+    class _ClienteFalso:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                vistos.append(kw)
+                return respuesta
+
+    monkeypatch.setattr("referentes.sugerir.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.sugerir._api_key", lambda: "sk-test")
+    cand = dict(_cand(1, "ugc"), consciencia="problem-aware", extra={"lead": "secreto"})
+    sugerir.sugerir_ia([cand], "persona", "producto", "temporada", objetivo=1)
+    msg = vistos[0]["messages"][0]["content"]
+    assert "consciencia: consciente del problema" in msg and "arranque: secreto" in msg
+    assert vistos[0]["system"][0]["text"] == doctrina.texto("clasificar")

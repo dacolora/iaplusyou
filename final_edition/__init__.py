@@ -35,6 +35,7 @@ import db
 import gastos
 import marca
 import proyectos
+import tiendas
 from final_edition import cortes, guion as guion_mod, mezcla, musica, render, texto, tipos, voz
 from providers import fal_audio
 from storage import r2_uploader
@@ -148,44 +149,55 @@ def _sesion(cliente, cf_id):
     return entry
 
 
-def _producto(cliente, entry, precio):
-    """{"nombre","descripcion","precio","moneda","beneficios","tipo"} desde el
-    catálogo o desde la acción central.
+def _fila_producto(cliente, activo_id):
+    """Fila `producto` del activo (precio, moneda, url_compra); {} si no hay."""
+    try:
+        return tiendas.por_activo(cliente).get(activo_id) or {}
+    except Exception:  # noqa: BLE001 — precio y URL son un extra del guion, nunca lo tumban
+        return {}
 
-    `productos_ids` guarda NOMBRES visibles (no ids), y puede mezclar
-    productos con personajes/entornos — se busca cada uno primero por id en
-    la categoría "producto" (compatibilidad con sesiones viejas) y si no,
-    por nombre entre los productos del catálogo. Si nada resuelve, se cae a
-    la primera referencia con categoria=="producto" (el nombre del activo
-    tal como quedó en la sesión) y luego a la acción central."""
-    ids = entry.get("productos_ids") or []
-    p = None
-    nombre_activo = None
-    for x in ids:
-        p = catalogo_productos.encontrar(cliente, x, categoria="producto")
+
+def _precio_entero(precio):
+    """89900.0 → 89900: el precio escrito (`_precio_form`) y el de la tienda
+    (columna Float) llegan como float, y Claude no debe ver «89900.0» — el
+    verificador de cifras lo leería como 899000 y el precio real saldría
+    «inventado». Un precio con decimales (89.9) queda igual."""
+    if isinstance(precio, float) and precio.is_integer():
+        return int(precio)
+    return precio
+
+
+def _producto(cliente, entry, precio):
+    """{"nombre","descripcion","regla","precio","moneda","url_compra","tipo"}
+    desde el catálogo (y su fila de tienda) o desde la acción central.
+
+    `productos_ids` guarda NOMBRES visibles (no ids): se busca cada uno por id
+    y luego por nombre (`catalogo_productos.encontrar_por_id_o_nombre`). Si
+    nada resuelve, se cae a la primera referencia con categoria=="producto" y
+    luego a la acción central. El precio escrito por la persona manda; si no
+    hay, el de la tienda con SU moneda (nunca una moneda para un precio escrito).
+    Un precio entero va como int (`_precio_entero`), nunca «89900.0»."""
+    precio = _precio_entero(precio)
+    p, visto = None, None
+    for x in entry.get("productos_ids") or []:
+        p = catalogo_productos.encontrar_por_id_o_nombre(cliente, x, "producto")
         if p:
-            nombre_activo = x
+            visto = x
             break
-        for cand in catalogo_productos.listar(cliente, "producto"):
-            if cand.get("nombre") == x:
-                p, nombre_activo = cand, x
-                break
-        if p:
-            break
-    if not p:
-        for r in entry.get("referencias") or []:
-            if r.get("categoria") == "producto" and r.get("activo"):
-                nombre_activo = r["activo"]
-                break
     if p:
-        return {"nombre": p.get("nombre") or nombre_activo, "descripcion": p.get("descripcion") or "",
-                "precio": precio, "moneda": None, "beneficios": [], "tipo": p.get("tipo")}
-    if nombre_activo:
-        return {"nombre": nombre_activo, "descripcion": "", "precio": precio, "moneda": None,
-                "beneficios": [], "tipo": None}
+        fila = _fila_producto(cliente, p.get("id"))
+        usa_tienda = precio is None and fila.get("precio") is not None
+        return {"nombre": p.get("nombre") or visto, "descripcion": p.get("descripcion") or "",
+                "regla": p.get("regla") or "", "precio": _precio_entero(fila.get("precio")) if usa_tienda else precio,
+                "moneda": fila.get("moneda") if usa_tienda else None, "url_compra": fila.get("url_compra"),
+                "tipo": p.get("tipo")}
+    for r in entry.get("referencias") or []:
+        if r.get("categoria") == "producto" and r.get("activo"):
+            return {"nombre": r["activo"], "descripcion": "", "regla": r.get("regla") or "", "precio": precio,
+                    "moneda": None, "url_compra": None, "tipo": None}
     accion = entry.get("accion_central") or ""
-    return {"nombre": accion[:60], "descripcion": accion, "precio": precio, "moneda": None,
-            "beneficios": [], "tipo": None}
+    return {"nombre": accion[:60], "descripcion": accion, "regla": "", "precio": precio, "moneda": None,
+            "url_compra": None, "tipo": None}
 
 
 def _referencia(entry, idioma_base):
@@ -341,6 +353,12 @@ def _canal_optimo_triple_whale(cliente, cf_id):
 
 # ------------------------------------------------------------------- API ---
 
+def _angulo_con_contenido(angulo):
+    """Un ángulo que vale la pena guardar: dict con promesa y gancho."""
+    return (isinstance(angulo, dict) and bool(str(angulo.get("promesa") or "").strip())
+            and bool(str(angulo.get("gancho") or "").strip()))
+
+
 def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     """Guion base de la sesión (capa 0). Devuelve `(guion_base, costo_usd)` y
     lo deja guardado en el concepto (`creative_flow.guardar_guion_base`).
@@ -354,6 +372,17 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     entry = _sesion(cliente, cf_id)
     idioma_base = o.get("idioma_base") or "es"
     producto = _producto(cliente, entry, o.get("precio"))
+    # Precio base del guion (D, regla de CLAUDE.md): el escrito por la persona
+    # manda tal cual. Sin uno escrito, el de la tienda solo cuenta como precio
+    # base si su moneda es la del país base — si no, ninguna final lo llevaría
+    # en esa moneda y Claude no debe voz-earlo: se le quita al producto.
+    precio_base = o.get("precio")
+    if precio_base is None and producto.get("precio") is not None:
+        moneda_pais_base = tipos.PAISES[guion_mod._pais_por_idioma(idioma_base)]["moneda"]
+        if producto.get("moneda") == moneda_pais_base:
+            precio_base = producto["precio"]
+        else:
+            producto = dict(producto, precio=None, moneda=None)
     referencia, costo = _referencia(entry, idioma_base)
     duracion_s = o.get("duracion_s") or cortes.duracion(_clon_local(cliente, cf_id, entry))
     enfoque = entry.get("enfoque") or "producto"
@@ -361,13 +390,19 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     costo_whisper = costo
     # Detectar canal óptimo de Triple Whale si existe
     canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
+    angulo_sesion = entry.get("angulo")
     guion_base, costo_guion = guion_mod.generar_guion_base(
         producto, referencia, enfoque, float(duracion_s), idioma_base,
-        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo)
+        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion)
     costo += float(costo_guion or 0.0)
+    # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
+    # con el guion (B: `guion_mod.generar_guion_base` reusa su propia vuelta
+    # de corrección); acá solo se separa y se guarda. Uno que ya existía (de
+    # la idea del sprint o de «Recrear») nunca se pisa.
+    nuevo = guion_base.pop("angulo", None)
     # El precio escrito al preparar viaja con el guion base para prellenar el
     # destino del país base al producir (los demás países piden el suyo).
-    guion_base["precio_base"] = o.get("precio")
+    guion_base["precio_base"] = precio_base
     # Guardar contexto de canal óptimo si lo hay
     if canal_optimo:
         guion_base["canal_optimo"] = canal_optimo
@@ -380,6 +415,13 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         cliente, "guion", round(costo, 4), f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
         detalle=f"guion base {idioma_base}" + (" + transcripción de la referencia" if costo_whisper else ""),
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
+    # F: el ángulo se guarda AL FINAL — si esto falla, el guion (ya pagado) y
+    # su gasto ya quedaron a salvo; una tarea nueva no vuelve a pagar por él.
+    # Solo uno con promesa y gancho: si Claude lo omitió en las dos vueltas,
+    # llega un cascarón de «error: campo_faltante:…» y guardarlo haría que
+    # todo guion, variante y caption posterior «escriba desde» la nada.
+    if not angulo_sesion and _angulo_con_contenido(nuevo):
+        creative_flow.actualizar(cliente, cf_id, angulo=nuevo)
     return guion_base, round(costo, 4)
 
 
@@ -457,12 +499,19 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         if not guion_base:
             guion_base, costo_base = preparar_guion(cliente, cf_id, o, ref_sufijo=ref_sufijo)
             costo += costo_base
+            # F.1: si la sesión no tenía ángulo, preparar_guion pudo guardar
+            # uno nuevo — recargar para que la variante y la localización de
+            # ABAJO (en esta misma llamada) ya lo reciban, en vez de None.
+            entry = _sesion(cliente, cf_id)
         # Variante: el guion variado reemplaza al base SOLO para esta pieza;
         # `concepto.guion_base` sigue intacto para las demás finales.
         costo_variante = 0.0
+        angulo_variante = None
         if variante_tipo:
-            guion_base, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, _guia_marca(cliente))
+            guion_base, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, _guia_marca(cliente),
+                                                                angulo=entry.get("angulo"))
             costo += float(costo_variante or 0.0)
+            angulo_variante = guion_base.pop("angulo_variante", None)
     except Exception as e:
         capas["guion"] = {"proveedor": "anthropic", "parametros": {"variante_tipo": variante_tipo} if variante_tipo else {},
                           "costo_usd": 0.0, "estado": "error", "error": str(e)}
@@ -496,8 +545,10 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         params_guion = {"idioma": idioma, "pais": pais, "precio": precio}
         if variante_tipo:
             params_guion["variante_tipo"] = variante_tipo
+        if angulo_variante and (angulo_variante.get("lead") or angulo_variante.get("gancho")):
+            params_guion["angulo"] = angulo_variante
         try:
-            guion, c = guion_mod.localizar_guion(guion_base, idioma, pais, precio)
+            guion, c = guion_mod.localizar_guion(guion_base, idioma, pais, precio, angulo=entry.get("angulo"))
         except Exception as e:
             capa("guion", "anthropic", params_guion, costo_variante, estado="error", error=str(e))
             raise

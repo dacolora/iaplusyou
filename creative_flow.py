@@ -248,6 +248,7 @@ def datos_para_director(cliente, entry):
         "sonido_texto": entry.get("sonido_texto") or "",
         "enfoque": entry.get("enfoque") or "producto",
         "contexto": entry.get("contexto"),
+        "angulo": entry.get("angulo"),
         "preset_camara": entry.get("preset_camara"),
         "plantilla": entry.get("plantilla"),
         "guia_marca": "" if libre else marca_mod.guia_efectiva(cliente),

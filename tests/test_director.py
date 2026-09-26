@@ -76,6 +76,12 @@ def _sesion(**kw):
     return s
 
 
+def _sys(kw):
+    """El system llega como lista de bloques (doctrina + instrucciones)."""
+    s = kw["system"]
+    return "".join(b["text"] for b in s) if isinstance(s, list) else s
+
+
 def test_n_planos_por_duracion():
     import director
     assert [director.n_planos(d) for d in (5, 6, 10, 11, 15, 16, 20, 21, 30)] == [1, 2, 2, 3, 3, 4, 4, 5, 5]
@@ -86,8 +92,8 @@ def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
     reg = _instalar_fake(monkeypatch, [_respuesta()])
     r = director.compilar("acme", _sesion())
     assert reg.kwargs[0]["model"] == director.MODEL and reg.kwargs[0]["max_tokens"] == director.MAX_TOKENS
-    assert "Wan 3.0" in reg.kwargs[0]["system"] and "No dialogue. No background music." in reg.kwargs[0]["system"]
-    assert "Hard cut." in reg.kwargs[0]["system"] and "Shot 2 (4-8s): Hard cut. " in r["prompt_a"]
+    assert "Wan 3.0" in _sys(reg.kwargs[0]) and "No dialogue. No background music." in _sys(reg.kwargs[0])
+    assert "Hard cut." in _sys(reg.kwargs[0]) and "Shot 2 (4-8s): Hard cut. " in r["prompt_a"]
     assert "IDEA: Image 1 gira sobre la piedra" in reg.kwargs[0]["messages"][0]["content"]
     assert r["prompt_a"].count("Shot ") == 2 and "Shot 1 (0-4s)" in r["prompt_a"] and "Shot 2 (4-8s)" in r["prompt_a"]
     assert r["prompt_a"].endswith("Recordatorio final: el producto permanece solo y sin nadie durante todo el video.")
@@ -168,8 +174,8 @@ def test_familia_kling_y_seedance_cambian_plantilla_y_cierre(monkeypatch):
     reg = _instalar_fake(monkeypatch, [_respuesta(), _respuesta()])
     k = director.compilar("acme", _sesion(modelo="kling_o3_pro"))
     s = director.compilar("acme", _sesion(modelo="seedance25"))
-    assert "Kling" in reg.kwargs[0]["system"] and "No dialogue. No music." in k["prompt_a"]
-    assert "movimiento y cámara" in reg.kwargs[1]["system"].lower() and "No BGM" in s["prompt_a"]
+    assert "Kling" in _sys(reg.kwargs[0]) and "No dialogue. No music." in k["prompt_a"]
+    assert "movimiento y cámara" in _sys(reg.kwargs[1]).lower() and "No BGM" in s["prompt_a"]
 
 
 def test_idioma_en_cambia_la_instruccion_de_idioma(monkeypatch):
@@ -239,3 +245,29 @@ def test_respuesta_vacia_pide_correccion_sin_content_vacio(monkeypatch):
     asistente = [m for m in reg.kwargs[1]["messages"] if m["role"] == "assistant"]
     assert asistente[-1]["content"] == "(respuesta vacía)"
     assert r["prompt_a"].count("Shot ") == 2
+
+
+def test_la_doctrina_de_video_va_en_el_system_con_cache_y_el_angulo_en_el_mensaje(monkeypatch):
+    import director
+    import doctrina
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    angulo, _ = doctrina.validar_angulo({
+        "audiencia": "quien corre de noche", "consciencia": "consciente_del_problema", "sofisticacion": 3,
+        "deseo": "que la vean en la calle", "promesa": "te ven a 200 metros sin cambiar de ropa",
+        "mecanismo": "banda reflectiva cosida en el talón",
+        "pruebas": [{"texto": "la banda brilla con los faros", "fuente": "demostracion"}],
+        "lead": "problema_solucion", "gancho": "Si corres de noche, esto te salva", "faltantes": []})
+    director.compilar("acme", _sesion(angulo=angulo))
+    kw = reg.kwargs[0]
+    assert kw["system"][0]["cache_control"] == {"type": "ephemeral"} and kw["system"][0]["text"] == doctrina.texto("video")
+    assert "Wan 3.0" in kw["system"][1]["text"]
+    msg = kw["messages"][0]["content"]
+    assert "ÁNGULO" in msg and "Promesa única: te ven a 200 metros" in msg and "se demuestra en cámara" in msg
+    assert msg.index("IDEA:") < msg.index("ÁNGULO") < msg.index("ACTIVOS")
+
+
+def test_sin_angulo_el_mensaje_del_director_no_trae_bloque(monkeypatch):
+    import director
+    reg = _instalar_fake(monkeypatch, [_respuesta()])
+    director.compilar("acme", _sesion())
+    assert "ÁNGULO" not in reg.kwargs[0]["messages"][0]["content"]

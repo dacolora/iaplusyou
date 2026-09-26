@@ -13,6 +13,7 @@
         data-recrear="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}"
         data-adaptar="{{ url_for('referentes.recrear_adaptar', cliente=cliente, rid=r.id) }}">
     <input type="hidden" name="tipo" value="{{ tipo }}">
+    <input type="hidden" name="angulo" value="" data-recrear-campo="angulo">
     <div class="fe-opciones">
       <label>Producto
         <select name="producto_id" data-recrear-campo="producto_id">

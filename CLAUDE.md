@@ -667,6 +667,35 @@ top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the s
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
 (`tests/test_base_visual.py`, `tests/test_movil.py`).
 
+**Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
+ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)
+destilados en nuestras palabras en `doctrina/textos/*.md`, por rebanadas (`base` siempre + `investigar`, `angulo`,
+`gancho`, `guion`, `video`, `caption`, `clasificar`, `revisar`); los libros NO están en el repo. Cada llamada a Claude
+que escribe o clasifica copy recibe su rebanada con `doctrina.bloque_system(*rebanadas, extra=<instrucciones del
+sitio>)` (bloque con `cache_control`): ideas de sprint (`angulo`+`gancho`+`video`), director (`video`), guion
+(`guion`+`gancho`, o además `angulo` si la sesión no tiene), localizar (base), variar (`gancho`), captions
+(`caption`), «Adaptar con IA» (`angulo`+`gancho`), clasificar/sugerir referentes y analizar referencias
+(`clasificar`), avatares y personas sugeridas (`investigar`). El **ángulo** (audiencia, consciencia, sofisticación
+1–5, deseo, promesa única, mecanismo, pruebas con fuente `ficha|comentarios|demostracion`, arranque/`lead`, gancho,
+faltantes) lo decide Claude antes de escribir y `doctrina.validar_angulo` lo limpia (nunca lanza; una corrección —
+en el guion, la misma ronda del guion con errores no bloqueantes—; si la corrección falla por lo que sea, se guarda la
+primera respuesta con `faltantes` «error: …» vía `doctrina.anotar_errores`, que los pone primero para que ninguno se
+corte antes que un faltante de Claude: nunca se pierde lo pagado). Vive en `campana_pieza.extra.angulo`
+(ideas) → `concepto.extra.angulo` (sesión; `duplicar` lo copia; «Adaptar» y el guion lo crean solo si la sesión no
+tiene, y el guion solo si trae promesa y gancho) → director, guion, captions; las variantes guardan
+`capas.guion.parametros.angulo` (`lead` y `gancho` nuevos). `doctrina.verificar_cifras`: ninguna cifra fuerte (2+
+dígitos, %, moneda, «3x», «N de cada M») que no esté en los datos que Claude recibió; del ángulo solo cuenta como dato
+`doctrina.texto_verificable` (las pruebas, y el resto solo si ningún `faltantes` es un «error: …»; nunca
+`faltantes`). En el guion base y las variantes es bloqueante (va a la corrección y, si persiste, `GuionInvalido`);
+localizar no verifica cifras (convierte unidades y precio y el base ya se verificó); en ideas y «Adaptar» queda en
+`faltantes`. Sin precio escrito, el precio de la tienda solo entra al guion como `precio_base` si su moneda es la del
+país base; si no, el guion no recibe precio. Vocabulario único:
+`doctrina.CONSCIENCIAS` (el de Nicho; `normalizar_consciencia` traduce el inglés de referentes y
+`referentes.sugerir.NIVEL_A_CONSCIENCIA` se deriva de ahí), `LEADS`, `SOFISTICACIONES`. Nada de esto agrega pantallas
+ni migraciones (bloque 1 de 4; los bloques 2–4 están en el §14 del spec). Los topes de salida de estos sitios son
+amplios (4 000–16 000 tokens): el pensamiento adaptativo de `claude-sonnet-5` los consume y con topes chicos la
+respuesta llega vacía (prueba real del 2026-09-26).
+
 ## Agent skills
 
 ### Issue tracker

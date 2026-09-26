@@ -33,6 +33,7 @@ import catalogo_productos
 import cola
 import creative_flow
 import db
+import doctrina
 import gastos
 import notificaciones
 import proyectos
@@ -107,7 +108,8 @@ def ejecutar_sugerir(tarea):
                             descripcion=persona.get("descripcion", ""), edad_rango=persona.get("edad_rango", ""),
                             tono=persona.get("tono", ""), senales_visuales=persona.get("senales_visuales"),
                             palabras_clave=persona.get("palabras_clave"), color=persona.get("color"),
-                            origen="sugerida_ia")
+                            origen="sugerida_ia",
+                            extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
     return f"{len(propuestas)} personas sugeridas — revísalas y edítalas."
 
 
@@ -181,7 +183,11 @@ def ejecutar_sugerir_biblioteca(tarea):
     if not candidatos:
         return "No hay candidatos nuevos en la biblioteca para esta etapa."
     objetivo = max(1, (c.get("referencias_objetivo") or 1) - len(refs_actuales))
-    persona_texto = ". ".join(x for x in (persona.get("resumen"), persona.get("descripcion"), persona.get("tono")) if x)
+    conciencia = (persona.get("extra") or {}).get("conciencia") or {}
+    nivel = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
+    persona_texto = ". ".join(x for x in (persona.get("resumen"), persona.get("descripcion"), persona.get("tono"),
+                                          f"nivel de consciencia: {doctrina.CONSCIENCIAS_NOMBRE[nivel]}" if nivel else None)
+                              if x)
     producto_texto = ". ".join(x for x in (producto.get("nombre"), producto.get("descripcion")) if x)
     temporada_texto = ". ".join(x for x in (temporada.get("nombre"), temporada.get("contexto")) if x)
     try:

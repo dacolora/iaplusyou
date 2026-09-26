@@ -15,6 +15,7 @@ from flask import (Blueprint, abort, flash, has_request_context, jsonify, redire
                    session, url_for)
 
 import catalogo_productos
+import doctrina
 import gastos
 import proyectos
 import trabajos
@@ -485,7 +486,7 @@ def campana_ver(cliente, sid, cid):
     nivel_conciencia = ((persona_ or {}).get("extra") or {}).get("conciencia") or {}
     if isinstance(nivel_conciencia, dict):
         nivel_conciencia = nivel_conciencia.get("nivel")
-    consciencia = referentes_sugerir.NIVEL_A_CONSCIENCIA.get(nivel_conciencia)
+    consciencia = referentes_sugerir.NIVEL_A_CONSCIENCIA.get(doctrina.normalizar_consciencia(nivel_conciencia))
     candidatos_gratis = referentes_sugerir.sugerir(cliente, c["funnel"].upper(), ya_ids, objetivo_restante,
                                                     consciencia=consciencia)
     palabra_sugerida = (producto or {}).get("nombre") or ""

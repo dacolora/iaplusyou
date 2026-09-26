@@ -8,10 +8,13 @@ import base64
 import json
 import os
 
+import doctrina
 from sprints import datos
 
 CLAVES = ("resumen", "paleta", "composicion", "iluminacion", "movimiento", "tipografia", "estetica",
           "storytelling", "elementos")
+# Claves opcionales (spec 2026-09-25 §5.3): un análisis viejo sin ellas sigue valiendo.
+PRUEBAS_REFERENCIA = ("demostracion", "testimonio", "cifra", "autoridad", "ninguna")
 
 PROMPT_ANALISIS = """Eres director de arte de anuncios cortos para redes sociales. Vas a ver una referencia visual (una imagen, o fotogramas en orden de un video) que una persona subió para inspirar contenido de la marca {marca}.
 Lo que le interesa reutilizar de esta referencia: {intencion}.
@@ -27,6 +30,9 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con exactamente e
 - "estetica": estilo general en 5 a 10 palabras.
 - "storytelling": qué cuenta o sugiere la escena, en una frase.
 - "elementos": lista de 3 a 8 sustantivos con lo que aparece.
+- "gancho": qué hace la pieza en los primeros tres segundos, o su titular si es imagen; máximo 20 palabras; "" si no se puede saber.
+- "lead": cómo arranca, uno de: "oferta", "promesa", "problema_solucion", "secreto", "proclamacion", "historia"; null si no se puede saber.
+- "prueba": cómo sostiene lo que promete, uno de: "demostracion", "testimonio", "cifra", "autoridad", "ninguna".
 Todo en español. No menciones "fotograma" ni "imagen": describe la escena."""
 
 
@@ -34,13 +40,16 @@ class AnalisisInvalido(RuntimeError):
     pass
 
 
-def _llamar(content, max_tokens=700):
-    """Una llamada a Claude con bloques de texto e imagen; devuelve el texto."""
+def _llamar(content, max_tokens=700, system=None):
+    """Una llamada a Claude con bloques de texto e imagen; devuelve el texto.
+    `system` (str o lista de bloques, p. ej. `doctrina.bloque_system(...)`)
+    solo se manda si viene."""
     import anthropic
     from generador_prompts import MODEL, _api_key
     client = anthropic.Anthropic(api_key=_api_key())
+    extra = {"system": system} if system else {}
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
-                                  messages=[{"role": "user", "content": content}])
+                                  messages=[{"role": "user", "content": content}], **extra)
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 
@@ -67,7 +76,11 @@ def _parsear_json(texto):
         raise AnalisisInvalido(f"Faltan claves: {', '.join(faltan)}")
     data["paleta"] = [c for c in (data.get("paleta") or []) if isinstance(c, str) and datos.COLOR_HEX.match(c)][:5]
     data["elementos"] = [str(e) for e in (data.get("elementos") or [])][:8]
-    return {k: data[k] for k in CLAVES}
+    salida = {k: data[k] for k in CLAVES}
+    salida["gancho"] = " ".join(str(data.get("gancho") or "").split())[:200]
+    salida["lead"] = data.get("lead") if data.get("lead") in doctrina.LEADS else None
+    salida["prueba"] = data.get("prueba") if data.get("prueba") in PRUEBAS_REFERENCIA else None
+    return salida
 
 
 def _bloques_imagen(referencia):
@@ -87,6 +100,10 @@ def _bloques_imagen(referencia):
     return bloques
 
 
+def _system():
+    return doctrina.bloque_system("clasificar")
+
+
 def analizar(referencia, marca=""):
     """Devuelve el dict con CLAVES. Reintenta una sola vez si el JSON no sirve."""
     etiquetas = [datos.INTENCIONES_NOMBRE.get(i, i) for i in (referencia.get("intencion") or [])]
@@ -100,7 +117,7 @@ def analizar(referencia, marca=""):
         raise AnalisisInvalido("La referencia no tiene imagen ni fotograma que analizar.")
     content = [{"type": "text", "text": texto}] + imagenes
     try:
-        return _parsear_json(_llamar(content))
+        return _parsear_json(_llamar(content, max_tokens=4000, system=_system()))
     except AnalisisInvalido as e:
         content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
-        return _parsear_json(_llamar(content))
+        return _parsear_json(_llamar(content, max_tokens=4000, system=_system()))

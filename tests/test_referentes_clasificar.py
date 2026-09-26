@@ -139,3 +139,35 @@ def test_clasificar_da_espacio_para_pensar_y_responder(monkeypatch):
                                               '"dolor": "x", "firma": "y"}'), pedidos)
     clasificar.clasificar(_REFERENTE, [])
     assert 299 * 5 <= pedidos[0]["max_tokens"] <= 16000
+    assert pedidos[0]["max_tokens"] == clasificar.MAX_TOKENS == 4000     # con doctrina, 2000 volvía solo pensamiento
+
+
+def test_validar_acepta_lead_y_descarta_el_raro():
+    base = {"etapa": "TOF", "consciencia": "unaware", "familia": None,
+            "familia_nueva": {"nombre": "X", "descripcion": "d"}, "dolor": "x", "firma": "f"}
+    assert clasificar.validar(dict(base, lead="historia"), [])["lead"] == "historia"
+    assert clasificar.validar(dict(base, lead="grito"), [])["lead"] is None
+    assert clasificar.validar(base, [])["lead"] is None
+
+
+def test_clasificar_manda_la_doctrina_de_clasificar_y_pide_el_lead(monkeypatch):
+    import doctrina
+    vistos = []
+    respuesta = _RespuestaFalsa('{"etapa": "TOF", "consciencia": "unaware", "familia": null, '
+                                '"familia_nueva": {"nombre": "X", "descripcion": "d"}, "dolor": "d", "firma": "f", '
+                                '"lead": "secreto"}')
+
+    class _ClienteFalso:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                vistos.append(kw)
+                return respuesta
+
+    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.clasificar._api_key", lambda: "sk-test")
+    r, _, _ = clasificar.clasificar({"marca": "M", "titular": "T", "cuerpo": "", "idioma": "en",
+                                     "imagen_url": "https://r2/x.jpg"}, [])
+    assert r["lead"] == "secreto"
+    assert vistos[0]["system"][0]["text"] == doctrina.texto("clasificar")
+    assert '"lead"' in vistos[0]["messages"][0]["content"][0]["text"]

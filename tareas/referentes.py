@@ -457,9 +457,13 @@ def _clasificar_uno(cliente, r):
         nombre_nuevo = f"EMERGING: {fn['nombre']}"
         datos.familia_asegurar(nombre_nuevo, fn.get("descripcion") or "", origen="claude")
         familia = nombre_nuevo
+    # `actualizar_referente` reemplaza `extra` entero: se copia y se agrega el arranque.
+    extra = dict(r.get("extra") or {})
+    if resultado.get("lead"):
+        extra["lead"] = resultado["lead"]
     datos.actualizar_referente(r["id"], etapa=resultado["etapa"], consciencia=resultado["consciencia"],
                                familia=familia, dolor=resultado["dolor"], firma=resultado["firma"],
-                               clasificacion="claude")
+                               clasificacion="claude", extra=extra)
     return True, ent, sal
 
 

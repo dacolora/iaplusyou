@@ -13,16 +13,20 @@ Forma del guion:
 """
 import copy
 import json
+import math
 import os
 
 import anthropic
 
+import doctrina
 from final_edition import tipos
 
 # Mismo patrón que generador_prompts (replicado para no acoplar este módulo al
 # generador de prompts de video).
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
-MAX_TOKENS = 1500
+# Sonnet 5 piensa antes de responder y eso sale del mismo tope; con la
+# doctrina y el ángulo en la salida, 1500 se quedaba corto.
+MAX_TOKENS = 4000
 COSTO_LLAMADA_USD = 0.01
 
 PALABRAS_POR_SEGUNDO = 2.5
@@ -75,43 +79,65 @@ FORMATO_JSON = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional
 {"bloques": [{"rol": "hook", "texto_pantalla": "...", "texto_voz": "...", "inicio_s": 0, "fin_s": 2}, ...],
  "idioma": "es", "pais": "CO", "moneda": null, "precio_texto": null}"""
 
+FORMATO_JSON_CON_ANGULO = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional ni markdown) con esta forma:
+{"angulo": {"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": null, "pruebas": [{"texto": "...", "fuente": "ficha"}], "lead": "...", "gancho": "...", "faltantes": []},
+ "bloques": [{"rol": "hook", "texto_pantalla": "...", "texto_voz": "...", "inicio_s": 0, "fin_s": 2}, ...],
+ "idioma": "es", "pais": "CO", "moneda": null, "precio_texto": null}"""
 
-def _system_generar(duracion_s, idioma_base, canal_optimo=None):
-    ajuste_canal = ""
-    if canal_optimo:
-        if canal_optimo["canal"] == "google_ads":
-            # Google Ads: búsqueda, usuario buscando activamente, breve y directo
-            ajuste_canal = f"""
-NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
-- Hook: muy rápido, captura urgencia o curiosidad inmediata (primeros 0.5 s).
-- Tono: directo, agresivo, enfocado en el beneficio inmediato.
-- Estructura: problema → solución → CTA (rápido).
-- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 6)}} segundos."""
-        elif canal_optimo["canal"] == "tiktok":
-            # TikTok: scroll social, emocional, trending
-            ajuste_canal = f"""
-NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
-- Hook: emocional, engagement visual fuerte (trending music, cambios).
-- Tono: conversacional, emocional, relatable.
-- Estructura: gancho emocional → problema identificable → producto como solución → CTA social.
-- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 9)}} segundos."""
-        elif canal_optimo["canal"] == "instagram":
-            # Instagram: estético, lifestyle
-            ajuste_canal = f"""
-NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
-- Hook: estético, visual fuerte (cuidado con el framing).
-- Tono: aspiracional, lifestyle, inspirador.
-- Estructura: muestra el resultado/lifestyle → problema → producto integrado → CTA sutil.
-- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 7)}} segundos."""
-        elif canal_optimo["canal"] == "pinterest":
-            # Pinterest: inspiración, soluciones prácticas
-            ajuste_canal = f"""
-NOTA: Este video está optimizado para {{canal_optimo["canal"]}} (ROAS {{canal_optimo["roas"]}}x).
-- Hook: visual limpio, inspirador, con números/datos si aplica.
-- Tono: práctico, informativo, inspirador.
-- Estructura: resultado/beneficio → problema → producto como solución → CTA claro.
-- Duración sugerida: {{canal_optimo.get("duracion_sugerida_s", 8)}} segundos."""
+# Notas por canal (Triple Whale): (duración sugerida por defecto, reglas).
+_CANALES = {
+    "google_ads": (6, ("Hook: muy rápido, captura urgencia o curiosidad inmediata (primeros 0.5 s).",
+                       "Tono: directo, enfocado en el beneficio inmediato.",
+                       "Estructura: problema → solución → CTA (rápido).")),
+    "tiktok": (9, ("Hook: emocional, con un cambio visual fuerte.",
+                   "Tono: conversacional, emocional, cercano.",
+                   "Estructura: gancho emocional → problema identificable → producto como solución → CTA social.")),
+    "instagram": (7, ("Hook: estético, visual fuerte (cuidado con el encuadre).",
+                      "Tono: aspiracional, estilo de vida, inspirador.",
+                      "Estructura: muestra el resultado → problema → producto integrado → CTA sutil.")),
+    "pinterest": (8, ("Hook: visual limpio e inspirador, con datos reales si los hay.",
+                      "Tono: práctico, informativo, inspirador.",
+                      "Estructura: resultado o beneficio → problema → producto como solución → CTA claro.")),
+    "facebook": (8, ("Hook: visual y con texto en pantalla; se entiende sin sonido.",
+                     "Tono: cercano, de conversación.",
+                     "Estructura: gancho → problema reconocible → producto en uso → prueba → CTA con razón.")),
+}
 
+
+def _roas_texto(canal_optimo):
+    """«ROAS 3.5x», o "" si el ROAS no es un número finito (None, "n/a", un
+    dict…): Triple Whale no siempre lo trae y un valor raro nunca tumba el
+    guion — se omite, igual que cuando falta."""
+    try:
+        roas = float(canal_optimo.get("roas"))
+    except (TypeError, ValueError):
+        return ""
+    return f"ROAS {roas:.1f}x" if math.isfinite(roas) else ""
+
+
+def _nota_canal(canal_optimo):
+    """Antes esto era un f-string con llaves dobles y a Claude le llegaba
+    literal «{canal_optimo["canal"]}»; además faltaba facebook."""
+    if not canal_optimo or canal_optimo.get("canal") not in _CANALES:
+        return ""
+    duracion_defecto, reglas = _CANALES[canal_optimo["canal"]]
+    roas = _roas_texto(canal_optimo)
+    lineas = [f"NOTA: Este video está optimizado para {canal_optimo['canal']}"
+              + (f" ({roas})." if roas else ".")]
+    lineas += [f"- {r}" for r in reglas]
+    lineas.append(f"- Duración sugerida: {canal_optimo.get('duracion_sugerida_s', duracion_defecto)} segundos.")
+    return "\n" + "\n".join(lineas)
+
+
+def _reglas_generar(duracion_s, idioma_base, canal_optimo=None, pedir_angulo=False):
+    """Instrucciones propias del guion (van al system después de la doctrina)."""
+    regla_angulo = ""
+    if pedir_angulo:
+        regla_angulo = ("\n- Antes del guion decide el ángulo (clave \"angulo\") con los valores de la doctrina: "
+                        "consciencia uno de " + ", ".join(doctrina.CONSCIENCIAS) + "; lead uno de "
+                        + ", ".join(doctrina.LEADS) + "; sofisticacion de 1 a 5; pruebas con fuente ficha, "
+                        "comentarios o demostracion. Después escribe el guion desde ese ángulo.")
+    formato = FORMATO_JSON_CON_ANGULO if pedir_angulo else FORMATO_JSON
     return f"""Eres un guionista de videos cortos de venta (reels, TikTok, shorts). \
 Escribes guiones en el idioma '{idioma_base}' para un video de {duracion_s:g} segundos.
 
@@ -123,17 +149,29 @@ El guion tiene EXACTAMENTE 5 bloques, en este orden y con estos roles:
 5. cta: llamado a la acción claro.
 
 Tiempos sugeridos por bloque (inicio_s / fin_s en segundos; el último fin_s no puede pasar de {duracion_s:g}):
-{_lineas_tiempos(duracion_s)}{ajuste_canal}
+{_lineas_tiempos(duracion_s)}{_nota_canal(canal_optimo)}
 
 Reglas:
 - texto_pantalla: máximo {MAX_PALABRAS_PANTALLA} palabras, impactante, para sobreimprimir en el video.
 - texto_voz: frase natural para locución, ≈ {PALABRAS_POR_SEGUNDO} palabras por segundo de duración del bloque.
+- El hook es el gancho del ángulo (o una versión de él con el mismo sentido); el bloque prueba usa solo las pruebas \
+del ángulo o datos reales del producto, y si no hay prueba real, una demostración que se vea en el video.
+- Ninguna cifra, porcentaje, testimonio ni autoridad que no esté en los datos que recibes: se verifica y se devuelve \
+a corregir.
 - Si hay un video referente, copia su ESTRUCTURA (ritmo, tipo de gancho, forma de presentar el producto), \
 NUNCA su texto literal ni su marca.
 - Los bloques no se solapan y sus tiempos van en orden creciente.
-- Deja "moneda" y "precio_texto" en null; se rellenan al localizar.
+- Deja "moneda" y "precio_texto" en null; se rellenan al localizar.{regla_angulo}
 
-{FORMATO_JSON}"""
+{formato}"""
+
+
+def _system_generar(duracion_s, idioma_base, canal_optimo=None, con_angulo=False):
+    """System del guion base: doctrina (con caché) + reglas. Sin ángulo en la
+    sesión, la doctrina incluye la rebanada de ángulo y se le pide decidirlo."""
+    rebanadas = ("guion", "gancho") if con_angulo else ("angulo", "guion", "gancho")
+    return doctrina.bloque_system(*rebanadas, extra=_reglas_generar(duracion_s, idioma_base, canal_optimo,
+                                                                     pedir_angulo=not con_angulo))
 
 
 def _formato_json_localizado(idioma, pais, moneda, precio_texto):
@@ -174,21 +212,35 @@ lugar), y deja "precio_texto": null.
 {_formato_json_localizado(idioma, pais, info['moneda'], precio_texto)}"""
 
 
-def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=None):
+_ENFOQUE_GUION = {
+    "producto": "Enfoque: el producto es el héroe; aparece pronto, en uso y con un resultado que se ve.",
+    "persona": ("Enfoque: la persona es el vehículo de identificación; el video vende el rol que el producto le da "
+                "y el producto entra en su vida."),
+}
+
+
+def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=None, angulo=None):
     """Devuelve el contenido del mensaje de usuario: un string si no hay
     referencia con frames, o una lista de bloques (texto + imágenes) para que
     Claude vea los fotogramas del referente, no solo su conteo."""
-    partes = [f"Producto: {json.dumps(producto, ensure_ascii=False)}",
-              "Enfoque del video: Escenas asombrosas que muestren transformación y resultado wow. "
-              "Prioriza secuencias visuales impactantes, antes/después, reacciones, momentos de impacto. "
-              "La idea es que alguien que lo ve diga '¡wow, quiero eso!'",
-              f"Duración objetivo: {duracion_s:g} segundos"]
+    partes = [f"Producto: {json.dumps(producto, ensure_ascii=False)}"]
+    if _ENFOQUE_GUION.get(enfoque):
+        partes.append(_ENFOQUE_GUION[enfoque])
+    partes.append(f"Duración objetivo: {duracion_s:g} segundos")
     if canal_optimo:
-        partes.append(f"Canal optimizado: {canal_optimo['canal']} (ROAS {canal_optimo['roas']:.1f}x)")
+        roas = _roas_texto(canal_optimo)
+        partes.append(f"Canal optimizado: {canal_optimo['canal']}" + (f" ({roas})" if roas else ""))
     if marca and str(marca).strip():
         partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
     if cliente_hint and str(cliente_hint).strip():
         partes.append(f"Contexto del cliente/audiencia: {str(cliente_hint).strip()}")
+    angulo_txt = doctrina.angulo_a_texto(angulo)
+    if angulo_txt:
+        partes.append(angulo_txt + "\nEscribe el guion DESDE este ángulo: mismo arranque, misma promesa, mismas "
+                                   "pruebas; no lo reinventes.")
+    else:
+        partes.append("Primero decide el ángulo (clave \"angulo\" del JSON) aplicando la doctrina y después escribe "
+                      "el guion desde él.")
 
     frames = []
     if referencia:
@@ -214,12 +266,18 @@ def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_h
     return contenido
 
 
-def _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto):
-    return (
+REGLA_LOCALIZAR_ANGULO = ("\n\nDel ÁNGULO, si viene, conserva el arranque, la promesa, el mecanismo y las pruebas; "
+                          "adapta idioma, expresiones, unidades y precio.")
+
+
+def _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto, angulo=None):
+    texto = (
         f"Localiza este guion al idioma '{idioma}' para el país {pais} (moneda {moneda}).\n"
         f"precio_texto a usar: {precio_texto if precio_texto is not None else '(sin precio)'}\n\n"
         f"Guion base:\n{json.dumps(guion_base, ensure_ascii=False)}"
     )
+    angulo_txt = doctrina.angulo_a_texto(angulo)
+    return texto + (f"\n\n{angulo_txt}" if angulo_txt else "")
 
 
 # ---------------------------------------------------------------- Claude ---
@@ -262,60 +320,144 @@ def _recortar_llaves(t):
     return t[ini:fin + 1]
 
 
-def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar):
+def _datos_verificables(*partes):
+    """Texto contra el que se verifican las cifras: exactamente lo que Claude
+    recibió como datos (dicts como JSON)."""
+    return "\n".join(p if isinstance(p, str) else json.dumps(p, ensure_ascii=False) for p in partes if p)
+
+
+def _precio_verificable(precio, pais):
+    """El precio como lo puede decir el guion, para sumarlo a los datos que se
+    verifican: sus dígitos enteros (si es entero) y el formato del país
+    (`tipos.formatear_precio`, el mismo que usa localizar). Sin esto un
+    precio float llega a los datos como «89900.0» (→ 899000) y el precio
+    real dicho en la voz («89.900 pesos», «$89.900», «89900») se tomaría
+    por inventado. "" si no hay precio o no se puede leer."""
+    if precio is None or isinstance(precio, bool):
+        return ""
+    try:
+        valor = float(precio)
+    except (TypeError, ValueError):
+        return ""
+    partes = [str(int(valor))] if valor.is_integer() else []
+    try:
+        partes.append(tipos.formatear_precio(valor, pais))
+    except (KeyError, TypeError, ValueError, OverflowError):
+        pass
+    return " ".join(partes)
+
+
+def _errores_de_cifras(guion, datos_texto):
+    errores = []
+    for b in guion.get("bloques") or []:
+        texto = f"{b.get('texto_pantalla') or ''} {b.get('texto_voz') or ''}"
+        for cifra in doctrina.verificar_cifras(texto, datos_texto):
+            errores.append(f"La cifra «{cifra}» del bloque {b.get('rol')} no está en los datos: reescríbelo sin ella "
+                           "o con el dato real.")
+    return errores
+
+
+def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_texto=None, errores_extra=None):
     """Llama a Claude, valida y, si hay errores, pide UNA corrección
-    incluyendo la lista de errores. Devuelve (guion, costo_usd)."""
+    incluyendo la lista de errores. Devuelve (guion, costo_usd).
+
+    `errores_extra(guion) -> list[str]` son errores NO bloqueantes (p. ej. el
+    ángulo que Claude debía decidir junto con el guion): se incluyen en la
+    corrección igual que los bloqueantes, pero no impiden devolver el guion
+    de la segunda pasada si esa ya no tiene errores bloqueantes (los extra
+    que sigan quedan para quien llama). Si la segunda pasada SÍ rompe el
+    guion (error bloqueante) pero la primera no tenía ninguno — solo extra —
+    se devuelve la primera: lo ya pagado nunca se pierde por una corrección
+    que empeoró las cosas."""
     client = anthropic.Anthropic(api_key=_api_key())
     mensajes = [{"role": "user", "content": mensaje_usuario}]
     costo = 0.0
     errores = []
+    guion_sin_bloqueo = None
     for intento in range(2):
         texto = _llamar(client, system, mensajes)
         costo += COSTO_LLAMADA_USD
         guion = _parsear(texto)
+        extra = []
         if guion is None:
             errores = ["JSON inválido"]
         else:
             guion = ajustar(guion)
             errores = tipos.validar_guion(guion, duracion_s)
+            if datos_texto is not None:
+                errores += _errores_de_cifras(guion, datos_texto)
+            if errores_extra is not None:
+                extra = list(errores_extra(guion) or [])
             if not errores:
-                return guion, costo
+                if not extra or intento == 1:
+                    return guion, costo
+                guion_sin_bloqueo = guion
         if intento == 0:
+            todos = errores + extra
             mensajes = mensajes + [
                 {"role": "assistant", "content": texto or "(respuesta vacía)"},
                 {"role": "user", "content": (
-                    "El guion tiene estos errores:\n- " + "\n- ".join(errores) +
+                    "El guion tiene estos errores:\n- " + "\n- ".join(todos) +
                     "\n\nCorrígelos y responde de nuevo ÚNICAMENTE con el JSON completo del guion."
                 )},
             ]
+    if guion_sin_bloqueo is not None:
+        return guion_sin_bloqueo, costo
     raise GuionInvalido(errores)
 
 
 # ---------------------------------------------------------------- API ---
 
-def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None):
-    """Guion en el idioma base. `producto`: {"nombre", "descripcion", "precio",
-    "moneda", "beneficios"}; `referencia`: {"frames": [urls], "transcripcion"}
-    o None; `canal_optimo`: {"canal": "google_ads|tiktok|...", "roas": 3.5, "duracion_sugerida_s": 6}
-    o None. Devuelve (guion, costo_usd)."""
+def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None,
+                       angulo=None):
+    """Guion en el idioma base. `producto`: {"nombre", "descripcion", "regla", "precio", "moneda", "url_compra",
+    "tipo"}; `referencia`: {"frames": [urls], "transcripcion"} o None; `canal_optimo`: {"canal", "roas",
+    "duracion_sugerida_s"} o None; `angulo`: el de la sesión (se escribe DESDE él) o None (se le pide a
+    Claude, que reusa la MISMA vuelta de corrección del guion — spec §4.2 — y vuelve ya limpio y validado
+    en la clave "angulo" del guion, `origen="guion"`). Devuelve (guion, costo_usd)."""
     duracion_s = float(duracion_s)
     pais_base = _pais_por_idioma(idioma_base)
 
     def ajustar(g):
-        g.setdefault("idioma", idioma_base)
-        g.setdefault("pais", pais_base)
+        # Idioma y país del base los fija el código (como en localizar): el
+        # ejemplo de FORMATO_JSON dice "CO" y, con un base en otro idioma,
+        # Claude puede copiarlo — `producir` prellenaría entonces el destino
+        # CO con un `precio_base` de otra moneda.
+        g["idioma"] = idioma_base
+        g["pais"] = pais_base
         g.setdefault("moneda", None)
         g.setdefault("precio_texto", None)
         return g
 
-    return _generar_con_correccion(
-        _system_generar(duracion_s, idioma_base, canal_optimo=canal_optimo),
-        _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=canal_optimo),
-        duracion_s, ajustar,
+    datos = _datos_verificables(producto, (referencia or {}).get("transcripcion"), cliente_hint, marca,
+                                doctrina.texto_verificable(angulo),
+                                _precio_verificable((producto or {}).get("precio"), pais_base))
+
+    errores_extra = None
+    if not angulo:
+        # Se le pidió a Claude decidir el ángulo: sus errores (campo_faltante,
+        # cifra_no_verificada...) entran a la MISMA corrección del guion en
+        # vez de descubrirse recién después, sin poder pedir que los arregle.
+        def errores_extra(g):
+            crudo = g.get("angulo") if isinstance(g.get("angulo"), dict) else {}
+            _, errores_angulo = doctrina.validar_angulo(crudo, datos)
+            return [f"Ángulo: {e}" for e in errores_angulo]
+
+    guion, costo = _generar_con_correccion(
+        _system_generar(duracion_s, idioma_base, canal_optimo=canal_optimo, con_angulo=bool(angulo)),
+        _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=canal_optimo,
+                         angulo=angulo),
+        duracion_s, ajustar, datos, errores_extra=errores_extra,
     )
+    if not angulo:
+        crudo = guion.get("angulo") if isinstance(guion.get("angulo"), dict) else {}
+        limpio, errores_angulo = doctrina.validar_angulo(crudo, datos)
+        limpio["origen"] = "guion"
+        guion["angulo"] = doctrina.anotar_errores(limpio, errores_angulo)
+    return guion, costo
 
 
-def localizar_guion(guion_base, idioma, pais, precio):
+def localizar_guion(guion_base, idioma, pais, precio, angulo=None):
     """Traduce/adapta el guion base a `idioma` y `pais`, fija moneda y
     precio_texto y conserva los tiempos. Mismo idioma y país: copia sin llamar
     a Claude (costo 0). Devuelve (guion, costo_usd)."""
@@ -342,46 +484,61 @@ def localizar_guion(guion_base, idioma, pais, precio):
             raise GuionInvalido(errores)
         return g, 0.0
 
+    # Sin verificación de cifras (E): el guion base ya se verificó al generarlo;
+    # aquí Claude convierte moneda/unidades a propósito («60 cm» → «24 in»,
+    # el precio a otra moneda) y esas cifras nuevas nunca están en los datos
+    # de origen — verificarlas solo forzaría una corrección pagada de más o
+    # un GuionInvalido que bloquearía la final de todo un país.
     return _generar_con_correccion(
-        _system_localizar(idioma, pais, precio_texto),
-        _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto),
+        doctrina.bloque_system(extra=_system_localizar(idioma, pais, precio_texto) + REGLA_LOCALIZAR_ANGULO),
+        _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto, angulo=angulo),
         duracion_s, ajustar,
     )
 
 
 VARIANTES_GUION = {
     "hook": (
-        "Reescribe el hook (bloque 1) y el CTA (último bloque) con un ángulo distinto; "
-        "conserva tiempos, estructura y los demás bloques salvo ajustes mínimos de continuidad."
+        "Cambia SOLO el hook (bloque 1): elige otro arranque compatible con la consciencia del ÁNGULO (u otro "
+        "patrón de gancho si ese arranque es el único recomendado) y reescribe el hook con él. Conserva la "
+        "promesa, el mecanismo, las pruebas, el CTA (último bloque) y los demás bloques salvo ajustes mínimos "
+        "de continuidad: mismo mensaje, otro gancho."
     ),
     "estructura": (
-        "Cambia el ángulo narrativo del guion con TODOS los textos nuevos, pero mantén "
-        "los 5 bloques con sus roles fijos y en el mismo orden (hook, problema, producto, "
-        "prueba, cta) y con sus mismos tiempos: no agregues, quites ni reordenes bloques. "
-        "Varía lo que pasa dentro de cada bloque: otro problema del que parte la historia, "
-        "otra prueba (testimonio, dato, comparación...), otro ritmo de frases y otra "
-        "sugerencia de música, y un CTA distinto; el producto es el mismo."
+        "Mantén los 5 bloques con sus roles fijos y en el mismo orden (hook, problema, producto, prueba, cta) y con "
+        "sus mismos tiempos: no agregues, quites ni reordenes bloques. Cambia cómo se dramatiza la promesa dentro de "
+        "cada bloque con otra técnica de intensificación (producto en acción, el espectador dentro de la escena, "
+        "cómo probarlo uno mismo, gente reaccionando, comparación con lo que usa hoy), con textos nuevos, otra "
+        "sugerencia de música y un CTA distinto; conserva la promesa, el mecanismo y las pruebas; el producto es el "
+        "mismo."
     ),
 }
 
+REGLA_VARIANTE = ("\n\nAdemás del guion, devuelve la clave \"angulo_variante\": {\"lead\": \"<arranque que usaste>\", "
+                  "\"gancho\": \"<el gancho nuevo, máximo 12 palabras>\"}. En esta variante el gancho del ÁNGULO se "
+                  "reemplaza por uno nuevo: no repitas ni parafrasees el gancho anterior.")
 
-def _mensaje_variar(guion_base, variante_tipo, marca):
+
+def _mensaje_variar(guion_base, variante_tipo, marca, angulo=None):
     partes = [
         "Guion base (en su idioma, con tiempos):\n" + json.dumps(guion_base, ensure_ascii=False),
         f"Variante pedida ({variante_tipo}): {VARIANTES_GUION[variante_tipo]}",
     ]
+    angulo_txt = doctrina.angulo_a_texto(angulo)
+    if angulo_txt:
+        partes.append(angulo_txt)
     if marca and str(marca).strip():
         partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
     partes.append("Escribe la variante del guion, en el mismo idioma que el guion base.")
     return "\n\n".join(partes)
 
 
-def variar_guion(guion_base, variante_tipo, marca):
+def variar_guion(guion_base, variante_tipo, marca, angulo=None):
     """Variante del guion base (mismo idioma/país, mismos tiempos) con UNA
-    llamada a Claude. `variante_tipo` ∈ VARIANTES_GUION ("hook": otro gancho y
-    CTA; "estructura": otro ángulo en cada bloque, textos nuevos, mismos roles/orden/tiempos). Conserva
-    `idioma`, `pais` y `precio_base` del base y no lo muta. Devuelve
-    (guion, costo_usd)."""
+    llamada a Claude. `variante_tipo` ∈ VARIANTES_GUION ("hook": otro arranque
+    y gancho, mismo mensaje; "estructura": otra forma de dramatizar la misma
+    promesa en cada bloque). Conserva `idioma`, `pais` y `precio_base` del base
+    y no lo muta. El guion devuelto trae `angulo_variante: {lead, gancho}`.
+    Devuelve (guion, costo_usd)."""
     if variante_tipo not in VARIANTES_GUION:
         raise ValueError(
             f"Tipo de variante no soportado: {variante_tipo}. Opciones: {sorted(VARIANTES_GUION)}")
@@ -400,12 +557,16 @@ def variar_guion(guion_base, variante_tipo, marca):
             g["precio_base"] = base["precio_base"]
         for bloque, (ini, fin) in zip(g.get("bloques") or [], tiempos):
             bloque["inicio_s"], bloque["fin_s"] = ini, fin
+        av = g.get("angulo_variante") if isinstance(g.get("angulo_variante"), dict) else {}
+        g["angulo_variante"] = {"lead": av.get("lead") if av.get("lead") in doctrina.LEADS else None,
+                                "gancho": " ".join(str(av.get("gancho") or "").split())[:200]}
         return g
 
     return _generar_con_correccion(
-        _system_generar(duracion_s, idioma),
-        _mensaje_variar(base, variante_tipo, marca),
-        duracion_s, ajustar,
+        doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE),
+        _mensaje_variar(base, variante_tipo, marca, angulo=angulo),
+        duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo),
+                                                 _precio_verificable(base.get("precio_base"), pais)),
     )
 
 
