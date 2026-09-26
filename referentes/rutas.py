@@ -7,6 +7,7 @@ Bloque 2 agrega `recrear_form`/`recrear_adaptar`/`recrear_generar` («Recrear
 con mi producto»); los créditos de generación se gastan a través del pipeline
 de Crear que ya existe (`creative_flow` + `flowplus_lanzar`), no se reimplementan aquí.
 """
+import json
 import re
 from uuid import uuid4
 
@@ -14,6 +15,7 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 
 import catalogo_productos
 import creative_flow
+import doctrina
 import flowplus_lanzar
 import gastos
 import marca as marca_mod
@@ -249,12 +251,23 @@ def recrear_generar(cliente, rid):
         duracion_objetivo = flowplus_modelos.ajustar_duracion(
             modelo, proyectos.preferencias_flowplus(cliente)["duracion_defecto"])
         formato = flowplus_modelos.ajustar_formato(modelo, formato_pedido)
+    angulo = None
+    try:
+        crudo = json.loads(request.form.get("angulo") or "null")
+    except ValueError:
+        crudo = None
+    if isinstance(crudo, dict):
+        angulo, _errores = doctrina.validar_angulo(crudo)
+        angulo["origen"] = "recrear"
     cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [],
                                 titular or f"Recrear: {r.get('titular') or r['id']}",
                                 duracion_objetivo, "", "A", referencias_urls=referencias_urls, platforms=[])
-    creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt, aspect_ratio=formato, tipo=tipo, modelo=modelo,
-                             con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
-                             calidad="final", referente_id=rid)
+    campos = dict(prompt_relleno=prompt, aspect_ratio=formato, tipo=tipo, modelo=modelo,
+                  con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
+                  calidad="final", referente_id=rid)
+    if angulo:
+        campos["angulo"] = angulo
+    creative_flow.actualizar(cliente, cf_id, **campos)
     entry = creative_flow.cargar(cliente)[cf_id]
     if flowplus_lanzar.lanzar(cliente, cf_id, entry):
         flash("Generando desde el referente…", "ok")
