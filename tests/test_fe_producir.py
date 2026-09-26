@@ -213,6 +213,32 @@ def test_preparar_guion_guarda_el_angulo_nuevo_y_no_pisa_uno_existente(entorno, 
     assert cf.cargar("acme")[entorno["cf_id"]]["angulo"]["promesa"] == "p"      # el ángulo de la sesión manda
 
 
+def test_preparar_guion_no_pisa_el_angulo_que_la_persona_llena_mientras_claude_escribe(entorno, monkeypatch):
+    """Doctrina, bloque 2 (revisión final #7, ahora alcanzable tras el #1): la
+    sesión no tenía ángulo al arrancar (`angulo_sesion` queda None), pero si
+    la persona lo llena en el editor MIENTRAS Claude escribe el guion (misma
+    carrera del bug crítico #1), el de la persona manda — `preparar_guion`
+    debe releer la sesión justo antes de guardar, no confiar en la foto de
+    antes de llamar a Claude."""
+    import creative_flow as cf
+    de_claude = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+                 "promesa": "promesa de claude", "mecanismo": None, "pruebas": [], "lead": "problema_solucion",
+                 "gancho": "gancho de claude", "faltantes": [], "origen": "guion"}
+    de_la_persona = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+                     "promesa": "promesa de la persona", "mecanismo": None, "pruebas": [],
+                     "lead": "problema_solucion", "gancho": "gancho de la persona", "faltantes": []}
+
+    def generar_con_carrera(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
+                            canal_optimo=None, angulo=None):
+        # Mientras "Claude" trabaja, la persona guarda su ángulo en el editor.
+        cf.actualizar("acme", entorno["cf_id"], angulo=de_la_persona)
+        return dict(GUION_BASE, angulo=de_claude), 0.01
+    monkeypatch.setattr(guion_mod, "generar_guion_base", generar_con_carrera)
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    guardado = cf.cargar("acme")[entorno["cf_id"]]["angulo"]
+    assert guardado["promesa"] == "promesa de la persona"
+
+
 def test_preparar_guion_no_guarda_un_angulo_vacio_si_claude_no_lo_decidio(entorno, monkeypatch):
     """Fix 5: si Claude omitió el ángulo en las dos vueltas, `generar_guion_base`
     devuelve un cascarón lleno de `error: campo_faltante:…`; guardarlo haría

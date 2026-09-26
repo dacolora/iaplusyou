@@ -429,8 +429,15 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     # Solo uno con promesa y gancho: si Claude lo omitió en las dos vueltas,
     # llega un cascarón de «error: campo_faltante:…» y guardarlo haría que
     # todo guion, variante y caption posterior «escriba desde» la nada.
-    if not angulo_sesion and _angulo_con_contenido(nuevo):
-        creative_flow.actualizar(cliente, cf_id, angulo=nuevo)
+    # Revisión final #7: `angulo_sesion` es la foto de ANTES de llamar a
+    # Claude — si la persona llenó el editor mientras tanto (misma carrera
+    # del bug crítico #1, ahora que sí guarda), se relee la sesión justo
+    # antes de escribir: el de la persona manda, el de Claude solo entra si
+    # sigue sin haber nada.
+    if not angulo_sesion:
+        angulo_actual = _sesion(cliente, cf_id).get("angulo")
+        if not _angulo_con_contenido(angulo_actual) and _angulo_con_contenido(nuevo):
+            creative_flow.actualizar(cliente, cf_id, angulo=nuevo)
     return guion_base, round(costo, 4)
 
 
