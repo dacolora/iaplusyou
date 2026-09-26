@@ -6,11 +6,12 @@ Solo datos (SQLAlchemy Core), siguiendo el estilo de experimentos.py:
 `_mapping`. Las credenciales de cada tienda se guardan cifradas (cifrado.py)
 y nunca salen de `credenciales()` — `listar`/`obtener` las omiten a propósito.
 
-A diferencia de experimento/experimento_pieza (Bloque 3/4, donde gunicorn y
-el worker escriben la misma fila a la vez), acá solo el worker sincroniza
-tiendas/productos/pedidos (`tareas/` de los conectores) — el dashboard solo
-lee y marca banderas puntuales (`marcar_producto`, `actualizar`). No hay
-carrera de lost-update que justifique el lock `_bloquear` de experimentos.py.
+Como en experimento/experimento_pieza (Bloque 3/4, donde gunicorn y el worker
+escriben la misma fila a la vez): desde la doctrina (bloque 2) el dashboard
+también hace read-modify-write de `producto.extra` (`anotar_extra`,
+`marcar_producto` al archivar) al mismo tiempo que el worker sincroniza
+(`upsert_producto`, `archivar_faltantes`) — `_bloquear_producto` toma el lock
+de escritura de SQLite ANTES de leer, mismo truco que `experimentos._bloquear`.
 """
 import json
 from datetime import datetime, timedelta
@@ -152,6 +153,22 @@ def _extra_con_internos(nuevo, viejo):
     return base
 
 
+def _bloquear_producto(con, condiciones):
+    """Toma el lock de escritura de SQLite sobre la fila `producto` que
+    cumple `condiciones`, ANTES de leerla (mismo truco de
+    `experimentos._bloquear`): la web (anotar_extra, marcar_producto) y el
+    worker (upsert_producto, una sync) leen y escriben el `extra` del mismo
+    producto, y sin el lock previo el último en escribir pisaba al otro
+    (lost update). Un UPDATE sin efecto sobre la fila obliga al driver a
+    abrir la transacción y tomar el lock ya; con `busy_timeout` el segundo
+    escritor espera en vez de leer una foto vieja. Devuelve True si la fila
+    existe (False es un no-op inofensivo: p. ej. `upsert_producto` sobre un
+    producto que todavía no existe)."""
+    p = db.producto
+    r = con.execute(p.update().where(*condiciones).values(actualizado_en=p.c.actualizado_en))
+    return r.rowcount == 1
+
+
 def upsert_producto(cliente, fuente, fuente_id, datos):
     """Crea o actualiza el producto (cliente, fuente, fuente_id). Solo toca
     las columnas presentes en `datos` — una sync parcial (p. ej. solo precio)
@@ -166,6 +183,9 @@ def upsert_producto(cliente, fuente, fuente_id, datos):
     valores = {k: v for k, v in (datos or {}).items() if k in _PRODUCTO_CAMPOS_DATOS}
     p = db.producto
     with db.conectar() as con:
+        # Lock antes de leer (ver `_bloquear_producto`): si el producto todavía
+        # no existe esto es un no-op, y el INSERT de abajo sigue su curso normal.
+        _bloquear_producto(con, (p.c.cliente == cliente, p.c.fuente == fuente, p.c.fuente_id == fuente_id))
         fila = con.execute(sa.select(p.c.id, p.c.archivado, p.c.extra).where(
             p.c.cliente == cliente, p.c.fuente == fuente, p.c.fuente_id == fuente_id)).first()
         if fila:
@@ -271,6 +291,8 @@ def marcar_producto(cliente, producto_id, **campos):
     p = db.producto
     with db.conectar() as con:
         if "archivado" in campos:
+            if not _bloquear_producto(con, (p.c.id == producto_id, p.c.cliente == cliente)):
+                return
             fila = con.execute(sa.select(p.c.extra).where(p.c.id == producto_id, p.c.cliente == cliente)).first()
             if not fila:
                 return
@@ -293,9 +315,9 @@ def anotar_extra(cliente, producto_id, **claves):
         raise ValueError(f"Claves no permitidas: {sorted(malas)}")
     p = db.producto
     with db.conectar() as con:
-        fila = con.execute(sa.select(p.c.extra).where(p.c.id == producto_id, p.c.cliente == cliente)).first()
-        if not fila:
+        if not _bloquear_producto(con, (p.c.id == producto_id, p.c.cliente == cliente)):
             return
+        fila = con.execute(sa.select(p.c.extra).where(p.c.id == producto_id, p.c.cliente == cliente)).first()
         extra = dict(fila[0] or {})
         for clave, valor in claves.items():
             if valor is None:
@@ -308,17 +330,15 @@ def anotar_extra(cliente, producto_id, **claves):
 def modificar_extra_interno(cliente, producto_id, fn):
     """Read-modify-write atómico de las claves EXTRA_INTERNO de
     `producto.extra` (las de la doctrina: `sofisticacion`, `pruebas`,
-    `pedidos`). Toma el lock de escritura de SQLite ANTES de leer (el mismo
-    truco de `experimentos._bloquear`): la web y el worker escriben pedidos
-    y pruebas del mismo producto y sin el lock el último pisaría al otro.
+    `pedidos`). Toma el lock de escritura de SQLite ANTES de leer
+    (`_bloquear_producto`): la web y el worker escriben pedidos y pruebas del
+    mismo producto y sin el lock el último pisaría al otro.
     `fn(extra) -> extra` recibe una copia; solo puede cambiar claves
     internas (ValueError si toca otra). Devuelve el `extra` escrito, o None
     si el producto no existe."""
     p = db.producto
     with db.conectar() as con:
-        r = con.execute(p.update().where(p.c.id == producto_id, p.c.cliente == cliente)
-                        .values(actualizado_en=p.c.actualizado_en))
-        if r.rowcount != 1:
+        if not _bloquear_producto(con, (p.c.id == producto_id, p.c.cliente == cliente)):
             return None
         viejo = dict(con.execute(sa.select(p.c.extra).where(p.c.id == producto_id)).scalar() or {})
         nuevo = dict(fn(dict(viejo)) or {})
@@ -331,14 +351,19 @@ def modificar_extra_interno(cliente, producto_id, fn):
 
 def _archivar_en(con, condiciones, por, ahora):
     """Archiva fila por fila (hay que reescribir `extra` con `archivado_por`).
-    Devuelve cuántas."""
+    Toma el lock de cada fila (`_bloquear_producto`) antes de leer su `extra`:
+    un archivado manual desde la web (`marcar_producto`) puede caer sobre la
+    misma fila al mismo tiempo que una sync la archiva por ausencia. Devuelve
+    cuántas."""
     p = db.producto
-    filas = con.execute(sa.select(p.c.id, p.c.extra).where(*condiciones)).all()
-    for pid, extra in filas:
-        extra = dict(extra or {})
+    ids = [pid for (pid,) in con.execute(sa.select(p.c.id).where(*condiciones)).all()]
+    for pid in ids:
+        if not _bloquear_producto(con, (p.c.id == pid,)):
+            continue
+        extra = dict(con.execute(sa.select(p.c.extra).where(p.c.id == pid)).scalar() or {})
         extra["archivado_por"] = por
         con.execute(p.update().where(p.c.id == pid).values(archivado=True, actualizado_en=ahora, extra=extra))
-    return len(filas)
+    return len(ids)
 
 
 def archivar_faltantes(cliente, fuente, ids_vistos):
