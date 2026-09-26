@@ -315,9 +315,10 @@ requested. Videos
 ALWAYS ask for the model's native scene sound (`generar_video(..., con_sonido=True)`: Wan 3.0
 `enable_audio`, Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
 `usd_por_segundo_efectivo` the templates show —, Seedance 2.5 `generate_audio`), and the
-prompt carries a `SONIDO:` line ("Sin diálogo hablado ni música de fondo" keeps Kling's
-Chinese/English voices out; the Spanish voice comes from final edition). Images never get
-that line. The session carries `con_sonido` (the "Sonido de la escena" check, default from
+`armar` prompt (director, Sprints, derivations) carries a `SONIDO:` line ("Sin diálogo
+hablado ni música de fondo" keeps Kling's Chinese/English voices out; the Spanish voice
+comes from final edition); direct generation carries one only when the person typed a
+sound (`tal_cual`). Images never get that line. The session carries `con_sonido` (the "Sonido de la escena" check, default from
 `proyectos.preferencias_sonido`), `sonido_texto` (the described sound, "Sugerir" asks
 Claude through `final_edition/sonido.py`) and `musica_estilo` ("" = none). After the
 download the worker's **Mezclando sonido** step (`ETAPAS_CREATIVE_FLOW`, 4 stages) probes
