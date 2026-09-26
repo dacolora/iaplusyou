@@ -305,12 +305,24 @@ def _sin_acentos(texto):
     return "".join(c for c in unicodedata.normalize("NFD", texto) if unicodedata.category(c) != "Mn")
 
 
+def _activo(cliente, valor):
+    """El activo del catálogo por id o por nombre visible (Crear y Sprints
+    guardan nombres en `productos_ids`); None si no hay o el catálogo falla."""
+    try:
+        import catalogo_productos
+        return (catalogo_productos.encontrar_por_id_o_nombre(cliente, valor, "producto")
+                or catalogo_productos.encontrar(cliente, valor))
+    except Exception:  # noqa: BLE001 — el catálogo en disco es opcional para redactar
+        return None
+
+
 def contexto_pieza(cliente, pieza_id):
     """Lo que redactar necesita: guion de la pieza (final: `pieza.guion`;
     clon: `concepto.extra.accion_central`), producto (tiendas.por_activo
-    por el primer `productos_ids` del concepto, o el nombre del catálogo),
-    `url_compra` (del producto, o `destino_url` del último experimento que
-    contiene la pieza), idioma y hashtags base."""
+    por el primer `productos_ids` del concepto — id o nombre visible, ver
+    `_activo` — o el catálogo directamente), `url_compra` (del producto, o
+    `destino_url` del último experimento que contiene la pieza), idioma,
+    hashtags base y el `angulo` decidido para la pieza (dict o None)."""
     with db.conectar() as con:
         pz = _fila_pieza(con, cliente, pieza_id)
         if pz is None:
@@ -330,8 +342,12 @@ def contexto_pieza(cliente, pieza_id):
     if activos:
         mapa = tiendas.por_activo(cliente)
         for a in activos:
-            if a in mapa:
+            if a in mapa:                                 # sesiones viejas: guardaban el id
                 producto = mapa[a]
+                break
+            act = _activo(cliente, a)                     # hoy se guarda el nombre visible
+            if act and act.get("id") in mapa:
+                producto = mapa[act["id"]]
                 break
     if producto is None and ex and ex[1]:
         producto = tiendas.producto(cliente, ex[1])
@@ -341,20 +357,16 @@ def contexto_pieza(cliente, pieza_id):
         descripcion = producto.get("descripcion") or ""
         url_compra = producto.get("url_compra") or None
     elif activos:
-        try:
-            import catalogo_productos
-            act = catalogo_productos.encontrar(cliente, activos[0])
-            if act:
-                nombre, descripcion = act.get("nombre") or "", act.get("descripcion") or ""
-        except Exception:  # noqa: BLE001 — el catálogo en disco es opcional para redactar
-            pass
+        act = _activo(cliente, activos[0])
+        if act:
+            nombre, descripcion = act.get("nombre") or "", act.get("descripcion") or ""
     if not nombre:
         nombre = accion or f"Pieza {pieza_id}"
     if not url_compra and ex and ex[0]:
         url_compra = ex[0]
     idioma = pm[db.pieza.c.idioma] or (cp._mapping[db.concepto.c.idioma_base] if cp else None) or "es"
     return {"nombre_producto": nombre, "descripcion": descripcion, "url_compra": url_compra, "idioma": idioma,
-            "guion_texto": guion_texto, "hashtags_base": _hashtags_de(nombre)}
+            "guion_texto": guion_texto, "hashtags_base": _hashtags_de(nombre), "angulo": c_extra.get("angulo")}
 
 
 def _hook(contexto):
