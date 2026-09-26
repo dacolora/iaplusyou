@@ -30,6 +30,7 @@ import os
 import re
 from datetime import datetime
 
+from flask_babel import gettext
 from werkzeug.security import check_password_hash, generate_password_hash
 
 import _json_store
@@ -100,24 +101,25 @@ def validar_correo(correo):
 
 
 def validar_password(password):
-    """None si la contraseña sirve; si no, el mensaje (en español) para el
-    formulario."""
+    """None si la contraseña sirve; si no, el mensaje (localizado, fuera de
+    una petición en español) para el formulario."""
     if not isinstance(password, str) or len(password) < PASSWORD_MINIMO:
-        return f"La contraseña debe tener al menos {PASSWORD_MINIMO} caracteres."
+        return gettext("La contraseña debe tener al menos %(minimo)d caracteres.", minimo=PASSWORD_MINIMO)
     return None
 
 
 def validar_usuario(usuario):
-    """None si el nombre de usuario sirve; si no, el mensaje (en español)
-    para el formulario. Solo minúsculas, dígitos, punto, guion y guion bajo,
-    entre 3 y 40 caracteres — así el usuario nunca puede meter texto libre
-    (saltos de línea, frases) en un correo que lo cita (ver M3 de la
-    revisión de la Task 1: email-body injection vía nombre de usuario).
-    Solo se exige al crear: los usuarios ya existentes con otro formato
-    siguen funcionando igual, esto no los toca."""
+    """None si el nombre de usuario sirve; si no, el mensaje (localizado,
+    fuera de una petición en español) para el formulario. Solo minúsculas,
+    dígitos, punto, guion y guion bajo, entre 3 y 40 caracteres — así el
+    usuario nunca puede meter texto libre (saltos de línea, frases) en un
+    correo que lo cita (ver M3 de la revisión de la Task 1: email-body
+    injection vía nombre de usuario). Solo se exige al crear: los usuarios
+    ya existentes con otro formato siguen funcionando igual, esto no los
+    toca."""
     if not isinstance(usuario, str) or not USUARIO_REGEX.match(usuario):
-        return ("El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, "
-                "números, puntos, guiones y guiones bajos.")
+        return gettext("El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, "
+                       "números, puntos, guiones y guiones bajos.")
     return None
 
 
@@ -138,19 +140,19 @@ def crear(usuario, password, rol, cliente=None, correo=None):
     if error_usuario:
         raise ValueError(error_usuario)
     if rol not in ROLES_VALIDOS:
-        raise ValueError(f"Rol inválido: {rol}. Opciones: {ROLES_VALIDOS}")
+        raise ValueError(gettext("Rol inválido: %(rol)s. Opciones: %(opciones)s", rol=rol, opciones=ROLES_VALIDOS))
     if rol == "cliente" and not cliente:
-        raise ValueError("Un usuario con rol 'cliente' necesita un proyecto asignado.")
+        raise ValueError(gettext("Un usuario con rol 'cliente' necesita un proyecto asignado."))
     correo_norm = None
     if correo is not None and str(correo).strip():
         correo_norm = validar_correo(correo)
         if correo_norm is None:
-            raise ValueError("El correo no es válido.")
+            raise ValueError(gettext("El correo no es válido."))
     data = cargar()
     if usuario in data:
-        raise ValueError(f"Ya existe un usuario '{usuario}'.")
+        raise ValueError(gettext("Ya existe un usuario '%(usuario)s'.", usuario=usuario))
     if correo_norm is not None and _correo_en_uso(data, correo_norm):
-        raise ValueError("Ese correo ya está en uso.")
+        raise ValueError(gettext("Ese correo ya está en uso."))
     data[usuario] = {
         "password_hash": _hash(password),
         "rol": rol,
@@ -204,11 +206,11 @@ def actualizar(usuario, **campos):
     registro actualizado."""
     desconocidos = [k for k in campos if k not in CAMPOS_ACTUALIZABLES]
     if desconocidos:
-        raise ValueError(f"Campos no actualizables: {desconocidos}")
+        raise ValueError(gettext("Campos no actualizables: %(campos)s", campos=desconocidos))
     data = cargar()
     entry = data.get(usuario)
     if not entry:
-        raise ValueError(f"No existe el usuario '{usuario}'.")
+        raise ValueError(gettext("No existe el usuario '%(usuario)s'.", usuario=usuario))
     _completar(entry)
     if "correo" in campos:
         nuevo = campos.pop("correo")
@@ -217,9 +219,9 @@ def actualizar(usuario, **campos):
         else:
             norm = validar_correo(nuevo)
             if norm is None:
-                raise ValueError("El correo no es válido.")
+                raise ValueError(gettext("El correo no es válido."))
             if _correo_en_uso(data, norm, salvo_usuario=usuario):
-                raise ValueError("Ese correo ya está en uso.")
+                raise ValueError(gettext("Ese correo ya está en uso."))
             entry["correo"] = norm
     if "correo_verificado" in campos:
         entry["correo_verificado"] = bool(campos.pop("correo_verificado"))
@@ -254,7 +256,7 @@ def cambiar_password(usuario, nueva):
     data = cargar()
     entry = data.get(usuario)
     if not entry:
-        raise ValueError(f"No existe el usuario '{usuario}'.")
+        raise ValueError(gettext("No existe el usuario '%(usuario)s'.", usuario=usuario))
     _completar(entry)
     entry["password_hash"] = _hash(nueva)
     entry["session_version"] = int(entry.get("session_version") or 1) + 1

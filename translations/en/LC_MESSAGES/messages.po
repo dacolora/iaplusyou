@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Creatv VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-26 16:57-0500\n"
+"POT-Creation-Date: 2026-09-26 17:46-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -19,17 +19,367 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
+#, python-format
+msgid "%(monto)s generación"
+msgstr "%(monto)s generation"
+
+#, python-format
+msgid "%(monto)s pauta"
+msgstr "%(monto)s ad spend"
+
+#, python-format
+msgid "%(num)d cobro"
+msgid_plural "%(num)d cobros"
+msgstr[0] "%(num)d charge"
+msgstr[1] "%(num)d charges"
+
+#, python-format
+msgid "%(num)d cobro a proveedores"
+msgid_plural "%(num)d cobros a proveedores"
+msgstr[0] "%(num)d charge to providers"
+msgstr[1] "%(num)d charges to providers"
+
+#, python-format
+msgid "%(num)d cobro · no es de ningún proyecto"
+msgid_plural "%(num)d cobros · no es de ningún proyecto"
+msgstr[0] "%(num)d charge · not part of any project"
+msgstr[1] "%(num)d charges · not part of any project"
+
+#, python-format
+msgid "%(num)d hechas en total"
+msgstr "%(num)d done in total"
+
+#, python-format
+msgid "%(num)d hora"
+msgid_plural "%(num)d horas"
+msgstr[0] "%(num)d hour"
+msgstr[1] "%(num)d hours"
+
+#, python-format
+msgid "%(num)d por revisar"
+msgstr "%(num)d to review"
+
+#, python-format
+msgid "%(num)d publicado"
+msgid_plural "%(num)d publicados"
+msgstr[0] "%(num)d published"
+msgstr[1] "%(num)d published"
+
+#, python-format
+msgid "%(num)d rechazado"
+msgid_plural "%(num)d rechazados"
+msgstr[0] "%(num)d rejected"
+msgstr[1] "%(num)d rejected"
+
+msgid "12 de septiembre de 2026"
+msgstr "September 12, 2026"
+
+#, python-format
+msgid "<a href=\"%(url)s\">Mapa del código →</a> cómo está construida la plataforma, archivo por archivo."
+msgstr "<a href=\"%(url)s\">Code map →</a> how the platform is built, file by file."
+
+#, python-format
+msgid "<a href=\"%(url)s\">Meta (agencia) →</a> conectar el Business de Creatv y asignar cuenta y Página a cada proyecto."
+msgstr "<a href=\"%(url)s\">Meta (agency) →</a> connect Creatv's Business and assign an ad account and Page to each project."
+
+#, python-format
+msgid "<a href=\"%(url)s\">Referentes →</a> importar el swipe file de copycoders y ver la biblioteca global."
+msgstr "<a href=\"%(url)s\">Swipe file →</a> import copycoders' swipe file and see the global library."
+
+msgid ""
+"<strong>SMTP sin configurar.</strong> Nadie puede confirmar su correo ni recuperar la contraseña por su cuenta:\n"
+"    pon SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS y SMTP_FROM en el <code>.env</code> del servidor (ver «Correo de la\n"
+"    plataforma» en la Configuración de cualquier proyecto) o marca las cuentas como verificadas a mano."
+msgstr ""
+"<strong>SMTP not configured.</strong> No one can confirm their email or recover their password on their own:\n"
+"    set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS and SMTP_FROM in the server's <code>.env</code> (see “Platform\n"
+"    email” in any project's Settings) or mark accounts as verified by hand."
+
+msgid "Abrir el menú"
+msgstr "Open the menu"
+
 msgid "Cambia el idioma de las pantallas y de todo lo que se genera en tu proyecto."
 msgstr "Changes the language of the screens and of everything generated in your project."
 
 msgid "Cambia solo tu idioma. El del proyecto está en Generación."
 msgstr "Changes only your language. The project's is under Generation."
 
+msgid "Cambiar producto"
+msgstr "Change product"
+
+msgid "Cambios de producto"
+msgstr "Product swaps"
+
+msgid "Campañas"
+msgstr "Campaigns"
+
+#, python-format
+msgid "Campos no actualizables: %(campos)s"
+msgstr "Non-updatable fields: %(campos)s"
+
+msgid "Carga tu catálogo"
+msgstr "Upload your catalog"
+
+msgid "Catálogo"
+msgstr "Catalog"
+
+msgid "Catálogo universal"
+msgstr "Universal catalog"
+
+msgid "Cerrar el menú"
+msgstr "Close the menu"
+
+msgid "Cerrar sesión"
+msgstr "Log out"
+
+msgid "Con el usuario y la contraseña de tu empresa."
+msgstr "With your company's username and password."
+
+msgid "Con persona"
+msgstr "With a person"
+
+msgid "Conecta tu cuenta de Meta, arma la campaña con lo que generaste y publica. Siempre en pausa al crearse; tú decides cuándo gasta y ves los resultados aquí."
+msgstr "Connect your Meta account, build the campaign with what you generated and publish it. It's always paused when created; you decide when it spends and you see the results here."
+
+msgid "Configuración"
+msgstr "Settings"
+
+#, python-format
+msgid "Confirma tu correo en %(plataforma)s"
+msgstr "Confirm your email at %(plataforma)s"
+
+msgid "Confirmar mi correo"
+msgstr "Confirm my email"
+
+msgid "Contraseña"
+msgstr "Password"
+
+msgid "Contraseña cambiada. Entra con la nueva."
+msgstr "Password changed. Log in with the new one."
+
+msgid "Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron."
+msgstr "Password changed. Other sessions open with the previous one were closed."
+
+msgid "Correcciones de prompt (Flow Plus)"
+msgstr "Prompt corrections (Flow Plus)"
+
+msgid "Correo"
+msgstr "Email"
+
+msgid "Correo confirmado. ¡Gracias!"
+msgstr "Email confirmed. Thanks!"
+
+#, python-format
+msgid "Correo guardado. Si %(correo)s es correcto, te llega el enlace de confirmación en unos minutos."
+msgstr "Email saved. If %(correo)s is correct, the confirmation link will arrive in a few minutes."
+
+#, python-format
+msgid "Correo guardado: %(correo)s. El servidor no tiene correo configurado, así que no pudimos enviarte el enlace de confirmación: avisa al administrador."
+msgstr "Email saved: %(correo)s. The server doesn't have email configured, so we couldn't send you the confirmation link: let the administrator know."
+
+#, python-format
+msgid "Correo guardado: %(correo)s. Espera un momento antes de pedir el enlace de confirmación."
+msgstr "Email saved: %(correo)s. Wait a moment before requesting the confirmation link."
+
+msgid "Crea tu proyecto en un minuto. Sin tarjeta: pagas solo lo que generas."
+msgstr "Create your project in a minute. No card: you only pay for what you generate."
+
+msgid "Crear"
+msgstr "Create"
+
+msgid "Crear mi proyecto"
+msgstr "Create my project"
+
+msgid "Crear mi proyecto →"
+msgstr "Create my project →"
+
+msgid "Cuándo"
+msgstr "When"
+
+msgid "Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."
+msgstr "Too many sign-ups in a row from this connection. Wait a while and try again."
+
+msgid "Descarga, edita a partir del resultado, o lánzalo como anuncio."
+msgstr "Download it, edit from the result, or launch it as an ad."
+
+msgid "Descargar CSV del mes"
+msgstr "Download this month's CSV"
+
+msgid "Detalle"
+msgstr "Detail"
+
+msgid "El correo no es válido."
+msgstr "The email isn't valid."
+
+#, python-format
+msgid "El enlace vence en %(vence)s y sirve una sola vez. Si no pediste cambiar tu contraseña, ignora este correo: tu cuenta sigue igual."
+msgstr "The link expires in %(vence)s and works only once. If you didn't ask to change your password, ignore this email: your account stays the same."
+
+#, python-format
+msgid "El enlace vence en %(vence)s. Si no creaste una cuenta en %(plataforma)s, ignora este correo."
+msgstr "The link expires in %(vence)s. If you didn't create an account at %(plataforma)s, ignore this email."
+
+msgid "El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta."
+msgstr "The server doesn't have email configured; let the administrator know so they can confirm your account."
+
+msgid "El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, números, puntos, guiones y guiones bajos."
+msgstr "The username must be between 3 and 40 characters: only lowercase letters, numbers, dots, hyphens and underscores."
+
+msgid "Elegir nueva contraseña"
+msgstr "Choose new password"
+
+msgid "Elige tu nueva contraseña"
+msgstr "Choose your new password"
+
+msgid "Elige un usuario y una contraseña para entrar a tu proyecto."
+msgstr "Choose a username and a password to enter your project."
+
+msgid "Eliminación de datos"
+msgstr "Data deletion"
+
+msgid "Empieza hoy"
+msgstr "Get started today"
+
+msgid "En curso"
+msgstr "In progress"
+
+msgid "En error"
+msgstr "Failed"
+
+msgid "Enlace vencido"
+msgstr "Expired link"
+
+msgid "Entrar"
+msgstr "Log in"
+
+msgid "Entrar a tu proyecto"
+msgstr "Log in to your project"
+
+msgid "Entre 3 y 40 caracteres: minúsculas, números, puntos, guiones y guiones bajos."
+msgstr "Between 3 and 40 characters: lowercase letters, numbers, dots, hyphens and underscores."
+
+msgid "Enviarme el enlace"
+msgstr "Send me the link"
+
+msgid "Error"
+msgstr "Error"
+
+msgid "Error:"
+msgstr "Error:"
+
+msgid "Esa página es solo para el administrador."
+msgstr "That page is only for the administrator."
+
+msgid "Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva. Vence en 1 hora."
+msgstr "Enter your account's email and we'll send you a link to choose a new one. It expires in 1 hour."
+
+msgid "Escribe qué tiene que pasar"
+msgstr "Describe what should happen"
+
+msgid "Escribe un correo válido."
+msgstr "Enter a valid email."
+
+msgid "Escribe un correo válido: ahí te llega el enlace para confirmar la cuenta y recuperar la contraseña."
+msgstr "Enter a valid email: that's where the link to confirm your account and recover your password arrives."
+
+msgid "Ese correo ya está en uso."
+msgstr "That email is already in use."
+
+msgid "Ese correo ya tiene una cuenta. Entra con ella o recupera la contraseña."
+msgstr "That email already has an account. Log in with it or recover the password."
+
+msgid "Ese enlace de verificación no sirve: ya se usó o venció. Pide uno nuevo desde tu cuenta."
+msgstr "That verification link doesn't work: it was already used or it expired. Request a new one from your account."
+
+msgid "Ese enlace ya se usó o pasó su hora. Pide uno nuevo y ábrelo antes de una hora."
+msgstr "That link was already used or its time passed. Request a new one and open it within an hour."
+
+msgid "Ese nombre no genera un identificador de proyecto válido."
+msgstr "That name doesn't produce a valid project identifier."
+
+msgid "Ese ya es tu correo y está confirmado."
+msgstr "That's already your email and it's confirmed."
+
+msgid "Espera un momento antes de pedir otro correo de verificación."
+msgstr "Wait a moment before requesting another verification email."
+
+msgid "Este mes"
+msgstr "This month"
+
+#, python-format
+msgid "Este mes: %(gasto)s"
+msgstr "This month: %(gasto)s"
+
+msgid "Experimentos"
+msgstr "Experiments"
+
+msgid "Experimentos corriendo"
+msgstr "Experiments running"
+
+msgid "Finales"
+msgstr "Final cuts"
+
+msgid "Fotos del producto, tus personajes, tus espacios y el logo."
+msgstr "Photos of the product, your characters, your spaces and the logo."
+
+msgid "Gasto del mes (US$)"
+msgstr "Spend this month (US$)"
+
+msgid "Genera y publica"
+msgstr "Generate and publish"
+
+msgid "Generación (IA)"
+msgstr "Generation (AI)"
+
+msgid "Generación (US$)"
+msgstr "Generation (US$)"
+
+msgid "Generación del mes (US$): lo pagado a los proveedores de IA este mes"
+msgstr "Generation this month (US$): what was paid to AI providers this month"
+
+msgid "Generación por mes (US$)"
+msgstr "Generation by month (US$)"
+
+msgid "Generando…"
+msgstr "Generating…"
+
 msgid "Guardar"
 msgstr "Save"
 
+msgid "Guardar contraseña"
+msgstr "Save password"
+
 msgid "Guardar idioma"
 msgstr "Save language"
+
+msgid "Guiones"
+msgstr "Scripts"
+
+msgid "Guiones a clips (Flow Plus)"
+msgstr "Scripts to clips (Flow Plus)"
+
+msgid "Historial"
+msgstr "History"
+
+#, python-format
+msgid ""
+"Hola %(usuario)s,\n"
+"\n"
+"Alguien pidió restablecer la contraseña de tu cuenta en %(plataforma)s. Si fuiste tú, abre este enlace para elegir una nueva:"
+msgstr ""
+"Hi %(usuario)s,\n"
+"\n"
+"Someone asked to reset your password at %(plataforma)s. If it was you, open this link to choose a new one:"
+
+#, python-format
+msgid ""
+"Hola %(usuario)s,\n"
+"\n"
+"Para terminar de crear tu cuenta en %(plataforma)s confirma que este correo es tuyo abriendo este enlace:"
+msgstr ""
+"Hi %(usuario)s,\n"
+"\n"
+"To finish creating your account at %(plataforma)s confirm this email is yours by opening this link:"
 
 msgid "Idioma del proyecto"
 msgstr "Project language"
@@ -40,6 +390,462 @@ msgstr "Project language saved."
 msgid "Idioma guardado."
 msgstr "Language saved."
 
+msgid "Imagen"
+msgstr "Image"
+
+msgid "Imágenes"
+msgstr "Images"
+
+msgid "Inicia sesión para cambiar tu contraseña."
+msgstr "Log in to change your password."
+
+msgid "Inicia sesión para cambiar tu correo."
+msgstr "Log in to change your email."
+
+msgid "Inicia sesión para entrar a este proyecto."
+msgstr "Log in to enter this project."
+
+msgid "Inicia sesión para reenviar la verificación."
+msgstr "Log in to resend the verification."
+
+msgid "Iniciar sesión"
+msgstr "Log in"
+
+msgid "Interno (Creatv)"
+msgstr "Internal (Creatv)"
+
+msgid "La contraseña actual no es correcta."
+msgstr "The current password isn't correct."
+
+#, python-format
+msgid "La contraseña debe tener al menos %(minimo)d caracteres."
+msgstr "The password must be at least %(minimo)d characters long."
+
+msgid "Las dos contraseñas no coinciden."
+msgstr "The two passwords don't match."
+
+msgid "Lo pagado a los proveedores de IA este mes, todos los proyectos"
+msgstr "What was paid to AI providers this month, all projects"
+
 msgid "Lo que escribe la IA y los anuncios de este proyecto salen en este idioma."
 msgstr "What the AI writes and this project's ads come out in this language."
+
+msgid "Mapa del código"
+msgstr "Code map"
+
+msgid "Marcar verificado"
+msgstr "Mark verified"
+
+msgid "Menú"
+msgstr "Menu"
+
+msgid "Mes"
+msgstr "Month"
+
+msgid "Monto"
+msgstr "Amount"
+
+msgid "Mínimo 8 caracteres. Al guardarla se cierran las sesiones abiertas con la anterior."
+msgstr "At least 8 characters. Saving it closes the sessions open with the previous one."
+
+msgid "Música"
+msgstr "Music"
+
+msgid "Nicho"
+msgstr "Niche"
+
+#, python-format
+msgid "No existe el usuario '%(usuario)s'."
+msgstr "User '%(usuario)s' doesn't exist."
+
+msgid "No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento."
+msgstr "I couldn't calculate the panel this time. The detail was logged on the server; reload in a moment."
+
+#, python-format
+msgid "No pude confirmar el correo: %(error)s"
+msgstr "I couldn't confirm the email: %(error)s"
+
+msgid "No se pudo completar el trabajo."
+msgstr "The task couldn't be completed."
+
+msgid "No tienes acceso a ese proyecto."
+msgstr "You don't have access to that project."
+
+msgid "Nombre de tu empresa o marca"
+msgstr "Your company or brand name"
+
+msgid "Nueva contraseña"
+msgstr "New password"
+
+msgid "O deja que la IA lo describa a partir de tus referencias."
+msgstr "Or let the AI describe it from your references."
+
+msgid "Otros"
+msgstr "Other"
+
+msgid "Panel de administrador"
+msgstr "Admin panel"
+
+msgid "Panel — Proyectos"
+msgstr "Panel — Projects"
+
+msgid "Pauta"
+msgstr "Ad spend"
+
+msgid "Pauta en Meta"
+msgstr "Meta ad spend"
+
+msgid "Pauta en Meta este mes, en la moneda de la cuenta publicitaria"
+msgstr "Meta ad spend this month, in the ad account's currency"
+
+msgid "Pedir otro enlace"
+msgstr "Request another link"
+
+msgid "Piezas"
+msgstr "Pieces"
+
+msgid "Piezas generadas"
+msgstr "Pieces generated"
+
+msgid "Pipeline"
+msgstr "Pipeline"
+
+msgid "Plegar / desplegar"
+msgstr "Collapse / expand"
+
+msgid "Política de privacidad"
+msgstr "Privacy policy"
+
+msgid "Ponle un nombre a la empresa."
+msgstr "Give the company a name."
+
+msgid "Por revisar"
+msgstr "To review"
+
+msgid "Por tipo"
+msgstr "By type"
+
+msgid "Primero escribe tu correo en Configuración › Cuenta."
+msgstr "First enter your email in Settings › Account."
+
+msgid "Privacidad"
+msgstr "Privacy"
+
+msgid "Procesando…"
+msgstr "Processing…"
+
+msgid "Productos, personajes, entornos y logos con su regla de fidelidad. La IA reproduce exactamente tu marca, sin inventar letras ni logotipos."
+msgstr "Products, characters, environments and logos with their fidelity rule. The AI reproduces your brand exactly, without inventing text or logos."
+
+msgid "Proyecto"
+msgstr "Project"
+
+#, python-format
+msgid "Proyecto '%(nombre)s' creado, pero no pudimos enviar el correo de confirmación. Reenvíalo desde el aviso de arriba en un momento."
+msgstr "Project '%(nombre)s' created, but we couldn't send the confirmation email. Resend it from the notice above in a moment."
+
+#, python-format
+msgid "Proyecto '%(nombre)s' creado. El servidor no tiene correo configurado, así que no pudimos enviarte el enlace de confirmación: avisa al administrador."
+msgstr "Project '%(nombre)s' created. The server doesn't have email configured, so we couldn't send you the confirmation link: let the administrator know."
+
+#, python-format
+msgid "Proyecto '%(nombre)s' creado. Espera un momento y pide el correo de confirmación desde el aviso de arriba."
+msgstr "Project '%(nombre)s' created. Wait a moment and request the confirmation email from the notice above."
+
+#, python-format
+msgid "Proyecto '%(nombre)s' creado. Te mandamos un correo a %(correo)s para confirmar tu cuenta."
+msgstr "Project '%(nombre)s' created. We sent an email to %(correo)s to confirm your account."
+
+msgid "Proyectos"
+msgstr "Projects"
+
+msgid "Publicados"
+msgstr "Published"
+
+msgid "Recargar ahora"
+msgstr "Reload now"
+
+msgid "Recuperar contraseña"
+msgstr "Recover password"
+
+msgid "Referencias, un texto y listo: varias versiones de un mismo concepto — solo producto, con persona, unboxing — con el modelo que elijas. Pega un link de TikTok o TrendTrack y recréalo con tu marca."
+msgstr "References, a text and that's it: several versions of the same concept — product only, with a person, unboxing — with the model you choose. Paste a TikTok or TrendTrack link and recreate it with your brand."
+
+msgid "Referentes"
+msgstr "Swipe file"
+
+msgid "Reglas de producto (IA)"
+msgstr "Product rules (AI)"
+
+msgid "Repítela"
+msgstr "Repeat it"
+
+#, python-format
+msgid "Restablece tu contraseña de %(plataforma)s"
+msgstr "Reset your password at %(plataforma)s"
+
+msgid "Rol"
+msgstr "Role"
+
+#, python-format
+msgid "Rol inválido: %(rol)s. Opciones: %(opciones)s"
+msgstr "Invalid role: %(rol)s. Options: %(opciones)s"
+
+msgid "Salir"
+msgstr "Log out"
+
+msgid "Salud del sistema"
+msgstr "System health"
+
+msgid "Se perdió el rastro de esta generación (¿se reinició el servidor?). Recargando…"
+msgstr "Lost track of this generation (did the server restart?). Reloading…"
+
+msgid "Se perdió el rastro de esta generación."
+msgstr "Lost track of this generation."
+
+msgid "Se perdió la conexión con el servidor."
+msgstr "Lost the connection to the server."
+
+msgid "Sesión cerrada."
+msgstr "Session closed."
+
+#, python-format
+msgid "Si %(correo)s es correcto, te llega el enlace en unos minutos (revisa también el spam)."
+msgstr "If %(correo)s is correct, the link will arrive in a few minutes (check spam too)."
+
+msgid "Si ese correo está registrado, te llegará un enlace para restablecer la contraseña (vence en 1 hora; revisa también el spam)."
+msgstr "If that email is registered, a link to reset the password will arrive (expires in 1 hour; check spam too)."
+
+msgid "Solo producto"
+msgstr "Product only"
+
+msgid "Solo tú ves esta pantalla — cada proyecto tiene su propio usuario y contraseña, restringido a lo suyo."
+msgstr "Only you see this screen — each project has its own username and password, restricted to its own."
+
+msgid "Sprints"
+msgstr "Sprints"
+
+msgid ""
+"Sube tus productos, personajes y espacios una sola vez. Genera videos e imágenes con los\n"
+"      mejores modelos del mercado, cambia el producto en fotos y videos reales, y lanza campañas en\n"
+"      Meta desde el mismo lugar — sin agencia, sin editor, sin esperar."
+msgstr ""
+"Upload your products, characters and spaces once. Generate videos and images with the\n"
+"      best models on the market, swap the product in real photos and videos, and launch campaigns on\n"
+"      Meta from the same place — no agency, no editor, no waiting."
+
+msgid "Tablero"
+msgstr "Dashboard"
+
+msgid "Tarea"
+msgstr "Task"
+
+msgid "Tareas en espera"
+msgstr "Tasks waiting"
+
+msgid "Te mandamos un enlace para confirmarlo; con él también recuperas la contraseña si la olvidas."
+msgstr "We'll send you a link to confirm it; you can also use it to recover your password if you forget it."
+
+msgid "Terminó con error."
+msgstr "Finished with an error."
+
+msgid "Textos orgánicos (IA)"
+msgstr "Organic captions (AI)"
+
+msgid "Tiendas"
+msgstr "Stores"
+
+msgid "Tienes cambios sin guardar, por eso no se recargó sola."
+msgstr "You have unsaved changes, so it didn't reload on its own."
+
+msgid "Tipo"
+msgstr "Type"
+
+msgid "Todavía no hay cobros registrados."
+msgstr "No charges recorded yet."
+
+msgid "Todavía no hay proyectos."
+msgstr "No projects yet."
+
+msgid "Todavía no hay usuarios."
+msgstr "No users yet."
+
+msgid "Todos los proyectos"
+msgstr "All projects"
+
+msgid "Todos los proyectos."
+msgstr "All projects."
+
+msgid "Total proyectos"
+msgstr "Total projects"
+
+msgid "Trabajo interno de Creatv sobre la biblioteca de referentes: importaciones, barridos globales, pruebas — no es de ningún proyecto"
+msgstr "Creatv's internal work on the swipe file library: imports, global sweeps, tests — not part of any project"
+
+msgid "Tu correo"
+msgstr "Your email"
+
+msgid "Tu correo ya está confirmado."
+msgstr "Your email is already confirmed."
+
+msgid "Tu máquina de contenido con IA.<br>De la foto del producto al anuncio publicado."
+msgstr "Your AI content machine.<br>From the product photo to the published ad."
+
+msgid "Tu sesión se cerró; entra de nuevo."
+msgstr "Your session closed; log in again."
+
+msgid "Términos"
+msgstr "Terms"
+
+msgid "Términos del servicio"
+msgstr "Terms of service"
+
+msgid "Un usuario con rol 'cliente' necesita un proyecto asignado."
+msgstr "A user with the 'cliente' role needs an assigned project."
+
+msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
+msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
+
+msgid "Usuario"
+msgstr "Username"
+
+#, python-format
+msgid "Usuario '%(usuario)s' marcado como verificado."
+msgstr "User '%(usuario)s' marked as verified."
+
+msgid "Usuario o contraseña incorrectos."
+msgstr "Incorrect username or password."
+
+msgid "Usuarios"
+msgstr "Users"
+
+msgid "Ver el detalle en Configuración › Gasto"
+msgstr "See the detail in Settings › Spend"
+
+msgid "Verificado"
+msgstr "Verified"
+
+msgid "Video · 10s"
+msgstr "Video · 10s"
+
+msgid "Video · 8s"
+msgstr "Video · 8s"
+
+msgid "Videos"
+msgstr "Videos"
+
+msgid "Volver a iniciar sesión"
+msgstr "Back to log in"
+
+#, python-format
+msgid "Ya existe un proyecto con el identificador '%(cid)s' — elige otro nombre."
+msgstr "A project with the identifier '%(cid)s' already exists — choose another name."
+
+#, python-format
+msgid "Ya existe un usuario '%(usuario)s' — elige otro."
+msgstr "A user '%(usuario)s' already exists — choose another."
+
+#, python-format
+msgid "Ya existe un usuario '%(usuario)s'."
+msgstr "User '%(usuario)s' already exists."
+
+msgid "Ya tengo cuenta"
+msgstr "I already have an account"
+
+msgid "ahora mismo"
+msgstr "right now"
+
+msgid "conectada"
+msgstr "connected"
+
+#, python-format
+msgid "del %(desde)s al %(hasta)s · todos los proyectos"
+msgstr "from %(desde)s to %(hasta)s · all projects"
+
+msgid "ej. Happy Flops"
+msgstr "e.g. Happy Flops"
+
+msgid "el worker es el proceso que genera, publica y sincroniza; si se atasca, todo espera"
+msgstr "the worker is the process that generates, publishes and syncs; if it gets stuck, everything waits"
+
+msgid "en la cola"
+msgstr "in the queue"
+
+msgid "esperan una aprobación"
+msgstr "waiting for an approval"
+
+msgid "experimentos y anuncios sueltos"
+msgstr "experiments and standalone ads"
+
+msgid "generación este mes"
+msgstr "generation this month"
+
+msgid "lo de este mes, proyecto por proyecto"
+msgstr "this month's numbers, project by project"
+
+msgid "no"
+msgstr "no"
+
+msgid "por revisar"
+msgstr "to review"
+
+msgid "proyecto"
+msgid_plural "proyectos"
+msgstr[0] "project"
+msgstr[1] "projects"
+
+msgid "publicados"
+msgstr "published"
+
+msgid "sin conectar"
+msgstr "not connected"
+
+msgid "sin contar anuncios sueltos"
+msgstr "not counting standalone ads"
+
+msgid "sin gasto medido este mes"
+msgstr "no spend measured this month"
+
+msgid "sin más reintentos"
+msgstr "no more retries"
+
+msgid "sí"
+msgstr "yes"
+
+msgid "tu@empresa.com"
+msgstr "you@company.com"
+
+msgid "videos, imágenes y finales listos"
+msgstr "videos, images and final cuts ready"
+
+msgid "¡Listo! Tienes cambios sin guardar en esta página."
+msgstr "Done! You have unsaved changes on this page."
+
+#, python-format
+msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"
+msgstr "Mark %(usuario)s as verified without them opening the email link?"
+
+#, python-format
+msgid "¿No tienes proyecto todavía? <a href=\"%(url)s\">Crea uno en un minuto</a>."
+msgstr "Don't have a project yet? <a href=\"%(url)s\">Create one in a minute</a>."
+
+msgid "¿Olvidaste tu contraseña?"
+msgstr "Forgot your password?"
+
+#, python-format
+msgid "¿Ya tienes uno? <a href=\"%(url)s\">Iniciar sesión</a>"
+msgstr "Already have one? <a href=\"%(url)s\">Log in</a>"
+
+msgid "Última actividad"
+msgstr "Last activity"
+
+#, python-format
+msgid "Última actualización: %(fecha)s"
+msgstr "Last updated: %(fecha)s"
+
+msgid "Última terminada"
+msgstr "Last one done"
+
+msgid "Últimos cobros"
+msgstr "Latest charges"
 

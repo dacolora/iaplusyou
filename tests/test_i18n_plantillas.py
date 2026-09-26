@@ -10,6 +10,8 @@ from tests.i18n_util import espanol_en_plantilla
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLANTILLAS_TRADUCIDAS = [
+    "base.html", "_sidebar.html", "login.html", "recuperar.html", "restablecer.html",
+    "index.html", "legal.html", "panel.html",
 ]
 
 

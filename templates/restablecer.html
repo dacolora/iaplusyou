@@ -1,25 +1,25 @@
 {% extends "base.html" %}
-{% block title %}Nueva contraseña{% endblock %}
+{% block title %}{{ _('Nueva contraseña') }}{% endblock %}
 {% block content %}
 <section class="login-caja aparece">
   <span class="eyebrow">Creatv Machine</span>
   {% if vencido %}
-  <h1 style="margin-bottom:.3rem;">Enlace vencido</h1>
-  <p class="hero-sub" style="margin-bottom:1.4rem;">Ese enlace ya se usó o pasó su hora. Pide uno nuevo y ábrelo antes de una hora.</p>
-  <a class="btn-generar" style="display:block;text-align:center;" href="{{ url_for('recuperar') }}">Pedir otro enlace</a>
+  <h1 style="margin-bottom:.3rem;">{{ _('Enlace vencido') }}</h1>
+  <p class="hero-sub" style="margin-bottom:1.4rem;">{{ _('Ese enlace ya se usó o pasó su hora. Pide uno nuevo y ábrelo antes de una hora.') }}</p>
+  <a class="btn-generar" style="display:block;text-align:center;" href="{{ url_for('recuperar') }}">{{ _('Pedir otro enlace') }}</a>
   {% else %}
-  <h1 style="margin-bottom:.3rem;">Elige tu nueva contraseña</h1>
-  <p class="hero-sub" style="margin-bottom:1.4rem;">Mínimo 8 caracteres. Al guardarla se cierran las sesiones abiertas con la anterior.</p>
+  <h1 style="margin-bottom:.3rem;">{{ _('Elige tu nueva contraseña') }}</h1>
+  <p class="hero-sub" style="margin-bottom:1.4rem;">{{ _('Mínimo 8 caracteres. Al guardarla se cierran las sesiones abiertas con la anterior.') }}</p>
   <form method="post" action="{{ url_for('restablecer', token=token) }}" class="form-nueva-idea">
-    <label class="campo-label">Nueva contraseña</label>
+    <label class="campo-label">{{ _('Nueva contraseña') }}</label>
     <input type="password" name="password" autocomplete="new-password" required minlength="8" autofocus>
-    <label class="campo-label" style="margin-top:.8rem;display:block;">Repítela</label>
+    <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Repítela') }}</label>
     <input type="password" name="confirmacion" autocomplete="new-password" required minlength="8">
-    <button type="submit" class="btn-generar" style="margin-top:1rem;width:100%;">Guardar contraseña</button>
+    <button type="submit" class="btn-generar" style="margin-top:1rem;width:100%;">{{ _('Guardar contraseña') }}</button>
   </form>
   {% endif %}
   <p class="vacio" style="margin-top:1rem;font-size:.82rem;">
-    <a href="{{ url_for('login') }}">Volver a iniciar sesión</a>
+    <a href="{{ url_for('login') }}">{{ _('Volver a iniciar sesión') }}</a>
   </p>
 </section>
 {% endblock %}

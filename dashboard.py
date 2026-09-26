@@ -218,7 +218,7 @@ def requiere_admin(fn):
     def envuelta(*args, **kwargs):
         sesion = _sesion()
         if not sesion or sesion["rol"] != "admin":
-            flash("Esa página es solo para el administrador.", "error")
+            flash(gettext("Esa página es solo para el administrador."), "error")
             return redirect(url_for("login"))
         return fn(*args, **kwargs)
     return envuelta
@@ -287,7 +287,7 @@ def _verificar_sesion():
         "sv" not in session or int(entry.get("session_version") or 1) == int(session.get("sv") or 0))
     if not vigente:
         session.clear()
-        flash("Tu sesión se cerró; entra de nuevo.", "error")
+        flash(gettext("Tu sesión se cerró; entra de nuevo."), "error")
         return redirect(url_for("login"))
     if "sv" not in session:
         session["sv"] = int(entry.get("session_version") or 1)
@@ -311,9 +311,9 @@ def _guard_por_cliente():
     sesion = _sesion()
     if not usuarios.puede_acceder(sesion, cliente):
         if not sesion:
-            flash("Inicia sesión para entrar a este proyecto.", "error")
+            flash(gettext("Inicia sesión para entrar a este proyecto."), "error")
             return redirect(url_for("login"))
-        flash("No tienes acceso a ese proyecto.", "error")
+        flash(gettext("No tienes acceso a ese proyecto."), "error")
         return redirect(url_for("ver_cliente", cliente=sesion["cliente"])) if sesion["rol"] == "cliente" else redirect(url_for("index"))
     return None
 
@@ -778,7 +778,11 @@ def index():
     return render_template("index.html")
 
 
-_PRIVACIDAD_HTML = """
+# Documentos legales completos en los dos idiomas (spec 2026-09-26 §Task 4):
+# textos largos, no van al catálogo de catalogo_i18n.py — cada ruta elige con
+# str(get_locale()). El español es idéntico al que había antes de esta tarea.
+_PRIVACIDAD_HTML = {
+    "es": """
 <p>Creatv Machine (creatvmachine.com) es una plataforma para que empresas creen contenido con inteligencia
 artificial y lo publiquen o anuncien en sus propias redes sociales. Esta política explica qué datos tratamos
 cuando conectas tu cuenta de Meta (Facebook e Instagram) y cómo los protegemos.</p>
@@ -817,9 +821,51 @@ indicando el nombre del proyecto; lo hacemos en un plazo máximo de 7 días y te
 <p>Puedes pedir acceso, corrección o eliminación de tus datos en cualquier momento al mismo correo.
 Cumplimos la Ley 1581 de 2012 de protección de datos personales de Colombia y las políticas de la plataforma
 de Meta.</p>
-"""
+""",
+    "en": """
+<p>Creatv Machine (creatvmachine.com) is a platform for businesses to create content with artificial
+intelligence and publish or advertise it on their own social media accounts. This policy explains what data we
+process when you connect your Meta account (Facebook and Instagram) and how we protect it.</p>
+<h3>Data controller</h3>
+<p>Daniel Alejandro Colorado Gaviria — Creatv Machine, Envigado, Colombia. Contact: dacoloradog@gmail.com.</p>
+<h3>What data we receive from Meta</h3>
+<ul>
+<li>Your name and your Facebook user identifier (to know who authorized the connection).</li>
+<li>The list of ad accounts, Facebook Pages and Instagram accounts you manage, so you can
+choose which one to connect to the project.</li>
+<li>A system access token for the chosen ad account and Page.</li>
+<li>Data about your ads and their results (impressions, reach, clicks, spend, conversions) and, when you
+publish organic content, confirmation of the publication.</li>
+</ul>
+<h3>What we use it for</h3>
+<ul>
+<li>Creating and managing campaigns, ad sets and ads in <strong>your</strong> ad account,
+always at your request from the platform: no ad is created or activated unless you ask for it.</li>
+<li>Showing you your ads' results inside the platform.</li>
+<li>Publishing the content you approve to your Facebook Page and your Instagram.</li>
+</ul>
+<p>We don't use your data for our own advertising, we don't sell it or share it with third parties, and we
+don't use it to train artificial intelligence models.</p>
+<h3>Where and how it's stored</h3>
+<p>Tokens and the identifiers of your assets are stored encrypted in transit (HTTPS) and with restricted
+permissions on our server in the European Union (Hetzner, Nuremberg). Only the platform's process
+can read them; they're never shown on screen or logged.</p>
+<h3>How long</h3>
+<p>As long as the project has Meta connected. Clicking “Disconnect” on the platform immediately deletes
+the token and the identifiers. You can also revoke access from Facebook: Settings › Business Integrations,
+or Settings › Apps and Websites.</p>
+<h3>Data deletion</h3>
+<p>For us to delete all the data associated with your Meta account, write to us at dacoloradog@gmail.com
+stating the project's name; we do it within a maximum of 7 days and confirm it by email.</p>
+<h3>Your rights</h3>
+<p>You can request access, correction or deletion of your data at any time at the same email address.
+We comply with Colombia's Law 1581 of 2012 on personal data protection and Meta's platform
+policies.</p>
+""",
+}
 
-_TERMINOS_HTML = """
+_TERMINOS_HTML = {
+    "es": """
 <p>Al usar Creatv Machine aceptas estas condiciones.</p>
 <h3>El servicio</h3>
 <p>Creatv Machine genera imágenes y videos con inteligencia artificial a partir de las referencias que subes,
@@ -841,30 +887,68 @@ siempre el resultado esperado. No respondemos por rechazos de anuncios por parte
 las plataformas de terceros.</p>
 <h3>Contacto</h3>
 <p>Daniel Alejandro Colorado Gaviria — Creatv Machine, Envigado, Colombia. dacoloradog@gmail.com.</p>
-"""
+""",
+    "en": """
+<p>By using Creatv Machine you accept these terms.</p>
+<h3>The service</h3>
+<p>Creatv Machine generates images and videos with artificial intelligence from the references you upload,
+and lets you publish or advertise them on your own social media accounts. You decide what gets generated,
+what gets published and what gets advertised: every action with a cost or a public effect requires your
+confirmation.</p>
+<h3>Your content</h3>
+<p>The references you upload and the generated content are yours. You declare that you have the right to use
+the images, videos, brands and products you upload. Don't upload third-party content without authorization.</p>
+<h3>Meta accounts and other platforms</h3>
+<p>By connecting a Meta account you act on behalf of that account and are responsible for the ads and
+posts you order from the platform, including their budget. Comply with Meta's advertising
+policies.</p>
+<h3>Costs</h3>
+<p>AI generations have a cost that's shown before generating. Ads are paid
+directly to Meta from your ad account.</p>
+<h3>Liability</h3>
+<p>The service is provided “as is”. We don't guarantee advertising results or that an AI model will always
+produce the expected result. We're not responsible for ads rejected by Meta or for changes to
+third-party platforms.</p>
+<h3>Contact</h3>
+<p>Daniel Alejandro Colorado Gaviria — Creatv Machine, Envigado, Colombia. dacoloradog@gmail.com.</p>
+""",
+}
 
 
 @app.route("/privacidad")
 def privacidad():
     """Pública. Es la URL que exige Meta (App Review) y que cualquiera puede leer."""
-    return render_template("legal.html", titulo="Política de privacidad", actualizado="12 de septiembre de 2026", cuerpo=_PRIVACIDAD_HTML)
+    return render_template("legal.html", titulo=gettext("Política de privacidad"),
+                           actualizado=gettext("12 de septiembre de 2026"),
+                           cuerpo=_PRIVACIDAD_HTML[str(get_locale())])
 
 
 @app.route("/terminos")
 def terminos():
-    return render_template("legal.html", titulo="Términos del servicio", actualizado="12 de septiembre de 2026", cuerpo=_TERMINOS_HTML)
+    return render_template("legal.html", titulo=gettext("Términos del servicio"),
+                           actualizado=gettext("12 de septiembre de 2026"),
+                           cuerpo=_TERMINOS_HTML[str(get_locale())])
 
 
 @app.route("/eliminar-datos")
 def eliminar_datos():
     """URL de instrucciones de eliminación de datos que pide Meta."""
-    cuerpo = """<p>Para eliminar los datos que Creatv Machine guarda de tu cuenta de Meta:</p>
+    cuerpo = {
+        "es": """<p>Para eliminar los datos que Creatv Machine guarda de tu cuenta de Meta:</p>
 <ol><li>Entra a tu proyecto en app.creatvmachine.com › FlowMarketing › <strong>Desconectar</strong>: se borran el token
 y los identificadores de tu cuenta publicitaria, Página e Instagram al instante.</li>
 <li>Si prefieres, escribe a dacoloradog@gmail.com con el nombre de tu proyecto y lo eliminamos en máximo 7 días,
 con confirmación por correo.</li></ol>
-<p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Machine › Eliminar.</p>"""
-    return render_template("legal.html", titulo="Eliminación de datos", actualizado="12 de septiembre de 2026", cuerpo=cuerpo)
+<p>También puedes revocar el acceso desde Facebook: Configuración › Apps y sitios web › Creatv Machine › Eliminar.</p>""",
+        "en": """<p>To delete the data Creatv Machine stores about your Meta account:</p>
+<ol><li>Go to your project at app.creatvmachine.com › FlowMarketing › <strong>Disconnect</strong>: the token
+and the identifiers of your ad account, Page and Instagram are deleted instantly.</li>
+<li>If you prefer, write to dacoloradog@gmail.com with your project's name and we'll delete it within 7 days,
+confirmed by email.</li></ol>
+<p>You can also revoke access from Facebook: Settings › Apps and Websites › Creatv Machine › Remove.</p>""",
+    }[str(get_locale())]
+    return render_template("legal.html", titulo=gettext("Eliminación de datos"),
+                           actualizado=gettext("12 de septiembre de 2026"), cuerpo=cuerpo)
 
 
 @app.route("/l/<cliente>")
@@ -909,7 +993,13 @@ def panel_gasto_csv():
 
 def _usuarios_panel():
     """Usuarios para la tabla del panel: nombre, rol, proyecto, correo y si
-    está verificado. Sin contraseña (usuarios.obtener la quita)."""
+    está verificado. Sin contraseña (usuarios.obtener la quita).
+    `confirmar_verificado_msg` viaja ya traducido (gettext de Python, no el
+    `_()` de Jinja) para que la plantilla solo lo pase por `|tojson`: el
+    `_()` de Jinja escapa HTML en las variables interpoladas (autoescape +
+    newstyle gettext), y ese escape sobrevive dentro de la cadena JS que arma
+    tojson — un usuario con una comilla (ver test_rutas_cuentas.py) rompía el
+    confirm() con la entidad &#39; en vez de la comilla escapada por JSON."""
     lista = []
     for nombre in sorted(usuarios.cargar(), key=str.lower):
         entry = usuarios.obtener(nombre) or {}
@@ -920,6 +1010,8 @@ def _usuarios_panel():
             "correo": entry.get("correo"),
             "correo_verificado": bool(entry.get("correo_verificado")),
             "creado_en": entry.get("creado_en"),
+            "confirmar_verificado_msg": gettext(
+                "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?", usuario=nombre),
         })
     return lista
 
@@ -945,7 +1037,7 @@ def login():
     password = request.form.get("password") or ""
     entry = usuarios.verificar(usuario, password)
     if not entry:
-        flash("Usuario o contraseña incorrectos.", "error")
+        flash(gettext("Usuario o contraseña incorrectos."), "error")
         return render_template("login.html"), 401
 
     _abrir_sesion(usuario, entry)
@@ -957,7 +1049,7 @@ def login():
 @app.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    flash("Sesión cerrada.", "ok")
+    flash(gettext("Sesión cerrada."), "ok")
     return redirect(url_for("index"))
 
 
@@ -976,33 +1068,33 @@ def crear_proyecto():
         return render_template("index.html", form=form), 400
 
     if not nombre:
-        return _error("Ponle un nombre a la empresa.")
+        return _error(gettext("Ponle un nombre a la empresa."))
     if not usuario or not password:
-        return _error("Elige un usuario y una contraseña para entrar a tu proyecto.")
+        return _error(gettext("Elige un usuario y una contraseña para entrar a tu proyecto."))
     error_usuario = usuarios.validar_usuario(usuario)
     if error_usuario:
         return _error(error_usuario)
     correo = usuarios.validar_correo(correo_crudo)
     if not correo:
-        return _error("Escribe un correo válido: ahí te llega el enlace para confirmar la cuenta y recuperar la contraseña.")
+        return _error(gettext("Escribe un correo válido: ahí te llega el enlace para confirmar la cuenta y recuperar la contraseña."))
     error_password = usuarios.validar_password(password)
     if error_password:
         return _error(error_password)
     if usuarios.existe(usuario):
-        return _error(f"Ya existe un usuario '{usuario}' — elige otro.")
+        return _error(gettext("Ya existe un usuario '%(usuario)s' — elige otro.", usuario=usuario))
     if usuarios.por_correo(correo):
-        return _error("Ese correo ya tiene una cuenta. Entra con ella o recupera la contraseña.")
+        return _error(gettext("Ese correo ya tiene una cuenta. Entra con ella o recupera la contraseña."))
 
     cid = secure_filename(nombre.lower().replace(" ", "_"))
     if not cid:
-        return _error("Ese nombre no genera un identificador de proyecto válido.")
+        return _error(gettext("Ese nombre no genera un identificador de proyecto válido."))
     if cid in estado_mod.listar_clientes():
-        return _error(f"Ya existe un proyecto con el identificador '{cid}' — elige otro nombre.")
+        return _error(gettext("Ya existe un proyecto con el identificador '%(cid)s' — elige otro nombre.", cid=cid))
 
     # Tope por IP al alta en sí (5 por hora): sin él, un script crea cuentas y
     # carpetas sin fin y manda un correo de verificación por cada una.
     if not cuentas.limite_ok(f"alta:ip:{_ip_cliente() or 'desconocida'}"):
-        flash("Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo.", "error")
+        flash(gettext("Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."), "error")
         return render_template("index.html", form=form), 429
 
     try:
@@ -1022,16 +1114,17 @@ def crear_proyecto():
     _abrir_sesion(usuario, usuarios.obtener(usuario) or {"rol": "cliente", "cliente": cid})
 
     if not cuentas.smtp_configurado():
-        flash(f"Proyecto '{nombre}' creado. El servidor no tiene correo configurado, así que no pudimos "
-              "enviarte el enlace de confirmación: avisa al administrador.", "warn")
+        flash(gettext("Proyecto '%(nombre)s' creado. El servidor no tiene correo configurado, así que no pudimos "
+                      "enviarte el enlace de confirmación: avisa al administrador.", nombre=nombre), "warn")
     elif not _limite_correo("verif", correo):
-        flash(f"Proyecto '{nombre}' creado. Espera un momento y pide el correo de confirmación desde "
-              "el aviso de arriba.", "warn")
+        flash(gettext("Proyecto '%(nombre)s' creado. Espera un momento y pide el correo de confirmación desde "
+                      "el aviso de arriba.", nombre=nombre), "warn")
     elif cuentas.enviar_verificacion(usuario, correo, _url_base(), ip=_ip_cliente()):
-        flash(f"Proyecto '{nombre}' creado. Te mandamos un correo a {correo} para confirmar tu cuenta.", "ok")
+        flash(gettext("Proyecto '%(nombre)s' creado. Te mandamos un correo a %(correo)s para confirmar tu cuenta.",
+                      nombre=nombre, correo=correo), "ok")
     else:
-        flash(f"Proyecto '{nombre}' creado, pero no pudimos enviar el correo de confirmación. "
-              "Reenvíalo desde el aviso de arriba en un momento.", "warn")
+        flash(gettext("Proyecto '%(nombre)s' creado, pero no pudimos enviar el correo de confirmación. "
+                      "Reenvíalo desde el aviso de arriba en un momento.", nombre=nombre), "warn")
     return redirect(url_for("ver_cliente", cliente=cid))
 
 
@@ -1048,15 +1141,15 @@ def verificar_correo(token):
     resultado = cuentas.consumir("verificacion", token)
     sesion = _sesion()
     if resultado is None:
-        flash("Ese enlace de verificación no sirve: ya se usó o venció. Pide uno nuevo desde tu cuenta.", "error")
+        flash(gettext("Ese enlace de verificación no sirve: ya se usó o venció. Pide uno nuevo desde tu cuenta."), "error")
         return _volver_cuenta() if sesion else redirect(url_for("login"))
     usuario = resultado["usuario"]
     try:
         usuarios.actualizar(usuario, correo=resultado["correo"], correo_verificado=True)
     except ValueError as e:
-        flash(f"No pude confirmar el correo: {e}", "error")
+        flash(gettext("No pude confirmar el correo: %(error)s", error=str(e)), "error")
         return _volver_cuenta() if sesion else redirect(url_for("login"))
-    flash("Correo confirmado. ¡Gracias!", "ok")
+    flash(gettext("Correo confirmado. ¡Gracias!"), "ok")
     # Con sesión abierta (la suya o la de otro usuario en este navegador) se
     # vuelve a su cuenta; sin sesión, al login.
     return _volver_cuenta() if sesion else redirect(url_for("login"))
@@ -1068,23 +1161,24 @@ def reenviar_verificacion():
         abort(403)
     sesion = _sesion()
     if not sesion:
-        flash("Inicia sesión para reenviar la verificación.", "error")
+        flash(gettext("Inicia sesión para reenviar la verificación."), "error")
         return redirect(url_for("login"))
     entry = usuarios.obtener(sesion["usuario"])
     if not entry or not entry.get("correo"):
-        flash("Primero escribe tu correo en Configuración › Cuenta.", "error")
+        flash(gettext("Primero escribe tu correo en Configuración › Cuenta."), "error")
         return _volver_cuenta()
     if entry.get("correo_verificado"):
-        flash("Tu correo ya está confirmado.", "ok")
+        flash(gettext("Tu correo ya está confirmado."), "ok")
         return _volver_cuenta()
     if not cuentas.smtp_configurado():
-        flash("El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.", "warn")
+        flash(gettext("El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta."), "warn")
         return _volver_cuenta()
     if not _limite_correo("verif", entry["correo"]):
-        flash("Espera un momento antes de pedir otro correo de verificación.", "warn")
+        flash(gettext("Espera un momento antes de pedir otro correo de verificación."), "warn")
         return _volver_cuenta()
     cuentas.enviar_verificacion(sesion["usuario"], entry["correo"], _url_base(), ip=_ip_cliente())
-    flash(f"Si {entry['correo']} es correcto, te llega el enlace en unos minutos (revisa también el spam).", "ok")
+    flash(gettext("Si %(correo)s es correcto, te llega el enlace en unos minutos (revisa también el spam).",
+                  correo=entry["correo"]), "ok")
     return _volver_cuenta()
 
 
@@ -1099,8 +1193,8 @@ def recuperar():
     if encontrado and cuentas.smtp_configurado() and _limite_correo("reset", correo):
         usuario, _entry = encontrado
         cuentas.enviar_restablecer(usuario, correo, _url_base(), ip=_ip_cliente())
-    flash("Si ese correo está registrado, te llegará un enlace para restablecer la contraseña "
-          "(vence en 1 hora; revisa también el spam).", "ok")
+    flash(gettext("Si ese correo está registrado, te llegará un enlace para restablecer la contraseña "
+                  "(vence en 1 hora; revisa también el spam)."), "ok")
     return redirect(url_for("login"))
 
 
@@ -1117,7 +1211,7 @@ def restablecer(token):
     confirmacion = request.form.get("confirmacion") or ""
     error = usuarios.validar_password(nueva)
     if not error and nueva != confirmacion:
-        error = "Las dos contraseñas no coinciden."
+        error = gettext("Las dos contraseñas no coinciden.")
     if error:
         if cuentas.validar("restablecer", token) is None:
             return render_template("restablecer.html", vencido=True), 400
@@ -1138,7 +1232,7 @@ def restablecer(token):
     if entry.get("correo") == resultado["correo"] and not entry.get("correo_verificado"):
         usuarios.actualizar(usuario, correo_verificado=True)
     session.clear()
-    flash("Contraseña cambiada. Entra con la nueva.", "ok")
+    flash(gettext("Contraseña cambiada. Entra con la nueva."), "ok")
     return redirect(url_for("login"))
 
 
@@ -1148,19 +1242,19 @@ def cuenta_correo():
     correo nuevo queda sin verificar hasta abrir el enlace."""
     sesion = _sesion()
     if not sesion:
-        flash("Inicia sesión para cambiar tu correo.", "error")
+        flash(gettext("Inicia sesión para cambiar tu correo."), "error")
         return redirect(url_for("login"))
     usuario = sesion["usuario"]
     if not usuarios.verificar(usuario, request.form.get("password") or ""):
-        flash("La contraseña actual no es correcta.", "error")
+        flash(gettext("La contraseña actual no es correcta."), "error")
         return _volver_cuenta()
     correo = usuarios.validar_correo(request.form.get("correo") or "")
     if not correo:
-        flash("Escribe un correo válido.", "error")
+        flash(gettext("Escribe un correo válido."), "error")
         return _volver_cuenta()
     actual = usuarios.obtener(usuario) or {}
     if actual.get("correo") == correo and actual.get("correo_verificado"):
-        flash("Ese ya es tu correo y está confirmado.", "ok")
+        flash(gettext("Ese ya es tu correo y está confirmado."), "ok")
         return _volver_cuenta()
     try:
         usuarios.actualizar(usuario, correo=correo, correo_verificado=False)
@@ -1172,13 +1266,15 @@ def cuenta_correo():
     # a emitir uno nuevo (sin SMTP o con el límite alcanzado).
     cuentas.invalidar("verificacion", usuario)
     if not cuentas.smtp_configurado():
-        flash(f"Correo guardado: {correo}. El servidor no tiene correo configurado, así que no pudimos "
-              "enviarte el enlace de confirmación: avisa al administrador.", "warn")
+        flash(gettext("Correo guardado: %(correo)s. El servidor no tiene correo configurado, así que no pudimos "
+                      "enviarte el enlace de confirmación: avisa al administrador.", correo=correo), "warn")
     elif not _limite_correo("verif", correo):
-        flash(f"Correo guardado: {correo}. Espera un momento antes de pedir el enlace de confirmación.", "warn")
+        flash(gettext("Correo guardado: %(correo)s. Espera un momento antes de pedir el enlace de confirmación.",
+                      correo=correo), "warn")
     else:
         cuentas.enviar_verificacion(usuario, correo, _url_base(), ip=_ip_cliente())
-        flash(f"Correo guardado. Si {correo} es correcto, te llega el enlace de confirmación en unos minutos.", "ok")
+        flash(gettext("Correo guardado. Si %(correo)s es correcto, te llega el enlace de confirmación en unos minutos.",
+                      correo=correo), "ok")
     return _volver_cuenta()
 
 
@@ -1189,16 +1285,16 @@ def cuenta_password():
     navegador para que siga abierta."""
     sesion = _sesion()
     if not sesion:
-        flash("Inicia sesión para cambiar tu contraseña.", "error")
+        flash(gettext("Inicia sesión para cambiar tu contraseña."), "error")
         return redirect(url_for("login"))
     usuario = sesion["usuario"]
     if not usuarios.verificar(usuario, request.form.get("password_actual") or ""):
-        flash("La contraseña actual no es correcta.", "error")
+        flash(gettext("La contraseña actual no es correcta."), "error")
         return _volver_cuenta()
     nueva = request.form.get("password") or ""
     error = usuarios.validar_password(nueva)
     if not error and nueva != (request.form.get("confirmacion") or ""):
-        error = "Las dos contraseñas no coinciden."
+        error = gettext("Las dos contraseñas no coinciden.")
     if error:
         flash(error, "error")
         return _volver_cuenta()
@@ -1207,7 +1303,7 @@ def cuenta_password():
     except ValueError as e:
         flash(str(e), "error")
         return _volver_cuenta()
-    flash("Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron.", "ok")
+    flash(gettext("Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron."), "ok")
     return _volver_cuenta()
 
 
@@ -1271,7 +1367,7 @@ def admin_usuario_verificar(usuario):
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("panel"))
-    flash(f"Usuario '{usuario}' marcado como verificado.", "ok")
+    flash(gettext("Usuario '%(usuario)s' marcado como verificado.", usuario=usuario), "ok")
     return redirect(url_for("panel"))
 
 
@@ -3992,11 +4088,15 @@ def tab_descargar_csv(cliente):
 
 # ---------- Gasto real (Task 3): precio antes y después ----------
 
-# Rótulos en español de cada `tipo` de la tabla `gasto` (gastos.TIPOS).
+# Rótulos de cada `tipo` de la tabla `gasto` (gastos.TIPOS): constante de
+# módulo que se muestra, marcada con N_ y traducida donde se usa
+# ({{ valor|traducir }} en las plantillas) — nunca acá mismo (idiomas.py).
 NOMBRES_TIPO_GASTO = {
-    "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
-    "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
-    "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)", "otro": "Otros",
+    "video": idiomas.N_("Videos"), "imagen": idiomas.N_("Imágenes"), "swap": idiomas.N_("Cambios de producto"),
+    "guion": idiomas.N_("Guiones"), "final": idiomas.N_("Finales"), "regla_producto": idiomas.N_("Reglas de producto (IA)"),
+    "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
+    "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
+    "otro": idiomas.N_("Otros"),
 }
 
 
@@ -4032,10 +4132,12 @@ def _precios_pagina():
 
 def _chip_gasto(gasto_mes, pauta_mes):
     """Texto del chip del sidebar: «US$ 12,40 generación · 1.405.157 COP
-    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0)."""
-    partes = [f"{gastos.formatear((gasto_mes or {}).get('total') or 0)} generación"]
+    pauta» (la pauta solo si hay; la generación siempre, aunque sea 0).
+    Traducido acá (no en la plantilla, que solo recibe el texto ya armado
+    con `_('Este mes: %(gasto)s', ...)`, ver _sidebar.html)."""
+    partes = [gettext("%(monto)s generación", monto=gastos.formatear((gasto_mes or {}).get('total') or 0))]
     for p in pauta_mes or []:
-        partes.append(f"{tablero.dinero(p['gasto'], p['moneda'])} pauta")
+        partes.append(gettext("%(monto)s pauta", monto=tablero.dinero(p['gasto'], p['moneda'])))
     return " · ".join(partes)
 
 

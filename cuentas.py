@@ -27,9 +27,11 @@ import time
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from flask_babel import gettext, ngettext, get_locale
 from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import db
+import idiomas
 import notificaciones
 import usuarios
 
@@ -197,38 +199,42 @@ def limite_ok(clave, maximo=LIMITE_MAXIMO, ventana_s=LIMITE_VENTANA_S):
 
 def _horas_texto(segundos):
     horas = segundos // 3600
-    if horas == 1:
-        return "1 hora"
-    return f"{horas} horas"
+    return ngettext("%(num)d hora", "%(num)d horas", horas)
 
 
 def _armar_correo(tipo, usuario, enlace):
-    """(asunto, texto plano, html) del correo de ese tipo."""
+    """(asunto, texto plano, html) del correo de ese tipo, en el locale activo
+    (spec 2026-09-26 §B8): quien llama a esto ya tiene que estar dentro de un
+    `idiomas.en_idioma(...)` (ver _enviar) — este correo va en el idioma de la
+    PERSONA destinataria, no el de quien hizo la petición."""
     vence = _horas_texto(VENCIMIENTO_S[tipo])
+    idioma = str(get_locale() or idiomas.DEFECTO)
     if tipo == "verificacion":
-        asunto = f"Confirma tu correo en {NOMBRE_PLATAFORMA}"
-        intro = (f"Hola {usuario},\n\nPara terminar de crear tu cuenta en {NOMBRE_PLATAFORMA} "
-                 f"confirma que este correo es tuyo abriendo este enlace:")
-        cierre = (f"El enlace vence en {vence}. Si no creaste una cuenta en {NOMBRE_PLATAFORMA}, "
-                  f"ignora este correo.")
-        boton = "Confirmar mi correo"
+        asunto = gettext("Confirma tu correo en %(plataforma)s", plataforma=NOMBRE_PLATAFORMA)
+        intro = gettext("Hola %(usuario)s,\n\nPara terminar de crear tu cuenta en %(plataforma)s "
+                        "confirma que este correo es tuyo abriendo este enlace:",
+                        usuario=usuario, plataforma=NOMBRE_PLATAFORMA)
+        cierre = gettext("El enlace vence en %(vence)s. Si no creaste una cuenta en %(plataforma)s, "
+                         "ignora este correo.", vence=vence, plataforma=NOMBRE_PLATAFORMA)
+        boton = gettext("Confirmar mi correo")
     else:
-        asunto = f"Restablece tu contraseña de {NOMBRE_PLATAFORMA}"
-        intro = (f"Hola {usuario},\n\nAlguien pidió restablecer la contraseña de tu cuenta en "
-                 f"{NOMBRE_PLATAFORMA}. Si fuiste tú, abre este enlace para elegir una nueva:")
-        cierre = (f"El enlace vence en {vence} y sirve una sola vez. Si no pediste cambiar tu "
-                  f"contraseña, ignora este correo: tu cuenta sigue igual.")
-        boton = "Elegir nueva contraseña"
+        asunto = gettext("Restablece tu contraseña de %(plataforma)s", plataforma=NOMBRE_PLATAFORMA)
+        intro = gettext("Hola %(usuario)s,\n\nAlguien pidió restablecer la contraseña de tu cuenta en "
+                        "%(plataforma)s. Si fuiste tú, abre este enlace para elegir una nueva:",
+                        usuario=usuario, plataforma=NOMBRE_PLATAFORMA)
+        cierre = gettext("El enlace vence en %(vence)s y sirve una sola vez. Si no pediste cambiar tu "
+                         "contraseña, ignora este correo: tu cuenta sigue igual.", vence=vence)
+        boton = gettext("Elegir nueva contraseña")
     cuerpo = f"{intro}\n\n{enlace}\n\n{cierre}\n\n— {NOMBRE_PLATAFORMA}\n"
     e = html_mod.escape
     parrafos = "".join(f"<p>{e(p)}</p>" for p in intro.split("\n\n"))
     html = (
-        "<!DOCTYPE html><html lang=\"es\"><body style=\"font-family:Arial,Helvetica,sans-serif;"
+        f"<!DOCTYPE html><html lang=\"{idioma}\"><body style=\"font-family:Arial,Helvetica,sans-serif;"
         "color:#222;line-height:1.5\">"
         f"{parrafos}"
         f"<p><a href=\"{e(enlace)}\" style=\"display:inline-block;padding:10px 18px;background:#1f6feb;"
         f"color:#fff;text-decoration:none;border-radius:6px\">{e(boton)}</a></p>"
-        f"<p style=\"font-size:13px;color:#555\">Si el botón no funciona, copia este enlace en tu navegador:<br>"
+        f"<p style=\"font-size:13px;color:#555\">{e(gettext('Si el botón no funciona, copia este enlace en tu navegador:'))}<br>"
         f"<a href=\"{e(enlace)}\">{e(enlace)}</a></p>"
         f"<p style=\"font-size:13px;color:#555\">{e(cierre)}</p>"
         f"<p>— {e(NOMBRE_PLATAFORMA)}</p>"
@@ -250,7 +256,11 @@ def _enviar(tipo, ruta, usuario, correo, url_base, ip=None):
         return False
     token = emitir(tipo, usuario, correo, ip=ip)
     enlace = f"{(url_base or '').rstrip('/')}/{ruta}/{token}"
-    asunto, cuerpo, html = _armar_correo(tipo, usuario, enlace)
+    # El correo sale en el idioma de quien lo RECIBE (spec 2026-09-26 §B8), no
+    # el de quien hizo la petición (quien la restablece por otra persona, un
+    # admin, el worker...).
+    with idiomas.en_idioma(idiomas.de_usuario(usuario)):
+        asunto, cuerpo, html = _armar_correo(tipo, usuario, enlace)
     try:
         enviado = bool(notificaciones.enviar(correo, asunto, cuerpo, html=html))
     except Exception as error:  # noqa: BLE001 — un correo nunca tumba una petición

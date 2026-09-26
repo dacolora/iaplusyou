@@ -73,3 +73,26 @@ def test_la_deteccion_funciona():
     assert espanol_visible(html) == ["Escribe aquí", "Guardar"]
     # Void element with matching id must have its attributes inspected
     assert espanol_visible('<input id="campo" placeholder="Escribe aquí">', ("campo",)) == ["Escribe aquí"]
+
+
+@pytest.mark.parametrize("url", ["/", "/login", "/recuperar", "/privacidad", "/terminos", "/eliminar-datos"])
+def test_publicas_en_ingles(publico_en, url):
+    fugas = espanol_visible(html_de(publico_en, url))
+    assert not fugas, f"{url}: {fugas[:15]}"
+
+
+def test_restablecer_en_ingles(publico_en):
+    import cuentas
+    token = cuentas.emitir("restablecer", "admin", "admin@prueba.local")
+    fugas = espanol_visible(html_de(publico_en, f"/restablecer/{token}"))
+    assert not fugas, fugas[:15]
+
+
+def test_panel_en_ingles(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/panel"))
+    assert not fugas, fugas[:15]
+
+
+def test_esqueleto_del_proyecto_en_ingles(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("sidebar", "barra-superior"))
+    assert not fugas, fugas[:15]
