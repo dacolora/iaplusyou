@@ -86,6 +86,11 @@ def test_campana_repetida_y_cantidades(base_temporal):
         datos.agregar_campana("acme", sid, 999, "otro", tid, 1, 1)        # persona ajena
     with pytest.raises(datos.ErrorDatos):
         datos.agregar_campana("acme", sid, pid, "", tid, 1, 1)           # sin producto
+    assert [c["id"] for c in datos.campanas("acme", sid)] == [cid, repetida, cid2]
+    assert datos.actualizar_campana("acme", cid, n_videos=12)
+    assert datos.eliminar_campana("acme", cid2) and len(datos.campanas("acme", sid)) == 2
+    tipos = [e["tipo"] for e in datos.eventos("acme", sid)]
+    assert tipos[0] == "campana_eliminada" and "campana_agregada" in tipos
 
 
 def test_sprints_lista_con_totales(base_temporal):
