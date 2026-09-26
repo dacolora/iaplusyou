@@ -21,7 +21,7 @@ def test_variar_guion_hook_y_estructura(monkeypatch):
     from final_edition import guion as g
     capturado = {}
 
-    def falso(system, mensaje, duracion, ajustar):
+    def falso(system, mensaje, duracion, ajustar, datos_texto=None):
         capturado["system"], capturado["mensaje"] = system, mensaje
         return ajustar({"bloques": [{"rol": "hook", "inicio_s": 0, "fin_s": 3, "texto_pantalla": "X", "texto_voz": "Y"}]}), 0.01
     monkeypatch.setattr(g, "_generar_con_correccion", falso)
@@ -140,7 +140,7 @@ def test_producir_variante_usa_guion_variante_y_no_pisa_base(entorno_fe, monkeyp
             "bloques": [{"rol": "hook", "inicio_s": 0, "fin_s": 3, "texto_pantalla": "A", "texto_voz": "B"}]}
     cf.guardar_guion_base("acme", cf_id, base)
     monkeypatch.setattr(g, "variar_guion",
-                        lambda gb, tipo, marca: (dict(gb, bloques=[dict(gb["bloques"][0], texto_pantalla="HOOK2")]), 0.02))
+                        lambda gb, tipo, marca, angulo=None: (dict(gb, bloques=[dict(gb["bloques"][0], texto_pantalla="HOOK2")]), 0.02))
     final_id, resumen = final_edition.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"})
     assert final_id.endswith("__v1") and resumen["estado"] in ("listo", "degradada")
     assert resumen["variante"] == 1
@@ -163,7 +163,7 @@ def test_producir_variante_cambia_voz_o_musica(entorno_fe, monkeypatch):
     voz_original = original["capas"]["voz"]["parametros"]["voz"]
     estilo_original = original["capas"]["musica"]["parametros"]["estilo"]
 
-    monkeypatch.setattr(g, "variar_guion", lambda gb, tipo, marca: (dict(gb), 0.0))
+    monkeypatch.setattr(g, "variar_guion", lambda gb, tipo, marca, angulo=None: (dict(gb), 0.0))
     _, v1 = final_edition.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"})
     _, v2 = final_edition.producir("acme", cf_id, "es", "CO", {"variante": 2, "variante_tipo": "estructura"})
     voces = fal_audio.VOCES["es"]
@@ -192,3 +192,19 @@ def test_interrumpida_marca_error_en_la_variante(base_temporal):
     te.interrumpida(tarea, "worker caído")
     assert cf.final_por_legado("acme", f2)["estado"] == "error"
     assert cf.final_por_legado("acme", f0)["estado"] == "generando"
+
+
+@_sin_ffmpeg
+def test_producir_variante_guarda_el_angulo_variante(entorno_fe, monkeypatch):
+    import creative_flow as cf
+    import final_edition
+    from final_edition import guion as g
+    cf_id = entorno_fe["cf_id"]
+    base = {"idioma": "es", "pais": "CO",
+            "bloques": [{"rol": "hook", "inicio_s": 0, "fin_s": 3, "texto_pantalla": "A", "texto_voz": "B"}]}
+    cf.guardar_guion_base("acme", cf_id, base)
+    monkeypatch.setattr(g, "variar_guion", lambda gb, tipo, marca, angulo=None: (
+        dict(gb, angulo_variante={"lead": "secreto", "gancho": "Lo que nadie te dijo"}), 0.02))
+    final_id, resumen = final_edition.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"})
+    assert resumen["capas"]["guion"]["parametros"]["angulo"] == {"lead": "secreto", "gancho": "Lo que nadie te dijo"}
+    assert "angulo_variante" not in (resumen["guion"] or {})

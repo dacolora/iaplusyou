@@ -57,6 +57,16 @@ def _guion_valido(duracion=10.0, idioma="es", pais="CO"):
 PRODUCTO = {"nombre": "Chancla Rose", "descripcion": "Chancla cómoda de espuma", "precio": 89900,
             "moneda": "COP", "beneficios": ["suave", "antideslizante"]}
 
+ANG = {"version": 1, "audiencia": "mujer que ya rompió tres pares", "consciencia": "consciente_del_problema",
+       "sofisticacion": 3, "deseo": "no volver a comprar chanclas", "promesa": "las últimas chanclas del verano",
+       "mecanismo": "suela cosida, no pegada", "pruebas": [{"texto": "suela cosida a mano", "fuente": "ficha"}],
+       "lead": "problema_solucion", "gancho": "Si ya rompiste tres chanclas, mira esto", "faltantes": [], "origen": "ideas"}
+
+
+def _sys(kw):
+    s = kw["system"]
+    return "".join(b["text"] for b in s) if isinstance(s, list) else s
+
 
 def test_generar_guion_base_una_llamada(monkeypatch):
     from final_edition import guion
@@ -66,8 +76,8 @@ def test_generar_guion_base_una_llamada(monkeypatch):
         "producto", 10.0, "es", "Tono cercano", "Colombia, mujeres 25-40")
     assert len(reg.kwargs) == 1 and costo == 0.01
     kw = reg.kwargs[0]
-    assert kw["max_tokens"] == 1500
-    sistema = kw["system"]
+    assert kw["max_tokens"] == guion.MAX_TOKENS
+    sistema = _sys(kw)
     for rol in ("hook", "problema", "producto", "prueba", "cta"):
         assert rol in sistema
     assert "JSON" in sistema and "10" in sistema
@@ -202,3 +212,91 @@ def test_guardar_y_leer_guion_base(base_temporal):
     assert cf.guion_base("acme", "cf_no_existe") is None
     # No pisa el resto del estado.
     assert cf.cargar("acme")[cid]["accion_central"] == "camina"
+
+
+def test_system_del_guion_ya_no_manda_llaves_literales_y_nombra_el_canal():
+    from final_edition import guion
+    for canal in ("google_ads", "tiktok", "instagram", "pinterest", "facebook"):
+        t = _sys({"system": guion._system_generar(10.0, "es", canal_optimo={"canal": canal, "roas": 3.456})})
+        assert "{canal_optimo" not in t and ("optimizado para " + canal) in t and "3.5x" in t and "Duración sugerida" in t
+    assert "optimizado para" not in _sys({"system": guion._system_generar(10.0, "es")})
+
+
+def test_el_enfoque_cambia_la_instruccion_y_ya_no_hay_wow():
+    from final_edition import guion
+    persona = guion._mensaje_generar(PRODUCTO, None, "persona", 10.0, "", "")
+    producto = guion._mensaje_generar(PRODUCTO, None, "producto", 10.0, "", "")
+    assert "identificación" in persona and "héroe" in producto and "wow" not in producto.lower()
+
+
+def test_con_angulo_escribe_desde_el_y_no_lo_pide(monkeypatch):
+    import doctrina
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido())])
+    guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "", angulo=ANG)
+    kw = reg.kwargs[0]
+    assert kw["system"][0]["text"] == doctrina.texto("guion", "gancho")
+    assert '"angulo"' not in kw["system"][1]["text"]
+    assert "ÁNGULO" in kw["messages"][0]["content"] and "DESDE este ángulo" in kw["messages"][0]["content"]
+
+
+def test_sin_angulo_lo_pide_primero(monkeypatch):
+    import doctrina
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=ANG))])
+    g, _ = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    kw = reg.kwargs[0]
+    assert kw["system"][0]["text"] == doctrina.texto("angulo", "guion", "gancho")
+    assert '"angulo"' in kw["system"][1]["text"] and "Primero decide el ángulo" in kw["messages"][0]["content"]
+    assert g["angulo"]["promesa"] == ANG["promesa"]       # preparar_guion lo separa y lo valida
+
+
+def test_una_cifra_inventada_va_a_la_correccion(monkeypatch):
+    from final_edition import guion
+    inventado = _guion_valido()
+    inventado["bloques"][3]["texto_voz"] = "El 47 % de las clientas repite."
+    reg = _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(_guion_valido())])
+    g, costo = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "", angulo=ANG)
+    assert len(reg.kwargs) == 2 and costo == 0.02
+    correccion = reg.kwargs[1]["messages"][-1]["content"]
+    assert "47 %" in correccion and "no está en los datos" in correccion
+
+
+def test_una_cifra_inventada_dos_veces_no_se_guarda(monkeypatch):
+    from final_edition import guion
+    inventado = _guion_valido()
+    inventado["bloques"][0]["texto_pantalla"] = "3x más duración"
+    _instalar_fake(monkeypatch, [json.dumps(inventado), json.dumps(inventado)])
+    with pytest.raises(guion.GuionInvalido) as e:
+        guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert any("3x" in x for x in e.value.errores)
+
+
+def test_el_precio_del_producto_si_puede_aparecer(monkeypatch):
+    from final_edition import guion
+    con_precio = _guion_valido()
+    con_precio["bloques"][4]["texto_voz"] = "Hoy por 89.900 pesos."
+    reg = _instalar_fake(monkeypatch, [json.dumps(con_precio)])
+    guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert len(reg.kwargs) == 1
+
+
+def test_localizar_conserva_el_angulo(monkeypatch):
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido(idioma="en", pais="US"))])
+    guion.localizar_guion(_guion_valido(), "en", "US", None, angulo=ANG)
+    kw = reg.kwargs[0]
+    assert "conserva el arranque, la promesa, el mecanismo y las pruebas" in _sys(kw)
+    assert "ÁNGULO" in kw["messages"][0]["content"]
+
+
+def test_variar_hook_pide_solo_otro_arranque_y_devuelve_angulo_variante(monkeypatch):
+    import doctrina
+    from final_edition import guion
+    variante = dict(_guion_valido(), angulo_variante={"lead": "secreto", "gancho": "Lo que nadie te dice de las chanclas"})
+    reg = _instalar_fake(monkeypatch, [json.dumps(variante)])
+    v, _ = guion.variar_guion(_guion_valido(), "hook", "", angulo=ANG)
+    kw = reg.kwargs[0]
+    assert kw["system"][0]["text"] == doctrina.texto("gancho")
+    assert "angulo_variante" in _sys(kw) and "ÁNGULO" in kw["messages"][0]["content"]
+    assert v["angulo_variante"] == {"lead": "secreto", "gancho": "Lo que nadie te dice de las chanclas"}

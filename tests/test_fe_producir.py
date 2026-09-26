@@ -78,13 +78,14 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
                         lambda cliente, categoria="producto": [{"id": "chancla_rose", "nombre": "Chancla Rose",
                                                                 "descripcion": "Chancla cómoda", "tipo": "calzado"}])
 
-    def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None):
+    def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None,
+                     angulo=None):
         llamadas["generar"] = dict(producto=producto, referencia=referencia, enfoque=enfoque,
                                    duracion_s=duracion_s, idioma_base=idioma_base, marca=marca)
         return dict(GUION_BASE), 0.01
     monkeypatch.setattr(guion_mod, "generar_guion_base", fake_generar)
 
-    def fake_localizar(guion_base, idioma, pais, precio):
+    def fake_localizar(guion_base, idioma, pais, precio, angulo=None):
         llamadas["localizar"] = (idioma, pais, precio)
         g = dict(guion_base); g["idioma"] = idioma; g["pais"] = pais
         return g, 0.02
@@ -180,6 +181,43 @@ def test_preparar_guion_sin_producto_ni_transcripcion(entorno, monkeypatch):
     assert args["producto"]["nombre"] == "la persona camina con las chanclas"
     assert args["referencia"]["transcripcion"] is None
     assert cf.guion_base("acme", entorno["cf_id"]) is not None
+
+
+def test_preparar_guion_guarda_el_angulo_nuevo_y_no_pisa_uno_existente(entorno, monkeypatch):
+    import creative_flow as cf
+    nuevo = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+             "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "problema_solucion", "gancho": "g", "faltantes": []}
+
+    def generar_con_angulo(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
+                           canal_optimo=None, angulo=None):
+        entorno["angulo_recibido"] = angulo
+        return dict(GUION_BASE, angulo=nuevo), 0.01
+    monkeypatch.setattr(guion_mod, "generar_guion_base", generar_con_angulo)
+    g, _ = final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    assert "angulo" not in g and "angulo" not in cf.guion_base("acme", entorno["cf_id"])
+    guardado = cf.cargar("acme")[entorno["cf_id"]]["angulo"]
+    assert guardado["promesa"] == "p" and guardado["origen"] == "guion" and entorno["angulo_recibido"] is None
+    monkeypatch.setattr(guion_mod, "generar_guion_base",
+                        lambda *a, **k: (dict(GUION_BASE, angulo=dict(nuevo, promesa="otra")), 0.01))
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    assert cf.cargar("acme")[entorno["cf_id"]]["angulo"]["promesa"] == "p"      # el ángulo de la sesión manda
+
+
+def test_preparar_guion_lleva_regla_y_precio_de_la_tienda(entorno, monkeypatch):
+    import catalogo_productos
+    import tiendas
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [
+        {"id": "chancla_rose", "nombre": "Chancla Rose", "descripcion": "Chancla cómoda", "tipo": "calzado",
+         "regla": "Suela rosa idéntica."}])
+    pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
+    tiendas.marcar_producto("acme", pid, precio=89900, moneda="COP", url_compra="https://tienda.co/rose")
+    final_edition.preparar_guion("acme", entorno["cf_id"])                    # sin precio escrito: el de la tienda
+    p = entorno["generar"]["producto"]
+    assert p["regla"] == "Suela rosa idéntica." and p["precio"] == 89900 and p["moneda"] == "COP"
+    assert p["url_compra"] == "https://tienda.co/rose" and "beneficios" not in p
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 99000})  # el escrito manda; no se le pone moneda
+    p = entorno["generar"]["producto"]
+    assert p["precio"] == 99000 and p["moneda"] is None
 
 
 def test_producir_ok(entorno):

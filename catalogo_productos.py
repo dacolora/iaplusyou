@@ -219,6 +219,17 @@ def encontrar(cliente, producto_id, categoria=None):
     return None
 
 
+def encontrar_por_id_o_nombre(cliente, valor, categoria=CATEGORIA_POR_DEFECTO):
+    """Por id y, si no, por nombre visible exacto: `productos_ids` de Crear y
+    Sprints guarda NOMBRES, no ids. None si nada coincide."""
+    if not valor:
+        return None
+    p = encontrar(cliente, valor, categoria=categoria)
+    if p:
+        return p
+    return next((c for c in listar(cliente, categoria) if c.get("nombre") == valor), None)
+
+
 def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
     """Ruta en disco de un producto, validada contra fugas de directorio: el id
     llega desde la URL, así que un '../..' no puede terminar borrando otra cosa."""
