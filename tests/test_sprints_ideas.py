@@ -362,3 +362,20 @@ def test_reescribir_con_respuesta_invalida_no_toca_la_idea_y_devuelve_lo_pagado(
     sin_angulo = datos.crear_idea("acme", cid, "video", "Sin", "x")
     with pytest.raises(datos.ErrorDatos):
         ideas.reescribir("acme", sin_angulo)
+
+
+def test_reescribir_sin_sonido_en_json_mantiene_el_sonido_anterior(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (review 1): si Claude omite la clave «sonido» en su JSON,
+    la idea mantiene el sonido anterior; solo una clave presente (incluso vacía) lo reemplaza."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    cp = datos.crear_idea("acme", cid, "video", "Vieja", "escena vieja", sonido="olas",
+                          extra={"angulo": ANGULO})
+    def falso(content, max_tokens=700, system=None):
+        # Claude responde sin la clave "sonido"
+        return json.dumps({"titulo": "Nueva", "escena": "Escena nueva"}), 800, 250
+    monkeypatch.setattr(analisis, "_llamar_contando", falso)
+    assert ideas.reescribir("acme", cp) == (800, 250)
+    idea = datos.idea("acme", cp)
+    assert idea["titulo"] == "Nueva" and idea["escena"] == "Escena nueva"
+    assert idea["sonido"] == "olas"  # Se mantiene el anterior

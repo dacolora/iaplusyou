@@ -414,7 +414,7 @@ def reescribir(cliente, cp_id):
         e.tokens_entrada, e.tokens_salida = ent, sal
         raise
     campos = {"titulo": titulo, "escena": escena}
-    if idea["tipo"] == "video":
+    if idea["tipo"] == "video" and "sonido" in data:
         campos["sonido"] = str(data.get("sonido") or "").strip()
     datos.actualizar_idea(cliente, cp_id, **campos)
     return ent, sal
