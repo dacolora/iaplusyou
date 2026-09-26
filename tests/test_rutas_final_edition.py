@@ -489,6 +489,23 @@ def test_plantilla_muestra_el_editor_del_angulo_de_la_pieza():
     assert "Todavía no tiene ángulo: se decide al preparar el guion" in vacio
 
 
+def test_editor_del_angulo_se_inicializa_al_abrir_la_pieza():
+    """Doctrina, bloque 2 (revisión final, bug crítico #1): el editor vive
+    dentro de <template class="generado-detalle"> y `iniciarEditoresAngulo()`
+    solo corre sobre `document` al cargar la página — nunca ve el contenido
+    que `abrir()` clona ahí adentro, así que sin esto no guarda nada."""
+    env = _entorno_plantilla()
+    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo()]))
+    assert "iniciarEditoresAngulo(cuerpo)" in html
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "static", "angulo.js")) as f:
+        js = f.read()
+    # Fix B: tras guardar desde el modal, el valor vuelve a escribirse en la
+    # <template> de origen (si no, la próxima apertura re-clona el HTML viejo
+    # del servidor y el guardado anterior se pierde).
+    assert "generado-detalle" in js and ".angulo-editor" in js
+
+
 def test_guardar_el_angulo_de_una_pieza(base_temporal, monkeypatch):
     import creative_flow
     import dashboard

@@ -609,6 +609,10 @@
       cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
         if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
       });
+      // Bug crítico (doctrina, bloque 2, revisión final): el editor del ángulo
+      // también vive en el <template> clonado — iniciarEditoresAngulo() ya
+      // corrió sobre `document` al cargar la página y nunca vio esto.
+      if (window.iniciarEditoresAngulo) window.iniciarEditoresAngulo(cuerpo);
       modal.showModal();
     }
     document.querySelectorAll('.generado').forEach(function (card) {

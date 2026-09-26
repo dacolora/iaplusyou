@@ -24,6 +24,27 @@
     lista.hidden = !(avisos && avisos.length);
   }
 
+  function escribirEnPlantillaOriginal(url, angulo) {
+    // Bug crítico (doctrina, bloque 2, revisión final): el modal de Crear
+    // clona su <template class="generado-detalle"> de cero cada vez que se
+    // abre, así que sin esto el siguiente guardado revertiría el anterior en
+    // cuanto se reabriera la pieza. Busca la <template> cuyo editor tiene la
+    // misma data-url y le deja los mismos valores.
+    document.querySelectorAll('template.generado-detalle').forEach(function (tpl) {
+      var editor = tpl.content.querySelector('.angulo-editor[data-url="' + url + '"]');
+      if (!editor) return;
+      editor.querySelectorAll('[data-angulo-campo]').forEach(function (el) {
+        el.value = (angulo && angulo[el.dataset.anguloCampo]) || '';
+      });
+      var pruebas = (angulo && angulo.pruebas) || [];
+      editor.querySelectorAll('[data-angulo-prueba]').forEach(function (fila, i) {
+        var p = pruebas[i] || {};
+        fila.querySelector('[data-prueba-texto]').value = p.texto || '';
+        fila.querySelector('[data-prueba-fuente]').value = p.fuente || '';
+      });
+    });
+  }
+
   function contarGancho(caja) {
     var gancho = caja.querySelector('[data-angulo-campo="gancho"]');
     var cuenta = caja.querySelector('.angulo-cuenta-gancho');
@@ -47,6 +68,7 @@
           pintarAvisos(caja, j.avisos);
           var resumen = caja.querySelector('.angulo-resumen');
           if (resumen && j.resumen) resumen.textContent = j.resumen;
+          escribirEnPlantillaOriginal(caja.dataset.url, j.angulo);
           // Gancho sync: copy saved gancho back to the idea card (doctrina, bloque 2, §3.3)
           var tarjeta = caja.closest('.sprint-idea');
           var ganchoTarjeta = tarjeta ? tarjeta.querySelector('input[name="gancho"]') : null;
