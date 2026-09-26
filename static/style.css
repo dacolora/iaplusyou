@@ -1078,6 +1078,7 @@ body.con-sidebar > header .header-logout { display: none; }
   /* En el menú siempre con nombres, aunque en escritorio esté plegada. */
   .con-sidebar.sidebar-plegada .sidebar-texto { display: revert; }
   .con-sidebar.sidebar-plegada .sidebar-usuario-datos { display: flex; }
+  .con-sidebar.sidebar-plegada .sidebar-usuario .sidebar-gasto { display: block; }
   .con-sidebar.sidebar-plegada .sidebar-item { justify-content: flex-start; padding: .6rem .7rem; }
   .con-sidebar.sidebar-plegada .sidebar-marca,
   .con-sidebar.sidebar-plegada .sidebar-usuario { justify-content: flex-start; padding-left: .5rem; padding-right: .5rem; }
@@ -2185,6 +2186,13 @@ textarea.gp-mono { font-size: .8rem; line-height: 1.5; }
 
 /* Configuración en apartados (spec 2026-09-26-configuracion-apartados):
    pastillas como las de Catálogo; Meta a todo el ancho en Conexiones. */
+/* Detalles (2026-09-26): foto que no carga → recuadro neutro (base.html);
+   pie de la barra lateral con el gasto en su propia línea. */
+img.img-rota { object-fit: contain; background: var(--panel-2); padding: 12%; }
+.sidebar-usuario { flex-wrap: wrap; }
+.sidebar-usuario-datos { flex: 1 1 0; }
+.sidebar-usuario .sidebar-gasto { flex: 1 1 100%; margin-top: 0; }
+.sidebar-plegada .sidebar-usuario .sidebar-gasto { display: none; }
 .config-apartados { margin: 0 0 1.4rem; }
 .config-apartado > h2:first-child { margin-top: .4rem; }
 .llaves-tarjetas-ancha { grid-template-columns: minmax(0, 1fr); }

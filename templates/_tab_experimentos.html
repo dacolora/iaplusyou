@@ -54,7 +54,7 @@
       <span class="exp-tarjeta-media">
         {% if el.url_miniatura %}<img src="{{ el.url_miniatura }}" alt="" loading="lazy">
         {% elif el.es_imagen %}<img src="{{ el.url_video }}" alt="" loading="lazy">
-        {% else %}<video src="{{ el.url_video }}" muted playsinline preload="metadata"></video>{% endif %}
+        {% else %}<video src="{{ el.url_video }}#t=0.1" muted playsinline preload="metadata"></video>{% endif %}
       </span>
       <span class="exp-tarjeta-texto">
         <strong>{{ el.nombre }}</strong>
