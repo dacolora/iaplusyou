@@ -1062,7 +1062,7 @@ body.con-sidebar > header .header-logout { display: none; }
 @media (max-width: 760px) {
   .con-sidebar, .con-sidebar.sidebar-plegada { --sb: 0px; }
   .con-sidebar .sidebar {
-    width: min(84vw, 300px); z-index: 40; padding-top: 3.2rem;
+    width: min(84vw, 300px); z-index: 40; padding-top: 3.2rem; overflow-y: auto;
     transform: translateX(-100%); transition: transform .2s ease;
   }
   body.menu-abierto .sidebar { transform: none; box-shadow: var(--shadow); }
@@ -1086,12 +1086,19 @@ body.con-sidebar > header .header-logout { display: none; }
     display: inline-flex; align-items: center; gap: .4rem; flex: none; padding: .45rem .75rem; font-size: .85rem;
   }
   body.con-sidebar > header .header-nav { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* «Proyectos /» (admin) ya está dentro del menú: en la barra solo proyecto · pestaña. */
+  body.con-sidebar > header .header-nav > a, body.con-sidebar > header .header-sep { display: none; }
   body.con-sidebar > header .header-pestana { display: inline; }
   body.con-sidebar > header .header-pestana:not(:empty)::before { content: "·"; margin: 0 .4rem; color: var(--muted-2); }
   .con-sidebar main { margin-left: 0; padding: 1rem; }
   .con-sidebar .tab-panel.activo { padding: 1rem; border-radius: var(--radius); }
-  /* Nada desplaza la página de lado: las tablas anchas se desplazan en su caja. */
-  .con-sidebar main table { display: block; max-width: 100%; overflow-x: auto; }
+  /* Nada desplaza la página de lado: las tablas anchas se desplazan en su caja,
+     las filas de campos se apilan y las filas de botones se envuelven. */
+  main table { display: block; max-width: 100%; overflow-x: auto; }
+  .fila-campos, .fila-campos-idea { grid-template-columns: minmax(0, 1fr); }
+  .form-subir-personaje { flex-wrap: wrap; }
+  /* Panel de admin (sin barra lateral): las cifras se envuelven. */
+  .hero-stats { flex: 1 1 100%; flex-wrap: wrap; gap: 1rem 1.6rem; }
 }
 
 /* Selector de archivos nativo: en tema claro se ve como un botón de la app. */
@@ -1892,6 +1899,10 @@ input[type="date"], input[type="time"], input[type="datetime-local"], input[type
   color: var(--text); padding: .6rem .75rem; font: inherit; font-size: .87rem;
   transition: border-color .15s, box-shadow .15s;
 }
+/* Dentro de una fila flex un campo con `flex: 1` no se achicaba por debajo de
+   su ancho propio (~20 caracteres) y empujaba el botón vecino fuera de la
+   pantalla en celular («Agregar link» en Crear). */
+:where(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea) { min-width: 0; }
 /* El control nativo mide su ancho sin contar el botón con estilo y recortaba
    «Sin archivos seleccionados» a «Sin archivo…leccionados». */
 input[type="file"] { width: 20rem; max-width: 100%; }
