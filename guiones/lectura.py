@@ -6,7 +6,7 @@ revisa y corrige antes de confirmar.
 """
 import logging
 
-from guiones import claude, datos
+from guiones import claude, datos, notion
 from guiones.refinador import DatoInvalido, _normalizar
 
 log = logging.getLogger(__name__)
@@ -106,6 +106,18 @@ def leer_lote(lote_id, llamar=None):
         lote = datos.lote_para_leer(lote_id)
         if lote is None or lote["estado"] != "leyendo":
             return
+        if lote["fuente"] == "notion" and not lote["texto_crudo"]:
+            llave = notion.llave(lote["cliente"])
+            if not llave:
+                datos.fallar_lote(lote_id, "No encuentro la llave de Notion de este proyecto; vuelve a conectarla.")
+                return
+            try:
+                titulo, texto = notion.leer_pagina(llave, lote["notion_page_id"])
+            except notion.ErrorNotion as e:
+                datos.fallar_lote(lote_id, str(e))
+                return
+            datos.poner_texto_lote(lote_id, titulo, texto)
+            lote = datos.lote_para_leer(lote_id)
         data, usd, error = claude.pedir_json(
             lote["cliente"], "leer", lote_id, SISTEMA, _mensajes(lote["texto_crudo"]),
             f"Leer guion · {(lote['titulo'] or '')[:60]}", llamar_fn=llamar, max_tokens=16000, timeout=240)
