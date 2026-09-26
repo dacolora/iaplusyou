@@ -68,9 +68,42 @@ def _sys(kw):
     return "".join(b["text"] for b in s) if isinstance(s, list) else s
 
 
-def test_generar_guion_base_una_llamada(monkeypatch):
+def test_generar_con_correccion_con_errores_extra_pide_correccion_pero_no_bloquea_en_la_ultima_pasada(monkeypatch):
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido()), json.dumps(_guion_valido())])
+    vistos = []
+
+    def extra(g):
+        vistos.append(g)
+        return ["algo no bloqueante"]
+    g, costo = guion._generar_con_correccion("system", "mensaje", 10.0, lambda g: g, errores_extra=extra)
+    assert len(reg.kwargs) == 2 and costo == pytest.approx(0.02)
+    correccion = reg.kwargs[1]["messages"][-1]["content"]
+    assert "algo no bloqueante" in correccion
+    assert len(vistos) == 2  # se llamó en las dos pasadas
+
+
+def test_generar_con_correccion_sin_errores_extra_ni_bloqueantes_no_pide_correccion(monkeypatch):
     from final_edition import guion
     reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido())])
+    g, costo = guion._generar_con_correccion("system", "mensaje", 10.0, lambda g: g, errores_extra=lambda g: [])
+    assert len(reg.kwargs) == 1 and costo == 0.01
+
+
+def test_generar_con_correccion_nunca_pierde_lo_pagado_si_la_correccion_rompe_el_guion(monkeypatch):
+    from final_edition import guion
+    malo = _guion_valido()
+    malo["bloques"][-1]["fin_s"] = 14.0
+    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido()), json.dumps(malo)])
+    g, costo = guion._generar_con_correccion(
+        "system", "mensaje", 10.0, lambda g: g, errores_extra=lambda g: ["algo no bloqueante"])
+    assert len(reg.kwargs) == 2
+    assert g["bloques"][-1]["fin_s"] == 10.0   # se queda con la primera pasada, no con la rota
+
+
+def test_generar_guion_base_una_llamada(monkeypatch):
+    from final_edition import guion
+    reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=ANG))])
     g, costo = guion.generar_guion_base(
         PRODUCTO, {"frames": ["https://x/f1.jpg"], "transcripcion": "hola mundo"},
         "producto", 10.0, "es", "Tono cercano", "Colombia, mujeres 25-40")
@@ -94,7 +127,7 @@ def test_generar_guion_base_una_llamada(monkeypatch):
 def test_generar_guion_base_con_referencia_envia_frames_como_imagenes(monkeypatch):
     from final_edition import guion
     urls = ["https://x/f1.jpg", "https://x/f2.jpg", "https://x/f3.jpg"]
-    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido())])
+    reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=ANG))])
     guion.generar_guion_base(
         PRODUCTO, {"frames": urls, "transcripcion": "hola"},
         "producto", 10.0, "es", "", "")
@@ -107,7 +140,7 @@ def test_generar_guion_base_con_referencia_envia_frames_como_imagenes(monkeypatc
 
 def test_generar_guion_base_sin_referencia_envia_string(monkeypatch):
     from final_edition import guion
-    reg = _instalar_fake(monkeypatch, [json.dumps(_guion_valido())])
+    reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=ANG))])
     guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
     contenido = reg.kwargs[0]["messages"][0]["content"]
     assert isinstance(contenido, str)
@@ -115,7 +148,8 @@ def test_generar_guion_base_sin_referencia_envia_string(monkeypatch):
 
 def test_generar_guion_base_tolera_fences_y_texto_alrededor(monkeypatch):
     from final_edition import guion
-    reg = _instalar_fake(monkeypatch, ["Aquí va:\n```json\n" + json.dumps(_guion_valido()) + "\n```\nListo."])
+    reg = _instalar_fake(monkeypatch,
+                         ["Aquí va:\n```json\n" + json.dumps(dict(_guion_valido(), angulo=ANG)) + "\n```\nListo."])
     g, _ = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
     assert len(reg.kwargs) == 1 and len(g["bloques"]) == 5
 
@@ -229,6 +263,15 @@ def test_el_enfoque_cambia_la_instruccion_y_ya_no_hay_wow():
     assert "identificación" in persona and "héroe" in producto and "wow" not in producto.lower()
 
 
+def test_mensaje_generar_no_revienta_si_el_roas_del_canal_optimo_es_none():
+    """F.3: igual que `_nota_canal`, el mensaje de usuario no debe reventar
+    con un ROAS ausente (Triple Whale sin métricas todavía)."""
+    from final_edition import guion
+    texto = guion._mensaje_generar(PRODUCTO, None, "producto", 10.0, "", "",
+                                   canal_optimo={"canal": "tiktok", "roas": None})
+    assert "tiktok" in texto and "ROAS" not in texto
+
+
 def test_con_angulo_escribe_desde_el_y_no_lo_pide(monkeypatch):
     import doctrina
     from final_edition import guion
@@ -248,7 +291,49 @@ def test_sin_angulo_lo_pide_primero(monkeypatch):
     kw = reg.kwargs[0]
     assert kw["system"][0]["text"] == doctrina.texto("angulo", "guion", "gancho")
     assert '"angulo"' in kw["system"][1]["text"] and "Primero decide el ángulo" in kw["messages"][0]["content"]
-    assert g["angulo"]["promesa"] == ANG["promesa"]       # preparar_guion lo separa y lo valida
+    assert g["angulo"]["promesa"] == ANG["promesa"]       # generar_guion_base ya lo valida y limpia (B)
+
+
+def test_angulo_con_campo_faltante_pide_correccion_y_guarda_el_limpio(monkeypatch):
+    """B(a): el ángulo que Claude decide reusa la MISMA vuelta de corrección
+    del guion — no se valida recién después, sin oportunidad de arreglarlo."""
+    from final_edition import guion
+    incompleto = dict(ANG, audiencia="")  # campo obligatorio vacío -> campo_faltante:audiencia
+    primero = dict(_guion_valido(), angulo=incompleto)
+    segundo = dict(_guion_valido(), angulo=ANG)
+    reg = _instalar_fake(monkeypatch, [json.dumps(primero), json.dumps(segundo)])
+    g, costo = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert len(reg.kwargs) == 2 and costo == pytest.approx(0.02)
+    correccion = reg.kwargs[1]["messages"][-1]["content"]
+    assert "Ángulo:" in correccion and "campo_faltante:audiencia" in correccion
+    assert g["angulo"]["audiencia"] == ANG["audiencia"] and g["angulo"]["origen"] == "guion"
+
+
+def test_angulo_invalido_no_bloquea_si_la_correccion_rompe_el_guion(monkeypatch):
+    """B(b): si la segunda pasada arregla el ángulo pero rompe el guion (o
+    viceversa no importa), lo pagado de la primera pasada no se pierde."""
+    from final_edition import guion
+    angulo_sin_mecanismo = dict(ANG, sofisticacion=3, mecanismo=None)  # sofisticacion>=3 exige mecanismo
+    primero = dict(_guion_valido(), angulo=angulo_sin_mecanismo)
+    malo = _guion_valido()
+    malo["bloques"][-1]["fin_s"] = 14.0  # la "corrección" rompe la duración
+    reg = _instalar_fake(monkeypatch, [json.dumps(primero), json.dumps(malo)])
+    g, costo = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
+    assert len(reg.kwargs) == 2 and costo == pytest.approx(0.02)
+    assert g["bloques"][-1]["fin_s"] == 10.0  # se queda con el guion de la primera pasada
+    assert any(e.startswith("error: mecanismo_obligatorio") for e in g["angulo"]["faltantes"])
+
+
+def test_angulo_con_cifra_de_la_marca_no_se_flagea(monkeypatch):
+    """B(c): la marca (y el tono) entran en los mismos `datos` que valida el
+    ángulo — una cifra real de la guía de marca no es una cifra inventada."""
+    from final_edition import guion
+    angulo_con_cifra_marca = dict(ANG, gancho="25 años cuidando pies cansados")
+    reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=angulo_con_cifra_marca))])
+    g, _ = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es",
+                                    "Marca con 25 años de trayectoria", "")
+    assert len(reg.kwargs) == 1
+    assert g["angulo"]["gancho"] == angulo_con_cifra_marca["gancho"]
 
 
 def test_una_cifra_inventada_va_a_la_correccion(monkeypatch):
@@ -260,6 +345,24 @@ def test_una_cifra_inventada_va_a_la_correccion(monkeypatch):
     assert len(reg.kwargs) == 2 and costo == 0.02
     correccion = reg.kwargs[1]["messages"][-1]["content"]
     assert "47 %" in correccion and "no está en los datos" in correccion
+
+
+def test_angulo_con_cifra_rechazada_no_blanquea_la_cifra(monkeypatch):
+    """A: `faltantes` (que sí se le muestra a Claude en el mensaje) nunca
+    puede colarse en `datos_texto` — si no, una cifra ya rechazada («47 %»)
+    reaparecería ahí como "conocida" y pasaría la verificación."""
+    from final_edition import guion
+    angulo_con_rechazos = dict(ANG, faltantes=["prueba sin fuente: el 47 % repite",
+                                               "error: cifra_no_verificada:3x"])
+    invencion = _guion_valido()
+    invencion["bloques"][3]["texto_voz"] = "El 47 % de las clientas repite."
+    invencion["bloques"][0]["texto_pantalla"] = "Dura 3x más"
+    reg = _instalar_fake(monkeypatch, [json.dumps(invencion), json.dumps(_guion_valido())])
+    g, costo = guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "",
+                                        angulo=angulo_con_rechazos)
+    assert len(reg.kwargs) == 2 and costo == 0.02
+    correccion = reg.kwargs[1]["messages"][-1]["content"]
+    assert "47 %" in correccion and "3x" in correccion
 
 
 def test_una_cifra_inventada_dos_veces_no_se_guarda(monkeypatch):
@@ -274,7 +377,7 @@ def test_una_cifra_inventada_dos_veces_no_se_guarda(monkeypatch):
 
 def test_el_precio_del_producto_si_puede_aparecer(monkeypatch):
     from final_edition import guion
-    con_precio = _guion_valido()
+    con_precio = dict(_guion_valido(), angulo=ANG)
     con_precio["bloques"][4]["texto_voz"] = "Hoy por 89.900 pesos."
     reg = _instalar_fake(monkeypatch, [json.dumps(con_precio)])
     guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "")
@@ -290,6 +393,20 @@ def test_localizar_conserva_el_angulo(monkeypatch):
     assert "ÁNGULO" in kw["messages"][0]["content"]
 
 
+def test_localizar_no_verifica_cifras_aunque_cambien_unidades_o_precio(monkeypatch):
+    """E: el guion base ya se verificó al generarlo; localizar convierte a
+    propósito unidades y precio, y esas cifras nuevas nunca están en los
+    datos de origen — no deben mandar a corrección."""
+    from final_edition import guion
+    base = _guion_valido()
+    traducido = _guion_valido(idioma="en", pais="US")
+    traducido["bloques"][2]["texto_voz"] = "24 inches of pure comfort, only $199.99"
+    reg = _instalar_fake(monkeypatch, [json.dumps(traducido)])
+    g, costo = guion.localizar_guion(base, "en", "US", None)
+    assert len(reg.kwargs) == 1 and costo == 0.01
+    assert g["bloques"][2]["texto_voz"] == "24 inches of pure comfort, only $199.99"
+
+
 def test_variar_hook_pide_solo_otro_arranque_y_devuelve_angulo_variante(monkeypatch):
     import doctrina
     from final_edition import guion
@@ -300,3 +417,17 @@ def test_variar_hook_pide_solo_otro_arranque_y_devuelve_angulo_variante(monkeypa
     assert kw["system"][0]["text"] == doctrina.texto("gancho")
     assert "angulo_variante" in _sys(kw) and "ÁNGULO" in kw["messages"][0]["content"]
     assert v["angulo_variante"] == {"lead": "secreto", "gancho": "Lo que nadie te dice de las chanclas"}
+
+
+def test_variar_hook_conserva_el_cta_y_pide_no_repetir_el_gancho_anterior(monkeypatch):
+    """C: spec §6.3 — la variante "hook" conserva promesa, mecanismo, pruebas
+    Y el CTA (solo cambia el bloque 1); el ángulo de la variante reemplaza el
+    gancho del ÁNGULO, así que no debe repetirlo ni parafrasearlo."""
+    from final_edition import guion
+    variante = dict(_guion_valido(), angulo_variante={"lead": "secreto", "gancho": "Nuevo gancho"})
+    reg = _instalar_fake(monkeypatch, [json.dumps(variante)])
+    guion.variar_guion(_guion_valido(), "hook", "", angulo=ANG)
+    kw = reg.kwargs[0]
+    mensaje = kw["messages"][0]["content"]
+    assert "hook" in mensaje.lower() and "CTA" in mensaje
+    assert "no repitas" in _sys(kw).lower()

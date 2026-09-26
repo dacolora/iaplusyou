@@ -24,7 +24,6 @@ Orquestador de las capas (`guion` -> `cortes` -> `sonido` -> `voz` -> `musica`
 Las capas se invocan siempre como atributo de su módulo (`voz.sintetizar`,
 `render.componer`, ...) para que las pruebas puedan sustituirlas una a una.
 """
-import json
 import os
 import shutil
 
@@ -33,7 +32,6 @@ import requests
 import catalogo_productos
 import creative_flow
 import db
-import doctrina
 import gastos
 import marca
 import proyectos
@@ -356,6 +354,17 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     entry = _sesion(cliente, cf_id)
     idioma_base = o.get("idioma_base") or "es"
     producto = _producto(cliente, entry, o.get("precio"))
+    # Precio base del guion (D, regla de CLAUDE.md): el escrito por la persona
+    # manda tal cual. Sin uno escrito, el de la tienda solo cuenta como precio
+    # base si su moneda es la del país base — si no, ninguna final lo llevaría
+    # en esa moneda y Claude no debe voz-earlo: se le quita al producto.
+    precio_base = o.get("precio")
+    if precio_base is None and producto.get("precio") is not None:
+        moneda_pais_base = tipos.PAISES[guion_mod._pais_por_idioma(idioma_base)]["moneda"]
+        if producto.get("moneda") == moneda_pais_base:
+            precio_base = producto["precio"]
+        else:
+            producto = dict(producto, precio=None, moneda=None)
     referencia, costo = _referencia(entry, idioma_base)
     duracion_s = o.get("duracion_s") or cortes.duracion(_clon_local(cliente, cf_id, entry))
     enfoque = entry.get("enfoque") or "producto"
@@ -368,18 +377,14 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         producto, referencia, enfoque, float(duracion_s), idioma_base,
         _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion)
     costo += float(costo_guion or 0.0)
-    # Sin ángulo en la sesión, Claude lo decidió junto con el guion: se separa,
-    # se valida y queda en la sesión para localizar, variar y los captions. Uno
-    # que ya existía (de la idea del sprint o de «Recrear») nunca se pisa.
+    # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
+    # con el guion (B: `guion_mod.generar_guion_base` reusa su propia vuelta
+    # de corrección); acá solo se separa y se guarda. Uno que ya existía (de
+    # la idea del sprint o de «Recrear») nunca se pisa.
     nuevo = guion_base.pop("angulo", None)
-    if not angulo_sesion and isinstance(nuevo, dict):
-        limpio, errores = doctrina.validar_angulo(nuevo, json.dumps(producto, ensure_ascii=False))
-        limpio["origen"] = "guion"
-        limpio["faltantes"] = (limpio["faltantes"] + [f"error: {e}" for e in errores])[:8]
-        creative_flow.actualizar(cliente, cf_id, angulo=limpio)
     # El precio escrito al preparar viaja con el guion base para prellenar el
     # destino del país base al producir (los demás países piden el suyo).
-    guion_base["precio_base"] = o.get("precio")
+    guion_base["precio_base"] = precio_base
     # Guardar contexto de canal óptimo si lo hay
     if canal_optimo:
         guion_base["canal_optimo"] = canal_optimo
@@ -392,6 +397,10 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
         cliente, "guion", round(costo, 4), f"guion:{cf_id}{ref_sufijo}", proveedor="anthropic",
         detalle=f"guion base {idioma_base}" + (" + transcripción de la referencia" if costo_whisper else ""),
         extra={"usd_guion": round(float(costo_guion or 0.0), 4), "usd_whisper": round(costo_whisper, 4)})
+    # F: el ángulo se guarda AL FINAL — si esto falla, el guion (ya pagado) y
+    # su gasto ya quedaron a salvo; una tarea nueva no vuelve a pagar por él.
+    if not angulo_sesion and isinstance(nuevo, dict):
+        creative_flow.actualizar(cliente, cf_id, angulo=nuevo)
     return guion_base, round(costo, 4)
 
 
@@ -469,6 +478,10 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         if not guion_base:
             guion_base, costo_base = preparar_guion(cliente, cf_id, o, ref_sufijo=ref_sufijo)
             costo += costo_base
+            # F.1: si la sesión no tenía ángulo, preparar_guion pudo guardar
+            # uno nuevo — recargar para que la variante y la localización de
+            # ABAJO (en esta misma llamada) ya lo reciban, en vez de None.
+            entry = _sesion(cliente, cf_id)
         # Variante: el guion variado reemplaza al base SOLO para esta pieza;
         # `concepto.guion_base` sigue intacto para las demás finales.
         costo_variante = 0.0

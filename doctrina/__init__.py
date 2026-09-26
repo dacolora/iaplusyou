@@ -289,3 +289,27 @@ def angulo_a_texto(angulo):
     if a.get("faltantes"):
         lineas.append("- Faltantes (no inventes esto): " + "; ".join(a["faltantes"]))
     return "\n".join(lineas)
+
+
+def texto_verificable(angulo):
+    """La parte de un ángulo que cuenta como dato ya verificado, para meter en
+    `datos_texto` (nunca en lo que se le MUESTRA a Claude: eso sigue siendo
+    `angulo_a_texto`). Las `pruebas` siempre — `validar_angulo` ya botó las que
+    no traían fuente o traían una cifra sin verificar. audiencia/deseo/
+    promesa/mecanismo/gancho SOLO si ningún `faltantes` es una cifra
+    rechazada (`error: cifra_no_verificada...`): si el ángulo ya tiene una
+    cifra rechazada, esos campos no entran — de lo contrario el propio
+    `faltantes` (que sí se le muestra a Claude en `angulo_a_texto`) volvería
+    a blanquear esa misma cifra en la próxima vuelta. Nunca los `faltantes`
+    en sí, nunca encabezados. "" si `angulo` no es un dict."""
+    if not isinstance(angulo, dict):
+        return ""
+    partes = [p.get("texto", "") for p in (angulo.get("pruebas") or []) if isinstance(p, dict)]
+    faltantes = angulo.get("faltantes") or []
+    cifra_rechazada = any(str(f).startswith("error: cifra_no_verificada") for f in faltantes)
+    if not cifra_rechazada:
+        for campo in ("audiencia", "deseo", "promesa", "mecanismo", "gancho"):
+            valor = angulo.get(campo)
+            if valor:
+                partes.append(str(valor))
+    return "\n".join(p for p in partes if p)

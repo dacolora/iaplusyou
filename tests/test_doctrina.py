@@ -221,3 +221,32 @@ def test_validar_angulo_no_lanza_con_angulo_malformado():
     limpio, e = doctrina.validar_angulo(dict(ANGULO_OK, pruebas=42))
     assert isinstance(limpio, dict) and isinstance(e, list)
     assert limpio["pruebas"] == []
+
+
+def test_texto_verificable_nunca_incluye_los_faltantes():
+    import doctrina
+    limpio, _ = doctrina.validar_angulo(ANGULO_OK, DATOS)
+    assert limpio["faltantes"]  # el fixture trae uno
+    t = doctrina.texto_verificable(limpio)
+    for frag in limpio["faltantes"]:
+        assert frag not in t
+    assert limpio["promesa"] in t and limpio["gancho"] in t
+    for p in limpio["pruebas"]:
+        assert p["texto"] in t
+
+
+def test_texto_verificable_omite_los_campos_de_texto_si_hay_una_cifra_rechazada_pero_deja_las_pruebas():
+    import doctrina
+    limpio, _ = doctrina.validar_angulo(ANGULO_OK, DATOS)
+    con_rechazo = dict(limpio, faltantes=["error: cifra_no_verificada:47"])
+    t = doctrina.texto_verificable(con_rechazo)
+    assert limpio["promesa"] not in t and limpio["gancho"] not in t and limpio["audiencia"] not in t
+    for p in limpio["pruebas"]:
+        assert p["texto"] in t
+
+
+def test_texto_verificable_vacio_para_none_o_no_dict():
+    import doctrina
+    assert doctrina.texto_verificable(None) == ""
+    assert doctrina.texto_verificable("texto") == ""
+    assert doctrina.texto_verificable(["a"]) == ""

@@ -216,7 +216,9 @@ def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_h
         partes.append(_ENFOQUE_GUION[enfoque])
     partes.append(f"Duración objetivo: {duracion_s:g} segundos")
     if canal_optimo:
-        partes.append(f"Canal optimizado: {canal_optimo['canal']} (ROAS {canal_optimo['roas']:.1f}x)")
+        roas = canal_optimo.get("roas")
+        partes.append(f"Canal optimizado: {canal_optimo['canal']}"
+                      + (f" (ROAS {float(roas):.1f}x)" if roas is not None else ""))
     if marca and str(marca).strip():
         partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
     if cliente_hint and str(cliente_hint).strip():
@@ -323,17 +325,28 @@ def _errores_de_cifras(guion, datos_texto):
     return errores
 
 
-def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_texto=None):
+def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_texto=None, errores_extra=None):
     """Llama a Claude, valida y, si hay errores, pide UNA corrección
-    incluyendo la lista de errores. Devuelve (guion, costo_usd)."""
+    incluyendo la lista de errores. Devuelve (guion, costo_usd).
+
+    `errores_extra(guion) -> list[str]` son errores NO bloqueantes (p. ej. el
+    ángulo que Claude debía decidir junto con el guion): se incluyen en la
+    corrección igual que los bloqueantes, pero no impiden devolver el guion
+    de la segunda pasada si esa ya no tiene errores bloqueantes (los extra
+    que sigan quedan para quien llama). Si la segunda pasada SÍ rompe el
+    guion (error bloqueante) pero la primera no tenía ninguno — solo extra —
+    se devuelve la primera: lo ya pagado nunca se pierde por una corrección
+    que empeoró las cosas."""
     client = anthropic.Anthropic(api_key=_api_key())
     mensajes = [{"role": "user", "content": mensaje_usuario}]
     costo = 0.0
     errores = []
+    guion_sin_bloqueo = None
     for intento in range(2):
         texto = _llamar(client, system, mensajes)
         costo += COSTO_LLAMADA_USD
         guion = _parsear(texto)
+        extra = []
         if guion is None:
             errores = ["JSON inválido"]
         else:
@@ -341,16 +354,23 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
             errores = tipos.validar_guion(guion, duracion_s)
             if datos_texto is not None:
                 errores += _errores_de_cifras(guion, datos_texto)
+            if errores_extra is not None:
+                extra = list(errores_extra(guion) or [])
             if not errores:
-                return guion, costo
+                if not extra or intento == 1:
+                    return guion, costo
+                guion_sin_bloqueo = guion
         if intento == 0:
+            todos = errores + extra
             mensajes = mensajes + [
                 {"role": "assistant", "content": texto or "(respuesta vacía)"},
                 {"role": "user", "content": (
-                    "El guion tiene estos errores:\n- " + "\n- ".join(errores) +
+                    "El guion tiene estos errores:\n- " + "\n- ".join(todos) +
                     "\n\nCorrígelos y responde de nuevo ÚNICAMENTE con el JSON completo del guion."
                 )},
             ]
+    if guion_sin_bloqueo is not None:
+        return guion_sin_bloqueo, costo
     raise GuionInvalido(errores)
 
 
@@ -361,7 +381,8 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
     """Guion en el idioma base. `producto`: {"nombre", "descripcion", "regla", "precio", "moneda", "url_compra",
     "tipo"}; `referencia`: {"frames": [urls], "transcripcion"} o None; `canal_optimo`: {"canal", "roas",
     "duracion_sugerida_s"} o None; `angulo`: el de la sesión (se escribe DESDE él) o None (se le pide a
-    Claude y vuelve en la clave "angulo" del guion). Devuelve (guion, costo_usd)."""
+    Claude, que reusa la MISMA vuelta de corrección del guion — spec §4.2 — y vuelve ya limpio y validado
+    en la clave "angulo" del guion, `origen="guion"`). Devuelve (guion, costo_usd)."""
     duracion_s = float(duracion_s)
     pais_base = _pais_por_idioma(idioma_base)
 
@@ -372,14 +393,32 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
         g.setdefault("precio_texto", None)
         return g
 
-    datos = _datos_verificables(producto, (referencia or {}).get("transcripcion"), cliente_hint,
-                                doctrina.angulo_a_texto(angulo))
-    return _generar_con_correccion(
+    datos = _datos_verificables(producto, (referencia or {}).get("transcripcion"), cliente_hint, marca,
+                                doctrina.texto_verificable(angulo))
+
+    errores_extra = None
+    if not angulo:
+        # Se le pidió a Claude decidir el ángulo: sus errores (campo_faltante,
+        # cifra_no_verificada...) entran a la MISMA corrección del guion en
+        # vez de descubrirse recién después, sin poder pedir que los arregle.
+        def errores_extra(g):
+            crudo = g.get("angulo") if isinstance(g.get("angulo"), dict) else {}
+            _, errores_angulo = doctrina.validar_angulo(crudo, datos)
+            return [f"Ángulo: {e}" for e in errores_angulo]
+
+    guion, costo = _generar_con_correccion(
         _system_generar(duracion_s, idioma_base, canal_optimo=canal_optimo, con_angulo=bool(angulo)),
         _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=canal_optimo,
                          angulo=angulo),
-        duracion_s, ajustar, datos,
+        duracion_s, ajustar, datos, errores_extra=errores_extra,
     )
+    if not angulo:
+        crudo = guion.get("angulo") if isinstance(guion.get("angulo"), dict) else {}
+        limpio, errores_angulo = doctrina.validar_angulo(crudo, datos)
+        limpio["origen"] = "guion"
+        limpio["faltantes"] = (limpio["faltantes"] + [f"error: {e}" for e in errores_angulo])[:8]
+        guion["angulo"] = limpio
+    return guion, costo
 
 
 def localizar_guion(guion_base, idioma, pais, precio, angulo=None):
@@ -409,19 +448,24 @@ def localizar_guion(guion_base, idioma, pais, precio, angulo=None):
             raise GuionInvalido(errores)
         return g, 0.0
 
+    # Sin verificación de cifras (E): el guion base ya se verificó al generarlo;
+    # aquí Claude convierte moneda/unidades a propósito («60 cm» → «24 in»,
+    # el precio a otra moneda) y esas cifras nuevas nunca están en los datos
+    # de origen — verificarlas solo forzaría una corrección pagada de más o
+    # un GuionInvalido que bloquearía la final de todo un país.
     return _generar_con_correccion(
         doctrina.bloque_system(extra=_system_localizar(idioma, pais, precio_texto) + REGLA_LOCALIZAR_ANGULO),
         _mensaje_localizar(guion_base, idioma, pais, moneda, precio_texto, angulo=angulo),
-        duracion_s, ajustar, _datos_verificables(guion_base, precio_texto, doctrina.angulo_a_texto(angulo)),
+        duracion_s, ajustar,
     )
 
 
 VARIANTES_GUION = {
     "hook": (
-        "Cambia solo el arranque y el gancho: elige otro arranque compatible con la consciencia del ÁNGULO (u otro "
-        "patrón de gancho si ese arranque es el único recomendado), reescribe el hook (bloque 1) y el CTA (último "
-        "bloque) y conserva la promesa, el mecanismo, las pruebas y los demás bloques salvo ajustes mínimos de "
-        "continuidad: mismo mensaje, otro gancho."
+        "Cambia SOLO el hook (bloque 1): elige otro arranque compatible con la consciencia del ÁNGULO (u otro "
+        "patrón de gancho si ese arranque es el único recomendado) y reescribe el hook con él. Conserva la "
+        "promesa, el mecanismo, las pruebas, el CTA (último bloque) y los demás bloques salvo ajustes mínimos "
+        "de continuidad: mismo mensaje, otro gancho."
     ),
     "estructura": (
         "Mantén los 5 bloques con sus roles fijos y en el mismo orden (hook, problema, producto, prueba, cta) y con "
@@ -434,7 +478,8 @@ VARIANTES_GUION = {
 }
 
 REGLA_VARIANTE = ("\n\nAdemás del guion, devuelve la clave \"angulo_variante\": {\"lead\": \"<arranque que usaste>\", "
-                  "\"gancho\": \"<el gancho nuevo, máximo 12 palabras>\"}.")
+                  "\"gancho\": \"<el gancho nuevo, máximo 12 palabras>\"}. En esta variante el gancho del ÁNGULO se "
+                  "reemplaza por uno nuevo: no repitas ni parafrasees el gancho anterior.")
 
 
 def _mensaje_variar(guion_base, variante_tipo, marca, angulo=None):
@@ -484,7 +529,7 @@ def variar_guion(guion_base, variante_tipo, marca, angulo=None):
     return _generar_con_correccion(
         doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE),
         _mensaje_variar(base, variante_tipo, marca, angulo=angulo),
-        duracion_s, ajustar, _datos_verificables(base, doctrina.angulo_a_texto(angulo)),
+        duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo)),
     )
 
 

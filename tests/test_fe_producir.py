@@ -184,9 +184,13 @@ def test_preparar_guion_sin_producto_ni_transcripcion(entorno, monkeypatch):
 
 
 def test_preparar_guion_guarda_el_angulo_nuevo_y_no_pisa_uno_existente(entorno, monkeypatch):
+    """B.3/F.2: `preparar_guion` ya no valida ni limpia el ángulo (eso lo hace
+    `guion_mod.generar_guion_base` en su propia vuelta de corrección, B) —
+    solo lo separa y lo guarda tal cual, y solo si la sesión no tenía uno."""
     import creative_flow as cf
     nuevo = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
-             "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "problema_solucion", "gancho": "g", "faltantes": []}
+             "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "problema_solucion", "gancho": "g",
+             "faltantes": [], "origen": "guion"}
 
     def generar_con_angulo(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
                            canal_optimo=None, angulo=None):
@@ -211,13 +215,59 @@ def test_preparar_guion_lleva_regla_y_precio_de_la_tienda(entorno, monkeypatch):
          "regla": "Suela rosa idéntica."}])
     pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
     tiendas.marcar_producto("acme", pid, precio=89900, moneda="COP", url_compra="https://tienda.co/rose")
-    final_edition.preparar_guion("acme", entorno["cf_id"])                    # sin precio escrito: el de la tienda
+    g, _ = final_edition.preparar_guion("acme", entorno["cf_id"])             # sin precio escrito: el de la tienda
     p = entorno["generar"]["producto"]
     assert p["regla"] == "Suela rosa idéntica." and p["precio"] == 89900 and p["moneda"] == "COP"
     assert p["url_compra"] == "https://tienda.co/rose" and "beneficios" not in p
-    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 99000})  # el escrito manda; no se le pone moneda
+    assert g["precio_base"] == 89900  # D: coincide con la moneda del país base (es -> CO -> COP)
+    g, _ = final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 99000})  # el escrito manda
     p = entorno["generar"]["producto"]
-    assert p["precio"] == 99000 and p["moneda"] is None
+    assert p["precio"] == 99000 and p["moneda"] is None       # no se le pone moneda a un precio escrito
+    assert g["precio_base"] == 99000
+
+
+def test_preparar_guion_ignora_el_precio_de_la_tienda_si_su_moneda_no_es_la_del_pais_base(entorno, monkeypatch):
+    """D: sin precio escrito, si la moneda de la tienda no es la del país base
+    del idioma (es -> CO -> COP), ni el producto ni `precio_base` la llevan —
+    Claude no debe voz-ear un precio que ninguna final va a mostrar en esa
+    moneda."""
+    import catalogo_productos
+    import tiendas
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [
+        {"id": "chancla_rose", "nombre": "Chancla Rose", "descripcion": "Chancla cómoda", "tipo": "calzado"}])
+    pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
+    tiendas.marcar_producto("acme", pid, precio=25, moneda="USD", url_compra="https://tienda.co/rose")
+    g, _ = final_edition.preparar_guion("acme", entorno["cf_id"])
+    p = entorno["generar"]["producto"]
+    assert p["precio"] is None and p["moneda"] is None
+    assert g["precio_base"] is None
+
+
+def test_producir_recarga_la_sesion_tras_preparar_el_guion_para_que_la_localizacion_reciba_el_angulo_nuevo(
+        entorno, monkeypatch):
+    """F.1: cuando `producir` escribe el guion base ADENTRO de la misma
+    llamada (la sesión no tenía uno), el ángulo que Claude decidió debe
+    llegar a `localizar_guion` de esa misma pieza — no `None`, que es lo que
+    quedaría si `producir` siguiera usando el `entry` cargado al principio."""
+    nuevo = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+             "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "problema_solucion", "gancho": "g",
+             "faltantes": [], "origen": "guion"}
+
+    def fake_generar_con_angulo(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
+                                canal_optimo=None, angulo=None):
+        return dict(GUION_BASE, angulo=nuevo), 0.01
+    monkeypatch.setattr(guion_mod, "generar_guion_base", fake_generar_con_angulo)
+
+    vistos = {}
+
+    def fake_localizar_ve_angulo(guion_base, idioma, pais, precio, angulo=None):
+        vistos["angulo"] = angulo
+        g = dict(guion_base); g["idioma"] = idioma; g["pais"] = pais
+        return g, 0.02
+    monkeypatch.setattr(guion_mod, "localizar_guion", fake_localizar_ve_angulo)
+
+    final_edition.producir("acme", entorno["cf_id"], "es", "CO")
+    assert vistos["angulo"] is not None and vistos["angulo"]["promesa"] == "p"
 
 
 def test_producir_ok(entorno):
@@ -393,6 +443,31 @@ def test_producir_sin_sonido_o_clon_mudo(entorno):
 def test_producir_rechaza_preset_desconocido(entorno):
     with pytest.raises(ValueError):
         final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"mezcla": "reguetón"})
+
+
+def test_preparar_guion_guarda_el_guion_y_el_gasto_aunque_falle_guardando_el_angulo(entorno, monkeypatch):
+    """F.2: el ángulo se guarda AL FINAL — si eso revienta, el guion (ya
+    pagado) y su fila de gasto no se pierden; solo se pierde el ángulo, que
+    se puede recuperar con un reintento (idempotente por sesión)."""
+    import creative_flow as cf
+    import gastos
+    nuevo = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+             "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "problema_solucion", "gancho": "g",
+             "faltantes": [], "origen": "guion"}
+
+    def generar_con_angulo(*a, **k):
+        return dict(GUION_BASE, angulo=nuevo), 0.01
+    monkeypatch.setattr(guion_mod, "generar_guion_base", generar_con_angulo)
+
+    def falla_al_guardar(*a, **k):
+        raise RuntimeError("base caída justo al guardar el ángulo")
+    monkeypatch.setattr(cf, "actualizar", falla_al_guardar)
+
+    with pytest.raises(RuntimeError, match="base caída"):
+        final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+
+    assert cf.guion_base("acme", entorno["cf_id"]) is not None    # el guion ya pagado no se pierde
+    assert len(gastos.historial("acme")) == 1                     # ni su gasto
 
 
 # ---------- gasto real (guion:<cf_id> / final:<final_id>) ----------
