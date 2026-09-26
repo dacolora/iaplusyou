@@ -77,7 +77,9 @@ def test_cada_pestana_abre_con_su_encabezado(app):
 def test_estados_vacios_con_accion(app):
     html = _pagina(app)
     sp, ni, rf, ex = (_pestana(html, t) for t in ("sprints", "nicho", "referentes", "experimentos"))
-    assert 'class="estado-vacio"' in sp and sp.count('data-abrir-detalle="nuevo-sprint"') == 2
-    assert 'class="estado-vacio"' in ni and ni.count('data-abrir-detalle="nuevo-estudio"') == 2
+    # Sprints y Nicho: el botón del encabezado y el formulario de abajo bastan
+    # (tres «+ Nuevo …» en la misma pantalla sobraban).
+    assert 'class="estado-vacio"' in sp and sp.count('data-abrir-detalle="nuevo-sprint"') == 1
+    assert 'class="estado-vacio"' in ni and ni.count('data-abrir-detalle="nuevo-estudio"') == 1
     assert 'class="estado-vacio"' in rf and "Todavía no hay referentes" in rf
     assert 'class="estado-vacio"' in ex and 'href="#creativeflowplus"' in ex
