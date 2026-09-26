@@ -25,7 +25,7 @@ def enlaces(cliente, sprint_id):
         for p in c["piezas"]:
             if p.get("revision") == "aprobada" and p.get("url_video"):
                 salida.append({"cp_id": p["id"], "campana_n": int(c["orden"]) + 1, "persona": c["persona_nombre"],
-                               "producto": c["catalogo_id"], "temporada": c["temporada_nombre"], "titulo": p.get("titulo") or "",
+                               "producto": c["catalogo_id"], "temporada": c["temporada_nombre"] or "", "titulo": p.get("titulo") or "",
                                "tipo": p.get("tipo"), "url": p["url_video"]})
     return salida
 

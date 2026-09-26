@@ -7,7 +7,7 @@
 <div class="pagina-cabecera sprint-cabecera">
   <div>
     <h1>Ideas de la campaña {{ campana.orden + 1 }}</h1>
-    <p class="vacio">{{ campana.persona_nombre }} · {{ campana.catalogo_id }} · {{ campana.temporada_nombre }} · {{ chip_estado(campana.estado) }}</p>
+    <p class="vacio">{{ campana.persona_nombre }} · {{ campana.catalogo_id }} · {{ campana.temporada_nombre or "sin temporada" }} · {{ chip_estado(campana.estado) }}</p>
   </div>
 </div>
 

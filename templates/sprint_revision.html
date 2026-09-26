@@ -46,7 +46,7 @@
     </div>
     <div class="sprint-ref-cuerpo">
       <strong>{{ p.titulo }}</strong>
-      <small class="vacio">Campaña {{ p.campana_n }} · {{ p.persona_nombre }} · {{ p.temporada_nombre }} · {{ p.tipo }}{% if p.costo_usd %} · USD {{ '%.2f' % p.costo_usd }}{% endif %}</small>
+      <small class="vacio">Campaña {{ p.campana_n }} · {{ p.persona_nombre }} · {{ p.temporada_nombre or "sin temporada" }} · {{ p.tipo }}{% if p.costo_usd %} · USD {{ '%.2f' % p.costo_usd }}{% endif %}</small>
       {% if p.qa and p.qa.veredicto == "error" %}
       <div class="sprint-qa">
         <span class="tag-error" title="{{ p.qa.nota or '' }}">QA falló: {{ p.qa.nota or 'sin detalle' }}</span>
