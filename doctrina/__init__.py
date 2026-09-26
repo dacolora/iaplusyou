@@ -235,7 +235,7 @@ def validar_angulo(angulo, datos_texto=None, fijos=None):
         errores.append("valor_invalido:consciencia")
     try:
         limpio["sofisticacion"] = int(a.get("sofisticacion")) if a.get("sofisticacion") not in (None, "") else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         limpio["sofisticacion"] = None
         errores.append("valor_invalido:sofisticacion")
     if limpio["sofisticacion"] is not None and limpio["sofisticacion"] not in SOFISTICACIONES:
@@ -436,7 +436,7 @@ def datos_fijos_texto(consciencia=None, sofisticacion=None):
         lineas.append(f"- Consciencia de la persona (fija, no la cambies): {CONSCIENCIAS_NOMBRE[cons]}")
     try:
         sof = int(sofisticacion) if sofisticacion not in (None, "") else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         sof = None
     if sof in SOFISTICACIONES:
         lineas.append(f"- Sofisticación del mercado (fija, no la cambies): {sof} — {SOFISTICACIONES_NOMBRE[sof]}")

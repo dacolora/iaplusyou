@@ -47,6 +47,10 @@
           pintarAvisos(caja, j.avisos);
           var resumen = caja.querySelector('.angulo-resumen');
           if (resumen && j.resumen) resumen.textContent = j.resumen;
+          // Gancho sync: copy saved gancho back to the idea card (doctrina, bloque 2, §3.3)
+          var tarjeta = caja.closest('.sprint-idea');
+          var ganchoTarjeta = tarjeta ? tarjeta.querySelector('input[name="gancho"]') : null;
+          if (ganchoTarjeta && !ganchoTarjeta.readOnly && j.angulo) ganchoTarjeta.value = j.angulo.gancho || '';
           var ok = caja.querySelector('.angulo-guardado');
           ok.hidden = false;
           setTimeout(function () { ok.hidden = true; }, 1500);

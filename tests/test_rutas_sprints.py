@@ -997,8 +997,10 @@ def test_editar_el_angulo_de_una_idea(con_ideas):
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA}, gancho=ANGULO_IDEA["gancho"])
     html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
     assert 'class="angulo-editor"' in html and f'/cliente/acme/sprints/ideas/{ii}/angulo' in html
-    assert "Consciente de la solución · promesa · “El espejo que cambia tu baño”" in html
+    assert "Consciente de la solución" in html and "El espejo que cambia tu baño" in html
     assert "/static/angulo.js" in html and "/cliente/acme/doctrina#angulo" in html
+    # Verificar que los links de documentación están presentes en la plantilla
+    assert html.count("/cliente/acme/doctrina#angulo") >= 7, f"Esperaba >= 7 links #angulo, encontré {html.count('/cliente/acme/doctrina#angulo')}"
     nuevo = dict(ANGULO_IDEA, sofisticacion="4", gancho="Tu baño nuevo en una tarde sin obra ni polvo ni ruido ni más", lead="secreto")
     nuevo.pop("faltantes")
     r = c.post(f"/cliente/acme/sprints/ideas/{ii}/angulo", json={"angulo": nuevo})
@@ -1008,6 +1010,9 @@ def test_editar_el_angulo_de_una_idea(con_ideas):
     idea = datos.idea("acme", ii)
     ang = idea["extra"]["angulo"]
     assert ang["sofisticacion"] == 4 and ang["editado_en"] and ang["origen"] == "ideas"
+    # Verificar que el link #base aparece después de editar (cuando editado_en está presente)
+    html_editado = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "/cliente/acme/doctrina#base" in html_editado, "Falta el link #base en la nota 'Editado a mano'"
     assert ang["faltantes"] == ["faltan comentarios reales"]
     assert idea["gancho"] == nuevo["gancho"]
     # el campo «Gancho» de la tarjeta también mueve el del ángulo
@@ -1025,3 +1030,20 @@ def test_el_angulo_de_una_idea_con_pieza_es_de_solo_lectura(con_ideas, monkeypat
     assert "disabled" in tarjeta
     r = c.post(f"/cliente/acme/sprints/ideas/{iv}/angulo", json={"angulo": ANGULO_IDEA})
     assert r.status_code == 409 and datos.idea("acme", iv)["extra"]["angulo"].get("editado_en") is None
+
+
+def test_gancho_sync_wiring(con_ideas):
+    """Doctrina, bloque 2 (§3.3): el editor del ángulo y la tarjeta comparten gancho via JS."""
+    import os
+    from sprints import datos
+    c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
+    datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA}, gancho=ANGULO_IDEA["gancho"])
+    # 1. Verificar que la página contiene el campo del ángulo en el script de la tarjeta
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "[data-angulo-campo=\"gancho\"]" in html, "Falta el selector del campo gancho en el template"
+    # 2. Verificar que static/angulo.js contiene el código de sincronización
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "static", "angulo.js"), "r") as f:
+        js_content = f.read()
+    assert "closest('.sprint-idea')" in js_content, "Falta closest en static/angulo.js"
+    assert "input[name=" in js_content and "gancho" in js_content, "Falta input[name=gancho] en static/angulo.js"

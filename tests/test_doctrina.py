@@ -381,3 +381,11 @@ def test_resumen_angulo_y_globales_de_plantilla():
     assert {"CONSCIENCIAS_CLIENTE", "SOFISTICACIONES_CLIENTE", "FUENTES_PRUEBA_CLIENTE", "LEADS_NOMBRE",
             "PREFIJO_ERROR", "lead_por_consciencia", "resumen_angulo"} <= set(g)
     assert set(doctrina.FUENTES_PRUEBA_CLIENTE) == set(doctrina.FUENTES_PRUEBA)
+
+def test_sofisticacion_infinity_no_explota():
+    """OverflowError en int(inf): debe devolver None sin reventar."""
+    import doctrina
+    limpio, avisos = doctrina.angulo_desde_formulario({"sofisticacion": float("inf")}, [], ahora="t")
+    assert limpio["sofisticacion"] is None
+    assert any("no es válido" in a for a in avisos)
+    assert doctrina.datos_fijos_texto(sofisticacion=float("inf")) == ""

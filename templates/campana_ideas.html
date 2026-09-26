@@ -127,7 +127,7 @@
         card.querySelectorAll('input[name], textarea[name]').forEach(function (el) { if (!el.readOnly) cuerpo[el.name] = el.value; });
         fetch(card.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'}, body: JSON.stringify(cuerpo)})
           .then(function (r) { return r.json(); })
-          .then(function (j) { if (!j.ok) { alert(j.error); return; } var ok = card.querySelector('.sprint-guardado'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500); })
+          .then(function (j) { if (!j.ok) { alert(j.error); return; } var ok = card.querySelector('.sprint-guardado'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500); var g = card.querySelector('input[name="gancho"]'), ga = card.querySelector('[data-angulo-campo="gancho"]'); if (g && ga) ga.value = g.value; })
           .catch(function () {});
       }
       card.querySelectorAll('input[name], textarea[name]').forEach(function (el) {

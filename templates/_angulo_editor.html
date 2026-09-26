@@ -13,24 +13,24 @@
   <div class="angulo-campos" style="display:grid;gap:.5rem;margin-top:.5rem;">
     <label class="campo-label">A quién le habla <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
       <textarea data-angulo-campo="audiencia" rows="2" {{ dis }}>{{ a.get('audiencia') or '' }}</textarea></label>
-    <label class="campo-label">Qué tanto sabe
+    <label class="campo-label">Qué tanto sabe <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
       <select data-angulo-campo="consciencia" {{ dis }}>
         <option value="">(sin elegir)</option>
         {% for clave, texto in CONSCIENCIAS_CLIENTE.items() %}<option value="{{ clave }}" {% if a.get('consciencia') == clave %}selected{% endif %}>{{ texto }}</option>{% endfor %}
       </select></label>
-    <label class="campo-label">Cuántas promesas parecidas vio ya
+    <label class="campo-label">Cuántas promesas parecidas vio ya <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
       <select data-angulo-campo="sofisticacion" {{ dis }}>
         <option value="">(sin elegir)</option>
         {% for n, texto in SOFISTICACIONES_CLIENTE.items() %}<option value="{{ n }}" {% if a.get('sofisticacion') == n %}selected{% endif %}>{{ n }} · {{ texto }}</option>{% endfor %}
       </select></label>
-    <label class="campo-label">Qué desea
+    <label class="campo-label">Qué desea <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
       <input data-angulo-campo="deseo" value="{{ a.get('deseo') or '' }}" {{ dis }}></label>
-    <label class="campo-label">Promesa (una sola frase)
+    <label class="campo-label">Promesa (una sola frase) <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
       <textarea data-angulo-campo="promesa" rows="2" {{ dis }}>{{ a.get('promesa') or '' }}</textarea></label>
-    <label class="campo-label">Mecanismo: cómo lo logra el producto
+    <label class="campo-label">Mecanismo: cómo lo logra el producto <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
       <input data-angulo-campo="mecanismo" value="{{ a.get('mecanismo') or '' }}" {{ dis }}></label>
     <fieldset class="angulo-pruebas" style="border:0;padding:0;margin:0;">
-      <legend class="campo-label">Pruebas</legend>
+      <legend class="campo-label">Pruebas <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a></legend>
       {% set pruebas = a.get('pruebas') or [] %}
       {% for n in range(3) %}{% set p = pruebas[n] if n < pruebas | length else {} %}
       <div data-angulo-prueba style="display:flex;gap:.4rem;flex-wrap:wrap;">
@@ -55,7 +55,7 @@
       <ul>{% for f in faltantes %}<li>{{ f }}</li>{% endfor %}</ul>
     </div>
     {% endif %}
-    {% if a.get('editado_en') %}<small class="vacio">Editado a mano: las cifras que escribas aquí se usan tal cual.</small>{% endif %}
+    {% if a.get('editado_en') %}<small class="vacio">Editado a mano: las cifras que escribas aquí se usan tal cual. <a href="{{ doctrina_url }}#base" target="_blank" rel="noopener">¿Por qué?</a></small>{% endif %}
     <ul class="angulo-avisos" hidden></ul>
     <span class="angulo-guardado vacio" hidden>Guardado</span>
   </div>
