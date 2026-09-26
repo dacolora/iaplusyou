@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Creatv VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-26 16:20-0500\n"
+"POT-Creation-Date: 2026-09-26 16:57-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -18,4 +18,28 @@ msgstr ""
 "Content-Type: text/plain; charset=utf-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
+
+msgid "Cambia el idioma de las pantallas y de todo lo que se genera en tu proyecto."
+msgstr "Changes the language of the screens and of everything generated in your project."
+
+msgid "Cambia solo tu idioma. El del proyecto está en Generación."
+msgstr "Changes only your language. The project's is under Generation."
+
+msgid "Guardar"
+msgstr "Save"
+
+msgid "Guardar idioma"
+msgstr "Save language"
+
+msgid "Idioma del proyecto"
+msgstr "Project language"
+
+msgid "Idioma del proyecto guardado."
+msgstr "Project language saved."
+
+msgid "Idioma guardado."
+msgstr "Language saved."
+
+msgid "Lo que escribe la IA y los anuncios de este proyecto salen en este idioma."
+msgstr "What the AI writes and this project's ads come out in this language."
 

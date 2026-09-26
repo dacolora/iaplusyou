@@ -26,7 +26,7 @@ import sqlalchemy as sa
 
 from dotenv import load_dotenv
 from flask import Flask, render_template, redirect, url_for, flash, request, jsonify, send_file, abort, session, Response
-from flask_babel import Babel, gettext, ngettext
+from flask_babel import Babel, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
 from datetime import datetime
@@ -257,6 +257,7 @@ def _verificar_host():
 ENDPOINTS_SIN_GUARD_SESION = frozenset((
     "static", "login", "logout", "index", "crear_proyecto", "verificar_correo",
     "recuperar", "restablecer", "privacidad", "terminos", "eliminar_datos",
+    "cambiar_idioma",
 ))
 
 
@@ -325,6 +326,25 @@ def _cuenta_en_plantillas():
     if "usuario" not in session or _quiere_json():
         return {}
     return {"cuenta_actual": usuarios.obtener(session["usuario"]), "smtp_ok": cuentas.smtp_configurado()}
+
+
+@app.context_processor
+def _idioma_en_plantillas():
+    """Idioma para las plantillas (spec 2026-09-26 §B3): `idioma_ui` (el de la
+    petición, para <html lang> y el selector), `idioma_proyecto` en las páginas
+    de un proyecto, y si se muestran el selector de Configuración y los enlaces
+    «English · Español» antes del login (fases 2-5: solo el admin)."""
+    sesion = _sesion()
+    cliente = request.view_args.get("cliente") if request.view_args else None
+    datos = {
+        "idioma_ui": str(get_locale() or idiomas.DEFECTO),
+        "idiomas_nombres": idiomas.NOMBRES,
+        "idioma_selector_visible": bool(sesion) and (idiomas.ACTIVO_PARA_TODOS or sesion["rol"] == "admin"),
+        "idioma_enlaces_publicos": idiomas.ACTIVO_PARA_TODOS and not sesion,
+    }
+    if cliente:
+        datos["idioma_proyecto"] = idiomas.de_proyecto(cliente)
+    return datos
 
 
 URL_BASE_LOCAL = "http://127.0.0.1:5050"
@@ -992,6 +1012,11 @@ def crear_proyecto():
     os.makedirs(os.path.join(BASE_DIR, "clientes", cid), exist_ok=True)
     proyectos.guardar_nombre(cid, nombre)
 
+    if idiomas.ACTIVO_PARA_TODOS:
+        elegido = idiomas.normalizar(request.cookies.get(idiomas.COOKIE)) or idiomas.DEFECTO
+        idiomas.guardar_de_usuario(usuario, elegido)
+        idiomas.guardar_de_proyecto(cid, elegido)
+
     # Alta con sesión inmediata: quien crea el proyecto queda logueado en su
     # propio proyecto de una vez, sin tener que ir a /login aparte.
     _abrir_sesion(usuario, usuarios.obtener(usuario) or {"rol": "cliente", "cliente": cid})
@@ -1184,6 +1209,50 @@ def cuenta_password():
         return _volver_cuenta()
     flash("Contraseña cambiada. Las demás sesiones abiertas con la anterior se cerraron.", "ok")
     return _volver_cuenta()
+
+
+@app.route("/cliente/<cliente>/cfg_idioma", methods=["POST"])
+def cfg_idioma(cliente):
+    """Selector de idioma (spec 2026-09-26 §B3). alcance=cuenta: el idioma de
+    quien está en sesión y, si es un cliente, también el de su proyecto (para él
+    son una sola cosa). alcance=proyecto: solo admin. Mientras
+    idiomas.ACTIVO_PARA_TODOS sea False, solo el admin puede usarlo."""
+    if not _mismo_origen():
+        abort(403)
+    sesion = _sesion()
+    es_admin = sesion["rol"] == "admin"
+    if not es_admin and not idiomas.ACTIVO_PARA_TODOS:
+        abort(403)
+    idioma = idiomas.normalizar(request.form.get("idioma"))
+    alcance = request.form.get("alcance") or "cuenta"
+    if idioma is None or alcance not in ("cuenta", "proyecto") or (alcance == "proyecto" and not es_admin):
+        abort(400)
+    if alcance == "proyecto":
+        idiomas.guardar_de_proyecto(cliente, idioma)
+        flash(gettext("Idioma del proyecto guardado."), "ok")
+    else:
+        idiomas.guardar_de_usuario(sesion["usuario"], idioma)
+        if not es_admin:
+            idiomas.guardar_de_proyecto(cliente, idioma)
+        with idiomas.en_idioma(idioma):
+            flash(gettext("Idioma guardado."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
+
+
+@app.route("/idioma/<codigo>")
+def cambiar_idioma(codigo):
+    """Enlaces «English · Español» antes del login: guarda la cookie y vuelve a
+    `next` solo si es una ruta de este sitio (nunca a otro dominio)."""
+    idioma = idiomas.normalizar(codigo)
+    if idioma is None:
+        abort(404)
+    destino = request.args.get("next") or ""
+    if not destino.startswith("/") or destino.startswith("//") or "\\" in destino:
+        destino = url_for("index")
+    resp = redirect(destino)
+    resp.set_cookie(idiomas.COOKIE, idioma, max_age=365 * 24 * 3600, samesite="Lax", httponly=True,
+                    secure=bool(app.config.get("SESSION_COOKIE_SECURE")))
+    return resp
 
 
 @app.route("/admin/usuarios/<usuario>/verificar", methods=["POST"])

@@ -500,6 +500,20 @@
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos de FlowPlus</button>
 </form>
 
+{% if es_admin %}
+<form method="post" action="{{ url_for('cfg_idioma', cliente=cliente) }}" id="config-idioma-proyecto" class="fila-campos-idea" style="margin-top:.8rem;">
+  <input type="hidden" name="alcance" value="proyecto">
+  <div>
+    <label class="campo-label" for="idioma-proyecto">{{ _('Idioma del proyecto') }}</label>
+    <select id="idioma-proyecto" name="idioma">
+      {% for codigo, nombre in idiomas_nombres.items() %}<option value="{{ codigo }}" {% if codigo == idioma_proyecto %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+    <button class="btn-guardar btn-sm" type="submit">{{ _('Guardar') }}</button>
+    <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Lo que escribe la IA y los anuncios de este proyecto salen en este idioma.') }}</p>
+  </div>
+</form>
+{% endif %}
+
 <h2 style="margin-top:2rem;">Sonido al crear</h2>
 <p class="vacio" style="padding-top:0;">
   Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual.
@@ -525,6 +539,19 @@
    sesión. cuenta_actual/smtp_ok vienen del context processor
    _cuenta_en_plantillas; el admin ve el bloque con su propia cuenta. ---- #}
 <h2 id="config-cuenta">Cuenta</h2>
+{% if idioma_selector_visible %}
+<form method="post" action="{{ url_for('cfg_idioma', cliente=cliente) }}" id="config-idioma" class="fila-campos-idea">
+  <input type="hidden" name="alcance" value="cuenta">
+  <div>
+    <label class="campo-label" for="idioma-cuenta">Language / Idioma</label>
+    <select id="idioma-cuenta" name="idioma">
+      {% for codigo, nombre in idiomas_nombres.items() %}<option value="{{ codigo }}" {% if codigo == idioma_ui %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
+    </select>
+    <button class="btn-guardar btn-sm" type="submit">{{ _('Guardar idioma') }}</button>
+    <p class="vacio" style="padding:0;font-size:.76rem;">{% if es_admin %}{{ _('Cambia solo tu idioma. El del proyecto está en Generación.') }}{% else %}{{ _('Cambia el idioma de las pantallas y de todo lo que se genera en tu proyecto.') }}{% endif %}</p>
+  </div>
+</form>
+{% endif %}
 {% if cuenta_actual is defined and cuenta_actual %}
 <p class="vacio" style="padding-top:0;">
   Usuario <strong>{{ session['usuario'] }}</strong>

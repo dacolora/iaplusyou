@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="es">
+<html lang="{{ idioma_ui }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -279,7 +279,7 @@
   {% include "_sidebar.html" %}
   <div class="sidebar-fondo" id="sidebar-fondo"></div>
   {% endif %}
-  <header>
+  <header id="barra-superior">
     {% if request.view_args and request.view_args.cliente %}
     <button type="button" class="menu-movil" id="menu-movil" aria-controls="sidebar" aria-expanded="false" aria-label="Abrir el menú">
       <span aria-hidden="true">☰</span> Menú
@@ -304,6 +304,12 @@
       <span class="header-usuario">{{ session['usuario'] }}</span>
       <button type="submit">Cerrar sesión</button>
     </form>
+    {% endif %}
+    {% if idioma_enlaces_publicos %}
+    <nav class="idioma-enlaces" aria-label="Language / Idioma">
+      <a href="{{ url_for('cambiar_idioma', codigo='en', next=request.path) }}">English</a> ·
+      <a href="{{ url_for('cambiar_idioma', codigo='es', next=request.path) }}">Español</a>
+    </nav>
     {% endif %}
   </header>
   <main>

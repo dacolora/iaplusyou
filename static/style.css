@@ -2205,3 +2205,8 @@ img.img-rota { object-fit: contain; background: var(--panel-2); padding: 12%; }
 .config-apartados { margin: 0 0 1.4rem; }
 .config-apartado > h2:first-child { margin-top: .4rem; }
 .llaves-tarjetas-ancha { grid-template-columns: minmax(0, 1fr); }
+
+/* Selector de idioma (2026-09-26): enlaces «English · Español» antes del
+   login, en el header público. */
+.idioma-enlaces { margin-left: auto; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.idioma-enlaces a { color: var(--accent-texto); text-decoration: none; }
