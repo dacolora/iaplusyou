@@ -63,11 +63,11 @@
     </fieldset>
 
     <div id="modal-agregar-campana" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000;">
-      <div style="background: white; border-radius: 8px; padding: 2rem; max-width: 500px; margin: 2rem auto;">
+      <div style="background: var(--panel); color: var(--text); border-radius: 8px; padding: 2rem; max-width: 500px; margin: 2rem auto;">
         <h3>Agregar campaña</h3>
         <label style="display: block; margin: 1rem 0;">Persona
           <select id="modal-persona"><option value="">(elige una persona)</option>{% for p in personas_sprint %}<option value="{{ p.id }}" data-resumen="{{ p.nombre }}, {{ p.edad_rango }}">{{ p.nombre }}</option>{% endfor %}</select>
-          <small id="persona-detalle" style="display: block; color: #666; margin-top: 0.5rem;"></small>
+          <small id="persona-detalle" style="display: block; color: var(--muted); margin-top: 0.5rem;"></small>
         </label>
         <label style="display: block; margin: 1rem 0;">Producto
           <select id="modal-producto"><option value="">(elige un producto)</option>{% for p in productos_sprint %}{% if p.variantes %}<option value="{{ p.id }}" data-variantes='{{ p.variantes | tojson }}' data-tiene-variantes="1">{{ p.nombre }}</option>{% else %}<option value="{{ p.id }}" data-tiene-variantes="0">{{ p.nombre }}</option>{% endif %}{% endfor %}</select>
@@ -86,10 +86,10 @@
           </select>
         </label>
         <label style="display: inline-block; margin: 1rem 1rem 1rem 0; width: 45%;">Videos
-          <input type="number" id="modal-n-videos" value="5" min="0" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+          <input type="number" id="modal-n-videos" value="5" min="0" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
         </label>
         <label style="display: inline-block; margin: 1rem 0; width: 45%;">Imágenes
-          <input type="number" id="modal-n-imagenes" value="5" min="0" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px;">
+          <input type="number" id="modal-n-imagenes" value="5" min="0" style="width: 100%; margin-top: 0.5rem; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px;">
         </label>
         <div style="margin-top: 1.5rem;">
           <button type="button" class="btn-sm" id="cerrar-modal-campana" style="margin-right: 0.5rem;">Cancelar</button>
@@ -171,7 +171,7 @@
       Object.keys(campanas).forEach(function (k) {
         var c = campanas[k];
         var div = document.createElement('div');
-        div.style.cssText = 'padding: 0.5rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px;';
+        div.style.cssText = 'padding: 0.5rem; background: var(--panel-2); margin: 0.5rem 0; border-radius: 4px;';
         div.innerHTML = '<strong>' + c.persona_nombre + ' × ' + c.catalogo_id + '</strong><br>' +
                         'Videos: <input type="number" value="' + c.n_videos + '" class="mini-input" data-key="' + k + '" data-type="n_videos"> ' +
                         'Imágenes: <input type="number" value="' + c.n_imagenes + '" class="mini-input" data-key="' + k + '" data-type="n_imagenes"> ' +
@@ -275,7 +275,7 @@
       Object.keys(campanas).forEach(function (k) {
         var c = campanas[k];
         var div = document.createElement('div');
-        div.style.cssText = 'padding: 0.75rem; background: #f5f5f5; margin: 0.5rem 0; border-radius: 4px;';
+        div.style.cssText = 'padding: 0.75rem; background: var(--panel-2); margin: 0.5rem 0; border-radius: 4px;';
         var labels = document.createElement('div');
         labels.innerHTML = '<strong>' + c.persona_nombre + ' × ' + c.catalogo_id + '</strong><br>' +
                           '<label style="display: inline-block; margin-right: 1rem; margin-top: 0.5rem;">Videos: <input type="number" value="' + c.n_videos + '" class="mini-input" data-key="' + k + '" data-type="n_videos" style="width: 50px;"></label>' +

@@ -14,17 +14,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f6f6fb;--panel:#ffffff;--panel-2:#f1f1f8;--border:#e3e4ee;--text:#16172b;--muted:#5f6377;--muted-2:#9497ab;
-  --accent:#7c3aed;--accent-soft:#efe7fd;--accent-line:#c9b4f7;--ok:#1f9d6a;--ok-soft:#e3f7ee;--warn:#a8780a;--warn-soft:#fdf3d9;--err:#d63c5e;--err-soft:#ffe6ec;
-  --shadow:0 4px 16px rgba(30,20,60,.07);--shadow-2:0 12px 32px rgba(30,20,60,.10);
+  color-scheme:dark;
+  --bg:#0f1115;--panel:#1a1d24;--panel-2:#232733;--border:#2c313c;--text:#f2f3f5;--muted:#9aa3b2;--muted-2:#838b9b;
+  --accent:#a78bfa;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;
+  --shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);
   --display:"Space Grotesk","Helvetica Neue",Arial,sans-serif;
   --body:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){--bg:#12132a;--panel:#1b1c36;--panel-2:#23244a;--border:#31325a;--text:#ecebf7;--muted:#a9abc6;--muted-2:#7c7f9e;--accent:#b39cff;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;--shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);}
-}
-:root[data-theme="dark"]{--bg:#12132a;--panel:#1b1c36;--panel-2:#23244a;--border:#31325a;--text:#ecebf7;--muted:#a9abc6;--muted-2:#7c7f9e;--accent:#b39cff;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;--shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:15.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:0 72px}
@@ -702,7 +699,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);font-
       <tr data-f data-a="tpl"><td class="f">_tab_catalogo.html · _catalogo_lista · _catalogo_importar · _catalogo_sin_fotos · _catalogo_campos_comerciales · _maniqui · _seccion_personajes</td><td class="n">619</td><td class="d">Pestaña Catálogo: lista de activos con campos comerciales, importación, importados sin fotos, el maniquí del mapa corporal y los personajes.</td></tr>
       <tr data-f data-a="tpl"><td class="f">_tab_settings.html · _seccion_marca · _comparacion_modelos</td><td class="n">915</td><td class="d">Pestaña Configuración: puesta a punto de llaves, Gasto (real del mes, historial, CSV), marca, preferencias, tiendas, Pixel, canales orgánicos y la comparación de modelos.</td></tr>
       <tr data-f data-a="tpl"><td class="f">_idea_card · _idea_visual_card · _prompt_row · _imagen_row · _progreso_row · _video_card · _seccion_videos · _seccion_bitacora · _selector_productos · _selector_productos_nuevo</td><td class="n">465</td><td class="d">Piezas reutilizables: tarjetas del pipeline original según el estado de cada prompt, la fila de progreso que engancha el polling, el selector de productos del catálogo.</td></tr>
-      <tr data-f data-a="tpl"><td class="f">static/style.css</td><td class="n">1 643</td><td class="d">Todo el CSS en un archivo: tokens en <code>:root</code> (tema claro, acento morado, Space Grotesk + Inter), sidebar, tarjetas, pestañas, barras de progreso.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">static/style.css</td><td class="n">1 643</td><td class="d">Todo el CSS en un archivo: tokens en <code>:root</code> (tema oscuro único, acento morado, Space Grotesk + Inter), sidebar, tarjetas, pestañas, barras de progreso.</td></tr>
       <tr data-f data-a="tpl"><td class="f">static/fonts/ · static/img/</td><td class="n">—</td><td class="d">Inter y Space Grotesk en TTF (la web los carga de Google Fonts; los TTF los usa Pillow para el texto en pantalla de final edition) y el ícono de la app.</td></tr>
 
       <tr class="grp" data-a="db"><td colspan="3">Base de datos y migraciones</td></tr>
