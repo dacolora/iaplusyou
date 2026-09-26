@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 
 import requests
 import sqlalchemy as sa
+from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cifrado
 import db
@@ -41,9 +42,9 @@ def _clave(cliente):
 def guardar_llave(cliente, llave):
     valor, ahora = cifrado.cifrar(llave.strip()), db.ahora()
     with db.conectar() as con:
-        r = con.execute(db.kv.update().where(db.kv.c.clave == _clave(cliente)).values(valor=valor, actualizado_en=ahora))
-        if r.rowcount == 0:
-            con.execute(sa.insert(db.kv).values(clave=_clave(cliente), valor=valor, actualizado_en=ahora))
+        con.execute(insert_sqlite(db.kv).values(
+            clave=_clave(cliente), valor=valor, actualizado_en=ahora
+        ).on_conflict_do_update(index_elements=["clave"], set_={"valor": valor, "actualizado_en": ahora}))
 
 
 def _valor(cliente):
