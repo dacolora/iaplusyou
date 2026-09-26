@@ -71,6 +71,21 @@ def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
     assert len(p) == 1 and p[0]["origen"] == "sugerida_ia" and p[0]["color"] == "#4d8dff" and "1 personas" in msg
 
 
+def test_sugerir_personas_guarda_la_consciencia_en_extra(base_temporal, monkeypatch):
+    import tareas
+    from sprints import datos, sugerencias
+    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3: [
+        {"nombre": "Con nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],
+         "palabras_clave": [], "color": "#4d8dff", "conciencia": {"nivel": "muy_consciente", "detalle": "ya compró"}},
+        {"nombre": "Sin nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],
+         "palabras_clave": [], "color": "#7c5cff"}])
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_sugerir_personas"]({"payload": {"cliente": "acme", "cuantas": 2}})
+    por_nombre = {p["nombre"]: p for p in datos.personas("acme")}
+    assert por_nombre["Con nivel"]["extra"]["conciencia"] == {"nivel": "muy_consciente", "detalle": "ya compró"}
+    assert por_nombre["Sin nivel"]["extra"] == {}
+
+
 def test_referencia_desde_link_descarga_registra_y_encola(base_temporal, monkeypatch, tmp_path):
     import tareas
     import referencias_link

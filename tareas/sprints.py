@@ -107,7 +107,8 @@ def ejecutar_sugerir(tarea):
                             descripcion=persona.get("descripcion", ""), edad_rango=persona.get("edad_rango", ""),
                             tono=persona.get("tono", ""), senales_visuales=persona.get("senales_visuales"),
                             palabras_clave=persona.get("palabras_clave"), color=persona.get("color"),
-                            origen="sugerida_ia")
+                            origen="sugerida_ia",
+                            extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
     return f"{len(propuestas)} personas sugeridas — revísalas y edítalas."
 
 
