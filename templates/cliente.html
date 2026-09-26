@@ -59,6 +59,10 @@
       botones.forEach(function (b) { b.classList.toggle('activo', b.dataset.tab === tab); });
       Object.keys(paneles).forEach(function (t) { paneles[t].classList.toggle('activo', t === tab); });
       try { localStorage.setItem(STORAGE_KEY, tab); } catch (e) {}
+      // En celular la barra superior dice en qué pestaña estás.
+      var nombre = document.getElementById('header-pestana');
+      var itemTab = document.querySelector('.sidebar-item[data-tab="' + tab + '"]');
+      if (nombre && itemTab) nombre.textContent = itemTab.title;
       // Al cambiar de pestaña se empieza arriba (antes quedaba a la altura
       // de la pestaña anterior); la carga inicial no se toca.
       if (subir) window.scrollTo(0, 0);
