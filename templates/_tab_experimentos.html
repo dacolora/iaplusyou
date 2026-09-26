@@ -39,7 +39,11 @@
     </div>
   </div>
   {% if not elegibles_exp %}
-  <p class="vacio">Todavía no hay videos ni imágenes listos. Genera algo en Crear o en un sprint y vuelve.</p>
+  <div class="estado-vacio">
+    <p class="estado-vacio-titulo">Todavía no hay piezas para probar</p>
+    <p class="estado-vacio-texto">Genera un video o una imagen en Crear o en un sprint y vuelve aquí para probarlo en Meta.</p>
+    <a class="btn-generar btn-sm" href="#creativeflowplus">Ir a Crear</a>
+  </div>
   {% endif %}
   <div class="exp-tarjetas">
     {% for el in elegibles_exp %}

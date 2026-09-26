@@ -24,7 +24,11 @@
     </div>
   </a>
   {% else %}
-  <p class="vacio">Todavía no hay sprints. Crea el primero abajo: necesitas al menos una persona, un producto en el catálogo y una temporada.</p>
+  <div class="estado-vacio">
+    <p class="estado-vacio-titulo">Todavía no hay sprints</p>
+    <p class="estado-vacio-texto">Necesitas al menos una persona, un producto en el catálogo y una temporada.</p>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-sprint">+ Nuevo sprint</button>
+  </div>
   {% endfor %}
 </div>
 

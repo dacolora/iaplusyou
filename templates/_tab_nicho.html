@@ -21,7 +21,11 @@
     </div>
   </a>
   {% else %}
-  <p class="vacio">Todavía no hay estudios. Crea el primero abajo: con {{ min_comentarios_nicho }} comentarios pegados a mano ya salen avatares.</p>
+  <div class="estado-vacio">
+    <p class="estado-vacio-titulo">Todavía no hay estudios</p>
+    <p class="estado-vacio-texto">Con {{ min_comentarios_nicho }} comentarios pegados a mano ya salen avatares.</p>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-estudio">+ Nuevo estudio</button>
+  </div>
   {% endfor %}
 </div>
 

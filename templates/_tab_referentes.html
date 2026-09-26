@@ -135,7 +135,11 @@
 </script>
 
 {% if not ref_opciones.total %}
-<p class="vacio">Todavía no hay referentes. Creatv importa la biblioteca inicial desde el panel de administrador; después aparecen aquí.</p>
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">Todavía no hay referentes</p>
+  <p class="estado-vacio-texto">Creatv importa la biblioteca inicial desde el panel de administrador; también puedes traer anuncios de una marca o palabra clave.</p>
+  <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes</button>
+</div>
 {% else %}
 <section class="ref-panel" id="ref-panel" data-grid="{{ url_for('referentes.grid', cliente=cliente) }}">
   <div class="exp-filtros ref-chips" data-filtro="etapa">
