@@ -22,9 +22,40 @@ Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
     el compilador aplique `atempo`;
   - `materiales` se DERIVA: unión de la lista recibida, los `material_id`
     de todos los clips y los valores de `pngs`, ordenada — la lista que
-    manda el navegador nunca es la única fuente."""
+    manda el navegador nunca es la única fuente;
+  - claves de destino en `variables.textos`/`variables.voz`/
+    `subtitulos.palabras`/`por_destino`: `<idioma>_<PAIS>` (p. ej. "es_MX")
+    gana sobre `<idioma>` ("es") si ambas existen (`valor_destino`);
+    `variables.precios` siempre lleva país (`<idioma>_<PAIS>`), nunca solo
+    idioma;
+  - `precio` es un texto variable reservado (no puede usarse como rol en
+    `variables.textos`/`variables.voz`): `resolver` lo formatea con
+    `tipos.formatear_precio` según `variables.precios` del destino, y si
+    ese destino no tiene precio el clip de texto DESAPARECE del documento
+    resuelto — nunca toma el precio de otro país;
+  - en audio, `por_destino[clave]` es `{material_id, duracion_ms}` (otra
+    grabación de voz para ese destino) o `None` explícito — «este destino
+    no tiene voz»: `resolver` QUITA el clip en vez de heredar la voz de
+    otro idioma/país (nunca cae al `material_id` crudo del clip cuando hay
+    `por_destino`); un clip sin `por_destino` (o con `{}`) no distingue por
+    destino y se conserva igual en cualquiera; `bloque` guarda el rol del
+    guion que lo originó; en video/superpuesto, `ken_burns` es `None`,
+    `"in"` o `"out"`; `origen` y `guion`, si vienen, deben ser objeto o
+    null — `validar` los conserva tal cual, sin mirar su contenido."""
 import copy
 import re
+
+from final_edition import tipos
+
+_CLAVE_RE = re.compile(r"^[a-z]{2}(_[A-Z]{2})?$")     # "es" o "es_CO": textos, voz, subtítulos, por_destino
+_DESTINO_RE = re.compile(r"^[a-z]{2}_[A-Z]{2}$")     # precios: siempre con país
+_FUENTE_RE = re.compile(r"^[A-Za-z0-9_-]{1,60}$")    # nombre de TTF en static/fonts, sin rutas ni extensión
+_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}([0-9A-Fa-f]{2})?$")
+VARIABLE_PRECIO = "precio"                          # texto variable reservado: el precio del destino
+KEN_BURNS = (None, "in", "out")
+_CONTORNO_DEFECTO = {"color": "#000000", "grosor": 0.002}
+_SOMBRA_DEFECTO = {"color": "#000000", "dx": 0.003, "dy": 0.003}
+_FONDO_DEFECTO = {"color": "#000000", "opacidad": 0.8, "radio": 0.02, "relleno_x": 0.02, "relleno_y": 0.01, "ancho": None}
 
 ESQUEMA_ACTUAL = 1
 _ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
@@ -37,7 +68,8 @@ TRANSICIONES = ("corte", "fundido", "deslizar", "zoom", "desenfoque")
 ANIMACIONES = ("ninguna", "aparecer", "deslizar", "rebote", "zoom", "maquina")
 _TRANSFORM_DEFECTO = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
 _AUDIO_DEFECTO = {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}
-_ESTILO_DEFECTO = {"fuente": None, "peso": 700, "tamano": 0.04, "color": "#FFFFFF", "contorno": None, "sombra": None, "fondo": None, "alineacion": "centro", "interlineado": 1.1}
+_ESTILO_DEFECTO = {"fuente": None, "peso": 700, "tamano": 0.04, "color": "#FFFFFF", "contorno": None, "sombra": None,
+                   "fondo": None, "alineacion": "centro", "interlineado": 1.1, "ancho_max": None}
 
 
 class DocumentoInvalido(ValueError):
@@ -95,6 +127,47 @@ def _fraccion(valor, nombre):
     return v
 
 
+def _numero(valor, nombre, minimo, maximo):
+    try:
+        v = float(valor)
+    except (TypeError, ValueError):
+        _fallar(f"{nombre} debe ser un número entre {minimo} y {maximo}.")
+    if not minimo <= v <= maximo:
+        _fallar(f"{nombre} debe estar entre {minimo} y {maximo} (vino {valor!r}).")
+    return v
+
+
+def _color(valor, nombre):
+    if not isinstance(valor, str) or not _COLOR_RE.match(valor):
+        _fallar(f"{nombre} debe ser un color #RRGGBB o #RRGGBBAA (vino {valor!r}).")
+    return valor
+
+
+def _validar_sub(valor, defecto, nombre, rangos):
+    """contorno / sombra / fondo: None, o un objeto que se completa con
+    `defecto`; `rangos` = {campo: (min, max)} para los numéricos; `color`
+    siempre. Todas las medidas son fracción del lienzo (spec §1.1)."""
+    if valor is None:
+        return None
+    if not isinstance(valor, dict):
+        _fallar(f"{nombre} debe ser un objeto o null.")
+    v = {**defecto, **valor}
+    v["color"] = _color(v.get("color"), f"{nombre}.color")
+    for campo, (lo, hi) in rangos.items():
+        v[campo] = _numero(v.get(campo), f"{nombre}.{campo}", lo, hi)
+    return v
+
+
+def _validar_claves(mapa, nombre):
+    """{clave: valor} con claves <idioma> ("es") o <idioma>_<PAIS> ("es_CO")."""
+    if not isinstance(mapa, dict):
+        _fallar(f"{nombre} debe ser un objeto por idioma o destino.")
+    for clave in mapa:
+        if not isinstance(clave, str) or not _CLAVE_RE.match(clave):
+            _fallar(f"{nombre}: la clave {clave!r} debe ser <idioma> (es) o <idioma>_<PAIS> (es_CO).")
+    return mapa
+
+
 def _validar_transform(t, ruta):
     t = {**_TRANSFORM_DEFECTO, **(t or {})}
     t["x"] = _fraccion(t["x"], f"{ruta}.transform.x")
@@ -118,11 +191,24 @@ def _validar_texto(clip, ruta):
     if tiene_lit == tiene_var:
         _fallar(f"{ruta}.texto debe ser literal o variable, no ambos ni ninguno.")
     estilo = {**_ESTILO_DEFECTO, **(clip.get("estilo") or {})}
-    if not estilo.get("fuente"):
-        _fallar(f"{ruta}.estilo.fuente es obligatoria.")
+    if not isinstance(estilo.get("fuente"), str) or not _FUENTE_RE.match(estilo["fuente"]):
+        # termina en static/fonts/<fuente>.ttf (rasterizar.py): ni vacío ni con rutas
+        _fallar(f"{ruta}.estilo.fuente debe ser el nombre de una fuente de static/fonts (p. ej. Inter-Bold).")
     estilo["tamano"] = _fraccion(estilo.get("tamano", 0.04), f"{ruta}.estilo.tamano")
+    estilo["color"] = _color(estilo.get("color"), f"{ruta}.estilo.color")
     if estilo.get("alineacion", "centro") not in ("izquierda", "centro", "derecha"):
         _fallar(f"{ruta}.estilo.alineacion inválida.")
+    estilo["interlineado"] = _numero(estilo.get("interlineado", 1.1), f"{ruta}.estilo.interlineado", 0.5, 3.0)
+    if estilo.get("ancho_max") is not None:
+        estilo["ancho_max"] = _fraccion(estilo["ancho_max"], f"{ruta}.estilo.ancho_max")
+    estilo["contorno"] = _validar_sub(estilo.get("contorno"), _CONTORNO_DEFECTO, f"{ruta}.estilo.contorno",
+                                      {"grosor": (0.0, 0.1)})
+    estilo["sombra"] = _validar_sub(estilo.get("sombra"), _SOMBRA_DEFECTO, f"{ruta}.estilo.sombra",
+                                    {"dx": (-0.1, 0.1), "dy": (-0.1, 0.1)})
+    estilo["fondo"] = _validar_sub(estilo.get("fondo"), _FONDO_DEFECTO, f"{ruta}.estilo.fondo",
+                                   {"opacidad": (0.0, 1.0), "radio": (0.0, 1.0), "relleno_x": (0.0, 0.5), "relleno_y": (0.0, 0.5)})
+    if estilo["fondo"] and estilo["fondo"].get("ancho") is not None:
+        estilo["fondo"]["ancho"] = _fraccion(estilo["fondo"]["ancho"], f"{ruta}.estilo.fondo.ancho")
     clip["estilo"] = estilo
 
 
@@ -159,6 +245,21 @@ def _validar_clip(clip, pista, i):
         clip["audio"]["volumen"] = _fraccion(clip["audio"]["volumen"], f"{ruta}.audio.volumen")
     if tipo == "audio" and clip.get("rol_audio", "subida") not in ROLES_AUDIO:
         _fallar(f"{ruta}.rol_audio desconocido.")
+    if tipo == "audio":
+        pd = clip.get("por_destino")
+        if pd is not None:
+            _validar_claves(pd, f"{ruta}.por_destino")
+            for clave, alt in pd.items():
+                if alt is None:
+                    continue    # explícito «este destino no tiene voz» (decisión 1, capa 2)
+                if not isinstance(alt, dict):
+                    _fallar(f"{ruta}.por_destino[{clave}] debe ser {{material_id, duracion_ms}} o null.")
+                _entero_positivo(alt.get("material_id"), f"{ruta}.por_destino[{clave}].material_id")
+                _entero_no_negativo(alt.get("duracion_ms"), f"{ruta}.por_destino[{clave}].duracion_ms")
+        if clip.get("bloque") is not None and not isinstance(clip["bloque"], str):
+            _fallar(f"{ruta}.bloque debe ser texto (el rol del guion) o null.")
+    if tipo in ("video", "superpuesto") and clip.get("ken_burns") not in KEN_BURNS:
+        _fallar(f"{ruta}.ken_burns debe ser null, 'in' u 'out'.")
     if tipo != "audio":
         clip["transform"] = _validar_transform(clip.get("transform"), ruta)
         for k in ("ancho_px", "alto_px"):
@@ -253,28 +354,48 @@ def validar(doc):
     sub.setdefault("estilo_id", "karaoke")
     sub["posicion"] = _fraccion(sub.get("posicion", 0.78), "subtitulos.posicion")
     sub.setdefault("palabras", {})
-    for idioma, palabras in sub["palabras"].items():
+    _validar_claves(sub["palabras"], "subtitulos.palabras")
+    for clave, palabras in sub["palabras"].items():
         for k, p in enumerate(palabras):
-            _entero_no_negativo(p.get("t_ms"), f"subtitulos.palabras.{idioma}[{k}].t_ms")
-            _entero_no_negativo(p.get("dur_ms"), f"subtitulos.palabras.{idioma}[{k}].dur_ms")
+            _entero_no_negativo(p.get("t_ms"), f"subtitulos.palabras.{clave}[{k}].t_ms")
+            _entero_no_negativo(p.get("dur_ms"), f"subtitulos.palabras.{clave}[{k}].dur_ms")
     doc["subtitulos"] = sub
     var = doc.get("variables") or {}
     var.setdefault("textos", {})
+    var.setdefault("voz", {})
     var.setdefault("precios", {})
+    for grupo in ("textos", "voz"):
+        if not isinstance(var[grupo], dict):
+            _fallar(f"variables.{grupo} debe ser un objeto {{rol: {{clave: texto}}}}.")
+        for rol, valores in var[grupo].items():
+            if rol == VARIABLE_PRECIO:
+                _fallar(f"variables.{grupo}: '{VARIABLE_PRECIO}' está reservado (es el precio del destino, va en variables.precios).")
+            _validar_claves(valores, f"variables.{grupo}[{rol!r}]")
+            for clave, texto in valores.items():
+                if not isinstance(texto, str):
+                    _fallar(f"variables.{grupo}[{rol!r}][{clave!r}] debe ser texto.")
     for destino, precio in var["precios"].items():
-        if "_" not in destino or not isinstance(precio, (int, float)) or isinstance(precio, bool):
+        if (not isinstance(destino, str) or not _DESTINO_RE.match(destino)
+                or not isinstance(precio, (int, float)) or isinstance(precio, bool)):
             _fallar(f"variables.precios[{destino!r}] debe ser <idioma>_<PAIS>: número.")
     doc["variables"] = var
+    for clave_top in ("origen", "guion"):
+        if doc.get(clave_top) is not None and not isinstance(doc[clave_top], dict):
+            _fallar(f"{clave_top} debe ser un objeto o null.")
+        doc[clave_top] = doc.get(clave_top)
     doc.setdefault("marca", {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None})
     doc.setdefault("mezcla", {"preset": "equilibrada", "volumenes": None})
     # `materiales` se deriva: lo que mandó el navegador ∪ material_id de los
-    # clips de todas las pistas ∪ valores de pngs. Así `en_uso` y
-    # `marcar_uso` nunca dependen de que la lista venga completa.
+    # clips de todas las pistas ∪ voces por destino ∪ valores de pngs. Así
+    # `en_uso` y `marcar_uso` nunca dependen de que la lista venga completa.
     mats = {_entero_positivo(x, "materiales[]") for x in (doc.get("materiales") or [])}
     for p in doc["pistas"]:
         for c in p["clips"]:
             if c.get("material_id") is not None:
                 mats.add(c["material_id"])
+            for alt in (c.get("por_destino") or {}).values():
+                if alt is not None:      # None = sin voz para ese destino: no hay material que sumar
+                    mats.add(int(alt["material_id"]))
     mats.update((doc.get("pngs") or {}).values())
     doc["materiales"] = sorted(mats)
     doc["miniatura_ms"] = _entero_no_negativo(doc.get("miniatura_ms", 0), "miniatura_ms")
@@ -333,28 +454,96 @@ class VariableSinValor(DocumentoInvalido):
     """Un texto variable no tiene valor en el idioma pedido."""
 
 
+def valor_destino(mapa, idioma, pais):
+    """El valor de `mapa` para el destino: gana `<idioma>_<pais>`; si no,
+    `<idioma>`; None si ninguno."""
+    if not mapa:
+        return None
+    v = mapa.get(f"{idioma}_{pais}")
+    return v if v is not None else mapa.get(idioma)
+
+
+def _materiales_de_clips(doc):
+    mats = set()
+    for p in doc.get("pistas") or []:
+        for c in p.get("clips") or []:
+            if c.get("material_id") is not None:
+                mats.add(int(c["material_id"]))
+    mats.update(int(m) for m in (doc.get("pngs") or {}).values())
+    return sorted(mats)
+
+
 def resolver(doc, idioma, pais):
     """Copia del documento con las variables sustituidas para ese destino.
-    El precio es el número escrito para `<idioma>_<pais>` o None: nunca se
-    convierte desde otro país."""
+    Textos, voz y subtítulos: gana la clave `<idioma>_<pais>`, si no
+    `<idioma>` (`valor_destino`). El texto variable `precio` es el número
+    escrito para `<idioma>_<pais>` formateado con `tipos.formatear_precio`;
+    sin precio para ese país el clip DESAPARECE (no hay badge) — nunca se
+    convierte desde otro país. Un clip de audio sin `por_destino` (o con
+    `{}`) queda tal cual, para cualquier destino. Si lo tiene: gana la
+    clave exacta `<idioma>_<pais>` si está en el mapa (aunque sea `None`);
+    si no, `<idioma>` si está; si ninguna, el clip SE QUITA — nunca cae al
+    `material_id` crudo del clip (la voz de otro idioma/país). `materiales`
+    se recalcula con lo que ESTE destino usa (las voces de otros idiomas
+    no se descargan al renderizar)."""
     res = copy.deepcopy(doc)
     textos = (res.get("variables") or {}).get("textos") or {}
-    for p in res["pistas"]:
-        if p["tipo"] != "texto":
-            continue
-        for c in p["clips"]:
-            t = c.get("texto") or {}
-            if "variable" in t:
-                rol = t["variable"]
-                valor = (textos.get(rol) or {}).get(idioma)
-                if valor is None:
-                    raise VariableSinValor(f"El texto '{rol}' no tiene valor en {idioma}.")
-                c["texto"] = {"literal": valor}
-    palabras = ((res.get("subtitulos") or {}).get("palabras") or {}).get(idioma) or []
-    res["subtitulos"] = {**res.get("subtitulos", {}), "palabras": list(palabras)}
     precios = (res.get("variables") or {}).get("precios") or {}
     precio = precios.get(f"{idioma}_{pais}")
+    for p in res["pistas"]:
+        if p["tipo"] == "texto":
+            vivos = []
+            for c in p["clips"]:
+                t = c.get("texto") or {}
+                if "variable" in t:
+                    rol = t["variable"]
+                    if rol == VARIABLE_PRECIO:
+                        if precio is None:
+                            # el clip desaparece: su png (si lo tenía) también,
+                            # para que ni `materiales` ni la descarga de pngs
+                            # sigan contando un clip que ya no existe.
+                            (res.get("pngs") or {}).pop(c["id"], None)
+                            continue
+                        if pais not in tipos.PAISES:
+                            raise DocumentoInvalido(f"No sé formatear precios de {pais}.")
+                        c["texto"] = {"literal": tipos.formatear_precio(precio, pais)}
+                    else:
+                        valor = valor_destino(textos.get(rol), idioma, pais)
+                        if valor is None:
+                            raise VariableSinValor(f"El texto '{rol}' no tiene valor en {idioma}.")
+                        c["texto"] = {"literal": valor}
+                vivos.append(c)
+            p["clips"] = vivos
+        elif p["tipo"] == "audio":
+            vivos = []
+            for c in p["clips"]:
+                pd = c.get("por_destino") or {}
+                quitar = False
+                if pd:
+                    # A diferencia de `valor_destino`, una clave PRESENTE con
+                    # valor `None` gana y NO cae a la clave de idioma: ese
+                    # destino exacto ya dijo "sin voz" (decisión 1, capa 2).
+                    clave = f"{idioma}_{pais}"
+                    if clave in pd:
+                        alt = pd[clave]
+                    elif idioma in pd:
+                        alt = pd[idioma]
+                    else:
+                        alt = None
+                    if alt is None:
+                        quitar = True
+                    else:
+                        c["material_id"] = int(alt["material_id"])
+                        c["duracion_ms"] = int(alt["duracion_ms"])
+                        c["recorte"] = {"desde_ms": 0, "hasta_ms": int(alt["duracion_ms"])}
+                c.pop("por_destino", None)
+                if not quitar:
+                    vivos.append(c)
+            p["clips"] = vivos
+    palabras = valor_destino((res.get("subtitulos") or {}).get("palabras"), idioma, pais) or []
+    res["subtitulos"] = {**res.get("subtitulos", {}), "palabras": list(palabras)}
     res["destino"] = {"idioma": idioma, "pais": pais, "precio": precio}
+    res["materiales"] = _materiales_de_clips(res)
     return res
 
 

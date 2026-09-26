@@ -178,3 +178,13 @@ def test_validar_detecta_tamano_incorrecto(tmp_path, medios):
     plan = Plan(ancho=1080, alto=1920, duracion_ms=8000, salida_audio=False)
     with pytest.raises(RuntimeError, match="tamaño"):
         r.validar(medios[1], plan)  # el clon es 540x960
+
+
+@pytest.mark.slow
+def test_ken_burns_renderiza_con_la_misma_duracion(tmp_path, medios):
+    doc = _doc()
+    doc["pistas"][0]["clips"][0]["ken_burns"] = "in"
+    doc["pistas"][0]["clips"][1]["ken_burns"] = "out"
+    out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "kb.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert abs(dur - 7.0) <= 0.2 and (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)

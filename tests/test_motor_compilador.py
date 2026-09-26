@@ -372,3 +372,19 @@ def test_pista_imagen_antes_de_la_de_video_no_es_la_principal():
     assert "[0:v]trim=start=0.000:end=4.000" in plan.filtergraph
     assert "[1:v]scale=200:100[l1]" in plan.filtergraph
     assert plan.overlays == 2
+
+
+def test_ken_burns_agrega_zoompan_y_sigue_donde_iba_en_cada_tramo():
+    doc = _doc()
+    doc["pistas"][0]["clips"][0]["ken_burns"] = "in"
+    doc["pistas"][0]["clips"][1]["ken_burns"] = "out"
+    fg = c.compilar(doc, RUTAS, con_ass=False).filtergraph
+    assert ("fps=30,zoompan=z='min(1+0.08*(on+0)/105,1.08)':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+            ":s=1080x1920:fps=30,format=yuv420p[v0]") in fg
+    assert "zoompan=z='max(1.08-0.08*(on+0)/105,1)'" in fg
+    # ventana que arranca a mitad del primer clip (tramos): el zoom continúa,
+    # no reinicia — 1000 ms = 30 cuadros ya consumidos
+    fg2 = c.compilar(doc, RUTAS, ventana=(1000, 7000), con_ass=False).filtergraph
+    assert "min(1+0.08*(on+30)/105,1.08)" in fg2
+    # sin ken_burns no aparece (el fixture esperado sigue intacto)
+    assert "zoompan" not in c.compilar(_doc(), RUTAS, con_ass=False).filtergraph

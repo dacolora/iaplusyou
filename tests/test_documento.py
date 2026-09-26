@@ -285,3 +285,148 @@ def test_materiales_se_deriva_de_clips_y_pngs():
     doc["materiales"] = [3, 42]
     doc["pngs"] = {"t1": 7}
     assert d.validar(doc)["materiales"] == [1, 2, 3, 7, 42]
+
+
+def _doc_texto(texto, estilo=None):
+    doc = cargar("video_basico.json")
+    clip = doc["pistas"][1]["clips"][0]
+    clip["texto"] = texto
+    if estilo:
+        clip["estilo"] = {**clip["estilo"], **estilo}
+    return doc
+
+
+def test_variables_por_destino_ganan_sobre_el_idioma():
+    doc = cargar("video_basico.json")
+    doc["variables"]["textos"]["hook"] = {"es": "Base", "es_MX": "Para México"}
+    doc["subtitulos"]["palabras"] = {"es": [{"t_ms": 0, "dur_ms": 100, "texto": "base"}],
+                                     "es_MX": [{"t_ms": 0, "dur_ms": 100, "texto": "mx"}]}
+    v = d.validar(doc)
+    assert d.resolver(v, "es", "MX")["pistas"][1]["clips"][0]["texto"] == {"literal": "Para México"}
+    assert d.resolver(v, "es", "CO")["pistas"][1]["clips"][0]["texto"] == {"literal": "Base"}
+    assert d.resolver(v, "es", "MX")["subtitulos"]["palabras"][0]["texto"] == "mx"
+    assert d.resolver(v, "es", "CO")["subtitulos"]["palabras"][0]["texto"] == "base"
+    assert d.valor_destino({"es": 1, "es_MX": 2}, "es", "MX") == 2
+    assert d.valor_destino({"es": 1}, "es", "MX") == 1
+    assert d.valor_destino({"es": 1}, "en", "US") is None and d.valor_destino(None, "es", "CO") is None
+
+
+def test_precio_variable_se_formatea_por_pais_o_desaparece():
+    doc = _doc_texto({"variable": "precio"})
+    doc["variables"]["precios"] = {"es_CO": 89900, "en_US": 24.99}
+    v = d.validar(doc)
+    assert d.resolver(v, "es", "CO")["pistas"][1]["clips"][0]["texto"] == {"literal": "$ 89.900"}
+    assert d.resolver(v, "en", "US")["pistas"][1]["clips"][0]["texto"] == {"literal": "$24.99"}
+    # sin precio para el país: el clip no existe (no hay badge), nunca se convierte
+    assert d.resolver(v, "pt", "BR")["pistas"][1]["clips"] == []
+    assert d.resolver(v, "pt", "BR")["destino"] == {"idioma": "pt", "pais": "BR", "precio": None}
+
+
+def test_precio_es_variable_reservada_y_claves_con_forma():
+    doc = cargar("video_basico.json")
+    doc["variables"]["textos"]["precio"] = {"es": "89.900"}
+    with pytest.raises(d.DocumentoInvalido, match="reservado"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["variables"]["textos"]["hook"] = {"ES": "mayúsculas"}
+    with pytest.raises(d.DocumentoInvalido, match="clave"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["variables"]["precios"] = {"es": 1}
+    with pytest.raises(d.DocumentoInvalido, match="precios"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["variables"]["voz"] = {"hook": {"es": "Hola", "en_US": "Hi"}}
+    assert d.validar(doc)["variables"]["voz"]["hook"]["en_US"] == "Hi"
+
+
+def test_por_destino_en_voz_cambia_material_y_duracion_y_cuenta_en_materiales():
+    doc = cargar("video_basico.json")
+    voz = doc["pistas"][2]["clips"][0]
+    voz["bloque"] = "hook"
+    voz["por_destino"] = {"es_CO": {"material_id": 2, "duracion_ms": 7000}, "en": {"material_id": 9, "duracion_ms": 2300}}
+    v = d.validar(doc)
+    assert v["materiales"] == [1, 2, 3, 9]              # la voz en inglés está en uso aunque el clip base no la lleve
+    en = d.resolver(v, "en", "US")
+    clip = en["pistas"][2]["clips"][0]
+    assert clip["material_id"] == 9 and clip["duracion_ms"] == 2300 and clip["recorte"] == {"desde_ms": 0, "hasta_ms": 2300}
+    assert "por_destino" not in clip and en["materiales"] == [1, 3, 9]   # lo resuelto solo lista lo que ese destino usa
+    es = d.resolver(v, "es", "CO")
+    assert es["pistas"][2]["clips"][0]["material_id"] == 2 and es["materiales"] == [1, 2, 3]
+    voz["por_destino"] = {"en": {"material_id": 0, "duracion_ms": 1}}
+    with pytest.raises(d.DocumentoInvalido, match="por_destino"):
+        d.validar(doc)
+
+
+def test_por_destino_none_es_sin_voz_y_quita_el_clip_al_resolver():
+    # Decisión 1 (capa 2): un None explícito en por_destino[clave] dice "este
+    # destino no tiene voz" — nunca cae al material_id crudo del clip (que
+    # sería la voz de OTRO idioma/país).
+    doc = cargar("video_basico.json")
+    doc["variables"]["textos"]["hook"]["pt"] = "Alguma coisa"   # para que "pt" no falle antes en el texto
+    voz = doc["pistas"][2]["clips"][0]
+    voz["bloque"] = "hook"
+    voz["por_destino"] = {"es_CO": {"material_id": 2, "duracion_ms": 7000},
+                         "es": {"material_id": 2, "duracion_ms": 7000},
+                         "en_US": None}
+    v = d.validar(doc)                                   # acepta el None
+    en = d.resolver(v, "en", "US")
+    assert en["pistas"][2]["clips"] == []                 # se quita: no hay voz para en_US
+    assert en["materiales"] == [1, 3]                     # sin la voz base (material 2)
+    pt = d.resolver(v, "pt", "BR")                        # ni clave ni idioma en por_destino
+    assert pt["pistas"][2]["clips"] == []
+    mx = d.resolver(v, "es", "MX")                        # sin es_MX: usa la clave "es"
+    assert mx["pistas"][2]["clips"][0]["material_id"] == 2
+    # un clip sin por_destino se conserva en cualquier destino
+    intacto = d.validar(cargar("video_basico.json"))
+    assert d.resolver(intacto, "en", "US")["pistas"][2]["clips"][0]["material_id"] == 2
+
+
+def test_ken_burns_solo_in_out():
+    doc = cargar("video_basico.json")
+    doc["pistas"][0]["clips"][0]["ken_burns"] = "in"
+    assert d.validar(doc)["pistas"][0]["clips"][0]["ken_burns"] == "in"
+    doc["pistas"][0]["clips"][0]["ken_burns"] = "zoom"
+    with pytest.raises(d.DocumentoInvalido, match="ken_burns"):
+        d.validar(doc)
+
+
+def test_estilo_normaliza_sub_estilos_y_rechaza_fuente_con_ruta():
+    doc = _doc_texto({"literal": "x"}, {"fondo": {"color": "#7c3aed", "radio": 1.0}, "sombra": None,
+                                        "contorno": {"color": "#000000DC", "grosor": 0.0016}, "ancho_max": 0.8})
+    e = d.validar(doc)["pistas"][1]["clips"][0]["estilo"]
+    assert e["fondo"] == {"color": "#7c3aed", "opacidad": 0.8, "radio": 1.0, "relleno_x": 0.02, "relleno_y": 0.01, "ancho": None}
+    assert e["contorno"] == {"color": "#000000DC", "grosor": 0.0016} and e["sombra"] is None and e["ancho_max"] == 0.8
+    with pytest.raises(d.DocumentoInvalido, match="fuente"):
+        d.validar(_doc_texto({"literal": "x"}, {"fuente": "../../etc/evil"}))
+    with pytest.raises(d.DocumentoInvalido, match="color"):
+        d.validar(_doc_texto({"literal": "x"}, {"color": "blanco"}))
+    with pytest.raises(d.DocumentoInvalido, match="fondo"):
+        d.validar(_doc_texto({"literal": "x"}, {"fondo": {"color": "#000000", "opacidad": 2}}))
+
+
+def test_origen_y_guion_se_conservan_y_deben_ser_objetos():
+    doc = cargar("video_basico.json")
+    doc["origen"] = {"tipo": "borrador", "receta": "abc"}
+    doc["guion"] = {"idioma": "es", "pais": "CO", "bloques": []}
+    v = d.validar(doc)
+    assert v["origen"]["receta"] == "abc" and v["guion"]["pais"] == "CO"
+    assert d.validar(cargar("video_basico.json"))["origen"] is None
+    doc["origen"] = "no"
+    with pytest.raises(d.DocumentoInvalido, match="origen"):
+        d.validar(doc)
+
+
+def test_resolver_quita_el_png_del_clip_de_precio_que_desaparece():
+    doc = _doc_texto({"variable": "precio"})
+    doc["variables"]["precios"] = {"es_CO": 89900, "en_US": 24.99}
+    doc["pngs"] = {"t1": 55}
+    v = d.validar(doc)
+    assert v["materiales"] == [1, 2, 3, 55]
+    sin_precio = d.resolver(v, "pt", "BR")
+    assert sin_precio["pistas"][1]["clips"] == []
+    assert "t1" not in sin_precio["pngs"]
+    assert sin_precio["materiales"] == [1, 2, 3]
+    con_precio = d.resolver(v, "es", "CO")
+    assert con_precio["pngs"] == {"t1": 55}
+    assert 55 in con_precio["materiales"]

@@ -1,5 +1,7 @@
 """Final edition: localización, producción y render de piezas finales por
-idioma/país a partir de un clon de creative flow.
+idioma/país a partir de un clon de creative flow. `producir` despacha a la vía
+del editor (`produccion.py`); `producir_legado` conserva el pipeline por capas
+hasta que `render.py`/`texto.py` se retiren.
 
 Orquestador de las capas (`guion` -> `cortes` -> `sonido` -> `voz` -> `musica`
 -> `texto` -> `render`) y del estado en la base (`creative_flow.crear_final` /
@@ -450,6 +452,24 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
     """Produce la pieza final `idioma`/`pais` de la sesión. Devuelve
     `(final_id, resumen)`; `resumen` es el dict de `creative_flow.finales`.
     `on_etapa(nombre)` se llama antes de cada etapa de `ETAPAS_FINAL`.
+    `ref_sufijo` (id de la tarea que paga) va en la referencia del gasto.
+
+    Desde la capa 2 del editor la producción va por `produccion.producir`
+    (guion → borrador como edición → traducción del destino → versión →
+    render del motor): mismo contrato, mismas capas, mismo gasto.
+    `FINAL_EDITION_LEGADO=1` (seguro de despliegue) vuelve al pipeline de
+    siempre, `producir_legado`."""
+    if os.environ.get("FINAL_EDITION_LEGADO") == "1":
+        return producir_legado(cliente, cf_id, idioma, pais, opciones, on_etapa, ref_sufijo)
+    from final_edition import produccion   # import perezoso: produccion importa este paquete
+    return produccion.producir(cliente, cf_id, idioma, pais, opciones, on_etapa, ref_sufijo)
+
+
+def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_sufijo=""):
+    """Pipeline anterior al editor (render.py/texto.py); se retira al final de
+    la spec §5. Hoy solo corre con FINAL_EDITION_LEGADO=1. Devuelve
+    `(final_id, resumen)`; `resumen` es el dict de `creative_flow.finales`.
+    `on_etapa(nombre)` se llama antes de cada etapa de `ETAPAS_FINAL`.
 
     `ref_sufijo` (el id de la tarea que paga, p. ej. `:t123`) se agrega a la
     referencia del gasto (`final:<final_id><ref_sufijo>`) y se pasa también
@@ -711,3 +731,6 @@ def _registrar_gasto_final(cliente, final_id, idioma, pais, usd, capas, fallo=Fa
         detalle = f"{idioma}_{pais} · " + (", ".join(cobradas) if cobradas else "sin cobros (todo cacheado u omitido)")
     gastos.registrar_seguro(cliente, "final", usd, f"final:{final_id}{ref_sufijo}", detalle=detalle,
                             proveedor="fal/anthropic", extra={"capas": por_capa, "fallo": bool(fallo)})
+
+
+registrar_gasto_final = _registrar_gasto_final   # lo usa final_edition.produccion (vía del editor)

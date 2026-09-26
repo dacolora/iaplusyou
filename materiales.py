@@ -3,6 +3,7 @@ produce, en R2 y en la tabla `material`, con hash como clave de caché.
 UNIQUE(cliente, hash) garantiza que nada se pague dos veces."""
 import hashlib
 import os
+import shutil
 from datetime import datetime, timedelta
 from urllib.parse import unquote, urlparse
 
@@ -90,8 +91,14 @@ def subir(cliente, local_path, key, content_type, **campos):
 
 
 def descargar(mat, destino):
+    """Copia `extra.local` si el archivo sigue en disco (el clon de Crear y
+    las voces recién sintetizadas viven en salidas/); si no, baja `url`."""
     import requests
     os.makedirs(os.path.dirname(destino) or ".", exist_ok=True)
+    local = (mat.get("extra") or {}).get("local")
+    if local and os.path.isfile(local):
+        shutil.copyfile(local, destino)
+        return destino
     with requests.get(mat["url"], stream=True, timeout=120) as r:
         r.raise_for_status()
         with open(destino, "wb") as f:
@@ -106,6 +113,23 @@ def marcar_uso(ids):
     with db.conectar() as con:
         con.execute(db.material.update().where(db.material.c.id.in_([int(i) for i in ids]))
                     .values(usado_en=db.ahora()))
+
+
+def actualizar_extra(cliente, material_id, **campos):
+    """Mezcla `campos` en `extra` (RMW bajo el lock de escritura: el UPDATE
+    sin efecto toma el lock RESERVED antes del SELECT, como
+    ediciones.versionar) y devuelve la fila actualizada; None si no es de
+    este cliente."""
+    mid = int(material_id)
+    with db.conectar() as con:
+        r = con.execute(db.material.update().where(db.material.c.id == mid, db.material.c.cliente == cliente)
+                        .values(actualizado_en=db.material.c.actualizado_en))
+        if r.rowcount != 1:
+            return None
+        actual = con.execute(sa.select(db.material.c.extra).where(db.material.c.id == mid)).scalar() or {}
+        con.execute(db.material.update().where(db.material.c.id == mid)
+                    .values(extra={**actual, **campos}, actualizado_en=db.ahora()))
+    return obtener(cliente, mid)
 
 
 def en_uso(cliente, material_id):

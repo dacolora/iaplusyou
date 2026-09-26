@@ -60,3 +60,4 @@ clientes/*/sprints/
 
 # worktrees de superpowers / Claude Code
 .claude/worktrees/
+.superpowers/
