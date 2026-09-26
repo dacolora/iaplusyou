@@ -16,6 +16,32 @@
   </div>
 </div>
 
+{# Aviso de cuenta (rol cliente): sin correo → pedirlo; con correo sin
+   confirmar → reenviar. Hasta 2026-09-26 salía arriba en todas las pestañas
+   (base.html); ahora solo aquí. cuenta_actual/smtp_ok vienen del context
+   processor _cuenta_en_plantillas (dashboard.py). #}
+{% if session.get('rol') == 'cliente' and cuenta_actual is defined and cuenta_actual and not cuenta_actual.correo_verificado %}
+<div class="flash warn cuenta-banner" id="cuenta-banner">
+  {% if not cuenta_actual.correo %}
+  <form method="post" action="{{ url_for('cuenta_correo') }}" class="cuenta-banner-form">
+    <strong>Tu cuenta no tiene correo.</strong> Ponlo para poder confirmarla y recuperar la contraseña si la olvidas.
+    <input type="email" name="correo" placeholder="tu@empresa.com" autocomplete="email" required>
+    <input type="password" name="password" placeholder="Contraseña actual" autocomplete="current-password" required>
+    <button type="submit" class="btn-guardar btn-xs">Guardar correo</button>
+  </form>
+  {% else %}
+  <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="cuenta-banner-form">
+    <strong>Confirma tu correo {{ cuenta_actual.correo }}</strong>: abre el enlace que te mandamos.
+    {% if smtp_ok %}
+    <button type="submit" class="btn-guardar btn-xs">Reenviar</button>
+    {% else %}
+    <span>(el servidor no tiene correo configurado; avisa al administrador)</span>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
 <nav class="cat-tabs config-apartados" role="tablist" aria-label="Apartados de Configuración">
   {% if es_admin %}<button type="button" class="cat-tab" data-apartado="puesta">Puesta a punto</button>{% endif %}
   <button type="button" class="cat-tab" data-apartado="conexiones">Conexiones</button>

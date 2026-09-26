@@ -448,6 +448,21 @@ def test_banner_sin_correo_pide_el_correo_y_sin_smtp_avisa(app, monkeypatch):
     assert 'action="/reenviar-verificacion"' in html and "Reenviar</button>" not in html
 
 
+def test_el_aviso_de_cuenta_vive_solo_en_configuracion(app):
+    """2026-09-26: el aviso (sin correo / sin confirmar) ya no sale arriba en
+    todas las pestañas del proyecto; solo al entrar a Configuración."""
+    import re
+    app["usuarios"].crear("viejo", "secreta123", "cliente", cliente="acme")
+    for c, texto in ((_ana(app), "Confirma tu correo ana@ejemplo.com"),
+                     (_cliente_con_sesion(app, "viejo"), "Tu cuenta no tiene correo")):
+        html = c.get("/cliente/acme").get_data(as_text=True)
+        ini = html.index('<section id="tab-settings"')
+        siguiente = re.compile(r'<section id="tab-').search(html, ini + 1)
+        fin = siguiente.start() if siguiente else len(html)
+        assert html.count('id="cuenta-banner"') == 1 and ini < html.index('id="cuenta-banner"') < fin
+        assert html.count(texto) == 1
+
+
 def test_admin_no_ve_el_banner(app):
     html = _cliente_admin(app["dashboard"]).get("/cliente/acme").get_data(as_text=True)
     assert 'id="cuenta-banner"' not in html

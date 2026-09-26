@@ -312,31 +312,8 @@
         <div class="flash {{ category }}">{{ message }}</div>
       {% endfor %}
     {% endwith %}
-    {# Banner de cuenta (rol cliente): sin correo → pedirlo; con correo sin
-       confirmar → reenviar. cuenta_actual/smtp_ok vienen del context
-       processor _cuenta_en_plantillas (dashboard.py). #}
-    {% if session.get('rol') == 'cliente' and cuenta_actual is defined and cuenta_actual and not cuenta_actual.correo_verificado %}
-    <div class="flash warn cuenta-banner" id="cuenta-banner">
-      {% if not cuenta_actual.correo %}
-      <form method="post" action="{{ url_for('cuenta_correo') }}" class="cuenta-banner-form">
-        <strong>Tu cuenta no tiene correo.</strong> Ponlo para poder confirmarla y recuperar la contraseña si la olvidas.
-        <input type="email" name="correo" placeholder="tu@empresa.com" autocomplete="email" required>
-        <input type="password" name="password" placeholder="Contraseña actual" autocomplete="current-password" required>
-        <button type="submit" class="btn-guardar btn-xs">Guardar correo</button>
-      </form>
-      {% else %}
-      <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="cuenta-banner-form">
-        <strong>Confirma tu correo {{ cuenta_actual.correo }}</strong>: abre el enlace que te mandamos.
-        {% if smtp_ok %}
-        <button type="submit" class="btn-guardar btn-xs">Reenviar</button>
-        {% else %}
-        <span>(el servidor no tiene correo configurado; avisa al administrador)</span>
-        {% endif %}
-        {% if session.get('cliente') %}<a href="{{ url_for('ver_cliente', cliente=session['cliente'], _anchor='settings') }}">Configuración › Cuenta</a>{% endif %}
-      </form>
-      {% endif %}
-    </div>
-    {% endif %}
+    {# El aviso de cuenta (sin correo / sin confirmar) vive solo en
+       Configuración desde 2026-09-26: _tab_settings.html. #}
     {% block content %}{% endblock %}
   </main>
   {% if request.view_args and request.view_args.cliente %}
