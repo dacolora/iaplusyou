@@ -19,11 +19,44 @@ def test_validar_familia_nueva_cuando_ninguna_encaja():
     assert r["familia_nueva"]["nombre"] == "Recipe Card"
 
 
-def test_validar_familia_fuera_del_vocabulario_falla():
-    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "Formato Inventado",
+def test_validar_familia_fuera_del_vocabulario_se_toma_como_familia_nueva():
+    # Claude a veces escribe el nombre nuevo en "familia" en vez de "familia_nueva":
+    # antes eso era error y «Clasificar pendientes» fallaba igual para siempre.
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "Challenge Launch Funnel",
             "familia_nueva": None, "dolor": "x", "firma": "f"}
-    with pytest.raises(clasificar.ClasificacionInvalida):
-        clasificar.validar(data, ["Villain Made Visible"])
+    r = clasificar.validar(data, ["Villain Made Visible"])
+    assert r["familia"] is None
+    assert r["familia_nueva"] == {"nombre": "Challenge Launch Funnel", "descripcion": ""}
+
+
+def test_validar_familia_fuera_del_vocabulario_conserva_la_descripcion_si_viene():
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "Challenge Launch Funnel",
+            "familia_nueva": {"nombre": "", "descripcion": "Reto de 5 días que lleva a la oferta."},
+            "dolor": "x", "firma": "f"}
+    r = clasificar.validar(data, ["Villain Made Visible"])
+    assert r["familia_nueva"] == {"nombre": "Challenge Launch Funnel",
+                                  "descripcion": "Reto de 5 días que lleva a la oferta."}
+
+
+def test_validar_familia_con_otras_mayusculas_usa_la_existente():
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "villain made visible",
+            "familia_nueva": None, "dolor": "x", "firma": "f"}
+    r = clasificar.validar(data, ["Villain Made Visible"])
+    assert r["familia"] == "Villain Made Visible" and r["familia_nueva"] is None
+
+
+def test_validar_nunca_duplica_el_prefijo_emerging():
+    vocab = ["Villain Made Visible", "EMERGING: Challenge Launch Funnel"]
+    # Ya existe como EMERGING: se usa esa, aunque venga sin el prefijo o con otras mayúsculas.
+    for nombre in ("Challenge Launch Funnel", "emerging: challenge launch funnel"):
+        data = {"etapa": "TOF", "consciencia": "unaware", "familia": nombre, "familia_nueva": None,
+                "dolor": "x", "firma": "f"}
+        r = clasificar.validar(data, vocab)
+        assert r["familia"] == "EMERGING: Challenge Launch Funnel" and r["familia_nueva"] is None
+    # Nueva con el prefijo puesto por Claude: el nombre se guarda sin él (la tarea lo agrega una vez).
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": None,
+            "familia_nueva": {"nombre": "EMERGING: Recipe Card", "descripcion": "d"}, "dolor": "x", "firma": "f"}
+    assert clasificar.validar(data, vocab)["familia_nueva"]["nombre"] == "Recipe Card"
 
 
 def test_validar_etapa_invalida_falla():

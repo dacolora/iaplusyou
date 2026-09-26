@@ -7,6 +7,7 @@ solo proponga una nueva cuando ninguna del vocabulario encaja. `_llamar` es
 la única función que toca la API — las pruebas la reemplazan.
 """
 import json
+import re
 
 import anthropic
 
@@ -100,6 +101,34 @@ def _parsear(texto):
     return data
 
 
+_PREFIJO_EMERGING = re.compile(r"^\s*EMERGING\s*:\s*", re.IGNORECASE)
+
+
+def _resolver_familia(familia, familia_nueva, vocabulario):
+    """(familia del vocabulario | None, familia_nueva {nombre, descripcion} | None).
+
+    Claude a veces escribe un nombre NUEVO en `familia` en vez de en
+    `familia_nueva`; antes eso era `ClasificacionInvalida` y, como responde lo
+    mismo cada vez, «Clasificar pendientes» re-facturaba el mismo anuncio sin
+    arreglarlo nunca. Ahora un nombre que no está en el vocabulario se toma
+    como familia nueva (la tarea lo guarda como `EMERGING: <nombre>`). Se
+    compara sin mayúsculas y sin el prefijo `EMERGING:`, para no duplicar una
+    familia que ya existe ni guardar `EMERGING: EMERGING: …`."""
+    por_clave = {}
+    for v in vocabulario:
+        por_clave.setdefault(v.casefold(), v)
+        por_clave.setdefault(_PREFIJO_EMERGING.sub("", v).casefold(), v)
+    nueva = familia_nueva if isinstance(familia_nueva, dict) else {}
+    nombre = familia if isinstance(familia, str) and familia.strip() else nueva.get("nombre")
+    nombre = _PREFIJO_EMERGING.sub("", str(nombre or "")).strip()
+    if not nombre:
+        return None, None
+    existente = por_clave.get(nombre.casefold()) or por_clave.get(str(familia or "").strip().casefold())
+    if existente:
+        return existente, None
+    return None, {"nombre": nombre, "descripcion": str(nueva.get("descripcion") or "").strip()}
+
+
 def validar(data, vocabulario):
     """`vocabulario`: lista de nombres de familia ya existentes. Devuelve un
     dict con `etapa, consciencia, familia (str|None), familia_nueva (dict|None),
@@ -111,13 +140,8 @@ def validar(data, vocabulario):
         raise ClasificacionInvalida(f"Etapa inválida: {data.get('etapa')}")
     if data.get("consciencia") not in datos.CONSCIENCIAS:
         raise ClasificacionInvalida(f"Consciencia inválida: {data.get('consciencia')}")
-    familia = data.get("familia")
-    familia_nueva = data.get("familia_nueva")
-    if familia is not None:
-        if familia not in vocabulario:
-            raise ClasificacionInvalida(f"Familia fuera del vocabulario: {familia}")
-        familia_nueva = None
-    elif not (isinstance(familia_nueva, dict) and (familia_nueva.get("nombre") or "").strip()):
+    familia, familia_nueva = _resolver_familia(data.get("familia"), data.get("familia_nueva"), vocabulario)
+    if familia is None and not familia_nueva:
         raise ClasificacionInvalida("Sin familia del vocabulario ni familia_nueva válida.")
     dolor = data.get("dolor")
     if not isinstance(dolor, str) or not dolor.strip():
