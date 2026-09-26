@@ -182,7 +182,7 @@ def test_agregar_referencia_biblioteca_crea_fila_lista(base_temporal, monkeypatc
     monkeypatch.setattr(referentes_datos, "referente", lambda cliente_, rid: {
         "id": rid, "estado_imagen": "ok", "imagen_url": "https://cdn/ref.jpg", "titular": "Titular del anuncio",
         "firma": "Antes/después con el mismo encuadre", "familia": "ugc_testimonial", "etapa": "TOF",
-        "consciencia": "unaware", "dolor": "no confía en la marca",
+        "consciencia": "unaware", "dolor": "no confía en la marca", "extra": {"lead": "historia"},
     })
     monkeypatch.setattr(referentes_datos, "familias", lambda cliente_: [
         {"nombre": "ugc_testimonial", "descripcion": "Testimonio grabado con el celular"},
@@ -200,6 +200,7 @@ def test_agregar_referencia_biblioteca_crea_fila_lista(base_temporal, monkeypatc
     assert r["analisis"]["descripcion_familia"] == "Testimonio grabado con el celular"
     assert r["analisis"]["resumen"] == "Antes/después con el mismo encuadre"
     assert r["extra"]["referente_id"] == 42
+    assert r["analisis"]["lead"] == "historia"
 
 
 def test_agregar_referencia_biblioteca_no_duplica(base_temporal, monkeypatch):

@@ -58,3 +58,44 @@ La sección de Configuración que dice qué llaves y conexiones tiene el proyect
 faltan, sin mostrar nunca un valor. El administrador ve todas las llaves del servidor; un
 cliente ve solo lo que se configura por proyecto (Meta) y lo que le toca hacer ahí.
 _Avoid_: setup, checklist
+
+### Doctrina de venta
+
+**Doctrina**:
+Los principios de venta que la app le da a Claude en cada llamada que escribe o clasifica copy; vive en
+`doctrina/textos/*.md`, en nuestras palabras.
+_Avoid_: reglas de estilo (eso es la guía de marca), prompt maestro
+
+**Rebanada**:
+Un archivo de la doctrina para una etapa (investigar, ángulo, gancho, guion, video, caption, clasificar, revisar);
+cada llamada recibe la base más una o dos.
+
+**Ángulo**:
+Las decisiones que se toman antes de escribir una pieza: audiencia y su consciencia, sofisticación del mercado,
+deseo, promesa única, mecanismo, pruebas, arranque, gancho y lo que falta. Claude lo propone y viaja con la pieza.
+_Avoid_: brief, concepto, enfoque (ya es producto/persona/libre en Crear)
+
+**Consciencia**:
+Qué tanto sabe la audiencia de su problema, de las soluciones y del producto: inconsciente, consciente del problema,
+de la solución, del producto, muy consciente.
+_Avoid_: awareness, etapa (eso es TOF/MOF/BOF)
+
+**Sofisticación**:
+Qué tan quemado está el mercado, de 1 (nadie lo prometió) a 5 (agotado: solo identificación); desde 3 hace falta
+mecanismo.
+_Avoid_: madurez, competencia
+
+**Arranque** (lead):
+Cómo abre la pieza: oferta, promesa, problema-solución, secreto, proclamación o historia; se elige por la consciencia.
+_Avoid_: hook (eso es el gancho), intro
+
+**Gancho**:
+La primera frase o el texto de los primeros tres segundos: llama a la audiencia, implica un beneficio y deja
+curiosidad. Es la expresión del arranque.
+
+**Mecanismo**:
+Cómo el producto logra la promesa, solo con lo que dice su ficha.
+
+**Prueba**:
+Un hecho que respalda la promesa con su fuente: la ficha del producto, un comentario real o algo que la pieza muestra
+pasar. Sin fuente no es prueba.

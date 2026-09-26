@@ -44,8 +44,8 @@ Lo que este bloque agrega:
    cuando la audiencia es consciente del problema" desde una ficha de producto,
    y pegar pasajes literales diluye las instrucciones y devuelve texto de 1966.
 2. **Los libros no entran al repo ni al servidor.** Cuatro tienen derechos de
-   autor (Ogilvy, Schwartz, Great Leads, Theriot) y el proyecto va a ser
-   público. La doctrina son principios en nuestras palabras, con autor y
+   autor (Ogilvy, Schwartz, Great Leads, Theriot) y la app no los necesita:
+   le basta la doctrina destilada. La doctrina son principios en nuestras palabras, con autor y
    capítulo citados para poder ir al libro; nunca citas.
 3. **Claude decide y anota, no solo "escribe mejor".** Sin ángulo anotado, el
    guion puede arrancar con otra promesa que la idea y el caption con otro

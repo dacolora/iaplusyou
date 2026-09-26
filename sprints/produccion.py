@@ -235,6 +235,13 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
                              con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
                              con_sonido=con_sonido, sonido_texto=sonido_texto,
                              musica_estilo=(prefs_sonido["musica_al_crear"] if es_video else ""))
+    # La sesión conserva el ángulo de la idea y el contexto de la campaña: el
+    # director los necesita (sin `contexto` pisaba AUDIENCIA/TEMPORADA) y
+    # `concepto.extra` es lo que `duplicar` copia a regeneraciones y derivaciones.
+    campos_actualizar["contexto"] = contexto
+    angulo = (idea.get("extra") or {}).get("angulo")
+    if angulo:
+        campos_actualizar["angulo"] = angulo
     if referente_id:
         campos_actualizar["referente_id"] = referente_id
     creative_flow.actualizar(cliente, cf_id, **campos_actualizar)

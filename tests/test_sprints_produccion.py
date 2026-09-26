@@ -469,3 +469,33 @@ def test_crear_sesion_sin_referencia_de_biblioteca_no_manda_referente_id(escenar
     cf_id = produccion.crear_sesion("acme", sp, c, idea, "wan3", "seedream_v5_pro")
     e = creative_flow.cargar("acme")[cf_id]
     assert "referente_id" not in e
+
+
+def test_crear_sesion_lleva_angulo_y_contexto_a_la_sesion(escenario):
+    import creative_flow
+    import db
+    from sprints import datos, produccion
+    angulo = {"version": 1, "audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+              "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "problema_solucion", "gancho": "g",
+              "faltantes": [], "origen": "ideas"}
+    with db.conectar() as con:
+        con.execute(db.campana_pieza.update().where(db.campana_pieza.c.id == escenario["iv"]).values(extra={"angulo": angulo}))
+    sp = datos.sprint("acme", escenario["sid"])
+    c = sp["campanas"][0]
+    cf_id = produccion.crear_sesion("acme", sp, c, datos.idea("acme", escenario["iv"]), "wan3", "seedream_v5_pro")
+    e = creative_flow.cargar("acme")[cf_id]
+    assert e["angulo"]["promesa"] == "p"
+    assert e["contexto"]["persona"]["resumen"] == "Busca calidad" and e["contexto"]["temporada"]["nombre"] == "Navidad"
+    d = creative_flow.datos_para_director("acme", e)
+    assert d["angulo"]["gancho"] == "g" and d["contexto"]["temporada"]["nombre"] == "Navidad"
+    copia = creative_flow.duplicar("acme", cf_id)
+    assert creative_flow.cargar("acme")[copia]["angulo"]["promesa"] == "p"      # regenerar/derivar conserva el ángulo
+
+
+def test_crear_sesion_sin_angulo_no_inventa_uno(escenario):
+    import creative_flow
+    from sprints import datos, produccion
+    sp = datos.sprint("acme", escenario["sid"])
+    cf_id = produccion.crear_sesion("acme", sp, sp["campanas"][0], datos.idea("acme", escenario["iv"]), "wan3", "seedream_v5_pro")
+    e = creative_flow.cargar("acme")[cf_id]
+    assert "angulo" not in e and e["contexto"]["persona"]["tono"] == "cercano"

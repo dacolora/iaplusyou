@@ -12,6 +12,7 @@ import logging
 import math
 import re
 
+import doctrina
 import marca
 import proyectos
 from nicho import datos
@@ -25,7 +26,10 @@ MAX_CARACTERES = 250_000
 MAX_NUCLEOS = 5
 MAX_SUBS_POR_NUCLEO = 4
 TOKENS_POR_CARACTER = 1 / 3.5          # conservador para español
-TOKENS_PROMPT = 800                    # instrucciones por llamada
+# La doctrina de investigación va en el system de cada llamada (1 + núcleos):
+# el estimado del botón la cuenta (~1,4 tokens por palabra en español).
+TOKENS_DOCTRINA = int(len(doctrina.texto("investigar").split()) * 1.4)
+TOKENS_PROMPT = 800 + TOKENS_DOCTRINA   # instrucciones + doctrina por llamada
 TOKENS_SALIDA_ESTIMADO_NUCLEOS = 1500  # lo que suele ocupar la pasada 1
 TOKENS_SALIDA_ESTIMADO_SUBS = 3000     # por núcleo, pasada 2
 MAX_TOKENS_NUCLEOS = 4000              # tope de salida real (no es costo: es el corte)
@@ -136,7 +140,7 @@ Abajo hay {n} comentarios reales de personas (reseñas, foros y redes), cada uno
 Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
 {{"nucleos": [{{"nombre": "2 a 5 palabras", "deseo": "una frase en primera persona que empiece por «Quiero»", "resumen": "quiénes son y qué comparten, 30 a 60 palabras", "comentarios": [números de los comentarios que pertenecen a este núcleo]}}]}}
 
-Reglas: cada comentario va en un solo núcleo, o en ninguno si no aporta; no inventes nada que los comentarios no digan; escribe todo en {idioma}.
+Reglas: cada comentario va en un solo núcleo, o en ninguno si no aporta; no inventes nada que los comentarios no digan; escribe todo en {idioma}. Aplica la doctrina de investigación del principio: agrupa por el deseo de fondo y prefiere los deseos con más urgencia, permanencia y alcance.
 
 COMENTARIOS:
 {comentarios}"""
@@ -169,7 +173,7 @@ Responde SOLO con un objeto JSON, sin texto antes ni después, con esta forma:
   "evidencia": [{{"comentario_id": número, "cita": "fragmento LITERAL copiado del comentario; 2 a 5 citas por sub-avatar"}}]
 }}]}}
 
-Reglas: escribe en {idioma}, salvo las citas, que se copian tal cual en el idioma en que la gente escribió; no inventes datos; cada cita debe aparecer palabra por palabra en el comentario indicado.
+Reglas: escribe en {idioma}, salvo las citas, que se copian tal cual en el idioma en que la gente escribió; no inventes datos; cada cita debe aparecer palabra por palabra en el comentario indicado. Aplica la doctrina de investigación del principio: anota literalmente lo que ya probaron y por qué les falló, y el nivel de conciencia según lo que dicen los comentarios.
 
 COMENTARIOS:
 {comentarios}"""
@@ -334,7 +338,7 @@ def _llamar(texto, max_tokens):
     import anthropic
     from generador_prompts import MODEL, _api_key
     client = anthropic.Anthropic(api_key=_api_key())
-    resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
+    resp = client.messages.create(model=MODEL, max_tokens=max_tokens, system=doctrina.bloque_system("investigar"),
                                   messages=[{"role": "user", "content": texto}])
     uso = getattr(resp, "usage", None)
     entrada = int(getattr(uso, "input_tokens", 0) or 0)

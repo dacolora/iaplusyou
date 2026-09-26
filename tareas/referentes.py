@@ -457,9 +457,13 @@ def _clasificar_uno(cliente, r):
         nombre_nuevo = f"EMERGING: {fn['nombre']}"
         datos.familia_asegurar(nombre_nuevo, fn.get("descripcion") or "", origen="claude")
         familia = nombre_nuevo
+    # `actualizar_referente` reemplaza `extra` entero: se copia y se agrega el arranque.
+    extra = dict(r.get("extra") or {})
+    if resultado.get("lead"):
+        extra["lead"] = resultado["lead"]
     datos.actualizar_referente(r["id"], etapa=resultado["etapa"], consciencia=resultado["consciencia"],
                                familia=familia, dolor=resultado["dolor"], firma=resultado["firma"],
-                               clasificacion="claude")
+                               clasificacion="claude", extra=extra)
     return True, ent, sal
 
 
@@ -510,7 +514,8 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     # + error, `incluir_error` por defecto) — es la estadística que ve la
     # persona (columna `pendientes`, aviso final), independiente de cuáles de
     # esas filas el tramo automático está dispuesto a reintentar por su cuenta.
-    pendientes_total = len(datos.pendientes_clasificacion(barrido_id=bid, limite=9999))
+    filas_pendientes = datos.pendientes_clasificacion(barrido_id=bid, limite=9999)
+    pendientes_total = len(filas_pendientes)
     datos.actualizar_barrido(bid, clasificados=clasificados, pendientes=pendientes_total)
     if pendientes_total and avanzo:
         _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tipo_actual)
@@ -529,8 +534,15 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     if aviso_trayendo:
         avisos.append(aviso_trayendo)
     if pendientes_total:
-        avisos.append(f"{pendientes_total} referentes no se pudieron clasificar; "
-                      "«Clasificar pendientes» los vuelve a pedir.")
+        aviso_clasificar = (f"{pendientes_total} referentes no se pudieron clasificar; "
+                            "«Clasificar pendientes» los vuelve a pedir.")
+        # El motivo va a la vista: sin él, un reintento que falla igual parece
+        # un botón que «no hace nada».
+        motivos = [m for m in dict.fromkeys(str((r.get("extra") or {}).get("error_clasificacion") or "").strip()
+                                            for r in filas_pendientes) if m]
+        if motivos:
+            aviso_clasificar += f" Motivo: {cola.recortar(motivos[0], 160)}" + (" (y otros)" if len(motivos) > 1 else "")
+        avisos.append(aviso_clasificar)
     if sin_imagen:
         avisos.append(f"{sin_imagen} imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.")
     aviso = " ".join(avisos) or None

@@ -71,6 +71,21 @@ def test_sugerir_personas_crea_filas(base_temporal, monkeypatch):
     assert len(p) == 1 and p[0]["origen"] == "sugerida_ia" and p[0]["color"] == "#4d8dff" and "1 personas" in msg
 
 
+def test_sugerir_personas_guarda_la_consciencia_en_extra(base_temporal, monkeypatch):
+    import tareas
+    from sprints import datos, sugerencias
+    monkeypatch.setattr(sugerencias, "sugerir_personas", lambda c, cuantas=3: [
+        {"nombre": "Con nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],
+         "palabras_clave": [], "color": "#4d8dff", "conciencia": {"nivel": "muy_consciente", "detalle": "ya compró"}},
+        {"nombre": "Sin nivel", "resumen": "", "descripcion": "", "edad_rango": "", "tono": "", "senales_visuales": [],
+         "palabras_clave": [], "color": "#7c5cff"}])
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_sugerir_personas"]({"payload": {"cliente": "acme", "cuantas": 2}})
+    por_nombre = {p["nombre"]: p for p in datos.personas("acme")}
+    assert por_nombre["Con nivel"]["extra"]["conciencia"] == {"nivel": "muy_consciente", "detalle": "ya compró"}
+    assert por_nombre["Sin nivel"]["extra"] == {}
+
+
 def test_referencia_desde_link_descarga_registra_y_encola(base_temporal, monkeypatch, tmp_path):
     import tareas
     import referencias_link
@@ -370,3 +385,23 @@ def test_ejecutar_sugerir_biblioteca_respuesta_invalida_registra_gasto_y_relanza
     assert not (c.get("extra") or {}).get("sugerencias_ia")
     filas = [f for f in gastos.historial("acme") if f["tipo"] == "sugerir_ia"]
     assert len(filas) == 1 and filas[0]["usd"] > 0 and filas[0]["detalle"] == "respuesta inválida"
+
+
+def test_sugerir_biblioteca_le_pasa_la_consciencia_de_la_persona(base_temporal, monkeypatch):
+    import tareas
+    import referentes.sugerir as referentes_sugerir
+    from sprints import datos
+    sid, cid, rid = _referencia(datos)
+    datos.actualizar_persona("acme", datos.campana("acme", cid)["persona_id"],
+                             extra={"conciencia": {"nivel": "consciente_del_problema", "detalle": "x"}})
+    monkeypatch.setattr(referentes_sugerir, "candidatos", lambda cliente_, etapa, excluir, limite=60: [
+        {"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}])
+    visto = {}
+
+    def falso(cands, persona_texto, producto_texto, temporada_texto, objetivo):
+        visto["persona"] = persona_texto
+        return [], 10, 5
+    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", falso)
+    tareas.cargar_todas()
+    tareas.REGISTRO["referentes_sugerir_ia"]({"id": 2, "payload": {"cliente": "acme", "campana_id": cid}})
+    assert "consciente del problema" in visto["persona"]

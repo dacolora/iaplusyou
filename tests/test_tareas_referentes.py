@@ -642,6 +642,8 @@ def test_fase_clasificando_claude_invalido_deja_error_y_no_reencola_para_siempre
     assert llamadas_cola == []
     b = datos.barrido(bid)
     assert b["estado"] == "parcial" and "no se pudieron clasificar" in b["aviso"]
+    # La fila de «Mis barridos» dice por qué, no solo cuántos.
+    assert "Motivo: Claude no devolvió JSON." in b["aviso"]
 
 
 def test_fase_clasificando_automatica_nunca_re_factura_un_referente_en_error(tmp_path, monkeypatch):
@@ -927,3 +929,18 @@ def test_fase_traducir_fallida_registra_lo_pagado(entorno, monkeypatch):
     assert kw["extra"]["tokens_salida"] == 6000
     b = datos.barrido(bid)
     assert b["estado"] == "parcial" and "se cortó" in b["aviso"] and b["usd_real"] > 0
+
+
+def test_clasificar_uno_guarda_el_lead_sin_perder_el_extra(tmp_path, monkeypatch, base_temporal):
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+    rid, _ = datos.guardar_referente({"anuncio_id": "901", "fuente": "atria", "imagen_origen": "https://x/901.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en",
+                                      "extra": {"origen_barrido": 3}}, cliente="acme")
+    datos.marcar_imagen(rid, "ok", "https://r2/901.jpg")
+    monkeypatch.setattr(clasificar, "clasificar", lambda referente, vocabulario: (
+        {"etapa": "TOF", "consciencia": "unaware", "familia": None, "familia_nueva": {"nombre": "W", "descripcion": "d"},
+         "dolor": "d", "firma": "f", "lead": "historia"}, 80, 20))
+    ok, _, _ = tareas_ref._clasificar_uno("acme", datos.referente("acme", rid))
+    r = datos.referente("acme", rid)
+    assert ok and r["extra"]["lead"] == "historia" and r["extra"]["origen_barrido"] == 3

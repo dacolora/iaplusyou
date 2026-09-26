@@ -228,7 +228,7 @@ def test_recrear_adaptar_devuelve_json_y_registra_gasto(app, monkeypatch):
                       json={"producto_id": "espejo_led", "titular": "viejo"})
     assert r.status_code == 200
     body = r.get_json()
-    assert body == {"titular": "SE ACABA HOY", "prompt": "Con Image 1 e Image 2..."}
+    assert body["titular"] == "SE ACABA HOY" and body["prompt"] == "Con Image 1 e Image 2..." and "angulo" in body
     gasto = gastos.historial("acme", limite=1)[0]
     assert gasto["tipo"] == "adaptar_referente" and gasto["usd"] > 0
 
@@ -294,6 +294,44 @@ def test_recrear_generar_video_usa_preferencias_del_proyecto(app, monkeypatch):
     entry = creative_flow.cargar("acme")[lanzado["cf_id"]]
     assert entry["tipo"] == "video" and entry["modelo"] == "wan3" and entry["duracion_objetivo"] == 12
     assert entry["con_sonido"] is False
+
+
+def test_recrear_generar_guarda_el_angulo_validado(app, monkeypatch):
+    import json
+    import creative_flow
+    import flowplus_lanzar
+    ids = _sembrar()
+    monkeypatch.setattr("referentes.recrear.r2_uploader.upload_image", lambda local, clave: f"https://r2/{clave}")
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(cf_id) or True)
+    angulo = {"audiencia": "a", "consciencia": "consciente_del_producto", "sofisticacion": 2, "deseo": "d",
+              "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "promesa", "gancho": "g", "faltantes": []}
+    base = {"producto_id": "espejo_led", "formato": "1:1", "titular": "T", "prompt": "P", "tipo": "imagen"}
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar", data=dict(base, angulo=json.dumps(angulo)))
+    entry = creative_flow.cargar("acme")[lanzados[0]]
+    assert entry["angulo"]["promesa"] == "p" and entry["angulo"]["origen"] == "recrear"
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar", data=dict(base, angulo="no es json"))
+    assert "angulo" not in creative_flow.cargar("acme")[lanzados[1]]
+
+
+def test_recrear_generar_no_pierde_los_errores_del_angulo_al_revalidarlo(app, monkeypatch):
+    """Fix 2: el ángulo que devuelve el navegador ya trae sus «error: …»
+    (después de 5 faltantes de Claude); al revalidarlo en la ruta van
+    primero y ninguno se cae por el tope."""
+    import json
+    import creative_flow
+    import flowplus_lanzar
+    ids = _sembrar()
+    monkeypatch.setattr("referentes.recrear.r2_uploader.upload_image", lambda local, clave: f"https://r2/{clave}")
+    lanzados = []
+    monkeypatch.setattr(flowplus_lanzar, "lanzar", lambda cliente, cf_id, entry, **kw: lanzados.append(cf_id) or True)
+    errores = ["error: gancho_largo", "error: cifra_no_verificada:47 %", "error: mecanismo_obligatorio"]
+    angulo = {"audiencia": "a", "consciencia": "consciente_del_producto", "sofisticacion": 2, "deseo": "d",
+              "promesa": "p", "mecanismo": None, "pruebas": [], "lead": "promesa", "gancho": "g",
+              "faltantes": [f"falta {n}" for n in range(5)] + errores}
+    base = {"producto_id": "espejo_led", "formato": "1:1", "titular": "T", "prompt": "P", "tipo": "imagen"}
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/generar", data=dict(base, angulo=json.dumps(angulo)))
+    assert creative_flow.cargar("acme")[lanzados[0]]["angulo"]["faltantes"][:3] == errores
 
 
 def test_recrear_generar_sin_producto_o_prompt_no_crea_nada(app):

@@ -19,11 +19,44 @@ def test_validar_familia_nueva_cuando_ninguna_encaja():
     assert r["familia_nueva"]["nombre"] == "Recipe Card"
 
 
-def test_validar_familia_fuera_del_vocabulario_falla():
-    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "Formato Inventado",
+def test_validar_familia_fuera_del_vocabulario_se_toma_como_familia_nueva():
+    # Claude a veces escribe el nombre nuevo en "familia" en vez de "familia_nueva":
+    # antes eso era error y «Clasificar pendientes» fallaba igual para siempre.
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "Challenge Launch Funnel",
             "familia_nueva": None, "dolor": "x", "firma": "f"}
-    with pytest.raises(clasificar.ClasificacionInvalida):
-        clasificar.validar(data, ["Villain Made Visible"])
+    r = clasificar.validar(data, ["Villain Made Visible"])
+    assert r["familia"] is None
+    assert r["familia_nueva"] == {"nombre": "Challenge Launch Funnel", "descripcion": ""}
+
+
+def test_validar_familia_fuera_del_vocabulario_conserva_la_descripcion_si_viene():
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "Challenge Launch Funnel",
+            "familia_nueva": {"nombre": "", "descripcion": "Reto de 5 días que lleva a la oferta."},
+            "dolor": "x", "firma": "f"}
+    r = clasificar.validar(data, ["Villain Made Visible"])
+    assert r["familia_nueva"] == {"nombre": "Challenge Launch Funnel",
+                                  "descripcion": "Reto de 5 días que lleva a la oferta."}
+
+
+def test_validar_familia_con_otras_mayusculas_usa_la_existente():
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": "villain made visible",
+            "familia_nueva": None, "dolor": "x", "firma": "f"}
+    r = clasificar.validar(data, ["Villain Made Visible"])
+    assert r["familia"] == "Villain Made Visible" and r["familia_nueva"] is None
+
+
+def test_validar_nunca_duplica_el_prefijo_emerging():
+    vocab = ["Villain Made Visible", "EMERGING: Challenge Launch Funnel"]
+    # Ya existe como EMERGING: se usa esa, aunque venga sin el prefijo o con otras mayúsculas.
+    for nombre in ("Challenge Launch Funnel", "emerging: challenge launch funnel"):
+        data = {"etapa": "TOF", "consciencia": "unaware", "familia": nombre, "familia_nueva": None,
+                "dolor": "x", "firma": "f"}
+        r = clasificar.validar(data, vocab)
+        assert r["familia"] == "EMERGING: Challenge Launch Funnel" and r["familia_nueva"] is None
+    # Nueva con el prefijo puesto por Claude: el nombre se guarda sin él (la tarea lo agrega una vez).
+    data = {"etapa": "TOF", "consciencia": "unaware", "familia": None,
+            "familia_nueva": {"nombre": "EMERGING: Recipe Card", "descripcion": "d"}, "dolor": "x", "firma": "f"}
+    assert clasificar.validar(data, vocab)["familia_nueva"]["nombre"] == "Recipe Card"
 
 
 def test_validar_etapa_invalida_falla():
@@ -139,3 +172,35 @@ def test_clasificar_da_espacio_para_pensar_y_responder(monkeypatch):
                                               '"dolor": "x", "firma": "y"}'), pedidos)
     clasificar.clasificar(_REFERENTE, [])
     assert 299 * 5 <= pedidos[0]["max_tokens"] <= 16000
+    assert pedidos[0]["max_tokens"] == clasificar.MAX_TOKENS == 4000     # con doctrina, 2000 volvía solo pensamiento
+
+
+def test_validar_acepta_lead_y_descarta_el_raro():
+    base = {"etapa": "TOF", "consciencia": "unaware", "familia": None,
+            "familia_nueva": {"nombre": "X", "descripcion": "d"}, "dolor": "x", "firma": "f"}
+    assert clasificar.validar(dict(base, lead="historia"), [])["lead"] == "historia"
+    assert clasificar.validar(dict(base, lead="grito"), [])["lead"] is None
+    assert clasificar.validar(base, [])["lead"] is None
+
+
+def test_clasificar_manda_la_doctrina_de_clasificar_y_pide_el_lead(monkeypatch):
+    import doctrina
+    vistos = []
+    respuesta = _RespuestaFalsa('{"etapa": "TOF", "consciencia": "unaware", "familia": null, '
+                                '"familia_nueva": {"nombre": "X", "descripcion": "d"}, "dolor": "d", "firma": "f", '
+                                '"lead": "secreto"}')
+
+    class _ClienteFalso:
+        class messages:
+            @staticmethod
+            def create(**kw):
+                vistos.append(kw)
+                return respuesta
+
+    monkeypatch.setattr("referentes.clasificar.anthropic.Anthropic", lambda api_key: _ClienteFalso())
+    monkeypatch.setattr("referentes.clasificar._api_key", lambda: "sk-test")
+    r, _, _ = clasificar.clasificar({"marca": "M", "titular": "T", "cuerpo": "", "idioma": "en",
+                                     "imagen_url": "https://r2/x.jpg"}, [])
+    assert r["lead"] == "secreto"
+    assert vistos[0]["system"][0]["text"] == doctrina.texto("clasificar")
+    assert '"lead"' in vistos[0]["messages"][0]["content"][0]["text"]
