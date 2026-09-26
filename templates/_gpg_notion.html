@@ -1,7 +1,7 @@
 {# Guion desde Notion: el link (si el proyecto conectó Notion) y la conexión. La llave nunca se muestra. #}
 <div class="gpg-notion" data-gpg-caja>
   {% if notion_conectado %}
-  <form class="gpg-form" data-gpg-post="/lotes">
+  <form class="gpg-form" id="gpg-form-notion-link" data-gpg-post="/lotes">
     <label class="campo-label" for="gpg-notion-url">Link de Notion</label>
     <input type="url" id="gpg-notion-url" name="notion_url" placeholder="https://www.notion.so/…" required>
     <div class="gpg-error flash error" hidden></div>
@@ -17,7 +17,7 @@
       <li>En la página del guion: ··· › Conexiones › elige tu integración.</li>
       <li>Copia la llave de la integración y pégala aquí.</li>
     </ol>
-    <form class="gpg-form" data-gpg-post="/notion">
+    <form class="gpg-form" id="gpg-form-notion-llave" data-gpg-post="/notion">
       <label class="campo-label" for="gpg-notion-llave">Llave de la integración</label>
       <input type="password" id="gpg-notion-llave" name="llave" autocomplete="off" required>
       <div class="gpg-error flash error" hidden></div>

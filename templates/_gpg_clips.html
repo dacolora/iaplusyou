@@ -61,7 +61,7 @@
 
   <details id="gpg-det-bloque-{{ video.id }}">
     <summary>Bloque del video (se repite en cada clip)</summary>
-    <form class="gpg-form" data-gpg-post="/videos/{{ video.id }}/nueva-version">
+    <form class="gpg-form" id="gpg-form-bloque-{{ video.id }}" data-gpg-post="/videos/{{ video.id }}/nueva-version">
       <input type="hidden" name="tipo" value="bloque">
       <p class="gp-ayuda">Cambiarlo crea una versión nueva con los mismos clips, sin llamar a Claude (gratis). Esta versión y sus prompts quedan como están.</p>
       {% set bv = video.plan.bloque_video %}

@@ -49,7 +49,7 @@
               Proponer qué quitar · {{ costos.recorte }}</button>
           </div>
         {% endif %}
-        <form class="gpg-form" data-gpg-post="/videos/{{ video.id }}/recorte" data-gpg-calcular="/videos/{{ video.id }}/calcular">
+        <form class="gpg-form" id="gpg-form-recorte-{{ video.id }}" data-gpg-post="/videos/{{ video.id }}/recorte" data-gpg-calcular="/videos/{{ video.id }}/calcular">
           <p class="gp-ayuda">Marca las líneas que salen. Se quitan enteras; la línea 1 (el hook) no se puede quitar.</p>
           <ul class="gpg-lineas">
             {% for l in recorte_info.lineas %}
@@ -74,7 +74,7 @@
 
   <details class="gpg-avanzado" data-gpg-caja id="gpg-det-global">
     <summary>Avanzado: bloque global del proyecto</summary>
-    <form class="gpg-form" data-gpg-post="/bloque-global">
+    <form class="gpg-form" id="gpg-form-global" data-gpg-post="/bloque-global">
       <p class="gp-ayuda">Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica.
         {% if not bloque_global.propio %}Ahora se usa el de fábrica.{% endif %}</p>
       <textarea name="texto" rows="10" class="gp-mono">{{ bloque_global.texto }}</textarea>
