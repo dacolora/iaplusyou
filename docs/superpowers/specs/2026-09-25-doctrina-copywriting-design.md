@@ -312,8 +312,10 @@ Sin migraciones: ninguna tabla nueva ni columna nueva.
     (`tiendas.por_activo`), además de nombre, descripción y regla.
 - **Salida**: cada idea trae `"angulo": {...}` con las claves de §4.1 (sin
   `origen`). `parsear` valida cada ángulo con `validar_angulo(angulo,
-  datos_texto)`; una idea con errores de ángulo entra a la ronda de corrección
-  que `proponer` ya tiene (solo se reenvían las ideas con error). El campo
+  datos_texto)`; si alguna idea trae errores de ángulo se pide UNA corrección
+  con la lista de errores por idea y la respuesta corregida reemplaza a la
+  primera solo si trae al menos tantas ideas; si la corrección falla, quedan
+  las ideas de la primera respuesta con los errores en `faltantes`. El campo
   `gancho` de la idea se iguala a `angulo.gancho`.
 - **Guardado**: `datos.crear_idea` recibe `extra={"angulo": ...}`
   (`_IDEA_COLS` no cambia; `extra` ya existe). El evento `ideas_propuestas`
@@ -352,9 +354,9 @@ misma forma que deja `nicho.datos.aprobar_avatar`. System =
 ### 6.1 `director.py` y `creative_flow.py`
 
 - `datos_para_director` devuelve además `angulo` y `contexto`.
-- `_system(...)` conserva su f-string por familia y le agrega
-  `doctrina.texto("video")` al final (el director ya usa `system=`; pasa a la
-  forma de bloques con caché).
+- El system pasa a `doctrina.bloque_system("video", extra=_system(...))`: la
+  doctrina primero (bloque con caché) y las instrucciones de la familia del
+  modelo después, sin cambios.
 - `_mensaje(...)` inserta el bloque `angulo_a_texto(sesion["angulo"])` después
   de `IDEA` cuando hay ángulo, con la instrucción: «Traduce el ángulo a planos:
   el producto aparece pronto, el mecanismo se **demuestra** en cámara, la
@@ -476,8 +478,10 @@ familia y dolor. `elegir` (determinista) no cambia.
   cliente); solo se les agrega una línea: «aplica la doctrina de investigación
   del system prompt: mide el deseo por urgencia, permanencia y alcance; anota
   literalmente lo que ya probaron».
-- `TOKENS_PROMPT` sube de 800 a 1 700 para que `estimar_costo` (lo que ve la
-  persona en el botón) incluya la doctrina.
+- `TOKENS_PROMPT` pasa a `800 + TOKENS_DOCTRINA` (≈ 1,4 tokens por palabra de
+  `doctrina.texto("investigar")`, calculado) para que `estimar_costo` (lo que
+  ve la persona en el botón) incluya la doctrina sin desfasarse si la rebanada
+  cambia.
 
 ## 10. Fuera del bloque 1
 
