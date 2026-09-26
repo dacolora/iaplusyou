@@ -272,3 +272,29 @@ def test_eliminar_y_recrear_conserva_una_fila(base_temporal):
     assert tiendas.productos("acme") == []
     assert tiendas.asegurar_manual("acme", "cojin", "Cojín") == pid
     assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
+
+
+def test_las_claves_de_la_doctrina_sobreviven_a_la_sync(base_temporal):
+    """Doctrina, bloque 2: sofisticación, pruebas y pedidos los escribe el
+    cliente; una sync de tienda reemplaza `extra` pero nunca los borra."""
+    import tiendas
+    a = tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A", "extra": {"handle": "a"}})
+    tiendas.anotar_extra("acme", a, sofisticacion=3, pruebas=[{"id": "p1", "texto": "t", "fuente": "ficha"}],
+                         pedidos=[{"id": "k1", "texto": "x", "estado": "abierto"}])
+    tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A v2", "extra": {"handle": "a2"}})
+    extra = tiendas.producto("acme", a)["extra"]
+    assert extra["handle"] == "a2" and extra["sofisticacion"] == 3
+    assert extra["pruebas"][0]["texto"] == "t" and extra["pedidos"][0]["id"] == "k1"
+
+
+def test_modificar_extra_interno_es_atomico_y_solo_toca_claves_internas(base_temporal):
+    import tiendas
+    a = tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A", "extra": {"handle": "a"}})
+    escrito = tiendas.modificar_extra_interno("acme", a, lambda e: {**e, "pruebas": [{"id": "p1"}]})
+    assert escrito == {"handle": "a", "pruebas": [{"id": "p1"}]}
+    assert tiendas.producto("acme", a)["extra"]["pruebas"] == [{"id": "p1"}]
+    with pytest.raises(ValueError):
+        tiendas.modificar_extra_interno("acme", a, lambda e: {**e, "handle": "otro"})
+    assert tiendas.producto("acme", a)["extra"]["handle"] == "a"
+    assert tiendas.modificar_extra_interno("acme", 999, lambda e: e) is None
+    assert tiendas.modificar_extra_interno("otro", a, lambda e: e) is None

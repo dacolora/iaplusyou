@@ -39,7 +39,9 @@ _PRODUCTO_CAMPOS_MARCA = ("en_prueba", "prioridad", "archivado", "activo_catalog
 # tienda (que sí se deshace si reaparece). `vinculo_intentado_en` marca el
 # último intento de crear el activo que terminó sin activo, para que el tope
 # por corrida del importador atienda primero lo que nunca se intentó.
-EXTRA_INTERNO = ("archivado_por", "vinculo_intentado_en")
+# `sofisticacion`, `pruebas` y `pedidos` son de la doctrina (bloque 2): los
+# escribe el cliente en Catálogo y una sync de tienda nunca debe borrarlos.
+EXTRA_INTERNO = ("archivado_por", "vinculo_intentado_en", "sofisticacion", "pruebas", "pedidos")
 
 
 # --- tiendas ---------------------------------------------------------------
@@ -301,6 +303,30 @@ def anotar_extra(cliente, producto_id, **claves):
             else:
                 extra[clave] = valor
         con.execute(p.update().where(p.c.id == producto_id, p.c.cliente == cliente).values(extra=extra))
+
+
+def modificar_extra_interno(cliente, producto_id, fn):
+    """Read-modify-write atómico de las claves EXTRA_INTERNO de
+    `producto.extra` (las de la doctrina: `sofisticacion`, `pruebas`,
+    `pedidos`). Toma el lock de escritura de SQLite ANTES de leer (el mismo
+    truco de `experimentos._bloquear`): la web y el worker escriben pedidos
+    y pruebas del mismo producto y sin el lock el último pisaría al otro.
+    `fn(extra) -> extra` recibe una copia; solo puede cambiar claves
+    internas (ValueError si toca otra). Devuelve el `extra` escrito, o None
+    si el producto no existe."""
+    p = db.producto
+    with db.conectar() as con:
+        r = con.execute(p.update().where(p.c.id == producto_id, p.c.cliente == cliente)
+                        .values(actualizado_en=p.c.actualizado_en))
+        if r.rowcount != 1:
+            return None
+        viejo = dict(con.execute(sa.select(p.c.extra).where(p.c.id == producto_id)).scalar() or {})
+        nuevo = dict(fn(dict(viejo)) or {})
+        ajenas = {k for k in set(viejo) | set(nuevo) if viejo.get(k) != nuevo.get(k)} - set(EXTRA_INTERNO)
+        if ajenas:
+            raise ValueError(f"Claves no permitidas: {sorted(ajenas)}")
+        con.execute(p.update().where(p.c.id == producto_id).values(extra=nuevo))
+    return nuevo
 
 
 def _archivar_en(con, condiciones, por, ahora):

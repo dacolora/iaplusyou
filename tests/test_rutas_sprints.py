@@ -940,3 +940,42 @@ def test_campana_ver_no_muestra_sugerencia_ia_ya_agregada(app, monkeypatch):
     assert r.status_code == 200
     assert "buena razón".encode() not in r.data
     assert b'name="referente_ids" value="5"' not in r.data
+
+
+def test_consciencia_de_la_persona_se_elige_en_la_pagina_de_ideas(con_ideas):
+    """Doctrina, bloque 2 (§4.1): el selector guarda el nivel en la persona,
+    conserva el detalle de Nicho y «Que Claude lo decida» lo quita."""
+    from sprints import datos
+    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
+    pid = datos.campana("acme", cid)["persona_id"]
+    datos.actualizar_persona("acme", pid, extra={"conciencia": {"nivel": "inconsciente", "detalle": "de Nicho"}})
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "Qué tanto sabe Premium" in html and 'value="inconsciente" selected' in html
+    assert "Promesas parecidas que ya vio el cliente de espejo_led:" in html and "Claude lo decide" in html
+    r = c.post(f"/cliente/acme/sprints/personas/{pid}/conciencia", json={"nivel": "consciente del problema"})
+    assert r.get_json() == {"ok": True, "nivel": "consciente_del_problema"}
+    assert datos.persona("acme", pid)["extra"]["conciencia"] == {"nivel": "consciente_del_problema", "detalle": "de Nicho",
+                                                                 "origen": "manual"}
+    assert c.post(f"/cliente/acme/sprints/personas/{pid}/conciencia", json={"nivel": "rarísimo"}).status_code == 400
+    c.post(f"/cliente/acme/sprints/personas/{pid}/conciencia", json={"nivel": ""})
+    assert datos.persona("acme", pid)["extra"]["conciencia"] == {"detalle": "de Nicho"}
+    assert c.post("/cliente/acme/sprints/personas/999/conciencia", json={"nivel": ""}).status_code == 404
+
+
+def test_pagina_de_ideas_muestra_la_sofisticacion_del_producto(con_ideas):
+    import tiendas
+    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    tiendas.anotar_extra("acme", fila, sofisticacion=4)
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "4 · Ya vio cómo funciona en otros: hay que mejorar el cómo" in html
+
+
+def test_consciencia_de_persona_ajena_no_se_toca(con_ideas):
+    from sprints import datos
+    import dashboard
+    pid = datos.campana("acme", con_ideas["cid"])["persona_id"]
+    ajeno = _cliente_ajeno(dashboard)
+    r = ajeno.post(f"/cliente/acme/sprints/personas/{pid}/conciencia", json={"nivel": "inconsciente"})
+    assert r.status_code in (302, 403, 404)
+    assert "conciencia" not in (datos.persona("acme", pid).get("extra") or {})

@@ -862,3 +862,28 @@ def test_eliminar_personaje_no_toca_filas(app):
     _crear_activo(c, nombre="Laura", categoria="personaje")
     c.post("/cliente/acme/productos/laura/eliminar", data={"categoria": "personaje"})
     assert len(tiendas.productos("acme")) == 1
+
+
+def test_actualizar_producto_guarda_la_sofisticacion_del_mercado(app):
+    """Doctrina, bloque 2: «Cuántas promesas parecidas vio ya tu cliente»."""
+    c = app["c"]
+    _crear_activo(c, sofisticacion="3")
+    assert _fila_por_activo("cojin_azul")["extra"]["sofisticacion"] == 3
+    # un formulario sin el campo no borra lo elegido
+    c.post("/cliente/acme/productos/cojin_azul/actualizar", data={"nombre": "Cojín Azul", "categoria": "producto"})
+    assert _fila_por_activo("cojin_azul")["extra"]["sofisticacion"] == 3
+    # «Que Claude lo decida» (vacío) o un valor raro lo borra
+    c.post("/cliente/acme/productos/cojin_azul/actualizar",
+           data={"nombre": "Cojín Azul", "categoria": "producto", "sofisticacion": ""})
+    assert "sofisticacion" not in _fila_por_activo("cojin_azul")["extra"]
+    c.post("/cliente/acme/productos/cojin_azul/actualizar",
+           data={"nombre": "Cojín Azul", "categoria": "producto", "sofisticacion": "9"})
+    assert "sofisticacion" not in _fila_por_activo("cojin_azul")["extra"]
+
+
+def test_catalogo_muestra_el_selector_de_sofisticacion(app):
+    c = app["c"]
+    _crear_activo(c, sofisticacion="4")
+    html = c.get("/cliente/acme").data.decode()
+    assert "Cuántas promesas parecidas vio ya tu cliente" in html
+    assert 'value="4" selected' in html and "Que Claude lo decida" in html

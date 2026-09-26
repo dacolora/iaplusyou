@@ -11,6 +11,37 @@
   </div>
 </div>
 
+{# Datos del mercado (doctrina, bloque 2): si están elegidos, Claude escribe con esos niveles. #}
+<section class="mercado-campana">
+  <label class="campo-label" for="persona-conciencia">Qué tanto sabe {{ campana.persona_nombre }}</label>
+  <select id="persona-conciencia" data-url="{{ url_for('sprints.persona_conciencia', cliente=cliente, pid=campana.persona_id) }}">
+    <option value="">Que Claude lo decida</option>
+    {% for clave, texto in CONSCIENCIAS_CLIENTE.items() %}
+    <option value="{{ clave }}" {% if nivel_persona == clave %}selected{% endif %}>{{ texto }}</option>
+    {% endfor %}
+  </select>
+  <small class="vacio">Es la misma persona en todas sus campañas: cambiarlo aquí la cambia en todas. <span class="persona-guardado" hidden>Guardado</span></small>
+  <p class="vacio">Promesas parecidas que ya vio el cliente de {{ campana.catalogo_id }}:
+    {% if sof_producto %}{{ sof_producto }} · {{ SOFISTICACIONES_CLIENTE[sof_producto] }}{% else %}Claude lo decide{% endif %}
+    (se cambia en Catálogo).</p>
+</section>
+<script>
+  (function () {
+    var sel = document.getElementById('persona-conciencia');
+    if (!sel) return;
+    sel.addEventListener('change', function () {
+      fetch(sel.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
+                              body: JSON.stringify({nivel: sel.value})})
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (!j.ok) { alert(j.error); return; }
+          var ok = document.querySelector('.persona-guardado'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500);
+        })
+        .catch(function () {});
+    });
+  })();
+</script>
+
 <section class="sprint-refs-progreso">
   <strong>{{ conteo.videos_aprobados }} de {{ campana.n_videos }} videos · {{ conteo.imagenes_aprobadas }} de {{ campana.n_imagenes }} imágenes aprobadas</strong>
   <p class="vacio">Claude propone ideas con la persona, el producto, la temporada, tus referencias y la guía de marca. Aprueba las que sirvan; solo esas se generan, y solo cuando pulses «Generar lote» con el costo a la vista.</p>

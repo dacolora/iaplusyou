@@ -59,6 +59,7 @@ import ads as ads_mod
 from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
+import doctrina
 import flowplus_lanzar
 import cola
 import db
@@ -114,6 +115,10 @@ FRAME_SUFFIX = ".frame.jpg"
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
+# Vocabulario de la doctrina en palabras simples para los selectores de
+# persona y producto (bloque 2 de la doctrina).
+app.jinja_env.globals.update(CONSCIENCIAS_CLIENTE=doctrina.CONSCIENCIAS_CLIENTE,
+                             SOFISTICACIONES_CLIENTE=doctrina.SOFISTICACIONES_CLIENTE)
 
 
 @app.url_defaults
@@ -2289,7 +2294,24 @@ def _campos_comerciales(form):
     return campos
 
 
-def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False):
+_SIN_CAMBIO = object()
+
+
+def _sofisticacion_form(form):
+    """1–5 del selector «Cuántas promesas parecidas vio ya tu cliente»;
+    None = «Que Claude lo decida»; `_SIN_CAMBIO` si el formulario no trae
+    el campo (un formulario viejo no debe borrar lo elegido)."""
+    if "sofisticacion" not in form:
+        return _SIN_CAMBIO
+    try:
+        valor = int(form.get("sofisticacion") or 0)
+    except ValueError:
+        return None
+    return valor if valor in doctrina.SOFISTICACIONES else None
+
+
+def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False,
+                          sofisticacion=_SIN_CAMBIO):
     """Escribe lo comercial del activo `producto_id` en su fila `producto`
     (`tiendas.asegurar_manual` la crea si no existe). Una fila sin moneda
     hereda la de la cuenta de Meta (o COP). `desarchivar`: al CREAR el
@@ -2312,6 +2334,8 @@ def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, de
     if desarchivar and (fila or {}).get("archivado"):
         valores["archivado"] = False
     tiendas.marcar_producto(cliente, pid, **valores)
+    if sofisticacion is not _SIN_CAMBIO:
+        tiendas.anotar_extra(cliente, pid, sofisticacion=sofisticacion)
     return pid
 
 
@@ -2349,7 +2373,8 @@ def crear_producto(cliente):
         # Solo lo que se vende tiene fila comercial (precio, url de compra,
         # en prueba): un personaje o un entorno no van a un experimento.
         _guardar_fila_producto(cliente, producto_id, nombre, descripcion,
-                               _campos_comerciales(request.form), desarchivar=True)
+                               _campos_comerciales(request.form), desarchivar=True,
+                               sofisticacion=_sofisticacion_form(request.form))
     flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
@@ -2397,7 +2422,8 @@ def actualizar_producto(cliente, producto_id):
         # La fila comercial se crea aquí si el activo es anterior a que
         # existiera (no hay migración: se enlaza al primer uso).
         _guardar_fila_producto(cliente, producto_id, request.form.get("nombre"),
-                               request.form.get("descripcion"), _campos_comerciales(request.form))
+                               request.form.get("descripcion"), _campos_comerciales(request.form),
+                               sofisticacion=_sofisticacion_form(request.form))
     flash("Producto actualizado.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
