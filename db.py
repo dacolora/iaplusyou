@@ -521,6 +521,10 @@ sprint = Table("sprint", metadata,
     Column("notas", Text),
     Column("archivado", Boolean, default=False),
     Column("extra", JSON, default=dict),                                # listo_manual, qa_umbral, modelos del lote
+    Column("pais", String(2)),                                          # mercado del sprint (0021)
+    Column("idioma", String(5)),
+    Column("marcas", JSON),                                             # [{nombre, pagina_id?}] a imitar
+    Column("momento", JSON),                                            # {clave?, nombre, contexto?, inicio?, fin?, mood_visual?}
 )
 
 campana = Table("campana", metadata,
@@ -538,7 +542,12 @@ campana = Table("campana", metadata,
     Column("orden", Integer, default=0),
     Column("extra", JSON, default=dict),
     Column("funnel", String(3), default="tof"),                          # tof|mof|bof (migración 0014)
-    sa.UniqueConstraint("sprint_id", "persona_id", "catalogo_id", "temporada_id", name="uq_campana_combinacion"),
+    Column("consciencia", String(24)),                                  # clave de doctrina.CONSCIENCIAS (0021)
+    Column("dolor", Text),
+    Column("familias", JSON),                                           # nombres de referente_familia
+    Column("pais", String(2)),                                          # NULL = hereda del sprint
+    Column("idioma", String(5)),
+    Column("marcas", JSON),
 )
 
 referencia = Table("referencia", metadata,

@@ -69,7 +69,7 @@ def test_migracion_deja_la_temporada_opcional(tmp_path, monkeypatch):
     insp = sa.inspect(db.engine())
     col = next(c for c in insp.get_columns("campana") if c["name"] == "temporada_id")
     assert col["nullable"] is True
-    # Recrear la tabla (batch) no puede perder la restricción ni las llaves foráneas.
-    assert "uq_campana_combinacion" in {u["name"] for u in insp.get_unique_constraints("campana")}
+    # Recrear la tabla (batch) no puede perder las llaves foráneas; la unicidad se quitó en 0021.
+    assert "uq_campana_combinacion" not in {u["name"] for u in insp.get_unique_constraints("campana")}
     assert {"sprint", "persona", "temporada"} <= {f["referred_table"] for f in insp.get_foreign_keys("campana")}
     db._reset_para_tests()
