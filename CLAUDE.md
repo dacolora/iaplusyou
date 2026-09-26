@@ -738,6 +738,27 @@ ni migraciones (bloque 1 de 4; los bloques 2–4 están en el §14 del spec). Lo
 amplios (4 000–16 000 tokens): el pensamiento adaptativo de `claude-sonnet-5` los consume y con topes chicos la
 respuesta llega vacía (prueba real del 2026-09-26).
 
+**Doctrina, bloque 2: el ángulo a la vista** (spec `docs/superpowers/specs/2026-09-26-doctrina-bloque-2-angulo-visible-design.md`):
+el ángulo se ve y se edita entero en la tarjeta de cada idea del sprint y en cada pieza de Crear (antes de «Preparar
+guion»): macro `templates/_angulo_editor.html` + `static/angulo.js` (autoguardado JSON; los campos no llevan `name`
+para no mezclarse con el autoguardado de la tarjeta), rutas `sprints.idea_angulo` (409 si la idea ya tiene pieza) y
+`cf_angulo`; `doctrina.angulo_desde_formulario` valida sin bloquear (`mensaje_error` da frases simples), conserva
+`origen`, pone `editado_en` y quita los «error: …»; con `editado_en`, `texto_verificable` cuenta todo el ángulo como
+dato (las cifras de la persona se usan tal cual). Un ángulo sin promesa o sin gancho no manda en `preparar_guion`.
+«Reescribir la idea con este ángulo» (tarea `sprint_reescribir_idea`, `sprints.ideas.reescribir`, gasto `ideas`) cambia
+título, escena y sonido sin tocar el ángulo. Datos del mercado: la consciencia de la persona
+(`persona.extra.conciencia.nivel`, selector en la página de ideas de la campaña, ruta `sprints.persona_conciencia`) y
+la sofisticación del producto (`producto.extra.sofisticacion`, selector en Catálogo) mandan cuando existen:
+`doctrina.validar_angulo(..., fijos=)` los impone antes de validar y `doctrina.datos_fijos_texto` los pone en los
+DATOS de ideas, guion (sin ángulo) y «Adaptar con IA». Pruebas y pedidos del producto viven en
+`producto.extra.pruebas|pedidos` (`tiendas.EXTRA_INTERNO` los protege de la sync; único escritor
+`doctrina/producto.py` vía `tiendas.modificar_extra_interno`, con lock): las pruebas entran a los DATOS de ideas,
+guion, «Adaptar» y captions y cuentan como dato verificado; «Actualizar lo que Claude necesita» (tarea
+`producto_pedidos`, `doctrina/pedidos.py`, gasto `pedidos`) junta los faltantes de las ideas y sesiones del producto
+y los resume en máximo cinco pedidos; responder uno lo guarda como prueba. Página de solo lectura
+`/cliente/<cliente>/doctrina` (`doctrina/pagina.py::a_html` escapa antes de convertir). Las plantillas reciben el
+vocabulario con `doctrina.globales_plantilla()`.
+
 ## Agent skills
 
 ### Issue tracker
