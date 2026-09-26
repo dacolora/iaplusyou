@@ -81,9 +81,13 @@ def test_cookie_de_idioma_y_next_seguro(app_i18n):
     r = c.get("/idioma/en?next=/login")
     assert r.status_code == 302 and r.headers["Location"].endswith("/login")
     assert "idioma=en" in r.headers["Set-Cookie"]
-    for malo in ("https://malo.example/x", "//malo.example/x", "/\\malo.example"):
+    for malo in ("https://malo.example/x", "//malo.example/x", "/\\malo.example",
+                 "/\t/malo.example", "/\n/x"):
         r = c.get("/idioma/es", query_string={"next": malo})
-        assert r.headers["Location"].endswith("/"), malo
+        assert r.status_code == 302 and r.headers["Location"] == "/", malo
+    # el tab llega codificado en una URL cruda (a mano, sin que query_string lo re-escape)
+    r = c.get("/idioma/es?next=/%09/malo.example")
+    assert r.status_code == 302 and r.headers["Location"] == "/"
     assert c.get("/idioma/pt").status_code == 404
 
 

@@ -1247,7 +1247,10 @@ def cambiar_idioma(codigo):
     if idioma is None:
         abort(404)
     destino = request.args.get("next") or ""
-    if not destino.startswith("/") or destino.startswith("//") or "\\" in destino:
+    partes = urlsplit(destino)
+    if (not destino.startswith("/") or destino.startswith("//") or "\\" in destino
+            or any(ord(c) < 0x20 or ord(c) == 0x7f for c in destino)
+            or partes.scheme or partes.netloc):
         destino = url_for("index")
     resp = redirect(destino)
     resp.set_cookie(idiomas.COOKIE, idioma, max_age=365 * 24 * 3600, samesite="Lax", httponly=True,
