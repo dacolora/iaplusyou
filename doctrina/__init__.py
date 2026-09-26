@@ -39,6 +39,8 @@ CONSCIENCIAS_CLIENTE = {
     "consciente_del_producto": "Conoce tu producto, pero aún no se decide",
     "muy_consciente": "Ya lo quiere: solo le falta la oferta",
 }
+FUENTES_PRUEBA_CLIENTE = {"ficha": "Dato del producto", "comentarios": "Comentario real de un comprador",
+                          "demostracion": "Se ve en el video"}
 SOFISTICACIONES_CLIENTE = {
     1: "Nadie le ha prometido esto",
     2: "Ya se lo prometieron: hay que prometer más grande",
@@ -396,6 +398,32 @@ def angulo_desde_formulario(datos, faltantes_guardados=None, ahora=None):
         limpio["origen"] = d["origen"]
     limpio["editado_en"] = ahora
     return limpio, [mensaje_error(e) for e in errores]
+
+
+def resumen_angulo(angulo):
+    """Una línea para el `<summary>` del editor: «Consciente del problema ·
+    problema-solución · “gancho”»; "" si el ángulo no dice nada todavía."""
+    if not isinstance(angulo, dict):
+        return ""
+    partes = []
+    cons = normalizar_consciencia(angulo.get("consciencia"))
+    if cons:
+        partes.append(CONSCIENCIAS_NOMBRE[cons].capitalize())
+    if angulo.get("lead") in LEADS:
+        partes.append(LEADS_NOMBRE[angulo["lead"]])
+    if angulo.get("gancho"):
+        partes.append(f"“{angulo['gancho']}”")
+    return " · ".join(partes)
+
+
+def globales_plantilla():
+    """Lo que las plantillas del bloque 2 necesitan (selectores de persona y
+    producto, editor del ángulo). `dashboard` lo registra en Jinja; las
+    pruebas que renderizan plantillas sueltas hacen lo mismo."""
+    return {"CONSCIENCIAS_CLIENTE": CONSCIENCIAS_CLIENTE, "SOFISTICACIONES_CLIENTE": SOFISTICACIONES_CLIENTE,
+            "FUENTES_PRUEBA_CLIENTE": FUENTES_PRUEBA_CLIENTE, "LEADS_NOMBRE": LEADS_NOMBRE,
+            "PREFIJO_ERROR": PREFIJO_ERROR, "lead_por_consciencia": lead_por_consciencia,
+            "resumen_angulo": resumen_angulo}
 
 
 def datos_fijos_texto(consciencia=None, sofisticacion=None):

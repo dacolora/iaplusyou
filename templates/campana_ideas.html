@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_sprint_macros.html" import chip_estado %}
+{% from "_angulo_editor.html" import editor_angulo %}
 {% block title %}Ideas · {{ sprint.nombre }}{% endblock %}
 {% block content %}
 {% include "_sprint_nav.html" %}
@@ -88,6 +89,8 @@
       <label>Gancho <input name="gancho" value="{{ i.gancho or '' }}" {% if not i.sin_sesion %}readonly{% endif %}></label>
       {% if i.plataformas %}<small class="vacio">{{ i.plataformas | join(', ') }}</small>{% endif %}
     </div>
+    {{ editor_angulo((i.extra or {}).get('angulo'), url_for('sprints.idea_angulo', cliente=cliente, cp_id=i.id), cliente,
+                     solo_lectura=not i.sin_sesion) }}
     {% if i.referencias_ids %}
     <div class="sprint-idea-refs">
       {% for rid in i.referencias_ids %}{% set r = referencias_por_id.get(rid) %}{% if r %}<img class="sprint-mini" src="{{ r.frame_url or r.url }}" alt="" title="{{ r.titulo }}">{% endif %}{% endfor %}
@@ -113,6 +116,7 @@
 </div>
 
 {% include "_sprint_lote_modal.html" %}
+<script src="{{ url_for('static', filename='angulo.js') }}"></script>
 
 <script>
   (function () {

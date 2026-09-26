@@ -394,7 +394,9 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     costo_whisper = costo
     # Detectar canal óptimo de Triple Whale si existe
     canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
-    angulo_sesion = entry.get("angulo")
+    # Un ángulo a medio llenar a mano (sin promesa o sin gancho) no manda: Claude
+    # decide uno completo y reemplaza el borrador (doctrina, bloque 2, §3.4).
+    angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
     guion_base, costo_guion = guion_mod.generar_guion_base(
         producto, referencia, enfoque, float(duracion_s), idioma_base,
         _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion)

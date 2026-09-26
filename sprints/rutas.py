@@ -15,6 +15,7 @@ from flask import (Blueprint, abort, flash, has_request_context, jsonify, redire
                    session, url_for)
 
 import catalogo_productos
+import db
 import doctrina
 import gastos
 import proyectos
@@ -878,6 +879,11 @@ def idea_editar(cliente, cp_id):
             return jsonify({"ok": False, "error": "Formato inválido."}), 400
         flash("Formato inválido.", "error")
         return _volver_ideas(i)
+    if "gancho" in campos and isinstance((i.get("extra") or {}).get("angulo"), dict):
+        # El gancho de la tarjeta y el del ángulo son el mismo (doctrina, bloque 2).
+        extra = dict(i["extra"])
+        extra["angulo"] = dict(extra["angulo"], gancho=" ".join((campos["gancho"] or "").split())[:200])
+        campos["extra"] = extra
     try:
         if "titulo" in campos and not (campos["titulo"] or "").strip():
             raise datos.ErrorDatos("Una idea necesita título.")
@@ -906,6 +912,27 @@ def idea_aprobar(cliente, cp_id):
 
 
 MENSAJE_IDEA_CON_PIEZA = "Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión."
+
+
+@bp.post("/ideas/<int:cp_id>/angulo")
+def idea_angulo(cliente, cp_id):
+    """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una idea
+    y su gancho (el de la tarjeta y el del ángulo son el mismo). JSON {angulo}
+    → {ok, angulo, avisos, resumen}; los avisos no bloquean. 409 si la idea ya
+    tiene pieza: desde ahí el ángulo vivo es el de la sesión de Crear."""
+    i = _idea_o_404(cliente, cp_id)
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("angulo"), dict):
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+    if not i["sin_sesion"]:
+        return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 409
+    extra = dict(i.get("extra") or {})
+    previo = extra.get("angulo") if isinstance(extra.get("angulo"), dict) else {}
+    limpio, avisos = doctrina.angulo_desde_formulario(dict(cuerpo["angulo"], origen=previo.get("origen")),
+                                                      previo.get("faltantes"), ahora=db.ahora())
+    extra["angulo"] = limpio
+    datos.actualizar_idea(cliente, cp_id, extra=extra, gancho=limpio["gancho"])
+    return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
 
 
 @bp.post("/ideas/<int:cp_id>/descartar")

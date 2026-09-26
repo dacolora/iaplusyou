@@ -353,6 +353,8 @@ def _entorno_plantilla():
     import gastos
     env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")))
     env.globals["url_for"] = lambda *a, **k: "#"
+    import doctrina
+    env.globals.update(doctrina.globales_plantilla())   # editor del ángulo (doctrina, bloque 2)
     env.filters["usd"] = gastos.formatear   # mismo filtro que registra dashboard (costos «US$ 0,07»)
     return env
 
@@ -473,3 +475,30 @@ def test_plantilla_imagen_no_muestra_final_edition():
     html = env.get_template("_tab_creativeflowplus.html").render(
         **_contexto_minimo([_item_video_listo(tipo="imagen")]))
     assert "Final edition" not in html
+
+
+def test_plantilla_muestra_el_editor_del_angulo_de_la_pieza():
+    """Doctrina, bloque 2 (§3.1): el ángulo de la pieza se ve y se edita antes del guion."""
+    env = _entorno_plantilla()
+    angulo = {"consciencia": "consciente_del_problema", "lead": "problema_solucion", "gancho": "¿Pies fríos en casa?",
+              "promesa": "pies calientes", "faltantes": ["error: campo_faltante:audiencia", "falta el precio"]}
+    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    assert 'class="angulo-editor"' in html and "Consciente del problema · problema-solución · “¿Pies fríos en casa?”" in html
+    assert "falta el precio" in html and "campo_faltante" not in html
+    vacio = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo()]))
+    assert "Todavía no tiene ángulo: se decide al preparar el guion" in vacio
+
+
+def test_guardar_el_angulo_de_una_pieza(base_temporal, monkeypatch):
+    import creative_flow
+    import dashboard
+    c = _cliente_admin(dashboard)
+    cf_id = creative_flow.crear("acme", [], ["Chancla Rose"], [], "camina", 8, "", "A")
+    r = c.post(f"/cliente/acme/creative_flow/{cf_id}/angulo",
+               json={"angulo": {"audiencia": "quien tiene pies fríos", "consciencia": "consciente_del_problema",
+                                "sofisticacion": "2", "deseo": "pies calientes", "promesa": "pies calientes en casa",
+                                "lead": "problema_solucion", "gancho": "¿Pies fríos?", "pruebas": []}})
+    assert r.status_code == 200 and r.get_json()["ok"] and r.get_json()["avisos"] == []
+    ang = creative_flow.cargar("acme")[cf_id]["angulo"]
+    assert ang["gancho"] == "¿Pies fríos?" and ang["editado_en"]
+    assert c.post("/cliente/acme/creative_flow/nada/angulo", json={"angulo": {}}).status_code == 404

@@ -979,3 +979,49 @@ def test_consciencia_de_persona_ajena_no_se_toca(con_ideas):
     r = ajeno.post(f"/cliente/acme/sprints/personas/{pid}/conciencia", json={"nivel": "inconsciente"})
     assert r.status_code in (302, 403, 404)
     assert "conciencia" not in (datos.persona("acme", pid).get("extra") or {})
+
+
+ANGULO_IDEA = {"audiencia": "quien renueva el baño", "consciencia": "consciente_de_la_solucion", "sofisticacion": 2,
+               "deseo": "un baño nuevo sin obra", "promesa": "tu baño se ve nuevo con solo cambiar el espejo",
+               "mecanismo": None, "pruebas": [{"texto": "luz integrada", "fuente": "ficha"}], "lead": "promesa",
+               "gancho": "El espejo que cambia tu baño", "origen": "ideas",
+               "faltantes": ["error: cifra_no_verificada:47", "faltan comentarios reales"]}
+
+
+def test_editar_el_angulo_de_una_idea(con_ideas):
+    """Doctrina, bloque 2 (§3): la tarjeta muestra el editor; guardar valida
+    sin bloquear, marca editado_en, conserva los faltantes sin errores y
+    sincroniza el gancho de la tarjeta."""
+    from sprints import datos
+    c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
+    datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA}, gancho=ANGULO_IDEA["gancho"])
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert 'class="angulo-editor"' in html and f'/cliente/acme/sprints/ideas/{ii}/angulo' in html
+    assert "Consciente de la solución · promesa · “El espejo que cambia tu baño”" in html
+    assert "/static/angulo.js" in html and "/cliente/acme/doctrina#angulo" in html
+    nuevo = dict(ANGULO_IDEA, sofisticacion="4", gancho="Tu baño nuevo en una tarde sin obra ni polvo ni ruido ni más", lead="secreto")
+    nuevo.pop("faltantes")
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}/angulo", json={"angulo": nuevo})
+    body = r.get_json()
+    assert r.status_code == 200 and body["ok"]
+    assert any("mecanismo" in a for a in body["avisos"]) and any("12 palabras" in a for a in body["avisos"])
+    idea = datos.idea("acme", ii)
+    ang = idea["extra"]["angulo"]
+    assert ang["sofisticacion"] == 4 and ang["editado_en"] and ang["origen"] == "ideas"
+    assert ang["faltantes"] == ["faltan comentarios reales"]
+    assert idea["gancho"] == nuevo["gancho"]
+    # el campo «Gancho» de la tarjeta también mueve el del ángulo
+    c.post(f"/cliente/acme/sprints/ideas/{ii}", json={"gancho": "Otro gancho"})
+    assert datos.idea("acme", ii)["extra"]["angulo"]["gancho"] == "Otro gancho"
+    assert c.post(f"/cliente/acme/sprints/ideas/{ii}/angulo", json={"angulo": "x"}).status_code == 400
+
+
+def test_el_angulo_de_una_idea_con_pieza_es_de_solo_lectura(con_ideas, monkeypatch):
+    from sprints import datos
+    c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
+    datos.actualizar_idea("acme", iv, extra={"angulo": ANGULO_IDEA}, cf_id="cf_x")
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    tarjeta = html.split(f'/cliente/acme/sprints/ideas/{iv}/angulo', 1)[1].split("</details>", 1)[0]
+    assert "disabled" in tarjeta
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/angulo", json={"angulo": ANGULO_IDEA})
+    assert r.status_code == 409 and datos.idea("acme", iv)["extra"]["angulo"].get("editado_en") is None

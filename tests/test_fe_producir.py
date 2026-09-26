@@ -87,7 +87,7 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
     def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None,
                      angulo=None):
         llamadas["generar"] = dict(producto=producto, referencia=referencia, enfoque=enfoque,
-                                   duracion_s=duracion_s, idioma_base=idioma_base, marca=marca)
+                                   duracion_s=duracion_s, idioma_base=idioma_base, marca=marca, angulo=angulo)
         return dict(GUION_BASE), 0.01
     monkeypatch.setattr(guion_mod, "generar_guion_base", fake_generar)
 
@@ -644,3 +644,17 @@ def test_producir_con_cancion_propia_usa_su_tramo_sin_costo(entorno, monkeypatch
     assert f["capas"]["musica"]["parametros"] == {"estilo": "Jingle", "url": "https://r2/clientes/acme/materiales/h.mp3",
                                                   "material_id": 3, "inicio_s": 12}
     assert entorno["render"]["musica"].endswith("propia.wav")
+
+
+def test_un_angulo_a_medio_llenar_no_manda_en_el_guion(entorno):
+    """Doctrina, bloque 2 (§3.4): un ángulo empezado a mano sin promesa o sin
+    gancho no es un ángulo: Claude decide uno completo."""
+    import creative_flow as cf
+    cf.actualizar("acme", entorno["cf_id"], angulo={"audiencia": "pies fríos", "promesa": "", "gancho": "",
+                                                    "editado_en": "2026-09-26T10:00:00"})
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["angulo"] is None
+    completo = {"audiencia": "pies fríos", "promesa": "pies calientes", "gancho": "¿Pies fríos?", "editado_en": "t"}
+    cf.actualizar("acme", entorno["cf_id"], angulo=completo)
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["angulo"]["gancho"] == "¿Pies fríos?"

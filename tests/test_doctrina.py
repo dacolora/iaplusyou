@@ -370,3 +370,14 @@ def test_validar_angulo_nunca_lanza_con_fijos_no_dict():
 def test_mensaje_error_valor_invalido_correcta_gramatica():
     import doctrina
     assert doctrina.mensaje_error("valor_invalido:lead") == "Revisa el arranque: ese valor no es válido."
+
+
+def test_resumen_angulo_y_globales_de_plantilla():
+    import doctrina
+    assert doctrina.resumen_angulo(None) == "" and doctrina.resumen_angulo({}) == ""
+    assert doctrina.resumen_angulo(ANGULO_OK) == ("Consciente del problema · problema-solución · "
+                                                   "“Si ya se te rompió la tercera chancla este verano, mira esto”")
+    g = doctrina.globales_plantilla()
+    assert {"CONSCIENCIAS_CLIENTE", "SOFISTICACIONES_CLIENTE", "FUENTES_PRUEBA_CLIENTE", "LEADS_NOMBRE",
+            "PREFIJO_ERROR", "lead_por_consciencia", "resumen_angulo"} <= set(g)
+    assert set(doctrina.FUENTES_PRUEBA_CLIENTE) == set(doctrina.FUENTES_PRUEBA)

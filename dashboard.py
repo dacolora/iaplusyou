@@ -117,8 +117,7 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 app = Flask(__name__)
 # Vocabulario de la doctrina en palabras simples para los selectores de
 # persona y producto (bloque 2 de la doctrina).
-app.jinja_env.globals.update(CONSCIENCIAS_CLIENTE=doctrina.CONSCIENCIAS_CLIENTE,
-                             SOFISTICACIONES_CLIENTE=doctrina.SOFISTICACIONES_CLIENTE)
+app.jinja_env.globals.update(doctrina.globales_plantilla())
 
 
 @app.url_defaults
@@ -5650,6 +5649,25 @@ def _precio_form(valor):
         return float(valor)
     except ValueError:
         return None
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/angulo", methods=["POST"])
+def cf_angulo(cliente, cf_id):
+    """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una
+    pieza de Crear (`concepto.extra.angulo`, el que usan el guion, las
+    variantes y los captions). JSON {angulo} → {ok, angulo, avisos, resumen}.
+    Los avisos no bloquean: se guarda igual."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry:
+        return jsonify({"ok": False, "error": "Esa pieza ya no existe."}), 404
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("angulo"), dict):
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+    previo = entry.get("angulo") if isinstance(entry.get("angulo"), dict) else {}
+    limpio, avisos = doctrina.angulo_desde_formulario(dict(cuerpo["angulo"], origen=previo.get("origen")),
+                                                      previo.get("faltantes"), ahora=db.ahora())
+    creative_flow.actualizar(cliente, cf_id, angulo=limpio)
+    return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
 
 
 def _sesion_con_video(cliente, cf_id):
