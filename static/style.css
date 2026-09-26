@@ -1974,3 +1974,9 @@ summary { cursor: pointer; }
 .estado-vacio-titulo { margin: 0; font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; color: var(--text); }
 .estado-vacio-texto { margin: 0; max-width: 52ch; color: var(--muted); font-size: .88rem; line-height: 1.5; }
 .estado-vacio .btn-generar, .estado-vacio .btn-sm { margin-top: .5rem; }
+
+/* Configuración en apartados (spec 2026-09-26-configuracion-apartados):
+   pastillas como las de Catálogo; Meta a todo el ancho en Conexiones. */
+.config-apartados { margin: 0 0 1.4rem; }
+.config-apartado > h2:first-child { margin-top: .4rem; }
+.llaves-tarjetas-ancha { grid-template-columns: minmax(0, 1fr); }

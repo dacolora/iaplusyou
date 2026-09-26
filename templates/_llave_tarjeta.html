@@ -1,0 +1,43 @@
+{# Tarjeta de una llave/servicio de Configuración (dashboard._estado_llaves).
+   Se incluye dentro de un `{% for l in llaves … %}` con `l` y `es_admin` en el
+   contexto: en «Puesta a punto» (admin, todas menos Meta) y en «Conexiones»
+   (solo Meta, a todo el ancho, con la elección de cómo conectarla). #}
+<article class="llave-tarjeta llave-{{ l.estado }}" id="llave-{{ l.id }}">
+  <header class="llave-cabecera">
+    <h3>{{ l.nombre }}</h3>
+    {% if l.estado == "configurada" %}<span class="tag-estado tag-en-uso">configurada</span>
+    {% elif l.estado == "parcial" %}<span class="tag-estado tag-advertencia">parcial</span>
+    {% else %}<span class="tag-estado tag-advertencia">falta</span>{% endif %}
+  </header>
+  <p class="llave-para-que">{{ l.para_que }}</p>
+  <p class="vacio llave-costo"><strong>Cómo se paga:</strong> {{ l.costo }}</p>
+  {% if es_admin and l.variables %}
+  <p class="vacio">
+    <strong>Variables en el <code>.env</code> del servidor:</strong>
+    {% for v in l.variables %}<code class="llave-var{% if v in l.faltan %} llave-var-falta{% endif %}">{{ v }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+  </p>
+  {% endif %}
+  {% if l.estado == "parcial" %}
+  <p class="tag-error">Faltan: {% for v in l.faltan %}<code>{{ v }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
+  {% endif %}
+  {% if es_admin %}
+  <p class="vacio llave-nota">{{ l.nota }}</p>
+  <p class="vacio" style="font-size:.74rem;">Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí.</p>
+  {% elif l.cliente_hace %}
+  <p class="vacio llave-nota">{{ l.cliente_hace }}</p>
+  {% endif %}
+  <a class="llave-enlace" href="{{ l.url }}" target="_blank" rel="noopener">{{ l.url_texto }} ↗</a>
+  {% if es_admin %}
+  <details class="llave-pasos">
+    <summary>Cómo conseguirla</summary>
+    <ol>
+      {% for paso in l.pasos %}<li>{{ paso }}</li>{% endfor %}
+    </ol>
+  </details>
+  {% endif %}
+  {% if l.id == "meta" %}
+  <div class="llave-meta-conexion">
+    {% include "_meta_conectar.html" %}
+  </div>
+  {% endif %}
+</article>

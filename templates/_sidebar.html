@@ -72,7 +72,7 @@
            cuenta de Meta, solo si hay). Lleva a Configuración › Gasto. #}
         <a class="sidebar-gasto" href="{{ url_for('ver_cliente', cliente=request.view_args.cliente, _anchor='settings') }}"
            title="Ver el detalle en Configuración › Gasto"
-           onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); var g = document.getElementById('config-gasto'); if (g) g.scrollIntoView({behavior: 'smooth'}); return false; }">Este mes: {{ gasto_chip }}</a>
+           onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-gasto'); return false; }">Este mes: {{ gasto_chip }}</a>
         {% endif %}
       </span>
       <form method="post" action="{{ url_for('logout') }}" class="sidebar-texto"><button type="submit" class="sidebar-salir" title="Cerrar sesión">Salir</button></form>

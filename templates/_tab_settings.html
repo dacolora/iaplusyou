@@ -16,8 +16,18 @@
   </div>
 </div>
 
-<h2 id="config-puesta-a-punto">Puesta a punto</h2>
+<nav class="cat-tabs config-apartados" role="tablist" aria-label="Apartados de Configuración">
+  {% if es_admin %}<button type="button" class="cat-tab" data-apartado="puesta">Puesta a punto</button>{% endif %}
+  <button type="button" class="cat-tab" data-apartado="conexiones">Conexiones</button>
+  <button type="button" class="cat-tab" data-apartado="marca">Marca</button>
+  <button type="button" class="cat-tab" data-apartado="generacion">Generación</button>
+  <button type="button" class="cat-tab" data-apartado="cuenta">Cuenta y avisos</button>
+  <button type="button" class="cat-tab" data-apartado="gasto">Gasto</button>
+</nav>
+
 {% if es_admin %}
+<section class="config-apartado" id="config-ap-puesta" data-apartado="puesta">
+<h2 id="config-puesta-a-punto">Puesta a punto</h2>
 <p class="vacio" style="padding-top:0;">
   Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar
   anuncios, en el orden en que se usa. Cada tarjeta dice para qué sirve, cómo se
@@ -25,191 +35,22 @@
   servidor en el archivo <code>.env</code>; aquí solo se ve si están o faltan,
   nunca su valor.
 </p>
-{% else %}
-<p class="vacio" style="padding-top:0;">
-  Lo que te toca configurar a ti. Los servicios de generación (guiones, imagen y
-  video, voz y música, almacenamiento) y el correo de la plataforma los pone Creatv
-  en el servidor: ahí no tienes que hacer nada.
-</p>
-{% endif %}
 <div class="llaves-tarjetas">
-  {% for l in llaves %}
-  <article class="llave-tarjeta llave-{{ l.estado }}" id="llave-{{ l.id }}">
-    <header class="llave-cabecera">
-      <h3>{{ l.nombre }}</h3>
-      {% if l.estado == "configurada" %}<span class="tag-estado tag-en-uso">configurada</span>
-      {% elif l.estado == "parcial" %}<span class="tag-estado tag-advertencia">parcial</span>
-      {% else %}<span class="tag-estado tag-advertencia">falta</span>{% endif %}
-    </header>
-    <p class="llave-para-que">{{ l.para_que }}</p>
-    <p class="vacio llave-costo"><strong>Cómo se paga:</strong> {{ l.costo }}</p>
-    {% if es_admin and l.variables %}
-    <p class="vacio">
-      <strong>Variables en el <code>.env</code> del servidor:</strong>
-      {% for v in l.variables %}<code class="llave-var{% if v in l.faltan %} llave-var-falta{% endif %}">{{ v }}</code>{% if not loop.last %} {% endif %}{% endfor %}
-    </p>
-    {% endif %}
-    {% if l.estado == "parcial" %}
-    <p class="tag-error">Faltan: {% for v in l.faltan %}<code>{{ v }}</code>{% if not loop.last %}, {% endif %}{% endfor %}.</p>
-    {% endif %}
-    {% if es_admin %}
-    <p class="vacio llave-nota">{{ l.nota }}</p>
-    <p class="vacio" style="font-size:.74rem;">Las pone quien administra el servidor en el archivo <code>.env</code>; no se escriben desde aquí.</p>
-    {% elif l.cliente_hace %}
-    <p class="vacio llave-nota">{{ l.cliente_hace }}</p>
-    {% endif %}
-    <a class="llave-enlace" href="{{ l.url }}" target="_blank" rel="noopener">{{ l.url_texto }} ↗</a>
-    {% if es_admin %}
-    <details class="llave-pasos">
-      <summary>Cómo conseguirla</summary>
-      <ol>
-        {% for paso in l.pasos %}<li>{{ paso }}</li>{% endfor %}
-      </ol>
-    </details>
-    {% endif %}
-    {% if l.id == "meta" %}
-    <div class="llave-meta-conexion">
-      {% include "_meta_conectar.html" %}
-    </div>
-    {% endif %}
-  </article>
-  {% endfor %}
+  {% for l in llaves if l.id != "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
 </div>
+</section>
+{% endif %}
 
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-{# ---- Cuenta: correo (verificado o no) y contraseña del usuario de la
-   sesión. cuenta_actual/smtp_ok vienen del context processor
-   _cuenta_en_plantillas; el admin ve el bloque con su propia cuenta. ---- #}
-<h2 id="config-cuenta">Cuenta</h2>
-{% if cuenta_actual is defined and cuenta_actual %}
+<section class="config-apartado" id="config-ap-conexiones" data-apartado="conexiones">
+<h2 id="config-meta">Meta</h2>
 <p class="vacio" style="padding-top:0;">
-  Usuario <strong>{{ session['usuario'] }}</strong>
-  {% if cuenta_actual.correo %}
-  · correo <strong>{{ cuenta_actual.correo }}</strong>
-  {% if cuenta_actual.correo_verificado %}<span class="tag-estado tag-en-uso">confirmado</span>
-  {% else %}<span class="tag-estado tag-advertencia">sin confirmar</span>{% endif %}
-  {% else %}
-  · <span class="tag-estado tag-advertencia">sin correo</span>
-  {% endif %}
+  Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de
+  generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la
+  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada.
 </p>
-{% if cuenta_actual.correo and not cuenta_actual.correo_verificado %}
-<p class="vacio" style="padding-top:0;">
-  Abre el enlace que te mandamos a {{ cuenta_actual.correo }} para confirmarlo.
-  {% if smtp_ok %}
-  <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="inline"><button type="submit" class="btn-guardar btn-xs">Reenviar el correo</button></form>
-  {% else %}
-  <span class="tag-error">El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.</span>
-  {% endif %}
-</p>
-{% endif %}
-<div class="fila-campos-idea" style="align-items:flex-start;">
-  <form method="post" action="{{ url_for('cuenta_correo') }}" class="form-nueva-idea" id="form-cuenta-correo">
-    <h3 style="margin-top:0;">{% if cuenta_actual.correo %}Cambiar correo{% else %}Poner correo{% endif %}</h3>
-    <label class="campo-label">Correo nuevo</label>
-    <input type="email" name="correo" autocomplete="email" placeholder="tu@empresa.com" required>
-    <label class="campo-label" style="margin-top:.6rem;display:block;">Contraseña actual</label>
-    <input type="password" name="password" autocomplete="current-password" required>
-    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">El correo nuevo queda sin confirmar hasta que abras el enlace que le mandamos.</p>
-    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
-  </form>
-  <form method="post" action="{{ url_for('cuenta_password') }}" class="form-nueva-idea" id="form-cuenta-password">
-    <h3 style="margin-top:0;">Cambiar contraseña</h3>
-    <label class="campo-label">Contraseña actual</label>
-    <input type="password" name="password_actual" autocomplete="current-password" required>
-    <label class="campo-label" style="margin-top:.6rem;display:block;">Nueva (mínimo 8 caracteres)</label>
-    <input type="password" name="password" autocomplete="new-password" required minlength="8">
-    <label class="campo-label" style="margin-top:.6rem;display:block;">Repítela</label>
-    <input type="password" name="confirmacion" autocomplete="new-password" required minlength="8">
-    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue.</p>
-    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Cambiar contraseña</button>
-  </form>
+<div class="llaves-tarjetas llaves-tarjetas-ancha">
+  {% for l in llaves if l.id == "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
 </div>
-{% else %}
-<p class="vacio">No hay una cuenta en esta sesión.</p>
-{% endif %}
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-{# ---- Gasto real (Task 3): lo pagado a los proveedores este mes, en USD;
-   la pauta de Meta al lado, en la moneda de la cuenta. Contexto de
-   ver_cliente: gasto_mes, pauta_mes, gastos_por_tipo, gastos_historial. ---- #}
-<div class="panel-cabecera tb-cabecera" id="config-gasto">
-  <div>
-    <h2 style="margin-top:0;">Gasto</h2>
-    <p class="vacio" style="padding-top:0;">
-      Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,
-      final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
-      muestran el precio aproximado antes de gastar; esta lista es el precio real después.
-    </p>
-  </div>
-  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
-</div>
-
-<div class="tb-tiles gasto-tiles">
-  <div class="kpi-tile">
-    <span>Generación este mes</span>
-    <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores{% else %}sin generación pagada{% endif %}</small>
-  </div>
-  {% for p in pauta_mes %}
-  <div class="kpi-tile">
-    <span>Pauta este mes{% if pauta_mes | length > 1 %} · {{ p.moneda }}{% endif %}</span>
-    <strong>{{ p.gasto | dinero(p.moneda) }}</strong>
-    <small>se cobra en tu cuenta de Meta</small>
-  </div>
-  {% else %}
-  <div class="kpi-tile">
-    <span>Pauta este mes</span>
-    <strong class="tb-sin-dato">—</strong>
-    <small>sin pauta corriendo</small>
-  </div>
-  {% endfor %}
-</div>
-
-{% if gastos_por_tipo %}
-<h3 style="margin-top:1.2rem;">Por tipo</h3>
-<table class="gasto-tabla">
-  <thead><tr><th>Tipo</th><th class="num">Cantidad</th><th class="num">US$</th></tr></thead>
-  <tbody>
-    {% for t in gastos_por_tipo %}
-    <tr><td>{{ t.nombre }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td></tr>
-    {% endfor %}
-    <tr class="gasto-total"><td>Total</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td></tr>
-  </tbody>
-</table>
-{% endif %}
-
-{# M6: el límite de 200 es fijo (sin paginación real); el scroll + la nota
-   de abajo alcanzan para el brief de hoy, pero si el volumen de cobros
-   crece, una Task futura debería paginar de verdad en vez de solo recortar. #}
-<h3 style="margin-top:1.2rem;">Historial</h3>
-{% if gastos_historial %}
-<div class="gasto-historial">
-  <table class="gasto-tabla">
-    <thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th class="num">US$</th></tr></thead>
-    <tbody>
-      {% for g in gastos_historial %}
-      <tr>
-        <td class="gasto-fecha">{{ g.creado_en[:16] | replace("T", " ") }}</td>
-        <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo) }}</td>
-        <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
-        <td class="num">{{ g.usd | usd }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">Se muestran los últimos {{ gastos_historial | length }} cobros{% if gastos_historial | length >= 200 %} (el CSV trae todos los del mes){% endif %}.</p>
-{% else %}
-<p class="vacio">Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.</p>
-{% endif %}
-<p class="vacio gasto-nota" style="font-size:.78rem;">
-  Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta
-  y no entra en este total. Ningún gasto bloquea una acción: solo se informa.
-</p>
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
 
 {# ---- Bloque 5: Conectar tu tienda ---- #}
 <h2 id="config-tienda">Conectar tu tienda</h2>
@@ -453,21 +294,9 @@
 
 {# Las reglas por defecto del decisor se movieron a Experimentos › «Reglas del motor». #}
 <p class="vacio" id="config-reglas-enlace" style="padding-top:1rem;">Las reglas del decisor están en <a href="#experimentos" onclick="document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;">Experimentos →</a></p>
+</section>
 
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-<h2 id="config-correo">Correo de avisos</h2>
-<p class="vacio" style="padding-top:0;">
-  A este correo llegan las propuestas que esperan aprobación, los ganadores y
-  los rechazos de Meta. Vacío = sin avisos por correo.
-</p>
-<form method="post" action="{{ url_for('cfg_correo', cliente=cliente) }}" class="form-nueva-idea">
-  <input type="email" name="correo" value="{{ correo_notificaciones }}" placeholder="dueño@tuproyecto.com">
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
-</form>
-
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
+<section class="config-apartado" id="config-ap-marca" data-apartado="marca">
 <h2>Nombre del proyecto</h2>
 <form method="post" action="{{ url_for('guardar_nombre_proyecto', cliente=cliente) }}" class="form-nueva-idea">
   <input type="text" name="nombre" value="{{ nombre_proyecto }}" placeholder="Nombre visible del proyecto">
@@ -480,8 +309,33 @@
   <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar nombre</button>
 </form>
 
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+<h2>Logos oficiales</h2>
+<p class="vacio" style="padding-top:0;">
+  El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
+  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.
+  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto).
+</p>
+<form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
+  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
+</form>
+{% if logos %}
+<div class="catalogo-productos" style="margin-top:.8rem;">
+  {% for l in logos %}
+  <figure style="margin:0;text-align:center;">
+    <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:#fff;">
+    <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
+    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
+      <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
+    </form>
+  </figure>
+  {% endfor %}
+</div>
+{% endif %}
 
+{% include "_seccion_marca.html" %}
+</section>
+
+<section class="config-apartado" id="config-ap-generacion" data-apartado="generacion">
 <h2>Modelos por defecto — Cambiar producto</h2>
 <p class="vacio" style="padding-top:0;">
   Modelo que viene marcado en Crear › Cambiar producto cada vez que subes una
@@ -578,37 +432,149 @@
 </form>
 
 {% include "_comparacion_modelos.html" %}
+</section>
 
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
-
-<h2>Logos oficiales</h2>
+<section class="config-apartado" id="config-ap-cuenta" data-apartado="cuenta">
+{# ---- Cuenta: correo (verificado o no) y contraseña del usuario de la
+   sesión. cuenta_actual/smtp_ok vienen del context processor
+   _cuenta_en_plantillas; el admin ve el bloque con su propia cuenta. ---- #}
+<h2 id="config-cuenta">Cuenta</h2>
+{% if cuenta_actual is defined and cuenta_actual %}
 <p class="vacio" style="padding-top:0;">
-  El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
-  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.
-  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto).
+  Usuario <strong>{{ session['usuario'] }}</strong>
+  {% if cuenta_actual.correo %}
+  · correo <strong>{{ cuenta_actual.correo }}</strong>
+  {% if cuenta_actual.correo_verificado %}<span class="tag-estado tag-en-uso">confirmado</span>
+  {% else %}<span class="tag-estado tag-advertencia">sin confirmar</span>{% endif %}
+  {% else %}
+  · <span class="tag-estado tag-advertencia">sin correo</span>
+  {% endif %}
 </p>
-<form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
-  <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
-</form>
-{% if logos %}
-<div class="catalogo-productos" style="margin-top:.8rem;">
-  {% for l in logos %}
-  <figure style="margin:0;text-align:center;">
-    <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:#fff;">
-    <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
-    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
-      <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
-    </form>
-  </figure>
-  {% endfor %}
+{% if cuenta_actual.correo and not cuenta_actual.correo_verificado %}
+<p class="vacio" style="padding-top:0;">
+  Abre el enlace que te mandamos a {{ cuenta_actual.correo }} para confirmarlo.
+  {% if smtp_ok %}
+  <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="inline"><button type="submit" class="btn-guardar btn-xs">Reenviar el correo</button></form>
+  {% else %}
+  <span class="tag-error">El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.</span>
+  {% endif %}
+</p>
+{% endif %}
+<div class="fila-campos-idea" style="align-items:flex-start;">
+  <form method="post" action="{{ url_for('cuenta_correo') }}" class="form-nueva-idea" id="form-cuenta-correo">
+    <h3 style="margin-top:0;">{% if cuenta_actual.correo %}Cambiar correo{% else %}Poner correo{% endif %}</h3>
+    <label class="campo-label">Correo nuevo</label>
+    <input type="email" name="correo" autocomplete="email" placeholder="tu@empresa.com" required>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Contraseña actual</label>
+    <input type="password" name="password" autocomplete="current-password" required>
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">El correo nuevo queda sin confirmar hasta que abras el enlace que le mandamos.</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+  </form>
+  <form method="post" action="{{ url_for('cuenta_password') }}" class="form-nueva-idea" id="form-cuenta-password">
+    <h3 style="margin-top:0;">Cambiar contraseña</h3>
+    <label class="campo-label">Contraseña actual</label>
+    <input type="password" name="password_actual" autocomplete="current-password" required>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Nueva (mínimo 8 caracteres)</label>
+    <input type="password" name="password" autocomplete="new-password" required minlength="8">
+    <label class="campo-label" style="margin-top:.6rem;display:block;">Repítela</label>
+    <input type="password" name="confirmacion" autocomplete="new-password" required minlength="8">
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue.</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Cambiar contraseña</button>
+  </form>
 </div>
+{% else %}
+<p class="vacio">No hay una cuenta en esta sesión.</p>
 {% endif %}
 
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+<h2 id="config-correo">Correo de avisos</h2>
+<p class="vacio" style="padding-top:0;">
+  A este correo llegan las propuestas que esperan aprobación, los ganadores y
+  los rechazos de Meta. Vacío = sin avisos por correo.
+</p>
+<form method="post" action="{{ url_for('cfg_correo', cliente=cliente) }}" class="form-nueva-idea">
+  <input type="email" name="correo" value="{{ correo_notificaciones }}" placeholder="dueño@tuproyecto.com">
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+</form>
+</section>
 
-{% include "_seccion_marca.html" %}
+<section class="config-apartado" id="config-ap-gasto" data-apartado="gasto">
+{# ---- Gasto real (Task 3): lo pagado a los proveedores este mes, en USD;
+   la pauta de Meta al lado, en la moneda de la cuenta. Contexto de
+   ver_cliente: gasto_mes, pauta_mes, gastos_por_tipo, gastos_historial. ---- #}
+<div class="panel-cabecera tb-cabecera" id="config-gasto">
+  <div>
+    <h2 style="margin-top:0;">Gasto</h2>
+    <p class="vacio" style="padding-top:0;">
+      Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,
+      final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
+      muestran el precio aproximado antes de gastar; esta lista es el precio real después.
+    </p>
+  </div>
+  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
+</div>
 
-<hr style="margin:2.5rem 0 1rem; border:0; border-top:1px solid var(--border);">
+<div class="tb-tiles gasto-tiles">
+  <div class="kpi-tile">
+    <span>Generación este mes</span>
+    <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores{% else %}sin generación pagada{% endif %}</small>
+  </div>
+  {% for p in pauta_mes %}
+  <div class="kpi-tile">
+    <span>Pauta este mes{% if pauta_mes | length > 1 %} · {{ p.moneda }}{% endif %}</span>
+    <strong>{{ p.gasto | dinero(p.moneda) }}</strong>
+    <small>se cobra en tu cuenta de Meta</small>
+  </div>
+  {% else %}
+  <div class="kpi-tile">
+    <span>Pauta este mes</span>
+    <strong class="tb-sin-dato">—</strong>
+    <small>sin pauta corriendo</small>
+  </div>
+  {% endfor %}
+</div>
+
+{% if gastos_por_tipo %}
+<h3 style="margin-top:1.2rem;">Por tipo</h3>
+<table class="gasto-tabla">
+  <thead><tr><th>Tipo</th><th class="num">Cantidad</th><th class="num">US$</th></tr></thead>
+  <tbody>
+    {% for t in gastos_por_tipo %}
+    <tr><td>{{ t.nombre }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td></tr>
+    {% endfor %}
+    <tr class="gasto-total"><td>Total</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td></tr>
+  </tbody>
+</table>
+{% endif %}
+
+{# M6: el límite de 200 es fijo (sin paginación real); el scroll + la nota
+   de abajo alcanzan para el brief de hoy, pero si el volumen de cobros
+   crece, una Task futura debería paginar de verdad en vez de solo recortar. #}
+<h3 style="margin-top:1.2rem;">Historial</h3>
+{% if gastos_historial %}
+<div class="gasto-historial">
+  <table class="gasto-tabla">
+    <thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th class="num">US$</th></tr></thead>
+    <tbody>
+      {% for g in gastos_historial %}
+      <tr>
+        <td class="gasto-fecha">{{ g.creado_en[:16] | replace("T", " ") }}</td>
+        <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo) }}</td>
+        <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
+        <td class="num">{{ g.usd | usd }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">Se muestran los últimos {{ gastos_historial | length }} cobros{% if gastos_historial | length >= 200 %} (el CSV trae todos los del mes){% endif %}.</p>
+{% else %}
+<p class="vacio">Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.</p>
+{% endif %}
+<p class="vacio gasto-nota" style="font-size:.78rem;">
+  Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta
+  y no entra en este total. Ningún gasto bloquea una acción: solo se informa.
+</p>
 
 {% if session.get('rol') == 'admin' %}
 {# Informe para sustentar la cuenta de cobro. TODO lo que se muestra acá sale de
@@ -705,4 +671,44 @@
   </p>
 </details>
 {% endif %}
+</section>
 
+<script>
+  // Configuración en apartados (spec 2026-09-26): uno a la vez; se recuerda
+  // el último por navegador. window.irAConfig(id) abre el apartado que
+  // contiene `id` y lo trae a la vista («Este mes» de la barra lateral,
+  // enlaces #llave-meta, #config-tienda…).
+  (function () {
+    var raiz = document.getElementById('tab-settings');
+    if (!raiz) return;
+    var botones = raiz.querySelectorAll('.config-apartados [data-apartado]');
+    var apartados = raiz.querySelectorAll('section.config-apartado');
+    var CLAVE = 'config-apartado-{{ cliente }}';
+    function mostrar(ap) {
+      var existe = Array.prototype.some.call(apartados, function (s) { return s.dataset.apartado === ap; });
+      if (!existe) return false;
+      apartados.forEach(function (s) { s.hidden = s.dataset.apartado !== ap; });
+      botones.forEach(function (b) { b.classList.toggle('activo', b.dataset.apartado === ap); });
+      try { localStorage.setItem(CLAVE, ap); } catch (e) {}
+      return true;
+    }
+    window.irAConfig = function (id) {
+      var el = document.getElementById(id);
+      var ap = el && el.closest('section.config-apartado');
+      if (!ap) return;
+      mostrar(ap.dataset.apartado);
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+    botones.forEach(function (b) { b.addEventListener('click', function () { mostrar(b.dataset.apartado); }); });
+    var guardado = null;
+    try { guardado = localStorage.getItem(CLAVE); } catch (e) {}
+    if (!mostrar(guardado)) mostrar('{{ "puesta" if es_admin else "conexiones" }}');
+    function alHash() {
+      var d = location.hash.slice(1).split('?')[0];
+      var e = d && d !== 'settings' && document.getElementById(d);
+      if (e && e.closest('section.config-apartado')) window.irAConfig(d);
+    }
+    alHash();
+    window.addEventListener('hashchange', alHash);
+  })();
+</script>
