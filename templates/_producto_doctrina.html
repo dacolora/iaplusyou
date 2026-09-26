@@ -2,7 +2,36 @@
    «Lo que Claude necesita»). Va dentro de la ficha de un producto en Catálogo;
    `comercial` es su fila `producto`. #}
 {% set pruebas_producto = ((comercial.extra or {}).get('pruebas') or []) %}
+{% set pedidos_abiertos = ((comercial.extra or {}).get('pedidos') or []) | selectattr('estado', 'equalto', 'abierto') | list %}
+{% set trabajo_pedidos = ((trabajos_prod or {}).get('pedidos') or {}).get(comercial.id) %}
 <section class="producto-doctrina" id="doctrina-{{ comercial.id }}" style="margin-top:1rem;">
+  <h4 class="fe-titulo">Lo que Claude necesita</h4>
+  <p class="vacio" style="padding:0;font-size:.76rem;">Lo que faltó en los datos cuando Claude escribió anuncios de este producto. Cada respuesta queda como prueba y mejora lo que venga.</p>
+  {% for pe in pedidos_abiertos %}
+  <div class="pedido-producto" style="margin:.5rem 0;">
+    <strong>{{ pe.texto }}</strong>{% if pe.para_que %} <small class="vacio">{{ pe.para_que }}</small>{% endif %}
+    <form method="post" action="{{ url_for('prod_pedido_responder', cliente=cliente, pid=comercial.id, pedido_id=pe.id) }}" class="form-nueva-idea">
+      <textarea name="texto" rows="2" maxlength="400" placeholder="Tu respuesta" required></textarea>
+      <select name="fuente">
+        <option value="ficha">Es un dato del producto</option>
+        <option value="comentarios">Es un comentario real de un comprador</option>
+      </select>
+      <button type="submit" class="btn-sm">Guardar como prueba</button>
+    </form>
+    <form method="post" action="{{ url_for('prod_pedido_descartar', cliente=cliente, pid=comercial.id, pedido_id=pe.id) }}" class="inline">
+      <button type="submit" class="btn-xs">No aplica</button>
+    </form>
+  </div>
+  {% endfor %}
+  {% if trabajo_pedidos %}
+  <div class="barra-progreso" id="trabajo-{{ trabajo_pedidos.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+  <script>iniciarPolling({{ trabajo_pedidos.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_pedidos.job_id) | tojson }});</script>
+  {% else %}
+  <form method="post" action="{{ url_for('prod_pedidos_actualizar', cliente=cliente, pid=comercial.id) }}" class="inline">
+    <button type="submit" class="btn-sm">Actualizar lo que Claude necesita ({{ precio_pedidos }})</button>
+  </form>
+  {% endif %}
+
   <h4 class="fe-titulo">Pruebas del producto</h4>
   <p class="vacio" style="padding:0;font-size:.76rem;">Hechos reales que Claude puede decir en ideas, guiones y captions de este producto, cifras incluidas.</p>
   {% if pruebas_producto %}

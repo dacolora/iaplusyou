@@ -684,7 +684,7 @@ def test_ver_cliente_contexto_productos(app, base_temporal, monkeypatch):
     assert por_id[pid_sin]["activo_ok"] is False and por_id[pid_sin]["n_experimentos"] == 0
     assert capturado["trabajos_prod"] == {"importar": {"job_id": "acme__importar_url"},
                                           "tiendas": {tiendas.listar("acme")[0]["id"]: {"job_id": job_sync}},
-                                          "vincular": {}}
+                                          "vincular": {}, "pedidos": {}}
     assert capturado["atribucion_sugerida"] == "tienda" and capturado["cifrado_ok"] is True
     assert capturado["meli_configurado"] is False and capturado["estado_pixel"]["estado"] == "sin_pixel"
     assert capturado["meta_conectado"] is True
@@ -906,3 +906,29 @@ def test_pruebas_del_producto_desde_catalogo(app):
     c.post(f"/cliente/acme/productos/{pid}/pruebas/{prueba['id']}/borrar")
     assert "pruebas" not in _fila_por_activo("cojin_azul")["extra"]
     assert c.post("/cliente/acme/productos/9999/pruebas", data={"texto": "x", "fuente": "ficha"}).status_code == 302
+
+
+def test_lo_que_claude_necesita_en_catalogo(app, monkeypatch):
+    """Doctrina, bloque 2 (§5.3–5.4): actualizar encola con precio (solo si hay
+    faltantes), responder deja una prueba, «No aplica» cierra el pedido."""
+    from doctrina import pedidos, producto as dp
+    c = app["c"]
+    _crear_activo(c)
+    pid = _fila_por_activo("cojin_azul")["id"]
+    monkeypatch.setattr(pedidos, "faltantes_del_producto", lambda cliente, fila: [])
+    c.post(f"/cliente/acme/productos/{pid}/pedidos/actualizar")
+    assert app["encolados"] == [] and any("no ha pedido nada" in m for m in _flashes(c))
+    monkeypatch.setattr(pedidos, "faltantes_del_producto", lambda cliente, fila: ["faltan comentarios"])
+    c.post(f"/cliente/acme/productos/{pid}/pedidos/actualizar")
+    t = app["encolados"][-1]
+    assert t["tipo"] == "producto_pedidos" and t["payload"] == {"cliente": "acme", "producto_id": pid} and t["max_intentos"] == 1
+    k1, k2 = [p["id"] for p in dp.reemplazar_abiertos("acme", pid, [{"texto": "Pega un comentario", "para_que": "prueba"},
+                                                                     {"texto": "Dinos la garantía", "para_que": "cifra"}])]
+    html = c.get("/cliente/acme").data.decode()
+    tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
+    assert "Lo que Claude necesita" in tarjeta and "Pega un comentario" in tarjeta and "2 pedidos de Claude" in tarjeta
+    assert "Actualizar lo que Claude necesita (US$ 0,04 aprox.)" in tarjeta
+    c.post(f"/cliente/acme/productos/{pid}/pedidos/{k1}/responder", data={"texto": "Súper suaves", "fuente": "comentarios"})
+    assert _fila_por_activo("cojin_azul")["extra"]["pruebas"][0]["pedido_id"] == k1
+    c.post(f"/cliente/acme/productos/{pid}/pedidos/{k2}/descartar")
+    assert [p["estado"] for p in dp.pedidos(_fila_por_activo("cojin_azul"))] == ["respondido", "descartado"]

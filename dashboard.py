@@ -88,6 +88,7 @@ from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
 from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
+from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
@@ -1521,6 +1522,7 @@ def ver_cliente(cliente):
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
+        precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         estado_pixel=estado_pixel,
         meta_conectado=meta_conectado,
         atribucion_sugerida=atribucion_sug,
@@ -4961,6 +4963,10 @@ def _trabajos_productos(cliente, tiendas_cliente, productos=()):
     «Crear activo» está corriendo, para pintar la barra. Los `vincular` salen
     de UNA consulta a la cola (cola.job_ids_vivos), no de una por producto."""
     vivos = cola.job_ids_vivos(cliente, "producto_vincular") if productos else set()
+    # «Actualizar lo que Claude necesita» (doctrina, bloque 2), también en una sola consulta.
+    vivos_pedidos = cola.job_ids_vivos(cliente, tareas_doctrina.TIPO_PEDIDOS) if productos else set()
+    pedidos = {prod["id"]: {"job_id": tareas_doctrina.job_id_pedidos(cliente, prod["id"])} for prod in productos
+               if tareas_doctrina.job_id_pedidos(cliente, prod["id"]) in vivos_pedidos}
     vincular = {}
     for prod in productos:
         jid = tareas_tiendas.job_id_vincular(cliente, prod["id"])
@@ -4978,7 +4984,7 @@ def _trabajos_productos(cliente, tiendas_cliente, productos=()):
             if trabajos.en_curso(jid):
                 por_tienda[t["id"]] = {"job_id": jid}
                 break
-    return {"importar": importar, "tiendas": por_tienda, "vincular": vincular}
+    return {"importar": importar, "tiendas": por_tienda, "vincular": vincular, "pedidos": pedidos}
 
 
 @app.route("/cliente/<cliente>/productos/importar/archivo", methods=["POST"])
@@ -5074,6 +5080,48 @@ def prod_prueba_borrar(cliente, pid, prueba_id):
         flash("No encontré ese producto.", "error")
     else:
         flash("Prueba borrada.", "ok")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/actualizar", methods=["POST"])
+def prod_pedidos_actualizar(cliente, pid):
+    """«Actualizar lo que Claude necesita» (doctrina, bloque 2, §5.3): encola la
+    tarea pagada; el precio ya está en el botón. Sin faltantes no encola."""
+    from doctrina import pedidos as doctrina_pedidos
+    fila = tiendas.producto(cliente, pid)
+    if not fila:
+        flash("No encontré ese producto.", "error")
+    elif not doctrina_pedidos.faltantes_del_producto(cliente, fila):
+        flash("Claude no ha pedido nada para este producto todavía: aparece cuando escribe ideas o guiones con él.", "ok")
+    elif tareas_doctrina.encolar_pedidos(cliente, pid):
+        flash("Armando lo que Claude necesita… la lista se actualiza sola.", "ok")
+    else:
+        flash("Ya se está armando la lista de este producto.", "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/responder", methods=["POST"])
+def prod_pedido_responder(cliente, pid, pedido_id):
+    """La respuesta queda como prueba del producto y el pedido se cierra."""
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid):
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    try:
+        doctrina_producto.responder(cliente, pid, pedido_id, request.form.get("texto"), request.form.get("fuente"))
+        flash("Gracias: quedó como prueba del producto y Claude ya la puede usar.", "ok")
+    except doctrina_producto.ErrorPrueba as e:
+        flash(str(e), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/descartar", methods=["POST"])
+def prod_pedido_descartar(cliente, pid, pedido_id):
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid) or not doctrina_producto.descartar(cliente, pid, pedido_id):
+        flash("Ese pedido ya no está abierto.", "error")
+    else:
+        flash("Listo: Claude no lo volverá a pedir.", "ok")
     return _volver_productos(cliente)
 
 

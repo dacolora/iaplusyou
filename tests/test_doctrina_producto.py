@@ -36,3 +36,25 @@ def test_agregar_prueba_valida_y_tiene_tope(base_temporal):
     with pytest.raises(dp.ErrorPrueba):
         dp.agregar_prueba("acme", pid, "uno más", "ficha")
     assert dp.pruebas_texto([]) == ""
+
+
+def test_pedidos_reemplazar_responder_y_descartar(base_temporal):
+    import tiendas
+    from doctrina import producto as dp
+    pid = _fila()
+    escritos = dp.reemplazar_abiertos("acme", pid, [{"texto": "Pega un comentario real", "para_que": "prueba"},
+                                                    {"texto": "  ", "para_que": "vacío no entra"},
+                                                    {"texto": "Dinos cuánto dura", "para_que": "cifra"}])
+    assert [p["texto"] for p in escritos] == ["Pega un comentario real", "Dinos cuánto dura"]
+    k1, k2 = escritos[0]["id"], escritos[1]["id"]
+    prueba = dp.responder("acme", pid, k1, "Me encantan, son muy calientitas", "comentarios")
+    assert prueba["pedido_id"] == k1
+    assert dp.descartar("acme", pid, k2) is True and dp.descartar("acme", pid, k2) is False
+    fila = tiendas.producto("acme", pid)
+    assert [p["estado"] for p in dp.pedidos(fila)] == ["respondido", "descartado"]
+    with pytest.raises(dp.ErrorPrueba):
+        dp.responder("acme", pid, k1, "otra vez", "ficha")             # ya no está abierto
+    # una actualización nueva conserva los cerrados y reemplaza solo los abiertos
+    dp.reemplazar_abiertos("acme", pid, [{"texto": "Nuevo", "para_que": "x"}])
+    assert [p["estado"] for p in dp.pedidos(tiendas.producto("acme", pid))] == ["respondido", "descartado", "abierto"]
+    assert dp.reemplazar_abiertos("acme", 999, []) is None

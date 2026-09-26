@@ -25,6 +25,8 @@
         {% if comercial.url_compra and comercial.url_compra.startswith(("http://", "https://")) %}· <a class="prod-url" style="display:inline;" href="{{ comercial.url_compra }}" target="_blank" rel="noopener">{{ comercial.url_compra | truncate(40, True) }}</a>{% elif comercial.url_compra %}· <span class="prod-url" style="display:inline;">{{ comercial.url_compra | truncate(40, True) }}</span>{% else %}· <span title="Sin URL de compra: el experimento no sabrá adónde mandar el clic">sin URL de compra</span>{% endif %}
         · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente) }}</span>
         {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">en prueba</span>{% endif %}
+        {% set n_pedidos = ((comercial.extra or {}).get('pedidos') or []) | selectattr('estado', 'equalto', 'abierto') | list | length %}
+        {% if n_pedidos %}<span class="tag-estado">{{ n_pedidos }} pedido{{ 's' if n_pedidos != 1 }} de Claude</span>{% endif %}
         {% if comercial.prioridad %}<span class="tag-estado">prioridad {{ comercial.prioridad }}</span>{% endif %}
         {% if comercial.n_experimentos %}<span class="tag-estado">en {{ comercial.n_experimentos }} experimento(s)</span>{% endif %}
       </span>
