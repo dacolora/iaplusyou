@@ -9,7 +9,7 @@ Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
   sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"          (max_intentos=3)
   sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=2)
   sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"             (max_intentos=2)
-  sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=2)
+  sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=1, pagada)
   sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=3)
   referentes_sugerir_ia      -> f"{cliente}__campana{campana_id}__sugerir_biblioteca" (max_intentos=1)
   sprint_reescribir_idea     -> f"{cliente}__cp{cp_id}__reescribir"                   (max_intentos=1, pagada)
@@ -136,7 +136,8 @@ def job_id_ideas(cliente, campana_id):
 def encolar_ideas(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None):
     return trabajos.encolar(job_id_ideas(cliente, campana_id), "sprint_proponer_ideas",
                             {"cliente": cliente, "campana_id": campana_id, "n_videos": n_videos, "n_imagenes": n_imagenes,
-                             "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40, max_intentos=2)
+                             "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40,
+                            max_intentos=1)  # pagada: nunca se reintenta sola
 
 
 def job_id_reescribir(cliente, cp_id):
@@ -174,10 +175,27 @@ def ejecutar_reescribir_idea(tarea):
 
 @registrar("sprint_proponer_ideas")
 def ejecutar_proponer_ideas(tarea):
+    """Propone ideas con Claude y registra su gasto real (tokens de todas las
+    llamadas, incluida la corrección), también cuando la respuesta no sirvió
+    — en ese caso la excepción sigue subiendo para que la cola marque error."""
     p = tarea["payload"]
     cliente, campana_id = p["cliente"], int(p["campana_id"])
-    creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
-                             reemplaza=p.get("reemplaza"))
+    uso = {"entrada": 0, "salida": 0}
+    referencia = f"idea:proponer:{campana_id}{ref_sufijo(tarea)}"
+
+    def _registrar(detalle):
+        if uso["entrada"] or uso["salida"]:
+            gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
+                                    proveedor="anthropic", detalle=detalle,
+                                    extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"],
+                                           "modelo": modelo_actual()})
+    try:
+        creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
+                                 reemplaza=p.get("reemplaza"), uso=uso)
+    except Exception:
+        _registrar("proponer ideas · la respuesta no sirvió")
+        raise
+    _registrar(f"proponer {len(creadas)} idea(s)")
     c = datos.campana(cliente, campana_id)
     if c:
         estado.recalcular(cliente, c["sprint_id"])

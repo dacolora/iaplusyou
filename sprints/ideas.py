@@ -365,10 +365,11 @@ def parsear(texto, referencias_ids_validos, duraciones, datos_texto=None, fijos=
     return limpias
 
 
-def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None):
+def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None, uso=None):
     """Pide ideas a Claude y las guarda. Sin cantidades, propone lo que falta.
     `reemplaza`: descarta esa idea y propone UNA del mismo tipo. Devuelve los
-    ids creados ([] si no hacía falta nada)."""
+    ids creados ([] si no hacía falta nada). `uso`: dict donde se suman los
+    tokens de cada llamada a Claude, para registrar el gasto real incluso si falla."""
     campana = datos.campana(cliente, campana_id)
     if not campana:
         raise datos.ErrorDatos("Esa campaña no existe.")
@@ -392,7 +393,10 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     tokens = max_tokens_para(n_videos + n_imagenes)
 
     def pedir(contenido):
-        crudo = analisis._llamar(contenido, max_tokens=tokens, system=system)
+        crudo, entrada, salida = analisis._llamar_contando(contenido, max_tokens=tokens, system=system)
+        if uso is not None:
+            uso["entrada"] = uso.get("entrada", 0) + entrada
+            uso["salida"] = uso.get("salida", 0) + salida
         return crudo, parsear(crudo, validos, ctx["duraciones"], datos_msg, fijos=ctx.get("fijos"))
 
     try:

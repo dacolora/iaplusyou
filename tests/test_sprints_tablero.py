@@ -65,3 +65,29 @@ def test_resumen_y_linea_del_sprint():
 def test_marcas_texto():
     assert tablero.marcas_texto([{"nombre": "Crocs"}, {"nombre": "Hoka", "pagina_id": "555555"}]) == "Crocs\nHoka 555555"
     assert tablero.marcas_texto(None) == ""
+
+
+def test_paso_por_defecto_sigue_el_siguiente_paso():
+    assert tablero.paso_por_defecto(_c(referencias_listas=3)) == "armar"
+    assert tablero.paso_por_defecto(_c()) == "ideas"                                   # proponer ideas
+    assert tablero.paso_por_defecto(_c(ideas=[_idea("propuesta", True)])) == "ideas"  # aprobar
+    assert tablero.paso_por_defecto(_c(ideas=[_idea(sin_sesion=True), _idea(sin_sesion=True)])) == "ideas"  # generar
+    en_curso = [_idea(estado="generando"), _idea(estado="listo")]
+    assert tablero.paso_por_defecto(_c(ideas=en_curso, piezas=en_curso)) == "piezas"
+    listas = [_idea(estado="listo"), _idea(estado="listo", revision="aprobada")]
+    assert tablero.paso_por_defecto(_c(ideas=listas, piezas=listas)) == "piezas"
+
+
+def test_resolver_paso():
+    assert tablero.resolver_paso("piezas", _c(referencias_listas=0)) == "piezas"
+    assert tablero.resolver_paso("otra", _c(referencias_listas=0)) == "armar"
+    assert tablero.resolver_paso(None, _c()) == "ideas"
+    assert tablero.PASOS == ("armar", "ideas", "piezas")
+
+
+def test_pestanas_cuentan_lo_de_cada_paso():
+    ideas = [_idea("aprobada", estado="listo"), _idea("propuesta", True), _idea("descartada", True)]
+    piezas = [ideas[0]]
+    assert tablero.pestanas(_c(referencias_listas=3, ideas=ideas, piezas=piezas)) == \
+        {"armar": "3/5", "ideas": "1/2", "piezas": "1/2"}
+    assert tablero.pestanas(_c())["armar"] == "✓"

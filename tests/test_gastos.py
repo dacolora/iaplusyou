@@ -239,3 +239,11 @@ def test_tarifas_de_la_doctrina_bloque_2():
     # reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007; redondeado hacia arriba.
     assert gastos.estimar("reescribir_idea")["usd"] == 0.03
     assert gastos.estimar("pedidos_producto")["usd"] == 0.01
+
+
+def test_estimar_proponer_ideas_por_numero_de_ideas():
+    import gastos
+    tres = gastos.estimar("proponer_ideas", n=3)
+    assert tres["usd"] == round(gastos.IDEAS_BASE_USD + 3 * gastos.IDEAS_POR_IDEA_USD, 4)
+    assert "aprox" in tres["texto"] and tres["detalle"] == "3 idea(s) con Claude"
+    assert gastos.estimar("proponer_ideas", n=0)["usd"] == gastos.estimar("proponer_ideas", n=1)["usd"]

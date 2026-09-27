@@ -15,6 +15,13 @@ IDEA_I = {"titulo": "Detalle del marco", "tipo": "imagen", "escena": "Primer pla
           "plataformas": ["instagram"], "angulo": dict(ANGULO, gancho="Detalle que enamora")}
 
 
+def _contando(falso):
+    """Adapta un `_llamar` falso (devuelve texto) a `_llamar_contando`
+    (texto, tokens_entrada, tokens_salida): `ideas.proponer` cuenta tokens
+    para registrar el gasto real desde la entrega 2 de Sprints."""
+    return lambda content, max_tokens=700, system=None: (falso(content, max_tokens=max_tokens, system=system), 100, 50)
+
+
 def test_parsear_valida_y_normaliza():
     from sprints import ideas
     salida = ideas.parsear(json.dumps({"ideas": [IDEA_V, IDEA_I, {"titulo": "sin escena", "tipo": "video"}]}),
@@ -77,7 +84,7 @@ def test_proponer_crea_ideas_y_reemplaza(base_temporal, monkeypatch):
     def _llamar_falso(content, max_tokens=700, system=None):
         llamadas.append(max_tokens)
         return respuestas.pop(0)
-    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
     creadas = ideas.proponer("acme", cid)          # faltantes: 2 videos, 1 imagen → pide 2 y 1; Claude devuelve 1 y 1
     assert len(creadas) == 2
     assert llamadas == [ideas.max_tokens_para(3)]   # 2 videos + 1 imagen pedidos, un solo llamado (sin reintento)
@@ -105,7 +112,7 @@ def test_proponer_sin_faltantes_no_llama(base_temporal, monkeypatch):
     for _ in range(2):
         datos.crear_idea("acme", cid, "video", "V", "v", estado_idea="aprobada")
     datos.crear_idea("acme", cid, "imagen", "I", "i", estado_idea="aprobada")
-    monkeypatch.setattr(analisis, "_llamar", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no debía llamar")))
+    monkeypatch.setattr(analisis, "_llamar_contando", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no debía llamar")))
     assert ideas.proponer("acme", cid) == []
     with pytest.raises(datos.ErrorDatos):
         ideas.proponer("acme", 999)
@@ -183,7 +190,7 @@ def test_proponer_guarda_el_angulo_y_manda_la_doctrina(base_temporal, monkeypatc
     def _llamar_falso(content, max_tokens=700, system=None):
         vistos.append(system)
         return json.dumps({"ideas": [IDEA_V, IDEA_I]})
-    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=1)
     assert len(vistos) == 1
     assert vistos[0][0]["cache_control"] == {"type": "ephemeral"} and "DOCTRINA DE VENTA" in vistos[0][0]["text"]
@@ -204,7 +211,7 @@ def test_proponer_pide_una_correccion_si_el_angulo_no_cumple(base_temporal, monk
     def _llamar_falso(content, max_tokens=700, system=None):
         contenidos.append(content)
         return respuestas.pop(0)
-    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
     assert len(contenidos) == 2 and "mecanismo_obligatorio" in contenidos[1][-1]["text"]
     ang = datos.idea("acme", creadas[0])["extra"]["angulo"]
@@ -217,7 +224,8 @@ def test_proponer_guarda_con_el_error_anotado_si_la_correccion_tampoco_cumple(ba
     sid, cid, rid = _ctx(monkeypatch, datos)
     inventada = dict(IDEA_V, angulo=dict(ANGULO, promesa="47 % más luz en tu baño"))
     respuestas = [json.dumps({"ideas": [inventada]}), json.dumps({"ideas": [inventada]})]
-    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700, system=None: respuestas.pop(0))
+    monkeypatch.setattr(analisis, "_llamar_contando",
+                        _contando(lambda content, max_tokens=700, system=None: respuestas.pop(0)))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
     assert len(creadas) == 1 and respuestas == []
     ang = datos.idea("acme", creadas[0])["extra"]["angulo"]
@@ -238,7 +246,7 @@ def test_proponer_guarda_la_primera_respuesta_si_la_correccion_falla_por_algo_aj
         if len(llamadas) == 1:
             return json.dumps({"ideas": [mala]})
         raise RuntimeError("api caída")
-    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
     assert len(llamadas) == 2 and len(creadas) == 1
     ang = datos.idea("acme", creadas[0])["extra"]["angulo"]
@@ -254,7 +262,8 @@ def test_proponer_con_cinco_faltantes_y_varios_errores_no_pierde_ningun_error(ba
     mala = dict(IDEA_V, angulo=dict(ANGULO, consciencia="dormido", lead="grito", gancho=" ".join(["palabra"] * 13),
                                     promesa="47 % más luz en tu baño", faltantes=[f"falta {n}" for n in range(5)]))
     respuestas = [json.dumps({"ideas": [mala]}), json.dumps({"ideas": [mala]})]
-    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700, system=None: respuestas.pop(0))
+    monkeypatch.setattr(analisis, "_llamar_contando",
+                        _contando(lambda content, max_tokens=700, system=None: respuestas.pop(0)))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
     faltantes = datos.idea("acme", creadas[0])["extra"]["angulo"]["faltantes"]
     errores = [f for f in faltantes if f.startswith("error: ")]
@@ -286,7 +295,8 @@ def test_proponer_una_correccion_con_menos_ideas_no_reemplaza_a_la_primera(base_
     mala = dict(IDEA_V, angulo=dict(ANGULO, sofisticacion=4, mecanismo=None))
     buena = dict(IDEA_V, titulo="Corregida", angulo=dict(ANGULO, sofisticacion=4, mecanismo="luz LED en el borde"))
     respuestas = [json.dumps({"ideas": [mala, IDEA_I]}), json.dumps({"ideas": [buena]})]
-    monkeypatch.setattr(analisis, "_llamar", lambda content, max_tokens=700, system=None: respuestas.pop(0))
+    monkeypatch.setattr(analisis, "_llamar_contando",
+                        _contando(lambda content, max_tokens=700, system=None: respuestas.pop(0)))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=1)
     assert respuestas == [] and len(creadas) == 2
     video, imagen = (datos.idea("acme", i) for i in creadas)
@@ -311,7 +321,7 @@ def test_los_datos_del_mercado_elegidos_mandan_en_las_ideas(base_temporal, monke
     def _llamar_falso(content, max_tokens=700, system=None):
         contenidos.append(content[0]["text"])
         return json.dumps({"ideas": [idea]})
-    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
     assert len(contenidos) == 1
     assert "Consciencia de la persona (fija, no la cambies): consciente del problema" in contenidos[0]
@@ -466,7 +476,7 @@ def test_las_pruebas_del_producto_van_en_los_datos_y_verifican_cifras(base_tempo
     def _llamar_falso(content, max_tokens=700, system=None):
         contenidos.append(content[0]["text"])
         return json.dumps({"ideas": [idea]})
-    monkeypatch.setattr(analisis, "_llamar", _llamar_falso)
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
     creadas = ideas.proponer("acme", cid, n_videos=1, n_imagenes=0)
     assert "Pruebas reales del producto" in contenidos[0] and "El 95 % de quienes lo instalan" in contenidos[0]
     angulo = datos.idea("acme", creadas[0])["extra"]["angulo"]
@@ -497,3 +507,25 @@ def test_sin_momento_sigue_la_temporada_y_sin_enfoque_lo_dice(base_temporal, mon
     p = ideas.armar_prompt(ctx, 1, 1)
     assert "Navidad" in p and "regalos" in p and "(sin enfoque definido" in p and "MARCAS A IMITAR" in p
     assert ideas.instrucciones(ctx).endswith("Todo en español.")
+
+
+def test_proponer_cuenta_los_tokens_de_todas_las_llamadas(base_temporal, monkeypatch):
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    respuestas = ["esto no es json", json.dumps({"ideas": [dict(IDEA_V, referencias_ids=[rid]), IDEA_I]})]
+    monkeypatch.setattr(analisis, "_llamar_contando",
+                        lambda content, max_tokens=700, system=None: (respuestas.pop(0), 1000, 300))
+    uso = {"entrada": 0, "salida": 0}
+    ideas.proponer("acme", cid, 1, 1, uso=uso)
+    assert uso == {"entrada": 2000, "salida": 600}          # la respuesta inválida y el reintento
+
+
+def test_proponer_cuenta_los_tokens_aunque_falle(base_temporal, monkeypatch):
+    import pytest
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    monkeypatch.setattr(analisis, "_llamar_contando", lambda content, max_tokens=700, system=None: ("nada", 800, 200))
+    uso = {"entrada": 0, "salida": 0}
+    with pytest.raises(ideas.AnalisisInvalido):
+        ideas.proponer("acme", cid, 1, 1, uso=uso)
+    assert uso == {"entrada": 1600, "salida": 400}
