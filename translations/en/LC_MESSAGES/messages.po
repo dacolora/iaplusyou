@@ -792,6 +792,9 @@ msgstr "Open the menu"
 msgid "Abrir en el chat"
 msgstr "Open in chat"
 
+msgid "Aburrimiento"
+msgstr "Boredom"
+
 #, python-format
 msgid "Acción desconocida: %(accion)s."
 msgstr "Unknown action: %(accion)s."
@@ -841,6 +844,10 @@ msgstr "Updating metrics…"
 msgid "Actualizando resultados…"
 msgstr "Updating results…"
 
+#, python-format
+msgid "Actualizar lo que Claude necesita (%(precio)s)"
+msgstr "Update what Claude needs (%(precio)s)"
+
 msgid "Actualizar métricas"
 msgstr "Update metrics"
 
@@ -874,6 +881,9 @@ msgstr "Add"
 
 msgid "Agregar pieza"
 msgstr "Add piece"
+
+msgid "Agregar prueba"
+msgstr "Add proof"
 
 msgid "Agregar referencias"
 msgstr "Add references"
@@ -942,6 +952,10 @@ msgstr ""
 
 msgid "Antes de generar"
 msgstr "Before generating"
+
+#, python-format
+msgid "Antes de lanzarla: lo que ven las reglas (gratis) y, si la pides, la revisión de Claude con los 12 puntos de <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">la lista</a>. Solo informa: no bloquea nada."
+msgstr "Before launching it: what the rules see (free) and, if you ask for it, Claude's review with the 12 points on <a href=\"%(url)s#revisar\" target=\"_blank\" rel=\"noopener\">the list</a>. It only informs: it doesn't block anything."
 
 msgid "Anthropic (guiones y prompts)"
 msgstr "Anthropic (scripts and prompts)"
@@ -1063,6 +1077,9 @@ msgstr "Draft at 480p"
 
 msgid "Borrar"
 msgstr "Delete"
+
+msgid "Borrar esta prueba"
+msgstr "Delete this proof"
 
 msgid "Boxer"
 msgstr "Boxers"
@@ -1268,6 +1285,9 @@ msgstr "The %(dias)s-day window closed without enough evidence (%(imp)s impressi
 msgid "Chile"
 msgstr "Chile"
 
+msgid "Cierre"
+msgstr "Close"
+
 msgid "Cinco minutos. No creas nada en Meta."
 msgstr "Five minutes. You don't create anything on Meta."
 
@@ -1304,6 +1324,9 @@ msgstr "Claude is reviewing the prompt…"
 
 msgid "Claude no encontró líneas de guion en el texto. Revisa que pegaste el guion completo."
 msgstr "Claude didn't find any script lines in the text. Check that you pasted the whole script."
+
+msgid "Claude no encontró nada para mejorar."
+msgstr "Claude found nothing to improve."
 
 #, python-format
 msgid "Claude no escribió el prompt de %(faltan)s. Vuelve a intentarlo."
@@ -2022,6 +2045,9 @@ msgstr "Edit by hand"
 msgid "Editar y crear otra a partir de esta"
 msgstr "Edit and create another one from this"
 
+msgid "Ej.: «Llevo tres inviernos con ellas y siguen igual de calientitas»"
+msgstr "E.g.: “I've worn them for three winters and they're still just as warm”"
+
 msgid "Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos..."
 msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
 
@@ -2172,6 +2198,9 @@ msgstr "The message is too long (maximum %(maximo)s characters)."
 msgid "El país %(pais)s quedó sin piezas: quita el país o marca una pieza para él."
 msgstr "The country %(pais)s was left without pieces: remove the country or select a piece for it."
 
+msgid "El porqué"
+msgstr "The reason why"
+
 msgid "El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé."
 msgstr "The price has to be a positive number (e.g. 89900 or 25.50); I didn't save it."
 
@@ -2254,6 +2283,10 @@ msgstr "The video comes with the scene's sound"
 
 msgid "El último clip tiene que terminar en un cuadro sostenido sin diálogo. "
 msgstr "The last clip has to end on a held frame with no dialogue. "
+
+#, python-format
+msgid "El último intento de revisión no se pudo terminar: %(error)s"
+msgstr "The last review attempt couldn't finish: %(error)s"
 
 #, python-format
 msgid "Elegidos: %(lista)s"
@@ -2499,6 +2532,12 @@ msgstr "It is the SAME person/character in every shot: same face, same features,
 
 msgid "Es la única foto del producto. Si quieres quitarla, sube otra primero o elimina el producto completo."
 msgstr "It's the product's only photo. If you want to remove it, upload another one first or delete the whole product."
+
+msgid "Es un comentario real de un comprador"
+msgstr "It's a real buyer's comment"
+
+msgid "Es un dato del producto"
+msgstr "It's a product fact"
 
 msgid "Esa Página no aparece entre las de tu portafolio; vuelve a buscar."
 msgstr "That Page doesn't show up among your portfolio's; search again."
@@ -3051,6 +3090,9 @@ msgstr "Winner: CTR %(ctr)s%%, CPC %(cpc)s, %(thruplay_txt)s%(motivo_ventas)s."
 msgid "Ganadoras publicadas"
 msgstr "Winners posted"
 
+msgid "Gancho"
+msgstr "Hook"
+
 msgid "Gasto"
 msgstr "Spend"
 
@@ -3201,6 +3243,9 @@ msgstr "Save global block"
 msgid "Guardar cambios"
 msgstr "Save changes"
 
+msgid "Guardar como prueba"
+msgstr "Save as proof"
+
 msgid "Guardar configuración"
 msgstr "Save configuration"
 
@@ -3284,6 +3329,9 @@ msgstr "There are %(usos)s result(s) already generated with this product: they w
 
 msgid "Hecho con Creatv Machine"
 msgstr "Made with Creatv Machine"
+
+msgid "Hechos reales que Claude puede decir en ideas, guiones y captions de este producto, cifras incluidas."
+msgstr "Real facts Claude can state in this product's ideas, scripts and captions, figures included."
 
 msgid "Higgsfield"
 msgstr "Higgsfield"
@@ -3659,6 +3707,9 @@ msgstr "Claude's answer came back incomplete. Try a shorter script."
 msgid "La respuesta de Claude salió incompleta. Pide un cambio más acotado."
 msgstr "Claude's answer came back incomplete. Ask for a smaller change."
 
+msgid "La revisión guardada es de una versión anterior de esta pieza."
+msgstr "The saved review is from an earlier version of this piece."
+
 msgid "La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel."
 msgstr "The task was interrupted before reaching this platform; retry from the panel."
 
@@ -3673,6 +3724,13 @@ msgstr "The %(tipo)s store “%(nombre)s” stopped syncing%(detalle)s. Reconnec
 #, python-format
 msgid "La tienda «%(nombre)s» dejó de sincronizar"
 msgstr "The store “%(nombre)s” stopped syncing"
+
+#, python-format
+msgid "La última revisión no se pudo terminar: %(error)s"
+msgstr "The last review couldn't finish: %(error)s"
+
+msgid "Lado brillante"
+msgstr "Bright side"
 
 msgid "Lanzando el experimento a Meta (queda en pausa)…"
 msgstr "Launching the experiment to Meta (it stays paused)…"
@@ -3707,6 +3765,9 @@ msgstr "Whoever administers the server sets them in the <code>.env</code> file; 
 
 msgid "Las reglas del decisor están en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experimentos →</a>"
 msgstr "The decisor's rules are in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); document.getElementById('reglas-motor').open = true; return false;\">Experiments →</a>"
+
+msgid "Las reglas no encontraron nada."
+msgstr "The rules found nothing."
 
 msgid "Leer guion"
 msgstr "Read script"
@@ -3794,6 +3855,9 @@ msgstr "Take to Final edition"
 msgid "Lo pagado a los proveedores de IA este mes, todos los proyectos"
 msgstr "What was paid to AI providers this month, all projects"
 
+msgid "Lo que Claude necesita"
+msgstr "What Claude needs"
+
 msgid "Lo que Claude sabe de este prompt"
 msgstr "What Claude knows about this prompt"
 
@@ -3809,6 +3873,9 @@ msgstr ""
 
 msgid "Lo que escribe la IA y los anuncios de este proyecto salen en este idioma."
 msgstr "What the AI writes and this project's ads come out in this language."
+
+msgid "Lo que faltó en los datos cuando Claude escribió anuncios de este producto. Cada respuesta queda como prueba y mejora lo que venga."
+msgstr "What was missing from the data when Claude wrote ads for this product. Each answer is saved as proof and improves what comes next."
 
 msgid "Lo que le falta a esta matriz"
 msgstr "What this matrix is missing"
@@ -3939,6 +4006,9 @@ msgstr "Mark verified"
 msgid "Me detuve en la propuesta #%(id)s (%(accion)s): %(error)s"
 msgstr "I stopped at proposal #%(id)s (%(accion)s): %(error)s"
 
+msgid "Mecanismo"
+msgstr "Mechanism"
+
 msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
 msgstr "Improve quality at the end (+$0.04, photos only)"
 
@@ -4042,6 +4112,9 @@ msgstr "My music · free"
 
 msgid "Mirando las referencias…"
 msgstr "Looking at the references…"
+
+msgid "Mismo mensaje"
+msgstr "Same message"
 
 msgid "Modelo"
 msgstr "Model"
@@ -4183,6 +4256,10 @@ msgstr "No product matches that search."
 
 msgid "No aplica"
 msgstr "Not applicable"
+
+#, python-format
+msgid "No aplica (%(n)s)"
+msgstr "Not applicable (%(n)s)"
 
 msgid "No aplica — recibe el resultado ya generado"
 msgstr "Not applicable — it receives the already-generated result"
@@ -4636,6 +4713,10 @@ msgid "Para volver a tu propia app,"
 msgstr "To go back to your own app,"
 
 #, python-format
+msgid "Pasa (%(n)s)"
+msgstr "Passes (%(n)s)"
+
+#, python-format
 msgid "Pasa umbrales pero no está en el tercio superior de su país (posición %(pos)s de %(total)s)."
 msgstr "Passes thresholds but is not in the top third of its country (position %(pos)s of %(total)s)."
 
@@ -5039,6 +5120,12 @@ msgstr "Test it with “Resend” in Settings › Account: the confirmation emai
 msgid "Prueba guardada: Claude ya la puede usar con este producto."
 msgstr "Proof saved: Claude can now use it with this product."
 
+msgid "Pruebas"
+msgstr "Proof"
+
+msgid "Pruebas del producto"
+msgstr "Product proof"
+
 msgid "Publicación automática"
 msgstr "Automatic publishing"
 
@@ -5373,11 +5460,23 @@ msgstr "Checking the audio…"
 msgid "Revisando la pieza con la doctrina: la página se recarga sola cuando esté lista."
 msgstr "Reviewing the piece against the doctrine: the page reloads on its own when it's ready."
 
+msgid "Revisando la pieza… la página se recarga sola cuando esté lista."
+msgstr "Reviewing the piece… the page reloads on its own when it's ready."
+
 msgid "Revisar"
 msgstr "Review"
 
+msgid "Revisar con la doctrina"
+msgstr "Review with the doctrine"
+
+msgid "Revisar de nuevo"
+msgstr "Review again"
+
 msgid "Revisar otra vez"
 msgstr "Check again"
+
+msgid "Revisión con Claude"
+msgstr "Review with Claude"
 
 msgid "Revisión de la doctrina"
 msgstr "Doctrine review"
@@ -5387,6 +5486,9 @@ msgstr "Doctrine review (AI)"
 
 msgid "Revisión de la doctrina: se ve en Crear"
 msgstr "Doctrine review: shown in Create"
+
+msgid "Revisión rápida (gratis)"
+msgstr "Quick review (free)"
 
 msgid "Ritmo de lectura (palabras por segundo; 2,4 es natural)"
 msgstr "Reading pace (words per second; 2.4 is natural)"
@@ -5875,6 +5977,9 @@ msgstr "Post text"
 msgid "Texto de la publicación (TikTok no tiene título aparte)"
 msgstr "Post text (TikTok doesn't have a separate title)"
 
+msgid "Texto en pantalla"
+msgstr "On-screen text"
+
 msgid "Texto listo, pero sin IA en alguna plataforma: revísalo bien."
 msgstr "Text is ready, but without AI on some platform: review it carefully."
 
@@ -6149,6 +6254,9 @@ msgstr "Your AI content machine.<br>From the product photo to the published ad."
 msgid "Tu proyecto usa su propia app de Meta: CreatvMachine opera solo con tus credenciales y tus datos no pasan por ninguna app ajena."
 msgstr "Your project uses its own Meta app: CreatvMachine operates only with your credentials and your data doesn't pass through any third-party app."
 
+msgid "Tu respuesta"
+msgstr "Your answer"
+
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
 
@@ -6211,6 +6319,9 @@ msgstr "A real person using the product naturally; the product is still the star
 
 msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no las puede tocar."
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
+
+msgid "Una sola idea"
+msgstr "One single idea"
 
 msgid "Unboxing"
 msgstr "Unboxing"
@@ -6414,6 +6525,9 @@ msgstr "Videos and images from your references, or change the product in a photo
 
 msgid "Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto"
 msgstr "Videos, images, scripts, final cuts and AI text paid for this month; detail in Settings › Spend"
+
+msgid "Visuales"
+msgstr "Visuals"
 
 msgid "Volver a armar"
 msgstr "Reassemble"
@@ -6671,6 +6785,9 @@ msgstr "clip 1 with %(hid)s"
 msgid "clon limpio"
 msgstr "clean clone"
 
+msgid "comentario real de un comprador"
+msgstr "real buyer's comment"
+
 msgid "compras"
 msgstr "purchases"
 
@@ -6723,6 +6840,9 @@ msgstr "cost %(usd)s"
 
 msgid "creado"
 msgstr "created"
+
+msgid "dato del producto"
+msgstr "product fact"
 
 #, python-format
 msgid "de %(valor)s/día"
@@ -7586,6 +7706,9 @@ msgstr "Don't have a project yet? <a href=\"%(url)s\">Create one in a minute</a>
 
 msgid "¿Olvidaste tu contraseña?"
 msgstr "Forgot your password?"
+
+msgid "¿Por qué?"
+msgstr "Why?"
 
 msgid "¿Prefieres que Creatv lo gestione? Cambiar"
 msgstr "Prefer that Creatv manage it? Change"

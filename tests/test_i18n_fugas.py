@@ -433,3 +433,36 @@ def test_landing_en_el_idioma_del_proyecto(app_i18n, tmp_path, monkeypatch):
     assert '<html lang="en">' in html and ">Download →<" in html.replace("\n", "")
     fugas = espanol_visible(html)
     assert not fugas, fugas[:15]
+
+
+def test_catalogo_producto_con_doctrina_en_ingles(admin_en):
+    """Merge de main (doctrina, bloque 2): la ficha de un producto trae el
+    selector de sofisticación, «Lo que Claude necesita» y las pruebas del
+    producto (_catalogo_campos_comerciales.html, _producto_doctrina.html,
+    _catalogo_lista.html). Datos sembrados en inglés."""
+    import io
+
+    import tiendas
+    from doctrina import producto as doctrina_producto
+    r = admin_en.post("/cliente/acme/productos/crear", headers=MISMO_ORIGEN, content_type="multipart/form-data",
+                      data={"nombre": "Blue Cushion", "descripcion": "soft", "categoria": "producto", "volver": "catalogo",
+                            "imagenes": (io.BytesIO(b"\xff\xd8\xff\xe0fake-jpg"), "a.jpg")})
+    assert r.status_code == 302
+    pid = tiendas.por_activo("acme")["blue_cushion"]["id"]
+    admin_en.post(f"/cliente/acme/productos/{pid}/pruebas", data={"texto": "Filling of 1,200 g", "fuente": "ficha"},
+                  headers=MISMO_ORIGEN)
+    doctrina_producto.reemplazar_abiertos("acme", pid, [{"texto": "Paste a buyer review", "para_que": "proof"},
+                                                         {"texto": "Tell us the warranty", "para_que": "figure"}])
+    html = html_de(admin_en, "/cliente/acme")
+    assert "Proof saved: Claude can now use it with this product." in html
+    assert "What Claude needs" in html and "2 requests from Claude" in html and "Let Claude decide" in html
+    fugas = espanol_visible(html, ("tab-catalogo",))
+    assert not fugas, fugas[:15]
+
+
+def test_experimentos_doctrina_en_ingles(admin_en):
+    """Merge de main (doctrina, bloque 3): las constantes del aviso del paso 3
+    salen en inglés (el marcado lo cubre test_experimentos_admin_en_ingles)."""
+    html = html_de(admin_en, "/cliente/acme")
+    assert "Doctrine: {n} to improve" in html
+    assert "chosen pieces have points to improve according to the doctrine" in html

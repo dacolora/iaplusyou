@@ -11,20 +11,21 @@ import subprocess
 import tempfile
 
 import doctrina
+from idiomas import N_
 
 PUNTOS = (
-    (1, "gancho", "Gancho", "gancho"),
-    (2, "una_idea", "Una sola idea", "angulo"),
-    (3, "reason_why", "El porqué", "base"),
-    (4, "pruebas", "Pruebas", "base"),
-    (5, "mecanismo", "Mecanismo", "angulo"),
-    (6, "visuales", "Visuales", "video"),
-    (7, "ojos", "Texto en pantalla", "video"),
-    (8, "lado_brillante", "Lado brillante", "guion"),
-    (9, "cierre", "Cierre", "guion"),
-    (10, "marca", "Marca", "revisar"),
-    (11, "aburrimiento", "Aburrimiento", "revisar"),
-    (12, "mismo_mensaje", "Mismo mensaje", "angulo"),
+    (1, "gancho", N_("Gancho"), "gancho"),
+    (2, "una_idea", N_("Una sola idea"), "angulo"),
+    (3, "reason_why", N_("El porqué"), "base"),
+    (4, "pruebas", N_("Pruebas"), "base"),
+    (5, "mecanismo", N_("Mecanismo"), "angulo"),
+    (6, "visuales", N_("Visuales"), "video"),
+    (7, "ojos", N_("Texto en pantalla"), "video"),
+    (8, "lado_brillante", N_("Lado brillante"), "guion"),
+    (9, "cierre", N_("Cierre"), "guion"),
+    (10, "marca", N_("Marca"), "revisar"),
+    (11, "aburrimiento", N_("Aburrimiento"), "revisar"),
+    (12, "mismo_mensaje", N_("Mismo mensaje"), "angulo"),
 )
 PUNTO = {n: {"n": n, "clave": c, "titulo": t, "rebanada": r} for n, c, t, r in PUNTOS}
 ESTADOS = ("pasa", "mejorar", "no_aplica")
