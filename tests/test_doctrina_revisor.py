@@ -445,3 +445,16 @@ def test_texto_para_revision_omite_la_guia_si_con_guia_es_false(base_temporal, m
     assert "GUÍA DE ESTILO DE LA MARCA" in con_guia and "Tono cálido, luz natural" in con_guia
     sin_guia = revisor.texto_para_revision(d, [], con_guia=False)
     assert "GUÍA DE ESTILO DE LA MARCA" not in sin_guia and "Tono cálido, luz natural" not in sin_guia
+
+
+FRASE_SIN_AUDIO = ('No escuchas el audio: lo que dependa del sonido (voz, música, sonido de la escena) es '
+                   '"no_aplica" salvo que el guion o el caption lo digan.')
+
+
+def test_las_instrucciones_avisan_que_claude_no_escucha_el_audio():
+    """Bloque 3, revisión final (I8): Claude solo ve fotogramas — sin esto
+    podía calificar «pasa/mejorar» algo que solo se puede juzgar con oído."""
+    from doctrina import revisor
+    from sprints import qa
+    assert FRASE_SIN_AUDIO in revisor.INSTRUCCIONES_REVISAR
+    assert FRASE_SIN_AUDIO in qa.PROMPT_QA

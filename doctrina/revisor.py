@@ -41,6 +41,7 @@ contesta con un hecho de la pieza, nunca con una opinión:
 - "mejorar": no se cumple; di qué pasa en concreto y dónde (el segundo, el bloque del guion o el caption).
 - "no_aplica": no se puede juzgar con lo que hay (por ejemplo, sin guion no hay cierre hablado; en una imagen no hay
   ritmo ni sonido); dilo en el detalle.
+No escuchas el audio: lo que dependa del sonido (voz, música, sonido de la escena) es "no_aplica" salvo que el guion o el caption lo digan.
 No inventes lo que no ves en los fotogramas ni en los DATOS. La REVISIÓN RÁPIDA ya encontró lo que dice: tenlo en
 cuenta, no la repitas palabra por palabra. Escribe en español simple, para el dueño de la marca, máximo dos frases por
 punto.

@@ -53,7 +53,7 @@ Evalúa y responde SOLO con un objeto JSON con esta forma:
 Notas de máximo 20 palabras, en español, concretas (qué está mal y dónde).
 En "doctrina" contesta los 12 puntos de la LISTA DE REVISIÓN de la doctrina (arriba, en orden) con los DATOS de la
 pieza que van al final: "pasa", "mejorar" (con el detalle concreto y dónde: el segundo, el bloque o el caption) o
-"no_aplica" (lo que no se puede juzgar con lo que hay). Hechos de la pieza, no opiniones."""
+"no_aplica" (lo que no se puede juzgar con lo que hay). No escuchas el audio: lo que dependa del sonido (voz, música, sonido de la escena) es "no_aplica" salvo que el guion o el caption lo digan. Hechos de la pieza, no opiniones."""
 
 
 def veredicto(score, checks, umbral):
