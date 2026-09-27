@@ -42,6 +42,21 @@
           <div class="progreso-texto">Escribiendo el guion…</div>
           <script>iniciarPolling({{ item.trabajo_guion.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_guion.job_id) | tojson }});</script>
         </div>
+        {% if item.trabajo_editor %}
+        {# Fix round 1 (Important): el guion y «Editar este video» son dos
+           formularios independientes sin exclusión mutua — pueden estar los
+           dos en curso a la vez. Solo cabe UNA tapa visible (la de arriba,
+           la del guion), pero el trabajo del editor igual necesita su
+           iniciarPolling(...) propio: sin él nada sondea su estado y la
+           página nunca se recarga sola cuando termina. Va contra un
+           contenedor oculto (mismo hermano .progreso-texto que espera
+           iniciarPolling) para no mostrar una segunda tapa encima. #}
+        <div style="display:none;">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto"></div>
+        </div>
+        <script>iniciarPolling({{ item.trabajo_editor.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_editor.job_id) | tojson }});</script>
+        {% endif %}
         {% elif item.trabajo_editor %}
         {# Mismo motivo que el guion: la barra de «Editar este video» corre en
            el worker y necesita arrancar su polling en la tarjeta. #}

@@ -40,6 +40,7 @@ def test_crear_arma_la_edicion_de_la_pieza(base_temporal, tmp_path, monkeypatch)
     assert ed["cf_id"] == cf and ed["nombre"].startswith("Edición de gira sobre la mesa")
     assert ed["documento"]["pistas"][0]["clips"][0]["material_id"] == 7
     assert bajadas == [("https://r2.test/v.mp4", str(tmp_path / "clon.mp4"))]
+    assert ed["creada_por"] == "editor"
 
 
 def test_crear_rechaza_una_pieza_sin_video(base_temporal, tmp_path):

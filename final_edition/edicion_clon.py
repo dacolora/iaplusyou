@@ -43,4 +43,4 @@ def crear(cliente, cf_id, carpeta):
     clon, _creado = insumos.clon(cliente, cf_id, entry, local)
     doc = documento(clon, borrador.formato_de(entry.get("aspect_ratio")))
     nombre = f"Edición de {entry.get('accion_central') or cf_id}"[:120]
-    return ediciones.crear(cliente, "video", nombre, doc, cf_id=cf_id)["id"]
+    return ediciones.crear(cliente, "video", nombre, doc, cf_id=cf_id, creada_por="editor")["id"]
