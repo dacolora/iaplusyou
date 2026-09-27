@@ -99,6 +99,50 @@ def test_proponer_crea_ideas_y_reemplaza(base_temporal, monkeypatch):
     assert any(e["tipo"] == "ideas_propuestas" for e in datos.eventos("acme", sid))
 
 
+def test_otra_idea_descarta_la_vieja_solo_cuando_ya_hay_reemplazo(base_temporal, monkeypatch):
+    """Ronda final F12: «Otra idea» (max_intentos=1) ya no descarta la idea
+    ANTES de llamar a Claude. Mientras Claude responde la vieja sigue viva
+    (aunque el prompt ya la trata como descartada, igual que antes); se
+    descarta solo cuando se creó una del mismo tipo, y el evento conserva
+    `reemplaza`."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    vieja = datos.crear_idea("acme", cid, "video", "Vieja fea", "x", estado_idea="aprobada")
+    vistos = []
+
+    def _llamar_falso(content, max_tokens=700, system=None):
+        vistos.append((datos.idea("acme", vieja)["estado_idea"], content[0]["text"]))
+        return json.dumps({"ideas": [dict(IDEA_V, titulo="La nueva")]})
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
+    nuevas = ideas.proponer("acme", cid, reemplaza=vieja)
+    assert vistos[0][0] == "aprobada"
+    assert "IDEAS DESCARTADAS (evita ese camino): Vieja fea" in vistos[0][1]
+    assert len(nuevas) == 1 and datos.idea("acme", vieja)["estado_idea"] == "descartada"
+    evento = next(e for e in datos.eventos("acme", sid) if e["tipo"] == "ideas_propuestas")      # el más reciente
+    assert evento["datos"]["reemplaza"] == vieja and evento["datos"]["cp_ids"] == nuevas
+
+
+def test_otra_idea_que_falla_deja_la_vieja_como_estaba(base_temporal, monkeypatch):
+    """Ronda final F12: si Claude falla (o no trae ninguna del mismo tipo), la
+    idea vieja no se pierde: queda tal cual, sin nada en su lugar que la reemplace."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    vieja = datos.crear_idea("acme", cid, "video", "Vieja", "x", estado_idea="aprobada")
+
+    def _revienta(content, max_tokens=700, system=None):
+        raise RuntimeError("la API no respondió")
+    monkeypatch.setattr(analisis, "_llamar_contando", _revienta)
+    with pytest.raises(RuntimeError):
+        ideas.proponer("acme", cid, reemplaza=vieja)
+    assert datos.idea("acme", vieja)["estado_idea"] == "aprobada"
+    monkeypatch.setattr(analisis, "_llamar_contando",
+                        _contando(lambda content, max_tokens=700, system=None: json.dumps({"ideas": [IDEA_I]})))
+    assert ideas.proponer("acme", cid, reemplaza=vieja) == []          # solo trajo una imagen
+    assert datos.idea("acme", vieja)["estado_idea"] == "aprobada"
+    with pytest.raises(datos.ErrorDatos):
+        ideas.proponer("acme", cid, reemplaza=999)
+
+
 def test_max_tokens_para_escala_con_la_cantidad_de_ideas():
     from sprints import ideas
     assert ideas.max_tokens_para(1) == 5200
