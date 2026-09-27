@@ -189,9 +189,19 @@ def _lineas_contexto(contexto, idioma="es"):
 
 # Vocabulario cerrado de cámara de la Etapa 1 (spec director §2.1.5): id ->
 # cómo se escribe el movimiento en el prompt (verbo + velocidad + punto final,
-# como piden las guías de cámara de Kling y Alibaba). La Etapa 2 lo sustituye
-# por presets_camara. Queda en español en los dos idiomas por ahora (no forma
-# parte del spec de idioma §B4-§B5, que cubre las frases fijas alrededor).
+# como piden las guías de cámara de Kling y Alibaba), por idioma del proyecto
+# (spec 2026-09-26 §B5) — SÍ está cubierto por §B5: la fase 3, ronda de
+# revisión, encontró que `_bloque_planos` metía este texto en español dentro
+# de un prompt en inglés. La Etapa 2 del spec del director sustituye este
+# vocabulario por presets_camara.
+#
+# `CAMARAS` (español) mantiene el nombre y el dict de siempre porque
+# `director.py` lo usa como la lista de ids válidos, no solo como texto:
+# `", ".join(flowplus_prompt.CAMARAS)` arma el vocabulario que se le muestra a
+# Claude y `p.get("camara") not in flowplus_prompt.CAMARAS` valida su
+# respuesta — los dos iteran las LLAVES del dict, así que siguen funcionando
+# igual. `CAMARAS_EN` traduce los mismos ids; `_bloque_planos` elige el dict
+# según `idioma`.
 CAMARAS = {
     "estatico": "cámara fija sobre trípode, horizonte nivelado, sin movimiento",
     "dolly_in": "la cámara avanza en línea recta hacia el sujeto, despacio y a velocidad constante, sin zoom",
@@ -215,6 +225,30 @@ CAMARAS = {
     "pov_objeto": "punto de vista desde el propio objeto, la cámara va pegada a él",
 }
 
+CAMARAS_EN = {
+    "estatico": "camera fixed on a tripod, level horizon, no movement",
+    "dolly_in": "the camera moves straight toward the subject, slowly and at a constant speed, no zoom",
+    "dolly_out": "the camera moves straight away from the subject, slowly and at a constant speed, no zoom",
+    "paneo_izq": "smooth pan from right to left from a fixed point, level horizon",
+    "paneo_der": "smooth pan from left to right from a fixed point, level horizon",
+    "tilt_arriba": "the camera tilts slowly upward from a fixed point",
+    "tilt_abajo": "the camera tilts slowly downward from a fixed point",
+    "travelling_lateral": "the camera moves sideways alongside the subject, at the subject's own speed",
+    "seguimiento_mano": "handheld camera following the subject with a slight natural shake",
+    "orbita_corta": "the camera circles the subject in a short arc of less than 45 degrees",
+    "orbita_360": "the camera makes one full turn around the subject at a constant speed",
+    "grua_arriba": "the camera rises vertically while keeping the subject in frame",
+    "cenital": "fixed overhead shot, the camera looks straight down at the subject from above",
+    "macro_a_abierto": "starts on a macro shot of the texture and pulls back continuously to a wide shot",
+    "zoom_in": "slow optical zoom toward the subject without moving the camera",
+    "crash_zoom": "a sudden, fast zoom toward the subject in under a second",
+    "dolly_zoom": "the camera pulls back while zooming toward the subject, the background warps and the subject doesn't",
+    "bullet_time": "motion freezes and the camera orbits around the frozen scene",
+    "whip_pan": "an extremely fast pan with motion blur that cuts to the next action",
+    "pov_objeto": "point of view from the object itself, the camera stays glued to it",
+}
+CAMARAS_POR_IDIOMA = {"es": CAMARAS, "en": CAMARAS_EN}
+
 
 # Cómo se pasa de un plano al siguiente, con la frase literal de la guía
 # multi-shot de Wan («Hard cut transition», alibabacloud.com/help/en/model-studio/
@@ -231,9 +265,10 @@ def _bloque_planos(planos, con_sonido, idioma="es"):
     `Hard cut.` (CORTE). Un id de cámara desconocido es un error de programación
     (el director ya lo validó): se lanza, no se disimula."""
     t = TEXTOS[idioma if idioma in TEXTOS else "es"]
+    cams = CAMARAS_POR_IDIOMA[idioma if idioma in CAMARAS_POR_IDIOMA else "es"]
     lineas = []
     for i, p in enumerate(planos):
-        cam = CAMARAS.get(p.get("camara"))
+        cam = cams.get(p.get("camara"))
         if cam is None:
             raise ValueError(f"Movimiento de cámara desconocido: {p.get('camara')!r}")
         accion = str(p.get("accion") or "").strip().rstrip(".")
@@ -276,7 +311,11 @@ TEXTOS = {
         "prohibido": ["texto inventado", "logos inventados", "marcas de agua", "subtítulos"],
         "prohibido_sin_persona": ["personas", "pies", "manos"],
         "recordatorio": "Recordatorio final: el producto permanece solo y sin nadie durante todo el video.",
-        "unboxing": ENFOQUES_UNBOXING_ES,
+        # Bloques por enfoque (ENFOQUES[...]["bloque"]), en su propio
+        # subdiccionario para no compartir espacio de nombres con las
+        # etiquetas de arriba (una id de enfoque nunca debe poder pisar, p.
+        # ej., la llave "escena" o "sonido" de una futura etiqueta nueva).
+        "enfoques": {"unboxing": ENFOQUES_UNBOXING_ES},
     },
     "en": {
         "sonido": "SOUND", "sonido_plano": "Sound", "sin_voz": "No spoken dialogue and no background music.",
@@ -284,7 +323,7 @@ TEXTOS = {
         "temporada": "SEASON", "senales": "Visual cues", "tono": "Tone", "paleta": "Palette", "luz": "Light",
         "elementos": "Elements", "personaje": "CHARACTER", "misma_persona": "the same person",
         "producto_exacto": "EXACT PRODUCT", "es_el_producto": "is the product",
-        "es_personaje": "(all its views are the same person)", "entorno": "SETTING", "es": "is",
+        "es_personaje": "(all their views are the same person)", "entorno": "SETTING", "es": "is",
         "fidelidad": ("FIDELITY: the products shown in the reference images are reproduced identically — "
                       "shape, color, texture and any logo exactly as seen. Do not invent or change letters, logos, "
                       "labels or text."),
@@ -300,10 +339,12 @@ TEXTOS = {
         "prohibido": ["invented text", "invented logos", "watermarks", "subtitles"],
         "prohibido_sin_persona": ["people", "feet", "hands"],
         "recordatorio": "Final reminder: the product stays alone, with nobody, for the whole video.",
-        "unboxing": ("UNBOXING FOCUS: the scene is a person receiving their purchase. It starts with the closed box "
-                     "or bag on the table or in their hands; they open it with curiosity and take the product out; "
-                     "it ends showing it up close, happy to use it for the first time. Only the hands and, at most, "
-                     "part of the body are seen; the product is what the camera looks for."),
+        "enfoques": {"unboxing": (
+            "UNBOXING FOCUS: the scene is a person receiving their purchase. It starts with the closed box "
+            "or bag on the table or in their hands; they open it with curiosity and take the product out; "
+            "it ends showing it up close, happy to use it for the first time. Only the hands and, at most, "
+            "part of the body are seen; the product is what the camera looks for."
+        )},
     },
 }
 
@@ -444,7 +485,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
 
     # --- Enfoque (unboxing, etc.) ---
     if info_enfoque and info_enfoque["bloque"]:
-        partes.append(t.get(enfoque, info_enfoque["bloque"]))
+        partes.append(t["enfoques"].get(enfoque, info_enfoque["bloque"]))
 
     # --- Escena: los planos del director, o el texto de la persona íntegro ---
     if planos:

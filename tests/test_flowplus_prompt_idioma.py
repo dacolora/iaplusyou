@@ -7,7 +7,12 @@ import flowplus_prompt as fp
 
 REFS = [{"tipo": "imagen", "etiqueta": "foto", "token": "Image 1", "activo": "Sandalia Sol", "categoria": "producto",
          "producto": True, "regla": "Rule text."}]
-ESPANOL = re.compile(r"[áéíóúñ¿¡]|\b(?:ESCENA|EVITAR|SONIDO|Sin diálogo|Recordatorio|PRODUCTO EXACTO|FIDELIDAD)\b")
+# «cámara», «plano», «despacio», «hacia»: palabras del vocabulario de cámara
+# en español (flowplus_prompt.CAMARAS) que se colaban en un prompt en inglés
+# armado a partir de planos del director (ronda de revisión de la fase 3).
+ESPANOL = re.compile(
+    r"[áéíóúñ¿¡]|\b(?:ESCENA|EVITAR|SONIDO|Sin diálogo|Recordatorio|PRODUCTO EXACTO|FIDELIDAD"
+    r"|cámara|plano|despacio|hacia)\b")
 
 
 def test_tal_cual_solo_cambia_la_etiqueta_del_sonido():
@@ -30,10 +35,17 @@ def test_armar_en_espanol_identico_al_de_siempre():
 
 
 def test_planos_en_ingles():
-    planos = [{"n": 1, "inicio_s": 0, "fin_s": 4, "plano": "close-up", "camara": "dolly_in", "accion": "turns",
-               "sonido": "waves"}]
+    """Cada plano trae un id de cámara distinto (spec §B5, ronda de revisión):
+    `flowplus_prompt.CAMARAS` es el vocabulario en español que `director.py`
+    valida contra Claude — su texto NO debe colarse en un prompt en inglés."""
+    planos = [
+        {"n": 1, "inicio_s": 0, "fin_s": 3, "plano": "close-up", "camara": "dolly_in", "accion": "turns", "sonido": "waves"},
+        {"n": 2, "inicio_s": 3, "fin_s": 6, "plano": "wide shot", "camara": "orbita_360", "accion": "reveals"},
+        {"n": 3, "inicio_s": 6, "fin_s": 8, "plano": "medium shot", "camara": "tilt_arriba", "accion": "settles"},
+    ]
     p = fp.armar("x", REFS, con_sonido=True, planos=planos, idioma="en")
     assert "Sound: waves." in p and "Sonido:" not in p
+    assert not ESPANOL.search(p), p
 
 
 def test_unboxing_en_ingles():

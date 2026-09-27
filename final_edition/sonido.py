@@ -37,9 +37,13 @@ def sugerir_descripcion(escena, enfoque, persona=None, idioma="es"):
     partes = [str(p[k]).strip() for k in ("resumen", "descripcion", "tono") if p.get(k)]
     if partes:
         linea_persona = "AUDIENCIA: " + ". ".join(partes) + "\n"
-    texto = PROMPT.format(escena=escena[:1000], enfoque=enfoque or "producto", persona=linea_persona,
+    cuerpo = PROMPT.format(escena=escena[:1000], enfoque=enfoque or "producto", persona=linea_persona,
                           idioma=idiomas.nombre_para_claude(idioma))
-    texto = f"{texto}\n\n{idiomas.orden_idioma(idioma)}"
+    # La orden de idioma va al principio Y al final (spec 2026-09-26 §B4, como
+    # doctrina.bloque_system): sola al final, el español largo del PROMPT de
+    # en medio la arrastra.
+    orden = idiomas.orden_idioma(idioma)
+    texto = f"{orden}\n\n{cuerpo}\n\n{orden}"
     respuesta = (_llamar(texto) or "").strip().strip('"').strip("'").strip()
     respuesta = " ".join(respuesta.split())
     return respuesta[:MAX_CARACTERES]
