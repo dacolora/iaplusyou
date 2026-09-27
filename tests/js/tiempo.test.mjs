@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  activo, capasEn, duracionMs, fuenteMs, pistaPrincipal, posicionCapa, principalEn,
+  activo, capasEn, cuadroVecino, duracionMs, fuenteMs, pistaPrincipal, posicionCapa, principalEn,
   siguienteClip, transicionReal, zoomKenBurns,
 } from "../../static/editor/tiempo.js";
 
@@ -158,4 +158,25 @@ test("posicionCapa: con dos keyframes x/y van por tramos y el tamaño es el de t
   cerca(medio.x, 465, "x a mitad");
   assert.equal(medio.w, 100);
   assert.equal(posicionCapa(clip, 9000, 100, 100, "1:1").x, 710);
+});
+
+test("cuadroVecino: las flechas avanzan un cuadro entero cada vez (a 30 fps)", () => {
+  // Sumar 33,33 ms y redondear perdía un cuadro cada tres (1000 → 1033 →
+  // 1066 → 1099, que sigue en el cuadro 32). El cuadro n empieza en n·1000/30.
+  const cuadro = (t) => Math.floor(t * 30 / 1000);
+  let t = 1000;
+  const vistos = [];
+  for (let i = 0; i < 6; i++) {
+    t = cuadroVecino(t, 1, 30);
+    assert.ok(Number.isInteger(t), `ms enteros: ${t}`);
+    vistos.push(cuadro(t));
+  }
+  assert.deepEqual(vistos, [31, 32, 33, 34, 35, 36]);
+  assert.equal(cuadroVecino(1000, 1, 30), 1034);
+  assert.equal(cuadroVecino(1100, 1, 30), 1134);
+  assert.equal(cuadroVecino(1134, -1, 30), 1100);
+  assert.equal(cuadroVecino(1100, -1, 30), 1067);
+  assert.equal(cuadro(cuadroVecino(1067, -1, 30)), 31);
+  assert.equal(cuadroVecino(20, -1, 30), 0);
+  assert.equal(cuadroVecino(0, -1, 30), 0);
 });

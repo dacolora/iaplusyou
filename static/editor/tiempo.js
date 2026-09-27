@@ -93,6 +93,15 @@ export function siguienteClip(doc, tMs) {
   return ordenados(p).find((c) => c.inicio_ms > tMs) ?? null;
 }
 
+// Instante del cuadro vecino (las flechas del teclado): el primer ms entero
+// dentro del cuadro n ± 1, que ocupa [n·1000/fps, (n+1)·1000/fps). Sumar
+// 1000/fps y redondear (el reloj va en ms enteros) perdía un cuadro de cada
+// tres: 1000 → 1033 → 1066 → 1099, que sigue en el cuadro 32.
+export function cuadroVecino(tMs, dir, fps = FPS) {
+  const n = Math.floor((tMs * fps) / 1000 + 1e-9) + dir;
+  return Math.max(0, Math.ceil((n * 1000) / fps));
+}
+
 // zoompan del compilador: n = cuadros del clip, `on` = cuadro actual;
 // in: min(1 + 0.08·on/n, 1.08); out: max(1.08 − 0.08·on/n, 1).
 export function zoomKenBurns(clip, tMs) {
