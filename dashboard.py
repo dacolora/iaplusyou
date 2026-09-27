@@ -189,6 +189,9 @@ app.register_blueprint(guiones_rutas.bp)
 from guiones import rutas_pipeline as guiones_pipeline  # noqa: E402  (panel de guiones de Flow Plus)
 app.register_blueprint(guiones_pipeline.bp)
 
+from final_edition import rutas_editor  # noqa: E402  (vista previa del editor, capa 3)
+app.register_blueprint(rutas_editor.bp)
+
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
 # distintos podrían solaparse y pisarse las credenciales una a la otra — este
@@ -410,6 +413,11 @@ def _sin_cache(resp):
     # (p. ej. el panel de Meta) pueden cargarlos por fetch.
     if request.path.startswith("/static/img/"):
         resp.headers["Access-Control-Allow-Origin"] = "*"
+    # Módulos ES del editor: se importan entre sí por ruta relativa, sin el
+    # ?v= de _version_estaticos; sin revalidar, un despliegue dejaría módulos
+    # viejos mezclados con nuevos. `no-cache` = siempre pregunta (304 barato).
+    if request.path.startswith("/static/editor/"):
+        resp.headers["Cache-Control"] = "no-cache"
     return resp
 
 
