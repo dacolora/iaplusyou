@@ -359,9 +359,11 @@ def bloques_visuales(entry, ruta=None):
 def revisar(cliente, cf_id):
     """La revisión con Claude de una pieza terminada. La guarda en
     `concepto.extra.revision_doctrina` y devuelve (revision, tokens_entrada,
-    tokens_salida). Si Claude no responde algo usable dos veces, guarda el
-    error y lanza `ErrorRevision` con los tokens de las dos llamadas; si
-    falla antes de llamar (sin pieza, sin video, sin fotogramas), sin tokens."""
+    tokens_salida). Un fallo — antes de llamar a Claude (sin pieza terminada,
+    sin fotogramas: sin tokens) o después (dos respuestas que no sirvieron, o
+    la llamada de corrección caída) — nunca toca `revision_doctrina`: se
+    guarda aparte en `revision_doctrina_error` para no perder la última buena
+    revisión pagada. Una revisión que sí sirve borra ese error."""
     import creative_flow
     import db
     from generador_prompts import MODEL
@@ -370,8 +372,15 @@ def revisar(cliente, cf_id):
     d = reunir(cliente, cf_id)
     entry = d["entry"]
     video_url = entry.get("video_url")
+
+    def _guardar_error(mensaje):
+        creative_flow.actualizar(cliente, cf_id, revision_doctrina_error={
+            "error": mensaje, "video_url": video_url, "revisado_en": db.ahora()})
+
     if entry.get("estado") != "video_listo" or not video_url:
-        raise ErrorRevision("Solo se revisa una pieza terminada.")
+        mensaje = "Solo se revisa una pieza terminada."
+        _guardar_error(mensaje)
+        raise ErrorRevision(mensaje)
     ruta = qa.archivo_local(entry) if (entry.get("tipo") or "video") != "imagen" else None
     try:
         visuales = bloques_visuales(entry, ruta)
@@ -382,7 +391,9 @@ def revisar(cliente, cf_id):
             except OSError:
                 pass
     if not visuales:
-        raise ErrorRevision("No se pudo sacar ningún fotograma del video.")
+        mensaje = "No se pudo sacar ningún fotograma del video."
+        _guardar_error(mensaje)
+        raise ErrorRevision(mensaje)
     avisos = reglas(d)
     content = [{"type": "text", "text": texto_para_revision(d, avisos)}] + visuales
     system = doctrina.bloque_system("revisar", extra=INSTRUCCIONES_REVISAR)
@@ -396,17 +407,17 @@ def revisar(cliente, cf_id):
             texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system)
             ent, sal = ent + e2, sal + s2
         except Exception as falla:  # noqa: BLE001
-            creative_flow.actualizar(cliente, cf_id, revision_doctrina={
-                "version": VERSION, "error": str(falla)[:300] or "La corrección falló.", "video_url": video_url, "revisado_en": db.ahora()})
-            raise ErrorRevision(str(falla)[:300] or "La corrección falló.", ent, sal) from falla
+            mensaje = str(falla)[:300] or "La corrección falló."
+            _guardar_error(mensaje)
+            raise ErrorRevision(mensaje, ent, sal) from falla
         try:
             r = parsear_revision(texto)
         except ErrorRevision as segundo:
-            creative_flow.actualizar(cliente, cf_id, revision_doctrina={
-                "version": VERSION, "error": str(segundo), "video_url": video_url, "revisado_en": db.ahora()})
-            raise ErrorRevision(str(segundo), ent, sal)
+            mensaje = str(segundo)
+            _guardar_error(mensaje)
+            raise ErrorRevision(mensaje, ent, sal)
     rev = {"version": VERSION, "video_url": video_url, "puntos": r["puntos"], "resumen": r["resumen"],
            "reglas": avisos, "origen": "boton", "modelo": MODEL, "usd": costo_real(ent, sal),
            "revisado_en": db.ahora()}
-    creative_flow.actualizar(cliente, cf_id, revision_doctrina=rev)
+    creative_flow.actualizar(cliente, cf_id, revision_doctrina=rev, revision_doctrina_error=None)
     return rev, ent, sal

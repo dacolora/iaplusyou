@@ -592,6 +592,23 @@ def test_plantilla_revision_vieja_error_y_en_curso():
     assert "Revisando la pieza…" in curso and "Revisar con la doctrina (" not in curso
 
 
+def test_plantilla_muestra_el_error_junto_a_la_revision_buena():
+    """Bloque 3, revisión final (I2): un fallo posterior no reemplaza la
+    buena revisión guardada — las dos se muestran."""
+    env = _entorno_plantilla()
+    tpl = env.get_template("_tab_creativeflowplus.html")
+    item = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2,
+                           revision_error={"error": "Claude no devolvió JSON.", "video_url": "https://r2/clon.mp4"})
+    html = tpl.render(**_contexto_minimo([item]))
+    assert "Muestra el producto antes." in html                          # la buena sigue mostrándose
+    assert "El último intento de revisión no se pudo terminar: Claude no devolvió JSON." in html
+    # el error es de otro video (uno anterior a la última generación): no se muestra
+    otro = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2,
+                           revision_error={"error": "x", "video_url": "https://r2/otro.mp4"})
+    html2 = tpl.render(**_contexto_minimo([otro]))
+    assert "no se pudo terminar" not in html2
+
+
 def test_items_de_crear_traen_la_revision_y_las_reglas(base_temporal, monkeypatch):
     import creative_flow
     import dashboard
@@ -607,6 +624,24 @@ def test_items_de_crear_traen_la_revision_y_las_reglas(base_temporal, monkeypatc
     otra = creative_flow.crear("acme", [], ["Chancla Rose"], [], "camina", 8, "", "A")
     sin = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == otra)
     assert sin["revision_estado"] is None and sin["reglas"] == []
+
+
+def test_creative_flow_items_trae_el_error_de_revision_aparte(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I2): `revision_error` viaja aparte de
+    `revision` (la buena, guardada, sigue disponible)."""
+    import creative_flow
+    import dashboard
+    import final_edition
+    monkeypatch.setattr(final_edition, "_producto", lambda cliente, entry, precio: {"nombre": "Chancla"})
+    cf_id = _sesion_video_listo()
+    error = {"error": "Claude no devolvió JSON.", "video_url": "https://r2/clon.mp4"}
+    creative_flow.actualizar("acme", cf_id, revision_doctrina=dict(REV_MEJORAR, video_url="https://r2/clon.mp4"),
+                             revision_doctrina_error=error)
+    item = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == cf_id)
+    assert item["revision_error"] == error and item["revision"]["resumen"] == REV_MEJORAR["resumen"]
+    otra = creative_flow.crear("acme", [], ["Chancla Rose"], [], "camina", 8, "", "A")
+    sin = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == otra)
+    assert sin["revision_error"] is None
 
 
 def test_creative_flow_items_resuelve_el_producto_una_sola_vez_por_productos_ids(base_temporal, monkeypatch):

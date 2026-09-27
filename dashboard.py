@@ -2584,8 +2584,10 @@ def _creative_flow_items(cliente):
         # Las reglas son gratis y se calculan al renderizar; la revisión de
         # Claude es la guardada. Sin ninguna de las dos, la sección no pesa.
         item["revision"], item["revision_estado"], item["reglas"], item["trabajo_revision"] = None, None, [], None
+        item["revision_error"] = None
         if entry.get("estado") == "video_listo" and entry.get("video_url"):
             item["revision"] = entry.get("revision_doctrina")
+            item["revision_error"] = entry.get("revision_doctrina_error")
             item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
             item["revision_n"] = doctrina_revisor.contar(item["revision"])
             try:

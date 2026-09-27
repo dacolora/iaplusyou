@@ -294,7 +294,8 @@ def duplicar(cliente, cf_id, modelo=None, enfoque=None, prompt_relleno=None, var
         extra = dict(extra_c or {})
         # Lo que pertenece al video generado, no a la idea, no viaja
         # (`capas` es columna de la pieza nueva: nace vacía).
-        for k in ("credits", "sonido", "video_url_crudo", "video_local_crudo", "revision_doctrina"):
+        for k in ("credits", "sonido", "video_url_crudo", "video_local_crudo", "revision_doctrina",
+                  "revision_doctrina_error"):
             extra.pop(k, None)
         extra.pop("director", None)
         extra.pop("variante", None)

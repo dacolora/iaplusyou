@@ -43,6 +43,9 @@
     {% if no_aplica %}<details><summary class="vacio">No aplica ({{ no_aplica | length }})</summary><ul>{% for p in no_aplica %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo }}</strong>{% if p.detalle %}: {{ p.detalle }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
   </div>
   {% endif %}
+  {% if item.revision_error and item.revision_error.video_url == item.video_url %}
+  <p class="tag-error">El último intento de revisión no se pudo terminar: {{ item.revision_error.error }}</p>
+  {% endif %}
   {% if item.trabajo_revision %}
   <p class="vacio" style="padding:0;">Revisando la pieza… la página se recarga sola cuando esté lista.</p>
   {% else %}

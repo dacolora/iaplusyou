@@ -247,7 +247,10 @@ def test_revisar_guarda_la_revision_y_devuelve_los_tokens(base_temporal, monkeyp
     assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "mejorar"
 
 
-def test_revisar_corrige_una_vez_y_si_sigue_mal_guarda_el_error(base_temporal, monkeypatch):
+def test_revisar_corrige_una_vez_y_si_sigue_mal_guarda_el_error_aparte(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I2): un fallo se guarda en
+    `revision_doctrina_error`, nunca en `revision_doctrina` (esa queda
+    intacta o vacía)."""
     import creative_flow
     from doctrina import revisor
     cf_id = _pieza(monkeypatch)
@@ -259,14 +262,15 @@ def test_revisar_corrige_una_vez_y_si_sigue_mal_guarda_el_error(base_temporal, m
     with pytest.raises(revisor.ErrorRevision) as e:
         revisor.revisar("acme", cf2)
     assert (e.value.tokens_entrada, e.value.tokens_salida) == (2000, 800)
-    guardada = creative_flow.cargar("acme")[cf2]["revision_doctrina"]
-    assert guardada["error"] and guardada["video_url"] == "https://r2/v.mp4"
-    assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "error"
+    entrada = creative_flow.cargar("acme")[cf2]
+    assert entrada.get("revision_doctrina") is None
+    error = entrada["revision_doctrina_error"]
+    assert error["error"] and error["video_url"] == "https://r2/v.mp4"
 
 
 def test_revisar_preserva_tokens_si_falla_la_correccion(base_temporal, monkeypatch):
     """Si la segunda llamada (corrección) falla por red/timeout, los tokens
-    de la primera llamada nunca se pierden."""
+    de la primera llamada nunca se pierden y el error queda aparte."""
     import creative_flow
     from doctrina import revisor
     from sprints import analisis, qa
@@ -286,12 +290,49 @@ def test_revisar_preserva_tokens_si_falla_la_correccion(base_temporal, monkeypat
     with pytest.raises(revisor.ErrorRevision) as e:
         revisor.revisar("acme", cf_id)
     assert (e.value.tokens_entrada, e.value.tokens_salida) == (1000, 400)
-    guardada = creative_flow.cargar("acme")[cf_id]["revision_doctrina"]
-    assert guardada["error"] and guardada["video_url"] == "https://r2/v.mp4"
-    assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "error"
+    entrada = creative_flow.cargar("acme")[cf_id]
+    assert entrada.get("revision_doctrina") is None
+    error = entrada["revision_doctrina_error"]
+    assert error["error"] and error["video_url"] == "https://r2/v.mp4"
+
+
+def test_una_revision_buena_no_se_pierde_si_una_revision_despues_falla(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I2): la buena (pagada) sigue en
+    `revision_doctrina` aunque un intento posterior falle."""
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    _preparar_revision(monkeypatch, [_respuesta()])
+    buena, _, _ = revisor.revisar("acme", cf_id)
+    _preparar_revision(monkeypatch, ["nada", "tampoco"])
+    with pytest.raises(revisor.ErrorRevision):
+        revisor.revisar("acme", cf_id)
+    entrada = creative_flow.cargar("acme")[cf_id]
+    assert entrada["revision_doctrina"] == buena
+    assert entrada["revision_doctrina_error"]["error"]
+
+
+def test_una_revision_buena_borra_el_error_anterior(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I2): una revisión que sí sirve limpia el
+    error de un intento anterior."""
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    _preparar_revision(monkeypatch, ["nada", "tampoco"])
+    with pytest.raises(revisor.ErrorRevision):
+        revisor.revisar("acme", cf_id)
+    assert creative_flow.cargar("acme")[cf_id]["revision_doctrina_error"]
+    _preparar_revision(monkeypatch, [_respuesta()])
+    rev, _, _ = revisor.revisar("acme", cf_id)
+    entrada = creative_flow.cargar("acme")[cf_id]
+    assert entrada["revision_doctrina"] == rev
+    assert entrada["revision_doctrina_error"] is None
 
 
 def test_revisar_sin_pieza_terminada_ni_fotogramas_no_llama_a_claude(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I2): las fallas antes de llamar a Claude
+    (sin tokens) también quedan en `revision_doctrina_error`, nunca en
+    `revision_doctrina`."""
     import creative_flow
     from doctrina import revisor
     cf_id = _pieza(monkeypatch)
@@ -300,11 +341,17 @@ def test_revisar_sin_pieza_terminada_ni_fotogramas_no_llama_a_claude(base_tempor
     with pytest.raises(revisor.ErrorRevision) as e:
         revisor.revisar("acme", cf_id)
     assert (e.value.tokens_entrada, e.value.tokens_salida) == (0, 0)
+    entrada = creative_flow.cargar("acme")[cf_id]
+    assert entrada.get("revision_doctrina") is None
+    assert entrada["revision_doctrina_error"]["error"] == "Solo se revisa una pieza terminada."
     creative_flow.actualizar("acme", cf_id, estado="video_listo")
     monkeypatch.setattr(revisor, "fotogramas", lambda ruta, ts: [])
     with pytest.raises(revisor.ErrorRevision):
         revisor.revisar("acme", cf_id)
     assert llamadas == []
+    entrada = creative_flow.cargar("acme")[cf_id]
+    assert entrada.get("revision_doctrina") is None
+    assert entrada["revision_doctrina_error"]["error"] == "No se pudo sacar ningún fotograma del video."
 
 
 def test_una_imagen_se_revisa_por_su_url(base_temporal, monkeypatch):
@@ -317,9 +364,11 @@ def test_una_imagen_se_revisa_por_su_url(base_temporal, monkeypatch):
 
 def test_duplicar_no_copia_la_revision(base_temporal, monkeypatch):
     import creative_flow
-    cf_id = _pieza(monkeypatch, revision_doctrina={"video_url": "https://r2/v.mp4", "puntos": []})
+    cf_id = _pieza(monkeypatch, revision_doctrina={"video_url": "https://r2/v.mp4", "puntos": []},
+                   revision_doctrina_error={"error": "x", "video_url": "https://r2/v.mp4"})
     hija = creative_flow.duplicar("acme", cf_id)
     assert "revision_doctrina" not in creative_flow.cargar("acme")[hija]
+    assert "revision_doctrina_error" not in creative_flow.cargar("acme")[hija]
     assert "angulo" in creative_flow.cargar("acme")[hija]
 
 

@@ -72,12 +72,15 @@ salvo la foto que queda dentro de una revisión de Claude (§4).
 - **Guardado**: `concepto.extra.revision_doctrina` (sin migración) = `{"version": 1, "video_url", "puntos",
   "resumen", "reglas": <foto de reglas()>, "origen": "boton|sprint", "modelo", "usd", "revisado_en"}`.
   `creative_flow.duplicar` no la copia (pertenece al video generado). **Vigente** solo si `video_url` coincide con
-  el de la pieza; si no, se muestra como «de una versión anterior».
+  el de la pieza; si no, se muestra como «de una versión anterior». Un fallo (antes o después de llamar a Claude)
+  nunca escribe en `revision_doctrina`: se guarda aparte en `revision_doctrina_error = {"error", "video_url",
+  "revisado_en"}`, así una revisión buena y pagada nunca se pierde por un intento posterior fallido; una revisión
+  que sí sirve borra ese error (`revision_doctrina_error=None`). `duplicar` tampoco copia esta segunda clave.
 - **Tarea** `pieza_revisar` (`tareas/doctrina.py`): `max_intentos=1`, `job_id = f"{cliente}__{cf_id}__revisar"` (como los demás trabajos de Crear),
   payload `{cliente, cf_id}`. Gasto tipo nuevo `revision` («Revisión de la doctrina»), referencia
   `revision:<cf_id>:t<tarea_id>`, costo real (`nicho.avatares.costo_real`); también cuando la respuesta no sirvió
-  (detalle «revisión · respuesta inválida»), y en ese caso guarda `revision_doctrina = {"error": ..., "video_url",
-  "revisado_en"}` antes de subir la excepción.
+  (detalle «revisión · respuesta inválida»), y en ese caso guarda el error en `revision_doctrina_error` (nunca en
+  `revision_doctrina`) antes de subir la excepción.
 - **Precio**: `gastos.TARIFAS["revision_pieza"]` (inicial US$ 0,05; se ajusta con lo medido en la prueba real),
   `gastos.estimar("revision_pieza")`.
 - **Ruta** `POST /cliente/<c>/creative_flow/<cf_id>/revisar` (`cf_revisar`): solo piezas `video_listo` con
