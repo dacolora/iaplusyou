@@ -2271,3 +2271,12 @@ body.panel-abierto { overflow: hidden; }
 @media (max-width: 760px) {
   .panel-elegidos { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
+/* V1 (ronda final): `.vacio` trae `padding: 1rem 0` para líneas de estado
+   vacío sueltas; dentro de un <label> con select/textarea (flex-column por la
+   base visual) esa pista quedaba en su propia fila con un salto enorme y
+   desalineaba los selects de la fila vecina. La tarjeta sufría lo mismo con
+   `.tablero-tarjeta-enfoque vacio`. */
+.sprint-nuevo-form label .vacio, .tablero-editar-campos label .vacio, .panel-campana label .vacio {
+  display: inline; padding: 0;
+}
+.tablero-tarjeta .vacio { padding: 0; }

@@ -83,3 +83,34 @@ def test_estados_vacios_con_accion(app):
     assert 'class="estado-vacio"' in ni and ni.count('data-abrir-detalle="nuevo-estudio"') == 1
     assert 'class="estado-vacio"' in rf and "Todavía no hay referentes" in rf
     assert 'class="estado-vacio"' in ex and 'href="#creativeflowplus"' in ex
+
+
+# --------------------------------------------- F3 (ronda final): hint en labels ---
+
+def _bloque_para_selector(css, selector):
+    i = css.find(selector)
+    assert i >= 0, f"falta el selector «{selector}»"
+    ini = css.index("{", i)
+    fin = css.index("}", ini)
+    return css[ini + 1:fin]
+
+
+def test_pistas_dentro_de_labels_del_tablero_no_pisan_el_alto_de_la_fila():
+    """`.vacio` trae `padding: 1rem 0` para líneas de estado vacío sueltas,
+    pero puesta DENTRO de un <label> con select/textarea (que la base visual
+    pone en flex-column) empujaba «(opcional)» a su propia fila con un salto
+    enorme y desalineaba los selects de la fila («+ Nuevo sprint», la cabecera
+    del tablero y el panel de la campaña). La tarjeta también la sufría
+    (`.tablero-tarjeta-enfoque vacio`)."""
+    bloque = _bloque_base_sprints_tablero()
+    for selector in (".sprint-nuevo-form label .vacio", ".tablero-editar-campos label .vacio",
+                     ".panel-campana label .vacio"):
+        assert "padding: 0" in _bloque_para_selector(bloque, selector)
+    assert "padding: 0" in _bloque_para_selector(bloque, ".tablero-tarjeta .vacio")
+
+
+def _bloque_base_sprints_tablero():
+    css = open("static/style.css", encoding="utf-8").read()
+    marca = "Tablero de Sprints (2026-09-26)"
+    assert marca in css, "falta el bloque del tablero de Sprints al final de style.css"
+    return css[css.index(marca):]
