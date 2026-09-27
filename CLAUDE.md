@@ -208,7 +208,26 @@ generates) and emails when a batch finishes. `sprints/revision.py` approves or
 rejects (a rejected piece leaves `estado_videos.json`), closes and reopens the
 sprint; `sprints/entrega.py` lists approved links and builds the zip
 (`sprint_empaquetar`). Retries and regenerations always go through the cost
-gate and `max_intentos=1`.
+gate and `max_intentos=1`. Entrega 2 of the board (2026-09-27, spec
+`docs/superpowers/specs/2026-09-27-sprints-tablero-entrega2-design.md`): the panel has three
+tabs — Armar · Ideas · Piezas (`_sprint_panel_armar.html`, `_sprint_panel_ideas.html`,
+`_sprint_panel_piezas.html`, all rendered in one fragment and toggled client-side;
+`?panel=<cid>&paso=armar|ideas|piezas`, default from `sprints.tablero.paso_por_defecto`, counters
+from `tablero.pestanas`). Armar describes references inline and shows the product's sofisticación;
+the persona consciencia selector is gone from the panel (the campaign's consciencia wins,
+`fijos_de`). Ideas (angle editor, «Otra idea», «Reescribir», «Aprobar todas») and the «Generar»
+cost gate live in the Ideas tab — `campana_ideas` now only redirects there and
+`campana_ideas.html` is deleted. The Piezas tab (`sprints.campana_piezas`, re-fetched every 8 s
+while something is alive and never while a rejection reason is being typed) reviews, rejects with
+an inline reason, retries and regenerates with the price shown and a confirm, and approves what
+passed QA for THAT campaign only (`revision.aprobar_pasaron_qa(..., campana_id=)`); the
+sprint-wide review page stays for bulk review, filters by campaign («n · ETAPA · persona ·
+producto») and links each piece to its panel. «Proponer ideas» shows
+`gastos.estimar("proponer_ideas", n=)` and registers its real spend (tipo `ideas`, counted with
+`analisis._llamar_contando`, also when the answer was unusable, `max_intentos=1`). The routes the
+panel calls answer JSON when asked (`_quiere_json`) and keep their old redirects otherwise.
+`static/angulo.js` clears `data-sucio` on its own fields only after a save that covered the
+latest edit.
 
 **Nicho y avatares** (`nicho/` + `tareas/nicho.py`, spec
 `docs/superpowers/specs/2026-09-18-nicho-avatares-design.md`): personas nacidas de
