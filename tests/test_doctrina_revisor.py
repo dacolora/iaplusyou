@@ -321,3 +321,22 @@ def test_duplicar_no_copia_la_revision(base_temporal, monkeypatch):
     hija = creative_flow.duplicar("acme", cf_id)
     assert "revision_doctrina" not in creative_flow.cargar("acme")[hija]
     assert "angulo" in creative_flow.cargar("acme")[hija]
+
+
+def test_reunir_con_guion_y_guia_dados_no_refetcha(base_temporal, monkeypatch):
+    """Bloque 3, review 1: reunir con guion/guia dados no llama a
+    creative_flow.guion_base ni marca.guia_efectiva — optimización para la
+    lista de Crear."""
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    guion_dado = {"bloques": [{"rol": "hook", "texto_voz": "¿Caliente?"}]}
+    guia_dada = "Tono cálido"
+    monkeypatch.setattr(creative_flow, "guion_base", lambda cliente, cf_id: (_ for _ in ()).throw(
+        AssertionError("guion_base no debe ser llamado cuando guion es dado")))
+    import marca
+    monkeypatch.setattr(marca, "guia_efectiva", lambda cliente: (_ for _ in ()).throw(
+        AssertionError("guia_efectiva no debe ser llamada cuando guia es dada")))
+    d = revisor.reunir("acme", cf_id, guion=guion_dado, guia=guia_dada)
+    assert d["guion"] == guion_dado and d["guia"] == "Tono cálido"
+    assert "Tono cálido" in d["verificables"] and "¿Caliente?" in d["verificables"]

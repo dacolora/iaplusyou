@@ -2517,6 +2517,11 @@ def _creative_flow_items(cliente):
     # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
     # (#experimentos?piezas=<pieza_id>). Las finales ya traen su pieza_id.
     pieza_ids = creative_flow.piezas_ids_por_legado(cliente)
+    # Doctrina, bloque 3: leer la guía una sola vez (no por pieza).
+    try:
+        guia_marca = marca_mod.guia_efectiva(cliente) or ""
+    except Exception:  # noqa: BLE001 — es informativa, nunca bloquea
+        guia_marca = ""
     items = []
     for cf_id, entry in sorted(
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
@@ -2560,6 +2565,14 @@ def _creative_flow_items(cliente):
         item["guion_base"] = None
         item["finales"] = []
         item["trabajo_guion"] = None
+        if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
+            item["guion_base"] = creative_flow.guion_base(cliente, cf_id)
+            jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
+            item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
+            for f in creative_flow.finales(cliente, cf_id):
+                jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
+                f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
+                item["finales"].append(f)
         # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
         # Las reglas son gratis y se calculan al renderizar; la revisión de
         # Claude es la guardada. Sin ninguna de las dos, la sección no pesa.
@@ -2569,20 +2582,13 @@ def _creative_flow_items(cliente):
             item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
             item["revision_n"] = doctrina_revisor.contar(item["revision"])
             try:
-                item["reglas"] = doctrina_revisor.reglas(doctrina_revisor.reunir(cliente, cf_id, entry=entry))
+                item["reglas"] = doctrina_revisor.reglas(doctrina_revisor.reunir(cliente, cf_id, entry=entry,
+                                                                                  guion=item["guion_base"], guia=guia_marca))
             except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
                 item["reglas"] = []
             jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
             item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
             item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
-        if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
-            item["guion_base"] = creative_flow.guion_base(cliente, cf_id)
-            jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
-            item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
-            for f in creative_flow.finales(cliente, cf_id):
-                jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
-                f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
-                item["finales"].append(f)
         items.append(item)
     return items
 

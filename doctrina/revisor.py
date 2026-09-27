@@ -47,6 +47,8 @@ punto.
 Responde SOLO un JSON: {"puntos": [{"n": 1, "estado": "pasa|mejorar|no_aplica", "detalle": "...", "donde": "..."}, ...
 hasta el 12], "resumen": "una frase con lo más importante para mejorar, o que la pieza está lista"}"""
 
+_SIN_DAR = object()
+
 
 class ErrorRevision(RuntimeError):
     """La revisión no se pudo hacer o Claude no respondió algo usable.
@@ -241,9 +243,10 @@ def ultimo_caption(cliente, cf_id):
     return (fila[0] if fila else "") or ""
 
 
-def reunir(cliente, cf_id, entry=None):
+def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR):
     """Todo lo que miran las reglas y Claude de una pieza de Crear. `entry`:
-    la sesión ya cargada (la lista de Crear la pasa para no recargar todo)."""
+    la sesión ya cargada (la lista de Crear la pasa para no recargar todo).
+    `guion`/`guia`: ya leídos por quien llama, para no repetir la lectura."""
     import creative_flow
     import final_edition
     import marca
@@ -252,7 +255,8 @@ def reunir(cliente, cf_id, entry=None):
     if not entry:
         raise ErrorRevision("Esa pieza ya no existe.")
     angulo = entry.get("angulo") if isinstance(entry.get("angulo"), dict) and entry.get("angulo") else None
-    guion = creative_flow.guion_base(cliente, cf_id) if (entry.get("tipo") or "video") != "imagen" else None
+    if guion is _SIN_DAR:
+        guion = creative_flow.guion_base(cliente, cf_id) if (entry.get("tipo") or "video") != "imagen" else None
     try:
         producto = final_edition._producto(cliente, entry, None) or {}
     except Exception:  # noqa: BLE001 — sin producto la revisión sigue (las cifras quedan más estrictas)
@@ -262,7 +266,10 @@ def reunir(cliente, cf_id, entry=None):
     if sprint and sprint.get("cp_id"):
         from sprints import datos as sprints_datos
         idea = sprints_datos.idea(cliente, sprint["cp_id"])
-    guia = (marca.guia_efectiva(cliente) or "").strip()
+    if guia is _SIN_DAR:
+        guia = (marca.guia_efectiva(cliente) or "").strip()
+    else:
+        guia = (guia or "").strip()
     verificables = "\n".join(x for x in (json.dumps(producto, ensure_ascii=False), doctrina.texto_verificable(angulo),
                                          str(entry.get("accion_central") or ""), guia, *textos_guion(guion)) if x)
     return {"entry": entry, "cf_id": cf_id, "angulo": angulo, "guion": guion, "producto": producto, "idea": idea,
