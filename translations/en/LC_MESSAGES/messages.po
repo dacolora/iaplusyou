@@ -166,6 +166,10 @@ msgid "%(n)s días"
 msgstr "%(n)s days"
 
 #, python-format
+msgid "%(n)s experimentos con derivaciones en producción revisados."
+msgstr "%(n)s experiments with derivations in production reviewed."
+
+#, python-format
 msgid "%(n)s experimentos en cola para decidir."
 msgstr "%(n)s experiments queued to decide."
 
@@ -234,6 +238,18 @@ msgid "%(nombre)s (%(dur)s s)"
 msgstr "%(nombre)s (%(dur)s s)"
 
 #, python-format
+msgid "%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación (solo videos)."
+msgstr "%(nombre)s (%(pais)s): Image piece: no rescue/derivation (video only)."
+
+#, python-format
+msgid "%(nombre)s (%(pais)s): anuncio %(estado_meta)s en Meta, el decisor no la evalúa hasta que se corrija o se reemplace."
+msgstr "%(nombre)s (%(pais)s): ad %(estado_meta)s on Meta, the decision engine won't evaluate it until it's fixed or replaced."
+
+#, python-format
+msgid "%(nombre)s (%(pais)s): escalado ya pedido en esta pasada."
+msgstr "%(nombre)s (%(pais)s): scaling already requested in this pass."
+
+#, python-format
 msgid "%(nombre)s no tiene nada nuevo que publicar.%(saltadas)s%(sin_canal)s"
 msgstr "%(nombre)s has nothing new to publish.%(saltadas)s%(sin_canal)s"
 
@@ -256,6 +272,10 @@ msgstr "%(nombre)s already derived: it will not be produced again."
 #, python-format
 msgid "%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada."
 msgstr "%(nombre)s already rescued (step %(escalon)s); piece paused."
+
+#, python-format
+msgid "%(nombre)s · derivado de %(pieza)s"
+msgstr "%(nombre)s · derived from %(pieza)s"
 
 #, python-format
 msgid "%(nombre)s — v%(version)s · %(n)s invariantes · actualizado %(actualizado)s"
@@ -2243,6 +2263,9 @@ msgstr "Log events"
 msgid "Experimento cerrado"
 msgstr "Experiment closed"
 
+msgid "Experimento decidido: todas las piezas activas tienen veredicto."
+msgstr "Experiment decided: all active pieces have a verdict."
+
 msgid "Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar."
 msgstr "Experiment on Meta, paused. Activate it whenever you want to start spending."
 
@@ -3413,6 +3436,10 @@ msgstr ""
 "%(mensaje)s\n"
 "\n"
 "Check the connection from the Stores panel and sync again."
+
+#, python-format
+msgid "No se pudo avanzar la derivación: %(error)s"
+msgstr "Could not advance the derivation: %(error)s"
 
 msgid "No se pudo cargar el panel de guiones. Recarga la página."
 msgstr "Couldn't load the scripts panel. Reload the page."

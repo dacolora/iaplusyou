@@ -263,7 +263,8 @@ def _planificar_derivar(cliente, ex, pz, motivo):
         items.append(_item_reedicion(cf_id, base + k, TIPOS_VARIANTE[k % 2], idiomas))
     for k in range(n_rg):
         items.append(_item_regeneracion(cliente, cf_id, k, idiomas))
-    hijo = experimentos.crear_hijo(cliente, ex["id"], f"{ex['nombre']} · derivado de {pz['nombre']}"[:200], pz["id"])
+    nombre_hijo = gettext("%(nombre)s · derivado de %(pieza)s", nombre=ex["nombre"], pieza=pz["nombre"])[:200]
+    hijo = experimentos.crear_hijo(cliente, ex["id"], nombre_hijo, pz["id"])
     d = _nueva(cliente, hijo, "derivar", pz, cf_id, motivo, items)
     # Bandera de idempotencia apenas la derivación está guardada y ANTES de
     # encolar: si encolar falla, un reintento no vuelve a planificar (I-5).

@@ -22,6 +22,7 @@ import db
 import decisor
 import derivaciones
 import experimentos
+import idiomas
 import lanzador
 import notificaciones
 import organico
@@ -181,15 +182,17 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado):
     es_imagen = bool(pz.get("es_imagen"))
     if es_imagen and accion in ("escalar_y_derivar", "rescatar"):
         experimentos.registrar_evento(cliente, ex["id"], "imagen",
-                                      f"{pz['nombre']} ({pz['pais']}): Pieza de imagen: sin rescate/derivación "
-                                      f"(solo videos).", {"accion": accion}, ep_id=ep_id)
+                                      gettext("%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación "
+                                              "(solo videos).", nombre=pz["nombre"], pais=pz["pais"]),
+                                      {"accion": accion}, ep_id=ep_id)
     if accion == "escalar_y_derivar":
         # "escalar" es una acción por país (sube el presupuesto del conjunto
         # en Meta), no por pieza: con varios ganadores del mismo país en una
         # misma pasada, solo el primero la pide — los demás solo derivan.
         if pz["pais"] in resultado["escalados"]:
             experimentos.registrar_evento(cliente, ex["id"], "escalado",
-                                          f"{pz['nombre']} ({pz['pais']}): escalado ya pedido en esta pasada.",
+                                          gettext("%(nombre)s (%(pais)s): escalado ya pedido en esta pasada.",
+                                                  nombre=pz["nombre"], pais=pz["pais"]),
                                           ep_id=ep_id)
         else:
             resultado["escalados"].add(pz["pais"])
@@ -253,8 +256,10 @@ def _rechazada_por_meta(cliente, ex, pz):
     if not (pz.get("extra") or {}).get("rechazo_avisado"):
         experimentos.registrar_evento(
             cliente, ex["id"], "rechazo_meta",
-            f"{pz['nombre']} ({pz['pais']}): anuncio {pz['estado_meta']} en Meta, el decisor no la evalúa "
-            f"hasta que se corrija o se reemplace.", {"estado_meta": pz["estado_meta"]}, ep_id=pz["id"])
+            gettext("%(nombre)s (%(pais)s): anuncio %(estado_meta)s en Meta, el decisor no la evalúa "
+                    "hasta que se corrija o se reemplace.",
+                    nombre=pz["nombre"], pais=pz["pais"], estado_meta=pz["estado_meta"]),
+            {"estado_meta": pz["estado_meta"]}, ep_id=pz["id"])
         experimentos.marcar_pieza(cliente, pz["id"], rechazo_avisado=True)
     return True
 
@@ -345,7 +350,7 @@ def _marcar_decidido(cliente, ex):
         return False
     experimentos.actualizar(cliente, ex["id"], estado="decidido")
     experimentos.registrar_evento(cliente, ex["id"], "estado",
-                                  "Experimento decidido: todas las piezas activas tienen veredicto.")
+                                  gettext("Experimento decidido: todas las piezas activas tienen veredicto."))
     return True
 
 
@@ -414,9 +419,11 @@ def exp_avanzar_todos(tarea):
         if not any(d.get("estado") == "produciendo" for d in ((extra or {}).get("derivaciones") or [])):
             continue
         n += 1
-        try:
-            derivaciones.avanzar(cliente, eid)
-        except Exception as error:
-            experimentos.registrar_evento(cliente, eid, "error",
-                                          f"No se pudo avanzar la derivación: {cola.sin_token(str(error))}")
-    return f"{n} experimentos con derivaciones en producción revisados."
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            try:
+                derivaciones.avanzar(cliente, eid)
+            except Exception as error:
+                experimentos.registrar_evento(cliente, eid, "error",
+                                              gettext("No se pudo avanzar la derivación: %(error)s",
+                                                      error=cola.sin_token(str(error))))
+    return gettext("%(n)s experimentos con derivaciones en producción revisados.", n=n)

@@ -102,3 +102,47 @@ def test_tienda_rota_en_ingles(monkeypatch):
     ((tipo, asunto, cuerpo),) = enviados
     assert (tipo, asunto) == ("tienda", "The store “Glow Shop” stopped syncing")
     assert "products" in cuerpo and not _con_marca(cuerpo), cuerpo
+
+
+def test_exp_avanzar_todos_usa_el_idioma_de_cada_proyecto(base_temporal, tmp_path, monkeypatch):
+    """Fix round 1: exp_avanzar_todos recorre experimentos de VARIOS proyectos
+    (periódica, sin cliente propio) y llamaba a derivaciones.avanzar sin envolver
+    cada vuelta en idiomas.en_idioma(idiomas.de_proyecto(cliente)) — un evento de
+    error de un proyecto en inglés salía en español (idioma DEFECTO ambiente)."""
+    import experimentos as ex
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import PAISES
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
+    idiomas.guardar_de_proyecto("acme", "en")
+    tareas.cargar_todas()
+    e_en = ex.crear("acme", "A", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    e_es = ex.crear("otro", "B", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.actualizar("acme", e_en, extra={"derivaciones": [{"id": "d1", "estado": "produciendo"}]})
+    ex.actualizar("otro", e_es, extra={"derivaciones": [{"id": "d1", "estado": "produciendo"}]})
+    monkeypatch.setattr(te.derivaciones, "avanzar", lambda c, e: (_ for _ in ()).throw(RuntimeError("boom")))
+    tareas.REGISTRO["exp_avanzar_todos"]({"payload": {}})
+    ev_en = next(e for e in ex.eventos("acme", e_en) if e["tipo"] == "error")
+    ev_es = next(e for e in ex.eventos("otro", e_es) if e["tipo"] == "error")
+    assert ev_en["mensaje"] == "Could not advance the derivation: boom"
+    assert ev_es["mensaje"] == "No se pudo avanzar la derivación: boom"
+    assert not _con_marca(ev_en["mensaje"])
+
+
+def test_marcar_decidido_en_ingles(monkeypatch):
+    """Fix round 1: los textos que _aplicar_veredicto/_rechazada_por_meta/
+    _marcar_decidido dejaban en español fijo (corren dentro del worker/las
+    periódicas, ya en el idioma del proyecto desde la Task 1/este fix) ahora
+    pasan por gettext."""
+    from tareas import experimentos as te
+    ex_fila = {"id": 7, "estado": "corriendo", "propuestas_pendientes": 0, "extra": {},
+               "piezas": [{"meta_ad_id": "a1", "estado": "activo", "veredicto": "ganador"}]}
+    monkeypatch.setattr(te.experimentos, "obtener", lambda c, eid: ex_fila)
+    monkeypatch.setattr(te.experimentos, "actualizar", lambda c, eid, **kw: None)
+    eventos = []
+    monkeypatch.setattr(te.experimentos, "registrar_evento",
+                        lambda cliente, eid, tipo, texto, datos=None, ep_id=None: eventos.append(texto))
+    with idiomas.en_idioma("en"):
+        assert te._marcar_decidido("acme", ex_fila) is True
+    assert eventos == ["Experiment decided: all active pieces have a verdict."]
