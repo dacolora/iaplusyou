@@ -521,8 +521,7 @@
     panel.addEventListener('input', function (ev) {
       var el = ev.target;
       if (el.closest('.angulo-editor')) {
-        // angulo.js guarda solo a los 800 ms; su marca de «sin guardar» se quita después.
-        setTimeout(function () { delete el.dataset.sucio; }, 2500);
+        // angulo.js guarda estos campos por su cuenta y borra su propia marca al terminar.
         return;
       }
       if (!el.name || el.readOnly) return;

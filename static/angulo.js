@@ -79,7 +79,9 @@
     contarGancho(caja);
     if (caja.dataset.soloLectura) return;
     var espera = null;
+    var cambios = 0;
     function guardar() {
+      var enviado = cambios;
       fetch(caja.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
                                body: JSON.stringify({angulo: leer(caja)})})
         .then(function (r) { return r.json(); })
@@ -93,6 +95,11 @@
           var tarjeta = caja.closest('.sprint-idea');
           var ganchoTarjeta = tarjeta ? tarjeta.querySelector('input[name="gancho"]') : null;
           if (ganchoTarjeta && !ganchoTarjeta.readOnly && j.angulo) ganchoTarjeta.value = j.angulo.gancho || '';
+          // Regla global: `data-sucio` solo se borra tras un autoguardado que
+          // SÍ terminó de guardar lo que hay ahora — si el campo cambió otra
+          // vez mientras esta llamada estaba en vuelo, sigue sucio (lo agarra
+          // el guardado siguiente).
+          if (enviado === cambios) caja.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
           var ok = caja.querySelector('.angulo-guardado');
           ok.hidden = false;
           setTimeout(function () { ok.hidden = true; }, 1500);
@@ -102,6 +109,7 @@
     caja.querySelectorAll('input, textarea, select').forEach(function (el) {
       el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', function () {
         contarGancho(caja);
+        cambios++;
         clearTimeout(espera);
         espera = setTimeout(guardar, 800);
       });
