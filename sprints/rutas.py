@@ -412,9 +412,11 @@ def campana_campo(cliente, sid, cid):
     tarjeta ya actualizada y si el panel debe recargarse."""
     _campana_o_404(cliente, sid, cid)
     cuerpo = _json_cuerpo()
-    if not cuerpo or cuerpo.get("campo") not in CAMPOS_CAMPANA or not _valor_simple(cuerpo.get("valor")):
+    if not cuerpo or cuerpo.get("campo") not in CAMPOS_CAMPANA:
         return jsonify({"ok": False, "error": "Ese dato no se puede editar aquí."}), 400
     campo, valor = cuerpo["campo"], cuerpo.get("valor")
+    if not _valor_simple(campo, valor):
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
     try:
         if campo == "catalogo_id" and valor not in {p["id"] for p in _productos_planos(cliente)}:
             raise datos.ErrorDatos("Ese producto no está en el catálogo.")
@@ -434,9 +436,29 @@ def _json_cuerpo():
     return cuerpo if isinstance(cuerpo, dict) else None
 
 
-def _valor_simple(valor):
-    """Lo que puede llegar como valor de un campo: texto, número, lista o nada."""
-    return valor is None or (isinstance(valor, (str, int, list)) and not isinstance(valor, bool))
+# F5 (ronda final): `_valor_simple` aceptaba una lista para CUALQUIER campo --
+# `{"campo": "catalogo_id", "valor": []}` tiraba un TypeError sin atrapar
+# (unhashable type: 'list' contra el set de ids, 500 real); un `dolor`/`nombre`
+# con lista se guardaba stringificado ("['a', 'b']", `sprints.datos._texto`); un
+# `n_videos`/`n_imagenes` con lista se guardaba como 0 (`[] or 0`, sin avisar).
+# Ahora el tipo depende del campo: lista solo donde el panel de verdad la manda
+# (familias, marcas); número o texto donde vienen de un <input type="number">
+# o de un formulario (persona_id y las cantidades); texto para todo lo demás.
+_CAMPOS_LISTA = ("familias", "marcas")
+_CAMPOS_NUMERICOS = ("n_videos", "n_imagenes", "referencias_objetivo", "persona_id")
+
+
+def _valor_simple(campo, valor):
+    """Si el TIPO de `valor` es válido para `campo` (el contenido lo valida
+    `sprints.datos`). `None` solo se acepta fuera de listas/numéricos, donde
+    significa «bórralo»."""
+    if isinstance(valor, bool):
+        return False
+    if campo in _CAMPOS_LISTA:
+        return valor is None or isinstance(valor, (str, list))
+    if campo in _CAMPOS_NUMERICOS:
+        return isinstance(valor, (str, int))
+    return valor is None or isinstance(valor, str)
 
 
 def _campanas_desde_form():
@@ -562,9 +584,11 @@ def sprint_campo(cliente, sid):
     """Autoguardado de un dato de la cabecera del tablero."""
     sp = _sprint_o_404(cliente, sid)
     cuerpo = _json_cuerpo()
-    if not cuerpo or cuerpo.get("campo") not in CAMPOS_SPRINT or not _valor_simple(cuerpo.get("valor")):
+    if not cuerpo or cuerpo.get("campo") not in CAMPOS_SPRINT:
         return jsonify({"ok": False, "error": "Ese dato no se puede editar aquí."}), 400
     campo, valor = cuerpo["campo"], cuerpo.get("valor")
+    if not _valor_simple(campo, valor):
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
     try:
         if campo == "momento":
             valor = _momento_desde(cliente, valor, sp.get("pais"), sp["inicio"])

@@ -275,6 +275,47 @@ def test_guardar_un_campo_de_la_campana(app):
     assert datos.campana("acme", cid)["n_videos"] == 7
 
 
+def test_guardar_un_campo_rechaza_el_tipo_equivocado(app):
+    """F5 (ronda final): antes, `_valor_simple` aceptaba una lista para
+    CUALQUIER campo -- `catalogo_id` con `[]` tiraba un TypeError sin atrapar
+    (unhashable type: 'list' al comparar contra el set de ids, 500), y
+    `dolor`/`nombre` con una lista se guardaban stringificados
+    ("['a', 'b']", `sprints.datos._texto`). Ahora solo familias/marcas
+    aceptan lista; el resto de texto, numéricos+persona_id texto o número."""
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    url = f"/cliente/acme/sprints/{sid}/campanas/{cid}/campo"
+    for malo in ({"campo": "catalogo_id", "valor": []}, {"campo": "dolor", "valor": ["a", "b"]},
+                 {"campo": "persona_id", "valor": [1]}, {"campo": "funnel", "valor": []},
+                 {"campo": "consciencia", "valor": []}, {"campo": "n_videos", "valor": []}):
+        r = _json(app["c"], url, malo)
+        assert r.status_code == 400 and r.get_json()["error"], malo
+    original = datos.campana("acme", cid)
+    assert original["catalogo_id"] == "espejo_led" and original["dolor"] == ""
+    # las listas siguen andando donde sí las manda el panel: familias y marcas.
+    from referentes import datos as rdatos
+    rdatos.familia_asegurar("UGC", "")
+    assert _json(app["c"], url, {"campo": "familias", "valor": ["UGC"]}).get_json()["ok"]
+    assert _json(app["c"], url, {"campo": "marcas", "valor": ["Crocs"]}).get_json()["ok"]
+    assert datos.campana("acme", cid)["marcas"] == [{"nombre": "Crocs"}]
+
+
+def test_guardar_campo_del_sprint_rechaza_el_tipo_equivocado(app):
+    """Mismo tipo de bug a nivel de sprint: `nombre`/`momento` con una lista."""
+    from sprints import datos
+    sid = _sprint(datos)
+    url = f"/cliente/acme/sprints/{sid}/campo"
+    original = datos.sprint("acme", sid)
+    for malo in ({"campo": "nombre", "valor": ["a", "b"]}, {"campo": "momento", "valor": ["a", "b"]},
+                 {"campo": "pais", "valor": []}):
+        r = _json(app["c"], url, malo)
+        assert r.status_code == 400 and r.get_json()["error"], malo
+    assert datos.sprint("acme", sid)["nombre"] == original["nombre"]
+    assert datos.sprint("acme", sid)["momento"] == original["momento"]
+    assert _json(app["c"], url, {"campo": "marcas", "valor": ["Crocs"]}).get_json()["ok"]
+
+
 def test_guardar_repetida_devuelve_el_aviso(app):
     from sprints import datos
     sid = _sprint(datos)
