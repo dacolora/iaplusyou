@@ -56,13 +56,25 @@ def test_traer_modo_palabra_arma_la_url_de_ad_library(monkeypatch):
     body = kw["json"]
     ad_lib_url = body["startUrls"][0]["url"]
     assert "country=CO" in ad_lib_url
-    assert "q=sandalias" in ad_lib_url
+    assert "q=%22sandalias%20de%20cuero%22" in ad_lib_url
     assert "content_languages%5B0%5D=es" in ad_lib_url or "content_languages[0]=es" in ad_lib_url
     assert "active_status=active" in ad_lib_url
     assert "media_type=image" in ad_lib_url
     assert body["resultsLimit"] == 5
     with pytest.raises(StopIteration):
         next(gen)
+
+
+def test_url_varias_palabras_es_frase_exacta_y_una_sola_palabra_no():
+    """`keyword_unordered` acepta anuncios con las palabras en cualquier parte
+    (catálogos genéricos, textos que las mencionan de pasada): «dolor de pies»
+    trajo un alpinista y un enchufe (2026-09-27). Con varias palabras se pide
+    la frase exacta, como las comillas en la Ad Library."""
+    base = {"modo": "palabra", "idioma": "es", "pais": "ALL", "formato": "imagen", "solo_activos": True}
+    url = apify_adlibrary._url_ad_library({**base, "palabra": "  dolor de pies "})
+    assert "q=%22dolor%20de%20pies%22" in url and "search_type=keyword_exact_phrase" in url
+    url = apify_adlibrary._url_ad_library({**base, "palabra": "plantillas"})
+    assert "q=plantillas" in url and "search_type=keyword_unordered" in url
 
 
 def test_traer_modo_marca_usa_view_all_page_id(monkeypatch):

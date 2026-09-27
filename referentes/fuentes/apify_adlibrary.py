@@ -63,10 +63,18 @@ def _url_ad_library(consulta):
                 f"&country={pais}&media_type={formato}&search_type=page"
                 f"&view_all_page_id={consulta['pagina_id']}")
     idioma = quote((consulta.get("idioma") or "es").strip()[:5] or "es")
-    palabra = consulta.get("palabra") or ""
+    palabra = " ".join((consulta.get("palabra") or "").split())
+    # Varias palabras = frase exacta (como las comillas en la Ad Library):
+    # `keyword_unordered` acepta anuncios con las palabras en cualquier parte
+    # y «dolor de pies» trajo catálogos genéricos y textos sin relación
+    # (2026-09-27). Una sola palabra sigue igual.
+    if " " in palabra:
+        q, tipo = quote(f'"{palabra}"'), "keyword_exact_phrase"
+    else:
+        q, tipo = quote(palabra), "keyword_unordered"
     return (f"https://www.facebook.com/ads/library/?active_status={activo}&ad_type=all"
             f"&content_languages[0]={idioma}&country={pais}&media_type={formato}"
-            f"&q={quote(palabra)}&search_type=keyword_unordered")
+            f"&q={q}&search_type={tipo}")
 
 
 def _texto_snapshot(snap):

@@ -203,6 +203,11 @@ def traer(consulta, tope, avanzar, cursor=None):
             ruta = "/ad-library/search"
             params["query"] = consulta.get("palabra") or ""
             params["language"] = consulta.get("idioma") or "es"
+            # Relevancia: sin `order` Atria ordena por `newest` y su búsqueda
+            # acepta cualquier palabra (incluida «de») -- «dolor de pies»
+            # trajo 500 anuncios sin relación (2026-09-27). Verificado en vivo:
+            # con best_match, 16 de 20 eran del tema.
+            params["order"] = "best_match"
         try:
             data = _pedir(sesion, ruta, params)
         except _LimiteExcedido:

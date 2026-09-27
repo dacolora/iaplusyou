@@ -312,3 +312,31 @@ def test_familias_frecuentes_por_etapa_y_consciencia(base_temporal):
     assert rdatos.familias_frecuentes("acme", etapa="TOF", consciencia="problem-aware") == ["A", "B"]
     assert rdatos.familias_frecuentes("acme", etapa="TOF") == ["A", "B", "D"]
     assert rdatos.familias_frecuentes("acme", etapa="TOF", limite=1) == ["A"]
+
+
+def test_borrar_de_barrido_quita_sus_referentes_y_las_familias_de_claude_que_quedan_vacias(base_temporal):
+    """2026-09-27: tres barridos de «dolor de pies» trajeron anuncios sin
+    relación (Atria sin orden por relevancia). Se borran sus referentes y las
+    familias que Claude inventó solo para ellos; las de copycoders nunca."""
+    import db
+    from referentes import datos
+    a = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "dolor de pies"}, 10)
+    b = datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "plantillas"}, 10)
+    datos.familia_asegurar("Price Slash Hero", origen="copycoders")
+    datos.familia_asegurar("EMERGING: solo de A", origen="claude")
+    datos.familia_asegurar("EMERGING: de A y B", origen="claude")
+
+    def guardar(aid, fam, bid):
+        datos.guardar_referente(_anuncio(anuncio_id=aid, fuente="atria", familia=fam, imagen_origen=f"https://cdn/{aid}.jpg"),
+                                cliente="acme", barrido_id=bid)
+    for aid, fam in (("a1", "Price Slash Hero"), ("a2", "EMERGING: solo de A"), ("a3", "EMERGING: de A y B")):
+        guardar(aid, fam, a)
+    guardar("b1", "EMERGING: de A y B", b)
+    r = datos.borrar_de_barrido(a)
+    assert r["referentes"] == 3 and r["familias"] == ["EMERGING: solo de A"]
+    assert sorted(r["anuncio_ids"]) == ["a1", "a2", "a3"]
+    nombres = [f["nombre"] for f in datos.familias("acme")]
+    assert "EMERGING: solo de A" not in nombres and "Price Slash Hero" in nombres and "EMERGING: de A y B" in nombres
+    with db.conectar() as con:
+        assert [f[0] for f in con.execute(sa.select(db.referente.c.anuncio_id))] == ["b1"]
+    assert datos.barrido(a) is not None      # el barrido queda (historial del gasto)
