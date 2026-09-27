@@ -63,7 +63,7 @@ def test_armar_muestra_la_sofisticacion_y_describe_referencias(app):
     assert "Promesas parecidas que ya vio el cliente de Espejo LED: Claude lo decide" in html
     assert f'data-describir="{rid}"' in html and f"/cliente/acme/sprints/referencias/{rid}" in html
     assert f'data-abrir-describir="{rid}"' in html and "Más opciones de referencias" in html
-    assert "descríbelos aquí" not in html and "Qué tanto sabe" not in html
+    assert "descríbelos aquí" not in html and 'id="persona-conciencia"' not in html and "Qué tanto sabe Premium" not in html
     r = app["c"].post(f"/cliente/acme/sprints/referencias/{rid}", json={"descripcion": "luz lateral", "intencion": ["iluminacion"]})
     assert r.get_json()["ok"] and r.get_json()["estado"] == "lista"
     assert "<script" not in html

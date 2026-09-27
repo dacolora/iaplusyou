@@ -41,7 +41,7 @@
       <small class="campo-error" hidden></small>
     </div>
     <div data-campo-caja>
-      <span class="campo-label">Consciencia de la audiencia (solo esta campaña)</span>
+      <span class="campo-label">Qué tanto sabe la audiencia</span>
       <div class="panel-opciones" role="radiogroup" aria-label="Consciencia" data-campo="consciencia" data-tipo="radio">
         <label><input type="radio" name="consciencia-{{ c.id }}" value="" {% if not c.consciencia %}checked{% endif %}> sin definir</label>
         {% for k, nombre in consciencias.items() %}
