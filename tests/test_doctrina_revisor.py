@@ -144,6 +144,19 @@ def test_estado_contar_y_resumen_de_galeria():
     assert revisor.resumen_galeria(rev, "https://r2/otro.mp4") == {"estado": "vieja", "n": 0}
 
 
+def test_contar_no_duplica_un_punto_marcado_por_los_dos():
+    """Bloque 3, revisión final (I6): `contar` son puntos DISTINTOS — si
+    Claude marca «mejorar» el mismo punto que ya marcaron las reglas, cuenta
+    una sola vez, no dos."""
+    from doctrina import revisor
+    puntos = [{"n": n, "estado": "pasa", "detalle": "", "donde": ""} for n in range(1, 13)]
+    puntos[4] = {"n": 5, "estado": "mejorar", "detalle": "Sin mecanismo.", "donde": ""}
+    r = revisor.parsear_revision(_respuesta(puntos=puntos))
+    rev = dict(r, video_url="https://r2/v.mp4",
+               reglas=[{"n": 5, "codigo": "sin_mecanismo", "texto": "x", "donde": "angulo"}])
+    assert revisor.contar(rev) == 1
+
+
 # ------------------------------------------------------------ tarea 2 ---
 
 PRODUCTO = {"nombre": "Hcozy Orange", "descripcion": "pantufla de pana", "regla": "", "precio": 89900,

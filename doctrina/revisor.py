@@ -198,12 +198,15 @@ def parsear_revision(texto):
 
 
 def contar(rev):
-    """Puntos «para mejorar» de una revisión guardada más los avisos de la
-    foto de reglas que se guardó con ella; 0 si no hay revisión o falló."""
+    """Puntos DISTINTOS «para mejorar» de una revisión guardada, contando
+    tanto los que marcó Claude como los de la foto de reglas que se guardó
+    con ella — un punto que marcan los dos cuenta una sola vez; 0 si no hay
+    revisión o falló."""
     if not isinstance(rev, dict) or rev.get("error"):
         return 0
-    mejorar = sum(1 for p in rev.get("puntos") or [] if isinstance(p, dict) and p.get("estado") == "mejorar")
-    return mejorar + sum(1 for x in rev.get("reglas") or [] if isinstance(x, dict))
+    puntos = {p.get("n") for p in rev.get("puntos") or [] if isinstance(p, dict) and p.get("estado") == "mejorar"}
+    puntos |= {x.get("n") for x in rev.get("reglas") or [] if isinstance(x, dict)}
+    return len(puntos)
 
 
 def estado_revision(rev, video_url=None):
