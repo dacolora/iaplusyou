@@ -349,3 +349,43 @@ def test_etiquetas_de_estado_en_ingles(admin_en):
 def test_flash_de_experimentos_en_ingles(admin_en):
     admin_en.post("/cliente/acme/experimentos/probar", data={}, headers=MISMO_ORIGEN)
     assert "Connect Meta in Settings before testing pieces." in html_de(admin_en, "/cliente/acme")
+
+
+def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypatch):
+    """Fix round 1, hallazgo 3: atribución (e.atribucion y el <select>), la
+    acción de una propuesta pendiente (pr.accion), el tipo de una derivación
+    (d.tipo) y el evento que crea una ruta (ev.tipo/ev.mensaje) son claves
+    guardadas en español que espanol_visible/MARCAS NO detecta (ninguna
+    palabra tiene tilde ni está en la lista de palabras frecuentes) — se
+    comprueban a mano, palabra por palabra."""
+    import experimentos as ex
+    import propuestas
+    # Proyecto también en inglés (app_i18n ya aisló proyectos.BASE_DIR en
+    # tmp_path): lo guardado sigue al proyecto (spec 2026-09-26 §B3), así que
+    # el evento de exp_crear solo sale en inglés si el proyecto también lo
+    # está — igual que un equipo angloparlante con su proyecto en inglés.
+    idiomas.guardar_de_proyecto("acme", "en")
+    monkeypatch.setattr(app_i18n.meta_conexion, "estado", lambda c: {"estado": "conectado", "verificado": True, "detalle": {}})
+    # Ruta de verdad (exp_crear): deja el evento "creado" con "Experimento
+    # creado con..." — el caso que el hallazgo pide comprobar explícitamente.
+    admin_en.post("/cliente/acme/experimentos/nuevo", data={
+        "nombre": "Test EN", "objetivo": "OUTCOME_TRAFFIC", "paises": ["CO"], "presupuesto_CO": "20000",
+        "dias": "7", "tope_total": "100000", "destino_url": "https://shop.example/p", "atribucion": "ninguna",
+    }, headers=MISMO_ORIGEN)
+    eid = ex.cargar("acme")[0]["id"]
+    propuestas.crear("acme", eid, "escalar", {"pais": "CO"}, "ganador")
+    ex.actualizar("acme", eid, extra={"derivaciones": [
+        {"id": "d1", "tipo": "rescatar", "estado": "produciendo", "origen_ep_id": None, "motivo": "", "items": []},
+    ]})
+
+    html = html_de(admin_en, "/cliente/acme")
+    # atribución (tag del experimento + <select> Avanzado)
+    assert "atribución ninguna" not in html and "attribution none" in html
+    assert ">ninguna<" not in html
+    # accion de la propuesta pendiente (tag + el confirm() de Aprobar)
+    assert ">escalar<" not in html and ">scale<" in html
+    # tipo de la derivación
+    assert ">rescatar<" not in html and ">rescue<" in html
+    # evento creado por la ruta (tipo + mensaje)
+    assert ">creado<" not in html and ">created<" in html
+    assert "Experimento creado" not in html and "Experiment created" in html

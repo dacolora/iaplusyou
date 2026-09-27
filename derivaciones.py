@@ -77,6 +77,9 @@ ETIQUETAS_ESTADO = {
 }
 ETIQUETAS_CLASE = {"reedicion": N_("reedición"), "regeneracion": N_("regeneración")}
 ETIQUETAS_VARIANTE = {"hook": N_("hook"), "estructura": N_("estructura")}
+# Rótulo del `tipo` de la derivación (`d.tipo`, "derivar"|"rescatar"): la
+# clave guardada no cambia — |traducir en la plantilla, nunca acá.
+ETIQUETAS_TIPO = {"derivar": N_("derivar"), "rescatar": N_("rescatar")}
 
 
 # ------------------------------------------------------------ helpers ---

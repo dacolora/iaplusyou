@@ -136,6 +136,10 @@ msgid "%(leidos)s pedido(s) leído(s), %(nuevos)s nuevo(s), %(atribuidos)s atrib
 msgstr "%(leidos)s order(s) read, %(nuevos)s new, %(atribuidos)s attributed to pieces."
 
 #, python-format
+msgid "%(mensaje)s (propuesta #%(id)s aprobada a mano)."
+msgstr "%(mensaje)s (proposal #%(id)s approved by hand)."
+
+#, python-format
 msgid "%(mensaje)s Experimento hijo %(hijo)s."
 msgstr "%(mensaje)s Child experiment %(hijo)s."
 
@@ -2750,6 +2754,10 @@ msgstr "Experiment closed"
 msgid "Experimento cerrado."
 msgstr "Experiment closed."
 
+#, python-format
+msgid "Experimento creado con %(n)s países (modo %(modo)s, atribución %(atribucion)s)"
+msgstr "Experiment created with %(n)s countries (mode %(modo)s, attribution %(atribucion)s)"
+
 msgid "Experimento decidido: todas las piezas activas tienen veredicto."
 msgstr "Experiment decided: all active pieces have a verdict."
 
@@ -3942,6 +3950,10 @@ msgstr "Default models — FlowPlus"
 msgid "Modo"
 msgstr "Mode"
 
+#, python-format
+msgid "Modo cambiado de %(antes)s a %(despues)s."
+msgstr "Mode changed from %(antes)s to %(despues)s."
+
 msgid "Modo inválido."
 msgstr "Invalid mode."
 
@@ -4142,6 +4154,10 @@ msgstr "Could not create the asset: %(detalle)s"
 #, python-format
 msgid "No pude describir las referencias (%(tipo)s)."
 msgstr "I couldn't describe the references (%(tipo)s)."
+
+#, python-format
+msgid "No pude ejecutar «%(accion)s»: %(error)s"
+msgstr "Couldn't execute “%(accion)s”: %(error)s"
 
 msgid "No pude leer tus activos:"
 msgstr "Couldn't read your assets:"
@@ -4806,6 +4822,10 @@ msgstr "Prompts"
 msgid "Proponer qué quitar"
 msgstr "Suggest what to cut"
 
+#, python-format
+msgid "Propuesta #%(id)s (%(accion)s) rechazada a mano."
+msgstr "Proposal #%(id)s (%(accion)s) rejected by hand."
+
 msgid "Propuesta de Claude"
 msgstr "Claude's suggestion"
 
@@ -4861,6 +4881,10 @@ msgstr "Organic post with errors"
 #, python-format
 msgid "Publicación orgánica de %(nombre)s en cola: %(creadas)s.%(saltadas)s%(sin_canal)s"
 msgstr "Organic post of %(nombre)s queued: %(creadas)s.%(saltadas)s%(sin_canal)s"
+
+#, python-format
+msgid "Publicación orgánica en cola a mano: %(plataformas)s."
+msgstr "Organic post queued by hand: %(plataformas)s."
 
 #, python-format
 msgid "Publicación orgánica en cola: %(plataformas)s. Te avisamos cuando salga."
@@ -5085,6 +5109,9 @@ msgstr "Product rules (AI)"
 
 msgid "Reglas del decisor"
 msgstr "Decisor rules"
+
+msgid "Reglas del experimento actualizadas."
+msgstr "Experiment rules updated."
 
 msgid "Reglas del motor (valen para todos los experimentos)"
 msgstr "Engine rules (apply to every experiment)"
@@ -5861,6 +5888,9 @@ msgstr "Bring in products from… (CSV/Excel, URL or your store)"
 msgid "Traer y leer"
 msgstr "Fetch and read"
 
+msgid "Triple Whale"
+msgstr "Triple Whale"
+
 msgid "Triple Whale (atribución)"
 msgstr "Triple Whale (attribution)"
 
@@ -6350,6 +6380,12 @@ msgstr "YouTube Data API (Niche: video comments)"
 msgid "abre el enlace que te mandamos."
 msgstr "open the link we sent you."
 
+msgid "acción"
+msgstr "action"
+
+msgid "activar"
+msgstr "activate"
+
 msgid "activo"
 msgstr "active"
 
@@ -6362,6 +6398,9 @@ msgstr "right now"
 
 msgid "archivado"
 msgstr "archived"
+
+msgid "archivar"
+msgstr "archive"
 
 #, python-format
 msgid "archivo(s)… 0%%"
@@ -6455,6 +6494,9 @@ msgstr "running"
 msgid "costó %(usd)s"
 msgstr "cost %(usd)s"
 
+msgid "creado"
+msgstr "created"
+
 #, python-format
 msgid "de %(valor)s/día"
 msgstr "of %(valor)s/day"
@@ -6466,6 +6508,9 @@ msgstr "decided"
 msgid "del %(desde)s al %(hasta)s · todos los proyectos"
 msgstr "from %(desde)s to %(hasta)s · all projects"
 
+msgid "derivación"
+msgstr "derivation"
+
 #, python-format
 msgid "derivación %(id)s lista: %(n)s pieza(s) nueva(s)%(fallidas)s%(motivo_extra)s"
 msgstr "derivation %(id)s ready: %(n)s new piece(s)%(fallidas)s%(motivo_extra)s"
@@ -6473,6 +6518,9 @@ msgstr "derivation %(id)s ready: %(n)s new piece(s)%(fallidas)s%(motivo_extra)s"
 #, python-format
 msgid "derivado en → %(nombre)s"
 msgstr "derived into → %(nombre)s"
+
+msgid "derivar"
+msgstr "derive"
 
 msgid "desde"
 msgstr "since"
@@ -6614,11 +6662,20 @@ msgstr "error"
 msgid "error desconocido"
 msgstr "unknown error"
 
+msgid "escalado"
+msgstr "scaling"
+
+msgid "escalar"
+msgstr "scale"
+
 msgid "esperan una aprobación"
 msgstr "waiting for an approval"
 
 msgid "esperando aprobación"
 msgstr "awaiting approval"
+
+msgid "estado"
+msgstr "status"
 
 msgid "este producto"
 msgstr "this product"
@@ -6730,6 +6787,9 @@ msgstr "session %(cf_id)s no longer exists"
 msgid "la tienda no trajo fotos"
 msgstr "the store didn't bring photos"
 
+msgid "lanzamiento"
+msgstr "launch"
+
 msgid "lanzando"
 msgstr "launching"
 
@@ -6781,6 +6841,9 @@ msgstr "same problem: no support for a product reference image"
 
 msgid "modelo de nicho, sin evidencia de que su calidad supere a los editores ya en uso"
 msgstr "niche model, with no evidence that its quality beats the editors already in use"
+
+msgid "modo"
+msgstr "mode"
 
 #, python-format
 msgid "modo %(modo)s"
@@ -6840,6 +6903,9 @@ msgstr "partial"
 msgid "pausado"
 msgstr "paused"
 
+msgid "pausar"
+msgstr "pause"
+
 msgid "pedidos"
 msgstr "orders"
 
@@ -6852,8 +6918,14 @@ msgstr "pending"
 msgid "perdedor"
 msgstr "loser"
 
+msgid "pixel"
+msgstr "pixel"
+
 msgid "por revisar"
 msgstr "to review"
+
+msgid "presupuesto"
+msgstr "budget"
 
 #, python-format
 msgid "prioridad %(n)s"
@@ -6881,10 +6953,16 @@ msgstr "products:"
 msgid "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s"
 msgstr "maximum depth (%(n)s derivation generations); %(motivo)s"
 
+msgid "propuesta"
+msgstr "proposal"
+
 msgid "proyecto"
 msgid_plural "proyectos"
 msgstr[0] "project"
 msgstr[1] "projects"
+
+msgid "publicación"
+msgstr "post"
 
 msgid "publicada"
 msgstr "published"
@@ -6895,9 +6973,15 @@ msgstr "published"
 msgid "publicando"
 msgstr "publishing"
 
+msgid "publicar orgánico"
+msgstr "publish organic"
+
 #, python-format
 msgid "re-edición %(tipo)s v%(variante)s"
 msgstr "re-edit %(tipo)s v%(variante)s"
+
+msgid "rechazo de Meta"
+msgstr "Meta rejection"
 
 msgid "reedición"
 msgstr "re-edit"
@@ -6912,9 +6996,15 @@ msgstr "regeneration"
 msgid "regeneración %(cf_id)s"
 msgstr "regeneration %(cf_id)s"
 
+msgid "reglas"
+msgstr "rules"
+
 #, python-format
 msgid "reintentar rescate: falló %(detalle)s"
 msgstr "retry rescue: failed %(detalle)s"
+
+msgid "rescatar"
+msgstr "rescue"
 
 msgid "rota"
 msgstr "broken"
@@ -7018,11 +7108,17 @@ msgstr "successor to Luma Ray3 Modify, cheaper per second"
 msgid "sí"
 msgstr "yes"
 
+msgid "tienda"
+msgstr "store"
+
 msgid "todavía no se han traído resultados"
 msgstr "results haven't been pulled yet"
 
 msgid "todo el experimento"
 msgstr "the whole experiment"
+
+msgid "tope"
+msgstr "cap"
 
 #, python-format
 msgid "tope alcanzado (%(gasto)s de %(tope)s %(moneda)s); %(motivo)s"
@@ -7047,6 +7143,9 @@ msgstr "uuid, only if you already created it in the Higgsfield panel"
 #, python-format
 msgid "ventas por tienda: %(n)s pedido(s)"
 msgstr "sales by store: %(n)s order(s)"
+
+msgid "veredicto"
+msgstr "verdict"
 
 msgid "version_n inválido."
 msgstr "Invalid version_n."

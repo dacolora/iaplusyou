@@ -37,6 +37,19 @@ ETIQUETAS_VEREDICTO = {
 ETIQUETAS_TIPO_PIEZA = {
     "final": N_("final"), "video": N_("video"), "clon_limpio": N_("clon limpio"), "imagen": N_("imagen"),
 }
+ETIQUETAS_ATRIBUCION = {
+    "pixel": N_("pixel"), "tienda": N_("tienda"), "triple_whale": N_("Triple Whale"), "ninguna": N_("ninguna"),
+}
+# Rótulo de cada `evento.tipo` (bitácora del experimento) — cubre todos los
+# tipos que registran experimentos.registrar_evento en dashboard.py,
+# acciones.py, organico.py, derivaciones.py, lanzador.py y tareas/experimentos.py.
+ETIQUETAS_EVENTO = {
+    "creado": N_("creado"), "modo": N_("modo"), "reglas": N_("reglas"), "accion": N_("acción"),
+    "propuesta": N_("propuesta"), "error": N_("error"), "publicacion": N_("publicación"),
+    "derivacion": N_("derivación"), "lanzamiento": N_("lanzamiento"), "estado": N_("estado"),
+    "presupuesto": N_("presupuesto"), "rechazo_meta": N_("rechazo de Meta"), "veredicto": N_("veredicto"),
+    "imagen": N_("imagen"), "escalado": N_("escalado"), "tope": N_("tope"),
+}
 _EXP_COLS = ("estado", "error", "meta_campaign_id", "gasto_acumulado", "paises", "nombre", "tope_total",
              "dias", "destino_url", "edad_min", "edad_max", "extra", "modo", "reglas", "atribucion", "objetivo_meta")
 _EP_COLS = ("estado", "error", "meta_adset_id", "meta_ad_id", "meta_creative_id", "estado_meta",

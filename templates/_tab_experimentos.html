@@ -120,7 +120,7 @@
           <select name="objetivo">{% for o in objetivos_exp %}<option value="{{ o }}" {% if o == objetivo_exp_sugerido %}selected{% endif %}>{{ nombres_objetivo_exp.get(o, o)|traducir }}{% if o == objetivo_exp_sugerido %} {{ _('(sugerido)') }}{% endif %}</option>{% endfor %}</select>
         </label>
         <label>{{ _('Atribución') }}
-          <select name="atribucion">{% for a in atribuciones_exp %}<option value="{{ a }}" {% if a == atribucion_sugerida %}selected{% endif %}>{{ a }}{% if a == atribucion_sugerida %} {{ _('(sugerida)') }}{% endif %}</option>{% endfor %}</select>
+          <select name="atribucion">{% for a in atribuciones_exp %}<option value="{{ a }}" {% if a == atribucion_sugerida %}selected{% endif %}>{{ etiquetas_exp.atribucion.get(a, a)|traducir }}{% if a == atribucion_sugerida %} {{ _('(sugerida)') }}{% endif %}</option>{% endfor %}</select>
         </label>
         <label>{{ _('Modo') }}
           <select name="modo">{% for m in modos_exp %}<option value="{{ m }}" {% if m == "manual" %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
@@ -160,7 +160,7 @@
     <strong>{{ e.nombre }}</strong>
     <span class="tag-estado">{{ etiquetas_exp.estado.get(e.estado, e.estado)|traducir }}</span>
     <span class="tag-estado tag-modo">{{ _('modo %(modo)s', modo=e.modo) }}</span>
-    <span class="tag-estado tag-atribucion tag-atribucion-{{ e.atribucion }}" title="{{ _('Con qué se miden las ventas de este experimento') }}">{{ _('atribución %(atribucion)s', atribucion=e.atribucion) }}</span>
+    <span class="tag-estado tag-atribucion tag-atribucion-{{ e.atribucion }}" title="{{ _('Con qué se miden las ventas de este experimento') }}">{{ _('atribución %(atribucion)s', atribucion=(etiquetas_exp.atribucion.get(e.atribucion, e.atribucion)|traducir)) }}</span>
     {% if e.propuestas_pendientes %}<span class="tag-propuestas">{{ _('%(n)s propuesta(s)', n=e.propuestas_pendientes) }}</span>{% endif %}
     <small>{{ _('%(activos)s/%(total)s activos · gasto %(gasto)s / %(tope)s %(moneda)s', activos=e.resumen.activos, total=e.resumen.total, gasto=("%.2f"|format(e.gasto_acumulado)), tope=e.tope_total, moneda=e.moneda) }}
       {% if e.resumen.mejor_cpc %}· {{ _('mejor CPC %(cpc)s', cpc=("%.2f"|format(e.resumen.mejor_cpc))) }}{% endif %}
@@ -204,7 +204,7 @@
       {% set pz_prop = (e.piezas | selectattr("id", "equalto", pl.ep_id) | list | first) if pl.ep_id else none %}
       {% set pzs_prop = (e.piezas | selectattr("id", "in", pl.ep_ids) | list) if pl.ep_ids else [] %}
       <li class="exp-propuesta exp-propuesta-{{ pr.accion }}">
-        <span class="tag-estado tag-accion">{{ pr.accion }}</span>
+        <span class="tag-estado tag-accion">{{ etiquetas_exp.accion.get(pr.accion, pr.accion)|traducir }}</span>
         <span class="exp-propuesta-que">
           {% if pz_prop %}{{ pz_prop.nombre }}{% endif %}{% if pl.pais %} · {{ pl.pais }}{% endif %}
           {% if pzs_prop %}{% for p in pzs_prop %}{{ p.nombre }} ({{ p.pais }}){% if not loop.last %}, {% endif %}{% endfor %}{% elif pl.ep_ids %}{{ _('%(n)s pieza(s)', n=pl.ep_ids|length) }}{% endif %}
@@ -217,7 +217,7 @@
         <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">{{ _('Rechazar') }}</button></form>
         {{ propuesta_organica(pr, pl) }}
         {% else %}
-        <form method="post" action="{{ url_for('prop_aprobar', cliente=cliente, pid=pr.id) }}" class="inline"{% if pr.accion in ("escalar", "activar", "derivar", "rescatar") %} onsubmit='return confirm({{ _("«%(accion)s» gasta en Meta o en generación. ¿Aprobar?", accion=pr.accion)|tojson }});'{% endif %}><button class="btn-aprobar btn-xs">{{ _('Aprobar') }}</button></form>
+        <form method="post" action="{{ url_for('prop_aprobar', cliente=cliente, pid=pr.id) }}" class="inline"{% if pr.accion in ("escalar", "activar", "derivar", "rescatar") %} onsubmit='return confirm({{ _("«%(accion)s» gasta en Meta o en generación. ¿Aprobar?", accion=(etiquetas_exp.accion.get(pr.accion, pr.accion)|traducir))|tojson }});'{% endif %}><button class="btn-aprobar btn-xs">{{ _('Aprobar') }}</button></form>
         <form method="post" action="{{ url_for('prop_rechazar', cliente=cliente, pid=pr.id) }}" class="inline"><button class="btn-rechazar btn-xs">{{ _('Rechazar') }}</button></form>
         {% endif %}
       </li>
@@ -323,7 +323,7 @@
       {% for d in derivs %}
       {% set pz_orig = (e.piezas | selectattr("id", "equalto", d.origen_ep_id) | list | first) %}
       <li class="exp-derivacion exp-derivacion-{{ d.estado }}">
-        <span class="tag-estado tag-accion">{{ d.tipo }}</span>
+        <span class="tag-estado tag-accion">{{ etiquetas_exp.tipo_derivacion.get(d.tipo, d.tipo)|traducir }}</span>
         <span class="tag-estado">{{ etiquetas_exp.derivacion.get(d.estado, d.estado)|traducir }}</span>
         {% if pz_orig %}{{ _('desde %(nombre)s', nombre=pz_orig.nombre) }}{% endif %}{% if d.motivo %} <small>— {{ d.motivo }}</small>{% endif %}
         <ul class="exp-derivacion-items">
@@ -349,7 +349,7 @@
   {% endif %}
 
   <details class="exp-eventos"><summary>{{ _('Bitácora (%(n)s)', n=e.eventos|length) }}</summary>
-    <ul>{% for ev in e.eventos %}<li><small>{{ ev.creado_en }}</small> <span class="tag-estado">{{ ev.tipo }}</span> {{ ev.mensaje }}</li>{% endfor %}</ul>
+    <ul>{% for ev in e.eventos %}<li><small>{{ ev.creado_en }}</small> <span class="tag-estado">{{ etiquetas_exp.evento.get(ev.tipo, ev.tipo)|traducir }}</span> {{ ev.mensaje }}</li>{% endfor %}</ul>
   </details>
 </details>
 {% else %}

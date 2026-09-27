@@ -1710,7 +1710,9 @@ def ver_cliente(cliente):
             "estado": experimentos.ETIQUETAS_ESTADO, "pieza": experimentos.ETIQUETAS_ESTADO_PIEZA,
             "veredicto": experimentos.ETIQUETAS_VEREDICTO, "tipo": experimentos.ETIQUETAS_TIPO_PIEZA,
             "derivacion": derivaciones.ETIQUETAS_ESTADO, "clase": derivaciones.ETIQUETAS_CLASE,
-            "variante": derivaciones.ETIQUETAS_VARIANTE,
+            "variante": derivaciones.ETIQUETAS_VARIANTE, "atribucion": experimentos.ETIQUETAS_ATRIBUCION,
+            "accion": acciones.ETIQUETAS_ACCION, "tipo_derivacion": derivaciones.ETIQUETAS_TIPO,
+            "evento": experimentos.ETIQUETAS_EVENTO,
         },
         meses_cortos=idiomas.meses_cortos(),
         productos_tienda=productos_tienda,
@@ -4307,9 +4309,15 @@ def exp_crear(cliente):
     eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max,
                              modo=modo, atribucion=atribucion)
     ex = experimentos.obtener(cliente, eid)
-    experimentos.registrar_evento(
-        cliente, eid, "creado",
-        f"Experimento creado con {len(paises)} países (modo {modo}, atribución {ex['atribucion']})")
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        # Texto guardado (bitácora): en el idioma del proyecto (spec 2026-09-26
+        # §B3). `modo` (manual/semi/auto) no se traduce, como en el <select>;
+        # `atribucion` sí tiene rótulo (experimentos.ETIQUETAS_ATRIBUCION).
+        experimentos.registrar_evento(
+            cliente, eid, "creado",
+            gettext("Experimento creado con %(n)s países (modo %(modo)s, atribución %(atribucion)s)",
+                    n=len(paises), modo=modo,
+                    atribucion=idiomas.traducir(experimentos.ETIQUETAS_ATRIBUCION.get(ex["atribucion"], ex["atribucion"]))))
     flash(gettext("Experimento «%(nombre)s» creado. Agrega piezas y lánzalo cuando esté listo.", nombre=nombre), "ok")
     return volver
 
@@ -4646,7 +4654,9 @@ def exp_modo(cliente, eid):
     if modo != ex["modo"]:
         experimentos.actualizar(cliente, eid, modo=modo)
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-            experimentos.registrar_evento(cliente, eid, "modo", f"Modo cambiado de {ex['modo']} a {modo}.",
+            experimentos.registrar_evento(cliente, eid, "modo",
+                                          gettext("Modo cambiado de %(antes)s a %(despues)s.",
+                                                  antes=ex["modo"], despues=modo),
                                           {"antes": ex["modo"], "despues": modo})
     flash(gettext("Modo: %(modo)s.", modo=modo), "ok")
     return _volver_exp(cliente)
@@ -4668,7 +4678,9 @@ def exp_reglas(cliente, eid):
         _flash_reglas_invalidas(errores)
         return _volver_exp(cliente)
     experimentos.actualizar(cliente, eid, reglas=reglas)
-    experimentos.registrar_evento(cliente, eid, "reglas", "Reglas del experimento actualizadas.", {"reglas": reglas})
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        experimentos.registrar_evento(cliente, eid, "reglas", gettext("Reglas del experimento actualizadas."),
+                                      {"reglas": reglas})
     flash(gettext("Reglas guardadas. Lo vacío hereda de Configuración."), "ok")
     return _volver_exp(cliente)
 
@@ -4701,23 +4713,22 @@ def _ep_id_evento(cliente, pr):
 def _ejecutar_propuesta(cliente, pr):
     """Ejecuta una propuesta ya aprobada y la marca ejecutada. Si falla, la
     devuelve a pendiente y devuelve el mensaje de error (None si fue bien).
-    Va bajo _ENV_LOCK porque acciones.ejecutar puede tocar Meta. La llamada al
-    motor corre en el idioma del proyecto; el flash lo arma la ruta afuera."""
-    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-        with _ENV_LOCK:
-            try:
-                mensaje = acciones.ejecutar(cliente, pr["experimento_id"], pr["accion"], pr["payload"])
-            except ValueError as e:
-                propuestas.reabrir(cliente, pr["id"])
-                return str(e)
-            except Exception as e:  # noqa: BLE001
-                propuestas.reabrir(cliente, pr["id"])
-                return f"No pude ejecutar «{pr['accion']}»: {cola.sin_token(str(e))}"
-        propuestas.marcar_ejecutada(cliente, pr["id"])
-        experimentos.registrar_evento(cliente, pr["experimento_id"], "accion",
-                                      f"{mensaje} (propuesta #{pr['id']} aprobada a mano)",
-                                      {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
-                                      ep_id=_ep_id_evento(cliente, pr))
+    Va bajo _ENV_LOCK porque acciones.ejecutar puede tocar Meta. El mensaje
+    que se devuelve (para el flash) sale en el idioma de quien mira —
+    acciones.ejecutar ya deja, en el idioma del proyecto, el evento que
+    queda en la bitácora (spec 2026-09-26 §B3: lo que se guarda sigue al
+    proyecto, lo que responde una ruta sigue a quien mira)."""
+    with _ENV_LOCK:
+        try:
+            mensaje = acciones.ejecutar(cliente, pr["experimento_id"], pr["accion"], pr["payload"],
+                                        propuesta_id=pr["id"], ep_id_evento=_ep_id_evento(cliente, pr))
+        except ValueError as e:
+            propuestas.reabrir(cliente, pr["id"])
+            return str(e)
+        except Exception as e:  # noqa: BLE001
+            propuestas.reabrir(cliente, pr["id"])
+            return gettext("No pude ejecutar «%(accion)s»: %(error)s", accion=pr["accion"], error=cola.sin_token(str(e)))
+    propuestas.marcar_ejecutada(cliente, pr["id"])
     flash(mensaje, "ok")
     return None
 
@@ -4788,10 +4799,12 @@ def prop_rechazar(cliente, pid):
         flash(gettext("Esa propuesta no existe o ya estaba resuelta."), "error")
         return _volver_exp(cliente)
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
-        experimentos.registrar_evento(cliente, pr["experimento_id"], "propuesta",
-                                      f"Propuesta #{pr['id']} ({pr['accion']}) rechazada a mano.",
-                                      {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
-                                      ep_id=_ep_id_evento(cliente, pr))
+        experimentos.registrar_evento(
+            cliente, pr["experimento_id"], "propuesta",
+            gettext("Propuesta #%(id)s (%(accion)s) rechazada a mano.", id=pr["id"],
+                    accion=idiomas.traducir(acciones.ETIQUETAS_ACCION.get(pr["accion"], pr["accion"]))),
+            {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
+            ep_id=_ep_id_evento(cliente, pr))
     flash(gettext("Propuesta rechazada."), "ok")
     return _volver_exp(cliente)
 
@@ -4980,10 +4993,11 @@ def org_publicar(cliente):
         eid = experimentos.experimento_de_pieza(cliente, ep_id)
         if eid:
             experimentos.marcar_pieza(cliente, ep_id, publicado_organico=True)
-            experimentos.registrar_evento(cliente, eid, "accion",
-                                          f"Publicación orgánica en cola a mano: {_nombres_org(creadas)}.",
-                                          {"accion": "publicar_organico", "plataformas": creadas,
-                                           "publicaciones": pub_ids}, ep_id=ep_id)
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                experimentos.registrar_evento(
+                    cliente, eid, "accion",
+                    gettext("Publicación orgánica en cola a mano: %(plataformas)s.", plataformas=_nombres_org(creadas)),
+                    {"accion": "publicar_organico", "plataformas": creadas, "publicaciones": pub_ids}, ep_id=ep_id)
     flash(gettext("Publicación orgánica en cola: %(plataformas)s. Te avisamos cuando salga.",
                   plataformas=_nombres_org(creadas)), "ok")
     return _volver_org(cliente)
