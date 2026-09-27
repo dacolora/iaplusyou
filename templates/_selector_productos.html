@@ -13,10 +13,16 @@
    secciones; en modo radio (Cambiar producto) solo productos, como siempre. #}
 {% set _activos = activos_por_categoria if (_modo == "checkbox" and activos_por_categoria is defined) else {"producto": productos} %}
 {% set _total = namespace(n=0) %}{% for cid, lista in _activos.items() %}{% set _total.n = _total.n + (lista | length) %}{% endfor %}
+{% if sel_dialogo %}
+{# En un <dialog> (Crear › «+» › Del catálogo): sin <summary>; el resumen es un párrafo. #}
+<div class="selector-productos selector-en-dialogo" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
+  <p class="selector-resumen" id="sel-{{ sel_id }}-resumen">Nada elegido todavía.</p>
+{% else %}
 <details class="comparacion-modelos selector-productos" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
   <summary class="btn-guardar btn-sm" id="sel-{{ sel_id }}-resumen">
     {% if _modo == "radio" %}Elegir producto ({{ productos | length }}) →{% else %}Del catálogo (opcional, {{ _total.n }}) →{% endif %}
   </summary>
+{% endif %}
   <div class="comparacion-contenido">
     <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;">
       <input type="text" id="sel-{{ sel_id }}-buscador" placeholder="Buscar por nombre…" style="flex:1;min-width:180px;margin:0;">
@@ -43,4 +49,4 @@
       {% endfor %}
     </div>
   </div>
-</details>
+{% if sel_dialogo %}</div>{% else %}</details>{% endif %}

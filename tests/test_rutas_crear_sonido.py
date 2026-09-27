@@ -77,7 +77,7 @@ def test_formulario_de_crear_trae_sonido_musica_y_sugerir(app, monkeypatch, tmp_
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     proyectos.guardar_preferencias_sonido("acme", True, "lujo")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert 'id="fp-con-sonido"' in html and ' checked> Sonido de la escena' in html
+    assert 'id="fp-con-sonido" checked>' in html and "<strong>Sonido de la escena</strong>" in html
     assert 'name="musica_estilo"' in html and '<option value="lujo" selected>' in html
     assert 'id="fp-sugerir-sonido"' in html and 'data-recargo="0.028"' in html
 
