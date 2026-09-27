@@ -809,7 +809,7 @@ Todo lo que la vista previa decide en función de `t` — qué clip de la princi
 - Consumes: `FORMATOS`, `FPS` (formatos.js); `redondearPar` (numeros.js); `caja`, `interpolar` (geometria.js).
 - Produces:
   - `duracionMs(doc)`, `pistaPrincipal(doc)`, `activo(clip, tMs)`, `transicionReal(clip)`, `fuenteMs(clip, tMs)`
-  - `principalEn(doc, tMs) -> {capas: [{clip, fuenteMs, alfa, dx}], aproximada}` (de abajo arriba; `dx` en fracción del ancho)
+  - `principalEn(doc, tMs) -> {capas: [{clip, fuenteMs, alfa, dx, tZoom}], aproximada}` (de abajo arriba; `dx` en fracción del ancho; `tZoom` = instante para el Ken Burns, `null` en una imagen principal — agregado en la revisión)
   - `siguienteClip(doc, tMs) -> clip | null` (el próximo clip de la principal que empieza después de `tMs`)
   - `zoomKenBurns(clip, tMs) -> number`
   - `capasEn(doc, tMs) -> [{pista, clip}]`
@@ -2208,9 +2208,9 @@ Una página a pantalla completa por edición (`/cliente/<c>/ediciones/<id>`) con
 - Consumes: `tareas.edicion.PROXY_VERSION`, `tareas.edicion.job_id_proxy` (Task 2); `subtitulos.ESTILOS_ASS`, `subtitulos.escala_libass` (Task 8); `ediciones.cargar`, `materiales.obtener`, `trabajos.encolar` (existentes).
 - Produces:
   - `vista_previa.config_navegador() -> {formatos, fps, ventana_picos_ms, fuentes, mezcla: {presets, preset_defecto, vol_musica_sola, vol_musica_con_sonido, ducking_musica, ducking_sonido}, subtitulos: {estilos, em_por_tam}}` — la forma que consumen `audio.js`, `lienzo.js` y `vista.js`.
-  - `vista_previa.materiales_para(cliente, doc) -> {id: {id, tipo, url, url_proxy, duracion_ms, ancho, alto, picos, proxy_version}}`, `faltantes(doc, mats)`, `pendientes(mats)`, `encolar_proxies(cliente, ids)`, `destinos(doc)`, `datos_pagina(cliente, edicion, url_materiales)`.
+  - `vista_previa.materiales_para(cliente, doc) -> {id: {id, tipo, url, url_proxy, duracion_ms, ancho, alto, picos, proxy_version}}`, `faltantes(doc, mats)`, `pendientes(mats)`, `encolar_proxies(cliente, ids)`, `destinos(doc)`, `documento_para_vista(doc, mats) -> (doc, aviso | None)`, `datos_pagina(cliente, edicion, url_materiales)` (trae `aviso_recortes`).
   - Blueprint `editor`: endpoints `editor.ver` (`/cliente/<cliente>/ediciones/<int:edicion_id>`) y `editor.materiales_json` (`…/<id>/materiales`). Task 12 enlaza `editor.ver`.
-  - `templates/editor.html` con los ids que usa `vista.js` (Task 13): `lienzo`, `destino`, `reproducir`, `inicio`, `tiempo`, `barra`, `aviso-destino`, `aviso-faltan`, `aviso-preparando`, `aviso-audio`, `aproximada`, y el JSON en `<script type="application/json" id="datos-editor">`. Su enlace de vuelta va a `ver_cliente` con `_anchor="final"` (la pestaña de Task 12).
+  - `templates/editor.html` con los ids que usa `vista.js` (Task 13): `lienzo`, `destino`, `reproducir`, `inicio`, `tiempo`, `barra`, `aviso-destino`, `aviso-faltan`, `aviso-recortes`, `aviso-preparando`, `aviso-audio`, `aproximada`, y el JSON en `<script type="application/json" id="datos-editor">`. Su enlace de vuelta va a `ver_cliente` con `_anchor="final"` (la pestaña de Task 12).
 
 - [ ] **Step 1: Pruebas que fallan**
 
@@ -2279,6 +2279,26 @@ def test_materiales_para_y_faltantes(base_temporal):
     assert mats[m["id"]]["picos"] == [0.5] and mats[m["id"]]["url"] == "https://r2.test/v.wav"
     assert vista_previa.faltantes(doc, mats) == [999]
     assert vista_previa.materiales_para("otro", doc) == {}
+
+
+def test_la_vista_previa_usa_los_recortes_del_render(base_temporal):
+    # Revisión de la Task 5: sin cola en el material, el render hace corte seco
+    # (compilador.verificar_recortes); la vista previa no debe mostrar un fundido.
+    import materiales
+    clon = materiales.registrar("acme", tipo="video", origen="crear", url="u", hash="h", bytes=1, duracion_ms=4000)
+    doc = documento.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [
+        {"id": "a", "inicio_ms": 0, "duracion_ms": 2000, "material_id": clon["id"], "recorte": {"desde_ms": 2000, "hasta_ms": 4000},
+         "transicion": {"tipo": "fundido", "duracion_ms": 500}},
+        {"id": "b", "inicio_ms": 2000, "duracion_ms": 2000, "material_id": clon["id"], "recorte": {"desde_ms": 0, "hasta_ms": 2000}}]
+    doc = documento.validar(doc)
+    mats = vista_previa.materiales_para("acme", doc)
+    vista, aviso = vista_previa.documento_para_vista(doc, mats)
+    assert aviso is None and vista["pistas"][0]["clips"][0]["transicion"] is None
+    assert doc["pistas"][0]["clips"][0]["transicion"]["tipo"] == "fundido"      # el original no se toca
+    doc["pistas"][0]["clips"][1]["recorte"]["desde_ms"] = 3000                  # b pide 3000–5000 de un clon de 4000
+    vista2, aviso2 = vista_previa.documento_para_vista(doc, mats)
+    assert "'b'" in aviso2 and vista2 is doc
 
 
 def test_encolar_proxies_uno_por_material_gratis_y_con_reintentos(monkeypatch):
@@ -2358,7 +2378,7 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     for id_ in ("lienzo", "destino", "reproducir", "inicio", "tiempo", "barra", "aviso-destino", "aviso-faltan",
-                "aviso-preparando", "aviso-audio", "aproximada"):
+                "aviso-recortes", "aviso-preparando", "aviso-audio", "aproximada"):
         assert f'id="{id_}"' in html, id_
     assert "editor/vista.js" in html and 'type="module"' in html
     assert "Demo &lt;editor&gt;" in html                     # el nombre va escapado
@@ -2368,6 +2388,7 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     assert set(datos["materiales"]) == {str(clon["id"]), str(voz["id"])}
     assert datos["pendientes"] == [clon["id"]]               # el clon aún no tiene proxy
     assert datos["faltantes"] == []
+    assert datos["aviso_recortes"] is None
     assert datos["destinos"] == ["es_CO"]
     assert datos["documento"]["pistas"][0]["clips"][0]["id"] == "v0"
     assert datos["config"]["formatos"]["9:16"] == [1080, 1920]
@@ -2422,6 +2443,7 @@ faltan por preparar, los destinos que el documento sabe resolver y la
 configuración que el motor del navegador comparte con el de ffmpeg — sacada
 de los módulos de Python, nunca copiada a mano. Solo lectura: no cambia el
 documento ni paga nada; encolar proxies es gratis (edicion_proxy)."""
+import copy
 import glob
 import os
 
@@ -2429,7 +2451,7 @@ import materiales
 import trabajos
 from final_edition import mezcla
 from final_edition.documento import FORMATOS
-from final_edition.motor import subtitulos
+from final_edition.motor import compilador, subtitulos
 from tareas import edicion as tareas_edicion
 
 VENTANA_PICOS_MS = 50   # tareas.edicion._picos(ventana_ms=50): un pico cada 50 ms
@@ -2524,12 +2546,29 @@ def destinos(doc):
     return sorted(claves, key=lambda k: (k != base, k))
 
 
+def documento_para_vista(doc, mats):
+    """Copia del documento con los recortes que el render de verdad usa:
+    `compilador.verificar_recortes`, con las duraciones medidas de los
+    materiales, acorta o quita una transición cuya cola no cabe en el
+    material — así la vista previa no muestra un fundido donde el video final
+    hace corte seco. Si un clip pide más material del que hay (el render
+    fallaría), devuelve el documento tal cual y el aviso en vez de lanzar."""
+    copia = copy.deepcopy(doc)
+    duraciones = {mid: m["duracion_ms"] for mid, m in mats.items() if m.get("duracion_ms")}
+    try:
+        compilador.verificar_recortes(copia, duraciones)
+    except ValueError as e:
+        return doc, str(e)
+    return copia, None
+
+
 def datos_pagina(cliente, edicion, url_materiales):
-    doc = edicion["documento"]
-    mats = materiales_para(cliente, doc)
+    mats = materiales_para(cliente, edicion["documento"])
+    doc, aviso = documento_para_vista(edicion["documento"], mats)
     return {
         "edicion": {"id": edicion["id"], "nombre": edicion["nombre"], "version_n": edicion["version_n"]},
         "documento": doc,
+        "aviso_recortes": aviso,
         "materiales": {str(k): v for k, v in mats.items()},
         "pendientes": pendientes(mats),
         "faltantes": faltantes(doc, mats),
@@ -2626,6 +2665,7 @@ def materiales_json(cliente, edicion_id):
 <section class="editor-avisos" aria-live="polite">
   <p id="aviso-destino" class="editor-aviso" hidden></p>
   <p id="aviso-faltan" class="editor-aviso" hidden></p>
+  <p id="aviso-recortes" class="editor-aviso" hidden></p>
   <p id="aviso-preparando" class="editor-aviso" hidden></p>
   <p id="aviso-audio" class="editor-aviso" hidden></p>
   <p id="aproximada" class="editor-aviso" hidden>Transición vista de forma aproximada: el video final la hace completa.</p>
@@ -3422,8 +3462,10 @@ export function dibujarCuadro(ctx, doc, tMs, recursos, cfg) {
       continue;
     }
     // scale=W:H:force_original_aspect_ratio=increase,crop=W:H y el zoompan
-    // centrado del Ken Burns.
-    const escala = Math.max(W / fw, H / fh) * zoomKenBurns(capa.clip, tMs);
+    // centrado del Ken Burns en el instante que dice la capa (el cuadro
+    // congelado usa el suyo; una imagen principal no lleva zoom: tZoom null).
+    const zoom = capa.tZoom === null ? 1 : zoomKenBurns(capa.clip, capa.tZoom);
+    const escala = Math.max(W / fw, H / fh) * zoom;
     const dw = fw * escala;
     const dh = fh * escala;
     ctx.globalAlpha = capa.alfa;
@@ -3802,6 +3844,9 @@ async function iniciar() {
   const sel = $("destino");
   for (const d of datos.destinos) sel.append(new Option(d.replace("_", " · "), d));
   sel.addEventListener("change", () => elegirDestino(sel.value));
+  if (datos.aviso_recortes) {
+    aviso("aviso-recortes", `Esta edición no se puede producir tal como está: ${datos.aviso_recortes}`, true);
+  }
   if (datos.faltantes.length) {
     aviso("aviso-faltan", `Faltan ${datos.faltantes.length} archivo(s) de esta edición (se borraron o no son de este proyecto): esas partes no se verán.`, true);
   }
