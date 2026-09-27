@@ -19,7 +19,9 @@ def _sprint_basico(db):
     return pid, tid, sid
 
 
-def test_campana_unica_por_combinacion(base_temporal):
+def test_campana_admite_la_misma_combinacion(base_temporal):
+    """Desde 0021 una persona y un producto pueden tener varias campañas en el
+    mismo sprint (TOF, MOF y BOF, o dos TOF con distinto formato)."""
     db = base_temporal
     pid, tid, sid = _sprint_basico(db)
     ahora = db.ahora()
@@ -27,15 +29,8 @@ def test_campana_unica_por_combinacion(base_temporal):
                 catalogo_id="espejo_led", temporada_id=tid, n_videos=10, n_imagenes=5, estado="planeada")
     with db.conectar() as con:
         con.execute(db.campana.insert().values(**fila))
-    import pytest
-    with pytest.raises(sa.exc.IntegrityError):
-        with db.conectar() as con:
-            con.execute(db.campana.insert().values(**fila))
-    # Misma persona y producto en OTRA temporada sí entra.
-    with db.conectar() as con:
-        tid2 = con.execute(db.temporada.insert().values(cliente="acme", creado_en=ahora, actualizado_en=ahora,
-                                                        nombre="Navidad", inicio="2026-11-15", fin="2026-12-31", tipo="comercial")).inserted_primary_key[0]
-        con.execute(db.campana.insert().values(**dict(fila, temporada_id=tid2)))
+        con.execute(db.campana.insert().values(**fila))
+        assert con.execute(sa.select(sa.func.count()).select_from(db.campana)).scalar() == 2
 
 
 def test_migracion_0006_crea_las_tablas(tmp_path, monkeypatch):
@@ -52,7 +47,7 @@ def test_migracion_0006_crea_las_tablas(tmp_path, monkeypatch):
     assert {"persona", "temporada", "sprint", "campana", "referencia", "campana_pieza", "sprint_evento"} <= nombres
     indices = {i["name"] for i in sa.inspect(db.engine()).get_indexes("campana")} | \
               {u["name"] for u in sa.inspect(db.engine()).get_unique_constraints("campana")}
-    assert "uq_campana_combinacion" in indices
+    assert "uq_campana_combinacion" not in indices          # quitada en 0021
     db._reset_para_tests()
 
 

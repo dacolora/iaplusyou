@@ -295,3 +295,20 @@ def test_reintentar_imagenes_resetea_solo_error_de_ese_barrido(base_temporal):
     assert datos.referente("acme", rid1)["estado_imagen"] == "pendiente"
     assert datos.referente("acme", rid3)["estado_imagen"] == "ok"
     assert datos.referente("acme", rid2)["estado_imagen"] == "error"  # otro barrido, no tocado
+
+
+def test_familias_frecuentes_por_etapa_y_consciencia(base_temporal):
+    from referentes import datos as rdatos
+
+    def ref(n, familia, etapa="TOF", consciencia="problem-aware"):
+        rid, _ = rdatos.guardar_referente({"anuncio_id": f"f{n}", "fuente": "atria", "imagen_origen": "https://o/x.jpg"})
+        rdatos.marcar_imagen(rid, "ok", f"https://r2/{n}.jpg")
+        rdatos.actualizar_referente(rid, etapa=etapa, consciencia=consciencia, familia=familia, clasificacion="claude")
+
+    for n, fam in enumerate(["A", "A", "B"]):
+        ref(n, fam)
+    ref(10, "C", etapa="MOF")
+    ref(11, "D", consciencia="unaware")
+    assert rdatos.familias_frecuentes("acme", etapa="TOF", consciencia="problem-aware") == ["A", "B"]
+    assert rdatos.familias_frecuentes("acme", etapa="TOF") == ["A", "B", "D"]
+    assert rdatos.familias_frecuentes("acme", etapa="TOF", limite=1) == ["A"]

@@ -22,6 +22,9 @@
     {% endfor %}
   </select>
   <small class="vacio">Es la misma persona en todas sus campañas: cambiarlo aquí la cambia en todas. <span class="persona-guardado" hidden>Guardado</span></small>
+  {% if campana.consciencia and CONSCIENCIAS_CLIENTE.get(campana.consciencia) %}
+  <p class="vacio">Para las ideas de esta campaña manda la de la campaña: {{ CONSCIENCIAS_CLIENTE[campana.consciencia] }} (se cambia en el panel de la campaña).</p>
+  {% endif %}
   <p class="vacio">Promesas parecidas que ya vio el cliente de {{ campana.catalogo_id }}:
     {% if sof_producto %}{{ sof_producto }} · {{ SOFISTICACIONES_CLIENTE[sof_producto] }}{% else %}Claude lo decide{% endif %}
     (se cambia en Catálogo).</p>

@@ -325,7 +325,26 @@ def test_sin_datos_del_mercado_claude_los_decide(base_temporal, monkeypatch):
     sid, cid, rid = _ctx(monkeypatch, datos)
     ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
     assert ctx["fijos"] == {"consciencia": None, "sofisticacion": None}
-    assert "DATOS DEL MERCADO: no elegidos: decide tú la consciencia y la sofisticación" in ideas.armar_prompt(ctx, 1, 0)
+    assert "CONSCIENCIA Y SOFISTICACIÓN: no elegidos: decide tú la consciencia y la sofisticación" in ideas.armar_prompt(ctx, 1, 0)
+
+
+def test_la_consciencia_de_la_campana_manda_sobre_la_de_la_persona(base_temporal, monkeypatch):
+    """Integración con el tablero de Sprints: la campaña tiene su propia
+    consciencia (su enfoque) y es más específica que la de la persona, que
+    queda como respaldo cuando la campaña no tiene."""
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    p = datos.campana("acme", cid)["persona_id"]
+    persona = datos.persona("acme", p)
+    datos.actualizar_persona("acme", p, extra=dict(persona.get("extra") or {},
+                                                   conciencia={"nivel": "inconsciente", "origen": "manual"}))
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    if not datos.campana("acme", cid).get("consciencia"):
+        assert ctx["fijos"]["consciencia"] == "inconsciente"
+    datos.actualizar_campana("acme", cid, consciencia="consciente_del_problema")
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    assert ctx["fijos"]["consciencia"] == "consciente_del_problema"
+    assert "Consciencia de la persona (fija, no la cambies): consciente del problema" in ideas.armar_prompt(ctx, 1, 0)
 
 
 def test_reescribir_la_idea_desde_su_angulo(base_temporal, monkeypatch):
@@ -452,3 +471,29 @@ def test_las_pruebas_del_producto_van_en_los_datos_y_verifican_cifras(base_tempo
     assert "Pruebas reales del producto" in contenidos[0] and "El 95 % de quienes lo instalan" in contenidos[0]
     angulo = datos.idea("acme", creadas[0])["extra"]["angulo"]
     assert not any("cifra_no_verificada" in f for f in angulo["faltantes"]) and len(contenidos) == 1
+
+
+def test_armar_prompt_lleva_enfoque_mercado_marcas_y_momento(base_temporal, monkeypatch):
+    from referentes import datos as rdatos
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    rdatos.familia_asegurar("Antes y después", "Muestra el cambio en dos cuadros")
+    datos.actualizar_sprint("acme", sid, pais="US", idioma="en", marcas="Crocs", momento="Hot Sale")
+    datos.actualizar_campana("acme", cid, consciencia="consciente_del_problema", dolor="pies fríos",
+                             familias=["Antes y después"])
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    p = ideas.armar_prompt(ctx, 1, 1)
+    for frag in ("consciente del problema", "pies fríos", "Antes y después", "Muestra el cambio en dos cuadros",
+                 "Estados Unidos", "inglés", "Crocs", "Hot Sale"):
+        assert frag in p, frag
+    assert "Navidad" not in p                        # el momento del sprint gana a la temporada vieja
+    assert "inglés" in ideas.instrucciones(ctx) and "Todo en español." not in ideas.instrucciones(ctx)
+
+
+def test_sin_momento_sigue_la_temporada_y_sin_enfoque_lo_dice(base_temporal, monkeypatch):
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    p = ideas.armar_prompt(ctx, 1, 1)
+    assert "Navidad" in p and "regalos" in p and "(sin enfoque definido" in p and "MARCAS A IMITAR" in p
+    assert ideas.instrucciones(ctx).endswith("Todo en español.")

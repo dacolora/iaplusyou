@@ -10,7 +10,7 @@ cliente.html para la pestaña; el estudio abre en su propia página
 """
 import io
 
-from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, send_file, url_for
+from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
 
 import catalogo_productos
 import gastos
@@ -79,12 +79,22 @@ def _entero(campo, defecto):
         raise datos.ErrorDatos(f"«{campo}» debe ser un número entero.")
 
 
+def _es_admin():
+    return session.get("rol") == "admin"
+
+
 def _fuentes_conectadas(cliente, eid):
-    """Tarjetas de Reddit, YouTube y Apify: qué llave falta y si hay una recolección viva."""
+    """Tarjetas de Reddit, YouTube y Apify: qué llave falta y si hay una
+    recolección viva. Las llaves son de Creatv (el admin las pone en el .env):
+    una fuente sin llave solo la ve el admin, apagada; al cliente no se le
+    muestra (2026-09-27)."""
     salida = []
     for tipo in fuentes_registro.CONECTADAS:
+        faltan = fuentes_registro.llaves_faltantes(tipo)
+        if faltan and not _es_admin():
+            continue
         job = datos.job_id_recolectar(cliente, eid, tipo)
-        salida.append({"tipo": tipo, "nombre": fuentes_registro.NOMBRES[tipo], "faltan": fuentes_registro.llaves_faltantes(tipo),
+        salida.append({"tipo": tipo, "nombre": fuentes_registro.NOMBRES[tipo], "faltan": faltan,
                        "job_id": job, "en_curso": trabajos.en_curso(job)})
     return salida
 
@@ -260,7 +270,8 @@ def recolectar(cliente, eid, fuente):
         return _volver(cliente, eid)
     faltan = fuentes_registro.llaves_faltantes(fuente)
     if faltan:
-        flash(f"Falta {', '.join(faltan)} en el .env del servidor (Configuración › Puesta a punto).", "error")
+        flash(f"Falta {', '.join(faltan)} en el .env del servidor (Configuración › Puesta a punto)." if _es_admin()
+              else "Esa fuente no está disponible todavía.", "error")
         return _volver(cliente, eid)
     try:
         params = _params_desde_form(fuente, est, cliente)

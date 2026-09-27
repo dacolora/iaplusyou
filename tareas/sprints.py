@@ -197,12 +197,13 @@ def encolar_sugerir_biblioteca(cliente, campana_id):
 @registrar("referentes_sugerir_ia")
 def ejecutar_sugerir_biblioteca(tarea):
     """«Sugerir con IA» de la biblioteca de referentes (spec §10): candidatos
-    de la misma etapa que el funnel de la campaña, sin repetir lo ya usado
-    (`referencia.extra.referente_id`), y Claude elige hasta lo que falta para
-    el objetivo de referencias. El gasto real se registra tanto si Claude
-    acierta como si la respuesta no parsea (`SugerenciaInvalida` trae los
-    tokens ya gastados) — y en ese caso la excepción sigue subiendo para que
-    la cola marque la tarea en error en vez de darla por buena en silencio."""
+    con los filtros de la campaña (etapa, consciencia, familias, aflojando si
+    faltan), sin repetir lo ya usado (`referencia.extra.referente_id`), y
+    Claude elige hasta lo que falta para el objetivo de referencias. El gasto
+    real se registra tanto si Claude acierta como si la respuesta no parsea
+    (`SugerenciaInvalida` trae los tokens ya gastados) — y en ese caso la
+    excepción sigue subiendo para que la cola marque la tarea en error en vez
+    de darla por buena en silencio."""
     p = tarea["payload"]
     cliente, cid = p["cliente"], int(p["campana_id"])
     c = datos.campana(cliente, cid)
@@ -211,22 +212,32 @@ def ejecutar_sugerir_biblioteca(tarea):
     persona = datos.persona(cliente, c["persona_id"]) or {}
     producto = catalogo_productos.encontrar(cliente, c["catalogo_id"], categoria="producto") or {}
     temporada = datos.temporada(cliente, c["temporada_id"]) or {}
+    ef = datos.efectivos_de(cliente, c)
     refs_actuales = datos.referencias(cliente, cid)
     ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs_actuales} - {None}
-    candidatos = referentes_sugerir.candidatos(cliente, c["funnel"].upper(), ya_ids, limite=60)
+    enfoque = {"etapa": (c.get("funnel") or "tof").upper(),
+               "consciencia": c.get("consciencia") or datos.consciencia_de_persona(persona),
+               "familias": c.get("familias") or [], "idioma": ef["idioma"], "marcas": ef["marcas"]}
+    candidatos, _ = referentes_sugerir.candidatos_aflojando(cliente, enfoque, ya_ids, minimo=20)
     if not candidatos:
         return "No hay candidatos nuevos en la biblioteca para esta etapa."
     objetivo = max(1, (c.get("referencias_objetivo") or 1) - len(refs_actuales))
-    conciencia = (persona.get("extra") or {}).get("conciencia") or {}
-    nivel = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
+    nivel = doctrina.normalizar_consciencia(enfoque["consciencia"])
     persona_texto = ". ".join(x for x in (persona.get("resumen"), persona.get("descripcion"), persona.get("tono"),
-                                          f"nivel de consciencia: {doctrina.CONSCIENCIAS_NOMBRE[nivel]}" if nivel else None)
+                                          f"nivel de consciencia: {doctrina.CONSCIENCIAS_NOMBRE[nivel]}" if nivel else None,
+                                          f"dolor o deseo: {c['dolor']}" if c.get("dolor") else None)
                               if x)
     producto_texto = ". ".join(x for x in (producto.get("nombre"), producto.get("descripcion")) if x)
-    temporada_texto = ". ".join(x for x in (temporada.get("nombre"), temporada.get("contexto")) if x)
+    momento = ef.get("momento") or {}
+    temporada_texto = (". ".join(x for x in (momento.get("nombre"), momento.get("contexto")) if x)
+                       or ". ".join(x for x in (temporada.get("nombre"), temporada.get("contexto")) if x))
+    enfoque_texto = "; ".join(x for x in (
+        ("formatos buscados: " + ", ".join(enfoque["familias"])) if enfoque["familias"] else None,
+        ("marcas a imitar: " + ", ".join(m["nombre"] for m in enfoque["marcas"])) if enfoque["marcas"] else None,
+        f"idioma de la audiencia: {datos.IDIOMAS_NOMBRE.get(enfoque['idioma'], enfoque['idioma'])}") if x)
     try:
-        elegidos, ent, sal = referentes_sugerir.sugerir_ia(candidatos, persona_texto, producto_texto,
-                                                            temporada_texto, objetivo)
+        elegidos, ent, sal = referentes_sugerir.sugerir_ia(candidatos[:60], persona_texto, producto_texto,
+                                                            temporada_texto, objetivo, enfoque_texto=enfoque_texto)
     except referentes_sugerir.SugerenciaInvalida as e:
         ent = getattr(e, "tokens_entrada", 0) or 0
         sal = getattr(e, "tokens_salida", 0) or 0

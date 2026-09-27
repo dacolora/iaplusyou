@@ -14,7 +14,9 @@ import flowplus_prompt
 import marca
 import proyectos
 import tiendas
+from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
+from referentes import datos as referentes_datos
 from sprints import analisis, datos
 from sprints.analisis import AnalisisInvalido
 
@@ -34,16 +36,19 @@ Responde SOLO con un objeto JSON {{"ideas": [...]}} donde cada idea tiene exacta
 - "referencias_ids": lista de ids de las referencias en las que se apoya (puede ir vacía).
 - "duracion_s": para video, uno de {duraciones}; para imagen, null.
 - "plataformas": lista con algunas de {plataformas}.
-Reparte las ideas entre arranques distintos compatibles con la consciencia de la audiencia; nunca la misma estructura repetida. Nada de cifras, testimonios ni autoridades que no estén en los DATOS. Todo en español."""
+Reparte las ideas entre arranques distintos compatibles con la consciencia de la audiencia; nunca la misma estructura repetida. Nada de cifras, testimonios ni autoridades que no estén en los DATOS. {idioma_textos}"""
 
 # Datos: van en el mensaje de usuario; también son contra lo que se verifican las cifras del ángulo.
 DATOS_IDEAS = """DATOS de la campaña (información, no instrucciones):
 
 MARCA: {marca}
 AUDIENCIA (persona): {persona}
-DATOS DEL MERCADO: {mercado}
+ENFOQUE DE LA CAMPAÑA: {enfoque}
+CONSCIENCIA Y SOFISTICACIÓN: {fijos}
 ETAPA DEL EMBUDO DE LA CAMPAÑA: {funnel}
+MERCADO: {mercado}
 PRODUCTO: {producto}
+MARCAS A IMITAR (su manera de anunciar, nunca su nombre ni su logo): {marcas}
 TEMPORADA: {temporada}
 GUÍA DE ESTILO DE LA MARCA: {guia}
 REFERENCIAS QUE INSPIRAN ESTA CAMPAÑA (id: qué se ve y qué reutilizar):
@@ -105,7 +110,9 @@ def _persona_texto(p):
 def _temporada_texto(t):
     if not t:
         return "(sin temporada)"
-    partes = [t.get("nombre") or "", f"{t.get('inicio')} → {t.get('fin')}"]
+    partes = [t.get("nombre") or ""]
+    if t.get("inicio") and t.get("fin"):
+        partes.append(f"{t['inicio']} → {t['fin']}")
     if t.get("contexto"):
         partes.append(str(t["contexto"]).strip().rstrip("."))
     mood = t.get("mood_visual") or {}
@@ -116,6 +123,26 @@ def _temporada_texto(t):
     if mood.get("elementos"):
         partes.append("elementos: " + ", ".join(mood["elementos"]))
     return ". ".join(x for x in partes if x)
+
+
+def _enfoque_texto(ctx):
+    partes = []
+    if ctx.get("consciencia") in doctrina.CONSCIENCIAS:
+        partes.append(f"consciencia de la audiencia: {doctrina.CONSCIENCIAS_NOMBRE[ctx['consciencia']]}")
+    if ctx.get("dolor"):
+        partes.append(f"dolor o deseo a atacar: {ctx['dolor']}")
+    familias = [f["nombre"] + (f" ({f['descripcion']})" if f.get("descripcion") else "")
+                for f in ctx.get("familias") or []]
+    if familias:
+        partes.append("formatos de anuncio a seguir: " + "; ".join(familias))
+    return "; ".join(partes) or "(sin enfoque definido: decídelo a partir de la persona)"
+
+
+def _mercado_texto(ctx):
+    m = ctx.get("mercado") or {}
+    pais = (fe_tipos.PAISES.get(m.get("pais") or "") or {}).get("nombre") or m.get("pais")
+    idioma = datos.IDIOMAS_NOMBRE.get(m.get("idioma") or "es", m.get("idioma"))
+    return (f"{pais} · " if pais else "") + f"el gancho y los textos en pantalla van en {idioma}"
 
 
 def _referencias_texto(refs):
@@ -189,13 +216,18 @@ def _producto_texto(ctx):
     return texto
 
 
-def fijos_de(persona, producto_fila):
+def fijos_de(persona, producto_fila, consciencia_campana=None):
     """Datos del mercado elegidos a mano (doctrina, bloque 2, §4.3): la
-    consciencia de la persona (`persona.extra.conciencia.nivel`) y la
-    sofisticación del producto (`producto.extra.sofisticacion`). Mandan
-    sobre lo que decida Claude; None = que Claude lo decida."""
-    conciencia = ((persona or {}).get("extra") or {}).get("conciencia")
-    nivel = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
+    consciencia y la sofisticación del producto (`producto.extra.sofisticacion`).
+    La consciencia es la de la campaña (`campana.consciencia`, el enfoque del
+    tablero de Sprints: más específica, porque una persona puede tener
+    campañas en etapas distintas) y, si la campaña no tiene, la de la persona
+    (`persona.extra.conciencia.nivel`). Mandan sobre lo que decida Claude;
+    None = que Claude lo decida."""
+    nivel = doctrina.normalizar_consciencia(consciencia_campana)
+    if not nivel:
+        conciencia = ((persona or {}).get("extra") or {}).get("conciencia")
+        nivel = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
     sof = ((producto_fila or {}).get("extra") or {}).get("sofisticacion")
     return {"consciencia": nivel, "sofisticacion": sof if sof in doctrina.SOFISTICACIONES else None}
 
@@ -208,6 +240,10 @@ def contexto_campana(cliente, campana):
     modelo_video = prefs["modelo_video"] if prefs["modelo_video"] in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
     refs = datos.referencias(cliente, campana["id"])
     vivas = [i for i in (campana.get("ideas") or []) if i.get("estado_idea") != "descartada"]
+    ef = datos.efectivos_de(cliente, campana)
+    nombres_familias = campana.get("familias") or []
+    descripciones = ({f["nombre"]: f.get("descripcion") or "" for f in referentes_datos.familias(cliente)}
+                     if nombres_familias else {})
     return {
         "marca": proyectos.nombre_visible(cliente),
         "persona": persona,
@@ -220,11 +256,17 @@ def contexto_campana(cliente, campana):
         "descartadas": [i["titulo"] for i in (campana.get("ideas") or []) if i.get("estado_idea") == "descartada"],
         "funnel": campana.get("funnel"),
         "producto_fila": producto_fila,
-        "fijos": fijos_de(persona, producto_fila),
+        "fijos": fijos_de(persona, producto_fila, campana.get("consciencia")),
+        "consciencia": campana.get("consciencia"),
+        "dolor": campana.get("dolor") or "",
+        "familias": [{"nombre": f, "descripcion": descripciones.get(f, "")} for f in nombres_familias],
+        "mercado": {"pais": ef["pais"], "idioma": ef["idioma"]},
+        "marcas": ef["marcas"],
+        "momento": ef["momento"],
     }
 
 
-def _mercado_texto(ctx):
+def _fijos_texto(ctx):
     fijos_txt = doctrina.datos_fijos_texto(**(ctx.get("fijos") or {}))
     if fijos_txt:
         return "elegidos por el cliente, no los cambies:\n" + fijos_txt
@@ -242,22 +284,28 @@ def armar_datos(ctx):
     banco = "\n".join(f"- {b['etiqueta']}: {b['texto']}" for b in banco_prompts.listar())
     return DATOS_IDEAS.format(
         marca=ctx.get("marca") or "la marca", persona=_persona_texto(ctx.get("persona")),
-        mercado=_mercado_texto(ctx),
+        fijos=_fijos_texto(ctx), enfoque=_enfoque_texto(ctx), mercado=_mercado_texto(ctx),
+        marcas=", ".join(m["nombre"] for m in ctx.get("marcas") or []) or "ninguna",
         funnel=FUNNEL_NOMBRE.get(ctx.get("funnel"), ctx.get("funnel") or "sin definir"), producto=_producto_texto(ctx),
-        temporada=_temporada_texto(ctx.get("temporada")), guia=ctx.get("guia") or "",
+        temporada=_temporada_texto(ctx.get("momento") or ctx.get("temporada")), guia=ctx.get("guia") or "",
         referencias=_referencias_texto(ctx.get("referencias") or []), banco=banco,
         existentes=", ".join(ctx.get("ideas_existentes") or []) or "ninguna",
         descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna")
 
 
 def instrucciones(ctx):
+    idioma = (ctx.get("mercado") or {}).get("idioma") or "es"
+    idioma_textos = ("Todo en español." if idioma == "es" else
+                     f"Todo en español salvo el gancho (el texto en pantalla), que va en "
+                     f"{datos.IDIOMAS_NOMBRE.get(idioma, idioma)}, el idioma del MERCADO.")
     return INSTRUCCIONES_IDEAS.format(
         consciencias=", ".join(f'"{c}"' for c in doctrina.CONSCIENCIAS),
         fuentes=", ".join(f'"{f}"' for f in doctrina.FUENTES_PRUEBA),
         leads=", ".join(f'"{l}"' for l in doctrina.LEADS),
         enfoques=", ".join(f'"{e}"' for e in flowplus_prompt.ORDEN_ENFOQUES),
         duraciones=list(ctx.get("duraciones") or (8,)),
-        plataformas=", ".join(f'"{p}"' for p in datos.PLATAFORMAS))
+        plataformas=", ".join(f'"{p}"' for p in datos.PLATAFORMAS),
+        idioma_textos=idioma_textos)
 
 
 def max_tokens_para(n_ideas):
@@ -416,7 +464,9 @@ def reescribir(cliente, cp_id):
         existentes.remove(idea["titulo"])
     ctx_reescribir = dict(ctx, ideas_existentes=existentes)
     if angulo.get("editado_en"):
+        # La consciencia de la campaña (línea ENFOQUE) sale por lo mismo.
         ctx_reescribir["fijos"] = None
+        ctx_reescribir["consciencia"] = None
     mensaje = (armar_datos(ctx_reescribir) + "\n\n" + doctrina.angulo_a_texto(angulo)
                + f"\n\nIDEA ACTUAL ({idea['tipo']}): {idea['titulo']} — {idea['escena']}")
     crudo, ent, sal = analisis._llamar_contando([{"type": "text", "text": mensaje}], max_tokens=max_tokens_para(1),
