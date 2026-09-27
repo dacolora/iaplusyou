@@ -36,3 +36,44 @@ def test_enter_en_un_campo_no_envia_el_formulario_de_crear(app):
     js = html[html.index("form.addEventListener('keydown'"):]
     assert "e.key !== 'Enter'" in js[:300]
     assert "e.target.form === form" in js[:400] and "e.preventDefault()" in js[:400]
+
+
+def test_nada_anidado_y_subir_link_con_sus_formularios_de_afuera(app):
+    crear = _crear(_html(app))
+    form = _form(crear)
+    assert form.count("<form") == 1
+    assert 'id="fp-input-archivos" form="fp-form-subir"' in form
+    assert 'name="link" form="fp-form-link"' in form
+    antes = crear[:crear.index('id="form-flowplus"')]
+    assert 'id="fp-form-subir"' in antes and 'id="fp-form-link"' in antes and 'id="fp-bandeja-wrap"' in antes
+
+
+def test_seis_pastillas_el_mas_y_el_catalogo_en_dialogo(app):
+    form = _form(_crear(_html(app)))
+    for menu in ("fp-menu-mas", "fp-menu-tipo", "fp-menu-modelo", "fp-menu-duracion",
+                 "fp-menu-formato", "fp-menu-sonido", "fp-menu-musica"):
+        assert f'data-menu="{menu}"' in form and f'id="{menu}"' in form, menu
+    assert '<dialog class="generado-modal crear-catalogo" id="fp-catalogo">' in form
+    assert 'id="fp-precio"' in form
+
+
+def test_generar_primero_y_super_prompt_como_ayuda(app):
+    form = _form(_crear(_html(app)))
+    assert form.index('id="fp-generar"') < form.index('id="fp-armar"')
+    assert re.search(r'<button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director"', form)
+
+
+def test_los_avisos_viven_en_su_menu_o_en_el_pie(app):
+    crear = _crear(_html(app))
+    assert "Dos caminos:" not in crear and "Una pieza por clic." not in crear
+    duracion = crear[crear.index('id="fp-menu-duracion"'):crear.index('data-menu="fp-menu-formato"')]
+    assert "sus segundos más los del resultado no pueden pasar de 30" in duracion and 'id="fp-duracion-larga"' in duracion
+    modelo = crear[crear.index('id="fp-menu-modelo"'):crear.index('data-menu="fp-menu-duracion"')]
+    assert 'id="fp-calidad"' in modelo and "Borrador a 480p" in modelo
+    assert "Tu texto va tal cual al modelo" in crear
+
+
+def test_cambiar_producto_sigue_con_su_desplegable(app):
+    crear = _crear(_html(app))
+    assert '<details class="comparacion-modelos selector-productos" id="sel-clone"' in crear
+    assert '<div class="selector-productos selector-en-dialogo" id="sel-plus"' in crear

@@ -2,162 +2,207 @@
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 {% from "_angulo_editor.html" import editor_angulo %}
-<p class="vacio" style="padding-top:0;">
-  Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.
-  Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:
-</p>
-<ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.95rem;">
-  <li><strong>Generar video</strong>: Tu texto va tal cual al modelo (Wan 3.0, Kling O3 Pro o Seedance 2.5).</li>
-  <li><strong>Crear super prompt</strong>: La IA arma un prompt detallado por planos desde tu idea y las referencias. Lo revisas, editas y regeneras (gratis) antes de generar el video — perfecto si no sabes qué escribir.</li>
-</ul>
-<p class="vacio" style="padding-top:0;margin-top:0.5rem;">Las imágenes van solas a Seedream V5 Pro. Ninguna genera costos hasta que pulses "Generar".</p>
+{# Formulario de Crear como compositor (spec 2026-09-27-crear-compositor-design.md).
+   Una tarjeta en dos mitades: arriba la bandeja de referencias (FUERA de
+   #form-flowplus porque lleva sus propios <form> de quitar/vaciar — los
+   formularios no se anidan) y abajo el formulario: el texto y la barra de
+   «pastillas». Cada pastilla abre un menú con los controles REALES (radios y
+   selects de siempre), así que el servidor recibe los mismos campos. Subir y
+   pegar un link usan los formularios vacíos de aquí abajo vía el atributo form=. #}
+{% set total_catalogo = namespace(n=0) %}{% for cid, lista in activos_por_categoria.items() %}{% set total_catalogo.n = total_catalogo.n + (lista | length) %}{% endfor %}
+<form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir" hidden></form>
+<form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" id="fp-form-link" hidden></form>
 
-<div class="form-nueva-idea" style="margin-top:1rem;">
-  <label class="campo-label">Referencias <span class="vacio" style="display:inline;padding:0;font-weight:normal;">(opcional)</span></label>
-  <p class="vacio" style="padding-top:0;font-size:.78rem;">
-    Sube imágenes y videos, o pega un link (TrendTrack, TikTok, Instagram, YouTube). Cada uno queda como
-    <code>@Imagen N</code> / <code>@Video N</code> y puedes nombrarlo en el texto. Un video de link sirve como referencia
-    de movimiento y estructura para recrearlo con tu producto — no se publica ni se copia tal cual.
-  </p>
-  <div class="fila-campos-idea">
-    <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir">
-      <input type="file" name="referencias" id="fp-input-archivos" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple>
-      <noscript><button type="submit">Subir</button></noscript>
-    </form>
-    <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" style="display:flex;gap:.4rem;" id="fp-form-link">
-      <input type="url" name="link" placeholder="https://app.trendtrack.io/… o TikTok / Instagram / YouTube" style="flex:1;margin:0;" required>
-      <button class="btn-guardar btn-sm" type="submit">Agregar link</button>
-    </form>
-  </div>
-  <div id="fp-subida" class="vacio" style="font-size:.78rem;display:none;margin-top:.5rem;">
-    <div class="barra-progreso"><div class="barra-progreso-fill" id="fp-subida-barra" style="width:0%"></div></div>
-    <span id="fp-subida-texto">Subiendo…</span>
-  </div>
-  <div id="fp-bandeja-wrap">
-    {% include "_flowplus_bandeja.html" %}
-  </div>
-</div>
-
-<form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
-  {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
-  <input type="hidden" name="bandeja_vista" value="1">
-  <label class="campo-label" style="margin-top:1rem;display:block;">Del catálogo: productos, personajes, entornos <span class="vacio" style="display:inline;padding:0;font-weight:normal;">(opcional)</span></label>
-  {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
-  {% include "_selector_productos.html" %}
-  {% endwith %}
-
-  <label class="campo-label" style="margin-top:1rem;display:block;">Qué tiene que pasar</label>
-  <div class="banco-prompts" id="fp-etiquetas" style="margin-bottom:.4rem;"></div>
-  <textarea name="accion_central" id="fp-texto" rows="3" placeholder="ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
-  <p class="campo-error" id="fp-texto-error" hidden>Escribe qué tiene que pasar en el video.</p>
-
-  <p class="vacio" style="font-size:.78rem;">
-    Una pieza por clic. Sale solo el producto; si eliges un personaje del catálogo, la escena lo lleva a él.
-    Sin referencias ni catálogo, el modelo recibe tu texto tal cual (sin logos ni guía de marca).
-  </p>
-  {% if logos %}
-  <p class="vacio" style="font-size:.76rem;">Con referencias o catálogo se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
-  {% else %}
-  <p class="vacio" style="font-size:.76rem;">Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación con referencias o catálogo (evita marcas inventadas).</p>
-  {% endif %}
-
-  <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué quieres generar?</label>
-  <div class="checks-plataformas" id="fp-tipo">
-    <label><input type="radio" name="tipo" value="video" checked> Video</label>
-    <label><input type="radio" name="tipo" value="imagen"> Imagen</label>
-  </div>
-
-  <div id="fp-bloque-video">
-    <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de video</label>
-    <div class="checks-plataformas">
-      {% for id, m in modelos_flowplus_video.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
-      {% endfor %}
+<div class="crear-comp" id="crear-comp">
+  <div class="crear-comp-arriba">
+    <div id="fp-bandeja-wrap">
+      {% include "_flowplus_bandeja.html" %}
     </div>
-    <div class="fila-campos-idea" style="margin-top:.8rem;">
-      <div>
-        <label class="campo-label">Duración</label>
-        <select name="duracion_objetivo" id="fp-duracion">
-          {% for d in duraciones_crear %}
-          <option value="{{ d }}"{% if d == preferencias_flowplus.duracion_defecto %} selected{% endif %}>{{ d }} s</option>
-          {% endfor %}
-        </select>
-        <p class="vacio" id="fp-duracion-nota" style="font-size:.74rem;padding:0;">Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.</p>
-        <p class="vacio" id="fp-duracion-larga" style="font-size:.74rem;padding:0;color:var(--warn);" hidden>Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.</p>
-      </div>
-      <div>
-        <label class="campo-label">Formato</label>
-        <select name="aspect_ratio" id="fp-formato-video">
-          {% for f, nombre in formatos_nombres.items() %}
-          <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
-          {% endfor %}
-        </select>
-        <p class="vacio" id="fp-formato-nota" style="font-size:.74rem;padding:0;" hidden>Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen.</p>
-      </div>
+    <div class="crear-refs" id="fp-catalogo-elegidos" hidden></div>
+    <div class="crear-subida" id="fp-subida" hidden>
+      <div class="barra-progreso"><div class="barra-progreso-fill" id="fp-subida-barra"></div></div>
+      <span id="fp-subida-texto">Subiendo…</span>
     </div>
-    <div class="fila-campos-idea" style="margin-top:.8rem;">
-      <div>
-        <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" id="fp-con-sonido" {% if preferencias_sonido.con_sonido %}checked{% endif %}> Sonido de la escena</label>
-        <div style="display:flex;gap:.4rem;align-items:center;margin-top:.4rem;">
-          <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="ej. risas de niños, pasos sobre baldosa, respiración agitada al final" style="flex:1;">
-          <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">Sugerir</button>
-        </div>
-        <p class="vacio" style="font-size:.74rem;padding:0;">Audio nativo del modelo, sin diálogo ni música. Vacío = ambiente natural de la escena.</p>
-      </div>
-      <div>
-        <label class="campo-label">Música al crear</label>
-        <select name="musica_estilo" id="fp-musica">
-          <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>ninguna</option>
-          <optgroup label="Estilos IA">
-            {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
-          </optgroup>
-          <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
-            {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
-          </optgroup>
-        </select>
-        <p class="vacio" style="font-size:.74rem;padding:0;">Se mezcla debajo del sonido. Estilos IA: USD 0,02 la primera vez por estilo y duración. Mi música: gratis.</p>
-        <div id="fp-musica-inicio-wrap" hidden style="margin-top:.4rem;">
-          <audio id="fp-musica-audio" controls preload="none" style="width:100%;height:32px;"></audio>
-          <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-top:.3rem;">
-            <label style="font-size:.8rem;">Empieza en el segundo
-              <input type="number" name="musica_inicio_s" id="fp-musica-inicio" min="0" step="1" value="0" style="width:5rem;">
-            </label>
-            <button type="button" class="btn-sm" id="fp-musica-usar">Usar donde va el reproductor</button>
+  </div>
+
+  <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" id="form-flowplus" class="crear-comp-form">
+    {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
+    <input type="hidden" name="bandeja_vista" value="1">
+    <input type="hidden" name="modelo" id="fp-modelo">
+    <div class="crear-comp-abajo">
+      <div class="banco-prompts crear-etiquetas" id="fp-etiquetas"></div>
+      <label class="crear-oculto-lector" for="fp-texto">Qué tiene que pasar</label>
+      <textarea name="accion_central" id="fp-texto" rows="4" placeholder="Describe qué tiene que pasar. Ej.: @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
+      <p class="campo-error" id="fp-texto-error" hidden>Escribe qué tiene que pasar en el video.</p>
+
+      <div class="crear-barra">
+        <div class="crear-pills">
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill crear-mas" data-menu="fp-menu-mas" aria-expanded="false" aria-label="Agregar referencias">+</button>
+            <div class="crear-menu" id="fp-menu-mas" hidden>
+              <label class="crear-menu-item">
+                <span class="crear-menu-ico" aria-hidden="true">⬆</span>
+                <span><strong>Subir imágenes o videos</strong><small>JPG, PNG, WEBP, MP4 o MOV; también puedes arrastrarlos a la caja. Cada uno queda como @Imagen N / @Video N para nombrarlo en el texto.</small></span>
+                <input type="file" name="referencias" id="fp-input-archivos" form="fp-form-subir" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple hidden>
+              </label>
+              <button type="button" class="crear-menu-item" id="fp-abrir-link">
+                <span class="crear-menu-ico" aria-hidden="true">🔗</span>
+                <span><strong>Pegar un link</strong><small>TikTok, Instagram, YouTube o TrendTrack: sirve de referencia de movimiento y estructura; no se publica ni se copia tal cual.</small></span>
+              </button>
+              <div class="crear-menu-fila" id="fp-link-caja" hidden>
+                <input type="url" name="link" form="fp-form-link" placeholder="https://…" required>
+                <button type="submit" class="btn-sm" form="fp-form-link">Agregar</button>
+              </div>
+              <button type="button" class="crear-menu-item" id="fp-abrir-catalogo">
+                <span class="crear-menu-ico" aria-hidden="true">▦</span>
+                <span><strong>Del catálogo</strong><small>{{ total_catalogo.n }} productos, personajes y entornos, con buscador.</small></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill" data-menu="fp-menu-tipo" aria-expanded="false" id="fp-pill-tipo">🎬 Video</button>
+            <div class="crear-menu" id="fp-menu-tipo" hidden>
+              <div class="crear-opciones" id="fp-tipo">
+                <label class="crear-opcion"><input type="radio" name="tipo" value="video" checked><span><strong>Video</strong><small>Con el sonido de la escena, hasta 30 s</small></span></label>
+                <label class="crear-opcion"><input type="radio" name="tipo" value="imagen"><span><strong>Imagen</strong><small>Una imagen fija en 2k</small></span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill" data-menu="fp-menu-modelo" aria-expanded="false" id="fp-pill-modelo">Modelo</button>
+            <div class="crear-menu crear-menu-ancho" id="fp-menu-modelo" hidden>
+              <div class="crear-opciones" data-solo-video>
+                {% for id, m in modelos_flowplus_video.items() %}
+                <label class="crear-opcion crear-modelo" title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre }}</strong><small>hasta {{ m.max_referencias }} referencia{{ '' if m.max_referencias == 1 else 's' }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
+                {% endfor %}
+              </div>
+              <div class="crear-opciones" data-solo-imagen hidden>
+                {% for id, m in modelos_flowplus_imagen.items() %}
+                <label class="crear-opcion crear-modelo" title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-nombre="{{ m.nombre }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}><span><strong>{{ m.nombre }}</strong><small>hasta {{ m.max_referencias }} referencias · 2k</small></span><em>${{ "%.3f"|format(m.usd) }}</em></label>
+                {% endfor %}
+              </div>
+              <label class="crear-interruptor" id="fp-calidad-wrap" data-solo-video>
+                <input type="checkbox" name="calidad" value="borrador" id="fp-calidad">
+                <span><strong>Borrador a 480p</strong><small>Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final.</small></span>
+              </label>
+              <p class="crear-nota" data-solo-video>Precios con el sonido de la escena incluido.</p>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona" data-solo-video>
+            <button type="button" class="crear-pill" data-menu="fp-menu-duracion" aria-expanded="false" id="fp-pill-duracion">⏱ Duración</button>
+            <div class="crear-menu" id="fp-menu-duracion" hidden>
+              <p class="crear-menu-titulo">Duración</p>
+              <div class="crear-fichas" data-fichas-de="fp-duracion"></div>
+              <select name="duracion_objetivo" id="fp-duracion" hidden>
+                {% for d in duraciones_crear %}
+                <option value="{{ d }}"{% if d == preferencias_flowplus.duracion_defecto %} selected{% endif %}>{{ d }} s</option>
+                {% endfor %}
+              </select>
+              <p class="crear-nota crear-nota-aviso" id="fp-duracion-larga" hidden>Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.</p>
+              <p class="crear-nota" id="fp-duracion-nota">Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.</p>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill" data-menu="fp-menu-formato" aria-expanded="false" id="fp-pill-formato">▯ Formato</button>
+            <div class="crear-menu" id="fp-menu-formato" hidden>
+              <p class="crear-menu-titulo">Formato</p>
+              <div data-solo-video>
+                <div class="crear-fichas" data-fichas-de="fp-formato-video"></div>
+                <select name="aspect_ratio" id="fp-formato-video" hidden>
+                  {% for f, nombre in formatos_nombres.items() %}
+                  <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
+                  {% endfor %}
+                </select>
+                <p class="crear-nota" id="fp-formato-nota" hidden>Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen.</p>
+              </div>
+              <div data-solo-imagen hidden>
+                <div class="crear-fichas" data-fichas-de="fp-formato-imagen"></div>
+                <select name="aspect_ratio_imagen" id="fp-formato-imagen" hidden>
+                  {% for f, nombre in formatos_nombres.items() %}
+                  <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona" data-solo-video>
+            <button type="button" class="crear-pill" data-menu="fp-menu-sonido" aria-expanded="false" id="fp-pill-sonido">🔊 Sonido</button>
+            <div class="crear-menu crear-menu-ancho" id="fp-menu-sonido" hidden>
+              <label class="crear-interruptor">
+                <input type="checkbox" name="con_sonido" value="si" id="fp-con-sonido" {% if preferencias_sonido.con_sonido %}checked{% endif %}>
+                <span><strong>Sonido de la escena</strong><small>Audio nativo del modelo, sin diálogo ni música.</small></span>
+              </label>
+              <div class="crear-menu-fila">
+                <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="ej. risas de niños, pasos sobre baldosa, respiración agitada al final">
+                <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">Sugerir</button>
+              </div>
+              <p class="crear-nota">Vacío = ambiente natural de la escena.</p>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona" data-solo-video>
+            <button type="button" class="crear-pill" data-menu="fp-menu-musica" aria-expanded="false" id="fp-pill-musica">🎵 Música</button>
+            <div class="crear-menu crear-menu-ancho crear-menu-der" id="fp-menu-musica" hidden>
+              <select name="musica_estilo" id="fp-musica" hidden>
+                <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>ninguna</option>
+                <optgroup label="Estilos IA">
+                  {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+                </optgroup>
+                <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+                  {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
+                </optgroup>
+              </select>
+              <div class="crear-musica" id="fp-musica-opciones"></div>
+              <div class="crear-musica-inicio" id="fp-musica-inicio-wrap" hidden>
+                <audio id="fp-musica-audio" controls preload="none"></audio>
+                <div class="crear-menu-fila">
+                  <label class="crear-inicio">Empieza en el segundo <input type="number" name="musica_inicio_s" id="fp-musica-inicio" min="0" step="1" value="0"></label>
+                  <button type="button" class="btn-sm" id="fp-musica-usar">Usar donde va el reproductor</button>
+                </div>
+              </div>
+              <div class="crear-menu-sep"></div>
+              <div id="mm-wrap">{% include "_mi_musica.html" %}</div>
+            </div>
           </div>
         </div>
-        <div id="mm-wrap">{% include "_mi_musica.html" %}</div>
+
+        <div class="crear-generar">
+          <span class="crear-precio" id="fp-precio"></span>
+          <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo">Generar video</button>
+        </div>
       </div>
     </div>
-    <div style="margin-top:.8rem;" id="fp-calidad-wrap">
-      <label class="fe-check"><input type="checkbox" name="calidad" value="borrador" id="fp-calidad"> Borrador a 480p (solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final)</label>
-    </div>
-  </div>
 
-  <div id="fp-bloque-imagen" hidden>
-    <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de imagen</label>
-    <div class="checks-plataformas">
-      {% for id, m in modelos_flowplus_imagen.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }} · 2k</span></label>
-      {% endfor %}
+    <div class="crear-pie">
+      {% set n_logos = logos | length %}
+      <span id="fp-ayuda-boton">Tu texto va tal cual al modelo<span id="fp-pie-logos" hidden> · {% if n_logos > 1 %}se adjuntan tus {{ n_logos }} logos oficiales{% elif n_logos == 1 %}se adjunta tu logo oficial{% else %}sin logo oficial: súbelo en FlowSettings › Logos{% endif %}</span> · se cobra al generar.</span>
+      {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
+         cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
+         quien tiene una idea pero quiere que la IA arme los planos. Nunca obligatorio. #}
+      <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.">¿No sabes qué escribir? <strong>Crear super prompt con IA (gratis)</strong></button>
     </div>
-    <div style="margin-top:.8rem;">
-      <label class="campo-label">Formato</label>
-      <select name="aspect_ratio_imagen" id="fp-formato-imagen">
-        {% for f, nombre in formatos_nombres.items() %}
-        <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-  <input type="hidden" name="modelo" id="fp-modelo">
 
-  {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
-     cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
-     quien tiene una idea pero quiere que la IA arme los planos — revisa, edita y regenera antes de generar. #}
-  <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo" style="margin-top:1.2rem;">Generar video</button>
-  <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.">Crear super prompt con IA (gratis)</button>
-  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Se cobra al generar, no antes.</p>
-</form>
+    <dialog class="generado-modal crear-catalogo" id="fp-catalogo">
+      <button type="button" class="generado-cerrar" data-cerrar-catalogo aria-label="Cerrar">×</button>
+      <div class="modal-form ancho">
+        <header class="modal-form-cab">
+          <h3>Del catálogo</h3>
+          <p>Marca lo que debe salir en la pieza: productos, personajes o entornos. Es opcional; si eliges un personaje, la escena lo lleva a él.</p>
+        </header>
+        {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus", sel_dialogo=True %}
+        {% include "_selector_productos.html" %}
+        {% endwith %}
+        <footer class="modal-form-pie"><span></span><button type="button" class="btn-generar" data-cerrar-catalogo>Listo</button></footer>
+      </div>
+    </dialog>
+  </form>
+  <div class="crear-velo" id="crear-velo"></div>
+</div>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
 {% include "_selector_productos_nuevo.html" %}
