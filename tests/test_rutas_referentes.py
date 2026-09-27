@@ -24,6 +24,10 @@ def app(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
     (tmp_path / "clientes" / "acme").mkdir(parents=True)
     (tmp_path / "clientes" / "otro").mkdir(parents=True)
+    # Barridos por palabra: la traducción al inglés llama a Claude. En los
+    # tests nunca sale a la red: devuelve la palabra tal cual.
+    from referentes import traducir
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: (texto.rsplit("Keyword: ", 1)[-1].strip(), 0, 0))
     return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "productos": productos}
 
 
@@ -554,6 +558,83 @@ def test_traer_post_tope_excede_2000_se_recorta(app, monkeypatch):
         "fuente": "atria", "modo": "palabra", "palabra": "x", "idioma": "en", "tope": "999999",
     })
     assert llamadas[0][3] <= 2000  # el 4to posicional de encolar_barrer(cliente, fuente, consulta, tope, ...) es tope
+
+
+def _gastos_de(cliente):
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente))]
+
+
+def test_traer_post_traduce_la_palabra_y_busca_en_ingles(app, monkeypatch):
+    """2026-09-27: los barridos por palabra van SIEMPRE en inglés (pedido del
+    usuario tras «DOLOR DE PIES» en inglés = pasteles). Se traduce lo escrito,
+    se guarda la original, se fuerza idioma en y se registra el gasto."""
+    from referentes import traducir
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ('"foot pain"\n', 40, 6))
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 1)
+    app["c"].post("/cliente/acme/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "dolor de pies",
+                                                         "idioma": "es", "tope": "20"})
+    consulta = llamadas[0][2]
+    assert (consulta["palabra"], consulta["palabra_original"], consulta["idioma"]) == ("foot pain", "dolor de pies", "en")
+    (g,) = _gastos_de("acme")
+    assert g["tipo"] == "otro" and g["usd"] > 0 and "dolor de pies" in g["detalle"] and "foot pain" in g["detalle"]
+
+
+def test_traer_post_si_no_se_puede_traducir_no_lanza_nada(app, monkeypatch):
+    from referentes import traducir
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: (_ for _ in ()).throw(RuntimeError("Anthropic caído")))
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 1)
+    c = app["c"]
+    c.post("/cliente/acme/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "dolor de pies", "tope": "20"})
+    assert llamadas == []
+    with c.session_transaction() as s:
+        assert any("traducir" in m for _, m in s.get("_flashes", []))
+
+
+def test_admin_barrido_global_tambien_en_ingles(app, monkeypatch):
+    from referentes import traducir
+    from tareas import referentes as tr
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ("shoes", 30, 2))
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    app["c"].post("/admin/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "zapatos", "idioma": "es",
+                                                  "tope": "50"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert (llamadas[0][2]["palabra"], llamadas[0][2]["idioma"]) == ("shoes", "en")
+    assert [g["tipo"] for g in _gastos_de("_creatv")] == ["otro"]
+
+
+def test_mis_barridos_muestra_lo_escrito_y_lo_buscado(app):
+    from referentes import datos
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "foot pain", "palabra_original": "dolor de pies",
+                                          "idioma": "en"}, 20)
+    html = app["c"].get("/cliente/acme/referentes/barridos").get_data(as_text=True)
+    assert "«dolor de pies» → «foot pain»" in html
+
+
+def test_formularios_de_barrido_ya_no_piden_idioma(app, monkeypatch):
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    html = app["c"].get("/cliente/acme/referentes/traer").get_data(as_text=True)
+    assert 'name="idioma"' not in html and "inglés" in html
+    html = app["c"].get("/admin/referentes").get_data(as_text=True)
+    assert 'name="idioma"' not in html
+
+
+def test_al_ingles_limpia_comillas_y_rechaza_vacio(monkeypatch):
+    from referentes import traducir
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ("«foot pain relief»\nExplanation…", 1, 1))
+    assert traducir.al_ingles("alivio del dolor de pies")[0] == "foot pain relief"
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ("  ", 1, 1))
+    with pytest.raises(traducir.TraduccionInvalida):
+        traducir.al_ingles("x")
 
 
 def test_traer_post_sin_marca_ni_palabra_falla(app, monkeypatch):
