@@ -44,19 +44,31 @@ function ordenados(pista) {
 // de d ms: ocupa [inicio_B, inicio_B + d); A sigue con su cola (fuente más
 // allá de hasta_ms) y B arranca en su posición exacta. `dx` en fracción del
 // ancho (xfade slideleft: A sale por la izquierda, B entra por la derecha).
+// Cada capa lleva además `tZoom`, el instante que debe usar SU Ken Burns:
+// `tMs` en el caso normal y en los dos lados de una transición; el instante
+// CONGELADO (el mismo cuadro que ve `zoompan`, no `fin`) tras el último
+// clip; el inicio del primer clip en la rama defensiva antes de que
+// arranque la pista; `null` para una imagen (el compilador nunca le aplica
+// zoom a la principal cuando es imagen — quien llama se salta el zoom si
+// `tZoom` es `null`).
 export function principalEn(doc, tMs) {
   const p = pistaPrincipal(doc);
   const clips = ordenados(p);
   if (!clips.length) return { capas: [], aproximada: false };
-  if (p.tipo === "imagen") return { capas: [{ clip: clips[0], fuenteMs: 0, alfa: 1, dx: 0 }], aproximada: false };
+  if (p.tipo === "imagen") return { capas: [{ clip: clips[0], fuenteMs: 0, alfa: 1, dx: 0, tZoom: null }], aproximada: false };
   const i = clips.findIndex((c) => activo(c, tMs));
   if (i < 0) {
-    // Más allá del último clip (la voz sigue): tpad clona el último cuadro.
+    const c0 = clips[0];
+    if (tMs < c0.inicio_ms) {
+      return { capas: [{ clip: c0, fuenteMs: fuenteMs(c0, c0.inicio_ms), alfa: 1, dx: 0, tZoom: c0.inicio_ms }], aproximada: false };
+    }
+    // Más allá del último clip (la voz sigue): tpad clona el último cuadro
+    // de SALIDA. Su fuente es fuenteMs(ult, tCongelado): restar el cuadro
+    // en tiempo de SALIDA antes de convertir a tiempo de fuente, nunca
+    // después — con velocidad != 1 no da lo mismo.
     const ult = clips[clips.length - 1];
-    const fin = ult.inicio_ms + ult.duracion_ms;
-    const t = tMs < clips[0].inicio_ms ? clips[0].inicio_ms : fin;
-    const clip = tMs < clips[0].inicio_ms ? clips[0] : ult;
-    return { capas: [{ clip, fuenteMs: Math.max(0, fuenteMs(clip, t) - (clip === ult ? 1000 / FPS : 0)), alfa: 1, dx: 0 }], aproximada: false };
+    const tCongelado = Math.max(ult.inicio_ms, ult.inicio_ms + ult.duracion_ms - 1000 / FPS);
+    return { capas: [{ clip: ult, fuenteMs: fuenteMs(ult, tCongelado), alfa: 1, dx: 0, tZoom: tCongelado }], aproximada: false };
   }
   const b = clips[i];
   const a = i > 0 ? clips[i - 1] : null;
@@ -66,13 +78,13 @@ export function principalEn(doc, tMs) {
     const desliza = tr.tipo === "deslizar";
     return {
       capas: [
-        { clip: a, fuenteMs: fuenteMs(a, tMs), alfa: 1, dx: desliza ? -avance : 0 },
-        { clip: b, fuenteMs: fuenteMs(b, tMs), alfa: desliza ? 1 : avance, dx: desliza ? 1 - avance : 0 },
+        { clip: a, fuenteMs: fuenteMs(a, tMs), alfa: 1, dx: desliza ? -avance : 0, tZoom: tMs },
+        { clip: b, fuenteMs: fuenteMs(b, tMs), alfa: desliza ? 1 : avance, dx: desliza ? 1 - avance : 0, tZoom: tMs },
       ],
       aproximada: !FIELES.has(tr.tipo),
     };
   }
-  return { capas: [{ clip: b, fuenteMs: fuenteMs(b, tMs), alfa: 1, dx: 0 }], aproximada: false };
+  return { capas: [{ clip: b, fuenteMs: fuenteMs(b, tMs), alfa: 1, dx: 0, tZoom: tMs }], aproximada: false };
 }
 
 export function siguienteClip(doc, tMs) {

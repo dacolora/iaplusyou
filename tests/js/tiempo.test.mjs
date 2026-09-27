@@ -66,11 +66,13 @@ test("principalEn: deslizar mueve A a la izquierda y trae B desde la derecha", (
 });
 
 test("principalEn: zoom y desenfoque se ven como fundido aproximado", () => {
-  const doc = structuredClone(DOC);
-  doc.pistas[0].clips[0].transicion = { tipo: "zoom", duracion_ms: 500 };
-  const r = principalEn(doc, 3600);
-  assert.equal(r.aproximada, true);
-  cerca(r.capas[1].alfa, 0.2, "fundido");
+  for (const tipo of ["zoom", "desenfoque"]) {
+    const doc = structuredClone(DOC);
+    doc.pistas[0].clips[0].transicion = { tipo, duracion_ms: 500 };
+    const r = principalEn(doc, 3600);
+    assert.equal(r.aproximada, true, tipo);
+    cerca(r.capas[1].alfa, 0.2, `fundido (${tipo})`);
+  }
 });
 
 test("principalEn: después del último clip se congela su último cuadro", () => {
@@ -79,6 +81,26 @@ test("principalEn: después del último clip se congela su último cuadro", () =
   const r = principalEn(doc, 8000);
   assert.equal(r.capas[0].clip.id, "c2");
   cerca(r.capas[0].fuenteMs, 7000 - 1000 / 30, "último cuadro");
+});
+
+test("principalEn: el cuadro congelado respeta la velocidad", () => {
+  const doc = {
+    pistas: [
+      { id: "p_video", tipo: "video", clips: [
+        { id: "c1", inicio_ms: 0, duracion_ms: 3000, recorte: { desde_ms: 0, hasta_ms: 6000 }, velocidad: 2 },
+      ] },
+      { id: "p_voz", tipo: "audio", clips: [{ id: "a1", inicio_ms: 0, duracion_ms: 4000, material_id: 2 }] },
+    ],
+  };
+  const r = principalEn(doc, 3500);
+  cerca(r.capas[0].fuenteMs, (3000 - 1000 / 30) * 2, "fuente a doble velocidad");
+  cerca(r.capas[0].tZoom, 3000 - 1000 / 30, "instante congelado, sin escalar por velocidad");
+});
+
+test("principalEn: pista principal imagen no tiene instante de zoom", () => {
+  const doc = { pistas: [{ id: "p", tipo: "imagen", clips: [{ id: "i", inicio_ms: 0, duracion_ms: 0 }] }] };
+  const r = principalEn(doc, 1234);
+  assert.equal(r.capas[0].tZoom, null);
 });
 
 test("siguienteClip devuelve el próximo clip de la principal", () => {
@@ -93,6 +115,18 @@ test("zoomKenBurns sigue al zoompan del compilador (1.0 → 1.08)", () => {
   assert.equal(zoomKenBurns(c, 99999), 1.08);
   cerca(zoomKenBurns({ ...c, ken_burns: "out" }, 1000), 1.08 - 0.08 * 30 / 105, "out a 1 s");
   assert.equal(zoomKenBurns({ ...c, ken_burns: null }, 1000), 1);
+});
+
+test("zoomKenBurns en el instante congelado usa el cuadro N-1", () => {
+  const clip = { id: "c1", inicio_ms: 0, duracion_ms: 3000, ken_burns: "in" };
+  const doc = {
+    pistas: [
+      { id: "p_video", tipo: "video", clips: [clip] },
+      { id: "p_voz", tipo: "audio", clips: [{ id: "a1", inicio_ms: 0, duracion_ms: 4000, material_id: 2 }] },
+    ],
+  };
+  const r = principalEn(doc, 3500);
+  cerca(zoomKenBurns(clip, r.capas[0].tZoom), 1 + 0.08 * 89 / 90, "n=90, cuadro 89 (N-1)");
 });
 
 test("capasEn: solo imagen/texto no principales, activas y visibles, en orden de pista", () => {
