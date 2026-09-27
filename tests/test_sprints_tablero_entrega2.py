@@ -201,3 +201,14 @@ def test_reintentar_regenerar_y_qa_por_fetch(con_ideas, monkeypatch, tmp_path):
     monkeypatch.setattr(rutas.produccion, "regenerar", lambda cliente, cp: "cf-nuevo")
     r = c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", data={"volver": "panel"})
     assert r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}&paso=piezas")
+
+
+# -------------------------------------------------------- revisión sprint ---
+
+def test_revision_del_sprint_renovada(con_ideas, monkeypatch, tmp_path):
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    html = con_ideas["c"].get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert f'<option value="{cid}">1 · TOF · Premium · Espejo LED</option>' in html
+    assert f"/cliente/acme/sprints/{sid}?panel={cid}&amp;paso=piezas" in html and "Abrir en el panel" in html
+    assert "data-motivo" in html and "data-rechazo" in html and "prompt(" not in html
+    assert "if (e.metaKey || e.ctrlKey || e.altKey) return;" in html       # los atajos siguen

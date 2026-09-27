@@ -1397,7 +1397,8 @@ def revision(cliente, sid):
     sp = _sprint_o_404(cliente, sid)
     piezas = _piezas_revision(cliente, sp)
     return render_template("sprint_revision.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           sprint=sp, piezas=piezas, resumen=revision_mod.resumen(cliente, sid), checks=CHECKS_QA)
+                           sprint=sp, piezas=piezas, resumen=revision_mod.resumen(cliente, sid), checks=CHECKS_QA,
+                           productos_por_id={p["id"]: p for p in _productos_planos(cliente)})
 
 
 @bp.post("/ideas/<int:cp_id>/revision")
