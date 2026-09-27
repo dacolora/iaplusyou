@@ -216,8 +216,10 @@ def test_panel_muestra_las_siete_secciones(app):
                  'data-campo="pais"', 'data-campo="idioma"', 'data-campo="marcas"', 'data-campo="n_videos"',
                  'data-campo="n_imagenes"', 'data-campo="referencias_objetivo"', "Sugerir con IA",
                  "Buscar en la biblioteca", "Traer nuevos de Meta", 'name="volver" value="tablero"',
-                 "Eliminar campaña", f"/sprints/{sid}/campanas/{cid}/ideas", "Crear persona rápida", "data-sugeridos"):
+                 "Eliminar campaña", "Crear persona rápida", "data-sugeridos",
+                 'data-tab-btn="armar"', 'data-tab-btn="ideas"', "Ideas · 0", 'data-tab="armar"', 'data-tab="ideas"'):
         assert frag in html, frag
+    assert "Ideas de esta campaña →" not in html    # entrega 2: es una pestaña, no un enlace aparte
     assert "<script" not in html                      # el JS vive en sprint_detalle.html
 
 

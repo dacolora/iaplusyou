@@ -385,6 +385,34 @@ def _volver_campana(cliente, sid, cid):
     return _volver(cliente, sid, cid)
 
 
+def _contexto_ideas(cliente, cid, c):
+    """Lo que la pestaña «Ideas» del panel necesita (spec 2026-09-27, entrega 2):
+    lista de ideas, conteo, y precios/trabajos en curso."""
+    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
+    lista = datos.ideas(cliente, cid)
+    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
+    faltan_v, faltan_i = ideas.faltantes(c)
+    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
+              "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
+              "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
+              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"])}
+    job = tareas_sprints.job_id_ideas(cliente, cid)
+    persona = datos.persona(cliente, c["persona_id"]) or {}
+    conciencia = (persona.get("extra") or {}).get("conciencia")
+    nivel_persona = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
+    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
+    sof_producto = (fila_producto.get("extra") or {}).get("sofisticacion")
+    return {
+        "ideas": lista, "referencias_por_id": refs, "conteo": conteo,
+        "enfoques": flowplus_prompt_enfoques(), "trabajo_ideas": {"job_id": job} if trabajos.en_curso(job) else None,
+        "nivel_persona": nivel_persona, "sof_producto": sof_producto,
+        "precio_reescribir": gastos.estimar("reescribir_idea")["texto"],
+        "reescribiendo": {i["id"]: tareas_sprints.job_id_reescribir(cliente, i["id"]) for i in lista
+                          if trabajos.en_curso(tareas_sprints.job_id_reescribir(cliente, i["id"]))},
+        "n_ideas_vivas": len(vivas),
+    }
+
+
 @bp.get("/<int:sid>/campanas/<int:cid>/panel")
 def campana_panel(cliente, sid, cid):
     """Panel lateral de una campaña (fragmento por fetch). Abrirlo no gasta nada."""
@@ -417,7 +445,7 @@ def campana_panel(cliente, sid, cid):
         marcas_texto=tablero.marcas_texto(c.get("marcas")), candidatos_ia=candidatos_ia,
         trabajo_sugerir_ia={"job_id": job} if trabajos.en_curso(job) else None,
         precio_sugerir_ia=gastos.estimar("sugerir_ia"), aviso=_aviso_identica(cliente, cid),
-        enlaces=_enlaces(cliente, sp, c))
+        enlaces=_enlaces(cliente, sp, c), **_contexto_ideas(cliente, cid, c))
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/sugeridos")
@@ -605,6 +633,7 @@ def ver(cliente, sid):
                            momento_valor=momento.get("clave") or ("propio" if momento else ""),
                            marcas_texto=tablero.marcas_texto(sp.get("marcas")),
                            panel_inicial=request.args.get("panel", type=int),
+                           tab_inicial=request.args.get("tab") or "",
                            lote=produccion.progreso(cliente, sid)["sprint"], **_contexto_lote(cliente))
 
 
@@ -1023,38 +1052,13 @@ def _contexto_lote(cliente):
             "modelo_video_defecto": mv, "modelo_imagen_defecto": mi}
 
 
-@bp.get("/<int:sid>/campanas/<int:cid>/ideas")
-def campana_ideas(cliente, sid, cid):
-    sp = _sprint_o_404(cliente, sid)
-    c = _campana_o_404(cliente, sid, cid)
-    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
-    lista = datos.ideas(cliente, cid)
-    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
-    faltan_v, faltan_i = ideas.faltantes(c)
-    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
-              "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
-              "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
-              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"])}
-    job = tareas_sprints.job_id_ideas(cliente, cid)
-    # Datos del mercado (doctrina, bloque 2): lo elegido a mano manda sobre Claude.
-    persona = datos.persona(cliente, c["persona_id"]) or {}
-    conciencia = (persona.get("extra") or {}).get("conciencia")
-    nivel_persona = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
-    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
-    sof_producto = (fila_producto.get("extra") or {}).get("sofisticacion")
-    return render_template("campana_ideas.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           sprint=sp, campana=c, ideas=lista, referencias_por_id=refs, conteo=conteo,
-                           enfoques=flowplus_prompt_enfoques(), trabajo_ideas={"job_id": job} if trabajos.en_curso(job) else None,
-                           nivel_persona=nivel_persona, sof_producto=sof_producto,
-                           precio_reescribir=gastos.estimar("reescribir_idea")["texto"],
-                           reescribiendo={i["id"]: tareas_sprints.job_id_reescribir(cliente, i["id"]) for i in lista
-                                          if trabajos.en_curso(tareas_sprints.job_id_reescribir(cliente, i["id"]))},
-                           **_contexto_lote(cliente))
-
-
 def flowplus_prompt_enfoques():
     import flowplus_prompt
     return {k: flowplus_prompt.ENFOQUES[k]["nombre"] for k in flowplus_prompt.ORDEN_ENFOQUES}
+
+
+def _volver_panel(cliente, sid, cid, tab=None):
+    return redirect(url_for("sprints.ver", cliente=cliente, sid=sid, panel=cid, **({"tab": tab} if tab else {})))
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/ideas/proponer")
@@ -1069,13 +1073,19 @@ def ideas_proponer(cliente, sid, cid):
             n_v = _entero("n_videos") if request.form.get("n_videos") else None
             n_i = _entero("n_imagenes") if request.form.get("n_imagenes") else None
     except datos.ErrorDatos as e:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
-        return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+        return _volver_panel(cliente, sid, cid, tab="ideas")
     if tareas_sprints.encolar_ideas(cliente, cid, n_videos=n_v, n_imagenes=n_i):
+        if _quiere_json():
+            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_ideas(cliente, cid)})
         flash("Claude está proponiendo ideas; aparecerán aquí en unos segundos.", "ok")
     else:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Ya hay una propuesta de ideas en curso para esta campaña."}), 400
         flash("Ya hay una propuesta de ideas en curso para esta campaña.", "error")
-    return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+    return _volver_panel(cliente, sid, cid, tab="ideas")
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/ideas/aprobar_todas")
@@ -1087,12 +1097,14 @@ def ideas_aprobar_todas(cliente, sid, cid):
             datos.actualizar_idea(cliente, i["id"], estado_idea="aprobada")
             n += 1
     estado.recalcular(cliente, sid)
+    if _quiere_json():
+        return jsonify({"ok": True, "n": n})
     flash(f"{n} idea(s) aprobada(s).", "ok")
-    return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+    return _volver_panel(cliente, sid, cid, tab="ideas")
 
 
 def _volver_ideas(i):
-    return redirect(url_for("sprints.campana_ideas", cliente=i["cliente"], sid=i["sprint_id"], cid=i["campana_id"]))
+    return _volver_panel(i["cliente"], i["sprint_id"], i["campana_id"], tab="ideas")
 
 
 @bp.post("/ideas/<int:cp_id>")
@@ -1150,15 +1162,23 @@ def idea_reescribir(cliente, cp_id):
     la tarea pagada; el precio ya está en el botón."""
     i = _idea_o_404(cliente, cp_id)
     if not i["sin_sesion"]:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
         flash(MENSAJE_IDEA_CON_PIEZA, "error")
         return _volver_ideas(i)
     angulo = (i.get("extra") or {}).get("angulo")
     if not (isinstance(angulo, dict) and angulo.get("promesa")):
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Esta idea todavía no tiene un ángulo con promesa."}), 400
         flash("Esta idea todavía no tiene un ángulo con promesa.", "error")
         return _volver_ideas(i)
     if tareas_sprints.encolar_reescribir(cliente, cp_id):
+        if _quiere_json():
+            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_reescribir(cliente, cp_id)})
         flash("Reescribiendo la idea desde su ángulo…", "ok")
     else:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Ya se está reescribiendo esta idea."}), 400
         flash("Ya se está reescribiendo esta idea.", "error")
     return _volver_ideas(i)
 
@@ -1211,11 +1231,17 @@ def idea_otra(cliente, cp_id):
     reemplazo."""
     i = _idea_o_404(cliente, cp_id)
     if not i["sin_sesion"]:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
         flash(MENSAJE_IDEA_CON_PIEZA, "error")
         return _volver_ideas(i)
     if tareas_sprints.encolar_ideas(cliente, i["campana_id"], reemplaza=cp_id):
+        if _quiere_json():
+            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_ideas(cliente, i["campana_id"])})
         flash("Pidiendo otra idea…", "ok")
     else:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Ya hay una propuesta en curso; espera a que termine."}), 400
         flash("Ya hay una propuesta en curso; espera a que termine.", "error")
     return _volver_ideas(i)
 

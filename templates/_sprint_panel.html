@@ -16,6 +16,12 @@
   </header>
   <p class="panel-campana-aviso" data-aviso {% if not aviso %}hidden{% endif %}>{{ aviso or '' }}</p>
 
+  <div class="panel-tabs" role="tablist">
+    <button type="button" class="panel-tab-btn" data-tab-btn="armar" role="tab">Armar</button>
+    <button type="button" class="panel-tab-btn" data-tab-btn="ideas" role="tab">Ideas · {{ n_ideas_vivas }}</button>
+  </div>
+
+  <div class="panel-tab" data-tab="armar">
   <section class="panel-seccion">
     <h3>Audiencia y producto</h3>
     <div class="panel-fila">
@@ -168,12 +174,14 @@
       </form>
     </details>
   </section>
+  </div>
+
+  {% include "_panel_ideas.html" %}
 
   <footer class="panel-campana-pie">
     <form method="post" action="{{ url_for('sprints.campana_eliminar', cliente=cliente, sid=sprint.id, cid=c.id) }}"
           onsubmit="return confirm('¿Eliminar esta campaña y sus referentes?');">
       <button type="submit" class="btn-xs btn-rechazar">Eliminar campaña</button>
     </form>
-    <a href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=sprint.id, cid=c.id) }}">Ideas de esta campaña →</a>
   </footer>
 </div>

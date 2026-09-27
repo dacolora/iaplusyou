@@ -96,7 +96,7 @@
 <div class="tablero-fondo" id="tablero-fondo" hidden></div>
 <aside class="tablero-panel" id="tablero-panel" hidden aria-label="Campaña"
        data-url-base="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id) }}"
-       data-panel-inicial="{{ panel_inicial or '' }}">
+       data-panel-inicial="{{ panel_inicial or '' }}" data-tab-inicial="{{ tab_inicial or '' }}">
   <div id="tablero-panel-cuerpo"></div>
 </aside>
 
@@ -134,6 +134,7 @@
 </template>
 
 {% include "_sprint_lote_modal.html" %}
+<script src="{{ url_for('static', filename='angulo.js') }}"></script>
 
 <script>
   (function () {
@@ -217,7 +218,7 @@
           if (html === null || miPeticion !== peticionPanel) return;
           cuerpo.innerHTML = html;
           if (mismo) panel.scrollTop = scroll;
-          if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo();
+          if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo(mismo);
         })
         .catch(function () {
           if (miPeticion !== peticionPanel) return;
@@ -365,12 +366,24 @@
         .then(function (html) { caja.innerHTML = html; })
         .catch(function () { caja.innerHTML = '<p class="campo-error">No se pudieron cargar los sugeridos.</p>'; });
     }
-    window.tableroPanelListo = function () {
+    var tabActual = 'armar';
+    function activarTab(nombre) {
+      tabActual = nombre;
+      cuerpo.querySelectorAll('[data-tab-btn]').forEach(function (b) { b.classList.toggle('activa', b.dataset.tabBtn === nombre); });
+      cuerpo.querySelectorAll('[data-tab]').forEach(function (t) { t.hidden = t.dataset.tab !== nombre; });
+    }
+    window.tableroPanelListo = function (mismaCampana) {
       cuerpo.querySelectorAll('[data-campo]').forEach(function (el) { el.dataset.guardado = JSON.stringify(valorDe(el)); });
       cargarSugeridos();
       cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
         if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
       });
+      if (typeof window.iniciarEditoresAngulo === 'function') window.iniciarEditoresAngulo(cuerpo);
+      // Reabrir la MISMA campaña (tras aprobar/descartar/proponer ideas) se
+      // queda en la pestaña donde el usuario estaba; abrir OTRA campaña, o
+      // llegar por el enlace externo de Crear (?tab=ideas), no.
+      activarTab(panel.dataset.tabInicial === 'ideas' ? 'ideas' : (mismaCampana ? tabActual : 'armar'));
+      panel.dataset.tabInicial = '';
     };
     function guardar(el, valor) {
       var r = raiz();
@@ -402,8 +415,39 @@
     function cajaFamilias() { return cuerpo.querySelector('[data-campo="familias"]'); }
     function familias() { return valorDe(cajaFamilias()); }
 
+    function guardarPersonaConciencia(sel) {
+      var ok = sel.parentElement.querySelector('.persona-guardado');
+      fetch(sel.dataset.url, {method: 'POST', headers: HJ, body: JSON.stringify({nivel: sel.value})})
+        .then(T.json)
+        .then(function () { if (ok) { ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500); } })
+        .catch(function (e) { avisar(T.mensaje(e)); });
+    }
+    var timerIdea = new WeakMap();
+    function guardarIdea(card) {
+      var cont = {};
+      card.querySelectorAll('[data-campo]').forEach(function (el) { if (!el.readOnly) cont[el.dataset.campo] = el.value; });
+      fetch(card.dataset.urlCampo, {method: 'POST', headers: HJ, body: JSON.stringify(cont)})
+        .then(T.json)
+        .then(function () {
+          card.querySelectorAll('[data-campo]').forEach(function (el) { delete el.dataset.sucio; });
+          var ok = card.querySelector('.sprint-guardado');
+          if (ok) { ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500); }
+          var g = card.querySelector('[data-campo="gancho"]'), ga = card.querySelector('[data-angulo-campo="gancho"]');
+          if (g && ga) ga.value = g.value;
+        })
+        .catch(function (e) { avisar(T.mensaje(e)); });
+    }
+    panel.addEventListener('input', function (ev) {
+      var card = ev.target.closest('[data-idea]');
+      if (!card || !ev.target.matches('[data-campo]') || ev.target.readOnly) return;
+      ev.target.dataset.sucio = '1';
+      clearTimeout(timerIdea.get(card));
+      timerIdea.set(card, setTimeout(function () { guardarIdea(card); }, 800));
+    });
     panel.addEventListener('change', function (ev) {
       var t = ev.target;
+      if (t.matches('[data-persona-conciencia]')) { guardarPersonaConciencia(t); return; }
+      if (t.closest('[data-idea]')) return;    // los campos de idea se guardan por 'input' (arriba), no por 'change'
       if (!raiz() || t.closest('form')) return;
       if (t.matches('[data-agregar-familia]')) {
         var v = t.value.trim();
@@ -430,9 +474,36 @@
       return T.abrir(cid);
     }
     panel.addEventListener('click', function (ev) {
-      if (!raiz()) return;
       var b;
-      if ((b = ev.target.closest('[data-quitar-familia]'))) {
+      if ((b = ev.target.closest('[data-tab-btn]'))) { activarTab(b.dataset.tabBtn); return; }
+      if (!raiz()) return;
+      if ((b = ev.target.closest('[data-ideas-proponer]'))) {
+        b.disabled = true;
+        var cuerpo2 = {};
+        if (b.dataset.mas) { cuerpo2.mas = b.dataset.mas; if (b.dataset.tipo) cuerpo2.tipo = b.dataset.tipo; }
+        fetch(b.dataset.ideasProponer, {method: 'POST', headers: H, body: new URLSearchParams(cuerpo2)}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-ideas-aprobar-todas]'))) {
+        b.disabled = true;
+        fetch(b.dataset.ideasAprobarTodas, {method: 'POST', headers: H}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-idea-aprobar]'))) {
+        b.disabled = true;
+        fetch(b.dataset.ideaAprobar, {method: 'POST', headers: H}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-idea-descartar]'))) {
+        b.disabled = true;
+        fetch(b.dataset.ideaDescartar, {method: 'POST', headers: H}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-idea-otra]'))) {
+        b.disabled = true;
+        fetch(b.dataset.ideaOtra, {method: 'POST', headers: H}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-idea-reescribir]'))) {
+        b.disabled = true;
+        fetch(b.dataset.ideaReescribir, {method: 'POST', headers: H}).then(T.json).then(recargarTodo)
+          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+      } else if ((b = ev.target.closest('[data-quitar-familia]'))) {
         var f = b.closest('[data-familia]').dataset.familia;
         guardar(cajaFamilias(), familias().filter(function (x) { return x !== f; }));
       } else if ((b = ev.target.closest('[data-sumar-familia]'))) {

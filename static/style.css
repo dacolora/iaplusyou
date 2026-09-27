@@ -2277,6 +2277,11 @@ body.panel-abierto { overflow: hidden; }
 .panel-subir form { display: grid; gap: .5rem; margin-top: .5rem; }
 .panel-campana-pie { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap;
   border-top: 1px solid var(--border); margin-top: 1rem; padding-top: .8rem; }
+.panel-tabs { display: flex; gap: .3rem; border-bottom: 1px solid var(--border); margin-bottom: .2rem; }
+.panel-tab-btn { border: 0; background: none; padding: .5rem .2rem; font-size: .9rem; color: var(--muted); cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; min-height: 0; }
+.panel-tab-btn.activa { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.panel-tab[hidden] { display: none; }
 @media (max-width: 760px) {
   .panel-elegidos { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }

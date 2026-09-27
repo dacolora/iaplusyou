@@ -573,7 +573,7 @@ def con_ideas(app, monkeypatch):
 def test_pagina_de_ideas_y_acciones(con_ideas):
     from sprints import datos
     c, sid, cid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
-    r = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas")
+    r = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel")
     assert r.status_code == 200 and b"Amanecer" in r.data and b"Marco" in r.data and "1 de 2 videos".encode() in r.data
     c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/proponer", data={})
     assert con_ideas["encolados"][-1]["tipo"] == "sprint_proponer_ideas" and con_ideas["encolados"][-1]["payload"]["n_videos"] is None
@@ -591,8 +591,25 @@ def test_pagina_de_ideas_y_acciones(con_ideas):
     assert datos.idea("acme", i3)["estado_idea"] == "aprobada"
     c.post(f"/cliente/acme/sprints/ideas/{i3}/descartar")
     assert datos.idea("acme", i3)["estado_idea"] == "descartada"
-    assert c.get(f"/cliente/acme/sprints/{sid}/campanas/999/ideas").status_code == 404
+    assert c.get(f"/cliente/acme/sprints/{sid}/campanas/999/panel").status_code == 404
     assert c.post("/cliente/acme/sprints/ideas/999/aprobar").status_code == 404
+
+
+def test_pagina_de_ideas_ya_no_existe_esta_en_el_panel(con_ideas):
+    """Entrega 2 (2026-09-27): la página suelta desaparece, sus acciones
+    responden JSON por fetch y el panel trae las dos pestañas."""
+    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
+    assert c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").status_code == 404
+    r = c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/proponer", data={},
+               headers={"X-Requested-With": "fetch"})
+    assert r.get_json()["ok"] and "job_id" in r.get_json()
+    r = c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/aprobar_todas", headers={"X-Requested-With": "fetch"})
+    assert r.get_json() == {"ok": True, "n": 1}    # «ii» (imagen) ya nace en estado «propuesta»
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
+    assert 'data-tab-btn="armar"' in html and 'data-tab-btn="ideas"' in html and "Ideas · 2" in html
+    assert "<script" not in html
+    html_tab = c.get(f"/cliente/acme/sprints/{sid}?tab=ideas").data.decode()
+    assert 'data-tab-inicial="ideas"' in html_tab
 
 
 def test_otra_idea_no_descarta_si_ya_hay_una_propuesta_en_curso(con_ideas, monkeypatch):
@@ -629,18 +646,19 @@ def test_descartar_se_niega_con_una_pieza_en_marcha(con_ideas):
 
 
 def test_reserva_vencida_vuelve_a_ofrecer_generar_lote(con_ideas):
-    """F1: con una reserva colgada (vencida) la página del sprint y la de
-    ideas vuelven a ofrecer «Generar lote»; con una reserva viva, no."""
+    """F1: con una reserva colgada (vencida) la página del sprint y el panel
+    (pestaña Ideas, entrega 2) vuelven a ofrecer «Generar lote»; con una
+    reserva viva, no."""
     from sprints import datos
     c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
     datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv))          # viva: otro lote la tiene
     html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     assert "Generar lote del sprint" not in html
-    assert "Generar lote de esta campaña" not in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "Generar lote de esta campaña" not in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv, ahora=1))  # vencida
     html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     assert "Generar lote (1)" in html  # el tablero (2026-09-26) ya no dice «… del sprint»
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "Generar lote de esta campaña (1)" in html and "Otra idea" in html
 
 
@@ -886,7 +904,7 @@ def test_consciencia_de_la_persona_se_elige_en_la_pagina_de_ideas(con_ideas):
     c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
     pid = datos.campana("acme", cid)["persona_id"]
     datos.actualizar_persona("acme", pid, extra={"conciencia": {"nivel": "inconsciente", "detalle": "de Nicho"}})
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "Qué tanto sabe Premium" in html and 'value="inconsciente" selected' in html
     assert "Promesas parecidas que ya vio el cliente de espejo_led:" in html and "Claude lo decide" in html
     r = c.post(f"/cliente/acme/sprints/personas/{pid}/conciencia", json={"nivel": "consciente del problema"})
@@ -906,10 +924,10 @@ def test_la_pagina_de_ideas_dice_cuando_manda_la_consciencia_de_la_campana(con_i
     from sprints import datos
     c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
     datos.actualizar_campana("acme", cid, consciencia=None)
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "manda la de la campaña" not in html
     datos.actualizar_campana("acme", cid, consciencia="consciente_del_problema")
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "Para las ideas de esta campaña manda la de la campaña: Sabe que tiene el problema" in html
 
 
@@ -918,7 +936,7 @@ def test_pagina_de_ideas_muestra_la_sofisticacion_del_producto(con_ideas):
     c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
     fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
     tiendas.anotar_extra("acme", fila, sofisticacion=4)
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "4 · Ya vio cómo funciona en otros: hay que mejorar el cómo" in html
 
 
@@ -946,10 +964,13 @@ def test_editar_el_angulo_de_una_idea(con_ideas):
     from sprints import datos
     c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA}, gancho=ANGULO_IDEA["gancho"])
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert 'class="angulo-editor"' in html and f'/cliente/acme/sprints/ideas/{ii}/angulo' in html
     assert "Consciente de la solución" in html and "El espejo que cambia tu baño" in html
-    assert "/static/angulo.js" in html and "/cliente/acme/doctrina#angulo" in html
+    assert "/cliente/acme/doctrina#angulo" in html
+    # angulo.js ahora se carga desde la página del tablero (entrega 2: el panel
+    # es un fragmento por fetch, sus <script> nunca correrían)
+    assert "/static/angulo.js" in c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     # Verificar que los links de documentación están presentes en la plantilla
     assert html.count("/cliente/acme/doctrina#angulo") >= 7, f"Esperaba >= 7 links #angulo, encontré {html.count('/cliente/acme/doctrina#angulo')}"
     assert html.count("/cliente/acme/doctrina#gancho") >= 2, f"Esperaba >= 2 links #gancho (Arranque y Gancho), encontré {html.count('/cliente/acme/doctrina#gancho')}"
@@ -963,7 +984,7 @@ def test_editar_el_angulo_de_una_idea(con_ideas):
     ang = idea["extra"]["angulo"]
     assert ang["sofisticacion"] == 4 and ang["editado_en"] and ang["origen"] == "ideas"
     # Verificar que el link #base aparece después de editar (cuando editado_en está presente)
-    html_editado = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html_editado = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "/cliente/acme/doctrina#base" in html_editado, "Falta el link #base en la nota 'Editado a mano'"
     assert ang["faltantes"] == ["faltan comentarios reales"]
     assert idea["gancho"] == nuevo["gancho"]
@@ -977,7 +998,7 @@ def test_el_angulo_de_una_idea_con_pieza_es_de_solo_lectura(con_ideas, monkeypat
     from sprints import datos
     c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
     datos.actualizar_idea("acme", iv, extra={"angulo": ANGULO_IDEA}, cf_id="cf_x")
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     tarjeta = html.split(f'/cliente/acme/sprints/ideas/{iv}/angulo', 1)[1].split("</details>", 1)[0]
     assert "disabled" in tarjeta
     r = c.post(f"/cliente/acme/sprints/ideas/{iv}/angulo", json={"angulo": ANGULO_IDEA})
@@ -990,8 +1011,13 @@ def test_gancho_sync_wiring(con_ideas):
     from sprints import datos
     c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA}, gancho=ANGULO_IDEA["gancho"])
-    # 1. Verificar que la página contiene el campo del ángulo en el script de la tarjeta
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    # 1. El campo gancho de la tarjeta lleva name="gancho" (lo usa el propio
+    # angulo.js, closest('.sprint-idea') + input[name="gancho"]) y la página
+    # del tablero (entrega 2) trae el selector que sincroniza el sentido
+    # contrario -- de la tarjeta hacia el editor del ángulo.
+    html_panel = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
+    assert 'name="gancho"' in html_panel, "Falta name=\"gancho\" en el campo de la tarjeta"
+    html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     assert "[data-angulo-campo=\"gancho\"]" in html, "Falta el selector del campo gancho en el template"
     # 2. Verificar que static/angulo.js contiene el código de sincronización
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1005,15 +1031,15 @@ def test_boton_reescribir_idea_con_su_precio(con_ideas, monkeypatch):
     """Doctrina, bloque 2 (§3.5)."""
     from sprints import datos, rutas
     c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "Reescribir la idea con este ángulo" not in html          # sin ángulo no hay botón
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA})
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert "Reescribir la idea con este ángulo (US$ 0,03 aprox.)" in html
     c.post(f"/cliente/acme/sprints/ideas/{ii}/reescribir")
     t = con_ideas["encolados"][-1]
     assert t["tipo"] == "sprint_reescribir_idea" and t["payload"] == {"cliente": "acme", "cp_id": ii}
     assert t["max_intentos"] == 1 and t["job_id"] == f"acme__cp{ii}__reescribir"
     monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: job_id == f"acme__cp{ii}__reescribir")
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert f'id="trabajo-acme__cp{ii}__reescribir"' in html
