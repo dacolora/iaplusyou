@@ -142,3 +142,155 @@ def test_estado_contar_y_resumen_de_galeria():
     assert revisor.estado_revision(error, "https://r2/v.mp4") == "error" and revisor.contar(error) == 0
     assert revisor.resumen_galeria(rev, "https://r2/v.mp4") == {"estado": "mejorar", "n": 2}
     assert revisor.resumen_galeria(rev, "https://r2/otro.mp4") == {"estado": "vieja", "n": 0}
+
+
+# ------------------------------------------------------------ tarea 2 ---
+
+PRODUCTO = {"nombre": "Hcozy Orange", "descripcion": "pantufla de pana", "regla": "", "precio": 89900,
+            "moneda": "COP", "url_compra": None, "tipo": "calzado", "sofisticacion": 3,
+            "pruebas": [{"texto": "El 94 % de las reseñas son de 5 estrellas", "fuente": "comentarios"}]}
+
+
+def _pieza(monkeypatch, tipo="video", **extra):
+    """Una sesión de Crear terminada, con el producto de mentira."""
+    import creative_flow
+    import final_edition
+    monkeypatch.setattr(final_edition, "_producto", lambda cliente, entry, precio: dict(PRODUCTO))
+    cf_id = creative_flow.crear("acme", [], ["Hcozy Orange"], [], "pantuflas en la oficina", 8, "", "A")
+    creative_flow.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/v.mp4", tipo=tipo,
+                             angulo=dict(ANGULO), **extra)
+    return cf_id
+
+
+def _publicar_caption(cf_id, caption):
+    import sqlalchemy as sa
+
+    import db
+    with db.conectar() as con:
+        pid = con.execute(sa.select(db.pieza.c.id).where(db.pieza.c.legado_id == cf_id)).scalar()
+        con.execute(db.publicacion.insert().values(cliente="acme", creado_en=db.ahora(), actualizado_en=db.ahora(),
+                                                   pieza_id=pid, plataforma="instagram", estado="publicada",
+                                                   caption=caption))
+
+
+def test_reunir_junta_todo_lo_de_la_pieza(base_temporal, monkeypatch):
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    creative_flow.guardar_guion_base("acme", cf_id, {"bloques": [{"rol": "hook", "texto_voz": "¿Frío? 3 minutos"}]})
+    _publicar_caption(cf_id, "Tus pies calientes #hcozy")
+    d = revisor.reunir("acme", cf_id)
+    assert d["angulo"]["gancho"] == ANGULO["gancho"] and d["guion"]["bloques"][0]["rol"] == "hook"
+    assert d["caption"] == "Tus pies calientes #hcozy" and d["sofisticacion_fija"] == 3 and d["idea"] is None
+    for dato in ("94 %", "pantuflas en la oficina", "3 minutos"):          # pruebas, lo pedido y el guion verifican
+        assert dato in d["verificables"]
+    with pytest.raises(revisor.ErrorRevision):
+        revisor.reunir("acme", "cf_no_existe")
+
+
+def test_reunir_trae_la_idea_del_sprint(base_temporal, monkeypatch):
+    import creative_flow
+    from doctrina import revisor
+    from sprints import datos
+    cf_id = _pieza(monkeypatch)
+    monkeypatch.setattr(datos, "idea", lambda cliente, cp_id: {"id": cp_id, "titulo": "T", "escena": "E",
+                                                                "gancho": "¿Pies fríos en casa?"})
+    creative_flow.actualizar("acme", cf_id, sprint={"sprint_id": 1, "campana_id": 2, "cp_id": 7})
+    assert revisor.reunir("acme", cf_id)["idea"]["id"] == 7
+
+
+def test_bloques_visuales_de_video_e_imagen(monkeypatch):
+    from doctrina import revisor
+    monkeypatch.setattr(revisor, "duracion", lambda ruta: 8.0)
+    monkeypatch.setattr(revisor, "fotogramas", lambda ruta, ts: [(t, b"jpg") for t in ts])
+    bloques = revisor.bloques_visuales({"tipo": "video"}, "/tmp/v.mp4")
+    assert [b["text"] for b in bloques if b["type"] == "text"] == ["Segundo 0,3:", "Segundo 3:", "Segundo 6:",
+                                                                     "Segundo 7,7:"]
+    assert sum(1 for b in bloques if b["type"] == "image") == 4
+    assert revisor.bloques_visuales({"tipo": "video"}, None) == []
+    img = revisor.bloques_visuales({"tipo": "imagen", "video_url": "https://r2/i.png"})
+    assert img[1] == {"type": "image", "source": {"type": "url", "url": "https://r2/i.png"}}
+
+
+def _preparar_revision(monkeypatch, respuestas):
+    from doctrina import revisor
+    from sprints import analisis, qa
+    monkeypatch.setattr(qa, "archivo_local", lambda entry: "/tmp/no-existe-revision.mp4")
+    monkeypatch.setattr(revisor, "duracion", lambda ruta: 8.0)
+    monkeypatch.setattr(revisor, "fotogramas", lambda ruta, ts: [(t, b"jpg") for t in ts])
+    llamadas = []
+
+    def falso(content, max_tokens=700, system=None):
+        llamadas.append({"content": content, "max_tokens": max_tokens, "system": system})
+        return respuestas.pop(0), 1000, 400
+    monkeypatch.setattr(analisis, "_llamar_contando", falso)
+    return llamadas
+
+
+def test_revisar_guarda_la_revision_y_devuelve_los_tokens(base_temporal, monkeypatch):
+    import creative_flow
+    import doctrina
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    llamadas = _preparar_revision(monkeypatch, [_respuesta()])
+    rev, ent, sal = revisor.revisar("acme", cf_id)
+    assert (ent, sal) == (1000, 400) and len(llamadas) == 1
+    l = llamadas[0]
+    assert l["max_tokens"] == revisor.MAX_TOKENS and l["system"][0]["text"].startswith(doctrina.ENCABEZADO[:20])
+    assert doctrina.texto("revisar")[:40] in l["system"][0]["text"]
+    textos = [b["text"] for b in l["content"] if b["type"] == "text"]
+    assert "DATOS de la pieza" in textos[0] and "Hcozy Orange" in textos[0] and "punto 5" in textos[0]
+    assert "Segundo 0,3:" in textos
+    guardada = creative_flow.cargar("acme")[cf_id]["revision_doctrina"]
+    assert guardada == rev and rev["video_url"] == "https://r2/v.mp4" and rev["origen"] == "boton"
+    assert [a["codigo"] for a in rev["reglas"]] == ["sin_mecanismo"] and rev["usd"] > 0
+    assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "mejorar"
+
+
+def test_revisar_corrige_una_vez_y_si_sigue_mal_guarda_el_error(base_temporal, monkeypatch):
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    llamadas = _preparar_revision(monkeypatch, ["nada", _respuesta()])
+    rev, ent, sal = revisor.revisar("acme", cf_id)
+    assert (ent, sal) == (2000, 800) and "no sirvió" in llamadas[1]["content"][-1]["text"]
+    cf2 = _pieza(monkeypatch)
+    _preparar_revision(monkeypatch, ["nada", "tampoco"])
+    with pytest.raises(revisor.ErrorRevision) as e:
+        revisor.revisar("acme", cf2)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (2000, 800)
+    guardada = creative_flow.cargar("acme")[cf2]["revision_doctrina"]
+    assert guardada["error"] and guardada["video_url"] == "https://r2/v.mp4"
+    assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "error"
+
+
+def test_revisar_sin_pieza_terminada_ni_fotogramas_no_llama_a_claude(base_temporal, monkeypatch):
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    llamadas = _preparar_revision(monkeypatch, [_respuesta()])
+    creative_flow.actualizar("acme", cf_id, estado="video_generando")
+    with pytest.raises(revisor.ErrorRevision) as e:
+        revisor.revisar("acme", cf_id)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (0, 0)
+    creative_flow.actualizar("acme", cf_id, estado="video_listo")
+    monkeypatch.setattr(revisor, "fotogramas", lambda ruta, ts: [])
+    with pytest.raises(revisor.ErrorRevision):
+        revisor.revisar("acme", cf_id)
+    assert llamadas == []
+
+
+def test_una_imagen_se_revisa_por_su_url(base_temporal, monkeypatch):
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch, tipo="imagen")
+    llamadas = _preparar_revision(monkeypatch, [_respuesta()])
+    revisor.revisar("acme", cf_id)
+    assert {"type": "image", "source": {"type": "url", "url": "https://r2/v.mp4"}} in llamadas[0]["content"]
+
+
+def test_duplicar_no_copia_la_revision(base_temporal, monkeypatch):
+    import creative_flow
+    cf_id = _pieza(monkeypatch, revision_doctrina={"video_url": "https://r2/v.mp4", "puntos": []})
+    hija = creative_flow.duplicar("acme", cf_id)
+    assert "revision_doctrina" not in creative_flow.cargar("acme")[hija]
+    assert "angulo" in creative_flow.cargar("acme")[hija]
