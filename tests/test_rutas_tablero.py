@@ -301,7 +301,8 @@ def test_tile_generacion_este_mes(app, base_temporal, monkeypatch):
     tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
     ini = tb.index("Generación este mes")
     tile = tb[tb.rindex("<a", 0, ini):tb.index("</a>", ini)]
-    assert "US$ 0,87" in tile and "2 cobro(s) a proveedores" in tile
+    # Task 6: pluralización real (ngettext), ya no el placeholder "cobro(s)".
+    assert "US$ 0,87" in tile and "2 cobros a proveedores" in tile
     assert 'data-ir-tab="settings"' in tile
     assert "250 COP" in tb   # la pauta sigue en su moneda, al lado
 

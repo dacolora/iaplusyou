@@ -26,8 +26,11 @@ import math
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
+import idiomas
+from idiomas import N_
 
 log = logging.getLogger(__name__)
 
@@ -78,14 +81,15 @@ TARIFAS = {
     "final": 0.10,
 }
 
-SIN_PRECIO = "precio no disponible"
+SIN_PRECIO = N_("precio no disponible")
 
 
 # ------------------------------------------------------------ formato ---
 
 def formatear(usd):
     """`None` -> "—"; menos de un centavo -> "US$ <0,01"; si no, dos
-    decimales con coma decimal y punto de miles ("US$ 1.234,56")."""
+    decimales con coma decimal y punto de miles ("US$ 1.234,56") — o el
+    separador del idioma activo (`idiomas.numero`)."""
     if usd is None:
         return "—"
     try:
@@ -93,13 +97,14 @@ def formatear(usd):
     except (TypeError, ValueError):
         return "—"
     if 0 < v < 0.01:
-        return "US$ <0,01"
-    s = f"{v:,.2f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
-    return f"US$ {s}"
+        return "US$ <" + idiomas.numero(0.01, 2)
+    return f"US$ {idiomas.numero(v, 2)}"
 
 
 def _texto_estimado(usd):
-    return f"{formatear(usd)} aprox." if usd is not None else SIN_PRECIO
+    if usd is None:
+        return gettext(SIN_PRECIO)
+    return gettext("%(precio)s aprox.", precio=formatear(usd))
 
 
 def _estimado(usd, detalle=""):

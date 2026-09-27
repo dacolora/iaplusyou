@@ -29,7 +29,7 @@ from flask import Flask, render_template, redirect, url_for, flash, request, jso
 from flask_babel import Babel, get_locale, gettext, ngettext
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import date, datetime
 
 import estado as estado_mod
 import prompts as prompts_mod
@@ -969,13 +969,18 @@ confirmed by email.</li></ol>
 def landing_cliente(cliente):
     """Página pública de destino de un proyecto (clientes/<c>/landing.json).
     Sirve de landing para anuncios cuando el cliente no tiene web propia —
-    p. ej. una app, porque Meta no acepta el link a la tienda con Tráfico."""
+    p. ej. una app, porque Meta no acepta el link a la tienda con Tráfico.
+    Sale en el idioma DEL PROYECTO (`idiomas.de_proyecto`), no en el de quien
+    la abre: es la única página pública que un cliente ve, y sus visitantes
+    esperan el idioma del anuncio que la trajo, no el de su navegador."""
     ruta = os.path.join(BASE_DIR, "clientes", secure_filename(cliente), "landing.json")
     if not os.path.isfile(ruta):
         abort(404)
     with open(ruta, encoding="utf-8") as f:
         datos = json.load(f)
-    return render_template("landing_cliente.html", l=datos)
+    idioma = idiomas.de_proyecto(secure_filename(cliente))
+    with idiomas.en_idioma(idioma):
+        return render_template("landing_cliente.html", l=datos, idioma_landing=idioma)
 
 
 @app.route("/panel")
@@ -3918,8 +3923,6 @@ def eliminar_ad(cliente, ad_id):
 
 # ---------- Tablero (Bloque 6) ----------
 
-MESES_ES = ("enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre",
-            "noviembre", "diciembre")
 # Geometría del gráfico de 30 días (viewBox fija; el SVG escala al ancho).
 _TB_ANCHO, _TB_ALTO = 720, 220
 _TB_MARGEN = {"izq": 60, "der": 12, "arriba": 12, "abajo": 26}
@@ -3979,13 +3982,14 @@ def _grafico_tablero(serie):
     salida = []
     for i, d in enumerate(dias):
         dd, mm = d["dia"][8:10], d["dia"][5:7]
+        fecha_dia = date(int(d["dia"][0:4]), int(mm), int(dd))
         x = m["izq"] + i * paso
         gasto, ingresos = float(d["gasto"] or 0), float(d["ingresos"] or 0)
         salida.append({
             "dia": d["dia"], "gasto": gasto, "ingresos": ingresos, "compras": int(d.get("compras") or 0),
             "x": round(x, 2), "x_centro": round(x + paso / 2, 2), "ancho": round(ancho_barra, 2),
             "gasto_y": y_de(gasto), "ingresos_y": y_de(ingresos),
-            "etiqueta": f"{dd}/{mm}" if i % 5 == 0 else "",
+            "etiqueta": idiomas.dia_mes(fecha_dia) if i % 5 == 0 else "",
             "titulo": f"{dd}/{mm} · gasto {tablero.dinero(gasto, moneda)} · ingresos {tablero.dinero(ingresos, moneda)}",
         })
     marcas = [{"valor": maximo * k / 4, "y": y_de(maximo * k / 4), "texto": _compacto(maximo * k / 4)} for k in range(5)]
@@ -4002,8 +4006,8 @@ def _filtro_dinero(valor, moneda):
 
 @app.template_filter("roas")
 def _filtro_roas(valor):
-    """ROAS con un decimal y coma: 28,0."""
-    return f"{float(valor or 0):.1f}".replace(".", ",")
+    """ROAS con un decimal: 28,0 en español, 28.0 en inglés (idiomas.numero)."""
+    return idiomas.numero(float(valor or 0), 1)
 
 
 def _calcular_tablero(cliente):
@@ -4016,7 +4020,7 @@ def _calcular_tablero(cliente):
     pinta el resto. Si la carga misma falla, cada parte carga por su cuenta
     (más lento, mismo resultado)."""
     ahora = db.ahora()
-    out = {"ahora": ahora, "mes": MESES_ES[int(ahora[5:7]) - 1], "anio": ahora[:4], "errores": []}
+    out = {"ahora": ahora, "mes": idiomas.mes_largo(int(ahora[5:7])), "anio": ahora[:4], "errores": []}
     try:
         datos = tablero.cargar_datos(cliente, ahora)
     except Exception as e:  # noqa: BLE001 — sin carga compartida cada parte se las arregla sola
@@ -4053,10 +4057,13 @@ def _calcular_tablero(cliente):
 # cada redirect tras un POST, así que se guarda 60 s por proyecto. La clave
 # lleva además el estado que cambia lo que se ve (último snapshot, propuestas
 # pendientes, experimentos) para que un refresco del worker o una acción del
-# dueño lo invaliden al instante sin esperar el TTL. Con gunicorn multi-worker
-# es por proceso: aceptable.
+# dueño lo invaliden al instante sin esperar el TTL. La clave del diccionario
+# es (cliente, idiomas.activo()): dos personas viendo el mismo proyecto en
+# idiomas distintos (o la misma cambiando el suyo) nunca comparten entrada, así
+# que ninguna recibe el tablero calculado para el idioma de la otra. Con
+# gunicorn multi-worker es por proceso: aceptable.
 TABLERO_TTL_S = 60
-_TABLERO_CACHE = {}          # cliente -> (monotonic, clave, contexto)
+_TABLERO_CACHE = {}          # (cliente, idioma) -> (monotonic, clave, contexto)
 _TABLERO_LOCK = threading.Lock()
 
 
@@ -4083,31 +4090,34 @@ def _clave_tablero(cliente):
 
 
 def invalidar_tablero(cliente=None):
-    """Olvida el tablero cacheado de un proyecto (o de todos)."""
+    """Olvida el tablero cacheado de un proyecto, en todos los idiomas (o de
+    todos los proyectos)."""
     with _TABLERO_LOCK:
         if cliente is None:
             _TABLERO_CACHE.clear()
         else:
-            _TABLERO_CACHE.pop(cliente, None)
+            for clave_cache in [k for k in _TABLERO_CACHE if k[0] == cliente]:
+                _TABLERO_CACHE.pop(clave_cache, None)
 
 
 def _contexto_tablero(cliente):
-    """`_calcular_tablero` con caché de `TABLERO_TTL_S` por proyecto,
-    invalidada antes si cambia `_clave_tablero`. Si la clave no se puede
-    consultar, se calcula sin caché."""
+    """`_calcular_tablero` con caché de `TABLERO_TTL_S` por proyecto e
+    idioma, invalidada antes si cambia `_clave_tablero`. Si la clave no se
+    puede consultar, se calcula sin caché."""
     try:
         clave = _clave_tablero(cliente)
     except Exception as e:  # noqa: BLE001 — sin clave no hay caché, pero sí tablero
         print(f"[aviso] Tablero de {cliente}: no pude leer la clave de caché: {type(e).__name__}")
         return _calcular_tablero(cliente)
+    clave_cache = (cliente, idiomas.activo())
     ahora = time.monotonic()
     with _TABLERO_LOCK:
-        entrada = _TABLERO_CACHE.get(cliente)
+        entrada = _TABLERO_CACHE.get(clave_cache)
         if entrada and entrada[1] == clave and ahora - entrada[0] < TABLERO_TTL_S:
             return entrada[2]
     ctx = _calcular_tablero(cliente)
     with _TABLERO_LOCK:
-        _TABLERO_CACHE[cliente] = (ahora, clave, ctx)
+        _TABLERO_CACHE[clave_cache] = (ahora, clave, ctx)
     return ctx
 
 

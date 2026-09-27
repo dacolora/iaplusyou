@@ -389,3 +389,47 @@ def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypat
     # evento creado por la ruta (tipo + mensaje)
     assert ">creado<" not in html and ">created<" in html
     assert "Experimento creado" not in html and "Experiment created" in html
+
+
+def test_tablero_en_ingles(admin_en, monkeypatch):
+    import dashboard
+    dashboard._TABLERO_CACHE.clear()
+    monkeypatch.setattr(dashboard.db, "ahora", lambda: "2026-09-26T10:00:00")
+    html = html_de(admin_en, "/cliente/acme")
+    assert "Dashboard · September 2026" in html
+    fugas = espanol_visible(html, ("tab-tablero",))
+    assert not fugas, fugas[:15]
+
+
+def test_tablero_no_mezcla_idiomas_en_la_cache(app_i18n, monkeypatch):
+    app_i18n._TABLERO_CACHE.clear()
+    monkeypatch.setattr(app_i18n.db, "ahora", lambda: "2026-09-26T10:00:00")
+    c = app_i18n.app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
+    assert "Tablero · septiembre 2026" in html_de(c, "/cliente/acme")
+    idiomas.guardar_de_usuario("admin", "en")
+    assert "Dashboard · September 2026" in html_de(c, "/cliente/acme")
+
+
+def test_csv_del_tablero_con_encabezados_en_ingles(admin_en):
+    texto = admin_en.get("/cliente/acme/tablero/mes.csv").get_data(as_text=True)
+    assert texto.lstrip("﻿").splitlines()[0] == \
+        "experiment;country;piece;verdict;impressions;clicks;spend;purchases;revenue;roas;currency"
+
+
+def test_landing_en_el_idioma_del_proyecto(app_i18n, tmp_path, monkeypatch):
+    import json
+    import os
+    monkeypatch.setattr(app_i18n, "BASE_DIR", str(tmp_path))
+    os.makedirs(tmp_path / "clientes" / "acme", exist_ok=True)
+    (tmp_path / "clientes" / "acme" / "landing.json").write_text(json.dumps(
+        {"titulo": "Glow Serum", "descripcion": "Radiant skin in seven days.", "boton_url": "https://shop.example"}),
+        encoding="utf-8")
+    idiomas.guardar_de_proyecto("acme", "en")
+    c = app_i18n.app.test_client()
+    c.set_cookie(idiomas.COOKIE, "es")              # quien mira pidió español: manda el proyecto
+    html = html_de(c, "/l/acme")
+    assert '<html lang="en">' in html and ">Download →<" in html.replace("\n", "")
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]

@@ -31,10 +31,13 @@ import io
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
+from flask_babel import gettext, ngettext
 
 import db
 import experimentos
+import idiomas
 import propuestas
+from idiomas import N_
 
 # Copia local de lanzador.ESTADOS_META_RECHAZO: importar lanzador arrastra
 # meta_ads/requests y el tablero es solo datos.
@@ -46,8 +49,8 @@ FUENTES_VENTAS = ("meta", "tienda", "triple_whale")
 HORAS_SIN_METRICAS = 6
 DIAS_SERIE = 30
 MONEDA_POR_DEFECTO = "USD"
-ENCABEZADO_CSV = ("experimento", "pais", "pieza", "veredicto", "impresiones", "clics", "gasto", "compras",
-                  "ingresos", "roas", "moneda")
+ENCABEZADO_CSV = (N_("experimento"), N_("pais"), N_("pieza"), N_("veredicto"), N_("impresiones"), N_("clics"),
+                  N_("gasto"), N_("compras"), N_("ingresos"), N_("roas"), N_("moneda"))
 
 
 # ---------- deltas ----------
@@ -402,21 +405,15 @@ def top_ganadoras(cliente, n=5, datos=None):
 # ---------- alertas ----------
 
 def _dinero(valor, moneda):
-    """«1.250.000 COP» / «12,50 USD»: miles con punto, decimales con coma."""
+    """«1.250.000 COP» / «12,50 USD»: miles con punto, decimales con coma
+    (o el separador del idioma activo, `idiomas.numero`)."""
     valor = float(valor or 0)
-    if valor == int(valor):
-        texto = f"{int(valor):,}".replace(",", ".")
-    else:
-        texto = f"{valor:,.2f}".replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+    texto = idiomas.numero(valor) if valor == int(valor) else idiomas.numero(valor, 2)
     return f"{texto} {moneda}"
 
 
 # La plantilla del tablero formatea con la misma regla que las alertas.
 dinero = _dinero
-
-
-def _plural(n, singular, plural):
-    return f"{n} {singular if n == 1 else plural}"
 
 
 def _alerta(tipo, nivel, texto, tab, experimento_id=None):
@@ -475,26 +472,32 @@ def _alertas_ganadoras_sin_publicar(cliente, exps, out):
                 if pz.get("veredicto") == "ganador" and pz.get("pieza_id")
                 and not any(pub["estado"] in organico.ESTADOS_VIVOS for pub in pubs.get(pz["pieza_id"], [])))
         if n:
+            cuenta = ngettext("%(num)s ganadora", "%(num)s ganadoras", n)
             out.append(_alerta("ganador_sin_publicar", "media",
-                               f"{_plural(n, 'ganadora', 'ganadoras')} sin publicar orgánicamente y ningún canal "
-                               "conectado: configura un canal orgánico en Configuración.", "settings"))
+                               gettext("%(cuenta)s sin publicar orgánicamente y ningún canal "
+                                       "conectado: configura un canal orgánico en Configuración.", cuenta=cuenta),
+                               "settings"))
         return
     por_exp = {}
     for pz in organico.ganadoras_sin_publicar(cliente):
         por_exp.setdefault((pz["experimento_id"], pz["experimento_nombre"]), []).append(pz)
     for (eid, nombre), pzs in por_exp.items():
         n = len(pzs)
-        que = f"la ganadora «{pzs[0]['nombre']}»" if n == 1 else f"{n} ganadoras"
+        if n == 1:
+            que = gettext("la ganadora «%(nombre)s»", nombre=pzs[0]["nombre"])
+        else:
+            que = ngettext("%(num)s ganadora", "%(num)s ganadoras", n)
         out.append(_alerta("ganador_sin_publicar", "media",
-                           f"«{nombre}» tiene {que} sin publicar orgánicamente: publícala desde la pieza "
-                           "(Publicar orgánico).", "experimentos", eid))
+                           gettext("«%(nombre)s» tiene %(que)s sin publicar orgánicamente: publícala desde la "
+                                   "pieza (Publicar orgánico).", nombre=nombre, que=que),
+                           "experimentos", eid))
 
 
 def alertas(cliente, ahora_iso=None, datos=None):
     """Lista ordenada por lo que más urge (ver el orden en el cuerpo): cada
-    una con `tipo`, `nivel` (alta/media/baja), `texto` en español con los
-    números, `tab` donde se resuelve y `experimento_id` (None si no es de un
-    experimento). Ninguna acción sale de aquí."""
+    una con `tipo`, `nivel` (alta/media/baja), `texto` en el idioma activo con
+    los números, `tab` donde se resuelve y `experimento_id` (None si no es de
+    un experimento). Ninguna acción sale de aquí."""
     import meta_conexion  # noqa: PLC0415 — arrastra requests; el tablero es solo datos
     import tiendas  # noqa: PLC0415
 
@@ -506,36 +509,41 @@ def alertas(cliente, ahora_iso=None, datos=None):
     est = (meta_conexion.estado(cliente) or {}).get("estado")
     if est == "sin_conectar":
         out.append(_alerta("meta_sin_conectar", "alta",
-                           "Meta no está conectado: conéctalo en Configuración para lanzar y medir experimentos.",
+                           gettext("Meta no está conectado: conéctalo en Configuración para lanzar y medir "
+                                   "experimentos."),
                            "settings"))
     elif est == "roto":
         out.append(_alerta("meta_roto", "alta",
-                           "La conexión con Meta está rota (token vencido o permisos retirados): "
-                           "vuelve a conectar en Configuración.", "settings"))
+                           gettext("La conexión con Meta está rota (token vencido o permisos retirados): "
+                                   "vuelve a conectar en Configuración."), "settings"))
 
     # 2. Experimentos en error (alta).
     for ex in exps:
         if ex["estado"] == "error":
-            detalle = f": {ex['error']}" if ex.get("error") else ""
+            detalle = gettext(": %(error)s", error=ex["error"]) if ex.get("error") else ""
             out.append(_alerta("experimento_error", "alta",
-                               f"El experimento «{ex['nombre']}» falló al lanzar{detalle}. "
-                               "Revísalo y vuelve a intentarlo.", "experimentos", ex["id"]))
+                               gettext("El experimento «%(nombre)s» falló al lanzar%(detalle)s. "
+                                       "Revísalo y vuelve a intentarlo.", nombre=ex["nombre"], detalle=detalle),
+                               "experimentos", ex["id"]))
 
     # 3. Propuestas pendientes (media), con la cuenta por experimento.
     for ex in exps:
         n = int(ex.get("propuestas_pendientes") or 0)
         if n > 0:
+            cuenta = ngettext("%(num)s propuesta", "%(num)s propuestas", n)
             out.append(_alerta("propuestas_pendientes", "media",
-                               f"«{ex['nombre']}» tiene {_plural(n, 'propuesta', 'propuestas')} del motor "
-                               "esperando tu aprobación.", "experimentos", ex["id"]))
+                               gettext("«%(nombre)s» tiene %(cuenta)s del motor esperando tu aprobación.",
+                                       nombre=ex["nombre"], cuenta=cuenta), "experimentos", ex["id"]))
 
     # 4. Anuncios rechazados por Meta (alta).
     for ex in exps:
         n = sum(1 for pz in ex["piezas"] if (pz.get("estado_meta") or "") in ESTADOS_META_RECHAZO)
         if n > 0:
+            cuenta = ngettext("%(num)s anuncio", "%(num)s anuncios", n)
             out.append(_alerta("anuncios_rechazados", "alta",
-                               f"Meta rechazó {_plural(n, 'anuncio', 'anuncios')} de «{ex['nombre']}» "
-                               "(DISAPPROVED/WITH_ISSUES): mira el motivo en el experimento.",
+                               gettext("Meta rechazó %(cuenta)s de «%(nombre)s» "
+                                       "(DISAPPROVED/WITH_ISSUES): mira el motivo en el experimento.",
+                                       cuenta=cuenta, nombre=ex["nombre"]),
                                "experimentos", ex["id"]))
 
     # 5. Tope alcanzado (media).
@@ -544,8 +552,10 @@ def alertas(cliente, ahora_iso=None, datos=None):
         gasto = float(ex.get("gasto_acumulado") or 0)
         if ex["estado"] in ("corriendo", "pausado") and tope > 0 and gasto >= tope:
             out.append(_alerta("tope_alcanzado", "media",
-                               f"«{ex['nombre']}» alcanzó su tope: {_dinero(gasto, _moneda(ex))} gastados de "
-                               f"{_dinero(tope, _moneda(ex))}. Ciérralo o súbele el tope.",
+                               gettext("«%(nombre)s» alcanzó su tope: %(gastado)s gastados de "
+                                       "%(tope)s. Ciérralo o súbele el tope.",
+                                       nombre=ex["nombre"], gastado=_dinero(gasto, _moneda(ex)),
+                                       tope=_dinero(tope, _moneda(ex))),
                                "experimentos", ex["id"]))
 
     # 5b. Ganadoras sin publicar orgánicamente (media). Con canales
@@ -556,10 +566,12 @@ def alertas(cliente, ahora_iso=None, datos=None):
     # 6. Tiendas rotas (media, settings).
     for t in tiendas.listar(cliente):
         if t.get("estado") == "rota":
-            detalle = f": {t['error']}" if t.get("error") else ""
+            detalle = gettext(": %(error)s", error=t["error"]) if t.get("error") else ""
             out.append(_alerta("tienda_rota", "media",
-                               f"La tienda {t.get('tipo') or ''} «{t.get('nombre') or t.get('dominio') or ''}» "
-                               f"dejó de sincronizar{detalle}. Vuelve a conectarla en Configuración.",
+                               gettext("La tienda %(tipo)s «%(nombre)s» "
+                                       "dejó de sincronizar%(detalle)s. Vuelve a conectarla en Configuración.",
+                                       tipo=t.get("tipo") or "",
+                                       nombre=t.get("nombre") or t.get("dominio") or "", detalle=detalle),
                                "settings"))
 
     # 7. Pixel sin datos con experimentos que dependen de él (media, settings).
@@ -567,19 +579,23 @@ def alertas(cliente, ahora_iso=None, datos=None):
     if con_pixel:
         px = meta_conexion.estado_pixel(cliente, solo_cache=True)
         if px and px.get("estado") in ("sin_datos", "sin_pixel"):
-            que = ("no tiene Pixel" if px["estado"] == "sin_pixel" else "no está enviando datos")
+            que = gettext("no tiene Pixel") if px["estado"] == "sin_pixel" else gettext("no está enviando datos")
+            cuenta = ngettext("%(num)s experimento mide", "%(num)s experimentos miden", len(con_pixel))
             out.append(_alerta("pixel_sin_datos", "media",
-                               f"La cuenta {que}: {_plural(len(con_pixel), 'experimento mide', 'experimentos miden')} "
-                               "ventas por Pixel y no verán compras. Compruébalo en Configuración.", "settings"))
+                               gettext("La cuenta %(que)s: %(cuenta)s "
+                                       "ventas por Pixel y no verán compras. Compruébalo en Configuración.",
+                                       que=que, cuenta=cuenta), "settings"))
 
     # 8. Productos en prueba sin experimento (baja, catalogo — los productos
     # viven en Catálogo › Productos).
     sueltos = _productos_en_prueba_sin_experimento(cliente, exps)
     if sueltos:
         n = len(sueltos)
+        cuenta = ngettext("%(num)s producto marcado", "%(num)s productos marcados", n)
+        verbo = gettext("no está") if n == 1 else gettext("no están")
         out.append(_alerta("productos_sin_experimento", "baja",
-                           f"{_plural(n, 'producto marcado', 'productos marcados')} «en prueba» "
-                           f"{'no está' if n == 1 else 'no están'} en ningún experimento abierto.", "catalogo"))
+                           gettext("%(cuenta)s «en prueba» %(verbo)s en ningún experimento abierto.",
+                                   cuenta=cuenta, verbo=verbo), "catalogo"))
 
     # 9. Experimentos corriendo sin métricas nuevas en 6 h (baja).
     for ex in exps:
@@ -588,12 +604,14 @@ def alertas(cliente, ahora_iso=None, datos=None):
         ultimo = _ultimo_snapshot_experimento(ex)
         horas = _horas_desde(ultimo, ahora) if ultimo else None
         if ultimo is None:
-            texto = f"«{ex['nombre']}» está corriendo y todavía no tiene métricas de Meta."
+            texto = gettext("«%(nombre)s» está corriendo y todavía no tiene métricas de Meta.", nombre=ex["nombre"])
         elif horas is not None and horas >= HORAS_SIN_METRICAS:
-            texto = f"«{ex['nombre']}» lleva {round(horas)} h sin métricas nuevas de Meta."
+            texto = gettext("«%(nombre)s» lleva %(horas)s h sin métricas nuevas de Meta.",
+                            nombre=ex["nombre"], horas=round(horas))
         else:
             continue
-        out.append(_alerta("sin_metricas", "baja", texto + " Revisa el worker o refresca el experimento.",
+        out.append(_alerta("sin_metricas", "baja",
+                           texto + " " + gettext("Revisa el worker o refresca el experimento."),
                            "experimentos", ex["id"]))
     return out
 
@@ -631,7 +649,7 @@ def csv_mes(cliente, ahora_iso=None, datos=None):
     desde = _inicio_mes(hasta)
     buf = io.StringIO()
     w = csv.writer(buf, delimiter=";", lineterminator="\n")
-    w.writerow(ENCABEZADO_CSV)
+    w.writerow([gettext(c) for c in ENCABEZADO_CSV])
     for ex, pz, snaps in _datos(cliente, hasta, datos, desde_necesario=desde).filas:
         d = _deltas_pieza(snaps, desde, hasta)
         w.writerow([_celda(ex["nombre"]), _celda(pz["pais"]), _celda(pz["nombre"]), _celda(pz.get("veredicto")),

@@ -5,29 +5,29 @@
    `experimentos`, `moneda_exp`, `paises_fe`. Solo lectura: nada de acá gasta
    ni publica; los botones llevan a la pestaña que sí. #}
 {% set tb = tablero %}
-{% set nombres_tab = {"settings": "Configuración", "experimentos": "Experimentos",
-                      "creativeflowplus": "Crear", "catalogo": "Catálogo"} %}
+{% set nombres_tab = {"settings": _("Configuración"), "experimentos": _("Experimentos"),
+                      "creativeflowplus": _("Crear"), "catalogo": _("Catálogo")} %}
 
 <div class="panel-cabecera tb-cabecera">
   <div>
-    <h2>Tablero · {{ tb.mes }} {{ tb.anio }}</h2>
-    <p class="panel-cabecera-desc">Gasto y ventas del mes en curso (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker.</p>
+    <h2>{{ _('Tablero · %(mes)s %(anio)s', mes=tb.mes, anio=tb.anio) }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Gasto y ventas del mes en curso (Meta Pixel, tienda y Triple Whale si está conectado), tus piezas ganadoras y lo que necesita tu atención. Se actualiza con cada refresco de métricas del worker.') }}</p>
   </div>
   <div class="panel-cabecera-acciones">
-    <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
+    <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('tab_descargar_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
   </div>
 </div>
 
 {# ---------- tiles ---------- #}
 {% if tb.resumen is none and tb.resumen_triple_whale is none %}
-<p class="tag-error">No se pudo calcular el resumen del mes. El resto del tablero sigue abajo.</p>
+<p class="tag-error">{{ _('No se pudo calcular el resumen del mes. El resto del tablero sigue abajo.') }}</p>
 {# M2: el gasto de generación no depende de la pauta/Meta, así que se pinta
    igual aunque el resumen de pauta haya fallado. #}
 <div class="tb-tiles">
-  <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto">
-    <span>Generación este mes</span>
+  <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto') }}">
+    <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores →{% else %}sin generación pagada{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro a proveedores →', '%(num)s cobros a proveedores →', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </a>
 </div>
 {% else %}
@@ -37,55 +37,55 @@
 {% set grupos = r.por_moneda if r.por_moneda else {moneda_exp: {"gasto": 0, "compras": 0, "ingresos": 0, "roas": 0}} %}
 {% set varias = grupos | length > 1 %}
 {% for moneda, g in grupos.items() %}
-<div class="tb-tiles" {% if varias %}aria-label="Meta: Resumen en {{ moneda }}"{% endif %}>
+<div class="tb-tiles" {% if varias %}aria-label="{{ _('Meta: Resumen en %(moneda)s', moneda=moneda) }}"{% endif %}>
   {% if varias %}<div class="tb-tiles-moneda">Meta · {{ moneda }}</div>{% else %}<div class="tb-tiles-moneda" style="color: var(--muted);">Meta</div>{% endif %}
   <div class="kpi-tile">
-    <span>Gasto del mes</span>
+    <span>{{ _('Gasto del mes') }}</span>
     <strong>{{ g.gasto | dinero(moneda) }}</strong>
-    <small>desde el 1 de {{ tb.mes }}</small>
+    <small>{{ _('desde el 1 de %(mes)s', mes=tb.mes) }}</small>
   </div>
   <div class="kpi-tile">
-    <span>Compras</span>
+    <span>{{ _('Compras') }}</span>
     <strong>{{ g.compras }}</strong>
-    <small>atribuidas por Pixel o tienda</small>
+    <small>{{ _('atribuidas por Pixel o tienda') }}</small>
   </div>
   <div class="kpi-tile">
-    <span>Ingresos</span>
+    <span>{{ _('Ingresos') }}</span>
     <strong>{{ g.ingresos | dinero(moneda) }}</strong>
-    <small>solo ventas medibles</small>
+    <small>{{ _('solo ventas medibles') }}</small>
   </div>
   <div class="kpi-tile">
     <span>ROAS</span>
     {% if g.ingresos > 0 and g.roas > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
-    <small>ingresos / gasto</small>
+    <small>{{ _('ingresos / gasto') }}</small>
     {% else %}
     <strong class="tb-sin-dato">—</strong>
-    <small>sin ventas medibles</small>
+    <small>{{ _('sin ventas medibles') }}</small>
     {% endif %}
   </div>
   {% if loop.last %}
   {# Gasto real de generación (tabla `gasto`, USD): al lado de la pauta, en
      su propia moneda. Lleva a Configuración › Gasto, donde está el detalle. #}
-  <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto">
-    <span>Generación este mes</span>
+  <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto') }}">
+    <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores →{% else %}sin generación pagada{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro a proveedores →', '%(num)s cobros a proveedores →', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </a>
   <div class="kpi-tile">
-    <span>Experimentos corriendo</span>
+    <span>{{ _('Experimentos corriendo') }}</span>
     <strong>{{ r.experimentos_corriendo }}</strong>
-    <small>{{ r.piezas_activas }} pieza(s) activa(s)</small>
+    <small>{{ ngettext('%(num)s pieza activa', '%(num)s piezas activas', r.piezas_activas) }}</small>
   </div>
   <a class="kpi-tile kpi-tile-enlace" href="#experimentos" data-ir-tab="experimentos">
-    <span>Propuestas pendientes</span>
+    <span>{{ _('Propuestas pendientes') }}</span>
     <strong>{{ r.propuestas_pendientes }}</strong>
-    <small>{% if r.propuestas_pendientes %}esperan tu aprobación →{% else %}nada por aprobar{% endif %}</small>
+    <small>{% if r.propuestas_pendientes %}{{ _('esperan tu aprobación →') }}{% else %}{{ _('nada por aprobar') }}{% endif %}</small>
   </a>
-  <a class="kpi-tile kpi-tile-enlace" href="#experimentos" data-ir-tab="experimentos" title="Piezas ganadoras distintas publicadas orgánicamente este mes (en una o varias plataformas)">
-    <span>Ganadoras publicadas</span>
+  <a class="kpi-tile kpi-tile-enlace" href="#experimentos" data-ir-tab="experimentos" title="{{ _('Piezas ganadoras distintas publicadas orgánicamente este mes (en una o varias plataformas)') }}">
+    <span>{{ _('Ganadoras publicadas') }}</span>
     <strong>{{ r.ganadoras_publicadas or 0 }}</strong>
-    <small>orgánicas este mes</small>
+    <small>{{ _('orgánicas este mes') }}</small>
   </a>
   {% endif %}
 </div>
@@ -97,31 +97,31 @@
 {% set grupos = r.por_moneda if r.por_moneda else {moneda_exp: {"gasto": 0, "compras": 0, "ingresos": 0, "roas": 0}} %}
 {% set varias = grupos | length > 1 %}
 {% for moneda, g in grupos.items() %}
-<div class="tb-tiles" {% if varias %}aria-label="Triple Whale: Resumen en {{ moneda }}"{% endif %}>
+<div class="tb-tiles" {% if varias %}aria-label="{{ _('Triple Whale: Resumen en %(moneda)s', moneda=moneda) }}"{% endif %}>
   {% if varias %}<div class="tb-tiles-moneda">Triple Whale · {{ moneda }}</div>{% else %}<div class="tb-tiles-moneda" style="color: var(--muted);">Triple Whale</div>{% endif %}
   <div class="kpi-tile">
-    <span>Gasto del mes</span>
+    <span>{{ _('Gasto del mes') }}</span>
     <strong>{{ g.gasto | dinero(moneda) }}</strong>
-    <small>desde el 1 de {{ tb.mes }}</small>
+    <small>{{ _('desde el 1 de %(mes)s', mes=tb.mes) }}</small>
   </div>
   <div class="kpi-tile">
-    <span>Compras</span>
+    <span>{{ _('Compras') }}</span>
     <strong>{{ g.compras }}</strong>
-    <small>atribuidas por TW</small>
+    <small>{{ _('atribuidas por TW') }}</small>
   </div>
   <div class="kpi-tile">
-    <span>Ingresos</span>
+    <span>{{ _('Ingresos') }}</span>
     <strong>{{ g.ingresos | dinero(moneda) }}</strong>
-    <small>solo ventas medibles</small>
+    <small>{{ _('solo ventas medibles') }}</small>
   </div>
   <div class="kpi-tile">
     <span>ROAS</span>
     {% if g.ingresos > 0 and g.roas > 0 %}
     <strong>{{ g.roas | roas }}×</strong>
-    <small>ingresos / gasto</small>
+    <small>{{ _('ingresos / gasto') }}</small>
     {% else %}
     <strong class="tb-sin-dato">—</strong>
-    <small>sin ventas medibles</small>
+    <small>{{ _('sin ventas medibles') }}</small>
     {% endif %}
   </div>
 </div>
@@ -131,19 +131,19 @@
 
 {% if not experimentos %}
 <div class="tb-vacio">
-  <h3>Crea tu primer experimento</h3>
-  <p class="vacio">El tablero se llena solo cuando hay experimentos corriendo: crea uno en <a href="#experimentos" data-ir-tab="experimentos">Experimentos</a>, mete piezas desde Crear y lánzalo. Desde ahí verás aquí gasto, ventas, ganadoras y alertas.</p>
+  <h3>{{ _('Crea tu primer experimento') }}</h3>
+  <p class="vacio">{{ _('El tablero se llena solo cuando hay experimentos corriendo: crea uno en <a href="#experimentos" data-ir-tab="experimentos">Experimentos</a>, mete piezas desde Crear y lánzalo. Desde ahí verás aquí gasto, ventas, ganadoras y alertas.') }}</p>
 </div>
 {% endif %}
 
 {# ---------- serie de 30 días ---------- #}
 <section class="tb-seccion">
   <div class="tb-seccion-cab">
-    <h3>Últimos 30 días</h3>
+    <h3>{{ _('Últimos 30 días') }}</h3>
     {% if tb.grafico or tb.grafico_triple_whale %}
-    <ul class="tb-leyenda" aria-label="Leyenda">
-      <li><span class="tb-muestra tb-muestra-gasto"></span>Gasto</li>
-      <li><span class="tb-muestra tb-muestra-ingresos"></span>Ingresos</li>
+    <ul class="tb-leyenda" aria-label="{{ _('Leyenda') }}">
+      <li><span class="tb-muestra tb-muestra-gasto"></span>{{ _('Gasto') }}</li>
+      <li><span class="tb-muestra tb-muestra-ingresos"></span>{{ _('Ingresos') }}</li>
       {% set moneda_meta = (tb.grafico or {}).get('moneda') %}
       {% set moneda_tw = (tb.grafico_triple_whale or {}).get('moneda') %}
       {% if moneda_meta and moneda_tw and moneda_meta != moneda_tw %}
@@ -157,17 +157,17 @@
     {% endif %}
   </div>
   {% if tb.serie is none and tb.serie_triple_whale is none %}
-  <p class="tag-error">No se pudo calcular la serie de 30 días.</p>
+  <p class="tag-error">{{ _('No se pudo calcular la serie de 30 días.') }}</p>
   {% elif not tb.grafico and not tb.grafico_triple_whale %}
-  <p class="vacio">Todavía no hay gasto ni ventas en los últimos 30 días. Cuando un experimento empiece a gastar, aquí verás el día a día.</p>
+  <p class="vacio">{{ _('Todavía no hay gasto ni ventas en los últimos 30 días. Cuando un experimento empiece a gastar, aquí verás el día a día.') }}</p>
   {% else %}
   {# Mostrar Meta si existe #}
   {% if tb.grafico %}
   {% set g = tb.grafico %}
   <div style="margin-bottom: 1.5rem;">
-    <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin: 0 0 0.75rem 0;">Meta (Pixel/Tienda)</h4>
+    <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin: 0 0 0.75rem 0;">{{ _('Meta (Pixel/Tienda)') }}</h4>
     <svg class="tb-grafico" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img"
-         aria-label="Meta: Gasto (barras) e ingresos (línea) por día en {{ g.moneda }} durante los últimos 30 días">
+         aria-label="{{ _('Meta: Gasto (barras) e ingresos (línea) por día en %(moneda)s durante los últimos 30 días', moneda=g.moneda) }}">
       {# rejilla + marcas del eje y (recesivas) #}
       {% for t in g.marcas %}
       <line class="tb-rejilla" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
@@ -205,7 +205,7 @@
   <div>
     <h4 style="font-size: 0.9rem; color: var(--text-secondary); margin: 0 0 0.75rem 0;">Triple Whale</h4>
     <svg class="tb-grafico" viewBox="0 0 {{ g.ancho }} {{ g.alto }}" role="img"
-         aria-label="Triple Whale: Gasto (barras) e ingresos (línea) por día en {{ g.moneda }} durante los últimos 30 días">
+         aria-label="{{ _('Triple Whale: Gasto (barras) e ingresos (línea) por día en %(moneda)s durante los últimos 30 días', moneda=g.moneda) }}">
       {# rejilla + marcas del eje y (recesivas) #}
       {% for t in g.marcas %}
       <line class="tb-rejilla" x1="{{ g.margen.izq }}" x2="{{ g.ancho - g.margen.der }}" y1="{{ t.y }}" y2="{{ t.y }}"/>
@@ -241,12 +241,13 @@
 </section>
 
 {# ---------- top 5 ganadoras ---------- #}
+{% set nombres_nivel = {"alta": _("alta"), "media": _("media"), "baja": _("baja")} %}
 <section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>Top 5 ganadoras</h3></div>
+  <div class="tb-seccion-cab"><h3>{{ _('Top 5 ganadoras') }}</h3></div>
   {% if tb.top is none %}
-  <p class="tag-error">No se pudo calcular el top de ganadoras.</p>
+  <p class="tag-error">{{ _('No se pudo calcular el top de ganadoras.') }}</p>
   {% elif not tb.top %}
-  <p class="vacio">Todavía ninguna pieza tiene veredicto «ganador». El decisor lo da cuando una pieza supera las reglas del experimento.</p>
+  <p class="vacio">{{ _('Todavía ninguna pieza tiene veredicto «ganador». El decisor lo da cuando una pieza supera las reglas del experimento.') }}</p>
   {% else %}
   <div class="tb-top">
     {% for p in tb.top %}
@@ -257,17 +258,17 @@
       </div>
       <div class="tb-ganadora-cuerpo">
         <div class="tb-ganadora-titulo">
-          <span class="tb-bandera" title="{{ paises_fe[p.pais].nombre if p.pais in paises_fe else p.pais }}">{{ paises_fe[p.pais].bandera if p.pais in paises_fe else p.pais }}</span>
+          <span class="tb-bandera" title="{{ paises_fe[p.pais].nombre|traducir if p.pais in paises_fe else p.pais }}">{{ paises_fe[p.pais].bandera if p.pais in paises_fe else p.pais }}</span>
           <strong>{{ p.nombre }}</strong>
         </div>
-        <small class="tb-ganadora-exp">{{ p.experimento_nombre }}{% if p.experimento_estado == "cerrado" %} (cerrado){% endif %}</small>
+        <small class="tb-ganadora-exp">{{ p.experimento_nombre }}{% if p.experimento_estado == "cerrado" %} {{ _('(cerrado)') }}{% endif %}</small>
         <div class="tb-ganadora-kpis" {% if p.veredicto_motivo %}title="{{ p.veredicto_motivo }}"{% endif %}>
-          <span><b>{{ "%.2f"|format(m.ctr or 0) }}%</b> CTR</span>
+          <span><b>{{ _('%(valor)s%%', valor=("%.2f"|format(m.ctr or 0))) }}</b> CTR</span>
           <span><b>{{ "%.2f"|format(m.cpc or 0) }}</b> CPC {{ p.moneda }}</span>
           <span><b>{% if m.roas %}{{ m.roas | roas }}×{% else %}—{% endif %}</b> ROAS</span>
         </div>
         {% if p.veredicto_motivo %}<p class="tb-ganadora-motivo" title="{{ p.veredicto_motivo }}">{{ p.veredicto_motivo }}</p>{% endif %}
-        <a class="btn-guardar btn-xs" href="?exp={{ p.experimento_id }}#experimentos" data-ir-tab="experimentos">Ver experimento</a>
+        <a class="btn-guardar btn-xs" href="?exp={{ p.experimento_id }}#experimentos" data-ir-tab="experimentos">{{ _('Ver experimento') }}</a>
       </div>
     </article>
     {% endfor %}
@@ -277,21 +278,21 @@
 
 {# ---------- alertas ---------- #}
 <section class="tb-seccion">
-  <div class="tb-seccion-cab"><h3>Alertas</h3></div>
+  <div class="tb-seccion-cab"><h3>{{ _('Alertas') }}</h3></div>
   {% if tb.alertas is none %}
-  <p class="tag-error">No se pudo calcular las alertas.</p>
+  <p class="tag-error">{{ _('No se pudo calcular las alertas.') }}</p>
   {% elif not tb.alertas %}
-  <p class="vacio tb-sin-alertas">Sin alertas. Todo en orden.</p>
+  <p class="vacio tb-sin-alertas">{{ _('Sin alertas. Todo en orden.') }}</p>
   {% else %}
   <ul class="tb-alertas">
     {% for a in tb.alertas %}
     <li class="tb-alerta tb-alerta-{{ a.nivel }}">
-      <span class="tb-alerta-nivel">{{ a.nivel }}</span>
+      <span class="tb-alerta-nivel">{{ nombres_nivel.get(a.nivel, a.nivel) }}</span>
       <span class="tb-alerta-texto">{{ a.texto }}</span>
       {% if a.tab == "experimentos" and a.experimento_id %}
-      <a class="tb-alerta-ir" href="?exp={{ a.experimento_id }}#experimentos" data-ir-tab="experimentos">Ver experimento →</a>
+      <a class="tb-alerta-ir" href="?exp={{ a.experimento_id }}#experimentos" data-ir-tab="experimentos">{{ _('Ver experimento →') }}</a>
       {% else %}
-      <a class="tb-alerta-ir" href="#{{ a.tab }}" data-ir-tab="{{ a.tab }}">Ir a {{ nombres_tab.get(a.tab, a.tab) }} →</a>
+      <a class="tb-alerta-ir" href="#{{ a.tab }}" data-ir-tab="{{ a.tab }}">{{ _('Ir a %(tab)s →', tab=nombres_tab.get(a.tab, a.tab)) }}</a>
       {% endif %}
     </li>
     {% endfor %}
