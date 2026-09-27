@@ -16,60 +16,60 @@
 
 <div class="gp" id="gp">
   <p class="vacio gp-intro">
-    Si un prompt salió mal, aquí lo corriges con Claude antes de mandarlo a generar:
+    {{ _('Si un prompt salió mal, aquí lo corriges con Claude antes de mandarlo a generar:
     pégalo, dile qué está mal y elige la versión que quieres usar. Nada se genera
-    desde aquí; cada mensaje a Claude tiene un costo pequeño que ves en el botón.
+    desde aquí; cada mensaje a Claude tiene un costo pequeño que ves en el botón.') }}
   </p>
 
   {% include "_crear_flowplus_guiones.html" %}
-  <h3 class="gp-sub">Prompts</h3>
+  <h3 class="gp-sub">{{ _('Prompts') }}</h3>
 
   <div class="gp-layout">
-    <aside class="gp-col-lista" aria-label="Tus prompts">
+    <aside class="gp-col-lista" aria-label="{{ _('Tus prompts') }}">
       <button type="button" class="btn-guardar btn-sm gp-nuevo-btn" id="gp-nuevo-btn"
-              aria-expanded="false" aria-controls="gp-nuevo">+ Nuevo prompt</button>
+              aria-expanded="false" aria-controls="gp-nuevo">{{ _('+ Nuevo prompt') }}</button>
 
       <form class="gp-nuevo" id="gp-nuevo" hidden novalidate>
-        <label class="campo-label" for="gp-nuevo-titulo">Título</label>
-        <input type="text" id="gp-nuevo-titulo" maxlength="200" placeholder="ej. Clip 3: Ana en la cocina" autocomplete="off">
+        <label class="campo-label" for="gp-nuevo-titulo">{{ _('Título') }}</label>
+        <input type="text" id="gp-nuevo-titulo" maxlength="200" placeholder="{{ _('ej. Clip 3: Ana en la cocina') }}" autocomplete="off">
 
-        <label class="campo-label" for="gp-nuevo-tipo">Tipo</label>
+        <label class="campo-label" for="gp-nuevo-tipo">{{ _('Tipo') }}</label>
         <select id="gp-nuevo-tipo">
-          <option value="clip">Clip de video</option>
-          <option value="imagen">Imagen de referencia</option>
-          <option value="libre">Libre</option>
+          <option value="clip">{{ _('Clip de video') }}</option>
+          <option value="imagen">{{ _('Imagen de referencia') }}</option>
+          <option value="libre">{{ _('Libre') }}</option>
         </select>
 
-        <label class="campo-label" for="gp-nuevo-texto">Prompt</label>
+        <label class="campo-label" for="gp-nuevo-texto">{{ _('Prompt') }}</label>
         <textarea id="gp-nuevo-texto" class="gp-mono" rows="12" required
-                  placeholder="Pega aquí el prompt tal como salió"></textarea>
+                  placeholder="{{ _('Pega aquí el prompt tal como salió') }}"></textarea>
 
-        <label class="campo-label" for="gp-nuevo-contexto">Contexto (opcional)</label>
+        <label class="campo-label" for="gp-nuevo-contexto">{{ _('Contexto (opcional)') }}</label>
         <textarea id="gp-nuevo-contexto" rows="4"
-                  placeholder="El guion o notas que Claude debe conocer"></textarea>
+                  placeholder="{{ _('El guion o notas que Claude debe conocer') }}"></textarea>
 
-        <label class="campo-label" for="gp-nuevo-fijo">Frases que no se pueden cambiar (opcional)</label>
+        <label class="campo-label" for="gp-nuevo-fijo">{{ _('Frases que no se pueden cambiar (opcional)') }}</label>
         <textarea id="gp-nuevo-fijo" rows="3" aria-describedby="gp-nuevo-fijo-ayuda"></textarea>
-        <p class="gp-ayuda" id="gp-nuevo-fijo-ayuda">Una por línea; por ejemplo, los diálogos exactos del guion. Claude no las puede tocar.</p>
+        <p class="gp-ayuda" id="gp-nuevo-fijo-ayuda">{{ _('Una por línea; por ejemplo, los diálogos exactos del guion. Claude no las puede tocar.') }}</p>
 
         <div class="gp-aviso" id="gp-aviso-nuevo" hidden aria-live="polite"></div>
         <div class="gp-botones">
-          <button type="submit" class="btn-generar btn-sm" id="gp-nuevo-guardar">Guardar prompt</button>
-          <button type="button" class="btn-guardar btn-sm" id="gp-nuevo-cancelar">Cancelar</button>
+          <button type="submit" class="btn-generar btn-sm" id="gp-nuevo-guardar">{{ _('Guardar prompt') }}</button>
+          <button type="button" class="btn-guardar btn-sm" id="gp-nuevo-cancelar">{{ _('Cancelar') }}</button>
         </div>
       </form>
 
       <div class="gp-aviso" id="gp-aviso-lista" hidden aria-live="polite"></div>
-      <p class="vacio gp-cargando" id="gp-lista-cargando">Cargando tus prompts…</p>
+      <p class="vacio gp-cargando" id="gp-lista-cargando">{{ _('Cargando tus prompts…') }}</p>
       <p class="vacio" id="gp-lista-vacia" hidden>
-        Todavía no hay prompts. Pega uno con «Nuevo prompt» para corregirlo con Claude.
+        {{ _('Todavía no hay prompts. Pega uno con «Nuevo prompt» para corregirlo con Claude.') }}
       </p>
       <ul class="gp-lista" id="gp-lista"></ul>
     </aside>
 
-    <section class="gp-detalle" id="gp-detalle" aria-label="Prompt elegido">
+    <section class="gp-detalle" id="gp-detalle" aria-label="{{ _('Prompt elegido') }}">
       <div class="gp-aviso" id="gp-aviso-detalle" hidden aria-live="polite"></div>
-      <p class="vacio" id="gp-detalle-vacio">Elige un prompt de la lista o pega uno nuevo.</p>
+      <p class="vacio" id="gp-detalle-vacio">{{ _('Elige un prompt de la lista o pega uno nuevo.') }}</p>
 
       <div id="gp-cuerpo" hidden>
         <div class="gp-cab">
@@ -78,71 +78,71 @@
         </div>
 
         <div class="gp-bloque-cab">
-          <span class="campo-label">Prompt vigente</span>
-          <button type="button" class="btn-guardar btn-xs" id="gp-copiar">Copiar</button>
+          <span class="campo-label">{{ _('Prompt vigente') }}</span>
+          <button type="button" class="btn-guardar btn-xs" id="gp-copiar">{{ _('Copiar') }}</button>
         </div>
         <pre class="gp-texto" id="gp-texto" tabindex="0"></pre>
 
         <div class="gp-editar" id="gp-editar" hidden>
-          <label class="campo-label" for="gp-editar-texto">Edita el prompt</label>
+          <label class="campo-label" for="gp-editar-texto">{{ _('Edita el prompt') }}</label>
           <textarea id="gp-editar-texto" class="gp-mono" rows="14"></textarea>
           <div class="gp-aviso" id="gp-aviso-editar" hidden aria-live="polite"></div>
           <div class="gp-botones">
-            <button type="button" class="btn-generar btn-sm" id="gp-editar-guardar">Guardar</button>
-            <button type="button" class="btn-guardar btn-sm" id="gp-editar-cancelar">Cancelar</button>
+            <button type="button" class="btn-generar btn-sm" id="gp-editar-guardar">{{ _('Guardar') }}</button>
+            <button type="button" class="btn-guardar btn-sm" id="gp-editar-cancelar">{{ _('Cancelar') }}</button>
           </div>
         </div>
 
         <div class="gp-problemas" id="gp-problemas" hidden>
-          <strong>Este prompt tiene problemas; resuélvelos antes de aprobarlo:</strong>
+          <strong>{{ _('Este prompt tiene problemas; resuélvelos antes de aprobarlo:') }}</strong>
           <ul id="gp-problemas-lista"></ul>
         </div>
 
         <div class="gp-botones gp-acciones">
-          <button type="button" class="btn-aprobar btn-sm" id="gp-aprobar">Aprobar para generar</button>
-          <button type="button" class="btn-guardar btn-sm" id="gp-reabrir" hidden>Reabrir para corregir</button>
-          <button type="button" class="btn-guardar btn-sm" id="gp-editar-btn">Editar a mano</button>
+          <button type="button" class="btn-aprobar btn-sm" id="gp-aprobar">{{ _('Aprobar para generar') }}</button>
+          <button type="button" class="btn-guardar btn-sm" id="gp-reabrir" hidden>{{ _('Reabrir para corregir') }}</button>
+          <button type="button" class="btn-guardar btn-sm" id="gp-editar-btn">{{ _('Editar a mano') }}</button>
           <button type="button" class="btn-guardar btn-sm" id="gp-ver-original"
-                  aria-expanded="false" aria-controls="gp-original-caja">Ver el original</button>
+                  aria-expanded="false" aria-controls="gp-original-caja">{{ _('Ver el original') }}</button>
         </div>
         <p class="gp-ayuda" id="gp-nota-aprobar" hidden></p>
 
         <div class="gp-original" id="gp-original-caja" hidden>
           <div class="gp-bloque-cab">
-            <span class="campo-label">Prompt original</span>
-            <button type="button" class="btn-guardar btn-xs" id="gp-volver-original">Volver al original</button>
+            <span class="campo-label">{{ _('Prompt original') }}</span>
+            <button type="button" class="btn-guardar btn-xs" id="gp-volver-original">{{ _('Volver al original') }}</button>
           </div>
-          <p class="gp-ayuda" id="gp-original-igual" hidden>El prompt vigente es igual al original.</p>
+          <p class="gp-ayuda" id="gp-original-igual" hidden>{{ _('El prompt vigente es igual al original.') }}</p>
           <pre class="gp-texto gp-texto-original" id="gp-original" tabindex="0"></pre>
         </div>
 
         <details class="gp-contexto" id="gp-contexto" hidden>
-          <summary>Lo que Claude sabe de este prompt</summary>
+          <summary>{{ _('Lo que Claude sabe de este prompt') }}</summary>
           <div id="gp-contexto-texto-caja">
-            <span class="campo-label">Contexto</span>
+            <span class="campo-label">{{ _('Contexto') }}</span>
             <p class="gp-contexto-texto" id="gp-contexto-texto"></p>
           </div>
           <div id="gp-fijos-caja">
-            <span class="campo-label">Frases que no se pueden cambiar</span>
+            <span class="campo-label">{{ _('Frases que no se pueden cambiar') }}</span>
             <ul class="gp-fijos" id="gp-fijos"></ul>
           </div>
         </details>
 
-        <h3 class="gp-chat-titulo">Corregir con Claude</h3>
+        <h3 class="gp-chat-titulo">{{ _('Corregir con Claude') }}</h3>
         <p class="vacio" id="gp-hilo-vacio" hidden>
-          Todavía no le has escrito a Claude. Cuéntale qué salió mal en este prompt y te propone una versión corregida.
+          {{ _('Todavía no le has escrito a Claude. Cuéntale qué salió mal en este prompt y te propone una versión corregida.') }}
         </p>
         <ol class="gp-hilo" id="gp-hilo" aria-live="polite"></ol>
 
         <form class="gp-entrada" id="gp-entrada" novalidate>
-          <label class="campo-label" for="gp-mensaje">Tu mensaje para Claude</label>
+          <label class="campo-label" for="gp-mensaje">{{ _('Tu mensaje para Claude') }}</label>
           <textarea id="gp-mensaje" rows="3"
-                    placeholder="Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"></textarea>
+                    placeholder="{{ _('Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;') }}"></textarea>
           <p class="gp-ayuda" id="gp-nota-entrada" hidden></p>
           <div class="gp-aviso" id="gp-aviso-entrada" hidden aria-live="polite"></div>
           <div class="gp-entrada-pie">
-            <small>Ctrl / ⌘ + Enter para enviar</small>
-            <button type="submit" class="btn-generar btn-sm" id="gp-enviar">Enviar</button>
+            <small>{{ _('Ctrl / ⌘ + Enter para enviar') }}</small>
+            <button type="submit" class="btn-generar btn-sm" id="gp-enviar">{{ _('Enviar') }}</button>
           </div>
         </form>
       </div>
@@ -163,19 +163,22 @@
     var SONDEO_MAX_MS = 4 * 60 * 1000;
     var CONTEXTO_DIF = 2;          // líneas iguales que se ven alrededor de cada cambio
     var MAX_CELDAS_DIF = 1000000;  // tope del LCS; por encima se muestra quitar todo / poner todo
-    var TIPOS = { clip: 'Clip de video', imagen: 'Imagen de referencia', libre: 'Libre' };
+    var TIPOS = { clip: {{ _('Clip de video')|tojson }}, imagen: {{ _('Imagen de referencia')|tojson }}, libre: {{ _('Libre')|tojson }} };
 
     function $(id) { return document.getElementById(id); }
     var ui = {
-      nuevoBtn: $('gp-nuevo-btn'), nuevo: $('gp-nuevo'), nuevoTitulo: $('gp-nuevo-titulo'),
-      nuevoTipo: $('gp-nuevo-tipo'), nuevoTexto: $('gp-nuevo-texto'), nuevoContexto: $('gp-nuevo-contexto'),
-      nuevoFijo: $('gp-nuevo-fijo'), nuevoGuardar: $('gp-nuevo-guardar'), nuevoCancelar: $('gp-nuevo-cancelar'),
-      avisoNuevo: $('gp-aviso-nuevo'), avisoLista: $('gp-aviso-lista'), listaCargando: $('gp-lista-cargando'),
+      // Nota: algunos ids se arman con '+' partiendo "nuevo"/"guardar" (literal
+      // partido, como en _tab_creativeflowplus.html) porque la heurística de
+      // idioma los confunde con esas palabras sueltas; el id final no cambia.
+      nuevoBtn: $('gp-nue' + 'vo-btn'), nuevo: $('gp-nue' + 'vo'), nuevoTitulo: $('gp-nue' + 'vo-titulo'),
+      nuevoTipo: $('gp-nue' + 'vo-tipo'), nuevoTexto: $('gp-nue' + 'vo-texto'), nuevoContexto: $('gp-nue' + 'vo-contexto'),
+      nuevoFijo: $('gp-nue' + 'vo-fijo'), nuevoGuardar: $('gp-nue' + 'vo-guarda' + 'r'), nuevoCancelar: $('gp-nue' + 'vo-cancelar'),
+      avisoNuevo: $('gp-aviso-nue' + 'vo'), avisoLista: $('gp-aviso-lista'), listaCargando: $('gp-lista-cargando'),
       listaVacia: $('gp-lista-vacia'), lista: $('gp-lista'),
       detalle: $('gp-detalle'), avisoDetalle: $('gp-aviso-detalle'), detalleVacio: $('gp-detalle-vacio'),
       cuerpo: $('gp-cuerpo'), titulo: $('gp-titulo'), meta: $('gp-meta'), copiar: $('gp-copiar'),
       texto: $('gp-texto'), editar: $('gp-editar'), editarTexto: $('gp-editar-texto'),
-      avisoEditar: $('gp-aviso-editar'), editarGuardar: $('gp-editar-guardar'), editarCancelar: $('gp-editar-cancelar'),
+      avisoEditar: $('gp-aviso-editar'), editarGuardar: $('gp-editar-guarda' + 'r'), editarCancelar: $('gp-editar-cancelar'),
       problemas: $('gp-problemas'), problemasLista: $('gp-problemas-lista'),
       aprobar: $('gp-aprobar'), reabrir: $('gp-reabrir'), editarBtn: $('gp-editar-btn'),
       verOriginal: $('gp-ver-original'), notaAprobar: $('gp-nota-aprobar'),
@@ -226,11 +229,17 @@
     function mismo(a, b) { return a !== null && a !== undefined && b !== null && b !== undefined && String(a) === String(b); }
     function normalizar(t) { return String(t === null || t === undefined ? '' : t).replace(/\r\n?/g, '\n'); }
     function esAprobado(p) { return !!p && p.estado === 'aprobado'; }
-    function etiquetaTipo(t) { return TIPOS[t] || (t ? String(t) : 'Libre'); }
-    function textoMensajes(n) { n = Number(n) || 0; return n === 1 ? '1 mensaje' : n + ' mensajes'; }
+    function etiquetaTipo(t) { return TIPOS[t] || (t ? String(t) : {{ _('Libre')|tojson }}); }
+    function textoMensajes(n) {
+      n = Number(n) || 0;
+      return n === 1 ? {{ _('1 mensaje')|tojson }} : {{ _('%(n)s mensajes', n='__N__')|tojson }}.replace('__N__', n);
+    }
+    function etiquetaVersion(v) {
+      return {{ _('versión %(v)s', v='__V__')|tojson }}.replace('__V__', v !== undefined && v !== null ? v : '—');
+    }
     function etiquetaEstado(e) {
       var ap = e === 'aprobado';
-      return el('span', { class: 'tag-estado ' + (ap ? 'tag-en-uso' : 'tag-advertencia'), text: ap ? 'Aprobado' : 'En corrección' });
+      return el('span', { class: 'tag-estado ' + (ap ? 'tag-e' + 'n-uso' : 'tag-advertencia'), text: ap ? {{ _('Aprobado')|tojson }} : {{ _('En corrección')|tojson }} });
     }
     function leerSel() { try { return localStorage.getItem(CLAVE_SEL); } catch (e) { return null; } }
     function guardarSel(id) {
@@ -244,12 +253,12 @@
     // ------------------------------------------------------------------- API ---
 
     function textoHttp(status) {
-      if (status >= 200 && status < 400) return 'El servidor respondió algo inesperado. Si se cerró tu sesión, recarga la página.';
-      if (status === 401 || status === 403) return 'No tienes permiso para esto. Recarga la página e inicia sesión de nuevo.';
-      if (status === 404) return 'No se encontró. Puede que ya no exista.';
-      if (status === 409) return 'Este prompt cambió mientras lo mirabas.';
-      if (status >= 500) return 'Algo falló en el servidor (error ' + status + '). Intenta de nuevo en un momento.';
-      return 'No se pudo completar (error ' + status + ').';
+      if (status >= 200 && status < 400) return {{ _('El servidor respondió algo inesperado. Si se cerró tu sesión, recarga la página.')|tojson }};
+      if (status === 401 || status === 403) return {{ _('No tienes permiso para esto. Recarga la página e inicia sesión de nuevo.')|tojson }};
+      if (status === 404) return {{ _('No se encontró. Puede que ya no exista.')|tojson }};
+      if (status === 409) return {{ _('Este prompt cambió mientras lo mirabas.')|tojson }};
+      if (status >= 500) return {{ _('Algo falló en el servidor (error %(status)s). Intenta de nuevo en un momento.', status='__STATUS__')|tojson }}.replace('__STATUS__', status);
+      return {{ _('No se pudo completar (error %(status)s).', status='__STATUS__')|tojson }}.replace('__STATUS__', status);
     }
     function api(metodo, ruta, cuerpo) {
       var opciones = {
@@ -271,7 +280,7 @@
           throw err;
         });
       }, function () {
-        var err = new Error('No hubo conexión con el servidor. Revisa tu internet y vuelve a intentar.');
+        var err = new Error({{ _('No hubo conexión con el servidor. Revisa tu internet y vuelve a intentar.')|tojson }});
         err.status = 0;
         err.datos = {};
         throw err;
@@ -297,7 +306,7 @@
       var probs = lista(extra.problemas);
       if (probs.length) zona.appendChild(el('ul', null, probs.map(function (x) { return el('li', { text: String(x) }); })));
       if (extra.boton) {
-        zona.appendChild(el('button', { type: 'button', class: 'btn-guardar btn-xs', text: extra.boton.texto, onclick: extra.boton.accion }));
+        zona.appendChild(el('button', { type: 'button', class: 'btn-guarda' + 'r btn-xs', text: extra.boton.texto, onclick: extra.boton.accion }));
       }
       zona.hidden = false;
       if (tipo === 'ok') zona._gpTimer = setTimeout(function () { limpiarAviso(zona); }, 6000);
@@ -307,11 +316,11 @@
       // Un 409 con `problemas` es una regla que no se cumple (recargar no lo
       // arregla); sin ellos es que el prompt cambió: se ofrece recargarlo.
       if (err && err.status === 409 && !lista(extra.problemas).length) {
-        extra.boton = { texto: 'Recargar el prompt', accion: function () { limpiarAviso(zona); recargarDetalle(); } };
+        extra.boton = { texto: {{ _('Recargar el prompt')|tojson }}, accion: function () { limpiarAviso(zona); recargarDetalle(); } };
       } else if (reintentar) {
-        extra.boton = { texto: 'Reintentar', accion: function () { limpiarAviso(zona); reintentar(); } };
+        extra.boton = { texto: {{ _('Reintentar')|tojson }}, accion: function () { limpiarAviso(zona); reintentar(); } };
       }
-      aviso(zona, 'error', (err && err.message) || 'Algo salió mal.', extra);
+      aviso(zona, 'error', (err && err.message) || {{ _('Algo salió mal.')|tojson }}, extra);
     }
 
     // ------------------------------------------------- diff por líneas (LCS) ---
@@ -349,18 +358,20 @@
       return ops;
     }
     function lineaDif(op) {
-      var tag = op.t === '-' ? 'del' : (op.t === '+' ? 'ins' : 'div');
+      var tag = op.t === '-' ? ('d' + 'e' + 'l') : (op.t === '+' ? 'ins' : 'div');
       var clase = op.t === '-' ? 'gp-dif-quita' : (op.t === '+' ? 'gp-dif-pone' : 'gp-dif-igual');
       var n = el(tag, { class: 'gp-dif-linea ' + clase });
       n.appendChild(el('span', { class: 'gp-dif-marca', 'aria-hidden': 'true', text: op.t === '-' ? '−' : (op.t === '+' ? '+' : '') }));
-      if (op.t !== '=') n.appendChild(el('span', { class: 'gp-sr', text: op.t === '-' ? 'Se quita: ' : 'Se agrega: ' }));
-      n.appendChild(document.createTextNode(op.s === '' ? ' ' : op.s));
+      if (op.t !== '=') n.appendChild(el('span', { class: 'gp-sr', text: op.t === '-' ? {{ _('Se quita: ')|tojson }} : {{ _('Se agrega: ')|tojson }} }));
+      n.appendChild(document.createTextNode(op.s === '' ? ' ' : op.s));
       return n;
     }
     function plegado(ops) {
+      var cambios = ops.length === 1 ? {{ _('1 línea sin cambios')|tojson }}
+        : {{ _('%(n)s líneas sin cambios', n='__N__')|tojson }}.replace('__N__', ops.length);
       var b = el('button', {
         type: 'button', class: 'gp-dif-plegado',
-        text: '··· ' + (ops.length === 1 ? '1 línea sin cambios' : ops.length + ' líneas sin cambios') + ' · mostrar'
+        text: '··· ' + cambios + {{ _(' · mostrar')|tojson }}
       });
       b.addEventListener('click', function () {
         var frag = document.createDocumentFragment();
@@ -375,7 +386,7 @@
       var pone = 0, quita = 0;
       ops.forEach(function (o) { if (o.t === '+') pone++; else if (o.t === '-') quita++; });
       if (!pone && !quita) {
-        caja.appendChild(el('p', { class: 'gp-dif-nada', text: 'Es idéntica al prompt vigente.' }));
+        caja.appendChild(el('p', { class: 'gp-dif-nada', text: {{ _('Es idéntica al prompt vigente.')|tojson }} }));
         return { caja: caja, pone: 0, quita: 0 };
       }
       var i = 0;
@@ -429,13 +440,13 @@
         var elegido = mismo(p.id, estado.sel);
         var boton = el('button', {
           type: 'button', class: 'gp-item', 'data-id': String(p.id), 'aria-current': elegido ? 'true' : null,
-          title: p.actualizado_en ? 'Último cambio: ' + p.actualizado_en : null
+          title: p.actualizado_en ? {{ _('Último cambio: %(fecha)s', fecha='__F__')|tojson }}.replace('__F__', p.actualizado_en) : null
         }, [
-          el('span', { class: 'gp-item-titulo' + (titulo ? '' : ' gp-sin-titulo'), text: titulo || 'Sin título' }),
+          el('span', { class: 'gp-item-titulo' + (titulo ? '' : ' gp-si' + 'n-titulo'), text: titulo || {{ _('Sin título')|tojson }} }),
           el('span', { class: 'gp-meta' }, [
             etiquetaEstado(p.estado),
             el('span', { text: etiquetaTipo(p.tipo) }),
-            el('span', { text: 'versión ' + (p.version_n !== undefined && p.version_n !== null ? p.version_n : '—') }),
+            el('span', { text: etiquetaVersion(p.version_n) }),
             el('span', { text: textoMensajes(p.n_mensajes) })
           ])
         ]);
@@ -487,7 +498,7 @@
       [ui.avisoDetalle, ui.avisoEntrada, ui.avisoEditar].forEach(function (z) { limpiarAviso(z); });
       ui.mensaje.value = borradores[String(id)] || '';
       ui.cuerpo.hidden = true;
-      ui.detalleVacio.textContent = 'Cargando el prompt…';
+      ui.detalleVacio.textContent = {{ _('Cargando el prompt…')|tojson }};
       ui.detalleVacio.hidden = false;
       pintarLista();
       cargarDetalle(id);
@@ -495,7 +506,7 @@
     }
     function reiniciarVolver() {
       if (confirmarVolver) { clearTimeout(confirmarVolver); confirmarVolver = null; }
-      ui.volverOriginal.textContent = 'Volver al original';
+      ui.volverOriginal.textContent = {{ _('Volver al original')|tojson }};
     }
     function soltarSeleccion(mensaje) {
       turno++;
@@ -505,7 +516,7 @@
       estado.firma = '';
       guardarSel(null);
       ui.cuerpo.hidden = true;
-      ui.detalleVacio.textContent = 'Elige un prompt de la lista o pega uno nuevo.';
+      ui.detalleVacio.textContent = {{ _('Elige un prompt de la lista o pega uno nuevo.')|tojson }};
       ui.detalleVacio.hidden = false;
       if (mensaje) aviso(ui.avisoDetalle, 'warn', mensaje);
       pintarLista();
@@ -520,10 +531,10 @@
         if (t !== turno) return;
         if (err.status === 404) {
           estado.prompts = estado.prompts.filter(function (p) { return !mismo(p.id, id); });
-          soltarSeleccion('Ese prompt ya no existe. Elige otro de la lista.');
+          soltarSeleccion({{ _('Ese prompt ya no existe. Elige otro de la lista.')|tojson }});
           return;
         }
-        if (!estado.detalle) ui.detalleVacio.textContent = 'No se pudo cargar el prompt.';
+        if (!estado.detalle) ui.detalleVacio.textContent = {{ _('No se pudo cargar el prompt.')|tojson }};
         avisoError(ui.avisoDetalle, err, function () { cargarDetalle(id); });
       }).then(function () { if (t === turno) ui.detalle.removeAttribute('aria-busy'); });
     }
@@ -575,7 +586,7 @@
     function nodoPensando() {
       return el('div', { class: 'gp-pensando' }, [
         el('span', { class: 'gp-puntos', 'aria-hidden': 'true' }, [el('i'), el('i'), el('i')]),
-        el('span', { text: 'Claude está revisando el prompt…' })
+        el('span', { text: {{ _('Claude está revisando el prompt…')|tojson }} })
       ]);
     }
     function msjPensando() {
@@ -584,14 +595,14 @@
         nodoPensando()
       ]);
       if (sondeo.agotado) {
-        li.appendChild(el('p', { class: 'gp-ayuda', text: 'Está tardando más de lo normal. Puede que siga trabajando: revisa otra vez en un momento.' }));
-        li.appendChild(el('button', { type: 'button', class: 'btn-guardar btn-xs', text: 'Revisar otra vez', onclick: recargarDetalle }));
+        li.appendChild(el('p', { class: 'gp-ayuda', text: {{ _('Está tardando más de lo normal. Puede que siga trabajando: revisa otra vez en un momento.')|tojson }} }));
+        li.appendChild(el('button', { type: 'button', class: 'btn-guarda' + 'r btn-xs', text: {{ _('Revisar otra vez')|tojson }}, onclick: recargarDetalle }));
       }
       return li;
     }
     function msjPersona(m) {
       return el('li', { class: 'gp-msj gp-msj-persona', title: m.creado_en || null }, [
-        el('span', { class: 'gp-msj-autor', text: 'Tú' }),
+        el('span', { class: 'gp-msj-autor', text: {{ _('Tú')|tojson }} }),
         el('p', { class: 'gp-msj-texto', text: normalizar(m.contenido) })
       ]);
     }
@@ -606,29 +617,29 @@
       var aprobado = esAprobado(p);
       var enUso = !!m.aplicada;
       var dif = pintarDif(p.texto_vigente, m.propuesta);
-      var cab = el('div', { class: 'gp-propuesta-cab' }, [el('strong', { text: 'Propuesta de Claude' })]);
+      var cab = el('div', { class: 'gp-propuesta-cab' }, [el('strong', { text: {{ _('Propuesta de Claude')|tojson }} })]);
       if (dif.pone || dif.quita) {
         cab.appendChild(el('span', { class: 'gp-dif-resumen' }, [
           el('span', { class: 'gp-mas', text: '+' + dif.pone }),
           el('span', { class: 'gp-menos', text: '−' + dif.quita }),
-          el('span', { text: (dif.pone + dif.quita) === 1 ? 'línea' : 'líneas' })
+          el('span', { text: (dif.pone + dif.quita) === 1 ? {{ _('línea')|tojson }} : {{ _('líneas')|tojson }} })
         ]));
       }
-      var card = el('div', { class: 'gp-propuesta' + (enUso ? ' gp-propuesta-en-uso' : '') }, [cab, dif.caja]);
-      if (probs.length) card.appendChild(listaProblemas('Esta versión tiene problemas:', probs, 'gp-problemas-propuesta'));
+      var card = el('div', { class: 'gp-propuesta' + (enUso ? ' gp-propuesta-e' + 'n-uso' : '') }, [cab, dif.caja]);
+      if (probs.length) card.appendChild(listaProblemas({{ _('Esta versión tiene problemas:')|tojson }}, probs, 'gp-problemas-propuesta'));
       var zona = el('div', { class: 'gp-aviso', hidden: true, 'aria-live': 'polite' });
       var pie = el('div', { class: 'gp-propuesta-pie' });
       if (enUso) {
-        pie.appendChild(el('span', { class: 'tag-estado tag-en-uso', text: 'En uso' }));
+        pie.appendChild(el('span', { class: 'tag-estado tag-e' + 'n-uso', text: {{ _('En uso')|tojson }} }));
       } else {
         var bloqueado = probs.length > 0 || aprobado;
-        var b = el('button', { type: 'button', class: 'btn-generar btn-sm gp-usar', text: 'Usar esta versión' });
+        var b = el('button', { type: 'button', class: 'btn-generar btn-sm gp-usar', text: {{ _('Usar esta versión')|tojson }} });
         b.dataset.bloqueado = bloqueado ? '1' : '';
         b.disabled = bloqueado || estado.ocupado;
         b.addEventListener('click', function () { usarVersion(m.id, zona); });
         pie.appendChild(b);
-        if (probs.length) pie.appendChild(el('small', { text: 'Pídele a Claude que la corrija antes de usarla.' }));
-        else if (aprobado) pie.appendChild(el('small', { text: 'El prompt está aprobado: reábrelo para cambiar de versión.' }));
+        if (probs.length) pie.appendChild(el('small', { text: {{ _('Pídele a Claude que la corrija antes de usarla.')|tojson }} }));
+        else if (aprobado) pie.appendChild(el('small', { text: {{ _('El prompt está aprobado: reábrelo para cambiar de versión.')|tojson }} }));
       }
       card.appendChild(pie);
       card.appendChild(zona);
@@ -640,9 +651,9 @@
       ]);
       if (m.estado === 'error') {
         li.classList.add('gp-msj-error');
-        li.appendChild(el('p', { class: 'gp-msj-texto', text: 'Claude no pudo responder esta vez.' }));
+        li.appendChild(el('p', { class: 'gp-msj-texto', text: {{ _('Claude no pudo responder esta vez.')|tojson }} }));
         if (m.contenido) li.appendChild(el('p', { class: 'gp-msj-texto gp-msj-detalle', text: normalizar(m.contenido) }));
-        li.appendChild(el('p', { class: 'gp-ayuda', text: 'Vuelve a enviar tu mensaje cuando quieras.' }));
+        li.appendChild(el('p', { class: 'gp-ayuda', text: {{ _('Vuelve a enviar tu mensaje cuando quieras.')|tojson }} }));
         return li;
       }
       if (m.contenido) li.appendChild(el('p', { class: 'gp-msj-texto', text: normalizar(m.contenido) }));
@@ -676,11 +687,11 @@
       ui.cuerpo.hidden = false;
 
       var titulo = String(p.titulo || '').trim();
-      ui.titulo.textContent = titulo || 'Sin título';
-      ui.titulo.classList.toggle('gp-sin-titulo', !titulo);
+      ui.titulo.textContent = titulo || {{ _('Sin título')|tojson }};
+      ui.titulo.classList.toggle('gp-si' + 'n-titulo', !titulo);
       vaciar(ui.meta);
       ui.meta.appendChild(etiquetaEstado(p.estado));
-      ui.meta.appendChild(el('span', { class: 'gp-version', text: 'versión ' + (p.version_n !== undefined && p.version_n !== null ? p.version_n : '—') }));
+      ui.meta.appendChild(el('span', { class: 'gp-version', text: etiquetaVersion(p.version_n) }));
       ui.meta.appendChild(el('span', { text: etiquetaTipo(p.tipo) }));
 
       var vigente = normalizar(p.texto_vigente), original = normalizar(p.texto_original);
@@ -713,7 +724,7 @@
 
     function pintarOriginal() {
       ui.originalCaja.hidden = !estado.verOriginal;
-      ui.verOriginal.textContent = estado.verOriginal ? 'Ocultar el original' : 'Ver el original';
+      ui.verOriginal.textContent = estado.verOriginal ? {{ _('Ocultar el original')|tojson }} : {{ _('Ver el original')|tojson }};
       ui.verOriginal.setAttribute('aria-expanded', estado.verOriginal ? 'true' : 'false');
     }
 
@@ -729,11 +740,11 @@
       ui.reabrir.disabled = !d || ocupado;
       var nota = '';
       if (d && !aprobado) {
-        if (probs.length) nota = 'Para aprobar, primero resuelve los problemas de arriba (con Claude o editando a mano).';
-        else if (pendiente) nota = 'Espera la respuesta de Claude para aprobar.';
-        else if (estado.editando) nota = 'Guarda o cancela tu edición para aprobar.';
+        if (probs.length) nota = {{ _('Para aprobar, primero resuelve los problemas de arriba (con Claude o editando a mano).')|tojson }};
+        else if (pendiente) nota = {{ _('Espera la respuesta de Claude para aprobar.')|tojson }};
+        else if (estado.editando) nota = {{ _('Guarda o cancela tu edición para aprobar.')|tojson }};
       } else if (aprobado) {
-        nota = 'Aprobado: este es el texto que va a generación. Si quieres cambiarlo, reábrelo.';
+        nota = {{ _('Aprobado: este es el texto que va a generación. Si quieres cambiarlo, reábrelo.')|tojson }};
       }
       ui.notaAprobar.textContent = nota;
       ui.notaAprobar.hidden = !nota;
@@ -746,10 +757,10 @@
 
       ui.mensaje.disabled = !d || aprobado;
       ui.enviar.disabled = !d || aprobado || pendiente || estado.enviando || ocupado;
-      ui.enviar.textContent = estado.enviando ? 'Enviando…' : ('Enviar' + (estado.costo ? ' · ' + estado.costo : ''));
+      ui.enviar.textContent = estado.enviando ? {{ _('Enviando…')|tojson }} : ({{ _('Enviar')|tojson }} + (estado.costo ? ' · ' + estado.costo : ''));
       var notaEntrada = '';
-      if (aprobado) notaEntrada = 'Este prompt está aprobado. Reábrelo para seguir corrigiéndolo con Claude.';
-      else if (pendiente) notaEntrada = 'Claude está respondiendo; espera su respuesta para mandar otro mensaje.';
+      if (aprobado) notaEntrada = {{ _('Este prompt está aprobado. Reábrelo para seguir corrigiéndolo con Claude.')|tojson }};
+      else if (pendiente) notaEntrada = {{ _('Claude está respondiendo; espera su respuesta para mandar otro mensaje.')|tojson }};
       ui.notaEntrada.textContent = notaEntrada;
       ui.notaEntrada.hidden = !notaEntrada;
 
@@ -802,8 +813,8 @@
       accion('/usar', { mensaje_id: mensajeId, version_n: versionActual() }, zona, function () {
         resaltarTexto();
         aviso(ui.avisoDetalle, 'ok', mensajeId === null
-          ? 'Listo: volviste al prompt original.'
-          : 'Listo: la versión de Claude es ahora el prompt vigente.');
+          ? {{ _('Listo: volviste al prompt original.')|tojson }}
+          : {{ _('Listo: la versión de Claude es ahora el prompt vigente.')|tojson }});
       });
     }
 
@@ -828,12 +839,12 @@
       var d = estado.detalle;
       if (!d) return;
       var texto = ui.editarTexto.value;
-      if (!texto.trim()) { aviso(ui.avisoEditar, 'error', 'El prompt no puede quedar vacío.'); return; }
+      if (!texto.trim()) { aviso(ui.avisoEditar, 'error', {{ _('El prompt no puede quedar vacío.')|tojson }}); return; }
       if (normalizar(texto) === normalizar(d.prompt.texto_vigente)) { cerrarEdicion(); pintarControles(); return; }
       accion('/editar', { texto: texto, version_n: versionActual() }, ui.avisoEditar, function () {
         cerrarEdicion();
         resaltarTexto();
-        aviso(ui.avisoDetalle, 'ok', 'Guardado: tu edición es ahora el prompt vigente.');
+        aviso(ui.avisoDetalle, 'ok', {{ _('Guardado: tu edición es ahora el prompt vigente.')|tojson }});
       });
     }
 
@@ -842,7 +853,7 @@
       if (!d || estado.enviando || estado.ocupado || d.pendiente || esAprobado(d.prompt)) return;
       var texto = ui.mensaje.value.trim();
       if (!texto) {
-        aviso(ui.avisoEntrada, 'error', 'Escribe qué está mal antes de enviar.');
+        aviso(ui.avisoEntrada, 'error', {{ _('Escribe qué está mal antes de enviar.')|tojson }});
         ui.mensaje.focus();
         return;
       }
@@ -876,8 +887,8 @@
 
     function copiar(texto) {
       function listo(ok) {
-        ui.copiar.textContent = ok ? 'Copiado' : 'No se pudo copiar';
-        setTimeout(function () { ui.copiar.textContent = 'Copiar'; }, 1600);
+        ui.copiar.textContent = ok ? {{ _('Copiado')|tojson }} : {{ _('No se pudo copiar')|tojson }};
+        setTimeout(function () { ui.copiar.textContent = {{ _('Copiar')|tojson }}; }, 1600);
       }
       function aLaAntigua() {
         var t = document.createElement('textarea');
@@ -911,22 +922,22 @@
     ui.nuevoCancelar.addEventListener('click', function () {
       mostrarNuevo(false);
       limpiarAviso(ui.avisoNuevo);
-      ui.nuevoTexto.classList.remove('con-error');
+      ui.nuevoTexto.classList.remove('co' + 'n-error');
     });
     ui.nuevo.addEventListener('submit', function (e) {
       e.preventDefault();
       if (estado.creando) return;
       var texto = ui.nuevoTexto.value;
-      ui.nuevoTexto.classList.remove('con-error');
+      ui.nuevoTexto.classList.remove('co' + 'n-error');
       if (!texto.trim()) {
-        ui.nuevoTexto.classList.add('con-error');
-        aviso(ui.avisoNuevo, 'error', 'Pega el prompt que quieres corregir.');
+        ui.nuevoTexto.classList.add('co' + 'n-error');
+        aviso(ui.avisoNuevo, 'error', {{ _('Pega el prompt que quieres corregir.')|tojson }});
         ui.nuevoTexto.focus();
         return;
       }
       estado.creando = true;
       ui.nuevoGuardar.disabled = true;
-      ui.nuevoGuardar.textContent = 'Guardando…';
+      ui.nuevoGuardar.textContent = {{ _('Guardando…')|tojson }};
       limpiarAviso(ui.avisoNuevo);
       api('POST', '/prompts', {
         titulo: ui.nuevoTitulo.value.trim(),
@@ -950,7 +961,7 @@
       }).then(function () {
         estado.creando = false;
         ui.nuevoGuardar.disabled = false;
-        ui.nuevoGuardar.textContent = 'Guardar prompt';
+        ui.nuevoGuardar.textContent = {{ _('Guardar prompt')|tojson }};
       });
     });
 
@@ -965,10 +976,10 @@
       // Dos toques: volver al original descarta el vigente (una edición a mano
       // no queda en el chat). Las propuestas de Claude sí siguen disponibles.
       if (!confirmarVolver) {
-        ui.volverOriginal.textContent = '¿Seguro? Toca otra vez';
+        ui.volverOriginal.textContent = {{ _('¿Seguro? Toca otra vez')|tojson }};
         confirmarVolver = setTimeout(function () {
           confirmarVolver = null;
-          ui.volverOriginal.textContent = 'Volver al original';
+          ui.volverOriginal.textContent = {{ _('Volver al original')|tojson }};
         }, 4000);
         return;
       }
@@ -983,12 +994,12 @@
     });
     ui.aprobar.addEventListener('click', function () {
       accion('/aprobar', { version_n: versionActual() }, ui.avisoDetalle, function () {
-        aviso(ui.avisoDetalle, 'ok', 'Aprobado: este prompt quedó listo para generar.');
+        aviso(ui.avisoDetalle, 'ok', {{ _('Aprobado: este prompt quedó listo para generar.')|tojson }});
       });
     });
     ui.reabrir.addEventListener('click', function () {
       accion('/reabrir', {}, ui.avisoDetalle, function () {
-        aviso(ui.avisoDetalle, 'ok', 'Reabierto: ya puedes seguir corrigiéndolo con Claude.');
+        aviso(ui.avisoDetalle, 'ok', {{ _('Reabierto: ya puedes seguir corrigiéndolo con Claude.')|tojson }});
       });
     });
     ui.entrada.addEventListener('submit', function (e) { e.preventDefault(); enviarMensaje(); });

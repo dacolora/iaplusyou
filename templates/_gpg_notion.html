@@ -2,26 +2,26 @@
 <div class="gpg-notion" data-gpg-caja>
   {% if notion_conectado %}
   <form class="gpg-form" id="gpg-form-notion-link" data-gpg-post="/lotes">
-    <label class="campo-label" for="gpg-notion-url">Link de Notion</label>
+    <label class="campo-label" for="gpg-notion-url">{{ _('Link de Notion') }}</label>
     <input type="url" id="gpg-notion-url" name="notion_url" placeholder="https://www.notion.so/…" required>
     <div class="gpg-error flash error" hidden></div>
-    <div class="gp-botones"><button type="submit" class="btn-generar btn-sm">Traer y leer · {{ costos.leer }}</button></div>
+    <div class="gp-botones"><button type="submit" class="btn-generar btn-sm">{{ _('Traer y leer') }} · {{ costos.leer }}</button></div>
   </form>
-  <p class="gp-ayuda">Notion está conectado.
-    <button type="button" class="btn-guardar btn-xs" data-gpg-accion="/notion/borrar">Desconectar</button></p>
+  <p class="gp-ayuda">{{ _('Notion está conectado.') }}
+    <button type="button" class="btn-guardar btn-xs" data-gpg-accion="/notion/borrar">{{ _('Desconectar') }}</button></p>
   {% else %}
   <details id="gpg-det-notion">
-    <summary>Traer el guion desde un link de Notion</summary>
+    <summary>{{ _('Traer el guion desde un link de Notion') }}</summary>
     <ol class="gp-ayuda">
-      <li>En notion.so/profile/integrations crea una integración interna (solo lectura de contenido).</li>
-      <li>En la página del guion: ··· › Conexiones › elige tu integración.</li>
-      <li>Copia la llave de la integración y pégala aquí.</li>
+      <li>{{ _('En notion.so/profile/integrations crea una integración interna (solo lectura de contenido).') }}</li>
+      <li>{{ _('En la página del guion: ··· › Conexiones › elige tu integración.') }}</li>
+      <li>{{ _('Copia la llave de la integración y pégala aquí.') }}</li>
     </ol>
     <form class="gpg-form" id="gpg-form-notion-llave" data-gpg-post="/notion">
-      <label class="campo-label" for="gpg-notion-llave">Llave de la integración</label>
+      <label class="campo-label" for="gpg-notion-llave">{{ _('Llave de la integración') }}</label>
       <input type="password" id="gpg-notion-llave" name="llave" autocomplete="off" required>
       <div class="gpg-error flash error" hidden></div>
-      <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">Conectar Notion</button></div>
+      <div class="gp-botones"><button type="submit" class="btn-guardar btn-sm">{{ _('Conectar Notion') }}</button></div>
     </form>
   </details>
   {% endif %}

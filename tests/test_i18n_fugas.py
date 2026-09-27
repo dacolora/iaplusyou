@@ -212,6 +212,16 @@ def test_crear_desde_referencias_cliente(cliente_en):
     assert not fugas, fugas[:15]
 
 
+def test_crear_flowplus_en_ingles(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("crear-modo-flowplus",))
+    assert not fugas, fugas[:15]
+
+
+def test_panel_de_guiones_en_ingles(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme/guiones/panel"))
+    assert not fugas, fugas[:15]
+
+
 def test_etapas_del_trabajo_en_ingles(admin_en, app_i18n, monkeypatch):
     """`estado_trabajo` traduce etapa/mensaje/detalle al responder (spec Task 4):
     tareas/flowplus.py y tareas/director.py marcan sus etapas con N_, y el
