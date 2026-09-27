@@ -142,7 +142,7 @@ def guion(cliente, guion_id):
             return None
         d["texto_crudo"] = con.execute(sa.select(t.c.texto_crudo).where(t.c.id == d["lote_id"])).scalar() or ""
         d["videos"] = [_dict(f) for f in con.execute(
-            sa.select(v.c.id, v.c.version_n, v.c.nombre, v.c.estado, v.c.estado_imagenes)
+            sa.select(v.c.id, v.c.version_n, v.c.nombre, v.c.config, v.c.estado, v.c.estado_imagenes)
             .where(v.c.guion_id == guion_id).order_by(v.c.version_n))]
     d["lectura"] = d.get("lectura") or {}
     return d
@@ -193,9 +193,26 @@ def duplicar(cliente, guion_id):
 # --------------------------------------------------------------- videos ---
 
 def nombre_version(config, version_n):
+    """Lo que se GUARDA en `guion_video.nombre` — siempre en español, nunca
+    cambia con el idioma de quien lo crea (si no, quien lo mira después en
+    otro idioma vería una mezcla, o español fijo para siempre en un proyecto
+    en inglés). Para mostrarlo en pantalla usar `etiqueta_version`, que
+    arma lo mismo pero traducido para quien mira — nunca se persiste."""
     dur = config.get("duracion_objetivo")
     modo = "voz en off" if config.get("modo") == "voiceover" else "diálogo"
     return f"{f'{dur} s' if dur else 'Completo'} · {modo} · v{version_n}"
+
+
+def etiqueta_version(config, version_n):
+    """Como `nombre_version`, pero con `gettext` en las dos palabras que sí
+    son texto (no la duración ni el número de versión, que son datos): para
+    pintar en pantalla dentro de una petición, en el idioma de quien mira.
+    Nunca se guarda — `nombre_version` sigue siendo lo que va a la base."""
+    config = config or {}
+    dur = config.get("duracion_objetivo")
+    modo = gettext("voz en off") if config.get("modo") == "voiceover" else gettext("diálogo")
+    duracion = f"{dur} s" if dur else gettext("Completo")
+    return f"{duracion} · {modo} · v{version_n}"
 
 
 _DEFECTOS_VIDEO = (("config", dict), ("recorte", dict), ("clips", list), ("hooks_alt", dict),

@@ -10,7 +10,7 @@
     {% for x in guion.videos %}
     {% set estado_x = video.estado if (video and video.id == x.id) else x.estado %}
     <button type="button" class="gpg-guion-btn{% if video and video.id == x.id %} activo{% endif %}"
-            data-gpg-ir data-guion="{{ guion.id }}" data-video="{{ x.id }}">{{ x.nombre }} · {{ ESTADOS.get(estado_x, estado_x) }}</button>
+            data-gpg-ir data-guion="{{ guion.id }}" data-video="{{ x.id }}">{{ x.etiqueta }} · {{ ESTADOS.get(estado_x, estado_x) }}</button>
     {% else %}<p class="vacio">{{ _('Todavía no hay videos. Crea el primero: eliges duración, modo, hook y referencias.') }}</p>{% endfor %}
   </div>
   <div id="gpg-nuevo-video" {% if guion.videos %}hidden{% endif %} data-gpg-caja>
@@ -20,7 +20,7 @@
   {% if video %}
   <section class="gpg-video" data-gpg-caja aria-label="{{ _('Versión elegida') }}">
     <div class="gpg-lote-cab">
-      <h4>{{ video.nombre }}</h4>
+      <h4>{{ video.etiqueta }}</h4>
       <span class="tag-estado">{{ ESTADOS.get(video.estado, video.estado) }}</span>
     </div>
     {% if video.aviso %}<p class="flash error">{{ video.aviso }}</p>{% endif %}

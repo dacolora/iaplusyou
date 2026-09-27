@@ -31,6 +31,14 @@ def _contexto(cliente, guion_id=None, video_id=None):
     v = datos.video(cliente, video_id) if (g and video_id) else None
     if v is not None and v["guion_id"] != g["id"]:
         v = None
+    if g is not None:
+        # `nombre` (guardado) queda tal cual en la base; `etiqueta` es la
+        # misma versión traducida para quien mira, calculada acá porque la
+        # ruta siempre corre dentro de una petición (nunca se guarda).
+        for x in g["videos"]:
+            x["etiqueta"] = datos.etiqueta_version(x.get("config"), x["version_n"])
+    if v is not None:
+        v["etiqueta"] = datos.etiqueta_version(v["config"], v["version_n"])
     ctx = {"cliente": cliente, "lotes": datos.lotes(cliente), "guion": g, "video": v,
            "notion_conectado": notion.conectado(cliente),
            "costos": {"leer": _costo("leer", 750), "recorte": _costo("recorte")}}

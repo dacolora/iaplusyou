@@ -713,6 +713,9 @@ msgstr "Commits"
 msgid "Comparte tu cuenta publicitaria y tu Página con Creatv desde tu Business Suite, como con cualquier agencia. Creatv solo ve lo que compartas y lo puedes revocar cuando quieras."
 msgstr "Share your ad account and your Page with Creatv from your Business Suite, just like with any agency. Creatv only sees what you share and you can revoke it whenever you want."
 
+msgid "Completo"
+msgstr "Full"
+
 msgid "Comprobar Pixel"
 msgstr "Check Pixel"
 
@@ -4485,6 +4488,9 @@ msgstr "from $0.04 / sec"
 msgid "desde $0.144 / seg (540p/5s)"
 msgstr "from $0.144 / sec (540p/5s)"
 
+msgid "diálogo"
+msgstr "dialogue"
+
 msgid "dueño@tuproyecto.com"
 msgstr "owner@yourproject.com"
 
@@ -4816,6 +4822,9 @@ msgstr "newer version than Kling O1, same price per second"
 
 msgid "videos, imágenes y finales listos"
 msgstr "videos, images and final cuts ready"
+
+msgid "voz en off"
+msgstr "voice-over"
 
 msgid "vía WaveSpeed AI"
 msgstr "via WaveSpeed AI"
