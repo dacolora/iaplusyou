@@ -17,6 +17,8 @@ el panel si reintenta esa plataforma.
 """
 import logging
 
+from flask_babel import gettext
+
 import notificaciones
 import organico
 import trabajos
@@ -46,22 +48,26 @@ def _resumen(pubs, resultado):
         if p["estado"] == "publicando":
             # Subió (tiene id) pero falta la confirmación: TikTok procesando o
             # la contabilidad falló; organico.reconciliar_subidas la cierra.
-            lineas.append(f"- {p['nombre_plataforma']}: subida, confirmación pendiente (id {p['id_externo']})")
+            lineas.append(gettext("- %(plataforma)s: subida, confirmación pendiente (id %(id)s)",
+                                  plataforma=p["nombre_plataforma"], id=p["id_externo"]))
             continue
-        lineas.append(f"- {p['nombre_plataforma']}: publicada" + (f" — {p['url']}" if p.get("url") else
-                                                                  (f" (id {p['id_externo']})" if p.get("id_externo") else "")))
+        detalle = (f" — {p['url']}" if p.get("url") else
+                  (f" (id {p['id_externo']})" if p.get("id_externo") else ""))
+        lineas.append(gettext("- %(plataforma)s: publicada%(detalle)s",
+                              plataforma=p["nombre_plataforma"], detalle=detalle))
     for p in mal:
-        lineas.append(f"- {p['nombre_plataforma']}: NO se publicó — {p.get('error') or 'error desconocido'}")
+        lineas.append(gettext("- %(plataforma)s: NO se publicó — %(error)s",
+                              plataforma=p["nombre_plataforma"], error=p.get("error") or gettext("error desconocido")))
     nombres_ok = ", ".join(p["nombre_plataforma"] for p in ok)
     nombres_mal = ", ".join(p["nombre_plataforma"] for p in mal)
     if ok and mal:
-        corto = f"Publicada en {nombres_ok}; falló en {nombres_mal}."
+        corto = gettext("Publicada en %(ok)s; falló en %(mal)s.", ok=nombres_ok, mal=nombres_mal)
     elif ok:
-        corto = f"Publicada en {nombres_ok}."
+        corto = gettext("Publicada en %(ok)s.", ok=nombres_ok)
     elif mal:
-        corto = f"No se pudo publicar en {nombres_mal}."
+        corto = gettext("No se pudo publicar en %(mal)s.", mal=nombres_mal)
     else:
-        corto = "No había publicaciones pendientes."
+        corto = gettext("No había publicaciones pendientes.")
     return corto, "\n".join(lineas)
 
 
@@ -76,7 +82,7 @@ def publicar(tarea):
     cliente, pub_ids = p["cliente"], _ids(p)
     pubs = [pub for pub in (organico.obtener(cliente, i) for i in pub_ids) if pub]
     if not pubs:
-        return "No había publicaciones pendientes."
+        return gettext("No había publicaciones pendientes.")
     job_id = tarea.get("job_id") or job_id_publicar(cliente, pubs[0]["pieza_id"])
     # Antes de la tanda nueva: cerrar lo que subió en tandas anteriores y quedó
     # `publicando` con id (contabilidad fallida o TikTok procesando). Nunca sube.
@@ -93,16 +99,18 @@ def publicar(tarea):
         # reintento). El worker igual marca la tarea `error` (max_intentos=1),
         # pero `al_interrumpir` solo corre en recuperar_colgadas — acá se hace
         # la misma limpieza a mano antes de dejar que la excepción suba.
-        interrumpida(tarea, "La publicación falló a mitad; revisa la plataforma antes de reintentar.")
+        interrumpida(tarea, gettext("La publicación falló a mitad; revisa la plataforma antes de reintentar."))
         raise
     pubs = [pub for pub in (organico.obtener(cliente, i) for i in pub_ids) if pub]
     corto, cuerpo = _resumen(pubs, resultado)
     if resultado["ok"] or resultado["error"]:
-        asunto = ("Publicación orgánica lista" if not resultado["error"] else
-                  "Publicación orgánica con errores" if resultado["ok"] else
-                  "No se pudo publicar orgánicamente")
-        notificaciones.avisar(cliente, "publicado", f"{asunto}: pieza {pubs[0]['pieza_id']}",
-                              f"{corto}\n\n{cuerpo}\n\nPieza {pubs[0]['pieza_id']} del proyecto {cliente}.")
+        asunto = (gettext("Publicación orgánica lista") if not resultado["error"] else
+                  gettext("Publicación orgánica con errores") if resultado["ok"] else
+                  gettext("No se pudo publicar orgánicamente"))
+        notificaciones.avisar(cliente, "publicado",
+                              gettext("%(asunto)s: pieza %(pieza_id)s", asunto=asunto, pieza_id=pubs[0]["pieza_id"]),
+                              gettext("%(corto)s\n\n%(cuerpo)s\n\nPieza %(pieza_id)s del proyecto %(cliente)s.",
+                                      corto=corto, cuerpo=cuerpo, pieza_id=pubs[0]["pieza_id"], cliente=cliente))
     if resultado["error"] and not resultado["ok"]:
         raise RuntimeError(corto)
     return corto
@@ -125,7 +133,8 @@ def interrumpida(tarea, mensaje):
         pub = organico.obtener(cliente, pub_id)
         if pub and pub["estado"] == "en_cola":
             organico.actualizar(cliente, pub_id, estado="error",
-                                error="La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel.")
+                                error=gettext(
+                                    "La tarea se interrumpió antes de llegar a esta plataforma; reintenta desde el panel."))
 
 
 __all__ = ["ETAPAS_PUBLICAR", "DURACION_PUBLICAR", "job_id_publicar", "publicar", "interrumpida"]

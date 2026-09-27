@@ -28,6 +28,8 @@ con publicación en cola/publicándose/publicada se salta) y por
 ("ya salió orgánica alguna vez"), escrita apenas se encoló algo de verdad;
 hoy nadie la lee para decidir nada.
 """
+from flask_babel import gettext
+
 import cola
 import creative_flow
 import decisor
@@ -52,14 +54,14 @@ PROFUNDIDAD_MAXIMA = 2
 def _experimento(cliente, experimento_id):
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     return ex
 
 
 def _pieza(ex, ep_id):
     pz = next((p for p in ex["piezas"] if p["id"] == ep_id), None)
     if pz is None:
-        raise ValueError("Esa pieza no está en el experimento.")
+        raise ValueError(gettext("Esa pieza no está en el experimento."))
     return pz
 
 
@@ -106,22 +108,24 @@ def ejecutar(cliente, experimento_id, accion, payload):
     if accion == "pausar":
         pz = _pieza(ex, payload["ep_id"])
         lanzador.pausar_pieza(cliente, pz["id"])
-        return f"Pausada {pz['nombre']} ({pz['pais']})."
+        return gettext("Pausada %(nombre)s (%(pais)s).", nombre=pz["nombre"], pais=pz["pais"])
 
     if accion == "escalar":
         pais = payload["pais"]
         reglas = reglas_de(cliente, ex)
         nuevo = lanzador.escalar_pais(cliente, experimento_id, pais, reglas["escalar_pct_dia"], reglas["escalar_tope_dia"])
-        return f"Presupuesto de {pais} escalado a {nuevo:g} {ex.get('moneda') or ''} por día."
+        return gettext("Presupuesto de %(pais)s escalado a %(nuevo)s %(moneda)s por día.",
+                       pais=pais, nuevo=f"{nuevo:g}", moneda=ex.get("moneda") or "")
 
     if accion == "derivar":
         pz = _pieza(ex, payload["ep_id"])
         if (pz.get("extra") or {}).get("derivado"):
-            return f"{pz['nombre']} ya derivada: no se vuelve a producir."
+            return gettext("%(nombre)s ya derivada: no se vuelve a producir.", nombre=pz["nombre"])
         hijo = derivaciones.planificar(cliente, experimento_id, "derivar", payload)
         # planificar ya marcó `derivado`; repetirlo es inocuo (misma bandera).
         experimentos.marcar_pieza(cliente, pz["id"], derivado=True)
-        return f"Derivación planificada a partir de {pz['nombre']} (experimento hijo {hijo})."
+        return gettext("Derivación planificada a partir de %(nombre)s (experimento hijo %(hijo)s).",
+                       nombre=pz["nombre"], hijo=hijo)
 
     if accion == "rescatar":
         pz = _pieza(ex, payload["ep_id"])
@@ -135,7 +139,8 @@ def ejecutar(cliente, experimento_id, accion, payload):
         # a gastar; solo se asegura la pausa (por si falló la primera vez).
         if marcado is not None and marcado >= escalon_actual:
             _pausar_si_activa(cliente, pz)
-            return f"{pz['nombre']} ya rescatada (escalón {marcado}); pieza pausada."
+            return gettext("%(nombre)s ya rescatada (escalón %(escalon)s); pieza pausada.",
+                           nombre=pz["nombre"], escalon=marcado)
         derivaciones.planificar(cliente, experimento_id, "rescatar", payload)
         # planificar ya dejó `rescatado_en_escalon` (I-5); acá se refuerza
         # ANTES de pausar y sin bajar lo que ya haya: si Meta falla al
@@ -146,35 +151,37 @@ def ejecutar(cliente, experimento_id, accion, payload):
                       int((pz_post.get("extra") or {}).get("rescatado_en_escalon") or 0))
         experimentos.marcar_pieza(cliente, pz["id"], rescatado_en_escalon=escalon)
         _pausar_si_activa(cliente, pz)
-        return f"Rescate planificado para {pz['nombre']} (escalón {escalon}); la pieza queda pausada."
+        return gettext("Rescate planificado para %(nombre)s (escalón %(escalon)s); la pieza queda pausada.",
+                       nombre=pz["nombre"], escalon=escalon)
 
     if accion == "activar":
         ep_ids = list(payload.get("ep_ids") or ([payload["ep_id"]] if payload.get("ep_id") else []))
         if not ep_ids:
-            raise ValueError("No hay piezas para activar.")
+            raise ValueError(gettext("No hay piezas para activar."))
         if ex["estado"] not in ("pausado", "corriendo", "decidido"):
-            raise ValueError("El experimento todavía no está en Meta.")
+            raise ValueError(gettext("El experimento todavía no está en Meta."))
         # I-1: nunca `cambiar_estado(ACTIVE)` del experimento entero desde
         # acá — reactivaría en Meta las piezas que el decisor ya retiró.
         # `activar_pieza` reactiva campaña y conjunto por su cuenta.
         for ep_id in ep_ids:
             lanzador.activar_pieza(cliente, ep_id)
-        return f"Activadas {len(ep_ids)} pieza(s)."
+        return gettext("Activadas %(n)s pieza(s).", n=len(ep_ids))
 
     if accion == "archivar":
         pz = _pieza(ex, payload["ep_id"])
         if (pz.get("extra") or {}).get("archivado"):
-            return f"{pz['nombre']} ya archivada."
+            return gettext("%(nombre)s ya archivada.", nombre=pz["nombre"])
         _pausar_si_activa(cliente, pz)
         for cf_id in _cadena_conceptos(cliente, payload.get("cf_id")):
             creative_flow.archivar_concepto(cliente, cf_id, motivo)
         experimentos.marcar_pieza(cliente, pz["id"], archivado=True)
-        return f"Archivado el concepto de {pz['nombre']}: {motivo or 'sin motivo'}."
+        return gettext("Archivado el concepto de %(nombre)s: %(motivo)s.",
+                       nombre=pz["nombre"], motivo=motivo or gettext("sin motivo"))
 
     if accion == "publicar_organico":
         return _publicar_organico(cliente, ex, payload)
 
-    raise ValueError(f"Acción desconocida: {accion!r}.")
+    raise ValueError(gettext("Acción desconocida: %(accion)s.", accion=repr(accion)))
 
 
 def _nombres(plataformas):
@@ -213,17 +220,20 @@ def _publicar_organico(cliente, ex, payload):
     pz = _pieza(ex, payload["ep_id"])
     ep_id, pieza_id = pz["id"], pz.get("pieza_id")
     if not pieza_id or not pz.get("url_video"):
-        raise ValueError(f"{pz['nombre']} no tiene video para publicar.")
+        raise ValueError(gettext("%(nombre)s no tiene video para publicar.", nombre=pz["nombre"]))
     if pz.get("es_imagen"):
-        return f"{pz['nombre']}: Las imágenes no se publican en orgánico todavía."
+        return gettext("%(nombre)s: Las imágenes no se publican en orgánico todavía.", nombre=pz["nombre"])
     plataformas, sin_canal = _plataformas_pedidas(cliente, payload)
-    aviso_sin_canal = f" Sin canal conectado: {_nombres(sin_canal)}." if sin_canal else ""
+    aviso_sin_canal = (gettext(" Sin canal conectado: %(nombres)s.", nombres=_nombres(sin_canal))
+                      if sin_canal else "")
     if not plataformas:
-        return f"No hay canales orgánicos disponibles para publicar {pz['nombre']}.{aviso_sin_canal}"
+        return gettext("No hay canales orgánicos disponibles para publicar %(nombre)s.%(aviso)s",
+                       nombre=pz["nombre"], aviso=aviso_sin_canal)
 
     job_id = tareas_organico.job_id_publicar(cliente, pieza_id)
     if trabajos.en_curso(job_id):
-        return f"Ya hay una publicación orgánica de {pz['nombre']} en curso; no se vuelve a encolar."
+        return gettext("Ya hay una publicación orgánica de %(nombre)s en curso; no se vuelve a encolar.",
+                       nombre=pz["nombre"])
 
     vivas = {pub["plataforma"] for pub in organico.listar(cliente, pieza_id=pieza_id)
              if pub["estado"] in organico.ESTADOS_VIVOS}
@@ -248,11 +258,14 @@ def _publicar_organico(cliente, ex, payload):
                 # plataforma por unicidad; en `error` se reintenta desde el panel.
                 for pub_id in pub_ids:
                     organico.actualizar(cliente, pub_id, estado="error",
-                                        error=f"No se creó la publicación en {_nombres([p])}: {error}")
+                                        error=gettext("No se creó la publicación en %(nombre)s: %(error)s",
+                                                      nombre=_nombres([p]), error=error))
                 raise
-    aviso_saltadas = f" Ya estaba publicada (o en cola) en {_nombres(saltadas)}." if saltadas else ""
+    aviso_saltadas = (gettext(" Ya estaba publicada (o en cola) en %(nombres)s.", nombres=_nombres(saltadas))
+                      if saltadas else "")
     if not pub_ids:
-        return f"{pz['nombre']} no tiene nada nuevo que publicar.{aviso_saltadas}{aviso_sin_canal}"
+        return gettext("%(nombre)s no tiene nada nuevo que publicar.%(saltadas)s%(sin_canal)s",
+                       nombre=pz["nombre"], saltadas=aviso_saltadas, sin_canal=aviso_sin_canal)
 
     encolada = trabajos.encolar(job_id, "organico_publicar", {"cliente": cliente, "pub_ids": pub_ids},
                                 cliente=cliente, duracion_estimada=tareas_organico.DURACION_PUBLICAR,
@@ -262,13 +275,15 @@ def _publicar_organico(cliente, ex, payload):
         # nuevas no tienen tarea; en `error` la persona las reintenta desde el panel.
         for pub_id in pub_ids:
             organico.actualizar(cliente, pub_id, estado="error",
-                                error="Ya había una publicación de esta pieza en curso; reintenta cuando termine.")
-        return f"Ya hay una publicación orgánica de {pz['nombre']} en curso; las nuevas quedaron para reintentar."
+                                error=gettext("Ya había una publicación de esta pieza en curso; reintenta cuando termine."))
+        return gettext("Ya hay una publicación orgánica de %(nombre)s en curso; las nuevas quedaron para reintentar.",
+                       nombre=pz["nombre"])
     # M-1: la bandera solo cuenta lo que de verdad quedó encolado — nadie más
     # la lee hoy (la idempotencia real es la unicidad viva + trabajos.en_curso),
     # pero que mienta sería peor que no existir.
     experimentos.marcar_pieza(cliente, ep_id, publicado_organico=True)
-    return (f"Publicación orgánica de {pz['nombre']} en cola: {_nombres(creadas)}.{aviso_saltadas}{aviso_sin_canal}")
+    return gettext("Publicación orgánica de %(nombre)s en cola: %(creadas)s.%(saltadas)s%(sin_canal)s",
+                   nombre=pz["nombre"], creadas=_nombres(creadas), saltadas=aviso_saltadas, sin_canal=aviso_sin_canal)
 
 
 def _propuesta_organica_pendiente(cliente, experimento_id, payload):
@@ -361,13 +376,18 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
     motivo_prop = motivo
     if accion in _ACCIONES_CON_GASTO and tope_alcanzado(ex):
         puerta = "propuesta"
-        motivo_prop = f"tope alcanzado ({ex.get('gasto_acumulado'):g} de {ex.get('tope_total'):g} {ex.get('moneda') or ''}); {motivo}".strip()
+        motivo_prop = gettext(
+            "tope alcanzado (%(gasto)s de %(tope)s %(moneda)s); %(motivo)s",
+            gasto=f"{ex.get('gasto_acumulado'):g}", tope=f"{ex.get('tope_total'):g}",
+            moneda=ex.get("moneda") or "", motivo=motivo).strip()
     elif accion == "derivar" and experimentos.profundidad(ex) >= PROFUNDIDAD_MAXIMA:
         # I-9: a partir de la generación N un ganador ya no deriva solo (en
         # auto la cadena hijo → nieto → … no tendría freno); la persona
         # decide si abrir otra generación.
         puerta = "propuesta"
-        motivo_prop = f"profundidad máxima ({experimentos.profundidad(ex)} generaciones de derivación); {motivo}".strip()
+        motivo_prop = gettext(
+            "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s",
+            n=experimentos.profundidad(ex), motivo=motivo).strip()
     ep_id = payload.get("ep_id")
     datos = {"accion": accion, "payload": payload, "modo": ex["modo"]}
 
@@ -379,13 +399,14 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
                                           cola.sin_token(str(error)), datos=datos, ep_id=ep_id)
             raise
         experimentos.registrar_evento(cliente, experimento_id, "accion",
-                                      f"{mensaje} Motivo: {motivo}.", datos=datos, ep_id=ep_id)
+                                      gettext("%(mensaje)s Motivo: %(motivo)s.", mensaje=mensaje, motivo=motivo),
+                                      datos=datos, ep_id=ep_id)
         return "ejecutada", mensaje
 
     if accion == "publicar_organico" and not _propuesta_organica_pendiente(cliente, experimento_id, payload):
         payload = _completar_propuesta_organica(cliente, ex, payload)
     pid = propuestas.crear(cliente, experimento_id, accion, payload, motivo_prop)
-    mensaje = f"Propuesta pendiente: {accion} ({motivo_prop})."
+    mensaje = gettext("Propuesta pendiente: %(accion)s (%(motivo)s).", accion=accion, motivo=motivo_prop)
     experimentos.registrar_evento(cliente, experimento_id, "propuesta", mensaje,
                                   datos={**datos, "propuesta_id": pid}, ep_id=ep_id)
     return "propuesta", mensaje

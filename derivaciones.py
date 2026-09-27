@@ -47,6 +47,8 @@ toma todas las piezas `en_cola`.
 y `propuestas` de forma perezosa (solo en `_cerrar_si_lista`) para evitar el
 ciclo.
 """
+from flask_babel import gettext
+
 import cola
 import creative_flow
 import db
@@ -73,14 +75,14 @@ _PENDIENTES = ("produciendo_clon", "produciendo_finales")
 def _experimento(cliente, experimento_id):
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     return ex
 
 
 def _pieza(ex, ep_id):
     pz = next((p for p in ex["piezas"] if p["id"] == ep_id), None)
     if pz is None:
-        raise ValueError("Esa pieza no está en el experimento.")
+        raise ValueError(gettext("Esa pieza no está en el experimento."))
     return pz
 
 
@@ -89,7 +91,7 @@ def _cf_id_de(pz):
     `cf_...__idioma_pais[__vN]`, para un clon el propio legado_id."""
     legado = pz.get("legado_id") or ""
     if not legado:
-        raise ValueError("Esa pieza no viene de una sesión de Crear: no se puede derivar.")
+        raise ValueError(gettext("Esa pieza no viene de una sesión de Crear: no se puede derivar."))
     return legado.split("__")[0]
 
 
@@ -98,7 +100,8 @@ def _rechazar_imagen(cliente, cf_id):
     después de gastar el guion. Se rechaza antes de planificar nada."""
     sesion = creative_flow.cargar(cliente).get(cf_id) or {}
     if sesion.get("tipo") == "imagen":
-        raise ValueError("Esa pieza viene de una sesión de imagen: no se puede derivar ni rescatar (no hay video).")
+        raise ValueError(gettext(
+            "Esa pieza viene de una sesión de imagen: no se puede derivar ni rescatar (no hay video)."))
 
 
 def _idiomas(pz, paises_ex, solo=None):
@@ -216,14 +219,15 @@ def _avanzar_sin_relanzar(cliente, experimento_id, d, ep_id):
     except Exception as error:  # noqa: BLE001
         experimentos.registrar_evento(
             cliente, experimento_id, "error",
-            f"Derivación {d['id']}: no se pudo encolar la producción ({cola.sin_token(str(error))}); "
-            f"la periódica lo reintenta.", datos={"derivacion": d["id"]}, ep_id=ep_id)
+            gettext("Derivación %(id)s: no se pudo encolar la producción (%(error)s); la periódica lo reintenta.",
+                    id=d["id"], error=cola.sin_token(str(error))), datos={"derivacion": d["id"]}, ep_id=ep_id)
 
 
 def _resumen_items(items):
     return ", ".join(
-        (f"re-edición {i['variante_tipo']} v{i['variante']}" if i["clase"] == "reedicion"
-         else f"regeneración {i['cf_id']}") for i in items)
+        (gettext("re-edición %(tipo)s v%(variante)s", tipo=i["variante_tipo"], variante=i["variante"])
+         if i["clase"] == "reedicion" else
+         gettext("regeneración %(cf_id)s", cf_id=i["cf_id"])) for i in items)
 
 
 # --------------------------------------------------------- planificar ---
@@ -240,7 +244,7 @@ def planificar(cliente, experimento_id, tipo, payload):
         return _planificar_derivar(cliente, ex, pz, motivo)
     if tipo == "rescatar":
         return _planificar_rescatar(cliente, ex, pz, motivo)
-    raise ValueError(f"Tipo de derivación desconocido: {tipo!r}.")
+    raise ValueError(gettext("Tipo de derivación desconocido: %(tipo)s.", tipo=repr(tipo)))
 
 
 def _planificar_derivar(cliente, ex, pz, motivo):
@@ -249,7 +253,7 @@ def _planificar_derivar(cliente, ex, pz, motivo):
     reglas = decisor.reglas_efectivas(proyectos.reglas_defecto(cliente), ex.get("reglas"))
     n_re, n_rg = int(reglas.get("n_reediciones") or 0), int(reglas.get("n_regeneraciones") or 0)
     if n_re + n_rg <= 0:
-        raise ValueError("La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar.")
+        raise ValueError(gettext("La regla no pide re-ediciones ni regeneraciones: no hay nada que derivar."))
     idiomas = _idiomas(pz, ex["paises"])
     # Items primero (duplicar puede fallar) y el hijo después: así no queda
     # un hijo huérfano sin derivación.
@@ -264,10 +268,14 @@ def _planificar_derivar(cliente, ex, pz, motivo):
     # Bandera de idempotencia apenas la derivación está guardada y ANTES de
     # encolar: si encolar falla, un reintento no vuelve a planificar (I-5).
     experimentos.marcar_pieza(cliente, pz["id"], derivado=True)
-    mensaje = f"Derivación {d['id']} a partir de {pz['nombre']}: {_resumen_items(items) or 'sin piezas'}."
-    experimentos.registrar_evento(cliente, ex["id"], "derivacion", f"{mensaje} Experimento hijo {hijo}.",
+    mensaje = gettext("Derivación %(id)s a partir de %(nombre)s: %(resumen)s.",
+                      id=d["id"], nombre=pz["nombre"], resumen=_resumen_items(items) or gettext("sin piezas"))
+    experimentos.registrar_evento(cliente, ex["id"], "derivacion",
+                                  gettext("%(mensaje)s Experimento hijo %(hijo)s.", mensaje=mensaje, hijo=hijo),
                                   datos={"hijo": hijo, "derivacion": d["id"]}, ep_id=pz["id"])
-    experimentos.registrar_evento(cliente, hijo, "derivacion", f"{mensaje} Motivo: {motivo or 'sin motivo'}.",
+    experimentos.registrar_evento(cliente, hijo, "derivacion",
+                                  gettext("%(mensaje)s Motivo: %(motivo)s.", mensaje=mensaje,
+                                          motivo=motivo or gettext("sin motivo")),
                                   datos={"padre": ex["id"], "derivacion": d["id"]})
     _avanzar_sin_relanzar(cliente, hijo, d, None)
     return hijo
@@ -278,7 +286,8 @@ def _planificar_rescatar(cliente, ex, pz, motivo):
     _rechazar_imagen(cliente, cf_id)
     escalon = int(pz.get("escalon_rescate") or 0) + 1
     if escalon not in _ESCALONES:
-        raise ValueError(f"{pz['nombre']} ya agotó los {len(_ESCALONES)} escalones de rescate.")
+        raise ValueError(gettext("%(nombre)s ya agotó los %(n)s escalones de rescate.",
+                                 nombre=pz["nombre"], n=len(_ESCALONES)))
     idiomas = _idiomas(pz, ex["paises"], solo=[pz["pais"]])
     clase, variante_tipo = _ESCALONES[escalon]
     if clase == "reedicion":
@@ -293,7 +302,9 @@ def _planificar_rescatar(cliente, ex, pz, motivo):
     experimentos.marcar_pieza(cliente, pz["id"], rescatado_en_escalon=escalon)
     experimentos.registrar_evento(
         cliente, ex["id"], "derivacion",
-        f"Rescate {d['id']} de {pz['nombre']} (escalón {escalon}): {_resumen_items([item])}. Motivo: {motivo or 'sin motivo'}.",
+        gettext("Rescate %(id)s de %(nombre)s (escalón %(escalon)s): %(resumen)s. Motivo: %(motivo)s.",
+                id=d["id"], nombre=pz["nombre"], escalon=escalon, resumen=_resumen_items([item]),
+                motivo=motivo or gettext("sin motivo")),
         datos={"derivacion": d["id"], "escalon": escalon}, ep_id=pz["id"])
     _avanzar_sin_relanzar(cliente, ex["id"], d, pz["id"])
     return ex["id"]
@@ -347,7 +358,7 @@ def _sesion(cliente, cf_id):
 def _estado_final(cliente, legado):
     f = creative_flow.final_por_legado(cliente, legado)
     if f is None:
-        return "error", f"la final {legado} ya no existe"
+        return "error", gettext("la final %(legado)s ya no existe", legado=legado)
     return f["estado"], f.get("error")
 
 
@@ -361,21 +372,22 @@ def _fallar(cliente, experimento_id, d, item, motivo):
     motivo = cola.sin_token(str(motivo))
     item["estado"], item["error"] = "error", motivo
     experimentos.registrar_evento(cliente, experimento_id, "error",
-                                  f"Derivación {d['id']}: falló {_resumen_items([item])}: {motivo}.",
+                                  gettext("Derivación %(id)s: falló %(resumen)s: %(motivo)s.",
+                                          id=d["id"], resumen=_resumen_items([item]), motivo=motivo),
                                   datos={"derivacion": d["id"], "cf_id": item["cf_id"]}, ep_id=d["origen_ep_id"])
 
 
 def _avanzar_clon(cliente, experimento_id, d, item):
     s = _sesion(cliente, item["cf_id"])
     if s is None:
-        _fallar(cliente, experimento_id, d, item, f"la sesión {item['cf_id']} ya no existe")
+        _fallar(cliente, experimento_id, d, item, gettext("la sesión %(cf_id)s ya no existe", cf_id=item["cf_id"]))
         return
     estado = s.get("estado")
     if estado == "video_listo":
         item["estado"] = "produciendo_finales"
         _avanzar_finales(cliente, experimento_id, d, item)
     elif estado == "error":
-        _fallar(cliente, experimento_id, d, item, s.get("error") or "la generación del clon falló")
+        _fallar(cliente, experimento_id, d, item, s.get("error") or gettext("la generación del clon falló"))
     elif estado != "video_generando":
         _encolar_clon(cliente, item["cf_id"], s.get("tipo") or "video")
     # video_generando: esperar.
@@ -412,7 +424,7 @@ def _avanzar_finales(cliente, experimento_id, d, item):
                 item["ep_ids"].append(ep_id)
             listas.add(clave)
         elif estado == "error":
-            _fallar(cliente, experimento_id, d, item, error or f"la final {clave} falló")
+            _fallar(cliente, experimento_id, d, item, error or gettext("la final %(clave)s falló", clave=clave))
             return
         # generando: esperar.
     if len(listas) == len(item["paises"]):
@@ -450,11 +462,13 @@ def _cerrar_si_lista(cliente, experimento_id, d):
     if con_error and d["tipo"] == "rescatar":
         # La pieza origen quedó pausada y el decisor no vuelve a pedir ese
         # escalón: que la persona decida (reintentar el rescate o archivar).
+        detalle = "; ".join(i["error"] or gettext("sin detalle") for i in con_error)
         propuestas.crear(cliente, experimento_id, "rescatar", {"ep_id": d["origen_ep_id"]},
-                         f"reintentar rescate: falló {'; '.join(i['error'] or 'sin detalle' for i in con_error)}")
-    motivo = (f"derivación {d['id']} lista: {len(ep_ids)} pieza(s) nueva(s)"
-              + (f", {len(con_error)} fallida(s)" if con_error else "")
-              + (f"; {d['motivo']}" if d.get("motivo") else ""))
+                         gettext("reintentar rescate: falló %(detalle)s", detalle=detalle))
+    fallidas_txt = gettext(", %(n)s fallida(s)", n=len(con_error)) if con_error else ""
+    motivo_txt = gettext("; %(motivo)s", motivo=d["motivo"]) if d.get("motivo") else ""
+    motivo = gettext("derivación %(id)s lista: %(n)s pieza(s) nueva(s)%(fallidas)s%(motivo_extra)s",
+                     id=d["id"], n=len(ep_ids), fallidas=fallidas_txt, motivo_extra=motivo_txt)
     if ep_ids:
         try:
             _lanzar_piezas(cliente, experimento_id)
@@ -462,15 +476,18 @@ def _cerrar_si_lista(cliente, experimento_id, d):
         except Exception as error:
             d["estado"] = "error"
             experimentos.registrar_evento(cliente, experimento_id, "error",
-                                          f"Derivación {d['id']}: no se pudieron lanzar las piezas nuevas: {cola.sin_token(str(error))}",
+                                          gettext("Derivación %(id)s: no se pudieron lanzar las piezas nuevas: %(error)s",
+                                                  id=d["id"], error=cola.sin_token(str(error))),
                                           datos={"derivacion": d["id"], "ep_ids": ep_ids}, ep_id=d["origen_ep_id"])
             return
     d["estado"] = "error" if con_error else "listo"
     d["motivo_cierre"] = motivo
+    texto_cierre = (gettext("Derivación %(id)s lista: %(n)s pieza(s) nueva(s) en el experimento.",
+                            id=d["id"], n=len(ep_ids)) if not con_error else
+                    gettext("Derivación %(id)s terminó con %(n_error)s item(s) fallido(s); %(n)s pieza(s) sí entraron.",
+                            id=d["id"], n_error=len(con_error), n=len(ep_ids)))
     experimentos.registrar_evento(
-        cliente, experimento_id, "derivacion" if not con_error else "error",
-        (f"Derivación {d['id']} lista: {len(ep_ids)} pieza(s) nueva(s) en el experimento." if not con_error
-         else f"Derivación {d['id']} terminó con {len(con_error)} item(s) fallido(s); {len(ep_ids)} pieza(s) sí entraron."),
+        cliente, experimento_id, "derivacion" if not con_error else "error", texto_cierre,
         datos={"derivacion": d["id"], "ep_ids": ep_ids}, ep_id=d["origen_ep_id"])
 
 

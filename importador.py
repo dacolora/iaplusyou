@@ -39,6 +39,7 @@ import unicodedata
 from urllib.parse import urljoin, urlparse
 
 import requests
+from flask_babel import gettext
 
 import catalogo_productos
 import db
@@ -531,19 +532,20 @@ def desde_url(cliente, url, on_progreso=None, max_activos=None):
 
 
 def resumen_texto(resumen):
-    """Frase en español para la barra/el mensaje de la tarea."""
-    partes = [f"{resumen.get('nuevos', 0)} producto(s) nuevo(s)",
-              f"{resumen.get('actualizados', 0)} actualizado(s)",
-              f"{resumen.get('activos', 0)} con activo en el catálogo"]
+    """Frase en el idioma del proyecto para la barra/el mensaje de la tarea."""
+    partes = [gettext("%(n)s producto(s) nuevo(s)", n=resumen.get("nuevos", 0)),
+              gettext("%(n)s actualizado(s)", n=resumen.get("actualizados", 0)),
+              gettext("%(n)s con activo en el catálogo", n=resumen.get("activos", 0))]
     texto = ", ".join(partes) + "."
     pendientes = int(resumen.get("pendientes") or 0)
     if pendientes:
-        texto += (f" {pendientes} producto(s) guardado(s) sin activo todavía: "
-                  "el resto se completa solo en las próximas corridas.")
+        texto += " " + gettext(
+            "%(n)s producto(s) guardado(s) sin activo todavía: el resto se completa solo en las próximas corridas.",
+            n=pendientes)
     errores = resumen.get("errores") or []
     if errores:
         muestra = "; ".join(errores[:3])
         if len(errores) > 3:
-            muestra += f"; y {len(errores) - 3} más"
-        texto += f" {len(errores)} aviso(s): {muestra}"
+            muestra += "; " + gettext("y %(n)s más", n=len(errores) - 3)
+        texto += " " + gettext("%(n)s aviso(s): %(muestra)s", n=len(errores), muestra=muestra)
     return texto

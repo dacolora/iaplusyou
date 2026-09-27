@@ -4516,7 +4516,8 @@ def exp_estado(cliente, eid):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     with _ENV_LOCK:
         try:
-            lanzador.cambiar_estado(cliente, eid, estado, pais=pais)
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                lanzador.cambiar_estado(cliente, eid, estado, pais=pais)
             flash("Listo." if estado == "ACTIVE" else "Pausado.", "ok")
         except ValueError as e:
             flash(str(e), "error")
@@ -4547,7 +4548,8 @@ def exp_presupuesto(cliente, eid):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     with _ENV_LOCK:
         try:
-            lanzador.cambiar_presupuesto_pais(cliente, eid, pais, presupuesto_dia)
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                lanzador.cambiar_presupuesto_pais(cliente, eid, pais, presupuesto_dia)
             flash("Presupuesto actualizado.", "ok")
         except ValueError as e:
             flash(str(e), "error")
@@ -4595,7 +4597,8 @@ def exp_cerrar(cliente, eid):
         return volver
     with _ENV_LOCK:
         try:
-            lanzador.cerrar(cliente, eid)
+            with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+                lanzador.cerrar(cliente, eid)
             flash("Experimento cerrado.", "ok")
         except ValueError as e:
             flash(str(e), "error")
@@ -4627,8 +4630,9 @@ def exp_modo(cliente, eid):
         return _volver_exp(cliente)
     if modo != ex["modo"]:
         experimentos.actualizar(cliente, eid, modo=modo)
-        experimentos.registrar_evento(cliente, eid, "modo", f"Modo cambiado de {ex['modo']} a {modo}.",
-                                      {"antes": ex["modo"], "despues": modo})
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            experimentos.registrar_evento(cliente, eid, "modo", f"Modo cambiado de {ex['modo']} a {modo}.",
+                                          {"antes": ex["modo"], "despues": modo})
     flash(f"Modo: {modo}.", "ok")
     return _volver_exp(cliente)
 
@@ -4682,21 +4686,23 @@ def _ep_id_evento(cliente, pr):
 def _ejecutar_propuesta(cliente, pr):
     """Ejecuta una propuesta ya aprobada y la marca ejecutada. Si falla, la
     devuelve a pendiente y devuelve el mensaje de error (None si fue bien).
-    Va bajo _ENV_LOCK porque acciones.ejecutar puede tocar Meta."""
-    with _ENV_LOCK:
-        try:
-            mensaje = acciones.ejecutar(cliente, pr["experimento_id"], pr["accion"], pr["payload"])
-        except ValueError as e:
-            propuestas.reabrir(cliente, pr["id"])
-            return str(e)
-        except Exception as e:  # noqa: BLE001
-            propuestas.reabrir(cliente, pr["id"])
-            return f"No pude ejecutar «{pr['accion']}»: {cola.sin_token(str(e))}"
-    propuestas.marcar_ejecutada(cliente, pr["id"])
-    experimentos.registrar_evento(cliente, pr["experimento_id"], "accion",
-                                  f"{mensaje} (propuesta #{pr['id']} aprobada a mano)",
-                                  {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
-                                  ep_id=_ep_id_evento(cliente, pr))
+    Va bajo _ENV_LOCK porque acciones.ejecutar puede tocar Meta. La llamada al
+    motor corre en el idioma del proyecto; el flash lo arma la ruta afuera."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        with _ENV_LOCK:
+            try:
+                mensaje = acciones.ejecutar(cliente, pr["experimento_id"], pr["accion"], pr["payload"])
+            except ValueError as e:
+                propuestas.reabrir(cliente, pr["id"])
+                return str(e)
+            except Exception as e:  # noqa: BLE001
+                propuestas.reabrir(cliente, pr["id"])
+                return f"No pude ejecutar «{pr['accion']}»: {cola.sin_token(str(e))}"
+        propuestas.marcar_ejecutada(cliente, pr["id"])
+        experimentos.registrar_evento(cliente, pr["experimento_id"], "accion",
+                                      f"{mensaje} (propuesta #{pr['id']} aprobada a mano)",
+                                      {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
+                                      ep_id=_ep_id_evento(cliente, pr))
     flash(mensaje, "ok")
     return None
 
@@ -4766,10 +4772,11 @@ def prop_rechazar(cliente, pid):
     if not pr:
         flash("Esa propuesta no existe o ya estaba resuelta.", "error")
         return _volver_exp(cliente)
-    experimentos.registrar_evento(cliente, pr["experimento_id"], "propuesta",
-                                  f"Propuesta #{pr['id']} ({pr['accion']}) rechazada a mano.",
-                                  {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
-                                  ep_id=_ep_id_evento(cliente, pr))
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        experimentos.registrar_evento(cliente, pr["experimento_id"], "propuesta",
+                                      f"Propuesta #{pr['id']} ({pr['accion']}) rechazada a mano.",
+                                      {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
+                                      ep_id=_ep_id_evento(cliente, pr))
     flash("Propuesta rechazada.", "ok")
     return _volver_exp(cliente)
 
