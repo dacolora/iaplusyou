@@ -172,9 +172,13 @@ brand reference images to auto-write that guía de estilo.
 **Sprints de contenido** (`sprints/` + `tareas/sprints.py`, spec
 `docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan.
 Since 2026-09-26 it is a **board** (spec `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`):
-«+ Nuevo sprint» is a short form (month, país/idioma, optional «momento del mes» from
-`sprints.calendario.presets(pais)` — the tab renders every country's presets with `data-pais` — or
-free text, brands to imitate) and the sprint page (`sprint_detalle.html`) is a board with one card
+«+ Nuevo sprint» is a short form (month, optional «momento del mes» from the PROJECT's calendar
+`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate). Since 2026-09-27
+a sprint is **for every country**: no país/idioma in the form, the sprint header or the campaign panel
+(`CAMPOS_SPRINT`/`CAMPOS_CAMPANA` refuse them), new sprints store `pais=NULL` and
+`idioma=datos.IDIOMA_BASE` ("en"), the idea prompt says «todos los países… cada país los adapta después
+en la edición final», and localization per country/language is final edition's job; old sprints keep the
+país/idioma they had (still read through `efectivos`). The sprint page (`sprint_detalle.html`) is a board with one card
 per campaign (`_sprint_tarjeta.html`, «Siguiente: …» from the pure `sprints/tablero.py`) plus a side
 panel (`_sprint_panel.html`, fetched; all its JS lives in `sprint_detalle.html` because scripts in
 fetched fragments never run) that saves field by field (`sprints.campana_campo` /
@@ -736,7 +740,13 @@ fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.b
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`).
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Crear's «Desde referencias» form is a **composer**
+(spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
+(OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
+whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
+from them —, so the POST to `cf_crear_video` is unchanged; upload/link inputs reach their empty outside forms via
+`form=`, the catalog opens as a `<dialog>` (`_selector_productos.html` with `sel_dialogo=True`; «Cambiar producto»
+keeps its `<details>`), and Enter in a one-line input never submits it (it used to generate and charge).
 
 **Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
 ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)
@@ -766,6 +776,28 @@ país base; si no, el guion no recibe precio. Vocabulario único:
 ni migraciones (bloque 1 de 4; los bloques 2–4 están en el §14 del spec). Los topes de salida de estos sitios son
 amplios (4 000–16 000 tokens): el pensamiento adaptativo de `claude-sonnet-5` los consume y con topes chicos la
 respuesta llega vacía (prueba real del 2026-09-26).
+
+**Doctrina, bloque 2: el ángulo a la vista** (spec `docs/superpowers/specs/2026-09-26-doctrina-bloque-2-angulo-visible-design.md`):
+el ángulo se ve y se edita entero en la tarjeta de cada idea del sprint y en cada video de la pestaña Final edition
+(antes de «Preparar guion»; se mudó de Crear con la sección de final edition, 2026-09-27): macro `templates/_angulo_editor.html` + `static/angulo.js` (autoguardado JSON; los campos no llevan `name`
+para no mezclarse con el autoguardado de la tarjeta), rutas `sprints.idea_angulo` (409 si la idea ya tiene pieza) y
+`cf_angulo`; `doctrina.angulo_desde_formulario` valida sin bloquear (`mensaje_error` da frases simples), conserva
+`origen`, pone `editado_en` y quita los «error: …»; con `editado_en`, `texto_verificable` cuenta todo el ángulo como
+dato (las cifras de la persona se usan tal cual). Un ángulo sin promesa o sin gancho no manda en `preparar_guion`.
+«Reescribir la idea con este ángulo» (tarea `sprint_reescribir_idea`, `sprints.ideas.reescribir`, gasto `ideas`) cambia
+título, escena y sonido sin tocar el ángulo. Datos del mercado: la consciencia (la de la campaña,
+`campana.consciencia` del tablero de Sprints, y si la campaña no tiene, la de la persona:
+`persona.extra.conciencia.nivel`, selector en la página de ideas de la campaña, ruta `sprints.persona_conciencia`;
+`sprints.ideas.fijos_de` aplica ese orden) y la sofisticación del producto (`producto.extra.sofisticacion`, selector en Catálogo) mandan cuando existen:
+`doctrina.validar_angulo(..., fijos=)` los impone antes de validar y `doctrina.datos_fijos_texto` los pone en los
+DATOS de ideas, guion (sin ángulo) y «Adaptar con IA». Pruebas y pedidos del producto viven en
+`producto.extra.pruebas|pedidos` (`tiendas.EXTRA_INTERNO` los protege de la sync; único escritor
+`doctrina/producto.py` vía `tiendas.modificar_extra_interno`, con lock): las pruebas entran a los DATOS de ideas,
+guion, «Adaptar» y captions y cuentan como dato verificado; «Actualizar lo que Claude necesita» (tarea
+`producto_pedidos`, `doctrina/pedidos.py`, gasto `pedidos`) junta los faltantes de las ideas y sesiones del producto
+y los resume en máximo cinco pedidos; responder uno lo guarda como prueba. Página de solo lectura
+`/cliente/<cliente>/doctrina` (`doctrina/pagina.py::a_html` escapa antes de convertir). Las plantillas reciben el
+vocabulario con `doctrina.globales_plantilla()`.
 
 ## Agent skills
 

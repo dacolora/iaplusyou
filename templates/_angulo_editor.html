@@ -1,0 +1,67 @@
+{# Editor del ángulo (doctrina, bloque 2, §3): se ve y se edita en la tarjeta
+   de cada idea del sprint y en la pieza de Crear, antes del guion. Los campos
+   NO llevan `name` (usan data-angulo-campo): así el autoguardado de la
+   tarjeta de idea no los mezcla con título y escena. Autoguarda con
+   static/angulo.js contra `url` (JSON {angulo}). #}
+{% macro editor_angulo(angulo, url, cliente, solo_lectura=False, resumen_vacio="Todavía no tiene ángulo") %}
+{% set a = angulo if angulo is mapping else {} %}
+{% set dis = 'disabled' if solo_lectura else '' %}
+{% set recomendados = lead_por_consciencia(a.get('consciencia')) %}
+{% set doctrina_url = url_for('doctrina_pagina', cliente=cliente) %}
+<details class="angulo-editor" data-url="{{ url }}" {% if solo_lectura %}data-solo-lectura="1"{% endif %}>
+  <summary>Ángulo · <span class="angulo-resumen">{{ resumen_angulo(a) or resumen_vacio }}</span></summary>
+  <div class="angulo-campos" style="display:grid;gap:.5rem;margin-top:.5rem;">
+    <label class="campo-label">A quién le habla <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
+      <textarea data-angulo-campo="audiencia" rows="2" {{ dis }}>{{ a.get('audiencia') or '' }}</textarea></label>
+    <label class="campo-label">Qué tanto sabe <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
+      <select data-angulo-campo="consciencia" {{ dis }}>
+        <option value="">(sin elegir)</option>
+        {% for clave, texto in CONSCIENCIAS_CLIENTE.items() %}<option value="{{ clave }}" {% if a.get('consciencia') == clave %}selected{% endif %}>{{ texto }}</option>{% endfor %}
+      </select></label>
+    <label class="campo-label">Cuántas promesas parecidas vio ya <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
+      <select data-angulo-campo="sofisticacion" {{ dis }}>
+        <option value="">(sin elegir)</option>
+        {% for n, texto in SOFISTICACIONES_CLIENTE.items() %}<option value="{{ n }}" {% if a.get('sofisticacion') == n %}selected{% endif %}>{{ n }} · {{ texto }}</option>{% endfor %}
+      </select></label>
+    <label class="campo-label">Qué desea <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
+      <input data-angulo-campo="deseo" value="{{ a.get('deseo') or '' }}" {{ dis }}></label>
+    <label class="campo-label">Promesa (una sola frase) <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
+      <textarea data-angulo-campo="promesa" rows="2" {{ dis }}>{{ a.get('promesa') or '' }}</textarea></label>
+    <label class="campo-label">Mecanismo: cómo lo logra el producto <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a>
+      <input data-angulo-campo="mecanismo" value="{{ a.get('mecanismo') or '' }}" {{ dis }}></label>
+    <fieldset class="angulo-pruebas" style="border:0;padding:0;margin:0;">
+      <legend class="campo-label">Pruebas <a href="{{ doctrina_url }}#angulo" target="_blank" rel="noopener">¿Por qué?</a></legend>
+      {% set pruebas = a.get('pruebas') or [] %}
+      {% for n in range(3) %}{% set p = pruebas[n] if n < pruebas | length else {} %}
+      <div data-angulo-prueba style="display:flex;gap:.4rem;flex-wrap:wrap;">
+        <input data-prueba-texto value="{{ p.get('texto') or '' }}" placeholder="Un hecho real" style="flex:1 1 14rem;" {{ dis }}>
+        <select data-prueba-fuente {{ dis }}>
+          {% for f, texto in FUENTES_PRUEBA_CLIENTE.items() %}<option value="{{ f }}" {% if p.get('fuente') == f %}selected{% endif %}>{{ texto }}</option>{% endfor %}
+        </select>
+      </div>
+      {% endfor %}
+    </fieldset>
+    <label class="campo-label">Arranque <a href="{{ doctrina_url }}#gancho" target="_blank" rel="noopener">¿Por qué?</a>
+      <select data-angulo-campo="lead" {{ dis }}>
+        <option value="">(sin elegir)</option>
+        {% for clave, texto in LEADS_NOMBRE.items() %}<option value="{{ clave }}" {% if a.get('lead') == clave %}selected{% endif %}>{{ texto }}{% if clave in recomendados %} (recomendado){% endif %}</option>{% endfor %}
+      </select></label>
+    <label class="campo-label">Gancho <a href="{{ doctrina_url }}#gancho" target="_blank" rel="noopener">¿Por qué?</a> <small class="vacio angulo-cuenta-gancho"></small>
+      <input data-angulo-campo="gancho" value="{{ a.get('gancho') or '' }}" {{ dis }}></label>
+    {% set faltantes = [] %}
+    {% for f in a.get('faltantes') or [] %}{% if f is string and not f.startswith(PREFIJO_ERROR) %}{% set _ = faltantes.append(f) %}{% endif %}{% endfor %}
+    {% if faltantes %}
+    <div class="angulo-faltantes"><span class="campo-label">Lo que Claude no encontró en los datos</span>
+      <ul>{% for f in faltantes %}<li>{{ f }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    {% if a.get('editado_en') %}<small class="vacio">Editado a mano: las cifras que escribas aquí se usan tal cual. <a href="{{ doctrina_url }}#base" target="_blank" rel="noopener">¿Por qué?</a></small>{% endif %}
+    {# Revisión final #2 (§11 «la interfaz lo dice»): los «error: …» guardados
+       se ven como aviso desde que se abre el editor, no solo tras guardar. #}
+    {% set avisos_guardados = [] %}
+    {% for f in a.get('faltantes') or [] %}{% if f is string and f.startswith(PREFIJO_ERROR) %}{% set _ = avisos_guardados.append(mensaje_error(f[(PREFIJO_ERROR | length):])) %}{% endif %}{% endfor %}
+    <ul class="angulo-avisos" {% if not avisos_guardados %}hidden{% endif %}>{% for texto in avisos_guardados %}<li>{{ texto }}</li>{% endfor %}</ul>
+    <span class="angulo-guardado vacio" hidden>Guardado</span>
+  </div>
+</details>
+{% endmacro %}

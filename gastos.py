@@ -31,7 +31,7 @@ import db
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -76,6 +76,11 @@ TARIFAS = {
     "musica_elevenlabs": 0.60,   # canción de 60 s con ElevenLabs vía fal (US$ 0,60 por minuto empezado)
     "whisper": 0.01,
     "final": 0.10,
+    # Doctrina, bloque 2: una llamada con la doctrina en el system y pensamiento
+    # adaptativo. Medido en la prueba real (2026-09-27) con la caché fría, el
+    # peor caso: reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007. Redondeado hacia arriba.
+    "reescribir_idea": 0.03,
+    "pedidos_producto": 0.01,
 }
 
 SIN_PRECIO = "precio no disponible"
@@ -199,6 +204,8 @@ _ESTIMADORES = {
     "clasificacion": lambda n=1, **_: (TARIFAS["clasificacion"] * max(1, int(n)), f"{max(1, int(n))} anuncio(s) con Claude"),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
     "guion_clips": _estimar_guion_clips,
+    "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
+    "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
 }
 
 

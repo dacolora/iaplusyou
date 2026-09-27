@@ -9,6 +9,9 @@
 {# Bloque 7: «Publicar orgánico» en el detalle de una final lista (macro
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
+{# Editor del ángulo de cada pieza (doctrina, bloque 2): vivía en la sección
+   Final edition de Crear y se mudó con ella. #}
+{% from "_angulo_editor.html" import editor_angulo %}
 {% set _videos = creative_flow_items | selectattr("estado", "equalto", "video_listo") | rejectattr("tipo", "equalto", "imagen") | list %}
 {% set _n = namespace(finales=0) %}
 {% for item in creative_flow_items %}{% set _n.finales = _n.finales + (item.finales | length) %}{% endfor %}
@@ -53,6 +56,8 @@
           <section class="fe-seccion">
             <h4 class="fe-titulo">Final edition</h4>
             <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
+            {{ editor_angulo(item.angulo, url_for('cf_angulo', cliente=cliente, cf_id=item.id), cliente,
+                             resumen_vacio="Todavía no tiene ángulo: se decide al preparar el guion") }}
             {% if not item.guion_base %}
               {% if item.trabajo_guion %}
               <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
@@ -331,6 +336,10 @@
       cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
         if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
       });
+      // El editor del ángulo también vive en el <template> clonado:
+      // iniciarEditoresAngulo() ya corrió sobre `document` al cargar la página
+      // y nunca vio este clon (igual que hacía Crear antes de la mudanza).
+      if (window.iniciarEditoresAngulo) window.iniciarEditoresAngulo(cuerpo);
       modal.showModal();
     }
     panel.querySelectorAll('.generado').forEach(function (card) {
@@ -385,3 +394,5 @@
     window.addEventListener('hashchange', function () { setTimeout(desdeHash, 0); });
   })();
 </script>
+{# Editor del ángulo de cada pieza (doctrina, bloque 2). #}
+<script src="{{ url_for('static', filename='angulo.js') }}"></script>

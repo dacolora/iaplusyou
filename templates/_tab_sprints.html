@@ -1,15 +1,14 @@
 {% from "_sprint_macros.html" import anillo, chip_estado %}
 {# Pestaña Sprints. Contexto de sprints.rutas.contexto(cliente): sprints_lista,
-   pais_calendario, presets_temporadas, presets_por_pais, paises_sprint,
-   idiomas_sprint, inicio_defecto, fin_defecto. Aquí solo se crea el sprint con
-   lo mínimo; las campañas se arman en su tablero (sprint_detalle.html).
-   `presets_por_pais` trae los presets de TODOS los países (no solo el
-   default) para que el select de «Momento del mes» pueda mostrar los del
-   país que la persona elija sin volver a pedirle nada al servidor. #}
+   pais_calendario, presets_temporadas, inicio_defecto, fin_defecto. Aquí solo
+   se crea el sprint con lo mínimo; las campañas se arman en su tablero
+   (sprint_detalle.html). Desde 2026-09-27 el sprint es para todos los países:
+   no pide país ni idioma (se trabaja en inglés y la edición final adapta cada
+   país), y «Momento del mes» ofrece el calendario del proyecto. #}
 <div class="panel-cabecera">
   <div>
     <h2>Sprints</h2>
-    <p class="panel-cabecera-desc">Un sprint es el plan de contenido de un mes: pones el mes y el mercado, y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Nada se genera sin tu aprobación y sin ver el costo antes.</p>
+    <p class="panel-cabecera-desc">Un sprint es el plan de contenido de un mes para todos tus países: pones el mes y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Se trabaja en inglés; cada país e idioma se adapta después en la edición final. Nada se genera sin tu aprobación y sin ver el costo antes.</p>
   </div>
   <div class="panel-cabecera-acciones">
     <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-sprint">+ Nuevo sprint</button>
@@ -25,18 +24,10 @@
       <input type="date" name="inicio" required value="{{ inicio_defecto }}"></label>
     <label>Fin
       <input type="date" name="fin" required value="{{ fin_defecto }}"></label>
-    <label>País
-      <select name="pais">
-        {% for p in paises_sprint %}<option value="{{ p.codigo }}" {% if p.codigo == pais_calendario %}selected{% endif %}>{{ p.bandera }} {{ p.nombre }}</option>{% endfor %}
-      </select></label>
-    <label>Idioma de los textos
-      <select name="idioma">
-        {% for cod, nombre in idiomas_sprint.items() %}<option value="{{ cod }}" {% if cod == 'es' %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
-      </select></label>
     <label>Momento del mes <small class="vacio">(opcional)</small>
       <select name="momento" data-momento>
         <option value="">Ninguno</option>
-        {% for codigo, presets in presets_por_pais.items() %}{% for p in presets %}<option value="{{ p.clave }}" data-pais="{{ codigo }}" {% if codigo != pais_calendario %}hidden disabled{% endif %}>{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}{% endfor %}
+        {% for p in presets_temporadas %}<option value="{{ p.clave }}">{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
         <option value="propio">Otro (escríbelo)…</option>
       </select></label>
     <label data-momento-propio hidden>Tu momento
@@ -59,7 +50,7 @@
   {% else %}
   <div class="estado-vacio">
     <p class="estado-vacio-titulo">Todavía no hay sprints</p>
-    <p class="estado-vacio-texto">Crea el primero con «+ Nuevo sprint»: pones el mes y el mercado, y agregas sus campañas en el tablero.</p>
+    <p class="estado-vacio-texto">Crea el primero con «+ Nuevo sprint»: pones el mes y agregas sus campañas en el tablero.</p>
   </div>
   {% endfor %}
 </div>
@@ -69,31 +60,9 @@
     // «Otro (escríbelo)…» muestra el campo del momento propio.
     var sel = document.querySelector('#nuevo-sprint [data-momento]');
     var propio = document.querySelector('#nuevo-sprint [data-momento-propio]');
-    var selPais = document.querySelector('#nuevo-sprint select[name="pais"]');
     if (!sel || !propio) return;
     function mostrar() { propio.hidden = sel.value !== 'propio'; }
     sel.addEventListener('change', mostrar);
     mostrar();
-
-    // El país elegido decide qué presets del calendario se ofrecen: cada
-    // <option> con data-pais solo se ve/habilita si coincide con el país
-    // actual («Ninguno» y «Otro» no tienen data-pais y siempre se ven). Si el
-    // momento ya elegido pertenecía a otro país, se limpia la selección.
-    if (selPais) {
-      function actualizarMomentoPorPais() {
-        var pais = selPais.value;
-        var actual = sel.options[sel.selectedIndex];
-        var actualQuedaOculta = actual && actual.dataset.pais && actual.dataset.pais !== pais;
-        Array.prototype.forEach.call(sel.options, function (opt) {
-          if (!opt.dataset.pais) return;
-          var visible = opt.dataset.pais === pais;
-          opt.hidden = !visible;
-          opt.disabled = !visible;
-        });
-        if (actualQuedaOculta) sel.value = '';
-        mostrar();
-      }
-      selPais.addEventListener('change', actualizarMomentoPorPais);
-    }
   })();
 </script>

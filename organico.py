@@ -36,6 +36,7 @@ import generador_prompts
 import meta_conexion
 import publicador
 import tiendas
+from doctrina import producto as doctrina_producto
 from uploaders import tiktok_uploader
 
 log = logging.getLogger("creatv.organico")
@@ -366,7 +367,8 @@ def contexto_pieza(cliente, pieza_id):
         url_compra = ex[0]
     idioma = pm[db.pieza.c.idioma] or (cp._mapping[db.concepto.c.idioma_base] if cp else None) or "es"
     return {"nombre_producto": nombre, "descripcion": descripcion, "url_compra": url_compra, "idioma": idioma,
-            "guion_texto": guion_texto, "hashtags_base": _hashtags_de(nombre), "angulo": c_extra.get("angulo")}
+            "guion_texto": guion_texto, "hashtags_base": _hashtags_de(nombre), "angulo": c_extra.get("angulo"),
+            "pruebas": doctrina_producto.pruebas(producto) if producto else []}
 
 
 def _hook(contexto):

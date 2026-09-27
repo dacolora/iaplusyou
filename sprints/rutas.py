@@ -15,11 +15,12 @@ from urllib.parse import urlencode
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 import catalogo_productos
+import db
 import doctrina
 import gastos
 import proyectos
+import tiendas
 import trabajos
-from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
@@ -97,17 +98,14 @@ def _productos(cliente):
     return list(productos_dict.values())
 
 
-def _paises():
-    return [{"codigo": codigo, "nombre": p["nombre"], "bandera": p["bandera"], "idioma": p["idioma"]}
-            for codigo, p in fe_tipos.PAISES.items()]
-
-
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
     lista = []
     for sp in datos.sprints(cliente):
         sp["progreso"] = progreso.progreso_sprint(sp["campanas"])
         lista.append(sp)
+    # El sprint no lleva país (es para todos): el «Momento del mes» sale del
+    # calendario del proyecto (el país de Temporadas).
     pais = proyectos.pais(cliente)
     inicio, fin = tablero.mes_siguiente(date.today())
     anio = int(inicio[:4])
@@ -115,10 +113,7 @@ def contexto(cliente):
         "sprints_lista": lista,
         "pais_calendario": pais,
         "presets_temporadas": calendario.presets(pais, anio),
-        "presets_por_pais": {codigo: calendario.presets(codigo, anio) for codigo in fe_tipos.PAISES},
         "calendario_fallback": not calendario.tiene_calendario(pais),
-        "paises_sprint": _paises(),
-        "idiomas_sprint": datos.IDIOMAS_NOMBRE,
         "inicio_defecto": inicio,
         "fin_defecto": fin,
         "hoy": date.today().isoformat(),
@@ -164,6 +159,37 @@ def persona_editar(cliente, pid):
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente)
+
+
+@bp.post("/personas/<int:pid>/conciencia")
+def persona_conciencia(cliente, pid):
+    """Doctrina, bloque 2 (§4.1): «Qué tanto sabe» de la persona, elegido a
+    mano en la página de ideas de una campaña. Guarda
+    `persona.extra.conciencia.nivel` (conserva el `detalle` que traiga de
+    Nicho); un nivel vacío («Que Claude lo decida») lo quita. JSON."""
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+    p = datos.persona(cliente, pid)
+    if not p:
+        return jsonify({"ok": False, "error": "Esa persona no existe."}), 404
+    crudo = cuerpo.get("nivel")
+    nivel = doctrina.normalizar_consciencia(crudo)
+    if crudo and not nivel:
+        return jsonify({"ok": False, "error": "Ese nivel no existe."}), 400
+    extra = dict(p.get("extra") or {})
+    conciencia = dict(extra.get("conciencia") or {}) if isinstance(extra.get("conciencia"), dict) else {}
+    if nivel:
+        conciencia.update(nivel=nivel, origen="manual")
+    else:
+        conciencia.pop("nivel", None)
+        conciencia.pop("origen", None)
+    if conciencia:
+        extra["conciencia"] = conciencia
+    else:
+        extra.pop("conciencia", None)
+    datos.actualizar_persona(cliente, pid, extra=extra)
+    return jsonify({"ok": True, "nivel": nivel})
 
 
 @bp.post("/personas/<int:pid>/archivar")
@@ -280,7 +306,8 @@ def _momento_desde(cliente, valor, pais, inicio):
 
 # ------------------------------------------------------------ tablero ---
 
-CAMPOS_SPRINT = ("nombre", "inicio", "fin", "pais", "idioma", "marcas", "momento")
+# Sin «pais» ni «idioma» desde 2026-09-27: el sprint es para todos los países.
+CAMPOS_SPRINT = ("nombre", "inicio", "fin", "marcas", "momento")
 
 
 def _productos_planos(cliente):
@@ -308,11 +335,11 @@ def _aviso_identica(cliente, cid):
             "Si es a propósito, cambia algo para que no salgan piezas repetidas.")
 
 
-CAMPOS_CAMPANA = ("persona_id", "catalogo_id", "funnel", "consciencia", "dolor", "familias", "pais", "idioma",
+CAMPOS_CAMPANA = ("persona_id", "catalogo_id", "funnel", "consciencia", "dolor", "familias",
                   "marcas", "n_videos", "n_imagenes", "referencias_objetivo")
 # Cambiar estos datos cambia más que la tarjeta (familias sugeridas, lo heredado,
 # los sugeridos, los enlaces): el panel se vuelve a cargar entero.
-CAMPOS_RECARGAN_PANEL = ("persona_id", "catalogo_id", "funnel", "consciencia", "familias", "pais", "idioma", "marcas",
+CAMPOS_RECARGAN_PANEL = ("persona_id", "catalogo_id", "funnel", "consciencia", "familias", "marcas",
                          "referencias_objetivo")
 
 
@@ -333,7 +360,10 @@ def _enlaces(cliente, sp, c):
     cons = referentes_sugerir.consciencia_en(c.get("consciencia"))
     if cons:
         filtros["consciencia"] = cons
-    traer = {"campana": c["id"], "pais": ef["pais"] or proyectos.pais(cliente), "idioma": ef["idioma"]}
+    # Un sprint sin país (todos) no manda país: «Traer referentes» queda en «Todos los países».
+    traer = {"campana": c["id"], "idioma": ef["idioma"]}
+    if ef["pais"]:
+        traer["pais"] = ef["pais"]
     con_pagina = next((m for m in ef["marcas"] if m.get("pagina_id")), None)
     if con_pagina:
         traer.update(modo="marca", pagina_id=con_pagina["pagina_id"])
@@ -350,6 +380,34 @@ def _volver_campana(cliente, sid, cid):
     if request.form.get("volver") == "tablero":
         return redirect(url_for("sprints.ver", cliente=cliente, sid=sid, panel=cid))
     return _volver(cliente, sid, cid)
+
+
+def _contexto_ideas(cliente, cid, c):
+    """Lo que la pestaña «Ideas» del panel necesita (spec 2026-09-27, entrega 2):
+    lista de ideas, conteo, y precios/trabajos en curso."""
+    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
+    lista = datos.ideas(cliente, cid)
+    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
+    faltan_v, faltan_i = ideas.faltantes(c)
+    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
+              "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
+              "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
+              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"])}
+    job = tareas_sprints.job_id_ideas(cliente, cid)
+    persona = datos.persona(cliente, c["persona_id"]) or {}
+    conciencia = (persona.get("extra") or {}).get("conciencia")
+    nivel_persona = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
+    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
+    sof_producto = (fila_producto.get("extra") or {}).get("sofisticacion")
+    return {
+        "ideas": lista, "referencias_por_id": refs, "conteo": conteo,
+        "enfoques": flowplus_prompt_enfoques(), "trabajo_ideas": {"job_id": job} if trabajos.en_curso(job) else None,
+        "nivel_persona": nivel_persona, "sof_producto": sof_producto,
+        "precio_reescribir": gastos.estimar("reescribir_idea")["texto"],
+        "reescribiendo": {i["id"]: tareas_sprints.job_id_reescribir(cliente, i["id"]) for i in lista
+                          if trabajos.en_curso(tareas_sprints.job_id_reescribir(cliente, i["id"]))},
+        "n_ideas_vivas": len(vivas),
+    }
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/panel")
@@ -373,18 +431,15 @@ def campana_panel(cliente, sid, cid):
     sugeridas = referentes_datos.familias_frecuentes(cliente, etapa=(c.get("funnel") or "tof").upper(),
                                                     consciencia=referentes_sugerir.consciencia_en(c.get("consciencia")))
     job = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
-    pais_sprint = fe_tipos.PAISES.get(sp.get("pais") or "") or {}
     return render_template(
         "_sprint_panel.html", cliente=cliente, sprint=sp, c=c, personas=personas_, productos=productos,
         consciencias=doctrina.CONSCIENCIAS_NOMBRE, funnels=datos.FUNNELS_NOMBRE,
         sugerencias_dolor=tablero.sugerencias_dolor(datos.persona(cliente, c["persona_id"])),
         familias=familias, familias_sugeridas=[f for f in sugeridas if f not in (c.get("familias") or [])],
-        paises=_paises(), idiomas=datos.IDIOMAS_NOMBRE,
-        pais_sprint=" ".join(x for x in (pais_sprint.get("bandera"), pais_sprint.get("nombre")) if x) or "sin país",
         marcas_texto=tablero.marcas_texto(c.get("marcas")), candidatos_ia=candidatos_ia,
         trabajo_sugerir_ia={"job_id": job} if trabajos.en_curso(job) else None,
         precio_sugerir_ia=gastos.estimar("sugerir_ia"), aviso=_aviso_identica(cliente, cid),
-        enlaces=_enlaces(cliente, sp, c))
+        enlaces=_enlaces(cliente, sp, c), **_contexto_ideas(cliente, cid, c))
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/sugeridos")
@@ -528,7 +583,6 @@ def crear(cliente):
     `campanas_json` sigue aceptándose (scripts y pruebas) pero ya no es obligatorio."""
     try:
         campanas = _validar_campanas(cliente, _campanas_desde_form())
-        pais = request.form.get("pais") or proyectos.pais(cliente)
         inicio = request.form.get("inicio")
         momento = request.form.get("momento") or ""
         if momento == "propio":
@@ -536,9 +590,9 @@ def crear(cliente):
         sid = datos.crear_sprint(cliente, request.form.get("nombre"), inicio, request.form.get("fin"),
                                  destinos=[d for d in request.form.getlist("destinos") if d],
                                  referencias_objetivo_defecto=request.form.get("referencias_objetivo") or 5,
-                                 notas=request.form.get("notas"), pais=pais,
-                                 idioma=request.form.get("idioma") or "es", marcas=request.form.get("marcas") or "",
-                                 momento=_momento_desde(cliente, momento, pais, inicio))
+                                 notas=request.form.get("notas"), pais=None, idioma=datos.IDIOMA_BASE,
+                                 marcas=request.form.get("marcas") or "",
+                                 momento=_momento_desde(cliente, momento, None, inicio))
         try:
             for c in campanas:
                 datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
@@ -566,12 +620,13 @@ def ver(cliente, sid):
     pais = sp.get("pais") or proyectos.pais(cliente)
     momento = sp.get("momento") or {}
     return render_template("sprint_detalle.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           sprint=sp, linea=tablero.linea_sprint(sp, fe_tipos.PAISES), resumen=tablero.resumen(sp),
-                           productos_sprint=productos, personas_sprint=datos.personas(cliente), paises=_paises(),
-                           idiomas=datos.IDIOMAS_NOMBRE, presets=calendario.presets(pais, int(sp["inicio"][:4])),
+                           sprint=sp, linea=tablero.linea_sprint(sp), resumen=tablero.resumen(sp),
+                           productos_sprint=productos, personas_sprint=datos.personas(cliente),
+                           presets=calendario.presets(pais, int(sp["inicio"][:4])),
                            momento_valor=momento.get("clave") or ("propio" if momento else ""),
                            marcas_texto=tablero.marcas_texto(sp.get("marcas")),
                            panel_inicial=request.args.get("panel", type=int),
+                           tab_inicial=request.args.get("tab") or "",
                            lote=produccion.progreso(cliente, sid)["sprint"], **_contexto_lote(cliente))
 
 
@@ -602,7 +657,7 @@ def sprint_campo(cliente, sid):
     except datos.ErrorDatos as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     nuevo = datos.sprint(cliente, sid, con_eventos=False)
-    return jsonify({"ok": True, "linea": tablero.linea_sprint(nuevo, fe_tipos.PAISES), "resumen": tablero.resumen(nuevo)})
+    return jsonify({"ok": True, "linea": tablero.linea_sprint(nuevo), "resumen": tablero.resumen(nuevo)})
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/tarjeta")
@@ -990,28 +1045,13 @@ def _contexto_lote(cliente):
             "modelo_video_defecto": mv, "modelo_imagen_defecto": mi}
 
 
-@bp.get("/<int:sid>/campanas/<int:cid>/ideas")
-def campana_ideas(cliente, sid, cid):
-    sp = _sprint_o_404(cliente, sid)
-    c = _campana_o_404(cliente, sid, cid)
-    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
-    lista = datos.ideas(cliente, cid)
-    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
-    faltan_v, faltan_i = ideas.faltantes(c)
-    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
-              "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
-              "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
-              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"])}
-    job = tareas_sprints.job_id_ideas(cliente, cid)
-    return render_template("campana_ideas.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           sprint=sp, campana=c, ideas=lista, referencias_por_id=refs, conteo=conteo,
-                           enfoques=flowplus_prompt_enfoques(), trabajo_ideas={"job_id": job} if trabajos.en_curso(job) else None,
-                           **_contexto_lote(cliente))
-
-
 def flowplus_prompt_enfoques():
     import flowplus_prompt
     return {k: flowplus_prompt.ENFOQUES[k]["nombre"] for k in flowplus_prompt.ORDEN_ENFOQUES}
+
+
+def _volver_panel(cliente, sid, cid, tab=None):
+    return redirect(url_for("sprints.ver", cliente=cliente, sid=sid, panel=cid, **({"tab": tab} if tab else {})))
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/ideas/proponer")
@@ -1026,13 +1066,19 @@ def ideas_proponer(cliente, sid, cid):
             n_v = _entero("n_videos") if request.form.get("n_videos") else None
             n_i = _entero("n_imagenes") if request.form.get("n_imagenes") else None
     except datos.ErrorDatos as e:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
-        return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+        return _volver_panel(cliente, sid, cid, tab="ideas")
     if tareas_sprints.encolar_ideas(cliente, cid, n_videos=n_v, n_imagenes=n_i):
+        if _quiere_json():
+            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_ideas(cliente, cid)})
         flash("Claude está proponiendo ideas; aparecerán aquí en unos segundos.", "ok")
     else:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Ya hay una propuesta de ideas en curso para esta campaña."}), 400
         flash("Ya hay una propuesta de ideas en curso para esta campaña.", "error")
-    return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+    return _volver_panel(cliente, sid, cid, tab="ideas")
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/ideas/aprobar_todas")
@@ -1044,12 +1090,14 @@ def ideas_aprobar_todas(cliente, sid, cid):
             datos.actualizar_idea(cliente, i["id"], estado_idea="aprobada")
             n += 1
     estado.recalcular(cliente, sid)
+    if _quiere_json():
+        return jsonify({"ok": True, "n": n})
     flash(f"{n} idea(s) aprobada(s).", "ok")
-    return redirect(url_for("sprints.campana_ideas", cliente=cliente, sid=sid, cid=cid))
+    return _volver_panel(cliente, sid, cid, tab="ideas")
 
 
 def _volver_ideas(i):
-    return redirect(url_for("sprints.campana_ideas", cliente=i["cliente"], sid=i["sprint_id"], cid=i["campana_id"]))
+    return _volver_panel(i["cliente"], i["sprint_id"], i["campana_id"], tab="ideas")
 
 
 @bp.post("/ideas/<int:cp_id>")
@@ -1066,6 +1114,11 @@ def idea_editar(cliente, cp_id):
             return jsonify({"ok": False, "error": "Formato inválido."}), 400
         flash("Formato inválido.", "error")
         return _volver_ideas(i)
+    if "gancho" in campos and isinstance((i.get("extra") or {}).get("angulo"), dict):
+        # El gancho de la tarjeta y el del ángulo son el mismo (doctrina, bloque 2).
+        extra = dict(i["extra"])
+        extra["angulo"] = dict(extra["angulo"], gancho=" ".join((campos["gancho"] or "").split())[:200])
+        campos["extra"] = extra
     try:
         if "titulo" in campos and not (campos["titulo"] or "").strip():
             raise datos.ErrorDatos("Una idea necesita título.")
@@ -1096,6 +1149,54 @@ def idea_aprobar(cliente, cp_id):
 MENSAJE_IDEA_CON_PIEZA = "Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión."
 
 
+@bp.post("/ideas/<int:cp_id>/reescribir")
+def idea_reescribir(cliente, cp_id):
+    """«Reescribir la idea con este ángulo» (doctrina, bloque 2, §3.5): encola
+    la tarea pagada; el precio ya está en el botón."""
+    i = _idea_o_404(cliente, cp_id)
+    if not i["sin_sesion"]:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
+        flash(MENSAJE_IDEA_CON_PIEZA, "error")
+        return _volver_ideas(i)
+    angulo = (i.get("extra") or {}).get("angulo")
+    if not (isinstance(angulo, dict) and angulo.get("promesa")):
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Esta idea todavía no tiene un ángulo con promesa."}), 400
+        flash("Esta idea todavía no tiene un ángulo con promesa.", "error")
+        return _volver_ideas(i)
+    if tareas_sprints.encolar_reescribir(cliente, cp_id):
+        if _quiere_json():
+            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_reescribir(cliente, cp_id)})
+        flash("Reescribiendo la idea desde su ángulo…", "ok")
+    else:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Ya se está reescribiendo esta idea."}), 400
+        flash("Ya se está reescribiendo esta idea.", "error")
+    return _volver_ideas(i)
+
+
+@bp.post("/ideas/<int:cp_id>/angulo")
+def idea_angulo(cliente, cp_id):
+    """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una idea
+    y su gancho (el de la tarjeta y el del ángulo son el mismo). JSON {angulo}
+    → {ok, angulo, avisos, resumen}; los avisos no bloquean. 409 si la idea ya
+    tiene pieza: desde ahí el ángulo vivo es el de la sesión de Crear."""
+    i = _idea_o_404(cliente, cp_id)
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("angulo"), dict):
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+    if not i["sin_sesion"]:
+        return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 409
+    extra = dict(i.get("extra") or {})
+    previo = extra.get("angulo") if isinstance(extra.get("angulo"), dict) else {}
+    limpio, avisos = doctrina.angulo_desde_formulario(dict(cuerpo["angulo"], origen=previo.get("origen")),
+                                                      previo.get("faltantes"), ahora=db.ahora())
+    extra["angulo"] = limpio
+    datos.actualizar_idea(cliente, cp_id, extra=extra, gancho=limpio["gancho"])
+    return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
+
+
 @bp.post("/ideas/<int:cp_id>/descartar")
 def idea_descartar(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
@@ -1123,11 +1224,17 @@ def idea_otra(cliente, cp_id):
     reemplazo."""
     i = _idea_o_404(cliente, cp_id)
     if not i["sin_sesion"]:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
         flash(MENSAJE_IDEA_CON_PIEZA, "error")
         return _volver_ideas(i)
     if tareas_sprints.encolar_ideas(cliente, i["campana_id"], reemplaza=cp_id):
+        if _quiere_json():
+            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_ideas(cliente, i["campana_id"])})
         flash("Pidiendo otra idea…", "ok")
     else:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Ya hay una propuesta en curso; espera a que termine."}), 400
         flash("Ya hay una propuesta en curso; espera a que termine.", "error")
     return _volver_ideas(i)
 

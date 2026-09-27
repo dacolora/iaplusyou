@@ -19,7 +19,7 @@ def test_contexto_de_la_pestana(app):
     from sprints import datos, rutas, tablero
     ctx = rutas.contexto("acme")
     assert ctx["pais_calendario"] == "CO" and any(p["clave"] == "navidad" for p in ctx["presets_temporadas"])
-    assert "CO" in [p["codigo"] for p in ctx["paises_sprint"]] and ctx["idiomas_sprint"]["en"] == "inglés"
+    assert "paises_sprint" not in ctx and "presets_por_pais" not in ctx   # el sprint es para todos los países
     assert (ctx["inicio_defecto"], ctx["fin_defecto"]) == tablero.mes_siguiente(date.today())
     assert datos.personas("acme") == []                     # ya no se crean personas genéricas
 
@@ -27,8 +27,7 @@ def test_contexto_de_la_pestana(app):
 def test_pestana_muestra_el_formulario_corto(app):
     html = app["c"].get("/cliente/acme").data.decode()
     tab = html[html.index('id="tab-sprints"'):]
-    for frag in ('name="nombre"', 'name="inicio"', 'name="pais"', 'name="idioma"', 'name="momento"',
-                 'name="marcas"', "Crear y armar campañas"):
+    for frag in ('name="nombre"', 'name="inicio"', 'name="momento"', 'name="marcas"', "Crear y armar campañas"):
         assert frag in tab, frag
     for viejo in ("campanas_json", "modal-agregar-campana", "sprint-paso", "Siguiente: la matriz"):
         assert viejo not in html, viejo
@@ -36,13 +35,13 @@ def test_pestana_muestra_el_formulario_corto(app):
 
 def test_crear_sprint_corto_abre_su_tablero(app):
     from sprints import calendario, datos
-    clave = calendario.presets("MX", 2026)[0]["clave"]
+    clave = calendario.presets("CO", 2026)[0]["clave"]          # calendario del proyecto
     r = app["c"].post("/cliente/acme/sprints/nuevo", data={
-        "nombre": "Octubre", "inicio": "2026-10-01", "fin": "2026-10-31", "pais": "MX", "idioma": "es",
+        "nombre": "Octubre", "inicio": "2026-10-01", "fin": "2026-10-31",
         "momento": clave, "marcas": "Crocs\nSkechers 1234567"})
     s = datos.sprints("acme")[0]
     assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{s['id']}")
-    assert s["pais"] == "MX" and s["campanas_total"] == 0 and s["momento"]["clave"] == clave
+    assert s["pais"] is None and s["idioma"] == "en" and s["campanas_total"] == 0 and s["momento"]["clave"] == clave
     assert s["marcas"] == [{"nombre": "Crocs"}, {"nombre": "Skechers", "pagina_id": "1234567"}]
 
 
@@ -51,10 +50,10 @@ def test_crear_sprint_con_momento_propio(app):
     app["c"].post("/cliente/acme/sprints/nuevo", data={"nombre": "Octubre", "inicio": "2026-10-01", "fin": "2026-10-31",
                                                         "momento": "propio", "momento_texto": "Lanzamiento"})
     s = datos.sprints("acme")[0]
-    assert s["momento"] == {"nombre": "Lanzamiento"} and s["pais"] == "CO" and s["idioma"] == "es"
+    assert s["momento"] == {"nombre": "Lanzamiento"} and s["pais"] is None and s["idioma"] == "en"
 
 
-@pytest.mark.parametrize("malo", [{"pais": "Colombia"}, {"momento": "no_existe"}, {"fin": "2026-09-01"}])
+@pytest.mark.parametrize("malo", [{"nombre": ""}, {"momento": "no_existe"}, {"fin": "2026-09-01"}])
 def test_crear_sprint_invalido_no_crea_nada(app, malo):
     from sprints import datos
     datos_form = {"nombre": "Octubre", "inicio": "2026-10-01", "fin": "2026-10-31", **malo}
@@ -63,21 +62,20 @@ def test_crear_sprint_invalido_no_crea_nada(app, malo):
     assert datos.sprints("acme", incluir_archivados=True) == []
 
 
-def test_momento_del_mes_sigue_al_pais_elegido(app):
-    """El «Momento del mes» no puede quedarse anclado al país por defecto: si
-    la persona cambia a MX y elige uno de sus presets, crear no debe fallar
-    con «Ese momento del calendario no existe» (fix round 1)."""
-    from final_edition import tipos as fe_tipos
-    from sprints import datos, rutas
-    ctx = rutas.contexto("acme")
-    assert set(ctx["presets_por_pais"].keys()) == set(fe_tipos.PAISES.keys())
+def test_momento_del_mes_sigue_al_calendario_del_proyecto(app):
+    """El sprint ya no lleva país (2026-09-27): «Momento del mes» ofrece el
+    calendario del país del proyecto (el de Temporadas), y un preset de ese
+    calendario se guarda sin «Ese momento del calendario no existe»."""
+    import proyectos
+    from sprints import datos
+    proyectos.guardar_pais("acme", "MX")
     html = app["c"].get("/cliente/acme").data.decode()
     tab = html[html.index('id="tab-sprints"'):]
-    assert 'data-pais="MX"' in tab and 'value="buen_fin"' in tab
+    assert 'value="buen_fin"' in tab and 'data-pais=' not in tab
     r = app["c"].post("/cliente/acme/sprints/nuevo", data={
-        "nombre": "Noviembre", "inicio": "2026-11-01", "fin": "2026-11-30", "pais": "MX", "momento": "buen_fin"})
+        "nombre": "Noviembre", "inicio": "2026-11-01", "fin": "2026-11-30", "momento": "buen_fin"})
     s = datos.sprints("acme")[0]
-    assert r.status_code == 302 and s["momento"]["clave"] == "buen_fin"
+    assert r.status_code == 302 and s["momento"]["clave"] == "buen_fin" and s["pais"] is None
 
 
 # ------------------------------------------------------------- tablero ---
@@ -94,7 +92,7 @@ def test_tablero_muestra_tarjetas_resumen_y_siguiente_paso(app):
     html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
     for frag in (f'id="campana-{cid}"', "Campaña 1", "Premium", "Espejo LED", "consciente del problema",
                  "«pies fríos»", "Siguiente: elegir 5 referentes", "1 campaña · 3 piezas planeadas · 0/5 referentes elegidos",
-                 "1–31 oct · 🇨🇴 español · Hot Sale · imita: Crocs", 'id="tablero-panel"', 'id="tablero-nueva"'):
+                 "1–31 oct · Hot Sale · imita: Crocs", 'id="tablero-panel"', 'id="tablero-nueva"'):
         assert frag in html, frag
     assert "-ajax" not in html and 'name="temporada_id"' not in html
     assert 'id="sprint-lote-resumen"' not in html    # F4: nada en cola/generando/listo -- no hay resumen que mostrar
@@ -132,18 +130,17 @@ def test_campo_del_sprint_guarda_y_valida(app):
     from sprints import datos
     sid = _sprint(datos)
     url = f"/cliente/acme/sprints/{sid}/campo"
-    j = _json(app["c"], url, {"campo": "pais", "valor": "MX"}).get_json()
-    assert j["ok"] and "🇲🇽" in j["linea"] and datos.sprint("acme", sid)["pais"] == "MX"
-    assert _json(app["c"], url, {"campo": "momento", "valor": "propio:Hot Sale"}).get_json()["ok"]
+    j = _json(app["c"], url, {"campo": "momento", "valor": "propio:Hot Sale"}).get_json()
+    assert j["ok"] and "Hot Sale" in j["linea"]
     assert datos.sprint("acme", sid)["momento"] == {"nombre": "Hot Sale"}
     assert _json(app["c"], url, {"campo": "momento", "valor": "navidad"}).get_json()["ok"]
     assert datos.sprint("acme", sid)["momento"]["clave"] == "navidad"
     assert _json(app["c"], url, {"campo": "marcas", "valor": "Crocs"}).get_json()["ok"]
-    for malo in ({"campo": "idioma", "valor": "xx"}, {"campo": "nombre", "valor": ""}, {"campo": "estado", "valor": "x"},
-                 {"campo": "pais", "valor": {"x": 1}}, {"campo": "fin", "valor": "2026-09-01"}):
+    for malo in ({"campo": "idioma", "valor": "es"}, {"campo": "nombre", "valor": ""}, {"campo": "estado", "valor": "x"},
+                 {"campo": "pais", "valor": "MX"}, {"campo": "fin", "valor": "2026-09-01"}):
         r = _json(app["c"], url, malo)
         assert r.status_code == 400 and r.get_json()["error"], malo
-    assert _json(app["c"], "/cliente/acme/sprints/999/campo", {"campo": "pais", "valor": "CO"}).status_code == 404
+    assert _json(app["c"], "/cliente/acme/sprints/999/campo", {"campo": "nombre", "valor": "X"}).status_code == 404
 
 
 def test_agregar_campana_json_crea_con_valores_por_defecto_y_avisa_repetida(app):
@@ -210,14 +207,16 @@ def test_panel_muestra_las_siete_secciones(app):
     r = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel")
     html = r.data.decode()
     assert r.status_code == 200
-    for frag in ("Audiencia y producto", "Enfoque", "Formato de los anuncios", "Mercado y marcas", "Piezas",
+    for frag in ("Audiencia y producto", "Enfoque", "Formato de los anuncios", "Marcas a imitar", "Piezas",
                  "Referentes · 0 de 5 elegidos", 'data-campo="persona_id"', 'data-campo="catalogo_id"',
                  'data-campo="funnel"', 'data-campo="consciencia"', 'data-campo="dolor"', 'data-campo="familias"',
-                 'data-campo="pais"', 'data-campo="idioma"', 'data-campo="marcas"', 'data-campo="n_videos"',
+                 'data-campo="marcas"', 'data-campo="n_videos"',
                  'data-campo="n_imagenes"', 'data-campo="referencias_objetivo"', "Sugerir con IA",
                  "Buscar en la biblioteca", "Traer nuevos de Meta", 'name="volver" value="tablero"',
-                 "Eliminar campaña", f"/sprints/{sid}/campanas/{cid}/ideas", "Crear persona rápida", "data-sugeridos"):
+                 "Eliminar campaña", "Crear persona rápida", "data-sugeridos",
+                 'data-tab-btn="armar"', 'data-tab-btn="ideas"', "Ideas · 0", 'data-tab="armar"', 'data-tab="ideas"'):
         assert frag in html, frag
+    assert "Ideas de esta campaña →" not in html    # entrega 2: es una pestaña, no un enlace aparte
     assert "<script" not in html                      # el JS vive en sprint_detalle.html
 
 
@@ -239,7 +238,7 @@ def test_panel_trae_lo_de_nicho_y_lo_heredado(app):
     html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
     assert 'value="consciente_del_problema" checked' in html
     assert 'data-valor="Abriga sin sudar"' in html and "Melissa · del Nicho" in html
-    assert "Del sprint (🇲🇽 México)" in html and "Del sprint: Crocs" in html
+    assert "Del sprint: Crocs" in html
     assert "#referentes?" in html and "etapa=TOF" in html and "consciencia=problem-aware" in html
     assert "pais=MX" in html and "palabra=Espejo+LED" in html
 

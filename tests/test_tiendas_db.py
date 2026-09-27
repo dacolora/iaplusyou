@@ -272,3 +272,85 @@ def test_eliminar_y_recrear_conserva_una_fila(base_temporal):
     assert tiendas.productos("acme") == []
     assert tiendas.asegurar_manual("acme", "cojin", "Cojín") == pid
     assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
+
+
+def test_las_claves_de_la_doctrina_sobreviven_a_la_sync(base_temporal):
+    """Doctrina, bloque 2: sofisticación, pruebas y pedidos los escribe el
+    cliente; una sync de tienda reemplaza `extra` pero nunca los borra."""
+    import tiendas
+    a = tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A", "extra": {"handle": "a"}})
+    tiendas.anotar_extra("acme", a, sofisticacion=3, pruebas=[{"id": "p1", "texto": "t", "fuente": "ficha"}],
+                         pedidos=[{"id": "k1", "texto": "x", "estado": "abierto"}])
+    tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A v2", "extra": {"handle": "a2"}})
+    extra = tiendas.producto("acme", a)["extra"]
+    assert extra["handle"] == "a2" and extra["sofisticacion"] == 3
+    assert extra["pruebas"][0]["texto"] == "t" and extra["pedidos"][0]["id"] == "k1"
+
+
+def test_modificar_extra_interno_es_atomico_y_solo_toca_claves_internas(base_temporal):
+    import tiendas
+    a = tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A", "extra": {"handle": "a"}})
+    escrito = tiendas.modificar_extra_interno("acme", a, lambda e: {**e, "pruebas": [{"id": "p1"}]})
+    assert escrito == {"handle": "a", "pruebas": [{"id": "p1"}]}
+    assert tiendas.producto("acme", a)["extra"]["pruebas"] == [{"id": "p1"}]
+    with pytest.raises(ValueError):
+        tiendas.modificar_extra_interno("acme", a, lambda e: {**e, "handle": "otro"})
+    assert tiendas.producto("acme", a)["extra"]["handle"] == "a"
+    assert tiendas.modificar_extra_interno("acme", 999, lambda e: e) is None
+    assert tiendas.modificar_extra_interno("otro", a, lambda e: e) is None
+
+
+# ------------------------------------------- final fix: bloque 2, RMW #4 ---
+
+def test_anotar_extra_y_upsert_producto_no_pierden_escrituras_entre_hilos(base_temporal, monkeypatch):
+    """Revisión final #4: `anotar_extra` (la web, «Guardar como prueba») y
+    `upsert_producto` (el worker, sync) leían y escribían `extra` sin tomar
+    el lock antes del SELECT — una sync a mitad de camino podía pisar la
+    prueba recién guardada. Con `_bloquear_producto` antes de leer, una sync
+    que arranca mientras la escritura de la prueba está en curso espera a que
+    termine (mismo patrón que `test_marcar_pieza_atomico_con_lecturas_intercaladas`
+    en tests/test_experimentos_db.py)."""
+    import threading
+    import time
+    import tiendas
+    pid = tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A", "extra": {"handle": "a"}})
+    original = tiendas._bloquear_producto
+
+    def _lento(con, condiciones):
+        ok = original(con, condiciones)
+        time.sleep(0.3)
+        return ok
+    monkeypatch.setattr(tiendas, "_bloquear_producto", _lento)
+
+    def _guardar_prueba():
+        tiendas.anotar_extra("acme", pid, pruebas=[{"id": "p1", "texto": "t", "fuente": "ficha"}])
+
+    hilo = threading.Thread(target=_guardar_prueba)
+    hilo.start()
+    time.sleep(0.05)     # deja que el hilo tome el lock y entre al sleep
+    tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A v2", "extra": {"handle": "a2"}})
+    hilo.join()
+
+    extra = tiendas.producto("acme", pid)["extra"]
+    assert extra["handle"] == "a2" and extra["pruebas"][0]["texto"] == "t"
+
+
+def test_archivar_faltantes_no_pisa_un_archivado_manual_que_llega_en_medio(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (revisión final): un «Archivar» de la persona que se
+    confirma entre el SELECT de ids de la sync y el lock de esa fila no se
+    reescribe como `archivado_por = "sync"`, y no cuenta como archivado."""
+    import db
+    import tiendas
+    a = tiendas.upsert_producto("acme", "shopify", "a", {"nombre": "A", "precio": 1, "extra": {"handle": "a"}})
+    b = tiendas.upsert_producto("acme", "shopify", "b", {"nombre": "B", "precio": 1, "extra": {"handle": "b"}})
+    real = tiendas._bloquear_producto
+
+    def con_archivado_en_medio(con, condiciones):
+        con.execute(db.producto.update().where(db.producto.c.id == a)
+                    .values(archivado=True, extra={"handle": "a", "archivado_por": "manual"}))
+        return real(con, condiciones)
+
+    monkeypatch.setattr(tiendas, "_bloquear_producto", con_archivado_en_medio)
+    assert tiendas.archivar_faltantes("acme", "shopify", set()) == 1
+    assert tiendas.producto("acme", a)["extra"]["archivado_por"] == "manual"
+    assert tiendas.producto("acme", b)["extra"]["archivado_por"] == "sync"

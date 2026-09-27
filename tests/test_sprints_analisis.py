@@ -189,3 +189,26 @@ def test_sugerir_personas_pide_la_consciencia_y_la_normaliza(monkeypatch):
     assert a["conciencia"] == {"nivel": "consciente_del_problema", "detalle": "sabe que le duele"}
     assert "conciencia" not in b and "conciencia" not in c
     assert vistos["s"][0]["text"] == doctrina.texto("investigar") and '"conciencia"' in vistos["c"][0]["text"]
+
+
+def test_llamar_contando_cobra_tambien_la_cache(monkeypatch):
+    """Prueba real (2026-09-27): la doctrina va en el system con cache_control
+    y `usage.input_tokens` no incluye la caché. La escritura cuesta 1,25× la
+    entrada y la lectura 0,1×: se suman a los tokens de entrada que se cobran."""
+    import types
+    import anthropic
+    import generador_prompts
+    from sprints import analisis
+
+    class Falso:
+        def __init__(self, api_key=None):
+            self.messages = self
+
+        def create(self, **k):
+            uso = types.SimpleNamespace(input_tokens=1000, output_tokens=300,
+                                        cache_creation_input_tokens=4000, cache_read_input_tokens=2000)
+            return types.SimpleNamespace(content=[types.SimpleNamespace(type="text", text="hola")], usage=uso)
+
+    monkeypatch.setattr(anthropic, "Anthropic", Falso)
+    monkeypatch.setattr(generador_prompts, "_api_key", lambda: "x")
+    assert analisis._llamar_contando([{"type": "text", "text": "?"}]) == ("hola", 1000 + 5000 + 200, 300)

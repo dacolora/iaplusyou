@@ -432,3 +432,25 @@ def barridos(cliente=None, fuente=None):
         q = q.where(t.c.fuente == fuente)
     with db.conectar() as con:
         return [_a_dict(r) for r in con.execute(q.order_by(t.c.id.desc()))]
+
+
+def borrar_de_barrido(barrido_id):
+    """Borra los referentes que trajo un barrido y las familias de origen
+    `claude` que se quedan sin ningún referente (las de copycoders nunca).
+    El barrido queda como historial del gasto. Devuelve {"referentes": n,
+    "familias": [nombres borrados], "anuncio_ids": [...]} -- el llamador borra
+    las copias en R2 (`referentes/<anuncio_id>.jpg`). Uso: limpiar un barrido
+    que trajo ruido (2026-09-27, «dolor de pies» sin orden por relevancia)."""
+    r, f = db.referente, db.referente_familia
+    with db.conectar() as con:
+        filas = con.execute(sa.select(r.c.anuncio_id, r.c.familia).where(r.c.barrido_id == barrido_id)).all()
+        anuncio_ids = [a for a, _ in filas]
+        tocadas = sorted({fam for _, fam in filas if fam})
+        con.execute(r.delete().where(r.c.barrido_id == barrido_id))
+        vacias = []
+        for nombre in tocadas:
+            if con.execute(sa.select(sa.func.count()).select_from(r).where(r.c.familia == nombre)).scalar():
+                continue
+            if con.execute(f.delete().where(f.c.nombre == nombre, f.c.origen == "claude")).rowcount:
+                vacias.append(nombre)
+    return {"referentes": len(anuncio_ids), "familias": vacias, "anuncio_ids": anuncio_ids}

@@ -365,4 +365,4 @@ def test_formulario_ofrece_generar_y_armar_prompt(app):
     assert 'name="modo_prompt" value="director"' in form and "Crear super prompt con IA" in form
     # El botón principal genera; el del director es la ayuda, no al revés.
     assert form.index('value="directo"') < form.index('value="director"')
-    assert "<strong>Generar video</strong>" in crear      # la intro explica primero el camino directo
+    assert "Tu texto va tal cual al modelo" in crear      # el pie explica el camino directo (compositor 2026-09-27)
