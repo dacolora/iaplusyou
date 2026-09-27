@@ -1960,7 +1960,9 @@ summary { cursor: pointer; }
 .panel-cabecera h2::before { display: none; }
 .panel-cabecera-desc { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; max-width: 72ch; }
 .panel-cabecera-desc + .panel-cabecera-desc { margin-top: .4rem; }
-.panel-cabecera-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: 0 0 auto; }
+/* max-width: sin él, `flex: 0 0 auto` toma el ancho de una sola línea y en el celular la cabecera del
+   sprint («+ Campaña · Generar lote · Revisar · Más») medía 434 px a 375: la página corría de lado. */
+.panel-cabecera-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: 0 0 auto; max-width: 100%; }
 
 /* Estado vacío: un título, una línea y (si aplica) el botón para empezar. */
 .estado-vacio {
@@ -2292,7 +2294,7 @@ body.panel-abierto { overflow: hidden; }
 /* Entrega 2 (2026-09-27): pestañas del panel y describir referentes */
 .panel-pestanas { display: flex; gap: .4rem; flex-wrap: wrap; margin: .8rem 0 .2rem; }
 .panel-pestana { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 999px;
-  padding: .25rem .8rem; font: inherit; font-size: .9rem; cursor: pointer; min-height: 0; }
+  padding: .25rem .8rem; font: inherit; font-size: .9rem; cursor: pointer; min-height: 2.25rem; }
 .panel-pestana span { color: var(--muted); margin-left: .2rem; }
 .panel-pestana[aria-selected="true"] { background: var(--accent-grad); color: #fff; border-color: transparent; }
 .panel-pestana[aria-selected="true"] span { color: #fff; }
@@ -2318,8 +2320,9 @@ body.panel-abierto { overflow: hidden; }
 .panel-piezas-cab { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
 .panel-piezas-cab p { margin: 0; }
 .panel-piezas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: .8rem; margin-top: .8rem; }
+/* align-content: las filas del grid no se estiran a la altura de la tarjeta vecina (los botones medían 43 px). */
 .panel-pieza { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem; display: grid; gap: .4rem;
-  background: var(--panel); min-width: 0; }
+  background: var(--panel); min-width: 0; align-content: start; }
 .panel-pieza-aprobada { border-color: var(--ok); }
 .panel-pieza-rechazada { border-color: var(--error); }
 .panel-pieza-media video, .panel-pieza-media img { width: 100%; max-height: 360px; object-fit: contain; display: block;

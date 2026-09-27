@@ -250,3 +250,15 @@ def test_precio_de_reintentar_y_regenerar_es_el_del_modelo_de_la_pieza(con_ideas
     assert "US$ 0)" not in piezas and "US$ 0.00)" not in piezas
     revision = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
     assert "Regenerar (precio no disponible)" in revision
+
+
+def test_piezas_y_pestanas_con_buen_tamano():
+    """F5 + F15: los botones de una pieza no se estiran a la altura de la
+    tarjeta vecina y las pestañas del panel conservan una altura cómoda al dedo
+    (F4, la cabecera en el celular, está en tests/test_movil.py)."""
+    import re
+    css = open("static/style.css", encoding="utf-8").read()
+    pieza = re.search(r"\.panel-pieza \{[^}]*\}", css).group(0)
+    assert "align-content: start" in pieza
+    pestana = re.search(r"\.panel-pestana \{[^}]*\}", css).group(0)
+    assert "min-height: 0" not in pestana and "min-height: 2.25rem" in pestana
