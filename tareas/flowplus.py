@@ -13,10 +13,13 @@ from datetime import datetime
 
 import requests
 
+from flask_babel import gettext
+
 import bitacora
 import creative_flow
 import estado as estado_mod
 import gastos
+import idiomas
 import trabajos
 from final_edition import cortes, mezcla, musica
 from idiomas import N_
@@ -111,10 +114,18 @@ def _aspect_ratio_para_plataformas(platforms):
     return "9:16"
 
 
-def _texto_fase(info):
-    """Traduce a español el estado crudo que reporta un proveedor durante el poll.
-    Con fallback: si aparece una fase que no conocemos se muestra tal cual en vez
-    de tragarse la información (los proveedores agregan estados sin avisar)."""
+def _texto_fase(info, cliente):
+    """Traduce el estado crudo que reporta un proveedor durante el poll, en el
+    idioma del PROYECTO (spec §B8: mensajes de fondo, no de una pantalla que
+    alguien está mirando en este momento — nadie puede reabrir esta llamada
+    más tarde para traducirla en el idioma del visitante). Con fallback: si
+    aparece una fase que no conocemos se muestra tal cual en vez de tragarse
+    la información (los proveedores agregan estados sin avisar).
+
+    El resultado ya viene compuesto con la posición en cola cuando la hay
+    (`"%(fase)s (puesto %(n)s)"`): estado_trabajo ya no puede traducirlo de
+    nuevo al responder (el número lo vuelve un string distinto por cada
+    llamada), así que tiene que salir bien armado desde acá."""
     if not info:
         return None
     fase = info.get("fase")
@@ -124,19 +135,21 @@ def _texto_fase(info):
     if not texto:
         return None
     posicion = info.get("queue_position")
-    if posicion is not None:
-        texto = f"{texto} (puesto {posicion})"
-    return texto
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        fase_traducida = gettext(texto)
+        if posicion is not None:
+            return gettext("%(fase)s (puesto %(n)s)", fase=fase_traducida, n=posicion)
+        return fase_traducida
 
 
-def _avisar_fase_de(job_id):
+def _avisar_fase_de(job_id, cliente):
     """Devuelve el callback on_progreso que esperan los clientes de proveedores
     (Higgsfield, fal.ai, WaveSpeed): traduce la fase cruda del poll y la publica
     como detalle del trabajo. Envuelto en try/except porque un fallo REPORTANDO
     jamás puede tumbar una generación que ya gastó créditos."""
     def avisar_fase(info):
         try:
-            texto = _texto_fase(info)
+            texto = _texto_fase(info, cliente)
             if texto:
                 trabajos.reportar(job_id, detalle=texto)
         except Exception:
@@ -188,7 +201,7 @@ def ejecutar_imagen(tarea):
     out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.png")
-    avisar_fase = _avisar_fase_de(job_id)
+    avisar_fase = _avisar_fase_de(job_id, cliente)
     costo = None
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
@@ -238,7 +251,7 @@ def ejecutar_video(tarea):
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
-    avisar_fase = _avisar_fase_de(job_id)
+    avisar_fase = _avisar_fase_de(job_id, cliente)
     costo = None
     detalle_gasto = f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido") + (" · borrador 480p" if calidad == "borrador" else "")
 

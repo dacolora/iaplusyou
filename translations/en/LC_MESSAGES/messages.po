@@ -38,6 +38,10 @@ msgid "$0.15 en 4k · $0.18 en 8k"
 msgstr "$0.15 at 4k · $0.18 at 8k"
 
 #, python-format
+msgid "%(fase)s (puesto %(n)s)"
+msgstr "%(fase)s (position %(n)s)"
+
+#, python-format
 msgid "%(modelo)s llega a %(aviso)s s: se armará para %(aviso)s s."
 msgstr "%(modelo)s tops out at %(aviso)s s: it'll be built for %(aviso)s s."
 
