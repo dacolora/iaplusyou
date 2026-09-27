@@ -1,26 +1,27 @@
-{# Contenido dinámico de la bandeja de referencias de FlowPlus. Se renderiza
-   dentro de #fp-bandeja-wrap y se reemplaza por fetch tras subir/quitar/link,
-   sin recargar la página. #}
-  {% if trabajo_link %}
-  <p class="vacio fp-link-descargando" data-job="{{ trabajo_link.job_id }}" style="font-size:.78rem;">⏳ Descargando el video del link… aparece aquí solo cuando termine.</p>
-  {% endif %}
-  {% if referencias_bandeja %}
-  <div class="catalogo-productos" id="fp-bandeja" style="margin-top:.8rem;">
-    {% for r in referencias_bandeja %}
-    <figure style="margin:0;text-align:center;position:relative;">
-      <img src="{{ r.frame_url }}" alt="" title="{{ r.titulo or '' }}" style="width:84px;height:84px;object-fit:cover;border-radius:6px;background:var(--panel-2);{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
-      <figcaption class="vacio" style="padding:0;font-size:.7rem;">{{ r.etiqueta }}{% if r.origen not in ('archivo', None) %} · {{ r.origen }}{% endif %}</figcaption>
-      {# Lo que ves es lo que se usa: viaja con el formulario de Crear (la bandeja es del proyecto). #}
-      <input type="hidden" name="ref_ids" value="{{ r.id }}" form="form-flowplus">
-      <form method="post" action="{{ url_for('fp_quitar_referencia', cliente=cliente, rid=r.id) }}" data-fp="quitar"><button type="submit" class="btn-rechazar btn-sm" title="Quitar">✕</button></form>
-    </figure>
-    {% endfor %}
+{# Contenido dinámico de la bandeja de referencias de Crear. Se renderiza
+   dentro de #fp-bandeja-wrap (mitad de arriba de la tarjeta del compositor,
+   FUERA de #form-flowplus porque lleva sus propios <form> de quitar/vaciar) y
+   se reemplaza por fetch tras subir/quitar/link, sin recargar la página. #}
+{% if trabajo_link %}
+<p class="crear-ref-aviso fp-link-descargando" data-job="{{ trabajo_link.job_id }}">⏳ Descargando el video del link… aparece aquí solo cuando termine.</p>
+{% endif %}
+{% if referencias_bandeja %}
+<div class="crear-refs" id="fp-bandeja">
+  {% for r in referencias_bandeja %}
+  <figure class="crear-ref{% if r.tipo == 'video' %} es-video{% endif %}">
+    <img src="{{ r.frame_url }}" alt="" title="{{ r.titulo or '' }}">
+    <figcaption>{{ r.etiqueta }}{% if r.origen not in ('archivo', None) %} · {{ r.origen }}{% endif %}</figcaption>
+    {# Lo que ves es lo que se usa: viaja con el formulario de Crear (la bandeja es del proyecto). #}
+    <input type="hidden" name="ref_ids" value="{{ r.id }}" form="form-flowplus">
+    <form method="post" action="{{ url_for('fp_quitar_referencia', cliente=cliente, rid=r.id) }}" data-fp="quitar"><button type="submit" class="crear-ref-quitar" title="Quitar" aria-label="Quitar {{ r.etiqueta }}">×</button></form>
+  </figure>
+  {% endfor %}
+  <div class="crear-refs-acciones">
+    <button type="button" class="crear-enlace" id="fp-describir">Describir con IA</button>
+    <form method="post" action="{{ url_for('fp_vaciar_referencias', cliente=cliente) }}" data-fp="vaciar" data-confirm="¿Quitar todas las referencias?"><button type="submit" class="crear-enlace crear-enlace-gris">Quitar todas</button></form>
+    <span class="crear-nota" id="fp-describir-estado"></span>
   </div>
-  <div style="margin-top:.6rem;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center;">
-    <button type="button" class="btn-guardar btn-sm" id="fp-describir">Describir con IA → rellena el texto</button>
-    <form method="post" action="{{ url_for('fp_vaciar_referencias', cliente=cliente) }}" data-fp="vaciar" data-confirm="¿Quitar todas las referencias?"><button type="submit" class="btn-rechazar btn-sm">Vaciar</button></form>
-    <span class="vacio" id="fp-describir-estado" style="padding:0;font-size:.76rem;"></span>
-  </div>
-  {% else %}
-  <p class="vacio" style="font-size:.78rem;">Sin referencias: se genera solo con tu texto. Si quieres, sube archivos, pega un link o elige del catálogo abajo.</p>
-  {% endif %}
+</div>
+{% else %}
+<p class="crear-refs-vacio">Arrastra aquí imágenes o videos, o toca <strong>+</strong> para sumar referencias o elegir del catálogo. Son opcionales: sin nada, se genera solo con tu texto.</p>
+{% endif %}

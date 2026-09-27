@@ -61,3 +61,6 @@ clientes/*/sprints/
 # worktrees de superpowers / Claude Code
 .claude/worktrees/
 .superpowers/
+
+# Medios sintéticos de sembrar_edicion_demo.py (vista previa local, sin R2)
+static/editor_demo/

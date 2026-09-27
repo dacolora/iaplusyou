@@ -188,3 +188,19 @@ def test_ken_burns_renderiza_con_la_misma_duracion(tmp_path, medios):
     out = motor.renderizar(doc, {**medios, "ass": str(tmp_path / "s.ass")}, str(tmp_path / "kb.mp4"))
     streams, dur = _streams(out["archivo"])
     assert abs(dur - 7.0) <= 0.2 and (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)
+
+
+@pytest.mark.slow
+def test_clips_reordenados_de_la_misma_fuente_renderizan_su_tramo(tmp_path, medios):
+    # Reordenar clips del mismo clon era lo que disparaba la memoria (1,39 GB):
+    # con una entrada -ss/-t por clip cada uno decodifica solo lo suyo.
+    doc = _doc()
+    c1, c2 = doc["pistas"][0]["clips"]
+    c1["transicion"] = None
+    c2["inicio_ms"], c1["inicio_ms"] = 0, 3500
+    doc["pistas"][0]["clips"] = [c2, c1]
+    rutas = {**medios, "ass": str(tmp_path / "sub.ass")}
+    out = motor.renderizar(doc, rutas, str(tmp_path / "reordenado.mp4"))
+    streams, dur = _streams(out["archivo"])
+    assert abs(dur - 7.0) <= 0.2
+    assert (streams["video"]["width"], streams["video"]["height"]) == (1080, 1920)

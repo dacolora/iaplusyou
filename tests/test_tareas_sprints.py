@@ -114,7 +114,8 @@ def test_proponer_ideas_tarea_y_encolar(base_temporal, monkeypatch):
     from sprints import datos, ideas
     from tareas import sprints as ts
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(ideas, "proponer", lambda c, cid_, n_videos=None, n_imagenes=None, reemplaza=None: [1, 2])
+    monkeypatch.setattr(ideas, "proponer",
+                        lambda c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None: [1, 2])
     tareas.cargar_todas()
     msg = tareas.REGISTRO["sprint_proponer_ideas"]({"payload": {"cliente": "acme", "campana_id": cid, "n_videos": 2, "n_imagenes": 0}})
     assert "2 ideas" in msg
@@ -123,7 +124,7 @@ def test_proponer_ideas_tarea_y_encolar(base_temporal, monkeypatch):
     assert ts.encolar_ideas("acme", cid, n_videos=3, reemplaza=7) is True
     job_id, tipo, payload, kw = encolados[0]
     assert job_id == f"acme__campana{cid}__ideas" and tipo == "sprint_proponer_ideas"
-    assert payload == {"cliente": "acme", "campana_id": cid, "n_videos": 3, "n_imagenes": None, "reemplaza": 7} and kw["max_intentos"] == 2
+    assert payload == {"cliente": "acme", "campana_id": cid, "n_videos": 3, "n_imagenes": None, "reemplaza": 7} and kw["max_intentos"] == 1
 
 
 def _pieza_lista(datos, creative_flow, cliente="acme", estado_pieza="video_listo"):
@@ -426,8 +427,9 @@ def test_ejecutar_sugerir_biblioteca_guarda_sugerencias(base_temporal, monkeypat
     assert c["extra"]["sugerencias_ia"] == [{"referente_id": 5, "razon": "encaja"}]
     filas = [f for f in gastos.historial("acme") if f["tipo"] == "sugerir_ia"]
     assert len(filas) == 1 and filas[0]["usd"] > 0
-    assert enfoques[0]["etapa"] == "TOF" and enfoques[0]["idioma"] == "es"
-    assert "idioma de la audiencia: español" in textos[0][2]
+    # Sprint nuevo: para todos los países, en inglés (2026-09-27).
+    assert enfoques[0]["etapa"] == "TOF" and enfoques[0]["idioma"] == "en"
+    assert "idioma de la audiencia: inglés" in textos[0][2]
 
 
 def test_ejecutar_sugerir_biblioteca_sin_candidatos(base_temporal, monkeypatch):
@@ -554,3 +556,57 @@ def test_sugerir_biblioteca_usa_el_enfoque_de_la_campana(base_temporal, monkeypa
     assert "pies fríos" in vistos["persona"] and "consciente del problema" in vistos["persona"]
     assert vistos["temporada"] == "Hot Sale"
     assert "UGC" in vistos["enfoque_texto"] and "Crocs" in vistos["enfoque_texto"] and "inglés" in vistos["enfoque_texto"]
+
+
+def test_proponer_ideas_registra_el_gasto_real(base_temporal, monkeypatch):
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    sid, cid, rid = _referencia(datos)
+
+    def proponer(c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None):
+        uso["entrada"] += 5000
+        uso["salida"] += 2000
+        return [11, 12]
+    monkeypatch.setattr(ideas, "proponer", proponer)
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_proponer_ideas"]({"id": 7, "payload": {"cliente": "acme", "campana_id": cid}})
+    filas = [f for f in gastos.historial("acme") if f["tipo"] == "ideas"]
+    assert len(filas) == 1 and filas[0]["usd"] > 0 and filas[0]["referencia"] == f"idea:proponer:{cid}:t7"
+
+
+def test_proponer_ideas_registra_lo_pagado_si_falla(base_temporal, monkeypatch):
+    import pytest
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    sid, cid, rid = _referencia(datos)
+
+    def proponer(c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None):
+        uso["entrada"] += 3000
+        raise ideas.AnalisisInvalido("Claude no devolvió JSON.")
+    monkeypatch.setattr(ideas, "proponer", proponer)
+    tareas.cargar_todas()
+    with pytest.raises(ideas.AnalisisInvalido):
+        tareas.REGISTRO["sprint_proponer_ideas"]({"id": 8, "payload": {"cliente": "acme", "campana_id": cid}})
+    filas = [f for f in gastos.historial("acme") if f["tipo"] == "ideas"]
+    assert len(filas) == 1 and "no sirvió" in filas[0]["detalle"]
+
+
+def test_proponer_ideas_sin_llamadas_no_registra_gasto(base_temporal, monkeypatch):
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    sid, cid, rid = _referencia(datos)
+    monkeypatch.setattr(ideas, "proponer", lambda c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None: [])
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_proponer_ideas"]({"id": 9, "payload": {"cliente": "acme", "campana_id": cid}})
+    assert not [f for f in gastos.historial("acme") if f["tipo"] == "ideas"]
+
+
+def test_encolar_ideas_no_se_reintenta_sola(base_temporal, monkeypatch):
+    from tareas import sprints as ts
+    vistos = []
+    monkeypatch.setattr(ts.trabajos, "encolar", lambda job_id, tipo, payload, **kw: vistos.append(kw) or True)
+    ts.encolar_ideas("acme", 5)
+    assert vistos[0]["max_intentos"] == 1

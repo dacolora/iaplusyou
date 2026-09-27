@@ -249,3 +249,11 @@ def test_tarifa_y_tipo_de_la_revision_de_la_doctrina():
     r = gastos.estimar("revision_pieza")
     # Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas): ≈ US$ 0,060; redondeado hacia arriba.
     assert r["usd"] == gastos.TARIFAS["revision_pieza"] == 0.07 and "0,07" in r["texto"]
+
+
+def test_estimar_proponer_ideas_por_numero_de_ideas():
+    import gastos
+    tres = gastos.estimar("proponer_ideas", n=3)
+    assert tres["usd"] == round(gastos.IDEAS_BASE_USD + 3 * gastos.IDEAS_POR_IDEA_USD, 4)
+    assert "aprox" in tres["texto"] and tres["detalle"] == "3 idea(s) con Claude"
+    assert gastos.estimar("proponer_ideas", n=0)["usd"] == gastos.estimar("proponer_ideas", n=1)["usd"]

@@ -32,6 +32,20 @@ _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "pr
 _IDIOMA_RE = re.compile(r"[a-z]{2}")
 _PAIS_RE = re.compile(r"[A-Z]{2}")
 
+# Proxy de la vista previa (spec §2.3): lado CORTO en 540 (un vertical sale
+# 540x960, no 304x540), cuadro clave cada 15 cuadros (medio segundo a 30 fps)
+# para que buscar un instante no decodifique segundos enteros, yuv420p para
+# Safari. Subir PROXY_VERSION cuando cambie la receta: la página del editor
+# rehace los proxies de versión anterior.
+PROXY_VERSION = 2
+_ESCALA_PROXY = "scale='if(gt(iw,ih),-2,540)':'if(gt(iw,ih),540,-2)'"
+
+
+def generar_proxy(original, destino):
+    cortes.ffmpeg(["-i", original, "-vf", _ESCALA_PROXY, "-c:v", "libx264", "-preset", "veryfast", "-b:v", "1M",
+                   "-g", "15", "-keyint_min", "15", "-sc_threshold", "0", "-pix_fmt", "yuv420p",
+                   "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", destino], timeout=900)
+
 
 def _extension(tipo):
     ext = _EXT.get(tipo)
@@ -231,8 +245,7 @@ def ejecutar_proxy(tarea):
             dur_s = cortes.duracion(original)
             campos.update(ancho=v.get("width"), alto=v.get("height"), duracion_ms=int(round(dur_s * 1000)))
             proxy = os.path.join(carpeta, "proxy.mp4")
-            cortes.ffmpeg(["-i", original, "-vf", "scale=-2:540", "-c:v", "libx264", "-preset", "veryfast", "-b:v", "1M",
-                           "-c:a", "aac", "-b:a", "96k", "-movflags", "+faststart", proxy], timeout=900)
+            generar_proxy(original, proxy)
             tira = os.path.join(carpeta, "tira.jpg")
             # una celda por segundo (fps=1): tantas como segundos tenga el
             # clip, no 60 fijas (que dejaban una tira casi vacía de 9600 px).
@@ -240,6 +253,7 @@ def ejecutar_proxy(tarea):
             cortes.ffmpeg(["-i", original, "-vf", f"fps=1,scale=160:-2,tile={celdas}x1", "-frames:v", "1", "-q:v", "6", tira], timeout=600)
             campos["url_proxy"] = r2_uploader.upload_file(proxy, f"clientes/{cliente}/materiales/{mid}_proxy.mp4", "video/mp4")
             extra["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
+            extra["proxy_version"] = PROXY_VERSION
             if "cortes_ms" not in extra:
                 # `insumos.clon` ya los midió al crear el material (I4,
                 # plan-mandated capa 2): no repetir el trabajo de `scdet`.

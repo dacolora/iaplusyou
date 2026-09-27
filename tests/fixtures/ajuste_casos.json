@@ -1,0 +1,239 @@
+[
+ {
+  "ancho_max_px": null,
+  "esperado": [
+   "Tu piel, en 7 días"
+  ],
+  "texto": "Tu piel, en 7 días"
+ },
+ {
+  "ancho_max_px": 60,
+  "esperado": [
+   "Tu",
+   "piel,",
+   "en 7",
+   "días"
+  ],
+  "texto": "Tu piel, en 7 días"
+ },
+ {
+  "ancho_max_px": 100,
+  "esperado": [
+   "Tu piel,",
+   "en 7 días"
+  ],
+  "texto": "Tu piel, en 7 días"
+ },
+ {
+  "ancho_max_px": 150,
+  "esperado": [
+   "Tu piel, en 7",
+   "días"
+  ],
+  "texto": "Tu piel, en 7 días"
+ },
+ {
+  "ancho_max_px": null,
+  "esperado": [
+   "Una frase bastante más larga que el ancho disponible"
+  ],
+  "texto": "Una frase bastante más larga que el ancho disponible"
+ },
+ {
+  "ancho_max_px": 60,
+  "esperado": [
+   "Una",
+   "frase",
+   "bastante",
+   "más",
+   "larga",
+   "que el",
+   "ancho",
+   "disponible"
+  ],
+  "texto": "Una frase bastante más larga que el ancho disponible"
+ },
+ {
+  "ancho_max_px": 100,
+  "esperado": [
+   "Una frase",
+   "bastante",
+   "más larga",
+   "que el",
+   "ancho",
+   "disponible"
+  ],
+  "texto": "Una frase bastante más larga que el ancho disponible"
+ },
+ {
+  "ancho_max_px": 150,
+  "esperado": [
+   "Una frase",
+   "bastante más",
+   "larga que el",
+   "ancho",
+   "disponible"
+  ],
+  "texto": "Una frase bastante más larga que el ancho disponible"
+ },
+ {
+  "ancho_max_px": null,
+  "esperado": [
+   "Palabraenormesinespacios corta"
+  ],
+  "texto": "Palabraenormesinespacios corta"
+ },
+ {
+  "ancho_max_px": 60,
+  "esperado": [
+   "Palabraenormesinespacios",
+   "corta"
+  ],
+  "texto": "Palabraenormesinespacios corta"
+ },
+ {
+  "ancho_max_px": 100,
+  "esperado": [
+   "Palabraenormesinespacios",
+   "corta"
+  ],
+  "texto": "Palabraenormesinespacios corta"
+ },
+ {
+  "ancho_max_px": 150,
+  "esperado": [
+   "Palabraenormesinespacios",
+   "corta"
+  ],
+  "texto": "Palabraenormesinespacios corta"
+ },
+ {
+  "ancho_max_px": null,
+  "esperado": [
+   "Dos",
+   "Párrafos aquí"
+  ],
+  "texto": "Dos\nPárrafos aquí"
+ },
+ {
+  "ancho_max_px": 60,
+  "esperado": [
+   "Dos",
+   "Párrafos",
+   "aquí"
+  ],
+  "texto": "Dos\nPárrafos aquí"
+ },
+ {
+  "ancho_max_px": 100,
+  "esperado": [
+   "Dos",
+   "Párrafos",
+   "aquí"
+  ],
+  "texto": "Dos\nPárrafos aquí"
+ },
+ {
+  "ancho_max_px": 150,
+  "esperado": [
+   "Dos",
+   "Párrafos aquí"
+  ],
+  "texto": "Dos\nPárrafos aquí"
+ },
+ {
+  "ancho_max_px": null,
+  "esperado": [
+   ""
+  ],
+  "texto": ""
+ },
+ {
+  "ancho_max_px": 60,
+  "esperado": [
+   ""
+  ],
+  "texto": ""
+ },
+ {
+  "ancho_max_px": 100,
+  "esperado": [
+   ""
+  ],
+  "texto": ""
+ },
+ {
+  "ancho_max_px": 150,
+  "esperado": [
+   ""
+  ],
+  "texto": ""
+ },
+ {
+  "ancho_max_px": null,
+  "esperado": [
+   "espacios raros"
+  ],
+  "texto": "   espacios   raros  "
+ },
+ {
+  "ancho_max_px": 60,
+  "esperado": [
+   "espacios",
+   "raros"
+  ],
+  "texto": "   espacios   raros  "
+ },
+ {
+  "ancho_max_px": 100,
+  "esperado": [
+   "espacios",
+   "raros"
+  ],
+  "texto": "   espacios   raros  "
+ },
+ {
+  "ancho_max_px": 150,
+  "esperado": [
+   "espacios raros"
+  ],
+  "texto": "   espacios   raros  "
+ },
+ {
+  "ancho_max_px": null,
+  "esperado": [
+   "Linea",
+   "",
+   "con vacía"
+  ],
+  "texto": "Linea\n\ncon vacía"
+ },
+ {
+  "ancho_max_px": 60,
+  "esperado": [
+   "Linea",
+   "",
+   "con",
+   "vacía"
+  ],
+  "texto": "Linea\n\ncon vacía"
+ },
+ {
+  "ancho_max_px": 100,
+  "esperado": [
+   "Linea",
+   "",
+   "con vacía"
+  ],
+  "texto": "Linea\n\ncon vacía"
+ },
+ {
+  "ancho_max_px": 150,
+  "esperado": [
+   "Linea",
+   "",
+   "con vacía"
+  ],
+  "texto": "Linea\n\ncon vacía"
+ }
+]

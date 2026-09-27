@@ -87,6 +87,13 @@ TARIFAS = {
     "revision_pieza": 0.07,
 }
 
+# «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
+# la doctrina en el system (caché) y hasta ~1 200 tokens de salida por idea
+# (`sprints.ideas.max_tokens_para`). El gasto REAL se registra con los tokens
+# medidos (tipo "ideas"); estas dos cifras solo dan el «≈» del botón.
+IDEAS_BASE_USD = 0.015
+IDEAS_POR_IDEA_USD = 0.012
+
 SIN_PRECIO = "precio no disponible"
 
 
@@ -211,6 +218,8 @@ _ESTIMADORES = {
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
     "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
+    "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
+                                        f"{max(1, int(n or 0))} idea(s) con Claude"),
 }
 
 

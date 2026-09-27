@@ -1,0 +1,398 @@
+{# Pestaña «Final edition» (decisión de Daniel, 2026-09-27): todo lo de final
+   edition salió de Crear y vive aquí — elegir un video listo, escribir y
+   corregir el guion, producir finales por país, ver/descartar/publicar las
+   finales y abrir cada edición en el editor. Las rutas fe_* son las de
+   siempre y vuelven a #final; Crear deja el botón «Llevar a final edition»,
+   que abre esta pestaña con esa pieza (#final?cf=<id>).
+   El guion, «Producir finales», las tarjetas de las finales y su JS se
+   mudaron tal cual desde _tab_creativeflowplus.html. #}
+{# Bloque 7: «Publicar orgánico» en el detalle de una final lista (macro
+   compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
+{% from "_organico_publicar.html" import bloque_organico with context %}
+{# Editor del ángulo de cada pieza (doctrina, bloque 2): vivía en la sección
+   Final edition de Crear y se mudó con ella. #}
+{% from "_angulo_editor.html" import editor_angulo %}
+{% set _videos = creative_flow_items | selectattr("estado", "equalto", "video_listo") | rejectattr("tipo", "equalto", "imagen") | list %}
+{% set _n = namespace(finales=0) %}
+{% for item in creative_flow_items %}{% set _n.finales = _n.finales + (item.finales | length) %}{% endfor %}
+<header class="panel-cabecera">
+  <div>
+    <h2>Final edition</h2>
+    <p class="panel-cabecera-desc">Convierte un video de Crear en un anuncio terminado: guion con IA, voz, música, textos y subtítulos, en el idioma y con el precio de cada país. Abre cada edición en el editor para verla antes de publicarla.</p>
+  </div>
+</header>
+
+<section class="fe-pestana-bloque">
+  <h3>Videos listos ({{ _videos | length }})</h3>
+  {% if not _videos %}
+  <div class="estado-vacio">Todavía no hay videos listos. Genera uno en <a href="#creativeflowplus">Crear</a> y vuelve aquí para terminarlo.</div>
+  {% endif %}
+  <div class="generados-grid" id="fe-videos">
+    {% for item in _videos %}
+    <div class="generado" data-cf="{{ item.id }}" tabindex="0" role="button">
+      <div class="generado-media">
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="metadata"></video>
+        <span class="generado-tipo">Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}</span>
+        {% if item.trabajo_guion %}
+        {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
+           <template> del detalle, cuyos <script> clonados nunca corren) para
+           que el polling arranque al cargar la página y un fallo se vea. #}
+        <div class="generado-velo">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+          <div class="progreso-texto">Escribiendo el guion…</div>
+          <script>iniciarPolling({{ item.trabajo_guion.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_guion.job_id) | tojson }});</script>
+        </div>
+        {% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
+        <small>{{ item.finales | length }} final{{ "es" if item.finales | length != 1 }}{% if ediciones_por_cf.get(item.id) %} · en el editor{% endif %}</small>
+      </div>
+      <template class="generado-detalle">
+        <div class="detalle-media"><video src="{{ item.video_url }}" controls autoplay muted loop playsinline></video></div>
+        <div class="detalle-info">
+          <p class="campo-label">Qué tenía que pasar</p>
+          <p class="detalle-texto">{{ item.accion_central or "(sin texto)" }}</p>
+          <section class="fe-seccion">
+            <h4 class="fe-titulo">Final edition</h4>
+            <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
+            {{ editor_angulo(item.angulo, url_for('cf_angulo', cliente=cliente, cf_id=item.id), cliente,
+                             resumen_vacio="Todavía no tiene ángulo: se decide al preparar el guion") }}
+            {% if not item.guion_base %}
+              {% if item.trabajo_guion %}
+              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
+              {% else %}
+              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar">
+                <label>Precio (opcional)
+                  <input type="number" name="precio" min="0" step="any" placeholder="p.ej. 89900" style="width:9rem;">
+                </label>
+                <label>Idioma base
+                  <select name="idioma_base">
+                    <option value="es">Español</option>
+                    <option value="en">English</option>
+                    <option value="pt">Português</option>
+                  </select>
+                </label>
+                <button type="submit" class="btn-guardar btn-sm">Preparar guion con IA{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
+              </form>
+              {% endif %}
+            {% else %}
+              {% set _g = item.guion_base %}
+              <form method="post" action="{{ url_for('fe_guardar_guion', cliente=cliente, cf_id=item.id) }}" class="fe-guion">
+                {% for b in _g.bloques %}
+                <div class="fe-bloque">
+                  <div class="fe-bloque-cab"><strong>{{ loop.index }}. {{ b.rol }}</strong> <small>{{ b.inicio_s }}s – {{ b.fin_s }}s</small></div>
+                  <label>Texto en pantalla <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
+                  <label>Texto de voz <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
+                </div>
+                {% endfor %}
+                <button type="submit" class="btn-guardar btn-sm">Guardar guion</button>
+              </form>
+              {% if item.trabajo_guion %}
+              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
+              {% else %}
+              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar"
+                    onsubmit="return confirm('¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).');">
+                <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in ('es', 'en', 'pt') else 'es' }}">
+                <button type="submit" class="btn-rechazar btn-sm">Volver a escribir con IA</button>
+              </form>
+              {% endif %}
+
+              {% set _finales_por_destino = {} %}
+              {% for f in item.finales if f.estado in ("listo", "degradada") %}
+              {% set _ = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
+              {% endfor %}
+              <h5 class="fe-subtitulo">Producir finales</h5>
+              <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir"
+                    data-moneda-base="{{ paises_fe[_g.pais].moneda if _g.pais in paises_fe else '' }}"
+                    onsubmit="return feConfirmarReemplazo(this);">
+                <div class="fe-destinos checks-plataformas">
+                  {% for codigo, p in paises_fe.items() %}
+                  {% set _ya = _finales_por_destino.get(p.idioma ~ "_" ~ codigo) %}
+                  <label class="fe-destino">
+                    <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
+                    {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small>
+                    <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
+                           placeholder="Precio (opcional)" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
+                           {% if codigo == _g.pais and _g.precio_base is not none %}value="{{ _g.precio_base }}"{% endif %}>
+                    {% if _ya %}<small class="tag-estado">(ya producida — se reemplaza)</small>{% endif %}
+                  </label>
+                  {% endfor %}
+                </div>
+                <div class="fe-opciones">
+                  <label>Voz
+                    <select name="voz">
+                      {% for v in (voces_fe.get(_g.idioma) or voces_fe.get("es") or []) %}
+                      <option value="{{ v }}">{{ v }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label>Música
+                    <select name="estilo_musica">
+                      {% for e in estilos_fe %}
+                      <option value="{{ e }}">{{ e }}</option>
+                      {% endfor %}
+                      <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+                        {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
+                      </optgroup>
+                    </select>
+                  </label>
+                  <label>Empieza en el segundo <small>(Mi música)</small>
+                    <input type="number" name="musica_inicio_s" min="0" step="1" value="0" style="width:5rem;">
+                  </label>
+                  <label>Precio base <input type="number" name="precio" min="0" step="any"
+                         placeholder="opcional, país base" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
+                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> con voz</label>
+                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> con música</label>
+                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> con sonido de la escena{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">(este clon no trae sonido)</small>{% endif %}</label>
+                  <label>Mezcla
+                    <select name="mezcla">
+                      {% for p in presets_mezcla %}<option value="{{ p }}">{{ p | replace("_", " ") }}</option>{% endfor %}
+                    </select>
+                  </label>
+                </div>
+                {% set _cu = (" ≈ " ~ (precios.final_por_pais.usd | usd) ~ " c/u") if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
+                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales{{ _cu }}">Producir finales{{ _cu }}</button>
+              </form>
+            {% endif %}
+
+            {% if item.finales %}
+            <h5 class="fe-subtitulo">Finales de esta pieza</h5>
+            <ul class="fe-lista">
+              {% for f in item.finales %}
+              <li class="fe-final">
+                <span class="fe-final-mini">{% if f.url_miniatura %}<img src="{{ f.url_miniatura }}" alt="">{% endif %}</span>
+                <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
+                <span class="tag-estado">{{ f.estado }}</span>
+                {% if f.estado == "generando" %}
+                <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}produciendo…{% else %}interrumpida{% endif %}</span>
+                {% elif f.estado == "error" and f.error %}
+                <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
+                {% endif %}
+                {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>{% endif %}
+                <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
+                  <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+                </form>
+              </li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </section>
+          {% set _eds = ediciones_por_cf.get(item.id) or [] %}
+          {% if _eds %}
+          <h5 class="fe-subtitulo">En el editor</h5>
+          <ul class="fe-lista">
+            {% for e in _eds %}
+            <li class="fe-final">
+              <span class="fe-final-nombre">{{ e.nombre }}</span>
+              <a class="btn-guardar btn-sm" href="{{ url_for('editor.ver', cliente=cliente, edicion_id=e.id) }}">Abrir en el editor</a>
+            </li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+        </div>
+      </template>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="fe-pestana-bloque" style="margin-top:2rem;">
+  <h3>Finales ({{ _n.finales }})</h3>
+  {% if not _n.finales %}
+  <p class="vacio">Todavía no hay finales. Abre un video de arriba, prepara el guion y elige los países.</p>
+  {% endif %}
+  <div class="generados-grid" id="fe-finales">
+    {% for item in creative_flow_items %}
+    {% for f in item.finales %}
+    {% set _bandera = paises_fe[f.pais].bandera if f.pais in paises_fe else "" %}
+    <div class="generado generado-final" data-cf="{{ f.id }}" tabindex="0" role="button">
+      <div class="generado-media">
+        {% if f.estado in ("listo", "degradada") and f.video_url %}
+        <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" muted playsinline preload="metadata"></video>
+        {% elif f.url_miniatura %}
+        <img src="{{ f.url_miniatura }}" alt="" loading="lazy" class="generado-portada">
+        {% else %}
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="metadata" class="generado-portada"></video>
+        {% endif %}
+        <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
+        {% if f.estado == "generando" %}
+        <div class="generado-velo">
+          {% if f.trabajo %}
+          <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto">Produciendo… 0% · 0s</div>
+          <script>iniciarPolling({{ f.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ f.trabajo.job_id) | tojson }});</script>
+          {% else %}
+          <span class="generado-estado">Interrumpida</span>
+          {% endif %}
+        </div>
+        {% elif f.estado == "error" %}
+        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        {% elif f.estado == "degradada" %}
+        <div class="generado-velo"><span class="generado-estado">Sin voz/música</span></div>
+        {% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
+        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}</small>
+      </div>
+      <template class="generado-detalle">
+        <div class="detalle-media">
+          {% if f.video_url %}
+          <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" controls autoplay muted loop playsinline></video>
+          {% elif f.url_miniatura %}
+          <img src="{{ f.url_miniatura }}" alt="">
+          {% else %}
+          <video src="{{ item.video_url }}" muted playsinline style="opacity:.6;"></video>
+          {% endif %}
+        </div>
+        <div class="detalle-info">
+          <p class="campo-label">Final edition</p>
+          <p class="detalle-texto">{{ _bandera }} {{ paises_fe[f.pais].nombre if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
+          <p class="vacio" style="padding:0;font-size:.78rem;">
+            Final de: {{ item.accion_central or item.id }}
+            {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
+            {% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}
+            · <span class="tag-estado">{{ f.estado }}</span>
+          </p>
+          {% if f.capas %}
+          <p class="campo-label" style="margin-top:.8rem;">Capas</p>
+          <ul class="fe-capas">
+            {% for nombre, capa in f.capas.items() %}
+            <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          {% if f.estado == "error" and f.error %}
+          <p class="tag-error">{{ f.error }}</p>
+          {% endif %}
+          <div class="detalle-acciones">
+            {% if f.video_url %}
+            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>
+            {% endif %}
+            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
+              <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+            </form>
+            {% if f.estado in ("listo", "degradada") and f.pieza_id %}
+            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
+            {% endif %}
+          </div>
+          {% if f.estado in ("listo", "degradada") and f.video_url and f.pieza_id %}
+          {# Bloque 7: mismo bloque que en Experimentos (sin ep_id: sale de Final edition). #}
+          <p class="campo-label" style="margin-top:.8rem;">Publicación orgánica</p>
+          {{ bloque_organico(f.pieza_id, "final") }}
+          {% endif %}
+        </div>
+      </template>
+    </div>
+    {% endfor %}
+    {% endfor %}
+  </div>
+</section>
+
+<dialog id="fe-modal" class="generado-modal">
+  <button type="button" class="generado-cerrar" id="fe-modal-cerrar" aria-label="Cerrar">×</button>
+  <div id="fe-modal-cuerpo" class="generado-modal-cuerpo"></div>
+</dialog>
+<script>
+  // Precio base -> se copia solo a los destinos cuya moneda coincide con la
+  // del país base (nunca convierte), y solo si el usuario no escribió ya un
+  // precio propio para ese destino. Global (window.*) porque el formulario
+  // "Producir finales" vive dentro de un <template> clonado — sus <script>
+  // internos nunca corren, pero los atributos onXXX sí, y al clonar buscan la
+  // función en window en el momento del evento (no al parsear el template).
+  window.feAplicarPrecioBase = function (input) {
+    var form = input.closest('form');
+    if (!form) return;
+    var monedaBase = form.dataset.monedaBase || '';
+    form.querySelectorAll('.fe-precio-destino').forEach(function (destino) {
+      if (destino.dataset.moneda === monedaBase && !destino.value) {
+        destino.value = input.value;
+      }
+    });
+  };
+  // Confirma si algún destino marcado ya tiene una final producida (se
+  // reemplaza al volver a producir).
+  window.feConfirmarReemplazo = function (form) {
+    var reemplaza = false;
+    form.querySelectorAll('input[name="destinos"]:checked').forEach(function (cb) {
+      if (cb.dataset.yaProducida) reemplaza = true;
+    });
+    if (!reemplaza) return true;
+    return confirm('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).');
+  };
+  (function () {
+    var panel = document.getElementById('tab-final');
+    var modal = document.getElementById('fe-modal');
+    var cuerpo = document.getElementById('fe-modal-cuerpo');
+    if (!panel || !modal) return;
+    function abrir(card) {
+      var tpl = card.querySelector('template.generado-detalle');
+      if (!tpl) return;
+      cuerpo.innerHTML = '';
+      cuerpo.appendChild(tpl.content.cloneNode(true));
+      // Los <script> clonados no corren: la publicación orgánica en curso
+      // arranca su polling acá (igual que en Crear).
+      cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
+        if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
+      });
+      // El editor del ángulo también vive en el <template> clonado:
+      // iniciarEditoresAngulo() ya corrió sobre `document` al cargar la página
+      // y nunca vio este clon (igual que hacía Crear antes de la mudanza).
+      if (window.iniciarEditoresAngulo) window.iniciarEditoresAngulo(cuerpo);
+      modal.showModal();
+    }
+    panel.querySelectorAll('.generado').forEach(function (card) {
+      card.addEventListener('click', function (e) { if (!e.target.closest('form, a, button')) abrir(card); });
+      card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); } });
+      var v = card.querySelector('.generado-media video');
+      if (v) {
+        card.addEventListener('mouseenter', function () { v.play().catch(function () {}); });
+        card.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
+      }
+    });
+    document.getElementById('fe-modal-cerrar').addEventListener('click', function () { modal.close(); });
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
+    // Igual que en Crear: al cerrar (×, fondo o Escape) se vacía el cuerpo y
+    // el video del detalle deja de sonar. Además el hash vuelve a «#final»:
+    // si quedara «#final?cf=<id>», la recarga automática (un guion o una final
+    // que termina) volvería a abrir esa pieza sin que nadie lo pidiera.
+    modal.addEventListener('close', function () {
+      cuerpo.innerHTML = '';
+      if (/^#final\?cf=/.test(location.hash)) history.replaceState(null, '', '#final');
+    });
+    // "Producir N finales": el formulario vive en un <template> clonado, así
+    // que el listener va delegado sobre el cuerpo del modal.
+    cuerpo.addEventListener('change', function (e) {
+      if (!e.target.matches('input[name="destinos"]')) return;
+      var form = e.target.closest('form');
+      var btn = form && form.querySelector('.fe-producir-btn');
+      if (!btn) return;
+      var n = form.querySelectorAll('input[name="destinos"]:checked').length;
+      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.plantilla.replace('Producir {n} finales', 'Producir finales');
+    });
+    cuerpo.addEventListener('submit', function (e) {
+      var form = e.target;
+      if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
+        e.preventDefault();
+        alert('Marca al menos un destino.');
+      }
+    });
+    // #final?cf=<id> (el botón «Llevar a final edition» de Crear): abre esa pieza.
+    function desdeHash() {
+      var m = /^#final\?cf=([^&]+)/.exec(location.hash);
+      if (!m) return;
+      var cf;
+      try { cf = decodeURIComponent(m[1]); } catch (e) { return; }   // un «%» suelto escrito a mano
+      var card = panel.querySelector('#fe-videos .generado[data-cf="' + CSS.escape(cf) + '"]');
+      if (card) abrir(card);
+    }
+    // Se espera a que cliente.html muestre la pestaña: este script corre antes
+    // que el suyo (al cargar y en cada hashchange), y un <dialog> abierto
+    // dentro de una pestaña todavía oculta no se ve.
+    document.addEventListener('DOMContentLoaded', desdeHash);
+    window.addEventListener('hashchange', function () { setTimeout(desdeHash, 0); });
+  })();
+</script>
+{# Editor del ángulo de cada pieza (doctrina, bloque 2). #}
+<script src="{{ url_for('static', filename='angulo.js') }}"></script>

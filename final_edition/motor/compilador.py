@@ -1,9 +1,11 @@
 """Compilador (spec §2.1): documento resuelto → Plan {entradas, filtergraph}.
-Puro: no toca disco ni ffmpeg. Orden de entradas: 0 = clon/pista principal
-(una sola fuente por ahora: los clips de la principal recortan el mismo
-material), luego PNG de capas en orden de pista/clip, luego audios en orden
-de pista/clip. Los textos libres son PNG del navegador; los subtítulos van
-por ASS (o se omiten si `con_ass=False`).
+Puro: no toca disco ni ffmpeg. Orden de entradas: primero UNA POR CLIP de la
+pista principal (`-ss <desde> -t <largo>` antes de su `-i`: ffmpeg decodifica
+solo ese tramo, así un reorden no retiene lo que hay entre recortes y la
+principal puede mezclar fuentes; una imagen, sin tiempo, entra una sola vez),
+luego PNG de capas en orden de pista/clip, luego audios en orden de
+pista/clip. Los textos libres son PNG del navegador; los subtítulos van por
+ASS (o se omiten si `con_ass=False`).
 
 Modelo de transición (decidido en la Task 8): una `transicion` de duración d
 en el clip A hacia B ocupa el intervalo de SALIDA `[fin_A, fin_A + d)`: B
@@ -89,9 +91,9 @@ _CAPA_ALTO_DEFECTO = 200
 # sistema y el VPS no tiene Inter instalada.
 FONTSDIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(final_edition.__file__))), "static", "fonts")
 
-# Orden en el que `compilar` agrega entradas (`-i`) al plan: la fuente
-# principal primero, luego los PNG de capas (imagen/texto) en orden de
-# pista/clip, luego los audios en orden de pista/clip.
+# Orden en el que `compilar` agrega entradas (`-i`) al plan: una entrada por
+# clip de la principal primero, luego los PNG de capas (imagen/texto) en
+# orden de pista/clip, luego los audios en orden de pista/clip.
 ORDEN_ENTRADAS = ("principal", "png_capas", "audio")
 _ROLES_SONIDO_GRUPO = "sonido"
 
@@ -265,12 +267,16 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
         clips_v = _clips_en(principal, ventana) if principal else []
     if not clips_v:
         raise ValueError("El documento no tiene nada en la pista principal en este tramo.")
-    fuente = clips_v[0]["material_id"]
-    if any(cl["material_id"] != fuente for cl in clips_v):
-        raise ValueError("La pista principal usa más de una fuente; el montaje de varias piezas llega en la capa 4.")
-    if fuente not in rutas:
-        raise ValueError(f"Falta la ruta del material '{fuente}' de la pista principal.")
-    plan.entradas.append({"ruta": rutas[fuente], "opciones": []})
+    for cl in clips_v:
+        if cl["material_id"] not in rutas:
+            raise ValueError(f"Falta la ruta del material '{cl['material_id']}' de la pista principal.")
+    if principal["tipo"] == "imagen":
+        # Una imagen no tiene línea de tiempo: una sola fuente, una sola
+        # entrada (el carrusel de varias páginas llega en la capa 6).
+        fuente = clips_v[0]["material_id"]
+        if any(cl["material_id"] != fuente for cl in clips_v):
+            raise ValueError("Una imagen usa una sola fuente en la pista principal; el carrusel llega en la capa 6.")
+        plan.entradas.append({"ruta": rutas[fuente], "opciones": []})
     etiquetas = []
     for i, cl in enumerate(clips_v):
         rec = cl.get("recorte") or {"desde_ms": 0, "hasta_ms": cl["duracion_ms"]}
@@ -293,8 +299,13 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
         if principal["tipo"] == "imagen":
             partes.append(f"[0:v]scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},format=yuv420p[v{i}]")
         else:
+            # Entrada propia con búsqueda de entrada: `-ss` antes de `-i` es
+            # exacto al transcodificar (ffmpeg descarta los cuadros previos
+            # al punto pedido) y `-t` acota lo que se lee.
+            idx = len(plan.entradas)
+            plan.entradas.append({"ruta": rutas[cl["material_id"]], "opciones": ["-ss", _s(desde), "-t", _s(hasta - desde)]})
             setpts = "setpts=PTS-STARTPTS" if vel == 1.0 else f"setpts=(PTS-STARTPTS)/{vel}"
-            partes.append(f"[0:v]trim=start={_s(desde)}:end={_s(hasta)},{setpts},"
+            partes.append(f"[{idx}:v]{setpts},"
                           f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={fps}"
                           f"{_zoompan(cl, corte_ini, fps, ancho, alto)},format=yuv420p[v{i}]")
         etiquetas.append((f"[v{i}]", cl))

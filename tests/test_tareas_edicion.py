@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 
 import pytest
 
@@ -309,7 +310,9 @@ def test_proxy_real_sobre_un_clip_de_tres_segundos(entorno, monkeypatch, tmp_pat
     assert m2["duracion_ms"] == 3000 and (m2["ancho"], m2["alto"]) == (540, 960)
     proxy = copias[f"clientes/acme/materiales/{mat['id']}_proxy.mp4"]
     v = next(s for s in cortes.ffprobe_json(proxy)["streams"] if s["codec_type"] == "video")
-    assert v["height"] == 540 and v["width"] % 2 == 0  # scale=-2:540
+    # Lado CORTO en 540 (vertical: width=540 es el corto; horizontal: height=540 es el corto)
+    short_side = min(v["width"], v["height"])
+    assert short_side == 540 and v["width"] % 2 == 0 and v["height"] % 2 == 0
     assert Image.open(copias[f"clientes/acme/materiales/{mat['id']}_tira.jpg"]).size[0] == 160 * 3
 
 
@@ -378,3 +381,24 @@ def test_picos_real_sobre_un_seno_de_44100(tmp_path):
     assert 18 <= len(picos) <= 22
     assert all(0.0 <= p <= 1.0 for p in picos)
     assert max(picos) > 0.5
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("entrada,esperado", [((1080, 1920), (540, 960)), ((1920, 1080), (960, 540)), ((1080, 1080), (540, 540))])
+def test_proxy_deja_el_lado_corto_en_540(tmp_path, entrada, esperado):
+    from tareas import edicion
+    from final_edition import cortes
+    original = str(tmp_path / "orig.mp4")
+    subprocess.run([cortes.FFMPEG, "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi", "-i",
+                    f"testsrc2=size={entrada[0]}x{entrada[1]}:rate=30", "-t", "2", "-pix_fmt", "yuv420p", original], check=True)
+    proxy = str(tmp_path / "proxy.mp4")
+    edicion.generar_proxy(original, proxy)
+    info = cortes.ffprobe_json(proxy)
+    v = next(s for s in info["streams"] if s["codec_type"] == "video")
+    assert (v["width"], v["height"]) == esperado
+    assert v["pix_fmt"] == "yuv420p"
+
+
+def test_proxy_version_es_2():
+    from tareas import edicion
+    assert edicion.PROXY_VERSION == 2

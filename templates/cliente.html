@@ -17,6 +17,10 @@
   {% include "_tab_flowplus.html" %}
 </section>
 
+<section id="tab-final" class="tab-panel" role="tabpanel">
+  {% include "_tab_final.html" %}
+</section>
+
 <section id="tab-experimentos" class="tab-panel" role="tabpanel">
   {% include "_tab_experimentos.html" %}
 </section>
@@ -33,7 +37,7 @@
   {% include "_tab_settings.html" %}
 </section>
 
-{# Bloque 7: JS de «Publicar orgánico» (Experimentos y Crear), una sola vez. #}
+{# Bloque 7: JS de «Publicar orgánico» (Experimentos y Final edition), una sola vez. #}
 {% from "_organico_publicar.html" import org_scripts with context %}
 {{ org_scripts() }}
 
@@ -48,6 +52,7 @@
       nicho: document.getElementById('tab-nicho'),
       referentes: document.getElementById('tab-referentes'),
       creativeflowplus: document.getElementById('tab-creativeflowplus'),
+      final: document.getElementById('tab-final'),
       experimentos: document.getElementById('tab-experimentos'),
       sprints: document.getElementById('tab-sprints'),
       catalogo: document.getElementById('tab-catalogo'),

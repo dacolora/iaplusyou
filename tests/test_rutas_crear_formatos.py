@@ -105,7 +105,7 @@ def test_crear_ya_no_ofrece_las_recetas_de_que_buscas(app):
     con una receta de banco_prompts.py) se quitó a pedido del usuario el
     2026-09-20: el texto se escribe directo y el director arma los planos."""
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    crear = html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-sprints"')]
+    crear = html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-final"')]   # solo Crear (Final edition es la pestaña siguiente)
     assert "¿Qué buscas?" not in crear
     assert 'id="fp-objetivos"' not in crear
     assert 'name="accion_central"' in crear   # el texto libre sigue ahí

@@ -62,7 +62,6 @@
     </div>
     <div class="fe-opciones">
       <label>Palabra clave <input type="text" name="palabra" value="{{ consulta_traer.palabra or '' }}" maxlength="120"></label>
-      <label>Idioma <input type="text" name="idioma" value="{{ consulta_traer.idioma or 'es' }}" maxlength="5" style="width:4rem"></label>
       <label>Marca / link del Ad Library <input type="text" name="pagina_id" value="{{ consulta_traer.pagina_id or '' }}" placeholder="id de página o view_all_page_id"></label>
     </div>
     <div class="fe-opciones">
@@ -93,7 +92,6 @@
     <input type="hidden" name="fuente" value="{{ fuente }}">
     <input type="hidden" name="modo" value="{{ consulta_traer.modo }}">
     <input type="hidden" name="palabra" value="{{ consulta_traer.palabra or '' }}">
-    <input type="hidden" name="idioma" value="{{ consulta_traer.idioma or 'es' }}">
     <input type="hidden" name="pagina_id" value="{{ consulta_traer.pagina_id or '' }}">
     <input type="hidden" name="pais" value="{{ consulta_traer.pais or 'ALL' }}">
     <input type="hidden" name="formato" value="{{ consulta_traer.formato or 'imagen' }}">

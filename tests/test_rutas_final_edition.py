@@ -1,7 +1,10 @@
 """Rutas de Final Edition en dashboard (preparar guion, guardar guion,
-producir finales, descartar) + `_creative_flow_items` y la plantilla de Crear
-con finales. Las rutas solo validan y encolan: `trabajos.encolar` se captura."""
+producir finales, descartar) + `_creative_flow_items` y la plantilla de la
+pestaña Final edition (`_tab_final.html`; hasta 2026-09-27 todo esto vivía en
+el detalle de Crear). Las rutas solo validan y encolan: `trabajos.encolar` se
+captura."""
 import os
+import re
 
 import pytest
 
@@ -64,7 +67,7 @@ def test_preparar_encola_final_guion(base_temporal, monkeypatch):
     c = _cliente_admin(dashboard)
     r = c.post(f"/cliente/acme/creative_flow/{cf_id}/final/preparar",
                data={"precio": "89900", "idioma_base": "es"})
-    assert r.status_code == 302 and r.headers["Location"].endswith("#creativeflowplus")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#final")
     assert len(llamadas) == 1
     t = llamadas[0]
     assert t["tipo"] == "final_guion"
@@ -371,6 +374,7 @@ def _contexto_minimo(items):
         paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
         presets_mezcla=["equilibrada", "voz_protagonista", "ambiente_protagonista"],
         duraciones_crear=(5, 8, 10, 12, 15, 20, 25, 30), formatos_nombres={"9:16": "Vertical 9:16"},
+        ediciones_por_cf={},
     )
 
 
@@ -387,7 +391,7 @@ def _item_video_listo(**extra):
 
 def test_plantilla_sin_guion_ofrece_preparar():
     env = _entorno_plantilla()
-    tpl = env.get_template("_tab_creativeflowplus.html")
+    tpl = env.get_template("_tab_final.html")
     html = tpl.render(**_contexto_minimo([_item_video_listo()]))
     assert "Final edition" in html
     assert "Preparar guion con IA" in html and 'name="precio"' in html
@@ -408,7 +412,7 @@ def test_plantilla_sin_guion_ofrece_preparar():
 
 def test_plantilla_con_guion_ofrece_reescribir():
     env = _entorno_plantilla()
-    tpl = env.get_template("_tab_creativeflowplus.html")
+    tpl = env.get_template("_tab_final.html")
     html = tpl.render(**_contexto_minimo([_item_video_listo(guion_base=GUION_BASE)]))
     assert "Volver a escribir con IA" in html and "Volver a escribir el guion con IA" in html  # botón + confirm
     assert 'name="idioma_base" value="es"' in html
@@ -433,7 +437,7 @@ def test_plantilla_con_guion_y_finales_renderiza():
          "url_miniatura": None, "duracion_s": None, "costo_usd": None, "capas": {}, "guion": None,
          "error": "ffmpeg murió", "trabajo": None},
     ]
-    html = env.get_template("_tab_creativeflowplus.html").render(
+    html = env.get_template("_tab_final.html").render(
         **_contexto_minimo([_item_video_listo(guion_base=GUION_BASE, finales=finales)]))
     assert "Guardar guion" in html and 'name="bloque_4_voz"' in html
     assert "Pide las tuyas" in html
@@ -443,7 +447,8 @@ def test_plantilla_con_guion_y_finales_renderiza():
     assert "trabajo-acme__cf_1__en_US__final" in html
     assert "generado-badge" in html
     assert "ffmpeg murió" in html
-    assert html.count('data-cf="') == 4  # la clon + 3 finales en la cuadrícula
+    # la clon + 3 finales en las cuadrículas (el selector del JS no cuenta)
+    assert len(re.findall(r'data-cf="[\w-]+"', html)) == 4
     assert "Final de Producto" in html
     # I4: es_CO ya tiene una final -> hint + checkbox marcado para confirm(); en_US y pt_BR no.
     assert "ya producida — se reemplaza" in html
@@ -463,7 +468,7 @@ def test_plantilla_clon_mudo_desmarca_el_sonido():
     """Si Crear anotó que el clon vino sin pista, el check «con sonido» sale
     desmarcado y se avisa; no se ofrece pedir lo que no existe."""
     env = _entorno_plantilla()
-    html = env.get_template("_tab_creativeflowplus.html").render(
+    html = env.get_template("_tab_final.html").render(
         **_contexto_minimo([_item_video_listo(guion_base=GUION_BASE,
                                               capas={"sonido": {"proveedor": "wan3", "estado": "ausente"}})]))
     assert 'name="con_sonido" value="si" checked' not in html and 'name="con_sonido" value="si"' in html
@@ -471,10 +476,19 @@ def test_plantilla_clon_mudo_desmarca_el_sonido():
 
 
 def test_plantilla_imagen_no_muestra_final_edition():
+    """Una imagen no entra a Final edition: la pestaña no la lista y Crear no
+    ofrece «Llevar a final edition» (un video listo sí)."""
     env = _entorno_plantilla()
-    html = env.get_template("_tab_creativeflowplus.html").render(
-        **_contexto_minimo([_item_video_listo(tipo="imagen")]))
-    assert "Final edition" not in html
+    ctx = _contexto_minimo([_item_video_listo(tipo="imagen")])
+    html = env.get_template("_tab_final.html").render(**ctx)
+    assert 'data-cf="cf_1"' not in html and "Preparar guion con IA" not in html
+    assert "Videos listos (0)" in html
+    crear = env.get_template("_tab_creativeflowplus.html").render(**ctx)
+    marcado = re.sub(r"<script>.*?</script>", "", crear, flags=re.S)   # lo que se ve, sin los comentarios del JS
+    assert "Llevar a final edition" not in marcado and "Final edition" not in marcado
+    crear = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo()]))
+    assert 'href="#final?cf=cf_1"' in crear and "Llevar a final edition" in crear
+    assert "Preparar guion con IA" not in crear
 
 
 def test_plantilla_muestra_el_editor_del_angulo_de_la_pieza():
@@ -482,11 +496,14 @@ def test_plantilla_muestra_el_editor_del_angulo_de_la_pieza():
     env = _entorno_plantilla()
     angulo = {"consciencia": "consciente_del_problema", "lead": "problema_solucion", "gancho": "¿Pies fríos en casa?",
               "promesa": "pies calientes", "faltantes": ["error: campo_faltante:audiencia", "falta el precio"]}
-    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    html = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
     assert 'class="angulo-editor"' in html and "Consciente del problema · problema-solución · “¿Pies fríos en casa?”" in html
     assert "falta el precio" in html and "campo_faltante" not in html
-    vacio = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo()]))
+    vacio = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo()]))
     assert "Todavía no tiene ángulo: se decide al preparar el guion" in vacio
+    # Se mudó con la sección Final edition: Crear ya no lo muestra (ni lo inicializa).
+    crear = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    assert 'class="angulo-editor"' not in crear and "iniciarEditoresAngulo" not in crear
 
 
 def test_plantilla_muestra_la_cifra_no_verificada_antes_de_guardar():
@@ -496,7 +513,7 @@ def test_plantilla_muestra_la_cifra_no_verificada_antes_de_guardar():
     env = _entorno_plantilla()
     angulo = {"consciencia": "consciente_del_problema", "lead": "problema_solucion", "gancho": "¿Pies fríos en casa?",
               "promesa": "pies calientes", "faltantes": ["error: cifra_no_verificada:47", "falta el precio"]}
-    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    html = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
     assert "La cifra «47» no está en los datos del producto." in html
     assert "cifra_no_verificada" not in html      # se muestra el mensaje, nunca el código
 
@@ -507,8 +524,10 @@ def test_editor_del_angulo_se_inicializa_al_abrir_la_pieza():
     solo corre sobre `document` al cargar la página — nunca ve el contenido
     que `abrir()` clona ahí adentro, así que sin esto no guarda nada."""
     env = _entorno_plantilla()
-    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo()]))
+    env.globals["url_for"] = lambda ruta, **k: "/static/" + k["filename"] if ruta == "static" else "#"
+    html = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo()]))
     assert "iniciarEditoresAngulo(cuerpo)" in html
+    assert 'src="/static/angulo.js"' in html      # la pestaña carga su propio script
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(raiz, "static", "angulo.js")) as f:
         js = f.read()

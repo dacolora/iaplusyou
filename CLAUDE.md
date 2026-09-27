@@ -172,9 +172,13 @@ brand reference images to auto-write that guía de estilo.
 **Sprints de contenido** (`sprints/` + `tareas/sprints.py`, spec
 `docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan.
 Since 2026-09-26 it is a **board** (spec `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`):
-«+ Nuevo sprint» is a short form (month, país/idioma, optional «momento del mes» from
-`sprints.calendario.presets(pais)` — the tab renders every country's presets with `data-pais` — or
-free text, brands to imitate) and the sprint page (`sprint_detalle.html`) is a board with one card
+«+ Nuevo sprint» is a short form (month, optional «momento del mes» from the PROJECT's calendar
+`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate). Since 2026-09-27
+a sprint is **for every country**: no país/idioma in the form, the sprint header or the campaign panel
+(`CAMPOS_SPRINT`/`CAMPOS_CAMPANA` refuse them), new sprints store `pais=NULL` and
+`idioma=datos.IDIOMA_BASE` ("en"), the idea prompt says «todos los países… cada país los adapta después
+en la edición final», and localization per country/language is final edition's job; old sprints keep the
+país/idioma they had (still read through `efectivos`). The sprint page (`sprint_detalle.html`) is a board with one card
 per campaign (`_sprint_tarjeta.html`, «Siguiente: …» from the pure `sprints/tablero.py`) plus a side
 panel (`_sprint_panel.html`, fetched; all its JS lives in `sprint_detalle.html` because scripts in
 fetched fragments never run) that saves field by field (`sprints.campana_campo` /
@@ -208,7 +212,27 @@ generates) and emails when a batch finishes. `sprints/revision.py` approves or
 rejects (a rejected piece leaves `estado_videos.json`), closes and reopens the
 sprint; `sprints/entrega.py` lists approved links and builds the zip
 (`sprint_empaquetar`). Retries and regenerations always go through the cost
-gate and `max_intentos=1`.
+gate and `max_intentos=1`. Entrega 2 of the board (2026-09-27; it replaced a smaller Armar/Ideas-only version,
+c91b6fc, that another session had shipped an hour earlier; spec
+`docs/superpowers/specs/2026-09-27-sprints-tablero-entrega2-design.md`): the panel has three
+tabs — Armar · Ideas · Piezas (`_sprint_panel_armar.html`, `_sprint_panel_ideas.html`,
+`_sprint_panel_piezas.html`, all rendered in one fragment and toggled client-side;
+`?panel=<cid>&paso=armar|ideas|piezas`, default from `sprints.tablero.paso_por_defecto`, counters
+from `tablero.pestanas`). Armar describes references inline and shows the product's sofisticación;
+the persona consciencia selector is gone from the panel (the campaign's consciencia wins,
+`fijos_de`). Ideas (angle editor, «Otra idea», «Reescribir», «Aprobar todas») and the «Generar»
+cost gate live in the Ideas tab — `campana_ideas` now only redirects there and
+`campana_ideas.html` is deleted. The Piezas tab (`sprints.campana_piezas`, re-fetched every 8 s
+while something is alive and never while a rejection reason is being typed) reviews, rejects with
+an inline reason, retries and regenerates with the price shown and a confirm, and approves what
+passed QA for THAT campaign only (`revision.aprobar_pasaron_qa(..., campana_id=)`); the
+sprint-wide review page stays for bulk review, filters by campaign («n · ETAPA · persona ·
+producto») and links each piece to its panel. «Proponer ideas» shows
+`gastos.estimar("proponer_ideas", n=)` and registers its real spend (tipo `ideas`, counted with
+`analisis._llamar_contando`, also when the answer was unusable, `max_intentos=1`). The routes the
+panel calls answer JSON when asked (`_quiere_json`); plain form posts still redirect (to the panel's tab when `volver=panel`). `base.html`'s unsaved-changes guard marks on `input`, and on `change` only `<select>`s.
+`static/angulo.js` clears `data-sucio` on its own fields only after a save that covered the
+latest edit.
 
 **Nicho y avatares** (`nicho/` + `tareas/nicho.py`, spec
 `docs/superpowers/specs/2026-09-18-nicho-avatares-design.md`): personas nacidas de
@@ -411,8 +435,9 @@ text variable `precio`, formatted per country or absent), freezes a version and 
 a second destino only pays its localization and voice; a changed guion or voice makes a new
 edición; degraded borradores are never reused (a new one is built, paying only the missing
 pieces). `capas`, `pieza.guion`, `final_id`s, the 5 `ETAPAS_FINAL` and the spend row
-`final:<id>:t<tarea>` keep their old shape, so the Crear modal, derivaciones and experiments did
-not change. `FINAL_EDITION_LEGADO=1` switches the worker back to the old layered pipeline
+`final:<id>:t<tarea>` keep their old shape, so the finals UI (then in Crear's modal, now the Final
+edition tab), derivaciones and experiments did not change. `FINAL_EDITION_LEGADO=1` switches the
+worker back to the old layered pipeline
 (`producir_legado`: `guion` -> `cortes` -> sonido -> `voz` -> `musica` -> `texto` -> `render`),
 kept only until `render.py`/`texto.py` are retired. Since S2 the clon's native sound is a layer: `producir` reads the RAW clon
 (`video_local_crudo`/`video_url_crudo`, never the music-mixed file), `render` trims `[0:a]`
@@ -436,9 +461,13 @@ individually verified against fal (see the module docstring) rather than assumed
 ElevenLabs' own catalog. Fonts are checked into `static/fonts/`; generated music
 tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 `tareas/final_edition.py`; the dashboard routes are `fe_preparar`, `fe_guardar_guion`,
-`fe_producir`, `fe_descartar`.
+`fe_producir`, `fe_descartar`. Since 2026-09-27 its UI is its own tab, **Final edition**
+(`_tab_final.html`, `data-tab="final"`, decisión de Daniel): the ready Crear videos with the guion,
+«Producir finales» and their finals, plus each piece's ediciones with «Abrir en el editor»; Crear
+only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
+return to `#final`.
 
-**Editor (capas 1–2, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–3, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -475,8 +504,8 @@ table the browser must match too), scaled to that box (`scale=w:h`) with per-cli
 outlasts it; subtitles get `fontsdir=static/fonts` and every path inside the graph goes
 through `_ruta_filtro` (two-level ffmpeg escaping — `'` becomes `\'\''`). NOT rendered in
 capa 1: `superpuesto` (PIP — `compilar` raises if it has clips), `rotacion` and
-`marca.marca_de_agua`; and one `-ss/-t` input per principal clip (memory bound for
-reordered clips) is due before capa 3. `motor/tramos.py` splits into windows past
+`marca.marca_de_agua`; each principal clip is its own `-ss/-t` input (capa 3: a reordered clip
+decodes only its span; the principal may mix sources). `motor/tramos.py` splits into windows past
 `PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
 exceeding budget at one instant is the only hard error — and `motor.renderizar` cleans
 partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
@@ -504,6 +533,21 @@ copies `extra.local` when the file is still on disk; `materiales.actualizar_extr
 `extra`; `ediciones.buscar_origen` finds the borrador of a receta. A fatal first-block voice
 failure raises `produccion.VozFatal`, and any exception raised after paying carries
 `costo_pagado`/`capas_pagadas` so `producir` still records the spend (Task 8's rulings).
+Capa 3 (2026-09-27): the browser preview `/cliente/<c>/ediciones/<id>` (Blueprint
+`final_edition/rutas_editor.py`, data from `final_edition/vista_previa.py`, open to anyone with access
+to the project) — ES modules in `static/editor/` (pure: `geometria`, `tiempo`, `resolver`, `precio`,
+`texto`, `subtitulos`, `audio`, `reloj`, `pendientes`; browser: `texto_canvas`, `videos`, `lienzo`, `motor_audio`,
+`vista`), tested with Node's own runner through `tests/test_editor_js.py` against parity tables that
+Python generates (`tests/fixtures/generar_casos_editor.py`; `test_casos_del_editor_al_dia` fails when
+one is stale). The preview draws only what the compiler renders (no rotation/PIP/watermark; x/y
+keyframes; `deslizar` entry); subtitles use libass's size via `subtitulos.escala_libass()` (OS/2
+metrics); audio is Web Audio with a ducking curve precomputed from the voice `picos`, which needs CORS
+on R2 (`storage/r2_cors.py`, applied by hand), while video proxies and images load WITHOUT
+`crossOrigin` (read-only preview; capa 5, which reads the canvas as PNG, must restore it). Proxies
+are short-side 540 with a keyframe every 15 frames (`tareas.edicion.PROXY_VERSION = 2`; the page
+re-queues older ones, free) and polls for them at most 5 min, swapping each one in as soon as it is ready
+(never while playing). `sembrar_edicion_demo.py` builds a local demo edition (no spend, no R2); its CLI
+refuses when `PLATAFORMA_URL` (env or root `.env`) points to a non-local host.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
@@ -717,7 +761,13 @@ fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.b
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`).
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Crear's «Desde referencias» form is a **composer**
+(spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
+(OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
+whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
+from them —, so the POST to `cf_crear_video` is unchanged; upload/link inputs reach their empty outside forms via
+`form=`, the catalog opens as a `<dialog>` (`_selector_productos.html` with `sel_dialogo=True`; «Cambiar producto»
+keeps its `<details>`), and Enter in a one-line input never submits it (it used to generate and charge).
 
 **Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
 ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)
@@ -749,8 +799,8 @@ amplios (4 000–16 000 tokens): el pensamiento adaptativo de `claude-sonnet-5` 
 respuesta llega vacía (prueba real del 2026-09-26).
 
 **Doctrina, bloque 2: el ángulo a la vista** (spec `docs/superpowers/specs/2026-09-26-doctrina-bloque-2-angulo-visible-design.md`):
-el ángulo se ve y se edita entero en la tarjeta de cada idea del sprint y en cada pieza de Crear (antes de «Preparar
-guion»): macro `templates/_angulo_editor.html` + `static/angulo.js` (autoguardado JSON; los campos no llevan `name`
+el ángulo se ve y se edita entero en la tarjeta de cada idea del sprint y en cada video de la pestaña Final edition
+(antes de «Preparar guion»; se mudó de Crear con la sección de final edition, 2026-09-27): macro `templates/_angulo_editor.html` + `static/angulo.js` (autoguardado JSON; los campos no llevan `name`
 para no mezclarse con el autoguardado de la tarjeta), rutas `sprints.idea_angulo` (409 si la idea ya tiene pieza) y
 `cf_angulo`; `doctrina.angulo_desde_formulario` valida sin bloquear (`mensaje_error` da frases simples), conserva
 `origen`, pone `editado_en` y quita los «error: …»; con `editado_en`, `texto_verificable` cuenta todo el ángulo como
@@ -758,7 +808,7 @@ dato (las cifras de la persona se usan tal cual). Un ángulo sin promesa o sin g
 «Reescribir la idea con este ángulo» (tarea `sprint_reescribir_idea`, `sprints.ideas.reescribir`, gasto `ideas`) cambia
 título, escena y sonido sin tocar el ángulo. Datos del mercado: la consciencia (la de la campaña,
 `campana.consciencia` del tablero de Sprints, y si la campaña no tiene, la de la persona:
-`persona.extra.conciencia.nivel`, selector en la página de ideas de la campaña, ruta `sprints.persona_conciencia`;
+`persona.extra.conciencia.nivel`, ruta `sprints.persona_conciencia` — desde la entrega 2 del tablero el panel ya no muestra ese selector: manda la consciencia de la campaña;
 `sprints.ideas.fijos_de` aplica ese orden) y la sofisticación del producto (`producto.extra.sofisticacion`, selector en Catálogo) mandan cuando existen:
 `doctrina.validar_angulo(..., fijos=)` los impone antes de validar y `doctrina.datos_fijos_texto` los pone en los
 DATOS de ideas, guion (sin ángulo) y «Adaptar con IA». Pruebas y pedidos del producto viven en

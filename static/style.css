@@ -1167,6 +1167,15 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .detalle-acciones { display: flex; gap: .5rem; flex-wrap: wrap; align-items: flex-start; margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .detalle-acciones a.btn-generar { text-decoration: none; display: inline-block; }
 @media (max-width: 720px) { .generado-modal-cuerpo { grid-template-columns: 1fr; } .detalle-media { min-height: 220px; } }
+/* Final edition (2026-09-27): el guion y «Producir finales» son largos. En
+   pantalla ancha la fila de la rejilla no pasa del alto del modal y la columna
+   de datos se desplaza sola: el video queda a la vista. Solo #fe-modal (Crear
+   y la ficha de Referentes siguen igual); en celular es una columna y el
+   modal entero se desplaza, como siempre. */
+@media (min-width: 721px) {
+  #fe-modal .generado-modal-cuerpo { grid-template-rows: minmax(0, 1fr); }
+  #fe-modal .detalle-info { overflow-y: auto; }
+}
 
 /* Portada (landing) e inicio de sesión */
 .landing-hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 3rem; align-items: center; padding: 2.5rem 0 3.5rem; }
@@ -1960,7 +1969,9 @@ summary { cursor: pointer; }
 .panel-cabecera h2::before { display: none; }
 .panel-cabecera-desc { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.55; max-width: 72ch; }
 .panel-cabecera-desc + .panel-cabecera-desc { margin-top: .4rem; }
-.panel-cabecera-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: 0 0 auto; }
+/* max-width: sin él, `flex: 0 0 auto` toma el ancho de una sola línea y en el celular la cabecera del
+   sprint («+ Campaña · Generar lote · Revisar · Más») medía 434 px a 375: la página corría de lado. */
+.panel-cabecera-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; flex: 0 0 auto; max-width: 100%; }
 
 /* Estado vacío: un título, una línea y (si aplica) el botón para empezar. */
 .estado-vacio {
@@ -2289,3 +2300,192 @@ body.panel-abierto { overflow: hidden; }
   display: inline; padding: 0;
 }
 .tablero-tarjeta .vacio { padding: 0; }
+/* Entrega 2 (2026-09-27): pestañas del panel y describir referentes */
+.panel-pestanas { display: flex; gap: .4rem; flex-wrap: wrap; margin: .8rem 0 .2rem; }
+.panel-pestana { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 999px;
+  padding: .25rem .8rem; font: inherit; font-size: .9rem; cursor: pointer; min-height: 2.25rem; }
+.panel-pestana span { color: var(--muted); margin-left: .2rem; }
+.panel-pestana[aria-selected="true"] { background: var(--accent-grad); color: #fff; border-color: transparent; }
+.panel-pestana[aria-selected="true"] span { color: #fff; }
+.tablero-panel.panel-ancho { width: min(960px, 100%); }
+.panel-describir { display: grid; gap: .5rem; padding: .6rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+.panel-describir[hidden] { display: none; }
+.panel-describir-cab { display: flex; gap: .5rem; align-items: center; }
+.panel-describir-cab img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
+.enlace-describir { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-size: .7rem;
+  color: var(--accent-texto); cursor: pointer; }
+.panel-sofisticacion { margin: 0; font-size: .85rem; }
+.panel-ideas-conteo { margin: 0; }
+.panel-ideas { gap: .5rem; }
+.panel-idea { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .5rem .7rem; background: var(--panel); }
+.panel-idea > summary { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; cursor: pointer; }
+.panel-idea-aprobada { border-color: var(--ok); }
+.panel-idea-estado { margin-left: auto; font-size: .8rem; color: var(--muted); }
+.panel-idea-cuerpo { display: grid; gap: .5rem; margin-top: .6rem; }
+.panel-idea-refs { display: flex; gap: 4px; flex-wrap: wrap; }
+.panel-idea-refs img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
+.chip-tipo { font-size: .7rem; font-weight: 700; border: 1px solid var(--border); border-radius: 999px; padding: 0 .45rem; }
+.panel-generar { border: 1px dashed var(--accent); border-radius: var(--radius); padding: .8rem; }
+.panel-piezas-cab { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.panel-piezas-cab p { margin: 0; }
+.panel-piezas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: .8rem; margin-top: .8rem; }
+/* align-content: las filas del grid no se estiran a la altura de la tarjeta vecina (los botones medían 43 px). */
+.panel-pieza { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem; display: grid; gap: .4rem;
+  background: var(--panel); min-width: 0; align-content: start; }
+.panel-pieza-aprobada { border-color: var(--ok); }
+.panel-pieza-rechazada { border-color: var(--error); }
+.panel-pieza-media video, .panel-pieza-media img { width: 100%; max-height: 360px; object-fit: contain; display: block;
+  border-radius: 6px; background: var(--panel-2); }
+.panel-pieza-qa { margin: 0; display: flex; gap: .3rem; align-items: center; flex-wrap: wrap; }
+.panel-rechazo { display: grid; gap: .4rem; }
+.panel-rechazo[hidden] { display: none; }
+
+/* ============================================================
+   Crear: compositor (2026-09-27) — spec:
+   docs/superpowers/specs/2026-09-27-crear-compositor-design.md
+   Una tarjeta en dos mitades (bandeja arriba, formulario abajo) y una barra
+   de pastillas con menús. Solo tokens de :root (modo oscuro único).
+   ============================================================ */
+.crear-comp { max-width: 920px; margin-top: 1rem; position: relative; }
+.crear-comp [hidden] { display: none !important; }
+.crear-comp-arriba { background: var(--panel); border: 1px solid var(--border); border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0; padding: 1rem 1.1rem .3rem; }
+.crear-comp-abajo { background: var(--panel); border: 1px solid var(--border); border-top: 0;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg); padding: .1rem 1.1rem 1rem; }
+.crear-comp.soltando .crear-comp-arriba, .crear-comp.soltando .crear-comp-abajo { border-color: var(--accent-2); background: var(--panel-hover); }
+
+/* Referencias (bandeja + lo elegido del catálogo) */
+.crear-refs { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-start; }
+.crear-refs + .crear-refs, #fp-bandeja-wrap + .crear-refs { margin-top: .6rem; }
+.crear-ref { position: relative; margin: 0; width: 76px; }
+.crear-ref img { width: 76px; height: 76px; object-fit: cover; display: block; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); }
+.crear-ref.es-video img { border: 2px solid var(--accent-2); }
+.crear-ref figcaption { margin-top: .25rem; font-size: .68rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.crear-ref form { margin: 0; }
+.crear-ref-quitar { position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; min-height: 0; padding: 0; border-radius: 999px;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: .8rem; line-height: 1; cursor: pointer; }
+.crear-refs-acciones { display: flex; flex-wrap: wrap; gap: .2rem .9rem; align-items: center; align-self: center; }
+.crear-refs-acciones form { margin: 0; }
+.crear-refs-vacio { margin: 0 0 .4rem; font-size: .82rem; color: var(--muted); line-height: 1.5; }
+.crear-ref-aviso { margin: 0 0 .5rem; font-size: .8rem; color: var(--muted); }
+.crear-subida { margin-top: .6rem; font-size: .78rem; color: var(--muted); }
+
+/* Botones con forma de enlace (Describir con IA, Quitar todas, super prompt) */
+.crear-enlace { background: none; border: 0; padding: 0; min-height: 0; box-shadow: none; color: var(--accent-texto);
+  font-family: var(--font-body); font-size: .8rem; font-weight: 600; cursor: pointer; text-align: left; }
+.crear-enlace:hover:not(:disabled) { text-decoration: underline; filter: none; box-shadow: none; }
+.crear-enlace-gris { color: var(--muted); font-weight: 500; }
+
+/* Texto */
+.crear-etiquetas { margin: .7rem 0 .1rem; }
+.crear-etiquetas:empty { display: none; }
+.crear-comp-abajo textarea { width: 100%; min-height: 6.5rem; resize: vertical; background: transparent; border: 0; box-shadow: none;
+  padding: .7rem .1rem .5rem; font-size: 1rem; line-height: 1.55; color: var(--text); }
+.crear-comp-abajo textarea:focus { outline: none; box-shadow: none; border: 0; }
+.crear-comp-abajo textarea.con-error { box-shadow: inset 0 0 0 1px var(--error); border-radius: var(--radius-sm); }
+.crear-oculto-lector { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Barra: pastillas a la izquierda; precio y Generar a la derecha */
+.crear-barra { display: flex; justify-content: space-between; align-items: center; gap: .8rem; flex-wrap: wrap;
+  border-top: 1px solid var(--border); padding-top: .8rem; margin-top: .3rem; }
+.crear-pills { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; min-width: 0; }
+.crear-pill-zona { position: relative; }
+.crear-pill { display: inline-flex; align-items: center; gap: .3rem; min-height: 0; padding: .45rem .85rem; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--text); box-shadow: none;
+  font-family: var(--font-body); font-size: .8rem; font-weight: 500; white-space: nowrap; cursor: pointer; }
+.crear-pill:hover { background: var(--panel-hover); }
+.crear-pill[aria-expanded="true"] { border-color: var(--accent-2); background: var(--panel-hover); }
+.crear-pill.con-aviso { border-color: var(--warn); }
+.crear-mas { width: 2.2rem; height: 2.2rem; padding: 0; justify-content: center; font-size: 1.2rem; }
+.crear-generar { display: flex; align-items: center; gap: .8rem; margin-left: auto; }
+.crear-precio { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; white-space: nowrap; }
+.crear-generar .btn-generar { border-radius: 999px; padding: .65rem 1.35rem; margin: 0; }
+
+/* Menús */
+.crear-menu { position: absolute; top: calc(100% + .5rem); left: 0; z-index: 30; width: 320px; max-width: calc(100vw - 2rem);
+  display: flex; flex-direction: column; gap: .3rem; padding: .5rem; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.crear-menu-ancho { width: 370px; }
+.crear-menu-der { left: auto; right: 0; }
+.crear-menu-titulo { margin: .35rem .45rem .1rem; font-size: .68rem; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.crear-menu-item { display: flex; flex-direction: row; gap: .7rem; align-items: flex-start; width: 100%; min-height: 0; padding: .55rem .6rem;
+  text-align: left; background: none; border: 0; border-radius: var(--radius-sm); box-shadow: none; color: var(--text);
+  font-family: var(--font-body); font-size: .85rem; font-weight: 400; cursor: pointer; }
+.crear-menu-item:hover { background: var(--panel-hover); }
+.crear-menu-item strong, .crear-opcion strong, .crear-interruptor strong { display: block; font-size: .85rem; font-weight: 600; color: var(--text); }
+.crear-menu-item small, .crear-opcion small, .crear-interruptor small { display: block; margin-top: .1rem; font-size: .74rem; font-weight: 400; line-height: 1.4; color: var(--muted); }
+.crear-menu-ico { flex: none; width: 1.9rem; height: 1.9rem; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-sm); background: var(--panel); }
+.crear-menu-fila { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; padding: .15rem .45rem; }
+.crear-menu-fila input[type="text"], .crear-menu-fila input[type="url"] { flex: 1 1 10rem; margin: 0; }
+.crear-menu-sep { height: 1px; background: var(--border); margin: .25rem .3rem; }
+.crear-nota { margin: .1rem .45rem; font-size: .74rem; line-height: 1.45; color: var(--muted); }
+.crear-nota-aviso { color: var(--warn); }
+
+/* Listas de una opción (tipo, modelo, Mi música) */
+.crear-opciones { display: flex; flex-direction: column; gap: .2rem; }
+.crear-opcion { position: relative; display: flex; align-items: center; gap: .7rem; padding: .55rem .6rem;
+  border: 1px solid transparent; border-radius: var(--radius-sm); cursor: pointer; }
+.crear-opcion:hover { background: var(--panel-hover); }
+.crear-opcion input { position: absolute; opacity: 0; pointer-events: none; }
+.crear-opcion:has(input:checked) { border-color: var(--accent-2); background: var(--panel-hover); }
+.crear-opcion:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+.crear-opcion > span { flex: 1; min-width: 0; }
+.crear-modelo em { font-style: normal; font-size: .78rem; font-weight: 600; color: var(--accent-texto); white-space: nowrap; }
+.crear-opcion-simple { width: 100%; min-height: 0; padding: .5rem .6rem; text-align: left; background: none; box-shadow: none;
+  border: 1px solid transparent; border-radius: var(--radius-sm); color: var(--text); font-family: var(--font-body); font-size: .85rem; font-weight: 500; cursor: pointer; }
+.crear-opcion-simple:hover { background: var(--panel-hover); }
+.crear-opcion-simple[aria-pressed="true"] { border-color: var(--accent-2); background: var(--panel-hover); }
+
+/* Fichas (duración, formato, estilos de música) */
+.crear-fichas { display: flex; flex-wrap: wrap; gap: .35rem; padding: .1rem .35rem; }
+.crear-ficha { min-height: 0; padding: .35rem .75rem; border-radius: 999px; background: var(--panel); border: 1px solid var(--border);
+  box-shadow: none; color: var(--text); font-family: var(--font-body); font-size: .78rem; font-weight: 500; cursor: pointer; }
+.crear-ficha:hover:not(:disabled) { background: var(--panel-hover); }
+.crear-ficha[aria-pressed="true"] { border-color: var(--accent-2); background: var(--panel-hover); }
+.crear-ficha:disabled { opacity: .4; text-decoration: line-through; cursor: not-allowed; }
+
+/* Interruptores (borrador, sonido de la escena) */
+.crear-interruptor { display: flex; align-items: center; gap: .7rem; padding: .55rem .6rem; border-radius: var(--radius-sm); cursor: pointer; }
+.crear-interruptor > span { flex: 1; min-width: 0; }
+.crear-interruptor input { order: 2; flex: none; appearance: none; -webkit-appearance: none; position: relative; width: 2.2rem; height: 1.3rem;
+  margin: 0; border-radius: 999px; background: var(--panel-hover); border: 1px solid var(--border); cursor: pointer; transition: background .15s ease; }
+.crear-interruptor input::after { content: ""; position: absolute; top: 2px; left: 2px; width: calc(1.3rem - 6px); height: calc(1.3rem - 6px);
+  border-radius: 50%; background: var(--muted); transition: transform .15s ease, background .15s ease; }
+.crear-interruptor input:checked { background: var(--accent-grad); border-color: transparent; }
+.crear-interruptor input:checked::after { transform: translateX(.9rem); background: var(--text); }
+.crear-interruptor input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.crear-interruptor input:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Música */
+.crear-musica { display: flex; flex-direction: column; gap: .2rem; }
+.crear-musica-inicio { display: flex; flex-direction: column; gap: .3rem; padding: .2rem .45rem; }
+.crear-musica-inicio audio { width: 100%; height: 32px; }
+.crear-inicio { display: inline-flex; flex-direction: row; align-items: center; gap: .4rem; font-size: .78rem; color: var(--muted); }
+.crear-inicio input { width: 4.5rem; margin: 0; }
+#mm-wrap .mm-panel { padding: 0 .45rem .2rem; }
+
+/* Pie y catálogo */
+.crear-pie { max-width: 920px; display: flex; justify-content: space-between; align-items: center; gap: .4rem 1rem; flex-wrap: wrap;
+  margin: .6rem .2rem 0; font-size: .78rem; color: var(--muted); }
+.crear-pie .crear-enlace { color: var(--muted); font-weight: 500; }
+.crear-pie .crear-enlace strong { color: var(--accent-texto); font-weight: 600; }
+.selector-en-dialogo .comparacion-contenido { padding: 0; border: 0; background: none; }
+.selector-resumen { margin: 0 0 .8rem; font-size: .82rem; color: var(--muted); }
+
+.crear-velo { display: none; }
+@media (max-width: 760px) {
+  .crear-comp-arriba { padding: .8rem .8rem .3rem; }
+  .crear-comp-abajo { padding: .1rem .8rem .8rem; }
+  /* Una sola línea: con wrap, cada línea de una columna mide lo que su hijo más
+     ancho (la fila de pastillas) y «Generar» se salía de la tarjeta. */
+  .crear-barra { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+  .crear-pills { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: .2rem; }
+  .crear-pills::-webkit-scrollbar { display: none; }
+  .crear-pill-zona { position: static; flex: none; }
+  .crear-menu, .crear-menu-ancho, .crear-menu-der { position: fixed; left: 0; right: 0; top: auto; bottom: 0; width: auto; max-width: none;
+    max-height: 75vh; overflow-y: auto; z-index: 60; padding: .9rem .8rem 1.2rem; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+  body.crear-menu-abierto .crear-velo { display: block; position: fixed; inset: 0; z-index: 55; background: rgba(0, 0, 0, .55); }
+  .crear-generar { margin-left: 0; }
+  .crear-generar .btn-generar { flex: 1; }
+}

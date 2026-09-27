@@ -61,3 +61,16 @@ def test_color_secundario_del_karaoke_es_naranja_en_bgr():
     ass = s.generar_ass({"estilo_id": "karaoke", "posicion": 0.78, "palabras": PAL[:1]}, "9:16")
     assert "&H007CAEED&" in ass
     assert "&H00EDAE7C&" not in ass
+
+
+def test_estilos_ass_es_el_mismo_dict():
+    from final_edition.motor import subtitulos as s
+    assert s.ESTILOS_ASS is s._ESTILOS
+    assert set(s.ESTILOS_ASS) == set(s.ESTILOS)
+
+
+def test_escala_libass_sale_de_la_tabla_os2_de_inter():
+    from final_edition.motor import subtitulos as s
+    k = s.escala_libass()
+    assert 0.6 < k < 1.0          # em más chico que Fontsize: libass mide asc+desc
+    assert s.escala_libass() == k  # determinista (con caché)

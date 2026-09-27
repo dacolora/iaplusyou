@@ -55,13 +55,6 @@
       <small class="campo-error" hidden></small></label>
     <label>Fin <input type="date" data-campo="fin" value="{{ sprint.fin }}">
       <small class="campo-error" hidden></small></label>
-    <label>País <select data-campo="pais">
-        <option value="">Sin país</option>
-        {% for p in paises %}<option value="{{ p.codigo }}" {% if p.codigo == sprint.pais %}selected{% endif %}>{{ p.bandera }} {{ p.nombre }}</option>{% endfor %}
-      </select><small class="campo-error" hidden></small></label>
-    <label>Idioma de los textos <select data-campo="idioma">
-        {% for cod, nombre in idiomas.items() %}<option value="{{ cod }}" {% if cod == sprint.idioma %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
-      </select><small class="campo-error" hidden></small></label>
     <label>Momento del mes <select data-campo="momento">
         <option value="">Ninguno</option>
         {% for p in presets %}<option value="{{ p.clave }}" {% if p.clave == momento_valor %}selected{% endif %}>{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
@@ -96,7 +89,7 @@
 <div class="tablero-fondo" id="tablero-fondo" hidden></div>
 <aside class="tablero-panel" id="tablero-panel" hidden aria-label="Campaña"
        data-url-base="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id) }}"
-       data-panel-inicial="{{ panel_inicial or '' }}">
+       data-panel-inicial="{{ panel_inicial or '' }}" data-paso-inicial="{{ paso_inicial }}">
   <div id="tablero-panel-cuerpo"></div>
 </aside>
 
@@ -135,6 +128,7 @@
 
 {% include "_sprint_lote_modal.html" %}
 
+<script src="{{ url_for('static', filename='angulo.js') }}"></script>
 <script>
   (function () {
     var panel = document.getElementById('tablero-panel');
@@ -163,10 +157,27 @@
     function limpiarSucio(raiz) {
       raiz.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
     }
-    function marcarUrl(cid) {
+    var pasoActual = null;
+    function marcarUrl(cid, paso) {
       var u = new URL(location.href);
       if (cid) u.searchParams.set('panel', cid); else u.searchParams.delete('panel');
+      if (cid && paso) u.searchParams.set('paso', paso); else u.searchParams.delete('paso');
       history.replaceState(null, '', u);
+    }
+    // Pestañas del panel (entrega 2): todas vienen en el fragmento; aquí solo se
+    // muestra una, se recuerda en la URL y se avisa con `tablero:paso` (la
+    // pestaña Piezas arranca o para su actualización automática con eso).
+    function irAPaso(paso) {
+      var r = cuerpo.querySelector('.panel-campana[data-cid]');
+      if (!r) return;
+      cuerpo.querySelectorAll('[data-pestana]').forEach(function (s) { s.hidden = s.dataset.pestana !== paso; });
+      cuerpo.querySelectorAll('[data-ir-paso]').forEach(function (b) {
+        if (b.getAttribute('role') === 'tab') b.setAttribute('aria-selected', b.dataset.irPaso === paso ? 'true' : 'false');
+      });
+      panel.classList.toggle('panel-ancho', paso === 'piezas');
+      pasoActual = paso;
+      marcarUrl(r.dataset.cid, paso);
+      document.dispatchEvent(new CustomEvent('tablero:paso', {detail: {paso: paso}}));
     }
     function marcarActiva(cid) {
       grid.querySelectorAll('.tablero-tarjeta.activa').forEach(function (t) { t.classList.remove('activa'); });
@@ -186,28 +197,34 @@
       panel.hidden = true; fondo.hidden = true; cuerpo.innerHTML = '';
       document.body.classList.remove('panel-abierto'); marcarUrl(null); marcarActiva(null);
       panelActualCid = null;
+      pasoActual = null;
+      panel.classList.remove('panel-ancho');
+      document.dispatchEvent(new CustomEvent('tablero:cerrado'));
     }
     function noExiste() {
       panelActualCid = null;
       cuerpo.innerHTML = '<div class="estado-vacio"><p class="estado-vacio-titulo">Esta campaña ya no existe</p>' +
         '<p class="estado-vacio-texto">Pudo borrarse en otra pestaña.</p><a class="btn-sm" href="' + base + '">Volver al tablero</a></div>';
     }
+    // Una tarjeta que se refresca tarde (su campaña ya no es la del panel)
+    // no se lleva el resaltado de la que sí está abierta.
     function refrescarTarjeta(cid) {
       return fetch(base + '/campanas/' + cid + '/tarjeta', {headers: H})
         .then(function (r) { return r.ok ? r.text() : null; })
         .then(function (html) {
           var t = document.getElementById('campana-' + cid);
-          if (html && t) { t.outerHTML = html; marcarActiva(cid); }
+          if (html && t) { t.outerHTML = html; if (panelActualCid === String(cid)) marcarActiva(cid); }
         }).catch(function () {});
     }
-    function abrir(cid) {
-      mostrar(); marcarUrl(cid); marcarActiva(cid);
+    function abrir(cid, paso) {
       var mismo = panelActualCid === cid;
+      if (!paso && mismo) paso = pasoActual;
+      mostrar(); marcarUrl(cid, paso); marcarActiva(cid);
       var scroll = mismo ? panel.scrollTop : 0;
       if (!mismo) cuerpo.innerHTML = '<p class="vacio">Cargando la campaña…</p>';
       panelActualCid = cid;
       var miPeticion = ++peticionPanel;
-      return fetch(base + '/campanas/' + cid + '/panel', {headers: H})
+      return fetch(base + '/campanas/' + cid + '/panel' + (paso ? '?paso=' + encodeURIComponent(paso) : ''), {headers: H})
         .then(function (r) {
           if (r.status === 404) { if (miPeticion === peticionPanel) noExiste(); return null; }
           if (!r.ok) throw new Error();
@@ -216,6 +233,8 @@
         .then(function (html) {
           if (html === null || miPeticion !== peticionPanel) return;
           cuerpo.innerHTML = html;
+          var r = cuerpo.querySelector('.panel-campana[data-cid]');
+          if (r) irAPaso(r.dataset.paso);
           if (mismo) panel.scrollTop = scroll;
           if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo();
         })
@@ -228,12 +247,16 @@
       mostrar(); marcarUrl(null); marcarActiva(null);
       cuerpo.innerHTML = document.getElementById('tablero-nueva').innerHTML;
       panelActualCid = null;
+      pasoActual = null; panel.classList.remove('panel-ancho');
       peticionPanel++;    // cualquier `abrir` todavía en vuelo queda obsoleta
     }
     window.tablero = {abrir: abrir, abrirNueva: abrirNueva, cerrar: cerrar, refrescarTarjeta: refrescarTarjeta,
-                      json: json, mensaje: mensaje, cuerpo: cuerpo, panel: panel, base: base};
+                      json: json, mensaje: mensaje, cuerpo: cuerpo, panel: panel, base: base,
+                      irAPaso: irAPaso, paso: function () { return pasoActual; }};
 
     document.addEventListener('click', function (ev) {
+      var pestana = ev.target.closest('[data-ir-paso]');
+      if (pestana && panel.contains(pestana)) { irAPaso(pestana.dataset.irPaso); return; }
       if (ev.target.closest('[data-nueva-campana]')) { abrirNueva(); return; }
       if (ev.target.closest('[data-panel-cerrar]')) { cerrar(); return; }
       var t = ev.target.closest('.tablero-tarjeta[data-cid]');
@@ -286,9 +309,11 @@
         .then(json).then(function (j) {
           el.dataset.guardado = el.value;
           delete el.dataset.sucio;
+          // «Otro (escríbelo)…» se guarda por el <select> del momento: el texto
+          // que se escribió también quedó guardado.
+          if (el.dataset.campo === 'momento') delete campos.querySelector('[data-momento-texto]').dataset.sucio;
           document.getElementById('tablero-linea').textContent = j.linea;
           document.getElementById('tablero-resumen').textContent = j.resumen;
-          if (el.dataset.campo === 'pais') location.reload();
         })
         .catch(function (e) {
           el.value = el.dataset.guardado || '';
@@ -312,7 +337,15 @@
       guardarSprint(el, el.value);
     });
 
-    // Mientras el sprint genera, el resumen del lote se actualiza solo.
+    // Mientras el sprint genera, el resumen del lote se actualiza solo. Al
+    // terminar recarga, pero no a ciegas: con algo sin guardar (la misma marca
+    // `data-sucio` de base.html) o un motivo de rechazo a medio escribir solo
+    // se actualiza el resumen y se vuelve a probar en la siguiente vuelta.
+    function puedeRecargar() {
+      if (typeof haySinGuardar === 'function' && haySinGuardar()) return false;
+      return !Array.prototype.some.call(document.querySelectorAll('[data-motivo]'),
+                                        function (t) { return t.value.trim(); });
+    }
     if ({{ sprint.estado | tojson }} === 'generando') {
       setInterval(function () {
         fetch({{ url_for('sprints.progreso_json', cliente=cliente, sid=sprint.id) | tojson }}, {headers: H})
@@ -320,12 +353,12 @@
           .then(function (j) {
             var res = document.getElementById('sprint-lote-resumen');
             if (res && j.lote) res.textContent = j.lote.listas + ' listas · ' + j.lote.generando + ' generando · ' + j.lote.encoladas + ' en cola · ' + j.lote.error + ' con error · ' + j.lote.aprobadas + ' aprobadas · USD ' + j.lote.costo_usd.toFixed(2) + ' gastado';
-            if (j.estado !== 'generando') location.reload();
+            if (j.estado !== 'generando' && puedeRecargar()) location.reload();
           }).catch(function () {});
       }, 10000);
     }
 
-    if (panel.dataset.panelInicial) abrir(panel.dataset.panelInicial);
+    if (panel.dataset.panelInicial) abrir(panel.dataset.panelInicial, panel.dataset.pasoInicial || null);
   })();
 </script>
 <script>
@@ -337,6 +370,16 @@
     var HJ = {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'};
 
     function raiz() { return cuerpo.querySelector('.panel-campana[data-cid]'); }
+    // Respuestas que llegan tarde: el cid se toma al hacer clic y, al volver la
+    // respuesta, el panel solo se reabre (o se le pintan avisos) si sigue
+    // mostrando ESA campaña; si ya muestra otra, está cargando otra o se
+    // cerró, solo se refresca la tarjeta de la campaña que cambió.
+    function cidPanel() { var r = raiz(); return r ? r.dataset.cid : null; }
+    function sigue(cid) { return cid != null && cidPanel() === String(cid); }
+    function trasCambio(cid, paso) {
+      T.refrescarTarjeta(cid);
+      return sigue(cid) ? T.abrir(cid, paso) : null;
+    }
     function valorDe(el) {
       if (el.dataset.tipo === 'radio') { var x = el.querySelector('input:checked'); return x ? x.value : ''; }
       if (el.dataset.tipo === 'familias') {
@@ -371,10 +414,14 @@
       cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
         if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
       });
+      if (typeof window.iniciarEditoresAngulo === 'function') window.iniciarEditoresAngulo(cuerpo);
+      estimarLoteCampana();
+      programarPiezas();
     };
     function guardar(el, valor) {
       var r = raiz();
       if (!r) return Promise.resolve();
+      var cid = r.dataset.cid;
       var err = errorDe(el);
       if (err) { err.hidden = true; err.textContent = ''; }
       return fetch(r.dataset.urlCampo, {method: 'POST', headers: HJ, body: JSON.stringify({campo: el.dataset.campo, valor: valor})})
@@ -382,15 +429,16 @@
         .then(function (j) {
           el.dataset.guardado = JSON.stringify(valor);
           delete el.dataset.sucio;
-          var t = document.getElementById('campana-' + r.dataset.cid);
+          var t = document.getElementById('campana-' + cid);
           if (t && j.tarjeta) {
             t.outerHTML = j.tarjeta;
-            var nueva = document.getElementById('campana-' + r.dataset.cid);
-            if (nueva) nueva.classList.add('activa');
+            var nueva = document.getElementById('campana-' + cid);
+            if (nueva && sigue(cid)) nueva.classList.add('activa');
           }
           var resumen = document.getElementById('tablero-resumen');
           if (resumen && j.resumen) resumen.textContent = j.resumen;
-          if (j.recargar_panel) return T.abrir(r.dataset.cid);
+          if (!sigue(cid)) return;
+          if (j.recargar_panel) return T.abrir(cid);
           avisar(j.aviso || '');
         })
         .catch(function (e) {
@@ -405,6 +453,9 @@
     panel.addEventListener('change', function (ev) {
       var t = ev.target;
       if (!raiz() || t.closest('form')) return;
+      var cajaDescribir = t.closest('[data-describir]');
+      if (cajaDescribir) { guardarDescripcion(cajaDescribir); return; }
+      if (t.matches('[data-lote-modelo]')) { estimarLoteCampana(); return; }
       if (t.matches('[data-agregar-familia]')) {
         var v = t.value.trim();
         if (!v) return;
@@ -424,14 +475,288 @@
       if (el) guardar(el, valorDe(el));
     });
 
-    function recargarTodo() {
-      var cid = raiz().dataset.cid;
-      T.refrescarTarjeta(cid);
-      return T.abrir(cid);
+    function recargarTodo(cid) {
+      return trasCambio(cid);
     }
+    // Describir un referente subido («Falta describir ✎») sin salir del panel
+    // (entrega 2): cada cambio guarda intención + descripción en
+    // `sprints.referencia_editar`. El panel NO se vuelve a pintar (cerraba la
+    // caja después del primer guardado y se perdía el segundo chip): la caja
+    // sigue abierta, dice «Guardado ✓», la tarjeta se refresca y los
+    // contadores (pestaña Armar, «Referentes · n de m») se actualizan en el
+    // sitio con lo que responde la ruta. Un guardado a la vez por caja: un
+    // cambio que llega mientras otro vuela se manda al terminar, con lo que
+    // haya entonces (así el último estado siempre es el que queda).
+    function pintarConteoReferentes(j) {
+      var listas = Number(j.referencias_listas || 0), objetivo = Number(j.referencias_objetivo || 1);
+      var enPestana = cuerpo.querySelector('[data-ir-paso="armar"][role="tab"] span');
+      if (enPestana) enPestana.textContent = listas >= objetivo ? '✓' : listas + '/' + objetivo;
+      var nListas = cuerpo.querySelector('[data-ref-listas]'), nObjetivo = cuerpo.querySelector('[data-ref-objetivo]');
+      if (nListas) nListas.textContent = listas;
+      if (nObjetivo) nObjetivo.textContent = objetivo;
+    }
+    function guardarDescripcion(caja) {
+      if (caja.dataset.guardando) { caja.dataset.otraVez = '1'; return; }
+      var cid = cidPanel();
+      if (!cid) return;
+      var err = caja.querySelector('.campo-error'), ok = caja.querySelector('[data-describir-guardado]');
+      err.hidden = true;
+      caja.dataset.guardando = '1';
+      var cambios = caja.dataset.cambios;
+      var cuerpoJson = {descripcion: caja.querySelector('[data-descripcion]').value,
+                        intencion: Array.prototype.map.call(caja.querySelectorAll('[data-intencion]:checked'),
+                                                            function (x) { return x.value; })};
+      fetch(caja.dataset.url, {method: 'POST', headers: HJ, body: JSON.stringify(cuerpoJson)})
+        .then(T.json)
+        .then(function (j) {
+          // Solo si no se escribió nada más mientras volaba (eso lo guarda el siguiente).
+          if (caja.dataset.cambios === cambios) caja.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
+          T.refrescarTarjeta(cid);
+          if (!sigue(cid)) return;
+          ok.hidden = false;
+          clearTimeout(Number(ok.dataset.reloj));
+          ok.dataset.reloj = setTimeout(function () { ok.hidden = true; }, 1500);
+          pintarConteoReferentes(j);
+          var boton = cuerpo.querySelector('[data-abrir-describir="' + caja.dataset.describir + '"]');
+          if (boton) boton.textContent = j.estado === 'lista' ? 'Descrito ✓' : 'Falta describir ✎';
+        })
+        .catch(function (e) { err.textContent = T.mensaje(e); err.hidden = false; })
+        .then(function () {
+          delete caja.dataset.guardando;
+          if (caja.dataset.otraVez) { delete caja.dataset.otraVez; if (caja.isConnected) guardarDescripcion(caja); }
+        });
+    }
+    // ---- Pestaña Ideas (entrega 2) ----
+    // Cada tarjeta se autoguarda 800 ms después de la última tecla:
+    // `esperaIdea[cp]` = {card, reloj} mientras espera y `vueloIdea[cp]` = el
+    // guardado en vuelo (uno a la vez por tarjeta, en orden). Antes de una
+    // acción que vuelve a pintar el panel (Aprobar, Descartar, Otra idea,
+    // Reescribir, Aprobar todas, Proponer, Generar) `guardarIdeasPendientes`
+    // guarda ya lo que esperaba y espera lo que vuela: si no, la tarjeta
+    // recargada mostraba el texto viejo. Si alguno no se guardó, la acción no
+    // sigue (el error queda a la vista en su tarjeta).
+    var esperaIdea = {}, vueloIdea = {};
+    function programarIdea(card) {
+      var cp = card.dataset.cp;
+      if (esperaIdea[cp]) clearTimeout(esperaIdea[cp].reloj);
+      esperaIdea[cp] = {card: card, reloj: setTimeout(function () { delete esperaIdea[cp]; guardarIdea(card); }, 800)};
+    }
+    function enviarIdea(card) {
+      var cp = card.dataset.cp, cuerpoJson = {};
+      card.querySelectorAll('input[name], textarea[name]').forEach(function (el) { if (!el.readOnly) cuerpoJson[el.name] = el.value; });
+      var err = card.querySelector('[data-error-idea]'), ok = card.querySelector('.panel-idea-guardado');
+      err.hidden = true;
+      return fetch(card.dataset.url, {method: 'POST', headers: HJ, body: JSON.stringify(cuerpoJson)})
+        .then(T.json)
+        .then(function () {
+          // Con otra tecla esperando su turno, la marca la borra ese guardado.
+          if (!esperaIdea[cp]) card.querySelectorAll('input[name], textarea[name]').forEach(function (el) { delete el.dataset.sucio; });
+          // El gancho de la tarjeta y el del ángulo son el mismo (doctrina, bloque 2).
+          var g = card.querySelector('input[name="gancho"]'), ga = card.querySelector('[data-angulo-campo="gancho"]');
+          if (g && ga) ga.value = g.value;
+          ok.hidden = false;
+          setTimeout(function () { ok.hidden = true; }, 1500);
+          return true;
+        })
+        .catch(function (e) { err.textContent = T.mensaje(e); err.hidden = false; return false; });
+    }
+    function guardarIdea(card) {
+      var cp = card.dataset.cp;
+      var p = (vueloIdea[cp] || Promise.resolve()).then(function () { return enviarIdea(card); });
+      vueloIdea[cp] = p;
+      p.then(function () { if (vueloIdea[cp] === p) delete vueloIdea[cp]; });
+      return p;
+    }
+    function guardarIdeasPendientes() {
+      var promesas = Object.keys(esperaIdea).map(function (cp) {
+        var e = esperaIdea[cp];
+        clearTimeout(e.reloj);
+        delete esperaIdea[cp];
+        return guardarIdea(e.card);
+      });
+      Object.keys(vueloIdea).forEach(function (cp) { promesas.push(vueloIdea[cp]); });
+      return Promise.all(promesas).then(function (oks) {
+        if (oks.indexOf(false) >= 0) throw new Error('Una idea no se guardó (mira el aviso en su tarjeta). Inténtalo de nuevo.');
+      });
+    }
+    // Una respuesta vieja (de un modelo elegido antes) nunca pisa a la última.
+    var pedidoEstimar = 0;
+    function estimarLoteCampana() {
+      var caja = cuerpo.querySelector('[data-generar]');
+      var btn = caja && caja.querySelector('[data-generar-lote]');
+      if (!btn) return;
+      var texto = caja.querySelector('[data-lote-texto]');
+      var mv = caja.querySelector('[data-lote-modelo="video"]').value, mi = caja.querySelector('[data-lote-modelo="imagen"]').value;
+      var miPedido = ++pedidoEstimar;
+      btn.disabled = true;
+      texto.textContent = 'Calculando el costo…';
+      fetch(caja.dataset.urlEstimar + '?campana_id=' + encodeURIComponent(caja.dataset.campana) +
+            '&modelo_video=' + encodeURIComponent(mv) + '&modelo_imagen=' + encodeURIComponent(mi), {headers: H})
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (miPedido !== pedidoEstimar) return;
+          if (j.error) { texto.textContent = j.error; return; }
+          // El modelo elegido ya se usó: no es un cambio sin guardar. (El
+          // listener de base.html corre después del del panel y lo marca: por
+          // eso se borra aquí, al volver, y no al cambiar.)
+          caja.querySelectorAll('[data-lote-modelo]').forEach(function (s) { delete s.dataset.sucio; });
+          texto.textContent = j.texto;
+          var n = j.videos + j.imagenes;
+          btn.textContent = n ? 'Generar ' + n + ' pieza(s) — US$ ' + j.usd.toFixed(2) : 'Nada que generar';
+          btn.disabled = !n;
+        })
+        .catch(function () { if (miPedido === pedidoEstimar) texto.textContent = 'No se pudo calcular el costo.'; });
+    }
+    // ---- Pestaña Piezas (entrega 2): revisión y actualización cada 8 s ----
+    var relojPiezas = null;
+    function cajaPiezas() { return cuerpo.querySelector('[data-pestana="piezas"]'); }
+    function escribiendoMotivo() {
+      return Array.prototype.some.call(cuerpo.querySelectorAll('[data-motivo]'),
+                                       function (t) { return t.value.trim() || document.activeElement === t; });
+    }
+    function programarPiezas() {
+      clearTimeout(relojPiezas);
+      relojPiezas = null;
+      var caja = cajaPiezas();
+      if (caja && !caja.hidden && caja.querySelector('[data-piezas-vivas="1"]')) relojPiezas = setTimeout(refrescarPiezas, 8000);
+    }
+    function refrescarPiezas() {
+      var r = raiz(), caja = cajaPiezas();
+      if (!r || !caja) return Promise.resolve();
+      return fetch(r.dataset.urlPiezas, {headers: H})
+        .then(function (x) {
+          if (x.status === 404) return null;      // la campaña se borró en otra pestaña: no se pregunta más
+          return x.ok ? x.text() : Promise.reject();
+        })
+        .then(function (html) {
+          if (html === null) { clearTimeout(relojPiezas); relojPiezas = null; return; }
+          if (!escribiendoMotivo()) caja.innerHTML = html;
+          programarPiezas();
+        })
+        .catch(function () { programarPiezas(); });
+    }
+    function trasAccionPieza(cid) {
+      T.refrescarTarjeta(cid);
+      return sigue(cid) ? refrescarPiezas() : null;
+    }
+    document.addEventListener('tablero:paso', programarPiezas);
+    document.addEventListener('tablero:cerrado', function () { clearTimeout(relojPiezas); relojPiezas = null; });
+    panel.addEventListener('input', function (ev) {
+      var el = ev.target;
+      if (el.closest('.angulo-editor')) {
+        // angulo.js guarda estos campos por su cuenta y borra su propia marca al terminar.
+        return;
+      }
+      var cajaDescribir = el.closest('[data-describir]');
+      if (cajaDescribir) {
+        // Se guarda al salir del campo (change); esto solo cuenta lo tecleado
+        // para que un guardado en vuelo no borre la marca de lo que no llevó.
+        cajaDescribir.dataset.cambios = Number(cajaDescribir.dataset.cambios || 0) + 1;
+        return;
+      }
+      if (!el.name || el.readOnly) return;
+      var card = el.closest('.panel-idea');
+      if (!card) return;
+      programarIdea(card);
+    });
     panel.addEventListener('click', function (ev) {
       if (!raiz()) return;
       var b;
+      var abreDescribir = ev.target.closest('[data-abrir-describir]');
+      if (abreDescribir) {
+        var cajaD = cuerpo.querySelector('[data-describir="' + abreDescribir.dataset.abrirDescribir + '"]');
+        if (cajaD) {
+          cajaD.hidden = !cajaD.hidden;
+          if (!cajaD.hidden) cajaD.querySelector('[data-descripcion]').focus();
+        }
+        return;
+      }
+      var proponer = ev.target.closest('[data-proponer]');
+      if (proponer) {
+        var cidP = cidPanel();
+        proponer.disabled = true;
+        var fdP = new FormData();
+        if (proponer.dataset.mas) fdP.append('mas', proponer.dataset.mas);
+        if (proponer.dataset.tipo) fdP.append('tipo', proponer.dataset.tipo);
+        guardarIdeasPendientes()
+          .then(function () { return fetch(proponer.dataset.url, {method: 'POST', headers: H, body: fdP}); })
+          .then(T.json)
+          .then(function () { return trasCambio(cidP, 'ideas'); })
+          .catch(function (e) { proponer.disabled = false; if (sigue(cidP)) avisar(T.mensaje(e)); });
+        return;
+      }
+      var accionIdea = ev.target.closest('[data-idea-accion]');
+      if (accionIdea) {
+        var cidI = cidPanel();
+        accionIdea.disabled = true;
+        guardarIdeasPendientes()
+          .then(function () { return fetch(accionIdea.dataset.url, {method: 'POST', headers: H}); })
+          .then(T.json)
+          .then(function () { return trasCambio(cidI, 'ideas'); })
+          .catch(function (e) { accionIdea.disabled = false; if (sigue(cidI)) avisar(T.mensaje(e)); });
+        return;
+      }
+      var generar = ev.target.closest('[data-generar-lote]');
+      if (generar) {
+        var cidG = cidPanel();
+        var cajaG = generar.closest('[data-generar]'), errG = cajaG.querySelector('.campo-error');
+        generar.disabled = true;
+        errG.hidden = true;
+        var fdG = new FormData();
+        fdG.append('campana_id', cajaG.dataset.campana);
+        fdG.append('modelo_video', cajaG.querySelector('[data-lote-modelo="video"]').value);
+        fdG.append('modelo_imagen', cajaG.querySelector('[data-lote-modelo="imagen"]').value);
+        guardarIdeasPendientes()
+          .then(function () { return fetch(cajaG.dataset.urlLote, {method: 'POST', headers: H, body: fdG}); })
+          .then(T.json)
+          .then(function () { return trasCambio(cidG, 'piezas'); })
+          .catch(function (e) { generar.disabled = false; errG.textContent = T.mensaje(e); errG.hidden = false; });
+        return;
+      }
+      var accionPieza = ev.target.closest('[data-pieza-accion]');
+      if (accionPieza) {
+        var cidA = cidPanel();
+        var cardP = accionPieza.closest('.panel-pieza'), errP = cardP.querySelector('[data-error-pieza]');
+        var rechazo = cardP.querySelector('[data-rechazo]'), motivo = rechazo.querySelector('[data-motivo]');
+        var acc = accionPieza.dataset.piezaAccion;
+        errP.hidden = true;
+        if (acc === 'rechazar') { rechazo.hidden = false; motivo.focus(); return; }
+        if (acc === 'cancelar-rechazo') { motivo.value = ''; delete motivo.dataset.sucio; rechazo.hidden = true; return; }
+        var cuerpoRev = {accion: 'aprobar'};
+        if (acc === 'confirmar-rechazo') {
+          if (!motivo.value.trim()) { errP.textContent = 'Escribe por qué no sirve.'; errP.hidden = false; return; }
+          cuerpoRev = {accion: 'rechazar', motivo: motivo.value.trim()};
+        }
+        accionPieza.disabled = true;
+        fetch(cardP.dataset.urlRevision, {method: 'POST', headers: HJ, body: JSON.stringify(cuerpoRev)}).then(T.json)
+          .then(function () { motivo.value = ''; delete motivo.dataset.sucio; return trasAccionPieza(cidA); })
+          .catch(function (e) { accionPieza.disabled = false; errP.textContent = T.mensaje(e); errP.hidden = false; });
+        return;
+      }
+      var postPieza = ev.target.closest('[data-pieza-post]');
+      if (postPieza) {
+        if (postPieza.dataset.confirmar && !confirm(postPieza.dataset.confirmar)) return;
+        var cidQ = cidPanel();
+        var errQ = postPieza.closest('.panel-pieza').querySelector('[data-error-pieza]');
+        postPieza.disabled = true;
+        errQ.hidden = true;
+        fetch(postPieza.dataset.url, {method: 'POST', headers: H}).then(T.json)
+          .then(function () { return trasAccionPieza(cidQ); })
+          .catch(function (e) { postPieza.disabled = false; errQ.textContent = T.mensaje(e); errQ.hidden = false; });
+        return;
+      }
+      var aprobarQa = ev.target.closest('[data-aprobar-qa]');
+      if (aprobarQa) {
+        var cidQa = cidPanel();
+        aprobarQa.disabled = true;
+        var fdQ = new FormData();
+        fdQ.append('campana_id', aprobarQa.dataset.campana);
+        fetch(aprobarQa.dataset.url, {method: 'POST', headers: H, body: fdQ}).then(T.json)
+          .then(function () { return trasAccionPieza(cidQa); })
+          .catch(function (e) { aprobarQa.disabled = false; if (sigue(cidQa)) avisar(T.mensaje(e)); });
+        return;
+      }
+      var cidR = cidPanel();
       if ((b = ev.target.closest('[data-quitar-familia]'))) {
         var f = b.closest('[data-familia]').dataset.familia;
         guardar(cajaFamilias(), familias().filter(function (x) { return x !== f; }));
@@ -445,17 +770,19 @@
         b.disabled = true;
         var fd = new FormData();
         fd.append('referente_ids', b.dataset.sumarRef);
-        fetch(b.dataset.url, {method: 'POST', headers: H, body: fd}).then(T.json).then(recargarTodo)
-          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+        fetch(b.dataset.url, {method: 'POST', headers: H, body: fd}).then(T.json)
+          .then(function () { return recargarTodo(cidR); })
+          .catch(function (e) { b.disabled = false; if (sigue(cidR)) avisar(T.mensaje(e)); });
       } else if ((b = ev.target.closest('[data-quitar-ref]'))) {
         b.disabled = true;
-        fetch(b.dataset.quitarRef, {method: 'POST', headers: H}).then(T.json).then(recargarTodo)
-          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+        fetch(b.dataset.quitarRef, {method: 'POST', headers: H}).then(T.json)
+          .then(function () { return recargarTodo(cidR); })
+          .catch(function (e) { b.disabled = false; if (sigue(cidR)) avisar(T.mensaje(e)); });
       } else if ((b = ev.target.closest('[data-sugerir-ia]'))) {
         b.disabled = true;
         fetch(b.dataset.sugerirIa, {method: 'POST', headers: H}).then(T.json)
-          .then(function () { return T.abrir(raiz().dataset.cid); })
-          .catch(function (e) { b.disabled = false; avisar(T.mensaje(e)); });
+          .then(function () { return sigue(cidR) ? T.abrir(cidR) : null; })
+          .catch(function (e) { b.disabled = false; if (sigue(cidR)) avisar(T.mensaje(e)); });
       } else if (ev.target.closest('[data-aflojar]')) {
         cargarSugeridos('?todas=1');
       }
