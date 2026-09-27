@@ -225,7 +225,7 @@ sprint-wide review page stays for bulk review, filters by campaign («n · ETAPA
 producto») and links each piece to its panel. «Proponer ideas» shows
 `gastos.estimar("proponer_ideas", n=)` and registers its real spend (tipo `ideas`, counted with
 `analisis._llamar_contando`, also when the answer was unusable, `max_intentos=1`). The routes the
-panel calls answer JSON when asked (`_quiere_json`) and keep their old redirects otherwise.
+panel calls answer JSON when asked (`_quiere_json`); plain form posts still redirect (to the panel's tab when `volver=panel`). `base.html`'s unsaved-changes guard marks on `input`, and on `change` only `<select>`s.
 `static/angulo.js` clears `data-sucio` on its own fields only after a save that covered the
 latest edit.
 
@@ -777,7 +777,7 @@ dato (las cifras de la persona se usan tal cual). Un ángulo sin promesa o sin g
 «Reescribir la idea con este ángulo» (tarea `sprint_reescribir_idea`, `sprints.ideas.reescribir`, gasto `ideas`) cambia
 título, escena y sonido sin tocar el ángulo. Datos del mercado: la consciencia (la de la campaña,
 `campana.consciencia` del tablero de Sprints, y si la campaña no tiene, la de la persona:
-`persona.extra.conciencia.nivel`, selector en la página de ideas de la campaña, ruta `sprints.persona_conciencia`;
+`persona.extra.conciencia.nivel`, ruta `sprints.persona_conciencia` — desde la entrega 2 del tablero el panel ya no muestra ese selector: manda la consciencia de la campaña;
 `sprints.ideas.fijos_de` aplica ese orden) y la sofisticación del producto (`producto.extra.sofisticacion`, selector en Catálogo) mandan cuando existen:
 `doctrina.validar_angulo(..., fijos=)` los impone antes de validar y `doctrina.datos_fijos_texto` los pone en los
 DATOS de ideas, guion (sin ángulo) y «Adaptar con IA». Pruebas y pedidos del producto viven en
