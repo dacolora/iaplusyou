@@ -115,3 +115,8 @@ responderlo crea una prueba del producto.
 
 **Ángulo editado a mano**:
 Un ángulo guardado desde la app; pasa a ser de quien lo editó y sus cifras se usan tal cual.
+
+**Revisión de la doctrina**:
+Los 12 puntos de la lista de revisión contestados sobre una pieza terminada: las reglas gratis siempre a la vista y, si
+se pide, la revisión de Claude con los fotogramas. Solo informa; nunca bloquea ni reescribe.
+_Avoid_: QA (el QA de Sprints revisa la calidad técnica; desde el bloque 3 trae también la revisión)

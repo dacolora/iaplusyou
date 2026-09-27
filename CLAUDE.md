@@ -770,6 +770,23 @@ y los resume en máximo cinco pedidos; responder uno lo guarda como prueba. Pág
 `/cliente/<cliente>/doctrina` (`doctrina/pagina.py::a_html` escapa antes de convertir). Las plantillas reciben el
 vocabulario con `doctrina.globales_plantilla()`.
 
+**Doctrina, bloque 3: el revisor de la pieza terminada** (spec
+`docs/superpowers/specs/2026-09-27-doctrina-bloque-3-revisor-design.md`): `doctrina/revisor.py` contesta la lista de
+`textos/revisar.md` (12 puntos; `PUNTOS`/`PUNTO` traen la rebanada del «¿Por qué?») sobre una pieza de Crear terminada.
+Dos capas. `reglas(datos)`: pura y gratis, se calcula al renderizar (gancho largo, arranque fuera de la consciencia,
+promesa múltiple, sin mecanismo con sofisticación ≥ 3 —la fija del producto manda—, cifras del caption que no están en
+los datos verificables de `reunir()`, guion sin CTA, gancho de la idea distinto del ángulo). `revisar(cliente, cf_id)`:
+Claude con visión, fotogramas de `tiempos()` (0,3 s, uno cada 3 s y el final; máximo 8) precedidos de «Segundo N:», los
+DATOS de `reunir()` y la rebanada `revisar`; una corrección; `ErrorRevision` lleva los tokens pagados. Se guarda en
+`concepto.extra.revision_doctrina` con el `video_url` revisado (`estado_revision` la marca «vieja» si el video cambió;
+`duplicar` no la copia). Botón «Revisar con la doctrina» en el detalle de Crear (`cf_revisar` → tarea `pieza_revisar`,
+`max_intentos=1`, gasto tipo `revision`, tarifa `revision_pieza`), macro `templates/_revision_doctrina.html`, barra de
+progreso en la tarjeta. El QA de Sprints (`sprints/qa.py`) pide los 12 puntos en la misma llamada (rebanada `revisar`
+en el system, mismos fotogramas, tope 6 000), por fin registra su gasto real (tipo `revision`, referencia
+`qa:<cp_id>:t<tarea>:i<intento>`) y guarda la revisión en la sesión (`origen: sprint`). La galería de Experimentos
+(`elegibles()["doctrina"]`, aviso en el paso 3) y la revisión del lote muestran la etiqueta con `resumen_galeria`,
+leyendo solo `concepto.extra`. Nada de esto bloquea ni reescribe.
+
 ## Agent skills
 
 ### Issue tracker
