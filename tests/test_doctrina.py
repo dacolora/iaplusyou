@@ -367,6 +367,10 @@ def test_datos_fijos_texto():
     assert "Consciencia de la persona (fija, no la cambies): consciente del problema" in t
     assert "Sofisticación del mercado (fija, no la cambies): 3 — ya no creen: hace falta mecanismo" in t
     assert doctrina.datos_fijos_texto("rarísimo", 9) == ""
+    # Prueba real (2026-09-27): con 3 o más, sin decirlo, Claude dejaba el
+    # ángulo sin «mecanismo» y el guion pagaba una vuelta de corrección.
+    assert "llena «mecanismo»" in doctrina.datos_fijos_texto(sofisticacion=3)
+    assert "llena «mecanismo»" not in doctrina.datos_fijos_texto(sofisticacion=2)
 
 
 def test_etiquetas_para_el_cliente_cubren_todo_el_vocabulario():

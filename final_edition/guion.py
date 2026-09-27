@@ -80,7 +80,7 @@ FORMATO_JSON = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional
  "idioma": "es", "pais": "CO", "moneda": null, "precio_texto": null}"""
 
 FORMATO_JSON_CON_ANGULO = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional ni markdown) con esta forma:
-{"angulo": {"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": null, "pruebas": [{"texto": "...", "fuente": "ficha"}], "lead": "...", "gancho": "...", "faltantes": []},
+{"angulo": {"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": "una frase (o null; obligatorio si sofisticacion es 3 o más)", "pruebas": [{"texto": "...", "fuente": "ficha"}], "lead": "...", "gancho": "...", "faltantes": []},
  "bloques": [{"rol": "hook", "texto_pantalla": "...", "texto_voz": "...", "inicio_s": 0, "fin_s": 2}, ...],
  "idioma": "es", "pais": "CO", "moneda": null, "precio_texto": null}"""
 

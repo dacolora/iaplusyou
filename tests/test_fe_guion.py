@@ -124,6 +124,16 @@ def test_generar_guion_base_una_llamada(monkeypatch):
     assert g["idioma"] == "es" and g["pais"] == "CO"
 
 
+def test_el_formato_con_angulo_no_ensena_un_mecanismo_vacio_con_sofisticacion_alta():
+    """Prueba real (2026-09-27): el ejemplo de JSON traía `"sofisticacion": 3`
+    junto a `"mecanismo": null`, justo lo que `validar_angulo` rechaza
+    (mecanismo_obligatorio): Claude lo copiaba y cada guion sin ángulo pagaba
+    una vuelta de corrección. El ejemplo dice la regla, como en las ideas."""
+    from final_edition import guion
+    assert '"mecanismo": null' not in guion.FORMATO_JSON_CON_ANGULO
+    assert "obligatorio si sofisticacion es 3 o más" in guion.FORMATO_JSON_CON_ANGULO
+
+
 def test_generar_guion_base_con_referencia_envia_frames_como_imagenes(monkeypatch):
     from final_edition import guion
     urls = ["https://x/f1.jpg", "https://x/f2.jpg", "https://x/f3.jpg"]

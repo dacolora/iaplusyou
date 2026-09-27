@@ -454,7 +454,12 @@ def datos_fijos_texto(consciencia=None, sofisticacion=None):
     except (TypeError, ValueError, OverflowError):
         sof = None
     if sof in SOFISTICACIONES:
-        lineas.append(f"- Sofisticación del mercado (fija, no la cambies): {sof} — {SOFISTICACIONES_NOMBRE[sof]}")
+        linea = f"- Sofisticación del mercado (fija, no la cambies): {sof} — {SOFISTICACIONES_NOMBRE[sof]}"
+        if sof >= 3:
+            # La misma regla que `validar_angulo` (mecanismo_obligatorio):
+            # sin decirla, Claude lo omitía y el guion pagaba una corrección.
+            linea += " (llena «mecanismo» en el ángulo: el porqué funciona)"
+        lineas.append(linea)
     return "\n".join(lineas)
 
 
