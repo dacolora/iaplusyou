@@ -273,3 +273,24 @@ def test_piezas_y_pestanas_con_buen_tamano():
     assert "align-content: start" in pieza
     pestana = re.search(r"\.panel-pestana \{[^}]*\}", css).group(0)
     assert "min-height: 0" not in pestana and "min-height: 2.25rem" in pestana
+
+
+def test_atajos_de_la_revision_no_escriben_la_letra(con_ideas, monkeypatch, tmp_path):
+    """F11: la R abre el motivo y le da el foco; sin preventDefault la misma R
+    quedaba escrita en la caja."""
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    html = con_ideas["c"].get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert "{ e.preventDefault(); accionSeleccionada('aprobar'); }" in html
+    assert "{ e.preventDefault(); accionSeleccionada('rechazar'); }" in html
+
+
+def test_la_pieza_de_crear_lleva_a_su_panel(con_ideas, monkeypatch, tmp_path):
+    """F14: el distintivo «Sprint · Campaña n» de una pieza de Crear abre el
+    panel de su campaña en la pestaña Piezas (es una pieza, no una idea)."""
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    import creative_flow
+    creative_flow.actualizar("acme", cfs[iv], sprint={"sprint_id": sid, "sprint_nombre": "Octubre", "campana_id": cid,
+                                                      "campana_n": 1, "cp_id": iv})
+    html = con_ideas["c"].get("/cliente/acme").data.decode()
+    assert f"/cliente/acme/sprints/{sid}?panel={cid}&amp;paso=piezas" in html and "Sprint · Campaña 1" in html
+    assert f"/sprints/{sid}/campanas/{cid}/ideas" not in html

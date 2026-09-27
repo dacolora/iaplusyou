@@ -154,8 +154,10 @@
       if (activo && ['INPUT', 'TEXTAREA', 'SELECT'].indexOf(activo.tagName) >= 0) return;
       if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); seleccionar(idx + 1); }
       else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); seleccionar(idx - 1); }
-      else if (e.key === 'a' || e.key === 'A') accionSeleccionada('aprobar');
-      else if (e.key === 'r' || e.key === 'R') accionSeleccionada('rechazar');
+      // preventDefault: la R abre el motivo y le da el foco; sin él, esa misma
+      // R quedaba escrita en la caja.
+      else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); accionSeleccionada('aprobar'); }
+      else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); accionSeleccionada('rechazar'); }
     });
     function filtrar() {
       var c = document.getElementById('filtro-campana').value, t = document.getElementById('filtro-tipo').value, q = document.getElementById('filtro-qa').value;
