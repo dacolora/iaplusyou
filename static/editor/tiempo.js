@@ -127,6 +127,20 @@ export function capasEn(doc, tMs) {
   return out;
 }
 
+// Tamaño natural de una capa de imagen, con el mismo respaldo que el
+// servidor: preparar_rutas estampa el tamaño del material solo si el clip no
+// trae ni ancho_px ni alto_px y el material tiene los dos; después el
+// compilador cae a 400×200 por separado. Nunca el tamaño del archivo cargado.
+export function tamanoCapaImagen(clip, material) {
+  let w = clip.ancho_px;
+  let h = clip.alto_px;
+  if (!w && !h && material?.ancho && material?.alto) {
+    w = Math.trunc(Number(material.ancho));
+    h = Math.trunc(Number(material.alto));
+  }
+  return [Number(w) || CAPA_DEFECTO[0], Number(h) || CAPA_DEFECTO[1]];
+}
+
 function porTramos(puntos, t) {
   if (t <= puntos[0][0]) return puntos[0][1];
   const ult = puntos[puntos.length - 1];

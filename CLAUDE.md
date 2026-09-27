@@ -518,8 +518,10 @@ Python generates (`tests/fixtures/generar_casos_editor.py`; `test_casos_del_edit
 one is stale). The preview draws only what the compiler renders (no rotation/PIP/watermark; x/y
 keyframes; `deslizar` entry); subtitles use libass's size via `subtitulos.escala_libass()` (OS/2
 metrics); audio is Web Audio with a ducking curve precomputed from the voice `picos`, which needs CORS
-on R2 (`storage/r2_cors.py`, applied by hand). Proxies are short-side 540 with a keyframe every 15
-frames (`tareas.edicion.PROXY_VERSION = 2`; the page re-queues older ones, free).
+on R2 (`storage/r2_cors.py`, applied by hand), while video proxies and images load WITHOUT
+`crossOrigin` (read-only preview; capa 5, which reads the canvas as PNG, must restore it). Proxies
+are short-side 540 with a keyframe every 15 frames (`tareas.edicion.PROXY_VERSION = 2`; the page
+re-queues older ones, free).
 `sembrar_edicion_demo.py` builds a local demo edition (no spend, no R2).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit

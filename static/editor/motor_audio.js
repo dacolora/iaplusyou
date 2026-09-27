@@ -5,6 +5,11 @@
 // adelantado desde los picos) → la salida. Necesita CORS en el
 // almacenamiento: sin él el fetch falla, el material queda en `fallidos` y la
 // vista previa sigue sin ese sonido, diciéndolo. No replica loudnorm.
+//
+// Cada detener() hace vieja cualquier llamada a reproducir() que siga
+// esperando el sonido (`turno`): una pausa, otro «reproducir» o un cambio de
+// destino mientras carga nunca dejan fuentes programadas desde un instante
+// viejo, ni cortan las de la llamada nueva.
 import { curvaDucking, grupoDe, nivelesVoz, parsearDucking, puntosGanancia, volumenesEfectivos, volumenesPara } from "./audio.js";
 
 const LATENCIA_S = 0.05;
@@ -18,6 +23,7 @@ export class MotorAudio {
     this.fuentes = [];
     this.nodos = [];
     this.fallidos = new Set();
+    this.turno = 0;
   }
 
   contexto() {
@@ -59,13 +65,17 @@ export class MotorAudio {
   }
 
   // Programa todo lo que suena desde tMs y devuelve el instante (ms del
-  // AudioContext) en que arranca: el reloj de la página arranca ahí.
+  // AudioContext) en que arranca: el reloj de la página arranca ahí. Devuelve
+  // null si mientras cargaba llegó un detener() u otro reproducir(): esta
+  // llamada ya no programa nada.
   async reproducir(doc, tMs) {
-    const ctx = this.contexto();
+    this.detener();
+    const turno = this.turno;
+    const ctx = this.contexto();           // antes de esperar: el clic habilita el sonido
     const clips = this._clips(doc);
     const ids = [...new Set(clips.map((c) => c.material_id))];
     const buffers = new Map(await Promise.all(ids.map(async (mid) => [mid, await this._buffer(mid)])));
-    this.detener();
+    if (turno !== this.turno) return null;
     const hay = { voz: false, sonido: false, musica: false };
     for (const c of clips) hay[grupoDe(c.rol_audio ?? "subida")] = true;
     const mz = doc.mezcla ?? {};
@@ -122,6 +132,7 @@ export class MotorAudio {
   }
 
   detener() {
+    this.turno++;
     for (const s of this.fuentes) {
       try { s.stop(); } catch { /* ya terminó */ }
     }

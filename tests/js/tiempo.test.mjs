@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
-  activo, capasEn, cuadroVecino, duracionMs, fuenteMs, pistaPrincipal, posicionCapa, principalEn,
+  activo, capasEn, cuadroVecino, duracionMs, tamanoCapaImagen, fuenteMs, pistaPrincipal, posicionCapa, principalEn,
   siguienteClip, transicionReal, zoomKenBurns,
 } from "../../static/editor/tiempo.js";
 
@@ -179,4 +179,18 @@ test("cuadroVecino: las flechas avanzan un cuadro entero cada vez (a 30 fps)", (
   assert.equal(cuadro(cuadroVecino(1067, -1, 30)), 31);
   assert.equal(cuadroVecino(20, -1, 30), 0);
   assert.equal(cuadroVecino(0, -1, 30), 0);
+});
+
+test("tamanoCapaImagen: el mismo respaldo que preparar_rutas + compilador", () => {
+  const mat = { ancho: 300, alto: 120 };
+  // el clip manda
+  assert.deepEqual(tamanoCapaImagen({ ancho_px: 50, alto_px: 60 }, mat), [50, 60]);
+  // sin ninguno de los dos: el del material (preparar_rutas lo estampa)
+  assert.deepEqual(tamanoCapaImagen({}, mat), [300, 120]);
+  // con uno solo, el material no entra: el otro cae a 400×200 (compilador)
+  assert.deepEqual(tamanoCapaImagen({ ancho_px: 50 }, mat), [50, 200]);
+  assert.deepEqual(tamanoCapaImagen({ alto_px: 60 }, mat), [400, 60]);
+  // material sin medidas completas, o ninguno: 400×200 — nunca el tamaño natural de la imagen
+  assert.deepEqual(tamanoCapaImagen({}, { ancho: 300 }), [400, 200]);
+  assert.deepEqual(tamanoCapaImagen({}, null), [400, 200]);
 });

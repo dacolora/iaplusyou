@@ -164,8 +164,9 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   proxy con lado corto 540 y GOP de 15 (`PROXY_VERSION`); vista previa en
 >   `static/editor/`; pruebas de JS con `node --test` (no vitest: sin npm) y tablas de
 >   paridad generadas por Python en vez de Playwright (la comparación de cuadros de la
->   capa 3 fue manual, en tres instantes); el audio decodifica los archivos
->   (`decodeAudioData`) en vez de nodos de `<video>`, y por eso R2 necesita CORS.
+>   capa 3 fue manual, en cuatro instantes: 1000/3000/4250/7200 ms); el audio decodifica
+>   los archivos (`decodeAudioData`) en vez de nodos de `<video>`, y por eso R2 necesita
+>   CORS.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,
@@ -297,13 +298,18 @@ calibrada.
 > Ajustes a la letra de este capítulo:
 > - **Un `<video>` por clip** de la principal, no por material: un fundido entre dos
 >   cortes del mismo clon necesita dos cuadros distintos a la vez. Reproduciendo cada
->   video corre solo y se corrige si se aparta más de 150 ms del reloj; parado se busca
->   el cuadro exacto; uno sin usar 5 s se suelta.
+>   video corre solo y se corrige si se aparta más de 150 ms del reloj (nunca mientras
+>   todavía busca o no tiene datos para seguir); parado, o en el cuadro congelado tras el
+>   último clip, se busca el cuadro exacto; uno sin usar 5 s se suelta. Videos e imágenes
+>   se piden **sin `crossOrigin`**: la vista es de solo lectura y así se ve aunque R2 no
+>   mande CORS; un archivo que no carga se nombra en un aviso y no se reintenta. La capa 5
+>   (el PNG sale del lienzo) tiene que volver a pedirlos con `crossOrigin`.
 > - **Audio**: cada material se descarga y se decodifica (`decodeAudioData`) y suena
 >   como `AudioBufferSourceNode` programado sobre el reloj del `AudioContext`; el agache
 >   es una curva calculada por adelantado desde los `picos` de la voz (ffmpeg detecta
 >   RMS: es una aproximación). Necesita CORS en R2 (`storage/r2_cors.py`); sin él la
->   vista sigue sin ese sonido y lo dice.
+>   vista sigue sin ese sonido y lo dice. Pausar, buscar o cambiar de destino mientras el
+>   sonido carga pausa; `MotorAudio` descarta la llamada que quedó vieja.
 > - **Textos** rasterizados en `<canvas>` con las fórmulas de `rasterizar.py`
 >   (`texto.js`); la métrica es la de la fuente en el navegador: unos px de diferencia en
 >   la altura de línea frente a Pillow. **Subtítulos** como libass (`\an5\pos`, karaoke

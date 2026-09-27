@@ -1,5 +1,15 @@
 // Página de la vista previa del editor (capa 3, solo lectura): elige el
 // destino, resuelve el documento, lleva el reloj y dibuja cada cuadro.
+//
+// Mientras el sonido carga («Cargando el sonido…», `cargando`) el botón ya
+// dice ⏸ pero el reloj todavía no corre: pausar, buscar en la barra o cambiar
+// de destino en ese rato PAUSA (nunca lanza un segundo «reproducir»), y
+// MotorAudio descarta la llamada que quedó vieja.
+//
+// Las imágenes (y los videos, en videos.js) se piden sin `crossOrigin`: en la
+// capa 3 el lienzo solo se mira, y así se ve aunque el almacenamiento no mande
+// CORS. La capa 5 (producir desde el editor lee el lienzo como PNG) tiene que
+// volver a poner `crossOrigin = "anonymous"` cuando R2 tenga su regla CORS.
 import { dibujarCuadro } from "./lienzo.js";
 import { MotorAudio } from "./motor_audio.js";
 import { Reloj } from "./reloj.js";
@@ -18,11 +28,16 @@ let materiales = datos.materiales;
 let doc = null;
 let reloj = null;
 let turno = 0;                      // invalida un «reproducir» que quedó esperando el audio
+let cargando = false;               // «reproducir» esperando el sonido: el reloj aún no corre
 let pedido = true;                  // redibujar en el próximo cuadro
+let errorDibujo = false;            // el aviso de un error al dibujar sale una sola vez
 const pedirCuadro = () => { pedido = true; };
-let videos = new Videos(materiales, pedirCuadro);
+const ocupado = () => Boolean(reloj?.reproduciendo || cargando);
+const fallasCarga = new Set();      // material_id cuyo archivo no cargó (video o imagen)
+let videos = new Videos(materiales, pedirCuadro, avisarFalla);
 const audio = new MotorAudio(cfg, materiales);
 const imagenes = new Map();
+const imagenesFallidas = new Set();
 
 const recursos = {
   material: (mid) => materiales[mid] ?? null,
@@ -31,27 +46,81 @@ const recursos = {
     const el = videos.elementoDe(clip);
     return el && el.readyState >= 2 ? el : null;
   },
+  // un material que falló no se reintenta ni pide redibujar en cada cuadro
+  fallo: (clip) => imagenesFallidas.has(Number(clip.material_id)) || videos.fallo(clip),
   medidas: (f) => (f instanceof HTMLVideoElement ? [f.videoWidth, f.videoHeight] : [f.naturalWidth, f.naturalHeight]),
   imagen(mid) {
-    let img = imagenes.get(mid);
+    const id = Number(mid);
+    if (imagenesFallidas.has(id)) return null;
+    let img = imagenes.get(id);
     if (!img) {
-      const m = materiales[mid];
+      const m = materiales[id];
       if (!m) return null;
       img = new Image();
-      img.crossOrigin = "anonymous";
       img.addEventListener("load", pedirCuadro);
+      img.addEventListener("error", () => {
+        imagenesFallidas.add(id);
+        avisarFalla(id);
+        pedirCuadro();
+      });
       img.src = m.url;
-      imagenes.set(mid, img);
+      imagenes.set(id, img);
     }
     return img.complete && img.naturalWidth ? img : null;
   },
 };
 
+// Los avisos de la plantilla más los que nacen aquí (carga, dibujo).
 function aviso(id, texto, error = false) {
-  const el = $(id);
+  let el = $(id);
+  if (!el) {
+    if (!texto) return;
+    el = document.createElement("p");
+    el.id = id;
+    el.className = "editor-aviso";
+    document.querySelector(".editor-avisos").append(el);
+  }
   el.textContent = texto || "";
   el.hidden = !texto;
   el.classList.toggle("error", Boolean(error));
+}
+
+function nombreMaterial(mid) {
+  const m = materiales[mid];
+  const tipo = m?.tipo === "imagen" ? "la imagen" : m?.tipo === "video" ? "el video" : "el archivo";
+  let archivo = "";
+  try {
+    archivo = decodeURIComponent(String(m?.url_proxy || m?.url || "").split("?")[0].split("/").pop() || "");
+  } catch { /* nombre raro: solo el tipo */ }
+  return archivo ? `${tipo} «${archivo.slice(0, 40)}»` : tipo;
+}
+
+function avisarFalla(mid) {
+  fallasCarga.add(Number(mid));
+  mostrarFallas();
+}
+
+function enumerar(lista) {
+  try {
+    return new Intl.ListFormat("es", { type: "conjunction" }).format(lista);
+  } catch {
+    return lista.join(", ");
+  }
+}
+
+function mostrarFallas() {
+  const lista = [...fallasCarga].map(nombreMaterial);
+  const varias = lista.length > 1;
+  aviso("aviso-carga", lista.length
+    ? `No se ${varias ? "pudieron" : "pudo"} cargar ${enumerar(lista)} (el enlace no respondió o el archivo ya no está): ${varias ? "esas partes quedan vacías" : "esa parte queda vacía"} en la vista previa.`
+    : "", true);
+}
+
+function avisoSonido() {
+  const n = audio.fallidos.size;
+  return n
+    ? `No se pudo cargar el sonido de ${n} archivo(s) (puede ser la conexión o que el almacenamiento no dé permiso de lectura): la vista previa sigue sin ese sonido.`
+    : "";
 }
 
 function formatoTiempo(ms) {
@@ -61,7 +130,7 @@ function formatoTiempo(ms) {
 
 function elegirDestino(clave) {
   const t = reloj ? reloj.tiempo() : 0;
-  if (reloj?.reproduciendo) pausar();
+  if (ocupado()) pausar();
   const [idioma, pais] = clave.split("_");
   try {
     doc = resolver(datos.documento, idioma, pais);
@@ -80,30 +149,38 @@ function elegirDestino(clave) {
 }
 
 async function reproducir() {
-  if (!doc || reloj.reproduciendo) return;
+  if (!doc || ocupado()) return;
   if (reloj.terminado()) reloj.ir(0);
   const miTurno = ++turno;
+  cargando = true;
   $("reproducir").textContent = "⏸";
   $("reproducir").setAttribute("aria-label", "Pausar");
   aviso("aviso-audio", "Cargando el sonido…");
-  let inicio;
+  let inicio = null;
+  let falla = null;
   try {
     inicio = await audio.reproducir(doc, reloj.tiempo());
-    aviso("aviso-audio", audio.fallidos.size
-      ? "Parte del sonido no se pudo cargar (el almacenamiento no dio permiso). La imagen sigue." : "", audio.fallidos.size > 0);
   } catch (e) {
-    inicio = audio.ahoraMs();
-    aviso("aviso-audio", `La vista previa va sin sonido: ${e.message}`, true);
+    falla = e;
   }
-  if (miTurno !== turno) {           // se pausó mientras cargaba
-    audio.detener();
+  if (miTurno !== turno) return;     // pausar() llegó mientras cargaba: ya dejó todo quieto
+  cargando = false;
+  if (falla) {
+    inicio = audio.ahoraMs();
+    aviso("aviso-audio", `La vista previa va sin sonido: ${falla.message}`, true);
+  } else if (inicio === null) {      // MotorAudio la descartó por vieja
+    pausar();
     return;
+  } else {
+    aviso("aviso-audio", avisoSonido(), audio.fallidos.size > 0);
   }
   reloj.reproducir(inicio);
 }
 
 function pausar() {
   turno++;
+  if (cargando) aviso("aviso-audio", avisoSonido(), audio.fallidos.size > 0);
+  cargando = false;
   reloj?.pausar();
   audio.detener();
   videos.pausarTodo();
@@ -113,7 +190,10 @@ function pausar() {
 }
 
 function cuadro() {
-  if (doc && reloj) {
+  // el próximo cuadro se pide primero: un error al dibujar no apaga la vista
+  requestAnimationFrame(cuadro);
+  if (!doc || !reloj) return;
+  try {
     const t = reloj.tiempo();
     const rep = reloj.reproduciendo;
     videos.sincronizar(doc, t, rep);
@@ -126,8 +206,13 @@ function cuadro() {
       if (document.activeElement !== $("barra")) $("barra").value = String(Math.round(t));
     }
     if (rep && reloj.terminado()) pausar();
+  } catch (e) {
+    if (!errorDibujo) {
+      errorDibujo = true;
+      console.error(e);
+      aviso("aviso-dibujo", `La vista previa tuvo un problema al dibujar (${e.message}). Recarga la página; si se repite, avísanos.`, true);
+    }
   }
-  requestAnimationFrame(cuadro);
 }
 
 async function vigilarPendientes() {
@@ -138,14 +223,16 @@ async function vigilarPendientes() {
   aviso("aviso-preparando", `Preparando ${datos.pendientes.length} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales.`);
   try {
     const r = await fetch(datos.urls.materiales, { headers: { Accept: "application/json" } });
-    if (r.ok && !reloj?.reproduciendo) {
+    if (r.ok && !ocupado()) {
       const j = await r.json();
       datos.pendientes = j.pendientes;
       if (!j.pendientes.length) {
         materiales = j.materiales;
         audio.materiales = materiales;
         videos.vaciar();
-        videos = new Videos(materiales, pedirCuadro);
+        videos = new Videos(materiales, pedirCuadro, avisarFalla);
+        for (const mid of [...fallasCarga]) if (materiales[mid]?.tipo === "video") fallasCarga.delete(mid);
+        mostrarFallas();
         aviso("aviso-preparando", "");
         pedirCuadro();
         return;
@@ -168,14 +255,14 @@ async function iniciar() {
   try {
     await Promise.all(cfg.fuentes.map((f) => document.fonts.load(`32px "${f}"`)));
   } catch { /* sigue con la fuente de respaldo */ }
-  $("reproducir").addEventListener("click", () => (reloj?.reproduciendo ? pausar() : reproducir()));
+  $("reproducir").addEventListener("click", () => (ocupado() ? pausar() : reproducir()));
   $("inicio").addEventListener("click", () => {
     pausar();
     reloj?.ir(0);
     pedirCuadro();
   });
   $("barra").addEventListener("input", (e) => {
-    if (reloj?.reproduciendo) pausar();
+    if (ocupado()) pausar();
     reloj?.ir(Number(e.target.value));
     pedirCuadro();
   });
@@ -183,7 +270,7 @@ async function iniciar() {
     if (e.target.closest?.("input, select, textarea, button")) return;
     if (e.code === "Space") {
       e.preventDefault();
-      if (reloj?.reproduciendo) pausar();
+      if (ocupado()) pausar();
       else reproducir();
     } else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && reloj) {
       pausar();

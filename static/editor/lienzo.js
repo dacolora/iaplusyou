@@ -1,9 +1,12 @@
 // Dibuja un cuadro de la vista previa en el orden del compilador: la pista
 // principal cubriendo el lienzo (con Ken Burns y la transición en curso), las
 // capas de imagen y texto, y los subtítulos como los pinta libass.
+// `faltaCuadro` pide otro intento en el próximo cuadro (el video todavía no
+// tiene ese fotograma); un material que ya falló (`recursos.fallo`) no lo
+// pide: se queda en negro sin redibujar para siempre.
 import { colorAss, estadoKaraoke, ventanaEn, ventanas } from "./subtitulos.js";
 import { rasterizarTexto } from "./texto_canvas.js";
-import { CAPA_DEFECTO, capasEn, posicionCapa, principalEn, zoomKenBurns } from "./tiempo.js";
+import { capasEn, posicionCapa, principalEn, tamanoCapaImagen, zoomKenBurns } from "./tiempo.js";
 
 const ventanasPorDoc = new WeakMap();
 
@@ -28,7 +31,7 @@ export function dibujarCuadro(ctx, doc, tMs, recursos, cfg) {
     const fuente = recursos.fuentePrincipal(capa.clip);
     const [fw, fh] = fuente ? recursos.medidas(fuente) : [0, 0];
     if (!fw || !fh) {
-      faltaCuadro = true;
+      if (!recursos.fallo?.(capa.clip)) faltaCuadro = true;
       continue;
     }
     // scale=W:H:force_original_aspect_ratio=increase,crop=W:H y el zoompan
@@ -53,9 +56,7 @@ export function dibujarCuadro(ctx, doc, tMs, recursos, cfg) {
     } else {
       src = recursos.imagen(clip.material_id);
       if (!src) continue;
-      const m = recursos.material(clip.material_id);
-      w = clip.ancho_px || m?.ancho || src.naturalWidth || CAPA_DEFECTO[0];
-      h = clip.alto_px || m?.alto || src.naturalHeight || CAPA_DEFECTO[1];
+      [w, h] = tamanoCapaImagen(clip, recursos.material(clip.material_id));
     }
     const p = posicionCapa(clip, tMs, w, h, doc.formato);
     ctx.globalAlpha = p.opacidad;

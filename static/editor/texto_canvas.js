@@ -6,6 +6,21 @@ import { ajustarLineas, cajaTexto, colorCss, medidasTexto } from "./texto.js";
 
 const cache = new Map();
 
+// ctx.roundRect no existe antes de Safari 16 / Chrome 99: mismo contorno a mano.
+function rectanguloRedondeado(ctx, x, y, w, h, r) {
+  if (typeof ctx.roundRect === "function") {
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  const rr = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
 export function rasterizarTexto(literal, estilo, formato) {
   const clave = JSON.stringify([literal, estilo, formato]);
   const hecho = cache.get(clave);
@@ -34,7 +49,7 @@ export function rasterizarTexto(literal, estilo, formato) {
   if (f) {
     ctx.fillStyle = colorCss(f.color, f.opacidad ?? 1);
     ctx.beginPath();
-    ctx.roundRect(c.margen, c.margen, c.cajaW, c.cajaH, c.radio);
+    rectanguloRedondeado(ctx, c.margen, c.margen, c.cajaW, c.cajaH, c.radio);
     ctx.fill();
   }
   const alinear = estilo.alineacion || "centro";
