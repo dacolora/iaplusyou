@@ -107,11 +107,17 @@ def texto(*rebanadas):
     return ENCABEZADO + "\n\n" + "\n\n".join(_cargar(r) for r in orden)
 
 
-def bloque_system(*rebanadas, extra=""):
+def bloque_system(*rebanadas, extra="", idioma=None):
     """System prompt en forma de bloques: la doctrina (prefijo estático, con
     caché de prompts de Anthropic) y, aparte y sin caché, las instrucciones
-    propias del sitio."""
+    propias del sitio. Con `idioma`, ese bloque `extra` queda rodeado al
+    inicio y al final por `idiomas.orden_idioma(idioma)` (spec 2026-09-26 §B4):
+    la doctrina con caché nunca se toca, solo lo que ya era sin caché."""
     bloques = [{"type": "text", "text": texto(*rebanadas), "cache_control": {"type": "ephemeral"}}]
+    if idioma is not None:
+        import idiomas
+        orden = idiomas.orden_idioma(idioma)
+        extra = f"{orden}\n\n{extra}\n\n{orden}"
     if extra:
         bloques.append({"type": "text", "text": extra})
     return bloques
@@ -131,14 +137,16 @@ _CAMPOS_TEXTO = ("audiencia", "deseo", "promesa", "mecanismo", "gancho")
 _OBLIGATORIOS = ("audiencia", "consciencia", "sofisticacion", "deseo", "promesa", "lead", "gancho")
 
 # Cifras «fuertes» (spec §4.3): dos o más dígitos; cualquier número con %;
-# con moneda antes o después; multiplicadores; «N de cada M». Un solo dígito
-# suelto («3 pasos») no se verifica a propósito.
+# con moneda antes o después; multiplicadores; «N de cada M» / «N out of M»;
+# «veces» / «times». Un solo dígito suelto («3 pasos») no se verifica a
+# propósito.
 _RE_CIFRAS = re.compile(
-    r"\d+\s*de\s*cada\s*\d+"
+    r"\d+\s*out\s*of\s*\d+"
+    r"|\d+\s*de\s*cada\s*\d+"
     r"|\d+(?:[.,]\d+)*\s*%"
     r"|[$€]\s*\d+(?:[.,]\d+)*"
     r"|\d+(?:[.,]\d+)*\s*(?:usd|cop|mxn|eur|€)\b"
-    r"|\d+(?:[.,]\d+)*\s*(?:x|veces)\b"
+    r"|\d+(?:[.,]\d+)*\s*(?:x|veces|times)\b"
     r"|\d(?:[.,]?\d){1,}",
     re.IGNORECASE)
 _RE_NUMERO = re.compile(r"\d+(?:[.,]\d+)*")

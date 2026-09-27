@@ -129,3 +129,15 @@ def test_en_idioma_fuera_de_toda_app(app_prueba):
 
 def test_gettext_sin_contexto_devuelve_el_espanol():
     assert gettext("Hola") == "Hola"
+
+
+def test_nombre_para_claude():
+    assert idiomas.nombre_para_claude("en") == "inglés"
+    assert idiomas.nombre_para_claude("es") == "español"
+    assert idiomas.nombre_para_claude("pt") == "español"      # inválido -> DEFECTO (fijo en "es" en tests)
+
+
+def test_orden_idioma():
+    en = idiomas.orden_idioma("en")
+    assert "inglés" in en and "English" in en
+    assert "español" in idiomas.orden_idioma("es")

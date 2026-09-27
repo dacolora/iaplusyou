@@ -47,6 +47,25 @@ def _validar(idioma):
     return v
 
 
+_NOMBRES_PARA_CLAUDE = {"en": "inglés", "es": "español"}
+_ORDENES = {
+    "en": "IDIOMA: escribe TODO lo que devuelvas en inglés (English), aunque estas instrucciones estén en español.",
+    "es": "IDIOMA: escribe TODO lo que devuelvas en español.",
+}
+
+
+def nombre_para_claude(idioma):
+    """Nombre del idioma para meterlo en instrucciones a Claude (que están en español)."""
+    return _NOMBRES_PARA_CLAUDE[normalizar(idioma) or DEFECTO]
+
+
+def orden_idioma(idioma):
+    """La línea que va al inicio y al final de las instrucciones de cada sitio
+    (doctrina.bloque_system(idioma=)): sin ella el español de las instrucciones
+    arrastra la salida."""
+    return _ORDENES[normalizar(idioma) or DEFECTO]
+
+
 def de_usuario(usuario):
     import usuarios
     entry = usuarios.obtener(usuario) if usuario else None
