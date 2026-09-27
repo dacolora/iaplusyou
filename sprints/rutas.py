@@ -396,7 +396,13 @@ def campana_sugeridos(cliente, sid, cid):
     ya_ids = {(r.get("extra") or {}).get("referente_id") for r in refs} - {None}
     ef = c["efectivos"]
     todas = request.args.get("todas") == "1"
-    enfoque = {"etapa": None if todas else (c.get("funnel") or "tof").upper(), "consciencia": c.get("consciencia"),
+    # Igual que la tarea de «Sugerir con IA» (tareas/sprints.py): sin
+    # consciencia propia, cae a la del Nicho de la persona (F9, ronda final) --
+    # una campaña creada antes de que Nicho investigara a su persona no debe
+    # quedarse sin ese filtro para siempre.
+    persona_c = datos.persona(cliente, c["persona_id"]) or {}
+    enfoque = {"etapa": None if todas else (c.get("funnel") or "tof").upper(),
+               "consciencia": c.get("consciencia") or datos.consciencia_de_persona(persona_c),
                "familias": c.get("familias") or [], "idioma": ef["idioma"], "marcas": ef["marcas"]}
     faltan = int(c.get("referencias_objetivo") or 1) - len(refs)
     r = referentes_sugerir.sugerir_campana(cliente, enfoque, ya_ids, min(8, faltan) if faltan > 0 else 4)

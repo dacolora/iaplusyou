@@ -401,6 +401,30 @@ def test_sugeridos_vacios_ofrecen_tres_salidas(app):
     assert "data-aflojar" not in html
 
 
+def test_sugeridos_gratis_heredan_la_consciencia_de_nicho_si_la_campana_no_tiene(app, monkeypatch):
+    """F9 (ronda final): la tarea de «Sugerir con IA» (tareas/sprints.py) ya
+    caía a `datos.consciencia_de_persona` cuando la campaña no tenía
+    consciencia propia; la ruta gratis (`campana_sugeridos`) no lo hacía --
+    una campaña creada ANTES de que Nicho investigara a su persona se quedaba
+    sin ese filtro para siempre."""
+    from sprints import datos, rutas
+    pid = datos.crear_persona("acme", "Melissa", resumen="x")   # sin nivel de Nicho al crear la campaña
+    sid = _sprint(datos)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0)
+    assert datos.campana("acme", cid)["consciencia"] is None
+    datos.actualizar_persona("acme", pid, extra={"conciencia": {"nivel": "consciente_del_problema"}})
+
+    vistos = []
+
+    def _falso(cliente, enfoque, excluir, objetivo, **kw):
+        vistos.append(enfoque)
+        return {"items": [], "aflojado": []}
+    monkeypatch.setattr(rutas.referentes_sugerir, "sugerir_campana", _falso)
+
+    app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/sugeridos")
+    assert vistos and vistos[0]["consciencia"] == "consciente_del_problema"
+
+
 def test_agregar_de_la_biblioteca_por_fetch_y_por_formulario(app):
     from sprints import datos
     uno, dos = _referente(1, "UGC"), _referente(2, "Lista")
