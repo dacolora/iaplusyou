@@ -61,6 +61,7 @@ from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
 import doctrina
+from doctrina import revisor as doctrina_revisor
 import flowplus_lanzar
 import cola
 import db
@@ -2521,11 +2522,23 @@ def _swap_items(cliente):
 
 
 def _creative_flow_items(cliente):
+    import final_edition
     data = creative_flow.cargar(cliente)
     # Id numérico de la pieza por sesión, UNA consulta para toda la pestaña:
     # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
     # (#experimentos?piezas=<pieza_id>). Las finales ya traen su pieza_id.
     pieza_ids = creative_flow.piezas_ids_por_legado(cliente)
+    # Doctrina, bloque 3: leer la guía una sola vez (no por pieza).
+    try:
+        guia_marca = marca_mod.guia_efectiva(cliente) or ""
+    except Exception:  # noqa: BLE001 — es informativa, nunca bloquea
+        guia_marca = ""
+    # Doctrina, bloque 3, revisión final (I1): `final_edition._producto`
+    # escanea el catálogo (archivo + tabla `producto`); con muchas piezas
+    # del mismo producto eso se notaba (+2,4 s con 500 piezas/100 productos).
+    # Memo por tupla de `productos_ids`, una sola resolución por producto
+    # distinto en toda la lista, no por pieza.
+    productos_por_ids = {}
     items = []
     for cf_id, entry in sorted(
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
@@ -2577,6 +2590,39 @@ def _creative_flow_items(cliente):
                 jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
                 f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
                 item["finales"].append(f)
+        # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
+        # Las reglas son gratis y se calculan al renderizar; la revisión de
+        # Claude es la guardada. Sin ninguna de las dos, la sección no pesa.
+        item["revision"], item["revision_estado"], item["reglas"], item["trabajo_revision"] = None, None, [], None
+        item["revision_error"] = None
+        if entry.get("estado") == "video_listo" and entry.get("video_url"):
+            item["revision"] = entry.get("revision_doctrina")
+            item["revision_error"] = entry.get("revision_doctrina_error")
+            item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
+            item["revision_n"] = doctrina_revisor.contar(item["revision"])
+            try:
+                clave = tuple(entry.get("productos_ids") or ())
+                if clave:
+                    producto = productos_por_ids.get(clave)
+                    if producto is None:
+                        try:
+                            producto = final_edition._producto(cliente, entry, None) or {}
+                        except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
+                            producto = {}
+                        # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
+                        # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
+                        if "pruebas" in producto or not producto:
+                            productos_por_ids[clave] = producto
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
+                                                guia=guia_marca, producto=producto)
+                else:
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=guia_marca)
+                item["reglas"] = doctrina_revisor.reglas(d)
+            except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
+                item["reglas"] = []
+            jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
+            item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
+            item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
         items.append(item)
     return items
 
@@ -3970,7 +4016,8 @@ NOMBRES_TIPO_GASTO = {
     "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
     "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
     "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)",
-    "ideas": "Ideas de sprint (IA)", "pedidos": "Pedidos al cliente (IA)", "otro": "Otros",
+    "ideas": "Ideas de sprint (IA)", "pedidos": "Pedidos al cliente (IA)",
+    "revision": "Revisión de la doctrina (IA)", "otro": "Otros",
 }
 
 
@@ -5773,6 +5820,20 @@ def cf_angulo(cliente, cf_id):
                                                       previo.get("faltantes"), ahora=db.ahora())
     creative_flow.actualizar(cliente, cf_id, angulo=limpio)
     return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/revisar", methods=["POST"])
+def cf_revisar(cliente, cf_id):
+    """Doctrina, bloque 3: encola «Revisar con la doctrina» de una pieza
+    terminada (pagada: el precio va en el botón; un clic repetido no lanza
+    dos porque el `job_id` es determinista). Solo informa, nunca bloquea."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry or entry.get("estado") != "video_listo" or not entry.get("video_url"):
+        flash("Solo se puede revisar una pieza terminada.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    tareas_doctrina.encolar_revisar(cliente, cf_id)
+    flash("Revisando la pieza con la doctrina: la página se recarga sola cuando esté lista.", "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 def _sesion_con_video(cliente, cf_id):

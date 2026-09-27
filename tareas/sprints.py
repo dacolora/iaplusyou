@@ -286,6 +286,13 @@ def encolar_qa(cliente, cp_id):
                             cliente=cliente, duracion_estimada=30, max_intentos=3)
 
 
+def _gasto_qa(cliente, referencia, ent, sal, detalle):
+    if ent or sal:
+        gastos.registrar_seguro(cliente, "revision", costo_real(ent, sal), referencia, proveedor="anthropic",
+                                detalle=detalle, extra={"tokens_entrada": ent, "tokens_salida": sal,
+                                                        "modelo": modelo_actual()})
+
+
 @registrar("sprint_qa_pieza")
 def ejecutar_qa_pieza(tarea):
     """QA de una pieza lista. Si falla, la tarea reintenta sola (max 3): el QA
@@ -295,7 +302,11 @@ def ejecutar_qa_pieza(tarea):
     periódica evaluará la sesión nueva. Un fallo (descarga, ffprobe, visión)
     deja el marcador terminal `veredicto="error"` antes de subir la
     excepción: la cola agota sus intentos, pero la periódica ya no la vuelve
-    a encolar cada 5 min; «Repetir QA» (rutas.pieza_qa) limpia el marcador."""
+    a encolar cada 5 min; «Repetir QA» (rutas.pieza_qa) limpia el marcador.
+
+    Doctrina, bloque 3: registra el gasto real de la visión (tipo «revision»,
+    una fila por intento, también si la respuesta no sirvió) y guarda en la
+    sesión la revisión de los 12 puntos que vino en la misma llamada."""
     p = tarea["payload"]
     cliente, cp_id = p["cliente"], int(p["cp_id"])
     i = datos.idea(cliente, cp_id)
@@ -309,16 +320,32 @@ def ejecutar_qa_pieza(tarea):
     sp = datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}
     umbral = (sp.get("extra") or {}).get("qa_umbral") or qa.UMBRAL_DEFECTO
     campana["marca"] = proyectos.nombre_visible(cliente)
+    referencia = f"qa:{cp_id}{ref_sufijo(tarea)}:i{tarea.get('intentos') or 0}"
     try:
         resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
     except Exception as e:
+        _gasto_qa(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
+                  "control de calidad · respuesta inválida")
         datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {}, "nota": str(e)[:300],
                                                  "cf_id": cf_id})
         raise
+    revision = resultado.pop("doctrina", None)
+    _gasto_qa(cliente, referencia, resultado.pop("tokens_entrada", 0) or 0, resultado.pop("tokens_salida", 0) or 0,
+              "control de calidad del sprint" + (" y doctrina" if revision else ""))
     resultado["cf_id"] = cf_id
     if not datos.guardar_qa(cliente, cp_id, cf_id, resultado):
         bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado", "QA descartado: la pieza fue regenerada")
         return "QA descartado: la pieza fue regenerada mientras se evaluaba."
+    if revision:
+        # Bloque 3, revisión final (I4): el QA ya se pagó y ya se guardó
+        # arriba (`datos.guardar_qa`); este segundo guardado, en la sesión de
+        # Crear, es informativo — que falle no debe tumbar la tarea (la cola
+        # reintentaría y cobraría de nuevo un QA que ya se hizo). Queda
+        # rastro en la bitácora.
+        try:
+            creative_flow.actualizar(cliente, cf_id, revision_doctrina=revision)
+        except Exception as e:  # noqa: BLE001
+            bitacora.registrar(cliente, cf_id, "sprint_qa", "doctrina_no_guardada", str(e)[:200])
     datos.registrar_evento(cliente, i["sprint_id"], "qa_evaluada",
                            f"QA de «{i['titulo']}»: {resultado['veredicto']} ({resultado['score']})",
                            {"cp_id": cp_id, "score": resultado["score"], "veredicto": resultado["veredicto"]},

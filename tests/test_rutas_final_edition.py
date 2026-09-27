@@ -554,3 +554,178 @@ def test_guardar_el_angulo_de_una_pieza(base_temporal, monkeypatch):
     ang = creative_flow.cargar("acme")[cf_id]["angulo"]
     assert ang["gancho"] == "¿Pies fríos?" and ang["editado_en"]
     assert c.post("/cliente/acme/creative_flow/nada/angulo", json={"angulo": {}}).status_code == 404
+
+
+# ------------------------------------------ doctrina, bloque 3: revisión ---
+
+REV_MEJORAR = {"video_url": "https://r2/clon.mp4", "resumen": "Muestra el producto antes.",
+               "puntos": [{"n": n, "estado": "pasa", "detalle": "", "donde": ""} for n in range(1, 13)],
+               "reglas": [{"n": 5, "codigo": "sin_mecanismo", "texto": "Falta el mecanismo.", "donde": "angulo"}]}
+REV_MEJORAR["puntos"][5] = {"n": 6, "estado": "mejorar", "detalle": "El producto aparece hasta el segundo 5.",
+                            "donde": "segundo 5"}
+REV_MEJORAR["puntos"][9] = {"n": 10, "estado": "no_aplica", "detalle": "Sin guía de marca.", "donde": ""}
+
+
+def _item_revisable(**extra):
+    base = dict(revision=None, revision_estado="sin_revisar", revision_n=0, reglas=[], trabajo_revision=None,
+                precio_revision="US$ 0,05 aprox.")
+    base.update(extra)
+    return _item_video_listo(**base)
+
+
+def test_plantilla_revision_sin_revisar_muestra_las_reglas_y_el_boton():
+    env = _entorno_plantilla()
+    reglas = [{"n": 4, "codigo": "cifra_no_verificada", "texto": "La cifra «1200» del caption no está.", "donde": "caption"}]
+    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_revisable(reglas=reglas)]))
+    assert "Revisión de la doctrina" in html and "Revisión rápida (gratis)" in html
+    assert "La cifra «1200» del caption no está." in html and "#base" in html
+    assert "Revisar con la doctrina (US$ 0,05 aprox.)" in html and "Doctrina:" not in html
+    sin = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_revisable()]))
+    assert "Las reglas no encontraron nada." in sin
+
+
+def test_plantilla_revision_con_claude_agrupa_y_pone_la_etiqueta():
+    env = _entorno_plantilla()
+    item = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2)
+    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([item]))
+    assert "Muestra el producto antes." in html
+    assert "<strong>Visuales</strong>: El producto aparece hasta el segundo 5." in html and "#video" in html
+    assert "Pasa (10)" in html and "No aplica (1)" in html
+    assert "Doctrina: 2 por mejorar" in html and "Revisar de nuevo (US$ 0,05 aprox.)" in html
+    bien = _item_revisable(revision=dict(REV_MEJORAR, reglas=[], puntos=[dict(p, estado="pasa") for p in REV_MEJORAR["puntos"]]),
+                           revision_estado="bien")
+    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([bien]))
+    assert "Doctrina: bien" in html and "Claude no encontró nada para mejorar." in html
+
+
+def test_plantilla_revision_vieja_error_y_en_curso():
+    env = _entorno_plantilla()
+    tpl = env.get_template("_tab_creativeflowplus.html")
+    vieja = tpl.render(**_contexto_minimo([_item_revisable(revision=REV_MEJORAR, revision_estado="vieja")]))
+    assert "es de una versión anterior" in vieja and "Revisar de nuevo" in vieja and "Doctrina:" not in vieja
+    error = tpl.render(**_contexto_minimo([_item_revisable(revision={"error": "Claude no devolvió JSON."},
+                                                             revision_estado="error")]))
+    assert "no se pudo terminar: Claude no devolvió JSON." in error
+    curso = tpl.render(**_contexto_minimo([_item_revisable(trabajo_revision={"job_id": "acme__cf_1__revisar"})]))
+    assert 'id="trabajo-acme__cf_1__revisar"' in curso and "Revisando con la doctrina…" in curso
+    assert "Revisando la pieza…" in curso and "Revisar con la doctrina (" not in curso
+
+
+def test_plantilla_muestra_el_error_junto_a_la_revision_buena():
+    """Bloque 3, revisión final (I2): un fallo posterior no reemplaza la
+    buena revisión guardada — las dos se muestran."""
+    env = _entorno_plantilla()
+    tpl = env.get_template("_tab_creativeflowplus.html")
+    item = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2,
+                           revision_error={"error": "Claude no devolvió JSON.", "video_url": "https://r2/clon.mp4"})
+    html = tpl.render(**_contexto_minimo([item]))
+    assert "Muestra el producto antes." in html                          # la buena sigue mostrándose
+    assert "El último intento de revisión no se pudo terminar: Claude no devolvió JSON." in html
+    # el error es de otro video (uno anterior a la última generación): no se muestra
+    otro = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2,
+                           revision_error={"error": "x", "video_url": "https://r2/otro.mp4"})
+    html2 = tpl.render(**_contexto_minimo([otro]))
+    assert "no se pudo terminar" not in html2
+
+
+def test_items_de_crear_traen_la_revision_y_las_reglas(base_temporal, monkeypatch):
+    import creative_flow
+    import dashboard
+    import final_edition
+    monkeypatch.setattr(final_edition, "_producto", lambda cliente, entry, precio: {"nombre": "Chancla", "sofisticacion": 3})
+    cf_id = _sesion_video_listo()
+    creative_flow.actualizar("acme", cf_id, angulo={"promesa": "pies frescos", "gancho": "¿Calor?", "sofisticacion": 2},
+                             revision_doctrina=dict(REV_MEJORAR, video_url="https://r2/clon.mp4"))
+    item = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == cf_id)
+    assert item["revision_estado"] == "mejorar" and item["revision_n"] == 2
+    assert [a["codigo"] for a in item["reglas"]] == ["sin_mecanismo"] and item["trabajo_revision"] is None
+    assert item["precio_revision"].startswith("US$")
+    otra = creative_flow.crear("acme", [], ["Chancla Rose"], [], "camina", 8, "", "A")
+    sin = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == otra)
+    assert sin["revision_estado"] is None and sin["reglas"] == []
+
+
+def test_creative_flow_items_trae_el_error_de_revision_aparte(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I2): `revision_error` viaja aparte de
+    `revision` (la buena, guardada, sigue disponible)."""
+    import creative_flow
+    import dashboard
+    import final_edition
+    monkeypatch.setattr(final_edition, "_producto", lambda cliente, entry, precio: {"nombre": "Chancla"})
+    cf_id = _sesion_video_listo()
+    error = {"error": "Claude no devolvió JSON.", "video_url": "https://r2/clon.mp4"}
+    creative_flow.actualizar("acme", cf_id, revision_doctrina=dict(REV_MEJORAR, video_url="https://r2/clon.mp4"),
+                             revision_doctrina_error=error)
+    item = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == cf_id)
+    assert item["revision_error"] == error and item["revision"]["resumen"] == REV_MEJORAR["resumen"]
+    otra = creative_flow.crear("acme", [], ["Chancla Rose"], [], "camina", 8, "", "A")
+    sin = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == otra)
+    assert sin["revision_error"] is None
+
+
+def test_creative_flow_items_resuelve_el_producto_una_sola_vez_por_productos_ids(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I1): dos piezas terminadas con los mismos
+    `productos_ids` no deben escanear el catálogo dos veces — `_producto` se
+    memoiza por tupla de `productos_ids` para toda la lista de Crear."""
+    import creative_flow
+    import dashboard
+    import final_edition
+    llamadas = []
+
+    def fake(cliente, entry, precio):
+        llamadas.append(tuple(entry.get("productos_ids") or ()))
+        return {"nombre": "Chancla", "sofisticacion": 3, "pruebas": []}   # resuelto en el catálogo
+    monkeypatch.setattr(final_edition, "_producto", fake)
+    cf1 = _sesion_video_listo("acme")
+    cf2 = creative_flow.crear("acme", [], ["Chancla Rose"], [], "otra acción", 8, "", "A")
+    creative_flow.actualizar("acme", cf2, estado="video_listo", video_url="https://r2/otra.mp4")
+    dashboard._creative_flow_items("acme")
+    assert llamadas == [("Chancla Rose",)]           # una sola llamada para las dos piezas
+
+
+def test_creative_flow_items_no_comparte_el_producto_de_respaldo(base_temporal, monkeypatch):
+    """Re-revisión del bloque 3: si el nombre no está en el catálogo, `_producto`
+    arma uno de respaldo con los datos de ESA pieza; recordarlo por
+    `productos_ids` le daba a otra pieza el texto de la primera."""
+    import creative_flow
+    import dashboard
+    from doctrina import revisor
+    vistos = {}
+    monkeypatch.setattr(revisor, "reglas", lambda d: vistos.update({d["cf_id"]: d["producto"].get("nombre")}) or [])
+    cf1 = creative_flow.crear("acme", [], ["Zapato Fantasma"], [], "primera acción", 8, "", "A")
+    cf2 = creative_flow.crear("acme", [], ["Zapato Fantasma"], [], "segunda acción", 8, "", "A")
+    for cf in (cf1, cf2):
+        creative_flow.actualizar("acme", cf, estado="video_listo", video_url=f"https://r2/{cf}.mp4")
+    dashboard._creative_flow_items("acme")
+    assert vistos[cf1] != vistos[cf2]
+
+
+def test_creative_flow_items_reglas_vacias_si_reunir_falla(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I9): un fallo de `reunir` (informativo) no
+    debe tumbar la lista de Crear — la pieza sigue apareciendo, sin reglas."""
+    import dashboard
+    from doctrina import revisor
+    cf_id = _sesion_video_listo()
+
+    def rompe(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(revisor, "reunir", rompe)
+    item = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == cf_id)
+    assert item["reglas"] == []
+
+
+def test_ruta_revisar_encola_solo_piezas_terminadas(base_temporal, monkeypatch):
+    import creative_flow
+    import dashboard
+    from tareas import doctrina as td
+    encoladas = []
+    monkeypatch.setattr(td, "encolar_revisar", lambda cliente, cf_id: encoladas.append((cliente, cf_id)))
+    c = _cliente_admin(dashboard)
+    cf_id = _sesion_video_listo()
+    assert c.post(f"/cliente/acme/creative_flow/{cf_id}/revisar").status_code == 302
+    assert encoladas == [("acme", cf_id)]
+    creative_flow.actualizar("acme", cf_id, estado="video_generando")
+    c.post(f"/cliente/acme/creative_flow/{cf_id}/revisar")
+    c.post("/cliente/acme/creative_flow/cf_no_existe/revisar")
+    assert encoladas == [("acme", cf_id)]
+

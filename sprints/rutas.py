@@ -15,12 +15,14 @@ from urllib.parse import urlencode
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 import catalogo_productos
+import creative_flow
 import db
 import doctrina
 import gastos
 import proyectos
 import tiendas
 import trabajos
+from doctrina import revisor as doctrina_revisor
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
@@ -439,22 +441,30 @@ def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
     return round(usd, 4) if usd > 0 else None
 
 
-def _piezas_de(cliente, c, modelo_video, modelo_imagen):
+def _piezas_de(cliente, c, modelo_video, modelo_imagen, sesiones=None):
     """Piezas con sesión de una campaña, con su costo de regeneración
-    (estimado gratis, el mismo que muestra el botón antes de gastar)."""
+    (estimado gratis, el mismo que muestra el botón antes de gastar) y el
+    estado de la revisión de la doctrina de su sesión (bloque 3). `sesiones`:
+    las de Crear ya cargadas, para no recargarlas por campaña."""
+    if sesiones is None:
+        sesiones = creative_flow.cargar(cliente)
     salida = []
     for p in c["piezas"]:
+        entry = sesiones.get(p.get("cf_id")) or {}
         salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
                        "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
                        "funnel": c.get("funnel") or "tof",
-                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen)})
+                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen),
+                       "doctrina": doctrina_revisor.resumen_galeria(entry.get("revision_doctrina"),
+                                                                    entry.get("video_url"))})
     return salida
 
 
 def _piezas_revision(cliente, sp):
     """Piezas con sesión de todas las campañas del sprint."""
     mv, mi = produccion.modelos(cliente)
-    return [p for c in sp["campanas"] for p in _piezas_de(cliente, c, mv, mi)]
+    sesiones = creative_flow.cargar(cliente)
+    return [p for c in sp["campanas"] for p in _piezas_de(cliente, c, mv, mi, sesiones=sesiones)]
 
 
 def _contexto_piezas(cliente, sp, c):

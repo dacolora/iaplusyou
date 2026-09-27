@@ -241,6 +241,16 @@ def test_tarifas_de_la_doctrina_bloque_2():
     assert gastos.estimar("pedidos_producto")["usd"] == 0.01
 
 
+def test_tarifa_y_tipo_de_la_revision_de_la_doctrina():
+    """Doctrina, bloque 3: la revisión con Claude es su propio tipo de gasto."""
+    import dashboard
+    import gastos
+    assert "revision" in gastos.TIPOS and dashboard.NOMBRES_TIPO_GASTO["revision"] == "Revisión de la doctrina (IA)"
+    r = gastos.estimar("revision_pieza")
+    # Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas): ≈ US$ 0,060; redondeado hacia arriba.
+    assert r["usd"] == gastos.TARIFAS["revision_pieza"] == 0.07 and "0,07" in r["texto"]
+
+
 def test_estimar_proponer_ideas_por_numero_de_ideas():
     import gastos
     tres = gastos.estimar("proponer_ideas", n=3)

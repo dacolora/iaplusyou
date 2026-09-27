@@ -31,7 +31,7 @@ import db
 
 log = logging.getLogger(__name__)
 
-TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "otro")
+TIPOS = ("video", "imagen", "swap", "guion", "final", "regla_producto", "caption_organico", "musica", "avatares", "recoleccion", "adaptar_referente", "sugerir_ia", "clasificacion", "refinar_prompt", "guion_clips", "ideas", "pedidos", "revision", "otro")
 
 # Tarifas fijas (USD) de lo que no tiene `estimate_*` propio. Fuentes:
 #  - Anthropic (claude-sonnet-5, US$ 2/M tokens de entrada y US$ 10/M de
@@ -81,6 +81,10 @@ TARIFAS = {
     # peor caso: reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007. Redondeado hacia arriba.
     "reescribir_idea": 0.03,
     "pedidos_producto": 0.01,
+    # Doctrina, bloque 3: una llamada con visión (hasta 8 fotogramas) y la rebanada
+    # «revisar». Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas):
+    # ≈ US$ 0,060 (casi todo es la salida con pensamiento); redondeado hacia arriba.
+    "revision_pieza": 0.07,
 }
 
 # «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
@@ -213,6 +217,7 @@ _ESTIMADORES = {
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
+    "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
                                         f"{max(1, int(n or 0))} idea(s) con Claude"),
 }

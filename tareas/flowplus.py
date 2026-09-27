@@ -214,6 +214,9 @@ def ejecutar_imagen(tarea):
     creative_flow.actualizar(
         cliente, cf_id, estado="video_listo", video_url=imagen_url, video_local=out_path,
         credits=costo.get("credits"), usd=costo.get("usd"),
+        # Bloque 3, revisión final (I5): una imagen nueva en la misma sesión
+        # deja obsoleta la revisión (y el error) de la doctrina anterior.
+        revision_doctrina=None, revision_doctrina_error=None,
     )
     return "Imagen de FlowPlus lista."
 
@@ -322,6 +325,9 @@ def ejecutar_video(tarea):
         video_url_crudo=video_url_crudo, video_local_crudo=out_path,
         credits=costo.get("credits"), usd=round(float(costo.get("usd") or 0.0) + usd_musica, 4),
         capas=capas,
+        # Bloque 3, revisión final (I5): un video nuevo en la misma sesión
+        # deja obsoleta la revisión (y el error) de la doctrina anterior.
+        revision_doctrina=None, revision_doctrina_error=None,
     )
     if estilo_musica and not musica.es_propia(estilo_musica):
         estado_musica = (capas.get("musica") or {}).get("estado")
