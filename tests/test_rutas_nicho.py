@@ -283,6 +283,28 @@ def test_pagina_tarjetas_sin_llaves(app, monkeypatch):
     assert "Puesta a punto" in html
 
 
+def test_cliente_no_ve_fuentes_sin_llave_ni_instrucciones_del_servidor(app, monkeypatch):
+    """Las llaves de Reddit/YouTube/Apify son de Creatv (las pone el admin en
+    el .env): al cliente no se le muestra una fuente apagada ni «configura el
+    .env» (2026-09-27). Las que sí tienen llave se ven normales."""
+    from nicho import datos
+    for v in ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USER_AGENT", "YOUTUBE_API_KEY"):
+        monkeypatch.delenv(v, raising=False)
+    monkeypatch.setenv("APIFY_TOKEN", "tok-prueba")
+    eid = datos.crear_estudio("acme", "X")
+    c = app["dashboard"].app.test_client()
+    with c.session_transaction() as s:
+        s["usuario"] = "user_acme"; s["rol"] = "cliente"; s["cliente"] = "acme"
+    html = c.get(f"/cliente/acme/nicho/{eid}").data.decode()
+    assert "nicho-fuente-apify" in html
+    assert "nicho-fuente-reddit" not in html and "nicho-fuente-youtube" not in html
+    assert "(falta " not in html and ".env" not in html
+    c.post(f"/cliente/acme/nicho/{eid}/recolectar/reddit", data={"palabras_clave": "x"})
+    with c.session_transaction() as s:
+        mensajes = [m for _, m in s.get("_flashes", [])]
+    assert mensajes and not any(".env" in m or "REDDIT_" in m for m in mensajes)
+
+
 def test_pagina_tarjetas_con_llaves(app, llaves):
     from nicho import datos
     eid = datos.crear_estudio("acme", "X", idioma="en")
