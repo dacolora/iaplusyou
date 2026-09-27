@@ -26,7 +26,6 @@
    formulario dispare el refresco de ESE OTRO, contra una URL rota
    (`/undefined`) que termina en "No se pudo cargar.". #}
 {% set es_admin = session.get('rol') == 'admin' %}
-{% set idiomas = [('es', 'Español'), ('en', 'Inglés'), ('pt', 'Portugués'), ('fr', 'Francés'), ('it', 'Italiano'), ('de', 'Alemán')] %}
 {% set fuente_lista = fuentes_tipos and not fuente_llaves_faltantes.get(fuente) %}
 <div class="modal-form ref-traer">
   <header class="modal-form-cab">
@@ -82,14 +81,9 @@
         <label class="modal-form-campo crece">Palabra clave
           <input type="text" name="palabra" value="{{ consulta.palabra or '' }}" maxlength="120" placeholder="Ej.: crema antiarrugas, sandalias, proteína">
         </label>
-        <label class="modal-form-campo">Idioma de los anuncios
-          <select name="idioma">
-            {% set idioma = consulta.idioma or 'es' %}
-            {% for cod, nombre in idiomas %}<option value="{{ cod }}" {% if cod == idioma %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
-            {% if idioma not in idiomas | map('first') | list %}<option value="{{ idioma }}" selected>{{ idioma }}</option>{% endif %}
-          </select>
-        </label>
       </div>
+      {# Siempre en inglés (2026-09-27): referentes.traducir traduce la palabra al lanzar. #}
+      <p class="modal-form-ayuda" data-solo="palabra">Escríbela en español o en inglés: se traduce al inglés y se buscan anuncios en inglés, el mercado más grande (la traducción cuesta centavos).</p>
 
       <div class="modal-form-fila" data-solo-fuente="apify">
         <label class="modal-form-campo">País de los anuncios

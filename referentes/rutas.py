@@ -24,7 +24,7 @@ import proyectos
 import tiendas
 from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
-from referentes import datos, fuentes, recrear
+from referentes import datos, fuentes, recrear, traducir
 from referentes.fuentes.base import ErrorFuente
 from sprints import datos as sprints_datos
 from tareas import referentes as tareas_referentes
@@ -139,6 +139,11 @@ def traer_post(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
         flash("Escribe una palabra clave.", "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    try:
+        consulta = traducir.preparar_consulta(consulta, cliente)     # palabra → inglés, idioma en
+    except traducir.TraduccionInvalida as e:
+        flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
     modulo = fuentes.por_tipo(fuente)
@@ -318,6 +323,9 @@ def _vista_barrido(b):
                                         f"&view_all_page_id={consulta.get('pagina_id') or ''}")
     else:
         busqueda, enlace = f"«{consulta.get('palabra') or ''}»", None
+        original = consulta.get("palabra_original")
+        if original and original.strip().lower() != (consulta.get("palabra") or "").strip().lower():
+            busqueda = f"«{original}» → «{consulta.get('palabra') or ''}»"     # lo escrito → lo buscado en inglés
     return {"fecha": fecha, "estado": estado, "tono": tono, "busqueda": busqueda, "enlace": enlace,
             "detalle": " · ".join(d for d in detalle if d)}
 

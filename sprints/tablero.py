@@ -82,12 +82,10 @@ def _fechas_cortas(inicio, fin):
     return f"{i.day} {MESES[i.month - 1]} – {f.day} {MESES[f.month - 1]}"
 
 
-def linea_sprint(sp, paises):
-    """«1–31 oct · 🇨🇴 español · Hot Sale · imita: Crocs, Hoka» (cabecera del tablero)."""
+def linea_sprint(sp):
+    """«1–31 oct · Hot Sale · imita: Crocs, Hoka» (cabecera del tablero). Sin
+    país ni idioma: el sprint es para todos los países (2026-09-27)."""
     partes = [_fechas_cortas(sp["inicio"], sp["fin"])]
-    bandera = ((paises or {}).get(sp.get("pais") or "") or {}).get("bandera") or (sp.get("pais") or "")
-    idioma = datos.IDIOMAS_NOMBRE.get(sp.get("idioma") or "es", sp.get("idioma"))
-    partes.append(f"{bandera} {idioma}".strip())
     if (sp.get("momento") or {}).get("nombre"):
         partes.append(sp["momento"]["nombre"])
     if sp.get("marcas"):

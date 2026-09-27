@@ -172,9 +172,13 @@ brand reference images to auto-write that guía de estilo.
 **Sprints de contenido** (`sprints/` + `tareas/sprints.py`, spec
 `docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan.
 Since 2026-09-26 it is a **board** (spec `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`):
-«+ Nuevo sprint» is a short form (month, país/idioma, optional «momento del mes» from
-`sprints.calendario.presets(pais)` — the tab renders every country's presets with `data-pais` — or
-free text, brands to imitate) and the sprint page (`sprint_detalle.html`) is a board with one card
+«+ Nuevo sprint» is a short form (month, optional «momento del mes» from the PROJECT's calendar
+`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate). Since 2026-09-27
+a sprint is **for every country**: no país/idioma in the form, the sprint header or the campaign panel
+(`CAMPOS_SPRINT`/`CAMPOS_CAMPANA` refuse them), new sprints store `pais=NULL` and
+`idioma=datos.IDIOMA_BASE` ("en"), the idea prompt says «todos los países… cada país los adapta después
+en la edición final», and localization per country/language is final edition's job; old sprints keep the
+país/idioma they had (still read through `efectivos`). The sprint page (`sprint_detalle.html`) is a board with one card
 per campaign (`_sprint_tarjeta.html`, «Siguiente: …» from the pure `sprints/tablero.py`) plus a side
 panel (`_sprint_panel.html`, fetched; all its JS lives in `sprint_detalle.html` because scripts in
 fetched fragments never run) that saves field by field (`sprints.campana_campo` /
@@ -208,7 +212,8 @@ generates) and emails when a batch finishes. `sprints/revision.py` approves or
 rejects (a rejected piece leaves `estado_videos.json`), closes and reopens the
 sprint; `sprints/entrega.py` lists approved links and builds the zip
 (`sprint_empaquetar`). Retries and regenerations always go through the cost
-gate and `max_intentos=1`. Entrega 2 of the board (2026-09-27, spec
+gate and `max_intentos=1`. Entrega 2 of the board (2026-09-27; it replaced a smaller Armar/Ideas-only version,
+c91b6fc, that another session had shipped an hour earlier; spec
 `docs/superpowers/specs/2026-09-27-sprints-tablero-entrega2-design.md`): the panel has three
 tabs — Armar · Ideas · Piezas (`_sprint_panel_armar.html`, `_sprint_panel_ideas.html`,
 `_sprint_panel_piezas.html`, all rendered in one fragment and toggled client-side;
@@ -736,7 +741,13 @@ fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.b
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`).
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Crear's «Desde referencias» form is a **composer**
+(spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
+(OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
+whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
+from them —, so the POST to `cf_crear_video` is unchanged; upload/link inputs reach their empty outside forms via
+`form=`, the catalog opens as a `<dialog>` (`_selector_productos.html` with `sel_dialogo=True`; «Cambiar producto»
+keeps its `<details>`), and Enter in a one-line input never submits it (it used to generate and charge).
 
 **Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
 ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)

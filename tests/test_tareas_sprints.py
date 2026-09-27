@@ -346,8 +346,9 @@ def test_ejecutar_sugerir_biblioteca_guarda_sugerencias(base_temporal, monkeypat
     assert c["extra"]["sugerencias_ia"] == [{"referente_id": 5, "razon": "encaja"}]
     filas = [f for f in gastos.historial("acme") if f["tipo"] == "sugerir_ia"]
     assert len(filas) == 1 and filas[0]["usd"] > 0
-    assert enfoques[0]["etapa"] == "TOF" and enfoques[0]["idioma"] == "es"
-    assert "idioma de la audiencia: español" in textos[0][2]
+    # Sprint nuevo: para todos los países, en inglés (2026-09-27).
+    assert enfoques[0]["etapa"] == "TOF" and enfoques[0]["idioma"] == "en"
+    assert "idioma de la audiencia: inglés" in textos[0][2]
 
 
 def test_ejecutar_sugerir_biblioteca_sin_candidatos(base_temporal, monkeypatch):

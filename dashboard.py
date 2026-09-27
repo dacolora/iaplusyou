@@ -3569,6 +3569,12 @@ def admin_referentes_traer():
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
         flash("Escribe una palabra clave.", "error")
         return redirect(url_for("admin_referentes"))
+    from referentes import traducir
+    try:
+        consulta = traducir.preparar_consulta(consulta, None)     # palabra → inglés, idioma en (gasto a _creatv)
+    except traducir.TraduccionInvalida as e:
+        flash(str(e), "error")
+        return redirect(url_for("admin_referentes"))
     tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
     modulo = fuentes.por_tipo(fuente)
     try:
