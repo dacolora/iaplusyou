@@ -6,7 +6,11 @@ bloquean. Claude nunca escribe el diálogo: lo pega el código.
 """
 import json
 import logging
+from contextlib import nullcontext
 
+from flask_babel import gettext
+
+import idiomas
 from guiones import claude, datos, duracion, plantillas, refinador
 from guiones.refinador import Conflicto, NoExiste, _normalizar
 
@@ -47,16 +51,16 @@ def hooks_esperados(lectura, config):
 
 def _clip_forma(c, i):
     if not isinstance(c, dict):
-        raise ValueError(f"el clip {i} no es un objeto")
+        raise ValueError(gettext("el clip %(i)s no es un objeto", i=i))
     momentos = c.get("momentos")
     if not isinstance(momentos, list) or not momentos:
-        raise ValueError(f"el clip {i} no tiene momentos")
+        raise ValueError(gettext("el clip %(i)s no tiene momentos", i=i))
     if len(momentos) > MAX_MOMENTOS:
-        raise ValueError(f"el clip {i} tiene demasiados momentos")
+        raise ValueError(gettext("el clip %(i)s tiene demasiados momentos", i=i))
     ms = []
     for m in momentos:
         if not isinstance(m, dict) or not _str(m.get("visual")):
-            raise ValueError(f"un momento del clip {i} no describe qué se ve")
+            raise ValueError(gettext("un momento del clip %(i)s no describe qué se ve", i=i))
         try:
             aire = min(MAX_AIRE, max(0.0, float(m.get("aire") or 0)))
         except (TypeError, ValueError):
@@ -71,9 +75,9 @@ def validar_forma(data, hooks_esperados):
     """El plan normalizado; ValueError si no tiene la forma pedida."""
     crudos = data.get("clips") if isinstance(data, dict) else None
     if not isinstance(crudos, list) or not crudos:
-        raise ValueError("no trae clips")
+        raise ValueError(gettext("no trae clips"))
     if len(crudos) > MAX_CLIPS:
-        raise ValueError("trae demasiados clips")
+        raise ValueError(gettext("trae demasiados clips"))
     bv = data.get("bloque_video") if isinstance(data.get("bloque_video"), dict) else {}
     hooks = data.get("hooks") if isinstance(data.get("hooks"), dict) else {}
     return {"bloque_video": {k: (_str(bv.get(k)) or d) for k, d in DEFECTOS_BLOQUE.items()},
@@ -138,6 +142,11 @@ def _frase(t):
 
 
 def validar(cs, hooks_alt, lectura, config, quitadas, renders, esperados):
+    """Los V1-V6/E1-E4 se muestran en la tabla de Validaciones del panel de guiones
+    (_gpg_clips.html): siempre a través de armar() (hilo de trabajos.iniciar) o
+    version_con_bloque() (ruta síncrona), así que gettext() ya resuelve solo con
+    el idioma que esté forzado en ese momento (proyecto en el hilo, quien mira en
+    la ruta — ver armar() y version_con_bloque())."""
     textos = duracion.textos_efectivos(lectura, config.get("hook", "original"))
     cons = duracion.conservadas(textos, quitadas)
     esperadas = [n for n, _ in cons]
@@ -148,54 +157,62 @@ def validar(cs, hooks_alt, lectura, config, quitadas, renders, esperados):
         res.append({"regla": nombre, "ok": bool(ok), "detalle": "" if ok else detalle.strip()})
 
     dicho = _normalizar(" ".join(m["texto"] for c in cs for m in c["momentos"] if m["texto"]))
-    regla("V1 fidelidad", dicho == _normalizar(" ".join(t for _, t in cons)),
-          "El texto que se dice en los clips no es idéntico al guion con las líneas quitadas.")
+    regla(gettext("V1 fidelidad"), dicho == _normalizar(" ".join(t for _, t in cons)),
+          gettext("El texto que se dice en los clips no es idéntico al guion con las líneas quitadas."))
 
     faltan = [n for n in esperadas if n not in dichas]
     repetidas = sorted({n for n in dichas if dichas.count(n) > 1})
     sobran = sorted({n for n in dichas if n not in esperadas})
-    partes = ([f"faltan las líneas {_lista(faltan)}"] if faltan else []) + \
-             ([f"se repiten {_lista(repetidas)}"] if repetidas else []) + \
-             ([f"sobran {_lista(sobran)} (quitadas o inexistentes)"] if sobran else [])
-    regla("V2 cobertura", dichas == esperadas,
-          ("Las líneas no cubren el guion: " + "; ".join(partes) + ".") if partes else "Las líneas están fuera de orden.")
+    partes = ([gettext("faltan las líneas %(lista)s", lista=_lista(faltan))] if faltan else []) + \
+             ([gettext("se repiten %(lista)s", lista=_lista(repetidas))] if repetidas else []) + \
+             ([gettext("sobran %(lista)s (quitadas o inexistentes)", lista=_lista(sobran))] if sobran else [])
+    regla(gettext("V2 cobertura"), dichas == esperadas,
+          gettext("Las líneas no cubren el guion: %(partes)s.", partes="; ".join(partes)) if partes
+          else gettext("Las líneas están fuera de orden."))
 
-    todos = [(f"clip {c['indice']}", c) for c in cs] + [(f"clip 1 con {hid}", h) for hid, h in hooks_alt.items()]
-    fuera = [f"{nombre} ({c['duracion']} s)" for nombre, c in todos
+    todos = [(f"clip {c['indice']}", c) for c in cs] + \
+            [(gettext("clip 1 con %(hid)s", hid=hid), h) for hid, h in hooks_alt.items()]
+    fuera = [gettext("%(nombre)s (%(dur)s s)", nombre=nombre, dur=c["duracion"]) for nombre, c in todos
              if not duracion.MIN_CLIP <= c["duracion"] <= duracion.MAX_CLIP]
-    regla("V3 duración", not fuera, "Fuera de 5–15 s: " + ", ".join(fuera) + ".")
+    regla(gettext("V3 duración"), not fuera, gettext("Fuera de 5–15 s: %(lista)s.", lista=", ".join(fuera)))
     huecos = [nombre for nombre, c in todos if not _momentos_ok(c)]
-    regla("V4 tiempos", not huecos, "Tiempos con huecos o momentos vacíos en: " + ", ".join(huecos) + ".")
+    regla(gettext("V4 tiempos"), not huecos,
+          gettext("Tiempos con huecos o momentos vacíos en: %(lista)s.", lista=", ".join(huecos)))
 
     final = cs[-1]
     cierre = final["es_final"] and not final["momentos"][-1]["dice"]
     problemas = [p for r in renders for p in refinador.validar(r["texto"], r["fijos"], "clip")]
-    regla("V5 cierre", cierre and not problemas,
-          ("El último clip tiene que terminar en un cuadro sostenido sin diálogo. " if not cierre else "")
+    regla(gettext("V5 cierre"), cierre and not problemas,
+          (gettext("El último clip tiene que terminar en un cuadro sostenido sin diálogo. ") if not cierre else "")
           + (problemas[0] if problemas else ""))
 
     objetivo = config.get("duracion_objetivo")
     total = sum(c["duracion"] for c in cs)
-    regla("V6 total", objetivo is None or total <= objetivo, f"El video dura {total} s y el objetivo es {objetivo} s.")
+    regla(gettext("V6 total"), objetivo is None or total <= objetivo,
+          gettext("El video dura %(total)s s y el objetivo es %(objetivo)s s.", total=total, objetivo=objetivo))
 
     mal = [c["indice"] for c in cs if sorted(c["lineas"]) != sorted(_dichas(c))]
-    regla("E1 líneas por clip", not mal, f"En los clips {_lista(mal)} las líneas declaradas no coinciden con las que se dicen.")
-    regla("E2 hook al inicio", _dichas(cs[0])[:1] == [1], "El clip 1 tiene que empezar con la línea 1 (el hook).")
+    regla(gettext("E1 líneas por clip"), not mal,
+          gettext("En los clips %(lista)s las líneas declaradas no coinciden con las que se dicen.", lista=_lista(mal)))
+    regla(gettext("E2 hook al inicio"), _dichas(cs[0])[:1] == [1],
+          gettext("El clip 1 tiene que empezar con la línea 1 (el hook)."))
     slots = {i for i, r in enumerate(config["referencias"], start=1) if r["tipo"] == "entorno"}
     malos = [nombre for nombre, c in todos if any(s not in slots for s in c["entornos"])]
-    regla("E3 entornos", not malos, "Entornos que no son referencias de tipo entorno en: " + ", ".join(malos) + ".")
+    regla(gettext("E3 entornos"), not malos,
+          gettext("Entornos que no son referencias de tipo entorno en: %(lista)s.", lista=", ".join(malos)))
 
-    errores = [f"falta el clip 1 con {h}" for h in esperados if h not in hooks_alt]
+    errores = [gettext("falta el clip 1 con %(hid)s", hid=h) for h in esperados if h not in hooks_alt]
     for hid, h in hooks_alt.items():
         if _dichas(h) != _dichas(cs[0]):
-            errores.append(f"el clip 1 con {hid} no dice las mismas líneas que el clip 1")
+            errores.append(gettext("el clip 1 con %(hid)s no dice las mismas líneas que el clip 1", hid=hid))
         elif _normalizar(h["estado_fin"]) != _normalizar(cs[0]["estado_fin"]):
-            errores.append(f"el clip 1 con {hid} no termina igual que el clip 1")
-    regla("E4 hooks alternativos", not errores, _frase("; ".join(errores)) + ".")
+            errores.append(gettext("el clip 1 con %(hid)s no termina igual que el clip 1", hid=hid))
+    regla(gettext("E4 hooks alternativos"), not errores, _frase("; ".join(errores)) + ".")
 
-    avisos = [f"Continuidad: el clip {a['indice']} termina «{a['estado_fin']}» y el {b['indice']} empieza «{b['estado_inicio']}»."
+    avisos = [gettext("Continuidad: el clip %(a)s termina «%(fin)s» y el %(b)s empieza «%(inicio)s».",
+                      a=a["indice"], fin=a["estado_fin"], b=b["indice"], inicio=b["estado_inicio"])
               for a, b in zip(cs, cs[1:]) if _normalizar(a["estado_fin"]) != _normalizar(b["estado_inicio"])]
-    avisos += [f"El clip {c['indice']} no dice cómo empieza o cómo termina." for c in cs
+    avisos += [gettext("El clip %(n)s no dice cómo empieza o cómo termina.", n=c["indice"]) for c in cs
                if not c["estado_inicio"] or not c["estado_fin"]]
     return res, avisos
 
@@ -300,35 +317,46 @@ def _guardar(v, plan, usd):
             _crear_prompts(v, renders, cons, cs)
         except Exception:  # noqa: BLE001 — los clips ya quedaron guardados; se avisa en la versión
             log.exception("guiones: no se pudieron pasar al chat los prompts del video %s", v["id"])
-            datos.avisar(v["id"], "Los clips quedaron armados pero no se pudieron pasar al chat. Crea una versión nueva.")
+            datos.avisar(v["id"], gettext(
+                "Los clips quedaron armados pero no se pudieron pasar al chat. Crea una versión nueva."))
 
 
 def armar(video_id, llamar=None):
-    """Hilo de «Armar clips»: deja el video `armado`, `invalido` (con las fallas) o en `error`. Nunca lanza."""
+    """Hilo de «Armar clips»: deja el video `armado`, `invalido` (con las fallas) o en `error`. Nunca lanza.
+
+    Corre en un hilo de trabajos.iniciar (sin contexto de petición): todo lo que
+    escribe con gettext (validaciones de _guardar/validar, los avisos de acá)
+    va dentro de idiomas.en_idioma(idiomas.de_proyecto(cliente)) para salir en el
+    idioma del proyecto — mismo patrón que tareas/flowplus.py::_texto_fase."""
     try:
         v = datos.video_para_trabajo(video_id)
         if v is None or v["estado"] != "armando":
             return
-        lec, cfg = v["guion"]["lectura"], v["config"]
-        esperados = hooks_esperados(lec, cfg)
-        fallas = [x["detalle"] for x in v["validaciones"] if not x["ok"]] if v.get("plan") else None
-        data, usd, error = claude.pedir_json(
-            v["cliente"], "armar", video_id, SISTEMA, mensajes(v, esperados, fallas),
-            f"Armar clips · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
-            llamar_fn=llamar, max_tokens=16000, timeout=240)
-        if error:
-            datos.fallar(video_id, error, usd)
-            return
-        try:
-            plan = validar_forma(data, esperados)
-        except ValueError as e:
-            datos.fallar(video_id, f"Claude devolvió un plan incompleto ({e}). Vuelve a armar.", usd)
-            return
-        _guardar(v, plan, usd)
+        with idiomas.en_idioma(idiomas.de_proyecto(v["cliente"])):
+            lec, cfg = v["guion"]["lectura"], v["config"]
+            esperados = hooks_esperados(lec, cfg)
+            fallas = [x["detalle"] for x in v["validaciones"] if not x["ok"]] if v.get("plan") else None
+            data, usd, error = claude.pedir_json(
+                v["cliente"], "armar", video_id, SISTEMA, mensajes(v, esperados, fallas),
+                f"Armar clips · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
+                llamar_fn=llamar, max_tokens=16000, timeout=240)
+            if error:
+                datos.fallar(video_id, error, usd)
+                return
+            try:
+                plan = validar_forma(data, esperados)
+            except ValueError as e:
+                datos.fallar(video_id, gettext(
+                    "Claude devolvió un plan incompleto (%(error)s). Vuelve a armar.", error=e), usd)
+                return
+            _guardar(v, plan, usd)
     except Exception:  # noqa: BLE001 — corre en un hilo
         log.exception("guiones: no se pudieron armar los clips del video %s", video_id)
         try:
-            datos.fallar(video_id, "No se pudieron armar los clips. Vuelve a intentarlo.")
+            cliente = v["cliente"] if "v" in locals() and isinstance(v, dict) else None
+            forzar_idioma = idiomas.en_idioma(idiomas.de_proyecto(cliente)) if cliente else nullcontext()
+            with forzar_idioma:
+                datos.fallar(video_id, gettext("No se pudieron armar los clips. Vuelve a intentarlo."))
         except Exception:  # noqa: BLE001
             log.exception("guiones: tampoco se pudo marcar el error del video %s", video_id)
 
@@ -337,9 +365,9 @@ def version_con_bloque(cliente, video_id, bloque):
     """Versión nueva con el mismo plan y otro bloque del video: re-escribe y re-valida sin llamar a Claude."""
     v = datos.video(cliente, video_id)
     if v is None:
-        raise NoExiste("Esa versión no existe.")
+        raise NoExiste(gettext("Esa versión no existe."))
     if not v.get("plan"):
-        raise Conflicto("Esta versión todavía no tiene clips armados.")
+        raise Conflicto(gettext("Esta versión todavía no tiene clips armados."))
     plan = dict(v["plan"], bloque_video={k: (_str(bloque.get(k)) or d) for k, d in DEFECTOS_BLOQUE.items()})
     nuevo = datos.nueva_version(cliente, video_id, plan=plan)
     _guardar(datos.video_para_trabajo(nuevo), plan, 0.0)

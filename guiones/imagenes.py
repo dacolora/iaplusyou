@@ -6,6 +6,9 @@ checklist de lo que falta antes de generar. Lo que ya está en el Catálogo
 no se pide; el producto nunca se inventa: sale de sus fotos reales.
 """
 import logging
+from contextlib import nullcontext
+
+from flask_babel import gettext
 
 import idiomas
 from guiones import claude, datos, duracion, refinador
@@ -15,8 +18,12 @@ log = logging.getLogger(__name__)
 CIERRE = "No text, no logos, no watermark."
 CIERRE_ENTORNO = "No text, no logos, no watermark, no people."
 ORDEN = {"personaje": 0, "entorno": 1, "producto": 2}
-NOMBRE_TIPO = {"personaje": "Hoja de personaje", "entorno": "Entorno", "producto": "Producto en el estilo del video",
-               "hook": "Estilo del hook"}
+# N_: usado tal cual (español) en documento_md (documento descargable, fuera de
+# esta fase); en escribir() se traduce con gettext dentro de idiomas.en_idioma
+# como respaldo cuando Claude no trae título — el título normal ya sale en el
+# idioma del proyecto porque _sistema() se lo pide a Claude.
+NOMBRE_TIPO = {"personaje": idiomas.N_("Hoja de personaje"), "entorno": idiomas.N_("Entorno"),
+              "producto": idiomas.N_("Producto en el estilo del video"), "hook": idiomas.N_("Estilo del hook")}
 
 
 def necesarias(config, lectura):
@@ -88,17 +95,23 @@ def checklist(config, lista, prompts):
     por_slot = {it["slot"]: it["id"] for it in lista if it.get("slot")}
     for i, r in enumerate(config["referencias"], start=1):
         if r["tipo"] == "producto" and not r.get("activo_id"):
-            faltas.append(f"Image {i}: elige el producto del Catálogo; sin sus fotos no se puede convertir al estilo del video.")
+            faltas.append(gettext(
+                "Image %(i)s: elige el producto del Catálogo; sin sus fotos no se puede convertir al estilo del video.",
+                i=i))
         elif r["tipo"] == "producto" and not r.get("fotos"):
-            faltas.append(f"Image {i}: «{r.get('nombre') or r['activo_id']}» no tiene fotos en el Catálogo.")
+            faltas.append(gettext("Image %(i)s: «%(nombre)s» no tiene fotos en el Catálogo.",
+                                  i=i, nombre=(r.get('nombre') or r['activo_id'])))
         elif r["tipo"] != "producto" and not r.get("activo_id"):
-            faltas.append(f"Image {i}: genera la imagen «{por_slot.get(i, 'por crear')}», que está por crear.")
+            faltas.append(gettext("Image %(i)s: genera la imagen «%(nombre)s», que está por crear.",
+                                  i=i, nombre=por_slot.get(i, gettext('por crear'))))
     clips_p = sum(1 for p in prompts if p.get("tipo") == "clip" and p.get("estado") != "aprobado")
     img_p = sum(1 for p in prompts if p.get("tipo") == "imagen" and p.get("estado") != "aprobado")
     if clips_p:
-        faltas.append(f"Faltan por aprobar {_plural(clips_p, 'prompt')} de clip en el chat.")
+        faltas.append(gettext("Faltan por aprobar %(cantidad)s de clip en el chat.",
+                              cantidad=_plural(clips_p, 'prompt')))
     if img_p:
-        faltas.append(f"Faltan por aprobar {_plural(img_p, 'prompt')} de imagen en el chat.")
+        faltas.append(gettext("Faltan por aprobar %(cantidad)s de imagen en el chat.",
+                              cantidad=_plural(img_p, 'prompt')))
     return faltas
 
 
@@ -180,49 +193,67 @@ def mensajes(video, lista):
 
 
 def escribir(video_id, llamar=None):
-    """Hilo de «Escribir prompts de imágenes»: deja las imágenes `listo` (con sus prompts en el chat) o en `error`."""
+    """Hilo de «Escribir prompts de imágenes»: deja las imágenes `listo` (con sus prompts en el chat) o en `error`.
+
+    Corre en un hilo de trabajos.iniciar (sin contexto de petición): igual que
+    clips.armar, los avisos se arman con gettext dentro de
+    idiomas.en_idioma(idiomas.de_proyecto(cliente))."""
+    v = None
     try:
         v = datos.video_para_trabajo(video_id)
         if v is None or v["estado_imagenes"] != "escribiendo":
             return
-        lista = necesarias(v["config"], v["guion"]["lectura"])
-        usd, cuerpos = 0.0, {}
-        if lista:
-            data, usd, error = claude.pedir_json(
-                v["cliente"], "imagenes", video_id, _sistema(idiomas.de_proyecto(v["cliente"])), mensajes(v, lista),
-                f"Prompts de imágenes · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
-                llamar_fn=llamar, max_tokens=8000, timeout=180)
-            if error:
-                datos.fallar_imagenes(video_id, error, usd)
+        with idiomas.en_idioma(idiomas.de_proyecto(v["cliente"])):
+            lista = necesarias(v["config"], v["guion"]["lectura"])
+            usd, cuerpos = 0.0, {}
+            if lista:
+                data, usd, error = claude.pedir_json(
+                    v["cliente"], "imagenes", video_id, _sistema(idiomas.de_proyecto(v["cliente"])), mensajes(v, lista),
+                    f"Prompts de imágenes · {(v['guion']['titulo'] or '')[:50]} · v{v['version_n']}",
+                    llamar_fn=llamar, max_tokens=8000, timeout=180)
+                if error:
+                    datos.fallar_imagenes(video_id, error, usd)
+                    return
+                for x in data.get("imagenes") or []:
+                    if isinstance(x, dict) and str(x.get("prompt") or "").strip():
+                        cuerpos[str(x.get("id"))] = (str(x.get("titulo") or "").strip(), str(x["prompt"]).strip()[:4000])
+                faltan = [it["id"] for it in lista if it["id"] not in cuerpos]
+                if faltan:
+                    datos.fallar_imagenes(video_id, gettext(
+                        "Claude no escribió el prompt de %(faltan)s. Vuelve a intentarlo.",
+                        faltan=', '.join(faltan)), usd)
+                    return
+            salida = []
+            for it in lista:
+                titulo, cuerpo = cuerpos[it["id"]]
+                texto, cierre = componer(it, cuerpo, v["config"])
+                # Variable local antes de gettext(): pasarle NOMBRE_TIPO[it["tipo"]]
+                # directo confunde al extractor de Babel, que saca "tipo" (la clave
+                # del subíndice interno) como si fuera un mensaje aparte.
+                etiqueta_defecto = NOMBRE_TIPO[it["tipo"]]
+                salida.append(dict(it, titulo=(titulo or gettext(etiqueta_defecto))[:120],
+                                   texto=texto, cierre=cierre))
+            if not datos.guardar_imagenes(video_id, {"lista": salida, "tabla": tabla(v["clips"], v["config"], salida)}, usd):
                 return
-            for x in data.get("imagenes") or []:
-                if isinstance(x, dict) and str(x.get("prompt") or "").strip():
-                    cuerpos[str(x.get("id"))] = (str(x.get("titulo") or "").strip(), str(x["prompt"]).strip()[:4000])
-            faltan = [it["id"] for it in lista if it["id"] not in cuerpos]
-            if faltan:
-                datos.fallar_imagenes(video_id, f"Claude no escribió el prompt de {', '.join(faltan)}. Vuelve a intentarlo.", usd)
-                return
-        salida = []
-        for it in lista:
-            titulo, cuerpo = cuerpos[it["id"]]
-            texto, cierre = componer(it, cuerpo, v["config"])
-            salida.append(dict(it, titulo=(titulo or NOMBRE_TIPO[it["tipo"]])[:120], texto=texto, cierre=cierre))
-        if not datos.guardar_imagenes(video_id, {"lista": salida, "tabla": tabla(v["clips"], v["config"], salida)}, usd):
-            return
-        base = f"{(v['guion']['titulo'] or 'Guion')[:50]} · v{v['version_n']}"
-        try:
-            for it in salida:
-                refinador.crear(v["cliente"], it["texto"], titulo=f"{base} · {it['id']} · {it['titulo']}"[:200], tipo="imagen",
-                                contexto=f"Imagen de referencia para {v['nombre']} del guion «{v['guion']['titulo']}».",
-                                texto_fijo=[it["cierre"]], origen="pipeline",
-                                extra={"guion_id": v["guion"]["id"], "video_id": video_id, "imagen_id": it["id"]})
-        except Exception:  # noqa: BLE001 — las imágenes ya quedaron guardadas; se avisa en la versión
-            log.exception("guiones: no se pudieron pasar al chat los prompts de imágenes del video %s", video_id)
-            datos.avisar_imagenes(video_id, "Los prompts de imágenes quedaron escritos pero no se pudieron pasar "
-                                            "todos al chat. Vuelve a escribirlos en una versión nueva.")
+            base = f"{(v['guion']['titulo'] or 'Guion')[:50]} · v{v['version_n']}"
+            try:
+                for it in salida:
+                    refinador.crear(v["cliente"], it["texto"], titulo=f"{base} · {it['id']} · {it['titulo']}"[:200], tipo="imagen",
+                                    contexto=f"Imagen de referencia para {v['nombre']} del guion «{v['guion']['titulo']}».",
+                                    texto_fijo=[it["cierre"]], origen="pipeline",
+                                    extra={"guion_id": v["guion"]["id"], "video_id": video_id, "imagen_id": it["id"]})
+            except Exception:  # noqa: BLE001 — las imágenes ya quedaron guardadas; se avisa en la versión
+                log.exception("guiones: no se pudieron pasar al chat los prompts de imágenes del video %s", video_id)
+                datos.avisar_imagenes(video_id, gettext(
+                    "Los prompts de imágenes quedaron escritos pero no se pudieron pasar "
+                    "todos al chat. Vuelve a escribirlos en una versión nueva."))
     except Exception:  # noqa: BLE001 — corre en un hilo
         log.exception("guiones: no se pudieron escribir los prompts de imágenes del video %s", video_id)
         try:
-            datos.fallar_imagenes(video_id, "No se pudieron escribir los prompts de imágenes. Vuelve a intentarlo.")
+            cliente = v["cliente"] if isinstance(v, dict) else None
+            forzar_idioma = idiomas.en_idioma(idiomas.de_proyecto(cliente)) if cliente else nullcontext()
+            with forzar_idioma:
+                datos.fallar_imagenes(video_id, gettext(
+                    "No se pudieron escribir los prompts de imágenes. Vuelve a intentarlo."))
         except Exception:  # noqa: BLE001
             log.exception("guiones: tampoco se pudo marcar el error de imágenes del video %s", video_id)

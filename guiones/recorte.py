@@ -6,6 +6,8 @@ final con las casillas; nada se quita solo.
 """
 import logging
 
+from flask_babel import gettext
+
 import idiomas
 from guiones import claude, datos, duracion
 
@@ -56,9 +58,10 @@ def resumen(video, quitadas=None):
     objetivo = cfg.get("duracion_objetivo")
     entra = objetivo is None or estimado <= objetivo
     motivos = video["recorte"].get("motivos", {})
-    texto = f"Estimado: {_formato_s(estimado)} s"
+    texto = gettext("Estimado: %(estimado)s s", estimado=_formato_s(estimado))
     if objetivo:
-        texto += f" de {objetivo} s · {'entra' if entra else 'todavía no entra'}"
+        texto += gettext(" de %(objetivo)s s · %(entra)s", objetivo=objetivo,
+                         entra=(gettext("entra") if entra else gettext("todavía no entra")))
     return {"lineas": [{"n": n, "texto": t, "quitada": n in q, "motivo": motivos.get(str(n), "")}
                        for n, t in sorted(textos.items())],
             "completo": completo, "estimado": estimado, "objetivo": objetivo, "entra": entra,

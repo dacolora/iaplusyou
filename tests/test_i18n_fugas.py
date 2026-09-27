@@ -222,6 +222,28 @@ def test_panel_de_guiones_en_ingles(admin_en):
     assert not fugas, fugas[:15]
 
 
+def test_guiones_rutas_error_en_ingles(admin_en):
+    """guiones/rutas.py (el chat de prompts): un prompt vacío dispara
+    refinador.DatoInvalido -> _error(e) -> {"error": str(e)}, ya en gettext
+    desde la Task 3. Aquí solo se comprueba que sale en inglés (sin marcas de
+    español) para quien mira la pantalla en inglés."""
+    r = admin_en.post("/cliente/acme/guiones/prompts", json={"texto": ""})
+    assert r.status_code == 400, r.get_data(as_text=True)
+    error = r.get_json()["error"]
+    assert not _con_marca(error), error
+    assert error == "The prompt can't be empty."
+
+
+def test_guiones_rutas_pipeline_error_en_ingles(admin_en):
+    """guiones/rutas_pipeline.py: un lote sin texto dispara datos.crear_lote's
+    DatoInvalido, ahora con gettext (Task 5)."""
+    r = admin_en.post("/cliente/acme/guiones/lotes", json={"texto": ""})
+    assert r.status_code == 400, r.get_data(as_text=True)
+    error = r.get_json()["error"]
+    assert not _con_marca(error), error
+    assert error == "Paste the script first."
+
+
 def test_etapas_del_trabajo_en_ingles(admin_en, app_i18n, monkeypatch):
     """`estado_trabajo` traduce etapa/mensaje/detalle al responder (spec Task 4):
     tareas/flowplus.py y tareas/director.py marcan sus etapas con N_, y el
