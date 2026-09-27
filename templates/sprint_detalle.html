@@ -145,7 +145,16 @@
     var H = {'X-Requested-With': 'fetch'};
     var HJ = {'X-Requested-With': 'fetch', 'Content-Type': 'application/json'};
 
-    function json(r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo guardar.'); return j; }); }
+    // Un 404/500 real (o un login redirect) responde HTML, no JSON: `r.json()`
+    // rechaza con un SyntaxError crudo del navegador («Unexpected token '<'…»)
+    // que se veía tal cual en el aviso. Se atrapa y se cambia por un mensaje
+    // legible; el error específico del servidor (JSON válido con !ok) sigue
+    // llegando tal cual más abajo.
+    function json(r) {
+      return r.json()
+        .catch(function () { throw new Error('No se pudo guardar: el servidor respondió con un error. Recarga la página e intenta de nuevo.'); })
+        .then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo guardar.'); return j; });
+    }
     function mensaje(e) { return e instanceof TypeError ? 'Sin conexión: no se guardó. Intenta de nuevo.' : e.message; }
     // `f.reset()` limpia los <input> pero no el `data-sucio` que puso el
     // listener global de base.html: sin esto, un formulario ya guardado

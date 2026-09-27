@@ -345,6 +345,18 @@ def test_autoguardado_limpia_data_sucio(app):
     assert "function limpiarSucio(" in html and html.count("limpiarSucio(f)") == 2
 
 
+def test_json_del_tablero_avisa_amigable_si_el_servidor_no_responde_json(app):
+    """F7 (ronda final): `json(r)` llamaba `r.json()` directo -- un 404/500 en
+    HTML o un login redirect tiraban un SyntaxError crudo del navegador
+    («Unexpected token '<'…») en vez de un aviso legible."""
+    from sprints import datos
+    sid = _sprint(datos)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
+    assert "el servidor respondió con un error" in html
+    funcion = html[html.index("function json(r)"):html.index("function mensaje(e)")]
+    assert ".catch(" in funcion    # r.json() puede rechazar (no es JSON): hay que atraparlo, no dejarlo subir crudo
+
+
 def test_sugeridos_siguen_el_enfoque_y_avisan_lo_aflojado(app):
     from sprints import datos
     uno = _referente(1, "UGC")
