@@ -211,7 +211,7 @@ def test_panel_muestra_las_siete_secciones(app):
     html = r.data.decode()
     assert r.status_code == 200
     for frag in ("Audiencia y producto", "Enfoque", "Formato de los anuncios", "Mercado y marcas", "Piezas",
-                 "Referentes · 0 de 5 elegidos", 'data-campo="persona_id"', 'data-campo="catalogo_id"',
+                 "Referentes · <span data-ref-listas>0</span> de <span data-ref-objetivo>5</span> elegidos", 'data-campo="persona_id"', 'data-campo="catalogo_id"',
                  'data-campo="funnel"', 'data-campo="consciencia"', 'data-campo="dolor"', 'data-campo="familias"',
                  'data-campo="pais"', 'data-campo="idioma"', 'data-campo="marcas"', 'data-campo="n_videos"',
                  'data-campo="n_imagenes"', 'data-campo="referencias_objetivo"', "Sugerir con IA",

@@ -112,7 +112,7 @@
   </section>
 
   <section class="panel-seccion">
-    <h3>Referentes · {{ c.referencias_listas }} de {{ c.referencias_objetivo }} elegidos</h3>
+    <h3>Referentes · <span data-ref-listas>{{ c.referencias_listas }}</span> de <span data-ref-objetivo>{{ c.referencias_objetivo }}</span> elegidos</h3>
     <div class="panel-elegidos">
       {% for r in c.referencias_lista %}
       <figure class="panel-elegido">
@@ -133,6 +133,7 @@
       </div>
       <label>Descripción
         <textarea rows="2" data-descripcion maxlength="500" placeholder="Qué se ve y qué quieres copiar">{{ r.descripcion or '' }}</textarea></label>
+      <small class="vacio" data-describir-guardado hidden>Guardado ✓</small>
       <small class="campo-error" hidden></small>
     </div>
     {% endfor %}

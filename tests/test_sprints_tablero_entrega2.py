@@ -82,11 +82,11 @@ def test_pestana_ideas_muestra_conteo_ideas_y_generar(con_ideas):
     c, sid, cid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
     html = _panel(c, sid, cid, "ideas")
     assert "1 de 3 aprobadas · videos 1/2 · imágenes 0/1" in html
-    assert "Proponer las que faltan (1 videos, 0 imágenes) (" in html and "aprox." in html
+    assert "Proponer las que faltan (1 video, 0 imágenes) (" in html and "aprox." in html
     assert "Aprobar todas las propuestas (1)" in html
     assert f'data-url="/cliente/acme/sprints/ideas/{ii}"' in html and 'class="sprint-idea panel-idea' in html
     assert "Otra idea (" in html and "Amanecer" in html and "Marco" in html
-    assert "data-generar-lote" in html and "1 aprobada(s) sin generar (1 videos, 0 imágenes)" in html
+    assert "data-generar-lote" in html and "1 aprobada(s) sin generar (1 video, 0 imágenes)" in html
     assert 'data-lote-modelo="video"' in html and "<script" not in html
 
 
@@ -236,6 +236,21 @@ def test_la_guardia_de_base_solo_marca_selects_en_change(app):
     assert "document.addEventListener('change', function (e) { if (e.target && e.target.tagName === 'SELECT') marcarSucio(e); });" in html
 
 
+def test_los_selects_del_tablero_borran_su_marca(app):
+    """F1: los selects que no pasan por `guardar` (modelos de la caja Generar y
+    del modal del lote) borran su `data-sucio` cuando el estimado respondió; el
+    texto de «Momento del mes» se limpia al guardarse el momento."""
+    from sprints import datos
+    html = _tablero(app["c"], _sprint(datos))
+    campana = html[html.index("function estimarLoteCampana"):html.index("// ---- Pestaña Piezas")]
+    exito = campana[campana.index(".then(function (j) {"):]
+    assert "[data-lote-modelo]" in exito and "delete s.dataset.sucio" in exito
+    modal = html[html.index("function estimarLote()"):html.index("document.getElementById('lote-modelo-video').addEventListener")]
+    assert "delete s.dataset.sucio" in modal[modal.index(".then(function (j) {"):]
+    cabecera = html[html.index("function guardarSprint"):html.index("campos.addEventListener")]
+    assert "delete campos.querySelector('[data-momento-texto]').dataset.sucio" in cabecera
+
+
 def test_precio_de_reintentar_y_regenerar_es_el_del_modelo_de_la_pieza(con_ideas, monkeypatch, tmp_path):
     """F2 + F6: la pieza se hizo con Kling O3 Pro (no el modelo del proyecto,
     Wan 3.0): el precio es el de Kling, con la duración recortada a su rango
@@ -263,6 +278,25 @@ def test_precio_de_reintentar_y_regenerar_es_el_del_modelo_de_la_pieza(con_ideas
     assert "Regenerar (precio no disponible)" in revision
 
 
+def test_describir_un_referente_no_recarga_el_panel(app):
+    """F3: guardar la descripción no vuelve a pintar el panel (se cerraba la
+    caja y se perdía el segundo chip): avisa «Guardado ✓», refresca la tarjeta
+    y actualiza en el sitio el contador de Armar y el de Referentes."""
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/sin.jpg")
+    html = _panel(app["c"], sid, cid, "armar")
+    assert "data-ref-listas>0</span>" in html and "data-ref-objetivo>5</span>" in html
+    caja = html[html.index(f'data-describir="{rid}"'):]
+    assert "Guardado ✓" in caja[:caja.index("Más opciones de referencias")]
+    js = _js_panel(_tablero(app["c"], sid))
+    fn = js[js.index("function pintarConteoReferentes"):js.index("// ---- Pestaña Ideas")]
+    assert "T.abrir(" not in fn and "T.refrescarTarjeta(cid)" in fn
+    assert "j.referencias_listas" in fn and "j.referencias_objetivo" in fn and "Falta describir" in fn
+    assert "sigue(cid)" in fn
+
+
 def test_piezas_y_pestanas_con_buen_tamano():
     """F5 + F15: los botones de una pieza no se estiran a la altura de la
     tarjeta vecina y las pestañas del panel conservan una altura cómoda al dedo
@@ -273,6 +307,32 @@ def test_piezas_y_pestanas_con_buen_tamano():
     assert "align-content: start" in pieza
     pestana = re.search(r"\.panel-pestana \{[^}]*\}", css).group(0)
     assert "min-height: 0" not in pestana and "min-height: 2.25rem" in pestana
+
+
+def test_respuestas_tardias_no_tocan_otra_campana(con_ideas):
+    """F7 + F8 + F9 + F13: el cid se toma al hacer clic; al volver, solo se
+    reabre si el panel sigue en esa campaña. Antes de recargar se guardan las
+    ideas con autoguardado pendiente. El estimado del lote ignora respuestas
+    viejas y la pestaña Piezas deja de preguntar si la campaña ya no existe."""
+    js = _js_panel(_tablero(con_ideas["c"], con_ideas["sid"]))
+    assert "T.abrir(raiz().dataset.cid" not in js
+    assert "function sigue(cid)" in js
+    for bloque in ("var proponer = ", "var accionIdea = ", "var generar = "):
+        trozo = js[js.index(bloque):js.index(bloque) + 900]
+        assert "guardarIdeasPendientes()" in trozo, bloque
+    est = js[js.index("function estimarLoteCampana"):js.index("// ---- Pestaña Piezas")]
+    assert "pedidoEstimar" in est and "miPedido !== pedidoEstimar" in est
+    ref = js[js.index("function refrescarPiezas"):js.index("function trasAccionPieza")]
+    assert "x.status === 404" in ref
+
+
+def test_recarga_del_sprint_generando_respeta_lo_escrito(con_ideas):
+    """F10: al terminar de generar, el tablero recarga solo si no hay nada sin
+    guardar ni un motivo de rechazo a medio escribir."""
+    html = _tablero(con_ideas["c"], con_ideas["sid"])
+    bloque = html[html.index("Mientras el sprint genera"):html.index("if (panel.dataset.panelInicial)")]
+    assert "if (j.estado !== 'generando' && puedeRecargar()) location.reload();" in bloque
+    assert "haySinGuardar()" in html and "[data-motivo]" in html[html.index("function puedeRecargar"):]
 
 
 def test_atajos_de_la_revision_no_escriben_la_letra(con_ideas, monkeypatch, tmp_path):
@@ -294,3 +354,11 @@ def test_la_pieza_de_crear_lleva_a_su_panel(con_ideas, monkeypatch, tmp_path):
     html = con_ideas["c"].get("/cliente/acme").data.decode()
     assert f"/cliente/acme/sprints/{sid}?panel={cid}&amp;paso=piezas" in html and "Sprint · Campaña 1" in html
     assert f"/sprints/{sid}/campanas/{cid}/ideas" not in html
+
+
+def test_ideas_en_singular(con_ideas):
+    """F15: «1 video», nunca «1 videos»."""
+    html = _panel(con_ideas["c"], con_ideas["sid"], con_ideas["cid"], "ideas")
+    assert "Proponer las que faltan (1 video, 0 imágenes)" in html
+    assert "1 aprobada(s) sin generar (1 video, 0 imágenes)" in html
+    assert "1 videos" not in html and "1 imágenes" not in html

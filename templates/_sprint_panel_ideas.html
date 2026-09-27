@@ -45,13 +45,14 @@
   </div>
 </details>
 {% endmacro %}
+{% macro cuantos(n, uno, varios) %}{{ n }} {{ uno if n == 1 else varios }}{% endmacro %}
 {% set ci = conteo_ideas %}
 {% set faltan = ci.faltan_videos + ci.faltan_imagenes %}
 {% set url_proponer = url_for('sprints.ideas_proponer', cliente=cliente, sid=sprint.id, cid=c.id) %}
 <section class="panel-seccion">
   <p class="panel-ideas-conteo"><strong>{{ ci.aprobadas }} de {{ ci.planeadas }} aprobadas · videos {{ ci.videos_aprobados }}/{{ c.n_videos }} · imágenes {{ ci.imagenes_aprobadas }}/{{ c.n_imagenes }}</strong></p>
   <div class="panel-acciones">
-    <button type="button" class="btn-generar btn-sm" data-proponer data-url="{{ url_proponer }}" {% if trabajo_ideas or not faltan %}disabled{% endif %}>✨ Proponer las que faltan ({{ ci.faltan_videos }} videos, {{ ci.faltan_imagenes }} imágenes){% if faltan %} ({{ precios_ideas.faltan }}){% endif %}</button>
+    <button type="button" class="btn-generar btn-sm" data-proponer data-url="{{ url_proponer }}" {% if trabajo_ideas or not faltan %}disabled{% endif %}>✨ Proponer las que faltan ({{ cuantos(ci.faltan_videos, 'video', 'videos') }}, {{ cuantos(ci.faltan_imagenes, 'imagen', 'imágenes') }}){% if faltan %} ({{ precios_ideas.faltan }}){% endif %}</button>
     <button type="button" class="btn-sm" data-proponer data-mas="3" data-url="{{ url_proponer }}" {% if trabajo_ideas %}disabled{% endif %}>+3 videos ({{ precios_ideas.mas }})</button>
     <button type="button" class="btn-sm" data-proponer data-mas="3" data-tipo="imagen" data-url="{{ url_proponer }}" {% if trabajo_ideas %}disabled{% endif %}>+3 imágenes ({{ precios_ideas.mas }})</button>
     {% if ci.propuestas %}<button type="button" class="btn-sm" data-idea-accion data-url="{{ url_for('sprints.ideas_aprobar_todas', cliente=cliente, sid=sprint.id, cid=c.id) }}">Aprobar todas las propuestas ({{ ci.propuestas }})</button>{% endif %}
@@ -81,7 +82,7 @@
          data-url-lote="{{ url_for('sprints.lote', cliente=cliente, sid=sprint.id) }}">
   <h3>Generar</h3>
   {% if ci.por_generar %}
-  <p>{{ ci.por_generar }} aprobada(s) sin generar ({{ ci.por_generar_videos }} videos, {{ ci.por_generar_imagenes }} imágenes)</p>
+  <p>{{ ci.por_generar }} aprobada(s) sin generar ({{ cuantos(ci.por_generar_videos, 'video', 'videos') }}, {{ cuantos(ci.por_generar_imagenes, 'imagen', 'imágenes') }})</p>
   <div class="panel-fila">
     <label>Modelo de video
       <select data-lote-modelo="video">{% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} (US$ {{ '%.3f' % m.usd_por_segundo_efectivo }}/s con sonido)</option>{% endfor %}</select></label>

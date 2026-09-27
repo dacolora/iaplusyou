@@ -34,19 +34,26 @@
     modal.showModal();
     estimarLote();
   }
+  // Una respuesta vieja (de un modelo elegido antes) nunca pisa a la última.
+  var pedidoEstimarLote = 0;
   function estimarLote() {
     var cid = document.getElementById('lote-campana').value;
     var mv = document.getElementById('lote-modelo-video').value, mi = document.getElementById('lote-modelo-imagen').value;
     var texto = document.getElementById('lote-estimado'), btn = document.getElementById('lote-confirmar');
+    var miPedido = ++pedidoEstimarLote;
     btn.disabled = true; texto.textContent = 'Calculando el costo…';
     var url = {{ url_for('sprints.lote_estimar', cliente=cliente, sid=sprint.id) | tojson }} + '?modelo_video=' + encodeURIComponent(mv) + '&modelo_imagen=' + encodeURIComponent(mi) + (cid ? '&campana_id=' + encodeURIComponent(cid) : '');
     fetch(url, {headers: {'X-Requested-With': 'fetch'}}).then(function (r) { return r.json(); }).then(function (j) {
+      if (miPedido !== pedidoEstimarLote) return;
       if (j.error) { texto.textContent = j.error; return; }
+      // El modelo elegido ya se usó para el estimado: no es un cambio sin
+      // guardar que deba frenar la recarga automática del tablero.
+      document.querySelectorAll('#lote-modelo-video, #lote-modelo-imagen').forEach(function (s) { delete s.dataset.sucio; });
       texto.textContent = j.texto;
       var n = j.videos + j.imagenes;
       btn.textContent = n ? 'Generar ' + n + ' pieza(s) — USD ' + j.usd.toFixed(2) : 'Nada que generar';
       btn.disabled = !n;
-    }).catch(function () { texto.textContent = 'No se pudo calcular el costo.'; });
+    }).catch(function () { if (miPedido === pedidoEstimarLote) texto.textContent = 'No se pudo calcular el costo.'; });
   }
   document.getElementById('lote-modelo-video').addEventListener('change', estimarLote);
   document.getElementById('lote-modelo-imagen').addEventListener('change', estimarLote);
