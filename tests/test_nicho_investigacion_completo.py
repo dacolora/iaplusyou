@@ -379,6 +379,77 @@ class TestTareasWorker:
         result = json.loads(text)
         assert len(result["consultas"]) == 2
 
+    def test_ejecutar_consultas_avanza_la_cadena_real(self, tareas_inv, datos_nicho, estudio_test, monkeypatch):
+        """Regresión: `ejecutar_consultas` definía un `avanzar(etapa, detalle)`
+        local que TAPABA al `avanzar(cliente, estudio_id)` del módulo -- la
+        cadena marcaba "consultas" hecho pero nunca encolaba nicho_inv_buscar.
+        Llama la tarea real de punta a punta (no solo avanzar() en aislado,
+        que nunca hubiera detectado esto)."""
+        cliente, eid = "test_cliente", estudio_test
+        datos_nicho.actualizar_investigacion(cliente, eid, lambda inv: {
+            "estado": "consultas", "consultas": [], "pasos": {},
+            "gastado_usd": 0.0, "aprobado_usd": 5.0,
+        })
+
+        class _Bloque:
+            text = '{"consultas": ["mejor termo", "termo acero"]}'
+
+        class _Respuesta:
+            content = [_Bloque()]
+
+        class _Mensajes:
+            def create(self, **kw):
+                return _Respuesta()
+
+        class _ClienteFalso:
+            messages = _Mensajes()
+
+        monkeypatch.setattr("tareas.investigacion.anthropic.Anthropic", lambda: _ClienteFalso())
+        monkeypatch.setattr("tareas.investigacion.gastos.registrar_seguro", lambda *a, **k: None)
+        encolados = []
+        monkeypatch.setattr("tareas.investigacion.trabajos.encolar",
+                             lambda job_id, tarea, payload, **kw: encolados.append((job_id, tarea, payload)) or True)
+
+        tareas_inv.ejecutar_consultas({"payload": {"cliente": cliente, "estudio_id": eid},
+                                       "job_id": f"nicho:{cliente}:{eid}:inv:consultas"})
+
+        assert len(encolados) == 1
+        job_id, tarea, payload = encolados[0]
+        assert tarea == "nicho_inv_buscar" and payload["plataforma"] == "amazon"
+        assert job_id == f"nicho:{cliente}:{eid}:inv:buscar:amazon"
+
+        inv = datos_nicho.investigacion(cliente, eid)
+        assert inv["pasos"]["consultas"]["estado"] == "hecho"
+
+    def test_ejecutar_buscar_detiene_la_cadena_en_vez_de_fingir(self, tareas_inv, datos_nicho, estudio_test):
+        """`nicho_inv_buscar` todavía no tiene la búsqueda real de Apify: debe
+        detener la investigación con un motivo claro, nunca quedar "en curso"
+        para siempre sin ningún aviso (antes no tocaba el estado en absoluto)."""
+        cliente, eid = "test_cliente", estudio_test
+        datos_nicho.actualizar_investigacion(cliente, eid, lambda inv: {
+            "estado": "buscando", "consultas": ["termo"],
+            "pasos": {"consultas": {"estado": "hecho"}}, "gastado_usd": 0.0, "aprobado_usd": 5.0,
+        })
+
+        tareas_inv.ejecutar_buscar({"payload": {"cliente": cliente, "estudio_id": eid, "plataforma": "amazon"},
+                                    "job_id": f"nicho:{cliente}:{eid}:inv:buscar:amazon"})
+
+        inv = datos_nicho.investigacion(cliente, eid)
+        assert inv["estado"] == "detenida"
+        assert "amazon" in inv["detenida_por"] and "no está implementada" in inv["detenida_por"]
+
+    def test_ejecutar_seleccionar_detiene_la_cadena_en_vez_de_fingir(self, tareas_inv, datos_nicho, estudio_test):
+        cliente, eid = "test_cliente", estudio_test
+        datos_nicho.actualizar_investigacion(cliente, eid, lambda inv: {
+            "estado": "seleccionando", "consultas": ["termo"], "pasos": {}, "gastado_usd": 0.0, "aprobado_usd": 5.0,
+        })
+
+        tareas_inv.ejecutar_seleccionar({"payload": {"cliente": cliente, "estudio_id": eid},
+                                        "job_id": f"nicho:{cliente}:{eid}:inv:seleccionar"})
+
+        inv = datos_nicho.investigacion(cliente, eid)
+        assert inv["estado"] == "detenida" and "no está implementada" in inv["detenida_por"]
+
 
 # ========== DATA LAYER TESTS (nicho/datos.py) ==========
 

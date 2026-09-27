@@ -39,7 +39,11 @@
   </form>
 </details>
 
-{% set investigacion = estudio.extra.investigacion or {} %}
+{# `investigacion` viene del contexto de la ruta (nicho.rutas.ver), ya resumido
+   con nicho.investigacion.resumen() -- un `{% set %}` local aquí que lo
+   recalculara del estudio.extra crudo tapaba ese contexto y además le
+   faltaban los campos agregados (productos/relevantes) que la rama "lista"
+   de abajo necesita. #}
 {% include "_nicho_investigacion.html" %}
 
 {% include "_nicho_comentarios.html" %}

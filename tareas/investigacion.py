@@ -106,10 +106,10 @@ def ejecutar_consultas(tarea):
         return "El estudio no tiene tema."
     
     job_id = tarea.get("job_id") or f"nicho:{cliente}:{eid}:inv:consultas"
-    
-    def avanzar(etapa, detalle=None):
+
+    def reportar(etapa, detalle=None):
         cola.reportar(job_id, etapa=etapa, detalle=detalle)
-    
+
     # Llamar Claude
     try:
         client = anthropic.Anthropic()
@@ -153,9 +153,8 @@ Responde en JSON: {{"consultas": ["...", "..."]}}"""
                                proveedor="anthropic",
                                extra={"tokens_entrada": tokens_entrada, "tokens_salida": tokens_salida})
         
-        # Avanzar cadena
-        avanzar("Generadas {} consultas: {}".format(len(consultas), ", ".join(consultas)))
-        
+        reportar("Generadas {} consultas: {}".format(len(consultas), ", ".join(consultas)))
+
     except json.JSONDecodeError:
         raise ValueError(f"Claude no respondió JSON válido")
     except Exception as e:
@@ -163,10 +162,12 @@ Responde en JSON: {{"consultas": ["...", "..."]}}"""
             **inv, "ultimo_error": cola.recortar(str(e), 300)
         })
         raise
-    
-    # Encolar siguiente paso
-    avanzar("Iniciando búsquedas...")
-    
+
+    # Encolar siguiente paso de la cadena real (antes llamaba a un `avanzar`
+    # local que solo reportaba progreso y tapaba a este, así que la cadena
+    # nunca pasaba de "consultas").
+    avanzar(cliente, eid)
+
     return f"Generadas {len(consultas)} consultas: {', '.join(consultas)}"
 
 
@@ -188,13 +189,19 @@ def ejecutar_buscar(tarea):
         return "El estudio ya no existe."
     
     job_id = tarea.get("job_id") or f"nicho:{cliente}:{eid}:inv:buscar:{plat}"
-    
-    def avanzar(etapa, detalle=None):
+
+    def reportar(etapa, detalle=None):
         cola.reportar(job_id, etapa=etapa, detalle=detalle)
-    
-    # TODO: Implementar búsqueda con Apify
-    avanzar("Stub: buscar en {}".format(plat))
-    return f"Stub: búsqueda {plat} encolada"
+
+    # La búsqueda real en Apify todavía no está implementada (spec §9, Parte 3):
+    # se detiene la cadena con un motivo claro en vez de fingir que corrió y
+    # dejar el estudio "en curso" para siempre sin ningún aviso.
+    mensaje = f"Búsqueda automática en {plat} todavía no está implementada."
+    datos.actualizar_investigacion(cliente, eid, lambda inv: {
+        **inv, "estado": "detenida", "detenida_por": mensaje
+    })
+    reportar(mensaje)
+    return mensaje
 
 
 @al_interrumpir("nicho_inv_buscar")
@@ -215,14 +222,18 @@ def ejecutar_seleccionar(tarea):
         return "El estudio ya no existe."
     
     job_id = tarea.get("job_id") or f"nicho:{cliente}:{eid}:inv:seleccionar"
-    
-    def avanzar(etapa, detalle=None):
+
+    def reportar(etapa, detalle=None):
         cola.reportar(job_id, etapa=etapa, detalle=detalle)
-    
-    # TODO: Implementar selección
-    avanzar("Stub: seleccionar productos relevantes")
-    
-    return "Stub: selección encolada"
+
+    # La selección real con Claude todavía no está implementada (spec §9, Parte 3):
+    # mismo motivo que ejecutar_buscar — detener con un aviso claro, no fingir.
+    mensaje = "La selección automática de productos todavía no está implementada."
+    datos.actualizar_investigacion(cliente, eid, lambda inv: {
+        **inv, "estado": "detenida", "detenida_por": mensaje
+    })
+    reportar(mensaje)
+    return mensaje
 
 
 @al_interrumpir("nicho_inv_seleccionar")

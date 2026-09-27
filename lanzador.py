@@ -602,8 +602,10 @@ def refrescar(cliente, experimento_id):
                 if ex.get("atribucion") == "triple_whale":
                     snap = _obtener_metricas_triple_whale(cliente, ex, pz)
                     if snap:
-                        if ex["atribucion"] == "tienda":
-                            monedas_ajenas.update(_mezclar_ventas_tienda(cliente, ex, pz, snap))
+                        # Triple Whale ya trae venta atribuida real -- a diferencia
+                        # del camino de abajo, nunca necesita mezclarse con la
+                        # tienda (esa comparación con "tienda" era código muerto:
+                        # esta rama solo corre cuando atribucion == "triple_whale").
                         experimentos.snapshot(pz["id"], snap)
                         n += 1
                         continue

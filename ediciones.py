@@ -118,6 +118,21 @@ def restaurar(cliente, edicion_id, n):
     return guardar(cliente, edicion_id, documento_mod.migrar(v["documento"]), actual)
 
 
+def buscar_origen(cliente, cf_id, receta):
+    """La edición más reciente de la sesión cuyo `documento.origen.receta`
+    es `receta` y que no quedó degradada (`origen.degradada`), o None. Es
+    la que la vía automática reutiliza para otro destino de la misma
+    producción (spec §2.4: nada se paga dos veces)."""
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.edicion.c.id, db.edicion.c.documento).where(
+            db.edicion.c.cliente == cliente, db.edicion.c.cf_id == cf_id).order_by(db.edicion.c.id.desc())).fetchall()
+    for eid, doc in filas:
+        o = (doc or {}).get("origen") or {}
+        if o.get("receta") == receta and not o.get("degradada"):
+            return cargar(cliente, eid)
+    return None
+
+
 def apuntar_final(cliente, final_legado_id, version_id):
     """Enlaza la pieza final con la versión congelada que la produjo.
     Devuelve las filas tocadas (0 = esa final no existe para este cliente)."""
