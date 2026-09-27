@@ -382,32 +382,92 @@ def _volver_campana(cliente, sid, cid):
     return _volver(cliente, sid, cid)
 
 
-def _contexto_ideas(cliente, cid, c):
-    """Lo que la pestaña «Ideas» del panel necesita (spec 2026-09-27, entrega 2):
-    lista de ideas, conteo, y precios/trabajos en curso."""
-    refs = {r["id"]: r for r in datos.referencias(cliente, cid)}
-    lista = datos.ideas(cliente, cid)
-    vivas = [i for i in lista if i["estado_idea"] != "descartada"]
+def _volver_panel(cliente, sid, cid, paso):
+    """Vuelve al tablero con el panel de esa campaña abierto en esa pestaña."""
+    return redirect(url_for("sprints.ver", cliente=cliente, sid=sid, panel=cid, paso=paso))
+
+
+def _contexto_ideas(cliente, c):
+    """Lo que muestra la pestaña Ideas del panel (entrega 2 del tablero)."""
+    vivas = [i for i in c["ideas"] if i["estado_idea"] != "descartada"]
     faltan_v, faltan_i = ideas.faltantes(c)
-    conteo = {"videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
+    por_generar = [i for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"]]
+    conteo = {"planeadas": int(c["n_videos"] or 0) + int(c["n_imagenes"] or 0),
+              "aprobadas": sum(1 for i in vivas if i["estado_idea"] == "aprobada"),
+              "videos_aprobados": sum(1 for i in vivas if i["tipo"] == "video" and i["estado_idea"] == "aprobada"),
               "imagenes_aprobadas": sum(1 for i in vivas if i["tipo"] == "imagen" and i["estado_idea"] == "aprobada"),
+              "propuestas": sum(1 for i in vivas if i["estado_idea"] == "propuesta"),
               "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
-              "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"])}
-    job = tareas_sprints.job_id_ideas(cliente, cid)
-    persona = datos.persona(cliente, c["persona_id"]) or {}
-    conciencia = (persona.get("extra") or {}).get("conciencia")
-    nivel_persona = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
-    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
-    sof_producto = (fila_producto.get("extra") or {}).get("sofisticacion")
+              "por_generar": len(por_generar),
+              "por_generar_videos": sum(1 for i in por_generar if i["tipo"] == "video"),
+              "por_generar_imagenes": sum(1 for i in por_generar if i["tipo"] == "imagen")}
+    job = tareas_sprints.job_id_ideas(cliente, c["id"])
     return {
-        "ideas": lista, "referencias_por_id": refs, "conteo": conteo,
-        "enfoques": flowplus_prompt_enfoques(), "trabajo_ideas": {"job_id": job} if trabajos.en_curso(job) else None,
-        "nivel_persona": nivel_persona, "sof_producto": sof_producto,
-        "precio_reescribir": gastos.estimar("reescribir_idea")["texto"],
-        "reescribiendo": {i["id"]: tareas_sprints.job_id_reescribir(cliente, i["id"]) for i in lista
+        "ideas_vivas": vivas,
+        "ideas_descartadas": [i for i in c["ideas"] if i["estado_idea"] == "descartada"],
+        "conteo_ideas": conteo,
+        "precios_ideas": {"faltan": gastos.estimar("proponer_ideas", n=faltan_v + faltan_i)["texto"],
+                          "mas": gastos.estimar("proponer_ideas", n=3)["texto"],
+                          "otra": gastos.estimar("proponer_ideas", n=1)["texto"],
+                          "reescribir": gastos.estimar("reescribir_idea")["texto"]},
+        "trabajo_ideas": {"job_id": job} if trabajos.en_curso(job) else None,
+        "reescribiendo": {i["id"]: tareas_sprints.job_id_reescribir(cliente, i["id"]) for i in vivas
                           if trabajos.en_curso(tareas_sprints.job_id_reescribir(cliente, i["id"]))},
-        "n_ideas_vivas": len(vivas),
+        "enfoques": flowplus_prompt_enfoques(),
+        "referencias_por_id": {r["id"]: r for r in (c.get("referencias_lista") or datos.referencias(cliente, c["id"]))},
+        **_contexto_lote(cliente),
     }
+
+
+def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
+    """Lo que cuesta reintentar o regenerar la pieza: con SU modelo (reintentar
+    relanza su sesión y regenerar la duplica con el mismo modelo), con la
+    duración recortada al rango de ese modelo. Si el modelo de la pieza ya no
+    está en el registro, el del proyecto. None si no hay estimado: el botón
+    dice «precio no disponible», nunca «US$ 0»."""
+    es_video = p["tipo"] == "video"
+    registro = flowplus_modelos.VIDEO if es_video else flowplus_modelos.IMAGEN
+    modelo = p.get("modelo") if p.get("modelo") in registro else (modelo_video if es_video else modelo_imagen)
+    try:
+        if es_video:
+            est = flowplus_modelos.estimate_video(modelo, produccion._duracion(p, modelo))
+        else:
+            est = flowplus_modelos.estimate_imagen(modelo, n_referencias=produccion._n_referencias(cliente, c))
+        usd = float((est or {}).get("usd") or 0.0)
+    except Exception:  # noqa: BLE001 — sin estimado no se inventa un precio
+        return None
+    return round(usd, 4) if usd > 0 else None
+
+
+def _piezas_de(cliente, c, modelo_video, modelo_imagen):
+    """Piezas con sesión de una campaña, con su costo de regeneración
+    (estimado gratis, el mismo que muestra el botón antes de gastar)."""
+    salida = []
+    for p in c["piezas"]:
+        salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
+                       "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
+                       "funnel": c.get("funnel") or "tof",
+                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen)})
+    return salida
+
+
+def _piezas_revision(cliente, sp):
+    """Piezas con sesión de todas las campañas del sprint."""
+    mv, mi = produccion.modelos(cliente)
+    return [p for c in sp["campanas"] for p in _piezas_de(cliente, c, mv, mi)]
+
+
+def _contexto_piezas(cliente, sp, c):
+    """Lo que muestra la pestaña Piezas del panel (entrega 2 del tablero)."""
+    mv, mi = produccion.modelos(cliente)
+    piezas = _piezas_de(cliente, c, mv, mi)
+    resumen = next((x for x in produccion.progreso(cliente, sp["id"])["campanas"] if x["id"] == c["id"]), {})
+    vivas = any(produccion.pieza_viva(p) or (p.get("estado") in revision_mod.TERMINADAS and not p.get("qa"))
+                for p in piezas)
+    pasaron_qa = sum(1 for p in piezas if p.get("revision") == "pendiente" and p.get("estado") in revision_mod.TERMINADAS
+                     and (p.get("qa") or {}).get("veredicto") == "pasa")
+    return {"piezas": piezas, "resumen_piezas": resumen, "piezas_vivas": vivas, "pasaron_qa": pasaron_qa,
+            "checks": CHECKS_QA}
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/panel")
@@ -431,6 +491,8 @@ def campana_panel(cliente, sid, cid):
     sugeridas = referentes_datos.familias_frecuentes(cliente, etapa=(c.get("funnel") or "tof").upper(),
                                                     consciencia=referentes_sugerir.consciencia_en(c.get("consciencia")))
     job = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
+    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
+    sof = (fila_producto.get("extra") or {}).get("sofisticacion")
     return render_template(
         "_sprint_panel.html", cliente=cliente, sprint=sp, c=c, personas=personas_, productos=productos,
         consciencias=doctrina.CONSCIENCIAS_NOMBRE, funnels=datos.FUNNELS_NOMBRE,
@@ -439,7 +501,19 @@ def campana_panel(cliente, sid, cid):
         marcas_texto=tablero.marcas_texto(c.get("marcas")), candidatos_ia=candidatos_ia,
         trabajo_sugerir_ia={"job_id": job} if trabajos.en_curso(job) else None,
         precio_sugerir_ia=gastos.estimar("sugerir_ia"), aviso=_aviso_identica(cliente, cid),
-        enlaces=_enlaces(cliente, sp, c), **_contexto_ideas(cliente, cid, c))
+        enlaces=_enlaces(cliente, sp, c),
+        paso=tablero.resolver_paso(request.args.get("paso"), c), pestanas=tablero.pestanas(c),
+        sof_producto=sof if sof in doctrina.SOFISTICACIONES else None, intenciones=datos.INTENCIONES_NOMBRE,
+        **_contexto_ideas(cliente, c), **_contexto_piezas(cliente, sp, c))
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/piezas")
+def campana_piezas(cliente, sid, cid):
+    """Solo la pestaña Piezas: el panel la vuelve a pedir cada 8 s mientras
+    algo se genera o espera QA. No gasta nada."""
+    sp, c = _campana_del_sprint(cliente, sid, cid)
+    return render_template("_sprint_panel_piezas.html", cliente=cliente, sprint=sp, c=c,
+                           **_contexto_piezas(cliente, sp, c))
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/sugeridos")
@@ -626,7 +700,7 @@ def ver(cliente, sid):
                            momento_valor=momento.get("clave") or ("propio" if momento else ""),
                            marcas_texto=tablero.marcas_texto(sp.get("marcas")),
                            panel_inicial=request.args.get("panel", type=int),
-                           tab_inicial=request.args.get("tab") or "",
+                           paso_inicial=request.args.get("paso") if request.args.get("paso") in tablero.PASOS else "",
                            lote=produccion.progreso(cliente, sid)["sprint"], **_contexto_lote(cliente))
 
 
@@ -1045,13 +1119,17 @@ def _contexto_lote(cliente):
             "modelo_video_defecto": mv, "modelo_imagen_defecto": mi}
 
 
+@bp.get("/<int:sid>/campanas/<int:cid>/ideas")
+def campana_ideas(cliente, sid, cid):
+    """Desde la entrega 2 del tablero las ideas viven en la pestaña Ideas del
+    panel de la campaña: la página vieja redirige ahí (sus enlaces siguen vivos)."""
+    _campana_o_404(cliente, sid, cid)
+    return _volver_panel(cliente, sid, cid, "ideas")
+
+
 def flowplus_prompt_enfoques():
     import flowplus_prompt
     return {k: flowplus_prompt.ENFOQUES[k]["nombre"] for k in flowplus_prompt.ORDEN_ENFOQUES}
-
-
-def _volver_panel(cliente, sid, cid, tab=None):
-    return redirect(url_for("sprints.ver", cliente=cliente, sid=sid, panel=cid, **({"tab": tab} if tab else {})))
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/ideas/proponer")
@@ -1069,16 +1147,14 @@ def ideas_proponer(cliente, sid, cid):
         if _quiere_json():
             return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
-        return _volver_panel(cliente, sid, cid, tab="ideas")
-    if tareas_sprints.encolar_ideas(cliente, cid, n_videos=n_v, n_imagenes=n_i):
-        if _quiere_json():
-            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_ideas(cliente, cid)})
-        flash("Claude está proponiendo ideas; aparecerán aquí en unos segundos.", "ok")
-    else:
-        if _quiere_json():
-            return jsonify({"ok": False, "error": "Ya hay una propuesta de ideas en curso para esta campaña."}), 400
-        flash("Ya hay una propuesta de ideas en curso para esta campaña.", "error")
-    return _volver_panel(cliente, sid, cid, tab="ideas")
+        return _volver_panel(cliente, sid, cid, "ideas")
+    ok = tareas_sprints.encolar_ideas(cliente, cid, n_videos=n_v, n_imagenes=n_i)
+    error = None if ok else "Ya hay una propuesta de ideas en curso para esta campaña."
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_ideas(cliente, cid), "error": error}), \
+            (200 if ok else 409)
+    flash("Claude está proponiendo ideas; aparecerán aquí en unos segundos." if ok else error, "ok" if ok else "error")
+    return _volver_panel(cliente, sid, cid, "ideas")
 
 
 @bp.post("/<int:sid>/campanas/<int:cid>/ideas/aprobar_todas")
@@ -1091,13 +1167,13 @@ def ideas_aprobar_todas(cliente, sid, cid):
             n += 1
     estado.recalcular(cliente, sid)
     if _quiere_json():
-        return jsonify({"ok": True, "n": n})
+        return jsonify({"ok": True, "aprobadas": n})
     flash(f"{n} idea(s) aprobada(s).", "ok")
-    return _volver_panel(cliente, sid, cid, tab="ideas")
+    return _volver_panel(cliente, sid, cid, "ideas")
 
 
 def _volver_ideas(i):
-    return _volver_panel(i["cliente"], i["sprint_id"], i["campana_id"], tab="ideas")
+    return _volver_panel(i["cliente"], i["sprint_id"], i["campana_id"], "ideas")
 
 
 @bp.post("/ideas/<int:cp_id>")
@@ -1154,25 +1230,21 @@ def idea_reescribir(cliente, cp_id):
     """«Reescribir la idea con este ángulo» (doctrina, bloque 2, §3.5): encola
     la tarea pagada; el precio ya está en el botón."""
     i = _idea_o_404(cliente, cp_id)
-    if not i["sin_sesion"]:
-        if _quiere_json():
-            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
-        flash(MENSAJE_IDEA_CON_PIEZA, "error")
-        return _volver_ideas(i)
     angulo = (i.get("extra") or {}).get("angulo")
-    if not (isinstance(angulo, dict) and angulo.get("promesa")):
+    error = (MENSAJE_IDEA_CON_PIEZA if not i["sin_sesion"] else
+             None if isinstance(angulo, dict) and angulo.get("promesa") else
+             "Esta idea todavía no tiene un ángulo con promesa.")
+    if error:
         if _quiere_json():
-            return jsonify({"ok": False, "error": "Esta idea todavía no tiene un ángulo con promesa."}), 400
-        flash("Esta idea todavía no tiene un ángulo con promesa.", "error")
+            return jsonify({"ok": False, "error": error}), 400
+        flash(error, "error")
         return _volver_ideas(i)
-    if tareas_sprints.encolar_reescribir(cliente, cp_id):
-        if _quiere_json():
-            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_reescribir(cliente, cp_id)})
-        flash("Reescribiendo la idea desde su ángulo…", "ok")
-    else:
-        if _quiere_json():
-            return jsonify({"ok": False, "error": "Ya se está reescribiendo esta idea."}), 400
-        flash("Ya se está reescribiendo esta idea.", "error")
+    ok = tareas_sprints.encolar_reescribir(cliente, cp_id)
+    error = None if ok else "Ya se está reescribiendo esta idea."
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_reescribir(cliente, cp_id), "error": error}), \
+            (200 if ok else 409)
+    flash("Reescribiendo la idea desde su ángulo…" if ok else error, "ok" if ok else "error")
     return _volver_ideas(i)
 
 
@@ -1228,14 +1300,12 @@ def idea_otra(cliente, cp_id):
             return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
         flash(MENSAJE_IDEA_CON_PIEZA, "error")
         return _volver_ideas(i)
-    if tareas_sprints.encolar_ideas(cliente, i["campana_id"], reemplaza=cp_id):
-        if _quiere_json():
-            return jsonify({"ok": True, "job_id": tareas_sprints.job_id_ideas(cliente, i["campana_id"])})
-        flash("Pidiendo otra idea…", "ok")
-    else:
-        if _quiere_json():
-            return jsonify({"ok": False, "error": "Ya hay una propuesta en curso; espera a que termine."}), 400
-        flash("Ya hay una propuesta en curso; espera a que termine.", "error")
+    ok = tareas_sprints.encolar_ideas(cliente, i["campana_id"], reemplaza=cp_id)
+    error = None if ok else "Ya hay una propuesta en curso; espera a que termine."
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_ideas(cliente, i["campana_id"]),
+                        "error": error}), (200 if ok else 409)
+    flash("Pidiendo otra idea…" if ok else error, "ok" if ok else "error")
     return _volver_ideas(i)
 
 
@@ -1254,27 +1324,40 @@ def lote_estimar(cliente, sid):
 
 @bp.post("/<int:sid>/lote")
 def lote(cliente, sid):
-    """Puerta de gasto: el modal ya mostró el costo; aquí se encola."""
+    """Puerta de gasto: el modal del tablero o la caja «Generar» del panel ya
+    mostraron el costo; aquí se encola."""
     _sprint_o_404(cliente, sid)
     cid = request.form.get("campana_id", type=int)
     try:
         r = produccion.lanzar_lote(cliente, sid, campana_id=cid, modelo_video=request.form.get("modelo_video"),
                                    modelo_imagen=request.form.get("modelo_imagen"))
     except datos.ErrorDatos as e:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
         return _volver(cliente, sid)
-    if r["encoladas"]:
-        flash(f"Lote encolado: {r['encoladas']} pieza(s), USD {r['usd']:.2f} estimado. Te avisamos por correo al terminar si está configurado.", "ok")
-    else:
-        flash("No había ideas aprobadas sin generar." if not r["omitidas"] else "Esas piezas ya se estaban generando.", "warn")
+    if not r["encoladas"]:
+        error = "No había ideas aprobadas sin generar." if not r["omitidas"] else "Esas piezas ya se estaban generando."
+        if _quiere_json():
+            return jsonify({"ok": False, "error": error, "encoladas": 0, "omitidas": r["omitidas"]}), 409
+        flash(error, "warn")
+        return _volver(cliente, sid)
+    texto = (f"Lote encolado: {r['encoladas']} pieza(s), USD {r['usd']:.2f} estimado. "
+             "Te avisamos por correo al terminar si está configurado.")
+    if _quiere_json():
+        return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": r["usd"],
+                        "mensaje": texto})
+    flash(texto, "ok")
     return _volver(cliente, sid)
 
 
 def _volver_pieza(cliente, i):
-    """A la bandeja si el formulario vino de ahí (`volver=revision`); si no,
-    al sprint."""
+    """A la bandeja si el formulario vino de ahí (`volver=revision`), a la
+    pestaña Piezas del panel (`volver=panel`); si no, al sprint."""
     if request.form.get("volver") == "revision":
         return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
+    if request.form.get("volver") == "panel":
+        return _volver_panel(cliente, i["sprint_id"], i["campana_id"], "piezas")
     return _volver(cliente, i["sprint_id"])
 
 
@@ -1284,9 +1367,14 @@ def pieza_reintentar(cliente, cp_id):
     try:
         ok = produccion.reintentar(cliente, cp_id)
     except datos.ErrorDatos as e:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
         return _volver(cliente, i["sprint_id"])
-    flash("Reintentando la pieza." if ok else "Esa pieza no está en error o ya se está generando.", "ok" if ok else "warn")
+    error = None if ok else "Esa pieza no está en error o ya se está generando."
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "error": error}), (200 if ok else 409)
+    flash("Reintentando la pieza." if ok else error, "ok" if ok else "warn")
     return _volver_pieza(cliente, i)
 
 
@@ -1298,8 +1386,12 @@ def pieza_regenerar(cliente, cp_id):
     except (datos.ErrorDatos, ValueError) as e:
         # ValueError: `creative_flow.duplicar` con una sesión que no existe
         # (cf_id colgado o placeholder) — se muestra como un ErrorDatos.
+        if _quiere_json():
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
         return _volver(cliente, i["sprint_id"])
+    if _quiere_json():
+        return jsonify({"ok": True, "error": None})
     flash("Regenerando la pieza (sesión nueva, misma idea).", "ok")
     return _volver_pieza(cliente, i)
 
@@ -1309,29 +1401,13 @@ def pieza_regenerar(cliente, cp_id):
 CHECKS_QA = ("consistencia_visual", "presencia_marca", "compatibilidad_campana", "calidad_minima", "formato")
 
 
-def _piezas_revision(cliente, sp):
-    """Piezas con sesión de todas las campañas, con su costo de regeneración
-    (estimado gratis, el mismo que muestra el botón antes de gastar)."""
-    mv, mi = produccion.modelos(cliente)
-    salida = []
-    for c in sp["campanas"]:
-        for p in c["piezas"]:
-            if p["tipo"] == "video":
-                costo = (flowplus_modelos.estimate_video(mv, produccion._duracion(p)) or {}).get("usd") or 0.0
-            else:
-                costo = (flowplus_modelos.estimate_imagen(mi, n_referencias=produccion._n_referencias(cliente, c)) or {}).get("usd") or 0.0
-            salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
-                           "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
-                           "costo_regenerar": round(float(costo), 3)})
-    return salida
-
-
 @bp.get("/<int:sid>/revision")
 def revision(cliente, sid):
     sp = _sprint_o_404(cliente, sid)
     piezas = _piezas_revision(cliente, sp)
     return render_template("sprint_revision.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           sprint=sp, piezas=piezas, resumen=revision_mod.resumen(cliente, sid), checks=CHECKS_QA)
+                           sprint=sp, piezas=piezas, resumen=revision_mod.resumen(cliente, sid), checks=CHECKS_QA,
+                           productos_por_id={p["id"]: p for p in _productos_planos(cliente)})
 
 
 @bp.post("/ideas/<int:cp_id>/revision")
@@ -1375,10 +1451,16 @@ def pieza_qa(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
     destino = redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
     if not i.get("cf_id") or i.get("estado") not in revision_mod.TERMINADAS:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Esa pieza todavía no está lista para el QA."}), 400
         flash("Esa pieza todavía no está lista para el QA.", "error")
         return destino
     datos.actualizar_idea(cliente, cp_id, qa=None)
-    if tareas_sprints.encolar_qa(cliente, cp_id):
+    ok = tareas_sprints.encolar_qa(cliente, cp_id)
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "error": None if ok else "Ya hay un QA en curso para esa pieza."}), \
+            (200 if ok else 409)
+    if ok:
         flash("Repitiendo el QA de la pieza; el resultado aparecerá aquí en unos segundos.", "ok")
     else:
         flash("Ya hay un QA en curso para esa pieza.", "warn")
@@ -1388,7 +1470,9 @@ def pieza_qa(cliente, cp_id):
 @bp.post("/<int:sid>/revision/aprobar_qa")
 def revision_aprobar_qa(cliente, sid):
     _sprint_o_404(cliente, sid)
-    n = revision_mod.aprobar_pasaron_qa(cliente, sid)
+    n = revision_mod.aprobar_pasaron_qa(cliente, sid, campana_id=request.form.get("campana_id", type=int))
+    if _quiere_json():
+        return jsonify({"ok": True, "aprobadas": n})
     flash(f"{n} pieza(s) aprobada(s) por haber pasado el QA.", "ok")
     return redirect(url_for("sprints.revision", cliente=cliente, sid=sid))
 

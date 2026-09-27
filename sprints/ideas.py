@@ -370,10 +370,14 @@ def parsear(texto, referencias_ids_validos, duraciones, datos_texto=None, fijos=
     return limpias
 
 
-def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None):
+def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None, uso=None):
     """Pide ideas a Claude y las guarda. Sin cantidades, propone lo que falta.
-    `reemplaza`: descarta esa idea y propone UNA del mismo tipo. Devuelve los
-    ids creados ([] si no hacía falta nada)."""
+    `reemplaza`: propone UNA del mismo tipo y descarta esa idea SOLO cuando la
+    nueva ya existe — la tarea tiene `max_intentos=1`, así que una llamada que
+    falla (o que no trae ninguna de ese tipo) deja la vieja como estaba en vez
+    de dejar la campaña con un hueco. Devuelve los ids creados ([] si no hacía
+    falta nada). `uso`: dict donde se suman los tokens de cada llamada a
+    Claude, para registrar el gasto real incluso si falla."""
     campana = datos.campana(cliente, campana_id)
     if not campana:
         raise datos.ErrorDatos("Esa campaña no existe.")
@@ -381,8 +385,11 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
         vieja = datos.idea(cliente, reemplaza)
         if not vieja or vieja["campana_id"] != campana_id:
             raise datos.ErrorDatos("Esa idea no existe en esta campaña.")
-        datos.actualizar_idea(cliente, reemplaza, estado_idea="descartada")
-        campana = datos.campana(cliente, campana_id)
+        # Para Claude (DATOS: «ya existen» / «descartadas») la vieja ya cuenta
+        # como descartada, igual que antes; en la base sigue viva hasta que
+        # haya con qué reemplazarla.
+        campana = dict(campana, ideas=[dict(i, estado_idea="descartada") if i["id"] == reemplaza else i
+                                       for i in campana.get("ideas") or []])
         n_videos, n_imagenes = (1, 0) if vieja["tipo"] == "video" else (0, 1)
     if n_videos is None and n_imagenes is None:
         n_videos, n_imagenes = faltantes(campana)
@@ -397,7 +404,10 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     tokens = max_tokens_para(n_videos + n_imagenes)
 
     def pedir(contenido):
-        crudo = analisis._llamar(contenido, max_tokens=tokens, system=system)
+        crudo, entrada, salida = analisis._llamar_contando(contenido, max_tokens=tokens, system=system)
+        if uso is not None:
+            uso["entrada"] = uso.get("entrada", 0) + entrada
+            uso["salida"] = uso.get("salida", 0) + salida
         return crudo, parsear(crudo, validos, ctx["duraciones"], datos_msg, fijos=ctx.get("fijos"))
 
     try:
@@ -428,6 +438,12 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
                                         enfoque=i["enfoque"], gancho=i["gancho"], referencias_ids=i["referencias_ids"],
                                         duracion_s=i["duracion_s"], plataformas=i["plataformas"],
                                         extra={"angulo": i["angulo"]}))
+    if reemplaza is not None and creadas:      # `creadas` solo trae ideas del tipo de la vieja
+        # Mientras Claude respondía, «Generar» pudo darle una sesión pagada a la
+        # vieja: descartada, su pieza desaparecería de Piezas, revisión y entrega.
+        # En ese caso se quedan las dos.
+        if (datos.idea(cliente, reemplaza) or {}).get("sin_sesion"):
+            datos.actualizar_idea(cliente, reemplaza, estado_idea="descartada")
     datos.registrar_evento(cliente, campana["sprint_id"], "ideas_propuestas",
                            f"{len(creadas)} idea(s) propuesta(s) para la campaña {campana['orden'] + 1}",
                            {"campana_id": campana_id, "cp_ids": creadas, "reemplaza": reemplaza,

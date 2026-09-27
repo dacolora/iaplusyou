@@ -96,3 +96,31 @@ def linea_sprint(sp):
 def marcas_texto(marcas):
     """Lista de marcas -> el texto que las vuelve a producir en `normalizar_marcas`."""
     return "\n".join(m["nombre"] + (f" {m['pagina_id']}" if m.get("pagina_id") else "") for m in marcas or [])
+
+
+PASOS = ("armar", "ideas", "piezas")
+_PASO_POR_CLAVE = {"referentes": "armar", "aprobar": "ideas", "ideas": "ideas", "generar": "ideas",
+                   "generando": "piezas", "errores": "piezas", "revisar": "piezas", "lista": "piezas"}
+
+
+def paso_por_defecto(c):
+    """La pestaña del panel que toca según el siguiente paso de la campaña."""
+    return _PASO_POR_CLAVE.get(siguiente_paso(c)["clave"], "armar")
+
+
+def resolver_paso(pedido, c):
+    """La pestaña pedida si existe; si no, la que toca."""
+    return pedido if pedido in PASOS else paso_por_defecto(c)
+
+
+def pestanas(c):
+    """Lo que dice cada pestaña del panel: «✓» o «listos/objetivo» en Armar,
+    aprobadas/planeadas en Ideas y terminadas/planeadas en Piezas."""
+    objetivo = int(c.get("referencias_objetivo") or 1)
+    listas = int(c.get("referencias_listas") or 0)
+    planeadas = int(c.get("n_videos") or 0) + int(c.get("n_imagenes") or 0)
+    vivas = [i for i in c.get("ideas") or [] if i.get("estado_idea") != "descartada"]
+    aprobadas = sum(1 for i in vivas if i.get("estado_idea") == "aprobada")
+    terminadas = sum(1 for p in c.get("piezas") or [] if p.get("estado") in datos._PIEZA_TERMINADA)
+    return {"armar": "✓" if listas >= objetivo else f"{listas}/{objetivo}",
+            "ideas": f"{aprobadas}/{planeadas}", "piezas": f"{terminadas}/{planeadas}"}

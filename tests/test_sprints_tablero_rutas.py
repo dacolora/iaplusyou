@@ -208,15 +208,13 @@ def test_panel_muestra_las_siete_secciones(app):
     html = r.data.decode()
     assert r.status_code == 200
     for frag in ("Audiencia y producto", "Enfoque", "Formato de los anuncios", "Marcas a imitar", "Piezas",
-                 "Referentes · 0 de 5 elegidos", 'data-campo="persona_id"', 'data-campo="catalogo_id"',
+                 "Referentes · <span data-ref-listas>0</span> de <span data-ref-objetivo>5</span> elegidos", 'data-campo="persona_id"', 'data-campo="catalogo_id"',
                  'data-campo="funnel"', 'data-campo="consciencia"', 'data-campo="dolor"', 'data-campo="familias"',
                  'data-campo="marcas"', 'data-campo="n_videos"',
                  'data-campo="n_imagenes"', 'data-campo="referencias_objetivo"', "Sugerir con IA",
                  "Buscar en la biblioteca", "Traer nuevos de Meta", 'name="volver" value="tablero"',
-                 "Eliminar campaña", "Crear persona rápida", "data-sugeridos",
-                 'data-tab-btn="armar"', 'data-tab-btn="ideas"', "Ideas · 0", 'data-tab="armar"', 'data-tab="ideas"'):
+                 "Eliminar campaña", "Crear persona rápida", "data-sugeridos"):
         assert frag in html, frag
-    assert "Ideas de esta campaña →" not in html    # entrega 2: es una pestaña, no un enlace aparte
     assert "<script" not in html                      # el JS vive en sprint_detalle.html
 
 
@@ -249,7 +247,7 @@ def test_panel_muestra_referencias_viejas_sin_frame(app):
     cid = _campana(datos, sid)
     datos.agregar_referencia("acme", cid, "imagen", "https://r2/vieja.png", frame_url=None, titulo="vieja.png")
     html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
-    assert 'src="https://r2/vieja.png"' in html and "falta describir" in html
+    assert 'src="https://r2/vieja.png"' in html and "Falta describir" in html
 
 
 def test_guardar_un_campo_de_la_campana(app):

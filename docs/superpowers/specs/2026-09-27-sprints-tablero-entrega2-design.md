@@ -1,131 +1,155 @@
-# Sprints: ideas y lote dentro del panel de campaña (entrega 2 de 2)
+# Sprints como tablero — entrega 2: ideas, generar y piezas dentro del panel
 
-Fecha: 2026-09-27. Continúa `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`
-(entrega 1, en producción), que dejó explícitamente fuera "ideas, lote y revisión dentro
-del panel". Aprobado por Daniel en el chat (alcance, pestañas del panel, qué se queda
-afuera) con mockups del compañero visual.
+Fecha: 2026-09-27. Aprobado por Daniel en el chat, por partes (dónde se revisa, forma del panel,
+pestaña Ideas, pestaña Piezas y revisión del sprint, páginas viejas, convivencia con la doctrina,
+dinero, errores y pruebas), con bocetos del compañero visual. Continúa la entrega 1
+(`docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`, en producción desde 2026-09-27,
+main 0c84628, migración 0021).
 
 ## Problema
 
-El panel lateral de una campaña (`_sprint_panel.html`) ya arma persona, enfoque, formato,
-mercado y referentes con autoguardado. Pero para proponer/aprobar ideas y generar el lote
-hay que salir a `campana_ideas.html`, una página aparte con su propio flujo de guardado
-(fetch para editar campos, pero formularios con recarga completa para proponer/aprobar
-todas/reescribir/otra idea). Revisar el sprint completo (`sprint_revision.html`) es distinto:
-filtra piezas de TODAS las campañas con atajos de teclado para aprobar/rechazar en cadena,
-así que no encaja en un panel por campaña.
+Después de elegir referentes, el trabajo de una campaña se va a tres pantallas sueltas: la página
+de ideas de la campaña (`campana_ideas.html`), el modal «Generar lote» (`_sprint_lote_modal.html`)
+y la página de revisión del sprint (`sprint_revision.html`). El panel de la campaña solo llega hasta
+«Ideas de esta campaña →». Además, «Proponer ideas» llama a Claude sin mostrar precio y sin
+registrar su gasto real (`tareas/sprints.py::ejecutar_proponer_ideas` no llama a
+`gastos.registrar_seguro`), en contra de la regla del proyecto.
 
-## Decisiones (del chat, con mockup)
+## Dependencia: doctrina, bloque 2
 
-- El panel gana una segunda pestaña interna **"Ideas · N"** (N = ideas vivas) junto a
-  **"Armar"** (lo que ya existe: audiencia, enfoque, formato, mercado, piezas, referentes).
-  Cambiar de pestaña es solo mostrar/ocultar en el cliente — las dos vienen en la misma
-  respuesta de `campana_panel`, sin una segunda petición.
-- **Revisión sigue siendo su propia página** (`sprint_revision.html`), sin cambios; se
-  seguirá enlazando desde la cabecera del tablero como hoy.
-- **"Generar lote" no es código nuevo**: el modal (`_sprint_lote_modal.html`) y su JS
-  (`abrirLote(campanaId)`, ya global en `sprint_detalle.html`) no cambian; la pestaña
-  Ideas solo agrega un botón que lo llama.
-- `campana_ideas.html` y su ruta `sprints.campana_ideas` **desaparecen**: todo lo que
-  hacían pasa a la pestaña Ideas del panel. El único enlace externo que apuntaba ahí
-  (la insignia "Sprint · Campaña N" en `_tab_creativeflowplus.html`) pasa a abrir el
-  tablero con el panel y la pestaña Ideas ya seleccionados.
-- Las acciones de idea (proponer, aprobar todas, aprobar una, descartar, "otra idea",
-  reescribir con ángulo, editar campos) pasan a responder JSON y a dispararse por fetch
-  igual que ya hacen "aprobar" y "editar campo" hoy — nunca un formulario con recarga de
-  página. Las que encolan un trabajo de Claude (proponer, reescribir) usan el mecanismo
-  YA existente de `data-poll-job` + `iniciarPolling` (el mismo de "Sugerir con IA"): barra
-  de progreso sin recargar, y al terminar recarga la página completa (ya reabre el panel
-  por el `?panel=`, patrón ya establecido, no uno nuevo).
+La rama `doctrina-bloque-2` (otra conversación; revisión final hecha, aún no en `main` el
+2026-09-27) cambia justo la página de ideas: el ángulo de cada idea a la vista y editable
+(macro `editor_angulo` en `templates/_angulo_editor.html`, `static/angulo.js` con
+`window.iniciarEditoresAngulo(raiz)`, ruta `sprints.idea_angulo`), «Reescribir la idea con este
+ángulo» (`sprints.idea_reescribir`, tarea `sprint_reescribir_idea`, tarifa `reescribir_idea`),
+el selector «Qué tanto sabe <persona>» (`sprints.persona_conciencia`), la sofisticación del
+producto (`producto.extra.sofisticacion`, se elige en Catálogo), los «datos fijos del mercado»
+(`sprints.ideas.fijos_de`) y `sprints.analisis._llamar_contando` (texto + tokens para el gasto).
 
-## Pantallas
+Esta entrega se construye **encima** de ese bloque, una vez esté en `main`: reutiliza sus piezas y
+no las duplica. Si al empezar la implementación el bloque 2 todavía no está en `main`, se espera
+(o se le pide a esa conversación que lo suba); nunca se mezcla su rama sin su revisión.
 
-### Panel de la campaña: pestañas
+**Consciencia (regla única):** manda la de la campaña (`campana.consciencia`, entrega 1, que ya se
+precarga de la persona de Nicho). Si la campaña no tiene, vale la de la persona
+(`persona.extra.conciencia.nivel`). `fijos_de` (o su equivalente tras la fusión) recibe la campaña
+y aplica esa precedencia; el selector «Qué tanto sabe <persona>» no se repite dentro del panel.
 
-`_sprint_panel.html` antepone una barra de dos pestañas (`Armar` / `Ideas · N`) al
-`<div class="panel-campana">`. Las secciones actuales (audiencia…referentes) quedan
-envueltas en `<div data-tab="armar">`; el pie ("Eliminar campaña") se queda fuera de
-ambas pestañas, siempre visible. El enlace "Ideas de esta campaña →" del pie desaparece
-(ya no hace falta: es la otra pestaña).
+## Decisiones (del chat)
 
-### Pestaña "Ideas" (`_panel_ideas.html`, nuevo, incluido por `_sprint_panel.html`)
+- **Pasos dentro del panel:** tres pestañas arriba — **Armar · Ideas · Piezas** — cada una con su
+  conteo («Armar ✓», «Ideas 7/10», «Piezas 6/10»).
+- El panel abre en la pestaña que toca según `tablero.siguiente_paso`: `referentes` → Armar;
+  `aprobar`, `ideas`, `generar` → Ideas; `generando`, `errores`, `revisar`, `lista` → Piezas. La
+  URL la recuerda: `?panel=<cid>&paso=armar|ideas|piezas` (cambiar de pestaña hace
+  `replaceState`). Un `paso` inválido cae en el que toca.
+- **Revisión en los dos sitios:** cada campaña revisa sus piezas en su panel y además se mantiene la
+  revisión de todo el sprint (página «Revisar» con atajos y filtros).
 
-Contenido de `campana_ideas.html` portado tal cual (conteo de aprobadas, botones
-"Proponer las que faltan / 3 videos más / 3 imágenes más / Aprobar todas", tarjetas de
-idea con editor de ángulo (`_angulo_editor.html`, sin cambios) y sus acciones, selector
-de consciencia de la persona), MENOS: el `<script>` propio (todo el JS pasa al bloque
-compartido de `sprint_detalle.html`, porque el HTML de un fragmento por fetch no corre
-sus `<script>`, igual que ya pasa con `_sprint_panel.html`) y los `<form method="post">`
-con recarga (se vuelven botones con `data-*` manejados por delegación, igual que
-referentes). "Generar lote de esta campaña" usa `onclick="abrirLote({{ c.id }})"` tal cual
-hoy.
+## Pestaña «Armar»
 
-## Rutas (`sprints/rutas.py`)
+Lo de la entrega 1, más:
 
-- `campana_panel` (ya existe): agrega al contexto lo que hoy arma `campana_ideas`
-  (`ideas`, `conteo`, `enfoques`, `trabajo_ideas`, `nivel_persona`, `sof_producto`,
-  `precio_reescribir`, `reescribiendo`) para que `_sprint_panel.html` pueda incluir
-  `_panel_ideas.html` en la misma respuesta.
-- `ideas_proponer`, `ideas_aprobar_todas`, `idea_reescribir`, `idea_otra`: ganan la rama
-  `if _quiere_json(): return jsonify(...)` que ya tienen `idea_editar`/`idea_aprobar`/
-  `idea_descartar` (mismo criterio: cuerpo `{ok: true, ...}` en éxito, `{ok: false,
-  error}` con 400/409 en error — p. ej. "ya hay una propuesta en curso" o
-  `MENSAJE_IDEA_CON_PIEZA`); la rama de formulario (flash + redirect) se queda para
-  scripts/pruebas viejas que no manden el header.
-- `campana_ideas` (GET) se **elimina**; su URL deja de existir.
-- `sprints.ver`: acepta `?tab=ideas` (además del `?panel=` que ya acepta) y lo pasa al
-  template como `tab_inicial`.
+- En Enfoque, solo lectura: «Promesas parecidas que ya vio el cliente: <nivel> · <texto> (se
+  cambia en Catálogo)» con la sofisticación del producto (o «Claude lo decide»).
+- Los referentes que dicen «falta describir» se describen ahí mismo: al tocar la miniatura se
+  abre debajo un recuadro con las intenciones (`sprints.datos.INTENCIONES_NOMBRE`, chips) y la
+  descripción; se guarda solo con la ruta que ya existe (`sprints.referencia_editar`, JSON) y al
+  quedar «lista» se actualizan la tarjeta y el conteo. La página de referencias de la campaña se
+  queda como «Más opciones de referencias» (reutilizar de otra campaña, links en descarga).
 
-## Plantillas fuera de Sprints
+## Pestaña «Ideas»
 
-- `_tab_creativeflowplus.html:241`: el `href` de la insignia "Sprint · Campaña N" cambia
-  de `sprints.campana_ideas` a `sprints.ver` con `panel=<cid>` y `tab=ideas`.
-- `mapa_codigo.html`: las dos filas que listan `campana_ideas` como página propia se
-  actualizan para reflejar que las ideas viven en el panel (texto, no afecta rutas).
+- Arriba: «N de M aprobadas · videos a/b · imágenes c/d» y los botones «✨ Proponer las que faltan
+  (X videos, Y imágenes) (≈ US$ Z)», «+3 videos», «+3 imágenes» (con su precio) y «Aprobar todas
+  las propuestas». Mientras Claude propone: barra de progreso del trabajo (`iniciarPolling` con la
+  URL de la pestaña; al terminar, la página vuelve al mismo panel y pestaña) y los botones de
+  proponer deshabilitados.
+- Cada idea viva es una fila compacta (tipo, título, duración, enfoque, estado: propuesta /
+  aprobada / generada) que se abre para editar: título, escena, sonido (video), gancho — se
+  guardan solos con `sprints.idea_editar` (JSON) —, el editor del ángulo de la doctrina
+  (`editor_angulo`, iniciado con `iniciarEditoresAngulo(panel)` tras insertar el fragmento), las
+  miniaturas de los referentes en que se apoya, y las acciones Aprobar, Otra idea, Reescribir con
+  este ángulo (≈ precio, solo si el ángulo tiene promesa) y Descartar. Una idea con pieza queda de
+  solo lectura con «Ver su pieza →» (abre la pestaña Piezas).
+- Las descartadas van plegadas al final («▸ N descartadas»).
+- Al pie, la caja **Generar**: «N aprobadas sin generar (v videos, i imágenes)», modelo de video y
+  de imagen (por defecto los del proyecto) y el costo real al momento (`sprints.lote_estimar` con
+  `campana_id`); el botón «Generar N piezas — US$ X» encola con `sprints.lote` (`campana_id`,
+  respuesta JSON) y pasa a la pestaña Piezas. Sin ideas por generar, la caja lo dice y no ofrece el
+  botón. El modal del encabezado del tablero («Generar lote» del sprint entero) no cambia.
 
-## JS (`sprint_detalle.html`, dentro del bloque `window.tableroPanelListo`/delegación ya
-existente — nada de scripts nuevos por fragmento)
+## Pestaña «Piezas»
 
-- Tabs: un manejador de click delegado en `panel` para `[data-tab-btn]` que
-  muestra/oculta `[data-tab="armar"]`/`[data-tab="ideas"]` y marca el botón activo;
-  `tableroPanelListo` selecciona `armar` por defecto, o `ideas` si
-  `panel.dataset.tabInicial === 'ideas'` (una sola vez, al abrir por el enlace externo).
-- Autoguardado de campos de idea (título/escena/sonido/gancho): mismo patrón que ya
-  existe para los campos de la campaña (`data-sucio`, guardar en `blur`/debounce), pero
-  apuntando a `sprints.idea_editar` por idea — se generaliza la función `guardar()' ya
-  escrita para que la use cualquier `[data-url-campo]`, no solo el de la campaña.
-- Botones de acción de idea (`data-idea-aprobar`, `data-idea-descartar`, `data-idea-otra`,
-  `data-idea-reescribir`, `data-ideas-proponer`, `data-ideas-aprobar-todas`): fetch POST,
-  al terminar refrescan la pestaña Ideas (recargando el panel completo con `T.abrir(cid)`,
-  igual que ya hacen los referentes) — no hace falta granularidad menor porque abrir el
-  panel ya es rápido (misma consulta que hoy).
-- El editor de ángulo (`static/angulo.js`) sigue intacto: ya funciona por delegación de
-  eventos sobre el documento, no depende de que su HTML esté en una página completa.
+- El panel se ensancha (`min(960px, 100%)`; en celular ya ocupa la pantalla).
+- Arriba: «L listas · G generando · C en cola · E con error · A aprobadas · US$ X gastado» (la entrada de
+  esa campaña en `produccion.progreso(cliente, sid)["campanas"]`) y «Aprobar las que pasaron QA (n)» solo de esta
+  campaña.
+- Cuadrícula de piezas (no descartadas, con sesión de Crear): video con póster o imagen; estado
+  (en cola, generando, lista, con error y su motivo); QA (puntaje, chequeos ✓/✗ con su nota,
+  «QA pendiente…», «QA falló · Repetir QA»); revisión (pendiente / aprobada / rechazada con su
+  motivo). Acciones: Aprobar; Rechazar con el motivo en un campo dentro de la tarjeta (no
+  `prompt()`), obligatorio; Reintentar (error) y Regenerar, ambos con su precio en el botón y una
+  confirmación; «Abrir en Crear» (edición final, experimentos).
+- Mientras haya piezas en cola, generando o con QA pendiente y la pestaña Piezas esté a la vista,
+  la pestaña se actualiza sola cada 8 s (vuelve a pedir solo su contenido); no pisa un motivo de
+  rechazo que se esté escribiendo y se detiene al cerrar el panel o cambiar de pestaña.
+- Sin piezas: estado vacío que lleva a la pestaña Ideas.
 
-## Se quita
+## Revisión de todo el sprint (`sprint_revision.html`)
 
-- `templates/campana_ideas.html`.
-- La ruta `GET /cliente/<c>/sprints/<sid>/campanas/<cid>/ideas` (`sprints.campana_ideas`).
-- El enlace "Ideas de esta campaña →" del pie del panel.
+Se queda con sus atajos (A, R, flechas), filtros, «Aprobar todas las que pasaron QA», «Cerrar
+sprint» y «Entrega». Cambios: el filtro de campaña dice «<n> · <ETAPA> · <persona> · <producto>»;
+cada pieza trae «Abrir en el panel» (tablero con `?panel=<cid>&paso=piezas`); rechazar pide el
+motivo en el mismo campo dentro de la tarjeta que el panel.
 
-Sigue igual: `sprint_revision.html` y su ruta; `_sprint_lote_modal.html` y `abrirLote`;
-`campana_referencias.html` (para describir referentes pendientes, ya fuera del alcance de
-la entrega 1).
+## Rutas y datos
+
+Sin migraciones. Las rutas existentes de ideas y piezas (`ideas_proponer`, `ideas_aprobar_todas`,
+`idea_editar`, `idea_aprobar`, `idea_descartar`, `idea_otra`, `idea_reescribir`, `idea_angulo`,
+`lote_estimar`, `lote`, `pieza_revision`, `pieza_reintentar`, `pieza_regenerar`, `pieza_qa`,
+`revision_aprobar_qa`) responden JSON cuando las llama el panel (`X-Requested-With: fetch`) y,
+llamadas desde un formulario, vuelven al tablero con el panel y la pestaña correspondientes.
+`revision_aprobar_qa` acepta `campana_id` opcional. `campana_ideas` (GET) redirige a
+`sprints.ver` con `panel=<cid>&paso=ideas`. El fragmento del panel lleva las tres pestañas; la de
+Piezas también se puede pedir sola para la actualización automática.
+
+## Dinero
+
+- «Proponer ideas» (y «+3», «Otra idea»): precio aproximado en el botón (`gastos.estimar`, tarifa
+  nueva por número de ideas, medida en una llamada real) y **gasto real registrado** por
+  `gastos.registrar_seguro(cliente, "ideas", usd, "idea:proponer:<cid>:t<tarea_id>", ...)` con los
+  tokens de todas las llamadas de esa propuesta (incluida la corrección), también cuando la
+  respuesta no sirvió.
+- Reescribir, Generar, Reintentar y Regenerar muestran su precio antes del clic; nada se relanza
+  solo (`max_intentos=1` como hoy).
+
+## Errores
+
+- Propuesta de ideas o lote ya en curso para esa campaña: el botón lo dice («Ya hay una propuesta
+  en curso») y no encola otra.
+- Idea con pieza: no se edita ni se descarta (regla actual `MENSAJE_IDEA_CON_PIEZA`); se regenera
+  desde Piezas.
+- Guardado que falla: el campo vuelve a su valor y el motivo aparece a su lado (como en la
+  entrega 1); una respuesta que no es JSON muestra el aviso genérico de la entrega 1.
+- Rechazar sin motivo: el campo lo pide y no envía.
+- Campaña o sprint que ya no existe: el panel lo dice y ofrece volver al tablero (entrega 1).
 
 ## Pruebas
 
-- `sprints.rutas` (rutas): `campana_panel` devuelve el HTML de las dos pestañas con las
-  ideas de la campaña; `ideas_proponer`/`ideas_aprobar_todas`/`idea_reescribir`/
-  `idea_otra` responden JSON con el header de fetch (éxito y cada error ya cubierto en
-  su versión de formulario); `campana_ideas` ya no resuelve (404); `sprints.ver` con
-  `?tab=ideas` pasa `tab_inicial` al contexto.
-- Plantillas: `_panel_ideas.html` no tiene `<script>` propio (regla ya probada para
-  `_sprint_panel.html`); ambas pestañas están presentes en el HTML de `campana_panel`
-  aunque una esté oculta por CSS (para que el fetch no dependa de un segundo viaje).
-- Suite completa (`pytest -q`) sin marcar `slow` para el ciclo corto, completa antes de
-  desplegar.
+- `tablero`: `paso` por defecto según `siguiente_paso` (función pura) y `paso` inválido.
+- Rutas: el panel trae las tres pestañas con sus conteos y abre la pedida; JSON de cada acción de
+  ideas, generar y piezas; redirecciones de formulario al panel; `campana_ideas` redirige;
+  `revision_aprobar_qa` por campaña; la pestaña Piezas sola.
+- Gasto: proponer ideas registra el gasto real en éxito y en respuesta inválida; el precio sale en
+  el botón.
+- Revisión del sprint: filtro nuevo y «Abrir en el panel».
+- En pantalla (app local sin llaves), escritorio 1280×800 y celular 375×812: proponer (con
+  Claude simulado o sin llave, el error se ve bien), aprobar, abrir y editar una idea con su
+  ángulo, estimar el lote, revisar piezas con distintos estados; ningún desplazamiento lateral;
+  modo oscuro.
 
 ## Fuera de esta entrega
 
-Revisión dentro del panel (se descartó: no encaja con "revisar todo el sprint seguido");
-`campana_referencias.html` (describir referentes pendientes) sigue aparte.
+Pantallas de personas y temporadas; «Proponer ideas en todas las campañas» de un clic; atajos de
+teclado dentro del panel; la edición final dentro del panel (sigue en Crear).
