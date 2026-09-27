@@ -5,7 +5,7 @@
 
   <details class="sprint-agregar-ref" style="margin-bottom: 2rem;">
     <summary style="cursor: pointer; font-weight: bold;">+ Agregar referencia</summary>
-    <form method="post" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="sprint-form-referencias" style="margin-top: 1rem; padding: 1rem; background: #f9f9f9; border-radius: 4px;">
+    <form method="post" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="sprint-form-referencias" style="margin-top: 1rem; padding: 1rem; background: var(--panel-2); border-radius: 4px;">
       <label>Archivo o link
         <input type="file" name="archivo" accept="image/*,video/*">
         <small>o</small>
@@ -29,7 +29,7 @@
     {% for r in referencias %}
     {# Las imágenes anteriores al 2026-09-22 no tienen frame_url: la miniatura sale de url. #}
     {% set mini = r.frame_url or (r.url if r.tipo == "imagen" else None) %}
-    <details class="sprint-ref-desplegable" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid #ddd; border-radius: 4px;">
+    <details class="sprint-ref-desplegable" style="margin-bottom: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 4px;">
       <summary style="cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 0.75rem;">
         {% if mini %}
           <img src="{{ mini }}" alt="" style="width: 80px; height: auto; border-radius: 2px; object-fit: cover;">
@@ -37,7 +37,7 @@
         <span>{{ r.titulo or "Sin título" }}</span>
         <span class="tag-estado">{{ r.estado }}</span>
       </summary>
-      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee;">
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
         <div class="sprint-ref-media" style="margin-bottom: 0.75rem;">
           {% if r.tipo == "video" %}
           <video src="{{ r.url }}" poster="{{ r.frame_url or '' }}" controls muted preload="none" style="max-width: 100%; max-height: 360px; border-radius: 4px;"></video>

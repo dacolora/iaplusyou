@@ -14,17 +14,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f6f6fb;--panel:#ffffff;--panel-2:#f1f1f8;--border:#e3e4ee;--text:#16172b;--muted:#5f6377;--muted-2:#9497ab;
-  --accent:#7c3aed;--accent-soft:#efe7fd;--accent-line:#c9b4f7;--ok:#1f9d6a;--ok-soft:#e3f7ee;--warn:#a8780a;--warn-soft:#fdf3d9;--err:#d63c5e;--err-soft:#ffe6ec;
-  --shadow:0 4px 16px rgba(30,20,60,.07);--shadow-2:0 12px 32px rgba(30,20,60,.10);
+  color-scheme:dark;
+  --bg:#0f1115;--panel:#1a1d24;--panel-2:#232733;--border:#2c313c;--text:#f2f3f5;--muted:#9aa3b2;--muted-2:#838b9b;
+  --accent:#a78bfa;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;
+  --shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);
   --display:"Space Grotesk","Helvetica Neue",Arial,sans-serif;
   --body:"Inter","Helvetica Neue",Helvetica,Arial,sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){--bg:#12132a;--panel:#1b1c36;--panel-2:#23244a;--border:#31325a;--text:#ecebf7;--muted:#a9abc6;--muted-2:#7c7f9e;--accent:#b39cff;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;--shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);}
-}
-:root[data-theme="dark"]{--bg:#12132a;--panel:#1b1c36;--panel-2:#23244a;--border:#31325a;--text:#ecebf7;--muted:#a9abc6;--muted-2:#7c7f9e;--accent:#b39cff;--accent-soft:#2b2352;--accent-line:#4f4390;--ok:#4fd39c;--ok-soft:#173a2c;--warn:#e8c25a;--warn-soft:#3d3416;--err:#ff7a93;--err-soft:#46202a;--shadow:0 4px 16px rgba(0,0,0,.35);--shadow-2:0 12px 32px rgba(0,0,0,.45);}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:15.5px;line-height:1.55;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1080px;margin:0 auto;padding-inline:16px;padding-block:0 72px}
@@ -33,7 +30,7 @@ h1{font-size:clamp(2rem,4.2vw,2.8rem);letter-spacing:-.015em;margin-top:.35rem}
 h2{font-size:1.55rem;margin-block:.15rem .5rem}
 h3{font-size:1.05rem;margin-block:1.4rem .5rem}
 p{margin:0 0 .8rem;max-width:70ch}
-a{color:var(--accent)}
+a{color:var(--accent-texto)}
 code{font-family:var(--mono);font-size:.86em;background:var(--panel-2);padding:.1em .35em;border-radius:5px}
 .eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:600}
 header.top{padding-block:2.2rem 1rem}
@@ -44,14 +41,14 @@ nav.nav li a{display:block;padding:.7rem .6rem;font-size:.84rem;font-weight:500;
 nav.nav li a:hover,nav.nav li a:focus-visible{color:var(--text);border-color:var(--accent);outline:none}
 section{padding-block:2.8rem 0}
 .cristiano{font-size:1rem;color:var(--text);border-left:3px solid var(--accent);background:var(--accent-soft);padding:.6rem .9rem;border-radius:0 10px 10px 0;margin:.4rem 0 1.1rem;max-width:74ch}
-.cristiano b{font-family:var(--display);color:var(--accent)}
+.cristiano b{font-family:var(--display);color:var(--accent-texto)}
 .grid{display:grid;gap:14px}
 .g2{grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
 .g3{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow)}
 .card h3{margin-top:0}
 .card .q{font-family:var(--display);font-weight:600;font-size:1rem;color:var(--muted);margin-bottom:.35rem}
-.card .a{font-size:1.2rem;font-weight:700;color:var(--accent);font-family:var(--display);line-height:1.25}
+.card .a{font-size:1.2rem;font-weight:700;color:var(--accent-texto);font-family:var(--display);line-height:1.25}
 .card p{margin:.55rem 0 0;font-size:.93rem;color:var(--muted);max-width:none}
 .card ul.lista{font-size:.93rem}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px}
@@ -62,16 +59,16 @@ section{padding-block:2.8rem 0}
 .chip.vivo{background:var(--ok-soft);color:var(--ok)}
 .chip.legado{background:var(--warn-soft);color:var(--warn)}
 .chip.cli{background:var(--panel-2);color:var(--muted)}
-.chip.db{background:var(--accent-soft);color:var(--accent)}
+.chip.db{background:var(--accent-soft);color:var(--accent-texto)}
 /* héroe y analogía */
 .hero{margin-top:1.2rem;border:1px solid var(--border);border-radius:18px;background:linear-gradient(135deg,var(--accent-soft),var(--panel) 62%);padding:24px 24px 20px;box-shadow:var(--shadow)}
 .hero .una{font-family:var(--display);font-size:clamp(1.2rem,2.5vw,1.55rem);font-weight:600;line-height:1.3;max-width:36ch;text-wrap:balance;margin:0}
 .hero .regla{margin:1rem 0 0;padding:.75rem 1rem;border-radius:12px;background:var(--panel);border:1px dashed var(--accent-line);font-size:.97rem;max-width:none}
-.hero .regla b{color:var(--accent)}
+.hero .regla b{color:var(--accent-texto)}
 .cadena{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-top:.9rem}
 .cadena .nodo{flex:1 1 160px;min-width:0;background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
 .cadena .nodo .rol{font-family:var(--display);font-weight:700;font-size:1.02rem}
-.cadena .nodo .real{font-family:var(--mono);font-size:.76rem;color:var(--accent);margin-top:.2rem;word-break:break-word}
+.cadena .nodo .real{font-family:var(--mono);font-size:.76rem;color:var(--accent-texto);margin-top:.2rem;word-break:break-word}
 .cadena .nodo p{font-size:.86rem;color:var(--muted);margin:.45rem 0 0;max-width:none}
 .cadena .flecha{align-self:center;color:var(--muted-2);font-size:1.3rem;flex:0 0 auto;padding-inline:2px}
 .cadena .nodo.almacen{background:var(--accent-soft);border-color:transparent}
@@ -147,11 +144,11 @@ ul.lista li{margin-bottom:.45rem}
 .faq details{border:1px solid var(--border);border-radius:12px;background:var(--panel);padding:0 16px;margin-top:8px}
 .faq summary{cursor:pointer;font-family:var(--display);font-weight:600;padding:13px 0;list-style:none;display:flex;gap:10px;align-items:baseline}
 .faq summary::-webkit-details-marker{display:none}
-.faq summary::before{content:"+";color:var(--accent);font-weight:700;width:1em;flex:0 0 auto}
+.faq summary::before{content:"+";color:var(--accent-texto);font-weight:700;width:1em;flex:0 0 auto}
 .faq details[open] summary::before{content:"–"}
 .faq details p{padding-bottom:13px;color:var(--muted);max-width:none;margin:0}
 dl.glos{display:grid;grid-template-columns:max-content 1fr;gap:.45rem 1rem;margin:1rem 0 0;font-size:.93rem}
-dl.glos dt{font-family:var(--mono);font-size:.82rem;color:var(--accent);padding-top:.15rem}
+dl.glos dt{font-family:var(--mono);font-size:.82rem;color:var(--accent-texto);padding-top:.15rem}
 dl.glos dd{margin:0;max-width:70ch}
 .aviso{border-left:3px solid var(--warn);background:var(--warn-soft);padding:12px 16px;border-radius:0 12px 12px 0;margin-top:1rem}
 .aviso p{margin:0 0 .45rem;max-width:none}
@@ -702,7 +699,7 @@ footer{margin-top:3rem;padding-top:1rem;border-top:1px solid var(--border);font-
       <tr data-f data-a="tpl"><td class="f">_tab_catalogo.html · _catalogo_lista · _catalogo_importar · _catalogo_sin_fotos · _catalogo_campos_comerciales · _maniqui · _seccion_personajes</td><td class="n">619</td><td class="d">Pestaña Catálogo: lista de activos con campos comerciales, importación, importados sin fotos, el maniquí del mapa corporal y los personajes.</td></tr>
       <tr data-f data-a="tpl"><td class="f">_tab_settings.html · _seccion_marca · _comparacion_modelos</td><td class="n">915</td><td class="d">Pestaña Configuración: puesta a punto de llaves, Gasto (real del mes, historial, CSV), marca, preferencias, tiendas, Pixel, canales orgánicos y la comparación de modelos.</td></tr>
       <tr data-f data-a="tpl"><td class="f">_idea_card · _idea_visual_card · _prompt_row · _imagen_row · _progreso_row · _video_card · _seccion_videos · _seccion_bitacora · _selector_productos · _selector_productos_nuevo</td><td class="n">465</td><td class="d">Piezas reutilizables: tarjetas del pipeline original según el estado de cada prompt, la fila de progreso que engancha el polling, el selector de productos del catálogo.</td></tr>
-      <tr data-f data-a="tpl"><td class="f">static/style.css</td><td class="n">1 643</td><td class="d">Todo el CSS en un archivo: tokens en <code>:root</code> (tema claro, acento morado, Space Grotesk + Inter), sidebar, tarjetas, pestañas, barras de progreso.</td></tr>
+      <tr data-f data-a="tpl"><td class="f">static/style.css</td><td class="n">1 643</td><td class="d">Todo el CSS en un archivo: tokens en <code>:root</code> (tema oscuro único, acento morado, Space Grotesk + Inter), sidebar, tarjetas, pestañas, barras de progreso.</td></tr>
       <tr data-f data-a="tpl"><td class="f">static/fonts/ · static/img/</td><td class="n">—</td><td class="d">Inter y Space Grotesk en TTF (la web los carga de Google Fonts; los TTF los usa Pillow para el texto en pantalla de final edition) y el ícono de la app.</td></tr>
 
       <tr class="grp" data-a="db"><td colspan="3">Base de datos y migraciones</td></tr>

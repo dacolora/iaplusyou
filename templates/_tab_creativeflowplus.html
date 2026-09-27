@@ -83,7 +83,7 @@
           {% endfor %}
         </select>
         <p class="vacio" id="fp-duracion-nota" style="font-size:.74rem;padding:0;">Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.</p>
-        <p class="vacio" id="fp-duracion-larga" style="font-size:.74rem;padding:0;color:var(--warn, #b26a00);" hidden>Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.</p>
+        <p class="vacio" id="fp-duracion-larga" style="font-size:.74rem;padding:0;color:var(--warn);" hidden>Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.</p>
       </div>
       <div>
         <label class="campo-label">Formato</label>
@@ -207,10 +207,10 @@
           {% endif %}
         </div>
         {% elif item.estado == "prompt_listo" %}
-        <div class="fe-seccion" style="background:#f5f5f5;padding:0.8rem;border-radius:4px;margin-bottom:0.8rem;">
+        <div class="fe-seccion" style="background:var(--panel-2);padding:0.8rem;border-radius:4px;margin-bottom:0.8rem;">
           <p class="campo-label" style="margin:0 0 0.4rem 0;">✏️ Super prompt (editable)</p>
           {% if item.director and item.director.estado == "fallback" %}
-          <p class="vacio" style="padding:0;font-size:.75rem;color:#c00;">⚠️ La IA no pudo armar los planos ({{ item.director.aviso }}). Aquí va el prompt básico que puedes editar.</p>
+          <p class="vacio" style="padding:0;font-size:.75rem;color:var(--error);">⚠️ La IA no pudo armar los planos ({{ item.director.aviso }}). Aquí va el prompt básico que puedes editar.</p>
           {% else %}
           <p class="vacio" style="padding:0;font-size:.75rem;">Revisa, edita si quieres y haz clic en «Generar video».</p>
           {% endif %}
@@ -266,7 +266,7 @@
           <div class="catalogo-productos" style="margin-bottom:.6rem;">
             {% for r in item.referencias %}
             <figure style="margin:0;text-align:center;">
-              <img src="{{ r.frame_url }}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;background:#fff;{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
+              <img src="{{ r.frame_url }}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;background:var(--panel-2);{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
               <figcaption class="vacio" style="padding:0;font-size:.66rem;">{{ r.etiqueta }}</figcaption>
             </figure>
             {% endfor %}
@@ -445,7 +445,7 @@
               <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> Generar también la versión B (dos videos)</label>
               {% endif %}
               {% if item.estado == "prompt_listo" %}
-              <p class="vacio" style="padding:0;font-size:.75rem;color:#0088cc;margin-bottom:.4rem;">👆 Revisa el prompt arriba antes de generar</p>
+              <p class="vacio" style="padding:0;font-size:.75rem;color:var(--accent-texto);margin-bottom:.4rem;">👆 Revisa el prompt arriba antes de generar</p>
               {% endif %}
               <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}Reintentar{% elif item.estado == "prompt_listo" %}Generar video{% else %}Generar{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
             </form>
