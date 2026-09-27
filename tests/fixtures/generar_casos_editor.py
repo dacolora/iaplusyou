@@ -64,9 +64,27 @@ def casos_resolver():
     return {"doc": doc, "casos": casos}
 
 
+class _MedidorFalso:
+    """10 px por carácter: el mismo medidor en Python y en Node."""
+    def textlength(self, texto, font=None):
+        return 10 * len(texto)
+
+
+TEXTOS_AJUSTE = ("Tu piel, en 7 días", "Una frase bastante más larga que el ancho disponible",
+                 "Palabraenormesinespacios corta", "Dos\nPárrafos aquí", "", "   espacios   raros  ",
+                 "Linea\n\ncon vacía")
+
+
+def casos_ajuste():
+    from final_edition import rasterizar
+    return [{"texto": t, "ancho_max_px": ancho, "esperado": rasterizar.ajustar_lineas(_MedidorFalso(), t, None, ancho)}
+            for t in TEXTOS_AJUSTE for ancho in (None, 60, 100, 150)]
+
+
 ARCHIVOS = {
     "precios_casos.json": casos_precios,
     "resolver_casos.json": casos_resolver,
+    "ajuste_casos.json": casos_ajuste,
 }
 
 
