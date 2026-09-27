@@ -49,16 +49,16 @@ mismo tipo de fallo que el modal «Traer referentes» (incidente del 2026-09-27)
    `aspect_ratio_imagen`, `con_sonido`, `sonido`, `musica_estilo`, `musica_inicio_s`,
    `calidad` y `modo_prompt` (`directo` | `director`). Cero cambios en `dashboard.py`.
 2. **El texto de la persona va tal cual.** No se agrega nada al prompt (regla del
-   incidente del 2026-09-26, CLAUDE.md › «Crear (FlowPlus)»). «Armar el prompt con IA» sigue
-   siendo opcional y nunca obligatorio (incidente del 2026-09-21).
+   incidente del 2026-09-26, CLAUDE.md › «Crear (FlowPlus)»). «Crear super prompt con IA (gratis)»
+   sigue siendo opcional y nunca obligatorio (incidente del 2026-09-21).
 3. **Mismo precio.** Se usa la misma fórmula del `refrescar()` actual: segundos × USD/s
    efectivo, menos el recargo si se apaga el sonido, 480p de Wan a 0,05, y + 0,02 por un estilo
    de música de IA. El precio siempre se ve junto a «Generar» antes de hacer clic.
 4. **Mismas reglas por modelo.** Lo que el modelo no admite (duración fuera de
    `min/max_duracion`, formatos fuera de `formatos` o `formatos_texto`) no se puede elegir.
    Seedance con una imagen de arranque sigue el formato de esa imagen. El borrador es solo de
-   Wan 3.0 en video. En Imagen desaparecen duración, sonido, música, borrador y «Armar el prompt
-   con IA».
+   Wan 3.0 en video. En Imagen desaparecen duración, sonido, música, borrador y «Crear super
+   prompt con IA».
 5. **Sin recargas.** Siguen funcionando igual: subir con barra de progreso, pegar link (y el
    sondeo mientras se descarga), quitar y vaciar referencias, «Describir con IA», «Sugerir»
    sonido, Mi música (subir, crear con ElevenLabs, borrar, reproductor + «Empieza en el
@@ -76,16 +76,18 @@ mismo tipo de fallo que el modal «Traer referentes» (incidente del 2026-09-27)
 .crear-comp  (div, la tarjeta visual)
 ├─ #fp-bandeja-wrap             ← FUERA de #form-flowplus: tiene sus propios <form> (quitar, vaciar)
 │   └─ miniaturas @Imagen N / @Video N + «Describir con IA» · «Quitar todas»
-├─ .crear-comp-catalogo         ← miniaturas de lo marcado en el catálogo (JS, desde los checkbox), con ×
+├─ #fp-catalogo-elegidos        ← miniaturas de lo marcado en el catálogo (JS, desde los checkbox), con ×
 └─ <form id="form-flowplus">
-    ├─ textarea accion_central (grande, sin borde, placeholder de ejemplo) + #fp-texto-error
-    ├─ .crear-comp-barra
-    │   ├─ «+» → menú: Subir · Pegar un link · Del catálogo
-    │   ├─ pastillas: Tipo · Modelo · Duración · Formato · Sonido · Música
-    │   └─ precio (#fp-precio) + «Generar video|imagen» (#fp-generar, modo_prompt=directo)
+    ├─ .crear-comp-abajo (la mitad de abajo de la tarjeta)
+    │   ├─ textarea accion_central (grande, sin borde, placeholder de ejemplo) + #fp-texto-error
+    │   └─ .crear-barra
+    │       ├─ «+» → menú: Subir · Pegar un link · Del catálogo
+    │       ├─ pastillas: Tipo · Modelo · Duración · Formato · Sonido · Música
+    │       └─ precio (#fp-precio) + «Generar video|imagen» (#fp-generar, modo_prompt=directo)
+    ├─ .crear-pie (debajo de la tarjeta, todavía dentro del form):
+    │     «Tu texto va tal cual al modelo · [logos] · se cobra al generar»
+    │     + #fp-armar (submit, modo_prompt=director, «Crear super prompt con IA (gratis)», oculto en Imagen)
     └─ <dialog id="fp-catalogo"> con el selector del catálogo (checkbox dentro del form)
-.crear-comp-pie: «Tu texto va tal cual al modelo · [logos] · se cobra al generar»
-                 + #fp-armar (submit con form="form-flowplus", modo_prompt=director, oculto en Imagen)
 <form id="fp-form-subir"> y <form id="fp-form-link"> vacíos, fuera de todo;
 sus controles viven en el menú «+» con form="fp-form-subir" / form="fp-form-link".
 ```
@@ -168,7 +170,7 @@ insertando la etiqueta en el cursor.
 - La tarjeta ocupa todo el ancho.
 - Las pastillas van en una sola fila que se desliza de lado dentro de la barra
   (`overflow-x: auto`). La página nunca se desliza de lado.
-- «Generar» pasa debajo, a todo lo ancho, con el precio adentro: «Generar video · ≈ US$ 0,80».
+- Debajo de las pastillas va una fila con el precio a la izquierda y «Generar» estirado al resto del ancho.
 - Los menús se abren como hoja desde abajo (`position: fixed; bottom: 0`), con fondo oscuro, y
   se cierran tocando el fondo.
 
@@ -197,7 +199,7 @@ no lleva `style=""` en línea. Pasa la guardia de colores del modo oscuro y la b
   - ningún `<form>` anidado dentro de `#form-flowplus`;
   - los controles de subir o pegar un link llevan `form="fp-form-subir"` / `form="fp-form-link"`;
   - existen las seis pastillas y el menú «+»;
-  - `#fp-armar` es `type=submit`, `value="director"` y `form="form-flowplus"`;
+  - `#fp-armar` es `type=submit` y `value="director"`, dentro de `#form-flowplus` y después de `#fp-generar`;
   - no quedan los avisos sueltos de §4.4 fuera de sus menús o del pie;
   - el guardián de Enter está en el script;
   - el selector en modo `radio` («Cambiar producto») sigue siendo `<details>`.
