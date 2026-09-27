@@ -709,11 +709,12 @@
     // Tipo (video/imagen), modelo elegido y costo en el botón.
     // formatearUSD es global (window.formatearUSD, script de arriba).
     var form = document.getElementById('form-flowplus');
-    var bloqueVideo = document.getElementById('fp-bloque-video');
-    var bloqueImagen = document.getElementById('fp-bloque-imagen');
+    var comp = document.getElementById('crear-comp');
     var campoModelo = document.getElementById('fp-modelo');
     var botonGenerar = document.getElementById('fp-generar');
-    var ayudaBoton = document.getElementById('fp-ayuda-boton');
+    var precio = document.getElementById('fp-precio');
+    var calidadWrap = document.getElementById('fp-calidad-wrap');
+    var pieLogos = document.getElementById('fp-pie-logos');
     var duracion = document.getElementById('fp-duracion');
     function tipoActual() { return form.querySelector('input[name=tipo]:checked').value; }
     function modeloActual() {
@@ -790,12 +791,14 @@
       if (notaDuracion) notaDuracion.hidden = m.value !== 'wan3';
       var calidad = document.getElementById('fp-calidad');
       if (calidad) { calidad.disabled = m.value !== 'wan3'; if (calidad.disabled) calidad.checked = false; }
+      if (calidadWrap) calidadWrap.hidden = m.value !== 'wan3';
       var larga = document.getElementById('fp-duracion-larga');
       if (larga) larga.hidden = parseInt(duracion.value, 10) <= 15;
     }
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
-      bloqueVideo.hidden = esImagen; bloqueImagen.hidden = !esImagen;
+      comp.querySelectorAll('[data-solo-video]').forEach(function (el) { el.hidden = esImagen; });
+      comp.querySelectorAll('[data-solo-imagen]').forEach(function (el) { el.hidden = !esImagen; });
       var m = modeloActual();
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
@@ -812,17 +815,13 @@
         }
       }
       // «Generar» (video o imagen) cobra al generar con el texto de la persona;
-      // «Armar prompt con IA» solo existe para video (la imagen nunca pasa por
-      // el director). Mismo formato que gastos.formatear: «≈ US$ 1,00».
-      var btnArmar = document.getElementById('fp-armar');
-      if (btnArmar) btnArmar.hidden = esImagen;
-      if (esImagen) {
-        botonGenerar.textContent = 'Generar imagen' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = 'Se cobra al generar, no antes.';
-      } else {
-        botonGenerar.textContent = 'Generar video' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = '«Generar» manda tu texto tal cual y se cobra al generar; «Crear super prompt» es gratis y te deja revisar el prompt antes de gastar.';
-      }
+      // el precio va al lado, con el formato de gastos.formatear: «≈ US$ 1,00».
+      // «Crear super prompt» solo existe para video (la imagen nunca pasa por
+      // el director): lo oculta [data-solo-video].
+      botonGenerar.textContent = esImagen ? 'Generar imagen' : 'Generar video';
+      precio.textContent = usd ? '≈ ' + formatearUSD(usd) : '';
+      if (pieLogos) pieLogos.hidden = sinAdjuntos();
+      pintarFichas(); pintarMusica(); pintarPastillas();
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
@@ -831,6 +830,173 @@
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });
+    [formatoVideo, formatoImagen].forEach(function (s) { if (s) s.addEventListener('change', refrescar); });
+    document.getElementById('fp-sonido').addEventListener('input', function () { pintarPastillas(); });
+
+    // Duración y formato: los <select> de siempre son la fuente de verdad (el
+    // servidor y limitarSelect los leen); el menú dibuja una ficha por opción y
+    // la deshabilitada sale tachada.
+    function pintarFichas() {
+      comp.querySelectorAll('[data-fichas-de]').forEach(function (caja) {
+        var sel = document.getElementById(caja.dataset.fichasDe);
+        caja.innerHTML = '';
+        Array.prototype.forEach.call(sel.options, function (o) {
+          var b = document.createElement('button');
+          b.type = 'button'; b.className = 'crear-ficha';
+          b.textContent = o.textContent.split(' (')[0]; b.title = o.textContent;
+          b.dataset.valor = o.value;
+          b.disabled = o.disabled || sel.disabled;
+          b.setAttribute('aria-pressed', (!sel.disabled && o.value === sel.value) ? 'true' : 'false');
+          caja.appendChild(b);
+        });
+      });
+    }
+    comp.addEventListener('click', function (e) {
+      var ficha = e.target.closest('[data-fichas-de] .crear-ficha');
+      if (!ficha || ficha.disabled) return;
+      var sel = document.getElementById(ficha.closest('[data-fichas-de]').dataset.fichasDe);
+      sel.value = ficha.dataset.valor;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      cerrarMenus();
+    });
+
+    // Música: el <select> #fp-musica sigue siendo la fuente de verdad (lo leen
+    // el servidor y mostrarInicio); el menú lo dibuja como «Sin música», fichas
+    // de estilos IA y la lista de Mi música.
+    function pintarMusica() {
+      var caja = document.getElementById('fp-musica-opciones');
+      if (!caja) return;
+      caja.innerHTML = '';
+      function boton(valor, texto, clase) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = clase; b.dataset.musica = valor; b.textContent = texto;
+        b.setAttribute('aria-pressed', musicaSel.value === valor ? 'true' : 'false');
+        return b;
+      }
+      caja.appendChild(boton('', 'Sin música', 'crear-opcion-simple'));
+      Array.prototype.forEach.call(musicaSel.querySelectorAll('optgroup'), function (g) {
+        var opciones = g.querySelectorAll('option');
+        if (g.hidden || !opciones.length) return;
+        var propia = g.classList.contains('mm-opciones');
+        var t = document.createElement('p');
+        t.className = 'crear-menu-titulo';
+        t.textContent = propia ? 'Mi música · gratis' : 'Estilos IA · US$ 0,02 la primera vez por estilo y duración';
+        caja.appendChild(t);
+        var lista = document.createElement('div');
+        lista.className = propia ? 'crear-opciones' : 'crear-fichas';
+        Array.prototype.forEach.call(opciones, function (o) {
+          lista.appendChild(boton(o.value, (propia ? '▶ ' : '') + o.textContent, propia ? 'crear-opcion-simple' : 'crear-ficha'));
+        });
+        caja.appendChild(lista);
+      });
+    }
+    comp.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-musica]');
+      if (!b) return;
+      musicaSel.value = b.dataset.musica;
+      musicaSel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // Cada pastilla dice lo elegido.
+    function recortar(t, n) { return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+    function pill(id, texto, aviso) {
+      var b = document.getElementById(id);
+      if (!b) return;
+      b.textContent = texto;
+      b.classList.toggle('con-aviso', !!aviso);
+    }
+    function pintarPastillas() {
+      var esImagen = tipoActual() === 'imagen';
+      var m = modeloActual();
+      var cal = document.getElementById('fp-calidad');
+      pill('fp-pill-tipo', esImagen ? '🖼 Imagen' : '🎬 Video');
+      pill('fp-pill-modelo', m ? m.dataset.nombre + (!esImagen && cal && cal.checked ? ' · borrador' : '') : 'Modelo');
+      pill('fp-pill-duracion', '⏱ ' + duracion.value + ' s', parseInt(duracion.value, 10) > 15);
+      var selFormato = esImagen ? formatoImagen : formatoVideo;
+      pill('fp-pill-formato', (!esImagen && formatoVideo.disabled) ? '▯ Formato de la imagen' : '▯ ' + selFormato.value);
+      var cs = document.getElementById('fp-con-sonido');
+      var desc = document.getElementById('fp-sonido').value.trim();
+      pill('fp-pill-sonido', !cs.checked ? '🔇 Sin sonido' : '🔊 ' + (desc ? recortar(desc, 22) : 'Sonido'));
+      var o = musicaSel.selectedOptions[0];
+      pill('fp-pill-musica', '🎵 ' + (!musicaSel.value ? 'Sin música' : recortar(o ? o.textContent : musicaSel.value, 22)));
+    }
+
+    // Menús de las pastillas: uno abierto a la vez; se cierran con clic fuera,
+    // con Escape o al elegir en los de una sola opción. En el celular suben
+    // como hoja desde abajo (CSS) y #crear-velo oscurece el fondo.
+    function cerrarMenus() {
+      comp.querySelectorAll('.crear-menu').forEach(function (mn) { mn.hidden = true; });
+      comp.querySelectorAll('[data-menu]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+      document.body.classList.remove('crear-menu-abierto');
+    }
+    comp.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-menu]');
+      if (!b) return;
+      var menu = document.getElementById(b.dataset.menu);
+      var abrir = menu.hidden;
+      cerrarMenus();
+      if (!abrir) return;
+      menu.hidden = false;
+      b.setAttribute('aria-expanded', 'true');
+      document.body.classList.add('crear-menu-abierto');
+    });
+    document.addEventListener('click', function (e) {
+      // Un clic que redibujó su propio menú (p. ej. elegir música) deja el
+      // target fuera del DOM: eso no es un clic fuera.
+      if (!e.target.isConnected || e.target.closest('.crear-pill-zona')) return;
+      cerrarMenus();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrarMenus(); });
+    form.addEventListener('change', function (e) {
+      if (e.target.name === 'tipo' || e.target.name === 'modelo_video' || e.target.name === 'modelo_imagen') cerrarMenus();
+    });
+
+    // «+»: pegar link y catálogo.
+    document.getElementById('fp-abrir-link').addEventListener('click', function () {
+      var caja = document.getElementById('fp-link-caja');
+      caja.hidden = !caja.hidden;
+      if (!caja.hidden) caja.querySelector('input').focus();
+    });
+    var dlgCatalogo = document.getElementById('fp-catalogo');
+    var catElegidos = document.getElementById('fp-catalogo-elegidos');
+    document.getElementById('fp-abrir-catalogo').addEventListener('click', function () {
+      cerrarMenus();
+      dlgCatalogo.showModal();
+    });
+    var presionEnFondo = false;
+    dlgCatalogo.addEventListener('mousedown', function (e) { presionEnFondo = e.target === dlgCatalogo; });
+    dlgCatalogo.addEventListener('click', function (e) {
+      if (e.target.closest('[data-cerrar-catalogo]') || (e.target === dlgCatalogo && presionEnFondo)) dlgCatalogo.close();
+      presionEnFondo = false;
+    });
+    dlgCatalogo.addEventListener('close', function () { pintarCatalogo(); refrescar(); });
+    // Lo marcado en el catálogo se ve en la tarjeta como las referencias
+    // subidas; la × lo desmarca.
+    function pintarCatalogo() {
+      var marcados = form.querySelectorAll('input[name=productos_catalogo]:checked');
+      catElegidos.innerHTML = '';
+      marcados.forEach(function (cb) {
+        var fig = document.createElement('figure');
+        fig.className = 'crear-ref';
+        var foto = cb.parentElement.querySelector('img');
+        var img = document.createElement('img');
+        img.src = foto ? foto.src : ''; img.alt = '';
+        var cap = document.createElement('figcaption');
+        cap.textContent = cb.dataset.nombre;
+        var x = document.createElement('button');
+        x.type = 'button'; x.className = 'crear-ref-quitar'; x.textContent = '×';
+        x.setAttribute('aria-label', 'Quitar ' + cb.dataset.nombre);
+        x.addEventListener('click', function () {
+          cb.checked = false;
+          cb.dispatchEvent(new Event('change', { bubbles: true }));
+          pintarCatalogo();
+        });
+        fig.appendChild(img); fig.appendChild(cap); fig.appendChild(x);
+        catElegidos.appendChild(fig);
+      });
+      catElegidos.hidden = !marcados.length;
+    }
+    pintarCatalogo();
     refrescar();
 
     // Chips @Imagen N / @Video N de la bandeja: insertan la etiqueta en el texto.
@@ -845,7 +1011,7 @@
                                      body: JSON.stringify({escena: texto.value, enfoque: enfoque})})
         .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, j: j}; }); })
         .then(function (res) {
-          if (res.ok && res.j.sonido) document.getElementById('fp-sonido').value = res.j.sonido;
+          if (res.ok && res.j.sonido) { document.getElementById('fp-sonido').value = res.j.sonido; pintarPastillas(); }
           else alert(res.j.error || 'No se pudo sugerir.');
         })
         .catch(function () { alert('No se pudo sugerir.'); })
@@ -877,13 +1043,13 @@
     function aplicar(d) {
       if (d.html !== undefined) { wrap.innerHTML = d.html; engancharBandeja(); refrescar(); }
       if (d.etiquetas) pintarChips(d.etiquetas);
-      if (d.error) { subidaTexto.textContent = d.error; subida.style.display = 'block'; subidaBarra.style.width = '0%'; }
+      if (d.error) { subidaTexto.textContent = d.error; subida.hidden = false; subidaBarra.style.width = '0%'; }
       vigilarLink();
     }
     function enviar(url, body) {
       return fetch(url, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.json(); }).then(aplicar)
-        .catch(function () { subidaTexto.textContent = 'Se perdió la conexión; recarga la página.'; subida.style.display = 'block'; });
+        .catch(function () { subidaTexto.textContent = 'Se perdió la conexión; recarga la página.'; subida.hidden = false; });
     }
     function engancharBandeja() {
       wrap.querySelectorAll('form[data-fp]').forEach(function (f) {
@@ -912,11 +1078,12 @@
     var formSubir = document.getElementById('fp-form-subir');
     inputArchivos.addEventListener('change', function () {
       if (!inputArchivos.files.length) return;
+      cerrarMenus();
       var fd = new FormData(formSubir);
       var xhr = new XMLHttpRequest();
       xhr.open('POST', formSubir.action);
       xhr.setRequestHeader('X-Requested-With', 'fetch');
-      subida.style.display = 'block'; subidaBarra.style.width = '0%';
+      subida.hidden = false; subidaBarra.style.width = '0%';
       subidaTexto.textContent = 'Subiendo ' + inputArchivos.files.length + ' archivo(s)… 0%';
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable) return;
@@ -925,18 +1092,41 @@
         subidaTexto.textContent = pct < 100 ? 'Subiendo… ' + pct + '%' : 'Procesando (fotogramas y almacenamiento)…';
       };
       xhr.onload = function () {
-        try { var d = JSON.parse(xhr.responseText); aplicar(d); subida.style.display = d.error ? 'block' : 'none'; }
+        try { var d = JSON.parse(xhr.responseText); aplicar(d); subida.hidden = !d.error; }
         catch (e) { subidaTexto.textContent = 'Error al subir; recarga la página.'; }
         inputArchivos.value = '';
       };
       xhr.onerror = function () { subidaTexto.textContent = 'Error de red al subir.'; };
       xhr.send(fd);
     });
+    // Arrastrar archivos sobre la tarjeta = «Subir imágenes o videos».
+    function traeArchivos(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1; }
+    ['dragenter', 'dragover'].forEach(function (t) {
+      comp.addEventListener(t, function (e) {
+        if (!traeArchivos(e)) return;
+        e.preventDefault();
+        comp.classList.add('soltando');
+      });
+    });
+    comp.addEventListener('dragleave', function (e) {
+      if (!comp.contains(e.relatedTarget)) comp.classList.remove('soltando');
+    });
+    comp.addEventListener('drop', function (e) {
+      comp.classList.remove('soltando');
+      if (!traeArchivos(e) || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      inputArchivos.files = e.dataTransfer.files;
+      inputArchivos.dispatchEvent(new Event('change'));
+    });
+    // El campo del link vive en el menú «+» pero su dueño es #fp-form-link
+    // (atributo form=): se lee por form.elements, no por querySelector.
     var formLink = document.getElementById('fp-form-link');
     formLink.addEventListener('submit', function (e) {
       e.preventDefault();
       var fd = new FormData(formLink);
-      formLink.querySelector('input[name=link]').value = '';
+      formLink.elements.link.value = '';
+      document.getElementById('fp-link-caja').hidden = true;
+      cerrarMenus();
       enviar(formLink.action, fd);
     });
 

@@ -77,3 +77,11 @@ def test_cambiar_producto_sigue_con_su_desplegable(app):
     crear = _crear(_html(app))
     assert '<details class="comparacion-modelos selector-productos" id="sel-clone"' in crear
     assert '<div class="selector-productos selector-en-dialogo" id="sel-plus"' in crear
+
+
+def test_el_script_maneja_menus_fichas_y_pastillas(app):
+    html = _html(app)
+    for pieza in ("function cerrarMenus()", "function pintarFichas()", "function pintarMusica()",
+                  "function pintarPastillas()", "function pintarCatalogo()", "e.dataTransfer.files"):
+        assert pieza in html, pieza
+    assert "bloqueVideo" not in html          # los bloques viejos se reemplazan por [data-solo-video]
