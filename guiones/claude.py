@@ -8,7 +8,10 @@ import logging
 import re
 from uuid import uuid4
 
+from flask_babel import gettext
+
 import gastos
+import idiomas
 from nicho.avatares import costo_real, modelo_actual
 
 log = logging.getLogger(__name__)
@@ -22,6 +25,8 @@ class RespuestaFallida(RuntimeError):
 
 
 def llamar(system, messages, max_tokens=8000, timeout=150):
+    """(texto, tokens_entrada, tokens_salida). El mensaje de una `RespuestaFallida`
+    sale en el idioma forzado por el llamador (`pedir_json`, vía `idiomas.en_idioma`)."""
     import anthropic
     from generador_prompts import MODEL, _api_key
     api = anthropic.Anthropic(api_key=_api_key(), timeout=timeout, max_retries=0)
@@ -30,8 +35,9 @@ def llamar(system, messages, max_tokens=8000, timeout=150):
     entrada = int(getattr(uso, "input_tokens", 0) or 0)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason in ("refusal", "max_tokens"):
-        e = RespuestaFallida("Claude no quiso responder esa solicitud." if resp.stop_reason == "refusal"
-                             else "La respuesta de Claude salió incompleta. Intenta con un guion más corto.")
+        mensaje = (gettext("Claude no quiso responder esa solicitud.") if resp.stop_reason == "refusal"
+                  else gettext("La respuesta de Claude salió incompleta. Intenta con un guion más corto."))
+        e = RespuestaFallida(mensaje)
         e.tokens_entrada, e.tokens_salida = entrada, salida
         raise e
     return "".join(b.text for b in resp.content if b.type == "text").strip(), entrada, salida
@@ -70,20 +76,25 @@ def _registrar(cliente, paso, ref_id, entrada, salida, detalle):
 
 def pedir_json(cliente, paso, ref_id, system, messages, detalle, llamar_fn=None, max_tokens=8000, timeout=150):
     """(data | None, usd, error | None). Nunca lanza: corre en un hilo, y lo
-    que se pagó queda registrado aunque la respuesta no sirva."""
+    que se pagó queda registrado aunque la respuesta no sirva. Los mensajes de
+    error que llegan a la persona se arman en el idioma del proyecto
+    (`idiomas.en_idioma`, que funciona con o sin petición ni app activa: este
+    paso corre en el hilo del worker, nunca dentro de una petición)."""
     fn = llamar_fn or llamar
-    try:
-        texto, ent, sal = fn(system, messages, max_tokens, timeout)
-    except Exception as e:  # noqa: BLE001 — ver docstring
-        ent, sal = int(getattr(e, "tokens_entrada", 0) or 0), int(getattr(e, "tokens_salida", 0) or 0)
-        usd = _registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · sin respuesta útil") if (ent or sal) else 0.0
-        log.warning("guiones: Claude falló en %s %s (%s)", paso, ref_id, type(e).__name__)
-        if isinstance(e, RespuestaFallida):
-            return None, usd, str(e)
-        return None, usd, f"No se pudo consultar a Claude ({type(e).__name__}). Vuelve a intentarlo."
-    try:
-        data = parsear_json(texto)
-    except ValueError:
-        usd = _registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · respuesta inválida")
-        return None, usd, "Claude no respondió en el formato esperado. Vuelve a intentarlo."
-    return data, _registrar(cliente, paso, ref_id, ent, sal, detalle), None
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        try:
+            texto, ent, sal = fn(system, messages, max_tokens, timeout)
+        except Exception as e:  # noqa: BLE001 — ver docstring
+            ent, sal = int(getattr(e, "tokens_entrada", 0) or 0), int(getattr(e, "tokens_salida", 0) or 0)
+            usd = _registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · sin respuesta útil") if (ent or sal) else 0.0
+            log.warning("guiones: Claude falló en %s %s (%s)", paso, ref_id, type(e).__name__)
+            if isinstance(e, RespuestaFallida):
+                return None, usd, str(e)
+            return None, usd, gettext("No se pudo consultar a Claude (%(tipo)s). Vuelve a intentarlo.",
+                                      tipo=type(e).__name__)
+        try:
+            data = parsear_json(texto)
+        except ValueError:
+            usd = _registrar(cliente, paso, ref_id, ent, sal, f"{detalle} · respuesta inválida")
+            return None, usd, gettext("Claude no respondió en el formato esperado. Vuelve a intentarlo.")
+        return data, _registrar(cliente, paso, ref_id, ent, sal, detalle), None

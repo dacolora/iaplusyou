@@ -261,6 +261,9 @@ msgstr "When connecting, choose that Page: its page token (<code>page_id</code>)
 msgid "Al volver, la tienda queda conectada y se sincroniza sola cada 6 h."
 msgstr "When you come back, the store is connected and syncs on its own every 6 h."
 
+msgid "Alguien cambió este prompt; recarga."
+msgstr "Someone changed this prompt; reload the page."
+
 msgid "Alguien recibe la compra y abre la caja o bolsa hasta descubrir el producto, con la emoción de estrenarlo."
 msgstr "Someone receives their purchase and opens the box or bag until they discover the product, with the thrill of trying it for the first time."
 
@@ -410,6 +413,18 @@ msgstr "Chile"
 
 msgid "Cinco minutos. No creas nada en Meta."
 msgstr "Five minutes. You don't create anything on Meta."
+
+msgid "Claude no quiso responder esa solicitud."
+msgstr "Claude wouldn't answer that request."
+
+msgid "Claude no respondió en el formato esperado. Vuelve a enviar tu mensaje."
+msgstr "Claude didn't answer in the expected format. Send your message again."
+
+msgid "Claude no respondió en el formato esperado. Vuelve a intentarlo."
+msgstr "Claude didn't answer in the expected format. Try again."
+
+msgid "Claude todavía está respondiendo tu mensaje anterior."
+msgstr "Claude is still answering your previous message."
 
 msgid "Clave secreta de la app"
 msgstr "App secret"
@@ -772,6 +787,13 @@ msgstr "Access was revoked or expired"
 msgid "El acceso no caduca."
 msgstr "Access doesn't expire."
 
+#, python-format
+msgid "El clip %(n)s dura %(segundos)s s; cada clip debe durar entre %(minimo)s y %(maximo)s segundos."
+msgstr "Clip %(n)s lasts %(segundos)s s; every clip has to last between %(minimo)s and %(maximo)s seconds."
+
+msgid "El clip final tiene que terminar con HARD CUT sobre un cuadro sostenido."
+msgstr "The final clip has to end with a HARD CUT on a held frame."
+
 msgid "El correo no es válido."
 msgstr "The email isn't valid."
 
@@ -795,8 +817,27 @@ msgstr ""
 "  <code>@Logo N</code> with the instruction to reproduce it exactly — that way the model doesn't invent brands or letters.\n"
 "  Upload 1 or 2 (PNG with a clean background, or a sharp photo of the logo on the product)."
 
+#, python-format
+msgid "El mensaje es demasiado largo (máximo %(maximo)s caracteres)."
+msgstr "The message is too long (maximum %(maximo)s characters)."
+
 msgid "El producto solo, sin nadie: vacío, sin usar, sobre la superficie o flotando."
 msgstr "The product alone, with nobody: empty, unused, on the surface or floating."
+
+msgid "El prompt es demasiado largo."
+msgstr "The prompt is too long."
+
+msgid "El prompt está vacío."
+msgstr "The prompt is empty."
+
+msgid "El prompt no cumple las reglas; corrígelo antes de guardarlo."
+msgstr "The prompt doesn't meet the rules; fix it before saving."
+
+msgid "El prompt no puede quedar vacío."
+msgstr "The prompt can't be empty."
+
+msgid "El prompt rompe reglas que no se negocian; corrígelo antes de aprobarlo."
+msgstr "The prompt breaks non-negotiable rules; fix it before approving."
 
 msgid "El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta."
 msgstr "The server doesn't have email configured; let the administrator know so they can confirm your account."
@@ -975,6 +1016,9 @@ msgstr "That page is only for the administrator."
 msgid "Esa tienda no existe."
 msgstr "That store doesn't exist."
 
+msgid "Esa versión rompe reglas que no se negocian; pídele a Claude que la corrija."
+msgstr "That version breaks non-negotiable rules; ask Claude to fix it."
+
 msgid "Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva. Vence en 1 hora."
 msgstr "Enter your account's email and we'll send you a link to choose a new one. It expires in 1 hour."
 
@@ -983,6 +1027,9 @@ msgstr "Write your business portfolio's id (numbers only)."
 
 msgid "Escribe los 5 prompts por idea y los guiones de las finales."
 msgstr "Writes the 5 prompts per idea and the scripts for the finals."
+
+msgid "Escribe qué quieres cambiar."
+msgstr "Write what you want to change."
 
 msgid "Escribe qué tiene que pasar"
 msgstr "Describe what should happen"
@@ -1008,8 +1055,14 @@ msgstr "That verification link doesn't work: it was already used or it expired. 
 msgid "Ese enlace ya se usó o pasó su hora. Pide uno nuevo y ábrelo antes de una hora."
 msgstr "That link was already used or its time passed. Request a new one and open it within an hour."
 
+msgid "Ese mensaje no trae una versión para usar."
+msgstr "That message doesn't carry a version to use."
+
 msgid "Ese nombre no genera un identificador de proyecto válido."
 msgstr "That name doesn't produce a valid project identifier."
+
+msgid "Ese prompt no existe."
+msgstr "That prompt doesn't exist."
 
 msgid "Ese tipo de tienda no se conecta desde aquí (Shopify o WooCommerce; MercadoLibre va por su botón)."
 msgstr "That store type doesn't connect from here (Shopify or WooCommerce; MercadoLibre has its own button)."
@@ -1019,6 +1072,9 @@ msgstr "That's already your email and it's confirmed."
 
 msgid "España"
 msgstr "Spain"
+
+msgid "Espera a que Claude termine de responder antes de aprobar."
+msgstr "Wait for Claude to finish answering before approving."
 
 msgid "Espera un momento antes de pedir otro correo de verificación."
 msgstr "Wait a moment before requesting another verification email."
@@ -1035,6 +1091,12 @@ msgstr "This month"
 #, python-format
 msgid "Este mes: %(gasto)s"
 msgstr "This month: %(gasto)s"
+
+msgid "Este prompt está aprobado. Reábrelo para cambiarlo."
+msgstr "This prompt is approved. Reopen it to change it."
+
+msgid "Este prompt ya está aprobado. Reábrelo para seguir corrigiendo."
+msgstr "This prompt is already approved. Reopen it to keep correcting it."
 
 msgid "Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el panel; pídele a él cualquier cambio."
 msgstr "Creatv manages this project on Meta (agency mode): it doesn't register an app or connect anything here. The admin assigns the ad account and the Page from the panel; ask them for any change."
@@ -1075,6 +1137,13 @@ msgstr "%(vars)s still need to be set in the server's .env (developers.mercadoli
 
 msgid "Falta el id de tu portafolio o la cuenta publicitaria."
 msgstr "Missing your portfolio's id or the ad account."
+
+#, python-format
+msgid "Falta el texto fijo «%(fragmento)s»: tiene que ir tal cual."
+msgstr "Missing the fixed text “%(fragmento)s”: it has to stay exactly as is."
+
+msgid "Falta la versión del prompt."
+msgstr "Missing the prompt's version."
 
 msgid "Falta token_tiktok.json (autoriza desde tu Mac con auth/auth_tiktok.py)"
 msgstr "Missing token_tiktok.json (authorize from your Mac with auth/auth_tiktok.py)"
@@ -1382,6 +1451,12 @@ msgstr "The ad account doesn't have any Pixel."
 msgid "La pauta se cobra en tu cuenta publicitaria; la API no cuesta."
 msgstr "Ad spend is charged to your ad account; the API itself is free."
 
+msgid "La respuesta de Claude salió incompleta. Intenta con un guion más corto."
+msgstr "Claude's answer came back incomplete. Try a shorter script."
+
+msgid "La respuesta de Claude salió incompleta. Pide un cambio más acotado."
+msgstr "Claude's answer came back incomplete. Ask for a smaller change."
+
 msgid "Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue."
 msgstr "Other sessions open with the previous password are closed; this one stays open."
 
@@ -1647,8 +1722,19 @@ msgstr "Couldn't read your assets: %(error)s"
 msgid "No se pudo completar el trabajo."
 msgstr "The task couldn't be completed."
 
+msgid "No se pudo completar la respuesta. Vuelve a enviar tu mensaje."
+msgstr "Couldn't finish the answer. Send your message again."
+
 msgid "No se pudo comprobar"
 msgstr "Couldn't check"
+
+#, python-format
+msgid "No se pudo consultar a Claude (%(tipo)s). Vuelve a enviar tu mensaje."
+msgstr "Couldn't reach Claude (%(tipo)s). Send your message again."
+
+#, python-format
+msgid "No se pudo consultar a Claude (%(tipo)s). Vuelve a intentarlo."
+msgstr "Couldn't reach Claude (%(tipo)s). Try again."
 
 msgid "No se puede recuperar la llave (descifrado falló)"
 msgstr "Can't retrieve the key (decryption failed)"
@@ -1776,6 +1862,10 @@ msgstr "Development period"
 
 msgid "Perú"
 msgstr "Peru"
+
+#, python-format
+msgid "Pide un fundido a negro («%(frase)s»); ningún clip puede terminar en negro."
+msgstr "It asks for a fade to black (“%(frase)s”); no clip can end in black."
 
 msgid "Piezas"
 msgstr "Pieces"
