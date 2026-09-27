@@ -65,6 +65,10 @@ def test_la_linea_de_comandos_lee_el_env_raiz(monkeypatch, tmp_path):
     import sembrar_edicion_demo as s
     (tmp_path / ".env").write_text("PLATAFORMA_URL=https://app.creatvmachine.com\n")
     monkeypatch.setattr(s, "BASE", str(tmp_path))
-    monkeypatch.delenv("PLATAFORMA_URL", raising=False)
+    # setenv antes de delenv: así monkeypatch recuerda el valor original y, al
+    # terminar, deshace lo que load_dotenv escribe en os.environ (si no, la
+    # URL de producción quedaba puesta para el resto de la corrida).
+    monkeypatch.setenv("PLATAFORMA_URL", "")
+    monkeypatch.delenv("PLATAFORMA_URL")
     monkeypatch.setattr(s, "sembrar", lambda *a, **k: pytest.fail("no debía sembrar"))
     assert s.main(["--cliente", "acme"]) == 1
