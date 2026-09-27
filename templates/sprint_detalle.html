@@ -96,7 +96,7 @@
 <div class="tablero-fondo" id="tablero-fondo" hidden></div>
 <aside class="tablero-panel" id="tablero-panel" hidden aria-label="Campaña"
        data-url-base="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id) }}"
-       data-panel-inicial="{{ panel_inicial or '' }}">
+       data-panel-inicial="{{ panel_inicial or '' }}" data-paso-inicial="{{ paso_inicial }}">
   <div id="tablero-panel-cuerpo"></div>
 </aside>
 
@@ -163,10 +163,27 @@
     function limpiarSucio(raiz) {
       raiz.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
     }
-    function marcarUrl(cid) {
+    var pasoActual = null;
+    function marcarUrl(cid, paso) {
       var u = new URL(location.href);
       if (cid) u.searchParams.set('panel', cid); else u.searchParams.delete('panel');
+      if (cid && paso) u.searchParams.set('paso', paso); else u.searchParams.delete('paso');
       history.replaceState(null, '', u);
+    }
+    // Pestañas del panel (entrega 2): todas vienen en el fragmento; aquí solo se
+    // muestra una, se recuerda en la URL y se avisa con `tablero:paso` (la
+    // pestaña Piezas arranca o para su actualización automática con eso).
+    function irAPaso(paso) {
+      var r = cuerpo.querySelector('.panel-campana[data-cid]');
+      if (!r) return;
+      cuerpo.querySelectorAll('[data-pestana]').forEach(function (s) { s.hidden = s.dataset.pestana !== paso; });
+      cuerpo.querySelectorAll('[data-ir-paso]').forEach(function (b) {
+        if (b.getAttribute('role') === 'tab') b.setAttribute('aria-selected', b.dataset.irPaso === paso ? 'true' : 'false');
+      });
+      panel.classList.toggle('panel-ancho', paso === 'piezas');
+      pasoActual = paso;
+      marcarUrl(r.dataset.cid, paso);
+      document.dispatchEvent(new CustomEvent('tablero:paso', {detail: {paso: paso}}));
     }
     function marcarActiva(cid) {
       grid.querySelectorAll('.tablero-tarjeta.activa').forEach(function (t) { t.classList.remove('activa'); });
@@ -186,6 +203,9 @@
       panel.hidden = true; fondo.hidden = true; cuerpo.innerHTML = '';
       document.body.classList.remove('panel-abierto'); marcarUrl(null); marcarActiva(null);
       panelActualCid = null;
+      pasoActual = null;
+      panel.classList.remove('panel-ancho');
+      document.dispatchEvent(new CustomEvent('tablero:cerrado'));
     }
     function noExiste() {
       panelActualCid = null;
@@ -200,14 +220,15 @@
           if (html && t) { t.outerHTML = html; marcarActiva(cid); }
         }).catch(function () {});
     }
-    function abrir(cid) {
-      mostrar(); marcarUrl(cid); marcarActiva(cid);
+    function abrir(cid, paso) {
       var mismo = panelActualCid === cid;
+      if (!paso && mismo) paso = pasoActual;
+      mostrar(); marcarUrl(cid, paso); marcarActiva(cid);
       var scroll = mismo ? panel.scrollTop : 0;
       if (!mismo) cuerpo.innerHTML = '<p class="vacio">Cargando la campaña…</p>';
       panelActualCid = cid;
       var miPeticion = ++peticionPanel;
-      return fetch(base + '/campanas/' + cid + '/panel', {headers: H})
+      return fetch(base + '/campanas/' + cid + '/panel' + (paso ? '?paso=' + encodeURIComponent(paso) : ''), {headers: H})
         .then(function (r) {
           if (r.status === 404) { if (miPeticion === peticionPanel) noExiste(); return null; }
           if (!r.ok) throw new Error();
@@ -216,6 +237,8 @@
         .then(function (html) {
           if (html === null || miPeticion !== peticionPanel) return;
           cuerpo.innerHTML = html;
+          var r = cuerpo.querySelector('.panel-campana[data-cid]');
+          if (r) irAPaso(r.dataset.paso);
           if (mismo) panel.scrollTop = scroll;
           if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo();
         })
@@ -228,12 +251,16 @@
       mostrar(); marcarUrl(null); marcarActiva(null);
       cuerpo.innerHTML = document.getElementById('tablero-nueva').innerHTML;
       panelActualCid = null;
+      pasoActual = null; panel.classList.remove('panel-ancho');
       peticionPanel++;    // cualquier `abrir` todavía en vuelo queda obsoleta
     }
     window.tablero = {abrir: abrir, abrirNueva: abrirNueva, cerrar: cerrar, refrescarTarjeta: refrescarTarjeta,
-                      json: json, mensaje: mensaje, cuerpo: cuerpo, panel: panel, base: base};
+                      json: json, mensaje: mensaje, cuerpo: cuerpo, panel: panel, base: base,
+                      irAPaso: irAPaso, paso: function () { return pasoActual; }};
 
     document.addEventListener('click', function (ev) {
+      var pestana = ev.target.closest('[data-ir-paso]');
+      if (pestana && panel.contains(pestana)) { irAPaso(pestana.dataset.irPaso); return; }
       if (ev.target.closest('[data-nueva-campana]')) { abrirNueva(); return; }
       if (ev.target.closest('[data-panel-cerrar]')) { cerrar(); return; }
       var t = ev.target.closest('.tablero-tarjeta[data-cid]');
@@ -325,7 +352,7 @@
       }, 10000);
     }
 
-    if (panel.dataset.panelInicial) abrir(panel.dataset.panelInicial);
+    if (panel.dataset.panelInicial) abrir(panel.dataset.panelInicial, panel.dataset.pasoInicial || null);
   })();
 </script>
 <script>
@@ -405,6 +432,8 @@
     panel.addEventListener('change', function (ev) {
       var t = ev.target;
       if (!raiz() || t.closest('form')) return;
+      var cajaDescribir = t.closest('[data-describir]');
+      if (cajaDescribir) { guardarDescripcion(cajaDescribir); return; }
       if (t.matches('[data-agregar-familia]')) {
         var v = t.value.trim();
         if (!v) return;
@@ -429,9 +458,35 @@
       T.refrescarTarjeta(cid);
       return T.abrir(cid);
     }
+    // Describir un referente subido («Falta describir ✎») sin salir del panel
+    // (entrega 2): intención + descripción van a `sprints.referencia_editar`;
+    // cuando queda «lista», la tarjeta y el panel se actualizan.
+    function guardarDescripcion(caja) {
+      var err = caja.querySelector('.campo-error');
+      err.hidden = true;
+      var cuerpoJson = {descripcion: caja.querySelector('[data-descripcion]').value,
+                        intencion: Array.prototype.map.call(caja.querySelectorAll('[data-intencion]:checked'),
+                                                            function (x) { return x.value; })};
+      fetch(caja.dataset.url, {method: 'POST', headers: HJ, body: JSON.stringify(cuerpoJson)})
+        .then(T.json)
+        .then(function (j) {
+          caja.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
+          if (j.estado === 'lista') { var cid = raiz().dataset.cid; T.refrescarTarjeta(cid); return T.abrir(cid, 'armar'); }
+        })
+        .catch(function (e) { err.textContent = T.mensaje(e); err.hidden = false; });
+    }
     panel.addEventListener('click', function (ev) {
       if (!raiz()) return;
       var b;
+      var abreDescribir = ev.target.closest('[data-abrir-describir]');
+      if (abreDescribir) {
+        var cajaD = cuerpo.querySelector('[data-describir="' + abreDescribir.dataset.abrirDescribir + '"]');
+        if (cajaD) {
+          cajaD.hidden = !cajaD.hidden;
+          if (!cajaD.hidden) cajaD.querySelector('[data-descripcion]').focus();
+        }
+        return;
+      }
       if ((b = ev.target.closest('[data-quitar-familia]'))) {
         var f = b.closest('[data-familia]').dataset.familia;
         guardar(cajaFamilias(), familias().filter(function (x) { return x !== f; }));

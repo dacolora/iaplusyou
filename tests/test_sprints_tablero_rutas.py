@@ -250,7 +250,7 @@ def test_panel_muestra_referencias_viejas_sin_frame(app):
     cid = _campana(datos, sid)
     datos.agregar_referencia("acme", cid, "imagen", "https://r2/vieja.png", frame_url=None, titulo="vieja.png")
     html = app["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel").data.decode()
-    assert 'src="https://r2/vieja.png"' in html and "falta describir" in html
+    assert 'src="https://r2/vieja.png"' in html and "Falta describir" in html
 
 
 def test_guardar_un_campo_de_la_campana(app):

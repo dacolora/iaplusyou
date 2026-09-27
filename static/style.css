@@ -2289,3 +2289,18 @@ body.panel-abierto { overflow: hidden; }
   display: inline; padding: 0;
 }
 .tablero-tarjeta .vacio { padding: 0; }
+/* Entrega 2 (2026-09-27): pestañas del panel y describir referentes */
+.panel-pestanas { display: flex; gap: .4rem; flex-wrap: wrap; margin: .8rem 0 .2rem; }
+.panel-pestana { border: 1px solid var(--border); background: var(--panel); color: var(--text); border-radius: 999px;
+  padding: .25rem .8rem; font: inherit; font-size: .9rem; cursor: pointer; min-height: 0; }
+.panel-pestana span { color: var(--muted); margin-left: .2rem; }
+.panel-pestana[aria-selected="true"] { background: var(--accent-grad); color: #fff; border-color: transparent; }
+.panel-pestana[aria-selected="true"] span { color: #fff; }
+.tablero-panel.panel-ancho { width: min(960px, 100%); }
+.panel-describir { display: grid; gap: .5rem; padding: .6rem; border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+.panel-describir[hidden] { display: none; }
+.panel-describir-cab { display: flex; gap: .5rem; align-items: center; }
+.panel-describir-cab img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; }
+.enlace-describir { background: none; border: 0; padding: 0; min-height: 0; font: inherit; font-size: .7rem;
+  color: var(--accent-texto); cursor: pointer; }
+.panel-sofisticacion { margin: 0; font-size: .85rem; }

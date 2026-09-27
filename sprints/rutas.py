@@ -407,6 +407,8 @@ def campana_panel(cliente, sid, cid):
                                                     consciencia=referentes_sugerir.consciencia_en(c.get("consciencia")))
     job = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
     pais_sprint = fe_tipos.PAISES.get(sp.get("pais") or "") or {}
+    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
+    sof = (fila_producto.get("extra") or {}).get("sofisticacion")
     return render_template(
         "_sprint_panel.html", cliente=cliente, sprint=sp, c=c, personas=personas_, productos=productos,
         consciencias=doctrina.CONSCIENCIAS_NOMBRE, funnels=datos.FUNNELS_NOMBRE,
@@ -417,7 +419,9 @@ def campana_panel(cliente, sid, cid):
         marcas_texto=tablero.marcas_texto(c.get("marcas")), candidatos_ia=candidatos_ia,
         trabajo_sugerir_ia={"job_id": job} if trabajos.en_curso(job) else None,
         precio_sugerir_ia=gastos.estimar("sugerir_ia"), aviso=_aviso_identica(cliente, cid),
-        enlaces=_enlaces(cliente, sp, c))
+        enlaces=_enlaces(cliente, sp, c),
+        paso=tablero.resolver_paso(request.args.get("paso"), c), pestanas=tablero.pestanas(c),
+        sof_producto=sof if sof in doctrina.SOFISTICACIONES else None, intenciones=datos.INTENCIONES_NOMBRE)
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/sugeridos")
@@ -605,6 +609,7 @@ def ver(cliente, sid):
                            momento_valor=momento.get("clave") or ("propio" if momento else ""),
                            marcas_texto=tablero.marcas_texto(sp.get("marcas")),
                            panel_inicial=request.args.get("panel", type=int),
+                           paso_inicial=request.args.get("paso") if request.args.get("paso") in tablero.PASOS else "",
                            lote=produccion.progreso(cliente, sid)["sprint"], **_contexto_lote(cliente))
 
 
