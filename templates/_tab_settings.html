@@ -410,7 +410,7 @@
   <figure style="margin:0;text-align:center;">
     <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:var(--fondo-logo);">
     <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
-    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm({{ _('¿Quitar este logo?')|tojson }});">
+    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit='return confirm({{ _("¿Quitar este logo?")|tojson }});'>
       <button type="submit" class="btn-rechazar btn-sm">{{ _('Quitar') }}</button>
     </form>
   </figure>

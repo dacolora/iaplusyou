@@ -2,6 +2,9 @@
 real: atrapa también los textos que vienen de Python (flash, nombres de
 constantes, tarjetas de llaves). Cada tarea que traduce una pantalla agrega su
 test aquí."""
+import json
+import re
+
 import pytest
 
 import idiomas
@@ -148,3 +151,44 @@ def test_bloqueo_cambio_forma_en_ingles_y_espanol_intacto(app_i18n, monkeypatch)
     with idiomas.en_idioma("en"):
         en_singular = app_i18n._bloqueo_cambio_forma("acme")
     assert en_singular == "Finish or close first: 1 live experiment"
+
+
+_ONSUBMIT_FORM_LOGO = re.compile(
+    r'<form[^>]*action="[^"]*logos/[^"]*eliminar[^"]*"[^>]*onsubmit=([\'"])(.*?)\1', re.S)
+
+
+def test_logo_quitar_onsubmit_bien_formado(app_i18n, tmp_path):
+    """Regresión (task-6 fix round 1): `onsubmit="return confirm({{ ... |
+    tojson }});"` con el atributo entre comillas dobles se rompe — tojson
+    emite comillas dobles, que cierran el atributo a la mitad y el manejador
+    nunca compila (ni el confirm sale, en ningún idioma). Con un logo
+    presente, comprueba que el atributo va entre comillas simples y que
+    adentro hay un `confirm("...")` con un string JSON válido, en español Y
+    en inglés.
+
+    OJO: `_tab_catalogo.html` tiene un panel «logo» DUPLICADO (mismo
+    `eliminar_logo`, mismo `nombre`) con un `onsubmit` hardcodeado en español
+    sin `tojson` — no forma parte de este bug (no usa tojson) y cliente.html
+    renderiza las dos pestañas en la misma página, así que el texto sale dos
+    veces; por eso se acota la búsqueda al recorte de `config-ap-marca`
+    (Configuración › Marca), que es la única instancia que toca esta task."""
+    carpeta = tmp_path / "clientes" / "acme" / "logos"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    (carpeta / "logo1.png").write_bytes(b"fake-png")
+
+    for idioma in ("es", "en"):
+        idiomas.guardar_de_usuario("admin", idioma)
+        c = app_i18n.app.test_client()
+        with c.session_transaction() as s:
+            s["usuario"] = "admin"
+            s["rol"] = "admin"
+            s["cliente"] = None
+        html = html_de(c, "/cliente/acme")
+        recorte = html[html.index('id="config-ap-marca"'):html.index('id="config-ap-generacion"')]
+        m = _ONSUBMIT_FORM_LOGO.search(recorte)
+        assert m, f"[{idioma}] no encontré el <form> de Quitar logo con onsubmit en Configuración > Marca"
+        comillas, contenido = m.group(1), m.group(2)
+        assert comillas == "'", f"[{idioma}] el atributo onsubmit debe ir con comillas simples: {contenido!r}"
+        cm = re.fullmatch(r"return confirm\((\".*\")\);", contenido, re.S)
+        assert cm, f"[{idioma}] onsubmit mal formado (falta confirm(...); dentro del mismo atributo): {contenido!r}"
+        json.loads(cm.group(1))  # el argumento de confirm() tiene que ser un string JSON válido
