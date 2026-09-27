@@ -54,6 +54,31 @@ def test_ejecutar_video_guarda_resultado(base_temporal, monkeypatch, tmp_path):
     assert (tmp_path / "salidas" / "acme" / f"{cid}.mp4").read_bytes() == b"00"
 
 
+def test_ejecutar_video_invalida_la_revision_de_la_doctrina_anterior(base_temporal, monkeypatch, tmp_path):
+    """Bloque 3, revisión final (I5): un video nuevo en la misma sesión (por
+    ejemplo, «Generar de nuevo») deja obsoleta la revisión y el error de la
+    doctrina del video anterior."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], ["Rose"], [], "camina", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="video", modelo="wan3", prompt_relleno="P", aspect_ratio="9:16",
+                  revision_doctrina={"video_url": "https://r2/vieja.mp4", "puntos": []},
+                  revision_doctrina_error={"error": "x", "video_url": "https://r2/vieja.mp4"})
+
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_video", lambda *a, **k: "https://prov/v.mp4")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_video", lambda m, d, con_sonido=True, calidad="final": {"credits": None, "usd": 0.5})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_video", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+    monkeypatch.setattr(fp.estado_mod, "cargar", lambda c: {})
+    monkeypatch.setattr(fp.estado_mod, "guardar", lambda c, d: None)
+
+    fp.ejecutar_video({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "acme__cf__creative_flow"})
+    e = cf.cargar("acme")[cid]
+    assert e["revision_doctrina"] is None and e["revision_doctrina_error"] is None
+
+
 def test_ejecutar_video_marca_error(base_temporal, monkeypatch, tmp_path):
     import creative_flow as cf
     import tareas.flowplus as fp
@@ -112,6 +137,26 @@ def test_ejecutar_imagen_guarda_resultado(base_temporal, monkeypatch, tmp_path):
     assert e["usd"] == 0.1 and "lista" in msg
     assert llamadas == {"modelo": "seedream_v5_pro", "refs": ["https://x/1.png"], "aspect_ratio": None}
     assert (tmp_path / "salidas" / "acme" / "flowplus" / f"{cid}.png").exists()
+
+
+def test_ejecutar_imagen_invalida_la_revision_de_la_doctrina_anterior(base_temporal, monkeypatch, tmp_path):
+    """Bloque 3, revisión final (I5): mismo caso que el video, para imágenes."""
+    import creative_flow as cf
+    import tareas.flowplus as fp
+    monkeypatch.setattr(fp, "BASE_DIR", str(tmp_path))
+    cid = cf.crear("acme", [], [], [], "posa", 5, "", "A", referencias_urls=["https://x/1.png"])
+    cf.actualizar("acme", cid, estado="video_generando", tipo="imagen", modelo="seedream_v5_pro", prompt_relleno="P",
+                  revision_doctrina={"video_url": "https://r2/vieja.png", "puntos": []},
+                  revision_doctrina_error={"error": "x", "video_url": "https://r2/vieja.png"})
+    monkeypatch.setattr(fp.flowplus_modelos, "generar_imagen", lambda *a, **k: "https://prov/i.png")
+    monkeypatch.setattr(fp.flowplus_modelos, "estimate_imagen", lambda m, n_referencias=1: {"credits": 2, "usd": 0.1})
+    monkeypatch.setattr(fp.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setattr(fp.r2_uploader, "upload_image", lambda local, key: "https://r2/" + key)
+    monkeypatch.setattr(fp.bitacora, "registrar", lambda *a, **k: None)
+
+    fp.ejecutar_imagen({"payload": {"cliente": "acme", "cf_id": cid}, "job_id": "j"})
+    e = cf.cargar("acme")[cid]
+    assert e["revision_doctrina"] is None and e["revision_doctrina_error"] is None
 
 
 def test_video_wan3_quita_fotograma_del_video_de_referencia(base_temporal, monkeypatch, tmp_path):
