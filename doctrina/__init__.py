@@ -432,13 +432,15 @@ def resumen_angulo(angulo):
 
 
 def globales_plantilla():
-    """Lo que las plantillas del bloque 2 necesitan (selectores de persona y
-    producto, editor del ángulo). `dashboard` lo registra en Jinja; las
-    pruebas que renderizan plantillas sueltas hacen lo mismo."""
+    """Lo que las plantillas de los bloques 2 y 3 necesitan (selectores de
+    persona y producto, editor del ángulo, revisión de la pieza). `dashboard`
+    lo registra en Jinja; las pruebas que renderizan plantillas sueltas hacen
+    lo mismo."""
+    from doctrina import revisor  # tarde: revisor importa este módulo
     return {"CONSCIENCIAS_CLIENTE": CONSCIENCIAS_CLIENTE, "SOFISTICACIONES_CLIENTE": SOFISTICACIONES_CLIENTE,
             "FUENTES_PRUEBA_CLIENTE": FUENTES_PRUEBA_CLIENTE, "LEADS_NOMBRE": LEADS_NOMBRE,
             "PREFIJO_ERROR": PREFIJO_ERROR, "lead_por_consciencia": lead_por_consciencia,
-            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error}
+            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error, "PUNTOS_REVISION": revisor.PUNTO}
 
 
 def datos_fijos_texto(consciencia=None, sofisticacion=None):

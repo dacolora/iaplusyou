@@ -60,6 +60,7 @@ from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
 import doctrina
+from doctrina import revisor as doctrina_revisor
 import flowplus_lanzar
 import cola
 import db
@@ -2559,6 +2560,21 @@ def _creative_flow_items(cliente):
         item["guion_base"] = None
         item["finales"] = []
         item["trabajo_guion"] = None
+        # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
+        # Las reglas son gratis y se calculan al renderizar; la revisión de
+        # Claude es la guardada. Sin ninguna de las dos, la sección no pesa.
+        item["revision"], item["revision_estado"], item["reglas"], item["trabajo_revision"] = None, None, [], None
+        if entry.get("estado") == "video_listo" and entry.get("video_url"):
+            item["revision"] = entry.get("revision_doctrina")
+            item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
+            item["revision_n"] = doctrina_revisor.contar(item["revision"])
+            try:
+                item["reglas"] = doctrina_revisor.reglas(doctrina_revisor.reunir(cliente, cf_id, entry=entry))
+            except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
+                item["reglas"] = []
+            jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
+            item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
+            item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
         if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
             item["guion_base"] = creative_flow.guion_base(cliente, cf_id)
             jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
@@ -5743,6 +5759,20 @@ def cf_angulo(cliente, cf_id):
                                                       previo.get("faltantes"), ahora=db.ahora())
     creative_flow.actualizar(cliente, cf_id, angulo=limpio)
     return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/revisar", methods=["POST"])
+def cf_revisar(cliente, cf_id):
+    """Doctrina, bloque 3: encola «Revisar con la doctrina» de una pieza
+    terminada (pagada: el precio va en el botón; un clic repetido no lanza
+    dos porque el `job_id` es determinista). Solo informa, nunca bloquea."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry or entry.get("estado") != "video_listo" or not entry.get("video_url"):
+        flash("Solo se puede revisar una pieza terminada.", "error")
+        return _volver_crear(cliente)
+    tareas_doctrina.encolar_revisar(cliente, cf_id)
+    flash("Revisando la pieza con la doctrina: la página se recarga sola cuando esté lista.", "ok")
+    return _volver_crear(cliente)
 
 
 def _sesion_con_video(cliente, cf_id):

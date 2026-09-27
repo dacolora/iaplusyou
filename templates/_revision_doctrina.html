@@ -1,0 +1,54 @@
+{# Revisión de la doctrina (bloque 3): en el detalle de toda pieza terminada
+   de Crear. «Revisión rápida» = reglas gratis (item.reglas, calculadas al
+   renderizar); debajo, la revisión de Claude guardada (item.revision) y el
+   botón con precio. Solo informa: nada de esto bloquea ni reescribe. Vive
+   dentro del <template> del detalle, así que no lleva <script>: la barra del
+   trabajo en curso va en la tarjeta. #}
+{% macro revision_doctrina(item, cliente) %}
+{% set doctrina_url = url_for('doctrina_pagina', cliente=cliente) %}
+{% set rev = item.revision if item.revision is mapping else {} %}
+{% set est = item.revision_estado or 'sin_revisar' %}
+<section class="fe-seccion revision-doctrina">
+  <h4 class="fe-titulo">Revisión de la doctrina</h4>
+  <p class="vacio" style="padding:0;font-size:.76rem;">Antes de lanzarla: lo que ven las reglas (gratis) y, si la pides, la revisión de Claude con los 12 puntos de <a href="{{ doctrina_url }}#revisar" target="_blank" rel="noopener">la lista</a>. Solo informa: no bloquea nada.</p>
+  <div class="revision-rapida">
+    <span class="campo-label">Revisión rápida (gratis)</span>
+    {% if item.reglas %}
+    <ul class="revision-avisos">
+      {% for a in item.reglas %}<li>{{ a.texto }} <small class="vacio">({{ a.donde }})</small> <a href="{{ doctrina_url }}#{{ PUNTOS_REVISION[a.n].rebanada }}" target="_blank" rel="noopener">¿Por qué?</a></li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="vacio" style="padding:0;">Las reglas no encontraron nada.</p>
+    {% endif %}
+  </div>
+  {% if est == 'vieja' %}
+  <p class="vacio revision-vieja" style="padding:0;">La revisión guardada es de una versión anterior de esta pieza.</p>
+  {% elif est == 'error' %}
+  <p class="tag-error">La última revisión no se pudo terminar: {{ rev.error }}</p>
+  {% elif est in ('bien', 'mejorar') %}
+  <div class="revision-claude">
+    <span class="campo-label">Revisión con Claude</span>
+    {% if rev.resumen %}<p style="margin:.2rem 0;">{{ rev.resumen }}</p>{% endif %}
+    {% set mejorar = (rev.puntos or []) | selectattr('estado', 'equalto', 'mejorar') | list %}
+    {% set pasa = (rev.puntos or []) | selectattr('estado', 'equalto', 'pasa') | list %}
+    {% set no_aplica = (rev.puntos or []) | selectattr('estado', 'equalto', 'no_aplica') | list %}
+    {% if mejorar %}
+    <ul class="revision-mejorar">
+      {% for p in mejorar %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo }}</strong>: {{ p.detalle }}{% if p.donde %} <small class="vacio">({{ p.donde }})</small>{% endif %} <a href="{{ doctrina_url }}#{{ PUNTOS_REVISION[p.n].rebanada }}" target="_blank" rel="noopener">¿Por qué?</a></li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="vacio" style="padding:0;">Claude no encontró nada para mejorar.</p>
+    {% endif %}
+    {% if pasa %}<details><summary class="vacio">Pasa ({{ pasa | length }})</summary><ul>{% for p in pasa %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo }}</strong>{% if p.detalle %}: {{ p.detalle }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+    {% if no_aplica %}<details><summary class="vacio">No aplica ({{ no_aplica | length }})</summary><ul>{% for p in no_aplica %}<li><strong>{{ PUNTOS_REVISION[p.n].titulo }}</strong>{% if p.detalle %}: {{ p.detalle }}{% endif %}</li>{% endfor %}</ul></details>{% endif %}
+  </div>
+  {% endif %}
+  {% if item.trabajo_revision %}
+  <p class="vacio" style="padding:0;">Revisando la pieza… la página se recarga sola cuando esté lista.</p>
+  {% else %}
+  <form method="post" action="{{ url_for('cf_revisar', cliente=cliente, cf_id=item.id) }}" class="inline">
+    <button type="submit" class="btn-sm">{{ 'Revisar con la doctrina' if est == 'sin_revisar' else 'Revisar de nuevo' }} ({{ item.precio_revision }})</button>
+  </form>
+  {% endif %}
+</section>
+{% endmacro %}
