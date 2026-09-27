@@ -319,7 +319,15 @@ def ejecutar_qa_pieza(tarea):
         bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado", "QA descartado: la pieza fue regenerada")
         return "QA descartado: la pieza fue regenerada mientras se evaluaba."
     if revision:
-        creative_flow.actualizar(cliente, cf_id, revision_doctrina=revision)
+        # Bloque 3, revisión final (I4): el QA ya se pagó y ya se guardó
+        # arriba (`datos.guardar_qa`); este segundo guardado, en la sesión de
+        # Crear, es informativo — que falle no debe tumbar la tarea (la cola
+        # reintentaría y cobraría de nuevo un QA que ya se hizo). Queda
+        # rastro en la bitácora.
+        try:
+            creative_flow.actualizar(cliente, cf_id, revision_doctrina=revision)
+        except Exception as e:  # noqa: BLE001
+            bitacora.registrar(cliente, cf_id, "sprint_qa", "doctrina_no_guardada", str(e)[:200])
     datos.registrar_evento(cliente, i["sprint_id"], "qa_evaluada",
                            f"QA de «{i['titulo']}»: {resultado['veredicto']} ({resultado['score']})",
                            {"cp_id": cp_id, "score": resultado["score"], "veredicto": resultado["veredicto"]},

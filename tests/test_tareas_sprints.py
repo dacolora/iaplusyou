@@ -195,6 +195,55 @@ def test_qa_pieza_registra_el_gasto_y_guarda_la_doctrina_en_la_sesion(base_tempo
     assert g["referencia"] == f"qa:{cp}:t31:i2" and "respuesta inválida" in g["detalle"]
 
 
+def test_qa_pieza_no_revienta_si_falla_guardar_la_doctrina(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I4): si guardar `revision_doctrina` en la
+    sesión revienta, el QA (ya pagado y guardado) no debe reintentarse por
+    eso — solo queda rastro en la bitácora."""
+    import bitacora
+    import creative_flow
+    import gastos
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    rev = {"video_url": "https://r2/v.mp4", "puntos": [], "resumen": "ok", "reglas": [], "origen": "sprint"}
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {
+        "score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x",
+        "tokens_entrada": 1500, "tokens_salida": 400, "doctrina": dict(rev)})
+    original = creative_flow.actualizar
+
+    def falla_solo_doctrina(cliente, cf_id, **campos):
+        if "revision_doctrina" in campos:
+            raise RuntimeError("db caída")
+        return original(cliente, cf_id, **campos)
+    monkeypatch.setattr(creative_flow, "actualizar", falla_solo_doctrina)
+    tareas.cargar_todas()
+    msg = tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 1, "payload": {"cliente": "acme", "cp_id": cp}})
+    assert "pasa" in msg
+    assert datos.idea("acme", cp)["qa"]["veredicto"] == "pasa"          # el QA sí se guardó
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["tipo"] == "revision"                                      # el gasto sí se registró
+    filas = bitacora.leer(cliente="acme", brief_id=cf)
+    assert any(f["etapa"] == "sprint_qa" and f["estado"] == "doctrina_no_guardada" for f in filas)
+
+
+def test_qa_sin_doctrina_no_toca_una_revision_existente(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I9): con `doctrina=None` (el QA solo, sin
+    revisión útil) la sesión conserva la revisión que ya tenía — por ejemplo,
+    una hecha con el botón de Crear."""
+    import creative_flow
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    previa = {"video_url": "https://r2/v.mp4", "puntos": [], "resumen": "de antes", "reglas": [], "origen": "boton"}
+    creative_flow.actualizar("acme", cf, revision_doctrina=previa)
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {
+        "score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x",
+        "tokens_entrada": 0, "tokens_salida": 0, "doctrina": None})
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert creative_flow.cargar("acme")[cf]["revision_doctrina"] == previa
+
+
 def test_qa_pieza_error_no_se_reencola_y_un_intento_bueno_pisa_el_marcador(base_temporal, monkeypatch):
     """F5: con el marcador `veredicto=error` la periódica ya no encola otro
     QA para esa pieza (antes lo hacía cada 5 min, descargando el video otra
