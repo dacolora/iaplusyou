@@ -10,6 +10,10 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md` (§B4, §B5 «Nicho», §B6, §B7, §B8, §B9, fase 5, §Pruebas, §Despliegue «Fase 5 trae la migración 0021»).
 
+**Notas del controlador (2026-09-27, mandan sobre el texto de abajo):**
+- **Migración:** `origin/main` ya trae una 0021 (tablero de Sprints). Antes de la Task 2, fusionar `origin/main` en la rama y usar el **siguiente número libre** (hoy `0022`, `down_revision` = el id real de esa 0021: `ls migrations/versions/`). Donde este plan dice «0021» / «revises 0020», léase ese número y esa revisión (nombre de archivo, `Revision ID`, `down_revision`, el test `test_migracion_…`, el despliegue).
+- **`referentes/recrear.armar_prompt`** (determinista, sin Claude) arma el prompt de video/imagen de «Recrear con mi producto» todo en español (incluida su línea `SONIDO`): entra en la **Task 1** igual que `flowplus_prompt` en la fase 3 — textos fijos por idioma (`es` idéntico al de hoy) y `idioma=` desde `idiomas.de_proyecto(cliente)` en su ruta; el texto de la persona y los datos del referente no se traducen. Test en `tests/test_referentes_idioma.py`: con `idioma="en"` el prompt no trae español fijo; con `"es"` es idéntico al de antes (comparar contra literales de los tests existentes de `recrear`).
+
 **Inventario de apoyo:** `.superpowers/sdd/inventario-fases-4-6.md` (FASE 5). Líneas de `sprints/rutas.py` verificadas al escribir este plan: `ver` l.364, `campana_ver` l.473, `referencias_ajax` l.650, `ideas_ajax` l.661, `revision_ajax` l.677, `campana_ideas` l.766, `revision` l.995, `entrega_ver` ~l.1091, `temporada_adoptar` l.240; `nicho/rutas.py`: `contexto` l.105, `crear` l.113, `ver` l.126, `editar` l.155; `referentes/rutas.py`: `grid` l.58, `traer` l.106, `recrear_form` l.155, `ficha` l.279, `barridos` l.317, `usar_en_sprint` l.363. La última migración del repo es `0020_campana_temporada_opcional.py`: la de esta fase es la **0021**.
 
 ## Global Constraints
