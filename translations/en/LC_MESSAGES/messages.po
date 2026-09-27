@@ -2105,6 +2105,9 @@ msgstr "It is identical to the current prompt."
 msgid "Es la MISMA persona/personaje en todas las tomas: misma cara, mismos rasgos, mismo pelo, misma complexión y la misma ropa y accesorios que en las referencias. No cambies edad, género, piel ni estilo. Manos y pies anatómicamente correctos."
 msgstr "It is the SAME person/character in every shot: same face, same features, same hair, same build and the same clothes and accessories as in the references. Do not change age, gender, skin or style. Anatomically correct hands and feet."
 
+msgid "Es la única foto del producto. Si quieres quitarla, sube otra primero o elimina el producto completo."
+msgstr "It's the product's only photo. If you want to remove it, upload another one first or delete the whole product."
+
 msgid "Esa Página no aparece entre las de tu portafolio; vuelve a buscar."
 msgstr "That Page doesn't show up among your portfolio's; search again."
 
@@ -2906,6 +2909,10 @@ msgstr "Reference image"
 msgid "Imagen de referencia para %(version)s del guion «%(titulo)s»."
 msgstr "Reference image for %(version)s of the script «%(titulo)s»."
 
+#, python-format
+msgid "Imagen eliminada: %(nombre)s"
+msgstr "Image deleted: %(nombre)s"
+
 msgid "Imagen generada"
 msgstr "Generated image"
 
@@ -3569,6 +3576,9 @@ msgstr "You didn't pick a file."
 #, python-format
 msgid "No encontré el producto %(id)s"
 msgstr "I couldn't find product %(id)s"
+
+msgid "No encontré esa imagen."
+msgstr "I couldn't find that image."
 
 msgid "No encontré esa pieza."
 msgstr "I couldn't find that piece."
@@ -5939,9 +5949,6 @@ msgstr "it has no edit mode (verified on WaveSpeed, Sep 1, 2026), so it's not pa
 
 msgid "no trae clips"
 msgstr "has no clips"
-
-msgid "nombre"
-msgstr "name"
 
 msgid "nombre, precio, moneda, url_compra, fotos (varias con |), descripcion, categoria, sku"
 msgstr "nombre, precio, moneda, url_compra, fotos (multiple with |), descripcion, categoria, sku"

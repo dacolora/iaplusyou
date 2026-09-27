@@ -307,3 +307,15 @@ def test_catalogo_cliente_en_ingles(cliente_en):
 def test_flash_de_producto_en_ingles(admin_en):
     admin_en.post("/cliente/acme/productos/crear", data={"nombre": ""}, headers=MISMO_ORIGEN)
     assert "Give it a name." in html_de(admin_en, "/cliente/acme")
+
+
+def test_flash_eliminar_imagen_inexistente_en_ingles(admin_en):
+    """Fix round 1: catalogo_productos.eliminar_imagen() flasheaba sus 3
+    mensajes en español crudo (nunca por gettext); una foto que no existe es
+    el caso más simple de disparar uno de ellos desde la ruta. El apóstrofo de
+    "couldn't" sale escapado como entidad HTML (autoescape de Jinja en el
+    `{{ message }}` de base.html), como ya se compara en otros tests
+    (tests/test_rutas_productos.py con "Cojín d&#39;Or")."""
+    admin_en.post("/cliente/acme/productos/cualquier-id/imagenes/no-existe.jpg/eliminar",
+                  data={"categoria": "producto"}, headers=MISMO_ORIGEN)
+    assert "I couldn&#39;t find that image." in html_de(admin_en, "/cliente/acme")

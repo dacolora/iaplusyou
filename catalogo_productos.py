@@ -286,8 +286,12 @@ def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATE
     producto_id = producto_id or id_desde_nombre(nombre)
     carpeta = carpeta_de(cliente, producto_id, categoria)
     if os.path.isdir(carpeta):
+        # nombre_categoria por variable local: gettext(CATEGORIAS[categoria]["nombre"])
+        # directo hace que el extractor de Babel, al no ver un string literal,
+        # grabe por error un msgid "nombre" (la clave del subscript).
+        nombre_categoria = CATEGORIAS[categoria]["nombre"]
         raise ValueError(gettext("Ya existe un %(tipo)s con ese nombre (%(id)s).",
-                                 tipo=gettext(CATEGORIAS[categoria]["nombre"]).lower(), id=producto_id))
+                                 tipo=gettext(nombre_categoria).lower(), id=producto_id))
     os.makedirs(carpeta, exist_ok=True)
 
     def _poner(meta):
@@ -350,10 +354,10 @@ def eliminar_imagen(cliente, producto_id, nombre_archivo, categoria=CATEGORIA_PO
     seguro = os.path.basename(nombre_archivo)
     ruta = os.path.join(carpeta, seguro)
     if not os.path.isfile(ruta):
-        return False, "No encontré esa imagen."
+        return False, gettext("No encontré esa imagen.")
     restantes = [f for f in os.listdir(carpeta) if f.lower().endswith(IMAGE_EXTS) and f != seguro]
     if not restantes:
-        return False, ("Es la única foto del producto. Si quieres quitarla, sube otra primero "
-                       "o elimina el producto completo.")
+        return False, gettext("Es la única foto del producto. Si quieres quitarla, sube otra primero "
+                              "o elimina el producto completo.")
     os.remove(ruta)
-    return True, f"Imagen eliminada: {seguro}"
+    return True, gettext("Imagen eliminada: %(nombre)s", nombre=seguro)
