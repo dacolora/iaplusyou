@@ -1,0 +1,67 @@
+"""sprints.tablero: funciones puras de las tarjetas y la cabecera del tablero."""
+from datetime import date
+
+from sprints import tablero
+
+
+def _c(**kw):
+    base = {"referencias_objetivo": 5, "referencias_listas": 5, "n_videos": 1, "n_imagenes": 1, "ideas": [], "piezas": []}
+    base.update(kw)
+    return base
+
+
+def _idea(estado_idea="aprobada", sin_sesion=False, estado=None, revision="pendiente"):
+    return {"estado_idea": estado_idea, "sin_sesion": sin_sesion, "estado": estado, "revision": revision}
+
+
+def test_siguiente_paso_sigue_el_orden_del_trabajo():
+    assert tablero.siguiente_paso(_c(referencias_listas=3)) == {"clave": "referentes", "texto": "elegir 2 referentes"}
+    assert tablero.siguiente_paso(_c(referencias_listas=4))["texto"] == "elegir 1 referente"
+    assert tablero.siguiente_paso(_c())["clave"] == "ideas"
+    propuestas = [_idea("propuesta", True), _idea("propuesta", True)]
+    assert tablero.siguiente_paso(_c(ideas=propuestas))["texto"] == "aprobar 2 ideas"
+    aprobadas = [_idea(sin_sesion=True), _idea(sin_sesion=True)]
+    assert tablero.siguiente_paso(_c(ideas=aprobadas))["texto"] == "generar 2 piezas"
+    en_curso = [_idea(estado="generando"), _idea(estado="listo")]
+    assert tablero.siguiente_paso(_c(ideas=en_curso, piezas=en_curso))["clave"] == "generando"
+    con_error = [_idea(estado="error"), _idea(estado="listo", revision="aprobada")]
+    assert tablero.siguiente_paso(_c(ideas=con_error, piezas=con_error))["clave"] == "errores"
+    listas = [_idea(estado="listo"), _idea(estado="degradada", revision="aprobada")]
+    assert tablero.siguiente_paso(_c(ideas=listas, piezas=listas))["texto"] == "revisar 1 pieza"
+    hechas = [_idea(estado="listo", revision="aprobada"), _idea(estado="listo", revision="rechazada")]
+    assert tablero.siguiente_paso(_c(ideas=hechas, piezas=hechas)) == {"clave": "lista", "texto": "campaña lista"}
+
+
+def test_las_descartadas_no_cuentan():
+    ideas = [_idea("descartada", True), _idea("aprobada", True)]
+    assert tablero.siguiente_paso(_c(n_videos=1, n_imagenes=0, ideas=ideas))["texto"] == "generar 1 pieza"
+
+
+def test_sugerencias_dolor_salen_de_la_persona():
+    p = {"resumen": "Comodidad al llegar", "senales_visuales": ["pisos helados", "sofá", "tercera"],
+         "extra": {"encaje_producto": "Abriga sin sudar", "evidencia": [{"cita": "mis pies son hielo"}, {"cita": "x"}]}}
+    assert tablero.sugerencias_dolor(p) == ["Comodidad al llegar", "Abriga sin sudar", "pisos helados", "sofá"]
+    assert tablero.sugerencias_dolor(None) == [] and tablero.sugerencias_dolor({"nombre": "X"}) == []
+
+
+def test_mes_siguiente():
+    assert tablero.mes_siguiente(date(2026, 9, 26)) == ("2026-10-01", "2026-10-31")
+    assert tablero.mes_siguiente(date(2026, 12, 3)) == ("2027-01-01", "2027-01-31")
+    assert tablero.mes_siguiente(date(2027, 1, 30)) == ("2027-02-01", "2027-02-28")
+
+
+def test_resumen_y_linea_del_sprint():
+    sp = {"inicio": "2026-10-01", "fin": "2026-10-31", "pais": "CO", "idioma": "es",
+          "momento": {"nombre": "Hot Sale"}, "marcas": [{"nombre": "Crocs"}, {"nombre": "Hoka", "pagina_id": "555555"}],
+          "campanas": [_c(referencias_listas=3, n_videos=5, n_imagenes=5), _c(referencias_listas=7, n_videos=3, n_imagenes=0)]}
+    assert tablero.resumen(sp) == "2 campañas · 13 piezas planeadas · 8/10 referentes elegidos"
+    assert tablero.resumen({"campanas": []}) == "0 campañas · 0 piezas planeadas · 0/0 referentes elegidos"
+    paises = {"CO": {"nombre": "Colombia", "bandera": "🇨🇴"}}
+    assert tablero.linea_sprint(sp, paises) == "1–31 oct · 🇨🇴 español · Hot Sale · imita: Crocs, Hoka"
+    otro = {"inicio": "2026-10-20", "fin": "2026-11-10", "pais": None, "idioma": "en", "momento": None, "marcas": []}
+    assert tablero.linea_sprint(otro, paises) == "20 oct – 10 nov · inglés"
+
+
+def test_marcas_texto():
+    assert tablero.marcas_texto([{"nombre": "Crocs"}, {"nombre": "Hoka", "pagina_id": "555555"}]) == "Crocs\nHoka 555555"
+    assert tablero.marcas_texto(None) == ""

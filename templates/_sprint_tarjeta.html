@@ -1,0 +1,21 @@
+{# Tarjeta de una campaña en el tablero (sprint_detalle.html). Contexto: cliente,
+   sprint y c ya pasado por rutas._campana_tablero (progreso, siguiente,
+   efectivos, producto, referencias_lista, consciencia_nombre). La tarjeta
+   entera abre el panel (JS de sprint_detalle.html). #}
+{% set objetivo = c.referencias_objetivo or 1 %}
+{% set mini = c.referencias_lista[:objetivo] %}
+<article class="tablero-tarjeta" id="campana-{{ c.id }}" data-cid="{{ c.id }}" tabindex="0" role="button"
+         aria-label="Abrir la campaña {{ c.orden + 1 }}">
+  <div class="tablero-tarjeta-cab">
+    <span class="chip-etapa">{{ (c.funnel or 'tof') | upper }}</span>
+    <small class="vacio">Campaña {{ c.orden + 1 }}</small>
+  </div>
+  <p class="tablero-tarjeta-quien"><strong>{{ c.persona_nombre }}</strong> · {{ c.producto.nombre if c.producto else c.catalogo_id }}</p>
+  <p class="tablero-tarjeta-enfoque vacio">{{ c.consciencia_nombre or "consciencia sin definir" }}{% if c.dolor %} · «{{ c.dolor }}»{% endif %}</p>
+  <div class="tablero-miniaturas" aria-hidden="true">
+    {% for r in mini %}<img src="{{ r.frame_url or r.url }}" alt="" loading="lazy">{% endfor %}
+    {% for _ in range(objetivo - (mini | length)) %}<span class="tablero-miniatura-vacia"></span>{% endfor %}
+  </div>
+  <p class="tablero-tarjeta-cantidades">{{ c.referencias_listas }}/{{ c.referencias_objetivo }} referentes · {{ c.n_videos }} videos · {{ c.n_imagenes }} imágenes</p>
+  <p class="tablero-siguiente">Siguiente: {{ c.siguiente.texto }} →</p>
+</article>

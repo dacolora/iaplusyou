@@ -27,12 +27,12 @@ def test_campana_sin_temporada_se_crea_y_se_lista(base_temporal):
     assert [x["id"] for x in datos.sprint("acme", sid)["campanas"]] == [cid]
 
 
-def test_campana_sin_temporada_no_se_repite(base_temporal):
+def test_campana_sin_temporada_puede_repetirse(base_temporal):
     from sprints import datos
     pid, sid = _sprint(datos)
     datos.agregar_campana("acme", sid, pid, "espejo_led", None, 2, 1)
-    with pytest.raises(datos.CampanaDuplicada):
-        datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0)
+    otra = datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0)
+    assert datos.campanas_identicas("acme", otra) == [1]
 
 
 def test_crear_sprint_en_un_proyecto_sin_temporadas(app):
@@ -47,15 +47,12 @@ def test_crear_sprint_en_un_proyecto_sin_temporadas(app):
     assert sp and sp[0]["campanas_total"] == 1 and sp[0]["estado"] == "planeando"
 
 
-def test_pagina_del_sprint_muestra_sin_temporada_y_no_la_exige(app):
+def test_tablero_con_campana_sin_temporada(app):
     from sprints import datos
     pid, sid = _sprint(datos)
     datos.agregar_campana("acme", sid, pid, "espejo_led", None, 2, 1)
     html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
-    assert "sin temporada" in html and ">None<" not in html
-    select = html[html.index('<select name="temporada_id"'):]
-    select = select[:select.index(">")]
-    assert "required" not in select
+    assert "Campaña 1" in html and ">None<" not in html and 'name="temporada_id"' not in html
 
 
 def test_migracion_deja_la_temporada_opcional(tmp_path, monkeypatch):
@@ -69,7 +66,7 @@ def test_migracion_deja_la_temporada_opcional(tmp_path, monkeypatch):
     insp = sa.inspect(db.engine())
     col = next(c for c in insp.get_columns("campana") if c["name"] == "temporada_id")
     assert col["nullable"] is True
-    # Recrear la tabla (batch) no puede perder la restricción ni las llaves foráneas.
-    assert "uq_campana_combinacion" in {u["name"] for u in insp.get_unique_constraints("campana")}
+    # Recrear la tabla (batch) no puede perder las llaves foráneas; la unicidad se quitó en 0021.
+    assert "uq_campana_combinacion" not in {u["name"] for u in insp.get_unique_constraints("campana")}
     assert {"sprint", "persona", "temporada"} <= {f["referred_table"] for f in insp.get_foreign_keys("campana")}
     db._reset_para_tests()

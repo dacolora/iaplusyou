@@ -170,10 +170,20 @@ to be repeated per idea. `analizar_marca()` uses Claude's vision input on upload
 brand reference images to auto-write that guía de estilo.
 
 **Sprints de contenido** (`sprints/` + `tareas/sprints.py`, spec
-`docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan
-as a matrix persona × producto × temporada. Tables `persona`, `temporada`,
-`sprint`, `campana` (UNIQUE `uq_campana_combinacion` on sprint + persona +
-catalogo_id + temporada), `referencia` (intención tags + descripción; a reference
+`docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan.
+Since 2026-09-26 it is a **board** (spec `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`):
+«+ Nuevo sprint» is a short form (month, país/idioma, optional «momento del mes» from
+`sprints.calendario.presets(pais)` — the tab renders every country's presets with `data-pais` — or
+free text, brands to imitate) and the sprint page (`sprint_detalle.html`) is a board with one card
+per campaign (`_sprint_tarjeta.html`, «Siguiente: …» from the pure `sprints/tablero.py`) plus a side
+panel (`_sprint_panel.html`, fetched; all its JS lives in `sprint_detalle.html` because scripts in
+fetched fragments never run) that saves field by field (`sprints.campana_campo` /
+`sprints.sprint_campo`, JSON `{campo, valor}`; `?panel=<cid>` reopens it). Tables `persona`,
+`temporada`, `sprint` (`pais`, `idioma`, `marcas`, `momento` since 0021), `campana` (`consciencia`,
+`dolor`, `familias`, and `pais`/`idioma`/`marcas` that override the sprint's — NULL inherits, read
+through `sprints.datos.efectivos`; no uniqueness since 0021: TOF/MOF/BOF of the same persona and
+product are allowed and `campanas_identicas` only warns; the three generic personas are no longer
+auto-created), `referencia` (intención tags + descripción; a reference
 without descripción is `borrador` and does not count toward progress),
 `campana_pieza` (Parte 2) and `sprint_evento`. `sprints/datos.py` is the only
 writer; `sprints/estado.py::recalcular` re-derives campaign/sprint states after
@@ -183,7 +193,7 @@ is pure. Routes live in the Blueprint `sprints/rutas.py`
 adds `sprints_rutas.contexto(cliente)` to the project page. Uploading a
 reference enqueues `sprint_analizar_referencia` (Claude vision, cents); "Sugerir
 personas" enqueues `sprint_sugerir_personas`; a pasted link goes through
-`sprint_referencia_link` (yt-dlp via `referencias_link.descargar`). A reference can also come straight from the referentes library (`origen='biblioteca'`, pre-analyzed, no `sprint_analizar_referencia`): `sprints.datos.agregar_referencia_biblioteca` (deduped per campaign), the Referentes grid's `?campana=` selection mode, `referentes/sugerir.py` (deterministic + optional Claude pick, task `referentes_sugerir_ia`, tariff `sugerir_ia`), and 'Usar en sprint' from a referente's ficha. Parte 2 (producción): `sprints/ideas.py` asks Claude for ideas per campaign
+`sprint_referencia_link` (yt-dlp via `referencias_link.descargar`). A reference can also come straight from the referentes library (`origen='biblioteca'`, pre-analyzed, no `sprint_analizar_referencia`): `sprints.datos.agregar_referencia_biblioteca` (deduped per campaign), the Referentes grid's `?campana=` selection mode, `referentes/sugerir.py` (deterministic + optional Claude pick, task `referentes_sugerir_ia`, tariff `sugerir_ia`), and 'Usar en sprint' from a referente's ficha. The panel's free suggestions come from `referentes.sugerir.sugerir_campana` (filters etapa + consciencia + familias, loosens familias then consciencia and says so, ranks brands to imitate → campaign language → variantes × días); «Sugerir con IA» sees the same candidates (`candidatos_aflojando`) plus dolor, marcas and the momento, and `sprints/ideas.py` passes enfoque, mercado, marcas and the momento (or the old temporada) to the idea prompt. Parte 2 (producción): `sprints/ideas.py` asks Claude for ideas per campaign
 (prompt maestro: persona + producto + temporada + reference analyses + brand
 guide + banco de prompts) stored as `campana_pieza` rows; "Generar lote"
 (`sprints/produccion.py`) shows the estimated cost first, then creates one

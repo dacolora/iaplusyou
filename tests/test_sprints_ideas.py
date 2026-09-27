@@ -292,3 +292,29 @@ def test_proponer_una_correccion_con_menos_ideas_no_reemplaza_a_la_primera(base_
     video, imagen = (datos.idea("acme", i) for i in creadas)
     assert video["titulo"] == IDEA_V["titulo"] and imagen["titulo"] == IDEA_I["titulo"]
     assert "error: mecanismo_obligatorio" in video["extra"]["angulo"]["faltantes"]
+
+
+def test_armar_prompt_lleva_enfoque_mercado_marcas_y_momento(base_temporal, monkeypatch):
+    from referentes import datos as rdatos
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    rdatos.familia_asegurar("Antes y después", "Muestra el cambio en dos cuadros")
+    datos.actualizar_sprint("acme", sid, pais="US", idioma="en", marcas="Crocs", momento="Hot Sale")
+    datos.actualizar_campana("acme", cid, consciencia="consciente_del_problema", dolor="pies fríos",
+                             familias=["Antes y después"])
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    p = ideas.armar_prompt(ctx, 1, 1)
+    for frag in ("consciente del problema", "pies fríos", "Antes y después", "Muestra el cambio en dos cuadros",
+                 "Estados Unidos", "inglés", "Crocs", "Hot Sale"):
+        assert frag in p, frag
+    assert "Navidad" not in p                        # el momento del sprint gana a la temporada vieja
+    assert "inglés" in ideas.instrucciones(ctx) and "Todo en español." not in ideas.instrucciones(ctx)
+
+
+def test_sin_momento_sigue_la_temporada_y_sin_enfoque_lo_dice(base_temporal, monkeypatch):
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
+    p = ideas.armar_prompt(ctx, 1, 1)
+    assert "Navidad" in p and "regalos" in p and "(sin enfoque definido" in p and "MARCAS A IMITAR" in p
+    assert ideas.instrucciones(ctx).endswith("Todo en español.")

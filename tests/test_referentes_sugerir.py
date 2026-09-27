@@ -244,3 +244,119 @@ def test_sugerir_ia_muestra_consciencia_y_arranque_y_manda_la_doctrina(monkeypat
     msg = vistos[0]["messages"][0]["content"]
     assert "consciencia: consciente del problema" in msg and "arranque: secreto" in msg
     assert vistos[0]["system"][0]["text"] == doctrina.texto("clasificar")
+
+
+# ------------------------------------------------ tablero de Sprints (2026-09-26) ---
+
+def _r(id, familia, consciencia="problem-aware", etapa="TOF", marca="", idioma="en", dias=1, variantes=1,
+       pagina_id=None):
+    return {"id": id, "familia": familia, "consciencia": consciencia, "etapa": etapa, "marca": marca,
+            "idioma": idioma, "dias": dias, "variantes": variantes, "pagina_id": pagina_id, "clasificacion": "claude",
+            "dolor": "", "firma": "", "titular": "", "imagen_url": ""}
+
+
+def _biblioteca(monkeypatch, filas):
+    """`referentes.datos.listar` falso que aplica los mismos filtros exactos que el real."""
+    import referentes.datos as referentes_datos
+
+    def listar(cliente, filtros, pagina, por_pagina):
+        f = filtros or {}
+        items = [r for r in filas if all(r.get(k) == f[k] for k in ("etapa", "consciencia", "familia") if f.get(k))]
+        return {"items": items[:por_pagina]}
+    monkeypatch.setattr(referentes_datos, "listar", listar)
+
+
+def test_sugerir_campana_respeta_consciencia_y_familias(monkeypatch):
+    _biblioteca(monkeypatch, [_r(1, "A"), _r(2, "B"), _r(3, "A", consciencia="unaware")])
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "consciencia": "consciente_del_problema", "familias": ["A"]},
+                                set(), 1)
+    assert [c["id"] for c in r["items"]] == [1] and r["aflojado"] == []
+
+
+def test_sugerir_campana_afloja_familias_y_despues_consciencia(monkeypatch):
+    _biblioteca(monkeypatch, [_r(1, "A"), _r(2, "B"), _r(3, "A", consciencia="unaware")])
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "consciencia": "consciente_del_problema", "familias": ["A"]},
+                                set(), 3)
+    assert [c["id"] for c in r["items"]] == [1, 2, 3]
+    assert r["aflojado"] == ["familias", "consciencia"]
+
+
+def test_sugerir_campana_sin_familias_toma_una_por_familia(monkeypatch):
+    _biblioteca(monkeypatch, [_r(1, "A", dias=5), _r(2, "A", dias=9), _r(3, "B")])
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF"}, set(), 3)
+    assert [c["id"] for c in r["items"]] == [2, 3] and r["aflojado"] == []
+
+
+def test_sugerir_campana_ordena_marca_idioma_y_rendimiento(monkeypatch):
+    _biblioteca(monkeypatch, [_r(1, "A", dias=100, variantes=10), _r(2, "B", idioma="es"),
+                              _r(3, "C", marca="Crocs"), _r(4, "D", pagina_id="555")])
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "idioma": "es",
+                                         "marcas": [{"nombre": "crocs"}, {"nombre": "Hoka", "pagina_id": "555"}]},
+                                set(), 4)
+    assert [c["id"] for c in r["items"]] == [4, 3, 2, 1] or [c["id"] for c in r["items"]] == [3, 4, 2, 1]
+    assert [c["id"] for c in r["items"]][2:] == [2, 1]
+
+
+def test_sugerir_campana_excluye_los_ya_elegidos_y_sin_etapa_busca_en_todas(monkeypatch):
+    _biblioteca(monkeypatch, [_r(1, "A"), _r(2, "B", etapa="MOF")])
+    assert [c["id"] for c in sugerir.sugerir_campana("acme", {"etapa": "TOF"}, {1}, 2)["items"]] == []
+    assert [c["id"] for c in sugerir.sugerir_campana("acme", {"etapa": None}, {1}, 2)["items"]] == [2]
+
+
+def test_candidatos_aflojando_llega_al_minimo(monkeypatch):
+    _biblioteca(monkeypatch, [_r(1, "A"), _r(2, "B"), _r(3, "A", consciencia="unaware")])
+    lista, aflojado = sugerir.candidatos_aflojando(
+        "acme", {"etapa": "TOF", "consciencia": "consciente_del_problema", "familias": ["A"]}, set(), minimo=3)
+    assert [c["id"] for c in lista] == [1, 2, 3] and aflojado == ["familias", "consciencia"]
+    lista, aflojado = sugerir.candidatos_aflojando("acme", {"etapa": "TOF", "familias": ["A"]}, set(), minimo=1)
+    assert [c["id"] for c in lista] == [1, 3] and aflojado == []
+
+
+def test_consciencia_en_traduce_claves_de_doctrina():
+    assert sugerir.consciencia_en("consciente_del_problema") == "problem-aware"
+    assert sugerir.consciencia_en(None) is None and sugerir.consciencia_en("nada") is None
+
+
+def test_sugerir_ia_manda_el_enfoque(monkeypatch):
+    pedidos = []
+    _cliente_que_responde(monkeypatch, _RespuestaFalsa('{"elegidos": []}'), pedidos)
+    sugerir.sugerir_ia([_cand(1, "A")], "p", "pr", "t", 1, enfoque_texto="marcas a imitar: Crocs")
+    texto = pedidos[0]["messages"][0]["content"]
+    assert "<enfoque>marcas a imitar: Crocs</enfoque>" in texto
+
+
+# --------------------------- F1 (ronda final): el pool de 200 no puede tapar
+# una marca/idioma que la campaña sí pide — base real, no el fake `listar`.
+
+def _fila_pool(referentes_datos, anuncio_id, dias, marca="", pagina_id=None, idioma="en", etapa="TOF"):
+    rid, _ = referentes_datos.guardar_referente({
+        "anuncio_id": anuncio_id, "fuente": "copycoders", "imagen_origen": f"https://cdn/{anuncio_id}.jpg",
+        "etapa": etapa, "clasificacion": "claude", "dias": dias, "variantes": 1, "marca": marca,
+        "pagina_id": pagina_id, "idioma": idioma, "familia": "ugc"})
+    referentes_datos.marcar_imagen(rid, "ok", f"https://r2/{anuncio_id}.jpg")
+    return rid
+
+
+def test_sugerir_campana_encuentra_marca_pagina_e_idioma_fuera_del_pool_de_200(base_temporal):
+    """300 filas TOF con `dias` altos (llenan el pool general de 200, ordenado
+    por dias DESC) más tres filas «de nicho» con dias=1 -- cada una solo
+    identificable por marca, por pagina_id o por idioma. Sin la consulta
+    restringida (F1), ninguna de las tres entraría nunca al pool y
+    `sugerir_campana` jamás las devolvería."""
+    import referentes.datos as referentes_datos
+    import referentes.sugerir as sugerir
+
+    for i in range(300):
+        _fila_pool(referentes_datos, f"pool-{i}", dias=1000 - i)
+    crocs_id = _fila_pool(referentes_datos, "crocs-1", dias=1, marca="Crocs")
+    hoka_id = _fila_pool(referentes_datos, "hoka-1", dias=1, pagina_id="555")
+    es_id = _fila_pool(referentes_datos, "es-1", dias=1, idioma="es")
+
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "marcas": [{"nombre": "crocs"}]}, set(), 1)
+    assert r["items"][0]["id"] == crocs_id
+
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "marcas": [{"nombre": "hoka", "pagina_id": "555"}]}, set(), 1)
+    assert r["items"][0]["id"] == hoka_id
+
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "idioma": "es"}, set(), 1)
+    assert r["items"][0]["id"] == es_id
