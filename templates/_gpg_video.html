@@ -27,7 +27,7 @@
     <div class="gpg-error flash error" hidden></div>
     <p class="gp-ayuda">
       {{ _('Voz en off') if video.config.modo == 'voiceover' else _('Diálogo a cámara') }} · {{ video.config.formato }} ·
-      {{ video.config.palabras_por_segundo }} palabras/s · hook: {{ video.config.hook }} ·
+      {{ _('%(n)s palabras/s · hook: %(hook)s', n=video.config.palabras_por_segundo, hook=video.config.hook) }} ·
       {{ ngettext('%(num)s referencia', '%(num)s referencias', video.config.referencias | length) }}
     </p>
 

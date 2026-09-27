@@ -89,6 +89,10 @@ msgid "%(n)s mensajes"
 msgstr "%(n)s messages"
 
 #, python-format
+msgid "%(n)s palabras/s · hook: %(hook)s"
+msgstr "%(n)s words/s · hook: %(hook)s"
+
+#, python-format
 msgid "%(n)s productos"
 msgstr "%(n)s products"
 
@@ -2903,6 +2907,9 @@ msgstr "Couldn't reach Notion; try again in a moment."
 
 msgid "No se pudo leer el guion. Vuelve a intentarlo."
 msgstr "Couldn't read the script. Try again."
+
+msgid "No se pudo proponer qué quitar. Vuelve a intentarlo."
+msgstr "Couldn't propose what to cut. Try again."
 
 #, python-format
 msgid "No se pudo sugerir (%(tipo)s)."

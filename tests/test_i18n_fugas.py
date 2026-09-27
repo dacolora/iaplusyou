@@ -8,7 +8,7 @@ import re
 import pytest
 
 import idiomas
-from tests.i18n_util import _con_marca, espanol_visible
+from tests.i18n_util import _con_marca, _Visible, espanol_visible
 
 CLAVES = [
     "ANTHROPIC_API_KEY", "FAL_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID",
@@ -220,6 +220,30 @@ def test_crear_flowplus_en_ingles(admin_en):
 def test_panel_de_guiones_en_ingles(admin_en):
     fugas = espanol_visible(html_de(admin_en, "/cliente/acme/guiones/panel"))
     assert not fugas, fugas[:15]
+
+
+def test_panel_de_guiones_con_video_en_ingles(admin_en):
+    """Fix round 1: `%(n)s palabras/s · hook: %(hook)s` (_gpg_video.html
+    ~l.30) se armaba sin `_()` — «2.4 palabras/s · hook: original» salía
+    igual en cualquier idioma. Necesita un video de verdad (con `config`)
+    para ejercitar esa línea; `fixtures_guiones.video_nuevo` lo crea con la
+    escritura real (`guiones.datos`), sin red ni Claude.
+
+    Acotado a «palabras» (no un `espanol_visible` completo): este contexto
+    con video también dispara `guiones.datos.nombre_version` («Completo ·
+    diálogo · v1») y las etiquetas de `FORMATOS_NOMBRES` sin `|traducir` en
+    `_gpg_macros.html` (p. ej. «Retrato 4:5 (feed de Instagram)») — fugas
+    reales pero previas a esta fase y fuera de los dos hallazgos de este
+    round; quedan marcadas aparte para no mezclarlas en este fix."""
+    import tests.fixtures_guiones as fx
+    gid, vid = fx.video_nuevo("acme")
+    html = html_de(admin_en, f"/cliente/acme/guiones/panel?guion={gid}&video={vid}")
+    # Texto/atributos VISIBLES nada más (name="palabras_por_segundo" es un
+    # campo de formulario interno, no algo que la persona lea).
+    p = _Visible()
+    p.feed(html)
+    visto = [t for t in p.trozos if "palabras" in t]
+    assert not visto, visto
 
 
 def test_guiones_rutas_error_en_ingles(admin_en):

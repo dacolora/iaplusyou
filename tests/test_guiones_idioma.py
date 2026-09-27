@@ -113,6 +113,38 @@ def test_recorte_proponer_en_espanol_mantiene_el_texto_de_hoy(base_temporal, mon
     assert "inglés" not in system
 
 
+def test_recorte_proponer_aviso_de_error_en_el_idioma_del_proyecto(base_temporal, monkeypatch, tmp_path):
+    """Fix round 1: `proponer()` corre en un hilo de trabajos.iniciar (sin
+    contexto de petición) igual que clips.armar/imagenes.escribir, pero no
+    estaba envuelto en idiomas.en_idioma(idiomas.de_proyecto(cliente)) — el
+    aviso del catch-all («No se pudo proponer qué quitar...») se guardaba
+    siempre en español sin importar el idioma del proyecto. Se fuerza una
+    excepción DESPUÉS de la llamada a Claude (datos.terminar_recorte revienta)
+    para llegar al catch-all real, no al camino de `error` de pedir_json."""
+    from guiones import datos, recorte
+
+    def _revienta(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(datos, "terminar_recorte", _revienta)
+
+    _proyecto_en_idioma(monkeypatch, tmp_path, "en")
+    _, vid = video_nuevo(config=dict(CONFIG, duracion_objetivo=15))
+    datos.empezar("acme", vid, "recortando", ("configurando",))
+    recorte.proponer(vid, llamar=fake({"orden": [4, 3, 2, 5, 6, 1], "motivos": {"4": "minor detail"}}))
+    v = datos.video("acme", vid)
+    assert v["estado"] == "configurando"
+    assert v["aviso"] == "Couldn't propose what to cut. Try again."
+
+    _proyecto_en_idioma(monkeypatch, tmp_path, "es")
+    _, vid2 = video_nuevo(config=dict(CONFIG, duracion_objetivo=15))
+    datos.empezar("acme", vid2, "recortando", ("configurando",))
+    recorte.proponer(vid2, llamar=fake({"orden": [4, 3, 2, 5, 6, 1], "motivos": {"4": "detalle"}}))
+    v2 = datos.video("acme", vid2)
+    assert v2["estado"] == "configurando"
+    assert v2["aviso"] == "No se pudo proponer qué quitar. Vuelve a intentarlo."
+
+
 # ---------------------------------------------------------- imagenes.py ---
 
 def _armado(monkeypatch, tmp_path, idioma, cliente="acme"):
