@@ -264,6 +264,33 @@ def test_revisar_corrige_una_vez_y_si_sigue_mal_guarda_el_error(base_temporal, m
     assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "error"
 
 
+def test_revisar_preserva_tokens_si_falla_la_correccion(base_temporal, monkeypatch):
+    """Si la segunda llamada (corrección) falla por red/timeout, los tokens
+    de la primera llamada nunca se pierden."""
+    import creative_flow
+    from doctrina import revisor
+    from sprints import analisis, qa
+    cf_id = _pieza(monkeypatch)
+    monkeypatch.setattr(qa, "archivo_local", lambda entry: "/tmp/no-existe-revision.mp4")
+    monkeypatch.setattr(revisor, "duracion", lambda ruta: 8.0)
+    monkeypatch.setattr(revisor, "fotogramas", lambda ruta, ts: [(t, b"jpg") for t in ts])
+    llamadas = []
+
+    def falso_con_error(content, max_tokens=700, system=None):
+        llamadas.append({"content": content, "max_tokens": max_tokens, "system": system})
+        if len(llamadas) == 1:
+            return "nada", 1000, 400  # Primera: respuesta mala
+        else:
+            raise RuntimeError("red caída")  # Segunda: falla de red
+    monkeypatch.setattr(analisis, "_llamar_contando", falso_con_error)
+    with pytest.raises(revisor.ErrorRevision) as e:
+        revisor.revisar("acme", cf_id)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (1000, 400)
+    guardada = creative_flow.cargar("acme")[cf_id]["revision_doctrina"]
+    assert guardada["error"] and guardada["video_url"] == "https://r2/v.mp4"
+    assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "error"
+
+
 def test_revisar_sin_pieza_terminada_ni_fotogramas_no_llama_a_claude(base_temporal, monkeypatch):
     import creative_flow
     from doctrina import revisor

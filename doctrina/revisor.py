@@ -317,8 +317,11 @@ def fotogramas(ruta, segundos):
     with tempfile.TemporaryDirectory() as tmp:
         for i, t in enumerate(segundos):
             p = os.path.join(tmp, f"f{i}.jpg")
-            subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(t), "-i", ruta, "-frames:v", "1",
-                            "-vf", "scale=640:-2", "-q:v", "4", p], capture_output=True, timeout=120)
+            try:
+                subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-ss", str(t), "-i", ruta, "-frames:v", "1",
+                                "-vf", "scale=640:-2", "-q:v", "4", p], capture_output=True, timeout=120)
+            except (subprocess.TimeoutExpired, OSError):
+                continue
             if os.path.exists(p) and os.path.getsize(p):
                 with open(p, "rb") as f:
                     salida.append((t, f.read()))
@@ -377,8 +380,13 @@ def revisar(cliente, cf_id):
     except ErrorRevision as primero:
         pedido = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({primero}). Responde de "
                                                     "nuevo SOLO el JSON pedido, con los 12 puntos."}]
-        texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system)
-        ent, sal = ent + e2, sal + s2
+        try:
+            texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system)
+            ent, sal = ent + e2, sal + s2
+        except Exception as falla:  # noqa: BLE001
+            creative_flow.actualizar(cliente, cf_id, revision_doctrina={
+                "version": VERSION, "error": str(falla)[:300] or "La corrección falló.", "video_url": video_url, "revisado_en": db.ahora()})
+            raise ErrorRevision(str(falla)[:300] or "La corrección falló.", ent, sal) from falla
         try:
             r = parsear_revision(texto)
         except ErrorRevision as segundo:
