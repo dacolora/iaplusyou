@@ -411,8 +411,9 @@ text variable `precio`, formatted per country or absent), freezes a version and 
 a second destino only pays its localization and voice; a changed guion or voice makes a new
 edición; degraded borradores are never reused (a new one is built, paying only the missing
 pieces). `capas`, `pieza.guion`, `final_id`s, the 5 `ETAPAS_FINAL` and the spend row
-`final:<id>:t<tarea>` keep their old shape, so the Crear modal, derivaciones and experiments did
-not change. `FINAL_EDITION_LEGADO=1` switches the worker back to the old layered pipeline
+`final:<id>:t<tarea>` keep their old shape, so the finals UI (then in Crear's modal, now the Final
+edition tab), derivaciones and experiments did not change. `FINAL_EDITION_LEGADO=1` switches the
+worker back to the old layered pipeline
 (`producir_legado`: `guion` -> `cortes` -> sonido -> `voz` -> `musica` -> `texto` -> `render`),
 kept only until `render.py`/`texto.py` are retired. Since S2 the clon's native sound is a layer: `producir` reads the RAW clon
 (`video_local_crudo`/`video_url_crudo`, never the music-mixed file), `render` trims `[0:a]`
@@ -436,9 +437,13 @@ individually verified against fal (see the module docstring) rather than assumed
 ElevenLabs' own catalog. Fonts are checked into `static/fonts/`; generated music
 tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 `tareas/final_edition.py`; the dashboard routes are `fe_preparar`, `fe_guardar_guion`,
-`fe_producir`, `fe_descartar`.
+`fe_producir`, `fe_descartar`. Since 2026-09-27 its UI is its own tab, **Final edition**
+(`_tab_final.html`, `data-tab="final"`, decisión de Daniel): the ready Crear videos with the guion,
+«Producir finales» and their finals, plus each piece's ediciones with «Abrir en el editor»; Crear
+only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
+return to `#final`.
 
-**Editor (capas 1–2, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–3, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -475,8 +480,8 @@ table the browser must match too), scaled to that box (`scale=w:h`) with per-cli
 outlasts it; subtitles get `fontsdir=static/fonts` and every path inside the graph goes
 through `_ruta_filtro` (two-level ffmpeg escaping — `'` becomes `\'\''`). NOT rendered in
 capa 1: `superpuesto` (PIP — `compilar` raises if it has clips), `rotacion` and
-`marca.marca_de_agua`; and one `-ss/-t` input per principal clip (memory bound for
-reordered clips) is due before capa 3. `motor/tramos.py` splits into windows past
+`marca.marca_de_agua`; each principal clip is its own `-ss/-t` input (capa 3: a reordered clip
+decodes only its span; the principal may mix sources). `motor/tramos.py` splits into windows past
 `PRESUPUESTO_OVERLAYS=60`, never cutting inside a transition's `[fin_A, fin_A+d)` —
 exceeding budget at one instant is the only hard error — and `motor.renderizar` cleans
 partial `.tramoN.mp4` files in a `finally`. Subtitles are one `.ass`
@@ -504,6 +509,18 @@ copies `extra.local` when the file is still on disk; `materiales.actualizar_extr
 `extra`; `ediciones.buscar_origen` finds the borrador of a receta. A fatal first-block voice
 failure raises `produccion.VozFatal`, and any exception raised after paying carries
 `costo_pagado`/`capas_pagadas` so `producir` still records the spend (Task 8's rulings).
+Capa 3 (2026-09-27): the browser preview `/cliente/<c>/ediciones/<id>` (Blueprint
+`final_edition/rutas_editor.py`, data from `final_edition/vista_previa.py`, open to anyone with access
+to the project) — ES modules in `static/editor/` (pure: `geometria`, `tiempo`, `resolver`, `precio`,
+`texto`, `subtitulos`, `audio`, `reloj`; browser: `texto_canvas`, `videos`, `lienzo`, `motor_audio`,
+`vista`), tested with Node's own runner through `tests/test_editor_js.py` against parity tables that
+Python generates (`tests/fixtures/generar_casos_editor.py`; `test_casos_del_editor_al_dia` fails when
+one is stale). The preview draws only what the compiler renders (no rotation/PIP/watermark; x/y
+keyframes; `deslizar` entry); subtitles use libass's size via `subtitulos.escala_libass()` (OS/2
+metrics); audio is Web Audio with a ducking curve precomputed from the voice `picos`, which needs CORS
+on R2 (`storage/r2_cors.py`, applied by hand). Proxies are short-side 540 with a keyframe every 15
+frames (`tareas.edicion.PROXY_VERSION = 2`; the page re-queues older ones, free).
+`sembrar_edicion_demo.py` builds a local demo edition (no spend, no R2).
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

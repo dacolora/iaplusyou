@@ -27,6 +27,10 @@ imágenes pasan a vivir dentro de este editor. S3 (video→audio de respaldo) y 
   hook, traducción, sonido), **no** como forma principal de editar.
 - Arquitectura **opción 1**: documento JSON + vista previa en el navegador +
   render final en el servidor con ffmpeg.
+- **2026-09-27 (Daniel):** final edition sale de Crear a su propia pestaña, «Final
+  edition», para todos los clientes, y el editor se muestra a medida que se construye
+  (sin esperar a la capa 7): anula la «una sola entrega» para las capas que ya
+  funcionan.
 
 Hechos del stack que mandan (verificados 2026-09-18): VPS con 1 núcleo y 1,9 GB
 de RAM, sin GPU, ffmpeg 8.0.1 (`xfade`, `subtitles`/`ass`, `drawtext`,
@@ -155,11 +159,13 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   duracion_estimada=estimar.segundos(doc), etapas=ETAPAS_EDICION)`;
 >   `edicion_proxy` va con `max_intentos=3`. Abierto: qué final se crea para
 >   una edición sin `cf_id` (hoy `crear_final` exige una sesión de Crear).
-> - **Pendiente antes de la capa 3**: una entrada `-ss/-t` por clip de la
->   pista principal (hoy el clon entra una sola vez y cada clip hace `trim`
->   sobre él): con clips reordenados ffmpeg decodifica y retiene todo lo que
->   hay entre recortes — medido 1,39 GB de RSS en un reorden de 10 s. Cambia
->   `Plan.entradas`, así que va en una tarea propia.
+> - **Capa 3 implementada** (plan `docs/superpowers/plans/2026-09-27-editor-capa3-vista-previa.md`):
+>   una entrada `-ss/-t` por clip de la principal (la principal ya admite varias fuentes);
+>   proxy con lado corto 540 y GOP de 15 (`PROXY_VERSION`); vista previa en
+>   `static/editor/`; pruebas de JS con `node --test` (no vitest: sin npm) y tablas de
+>   paridad generadas por Python en vez de Playwright (la comparación de cuadros de la
+>   capa 3 fue manual, en tres instantes); el audio decodifica los archivos
+>   (`decodeAudioData`) en vez de nodos de `<video>`, y por eso R2 necesita CORS.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,
@@ -284,6 +290,32 @@ calibrada.
 ---
 
 ## 3. Vista previa (navegador)
+
+> Estado: **capa 3 implementada, de solo lectura** (plan
+> `docs/superpowers/plans/2026-09-27-editor-capa3-vista-previa.md`): la página
+> `/cliente/<c>/ediciones/<id>` elige el destino, reproduce y busca cuadro a cuadro.
+> Ajustes a la letra de este capítulo:
+> - **Un `<video>` por clip** de la principal, no por material: un fundido entre dos
+>   cortes del mismo clon necesita dos cuadros distintos a la vez. Reproduciendo cada
+>   video corre solo y se corrige si se aparta más de 150 ms del reloj; parado se busca
+>   el cuadro exacto; uno sin usar 5 s se suelta.
+> - **Audio**: cada material se descarga y se decodifica (`decodeAudioData`) y suena
+>   como `AudioBufferSourceNode` programado sobre el reloj del `AudioContext`; el agache
+>   es una curva calculada por adelantado desde los `picos` de la voz (ffmpeg detecta
+>   RMS: es una aproximación). Necesita CORS en R2 (`storage/r2_cors.py`); sin él la
+>   vista sigue sin ese sonido y lo dice.
+> - **Textos** rasterizados en `<canvas>` con las fórmulas de `rasterizar.py`
+>   (`texto.js`); la métrica es la de la fuente en el navegador: unos px de diferencia en
+>   la altura de línea frente a Pillow. **Subtítulos** como libass (`\an5\pos`, karaoke
+>   por `\k`), con el tamaño pasado a em por `subtitulos.escala_libass()`.
+> - **Paridad**: todavía sin captura de `miniatura_ms` ni estado `revisar` (llegan con
+>   producir desde el editor). La comparación de la capa 3 fue manual con la edición de
+>   `sembrar_edicion_demo.py` en 1000/3000/4250/7200 ms: encuadre, zoom del Ken Burns,
+>   hook, precio, CTA, logo y la mezcla del fundido coinciden a 1–4 px. Los colores
+>   coinciden cuando el mismo navegador decodifica los dos videos: un mp4 sin etiqueta
+>   de color se lee BT.709 en el navegador y BT.601 al pasar a PNG con ffmpeg.
+> - **Pruebas**: `node --test` + tablas de paridad generadas por Python, sin npm ni
+>   Playwright. Rendimiento (30/24 fps en teléfono) sin medir; el timeline es capa 4.
 
 `static/editor/` como módulos ES. Segundo motor: reproduce el mismo documento en
 vivo, sin servidor.
