@@ -67,3 +67,76 @@ def test_armar_muestra_la_sofisticacion_y_describe_referencias(app):
     r = app["c"].post(f"/cliente/acme/sprints/referencias/{rid}", json={"descripcion": "luz lateral", "intencion": ["iluminacion"]})
     assert r.get_json()["ok"] and r.get_json()["estado"] == "lista"
     assert "<script" not in html
+
+
+# ---------------------------------------------------------------- ideas ---
+
+def test_la_pagina_de_ideas_redirige_al_panel(con_ideas):
+    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
+    r = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas")
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}&paso=ideas")
+    assert c.get(f"/cliente/acme/sprints/{sid}/campanas/999/ideas").status_code == 404
+
+
+def test_pestana_ideas_muestra_conteo_ideas_y_generar(con_ideas):
+    c, sid, cid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
+    html = _panel(c, sid, cid, "ideas")
+    assert "1 de 3 aprobadas · videos 1/2 · imágenes 0/1" in html
+    assert "Proponer las que faltan (1 videos, 0 imágenes) (" in html and "aprox." in html
+    assert "Aprobar todas las propuestas (1)" in html
+    assert f'data-url="/cliente/acme/sprints/ideas/{ii}"' in html and 'class="sprint-idea panel-idea' in html
+    assert "Otra idea (" in html and "Amanecer" in html and "Marco" in html
+    assert "data-generar-lote" in html and "1 aprobada(s) sin generar (1 videos, 0 imágenes)" in html
+    assert 'data-lote-modelo="video"' in html and "<script" not in html
+
+
+def test_el_tablero_carga_el_editor_del_angulo(con_ideas):
+    html = con_ideas["c"].get(f"/cliente/acme/sprints/{con_ideas['sid']}").data.decode()
+    assert "/static/angulo.js" in html and "iniciarEditoresAngulo(cuerpo)" in html
+    assert '[data-angulo-campo="gancho"]' in html
+
+
+def test_proponer_ideas_por_fetch(con_ideas, monkeypatch):
+    from sprints import rutas
+    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
+    url = f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/proponer"
+    j = c.post(url, data={"mas": "3", "tipo": "imagen"}, headers={"X-Requested-With": "fetch"}).get_json()
+    assert j["ok"] and j["job_id"] == f"acme__campana{cid}__ideas"
+    assert con_ideas["encolados"][-1]["payload"]["n_imagenes"] == 3
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_ideas", lambda *a, **k: False)
+    r = c.post(url, data={}, headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 409 and "en curso" in r.get_json()["error"]
+    r = c.post(url, data={})
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}&paso=ideas")
+
+
+def test_acciones_de_idea_por_fetch(con_ideas):
+    from sprints import datos
+    c, sid, cid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
+    H = {"X-Requested-With": "fetch"}
+    assert c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/aprobar_todas", headers=H).get_json() == \
+        {"ok": True, "aprobadas": 1}
+    j = c.post(f"/cliente/acme/sprints/ideas/{ii}/otra", headers=H).get_json()
+    assert j["ok"] and con_ideas["encolados"][-1]["payload"]["reemplaza"] == ii
+    r = c.post(f"/cliente/acme/sprints/ideas/{ii}/reescribir", headers=H)
+    assert r.status_code == 400 and "promesa" in r.get_json()["error"]
+    assert c.post(f"/cliente/acme/sprints/ideas/{ii}/descartar", headers=H).get_json()["ok"]
+    assert datos.idea("acme", ii)["estado_idea"] == "descartada"
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/aprobar")
+    assert r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}&paso=ideas")
+
+
+def test_generar_por_fetch(con_ideas, monkeypatch):
+    from sprints import rutas
+    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
+    H = {"X-Requested-With": "fetch"}
+    monkeypatch.setattr(rutas.produccion, "lanzar_lote",
+                        lambda cliente, sid_, campana_id=None, modelo_video=None, modelo_imagen=None:
+                        {"encoladas": 1, "omitidas": 0, "cf_ids": ["x"], "usd": 0.8})
+    j = c.post(f"/cliente/acme/sprints/{sid}/lote", data={"campana_id": cid}, headers=H).get_json()
+    assert j["ok"] and j["encoladas"] == 1 and "Lote encolado" in j["mensaje"]
+    monkeypatch.setattr(rutas.produccion, "lanzar_lote",
+                        lambda cliente, sid_, campana_id=None, modelo_video=None, modelo_imagen=None:
+                        {"encoladas": 0, "omitidas": 0, "cf_ids": [], "usd": 0.0})
+    r = c.post(f"/cliente/acme/sprints/{sid}/lote", data={"campana_id": cid}, headers=H)
+    assert r.status_code == 409 and r.get_json()["error"] == "No había ideas aprobadas sin generar."

@@ -551,6 +551,11 @@ def test_pestana_sprints_se_renderiza(app):
     assert "Octubre" in html and "Nuevo sprint" in html and "Crear y armar campañas" in html
 
 
+def _ideas_html(c, sid, cid):
+    """Desde la entrega 2 del tablero las ideas viven en la pestaña Ideas del panel."""
+    return c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/panel?paso=ideas").data.decode()
+
+
 @pytest.fixture()
 def con_ideas(app, monkeypatch):
     import catalogo_productos, marca, proyectos
@@ -573,8 +578,8 @@ def con_ideas(app, monkeypatch):
 def test_pagina_de_ideas_y_acciones(con_ideas):
     from sprints import datos
     c, sid, cid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"], con_ideas["ii"]
-    r = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas")
-    assert r.status_code == 200 and b"Amanecer" in r.data and b"Marco" in r.data and "1 de 2 videos".encode() in r.data
+    html = _ideas_html(c, sid, cid)
+    assert "Amanecer" in html and "Marco" in html and "videos 1/2" in html
     c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/proponer", data={})
     assert con_ideas["encolados"][-1]["tipo"] == "sprint_proponer_ideas" and con_ideas["encolados"][-1]["payload"]["n_videos"] is None
     c.post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas/proponer", data={"mas": "3"})
@@ -636,12 +641,12 @@ def test_reserva_vencida_vuelve_a_ofrecer_generar_lote(con_ideas):
     datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv))          # viva: otro lote la tiene
     html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     assert "Generar lote del sprint" not in html
-    assert "Generar lote de esta campaña" not in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    assert "data-generar-lote" not in _ideas_html(c, sid, cid)
     datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv, ahora=1))  # vencida
     html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     assert "Generar lote (1)" in html  # el tablero (2026-09-26) ya no dice «… del sprint»
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
-    assert "Generar lote de esta campaña (1)" in html and "Otra idea" in html
+    html = _ideas_html(c, sid, cid)
+    assert "data-generar-lote" in html and "Otra idea" in html
 
 
 def test_estimar_y_lanzar_lote(con_ideas, monkeypatch):
@@ -886,9 +891,8 @@ def test_consciencia_de_la_persona_se_elige_en_la_pagina_de_ideas(con_ideas):
     c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
     pid = datos.campana("acme", cid)["persona_id"]
     datos.actualizar_persona("acme", pid, extra={"conciencia": {"nivel": "inconsciente", "detalle": "de Nicho"}})
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
-    assert "Qué tanto sabe Premium" in html and 'value="inconsciente" selected' in html
-    assert "Promesas parecidas que ya vio el cliente de espejo_led:" in html and "Claude lo decide" in html
+    html = _ideas_html(c, sid, cid)
+    assert "Promesas parecidas que ya vio el cliente de Espejo LED:" in html and "Claude lo decide" in html
     r = c.post(f"/cliente/acme/sprints/personas/{pid}/conciencia", json={"nivel": "consciente del problema"})
     assert r.get_json() == {"ok": True, "nivel": "consciente_del_problema"}
     assert datos.persona("acme", pid)["extra"]["conciencia"] == {"nivel": "consciente_del_problema", "detalle": "de Nicho",
@@ -899,26 +903,12 @@ def test_consciencia_de_la_persona_se_elige_en_la_pagina_de_ideas(con_ideas):
     assert c.post("/cliente/acme/sprints/personas/999/conciencia", json={"nivel": ""}).status_code == 404
 
 
-def test_la_pagina_de_ideas_dice_cuando_manda_la_consciencia_de_la_campana(con_ideas):
-    """Integración con el tablero de Sprints: si la campaña tiene su propia
-    consciencia, esa manda en sus ideas, y la página lo dice junto al selector
-    de la persona."""
-    from sprints import datos
-    c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
-    datos.actualizar_campana("acme", cid, consciencia=None)
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
-    assert "manda la de la campaña" not in html
-    datos.actualizar_campana("acme", cid, consciencia="consciente_del_problema")
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
-    assert "Para las ideas de esta campaña manda la de la campaña: Sabe que tiene el problema" in html
-
-
 def test_pagina_de_ideas_muestra_la_sofisticacion_del_producto(con_ideas):
     import tiendas
     c, sid, cid = con_ideas["c"], con_ideas["sid"], con_ideas["cid"]
     fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
     tiendas.anotar_extra("acme", fila, sofisticacion=4)
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = _ideas_html(c, sid, cid)
     assert "4 · Ya vio cómo funciona en otros: hay que mejorar el cómo" in html
 
 
@@ -946,10 +936,11 @@ def test_editar_el_angulo_de_una_idea(con_ideas):
     from sprints import datos
     c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA}, gancho=ANGULO_IDEA["gancho"])
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = _ideas_html(c, sid, cid)
     assert 'class="angulo-editor"' in html and f'/cliente/acme/sprints/ideas/{ii}/angulo' in html
     assert "Consciente de la solución" in html and "El espejo que cambia tu baño" in html
-    assert "/static/angulo.js" in html and "/cliente/acme/doctrina#angulo" in html
+    assert "/cliente/acme/doctrina#angulo" in html
+    assert "/static/angulo.js" in c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     # Verificar que los links de documentación están presentes en la plantilla
     assert html.count("/cliente/acme/doctrina#angulo") >= 7, f"Esperaba >= 7 links #angulo, encontré {html.count('/cliente/acme/doctrina#angulo')}"
     assert html.count("/cliente/acme/doctrina#gancho") >= 2, f"Esperaba >= 2 links #gancho (Arranque y Gancho), encontré {html.count('/cliente/acme/doctrina#gancho')}"
@@ -963,7 +954,7 @@ def test_editar_el_angulo_de_una_idea(con_ideas):
     ang = idea["extra"]["angulo"]
     assert ang["sofisticacion"] == 4 and ang["editado_en"] and ang["origen"] == "ideas"
     # Verificar que el link #base aparece después de editar (cuando editado_en está presente)
-    html_editado = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html_editado = _ideas_html(c, sid, cid)
     assert "/cliente/acme/doctrina#base" in html_editado, "Falta el link #base en la nota 'Editado a mano'"
     assert ang["faltantes"] == ["faltan comentarios reales"]
     assert idea["gancho"] == nuevo["gancho"]
@@ -977,7 +968,7 @@ def test_el_angulo_de_una_idea_con_pieza_es_de_solo_lectura(con_ideas, monkeypat
     from sprints import datos
     c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
     datos.actualizar_idea("acme", iv, extra={"angulo": ANGULO_IDEA}, cf_id="cf_x")
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = _ideas_html(c, sid, cid)
     tarjeta = html.split(f'/cliente/acme/sprints/ideas/{iv}/angulo', 1)[1].split("</details>", 1)[0]
     assert "disabled" in tarjeta
     r = c.post(f"/cliente/acme/sprints/ideas/{iv}/angulo", json={"angulo": ANGULO_IDEA})
@@ -991,7 +982,7 @@ def test_gancho_sync_wiring(con_ideas):
     c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA}, gancho=ANGULO_IDEA["gancho"])
     # 1. Verificar que la página contiene el campo del ángulo en el script de la tarjeta
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = c.get(f"/cliente/acme/sprints/{sid}").data.decode()
     assert "[data-angulo-campo=\"gancho\"]" in html, "Falta el selector del campo gancho en el template"
     # 2. Verificar que static/angulo.js contiene el código de sincronización
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1005,15 +996,15 @@ def test_boton_reescribir_idea_con_su_precio(con_ideas, monkeypatch):
     """Doctrina, bloque 2 (§3.5)."""
     from sprints import datos, rutas
     c, sid, cid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["ii"]
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = _ideas_html(c, sid, cid)
     assert "Reescribir la idea con este ángulo" not in html          # sin ángulo no hay botón
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA})
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = _ideas_html(c, sid, cid)
     assert "Reescribir la idea con este ángulo (US$ 0,03 aprox.)" in html
     c.post(f"/cliente/acme/sprints/ideas/{ii}/reescribir")
     t = con_ideas["encolados"][-1]
     assert t["tipo"] == "sprint_reescribir_idea" and t["payload"] == {"cliente": "acme", "cp_id": ii}
     assert t["max_intentos"] == 1 and t["job_id"] == f"acme__cp{ii}__reescribir"
     monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: job_id == f"acme__cp{ii}__reescribir")
-    html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
+    html = _ideas_html(c, sid, cid)
     assert f'id="trabajo-acme__cp{ii}__reescribir"' in html

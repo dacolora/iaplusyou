@@ -135,6 +135,7 @@
 
 {% include "_sprint_lote_modal.html" %}
 
+<script src="{{ url_for('static', filename='angulo.js') }}"></script>
 <script>
   (function () {
     var panel = document.getElementById('tablero-panel');
@@ -398,6 +399,8 @@
       cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
         if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
       });
+      if (typeof window.iniciarEditoresAngulo === 'function') window.iniciarEditoresAngulo(cuerpo);
+      estimarLoteCampana();
     };
     function guardar(el, valor) {
       var r = raiz();
@@ -434,6 +437,7 @@
       if (!raiz() || t.closest('form')) return;
       var cajaDescribir = t.closest('[data-describir]');
       if (cajaDescribir) { guardarDescripcion(cajaDescribir); return; }
+      if (t.matches('[data-lote-modelo]')) { estimarLoteCampana(); return; }
       if (t.matches('[data-agregar-familia]')) {
         var v = t.value.trim();
         if (!v) return;
@@ -475,6 +479,58 @@
         })
         .catch(function (e) { err.textContent = T.mensaje(e); err.hidden = false; });
     }
+    // ---- Pestaña Ideas (entrega 2) ----
+    var esperaIdea = {};
+    function guardarIdea(card) {
+      var cuerpoJson = {};
+      card.querySelectorAll('input[name], textarea[name]').forEach(function (el) { if (!el.readOnly) cuerpoJson[el.name] = el.value; });
+      var err = card.querySelector('[data-error-idea]'), ok = card.querySelector('.panel-idea-guardado');
+      err.hidden = true;
+      fetch(card.dataset.url, {method: 'POST', headers: HJ, body: JSON.stringify(cuerpoJson)})
+        .then(T.json)
+        .then(function () {
+          card.querySelectorAll('input[name], textarea[name]').forEach(function (el) { delete el.dataset.sucio; });
+          // El gancho de la tarjeta y el del ángulo son el mismo (doctrina, bloque 2).
+          var g = card.querySelector('input[name="gancho"]'), ga = card.querySelector('[data-angulo-campo="gancho"]');
+          if (g && ga) ga.value = g.value;
+          ok.hidden = false;
+          setTimeout(function () { ok.hidden = true; }, 1500);
+        })
+        .catch(function (e) { err.textContent = T.mensaje(e); err.hidden = false; });
+    }
+    function estimarLoteCampana() {
+      var caja = cuerpo.querySelector('[data-generar]');
+      var btn = caja && caja.querySelector('[data-generar-lote]');
+      if (!btn) return;
+      var texto = caja.querySelector('[data-lote-texto]');
+      var mv = caja.querySelector('[data-lote-modelo="video"]').value, mi = caja.querySelector('[data-lote-modelo="imagen"]').value;
+      btn.disabled = true;
+      texto.textContent = 'Calculando el costo…';
+      fetch(caja.dataset.urlEstimar + '?campana_id=' + encodeURIComponent(caja.dataset.campana) +
+            '&modelo_video=' + encodeURIComponent(mv) + '&modelo_imagen=' + encodeURIComponent(mi), {headers: H})
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          if (j.error) { texto.textContent = j.error; return; }
+          texto.textContent = j.texto;
+          var n = j.videos + j.imagenes;
+          btn.textContent = n ? 'Generar ' + n + ' pieza(s) — US$ ' + j.usd.toFixed(2) : 'Nada que generar';
+          btn.disabled = !n;
+        })
+        .catch(function () { texto.textContent = 'No se pudo calcular el costo.'; });
+    }
+    panel.addEventListener('input', function (ev) {
+      var el = ev.target;
+      if (el.closest('.angulo-editor')) {
+        // angulo.js guarda solo a los 800 ms; su marca de «sin guardar» se quita después.
+        setTimeout(function () { delete el.dataset.sucio; }, 2500);
+        return;
+      }
+      if (!el.name || el.readOnly) return;
+      var card = el.closest('.panel-idea');
+      if (!card) return;
+      clearTimeout(esperaIdea[card.dataset.cp]);
+      esperaIdea[card.dataset.cp] = setTimeout(function () { guardarIdea(card); }, 800);
+    });
     panel.addEventListener('click', function (ev) {
       if (!raiz()) return;
       var b;
@@ -485,6 +541,39 @@
           cajaD.hidden = !cajaD.hidden;
           if (!cajaD.hidden) cajaD.querySelector('[data-descripcion]').focus();
         }
+        return;
+      }
+      var proponer = ev.target.closest('[data-proponer]');
+      if (proponer) {
+        proponer.disabled = true;
+        var fdP = new FormData();
+        if (proponer.dataset.mas) fdP.append('mas', proponer.dataset.mas);
+        if (proponer.dataset.tipo) fdP.append('tipo', proponer.dataset.tipo);
+        fetch(proponer.dataset.url, {method: 'POST', headers: H, body: fdP}).then(T.json)
+          .then(function () { return T.abrir(raiz().dataset.cid, 'ideas'); })
+          .catch(function (e) { proponer.disabled = false; avisar(T.mensaje(e)); });
+        return;
+      }
+      var accionIdea = ev.target.closest('[data-idea-accion]');
+      if (accionIdea) {
+        accionIdea.disabled = true;
+        fetch(accionIdea.dataset.url, {method: 'POST', headers: H}).then(T.json)
+          .then(function () { var cid = raiz().dataset.cid; T.refrescarTarjeta(cid); return T.abrir(cid, 'ideas'); })
+          .catch(function (e) { accionIdea.disabled = false; avisar(T.mensaje(e)); });
+        return;
+      }
+      var generar = ev.target.closest('[data-generar-lote]');
+      if (generar) {
+        var cajaG = generar.closest('[data-generar]'), errG = cajaG.querySelector('.campo-error');
+        generar.disabled = true;
+        errG.hidden = true;
+        var fdG = new FormData();
+        fdG.append('campana_id', cajaG.dataset.campana);
+        fdG.append('modelo_video', cajaG.querySelector('[data-lote-modelo="video"]').value);
+        fdG.append('modelo_imagen', cajaG.querySelector('[data-lote-modelo="imagen"]').value);
+        fetch(cajaG.dataset.urlLote, {method: 'POST', headers: H, body: fdG}).then(T.json)
+          .then(function () { var cid = raiz().dataset.cid; T.refrescarTarjeta(cid); return T.abrir(cid, 'piezas'); })
+          .catch(function (e) { generar.disabled = false; errG.textContent = T.mensaje(e); errG.hidden = false; });
         return;
       }
       if ((b = ev.target.closest('[data-quitar-familia]'))) {

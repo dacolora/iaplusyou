@@ -1,6 +1,7 @@
-{# Puerta de costo del lote (spec §2.2). Se incluye en sprint_detalle.html y en
-   campana_ideas.html. `abrirLote(campanaId)` pide el estimado, lo muestra y
-   habilita el botón; nada se encola sin este clic. Contexto: sprint,
+{# Puerta de costo del lote de TODO el sprint (spec §2.2), incluida en
+   sprint_detalle.html; la caja «Generar» de la pestaña Ideas del panel usa las
+   mismas rutas para una campaña. `abrirLote(campanaId)` pide el estimado, lo
+   muestra y habilita el botón; nada se encola sin este clic. Contexto: sprint,
    modelos_video, modelos_imagen, modelo_video_defecto, modelo_imagen_defecto. #}
 <dialog id="lote-modal" class="modal-caja sprint-lote-modal">
   <form method="post" action="{{ url_for('sprints.lote', cliente=cliente, sid=sprint.id) }}" id="form-lote">
