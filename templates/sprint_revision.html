@@ -64,7 +64,11 @@
         {% if p.estado in ("listo", "degradada") %}
         <button type="button" class="btn-generar btn-xs js-aprobar">Aprobar</button>
         <button type="button" class="btn-xs btn-peligro js-rechazar">Rechazar</button>
-        <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}" title="Abrir en Crear (final edition, experimentos)">Final edition</a>
+        {# Final edition tiene su pestaña (2026-09-27): se abre ahí, con el
+           detalle de esta pieza (#final?cf=<id>). Una imagen no tiene final. #}
+        {% if p.tipo != "imagen" %}
+        <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente) }}#final{% if p.cf_id %}?cf={{ p.cf_id | urlencode }}{% endif %}" title="Abrir esta pieza en la pestaña Final edition: guion, voz, música y finales por país">Final edition</a>
+        {% endif %}
         {% endif %}
         {% if p.estado == "error" %}
         <form method="post" action="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit="return confirm('Reintentar gasta de nuevo (USD {{ p.costo_regenerar }}). ¿Seguir?');"><input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">Reintentar (USD {{ p.costo_regenerar }})</button></form>

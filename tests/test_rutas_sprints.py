@@ -715,6 +715,18 @@ def test_revision_pagina_y_acciones(con_ideas, monkeypatch, tmp_path):
     assert datos.idea("acme", iv)["revision"] == "aprobada"
 
 
+def test_revision_lleva_cada_video_a_su_final_edition(con_ideas, monkeypatch, tmp_path):
+    """Final edition salió de Crear a su pestaña (2026-09-27): el botón de la
+    bandeja abre esa pestaña con el detalle de la pieza (#final?cf=<id>); una
+    imagen no tiene final edition y no lo ofrece."""
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    html = con_ideas["c"].get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert f'href="/cliente/acme#final?cf={cfs[iv]}"' in html
+    assert f"cf={cfs[ii]}" not in html
+    assert html.count(">Final edition</a>") == 1
+    assert "/cliente/acme#creativeflowplus" not in html and "Abrir en Crear" not in html
+
+
 def test_repetir_qa_limpia_el_marcador_y_encola_un_solo_qa(con_ideas, monkeypatch, tmp_path):
     """F5: una pieza cuyo QA falló muestra el motivo y «Repetir QA»; el POST
     borra el marcador y encola exactamente un `sprint_qa_pieza` (nunca

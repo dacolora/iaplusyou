@@ -482,7 +482,8 @@ def test_plantilla_imagen_no_muestra_final_edition():
     assert 'data-cf="cf_1"' not in html and "Preparar guion con IA" not in html
     assert "Videos listos (0)" in html
     crear = env.get_template("_tab_creativeflowplus.html").render(**ctx)
-    assert "Llevar a final edition" not in crear and "Final edition" not in crear
+    marcado = re.sub(r"<script>.*?</script>", "", crear, flags=re.S)   # lo que se ve, sin los comentarios del JS
+    assert "Llevar a final edition" not in marcado and "Final edition" not in marcado
     crear = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo()]))
     assert 'href="#final?cf=cf_1"' in crear and "Llevar a final edition" in crear
     assert "Preparar guion con IA" not in crear

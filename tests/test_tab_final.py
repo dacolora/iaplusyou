@@ -84,3 +84,29 @@ def test_cada_modal_toma_solo_las_tarjetas_de_su_pestana(app, pieza):
     # Tarjetas: el video de la pieza + su final, cada una en su cuadrícula.
     assert final.count(f'data-cf="{pieza}"') == 1
     assert f'data-cf="{pieza}__es_CO"' in final
+
+
+def test_cerrar_el_detalle_suelta_la_pieza_del_hash_y_un_hash_roto_no_rompe(app):
+    """Con «#final?cf=<id>» vivo, la recarga automática (un guion o una final
+    que termina) reabriría esa pieza: al cerrar el detalle el hash vuelve a
+    «#final». Un «%» suelto escrito a mano no tumba el script."""
+    final = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    cierre = final[final.index("modal.addEventListener('close'"):]
+    assert "history.replaceState(null, '', '#final')" in cierre[:cierre.index("});")]
+    assert "try { cf = decodeURIComponent(m[1]); } catch (e) { return; }" in final
+    # Crear ya no arranca barras de trabajo en su detalle: no le queda ninguna.
+    crear = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "creativeflowplus")
+    assert "[data-poll-job]" not in crear
+
+
+def test_en_pantalla_ancha_el_detalle_de_final_edition_se_desplaza_por_dentro():
+    """El guion y «Producir finales» son largos: en pantalla ancha la columna
+    de datos se desplaza y el video queda a la vista. Solo en #fe-modal: el
+    modal de Crear y la ficha de Referentes no cambian."""
+    css = open("static/style.css", encoding="utf-8").read()
+    i = css.index("@media (min-width: 721px) {\n  #fe-modal")
+    bloque = css[i:css.index("\n}\n", i)]
+    assert "#fe-modal .generado-modal-cuerpo { grid-template-rows: minmax(0, 1fr); }" in bloque
+    assert "#fe-modal .detalle-info { overflow-y: auto; }" in bloque
+    assert ".generado-modal-cuerpo { display: grid; grid-template-columns: minmax(260px, 44%) 1fr; max-height: 92vh; }" in css
+    assert css.count("grid-template-rows: minmax(0, 1fr)") == 1

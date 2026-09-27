@@ -359,11 +359,6 @@
       if (!tpl) return;
       cuerpo.innerHTML = '';
       cuerpo.appendChild(tpl.content.cloneNode(true));
-      // Los <script> clonados no corren: una barra de trabajo dentro del
-      // detalle (publicación orgánica en curso) arranca su polling acá.
-      cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
-        if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
-      });
       modal.showModal();
     }
     document.querySelectorAll('#creativeflowplus-resultados .generado').forEach(function (card) {
@@ -660,7 +655,9 @@
     document.getElementById('fp-musica-usar').addEventListener('click', function () {
       inicioInput.value = Math.floor(audioPrev.currentTime || 0);
     });
-    // Los dos selectores (Crear y, dentro de cada <template> de detalle, «Producir finales»).
+    // Los selectores de «Mi música» de toda la página: el de Crear y el de
+    // «Producir finales» dentro de cada <template> de detalle de la pestaña
+    // Final edition (y el del detalle abierto, que ya es parte del documento).
     function pintarCanciones(canciones) {
       var grupos = Array.prototype.slice.call(document.querySelectorAll('optgroup.mm-opciones'));
       document.querySelectorAll('template.generado-detalle').forEach(function (t) {

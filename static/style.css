@@ -1167,6 +1167,15 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .detalle-acciones { display: flex; gap: .5rem; flex-wrap: wrap; align-items: flex-start; margin-top: 1.2rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .detalle-acciones a.btn-generar { text-decoration: none; display: inline-block; }
 @media (max-width: 720px) { .generado-modal-cuerpo { grid-template-columns: 1fr; } .detalle-media { min-height: 220px; } }
+/* Final edition (2026-09-27): el guion y «Producir finales» son largos. En
+   pantalla ancha la fila de la rejilla no pasa del alto del modal y la columna
+   de datos se desplaza sola: el video queda a la vista. Solo #fe-modal (Crear
+   y la ficha de Referentes siguen igual); en celular es una columna y el
+   modal entero se desplaza, como siempre. */
+@media (min-width: 721px) {
+  #fe-modal .generado-modal-cuerpo { grid-template-rows: minmax(0, 1fr); }
+  #fe-modal .detalle-info { overflow-y: auto; }
+}
 
 /* Portada (landing) e inicio de sesión */
 .landing-hero { display: grid; grid-template-columns: 1.15fr .85fr; gap: 3rem; align-items: center; padding: 2.5rem 0 3.5rem; }

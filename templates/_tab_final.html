@@ -345,8 +345,13 @@
     document.getElementById('fe-modal-cerrar').addEventListener('click', function () { modal.close(); });
     modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
     // Igual que en Crear: al cerrar (×, fondo o Escape) se vacía el cuerpo y
-    // el video del detalle deja de sonar.
-    modal.addEventListener('close', function () { cuerpo.innerHTML = ''; });
+    // el video del detalle deja de sonar. Además el hash vuelve a «#final»:
+    // si quedara «#final?cf=<id>», la recarga automática (un guion o una final
+    // que termina) volvería a abrir esa pieza sin que nadie lo pidiera.
+    modal.addEventListener('close', function () {
+      cuerpo.innerHTML = '';
+      if (/^#final\?cf=/.test(location.hash)) history.replaceState(null, '', '#final');
+    });
     // "Producir N finales": el formulario vive en un <template> clonado, así
     // que el listener va delegado sobre el cuerpo del modal.
     cuerpo.addEventListener('change', function (e) {
@@ -368,7 +373,9 @@
     function desdeHash() {
       var m = /^#final\?cf=([^&]+)/.exec(location.hash);
       if (!m) return;
-      var card = panel.querySelector('#fe-videos .generado[data-cf="' + CSS.escape(decodeURIComponent(m[1])) + '"]');
+      var cf;
+      try { cf = decodeURIComponent(m[1]); } catch (e) { return; }   // un «%» suelto escrito a mano
+      var card = panel.querySelector('#fe-videos .generado[data-cf="' + CSS.escape(cf) + '"]');
       if (card) abrir(card);
     }
     // Se espera a que cliente.html muestre la pestaña: este script corre antes
