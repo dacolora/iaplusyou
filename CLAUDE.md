@@ -516,7 +516,7 @@ failure raises `produccion.VozFatal`, and any exception raised after paying carr
 Capa 3 (2026-09-27): the browser preview `/cliente/<c>/ediciones/<id>` (Blueprint
 `final_edition/rutas_editor.py`, data from `final_edition/vista_previa.py`, open to anyone with access
 to the project) — ES modules in `static/editor/` (pure: `geometria`, `tiempo`, `resolver`, `precio`,
-`texto`, `subtitulos`, `audio`, `reloj`; browser: `texto_canvas`, `videos`, `lienzo`, `motor_audio`,
+`texto`, `subtitulos`, `audio`, `reloj`, `pendientes`; browser: `texto_canvas`, `videos`, `lienzo`, `motor_audio`,
 `vista`), tested with Node's own runner through `tests/test_editor_js.py` against parity tables that
 Python generates (`tests/fixtures/generar_casos_editor.py`; `test_casos_del_editor_al_dia` fails when
 one is stale). The preview draws only what the compiler renders (no rotation/PIP/watermark; x/y
@@ -525,8 +525,9 @@ metrics); audio is Web Audio with a ducking curve precomputed from the voice `pi
 on R2 (`storage/r2_cors.py`, applied by hand), while video proxies and images load WITHOUT
 `crossOrigin` (read-only preview; capa 5, which reads the canvas as PNG, must restore it). Proxies
 are short-side 540 with a keyframe every 15 frames (`tareas.edicion.PROXY_VERSION = 2`; the page
-re-queues older ones, free).
-`sembrar_edicion_demo.py` builds a local demo edition (no spend, no R2).
+re-queues older ones, free) and polls for them at most 5 min, swapping each one in as soon as it is ready
+(never while playing). `sembrar_edicion_demo.py` builds a local demo edition (no spend, no R2); its CLI
+refuses when `PLATAFORMA_URL` (env or root `.env`) points to a non-local host.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

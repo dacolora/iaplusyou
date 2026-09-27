@@ -359,7 +359,7 @@ def test_armar_prompt_con_ia_sigue_como_opcion(app):
 
 def test_formulario_ofrece_generar_y_armar_prompt(app):
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    crear = html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-sprints"')]
+    crear = html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-final"')]   # solo Crear (Final edition es la pestaña siguiente)
     form = crear[crear.index('id="form-flowplus"'):crear.index("</form>", crear.index('id="form-flowplus"'))]
     assert 'name="modo_prompt" value="directo"' in form and 'id="fp-generar"' in form
     assert 'name="modo_prompt" value="director"' in form and "Crear super prompt con IA" in form

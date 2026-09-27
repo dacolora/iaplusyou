@@ -15,7 +15,7 @@ def _html(app):
 
 
 def _crear(html):
-    return html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-sprints"')]
+    return html[html.index('id="tab-creativeflowplus"'):html.index('id="tab-final"')]   # solo Crear (Final edition es la pestaña siguiente)
 
 
 def _form(crear):

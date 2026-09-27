@@ -10,10 +10,15 @@ CORS. `extra.local` deja que preparar_rutas también la renderice.
     venv/bin/python3 sembrar_edicion_demo.py --cliente <proyecto>
 
 Usa la base de CREATV_DB_URL (o data/creatv.db). Cada corrida crea una
-edición nueva; los materiales se reutilizan por hash."""
+edición nueva; los materiales se reutilizan por hash. Desde la línea de
+comandos se niega si PLATAFORMA_URL (del entorno o del .env raíz) apunta a
+otra máquina que esta: nunca escribe una edición de demostración en
+producción. `sembrar()` no mira eso (lo usan las pruebas y el lanzador local)."""
 import argparse
 import os
 import subprocess
+import sys
+from urllib.parse import urlsplit
 
 from PIL import Image
 
@@ -93,10 +98,45 @@ def sembrar(cliente, carpeta=None, url_base=None, cf_id=None):
     return ediciones.crear(cliente, "video", "Demo de la vista previa", doc, cf_id=cf_id)["id"]
 
 
-if __name__ == "__main__":
+HOSTS_LOCALES = frozenset(("localhost", "127.0.0.1", "::1"))
+
+
+def _cargar_env():
+    """El mismo .env raíz que lee la app: en el servidor PLATAFORMA_URL vive
+    ahí, no en la sesión de la terminal. No pisa lo que ya está en el entorno."""
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(BASE, ".env"))
+
+
+def host_no_local():
+    """El host de PLATAFORMA_URL cuando apunta fuera de esta máquina (o el
+    valor tal cual si no se entiende: ante la duda, no se siembra); None sin
+    PLATAFORMA_URL o con localhost/127.0.0.1."""
+    url = (os.environ.get("PLATAFORMA_URL") or "").strip()
+    if not url:
+        return None
+    host = (urlsplit(url if "//" in url else f"//{url}").hostname or "").lower()
+    if host in HOSTS_LOCALES:
+        return None
+    return host or url
+
+
+def main(argv=None):
     p = argparse.ArgumentParser(description="Crea una edición de demostración para la vista previa del editor.")
     p.add_argument("--cliente", required=True, help="proyecto donde crearla (carpeta de clientes/)")
     p.add_argument("--cf", default=None, help="sesión de Crear a la que cuelga (opcional)")
-    a = p.parse_args()
+    a = p.parse_args(argv)
+    _cargar_env()
+    host = host_no_local()
+    if host:
+        print(f"No se crea la edición de demostración: PLATAFORMA_URL apunta a {host}, que no es esta "
+              "máquina. La demo es solo para probar en local (localhost o 127.0.0.1); nunca se escribe "
+              "en producción.", file=sys.stderr)
+        return 1
     eid = sembrar(a.cliente, cf_id=a.cf)
     print(f"Edición {eid}: http://127.0.0.1:5050/cliente/{a.cliente}/ediciones/{eid}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
