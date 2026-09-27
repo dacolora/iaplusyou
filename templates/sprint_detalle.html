@@ -74,7 +74,7 @@
   </div>
 </details>
 
-{% if lote and lote.planeadas %}
+{% if lote and (lote.listas or lote.generando or lote.encoladas or lote.error) %}
 <p class="vacio sprint-lote-resumen" id="sprint-lote-resumen">
   {{ lote.listas }} listas · {{ lote.generando }} generando · {{ lote.encoladas }} en cola · {{ lote.error }} con error · {{ lote.aprobadas }} aprobadas · USD {{ '%.2f' % lote.costo_usd }} gastado
 </p>

@@ -97,6 +97,7 @@ def test_tablero_muestra_tarjetas_resumen_y_siguiente_paso(app):
                  "1–31 oct · 🇨🇴 español · Hot Sale · imita: Crocs", 'id="tablero-panel"', 'id="tablero-nueva"'):
         assert frag in html, frag
     assert "-ajax" not in html and 'name="temporada_id"' not in html
+    assert 'id="sprint-lote-resumen"' not in html    # F4: nada en cola/generando/listo -- no hay resumen que mostrar
 
 
 def test_tablero_de_un_sprint_viejo_abre(app):
