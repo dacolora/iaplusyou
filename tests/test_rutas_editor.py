@@ -158,3 +158,20 @@ def test_guardar_exige_mismo_origen_y_acceso(dashboard, encolados):
     assert r.status_code == 302
     r = _cliente_admin(dashboard).put("/cliente/acme/ediciones/999", json=cuerpo)
     assert r.status_code == 409
+
+
+def test_guardar_rechaza_el_logo_de_marca_de_otro_proyecto(dashboard, encolados):
+    # el logo puede llegar solo en marca.logo_material_id, sin ningún clip
+    # que lo use — el chequeo de "materiales ajenos" tiene que verlo igual
+    # (documento.validar lo deriva a doc["materiales"]).
+    import ediciones
+    import materiales
+    ed, clon, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    ajeno = materiales.registrar("otro", tipo="imagen", origen="marca", url="https://r2.test/logo.png",
+                                  hash="h-logo-ajeno", bytes=1)
+    doc = _doc_valido(clon["id"])
+    doc["marca"]["logo_material_id"] = ajeno["id"]
+    r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": doc, "version_n": ed["version_n"]})
+    assert r.status_code == 400 and "no son de este proyecto" in r.get_json()["error"]
+    assert ediciones.cargar("acme", ed["id"])["documento"]["marca"]["logo_material_id"] is None

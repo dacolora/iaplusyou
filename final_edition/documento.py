@@ -21,8 +21,8 @@ Contrato que `validar` garantiza al resto (compilador, tareas, capa 3):
   - `velocidad` solo en video/superpuesto: en audio debe ser 1.0 hasta que
     el compilador aplique `atempo`;
   - `materiales` se DERIVA: unión de la lista recibida, los `material_id`
-    de todos los clips y los valores de `pngs`, ordenada — la lista que
-    manda el navegador nunca es la única fuente;
+    de todos los clips, los valores de `pngs` y `marca.logo_material_id`,
+    ordenada — la lista que manda el navegador nunca es la única fuente;
   - claves de destino en `variables.textos`/`variables.voz`/
     `subtitulos.palabras`/`por_destino`: `<idioma>_<PAIS>` (p. ej. "es_MX")
     gana sobre `<idioma>` ("es") si ambas existen (`valor_destino`);
@@ -386,8 +386,12 @@ def validar(doc):
     doc.setdefault("marca", {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None})
     doc.setdefault("mezcla", {"preset": "equilibrada", "volumenes": None})
     # `materiales` se deriva: lo que mandó el navegador ∪ material_id de los
-    # clips de todas las pistas ∪ voces por destino ∪ valores de pngs. Así
-    # `en_uso` y `marcar_uso` nunca dependen de que la lista venga completa.
+    # clips de todas las pistas ∪ voces por destino ∪ valores de pngs ∪ el
+    # logo de marca (marca.logo_material_id: puede no estar en ningún clip
+    # todavía, p. ej. si se asignó desde el editor sin que borrador.py lo
+    # haya bajado a una pista "p_logo"). Así `en_uso`, `marcar_uso` y el
+    # chequeo de "materiales de otro proyecto" nunca dependen de que la
+    # lista venga completa.
     mats = {_entero_positivo(x, "materiales[]") for x in (doc.get("materiales") or [])}
     for p in doc["pistas"]:
         for c in p["clips"]:
@@ -397,6 +401,9 @@ def validar(doc):
                 if alt is not None:      # None = sin voz para ese destino: no hay material que sumar
                     mats.add(int(alt["material_id"]))
     mats.update((doc.get("pngs") or {}).values())
+    logo = doc["marca"].get("logo_material_id")
+    if logo is not None:
+        mats.add(_entero_positivo(logo, "marca.logo_material_id"))
     doc["materiales"] = sorted(mats)
     doc["miniatura_ms"] = _entero_no_negativo(doc.get("miniatura_ms", 0), "miniatura_ms")
     return doc
