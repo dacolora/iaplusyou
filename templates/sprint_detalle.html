@@ -174,11 +174,21 @@
       if (t) t.classList.add('activa');
     }
     function mostrar() { panel.hidden = false; fondo.hidden = false; document.body.classList.add('panel-abierto'); }
+    // F8 (ronda final): reabrir la MISMA campaña (tras guardar un campo que
+    // recarga el panel, o agregar/quitar un referente) blanqueaba a
+    // «Cargando…» y perdía el scroll. `panelActualCid` es el cid cuyo
+    // contenido vive hoy en `cuerpo` (cargado o cargando); `peticionPanel` es
+    // un contador para que una respuesta vieja (de una `abrir` ya superada
+    // por otra más nueva) nunca pise a la que sí corresponde mostrar.
+    var panelActualCid = null;
+    var peticionPanel = 0;
     function cerrar() {
       panel.hidden = true; fondo.hidden = true; cuerpo.innerHTML = '';
       document.body.classList.remove('panel-abierto'); marcarUrl(null); marcarActiva(null);
+      panelActualCid = null;
     }
     function noExiste() {
+      panelActualCid = null;
       cuerpo.innerHTML = '<div class="estado-vacio"><p class="estado-vacio-titulo">Esta campaña ya no existe</p>' +
         '<p class="estado-vacio-texto">Pudo borrarse en otra pestaña.</p><a class="btn-sm" href="' + base + '">Volver al tablero</a></div>';
     }
@@ -192,23 +202,33 @@
     }
     function abrir(cid) {
       mostrar(); marcarUrl(cid); marcarActiva(cid);
-      cuerpo.innerHTML = '<p class="vacio">Cargando la campaña…</p>';
+      var mismo = panelActualCid === cid;
+      var scroll = mismo ? panel.scrollTop : 0;
+      if (!mismo) cuerpo.innerHTML = '<p class="vacio">Cargando la campaña…</p>';
+      panelActualCid = cid;
+      var miPeticion = ++peticionPanel;
       return fetch(base + '/campanas/' + cid + '/panel', {headers: H})
         .then(function (r) {
-          if (r.status === 404) { noExiste(); return null; }
+          if (r.status === 404) { if (miPeticion === peticionPanel) noExiste(); return null; }
           if (!r.ok) throw new Error();
           return r.text();
         })
         .then(function (html) {
-          if (html === null) return;
+          if (html === null || miPeticion !== peticionPanel) return;
           cuerpo.innerHTML = html;
+          if (mismo) panel.scrollTop = scroll;
           if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo();
         })
-        .catch(function () { cuerpo.innerHTML = '<p class="campo-error">No se pudo abrir la campaña. Revisa tu conexión e intenta de nuevo.</p>'; });
+        .catch(function () {
+          if (miPeticion !== peticionPanel) return;
+          cuerpo.innerHTML = '<p class="campo-error">No se pudo abrir la campaña. Revisa tu conexión e intenta de nuevo.</p>';
+        });
     }
     function abrirNueva() {
       mostrar(); marcarUrl(null); marcarActiva(null);
       cuerpo.innerHTML = document.getElementById('tablero-nueva').innerHTML;
+      panelActualCid = null;
+      peticionPanel++;    // cualquier `abrir` todavía en vuelo queda obsoleta
     }
     window.tablero = {abrir: abrir, abrirNueva: abrirNueva, cerrar: cerrar, refrescarTarjeta: refrescarTarjeta,
                       json: json, mensaje: mensaje, cuerpo: cuerpo, panel: panel, base: base};

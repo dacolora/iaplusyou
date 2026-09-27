@@ -357,6 +357,22 @@ def test_json_del_tablero_avisa_amigable_si_el_servidor_no_responde_json(app):
     assert ".catch(" in funcion    # r.json() puede rechazar (no es JSON): hay que atraparlo, no dejarlo subir crudo
 
 
+def test_panel_no_se_blanquea_ni_pierde_el_scroll_al_reabrir_la_misma_campana(app):
+    """F8 (ronda final): `abrir(cid)` blanqueaba a «Cargando…» y perdía el
+    scroll aun cuando la campaña que reabría era la MISMA que ya estaba
+    mostrando -- pasa después de guardar un campo que recarga el panel, o de
+    agregar/quitar un referente. Dos `abrir` rápidas también podían dejar que
+    una respuesta vieja pisara a la más nueva."""
+    from sprints import datos
+    sid = _sprint(datos)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
+    js = html[html.index("function mostrar()"):html.index("window.tablero = {")]
+    assert "panelActualCid" in js and "peticionPanel" in js
+    assert "if (!mismo)" in js or "if (mismo)" in js
+    assert "panel.scrollTop" in js
+    assert js.count("panelActualCid = null") >= 2    # cerrar() y noExiste() sueltan el cid actual
+
+
 def test_sugeridos_siguen_el_enfoque_y_avisan_lo_aflojado(app):
     from sprints import datos
     uno = _referente(1, "UGC")
