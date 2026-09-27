@@ -225,6 +225,17 @@ def _js_panel(html):
     return html[html.index("// Panel de la campaña: autoguardado"):]
 
 
+def test_la_guardia_de_base_solo_marca_selects_en_change(app):
+    """F1: en un campo de texto `change` llega al salir (blur), DESPUÉS del
+    autoguardado con espera que ya borró la marca: volver a marcarlo lo dejaba
+    sucio para siempre y la página nunca se recargaba sola."""
+    from sprints import datos
+    html = _tablero(app["c"], _sprint(datos))
+    assert "['input', 'change'].forEach" not in html
+    assert "document.addEventListener('input', marcarSucio);" in html
+    assert "document.addEventListener('change', function (e) { if (e.target && e.target.tagName === 'SELECT') marcarSucio(e); });" in html
+
+
 def test_precio_de_reintentar_y_regenerar_es_el_del_modelo_de_la_pieza(con_ideas, monkeypatch, tmp_path):
     """F2 + F6: la pieza se hizo con Kling O3 Pro (no el modelo del proyecto,
     Wan 3.0): el precio es el de Kling, con la duración recortada a su rango
