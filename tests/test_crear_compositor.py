@@ -85,3 +85,11 @@ def test_el_script_maneja_menus_fichas_y_pastillas(app):
                   "function pintarPastillas()", "function pintarCatalogo()", "e.dataTransfer.files"):
         assert pieza in html, pieza
     assert "bloqueVideo" not in html          # los bloques viejos se reemplazan por [data-solo-video]
+
+
+def test_css_del_compositor():
+    css = open("static/style.css", encoding="utf-8").read()
+    bloque = css[css.index("Crear: compositor (2026-09-27)"):]
+    for sel in (".crear-comp", ".crear-pill", ".crear-menu", ".crear-ficha:disabled", ".crear-interruptor input",
+                "@media (max-width: 760px)", "body.crear-menu-abierto .crear-velo"):
+        assert sel in bloque, sel
