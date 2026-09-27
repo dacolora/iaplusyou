@@ -4,10 +4,12 @@ imágenes» le piden a Claude la explicación / los motivos / el título para la
 persona en el idioma DEL PROYECTO — el prompt del modelo (video o imagen)
 sigue siempre en inglés, como hoy. `refinador.validar` es aparte: sus
 mensajes van en el idioma de quien MIRA LA PANTALLA (gettext)."""
-import idiomas
+from flask import Flask
+from flask_babel import Babel
 
+import idiomas
 from tests.fixtures_guiones import CONFIG, PLAN, fake, video_nuevo
-from tests.test_guiones_refinador import CLIP, _crear, _json, _llamar_fijo
+from tests.test_guiones_refinador import CLIP, _crear, _envejecer, _json, _llamar_fijo
 
 
 def _proyecto_en_idioma(monkeypatch, tmp_path, idioma, cliente="acme"):
@@ -17,6 +19,19 @@ def _proyecto_en_idioma(monkeypatch, tmp_path, idioma, cliente="acme"):
     import proyectos
     monkeypatch.setattr(proyectos, "_path", lambda c: str(tmp_path / f"{c}.json"))
     idiomas.guardar_de_proyecto(cliente, idioma)
+
+
+def _app_con_catalogo_real():
+    """App Flask + Babel mínima, con el catálogo REAL del repo (mismo patrón
+    que `app_prueba` de tests/test_idiomas.py, pero sin fabricar un catálogo
+    de prueba: acá lo que importa es la traducción real que este task agregó).
+    `locale_selector=idiomas.de_peticion` es el mismo que usa `dashboard.py`."""
+    app = Flask(__name__)
+    app.secret_key = "prueba"
+    app.config["BABEL_DEFAULT_LOCALE"] = "es"
+    app.config["BABEL_TRANSLATION_DIRECTORIES"] = idiomas.DIR_TRADUCCIONES
+    Babel(app, locale_selector=idiomas.de_peticion)
+    return app
 
 
 def _sin_frases_permitidas(system):
@@ -158,3 +173,57 @@ def test_validar_en_el_idioma_de_quien_mira_la_pantalla():
     problemas_es = validar("")
     assert problemas_en == ["The prompt is empty."]
     assert problemas_es == ["El prompt está vacío."]
+
+
+def test_mensaje_interrumpido_sigue_el_idioma_de_quien_mira_la_pantalla(base_temporal):
+    """`MENSAJE_INTERRUMPIDO` (fix round 1): `_vencer_pendientes` corre siempre
+    dentro de una petición real (vía `obtener`/`pedir_cambio`/`aprobar`), así
+    que el aviso de chat interrumpido sigue el idioma de quien mira la
+    pantalla, igual que `validar` — DEFECTO ("es") fuera de toda petición."""
+    from guiones import refinador
+    p = _crear()
+    mid = refinador.pedir_cambio("acme", p["id"], "uno")
+    _envejecer(mid)
+    with idiomas.en_idioma("en"):
+        d = refinador.obtener("acme", p["id"])
+    claude = d["mensajes"][-1]
+    assert claude["estado"] == "error" and claude["contenido"] == "The answer was interrupted. Send your message again."
+
+    p2 = _crear(titulo="Otro")
+    mid2 = refinador.pedir_cambio("acme", p2["id"], "uno")
+    _envejecer(mid2)
+    d2 = refinador.obtener("acme", p2["id"])  # sin petición ni idiomas.en_idioma: DEFECTO
+    assert d2["mensajes"][-1]["contenido"] == "Se interrumpió la respuesta. Vuelve a enviar tu mensaje."
+
+
+# ------------------------------------------------------- guiones/claude.py ---
+
+def test_pedir_json_dentro_de_una_peticion_sigue_el_idioma_de_la_pantalla(base_temporal, monkeypatch, tmp_path):
+    """Fix round 1 (finding 2): dentro de una petición, `pedir_json` NO fuerza
+    el idioma del proyecto — los mensajes que llegan a la persona siguen el
+    idioma de la pantalla (spec §B4, «pantallas = la persona»), aunque el
+    proyecto esté en otro idioma."""
+    from guiones import claude
+    _proyecto_en_idioma(monkeypatch, tmp_path, "en")
+
+    def revienta(*_):
+        raise TimeoutError("lento")
+
+    app = _app_con_catalogo_real()
+    with app.test_request_context("/", headers={"Cookie": "idioma=es"}):
+        data, usd, error = claude.pedir_json("acme", "leer", 1, "sis", [], "Leer", llamar_fn=revienta)
+    assert data is None and "No se pudo consultar a Claude" in error and "TimeoutError" in error
+
+
+def test_pedir_json_sin_peticion_fuerza_el_idioma_del_proyecto(base_temporal, monkeypatch, tmp_path):
+    """Sin petición (el camino real: `recorte.proponer`/`imagenes.escribir`
+    corren en el hilo del worker, sin ningún contexto de Flask), `pedir_json`
+    sigue forzando el idioma del proyecto — es la mejor señal disponible."""
+    from guiones import claude
+    _proyecto_en_idioma(monkeypatch, tmp_path, "en")
+
+    def revienta(*_):
+        raise TimeoutError("lento")
+
+    data, usd, error = claude.pedir_json("acme", "leer", 1, "sis", [], "Leer", llamar_fn=revienta)
+    assert data is None and "Couldn't reach Claude" in error and "TimeoutError" in error

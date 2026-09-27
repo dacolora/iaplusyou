@@ -2103,6 +2103,9 @@ msgstr "Saved locally but the upload to R2 failed: %(error)s"
 msgid "Se guardó localmente pero falló la subida del video a R2: %(error)s"
 msgstr "Saved locally but the video upload to R2 failed: %(error)s"
 
+msgid "Se interrumpió la respuesta. Vuelve a enviar tu mensaje."
+msgstr "The answer was interrupted. Send your message again."
+
 #, python-format
 msgid "Se muestran los últimos %(n)s cobros"
 msgstr "Showing the last %(n)s charges"

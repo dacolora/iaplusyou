@@ -29,7 +29,9 @@ log = logging.getLogger(__name__)
 ORIGENES = ("manual", "pipeline")
 TIPOS = ("clip", "imagen", "libre")
 MINUTOS_PENDIENTE = 3
-MENSAJE_INTERRUMPIDO = "Se interrumpió la respuesta. Vuelve a enviar tu mensaje."
+# N_: se traduce donde se usa (`gettext(MENSAJE_INTERRUMPIDO)` en `_vencer_pendientes`,
+# que corre dentro de una petición — sigue el idioma de quien mira la pantalla).
+MENSAJE_INTERRUMPIDO = idiomas.N_("Se interrumpió la respuesta. Vuelve a enviar tu mensaje.")
 MAX_TEXTO = 40000
 MAX_MENSAJE = 4000
 MAX_TOKENS = 8000
@@ -216,7 +218,7 @@ def _vencer_pendientes(con, prompt_id):
         m.c.prompt_id == prompt_id, m.c.rol == "claude", m.c.estado == "pendiente", m.c.creado_en < limite))]
     if viejos:
         con.execute(m.update().where(m.c.id.in_(viejos), m.c.estado == "pendiente")
-                    .values(estado="error", contenido=MENSAJE_INTERRUMPIDO))
+                    .values(estado="error", contenido=gettext(MENSAJE_INTERRUMPIDO)))
 
 
 def _hay_pendiente(con, prompt_id):

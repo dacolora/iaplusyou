@@ -6,6 +6,7 @@ costura que las pruebas reemplazan; ningún paso importa anthropic directo.
 import json
 import logging
 import re
+from contextlib import nullcontext
 from uuid import uuid4
 
 from flask_babel import gettext
@@ -26,7 +27,8 @@ class RespuestaFallida(RuntimeError):
 
 def llamar(system, messages, max_tokens=8000, timeout=150):
     """(texto, tokens_entrada, tokens_salida). El mensaje de una `RespuestaFallida`
-    sale en el idioma forzado por el llamador (`pedir_json`, vía `idiomas.en_idioma`)."""
+    sale en el idioma que `pedir_json` haya dejado activo (el de la pantalla
+    dentro de una petición, el del proyecto sin petición)."""
     import anthropic
     from generador_prompts import MODEL, _api_key
     api = anthropic.Anthropic(api_key=_api_key(), timeout=timeout, max_retries=0)
@@ -76,12 +78,19 @@ def _registrar(cliente, paso, ref_id, entrada, salida, detalle):
 
 def pedir_json(cliente, paso, ref_id, system, messages, detalle, llamar_fn=None, max_tokens=8000, timeout=150):
     """(data | None, usd, error | None). Nunca lanza: corre en un hilo, y lo
-    que se pagó queda registrado aunque la respuesta no sirva. Los mensajes de
-    error que llegan a la persona se arman en el idioma del proyecto
-    (`idiomas.en_idioma`, que funciona con o sin petición ni app activa: este
-    paso corre en el hilo del worker, nunca dentro de una petición)."""
+    que se pagó queda registrado aunque la respuesta no sirva.
+
+    Idioma de los mensajes de error que llegan a la persona: dentro de una
+    petición (spec §B4, «pantallas = la persona») `gettext` ya resuelve con
+    `idiomas.de_peticion()` — el locale_selector de la app —, así que no hay
+    que forzar nada. Este paso corre casi siempre SIN petición, en el hilo del
+    worker (`trabajos.iniciar` no empuja ningún contexto de Flask): ahí no hay
+    locale de quien mira la pantalla que leer, así que se fuerza el idioma del
+    proyecto con `idiomas.en_idioma` — la mejor señal disponible."""
+    from flask import has_request_context
     fn = llamar_fn or llamar
-    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+    forzar_idioma = nullcontext() if has_request_context() else idiomas.en_idioma(idiomas.de_proyecto(cliente))
+    with forzar_idioma:
         try:
             texto, ent, sal = fn(system, messages, max_tokens, timeout)
         except Exception as e:  # noqa: BLE001 — ver docstring
