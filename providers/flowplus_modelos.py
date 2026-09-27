@@ -108,13 +108,15 @@ IMAGEN = {
 DURACIONES_CREAR = (5, 8, 10, 12, 15, 20, 25, 30)
 DURACION_DEFECTO = 8
 FORMATO_DEFECTO = "9:16"
+# Etiquetas del selector de formato en Crear (_tab_creativeflowplus.html);
+# marcadas con N_, se traducen con {{ nombre|traducir }} donde se muestran.
 FORMATOS_NOMBRES = {
-    "9:16": "Vertical 9:16 (Reels, TikTok, Shorts)",
-    "4:5": "Retrato 4:5 (feed de Instagram)",
-    "1:1": "Cuadrado 1:1",
-    "3:4": "Retrato 3:4",
-    "4:3": "Horizontal 4:3",
-    "16:9": "Horizontal 16:9 (YouTube)",
+    "9:16": N_("Vertical 9:16 (Reels, TikTok, Shorts)"),
+    "4:5": N_("Retrato 4:5 (feed de Instagram)"),
+    "1:1": N_("Cuadrado 1:1"),
+    "3:4": N_("Retrato 3:4"),
+    "4:3": N_("Horizontal 4:3"),
+    "16:9": N_("Horizontal 16:9 (YouTube)"),
 }
 
 

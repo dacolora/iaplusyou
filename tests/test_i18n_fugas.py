@@ -200,3 +200,25 @@ def test_logo_quitar_onsubmit_bien_formado(app_i18n, tmp_path):
         cm = re.fullmatch(r"return confirm\((\".*\")\);", contenido, re.S)
         assert cm, f"[{idioma}] onsubmit mal formado (falta confirm(...); dentro del mismo atributo): {contenido!r}"
         json.loads(cm.group(1))  # el argumento de confirm() tiene que ser un string JSON válido
+
+
+def test_crear_desde_referencias_admin(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("crear-modos", "crear-modo-referencias"))
+    assert not fugas, fugas[:15]
+
+
+def test_crear_desde_referencias_cliente(cliente_en):
+    fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("crear-modos", "crear-modo-referencias"))
+    assert not fugas, fugas[:15]
+
+
+def test_etapas_del_trabajo_en_ingles(admin_en, app_i18n, monkeypatch):
+    """`estado_trabajo` traduce etapa/mensaje/detalle al responder (spec Task 4):
+    tareas/flowplus.py y tareas/director.py marcan sus etapas con N_, y el
+    catálogo trae la traducción — sin tocar `trabajos.consultar` en sí."""
+    import tareas.flowplus as tf
+    monkeypatch.setattr(app_i18n.trabajos, "consultar",
+                        lambda job_id: {"estado": "corriendo", "etapa": tf.ETAPA_MODELO, "mensaje": None,
+                                        "detalle": None, "progreso": 10, "elapsed": 1, "progreso_real": False})
+    datos = admin_en.get("/trabajo/x/estado").get_json()
+    assert datos["etapa"] == "Generating with the model"

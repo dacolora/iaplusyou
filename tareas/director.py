@@ -13,12 +13,16 @@ import flowplus_lanzar
 import flowplus_prompt
 import idiomas
 import trabajos
+from idiomas import N_
 from providers import flowplus_modelos
 from tareas import al_interrumpir, registrar
 
-ETAPA_LEER = "Leyendo referencias"
-ETAPA_PLANOS = "Escribiendo planos"
-ETAPA_LISTO = "Listo"
+# N_(...): dashboard.estado_trabajo traduce etapa/mensaje con gettext al
+# responder (idioma de quien mira la pantalla) — este módulo corre en el
+# worker, sin idioma de petición.
+ETAPA_LEER = N_("Leyendo referencias")
+ETAPA_PLANOS = N_("Escribiendo planos")
+ETAPA_LISTO = N_("Listo")
 ETAPAS_DIRECTOR = [(ETAPA_LEER, 10), (ETAPA_PLANOS, 80), (ETAPA_LISTO, 10)]
 DURACION_ESTIMADA = 25
 
@@ -57,13 +61,13 @@ def ejecutar(tarea):
         prompt = r["prompt_a"]
         datos = {"estado": "ok", "aviso": None, "planos": r["planos"], "planos_b": r["planos_b"], "prompt_b": r["prompt_b"],
                  "diferencia_b": r["diferencia_b"], "modelo_claude": r["modelo_claude"], "version": r["version"], "usd": r["usd"]}
-        mensaje = "Prompt listo — revísalo y genera."
+        mensaje = N_("Prompt listo — revísalo y genera.")
     except director.DirectorError as e:
         prompt, datos = _fallback(cliente, entry, e.motivo)
-        mensaje = "La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes."
+        mensaje = N_("La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes.")
     except Exception as e:  # red, SDK, lo que sea: nunca deja la sesión colgada
         prompt, datos = _fallback(cliente, entry, str(e)[:300])
-        mensaje = "La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes."
+        mensaje = N_("La IA no pudo armar los planos; quedó el prompt básico para que lo edites o rearmes.")
     trabajos.reportar(jid, etapa=ETAPA_LISTO)
     creative_flow.actualizar(cliente, cf_id, estado="prompt_listo", prompt_relleno=prompt, director=datos, idioma_prompt=idioma)
     if p.get("auto_lanzar"):

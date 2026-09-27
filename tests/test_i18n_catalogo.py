@@ -11,7 +11,15 @@ import catalogo_i18n
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MARCADOR = re.compile(r"%\((\w+)\)[sd]")
-PORCENTAJE_SUELTO = re.compile(r"%(?!%|\(\w+\)[sd])")
+# Bug (Task 4, fase 3): con un solo lookahead, el SEGUNDO % de un `%%` ya
+# escapado (p. ej. «Generando… 0%% · 0s», el primer caso real de esto en una
+# plantilla) se marcaba como suelto — el lookahead de la primera mitad ve el
+# `%` que sigue y no la marca, pero nada impedía que la ronda de la segunda
+# mitad, con un espacio o letra después, se marcara ella sola. Un lookbehind
+# que además exige "no venir de un % anterior" hace que NINGÚN carácter de un
+# `%%` ya emparejado dispare la alarma, y una `%` suelta de verdad (una sola,
+# sin la siguiente) se sigue detectando igual que antes.
+PORCENTAJE_SUELTO = re.compile(r"(?<!%)%(?!%)(?!\(\w+\)[sd])")
 # Llamada de traducción dentro de las llaves {…} de un f-string: en Python 3.9
 # el extractor de Babel ve el f-string como un único token STRING y nunca
 # entra a mirar dentro de sus llaves (cuentas.py:237 era así).

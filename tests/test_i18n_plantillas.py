@@ -17,6 +17,8 @@ PLANTILLAS_TRADUCIDAS = [
     "_llave_tarjeta.html", "_meta_conectar.html", "_meta_elegir_forma.html",
     "_meta_agencia_cliente.html", "_meta_propia_guia.html",
     "_tab_settings.html", "_seccion_marca.html", "_comparacion_modelos.html",
+    "_tab_flowplus.html", "_tab_creativeflowplus.html", "_flowplus_bandeja.html",
+    "_selector_productos.html", "_selector_productos_nuevo.html", "_mi_musica.html",
 ]
 
 

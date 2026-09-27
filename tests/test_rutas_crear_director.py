@@ -266,8 +266,10 @@ def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app)
     assert '<option value="8" selected>8 s</option>' in html and 'id="fp-duracion-larga"' in html
     assert "exactamente lo que recibe el modelo" not in html
     # La imagen se cobra al instante (nunca pasa por el director): su botón en
-    # refrescar() debe seguir diciendo "Generar imagen", nunca "gratis".
-    assert "'Generar imagen'" in html
+    # refrescar() debe seguir diciendo "Generar imagen", nunca "gratis". Desde
+    # la Task 4 (fase 3) el literal pasa por {{ _(...)|tojson }} — comillas
+    # dobles (JSON), ya no simples.
+    assert '"Generar imagen"' in html
     # El costo A+B se delega sobre el cuerpo del modal (el formulario de generar
     # vive en el <template> clonado, igual que "Producir N finales"): un
     # querySelectorAll('.fp-generar-form') en la carga de la página nunca vería

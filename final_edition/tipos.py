@@ -44,6 +44,17 @@ NOMBRES_ESTILOS_MUSICA = {
     "urbano": N_("urbano"),
 }
 
+# Misma clave, etiqueta legible (Crear > Desde referencias: selects "Música al
+# crear" y "Producir finales", que antes mostraban la clave cruda). Constante
+# aparte de NOMBRES_ESTILOS_MUSICA de arriba para no tocar el español ya
+# mostrado en Configuración > Generación (msgid distinto).
+NOMBRES_ESTILO_MUSICA = {
+    "energetico": N_("Energético"),
+    "calmado": N_("Calmado"),
+    "lujo": N_("Lujo"),
+    "urbano": N_("Urbano"),
+}
+
 # Países cuya moneda no se muestra con decimales (COP, ARS, CLP).
 _PAISES_SIN_DECIMALES = ("CO", "AR", "CL")
 

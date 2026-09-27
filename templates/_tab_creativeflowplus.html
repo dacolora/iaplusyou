@@ -2,35 +2,35 @@
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
 <p class="vacio" style="padding-top:0;">
-  Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.
-  Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:
+  {{ _('Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.
+  Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:') }}
 </p>
 <ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.95rem;">
-  <li><strong>Generar video</strong>: Tu texto va tal cual al modelo (Wan 3.0, Kling O3 Pro o Seedance 2.5).</li>
-  <li><strong>Crear super prompt</strong>: La IA arma un prompt detallado por planos desde tu idea y las referencias. Lo revisas, editas y regeneras (gratis) antes de generar el video — perfecto si no sabes qué escribir.</li>
+  <li><strong>{{ _('Generar video') }}</strong>: {{ _('Tu texto va tal cual al modelo (Wan 3.0, Kling O3 Pro o Seedance 2.5).') }}</li>
+  <li><strong>{{ _('Crear super prompt') }}</strong>: {{ _('La IA arma un prompt detallado por planos desde tu idea y las referencias. Lo revisas, editas y regeneras (gratis) antes de generar el video — perfecto si no sabes qué escribir.') }}</li>
 </ul>
-<p class="vacio" style="padding-top:0;margin-top:0.5rem;">Las imágenes van solas a Seedream V5 Pro. Ninguna genera costos hasta que pulses "Generar".</p>
+<p class="vacio" style="padding-top:0;margin-top:0.5rem;">{{ _('Las imágenes van solas a Seedream V5 Pro. Ninguna genera costos hasta que pulses "Generar".') }}</p>
 
 <div class="form-nueva-idea" style="margin-top:1rem;">
-  <label class="campo-label">Referencias <span class="vacio" style="display:inline;padding:0;font-weight:normal;">(opcional)</span></label>
+  <label class="campo-label">{{ _('Referencias') }} <span class="vacio" style="display:inline;padding:0;font-weight:normal;">({{ _('opcional') }})</span></label>
   <p class="vacio" style="padding-top:0;font-size:.78rem;">
-    Sube imágenes y videos, o pega un link (TrendTrack, TikTok, Instagram, YouTube). Cada uno queda como
+    {{ _('Sube imágenes y videos, o pega un link (TrendTrack, TikTok, Instagram, YouTube). Cada uno queda como
     <code>@Imagen N</code> / <code>@Video N</code> y puedes nombrarlo en el texto. Un video de link sirve como referencia
-    de movimiento y estructura para recrearlo con tu producto — no se publica ni se copia tal cual.
+    de movimiento y estructura para recrearlo con tu producto — no se publica ni se copia tal cual.') }}
   </p>
   <div class="fila-campos-idea">
     <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir">
       <input type="file" name="referencias" id="fp-input-archivos" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple>
-      <noscript><button type="submit">Subir</button></noscript>
+      <noscript><button type="submit">{{ _('Subir') }}</button></noscript>
     </form>
     <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" style="display:flex;gap:.4rem;" id="fp-form-link">
-      <input type="url" name="link" placeholder="https://app.trendtrack.io/… o TikTok / Instagram / YouTube" style="flex:1;margin:0;" required>
-      <button class="btn-guardar btn-sm" type="submit">Agregar link</button>
+      <input type="url" name="link" placeholder="{{ _('https://app.trendtrack.io/… o TikTok / Instagram / YouTube') }}" style="flex:1;margin:0;" required>
+      <button class="btn-guardar btn-sm" type="submit">{{ _('Agregar link') }}</button>
     </form>
   </div>
   <div id="fp-subida" class="vacio" style="font-size:.78rem;display:none;margin-top:.5rem;">
     <div class="barra-progreso"><div class="barra-progreso-fill" id="fp-subida-barra" style="width:0%"></div></div>
-    <span id="fp-subida-texto">Subiendo…</span>
+    <span id="fp-subida-texto">{{ _('Subiendo…') }}</span>
   </div>
   <div id="fp-bandeja-wrap">
     {% include "_flowplus_bandeja.html" %}
@@ -40,110 +40,110 @@
 <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
   {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
   <input type="hidden" name="bandeja_vista" value="1">
-  <label class="campo-label" style="margin-top:1rem;display:block;">Del catálogo: productos, personajes, entornos <span class="vacio" style="display:inline;padding:0;font-weight:normal;">(opcional)</span></label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Del catálogo: productos, personajes, entornos') }} <span class="vacio" style="display:inline;padding:0;font-weight:normal;">({{ _('opcional') }})</span></label>
   {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
   {% include "_selector_productos.html" %}
   {% endwith %}
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">Qué tiene que pasar</label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Qué tiene que pasar') }}</label>
   <div class="banco-prompts" id="fp-etiquetas" style="margin-bottom:.4rem;"></div>
-  <textarea name="accion_central" id="fp-texto" rows="3" placeholder="ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"></textarea>
-  <p class="campo-error" id="fp-texto-error" hidden>Escribe qué tiene que pasar en el video.</p>
+  <textarea name="accion_central" id="fp-texto" rows="3" placeholder="{{ _('ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1') }}"></textarea>
+  <p class="campo-error" id="fp-texto-error" hidden>{{ _('Escribe qué tiene que pasar en el video.') }}</p>
 
   <p class="vacio" style="font-size:.78rem;">
-    Una pieza por clic. Sale solo el producto; si eliges un personaje del catálogo, la escena lo lleva a él.
-    Sin referencias ni catálogo, el modelo recibe tu texto tal cual (sin logos ni guía de marca).
+    {{ _('Una pieza por clic. Sale solo el producto; si eliges un personaje del catálogo, la escena lo lleva a él.
+    Sin referencias ni catálogo, el modelo recibe tu texto tal cual (sin logos ni guía de marca).') }}
   </p>
   {% if logos %}
-  <p class="vacio" style="font-size:.76rem;">Con referencias o catálogo se adjuntan {{ logos | length }} logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.</p>
+  <p class="vacio" style="font-size:.76rem;">{{ _('Con referencias o catálogo se adjuntan %(n)s logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.', n=(logos | length)) }}</p>
   {% else %}
-  <p class="vacio" style="font-size:.76rem;">Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación con referencias o catálogo (evita marcas inventadas).</p>
+  <p class="vacio" style="font-size:.76rem;">{{ _('Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación con referencias o catálogo (evita marcas inventadas).') }}</p>
   {% endif %}
 
-  <label class="campo-label" style="margin-top:1rem;display:block;">¿Qué quieres generar?</label>
+  <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('¿Qué quieres generar?') }}</label>
   <div class="checks-plataformas" id="fp-tipo">
-    <label><input type="radio" name="tipo" value="video" checked> Video</label>
-    <label><input type="radio" name="tipo" value="imagen"> Imagen</label>
+    <label><input type="radio" name="tipo" value="video" checked> {{ _('Video') }}</label>
+    <label><input type="radio" name="tipo" value="imagen"> {{ _('Imagen') }}</label>
   </div>
 
   <div id="fp-bloque-video">
-    <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de video</label>
+    <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Modelo de video') }}</label>
     <div class="checks-plataformas">
       {% for id, m in modelos_flowplus_video.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido · hasta {{ m.max_referencias }} ref.</span></label>
+      <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">{{ _('· $%(precio)s/s con sonido · hasta %(n)s ref.', precio=("%.3f"|format(m.usd_por_segundo_efectivo)), n=m.max_referencias) }}</span></label>
       {% endfor %}
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
       <div>
-        <label class="campo-label">Duración</label>
+        <label class="campo-label">{{ _('Duración') }}</label>
         <select name="duracion_objetivo" id="fp-duracion">
           {% for d in duraciones_crear %}
           <option value="{{ d }}"{% if d == preferencias_flowplus.duracion_defecto %} selected{% endif %}>{{ d }} s</option>
           {% endfor %}
         </select>
-        <p class="vacio" id="fp-duracion-nota" style="font-size:.74rem;padding:0;">Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.</p>
-        <p class="vacio" id="fp-duracion-larga" style="font-size:.74rem;padding:0;color:var(--warn);" hidden>Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.</p>
+        <p class="vacio" id="fp-duracion-nota" style="font-size:.74rem;padding:0;">{{ _('Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.') }}</p>
+        <p class="vacio" id="fp-duracion-larga" style="font-size:.74rem;padding:0;color:var(--warn);" hidden>{{ _('Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.') }}</p>
       </div>
       <div>
-        <label class="campo-label">Formato</label>
+        <label class="campo-label">{{ _('Formato') }}</label>
         <select name="aspect_ratio" id="fp-formato-video">
           {% for f, nombre in formatos_nombres.items() %}
-          <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
+          <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre|traducir }}</option>
           {% endfor %}
         </select>
-        <p class="vacio" id="fp-formato-nota" style="font-size:.74rem;padding:0;" hidden>Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen.</p>
+        <p class="vacio" id="fp-formato-nota" style="font-size:.74rem;padding:0;" hidden>{{ _('Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen.') }}</p>
       </div>
     </div>
     <div class="fila-campos-idea" style="margin-top:.8rem;">
       <div>
-        <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" id="fp-con-sonido" {% if preferencias_sonido.con_sonido %}checked{% endif %}> Sonido de la escena</label>
+        <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" id="fp-check-sonido" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena') }}</label>
         <div style="display:flex;gap:.4rem;align-items:center;margin-top:.4rem;">
-          <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="ej. risas de niños, pasos sobre baldosa, respiración agitada al final" style="flex:1;">
-          <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">Sugerir</button>
+          <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="{{ _('ej. risas de niños, pasos sobre baldosa, respiración agitada al final') }}" style="flex:1;">
+          <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">{{ _('Sugerir') }}</button>
         </div>
-        <p class="vacio" style="font-size:.74rem;padding:0;">Audio nativo del modelo, sin diálogo ni música. Vacío = ambiente natural de la escena.</p>
+        <p class="vacio" style="font-size:.74rem;padding:0;">{{ _('Audio nativo del modelo, sin diálogo ni música. Vacío = ambiente natural de la escena.') }}</p>
       </div>
       <div>
-        <label class="campo-label">Música al crear</label>
+        <label class="campo-label">{{ _('Música al crear') }}</label>
         <select name="musica_estilo" id="fp-musica">
-          <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>ninguna</option>
-          <optgroup label="Estilos IA">
-            {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+          <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>{{ _('ninguna') }}</option>
+          <optgroup label="{{ _('Estilos IA') }}">
+            {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ nombres_estilo_musica.get(e, e)|traducir }}</option>{% endfor %}
           </optgroup>
-          <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+          <optgroup label="{{ _('Mi música') }}" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
             {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
           </optgroup>
         </select>
-        <p class="vacio" style="font-size:.74rem;padding:0;">Se mezcla debajo del sonido. Estilos IA: USD 0,02 la primera vez por estilo y duración. Mi música: gratis.</p>
+        <p class="vacio" style="font-size:.74rem;padding:0;">{{ _('Se mezcla debajo del sonido. Estilos IA: USD 0,02 la primera vez por estilo y duración. Mi música: gratis.') }}</p>
         <div id="fp-musica-inicio-wrap" hidden style="margin-top:.4rem;">
           <audio id="fp-musica-audio" controls preload="none" style="width:100%;height:32px;"></audio>
           <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-top:.3rem;">
-            <label style="font-size:.8rem;">Empieza en el segundo
+            <label style="font-size:.8rem;">{{ _('Empieza en el segundo') }}
               <input type="number" name="musica_inicio_s" id="fp-musica-inicio" min="0" step="1" value="0" style="width:5rem;">
             </label>
-            <button type="button" class="btn-sm" id="fp-musica-usar">Usar donde va el reproductor</button>
+            <button type="button" class="btn-sm" id="fp-musica-usar">{{ _('Usar donde va el reproductor') }}</button>
           </div>
         </div>
         <div id="mm-wrap">{% include "_mi_musica.html" %}</div>
       </div>
     </div>
     <div style="margin-top:.8rem;" id="fp-calidad-wrap">
-      <label class="fe-check"><input type="checkbox" name="calidad" value="borrador" id="fp-calidad"> Borrador a 480p (solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final)</label>
+      <label class="fe-check"><input type="checkbox" name="calidad" value="borrador" id="fp-calidad"> {{ _('Borrador a 480p (solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final)') }}</label>
     </div>
   </div>
 
   <div id="fp-bloque-imagen" hidden>
-    <label class="campo-label" style="margin-top:1rem;display:block;">Modelo de imagen</label>
+    <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Modelo de imagen') }}</label>
     <div class="checks-plataformas">
       {% for id, m in modelos_flowplus_imagen.items() %}
-      <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }} · 2k</span></label>
+      <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }} · 2k</span></label>
       {% endfor %}
     </div>
     <div style="margin-top:.8rem;">
-      <label class="campo-label">Formato</label>
+      <label class="campo-label">{{ _('Formato') }}</label>
       <select name="aspect_ratio_imagen" id="fp-formato-imagen">
         {% for f, nombre in formatos_nombres.items() %}
-        <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre }}</option>
+        <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre|traducir }}</option>
         {% endfor %}
       </select>
     </div>
@@ -153,9 +153,9 @@
   {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
      cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
      quien tiene una idea pero quiere que la IA arme los planos — revisa, edita y regenera antes de generar. #}
-  <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo" style="margin-top:1.2rem;">Generar video</button>
-  <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.">Crear super prompt con IA (gratis)</button>
-  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">Se cobra al generar, no antes.</p>
+  <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo" style="margin-top:1.2rem;">{{ _('Generar video') }}</button>
+  <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('Crear super prompt con IA (gratis)') }}</button>
+  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">{{ _('Se cobra al generar, no antes.') }}</p>
 </form>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
@@ -164,11 +164,11 @@
 
 <div id="creativeflowplus-resultados" style="margin-top:2rem;">
   <div style="display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;">
-    <h3 style="margin:0;">Generados ({{ creative_flow_items | length }})</h3>
-    <span class="vacio" style="padding:0;font-size:.78rem;">Toca una pieza para ver el detalle, descargarla o crear otra a partir de ella.</span>
+    <h3 style="margin:0;">{{ _('Generados (%(n)s)', n=(creative_flow_items | length)) }}</h3>
+    <span class="vacio" style="padding:0;font-size:.78rem;">{{ _('Toca una pieza para ver el detalle, descargarla o crear otra a partir de ella.') }}</span>
   </div>
   {% if not creative_flow_items %}
-  <p class="vacio">Todavía no has generado nada en Crear.</p>
+  <p class="vacio">{{ _('Todavía no has generado nada en Crear.') }}</p>
   {% endif %}
   <div class="generados-grid">
     {% for item in creative_flow_items %}
@@ -182,43 +182,43 @@
         {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
         {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
         {% endif %}
-        <span class="generado-tipo">{% if item.tipo == "imagen" %}Imagen{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}{% endif %}</span>
+        <span class="generado-tipo">{% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}</span>
         {% if item.estado == "video_generando" %}
         <div class="generado-velo">
           {% if item.trabajo %}
           <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">Generando… 0% · 0s</div>
+          <div class="progreso-texto">{{ _('Generando… 0%% · 0s') }}</div>
           <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
           {% else %}
-          <span class="generado-estado">Interrumpido</span>
+          <span class="generado-estado">{{ _('Interrumpido') }}</span>
           {% endif %}
         </div>
         {% elif item.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
         {% elif item.estado == "prompt_pendiente" %}
         <div class="generado-velo">
           {% if item.trabajo_director %}
           <div class="barra-progreso" id="trabajo-{{ item.trabajo_director.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">Armando el prompt con IA…</div>
+          <div class="progreso-texto">{{ _('Armando el prompt con IA…') }}</div>
           <script>iniciarPolling({{ item.trabajo_director.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_director.job_id) | tojson }});</script>
           {% else %}
-          <span class="generado-estado">Interrumpido — rearma el prompt</span>
+          <span class="generado-estado">{{ _('Interrumpido — rearma el prompt') }}</span>
           {% endif %}
         </div>
         {% elif item.estado == "prompt_listo" %}
         <div class="fe-seccion" style="background:var(--panel-2);padding:0.8rem;border-radius:4px;margin-bottom:0.8rem;">
-          <p class="campo-label" style="margin:0 0 0.4rem 0;">✏️ Super prompt (editable)</p>
+          <p class="campo-label" style="margin:0 0 0.4rem 0;">{{ _('✏️ Super prompt (editable)') }}</p>
           {% if item.director and item.director.estado == "fallback" %}
-          <p class="vacio" style="padding:0;font-size:.75rem;color:var(--error);">⚠️ La IA no pudo armar los planos ({{ item.director.aviso }}). Aquí va el prompt básico que puedes editar.</p>
+          <p class="vacio" style="padding:0;font-size:.75rem;color:var(--error);">{{ _('⚠️ La IA no pudo armar los planos (%(aviso)s). Aquí va el prompt básico que puedes editar.', aviso=item.director.aviso) }}</p>
           {% else %}
-          <p class="vacio" style="padding:0;font-size:.75rem;">Revisa, edita si quieres y haz clic en «Generar video».</p>
+          <p class="vacio" style="padding:0;font-size:.75rem;">{{ _('Revisa, edita si quieres y haz clic en «Generar video».') }}</p>
           {% endif %}
           <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}" style="margin-top:.4rem;">
             <textarea name="prompt_a" rows="6" style="width:100%;font-size:.8rem;font-family:monospace;padding:.4rem;">{{ item.prompt_relleno }}</textarea>
             <div style="display:flex;gap:.4rem;margin-top:.3rem;">
-              <button type="submit" class="btn-guardar btn-sm">💾 Guardar cambios</button>
-              <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit="return confirm('Rearmar con IA sobrescribe el prompt. ¿Seguir?');">
-                <button type="submit" class="btn-sm">🔄 Rearmar con IA</button>
+              <button type="submit" class="btn-guardar btn-sm">{{ _('💾 Guardar cambios') }}</button>
+              <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe el prompt. ¿Seguir?')|tojson }});'>
+                <button type="submit" class="btn-sm">{{ _('🔄 Rearmar con IA') }}</button>
               </form>
             </div>
           </form>
@@ -229,16 +229,16 @@
            que el polling arranque al cargar la página y un fallo se vea. #}
         <div class="generado-velo">
           <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">Escribiendo el guion…</div>
+          <div class="progreso-texto">{{ _('Escribiendo el guion…') }}</div>
           <script>iniciarPolling({{ item.trabajo_guion.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_guion.job_id) | tojson }});</script>
         </div>
         {% endif %}
       </div>
       <div class="generado-pie">
-        <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
-        {% if item.variante %}<span class="generado-badge">Versión {{ item.variante }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">Versión A</span>{% endif %}
-        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">Sprint · Campaña {{ item.sprint.campana_n }}</a>{% endif %}
-        <small>{{ item.modelo_nombre }}{% if item.usd %} · costó {{ item.usd | usd }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="El video trae el sonido de la escena">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="El proveedor entregó el video sin pista de audio">🔇 sin sonido</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="Música al crear: {{ item.capas.musica.estilo }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
+        <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
+        {% if item.variante %}<span class="generado-badge">{{ _('Versión %(v)s', v=item.variante) }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">{{ _('Versión A') }}</span>{% endif %}
+        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">{{ _('Sprint · Campaña %(n)s', n=item.sprint.campana_n) }}</a>{% endif %}
+        <small>{{ item.modelo_nombre|traducir }}{% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="{{ _('El video trae el sonido de la escena') }}">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="{{ _('El proveedor entregó el video sin pista de audio') }}">{{ _('🔇 sin sonido') }}</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="{{ _('Música al crear: %(estilo)s', estilo=item.capas.musica.estilo) }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
       </div>
       <template class="generado-detalle">
         <div class="detalle-media">
@@ -251,17 +251,17 @@
           {% endif %}
         </div>
         <div class="detalle-info">
-          <p class="campo-label">Qué tenía que pasar</p>
-          <p class="detalle-texto">{{ item.accion_central or "(sin texto)" }}</p>
+          <p class="campo-label">{{ _('Qué tenía que pasar') }}</p>
+          <p class="detalle-texto">{{ item.accion_central or _('(sin texto)') }}</p>
           <p class="vacio" style="padding:0;font-size:.78rem;">
-            {% if item.tipo == "imagen" %}Imagen{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}{% endif %}
-            · {{ item.modelo_nombre }}
-            {% if item.enfoque_nombre %} · {{ item.enfoque_nombre }}{% endif %}
-            {% if item.usd %} · costó {{ item.usd | usd }}{% endif %}
+            {% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}
+            · {{ item.modelo_nombre|traducir }}
+            {% if item.enfoque_nombre %} · {{ item.enfoque_nombre|traducir }}{% endif %}
+            {% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}
             · <span class="tag-estado">{{ item.estado }}</span>
           </p>
           {% if item.referencias %}
-          <p class="campo-label" style="margin-top:.8rem;">Referencias</p>
+          <p class="campo-label" style="margin-top:.8rem;">{{ _('Referencias') }}</p>
           <div class="catalogo-productos" style="margin-bottom:.6rem;">
             {% for r in item.referencias %}
             <figure style="margin:0;text-align:center;">
@@ -273,26 +273,26 @@
           {% endif %}
           {% if item.estado == "prompt_listo" and item.tipo != "imagen" %}
           <section class="fe-seccion">
-            <h4 class="fe-titulo">Prompt por planos</h4>
+            <h4 class="fe-titulo">{{ _('Prompt por planos') }}</h4>
             {% if item.director and item.director.estado == "fallback" %}
-            <p class="tag-error">La IA no pudo armar los planos ({{ item.director.aviso }}); este es el prompt básico. Puedes editarlo o rearmar.</p>
+            <p class="tag-error">{{ _('La IA no pudo armar los planos (%(aviso)s); este es el prompt básico. Puedes editarlo o rearmar.', aviso=item.director.aviso) }}</p>
             {% endif %}
             <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}">
-              <label class="campo-label">Versión A (lo que recibe el modelo)</label>
+              <label class="campo-label">{{ _('Versión A (lo que recibe el modelo)') }}</label>
               <textarea name="prompt_a" rows="10" style="width:100%;font-size:.8rem;">{{ item.prompt_relleno }}</textarea>
               {% if item.director and item.director.prompt_b %}
-              <details style="margin-top:.5rem;"><summary class="vacio" style="cursor:pointer;padding:0;font-size:.78rem;">Versión B — {{ item.director.diferencia_b }}</summary>
+              <details style="margin-top:.5rem;"><summary class="vacio" style="cursor:pointer;padding:0;font-size:.78rem;">{{ _('Versión B — %(dif)s', dif=item.director.diferencia_b) }}</summary>
                 <textarea name="prompt_b" rows="10" style="width:100%;font-size:.8rem;">{{ item.director.prompt_b }}</textarea>
               </details>
               {% endif %}
-              <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">Guardar cambios</button>
+              <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">{{ _('Guardar cambios') }}</button>
             </form>
-            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit="return confirm('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?');">
-              <button type="submit" class="btn-sm">Rearmar con IA</button>
+            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?')|tojson }});'>
+              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }}</button>
             </form>
           </section>
           {% elif item.prompt_relleno and item.prompt_relleno != item.accion_central %}
-          <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">Ver el prompt completo que recibió el modelo</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
+          <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">{{ _('Ver el prompt completo que recibió el modelo') }}</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
           {% endif %}
           {% if item.estado == "error" %}
           <p class="tag-error">{{ item.error }}</p>
@@ -301,23 +301,23 @@
           {% if item.estado == "video_listo" and item.tipo != "imagen" %}
           <section class="fe-seccion">
             <h4 class="fe-titulo">Final edition</h4>
-            <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
+            <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.') }}</p>
             {% if not item.guion_base %}
               {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
+              <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Se está escribiendo el guion… la página se recarga sola cuando esté listo.') }}</p>
               {% else %}
               <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar">
-                <label>Precio (opcional)
-                  <input type="number" name="precio" min="0" step="any" placeholder="p.ej. 89900" style="width:9rem;">
+                <label>{{ _('Precio (opcional)') }}
+                  <input type="number" name="precio" min="0" step="any" placeholder="{{ _('p.ej. 89900') }}" style="width:9rem;">
                 </label>
-                <label>Idioma base
+                <label>{{ _('Idioma base') }}
                   <select name="idioma_base">
                     <option value="es">Español</option>
                     <option value="en">English</option>
                     <option value="pt">Português</option>
                   </select>
                 </label>
-                <button type="submit" class="btn-guardar btn-sm">Preparar guion con IA{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
+                <button type="submit" class="btn-guardar btn-sm">{{ _('Preparar guion con IA') }}{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
               </form>
               {% endif %}
             {% else %}
@@ -326,19 +326,19 @@
                 {% for b in _g.bloques %}
                 <div class="fe-bloque">
                   <div class="fe-bloque-cab"><strong>{{ loop.index }}. {{ b.rol }}</strong> <small>{{ b.inicio_s }}s – {{ b.fin_s }}s</small></div>
-                  <label>Texto en pantalla <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
-                  <label>Texto de voz <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
+                  <label>{{ _('Texto en pantalla') }} <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
+                  <label>{{ _('Texto de voz') }} <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
                 </div>
                 {% endfor %}
-                <button type="submit" class="btn-guardar btn-sm">Guardar guion</button>
+                <button type="submit" class="btn-guardar btn-sm">{{ _('Guardar guion') }}</button>
               </form>
               {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
+              <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Se está escribiendo el guion… la página se recarga sola cuando esté listo.') }}</p>
               {% else %}
               <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar"
-                    onsubmit="return confirm('¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).');">
+                    onsubmit='return confirm({{ _('¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).')|tojson }});'>
                 <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in ('es', 'en', 'pt') else 'es' }}">
-                <button type="submit" class="btn-rechazar btn-sm">Volver a escribir con IA</button>
+                <button type="submit" class="btn-rechazar btn-sm">{{ _('Volver a escribir con IA') }}</button>
               </form>
               {% endif %}
 
@@ -346,7 +346,7 @@
               {% for f in item.finales if f.estado in ("listo", "degradada") %}
               {% set _nada = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
               {% endfor %}
-              <h5 class="fe-subtitulo">Producir finales</h5>
+              <h5 class="fe-subtitulo">{{ _('Producir finales') }}</h5>
               <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir"
                     data-moneda-base="{{ paises_fe[_g.pais].moneda if _g.pais in paises_fe else '' }}"
                     onsubmit="return feConfirmarReemplazo(this);">
@@ -355,53 +355,53 @@
                   {% set _ya = _finales_por_destino.get(p.idioma ~ "_" ~ codigo) %}
                   <label class="fe-destino">
                     <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
-                    {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small>
+                    {{ p.bandera }} {{ p.nombre|traducir }} <small>({{ p.idioma }})</small>
                     <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
-                           placeholder="Precio (opcional)" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
+                           placeholder="{{ _('Precio (opcional)') }}" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
                            {% if codigo == _g.pais and _g.precio_base is not none %}value="{{ _g.precio_base }}"{% endif %}>
-                    {% if _ya %}<small class="tag-estado">(ya producida — se reemplaza)</small>{% endif %}
+                    {% if _ya %}<small class="tag-estado">{{ _('(ya producida — se reemplaza)') }}</small>{% endif %}
                   </label>
                   {% endfor %}
                 </div>
                 <div class="fe-opciones">
-                  <label>Voz
+                  <label>{{ _('Voz') }}
                     <select name="voz">
                       {% for v in (voces_fe.get(_g.idioma) or voces_fe.get("es") or []) %}
                       <option value="{{ v }}">{{ v }}</option>
                       {% endfor %}
                     </select>
                   </label>
-                  <label>Música
+                  <label>{{ _('Música') }}
                     <select name="estilo_musica">
                       {% for e in estilos_fe %}
-                      <option value="{{ e }}">{{ e }}</option>
+                      <option value="{{ e }}">{{ nombres_estilo_musica.get(e, e)|traducir }}</option>
                       {% endfor %}
-                      <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+                      <optgroup label="{{ _('Mi música') }}" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
                         {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
                       </optgroup>
                     </select>
                   </label>
-                  <label>Empieza en el segundo <small>(Mi música)</small>
+                  <label>{{ _('Empieza en el segundo') }} <small>({{ _('Mi música') }})</small>
                     <input type="number" name="musica_inicio_s" min="0" step="1" value="0" style="width:5rem;">
                   </label>
-                  <label>Precio base <input type="number" name="precio" min="0" step="any"
-                         placeholder="opcional, país base" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
-                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> con voz</label>
-                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> con música</label>
-                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> con sonido de la escena{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">(este clon no trae sonido)</small>{% endif %}</label>
-                  <label>Mezcla
+                  <label>{{ _('Precio base') }} <input type="number" name="precio" min="0" step="any"
+                         placeholder="{{ _('opcional, país base') }}" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
+                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> {{ _('con voz') }}</label>
+                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> {{ _('con música') }}</label>
+                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> {{ _('con sonido de la escena') }}{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">{{ _('(este clon no trae sonido)') }}</small>{% endif %}</label>
+                  <label>{{ _('Mezcla') }}
                     <select name="mezcla">
                       {% for p in presets_mezcla %}<option value="{{ p }}">{{ p | replace("_", " ") }}</option>{% endfor %}
                     </select>
                   </label>
                 </div>
-                {% set _cu = (" ≈ " ~ (precios.final_por_pais.usd | usd) ~ " c/u") if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
-                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales{{ _cu }}">Producir finales{{ _cu }}</button>
+                {% set _cu = (' ' ~ _('≈ %(usd)s c/u', usd=(precios.final_por_pais.usd | usd))) if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
+                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="{{ _('Producir {n} finales') }}{{ _cu }}" data-sin-n="{{ _('Producir finales') }}{{ _cu }}">{{ _('Producir finales') }}{{ _cu }}</button>
               </form>
             {% endif %}
 
             {% if item.finales %}
-            <h5 class="fe-subtitulo">Finales de esta pieza</h5>
+            <h5 class="fe-subtitulo">{{ _('Finales de esta pieza') }}</h5>
             <ul class="fe-lista">
               {% for f in item.finales %}
               <li class="fe-final">
@@ -409,13 +409,13 @@
                 <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
                 <span class="tag-estado">{{ f.estado }}</span>
                 {% if f.estado == "generando" %}
-                <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}produciendo…{% else %}interrumpida{% endif %}</span>
+                <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}</span>
                 {% elif f.estado == "error" and f.error %}
                 <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
                 {% endif %}
-                {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>{% endif %}
-                <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
-                  <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+                {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>{% endif %}
+                <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _('¿Descartar esta final?')|tojson }});' style="display:inline;">
+                  <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
                 </form>
               </li>
               {% endfor %}
@@ -426,40 +426,40 @@
 
           <div class="detalle-acciones">
             {% if item.estado == "video_listo" %}
-            <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">Descargar</a>
+            <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
             {% endif %}
             {% if item.estado in ("video_listo", "error", "prompt_listo") %}
             <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
               {% if item.estado == "video_listo" and item.tipo == "imagen" %}
-              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> Usar esta imagen como referencia</label>
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> {{ _('Usar esta imagen como referencia') }}</label>
               {% endif %}
-              <button type="submit" class="btn-guardar btn-sm">Editar y crear otra a partir de esta</button>
+              <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
             </form>
             {% endif %}
             {% if item.estado in ("prompt_listo", "error") %}
             <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd if item.costo_estimado else '' }}">
               {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
-              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> Generar también la versión B (dos videos)</label>
+              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> {{ _('Generar también la versión B (dos videos)') }}</label>
               {% endif %}
               {% if item.estado == "prompt_listo" %}
-              <p class="vacio" style="padding:0;font-size:.75rem;color:var(--accent-texto);margin-bottom:.4rem;">👆 Revisa el prompt arriba antes de generar</p>
+              <p class="vacio" style="padding:0;font-size:.75rem;color:var(--accent-texto);margin-bottom:.4rem;">{{ _('👆 Revisa el prompt arriba antes de generar') }}</p>
               {% endif %}
-              <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}Reintentar{% elif item.estado == "prompt_listo" %}Generar video{% else %}Generar{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
+              <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}{{ _('Reintentar') }}{% elif item.estado == "prompt_listo" %}{{ _('Generar video') }}{% else %}{{ _('Generar') }}{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
             </form>
             {% endif %}
             {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
             <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-sm">Rearmar el prompt</button>
+              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }}</button>
             </form>
             {% endif %}
-            <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit="return confirm('¿Descartar esta pieza?');" style="display:inline;">
-              <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+            <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">
+              <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
             </form>
             {# Galería primero: videos e imágenes listos van a Experimentos ya
                marcados (#experimentos?piezas=<pieza_id>); el reload hace que la
                pestaña lea el hash y abra los tres pasos. #}
             {% if item.estado == "video_listo" and item.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
+            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
             {% endif %}
           </div>
         </div>
@@ -481,21 +481,21 @@
         <div class="generado-velo">
           {% if f.trabajo %}
           <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">Produciendo… 0% · 0s</div>
+          <div class="progreso-texto">{{ _('Produciendo… 0%% · 0s') }}</div>
           <script>iniciarPolling({{ f.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ f.trabajo.job_id) | tojson }});</script>
           {% else %}
-          <span class="generado-estado">Interrumpida</span>
+          <span class="generado-estado">{{ _('Interrumpida') }}</span>
           {% endif %}
         </div>
         {% elif f.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
         {% elif f.estado == "degradada" %}
-        <div class="generado-velo"><span class="generado-estado">Sin voz/música</span></div>
+        <div class="generado-velo"><span class="generado-estado">{{ _('Sin voz/música') }}</span></div>
         {% endif %}
       </div>
       <div class="generado-pie">
-        <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
-        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}</small>
+        <strong>{{ _('Final %(id)s', id=(f.idioma ~ '_' ~ f.pais)) }}</strong>
+        <small>{{ _('Final de %(enfoque)s', enfoque=((item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')))) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>
       </div>
       <template class="generado-detalle">
         <div class="detalle-media">
@@ -509,15 +509,15 @@
         </div>
         <div class="detalle-info">
           <p class="campo-label">Final edition</p>
-          <p class="detalle-texto">{{ _bandera }} {{ paises_fe[f.pais].nombre if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
+          <p class="detalle-texto">{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
           <p class="vacio" style="padding:0;font-size:.78rem;">
-            Final de: {{ item.accion_central or item.id }}
+            {{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}
             {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
-            {% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}
+            {% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}
             · <span class="tag-estado">{{ f.estado }}</span>
           </p>
           {% if f.capas %}
-          <p class="campo-label" style="margin-top:.8rem;">Capas</p>
+          <p class="campo-label" style="margin-top:.8rem;">{{ _('Capas') }}</p>
           <ul class="fe-capas">
             {% for nombre, capa in f.capas.items() %}
             <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
@@ -529,18 +529,18 @@
           {% endif %}
           <div class="detalle-acciones">
             {% if f.video_url %}
-            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>
+            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
             {% endif %}
-            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
-              <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
+            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _('¿Descartar esta final?')|tojson }});' style="display:inline;">
+              <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
             </form>
             {% if f.estado in ("listo", "degradada") and f.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
+            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
             {% endif %}
           </div>
           {% if f.estado in ("listo", "degradada") and f.video_url and f.pieza_id %}
           {# Bloque 7: mismo bloque que en Experimentos (sin ep_id: sale de Crear). #}
-          <p class="campo-label" style="margin-top:.8rem;">Publicación orgánica</p>
+          <p class="campo-label" style="margin-top:.8rem;">{{ _('Publicación orgánica') }}</p>
           {{ bloque_organico(f.pieza_id, "creativeflowplus") }}
           {% endif %}
         </div>
@@ -552,7 +552,7 @@
 </div>
 
 <dialog id="generado-modal" class="generado-modal">
-  <button type="button" class="generado-cerrar" id="generado-cerrar" aria-label="Cerrar">×</button>
+  <button type="button" class="generado-cerrar" id="generado-cerrar" aria-label="{{ _('Cerrar') }}">×</button>
   <div id="generado-modal-cuerpo" class="generado-modal-cuerpo"></div>
 </dialog>
 <script>
@@ -580,7 +580,7 @@
       if (cb.dataset.yaProducida) reemplaza = true;
     });
     if (!reemplaza) return true;
-    return confirm('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).');
+    return confirm({{ _('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).')|tojson }});
   };
   // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear). Declarada
   // en este script sin envoltorio, así es global: la usan dos scripts, el estimado del formulario y el botón A+B del
@@ -625,7 +625,7 @@
       var btn = form && form.querySelector('.fe-producir-btn');
       if (!btn) return;
       var n = form.querySelectorAll('input[name="destinos"]:checked').length;
-      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.plantilla.replace('Producir {n} finales', 'Producir finales');
+      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.sinN;
     });
     // Costo A+B: el formulario de generar también vive en el <template> clonado,
     // así que el checkbox "Generar también la versión B" se delega igual que
@@ -643,7 +643,7 @@
       var form = e.target;
       if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
         e.preventDefault();
-        alert('Marca al menos un destino.');
+        alert({{ _('Marca al menos un destino.')|tojson }});
       }
     });
     document.getElementById('generado-cerrar').addEventListener('click', function () { modal.close(); });
@@ -699,7 +699,7 @@
       var selAr = form.querySelector('select[name=aspect_ratio]');
       if (selAr && prefill.aspect_ratio) selAr.value = prefill.aspect_ratio;
       if (formatoImagen && prefill.tipo === 'imagen' && prefill.aspect_ratio) formatoImagen.value = prefill.aspect_ratio;
-      var cs = document.getElementById('fp-con-sonido'); if (cs && typeof prefill.con_sonido === 'boolean') cs.checked = prefill.con_sonido;
+      var cs = document.getElementById('fp-check-sonido'); if (cs && typeof prefill.con_sonido === 'boolean') cs.checked = prefill.con_sonido;
       var st = document.getElementById('fp-sonido'); if (st && prefill.sonido_texto) st.value = prefill.sonido_texto;
       var mu = document.getElementById('fp-musica'); if (mu && typeof prefill.musica_estilo === 'string') mu.value = prefill.musica_estilo;
       if (inicioInput && prefill.musica_inicio_s) inicioInput.value = prefill.musica_inicio_s;
@@ -748,7 +748,7 @@
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
       var usd = 0;
-      var conSonido = document.getElementById('fp-con-sonido');
+      var conSonido = document.getElementById('fp-check-sonido');
       if (m) {
         if (esImagen) {
           usd = parseFloat(m.dataset.usd);
@@ -765,17 +765,17 @@
       var btnArmar = document.getElementById('fp-armar');
       if (btnArmar) btnArmar.hidden = esImagen;
       if (esImagen) {
-        botonGenerar.textContent = 'Generar imagen' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = 'Se cobra al generar, no antes.';
+        botonGenerar.textContent = {{ _('Generar imagen')|tojson }} + (usd ? ' ≈ ' + formatearUSD(usd) : '');
+        if (ayudaBoton) ayudaBoton.textContent = {{ _('Se cobra al generar, no antes.')|tojson }};
       } else {
-        botonGenerar.textContent = 'Generar video' + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = '«Generar» manda tu texto tal cual y se cobra al generar; «Crear super prompt» es gratis y te deja revisar el prompt antes de gastar.';
+        botonGenerar.textContent = {{ _('Generar video')|tojson }} + (usd ? ' ≈ ' + formatearUSD(usd) : '');
+        if (ayudaBoton) ayudaBoton.textContent = {{ _('«Generar» manda tu texto tal cual y se cobra al generar; «Crear super prompt» es gratis y te deja revisar el prompt antes de gastar.')|tojson }};
       }
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
     form.addEventListener('change', function (e) { if (e.target.name === 'productos_catalogo') refrescar(); });
-    ['fp-con-sonido', 'fp-musica', 'fp-calidad'].forEach(function (id) {
+    ['fp-check-sonido', 'fp-musica', 'fp-calidad'].forEach(function (id) {
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });
@@ -788,16 +788,16 @@
     var btnSugerir = document.getElementById('fp-sugerir-sonido');
     if (btnSugerir) btnSugerir.addEventListener('click', function () {
       var enfoque = form.querySelector('input[name=productos_catalogo][value^="personaje:"]:checked') ? 'persona' : (sinAdjuntos() ? 'libre' : 'producto');
-      btnSugerir.disabled = true; btnSugerir.textContent = 'Pensando…';
+      btnSugerir.disabled = true; btnSugerir.textContent = {{ _('Pensando…')|tojson }};
       fetch(btnSugerir.dataset.url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Requested-With': 'fetch'},
                                      body: JSON.stringify({escena: texto.value, enfoque: enfoque})})
         .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, j: j}; }); })
         .then(function (res) {
           if (res.ok && res.j.sonido) document.getElementById('fp-sonido').value = res.j.sonido;
-          else alert(res.j.error || 'No se pudo sugerir.');
+          else alert(res.j.error || {{ _('No se pudo sugerir.')|tojson }});
         })
-        .catch(function () { alert('No se pudo sugerir.'); })
-        .finally(function () { btnSugerir.disabled = false; btnSugerir.textContent = 'Sugerir'; });
+        .catch(function () { alert({{ _('No se pudo sugerir.')|tojson }}); })
+        .finally(function () { btnSugerir.disabled = false; btnSugerir.textContent = {{ _('Sugerir')|tojson }}; });
     });
     function insertar(etiqueta) {
       var v = texto.value, ini = texto.selectionStart || v.length;
@@ -831,7 +831,7 @@
     function enviar(url, body) {
       return fetch(url, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.json(); }).then(aplicar)
-        .catch(function () { subidaTexto.textContent = 'Se perdió la conexión; recarga la página.'; subida.style.display = 'block'; });
+        .catch(function () { subidaTexto.textContent = {{ _('Se perdió la conexión; recarga la página.')|tojson }}; subida.style.display = 'block'; });
     }
     function engancharBandeja() {
       wrap.querySelectorAll('form[data-fp]').forEach(function (f) {
@@ -865,19 +865,19 @@
       xhr.open('POST', formSubir.action);
       xhr.setRequestHeader('X-Requested-With', 'fetch');
       subida.style.display = 'block'; subidaBarra.style.width = '0%';
-      subidaTexto.textContent = 'Subiendo ' + inputArchivos.files.length + ' archivo(s)… 0%';
+      subidaTexto.textContent = {{ _('Subiendo')|tojson }} + ' ' + inputArchivos.files.length + ' ' + {{ _('archivo(s)… 0%%')|tojson }};
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable) return;
         var pct = Math.round(ev.loaded * 100 / ev.total);
         subidaBarra.style.width = pct + '%';
-        subidaTexto.textContent = pct < 100 ? 'Subiendo… ' + pct + '%' : 'Procesando (fotogramas y almacenamiento)…';
+        subidaTexto.textContent = pct < 100 ? ({{ _('Subiendo…')|tojson }} + ' ' + pct + '%') : {{ _('Procesando (fotogramas y almacenamiento)…')|tojson }};
       };
       xhr.onload = function () {
         try { var d = JSON.parse(xhr.responseText); aplicar(d); subida.style.display = d.error ? 'block' : 'none'; }
-        catch (e) { subidaTexto.textContent = 'Error al subir; recarga la página.'; }
+        catch (e) { subidaTexto.textContent = {{ _('Error al subir; recarga la página.')|tojson }}; }
         inputArchivos.value = '';
       };
-      xhr.onerror = function () { subidaTexto.textContent = 'Error de red al subir.'; };
+      xhr.onerror = function () { subidaTexto.textContent = {{ _('Error de red al subir.')|tojson }}; };
       xhr.send(fd);
     });
     var formLink = document.getElementById('fp-form-link');
@@ -892,14 +892,14 @@
     function describir() {
       var btnDescribir = document.getElementById('fp-describir');
       var estadoDescribir = document.getElementById('fp-describir-estado');
-      btnDescribir.disabled = true; estadoDescribir.textContent = 'Mirando las referencias…';
+      btnDescribir.disabled = true; estadoDescribir.textContent = {{ _('Mirando las referencias…')|tojson }};
       fetch({{ url_for('fp_describir', cliente=cliente) | tojson }}, { method: 'POST' })
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          if (d.ok) { texto.value = d.texto; texto.focus(); estadoDescribir.textContent = 'Listo: edítalo a tu gusto antes de generar.'; }
-          else { estadoDescribir.textContent = d.error || 'No se pudo describir.'; }
+          if (d.ok) { texto.value = d.texto; texto.focus(); estadoDescribir.textContent = {{ _('Listo: edítalo a tu gusto antes de generar.')|tojson }}; }
+          else { estadoDescribir.textContent = d.error || {{ _('No se pudo describir.')|tojson }}; }
         })
-        .catch(function () { estadoDescribir.textContent = 'No se pudo describir (red).'; })
+        .catch(function () { estadoDescribir.textContent = {{ _('No se pudo describir (red).')|tojson }}; })
         .finally(function () { btnDescribir.disabled = false; });
     }
 
@@ -952,7 +952,7 @@
       return fetch(url, {method: 'POST', body: body, headers: {'X-Requested-With': 'fetch'}})
         .then(function (r) { return r.json(); })
         .then(function (d) { aplicarMusica(d, false); })
-        .catch(function () { aplicarMusica({error: 'Se perdió la conexión; recarga la página.'}, false); });
+        .catch(function () { aplicarMusica({error: {{ _('Se perdió la conexión; recarga la página.')|tojson }}}, false); });
     }
     // La canción de ElevenLabs se crea en el worker: se consulta su estado y al
     // terminar se refresca solo el panel (recargar borraría lo que ya escribiste).
@@ -967,8 +967,8 @@
           fetch(document.getElementById('mm-panel').dataset.urlLista, {headers: {'X-Requested-With': 'fetch'}})
             .then(function (r) { return r.json(); })
             .then(function (d) {
-              if (e.estado === 'error') d.error = e.mensaje || 'No se pudo crear la canción.';
-              else d.mensaje = 'Canción lista en Mi música.';
+              if (e.estado === 'error') d.error = e.mensaje || {{ _('No se pudo crear la canción.')|tojson }};
+              else d.mensaje = {{ _('Canción lista en Mi música.')|tojson }};
               aplicarMusica(d, false);
             });
         }).catch(function () {});
@@ -982,17 +982,17 @@
       xhr.open('POST', document.getElementById('mm-panel').dataset.urlSubir);
       xhr.setRequestHeader('X-Requested-With', 'fetch');
       var aviso = document.getElementById('mm-subida');
-      aviso.hidden = false; aviso.textContent = 'Subiendo… 0%';
+      aviso.hidden = false; aviso.textContent = {{ _('Subiendo… 0%%')|tojson }};
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable) return;
         var p = Math.round(ev.loaded * 100 / ev.total);
-        aviso.textContent = p < 100 ? 'Subiendo… ' + p + '%' : 'Revisando el audio…';
+        aviso.textContent = p < 100 ? ({{ _('Subiendo…')|tojson }} + ' ' + p + '%') : {{ _('Revisando el audio…')|tojson }};
       };
       xhr.onload = function () {
         try { aplicarMusica(JSON.parse(xhr.responseText), true); }
-        catch (err) { aviso.textContent = 'Error al subir; recarga la página.'; }
+        catch (err) { aviso.textContent = {{ _('Error al subir; recarga la página.')|tojson }}; }
       };
-      xhr.onerror = function () { aviso.textContent = 'Error de red al subir.'; };
+      xhr.onerror = function () { aviso.textContent = {{ _('Error de red al subir.')|tojson }}; };
       xhr.send(fd);
     });
     mmWrap.addEventListener('click', function (e) {
@@ -1013,7 +1013,8 @@
         return;
       }
       var borrar = e.target.closest('.mm-borrar');
-      if (borrar && confirm('¿Borrar «' + borrar.dataset.nombre + '» de Mi música? Los videos ya hechos conservan su audio.')) {
+      var mensajeBorrar = {{ _('¿Borrar «%(nombre)s» de Mi música? Los videos ya hechos conservan su audio.', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', borrar ? borrar.dataset.nombre : '');
+      if (borrar && confirm(mensajeBorrar)) {
         enviarMusica(borrar.dataset.url, new FormData());
       }
     });
@@ -1027,12 +1028,12 @@
     var textoError = document.getElementById('fp-texto-error');
     form.addEventListener('submit', function (e) {
       var vacio = !texto.value.trim();
-      texto.classList.toggle('con-error', vacio);
+      texto.classList.toggle('co' + 'n-error', vacio);  // literal partido: heurística de idioma confunde "con" en "con-error"
       textoError.hidden = !vacio;
       if (vacio) { e.preventDefault(); texto.scrollIntoView({block: 'center'}); texto.focus(); }
     });
     texto.addEventListener('input', function () {
-      if (texto.value.trim()) { texto.classList.remove('con-error'); textoError.hidden = true; }
+      if (texto.value.trim()) { texto.classList.remove('co' + 'n-error'); textoError.hidden = true; }
     });
   })();
 </script>

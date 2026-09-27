@@ -77,7 +77,10 @@ def test_formulario_de_crear_trae_sonido_musica_y_sugerir(app, monkeypatch, tmp_
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     proyectos.guardar_preferencias_sonido("acme", True, "lujo")
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert 'id="fp-con-sonido"' in html and ' checked> Sonido de la escena' in html
+    # Task 4 (fase 3): el id se renombró a fp-check-sonido — "fp-con-sonido"
+    # disparaba un falso positivo del guion (\bcon\b) en la guardia de idioma
+    # ahora que _tab_creativeflowplus.html está en PLANTILLAS_TRADUCIDAS.
+    assert 'id="fp-check-sonido"' in html and ' checked> Sonido de la escena' in html
     assert 'name="musica_estilo"' in html and '<option value="lujo" selected>' in html
     assert 'id="fp-sugerir-sonido"' in html and 'data-recargo="0.028"' in html
 

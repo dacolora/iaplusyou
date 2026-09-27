@@ -351,9 +351,12 @@ def _entorno_plantilla():
     import jinja2
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     import gastos
-    env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")))
+    env = jinja2.Environment(loader=jinja2.FileSystemLoader(os.path.join(raiz, "templates")),
+                             extensions=["jinja2.ext.i18n"])
+    env.install_null_translations(newstyle=True)  # _()/gettext/ngettext de mentiras: devuelven el español tal cual
     env.globals["url_for"] = lambda *a, **k: "#"
     env.filters["usd"] = gastos.formatear   # mismo filtro que registra dashboard (costos «US$ 0,07»)
+    env.filters["traducir"] = lambda x: x   # idiomas.traducir necesita un app de Flask-Babel; acá no hay ninguno
     return env
 
 
@@ -367,6 +370,7 @@ def _contexto_minimo(items):
         fp_prefill=None, activos_por_categoria={}, categorias={}, productos=[],
         referencias_bandeja=[], trabajo_link=None, capacidades_meta={},
         paises_fe=tipos.PAISES, voces_fe=fal_audio.VOCES, estilos_fe=list(tipos.ESTILOS_MUSICA),
+        nombres_estilo_musica=tipos.NOMBRES_ESTILO_MUSICA,
         presets_mezcla=["equilibrada", "voz_protagonista", "ambiente_protagonista"],
         duraciones_crear=(5, 8, 10, 12, 15, 20, 25, 30), formatos_nombres={"9:16": "Vertical 9:16"},
     )

@@ -19,16 +19,20 @@ import estado as estado_mod
 import gastos
 import trabajos
 from final_edition import cortes, mezcla, musica
+from idiomas import N_
 from providers import flowplus_modelos
 from storage import r2_uploader
 from tareas import al_interrumpir, ref_sufijo, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-ETAPA_MODELO = "Generando con el modelo"
-ETAPA_DESCARGAR = "Descargando el resultado"
-ETAPA_MEZCLA = "Mezclando sonido"
-ETAPA_GUARDAR_VIDEO = "Guardando el video"
+# N_(...): dashboard.estado_trabajo traduce etapa/mensaje/detalle con gettext
+# al responder (idioma de quien mira la pantalla), no acá — este módulo corre
+# en el worker, sin idioma de petición.
+ETAPA_MODELO = N_("Generando con el modelo")
+ETAPA_DESCARGAR = N_("Descargando el resultado")
+ETAPA_MEZCLA = N_("Mezclando sonido")
+ETAPA_GUARDAR_VIDEO = N_("Guardando el video")
 # CreativeFlowPlus: el modelo se lleva casi todo el tiempo (timeout de 1200s);
 # la mezcla (clon + música, video copiado sin recodificar) son segundos.
 ETAPAS_CREATIVE_FLOW = [
@@ -43,15 +47,15 @@ PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
 _FASES_PROVEEDOR = {
-    "IN_QUEUE": "en cola",
-    "IN_PROGRESS": "el modelo está trabajando",
-    "created": "en cola",
-    "processing": "el modelo está trabajando",
-    "queued": "en cola",
-    "starting": "arrancando",
-    "running": "el modelo está trabajando",
-    "in_progress": "el modelo está trabajando",
-    "pending": "en cola",
+    "IN_QUEUE": N_("en cola"),
+    "IN_PROGRESS": N_("el modelo está trabajando"),
+    "created": N_("en cola"),
+    "processing": N_("el modelo está trabajando"),
+    "queued": N_("en cola"),
+    "starting": N_("arrancando"),
+    "running": N_("el modelo está trabajando"),
+    "in_progress": N_("el modelo está trabajando"),
+    "pending": N_("en cola"),
 }
 
 # Estados terminales: el poll también los emite en su última vuelta, pero mostrar
@@ -215,7 +219,7 @@ def ejecutar_imagen(tarea):
         cliente, cf_id, estado="video_listo", video_url=imagen_url, video_local=out_path,
         credits=costo.get("credits"), usd=costo.get("usd"),
     )
-    return "Imagen de FlowPlus lista."
+    return N_("Imagen de FlowPlus lista.")
 
 
 @registrar("flowplus_video")
@@ -343,4 +347,4 @@ def ejecutar_video(tarea):
         "publicado_en": None,
     }
     estado_mod.guardar(cliente, estado)
-    return "Video de FlowPlus listo, pendiente de revisión."
+    return N_("Video de FlowPlus listo, pendiente de revisión.")

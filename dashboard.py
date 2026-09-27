@@ -454,7 +454,15 @@ def estado_trabajo(job_id):
             "estado": "desconocido", "progreso": 0, "elapsed": 0, "mensaje": None,
             "etapa": None, "detalle": None, "progreso_real": False,
         })
-    return jsonify(info)
+    # etapa/mensaje/detalle son constantes N_(...) (tareas/flowplus.py,
+    # tareas/director.py) o texto libre que no está en el catálogo — gettext
+    # devuelve el msgid tal cual cuando no encuentra traducción, así que esto
+    # nunca rompe un texto que no se tradujo.
+    salida = dict(info)
+    for campo in ("etapa", "mensaje", "detalle"):
+        if isinstance(salida.get(campo), str):
+            salida[campo] = gettext(salida[campo])
+    return jsonify(salida)
 
 
 def _client_dir(cliente):
@@ -1672,6 +1680,7 @@ def ver_cliente(cliente):
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
         nombres_estilos_musica=fe_tipos.NOMBRES_ESTILOS_MUSICA,
+        nombres_estilo_musica=fe_tipos.NOMBRES_ESTILO_MUSICA,
         **_contexto_mi_musica(cliente),
         presets_mezcla=list(fe_mezcla.PRESETS),
         experimentos=experimentos_exp,
@@ -2329,7 +2338,7 @@ def imagen_producto(cliente, producto_id):
     (son fijas, no hace falta subirlas a R2)."""
     producto = catalogo_productos.encontrar(cliente, producto_id, categoria=_cat(request.args.get("categoria") or request.form.get("categoria")))
     if not producto:
-        flash(f"No encontré el producto {producto_id}", "error")
+        flash(gettext("No encontré el producto %(id)s", id=producto_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
     return send_file(producto["representativa"])
 
@@ -2508,10 +2517,10 @@ def crear_producto(cliente):
     categoria = _cat(request.form.get("categoria"))
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not nombre:
-        flash("Ponle un nombre.", "error")
+        flash(gettext("Ponle un nombre."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     if not archivos:
-        flash("Sube al menos una foto.", "error")
+        flash(gettext("Sube al menos una foto."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     try:
         producto_id = catalogo_productos.crear(
@@ -2527,14 +2536,14 @@ def crear_producto(cliente):
         # Sin ninguna foto válida el producto no aparecería en el catálogo:
         # mejor deshacer que dejar una carpeta fantasma.
         catalogo_productos.eliminar(cliente, producto_id, categoria=categoria)
-        flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
+        flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
     if categoria == "producto":
         # Solo lo que se vende tiene fila comercial (precio, url de compra,
         # en prueba): un personaje o un entorno no van a un experimento.
         _guardar_fila_producto(cliente, producto_id, nombre, descripcion,
                                _campos_comerciales(request.form), desarchivar=True)
-    flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
+    flash(gettext("Producto creado: %(nombre)s (%(n)s foto(s)).", nombre=nombre, n=guardadas), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
@@ -5788,7 +5797,7 @@ def rechazar(cliente, brief_id):
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])
 def cf_descartar(cliente, cf_id):
     creative_flow.eliminar(cliente, cf_id)
-    flash("Sesión de CreativeFlowPlus descartada.", "ok")
+    flash(gettext("Sesión de CreativeFlowPlus descartada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -5816,10 +5825,10 @@ def _sesion_con_video(cliente, cf_id):
     """Sesión de Crear con video listo, o None (con flash) si no aplica."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry:
-        flash("Esa sesión de Crear ya no existe.", "error")
+        flash(gettext("Esa sesión de Crear ya no existe."), "error")
         return None
     if entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") == "imagen":
-        flash("Final edition necesita un video listo (no una imagen ni una sesión sin generar).", "error")
+        flash(gettext("Final edition necesita un video listo (no una imagen ni una sesión sin generar)."), "error")
         return None
     return entry
 
@@ -5838,8 +5847,8 @@ def fe_preparar(cliente, cf_id):
         {"cliente": cliente, "cf_id": cf_id, "opciones": opciones},
         cliente=cliente, duracion_estimada=25, max_intentos=2,
     )
-    flash("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises." if encolado
-          else "Ya se estaba escribiendo el guion de esta pieza.", "ok")
+    flash(gettext("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises.") if encolado
+          else gettext("Ya se estaba escribiendo el guion de esta pieza."), "ok")
     return _volver_crear(cliente)
 
 
@@ -5851,7 +5860,7 @@ def fe_guardar_guion(cliente, cf_id):
         return _volver_crear(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base or not base.get("bloques"):
-        flash("Primero prepara el guion con IA; después lo editas.", "error")
+        flash(gettext("Primero prepara el guion con IA; después lo editas."), "error")
         return _volver_crear(cliente)
     guion = dict(base)
     guion["bloques"] = []
@@ -5863,10 +5872,10 @@ def fe_guardar_guion(cliente, cf_id):
     duracion = float(base["bloques"][-1].get("fin_s") or 0) + 0.05
     errores = fe_tipos.validar_guion(guion, duracion)
     if errores:
-        flash("No se guardó el guion: " + " ".join(errores), "error")
+        flash(gettext("No se guardó el guion: %(errores)s", errores=" ".join(errores)), "error")
         return _volver_crear(cliente)
     creative_flow.guardar_guion_base(cliente, cf_id, guion)
-    flash("Guion guardado. Ahora elige los destinos y produce las finales.", "ok")
+    flash(gettext("Guion guardado. Ahora elige los destinos y produce las finales."), "ok")
     return _volver_crear(cliente)
 
 
@@ -5890,11 +5899,11 @@ def fe_producir(cliente, cf_id):
         return _volver_crear(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base:
-        flash("Primero prepara el guion con IA y revísalo; sin guion no se produce nada.", "error")
+        flash(gettext("Primero prepara el guion con IA y revísalo; sin guion no se produce nada."), "error")
         return _volver_crear(cliente)
     destinos = _destinos_form(request.form.getlist("destinos"))
     if not destinos:
-        flash("Marca al menos un destino (idioma y país) válido para producir.", "error")
+        flash(gettext("Marca al menos un destino (idioma y país) válido para producir."), "error")
         return _volver_crear(cliente)
 
     idioma_base = base.get("idioma") if base.get("idioma") in IDIOMAS_FE else "es"
@@ -5945,9 +5954,9 @@ def fe_producir(cliente, cf_id):
         ):
             encolados += 1
     if encolados:
-        flash(f"Produciendo {encolados} finales… cada una aparece en Generados cuando termina.", "ok")
+        flash(gettext("Produciendo %(n)s finales… cada una aparece en Generados cuando termina.", n=encolados), "ok")
     else:
-        flash("Ya se estaban produciendo esas finales.", "ok")
+        flash(gettext("Ya se estaban produciendo esas finales."), "ok")
     return _volver_crear(cliente)
 
 
@@ -5958,12 +5967,12 @@ def fe_descartar(cliente, cf_id, final_id):
                                                           variante=final.get("variante"))):
         # Borrar la fila mientras el worker la escribe la dejaría resucitar a
         # medias (actualizar_final sobre una pieza que ya no existe).
-        flash("Esa final se está produciendo; espera a que termine.", "error")
+        flash(gettext("Esa final se está produciendo; espera a que termine."), "error")
         return _volver_crear(cliente)
     if not final or not creative_flow.eliminar_final(cliente, final_id):
-        flash("Esa final ya no existe.", "error")
+        flash(gettext("Esa final ya no existe."), "error")
     else:
-        flash("Final descartada.", "ok")
+        flash(gettext("Final descartada."), "ok")
     return _volver_crear(cliente)
 
 
@@ -6037,9 +6046,9 @@ def fp_subir_referencias(cliente):
             ok += 1 if _guardar_referencia_archivo(cliente, a, i) else 0
         except Exception as e:
             bitacora.registrar(cliente, a.filename, "flowplus_referencia", "error", str(e))
-            errores.append(f"No pude subir {a.filename}: {e}")
-    mensaje = f"{ok} referencia(s) agregada(s)." if ok else None
-    error = "; ".join(errores) if errores else (None if archivos else "No elegiste ningún archivo.")
+            errores.append(gettext("No pude subir %(archivo)s: %(error)s", archivo=a.filename, error=e))
+    mensaje = gettext("%(n)s referencia(s) agregada(s).", n=ok) if ok else None
+    error = "; ".join(errores) if errores else (None if archivos else gettext("No elegiste ningún archivo."))
     if _quiere_json():
         return _respuesta_bandeja(cliente, mensaje=mensaje, error=error)
     if mensaje:
@@ -6061,7 +6070,7 @@ def fp_agregar_link(cliente):
     con yt-dlp), lo recorta a 15 s, lo sube a R2 y lo deja en la bandeja."""
     url = (request.form.get("link") or "").strip()
     if not url:
-        flash("Pega un link primero.", "error")
+        flash(gettext("Pega un link primero."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     job_id = _job_id_link(cliente)
 
@@ -6080,16 +6089,16 @@ def fp_agregar_link(cliente):
         except Exception as e:
             bitacora.registrar(cliente, base, "flowplus_link", "error", str(e))
             raise
-        return "Video del link agregado a las referencias."
+        return idiomas.N_("Video del link agregado a las referencias.")
 
     arranco = trabajos.iniciar(job_id, trabajo, duracion_estimada=40)
     if _quiere_json():
-        return _respuesta_bandeja(cliente, mensaje="Descargando el video del link…" if arranco else None,
-                                  error=None if arranco else "Ya se está descargando un link — espera a que termine.")
+        return _respuesta_bandeja(cliente, mensaje=gettext("Descargando el video del link…") if arranco else None,
+                                  error=None if arranco else gettext("Ya se está descargando un link — espera a que termine."))
     if arranco:
-        flash("Descargando el video del link… en unos segundos aparece entre las referencias.", "ok")
+        flash(gettext("Descargando el video del link… en unos segundos aparece entre las referencias."), "ok")
     else:
-        flash("Ya se está descargando un link — espera a que termine.", "warn")
+        flash(gettext("Ya se está descargando un link — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -6129,15 +6138,15 @@ def _respuesta_mi_musica(cliente, error=None, mensaje=None, nuevo_id=None, job_i
 def mm_subir(cliente):
     archivo = request.files.get("cancion")
     if not archivo or not archivo.filename:
-        return _respuesta_mi_musica(cliente, error="Elige un archivo de audio.")
+        return _respuesta_mi_musica(cliente, error=gettext("Elige un archivo de audio."))
     try:
         c = mi_musica.subir(cliente, archivo, os.path.join(_client_dir(cliente), "tmp_musica"))
     except mi_musica.SubidaInvalida as e:
         return _respuesta_mi_musica(cliente, error=str(e))
     except Exception as e:
         bitacora.registrar(cliente, archivo.filename, "mi_musica", "error", str(e))
-        return _respuesta_mi_musica(cliente, error=f"No pude subir la canción ({type(e).__name__}).")
-    return _respuesta_mi_musica(cliente, mensaje=f"«{c['nombre']}» quedó en Mi música.", nuevo_id=c["id"])
+        return _respuesta_mi_musica(cliente, error=gettext("No pude subir la canción (%(tipo)s).", tipo=type(e).__name__))
+    return _respuesta_mi_musica(cliente, mensaje=gettext("«%(nombre)s» quedó en Mi música.", nombre=c["nombre"]), nuevo_id=c["id"])
 
 
 @app.route("/cliente/<cliente>/musica/<int:mid>/borrar", methods=["POST"])
@@ -6148,7 +6157,7 @@ def mm_borrar(cliente, mid):
         return _respuesta_mi_musica(cliente, error=str(e))
     except Exception as e:
         bitacora.registrar(cliente, str(mid), "mi_musica", "error", str(e))
-        return _respuesta_mi_musica(cliente, error=f"No pude borrarla ({type(e).__name__}); intenta de nuevo.")
+        return _respuesta_mi_musica(cliente, error=gettext("No pude borrarla (%(tipo)s); intenta de nuevo.", tipo=type(e).__name__))
     return _respuesta_mi_musica(cliente)
 
 
@@ -6156,14 +6165,14 @@ def mm_borrar(cliente, mid):
 def mm_crear(cliente):
     prompt = " ".join((request.form.get("prompt") or "").split())[:400]
     if not prompt:
-        return _respuesta_mi_musica(cliente, error="Describe la música que quieres.")
+        return _respuesta_mi_musica(cliente, error=gettext("Describe la música que quieres."))
     jid = tareas_musica.job_id(cliente)
     encolado = trabajos.encolar(jid, "musica_generar",
                                 {"cliente": cliente, "prompt": prompt, "instrumental": request.form.get("instrumental") == "si"},
                                 duracion_estimada=90, etapas=list(tareas_musica.ETAPAS), cliente=cliente, max_intentos=1)
     if not encolado:
-        return _respuesta_mi_musica(cliente, error="Ya se está creando una canción — espera a que termine.")
-    return _respuesta_mi_musica(cliente, mensaje="Creando la canción con ElevenLabs…", job_id=jid)
+        return _respuesta_mi_musica(cliente, error=gettext("Ya se está creando una canción — espera a que termine."))
+    return _respuesta_mi_musica(cliente, mensaje=gettext("Creando la canción con ElevenLabs…"), job_id=jid)
 
 
 @app.route("/cliente/<cliente>/musica/lista")
@@ -6180,7 +6189,7 @@ def fp_reusar(cliente, cf_id):
     puede entrar como referencia."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry:
-        flash("No encontré esa pieza.", "error")
+        flash(gettext("No encontré esa pieza."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     ya = {r["url"] for r in referencias_flowplus.listar(cliente)}
     for r in entry.get("referencias") or []:
@@ -6192,7 +6201,7 @@ def fp_reusar(cliente, cf_id):
         )
         ya.add(r["url"])
     if request.form.get("incluir_resultado") == "si" and entry.get("tipo") == "imagen" and entry.get("video_url") not in ya:
-        referencias_flowplus.agregar(cliente, "imagen", entry["video_url"], origen="generada", titulo="Imagen generada")
+        referencias_flowplus.agregar(cliente, "imagen", entry["video_url"], origen="generada", titulo=gettext("Imagen generada"))
     session["fp_prefill"] = {
         "texto": entry.get("prompt_fuente") or entry.get("accion_central") or "",
         "tipo": entry.get("tipo") or "video",
@@ -6208,7 +6217,7 @@ def fp_reusar(cliente, cf_id):
         "preset_camara": entry.get("preset_camara"),
         "plantilla": entry.get("plantilla"),
     }
-    flash("Referencias y texto cargados — ajusta lo que quieras y genera.", "ok")
+    flash(gettext("Referencias y texto cargados — ajusta lo que quieras y genera."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -6218,12 +6227,12 @@ def fp_describir(cliente):
     Devuelve JSON para rellenar el cuadro sin recargar."""
     refs = referencias_flowplus.listar(cliente)
     if not refs:
-        return jsonify({"ok": False, "error": "Agrega primero una imagen, un video o un link."}), 400
+        return jsonify({"ok": False, "error": gettext("Agrega primero una imagen, un video o un link.")}), 400
     try:
         texto = referencias_link.describir(refs, cliente_hint=proyectos.nombre_visible(cliente))
     except Exception as e:
         bitacora.registrar(cliente, "flowplus", "describir", "error", str(e))
-        return jsonify({"ok": False, "error": f"No pude describir las referencias ({type(e).__name__})."}), 502
+        return jsonify({"ok": False, "error": gettext("No pude describir las referencias (%(tipo)s).", tipo=type(e).__name__)}), 502
     bitacora.registrar(cliente, "flowplus", "describir", "ok", texto[:120])
     return jsonify({"ok": True, "texto": texto})
 
@@ -6296,8 +6305,8 @@ def cf_crear_video(cliente):
         usadas = request.form.getlist("ref_ids")
         en_bandeja = {r["id"] for r in bandeja}
         if any(rid not in en_bandeja for rid in usadas):
-            flash("Tu bandeja de referencias cambió (alguien más del proyecto la usó o la vació). "
-                  "Revisa las referencias y vuelve a generar — no se cobró nada.", "error")
+            flash(gettext("Tu bandeja de referencias cambió (alguien más del proyecto la usó o la vació). "
+                          "Revisa las referencias y vuelve a generar — no se cobró nada."), "error")
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
         bandeja = [r for r in bandeja if r["id"] in set(usadas)]
     referencias = []
@@ -6352,7 +6361,7 @@ def cf_crear_video(cliente):
     # su fotograma) — es lo que consumen los modelos que no aceptan video.
     referencias_urls = [r["frame_url"] for r in referencias][:10]
     if not accion_central:
-        flash("Escribe qué tiene que pasar en el video.", "error")
+        flash(gettext("Escribe qué tiene que pasar en el video."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if solo_texto:
@@ -6372,7 +6381,7 @@ def cf_crear_video(cliente):
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma,
         preset_camara=None, plantilla=None,
     )
-    directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else "Tu texto, tal cual")
+    directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else idiomas.N_("Tu texto, tal cual"))
     if tipo == "imagen":
         # La imagen no pasa por el director (spec §2.2): va el texto tal cual.
         prompt_final = flowplus_prompt.tal_cual(accion_central, referencias, idioma=idioma)
@@ -6381,8 +6390,11 @@ def cf_crear_video(cliente):
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
         _consumir_bandeja(cliente, usadas)
         nombre_modelo = flowplus_modelos.IMAGEN[modelo]["nombre"]
-        flash(f"Generando la imagen con {nombre_modelo}{' · ' + aspect_ratio if aspect_ratio else ''}…" if lanzado
-              else "Ya se estaba generando eso — espera a que termine.", "ok" if lanzado else "warn")
+        if lanzado:
+            detalle_flash = " · " + aspect_ratio if aspect_ratio else ""
+            flash(gettext("Generando la imagen con %(modelo)s%(detalle)s…", modelo=nombre_modelo, detalle=detalle_flash), "ok")
+        else:
+            flash(gettext("Ya se estaba generando eso — espera a que termine."), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     if request.form.get("modo_prompt") != "director":
@@ -6397,22 +6409,25 @@ def cf_crear_video(cliente):
         nombre_modelo = flowplus_modelos.VIDEO[modelo]["nombre"]
         if lanzado:
             detalle = f" · {aspect_ratio}" if aspect_ratio else ""
-            flash(f"Generando el video con {nombre_modelo}{detalle} · {duracion_objetivo} s…", "ok")
+            flash(gettext("Generando el video con %(modelo)s%(detalle)s · %(duracion)s s…",
+                          modelo=nombre_modelo, detalle=detalle, duracion=duracion_objetivo), "ok")
             if aviso_duracion is not None:
-                flash(f"{nombre_modelo} llega a {aviso_duracion} s: se generará de {aviso_duracion} s.", "warn")
+                flash(gettext("%(modelo)s llega a %(aviso)s s: se generará de %(aviso)s s.",
+                              modelo=nombre_modelo, aviso=aviso_duracion), "warn")
         else:
-            flash("Ya se estaba generando eso — espera a que termine.", "warn")
+            flash(gettext("Ya se estaba generando eso — espera a que termine."), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", **campos)
     encolado = _encolar_director(cliente, cf_id)
     _consumir_bandeja(cliente, usadas)
     if encolado:
-        flash("Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes.", "ok")
+        flash(gettext("Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes."), "ok")
         if aviso_duracion is not None:
-            flash(f"{flowplus_modelos.VIDEO[modelo]['nombre']} llega a {aviso_duracion} s: se armará para {aviso_duracion} s.", "warn")
+            flash(gettext("%(modelo)s llega a %(aviso)s s: se armará para %(aviso)s s.",
+                          modelo=flowplus_modelos.VIDEO[modelo]["nombre"], aviso=aviso_duracion), "warn")
     else:
-        flash("Ya se estaba armando ese prompt — espera a que termine.", "warn")
+        flash(gettext("Ya se estaba armando ese prompt — espera a que termine."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -6432,7 +6447,7 @@ def cf_guardar_prompt(cliente, cf_id):
     y el B. Solo en prompt_listo; un texto vacío no pisa nada. No llama a Claude."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry or entry.get("estado") != "prompt_listo":
-        flash("Ese prompt no se puede editar ahora.", "error")
+        flash(gettext("Ese prompt no se puede editar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     campos = {}
     a = (request.form.get("prompt_a") or "").strip()
@@ -6446,9 +6461,9 @@ def cf_guardar_prompt(cliente, cf_id):
         director_datos["editado_en"] = datetime.now().isoformat(timespec="seconds")
         campos["director"] = director_datos
         creative_flow.actualizar(cliente, cf_id, **campos)
-        flash("Prompt guardado. Ahora sí: genera cuando quieras.", "ok")
+        flash(gettext("Prompt guardado. Ahora sí: genera cuando quieras."), "ok")
     else:
-        flash("No había cambios que guardar.", "warn")
+        flash(gettext("No había cambios que guardar."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -6462,19 +6477,19 @@ def cf_rearmar(cliente, cf_id):
     ella, se sigue rechazando para no encolar una segunda compilación encima."""
     entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry or (entry.get("tipo") or "video") == "imagen":
-        flash("Esa sesión no se puede rearmar ahora.", "error")
+        flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     estado = entry.get("estado")
     puede_rearmar = estado in ("prompt_listo", "error") or (
         estado == "prompt_pendiente" and not trabajos.en_curso(tareas_director.job_id(cliente, cf_id)))
     if not puede_rearmar:
-        flash("Esa sesión no se puede rearmar ahora.", "error")
+        flash(gettext("Esa sesión no se puede rearmar ahora."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     creative_flow.actualizar(cliente, cf_id, estado="prompt_pendiente", error=None)
     if _encolar_director(cliente, cf_id):
-        flash("Rearmando el prompt con IA…", "ok")
+        flash(gettext("Rearmando el prompt con IA…"), "ok")
     else:
-        flash("Ya se estaba rearmando.", "warn")
+        flash(gettext("Ya se estaba rearmando."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -6484,16 +6499,16 @@ def fp_sugerir_sonido(cliente):
     from final_edition import sonido as sonido_mod
     cuerpo = request.get_json(silent=True)
     if not isinstance(cuerpo, dict):
-        return jsonify({"error": "Cuerpo inválido."}), 400
+        return jsonify({"error": gettext("Cuerpo inválido.")}), 400
     escena = " ".join(str(cuerpo.get("escena") or "").split())
     if not escena:
-        return jsonify({"error": "Escribe primero qué tiene que pasar en el video."}), 400
+        return jsonify({"error": gettext("Escribe primero qué tiene que pasar en el video.")}), 400
     e = cuerpo.get("enfoque")
     enfoque = e if isinstance(e, str) and e in flowplus_prompt.ENFOQUES else "producto"
     try:
         texto = sonido_mod.sugerir_descripcion(escena, enfoque, idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
-        return jsonify({"error": f"No se pudo sugerir ({type(e).__name__})."}), 502
+        return jsonify({"error": gettext("No se pudo sugerir (%(tipo)s).", tipo=type(e).__name__)}), 502
     return jsonify({"sonido": texto})
 
 
@@ -6505,23 +6520,24 @@ def cf_generar_video(cliente, cf_id):
     data = creative_flow.cargar(cliente)
     entry = data.get(cf_id)
     if not entry:
-        flash("No encontré esa sesión.", "error")
+        flash(gettext("No encontré esa sesión."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     # Guardia anti-reenvío: nunca disparar una segunda generación paga de un
     # video que ya se generó o se está generando.
     if entry.get("estado") not in ("prompt_listo", "error"):
-        flash("Este video ya se generó o se está generando — no se puede volver a disparar.", "error")
+        flash(gettext("Este video ya se generó o se está generando — no se puede volver a disparar."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not (entry.get("referencias_urls") or []) and entry.get("enfoque") != "libre":
-        flash("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva.", "error")
+        flash(gettext("Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
-    nombre_modelo = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "el modelo")
-    que = "la imagen" if (entry.get("tipo") or "video") == "imagen" else "el video"
+    nombre_modelo = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre") or gettext("el modelo")
+    es_imagen = (entry.get("tipo") or "video") == "imagen"
+    que = gettext("la imagen") if es_imagen else gettext("el video")
     prompt_b = (entry.get("director") or {}).get("prompt_b")
     # Si ya existe una hija B (de un clic anterior, o de un lote), no se crea
     # otra aunque la casilla venga marcada.
     tiene_hija_b = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
-    quiere_b = request.form.get("version_b") == "si" and bool(prompt_b) and que == "el video" and not tiene_hija_b
+    quiere_b = request.form.get("version_b") == "si" and bool(prompt_b) and not es_imagen and not tiene_hija_b
     hija = None
     if quiere_b:
         # Dos clics casi simultáneos pueden leer el mismo entry.estado
@@ -6529,21 +6545,21 @@ def cf_generar_video(cliente, cf_id):
         # chequeo, justo antes de crear la hija, es la segunda barrera (la
         # primera es el estado de arriba) para no duplicar la generación paga.
         if trabajos.en_curso(_job_id_creative_flow(cliente, cf_id)):
-            flash(f"Ya se está generando {que} — espera a que termine.", "warn")
+            flash(gettext("Ya se está generando %(que)s — espera a que termine.", que=que), "warn")
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
         try:
             hija = creative_flow.duplicar(cliente, cf_id, prompt_relleno=prompt_b, variante="B")
         except Exception as e:
-            flash(f"No se pudo crear la versión B: {e}. No se generó nada.", "error")
+            flash(gettext("No se pudo crear la versión B: %(error)s. No se generó nada.", error=e), "error")
             return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if not _lanzar_video_cf(cliente, cf_id, entry):
-        flash(f"Ya se está generando {que} — espera a que termine.", "warn")
+        flash(gettext("Ya se está generando %(que)s — espera a que termine.", que=que), "warn")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
     if hija:
         _lanzar_video_cf(cliente, hija, creative_flow.cargar(cliente)[hija])
-        flash(f"Generando las versiones A y B con {nombre_modelo}…", "ok")
+        flash(gettext("Generando las versiones A y B con %(modelo)s…", modelo=nombre_modelo), "ok")
     else:
-        flash(f"Generando {que} con {nombre_modelo}…", "ok")
+        flash(gettext("Generando %(que)s con %(modelo)s…", que=que, modelo=nombre_modelo), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 _MENSAJE_INTERRUMPIDO = (
