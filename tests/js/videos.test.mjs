@@ -122,3 +122,26 @@ test("el error de un video ya soltado no marca el material como fallido", () => 
   assert.deepEqual(avisos, []);
   assert.equal(v.fallo(DOC.pistas[0].clips[0]), false);
 });
+
+test("renovar: suelta solo los videos del material que ya tiene copia liviana y olvida su fallo", () => {
+  creados.length = 0;
+  const dos = { ...MATS, 2: { tipo: "video", url: "/otro.mp4", url_proxy: null } };
+  const doc = { formato: "9:16", pistas: [{ id: "p", tipo: "video", clips: [
+    { id: "a", material_id: 1, inicio_ms: 0, duracion_ms: 4000, recorte: { desde_ms: 0, hasta_ms: 4000 },
+      transicion: { tipo: "fundido", duracion_ms: 500 } },
+    { id: "b", material_id: 2, inicio_ms: 4000, duracion_ms: 4000, recorte: { desde_ms: 0, hasta_ms: 4000 } },
+  ] }] };
+  const v = new Videos(dos, () => {});
+  v.sincronizar(doc, 4250, false);         // el fundido: los dos vivos
+  const a = v.elementoDe(doc.pistas[0].clips[0]);
+  const b = v.elementoDe(doc.pistas[0].clips[1]);
+  assert.equal(b.atributos.src, "/otro.mp4");
+  b.emitir("error");                        // el original de 2 no cargó
+  assert.equal(v.fallo(doc.pistas[0].clips[1]), true);
+  const nuevos = { ...dos, 2: { tipo: "video", url: "/otro.mp4", url_proxy: "/otro_proxy.mp4" } };
+  v.renovar(nuevos, [2]);
+  assert.equal(v.fallo(doc.pistas[0].clips[1]), false);
+  assert.equal(v.elementoDe(doc.pistas[0].clips[0]), a, "el material 1 no se toca");
+  v.sincronizar(doc, 4250, false);
+  assert.equal(v.elementoDe(doc.pistas[0].clips[1]).atributos.src, "/otro_proxy.mp4");
+});

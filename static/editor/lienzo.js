@@ -2,8 +2,10 @@
 // principal cubriendo el lienzo (con Ken Burns y la transición en curso), las
 // capas de imagen y texto, y los subtítulos como los pinta libass.
 // `faltaCuadro` pide otro intento en el próximo cuadro (el video todavía no
-// tiene ese fotograma); un material que ya falló (`recursos.fallo`) no lo
-// pide: se queda en negro sin redibujar para siempre.
+// tiene ese fotograma); un material que ya falló (`recursos.fallo`) o que no
+// está entre los materiales de la página (se borró o es de otro proyecto: el
+// aviso «Faltan N archivo(s)» ya lo dice) no lo pide: se queda en negro sin
+// redibujar, también en pausa.
 import { colorAss, estadoKaraoke, ventanaEn, ventanas } from "./subtitulos.js";
 import { rasterizarTexto } from "./texto_canvas.js";
 import { capasEn, posicionCapa, principalEn, tamanoCapaImagen, zoomKenBurns } from "./tiempo.js";
@@ -22,6 +24,21 @@ function ventanasDe(doc) {
 export function dibujarCuadro(ctx, doc, tMs, recursos, cfg) {
   const [W, H] = cfg.formatos[doc.formato];
   ctx.save();
+  // restore() siempre: un error a mitad de cuadro no deja el estado del
+  // contexto (alfa, fuente, trazo) pegado a los cuadros siguientes.
+  try {
+    return dibujarDentro(ctx, doc, tMs, recursos, cfg, W, H);
+  } finally {
+    ctx.restore();
+  }
+}
+
+// Nunca vuelve a pedir un cuadro por un material que no va a llegar.
+function perdido(recursos, clip) {
+  return !recursos.material(clip.material_id) || Boolean(recursos.fallo?.(clip));
+}
+
+function dibujarDentro(ctx, doc, tMs, recursos, cfg, W, H) {
   ctx.globalAlpha = 1;
   ctx.fillStyle = "#000";
   ctx.fillRect(0, 0, W, H);
@@ -31,7 +48,7 @@ export function dibujarCuadro(ctx, doc, tMs, recursos, cfg) {
     const fuente = recursos.fuentePrincipal(capa.clip);
     const [fw, fh] = fuente ? recursos.medidas(fuente) : [0, 0];
     if (!fw || !fh) {
-      if (!recursos.fallo?.(capa.clip)) faltaCuadro = true;
+      if (!perdido(recursos, capa.clip)) faltaCuadro = true;
       continue;
     }
     // scale=W:H:force_original_aspect_ratio=increase,crop=W:H y el zoompan
@@ -64,7 +81,6 @@ export function dibujarCuadro(ctx, doc, tMs, recursos, cfg) {
   }
   ctx.globalAlpha = 1;
   dibujarSubtitulos(ctx, doc, tMs, cfg, W, H);
-  ctx.restore();
   return { aproximada: principal.aproximada, faltaCuadro };
 }
 

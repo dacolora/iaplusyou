@@ -7,7 +7,8 @@
 // reloj corra. Decodifican a la vez solo los de la transición en curso (dos
 // como mucho) y el clip que entra en PRECARGA_MS espera parado en su primer
 // cuadro. Un video sin usar hace LIBERAR_MS se suelta. Un material cuyo
-// archivo falla se avisa una vez (`alFallar`) y no se vuelve a pedir.
+// archivo falla se avisa una vez (`alFallar`) y no se vuelve a pedir (salvo
+// que `renovar` traiga su copia liviana nueva).
 //
 // Sin `crossOrigin`: en la capa 3 la vista es de solo lectura y un lienzo
 // «contaminado» da igual, así el video se ve aunque el almacenamiento no mande
@@ -119,6 +120,16 @@ export class Videos {
       if (!e.el.paused) e.el.pause();
       if (ahora - e.usado > LIBERAR_MS) this._soltar(id);
     }
+  }
+
+  // Materiales que el servidor terminó de preparar (copia liviana nueva): se
+  // sueltan sus <video> para que el próximo cuadro los pida con la URL nueva y
+  // se olvida un fallo anterior (el archivo ya es otro). Los demás siguen.
+  renovar(materiales, mids) {
+    this.materiales = materiales;
+    const ids = new Set(mids.map(Number));
+    for (const [id, e] of [...this.elementos]) if (ids.has(e.mid)) this._soltar(id);
+    for (const mid of ids) this.fallidos.delete(mid);
   }
 
   pausarTodo() {

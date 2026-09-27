@@ -12,6 +12,7 @@
 // volver a poner `crossOrigin = "anonymous"` cuando R2 tenga su regla CORS.
 import { dibujarCuadro } from "./lienzo.js";
 import { MotorAudio } from "./motor_audio.js";
+import { evaluarRespuesta, INTERVALO_SONDEO_MS, listos, TOPE_SONDEO_MS } from "./pendientes.js";
 import { Reloj } from "./reloj.js";
 import { resolver } from "./resolver.js";
 import { cuadroVecino, duracionMs } from "./tiempo.js";
@@ -215,31 +216,61 @@ function cuadro() {
   }
 }
 
+// Copias livianas (y picos del sonido) que el servidor todavía prepara: se
+// pregunta cada INTERVALO_SONDEO_MS y lo que ya esté listo se usa enseguida
+// aunque falten otros — nunca mientras reproduce o carga el sonido (se deja
+// para la próxima vuelta). Pasado TOPE_SONDEO_MS, o si la respuesta no sirve
+// (sesión vencida, edición borrada), se deja de preguntar y se avisa.
+const inicioSondeo = performance.now();
+
+function rendirsePendientes() {
+  const n = datos.pendientes.length;
+  aviso("aviso-preparando", `No se ${n > 1 ? "pudieron" : "pudo"} preparar las copias livianas de ${n} archivo(s): la vista previa sigue con los originales (se ve igual, solo tarda más en cargar).`);
+}
+
+function usarListos(j) {
+  const ids = listos(datos.pendientes, j);
+  datos.pendientes = (j.pendientes ?? []).map(Number);
+  if (!ids.length) return;
+  materiales = { ...materiales };
+  for (const mid of ids) materiales[mid] = j.materiales[mid];
+  audio.materiales = materiales;
+  videos.renovar(materiales, ids);
+  for (const mid of ids) if (materiales[mid]?.tipo === "video") fallasCarga.delete(mid);
+  mostrarFallas();
+  pedirCuadro();
+}
+
 async function vigilarPendientes() {
   if (!datos.pendientes.length) {
     aviso("aviso-preparando", "");
     return;
   }
+  if (performance.now() - inicioSondeo > TOPE_SONDEO_MS) {
+    rendirsePendientes();
+    return;
+  }
   aviso("aviso-preparando", `Preparando ${datos.pendientes.length} archivo(s) para que la vista previa sea más liviana. Es gratis; mientras tanto se usan los originales.`);
+  let decision = "reintentar";                 // sin red: se vuelve a intentar
   try {
     const r = await fetch(datos.urls.materiales, { headers: { Accept: "application/json" } });
-    if (r.ok && !ocupado()) {
+    decision = evaluarRespuesta(r);
+    if (decision === "json") {
       const j = await r.json();
-      datos.pendientes = j.pendientes;
-      if (!j.pendientes.length) {
-        materiales = j.materiales;
-        audio.materiales = materiales;
-        videos.vaciar();
-        videos = new Videos(materiales, pedirCuadro, avisarFalla);
-        for (const mid of [...fallasCarga]) if (materiales[mid]?.tipo === "video") fallasCarga.delete(mid);
-        mostrarFallas();
-        aviso("aviso-preparando", "");
-        pedirCuadro();
-        return;
-      }
+      if (!ocupado()) usarListos(j);           // se mira DESPUÉS de leer: pudo empezar a reproducir
     }
-  } catch { /* se reintenta */ }
-  setTimeout(vigilarPendientes, 5000);
+  } catch {
+    if (decision === "json") decision = "parar";   // decía JSON y no lo era
+  }
+  if (decision === "parar") {
+    rendirsePendientes();
+    return;
+  }
+  if (!datos.pendientes.length) {
+    aviso("aviso-preparando", "");
+    return;
+  }
+  setTimeout(vigilarPendientes, INTERVALO_SONDEO_MS);
 }
 
 async function iniciar() {
