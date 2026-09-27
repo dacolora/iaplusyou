@@ -117,6 +117,11 @@ def test_rechaza_planos_que_no_suman_y_pide_correccion_una_vez(monkeypatch):
     (lambda p: p.__setitem__("accion", "acción con Image 7"), "cita Image 7"),
     (lambda p: p.__setitem__("accion", "video vertical 9:16 de 8 segundos a 720p"), "escribe duración"),
     (lambda p: p.__setitem__("accion", "x" * 2600), "los planos pasan de 2500"),
+    # Revisión final fase 3 (finding 1): con la orden de idioma en español ahora
+    # permitiendo el español (salvo excepciones), Claude podría "traducir" el
+    # token por su cuenta — _TOKEN_ES lo rechaza igual que cualquier otro plano
+    # inválido, en vez de dejarlo pasar como texto libre.
+    (lambda p: p.__setitem__("accion", "acción con Imagen 1"), "no se traducen"),
 ])
 def test_dos_respuestas_invalidas_lanzan_director_error(monkeypatch, cambio, motivo_esperado):
     import director

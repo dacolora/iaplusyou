@@ -29,6 +29,13 @@ VERSION = 1
 MAX_CARACTERES_PROMPT = 2500
 
 _TOKEN = re.compile(r"\b(Image|Video) (\d+)\b")
+# Revisión final fase 3 (finding 1): con un proyecto en español la orden de
+# idioma ahora permite el español salvo estas excepciones (ver idiomas._ORDENES),
+# pero Claude puede seguir devolviendo el token traducido por su cuenta
+# ("Imagen 1", "Vídeo 2"): _TOKEN nunca los reconoce como válidos (silenciosamente
+# los deja pasar como texto libre), así que se valida aparte para que dispare el
+# mismo reintento/fallback que cualquier otro plano inválido.
+_TOKEN_ES = re.compile(r"\bIm[aá]gen \d+\b|\bV[ií]deo \d+\b")
 # Lo que va por API y NO en el prompt (spec §2 validación 5).
 _PARAMETRO_ESCRITO = re.compile(r"\b(\d+:\d+|\d{3,4}p|\d+ ?fps|\d+ segundos? de video|\d+ ?s de video)\b", re.IGNORECASE)
 
@@ -174,6 +181,12 @@ def _validar_planos(planos, n_esperado, duracion, tokens_validos, nombre):
         for m in _TOKEN.finditer(texto):
             if m.group(0) not in tokens_validos:
                 raise ValueError(f"{nombre}: el plano {i} cita {m.group(0)}, que no existe")
+        m_es = _TOKEN_ES.search(texto)
+        if m_es:
+            # Sin "en español"/"al español" literal en este mensaje: vuelve a
+            # Claude como corrección (compilar()) y test_i18n_claude.py escanea
+            # TODO el archivo por esa frase, no solo los prompts de _system().
+            raise ValueError(f"{nombre}: el plano {i} cita {m_es.group(0)!r}: los tokens no se traducen, van siempre en inglés (Image N / Video N)")
         if _PARAMETRO_ESCRITO.search(texto):
             raise ValueError(f"{nombre}: el plano {i} escribe duración, formato o resolución (van por API)")
         if not str(p.get("accion") or "").strip():

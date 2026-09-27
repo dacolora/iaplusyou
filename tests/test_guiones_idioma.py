@@ -35,11 +35,14 @@ def _app_con_catalogo_real():
 
 
 def _sin_frases_permitidas(system):
-    """`system` del refinador sin las dos frases que SIEMPRE mencionan
-    «inglés» (el prompt del modelo nunca cambia de idioma): lo que quede no
-    debería volver a nombrar el inglés."""
+    """`system` del refinador sin las frases que SIEMPRE mencionan «inglés»: las
+    dos del cuerpo (el prompt del modelo nunca cambia de idioma) y, desde la
+    revisión final fase 3 (finding 1), la propia orden de idioma en español —
+    que ahora nombra «inglés» al describir su excepción (tokens Image N/Video N
+    y prompts de modelo). Lo que quede no debería volver a nombrar el inglés."""
     return (system.replace("El prompt sigue en inglés (los modelos rinden mejor así)", "")
-                  .replace("revisado, en inglés", ""))
+                  .replace("revisado, en inglés", "")
+                  .replace(idiomas.orden_idioma("es"), ""))
 
 
 # --------------------------------------------------------- refinador.py ---
@@ -110,7 +113,10 @@ def test_recorte_proponer_en_espanol_mantiene_el_texto_de_hoy(base_temporal, mon
     orden = idiomas.orden_idioma("es")
     assert system.startswith(orden) and system.endswith(orden)
     assert "por qué se puede quitar, en español, máximo 12 palabras" in system
-    assert "inglés" not in system
+    # La propia orden de idioma en español nombra «inglés» al describir su
+    # excepción (finding 1, revisión final fase 3): se descuenta antes de
+    # comprobar que no queda ninguna OTRA mención.
+    assert "inglés" not in system.replace(orden, "")
 
 
 def test_recorte_proponer_aviso_de_error_en_el_idioma_del_proyecto(base_temporal, monkeypatch, tmp_path):
@@ -143,6 +149,93 @@ def test_recorte_proponer_aviso_de_error_en_el_idioma_del_proyecto(base_temporal
     v2 = datos.video("acme", vid2)
     assert v2["estado"] == "configurando"
     assert v2["aviso"] == "No se pudo proponer qué quitar. Vuelve a intentarlo."
+
+
+# -------------------------------------------------------------- clips.py ---
+
+def test_clips_armar_pide_el_titulo_en_ingles(base_temporal, monkeypatch, tmp_path):
+    """Fix ronda revisión final (finding 3b): el plan de clips (momentos,
+    bloque_video, estados) sigue en inglés siempre — es lo único que Claude no
+    tenía instrucción de idioma para "titulo", que sí llega a la persona
+    (vía _crear_prompts). Ahora se pide en el idioma del proyecto, con la
+    misma orden al inicio y al final que recorte._sistema/imagenes._sistema."""
+    from guiones import clips, datos
+    _proyecto_en_idioma(monkeypatch, tmp_path, "en")
+    _, vid = video_nuevo(config=CONFIG)
+    datos.empezar("acme", vid, "armando", ("configurando",))
+    registro = []
+    clips.armar(vid, llamar=fake(PLAN, registro=registro))
+    system = registro[0]["system"]
+    orden = idiomas.orden_idioma("en")
+    assert system.startswith(orden) and system.endswith(orden)
+    assert '"titulo": "título corto en inglés"' in system
+    # El plan en sí (lo que termina en el prompt del modelo de video) se sigue
+    # pidiendo en inglés siempre, sin importar el idioma del proyecto.
+    assert '"bloque_video" (en inglés)' in system
+
+
+def test_clips_armar_en_espanol_mantiene_el_texto_de_hoy(base_temporal, monkeypatch, tmp_path):
+    from guiones import clips, datos
+    _proyecto_en_idioma(monkeypatch, tmp_path, "es")
+    _, vid = video_nuevo(config=CONFIG)
+    datos.empezar("acme", vid, "armando", ("configurando",))
+    registro = []
+    clips.armar(vid, llamar=fake(PLAN, registro=registro))
+    system = registro[0]["system"]
+    orden = idiomas.orden_idioma("es")
+    assert system.startswith(orden) and system.endswith(orden)
+    assert '"titulo": "título corto en español"' in system
+
+
+def _capturar_prompts_de_chat(monkeypatch):
+    """Reemplaza `refinador.crear` por uno que solo guarda título/contexto
+    (sin tocar la base): lo que arma `clips._crear_prompts`, no lo que hace
+    `refinador.crear` con eso."""
+    from guiones import clips
+    llamadas = []
+
+    def _falso_crear(cliente, texto, titulo="", tipo="libre", contexto="", texto_fijo=(), origen="manual", extra=None):
+        llamadas.append({"titulo": titulo, "contexto": contexto, "extra": extra or {}})
+        return {"id": len(llamadas)}
+
+    monkeypatch.setattr(clips.refinador, "crear", _falso_crear)
+    return llamadas
+
+
+def test_clips_prompts_de_chat_en_ingles_sin_marcas_de_espanol(base_temporal, monkeypatch, tmp_path):
+    """Fix ronda revisión final (finding 2): título y contexto del prompt de
+    chat de cada clip (antes f-strings fijos en español, incluso en un
+    proyecto en inglés) se arman con gettext dentro del mismo en_idioma que ya
+    envuelve clips.armar."""
+    from guiones import clips, datos
+    from tests.i18n_util import _con_marca
+    _proyecto_en_idioma(monkeypatch, tmp_path, "en")
+    _, vid = video_nuevo(config=CONFIG)
+    datos.empezar("acme", vid, "armando", ("configurando",))
+    llamadas = _capturar_prompts_de_chat(monkeypatch)
+    clips.armar(vid, llamar=fake(PLAN))
+    assert llamadas
+    for l in llamadas:
+        assert not _con_marca(l["titulo"]), l["titulo"]
+        assert not _con_marca(l["contexto"]), l["contexto"]
+
+
+def test_clips_prompts_de_chat_en_espanol_mantiene_el_texto_de_hoy(base_temporal, monkeypatch, tmp_path):
+    """En español (DEFECTO, sin catálogo propio) el texto sale idéntico al de
+    antes de este cambio: `etiqueta_version` traduce igual que `nombre_version`
+    cuando no hay traducción que aplicar."""
+    from guiones import clips, datos
+    _proyecto_en_idioma(monkeypatch, tmp_path, "es")
+    _, vid = video_nuevo(config=CONFIG)
+    datos.empezar("acme", vid, "armando", ("configurando",))
+    llamadas = _capturar_prompts_de_chat(monkeypatch)
+    clips.armar(vid, llamar=fake(PLAN))
+    principal_1 = next(l for l in llamadas
+                       if l["extra"].get("variante") == "principal" and l["extra"].get("clip_index") == 1)
+    assert principal_1["titulo"] == "AI podiatrist · v1 · Clip 1 de 2 · The hook"
+    assert principal_1["contexto"].startswith(
+        "Guion «AI podiatrist», Completo · diálogo · v1. Líneas del video, en orden:\n1. ")
+    assert "El clip siguiente empieza así: Hands empty." in principal_1["contexto"]
 
 
 # ---------------------------------------------------------- imagenes.py ---
@@ -190,6 +283,46 @@ def test_imagenes_escribir_en_espanol_mantiene_el_texto_de_hoy(base_temporal, mo
     orden = idiomas.orden_idioma("es")
     assert system.startswith(orden) and system.endswith(orden)
     assert '"titulo": "título corto en español"' in system
+
+
+def _capturar_prompts_de_chat_imagenes(monkeypatch):
+    """Igual que `_capturar_prompts_de_chat` (clips.py) pero para
+    `imagenes.refinador.crear`."""
+    from guiones import imagenes
+    llamadas = []
+
+    def _falso_crear(cliente, texto, titulo="", tipo="libre", contexto="", texto_fijo=(), origen="manual", extra=None):
+        llamadas.append({"titulo": titulo, "contexto": contexto})
+        return {"id": len(llamadas)}
+
+    monkeypatch.setattr(imagenes.refinador, "crear", _falso_crear)
+    return llamadas
+
+
+def test_imagenes_prompts_de_chat_en_ingles_sin_marcas_de_espanol(base_temporal, monkeypatch, tmp_path):
+    """Fix ronda revisión final (finding 2): el contexto del prompt de chat de
+    cada imagen (antes un f-string fijo en español, con `v['nombre']` que
+    nunca se traduce porque se persiste) se arma con gettext y
+    `datos.etiqueta_version` dentro del mismo en_idioma que ya envuelve
+    imagenes.escribir."""
+    from guiones import imagenes
+    from tests.i18n_util import _con_marca
+    vid = _armado(monkeypatch, tmp_path, "en")
+    llamadas = _capturar_prompts_de_chat_imagenes(monkeypatch)
+    imagenes.escribir(vid, llamar=fake(RESPUESTA_IMAGENES))
+    assert llamadas
+    for l in llamadas:
+        assert not _con_marca(l["titulo"]), l["titulo"]
+        assert not _con_marca(l["contexto"]), l["contexto"]
+
+
+def test_imagenes_prompts_de_chat_en_espanol_mantiene_el_texto_de_hoy(base_temporal, monkeypatch, tmp_path):
+    from guiones import imagenes
+    vid = _armado(monkeypatch, tmp_path, "es")
+    llamadas = _capturar_prompts_de_chat_imagenes(monkeypatch)
+    imagenes.escribir(vid, llamar=fake(RESPUESTA_IMAGENES))
+    assert llamadas[0]["titulo"] == "AI podiatrist · v1 · img_1 · Podiatrist"
+    assert llamadas[0]["contexto"] == "Imagen de referencia para Completo · diálogo · v1 del guion «AI podiatrist»."
 
 
 # --------------------------------------------------------- refinador.validar ---

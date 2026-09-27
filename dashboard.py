@@ -457,11 +457,14 @@ def estado_trabajo(job_id):
     # etapa/mensaje/detalle son constantes N_(...) (tareas/flowplus.py,
     # tareas/director.py) o texto libre que no está en el catálogo — gettext
     # devuelve el msgid tal cual cuando no encuentra traducción, así que esto
-    # nunca rompe un texto que no se tradujo.
+    # nunca rompe un texto que no se tradujo. idiomas.traducir (no gettext
+    # directo, revisión final fase 3 finding 3a): un campo en "" es habitual
+    # (mensaje/detalle vacíos) y gettext("") devuelve la cabecera del .po, no
+    # "" — traducir() deja vacío/None tal cual antes de llamar a gettext.
     salida = dict(info)
     for campo in ("etapa", "mensaje", "detalle"):
         if isinstance(salida.get(campo), str):
-            salida[campo] = gettext(salida[campo])
+            salida[campo] = idiomas.traducir(salida[campo])
     return jsonify(salida)
 
 

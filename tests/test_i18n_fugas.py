@@ -277,3 +277,15 @@ def test_etapas_del_trabajo_en_ingles(admin_en, app_i18n, monkeypatch):
                                         "detalle": None, "progreso": 10, "elapsed": 1, "progreso_real": False})
     datos = admin_en.get("/trabajo/x/estado").get_json()
     assert datos["etapa"] == "Generating with the model"
+
+
+def test_etapas_del_trabajo_mensaje_vacio_sigue_vacio(admin_en, app_i18n, monkeypatch):
+    """Fix ronda revisión final (finding 3a): `mensaje`/`detalle` en "" es
+    habitual (nada que mostrar todavía) — `gettext("")` devolvería la cabecera
+    del .po en vez de "", así que `estado_trabajo` usa `idiomas.traducir`, que
+    deja vacío/None tal cual antes de llamar a gettext."""
+    monkeypatch.setattr(app_i18n.trabajos, "consultar",
+                        lambda job_id: {"estado": "corriendo", "etapa": None, "mensaje": "",
+                                        "detalle": "", "progreso": 10, "elapsed": 1, "progreso_real": False})
+    datos = admin_en.get("/trabajo/x/estado").get_json()
+    assert datos["mensaje"] == "" and datos["detalle"] == ""

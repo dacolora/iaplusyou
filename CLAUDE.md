@@ -728,6 +728,13 @@ Luego `venv/bin/python3 catalogo_i18n.py actualizar`, traducir con `docs/i18n/gl
 (`tests/test_i18n_catalogo.py` falla si falta). Idioma de la persona en `usuarios.json`, del proyecto en
 `proyecto.json`, cookie `idioma` antes del login; `idiomas.en_idioma(x)` para correos y worker.
 `idiomas.DEFECTO`/`ACTIVO_PARA_TODOS` cambian al cerrar la fase 6; los tests fijan español (`conftest`).
+Fase 3 (Crear en el idioma del proyecto): las llamadas a Claude reciben el idioma con
+`idiomas.de_proyecto(cliente)`, pasado a `doctrina.bloque_system(..., idioma=)` o envuelto a mano con
+`idiomas.orden_idioma` (va al inicio Y al final de las instrucciones del sitio; el prompt para el modelo de
+video/imagen y los tokens `Image N`/`Video N` siguen siempre en inglés, nunca en el idioma del proyecto —
+`idiomas._ORDENES` trae esa excepción). Los textos de fondo (hilos de `trabajos.iniciar`, tareas del worker, sin
+contexto de petición) se arman dentro de `idiomas.en_idioma(idiomas.de_proyecto(cliente))`; los mensajes que
+devuelve una ruta siguen el idioma de quien mira la pantalla.
 Trampa: `_('…', x=dato)` con variables devuelve `Markup`, que ya escapó `x` como HTML, así que
 `|tojson` detrás lo vuelve a escapar (doble escape) — arma esa cadena de JS con gettext en Python,
 o usa `|tojson` solo sobre texto fijo y une los datos en JS; y nunca metas `|tojson` dentro de un

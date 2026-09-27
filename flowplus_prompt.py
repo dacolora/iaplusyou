@@ -94,8 +94,8 @@ def _guia_sin_personas(guia):
     return (". ".join(utiles) + ".") if utiles else ""
 
 # Bloque del enfoque unboxing en español (spec 2026-09-26 §B5: extraído para
-# que TEXTOS["es"]["unboxing"] y ENFOQUES["unboxing"]["bloque"] compartan el
-# mismo texto, sin cambiar ni una letra del de siempre).
+# que TEXTOS["es"]["enfoques"]["unboxing"] y ENFOQUES["unboxing"]["bloque"]
+# compartan el mismo texto, sin cambiar ni una letra del de siempre).
 ENFOQUES_UNBOXING_ES = (
     "ENFOQUE UNBOXING: la escena es una persona recibiendo su compra. Empieza con la caja o "
     "bolsa cerrada sobre la mesa o en sus manos, la abre con curiosidad y saca el producto; "

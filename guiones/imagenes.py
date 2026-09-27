@@ -235,11 +235,14 @@ def escribir(video_id, llamar=None):
                                    texto=texto, cierre=cierre))
             if not datos.guardar_imagenes(video_id, {"lista": salida, "tabla": tabla(v["clips"], v["config"], salida)}, usd):
                 return
-            base = f"{(v['guion']['titulo'] or 'Guion')[:50]} · v{v['version_n']}"
+            titulo_guion = v["guion"]["titulo"] or gettext("Guion")
+            base = f"{titulo_guion[:50]} · v{v['version_n']}"
             try:
+                version = datos.etiqueta_version(v["config"], v["version_n"])
                 for it in salida:
                     refinador.crear(v["cliente"], it["texto"], titulo=f"{base} · {it['id']} · {it['titulo']}"[:200], tipo="imagen",
-                                    contexto=f"Imagen de referencia para {v['nombre']} del guion «{v['guion']['titulo']}».",
+                                    contexto=gettext("Imagen de referencia para %(version)s del guion «%(titulo)s».",
+                                                     version=version, titulo=v["guion"]["titulo"]),
                                     texto_fijo=[it["cierre"]], origen="pipeline",
                                     extra={"guion_id": v["guion"]["id"], "video_id": video_id, "imagen_id": it["id"]})
             except Exception:  # noqa: BLE001 — las imágenes ya quedaron guardadas; se avisa en la versión

@@ -48,9 +48,19 @@ def _validar(idioma):
 
 
 _NOMBRES_PARA_CLAUDE = {"en": "inglés", "es": "español"}
+# Revisión final fase 3 (finding 1): sin el «salvo…» estas órdenes contradecían
+# a los sitios que SIEMPRE piden partes en inglés (los tokens Image N/Video N —
+# director.py regla 8 — y el prompt para el modelo de video/imagen en
+# guiones/refinador.py e imagenes.py): con un proyecto en español, la orden
+# pisaba esa instrucción y el modelo podía devolver "Imagen 1" en vez de
+# "Image 1", rompiendo la referencia. El «salvo» dentro de cada orden nombra
+# esa única excepción sin abrir la puerta a nada más.
 _ORDENES = {
-    "en": "IDIOMA: escribe TODO lo que devuelvas en inglés (English), aunque estas instrucciones estén en español.",
-    "es": "IDIOMA: escribe TODO lo que devuelvas en español.",
+    "en": ("IDIOMA: escribe en inglés (English) todo el texto que devuelvas, aunque estas instrucciones estén en "
+           "español; los tokens Image N / Video N van siempre así."),
+    "es": ("IDIOMA: escribe en español todo el texto que devuelvas, salvo lo que estas instrucciones pidan "
+           "expresamente en inglés (los tokens Image N / Video N y los prompts para los modelos de video o "
+           "imagen)."),
 }
 
 

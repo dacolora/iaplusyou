@@ -370,7 +370,7 @@ msgid "Al conectar, elige esa Página: se guarda su token de página (<code>page
 msgstr "When connecting, choose that Page: its page token (<code>page_id</code>) gets saved to publish videos on the wall."
 
 msgid "Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine)."
-msgstr "At least one checked destination already has a produced final: it gets replaced by the new one (the previous one stays visible until it's done)."
+msgstr "At least one checked destination already has a produced final cut: it gets replaced by the new one (the previous one stays visible until it's done)."
 
 msgid "Al volver a armar, Claude recibe esta lista para corregirla."
 msgstr "When reassembling, Claude gets this list to fix it."
@@ -687,6 +687,10 @@ msgstr "App secret"
 
 msgid "Clip"
 msgstr "Clip"
+
+#, python-format
+msgid "Clip %(n)s de %(total)s"
+msgstr "Clip %(n)s of %(total)s"
 
 msgid "Clip 1"
 msgstr "Clip 1"
@@ -1275,8 +1279,16 @@ msgstr "Clip %(n)s doesn't say how it starts or ends."
 msgid "El clip 1 tiene que empezar con la línea 1 (el hook)."
 msgstr "Clip 1 has to start with line 1 (the hook)."
 
+#, python-format
+msgid "El clip anterior termina así: %(estado)s"
+msgstr "The previous clip ends like this: %(estado)s"
+
 msgid "El clip final tiene que terminar con HARD CUT sobre un cuadro sostenido."
 msgstr "The final clip has to end with a HARD CUT on a held frame."
+
+#, python-format
+msgid "El clip siguiente empieza así: %(estado)s"
+msgstr "The next clip starts like this: %(estado)s"
 
 msgid "El correo no es válido."
 msgstr "The email isn't valid."
@@ -1605,10 +1617,10 @@ msgid "Esa cuenta publicitaria no aparece entre las de tu portafolio; vuelve a b
 msgstr "That ad account doesn't show up among your portfolio's; search again."
 
 msgid "Esa final se está produciendo; espera a que termine."
-msgstr "That final is being produced; wait for it to finish."
+msgstr "That final cut is being produced; wait for it to finish."
 
 msgid "Esa final ya no existe."
-msgstr "That final no longer exists."
+msgstr "That final cut no longer exists."
 
 msgid "Esa opción todavía no está disponible: Creatv está terminando de activarla."
 msgstr "That option isn't available yet: Creatv is still finishing activating it."
@@ -1641,7 +1653,7 @@ msgid "Escribe el id de tu portafolio comercial (solo números)."
 msgstr "Write your business portfolio's id (numbers only)."
 
 msgid "Escribe los 5 prompts por idea y los guiones de las finales."
-msgstr "Writes the 5 prompts per idea and the scripts for the finals."
+msgstr "Writes the 5 prompts per idea and the scripts for the final cuts."
 
 msgid "Escribe primero qué tiene que pasar en el video."
 msgstr "Write what has to happen in the video first."
@@ -1892,18 +1904,18 @@ msgstr "Date"
 
 #, python-format
 msgid "Final %(id)s"
-msgstr "Final %(id)s"
+msgstr "Final cut %(id)s"
 
 #, python-format
 msgid "Final de %(enfoque)s"
-msgstr "Final of %(enfoque)s"
+msgstr "Final cut of %(enfoque)s"
 
 #, python-format
 msgid "Final de: %(texto)s"
-msgstr "Final of: %(texto)s"
+msgstr "Final cut of: %(texto)s"
 
 msgid "Final descartada."
-msgstr "Final discarded."
+msgstr "Final cut discarded."
 
 msgid "Final edition necesita un video listo (no una imagen ni una sesión sin generar)."
 msgstr "Final edition needs a finished video (not an image or a session that hasn't generated yet)."
@@ -1912,7 +1924,7 @@ msgid "Finales"
 msgstr "Final cuts"
 
 msgid "Finales de esta pieza"
-msgstr "This piece's finals"
+msgstr "This piece's final cuts"
 
 msgid "Flux Kontext Pro"
 msgstr "Flux Kontext Pro"
@@ -2126,7 +2138,15 @@ msgid "Guion elegido"
 msgstr "Chosen script"
 
 msgid "Guion guardado. Ahora elige los destinos y produce las finales."
-msgstr "Script saved. Now pick the destinations and produce the finals."
+msgstr "Script saved. Now pick the destinations and produce the final cuts."
+
+#, python-format
+msgid ""
+"Guion «%(titulo)s», %(version)s. Líneas del video, en orden:\n"
+"%(lineas)s"
+msgstr ""
+"Script «%(titulo)s», %(version)s. Lines of the video, in order:\n"
+"%(lineas)s"
 
 msgid "Guiones"
 msgstr "Scripts"
@@ -2264,6 +2284,10 @@ msgstr "FlowPlus image ready."
 
 msgid "Imagen de referencia"
 msgstr "Reference image"
+
+#, python-format
+msgid "Imagen de referencia para %(version)s del guion «%(titulo)s»."
+msgstr "Reference image for %(version)s of the script «%(titulo)s»."
 
 msgid "Imagen generada"
 msgstr "Generated image"
@@ -3244,18 +3268,18 @@ msgstr "Processing…"
 
 #, python-format
 msgid "Produciendo %(n)s finales… cada una aparece en Generados cuando termina."
-msgstr "Producing %(n)s finals… each one appears in Generated when it's done."
+msgstr "Producing %(n)s final cuts… each one appears in Generated when it's done."
 
 #, python-format
 msgid "Produciendo… 0%% · 0s"
 msgstr "Producing… 0%% · 0s"
 
 msgid "Producir finales"
-msgstr "Produce finals"
+msgstr "Produce final cuts"
 
 #, python-brace-format
 msgid "Producir {n} finales"
-msgstr "Produce {n} finals"
+msgstr "Produce {n} final cuts"
 
 msgid "Producto"
 msgstr "Product"
@@ -3585,7 +3609,7 @@ msgid "Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US
 msgstr "Pay per result (Amazon ≈ US$ 3 per 1 000 reviews; TikTok ≈ US$ 0,50 per 1 000 comments) plus compute; the estimate is shown before every click."
 
 msgid "Se paga por uso: alrededor de $0.05 por final."
-msgstr "Pay per use: around $0.05 per final."
+msgstr "Pay per use: around $0.05 per final cut."
 
 msgid "Se paga por uso: centavos por guion."
 msgstr "Pay per use: cents per script."
@@ -3680,7 +3704,7 @@ msgid "Sin ella la tarjeta YouTube de cada estudio queda apagada."
 msgstr "Without it the YouTube card of each study stays off."
 
 msgid "Sin ella las finales salen sin voz ni música."
-msgstr "Without it the finals come out with no voice or music."
+msgstr "Without it the final cuts come out with no voice or music."
 
 msgid "Sin ella los videos no tienen URL pública y Meta no puede usarlos."
 msgstr "Without it the videos have no public URL and Meta can't use them."
@@ -4322,7 +4346,7 @@ msgid "Voz en off"
 msgstr "Voice-over"
 
 msgid "Voz en off (ElevenLabs), subtítulos por palabra (Whisper) y música (Stable Audio) de las finales."
-msgstr "Voice-over (ElevenLabs), word-level subtitles (Whisper) and music (Stable Audio) for the finals."
+msgstr "Voice-over (ElevenLabs), word-level subtitles (Whisper) and music (Stable Audio) for the final cuts."
 
 msgid "Voz en off: la voz se agrega después"
 msgstr "Voice-over: the voice is added afterward"
@@ -4385,7 +4409,7 @@ msgid "Ya se estaba rearmando."
 msgstr "It was already being rebuilt."
 
 msgid "Ya se estaban produciendo esas finales."
-msgstr "Those finals were already being produced."
+msgstr "Those final cuts were already being produced."
 
 msgid "Ya se está creando una canción — espera a que termine."
 msgstr "A song is already being created — wait for it to finish."
@@ -4869,7 +4893,7 @@ msgid "¿Cómo quieres conectar Meta?"
 msgstr "How do you want to connect Meta?"
 
 msgid "¿Descartar esta final?"
-msgstr "Discard this final?"
+msgstr "Discard this final cut?"
 
 msgid "¿Descartar esta pieza?"
 msgstr "Discard this piece?"
