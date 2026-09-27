@@ -49,6 +49,7 @@ import meta_agencia
 import flowplus_prompt
 import referencias_flowplus
 import materiales
+import ediciones
 import mi_musica
 import referencias_link
 import generador_prompts
@@ -1467,6 +1468,7 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
+        ediciones_por_cf=_ediciones_por_cf(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         fp_prefill=session.pop("fp_prefill", None),
@@ -4626,8 +4628,11 @@ def _trabajos_organico(cliente, publicaciones_por_pieza):
 
 def _volver_org(cliente):
     """Vuelve a la pestaña de donde salió el clic (`volver` en el form):
-    Crear (creativeflowplus) o Experimentos (por defecto)."""
-    anchor = "creativeflowplus" if request.form.get("volver") == "creativeflowplus" else "experimentos"
+    Final edition (final; desde 2026-09-27 las finales viven ahí), Crear
+    (creativeflowplus: formularios pintados antes de la mudanza) o
+    Experimentos (por defecto)."""
+    volver = request.form.get("volver")
+    anchor = volver if volver in ("final", "creativeflowplus") else "experimentos"
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=anchor))
 
 
@@ -5608,8 +5613,20 @@ def cf_descartar(cliente, cf_id):
 IDIOMAS_FE = ("es", "en", "pt")
 
 
-def _volver_crear(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+def _volver_final(cliente):
+    """Las rutas de final edition vuelven a su pestaña (desde 2026-09-27 ya no
+    viven en Crear)."""
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="final"))
+
+
+def _ediciones_por_cf(cliente):
+    """{cf_id: [ediciones de esa pieza, la más reciente primero]} para la
+    pestaña Final edition (filas sin el documento)."""
+    out = {}
+    for e in ediciones.listar(cliente):
+        if e.get("cf_id"):
+            out.setdefault(e["cf_id"], []).append(e)
+    return out
 
 
 def _precio_form(valor):
@@ -5639,7 +5656,7 @@ def _sesion_con_video(cliente, cf_id):
 def fe_preparar(cliente, cf_id):
     """Encola la escritura del guion base (capa 0, Anthropic). No produce nada."""
     if _sesion_con_video(cliente, cf_id) is None:
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     idioma_base = request.form.get("idioma_base") or "es"
     if idioma_base not in IDIOMAS_FE:
         idioma_base = "es"
@@ -5651,7 +5668,7 @@ def fe_preparar(cliente, cf_id):
     )
     flash("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises." if encolado
           else "Ya se estaba escribiendo el guion de esta pieza.", "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/guion", methods=["POST"])
@@ -5659,11 +5676,11 @@ def fe_guardar_guion(cliente, cf_id):
     """Guarda la edición del guion base: solo cambian los textos (pantalla y
     voz) de cada bloque; tiempos, roles, idioma y país se conservan."""
     if _sesion_con_video(cliente, cf_id) is None:
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base or not base.get("bloques"):
         flash("Primero prepara el guion con IA; después lo editas.", "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     guion = dict(base)
     guion["bloques"] = []
     for i, bloque in enumerate(base["bloques"]):
@@ -5675,10 +5692,10 @@ def fe_guardar_guion(cliente, cf_id):
     errores = fe_tipos.validar_guion(guion, duracion)
     if errores:
         flash("No se guardó el guion: " + " ".join(errores), "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     creative_flow.guardar_guion_base(cliente, cf_id, guion)
     flash("Guion guardado. Ahora elige los destinos y produce las finales.", "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 def _destinos_form(valores):
@@ -5698,15 +5715,15 @@ def fe_producir(cliente, cf_id):
     """Encola una tarea `final_producir` por cada destino marcado. Exige guion
     base ya preparado (y revisado): sin él no se gasta nada."""
     if _sesion_con_video(cliente, cf_id) is None:
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base:
         flash("Primero prepara el guion con IA y revísalo; sin guion no se produce nada.", "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     destinos = _destinos_form(request.form.getlist("destinos"))
     if not destinos:
         flash("Marca al menos un destino (idioma y país) válido para producir.", "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
 
     idioma_base = base.get("idioma") if base.get("idioma") in IDIOMAS_FE else "es"
     voces_validas = {v for lista in fal_audio.VOCES.values() for v in lista}
@@ -5756,10 +5773,10 @@ def fe_producir(cliente, cf_id):
         ):
             encolados += 1
     if encolados:
-        flash(f"Produciendo {encolados} finales… cada una aparece en Generados cuando termina.", "ok")
+        flash(f"Produciendo {encolados} finales… cada una aparece aquí, en Finales, cuando termina.", "ok")
     else:
         flash("Ya se estaban produciendo esas finales.", "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/descartar", methods=["POST"])
@@ -5770,12 +5787,12 @@ def fe_descartar(cliente, cf_id, final_id):
         # Borrar la fila mientras el worker la escribe la dejaría resucitar a
         # medias (actualizar_final sobre una pieza que ya no existe).
         flash("Esa final se está produciendo; espera a que termine.", "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     if not final or not creative_flow.eliminar_final(cliente, final_id):
         flash("Esa final ya no existe.", "error")
     else:
         flash("Final descartada.", "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 def _lanzar_video_cf(cliente, cf_id, entry):

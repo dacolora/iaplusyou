@@ -1,6 +1,3 @@
-{# Bloque 7: «Publicar orgánico» en el detalle de una final lista (macro
-   compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
-{% from "_organico_publicar.html" import bloque_organico with context %}
 <p class="vacio" style="padding-top:0;">
   Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.
   Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:
@@ -223,15 +220,6 @@
             </div>
           </form>
         </div>
-        {% elif item.trabajo_guion %}
-        {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
-           <template> del detalle, cuyos <script> clonados nunca corren) para
-           que el polling arranque al cargar la página y un fallo se vea. #}
-        <div class="generado-velo">
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">Escribiendo el guion…</div>
-          <script>iniciarPolling({{ item.trabajo_guion.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_guion.job_id) | tojson }});</script>
-        </div>
         {% endif %}
       </div>
       <div class="generado-pie">
@@ -298,135 +286,13 @@
           <p class="tag-error">{{ item.error }}</p>
           {% endif %}
 
-          {% if item.estado == "video_listo" and item.tipo != "imagen" %}
-          <section class="fe-seccion">
-            <h4 class="fe-titulo">Final edition</h4>
-            <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
-            {% if not item.guion_base %}
-              {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
-              {% else %}
-              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar">
-                <label>Precio (opcional)
-                  <input type="number" name="precio" min="0" step="any" placeholder="p.ej. 89900" style="width:9rem;">
-                </label>
-                <label>Idioma base
-                  <select name="idioma_base">
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
-                    <option value="pt">Português</option>
-                  </select>
-                </label>
-                <button type="submit" class="btn-guardar btn-sm">Preparar guion con IA{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
-              </form>
-              {% endif %}
-            {% else %}
-              {% set _g = item.guion_base %}
-              <form method="post" action="{{ url_for('fe_guardar_guion', cliente=cliente, cf_id=item.id) }}" class="fe-guion">
-                {% for b in _g.bloques %}
-                <div class="fe-bloque">
-                  <div class="fe-bloque-cab"><strong>{{ loop.index }}. {{ b.rol }}</strong> <small>{{ b.inicio_s }}s – {{ b.fin_s }}s</small></div>
-                  <label>Texto en pantalla <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
-                  <label>Texto de voz <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
-                </div>
-                {% endfor %}
-                <button type="submit" class="btn-guardar btn-sm">Guardar guion</button>
-              </form>
-              {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
-              {% else %}
-              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar"
-                    onsubmit="return confirm('¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).');">
-                <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in ('es', 'en', 'pt') else 'es' }}">
-                <button type="submit" class="btn-rechazar btn-sm">Volver a escribir con IA</button>
-              </form>
-              {% endif %}
-
-              {% set _finales_por_destino = {} %}
-              {% for f in item.finales if f.estado in ("listo", "degradada") %}
-              {% set _ = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
-              {% endfor %}
-              <h5 class="fe-subtitulo">Producir finales</h5>
-              <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir"
-                    data-moneda-base="{{ paises_fe[_g.pais].moneda if _g.pais in paises_fe else '' }}"
-                    onsubmit="return feConfirmarReemplazo(this);">
-                <div class="fe-destinos checks-plataformas">
-                  {% for codigo, p in paises_fe.items() %}
-                  {% set _ya = _finales_por_destino.get(p.idioma ~ "_" ~ codigo) %}
-                  <label class="fe-destino">
-                    <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
-                    {{ p.bandera }} {{ p.nombre }} <small>({{ p.idioma }})</small>
-                    <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
-                           placeholder="Precio (opcional)" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
-                           {% if codigo == _g.pais and _g.precio_base is not none %}value="{{ _g.precio_base }}"{% endif %}>
-                    {% if _ya %}<small class="tag-estado">(ya producida — se reemplaza)</small>{% endif %}
-                  </label>
-                  {% endfor %}
-                </div>
-                <div class="fe-opciones">
-                  <label>Voz
-                    <select name="voz">
-                      {% for v in (voces_fe.get(_g.idioma) or voces_fe.get("es") or []) %}
-                      <option value="{{ v }}">{{ v }}</option>
-                      {% endfor %}
-                    </select>
-                  </label>
-                  <label>Música
-                    <select name="estilo_musica">
-                      {% for e in estilos_fe %}
-                      <option value="{{ e }}">{{ e }}</option>
-                      {% endfor %}
-                      <optgroup label="Mi música" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
-                        {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
-                      </optgroup>
-                    </select>
-                  </label>
-                  <label>Empieza en el segundo <small>(Mi música)</small>
-                    <input type="number" name="musica_inicio_s" min="0" step="1" value="0" style="width:5rem;">
-                  </label>
-                  <label>Precio base <input type="number" name="precio" min="0" step="any"
-                         placeholder="opcional, país base" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
-                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> con voz</label>
-                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> con música</label>
-                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> con sonido de la escena{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">(este clon no trae sonido)</small>{% endif %}</label>
-                  <label>Mezcla
-                    <select name="mezcla">
-                      {% for p in presets_mezcla %}<option value="{{ p }}">{{ p | replace("_", " ") }}</option>{% endfor %}
-                    </select>
-                  </label>
-                </div>
-                {% set _cu = (" ≈ " ~ (precios.final_por_pais.usd | usd) ~ " c/u") if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
-                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="Producir {n} finales{{ _cu }}">Producir finales{{ _cu }}</button>
-              </form>
-            {% endif %}
-
-            {% if item.finales %}
-            <h5 class="fe-subtitulo">Finales de esta pieza</h5>
-            <ul class="fe-lista">
-              {% for f in item.finales %}
-              <li class="fe-final">
-                <span class="fe-final-mini">{% if f.url_miniatura %}<img src="{{ f.url_miniatura }}" alt="">{% endif %}</span>
-                <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
-                <span class="tag-estado">{{ f.estado }}</span>
-                {% if f.estado == "generando" %}
-                <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}produciendo…{% else %}interrumpida{% endif %}</span>
-                {% elif f.estado == "error" and f.error %}
-                <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
-                {% endif %}
-                {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>{% endif %}
-                <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
-                  <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
-                </form>
-              </li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-          </section>
-          {% endif %}
-
           <div class="detalle-acciones">
             {% if item.estado == "video_listo" %}
             <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">Descargar</a>
+            {% endif %}
+            {% if item.estado == "video_listo" and item.tipo != "imagen" %}
+            <a class="btn-generar btn-sm" href="#final?cf={{ item.id }}"
+               onclick="var d = document.getElementById('generado-modal'); if (d) d.close(); location.hash = this.getAttribute('href'); return false;">Llevar a final edition</a>
             {% endif %}
             {% if item.estado in ("video_listo", "error", "prompt_listo") %}
             <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
@@ -465,88 +331,6 @@
         </div>
       </template>
     </div>
-    {% for f in item.finales %}
-    {% set _bandera = paises_fe[f.pais].bandera if f.pais in paises_fe else "" %}
-    <div class="generado generado-final" data-cf="{{ f.id }}" tabindex="0" role="button">
-      <div class="generado-media">
-        {% if f.estado in ("listo", "degradada") and f.video_url %}
-        <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" muted playsinline preload="metadata"></video>
-        {% elif f.url_miniatura %}
-        <img src="{{ f.url_miniatura }}" alt="" loading="lazy" class="generado-portada">
-        {% else %}
-        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="metadata" class="generado-portada"></video>
-        {% endif %}
-        <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
-        {% if f.estado == "generando" %}
-        <div class="generado-velo">
-          {% if f.trabajo %}
-          <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">Produciendo… 0% · 0s</div>
-          <script>iniciarPolling({{ f.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ f.trabajo.job_id) | tojson }});</script>
-          {% else %}
-          <span class="generado-estado">Interrumpida</span>
-          {% endif %}
-        </div>
-        {% elif f.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
-        {% elif f.estado == "degradada" %}
-        <div class="generado-velo"><span class="generado-estado">Sin voz/música</span></div>
-        {% endif %}
-      </div>
-      <div class="generado-pie">
-        <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
-        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}</small>
-      </div>
-      <template class="generado-detalle">
-        <div class="detalle-media">
-          {% if f.video_url %}
-          <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" controls autoplay muted loop playsinline></video>
-          {% elif f.url_miniatura %}
-          <img src="{{ f.url_miniatura }}" alt="">
-          {% else %}
-          <video src="{{ item.video_url }}" muted playsinline style="opacity:.6;"></video>
-          {% endif %}
-        </div>
-        <div class="detalle-info">
-          <p class="campo-label">Final edition</p>
-          <p class="detalle-texto">{{ _bandera }} {{ paises_fe[f.pais].nombre if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
-          <p class="vacio" style="padding:0;font-size:.78rem;">
-            Final de: {{ item.accion_central or item.id }}
-            {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
-            {% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}
-            · <span class="tag-estado">{{ f.estado }}</span>
-          </p>
-          {% if f.capas %}
-          <p class="campo-label" style="margin-top:.8rem;">Capas</p>
-          <ul class="fe-capas">
-            {% for nombre, capa in f.capas.items() %}
-            <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
-            {% endfor %}
-          </ul>
-          {% endif %}
-          {% if f.estado == "error" and f.error %}
-          <p class="tag-error">{{ f.error }}</p>
-          {% endif %}
-          <div class="detalle-acciones">
-            {% if f.video_url %}
-            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">Descargar</a>
-            {% endif %}
-            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit="return confirm('¿Descartar esta final?');" style="display:inline;">
-              <button type="submit" class="btn-rechazar btn-sm">Descartar</button>
-            </form>
-            {% if f.estado in ("listo", "degradada") and f.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
-            {% endif %}
-          </div>
-          {% if f.estado in ("listo", "degradada") and f.video_url and f.pieza_id %}
-          {# Bloque 7: mismo bloque que en Experimentos (sin ep_id: sale de Crear). #}
-          <p class="campo-label" style="margin-top:.8rem;">Publicación orgánica</p>
-          {{ bloque_organico(f.pieza_id, "creativeflowplus") }}
-          {% endif %}
-        </div>
-      </template>
-    </div>
-    {% endfor %}
     {% endfor %}
   </div>
 </div>
@@ -556,32 +340,6 @@
   <div id="generado-modal-cuerpo" class="generado-modal-cuerpo"></div>
 </dialog>
 <script>
-  // Precio base -> se copia solo a los destinos cuya moneda coincide con la
-  // del país base (nunca convierte), y solo si el usuario no escribió ya un
-  // precio propio para ese destino. Global (window.*) porque el formulario
-  // "Producir finales" vive dentro de un <template> clonado — sus <script>
-  // internos nunca corren, pero los atributos onXXX sí, y al clonar buscan la
-  // función en window en el momento del evento (no al parsear el template).
-  window.feAplicarPrecioBase = function (input) {
-    var form = input.closest('form');
-    if (!form) return;
-    var monedaBase = form.dataset.monedaBase || '';
-    form.querySelectorAll('.fe-precio-destino').forEach(function (destino) {
-      if (destino.dataset.moneda === monedaBase && !destino.value) {
-        destino.value = input.value;
-      }
-    });
-  };
-  // Confirma si algún destino marcado ya tiene una final producida (se
-  // reemplaza al volver a producir).
-  window.feConfirmarReemplazo = function (form) {
-    var reemplaza = false;
-    form.querySelectorAll('input[name="destinos"]:checked').forEach(function (cb) {
-      if (cb.dataset.yaProducida) reemplaza = true;
-    });
-    if (!reemplaza) return true;
-    return confirm('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).');
-  };
   // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear). Declarada
   // en este script sin envoltorio, así es global: la usan dos scripts, el estimado del formulario y el botón A+B del
   // modal (el formulario de generar vive en un <template> clonado).
@@ -608,7 +366,7 @@
       });
       modal.showModal();
     }
-    document.querySelectorAll('.generado').forEach(function (card) {
+    document.querySelectorAll('#creativeflowplus-resultados .generado').forEach(function (card) {
       card.addEventListener('click', function (e) { if (!e.target.closest('form, a, button')) abrir(card); });
       card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); } });
       var v = card.querySelector('.generado-media video');
@@ -617,19 +375,9 @@
         card.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
       }
     });
-    // "Producir N finales": el formulario vive en un <template> clonado, así
-    // que el listener va delegado sobre el cuerpo del modal.
-    cuerpo.addEventListener('change', function (e) {
-      if (!e.target.matches('input[name="destinos"]')) return;
-      var form = e.target.closest('form');
-      var btn = form && form.querySelector('.fe-producir-btn');
-      if (!btn) return;
-      var n = form.querySelectorAll('input[name="destinos"]:checked').length;
-      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.plantilla.replace('Producir {n} finales', 'Producir finales');
-    });
     // Costo A+B: el formulario de generar también vive en el <template> clonado,
-    // así que el checkbox "Generar también la versión B" se delega igual que
-    // "Producir N finales" arriba — un listener en la carga de la página nunca
+    // así que el checkbox "Generar también la versión B" se delega sobre el
+    // cuerpo del modal — un listener en la carga de la página nunca
     // vería el checkbox (no existe hasta que se clona el detalle).
     cuerpo.addEventListener('change', function (e) {
       if (!e.target.matches || !e.target.matches('.fp-version-b')) return;
@@ -638,13 +386,6 @@
       var usd = f ? parseFloat(f.dataset.usd || '0') : 0;
       if (!btn || !usd) return;
       btn.textContent = btn.textContent.replace(/\s*≈ US\$ [^ ]*$/, '') + ' ≈ ' + formatearUSD(e.target.checked ? usd * 2 : usd);
-    });
-    cuerpo.addEventListener('submit', function (e) {
-      var form = e.target;
-      if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
-        e.preventDefault();
-        alert('Marca al menos un destino.');
-      }
     });
     document.getElementById('generado-cerrar').addEventListener('click', function () { modal.close(); });
     modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
