@@ -377,6 +377,17 @@ def revisar(cliente, cf_id):
         creative_flow.actualizar(cliente, cf_id, revision_doctrina_error={
             "error": mensaje, "video_url": video_url, "revisado_en": db.ahora()})
 
+    def _guardar_error_pagado(mensaje, ent, sal):
+        """Igual que `_guardar_error`, pero después de que Claude ya cobró
+        (`ent`/`sal` > 0): si el guardado mismo revienta (la base caída, por
+        ejemplo), el gasto no se pierde — se relanza como `ErrorRevision` con
+        esos tokens, que es lo que `tareas.doctrina.ejecutar_revisar` mira
+        para registrarlo."""
+        try:
+            _guardar_error(mensaje)
+        except Exception as e:  # noqa: BLE001
+            raise ErrorRevision("No se pudo guardar la revisión.", ent, sal) from e
+
     if entry.get("estado") != "video_listo" or not video_url:
         mensaje = "Solo se revisa una pieza terminada."
         _guardar_error(mensaje)
@@ -408,16 +419,19 @@ def revisar(cliente, cf_id):
             ent, sal = ent + e2, sal + s2
         except Exception as falla:  # noqa: BLE001
             mensaje = str(falla)[:300] or "La corrección falló."
-            _guardar_error(mensaje)
+            _guardar_error_pagado(mensaje, ent, sal)
             raise ErrorRevision(mensaje, ent, sal) from falla
         try:
             r = parsear_revision(texto)
         except ErrorRevision as segundo:
             mensaje = str(segundo)
-            _guardar_error(mensaje)
+            _guardar_error_pagado(mensaje, ent, sal)
             raise ErrorRevision(mensaje, ent, sal)
     rev = {"version": VERSION, "video_url": video_url, "puntos": r["puntos"], "resumen": r["resumen"],
            "reglas": avisos, "origen": "boton", "modelo": MODEL, "usd": costo_real(ent, sal),
            "revisado_en": db.ahora()}
-    creative_flow.actualizar(cliente, cf_id, revision_doctrina=rev, revision_doctrina_error=None)
+    try:
+        creative_flow.actualizar(cliente, cf_id, revision_doctrina=rev, revision_doctrina_error=None)
+    except Exception as e:  # noqa: BLE001 — no perder el gasto si el guardado revienta
+        raise ErrorRevision("No se pudo guardar la revisión.", ent, sal) from e
     return rev, ent, sal

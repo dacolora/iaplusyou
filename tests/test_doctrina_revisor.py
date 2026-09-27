@@ -247,6 +247,20 @@ def test_revisar_guarda_la_revision_y_devuelve_los_tokens(base_temporal, monkeyp
     assert revisor.estado_revision(guardada, "https://r2/v.mp4") == "mejorar"
 
 
+def test_revisar_no_pierde_el_gasto_si_falla_al_guardar(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I3): si el guardado después de una llamada
+    pagada revienta (la base caída, por ejemplo), `ErrorRevision` sigue
+    trayendo los tokens ya gastados — la tarea los registra igual."""
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    _preparar_revision(monkeypatch, [_respuesta()])
+    monkeypatch.setattr(creative_flow, "actualizar", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("db caída")))
+    with pytest.raises(revisor.ErrorRevision) as e:
+        revisor.revisar("acme", cf_id)
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (1000, 400)
+
+
 def test_revisar_corrige_una_vez_y_si_sigue_mal_guarda_el_error_aparte(base_temporal, monkeypatch):
     """Bloque 3, revisión final (I2): un fallo se guarda en
     `revision_doctrina_error`, nunca en `revision_doctrina` (esa queda
