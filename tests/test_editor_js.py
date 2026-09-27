@@ -36,3 +36,20 @@ def _constante_js(archivo, nombre):
 
 def test_formatos_js_iguales_a_python():
     assert _constante_js("formatos.js", "FORMATOS") == {k: list(v) for k, v in documento.FORMATOS.items()}
+
+
+def _generador():
+    import importlib.util
+    ruta = os.path.join(RAIZ, "tests", "fixtures", "generar_casos_editor.py")
+    spec = importlib.util.spec_from_file_location("generar_casos_editor", ruta)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_casos_del_editor_al_dia():
+    gen = _generador()
+    for nombre, funcion in gen.ARCHIVOS.items():
+        with open(os.path.join(RAIZ, "tests", "fixtures", nombre), encoding="utf-8") as f:
+            assert f.read() == gen.texto(funcion), (
+                f"{nombre} quedó viejo: correr `venv/bin/python3 tests/fixtures/generar_casos_editor.py`")

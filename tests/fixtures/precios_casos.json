@@ -1,0 +1,402 @@
+[
+ {
+  "esperado": "$ 89.900",
+  "pais": "AR",
+  "valor": 89900
+ },
+ {
+  "esperado": "$ 25",
+  "pais": "AR",
+  "valor": 24.99
+ },
+ {
+  "esperado": "$ 1.234.568",
+  "pais": "AR",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "$ 500",
+  "pais": "AR",
+  "valor": 499.5
+ },
+ {
+  "esperado": "$ 0",
+  "pais": "AR",
+  "valor": 0
+ },
+ {
+  "esperado": "$ 0",
+  "pais": "AR",
+  "valor": 0.125
+ },
+ {
+  "esperado": "$ 1",
+  "pais": "AR",
+  "valor": 1.005
+ },
+ {
+  "esperado": "$ 3",
+  "pais": "AR",
+  "valor": 2.675
+ },
+ {
+  "esperado": "$ 20",
+  "pais": "AR",
+  "valor": 19.995
+ },
+ {
+  "esperado": "$ 1.500.000",
+  "pais": "AR",
+  "valor": 1500000
+ },
+ {
+  "esperado": "R$ 89.900,00",
+  "pais": "BR",
+  "valor": 89900
+ },
+ {
+  "esperado": "R$ 24,99",
+  "pais": "BR",
+  "valor": 24.99
+ },
+ {
+  "esperado": "R$ 1.234.567,89",
+  "pais": "BR",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "R$ 499,50",
+  "pais": "BR",
+  "valor": 499.5
+ },
+ {
+  "esperado": "R$ 0,00",
+  "pais": "BR",
+  "valor": 0
+ },
+ {
+  "esperado": "R$ 0,12",
+  "pais": "BR",
+  "valor": 0.125
+ },
+ {
+  "esperado": "R$ 1,00",
+  "pais": "BR",
+  "valor": 1.005
+ },
+ {
+  "esperado": "R$ 2,67",
+  "pais": "BR",
+  "valor": 2.675
+ },
+ {
+  "esperado": "R$ 20,00",
+  "pais": "BR",
+  "valor": 19.995
+ },
+ {
+  "esperado": "R$ 1.500.000,00",
+  "pais": "BR",
+  "valor": 1500000
+ },
+ {
+  "esperado": "$ 89.900",
+  "pais": "CL",
+  "valor": 89900
+ },
+ {
+  "esperado": "$ 25",
+  "pais": "CL",
+  "valor": 24.99
+ },
+ {
+  "esperado": "$ 1.234.568",
+  "pais": "CL",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "$ 500",
+  "pais": "CL",
+  "valor": 499.5
+ },
+ {
+  "esperado": "$ 0",
+  "pais": "CL",
+  "valor": 0
+ },
+ {
+  "esperado": "$ 0",
+  "pais": "CL",
+  "valor": 0.125
+ },
+ {
+  "esperado": "$ 1",
+  "pais": "CL",
+  "valor": 1.005
+ },
+ {
+  "esperado": "$ 3",
+  "pais": "CL",
+  "valor": 2.675
+ },
+ {
+  "esperado": "$ 20",
+  "pais": "CL",
+  "valor": 19.995
+ },
+ {
+  "esperado": "$ 1.500.000",
+  "pais": "CL",
+  "valor": 1500000
+ },
+ {
+  "esperado": "$ 89.900",
+  "pais": "CO",
+  "valor": 89900
+ },
+ {
+  "esperado": "$ 25",
+  "pais": "CO",
+  "valor": 24.99
+ },
+ {
+  "esperado": "$ 1.234.568",
+  "pais": "CO",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "$ 500",
+  "pais": "CO",
+  "valor": 499.5
+ },
+ {
+  "esperado": "$ 0",
+  "pais": "CO",
+  "valor": 0
+ },
+ {
+  "esperado": "$ 0",
+  "pais": "CO",
+  "valor": 0.125
+ },
+ {
+  "esperado": "$ 1",
+  "pais": "CO",
+  "valor": 1.005
+ },
+ {
+  "esperado": "$ 3",
+  "pais": "CO",
+  "valor": 2.675
+ },
+ {
+  "esperado": "$ 20",
+  "pais": "CO",
+  "valor": 19.995
+ },
+ {
+  "esperado": "$ 1.500.000",
+  "pais": "CO",
+  "valor": 1500000
+ },
+ {
+  "esperado": "89.900,00 €",
+  "pais": "ES",
+  "valor": 89900
+ },
+ {
+  "esperado": "24,99 €",
+  "pais": "ES",
+  "valor": 24.99
+ },
+ {
+  "esperado": "1.234.567,89 €",
+  "pais": "ES",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "499,50 €",
+  "pais": "ES",
+  "valor": 499.5
+ },
+ {
+  "esperado": "0,00 €",
+  "pais": "ES",
+  "valor": 0
+ },
+ {
+  "esperado": "0,12 €",
+  "pais": "ES",
+  "valor": 0.125
+ },
+ {
+  "esperado": "1,00 €",
+  "pais": "ES",
+  "valor": 1.005
+ },
+ {
+  "esperado": "2,67 €",
+  "pais": "ES",
+  "valor": 2.675
+ },
+ {
+  "esperado": "20,00 €",
+  "pais": "ES",
+  "valor": 19.995
+ },
+ {
+  "esperado": "1.500.000,00 €",
+  "pais": "ES",
+  "valor": 1500000
+ },
+ {
+  "esperado": "$89,900.00",
+  "pais": "MX",
+  "valor": 89900
+ },
+ {
+  "esperado": "$24.99",
+  "pais": "MX",
+  "valor": 24.99
+ },
+ {
+  "esperado": "$1,234,567.89",
+  "pais": "MX",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "$499.50",
+  "pais": "MX",
+  "valor": 499.5
+ },
+ {
+  "esperado": "$0.00",
+  "pais": "MX",
+  "valor": 0
+ },
+ {
+  "esperado": "$0.12",
+  "pais": "MX",
+  "valor": 0.125
+ },
+ {
+  "esperado": "$1.00",
+  "pais": "MX",
+  "valor": 1.005
+ },
+ {
+  "esperado": "$2.67",
+  "pais": "MX",
+  "valor": 2.675
+ },
+ {
+  "esperado": "$20.00",
+  "pais": "MX",
+  "valor": 19.995
+ },
+ {
+  "esperado": "$1,500,000.00",
+  "pais": "MX",
+  "valor": 1500000
+ },
+ {
+  "esperado": "S/89,900.00",
+  "pais": "PE",
+  "valor": 89900
+ },
+ {
+  "esperado": "S/24.99",
+  "pais": "PE",
+  "valor": 24.99
+ },
+ {
+  "esperado": "S/1,234,567.89",
+  "pais": "PE",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "S/499.50",
+  "pais": "PE",
+  "valor": 499.5
+ },
+ {
+  "esperado": "S/0.00",
+  "pais": "PE",
+  "valor": 0
+ },
+ {
+  "esperado": "S/0.12",
+  "pais": "PE",
+  "valor": 0.125
+ },
+ {
+  "esperado": "S/1.00",
+  "pais": "PE",
+  "valor": 1.005
+ },
+ {
+  "esperado": "S/2.67",
+  "pais": "PE",
+  "valor": 2.675
+ },
+ {
+  "esperado": "S/20.00",
+  "pais": "PE",
+  "valor": 19.995
+ },
+ {
+  "esperado": "S/1,500,000.00",
+  "pais": "PE",
+  "valor": 1500000
+ },
+ {
+  "esperado": "$89,900.00",
+  "pais": "US",
+  "valor": 89900
+ },
+ {
+  "esperado": "$24.99",
+  "pais": "US",
+  "valor": 24.99
+ },
+ {
+  "esperado": "$1,234,567.89",
+  "pais": "US",
+  "valor": 1234567.891
+ },
+ {
+  "esperado": "$499.50",
+  "pais": "US",
+  "valor": 499.5
+ },
+ {
+  "esperado": "$0.00",
+  "pais": "US",
+  "valor": 0
+ },
+ {
+  "esperado": "$0.12",
+  "pais": "US",
+  "valor": 0.125
+ },
+ {
+  "esperado": "$1.00",
+  "pais": "US",
+  "valor": 1.005
+ },
+ {
+  "esperado": "$2.67",
+  "pais": "US",
+  "valor": 2.675
+ },
+ {
+  "esperado": "$20.00",
+  "pais": "US",
+  "valor": 19.995
+ },
+ {
+  "esperado": "$1,500,000.00",
+  "pais": "US",
+  "valor": 1500000
+ }
+]
