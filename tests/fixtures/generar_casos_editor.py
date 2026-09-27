@@ -81,10 +81,27 @@ def casos_ajuste():
             for t in TEXTOS_AJUSTE for ancho in (None, 60, 100, 150)]
 
 
+PALABRAS_VENTANAS = (
+    [{"t_ms": 0, "dur_ms": 400, "texto": "Hola"}, {"t_ms": 400, "dur_ms": 500, "texto": "mundo"}],
+    [{"t_ms": i * 300, "dur_ms": 280, "texto": f"p{i}"} for i in range(9)],
+    [{"t_ms": 0, "dur_ms": 300, "texto": "antes"}, {"t_ms": 1000, "dur_ms": 300, "texto": "después"}],
+    [{"t_ms": 0, "dur_ms": 900, "texto": "larga"}, {"t_ms": 900, "dur_ms": 950, "texto": "más"}],
+    [{"t_ms": 500, "dur_ms": 200, "texto": "b"}, {"t_ms": 0, "dur_ms": 200, "texto": "{a}"}],
+    [{"t_ms": 0, "dur_ms": 200, "texto": "  con   espacios "}],
+    [],
+)
+
+
+def casos_ventanas():
+    from final_edition.motor import subtitulos
+    return [{"palabras": p, "esperado": subtitulos.ventanas(p)} for p in PALABRAS_VENTANAS]
+
+
 ARCHIVOS = {
     "precios_casos.json": casos_precios,
     "resolver_casos.json": casos_resolver,
     "ajuste_casos.json": casos_ajuste,
+    "ventanas_casos.json": casos_ventanas,
 }
 
 
