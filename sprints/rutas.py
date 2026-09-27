@@ -15,12 +15,14 @@ from urllib.parse import urlencode
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 import catalogo_productos
+import creative_flow
 import db
 import doctrina
 import gastos
 import proyectos
 import tiendas
 import trabajos
+from doctrina import revisor as doctrina_revisor
 from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
@@ -1294,16 +1296,20 @@ def _piezas_revision(cliente, sp):
     """Piezas con sesión de todas las campañas, con su costo de regeneración
     (estimado gratis, el mismo que muestra el botón antes de gastar)."""
     mv, mi = produccion.modelos(cliente)
+    sesiones = creative_flow.cargar(cliente)
     salida = []
     for c in sp["campanas"]:
         for p in c["piezas"]:
+            entry = sesiones.get(p.get("cf_id")) or {}
             if p["tipo"] == "video":
                 costo = (flowplus_modelos.estimate_video(mv, produccion._duracion(p)) or {}).get("usd") or 0.0
             else:
                 costo = (flowplus_modelos.estimate_imagen(mi, n_referencias=produccion._n_referencias(cliente, c)) or {}).get("usd") or 0.0
             salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
                            "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
-                           "costo_regenerar": round(float(costo), 3)})
+                           "costo_regenerar": round(float(costo), 3),
+                           "doctrina": doctrina_revisor.resumen_galeria(entry.get("revision_doctrina"),
+                                                                        entry.get("video_url"))})
     return salida
 
 

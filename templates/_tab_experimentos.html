@@ -50,7 +50,8 @@
     <label class="exp-tarjeta" data-tipo="{{ 'imagen' if el.es_imagen else ('final' if el.tipo == 'final' else 'video') }}" data-origen="{{ el.origen }}">
       <input type="checkbox" name="piezas" value="{{ el.pieza_id }}" form="exp-probar"
              data-pais="{{ el.pais or '' }}" data-imagen="{{ '1' if el.es_imagen else '0' }}" data-nombre="{{ el.nombre }}"
-             data-final="{{ '1' if el.tipo == 'final' else '0' }}">
+             data-final="{{ '1' if el.tipo == 'final' else '0' }}"
+             data-doctrina-n="{{ (el.doctrina or {}).get('n', 0) if (el.doctrina or {}).get('estado') == 'mejorar' else 0 }}">
       <span class="exp-tarjeta-media">
         {% if el.url_miniatura %}<img src="{{ el.url_miniatura }}" alt="" loading="lazy">
         {% elif el.es_imagen %}<img src="{{ el.url_video }}" alt="" loading="lazy">
@@ -61,6 +62,10 @@
         <small>{% if el.es_imagen %}Imagen{% if el.formato %} · {{ el.formato }}{% endif %}{% elif el.tipo == "final" %}Final {{ el.idioma }}_{{ el.pais }}{% else %}Video{% if el.duracion_s %} · {{ el.duracion_s | int }} s{% endif %}{% if el.formato %} · {{ el.formato }}{% endif %}{% endif %}
           · {% if el.origen == "sprint" %}Sprint {{ el.sprint.sprint_nombre }} · Campaña {{ el.sprint.campana_n }}{% elif el.origen == "final" %}Final edition{% else %}Crear{% endif %}</small>
         {% for x in el.en_experimentos %}<span class="tag-estado">en prueba: {{ x.nombre }}</span>{% endfor %}
+        {% set doc = el.doctrina or {} %}
+        {% if doc.estado == 'mejorar' %}<span class="tag-estado" title="Revisión de la doctrina: se ve en Crear">Doctrina: {{ doc.n }} por mejorar</span>
+        {% elif doc.estado == 'bien' %}<span class="tag-estado" title="Revisión de la doctrina">Doctrina: bien</span>
+        {% elif doc.estado %}<span class="tag-estado" title="Se revisa desde la pieza en Crear">Doctrina: sin revisar</span>{% endif %}
       </span>
     </label>
     {% endfor %}
@@ -109,6 +114,7 @@
   <section data-paso="3" hidden>
     <h4>Revisar</h4>
     <p class="vacio">Cada casilla es un anuncio (pieza × país). Las finales solo van a su país.</p>
+    <p class="vacio" id="exp-doctrina-aviso" hidden></p>
     <div id="exp-cuadricula" class="exp-cuadricula"></div>
     {# Desde Catálogo › Productos («Crear experimento») llega ?exp_nombre=&exp_destino=:
        un nombre ya puesto cuenta como «tocado» para que el JS no lo pise con el automático. #}
@@ -477,8 +483,16 @@
           return '<td>' + (cabe ? '<input type="checkbox" name="combinaciones" value="' + c.value + ':' + p + '" checked>' : '<span class="vacio">—</span>') + '</td>';
         }).join('');
         var nombreSeguro = document.createElement('div'); nombreSeguro.textContent = c.dataset.nombre;
-        return '<tr><th>' + nombreSeguro.innerHTML + (c.dataset.imagen === '1' ? ' <small>(imagen)</small>' : '') + '</th>' + celdas + '</tr>';
+        var nDoctrina = parseInt(c.dataset.doctrinaN || '0', 10);
+        return '<tr><th>' + nombreSeguro.innerHTML + (c.dataset.imagen === '1' ? ' <small>(imagen)</small>' : '') +
+          (nDoctrina ? ' <small class="tag-estado">Doctrina: ' + nDoctrina + ' por mejorar</small>' : '') + '</th>' + celdas + '</tr>';
       }).join('');
+      // Doctrina, bloque 3: solo informa; se puede lanzar igual.
+      var conDoctrina = marcadas().filter(function (c) { return parseInt(c.dataset.doctrinaN || '0', 10) > 0; }).length;
+      var avisoDoctrina = document.getElementById('exp-doctrina-aviso');
+      avisoDoctrina.hidden = !conDoctrina;
+      avisoDoctrina.textContent = conDoctrina ? (conDoctrina + (conDoctrina === 1 ? ' pieza elegida tiene' : ' piezas elegidas tienen') +
+        ' puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual.') : '';
       cuadricula.innerHTML = '<table><thead><tr><th></th>' + ps.map(function (p) { return '<th>' + p + '</th>'; }).join('') + '</tr></thead><tbody>' + filas + '</tbody></table>';
       cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function (i) { i.addEventListener('change', refrescarCuenta); });
     }

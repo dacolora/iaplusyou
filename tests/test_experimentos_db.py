@@ -293,3 +293,32 @@ def test_validar_combinacion():
     clon = {"tipo": "clon", "pais": None}
     assert ex.validar_combinacion(clon, {"CO", "MX"}, "US") == ("US", "Ese país no está en el experimento (elige entre CO, MX).")
     assert ex.validar_combinacion(clon, {"CO", "MX"}, "MX") == ("MX", None)
+
+
+def _pieza_revisada(db, legado, revision, tipo="video", url="https://r2/c.mp4", pais=None, idioma=None):
+    with db.conectar() as con:
+        ahora = db.ahora()
+        cid = con.execute(db.concepto.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, origen="manual", legado_id=legado,
+            extra={"accion_central": "x", "revision_doctrina": revision})).inserted_primary_key[0]
+        return con.execute(db.pieza.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo=tipo, estado="listo",
+            pais=pais, idioma=idioma, url_video=url, legado_id=legado, extra={})).inserted_primary_key[0]
+
+
+def test_elegibles_traen_el_estado_de_la_doctrina(base_temporal):
+    """Doctrina, bloque 3: la galería lee la revisión guardada en la sesión
+    (cero llamadas); una final muestra la de su pieza de origen."""
+    import experimentos as ex
+    rev = {"video_url": "https://r2/c.mp4", "puntos": [{"n": 6, "estado": "mejorar", "detalle": "x"}],
+           "reglas": [{"n": 5, "codigo": "sin_mecanismo"}]}
+    clon = _pieza_revisada(base_temporal, "cf_r1", rev)
+    vieja = _pieza_revisada(base_temporal, "cf_r2", dict(rev, video_url="https://r2/otro.mp4"))
+    final = _pieza_revisada(base_temporal, "cf_r3__es_CO", rev, tipo="final", url="https://r2/final.mp4",
+                            pais="CO", idioma="es")
+    sin = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_r4")
+    lista = {e["pieza_id"]: e["doctrina"] for e in ex.elegibles("acme")}
+    assert lista[clon] == {"estado": "mejorar", "n": 2}
+    assert lista[vieja] == {"estado": "vieja", "n": 0}
+    assert lista[final] == {"estado": "mejorar", "n": 2}
+    assert lista[sin] == {"estado": "sin_revisar", "n": 0}

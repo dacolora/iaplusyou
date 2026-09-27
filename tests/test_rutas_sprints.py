@@ -1017,3 +1017,17 @@ def test_boton_reescribir_idea_con_su_precio(con_ideas, monkeypatch):
     monkeypatch.setattr(rutas.trabajos, "en_curso", lambda job_id: job_id == f"acme__cp{ii}__reescribir")
     html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
     assert f'id="trabajo-acme__cp{ii}__reescribir"' in html
+
+
+def test_la_revision_del_lote_muestra_la_doctrina(con_ideas, monkeypatch, tmp_path):
+    """Doctrina, bloque 3: la misma etiqueta que en Experimentos, junto al QA."""
+    import creative_flow
+    from sprints import datos
+    c, sid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["ii"]
+    cf = creative_flow.crear("acme", [], ["E"], [], "a", 8, "", "A")
+    creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2/v.mp4",
+                             revision_doctrina={"video_url": "https://r2/v.mp4", "reglas": [],
+                                                "puntos": [{"n": 1, "estado": "mejorar", "detalle": "x"}]})
+    datos.actualizar_idea("acme", ii, cf_id=cf, qa={"veredicto": "pasa", "score": 90, "checks": {}})
+    html = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert "Doctrina: 1 por mejorar" in html
