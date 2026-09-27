@@ -289,3 +289,21 @@ def test_etapas_del_trabajo_mensaje_vacio_sigue_vacio(admin_en, app_i18n, monkey
                                         "detalle": "", "progreso": 10, "elapsed": 1, "progreso_real": False})
     datos = admin_en.get("/trabajo/x/estado").get_json()
     assert datos["mensaje"] == "" and datos["detalle"] == ""
+
+
+MISMO_ORIGEN = {"Sec-Fetch-Site": "same-origin"}
+
+
+def test_catalogo_admin_en_ingles(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("tab-catalogo",))
+    assert not fugas, fugas[:15]
+
+
+def test_catalogo_cliente_en_ingles(cliente_en):
+    fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("tab-catalogo",))
+    assert not fugas, fugas[:15]
+
+
+def test_flash_de_producto_en_ingles(admin_en):
+    admin_en.post("/cliente/acme/productos/crear", data={"nombre": ""}, headers=MISMO_ORIGEN)
+    assert "Give it a name." in html_de(admin_en, "/cliente/acme")

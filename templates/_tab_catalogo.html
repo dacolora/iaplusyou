@@ -1,50 +1,50 @@
 <div class="panel-cabecera">
   <div>
-    <h2>Catálogo</h2>
-    <p class="panel-cabecera-desc">Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos, la cara de tu marca y tus espacios. Cada activo lleva fotos de referencia y una regla de consistencia que va en cada generación. Un producto lleva además su precio y su URL de compra, se marca «en prueba» y desde aquí se le crea un experimento.</p>
+    <h2>{{ _('Catálogo') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Todo lo que la IA debe reproducir <strong>exacto</strong>: tus productos, la cara de tu marca y tus espacios. Cada activo lleva fotos de referencia y una regla de consistencia que va en cada generación. Un producto lleva además su precio y su URL de compra, se marca «en prueba» y desde aquí se le crea un experimento.') }}</p>
   </div>
 </div>
 
 <div class="cat-tabs" id="cat-tabs">
   {% for cid, c in categorias.items() %}
-  <button type="button" class="cat-tab" data-cat="{{ cid }}">{{ c.plural }} <span class="cat-n">{{ activos_por_categoria[cid] | length }}</span></button>
+  <button type="button" class="cat-tab" data-cat="{{ cid }}">{{ c.plural|traducir }} <span class="cat-n">{{ activos_por_categoria[cid] | length }}</span></button>
   {% endfor %}
-  <button type="button" class="cat-tab" data-cat="logo">Logos <span class="cat-n">{{ logos | length }}</span></button>
+  <button type="button" class="cat-tab" data-cat="logo">{{ _('Logos') }} <span class="cat-n">{{ logos | length }}</span></button>
 </div>
 
 {% for cid, c in categorias.items() %}
 <div class="cat-panel" data-cat="{{ cid }}" hidden>
-  <p class="vacio" style="padding-top:0;">{{ c.descripcion_ui }}</p>
+  <p class="vacio" style="padding-top:0;">{{ c.descripcion_ui|traducir }}</p>
 
   <details class="comparacion-modelos" style="margin-top:0;">
-    <summary class="btn-generar btn-sm">+ Nuevo {{ c.nombre | lower }}</summary>
+    <summary class="btn-generar btn-sm">{{ _('+ Nuevo %(nombre)s', nombre=(c.nombre|traducir|lower)) }}</summary>
     <div class="comparacion-contenido">
       <form method="post" action="{{ url_for('crear_producto', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea" style="margin-bottom:0;">
         <input type="hidden" name="categoria" value="{{ cid }}">
         <input type="hidden" name="volver" value="catalogo">
         <div class="fila-campos-idea">
           <div>
-            <label class="campo-label">Nombre</label>
-            <input type="text" name="nombre" placeholder="{% if cid == 'producto' %}ej. HappyBlanket — White{% elif cid == 'personaje' %}ej. Forja (personaje){% else %}ej. Showroom principal{% endif %}" required>
+            <label class="campo-label">{{ _('Nombre') }}</label>
+            <input type="text" name="nombre" placeholder="{% if cid == 'producto' %}{{ _('ej. HappyBlanket — White') }}{% elif cid == 'personaje' %}{{ _('ej. Forja (personaje)') }}{% else %}{{ _('ej. Showroom principal') }}{% endif %}" required>
           </div>
           {% if c.con_mapa %}
           <div>
-            <label class="campo-label">Tipo</label>
+            <label class="campo-label">{{ _('Tipo') }}</label>
             <select name="tipo">
               {% for tid, t in tipos_producto.items() %}
-              <option value="{{ tid }}">{{ t.etiqueta }}</option>
+              <option value="{{ tid }}">{{ t.etiqueta|traducir }}</option>
               {% endfor %}
             </select>
           </div>
           {% endif %}
         </div>
 
-        <label class="campo-label" style="margin-top:.8rem;display:block;">Descripción</label>
-        <textarea name="descripcion" rows="2" placeholder="{% if cid == 'producto' %}ej. chanclas tipo slide de goma acanalada, color verde uniforme{% elif cid == 'personaje' %}ej. hombre de 30 años, barba corta, gorra roja, sudadera negra; energético y cercano{% else %}ej. sala luminosa con piso de madera clara, sofá beige y ventanal a la izquierda{% endif %}"></textarea>
+        <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Descripción') }}</label>
+        <textarea name="descripcion" rows="2" placeholder="{% if cid == 'producto' %}{{ _('ej. chanclas tipo slide de goma acanalada, color verde uniforme') }}{% elif cid == 'personaje' %}{{ _('ej. hombre de 30 años, barba corta, gorra roja, sudadera negra; energético y cercano') }}{% else %}{{ _('ej. sala luminosa con piso de madera clara, sofá beige y ventanal a la izquierda') }}{% endif %}"></textarea>
 
-        <label class="campo-label" style="margin-top:.8rem;display:block;">Regla de consistencia (opcional)</label>
-        <input type="text" name="regla" placeholder="{% if cid == 'producto' %}ej. el logo va siempre en el lateral derecho{% elif cid == 'personaje' %}ej. siempre lleva la gorra roja y nunca sonríe con dientes{% else %}ej. el espejo va en la pared del fondo, nunca en el piso{% endif %}">
-        <p class="vacio" style="font-size:.74rem;">Se suma a la regla base de la categoría: <em>{{ c.regla }}</em></p>
+        <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Regla de consistencia (opcional)') }}</label>
+        <input type="text" name="regla" placeholder="{% if cid == 'producto' %}{{ _('ej. el logo va siempre en el lateral derecho') }}{% elif cid == 'personaje' %}{{ _('ej. siempre lleva la gorra roja y nunca sonríe con dientes') }}{% else %}{{ _('ej. el espejo va en la pared del fondo, nunca en el piso') }}{% endif %}">
+        <p class="vacio" style="font-size:.74rem;">{{ _('Se suma a la regla base de la categoría:') }} <em>{{ c.regla|traducir }}</em></p>
 
         {% if cid == 'producto' %}
         {# Lo comercial va a la fila `producto` del motor (precio, url de
@@ -53,17 +53,17 @@
         {% endif %}
 
         {% if c.con_mapa %}
-        <label class="campo-label" style="margin-top:.8rem;display:block;">Mapa corporal (solo si va sobre una persona)</label>
+        <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Mapa corporal (solo si va sobre una persona)') }}</label>
         {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=[] %}
           {% include "_maniqui.html" %}
         {% endwith %}
         {% endif %}
 
-        <label class="campo-label" style="margin-top:.8rem;display:block;">Fotos de referencia ({% if cid == 'personaje' %}frente, perfil y cuerpo entero — 3 a 6{% else %}3-6, distintos ángulos{% endif %})</label>
+        <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Fotos de referencia (%(detalle)s)', detalle=(_('frente, perfil y cuerpo entero — 3 a 6') if cid == 'personaje' else _('3-6, distintos ángulos'))) }}</label>
         <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple required>
 
-        <button class="btn-generar btn-sm" type="submit" style="margin-top:.8rem;">Crear {{ c.nombre | lower }}</button>
-        <small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">no gasta: la regla la escribes tú{% if precios and precios.regla_producto and precios.regla_producto.usd is not none %} (al importar, ≈ {{ precios.regla_producto.usd | usd }} la regla con IA){% endif %}</small>
+        <button class="btn-generar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Crear %(nombre)s', nombre=(c.nombre|traducir|lower)) }}</button>
+        <small class="vacio precio-nota" style="display:inline;padding:0 0 0 .5rem;">{{ _('no gasta: la regla la escribes tú') }}{% if precios and precios.regla_producto and precios.regla_producto.usd is not none %} {{ _('(al importar, ≈ %(usd)s la regla con IA)', usd=(precios.regla_producto.usd | usd)) }}{% endif %}</small>
       </form>
     </div>
   </details>
@@ -76,9 +76,9 @@
   {% include "_catalogo_sin_fotos.html" %}
   {% endif %}
 
-  <h2 style="margin-top:1.4rem;">{{ c.plural }} ({{ activos_por_categoria[cid] | length }})</h2>
+  <h2 style="margin-top:1.4rem;">{{ _('%(plural)s (%(n)s)', plural=(c.plural|traducir), n=(activos_por_categoria[cid] | length)) }}</h2>
   {% if not activos_por_categoria[cid] %}
-  <p class="vacio">Todavía no hay {{ c.plural | lower }}. Crea el primero arriba{% if cid == 'producto' %} o tráelos de un archivo, una URL o tu tienda{% endif %}.</p>
+  <p class="vacio">{{ _('Todavía no hay %(plural)s. Crea el primero arriba', plural=(c.plural|traducir|lower)) }}{% if cid == 'producto' %} {{ _('o tráelos de un archivo, una URL o tu tienda') }}{% endif %}.</p>
   {% endif %}
   {% with productos=activos_por_categoria[cid], categoria_actual=cid, con_mapa=c.con_mapa %}
   {% include "_catalogo_lista.html" %}
@@ -87,10 +87,7 @@
 {% endfor %}
 
 <div class="cat-panel" data-cat="logo" hidden>
-  <p class="vacio" style="padding-top:0;">
-    El logo tal como debe verse. En cada generación se adjunta como <code>@Logo N</code> con la orden de
-    reproducirlo exacto. Sube 1 o 2 (PNG limpio, o una foto nítida del logo en el producto).
-  </p>
+  <p class="vacio" style="padding-top:0;">{{ _('El logo tal como debe verse. En cada generación se adjunta como <code>@Logo N</code> con la orden de reproducirlo exacto. Sube 1 o 2 (PNG limpio, o una foto nítida del logo en el producto).') }}</p>
   <form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
     <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
   </form>
@@ -100,8 +97,8 @@
     <figure style="margin:0;text-align:center;">
       <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:var(--fondo-logo);border:1px solid var(--border);">
       <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
-      <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
-        <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
+      <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit='return confirm({{ _("¿Quitar este logo?")|tojson }});'>
+        <button type="submit" class="btn-rechazar btn-sm">{{ _('Quitar') }}</button>
       </form>
     </figure>
     {% endfor %}
@@ -146,8 +143,8 @@
           if (on) activas.push(z.dataset.zona);
         });
         resumen.textContent = activas.length
-          ? activas.length + ' zona(s) marcada(s). El modelo va a recibir la ubicación y la proporción exactas.'
-          : 'Sin zonas: el producto no va sobre una persona (una cobija, un objeto de escena).';
+          ? {{ _('%(n)s zona(s) marcada(s). El modelo va a recibir la ubicación y la proporción exactas.', n='__N__')|tojson }}.replace('__N__', activas.length)
+          : {{ _('Sin zonas: el producto no va sobre una persona (una cobija, un objeto de escena).')|tojson }};
       }
 
       zonas.forEach(function (z) {
@@ -178,13 +175,13 @@
    se pierden y cuántos swaps ya generados quedan sin su producto. #}
 <div class="modal-fondo" id="modal-eliminar-producto" hidden>
   <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="modal-eliminar-titulo">
-    <h3 id="modal-eliminar-titulo">¿Eliminar este producto?</h3>
+    <h3 id="modal-eliminar-titulo">{{ _('¿Eliminar este producto?') }}</h3>
     <p id="modal-eliminar-detalle"></p>
-    <p class="modal-advertencia">Esto borra la carpeta del producto y todas sus fotos del disco. No se puede deshacer.</p>
+    <p class="modal-advertencia">{{ _('Esto borra la carpeta del producto y todas sus fotos del disco. No se puede deshacer.') }}</p>
     <div class="modal-acciones">
-      <button type="button" class="btn-guardar btn-sm" id="modal-eliminar-cancelar">Cancelar</button>
+      <button type="button" class="btn-guardar btn-sm" id="modal-eliminar-cancelar">{{ _('Cancelar') }}</button>
       <form method="post" id="modal-eliminar-form"><input type="hidden" name="categoria" id="modal-eliminar-categoria" value="producto">
-        <button type="submit" class="btn-peligro btn-sm">Sí, eliminar</button>
+        <button type="submit" class="btn-peligro btn-sm">{{ _('Sí, eliminar') }}</button>
       </form>
     </div>
   </div>
@@ -202,11 +199,12 @@
       document.getElementById('modal-eliminar-categoria').value = boton.dataset.categoria || 'producto';
       var fotos = parseInt(boton.dataset.fotos || '0', 10);
       var usos = parseInt(boton.dataset.usos || '0', 10);
-      var texto = 'Se eliminará «' + boton.dataset.productoNombre + '» y sus ' + fotos + ' foto(s) de referencia.';
+      var texto = {{ _('Se eliminará «%(nombre)s» y sus %(fotos)s foto(s) de referencia.', nombre='__NOMBRE__', fotos='__FOTOS__')|tojson }}
+        .replace('__NOMBRE__', boton.dataset.productoNombre).replace('__FOTOS__', fotos);
       if (usos > 0) {
         // El swap guarda el producto_id, no una copia del producto: los
         // resultados viejos siguen viéndose, pero pierden nombre y miniatura.
-        texto += ' Hay ' + usos + ' resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto.';
+        texto += ' ' + {{ _('Hay %(usos)s resultado(s) ya generado(s) con este producto: no se borran, pero dejarán de mostrar su nombre y su foto.', usos='__USOS__')|tojson }}.replace('__USOS__', usos);
       }
       detalle.textContent = texto;
       ultimoDisparador = boton;

@@ -9,6 +9,8 @@ import os
 import re
 import unicodedata
 
+from flask_babel import gettext
+
 import _json_store
 import idiomas
 import mapa_corporal
@@ -42,31 +44,34 @@ DESCRIPCIONES = {
 # consistencia, que es lo que se le dice al modelo para que NO cambie el activo.
 CATEGORIAS = {
     "producto": {
-        "nombre": "Producto", "plural": "Productos", "carpeta": "productos", "meta": "productos.json",
-        "etiqueta": "@Producto", "descripcion_ui": "Lo que vendes: calzado, ropa, decoración, comida, lo que sea.",
-        "regla": ("Reprodúcelo idéntico a su referencia: misma forma, mismo color, misma textura y el mismo "
-                  "logotipo o marca tal como aparece, en el mismo lugar. No inventes ni cambies letras, logos ni etiquetas."),
+        "nombre": idiomas.N_("Producto"), "plural": idiomas.N_("Productos"), "carpeta": "productos", "meta": "productos.json",
+        "etiqueta": "@Producto", "descripcion_ui": idiomas.N_("Lo que vendes: calzado, ropa, decoración, comida, lo que sea."),
+        "regla": idiomas.N_(
+            "Reprodúcelo idéntico a su referencia: misma forma, mismo color, misma textura y el mismo "
+            "logotipo o marca tal como aparece, en el mismo lugar. No inventes ni cambies letras, logos ni etiquetas."),
         "regla_en": ("Reproduce it identical to its reference: same shape, same color, same texture and the "
                      "same logo or brand exactly as it appears, in the same place. Do not invent or change "
                      "letters, logos or labels."),
         "con_mapa": True,
     },
     "personaje": {
-        "nombre": "Personaje", "plural": "Personajes", "carpeta": "personajes_catalogo", "meta": "personajes_catalogo.json",
-        "etiqueta": "@Personaje", "descripcion_ui": "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre.",
-        "regla": ("Es la MISMA persona/personaje en todas las tomas: misma cara, mismos rasgos, mismo pelo, misma "
-                  "complexión y la misma ropa y accesorios que en las referencias. No cambies edad, género, piel ni estilo. "
-                  "Manos y pies anatómicamente correctos."),
+        "nombre": idiomas.N_("Personaje"), "plural": idiomas.N_("Personajes"), "carpeta": "personajes_catalogo", "meta": "personajes_catalogo.json",
+        "etiqueta": "@Personaje", "descripcion_ui": idiomas.N_("La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."),
+        "regla": idiomas.N_(
+            "Es la MISMA persona/personaje en todas las tomas: misma cara, mismos rasgos, mismo pelo, misma "
+            "complexión y la misma ropa y accesorios que en las referencias. No cambies edad, género, piel ni estilo. "
+            "Manos y pies anatómicamente correctos."),
         "regla_en": ("It is the SAME person/character in every shot: same face, same features, same hair, "
                      "same build and the same clothes and accessories as in the references. Do not change "
                      "age, gender, skin or style. Anatomically correct hands and feet."),
         "con_mapa": False,
     },
     "entorno": {
-        "nombre": "Entorno", "plural": "Entornos", "carpeta": "entornos", "meta": "entornos.json",
-        "etiqueta": "@Entorno", "descripcion_ui": "Lugares y escenas: tu tienda, un showroom, la sala donde va el espejo.",
-        "regla": ("La escena ocurre en ESTE lugar: conserva paredes, piso, muebles, decoración y luz tal como se ven en las "
-                  "referencias. El producto y las personas se integran ahí; no reconstruyas ni redecores el espacio."),
+        "nombre": idiomas.N_("Entorno"), "plural": idiomas.N_("Entornos"), "carpeta": "entornos", "meta": "entornos.json",
+        "etiqueta": "@Entorno", "descripcion_ui": idiomas.N_("Lugares y escenas: tu tienda, un showroom, la sala donde va el espejo."),
+        "regla": idiomas.N_(
+            "La escena ocurre en ESTE lugar: conserva paredes, piso, muebles, decoración y luz tal como se ven en las "
+            "referencias. El producto y las personas se integran ahí; no reconstruyas ni redecores el espacio."),
         "regla_en": ("The scene takes place in THIS place: keep walls, floor, furniture, decoration and light "
                      "exactly as seen in the references. The product and the people blend in there; do not "
                      "rebuild or redecorate the space."),
@@ -281,7 +286,8 @@ def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATE
     producto_id = producto_id or id_desde_nombre(nombre)
     carpeta = carpeta_de(cliente, producto_id, categoria)
     if os.path.isdir(carpeta):
-        raise ValueError(f"Ya existe un {CATEGORIAS[categoria]['nombre'].lower()} con ese nombre ({producto_id}).")
+        raise ValueError(gettext("Ya existe un %(tipo)s con ese nombre (%(id)s).",
+                                 tipo=gettext(CATEGORIAS[categoria]["nombre"]).lower(), id=producto_id))
     os.makedirs(carpeta, exist_ok=True)
 
     def _poner(meta):

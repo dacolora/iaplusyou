@@ -1394,7 +1394,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .cat-comercial select { min-width: 5.5rem; }
 .cat-en-prueba { display: flex; align-items: center; gap: .4rem; font-size: .84rem; margin-top: .6rem; }
 .cat-importar > summary { display: inline-block; }
-.cat-sin-fotos .tabla-productos { margin-top: .4rem; }
+.cat-sinfotos .tabla-productos { margin-top: .4rem; }
 .prod-subir-fotos { cursor: pointer; display: inline-block; }
 .prod-form-fotos { margin: 0; }
 

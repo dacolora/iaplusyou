@@ -624,7 +624,7 @@ def subir_personaje(cliente):
 @app.route("/cliente/<cliente>/personaje/<nombre>/eliminar", methods=["POST"])
 def eliminar_personaje(cliente, nombre):
     _eliminar_asset(cliente, "personajes", secure_filename(nombre))
-    flash(f"Eliminado: {nombre}", "ok")
+    flash(gettext("Eliminado: %(nombre)s", nombre=nombre), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
@@ -2462,7 +2462,7 @@ def _campos_comerciales(form):
                 raise ValueError
             campos["precio"] = precio
         except ValueError:
-            flash("El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé.", "error")
+            flash(gettext("El precio tiene que ser un número positivo (ej. 89900 o 25,50); no lo guardé."), "error")
     if "prioridad" in form:
         try:
             prioridad = int(form.get("prioridad") or 0)
@@ -2470,11 +2470,11 @@ def _campos_comerciales(form):
                 raise ValueError
             campos["prioridad"] = prioridad
         except ValueError:
-            flash("La prioridad va de 0 a 100; no la guardé.", "error")
+            flash(gettext("La prioridad va de 0 a 100; no la guardé."), "error")
     if "moneda" in form:
         moneda = (form.get("moneda") or "").strip().upper()
         if moneda and not _MONEDA_RE.match(moneda):
-            flash("La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé.", "error")
+            flash(gettext("La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé."), "error")
         else:
             campos["moneda"] = moneda or None
     if "url_compra" in form:
@@ -2482,7 +2482,7 @@ def _campos_comerciales(form):
         if url.lower().startswith("wa.me/"):
             url = "https://" + url
         if url and not url.startswith(("http://", "https://")):
-            flash("La URL de compra tiene que empezar por http:// o https:// (o ser wa.me/…); no la guardé.", "error")
+            flash(gettext("La URL de compra tiene que empezar por http:// o https:// (o ser wa.me/…); no la guardé."), "error")
         else:
             campos["url_compra"] = url or None
     return campos
@@ -2597,7 +2597,7 @@ def actualizar_producto(cliente, producto_id):
         # existiera (no hay migración: se enlaza al primer uso).
         _guardar_fila_producto(cliente, producto_id, request.form.get("nombre"),
                                request.form.get("descripcion"), _campos_comerciales(request.form))
-    flash("Producto actualizado.", "ok")
+    flash(gettext("Producto actualizado."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -2605,7 +2605,7 @@ def actualizar_producto(cliente, producto_id):
 def subir_imagen_producto(cliente, producto_id):
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not archivos:
-        flash("No elegiste ninguna foto.", "error")
+        flash(gettext("No elegiste ninguna foto."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     try:
         guardadas = _guardar_fotos_producto(cliente, producto_id, archivos, categoria=_cat(request.form.get("categoria")))
@@ -2613,9 +2613,9 @@ def subir_imagen_producto(cliente, producto_id):
         flash(str(e), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
     if guardadas:
-        flash(f"{guardadas} foto(s) agregada(s).", "ok")
+        flash(gettext("%(n)s foto(s) agregada(s).", n=guardadas), "ok")
     else:
-        flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
+        flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -2649,7 +2649,7 @@ def eliminar_producto(cliente, producto_id):
         fila = tiendas.por_activo(cliente).get(producto_id)
         if fila and not fila["archivado"]:
             tiendas.marcar_producto(cliente, fila["id"], archivado=True)
-    flash(f"Producto eliminado: {nombre}", "ok")
+    flash(gettext("Producto eliminado: %(nombre)s", nombre=nombre), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
 
@@ -5131,9 +5131,11 @@ def _producto_comercial_contexto(productos_tienda):
 
 
 # Nombre visible de cada `producto.fuente` (badge de la tarjeta y nota
-# «Sincronizado de …»).
-ETIQUETAS_FUENTE = {"manual": "manual", "csv": "CSV/Excel", "url": "URL", "shopify": "Shopify",
-                    "woo": "WooCommerce", "meli": "MercadoLibre"}
+# «Sincronizado de …»). Los que no son "manual" son nombres de marca (no se
+# traducen; se marcan igual con N_ para que el diccionario sea parejo — su
+# msgstr es el mismo texto).
+ETIQUETAS_FUENTE = {"manual": idiomas.N_("manual"), "csv": idiomas.N_("CSV/Excel"), "url": idiomas.N_("URL"),
+                    "shopify": idiomas.N_("Shopify"), "woo": idiomas.N_("WooCommerce"), "meli": idiomas.N_("MercadoLibre")}
 
 
 def _trabajos_productos(cliente, tiendas_cliente, productos=()):
@@ -5171,26 +5173,26 @@ def prod_importar_archivo(cliente):
     if request.content_length and request.content_length > IMPORTAR_MAX_BYTES * 2:
         # x2: el multipart trae cabeceras y el resto del formulario; el tope
         # exacto lo aplica la lectura de abajo.
-        flash("El archivo pesa más de 5 MB. Divídelo o quita columnas que no usamos.", "error")
+        flash(gettext("El archivo pesa más de 5 MB. Divídelo o quita columnas que no usamos."), "error")
         return _volver_productos(cliente)
     archivo = request.files.get("archivo")
     if not archivo or not archivo.filename:
-        flash("Elige un archivo .csv o .xlsx.", "error")
+        flash(gettext("Elige un archivo .csv o .xlsx."), "error")
         return _volver_productos(cliente)
     nombre = secure_filename(archivo.filename) or "catalogo"
     if os.path.splitext(nombre.lower())[1] not in IMPORTAR_EXTENSIONES:
-        flash("Solo se aceptan archivos .csv o .xlsx.", "error")
+        flash(gettext("Solo se aceptan archivos .csv o .xlsx."), "error")
         return _volver_productos(cliente)
     datos = archivo.read(IMPORTAR_MAX_BYTES + 1)
     if not datos:
-        flash("El archivo está vacío.", "error")
+        flash(gettext("El archivo está vacío."), "error")
         return _volver_productos(cliente)
     if len(datos) > IMPORTAR_MAX_BYTES:
-        flash("El archivo pesa más de 5 MB. Divídelo o quita columnas que no usamos.", "error")
+        flash(gettext("El archivo pesa más de 5 MB. Divídelo o quita columnas que no usamos."), "error")
         return _volver_productos(cliente)
     job_id = tareas_tiendas.job_id_importar_archivo(cliente)
     if trabajos.en_curso(job_id):
-        flash("Ya hay una importación de archivo en curso — espera a que termine.", "warn")
+        flash(gettext("Ya hay una importación de archivo en curso — espera a que termine."), "warn")
         return _volver_productos(cliente)
     carpeta = os.path.join(_client_dir(cliente), "importaciones")
     os.makedirs(carpeta, exist_ok=True)
@@ -5206,13 +5208,13 @@ def prod_importar_archivo(cliente):
         {"cliente": cliente, "ruta": ruta, "nombre_archivo": nombre, "borrar_al_terminar": True},
         cliente=cliente, duracion_estimada=120, etapas=tareas_tiendas.ETAPAS_IMPORTAR, max_intentos=1)
     if arranco:
-        flash(f"Importando «{nombre}»… Los productos aparecen aquí cuando termine.", "ok")
+        flash(gettext("Importando «%(nombre)s»… Los productos aparecen aquí cuando termine.", nombre=nombre), "ok")
     else:
         try:
             os.remove(ruta)
         except OSError:
             pass
-        flash("Ya hay una importación de archivo en curso — espera a que termine.", "warn")
+        flash(gettext("Ya hay una importación de archivo en curso — espera a que termine."), "warn")
     return _volver_productos(cliente)
 
 
@@ -5220,16 +5222,16 @@ def prod_importar_archivo(cliente):
 def prod_importar_url(cliente):
     url = (request.form.get("url") or "").strip()
     if not url.startswith(("http://", "https://")):
-        flash("Pega la URL completa de la página del producto (empieza por http:// o https://).", "error")
+        flash(gettext("Pega la URL completa de la página del producto (empieza por http:// o https://)."), "error")
         return _volver_productos(cliente)
     job_id = tareas_tiendas.job_id_importar_url(cliente)
     arranco = trabajos.encolar(
         job_id, "catalogo_importar", {"cliente": cliente, "url": url},
         cliente=cliente, duracion_estimada=90, etapas=tareas_tiendas.ETAPAS_IMPORTAR, max_intentos=1)
     if arranco:
-        flash("Leyendo la página del producto… aparece aquí cuando termine.", "ok")
+        flash(gettext("Leyendo la página del producto… aparece aquí cuando termine."), "ok")
     else:
-        flash("Ya hay una importación desde URL en curso — espera a que termine.", "warn")
+        flash(gettext("Ya hay una importación desde URL en curso — espera a que termine."), "warn")
     return _volver_productos(cliente)
 
 
@@ -5239,7 +5241,7 @@ def prod_marcar(cliente, pid):
     y moneda. Solo toca los campos que vienen en el formulario; `en_prueba`
     siempre viene (un checkbox sin marcar = apagado)."""
     if not tiendas.producto(cliente, pid):
-        flash("No encontré ese producto.", "error")
+        flash(gettext("No encontré ese producto."), "error")
         return _volver_productos(cliente)
     form = request.form
     campos = {"en_prueba": form.get("en_prueba") in ("on", "1", "true")}
@@ -5256,22 +5258,22 @@ def prod_marcar(cliente, pid):
                 raise ValueError
             campos["precio"] = precio
     except ValueError:
-        flash("Revisa los números: prioridad entre 0 y 100, precio positivo.", "error")
+        flash(gettext("Revisa los números: prioridad entre 0 y 100, precio positivo."), "error")
         return _volver_productos(cliente)
     if "url_compra" in form:
         url = (form.get("url_compra") or "").strip()
         if url and not url.startswith(("http://", "https://")):
-            flash("La URL de compra tiene que empezar por http:// o https://.", "error")
+            flash(gettext("La URL de compra tiene que empezar por http:// o https://."), "error")
             return _volver_productos(cliente)
         campos["url_compra"] = url or None
     if "moneda" in form:
         moneda = (form.get("moneda") or "").strip().upper()
         if moneda and not _MONEDA_RE.match(moneda):
-            flash("La moneda va en código de 3 letras (COP, MXN, USD…).", "error")
+            flash(gettext("La moneda va en código de 3 letras (COP, MXN, USD…)."), "error")
             return _volver_productos(cliente)
         campos["moneda"] = moneda or None
     tiendas.marcar_producto(cliente, pid, **campos)
-    flash("Producto actualizado.", "ok")
+    flash(gettext("Producto actualizado."), "ok")
     return _volver_productos(cliente)
 
 
@@ -5283,11 +5285,11 @@ def prod_archivar(cliente, pid):
     "manual"`): la sync de la tienda no lo desarchiva aunque el producto
     siga allá; solo «Recuperar» (archivado=0) lo devuelve a la lista."""
     if not tiendas.producto(cliente, pid):
-        flash("No encontré ese producto.", "error")
+        flash(gettext("No encontré ese producto."), "error")
         return _volver_productos(cliente)
     archivar = (request.form.get("archivado") or "1") not in ("0", "false", "off")
     tiendas.marcar_producto(cliente, pid, archivado=archivar)
-    flash("Producto archivado." if archivar else "Producto recuperado.", "ok")
+    flash(gettext("Producto archivado.") if archivar else gettext("Producto recuperado."), "ok")
     return _volver_productos(cliente)
 
 
@@ -5299,16 +5301,17 @@ def prod_vincular(cliente, pid):
     gunicorn. max_intentos=1 porque llama a Claude."""
     prod = tiendas.producto(cliente, pid)
     if not prod:
-        flash("No encontré ese producto.", "error")
+        flash(gettext("No encontré ese producto."), "error")
         return _volver_productos(cliente)
     job_id = tareas_tiendas.job_id_vincular(cliente, pid)
     arranco = trabajos.encolar(
         job_id, "producto_vincular", {"cliente": cliente, "producto_id": pid},
         cliente=cliente, duracion_estimada=90, etapas=tareas_tiendas.ETAPAS_VINCULAR, max_intentos=1)
     if arranco:
-        flash(f"Creando el activo de «{prod.get('nombre') or pid}»… aparece en el Catálogo cuando termine.", "ok")
+        flash(gettext("Creando el activo de «%(nombre)s»… aparece en el Catálogo cuando termine.",
+                      nombre=prod.get("nombre") or pid), "ok")
     else:
-        flash("Ya se está creando el activo de ese producto — espera a que termine.", "warn")
+        flash(gettext("Ya se está creando el activo de ese producto — espera a que termine."), "warn")
     return _volver_productos(cliente)
 
 
@@ -5323,20 +5326,20 @@ def prod_fotos_subir(cliente, pid):
     el importador, en vez de pisarle las fotos al otro."""
     prod = tiendas.producto(cliente, pid)
     if not prod:
-        flash("No encontré ese producto.", "error")
+        flash(gettext("No encontré ese producto."), "error")
         return _volver_productos(cliente)
     archivos = [a for a in request.files.getlist("imagenes") if a and a.filename]
     if not archivos:
-        flash("No elegiste ninguna foto.", "error")
+        flash(gettext("No elegiste ninguna foto."), "error")
         return _volver_productos(cliente)
-    nombre = (prod.get("nombre") or "").strip() or f"Producto {pid}"
+    nombre = (prod.get("nombre") or "").strip() or gettext("Producto %(pid)s", pid=pid)
     enlazado = prod.get("activo_catalogo_id")
     if enlazado and catalogo_productos.existe(cliente, enlazado, "producto"):
         # Página vieja o doble envío: el activo ya existe. Las fotos van a
         # ese, no a un segundo activo con el mismo nombre.
         guardadas = _guardar_fotos_producto(cliente, enlazado, archivos)
-        flash(f"{guardadas} foto(s) añadida(s) a «{nombre}»." if guardadas
-              else "Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).",
+        flash(gettext("%(n)s foto(s) añadida(s) a «%(nombre)s».", n=guardadas, nombre=nombre) if guardadas
+              else gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."),
               "ok" if guardadas else "error")
         return _volver_productos(cliente)
     base = catalogo_productos.id_desde_nombre(nombre)
@@ -5355,10 +5358,10 @@ def prod_fotos_subir(cliente, pid):
         # Sin foto válida el activo no aparecería en el catálogo y la fila
         # quedaría enlazada a algo invisible: mejor deshacer.
         catalogo_productos.eliminar(cliente, activo_id, categoria="producto")
-        flash("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp).", "error")
+        flash(gettext("Ninguna foto tenía un formato soportado (jpg, jpeg, png, webp)."), "error")
         return _volver_productos(cliente)
     tiendas.marcar_producto(cliente, pid, activo_catalogo_id=activo_id)
-    flash(f"«{nombre}» ya está en el catálogo con {guardadas} foto(s).", "ok")
+    flash(gettext("«%(nombre)s» ya está en el catálogo con %(n)s foto(s).", nombre=nombre, n=guardadas), "ok")
     return _volver_productos(cliente)
 
 
@@ -5369,7 +5372,7 @@ def prod_experimento(cliente, pid):
     lee de request.args (exp_nombre, exp_destino)."""
     prod = tiendas.producto(cliente, pid)
     if not prod:
-        flash("No encontré ese producto.", "error")
+        flash(gettext("No encontré ese producto."), "error")
         return _volver_productos(cliente)
     return redirect(url_for("ver_cliente", cliente=cliente, exp_nombre=prod["nombre"] or "",
                             exp_destino=prod.get("url_compra") or "", _anchor="experimentos"))

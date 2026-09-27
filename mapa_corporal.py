@@ -18,22 +18,23 @@ Ninguno de los modelos que usamos acepta una máscara real (no existe un campo
 donde mandarle "edita solo acá"), así que esto es la forma más precisa
 disponible: una instrucción, no una restricción dura.
 """
+import idiomas
 
 # id -> (etiqueta en la UI, desde, hasta, nombre dentro del prompt)
 # desde/hasta van en "cabezas" del canon de 8: 0 es la coronilla, 8 la planta.
 ZONAS = {
-    "cabeza_corona":  ("Corona de la cabeza", 0.0, 0.5, "la parte alta de la cabeza"),
-    "cabeza_ojos":    ("Ojos / rostro",       0.4, 0.6, "los ojos y el puente de la nariz"),
-    "cuello":         ("Cuello",              0.9, 1.1, "el cuello"),
-    "torso_alto":     ("Torso alto (pecho)",  1.0, 2.0, "el pecho y la parte alta del torso"),
-    "torso_bajo":     ("Torso bajo (abdomen)", 2.0, 3.0, "el abdomen y la cintura"),
-    "brazo":          ("Brazo (hombro→codo)", 1.2, 2.4, "los brazos, del hombro al codo"),
-    "antebrazo":      ("Antebrazo (codo→muñeca)", 2.4, 3.4, "los antebrazos, del codo a la muñeca"),
-    "manos":          ("Manos",               3.4, 3.7, "las manos"),
-    "cadera":         ("Cadera / entrepierna", 3.0, 4.0, "la cadera y la entrepierna"),
-    "muslo":          ("Muslos",              4.0, 5.5, "los muslos"),
-    "pantorrilla":    ("Rodilla y pantorrilla", 5.5, 7.3, "las rodillas y las pantorrillas"),
-    "pies":           ("Pies",                7.3, 8.0, "los pies"),
+    "cabeza_corona":  (idiomas.N_("Corona de la cabeza"), 0.0, 0.5, "la parte alta de la cabeza"),
+    "cabeza_ojos":    (idiomas.N_("Ojos / rostro"),       0.4, 0.6, "los ojos y el puente de la nariz"),
+    "cuello":         (idiomas.N_("Cuello"),              0.9, 1.1, "el cuello"),
+    "torso_alto":     (idiomas.N_("Torso alto (pecho)"),  1.0, 2.0, "el pecho y la parte alta del torso"),
+    "torso_bajo":     (idiomas.N_("Torso bajo (abdomen)"), 2.0, 3.0, "el abdomen y la cintura"),
+    "brazo":          (idiomas.N_("Brazo (hombro→codo)"), 1.2, 2.4, "los brazos, del hombro al codo"),
+    "antebrazo":      (idiomas.N_("Antebrazo (codo→muñeca)"), 2.4, 3.4, "los antebrazos, del codo a la muñeca"),
+    "manos":          (idiomas.N_("Manos"),               3.4, 3.7, "las manos"),
+    "cadera":         (idiomas.N_("Cadera / entrepierna"), 3.0, 4.0, "la cadera y la entrepierna"),
+    "muslo":          (idiomas.N_("Muslos"),              4.0, 5.5, "los muslos"),
+    "pantorrilla":    (idiomas.N_("Rodilla y pantorrilla"), 5.5, 7.3, "las rodillas y las pantorrillas"),
+    "pies":           (idiomas.N_("Pies"),                7.3, 8.0, "los pies"),
 }
 
 # Referencias de altura del canon, para traducir un número de cabeza a algo que
@@ -75,11 +76,11 @@ PRESETS = {
 }
 
 ETIQUETAS_PRESETS = {
-    "gafas": "Gafas", "gorra": "Gorra / sombrero", "calzado": "Calzado",
-    "camisilla": "Camisilla", "camisa_manga_corta": "Camisa manga corta",
-    "camisa_manga_larga": "Camisa manga larga", "boxer": "Boxer",
-    "pantaloneta": "Pantaloneta", "pantalon": "Pantalón",
-    "conjunto_completo": "Conjunto completo", "falda": "Falda", "vestido": "Vestido",
+    "gafas": idiomas.N_("Gafas"), "gorra": idiomas.N_("Gorra / sombrero"), "calzado": idiomas.N_("Calzado"),
+    "camisilla": idiomas.N_("Camisilla"), "camisa_manga_corta": idiomas.N_("Camisa manga corta"),
+    "camisa_manga_larga": idiomas.N_("Camisa manga larga"), "boxer": idiomas.N_("Boxer"),
+    "pantaloneta": idiomas.N_("Pantaloneta"), "pantalon": idiomas.N_("Pantalón"),
+    "conjunto_completo": idiomas.N_("Conjunto completo"), "falda": idiomas.N_("Falda"), "vestido": idiomas.N_("Vestido"),
 }
 
 

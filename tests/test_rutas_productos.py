@@ -486,7 +486,7 @@ def test_render_activo_manual_recibe_fila_y_muestra_precio(app):
     vieja = html.split('id="producto-viejo"', 1)[1].split("</details>", 1)[0]
     assert "sin precio" in vieja and "sin URL de compra" in vieja
     # Nada quedó en «Importados sin fotos»
-    assert 'id="cat-sin-fotos"' not in html
+    assert 'id="cat-sinfotos"' not in html
     # Listar dos veces no duplica filas
     c.get("/cliente/acme")
     assert len(tiendas.productos("acme", incluir_archivados=True)) == 2
@@ -518,7 +518,7 @@ def test_fotos_subir_crea_activo_y_enlaza(app):
     assert any("2 foto(s)" in m for m in _flashes(app["c"]))
     # ya no está en el bloque de sin fotos; su tarjeta muestra lo comercial de la fila importada
     html = app["c"].get("/cliente/acme").data.decode()
-    assert 'id="cat-sin-fotos"' not in html
+    assert 'id="cat-sinfotos"' not in html
     tarjeta = html.split('id="producto-espejo_redondo"', 1)[1].split("</details>", 1)[0]
     assert "89.900 COP" in tarjeta and "CSV/Excel" in tarjeta
     assert len(tiendas.productos("acme", incluir_archivados=True)) == 1
