@@ -47,7 +47,7 @@ def entorno(base_temporal, tmp_path, monkeypatch):
     monkeypatch.setattr(importador, "host_permitido", lambda u: True)
     reglas = []
 
-    def _regla(nombre, descripcion="", categoria=""):
+    def _regla(nombre, descripcion="", categoria="", idioma="es"):
         reglas.append(nombre)
         return f"Regla de {nombre}: mismo color y logo."
     monkeypatch.setattr(importador.generador_prompts, "regla_fidelidad", _regla)
@@ -639,3 +639,17 @@ def test_nunca_intentados_van_antes_que_en_prueba_ya_intentados(entorno):
     res = importador.importar_lista("acme", "csv", sin + [con], max_activos=2)
     assert res["activos"] == 1 and res["pendientes"] == 0
     assert tiendas.producto_por_fuente("acme", "csv", "c1")["activo_catalogo_id"] == "con_fotos"
+
+
+def test_la_regla_se_pide_en_el_idioma_del_proyecto(entorno, monkeypatch):
+    import idiomas
+    import importador
+    import proyectos
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(entorno["tmp"]))
+    idiomas.guardar_de_proyecto("acme", "en")
+    vistos = []
+    monkeypatch.setattr(importador.generador_prompts, "regla_fidelidad",
+                        lambda nombre, descripcion="", categoria="", idioma="es": vistos.append(idioma) or "Rule.")
+    entorno["respuestas"]["https://cdn.test/a.jpg"] = _Respuesta(content_type="image/jpeg")
+    importador.importar_lista("acme", "shopify", [_prod()])
+    assert vistos == ["en"]

@@ -701,7 +701,7 @@ def analizar_marca(cliente):
     job_id = _job_id_marca(cliente)
 
     def trabajo():
-        guia = generador_prompts.analizar_marca(urls)
+        guia = generador_prompts.analizar_marca(urls, idioma=idiomas.de_proyecto(cliente))
         data = marca_mod.cargar(cliente)
         data["guia_estilo"] = guia
         marca_mod.guardar(cliente, data)
@@ -2049,7 +2049,8 @@ def nueva_idea(cliente):
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
     try:
-        textos = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo)
+        textos = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
+                                                    idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         flash(f"No pude generar los prompts: {e}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
@@ -2141,7 +2142,8 @@ def nueva_idea_visual(cliente):
 
     guia_estilo = marca_mod.guia_efectiva(cliente)
     try:
-        escenas = generador_prompts.generar_conceptos_imagen(idea_texto, n=5, guia_estilo=guia_estilo)
+        escenas = generador_prompts.generar_conceptos_imagen(idea_texto, n=5, guia_estilo=guia_estilo,
+                                                              idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         flash(f"No pude generar las escenas: {e}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
@@ -2173,7 +2175,8 @@ def aprobar_concepto_imagen(cliente, idea_id, concepto_id, proveedor):
     guia_estilo = marca_mod.guia_efectiva(cliente)
     idea_texto = data[idea_id]["idea"]
     try:
-        animaciones = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo)
+        animaciones = generador_prompts.generar_prompts(idea_texto, n=5, guia_estilo=guia_estilo,
+                                                         idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         flash(f"No pude generar las propuestas de animación: {e}", "error")
         return redirect(url_for("ver_cliente", cliente=cliente))

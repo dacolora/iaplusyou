@@ -25,8 +25,8 @@ para que la tarea encole otra corrida (ver `tareas/tiendas.py`); los ya
 ligados siempre se refrescan (barato) y no cuentan para el tope.
 
 Un producto que falle no frena a los demás: el error queda listado en
-`errores` (texto en español, sin URLs completas ni credenciales) y el
-resumen sigue. Las fotos se bajan primero a una carpeta temporal y solo se
+`errores` (texto en el idioma del proyecto, sin URLs completas ni
+credenciales) y el resumen sigue. Las fotos se bajan primero a una carpeta temporal y solo se
 mueven a la carpeta del activo cuando hay al menos una — así una descarga
 fallida no deja carpetas fantasma ni gasta la llamada a Claude.
 """
@@ -45,6 +45,7 @@ import catalogo_productos
 import db
 import gastos
 import generador_prompts
+import idiomas
 import prompt_swap
 import tiendas
 from conectores import csv_excel
@@ -301,7 +302,7 @@ def _id_activo_disponible(cliente, nombre, fuente_id, producto_id):
 def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     """Liga el producto (fila `producto`) a un activo del catálogo de Crear.
     Devuelve el `activo_id` (None si no se pudo). Si se pasa `errores` (lista),
-    ahí deja los avisos en español; nunca lanza por un producto concreto.
+    ahí deja los avisos; nunca lanza por un producto concreto.
     Nunca marca `activo_catalogo_id` en la fila del producto a menos que el
     activo termine con al menos una imagen — un activo sin fotos no aparece
     en `catalogo_productos.listar()`, y quedaría ligado a algo invisible que
@@ -366,7 +367,8 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             return None
         if fallidas:
             errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
-        regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "")
+        regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "",
+                                                   idiomas.de_proyecto(cliente))
         if regla:
             # Claude respondió (una regla vacía es el fallback sin llamada o
             # con error, que no cobra). Tarifa fija: el SDK no devuelve el

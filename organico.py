@@ -73,12 +73,12 @@ _RE_PALABRA = re.compile(r"[A-Za-zÀ-ɏ0-9]+")
 _STOPWORDS = {"de", "del", "la", "el", "los", "las", "con", "para", "por", "sin", "the", "and", "of", "for",
               "un", "una", "unos", "unas", "en", "y", "o", "a", "al", "lo", "que", "se", "su", "sus"}
 
-# Copy fija que `fallback`/`ajustar` inyectan, en el idioma de la pieza
+# Copy fija que `fallback`/`ajustar` inyectan, en el idioma del proyecto
 # (`contexto["idioma"]`); español por defecto si no hay traducción.
 _COPY = {
-    "es": {"link_bio": "Link en bio.", "cta": "Consíguelo aquí"},
-    "en": {"link_bio": "Link in bio.", "cta": "Get it here"},
-    "pt": {"link_bio": "Link na bio.", "cta": "Garanta o seu"},
+    "es": {"link_bio": "Link en bio.", "cta": "Consíguelo aquí", "escribenos": "Escríbenos para conseguirlo."},
+    "en": {"link_bio": "Link in bio.", "cta": "Get it here", "escribenos": "Message us to get it."},
+    "pt": {"link_bio": "Link na bio.", "cta": "Garanta o seu", "escribenos": "Fale com a gente para garantir o seu."},
 }
 
 
@@ -322,8 +322,9 @@ def contexto_pieza(cliente, pieza_id):
     clon: `concepto.extra.accion_central`), producto (tiendas.por_activo
     por el primer `productos_ids` del concepto — id o nombre visible, ver
     `_activo` — o el catálogo directamente), `url_compra` (del producto, o
-    `destino_url` del último experimento que contiene la pieza), idioma,
-    hashtags base y el `angulo` decidido para la pieza (dict o None)."""
+    `destino_url` del último experimento que contiene la pieza), idioma (el
+    del proyecto), hashtags base y el `angulo` decidido para la pieza (dict o
+    None)."""
     with db.conectar() as con:
         pz = _fila_pieza(con, cliente, pieza_id)
         if pz is None:
@@ -365,7 +366,7 @@ def contexto_pieza(cliente, pieza_id):
         nombre = accion or f"Pieza {pieza_id}"
     if not url_compra and ex and ex[0]:
         url_compra = ex[0]
-    idioma = pm[db.pieza.c.idioma] or (cp._mapping[db.concepto.c.idioma_base] if cp else None) or "es"
+    idioma = idiomas.de_proyecto(cliente)
     return {"nombre_producto": nombre, "descripcion": descripcion, "url_compra": url_compra, "idioma": idioma,
             "guion_texto": guion_texto, "hashtags_base": _hashtags_de(nombre), "angulo": c_extra.get("angulo")}
 
@@ -388,7 +389,7 @@ def fallback(contexto, plataforma):
     if conf["links"] and contexto.get("url_compra"):
         cta = f"{copy['cta']}: {contexto['url_compra']}"
     elif conf["links"]:
-        cta = "Escríbenos para conseguirlo."
+        cta = copy["escribenos"]
     else:
         cta = copy["link_bio"]
     tags = " ".join(_hashtags_de(nombre) or ["#reels", "#tiktok", "#shorts"][:HASHTAGS_MIN])

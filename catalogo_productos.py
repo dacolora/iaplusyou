@@ -10,6 +10,7 @@ import re
 import unicodedata
 
 import _json_store
+import idiomas
 import mapa_corporal
 import prompt_swap
 
@@ -45,6 +46,9 @@ CATEGORIAS = {
         "etiqueta": "@Producto", "descripcion_ui": "Lo que vendes: calzado, ropa, decoración, comida, lo que sea.",
         "regla": ("Reprodúcelo idéntico a su referencia: misma forma, mismo color, misma textura y el mismo "
                   "logotipo o marca tal como aparece, en el mismo lugar. No inventes ni cambies letras, logos ni etiquetas."),
+        "regla_en": ("Reproduce it identical to its reference: same shape, same color, same texture and the "
+                     "same logo or brand exactly as it appears, in the same place. Do not invent or change "
+                     "letters, logos or labels."),
         "con_mapa": True,
     },
     "personaje": {
@@ -53,6 +57,9 @@ CATEGORIAS = {
         "regla": ("Es la MISMA persona/personaje en todas las tomas: misma cara, mismos rasgos, mismo pelo, misma "
                   "complexión y la misma ropa y accesorios que en las referencias. No cambies edad, género, piel ni estilo. "
                   "Manos y pies anatómicamente correctos."),
+        "regla_en": ("It is the SAME person/character in every shot: same face, same features, same hair, "
+                     "same build and the same clothes and accessories as in the references. Do not change "
+                     "age, gender, skin or style. Anatomically correct hands and feet."),
         "con_mapa": False,
     },
     "entorno": {
@@ -60,6 +67,9 @@ CATEGORIAS = {
         "etiqueta": "@Entorno", "descripcion_ui": "Lugares y escenas: tu tienda, un showroom, la sala donde va el espejo.",
         "regla": ("La escena ocurre en ESTE lugar: conserva paredes, piso, muebles, decoración y luz tal como se ven en las "
                   "referencias. El producto y las personas se integran ahí; no reconstruyas ni redecores el espacio."),
+        "regla_en": ("The scene takes place in THIS place: keep walls, floor, furniture, decoration and light "
+                     "exactly as seen in the references. The product and the people blend in there; do not "
+                     "rebuild or redecorate the space."),
         "con_mapa": False,
     },
 }
@@ -68,6 +78,12 @@ CATEGORIA_POR_DEFECTO = "producto"
 
 def categoria_valida(cat):
     return cat if cat in CATEGORIAS else CATEGORIA_POR_DEFECTO
+
+
+def regla_categoria(categoria, idioma="es"):
+    """Regla de consistencia de la categoría en el idioma de los prompts del proyecto."""
+    info = CATEGORIAS[categoria_valida(categoria)]
+    return info["regla_en"] if idioma == "en" else info["regla"]
 
 
 def _carpeta(cliente, categoria=CATEGORIA_POR_DEFECTO):
@@ -134,6 +150,7 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
         return []
     meta = cargar_meta(cliente, categoria)
     info_cat = CATEGORIAS[categoria]
+    idioma = idiomas.de_proyecto(cliente)
     productos = []
     public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
 
@@ -161,13 +178,13 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
                     "id": id_producto,
                     "categoria": categoria,
                     "etiqueta_base": info_cat["etiqueta"],
-                    "regla": (info_cat["regla"] + (" " + propio_base.get("regla", "").strip() if propio_base.get("regla") else "")).strip(),
+                    "regla": (regla_categoria(categoria, idioma) + (" " + propio_base.get("regla", "").strip() if propio_base.get("regla") else "")).strip(),
                     "regla_propia": (propio_base.get("regla") or "").strip(),
                     "nombre": nombre_mostrado,
                     "descripcion": propio_var.get("descripcion") or "",
                     "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
                     "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
-                    "mapa_texto": mapa_corporal.describir(propio_base.get("zonas")),
+                    "mapa_texto": mapa_corporal.describir(propio_base.get("zonas"), idioma),
                     "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
                         mapa_corporal.preset_de(propio_base.get("zonas"))),
                     "referencias": [os.path.join(ruta_variante, f) for f in archivos],
@@ -184,13 +201,13 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
                 "id": nombre_carpeta,
                 "categoria": categoria,
                 "etiqueta_base": info_cat["etiqueta"],
-                "regla": (info_cat["regla"] + (" " + propio_base["regla"].strip() if propio_base.get("regla") else "")).strip(),
+                "regla": (regla_categoria(categoria, idioma) + (" " + propio_base["regla"].strip() if propio_base.get("regla") else "")).strip(),
                 "regla_propia": (propio_base.get("regla") or "").strip(),
                 "nombre": propio_base.get("nombre") or NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
                 "descripcion": propio_base.get("descripcion") or DESCRIPCIONES.get(nombre_carpeta, ""),
                 "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
                 "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
-                "mapa_texto": mapa_corporal.describir(propio_base.get("zonas")),
+                "mapa_texto": mapa_corporal.describir(propio_base.get("zonas"), idioma),
                 "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
                     mapa_corporal.preset_de(propio_base.get("zonas"))),
                 "referencias": [os.path.join(ruta_carpeta, f) for f in archivos],

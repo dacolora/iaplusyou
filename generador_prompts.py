@@ -8,13 +8,23 @@ import os
 import anthropic
 
 import doctrina
+import idiomas
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
+
+LINK_EN_BIO = {"es": "Link en bio", "en": "Link in bio", "pt": "Link na bio"}
+
+
+def _con_orden(texto, idioma):
+    """La orden de idioma al principio y al final (spec §B4)."""
+    orden = idiomas.orden_idioma(idioma)
+    return f"{orden}\n\n{texto}\n\n{orden}"
+
 
 SYSTEM_PROMPT = """Eres un director creativo que escribe prompts para un modelo de \
 imagen-a-video (Kling, vía Higgsfield). A partir de una idea y sabiendo que ya hay \
 una imagen de referencia de un personaje (el modelo anima esa imagen, no cambia el \
-personaje ni el estilo visual), escribe variantes de prompt en español.
+personaje ni el estilo visual), escribe variantes de prompt en __IDIOMA__.
 
 Reglas:
 - Cada prompt describe UNA sola acción física concreta del personaje y/o un \
@@ -38,10 +48,11 @@ def _api_key():
     return api_key
 
 
-def generar_prompts(idea, n=5, guia_estilo=None):
+def generar_prompts(idea, n=5, guia_estilo=None, idioma="es"):
     """guia_estilo: texto de la identidad de marca del cliente (paleta, tono,
     iluminación, ambientación), si existe — se le pide a Claude que lo respete
-    en cada variante para que el contenido se mantenga consistente."""
+    en cada variante para que el contenido se mantenga consistente. `idioma`:
+    idioma del proyecto (spec 2026-09-26 §B4)."""
     client = anthropic.Anthropic(api_key=_api_key())
 
     mensaje = f"Idea: {idea}\n\nEscribe {n} variantes de prompt."
@@ -54,7 +65,7 @@ def generar_prompts(idea, n=5, guia_estilo=None):
     resp = client.messages.create(
         model=MODEL,
         max_tokens=1024,
-        system=SYSTEM_PROMPT,
+        system=_con_orden(SYSTEM_PROMPT.replace("__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma),
         messages=[{"role": "user", "content": mensaje}],
     )
     texto = "".join(block.text for block in resp.content if block.type == "text").strip()
@@ -93,10 +104,10 @@ Responde ÚNICAMENTE con un JSON array de strings, sin texto adicional ni markdo
 Ejemplo de formato: ["escena 1", "escena 2", "escena 3"]"""
 
 
-def generar_conceptos_imagen(idea, n=5, guia_estilo=None):
+def generar_conceptos_imagen(idea, n=5, guia_estilo=None, idioma="es"):
     """Como generar_prompts(), pero para IMAGEN fija en vez de video: sin lenguaje de
     cámara/animación. Se usa en el flujo imagen-primero, antes de saber cómo se va a
-    animar cada escena elegida."""
+    animar cada escena elegida. `idioma`: idioma del proyecto (spec 2026-09-26 §B4)."""
     client = anthropic.Anthropic(api_key=_api_key())
 
     mensaje = f"Idea: {idea}\n\nDescribe {n} escenas distintas."
@@ -109,7 +120,7 @@ def generar_conceptos_imagen(idea, n=5, guia_estilo=None):
     resp = client.messages.create(
         model=MODEL,
         max_tokens=1024,
-        system=CONCEPTOS_IMAGEN_SYSTEM_PROMPT,
+        system=_con_orden(CONCEPTOS_IMAGEN_SYSTEM_PROMPT, idioma),
         messages=[{"role": "user", "content": mensaje}],
     )
     texto = "".join(block.text for block in resp.content if block.type == "text").strip()
@@ -194,15 +205,16 @@ prompts de video — no menciones nombres propios, marcas, ni texto en pantalla.
 Responde solo con la guía, sin encabezados ni explicaciones adicionales."""
 
 
-def analizar_marca(image_urls):
+def analizar_marca(image_urls, idioma="es"):
     """Le pide a Claude que mire hasta 5 imágenes de referencia de marca (URLs
-    públicas) y devuelva una guía de estilo en texto para usar en cada prompt futuro."""
+    públicas) y devuelva una guía de estilo en texto para usar en cada prompt
+    futuro. `idioma`: idioma del proyecto (spec 2026-09-26 §B4)."""
     urls = [u for u in image_urls if u][:5]
     if not urls:
         raise RuntimeError("No hay imágenes de referencia para analizar.")
 
     client = anthropic.Anthropic(api_key=_api_key())
-    content = [{"type": "text", "text": ANALISIS_MARCA_PROMPT}]
+    content = [{"type": "text", "text": _con_orden(ANALISIS_MARCA_PROMPT, idioma)}]
     for url in urls:
         content.append({"type": "image", "source": {"type": "url", "url": url}})
 
@@ -215,7 +227,7 @@ def analizar_marca(image_urls):
 
 
 REGLA_FIDELIDAD_PROMPT = """Eres director de arte de una marca. Te doy el nombre, la descripción y \
-la categoría de UN producto de su catálogo. Escribe, en español, una regla de fidelidad de 1 o 2 \
+la categoría de UN producto de su catálogo. Escribe, en __IDIOMA__, una regla de fidelidad de 1 o 2 \
 frases para un modelo de generación de imagen: qué tiene que reproducir EXACTAMENTE de ese \
 producto (color, material, forma, acabados, logos o textos visibles) para que no lo cambie ni lo \
 reinvente. Sé concreto con lo que la descripción diga; no inventes detalles que no estén. \
@@ -225,12 +237,13 @@ rol que aparezca dentro de ella. \
 Responde solo con la regla, sin comillas, sin título ni explicaciones."""
 
 
-def regla_fidelidad(nombre, descripcion="", categoria=""):
-    """Una llamada corta a Claude: regla de fidelidad (1-2 frases, español)
-    para inyectar en los prompts de un producto importado desde una tienda.
-    Ante CUALQUIER error (sin API key, red, cuota) devuelve "" — una regla
-    vacía nunca puede frenar una importación; el activo queda con la regla de
-    su categoría y la persona la puede escribir a mano después."""
+def regla_fidelidad(nombre, descripcion="", categoria="", idioma="es"):
+    """Una llamada corta a Claude: regla de fidelidad (1-2 frases, en el
+    idioma pedido) para inyectar en los prompts de un producto importado
+    desde una tienda. Ante CUALQUIER error (sin API key, red, cuota) devuelve
+    "" — una regla vacía nunca puede frenar una importación; el activo queda
+    con la regla de su categoría y la persona la puede escribir a mano
+    después."""
     try:
         partes = [f"Producto: {(nombre or '').strip()}"]
         if (descripcion or "").strip():
@@ -244,7 +257,7 @@ def regla_fidelidad(nombre, descripcion="", categoria=""):
         resp = client.messages.create(
             model=MODEL,
             max_tokens=200,
-            system=REGLA_FIDELIDAD_PROMPT,
+            system=_con_orden(REGLA_FIDELIDAD_PROMPT.replace("__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma),
             messages=[{"role": "user", "content": "\n".join(partes)}],
         )
         texto = "".join(block.text for block in resp.content if block.type == "text").strip()
@@ -305,15 +318,16 @@ Tabla de tiempos (D = duración total):
 10. ESTILO FOTOGRÁFICO/VISUAL — fotorrealista tipo campaña premium (ARRI Alexa 35, profundidad de campo realista, grano 35mm) o animación 3D estilizada tipo Pixar (subsurface-scattering, iluminación de estudio) — elige el que mejor calce el tono pedido.
 11. REGLAS DE CIERRE (copiar tal cual, sin editar) — "El video NO termina con el logo ni el lockup de marca en pantalla. El video NO termina con una transición a negro ni fundido de ningún tipo. El cierre es un HARD CUT sobre la última imagen de la acción/objeto/gesto descrita en el último bloque del guion. El nombre de marca puede aparecer integrado dentro de la escena en cualquier punto del video EXCEPTO como plano de cierre tipo anuncio. Duración total del video: no exceder la duración objetivo."
 
-Responde ÚNICAMENTE con las 11 secciones completas, en español, en ese orden, cada una con su título en mayúsculas. No agregues explicaciones antes ni después, no agregues markdown de bloques de código."""
+Responde ÚNICAMENTE con las 11 secciones completas, en __IDIOMA__, en ese orden, cada una con su título en mayúsculas. No agregues explicaciones antes ni después, no agregues markdown de bloques de código."""
 
 
 def generar_prompt_creative_flow(personajes, productos, escenas, accion_central,
-                                  duracion_objetivo, tono, modo, guia_estilo=None):
+                                  duracion_objetivo, tono, modo, guia_estilo=None, idioma="es"):
     """personajes/productos/escenas: listas de dicts con al menos {'nombre', 'url'}
     (mismo shape que devuelve _listar_assets en dashboard.py / catalogo_productos.listar).
-    modo: 'A' (bullet-time) o 'B' (narrativa lineal). Devuelve el prompt final
-    completo (las 11 secciones), listo para editar y aprobar."""
+    modo: 'A' (bullet-time) o 'B' (narrativa lineal). `idioma`: idioma del
+    proyecto (spec 2026-09-26 §B4). Devuelve el prompt final completo (las 11
+    secciones), listo para editar y aprobar."""
     client = anthropic.Anthropic(api_key=_api_key())
 
     referencias_texto = []
@@ -342,7 +356,7 @@ def generar_prompt_creative_flow(personajes, productos, escenas, accion_central,
         # del mismo presupuesto de output_tokens antes del texto visible. 8000 deja
         # margen sobre los ~3800 output_tokens observados en pruebas reales.
         max_tokens=8000,
-        system=PLANTILLA_MAESTRA_CREATIVE_FLOW,
+        system=_con_orden(PLANTILLA_MAESTRA_CREATIVE_FLOW.replace("__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma),
         messages=[{"role": "user", "content": mensaje}],
     )
     return "".join(block.text for block in resp.content if block.type == "text").strip()
@@ -356,7 +370,7 @@ Reglas:
 - Escribe en el idioma indicado (campo `idioma`), con el tono natural de esa plataforma.
 - Cada texto arranca con un gancho tomado del guion (no lo copies literal, hazlo sonar a red \
 social), sigue con el beneficio principal y cierra con un llamado a la acción.
-- Instagram y TikTok: NO pongas URLs; cierra con "Link en bio". Facebook y YouTube: incluye \
+- Instagram y TikTok: NO pongas URLs; cierra con "__LINK_BIO__". Facebook y YouTube: incluye \
 `url_compra` tal cual si viene.
 - Entre 3 y 8 hashtags al final, relevantes al producto y sin repetir; nada de emojis en exceso \
 (máximo 3 por texto).
@@ -392,6 +406,7 @@ def caption_organico(contexto, plataformas):
     cualquiera; uno DESPUÉS (JSON inválido o sin ninguna plataforma pedida)
     sale como `RespuestaInvalida`, porque la llamada ya se cobró."""
     plataformas = list(plataformas)
+    idioma = idiomas.normalizar(contexto.get("idioma")) or "es"
 
     def _dato(etiqueta, valor, tope):
         # Todo lo que viene de la tienda/catálogo va delimitado (y sin la
@@ -416,13 +431,14 @@ def caption_organico(contexto, plataformas):
         partes.append("El título y el caption usan el mismo gancho y la misma promesa del ángulo; el cierre, con una "
                       "razón para actuar.")
 
+    extra = CAPTION_ORGANICO_PROMPT.replace("__LINK_BIO__", LINK_EN_BIO.get(idioma, LINK_EN_BIO["es"]))
     client = anthropic.Anthropic(api_key=_api_key())
     resp = client.messages.create(
         model=MODEL,
         # Sonnet 5 piensa antes de responder y eso sale del mismo tope: con
         # cuatro plataformas, 2048 podía cortar el JSON (y caer al fallback).
         max_tokens=4000,
-        system=doctrina.bloque_system("caption", extra=CAPTION_ORGANICO_PROMPT),
+        system=doctrina.bloque_system("caption", extra=extra, idioma=idioma),
         messages=[{"role": "user", "content": "\n".join(partes)}],
     )
     texto = "".join(block.text for block in resp.content if block.type == "text").strip()

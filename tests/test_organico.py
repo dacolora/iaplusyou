@@ -352,7 +352,10 @@ def test_caption_organico_arma_el_mensaje_y_parsea_json(monkeypatch):
     assert msg.count("</url_compra>") == 1
     import doctrina
     assert llamadas["system"][0]["text"] == doctrina.texto("caption")
-    assert llamadas["system"][1]["text"] == gp.CAPTION_ORGANICO_PROMPT
+    # El bloque extra va rodeado de la orden de idioma (spec 2026-09-26 §B4) y
+    # con "Link en bio" ya sustituido en el idioma pedido (acá, español).
+    extra_esperado = gp._con_orden(gp.CAPTION_ORGANICO_PROMPT.replace("__LINK_BIO__", gp.LINK_EN_BIO["es"]), "es")
+    assert llamadas["system"][1]["text"] == extra_esperado
     _Msgs.create = lambda self, **kw: type("R", (), {"content": [_Bloque("no es json")]})()
     with pytest.raises(Exception):
         gp.caption_organico({"nombre_producto": "P"}, ["instagram"])
@@ -396,31 +399,30 @@ def test_redactar_marca_fallback_solo_en_la_plataforma_que_claude_no_devolvio(pr
     assert out["facebook"]["extra"] == {"fallback": True}
 
 
-def test_redactar_copy_en_el_idioma_de_la_pieza(proyecto, monkeypatch):
-    """Fallback y CTA salen en español/inglés/portugués según `pieza.idioma`;
-    un idioma sin traducción cae a español."""
+def test_redactar_copy_en_el_idioma_del_proyecto(proyecto, monkeypatch):
+    """Fallback y CTA salen en el idioma del PROYECTO (spec 2026-09-26 §B5),
+    ya no en el de la pieza."""
     import generador_prompts
+    import idiomas
+    import proyectos
     org = proyecto["organico"]
     db = proyecto["db"]
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(proyecto["tmp"]))
     _producto()
 
     def explota(contexto, plataformas):
         raise RuntimeError("no")
     monkeypatch.setattr(generador_prompts, "caption_organico", explota)
 
-    pid_en = _pieza(db, idioma="en")
-    out_en = org.redactar("acme", pid_en, ["instagram", "facebook"])
-    assert "Link in bio." in out_en["instagram"]["caption"]
-    assert "Get it here: https://tienda.co/p/pantufla-nube" in out_en["facebook"]["caption"]
+    pid = _pieza(db, idioma="es")                   # la pieza dice español…
+    idiomas.guardar_de_proyecto("acme", "en")       # …pero el proyecto está en inglés
+    out = org.redactar("acme", pid, ["instagram", "facebook"])
+    assert "Link in bio." in out["instagram"]["caption"]
+    assert "Get it here: https://tienda.co/p/pantufla-nube" in out["facebook"]["caption"]
 
-    pid_pt = _pieza(db, idioma="pt")
-    out_pt = org.redactar("acme", pid_pt, ["instagram", "facebook"])
-    assert "Link na bio." in out_pt["instagram"]["caption"]
-    assert "Garanta o seu: https://tienda.co/p/pantufla-nube" in out_pt["facebook"]["caption"]
-
-    pid_fr = _pieza(db, idioma="fr")  # sin traducción -> español por defecto
-    out_fr = org.redactar("acme", pid_fr, ["instagram"])
-    assert "Link en bio." in out_fr["instagram"]["caption"]
+    idiomas.guardar_de_proyecto("acme", "es")
+    out = org.redactar("acme", pid, ["instagram"])
+    assert "Link en bio." in out["instagram"]["caption"]
 
 
 # ---------- crear / listar ----------

@@ -15,6 +15,7 @@ ARCHIVOS_FASE3 = [
     "director.py", "flowplus_prompt.py", "final_edition/sonido.py",
     "guiones/refinador.py", "guiones/recorte.py", "guiones/imagenes.py",
 ]
+ARCHIVOS_FASE4 = ["generador_prompts.py", "importador.py", "organico.py", "mapa_corporal.py"]
 
 
 def _offsets_de_linea(texto):
@@ -74,7 +75,7 @@ def _sin_comentarios_ni_docstrings(texto):
     return "".join(chars)
 
 
-@pytest.mark.parametrize("ruta", ARCHIVOS_FASE3)
+@pytest.mark.parametrize("ruta", ARCHIVOS_FASE3 + ARCHIVOS_FASE4)
 def test_sin_espanol_fijo_en_prompts(ruta):
     with open(os.path.join(RAIZ, ruta), encoding="utf-8") as f:
         texto = f.read()
