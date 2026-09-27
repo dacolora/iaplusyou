@@ -9,7 +9,10 @@ guarda país, idioma, marcas a imitar y el «momento del mes»; la campaña guar
 consciencia, dolor, familias de formato y, solo si cambian, su propio país,
 idioma y marcas (NULL = hereda del sprint). Se quita uq_campana_combinacion:
 una persona y un producto pueden tener TOF, MOF y BOF en el mismo sprint.
-El downgrade vuelve a crear la unicidad y falla si ya hay campañas repetidas.
+El downgrade vuelve a crear la unicidad; falla si hay campañas repetidas con
+temporada_id NO nulo, pero SQL nunca choca dos NULL en un UNIQUE, así que dos
+campañas repetidas SIN temporada (posible desde la 0020) pasan el downgrade
+sin aviso.
 """
 from typing import Sequence, Union
 
