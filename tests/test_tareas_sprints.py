@@ -163,6 +163,38 @@ def test_qa_pieza_guarda_resultado_y_error(base_temporal, monkeypatch):
     assert tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": 999}}) == "La pieza ya no existe."
 
 
+def test_qa_pieza_registra_el_gasto_y_guarda_la_doctrina_en_la_sesion(base_temporal, monkeypatch):
+    """Doctrina, bloque 3: el QA por fin registra su gasto real (una fila por
+    intento, también si falla después de pagar) y la revisión de los 12
+    puntos queda en la sesión de Crear."""
+    import creative_flow
+    import gastos
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    rev = {"video_url": "https://r2/v.mp4", "puntos": [], "resumen": "ok", "reglas": [], "origen": "sprint"}
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {
+        "score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x",
+        "tokens_entrada": 1500, "tokens_salida": 400, "doctrina": dict(rev)})
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 1, "payload": {"cliente": "acme", "cp_id": cp}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["tipo"] == "revision" and g["referencia"] == f"qa:{cp}:t31:i1" and "doctrina" in g["detalle"]
+    assert creative_flow.cargar("acme")[cf]["revision_doctrina"] == rev
+    qa_guardado = datos.idea("acme", cp)["qa"]
+    assert "doctrina" not in qa_guardado and "tokens_entrada" not in qa_guardado
+
+    def falla(*a, **k):
+        e = qa.AnalisisInvalido("Claude no devolvió JSON.")
+        e.tokens_entrada, e.tokens_salida = 1400, 100
+        raise e
+    monkeypatch.setattr(qa, "evaluar", falla)
+    with pytest.raises(qa.AnalisisInvalido):
+        tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 2, "payload": {"cliente": "acme", "cp_id": cp}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["referencia"] == f"qa:{cp}:t31:i2" and "respuesta inválida" in g["detalle"]
+
+
 def test_qa_pieza_error_no_se_reencola_y_un_intento_bueno_pisa_el_marcador(base_temporal, monkeypatch):
     """F5: con el marcador `veredicto=error` la periódica ya no encola otro
     QA para esa pieza (antes lo hacía cada 5 min, descargando el video otra

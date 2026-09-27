@@ -3,8 +3,12 @@ Control de calidad automático de una pieza generada (spec §2.4): Claude con
 visión (imagen, o tres fotogramas del video) juzga cuatro cosas y ffprobe
 verifica el formato. El resultado se guarda en `campana_pieza.qa`; el QA nunca
 genera ni gasta en proveedores de video: marca, explica y la persona decide.
+
+Doctrina, bloque 3: en la misma llamada Claude revisa también los 12 puntos de
+`doctrina/textos/revisar.md` (rebanada «revisar» en el system, los DATOS de
+`doctrina.revisor.reunir` y los mismos fotogramas que el revisor de Crear). Esa
+parte es opcional para el QA: si viene mal, el QA se guarda igual sin ella.
 """
-import base64
 import json
 import os
 import tempfile
@@ -12,7 +16,9 @@ from datetime import datetime
 
 import requests
 
+import doctrina
 import marca
+from doctrina import revisor
 from final_edition import cortes
 from sprints import analisis, datos
 from sprints.analisis import AnalisisInvalido
@@ -22,6 +28,9 @@ CHECKS_IA = CHECKS[:4]
 UMBRAL_DEFECTO = 70
 COSTO_USD_ESTIMADO = 0.02
 TOLERANCIA_DURACION = 0.2
+# Pensamiento adaptativo + los 12 puntos de la doctrina: con 600 la respuesta
+# puede llegar vacía (ver CLAUDE.md, topes de 4 000–16 000).
+MAX_TOKENS = 6000
 
 PROMPT_QA = """Eres el control de calidad de anuncios cortos para redes sociales de la marca {marca}. Vas a ver una pieza generada con IA (una imagen, o fotogramas en orden de un video de {duracion}).
 
@@ -37,8 +46,14 @@ Evalúa y responde SOLO con un objeto JSON con esta forma:
    "presencia_marca": {{"ok": true|false, "nota": "..."}},       ¿la marca o el producto se reconocen como suyos (sin logos inventados)?
    "compatibilidad_campana": {{"ok": true|false, "nota": "..."}}, ¿se ve el producto y encaja con la persona y la temporada?
    "calidad_minima": {{"ok": true|false, "nota": "..."}}         ¿sin artefactos, texto quemado, manos o productos deformados, ni cortes raros?
- }}}}
-Notas de máximo 20 palabras, en español, concretas (qué está mal y dónde)."""
+ }},
+ "doctrina": {{"puntos": [{{"n": 1, "estado": "pasa|mejorar|no_aplica", "detalle": "...", "donde": "..."}}, ... hasta el 12],
+              "resumen": "una frase"}}
+}}
+Notas de máximo 20 palabras, en español, concretas (qué está mal y dónde).
+En "doctrina" contesta los 12 puntos de la LISTA DE REVISIÓN de la doctrina (arriba, en orden) con los DATOS de la
+pieza que van al final: "pasa", "mejorar" (con el detalle concreto y dónde: el segundo, el bloque o el caption) o
+"no_aplica" (lo que no se puede juzgar con lo que hay). Hechos de la pieza, no opiniones."""
 
 
 def veredicto(score, checks, umbral):
@@ -138,16 +153,36 @@ def archivo_local(entry):
 
 
 def _bloques_imagen(entry, ruta):
+    """Los mismos fotogramas que el revisor de la doctrina (0,3 s y uno cada
+    3 s, con su segundo) o la imagen por URL; sin archivo local, la miniatura."""
     tipo = entry.get("tipo") or "video"
     if tipo == "video" and ruta and os.path.exists(ruta):
-        from referencias_link import fotogramas
-        return [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.b64encode(b).decode()}}
-                for b in fotogramas(ruta, n=3)]
-    url = entry.get("video_url") if tipo == "imagen" else (entry.get("url_miniatura") or entry.get("video_url"))
+        bloques = revisor.bloques_visuales(entry, ruta)
+        if bloques:
+            return bloques
+    if tipo == "imagen":
+        return revisor.bloques_visuales(entry)
+    url = entry.get("url_miniatura") or entry.get("video_url")
     return [{"type": "image", "source": {"type": "url", "url": url}}] if url else []
 
 
+def _doctrina_de(texto):
+    """Los 12 puntos de la doctrina dentro de la respuesta del QA, o None si
+    no vienen o no sirven (el QA sigue valiendo sin ellos)."""
+    t = (texto or "").strip()
+    try:
+        bruto = json.loads(t[t.find("{"):t.rfind("}") + 1]).get("doctrina")
+        return revisor.parsear_revision(json.dumps(bruto)) if isinstance(bruto, dict) else None
+    except (ValueError, AttributeError, revisor.ErrorRevision):
+        return None
+
+
 def evaluar(cliente, idea, entry, campana, umbral=None):
+    """QA + doctrina de una pieza del lote. Devuelve el QA con `tokens_entrada`,
+    `tokens_salida`, el costo real y `doctrina` (la revisión lista para guardar
+    en la sesión, o None). Si Claude no responde algo usable dos veces, lanza
+    `AnalisisInvalido` con los tokens de las dos llamadas."""
+    from nicho.avatares import costo_real
     umbral = int(umbral or UMBRAL_DEFECTO)
     persona = datos.persona(cliente, campana["persona_id"]) or {}
     temporada = datos.temporada(cliente, campana["temporada_id"]) or {}
@@ -159,17 +194,37 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
         producto=campana.get("catalogo_id"), temporada=f"{temporada.get('nombre', '')}: {temporada.get('contexto') or ''}".strip(": "),
         titulo=idea.get("titulo") or "", escena=idea.get("escena") or "", guia=(marca.guia_efectiva(cliente) or "").strip() or "(sin guía)",
         referencias="; ".join(r["analisis"]["resumen"] for r in refs) or "(sin referencias analizadas)")
+    try:
+        d = revisor.reunir(cliente, idea.get("cf_id"), entry=entry)
+    except Exception:  # noqa: BLE001 — sin datos de la pieza, el QA sigue sin la doctrina
+        d = None
+    avisos = revisor.reglas(d) if d else []
+    if d:
+        texto += "\n\n" + revisor.texto_para_revision(d, avisos)
     es_temporal = bool(ruta and ruta != entry.get("video_local"))
     try:
         imagenes = _bloques_imagen(entry, ruta)
         if not imagenes:
             raise AnalisisInvalido("La pieza no tiene imagen ni fotograma que evaluar.")
         content = [{"type": "text", "text": texto}] + imagenes
+        system = doctrina.bloque_system("revisar")
+        crudo, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
         try:
-            r = parsear(analisis._llamar(content, max_tokens=600))
+            r = parsear(crudo)
         except AnalisisInvalido as e:
             content = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({e}). Responde solo el JSON pedido."}]
-            r = parsear(analisis._llamar(content, max_tokens=600))
+            try:
+                crudo, e2, s2 = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
+            except Exception as falla:
+                perdida = AnalisisInvalido(str(falla)[:300] or "La corrección falló.")
+                perdida.tokens_entrada, perdida.tokens_salida = ent, sal
+                raise perdida from falla
+            ent, sal = ent + e2, sal + s2
+            try:
+                r = parsear(crudo)
+            except AnalisisInvalido as final:
+                final.tokens_entrada, final.tokens_salida = ent, sal
+                raise
         ok, nota = formato(ruta, entry.get("tipo") or "video", entry.get("duracion_objetivo"), entry.get("aspect_ratio") or "9:16")
         r["checks"]["formato"] = {"ok": ok, "nota": nota}
     finally:
@@ -183,6 +238,12 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
             except OSError:
                 pass
     from generador_prompts import MODEL
+    costo = costo_real(ent, sal)
+    evaluado_en = datetime.now().isoformat(timespec="seconds")
+    doc = _doctrina_de(crudo) if d else None
+    revision = ({"version": revisor.VERSION, "video_url": entry.get("video_url"), "puntos": doc["puntos"],
+                 "resumen": doc["resumen"], "reglas": avisos, "origen": "sprint", "modelo": MODEL, "usd": costo,
+                 "revisado_en": evaluado_en} if doc else None)
     return {"score": r["score"], "checks": r["checks"], "veredicto": veredicto(r["score"], r["checks"], umbral),
-            "modelo": MODEL, "costo_usd": COSTO_USD_ESTIMADO, "evaluado_en": datetime.now().isoformat(timespec="seconds"),
-            "umbral": umbral}
+            "modelo": MODEL, "costo_usd": costo, "evaluado_en": evaluado_en, "umbral": umbral,
+            "tokens_entrada": ent, "tokens_salida": sal, "doctrina": revision}
