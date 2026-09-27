@@ -50,6 +50,16 @@
   "valor": 1500000
  },
  {
+  "esperado": "$ -6",
+  "pais": "AR",
+  "valor": -5.5
+ },
+ {
+  "esperado": "$ -1.234",
+  "pais": "AR",
+  "valor": -1234.5
+ },
+ {
   "esperado": "R$ 89.900,00",
   "pais": "BR",
   "valor": 89900
@@ -100,6 +110,16 @@
   "valor": 1500000
  },
  {
+  "esperado": "R$ -5,50",
+  "pais": "BR",
+  "valor": -5.5
+ },
+ {
+  "esperado": "R$ -1.234,50",
+  "pais": "BR",
+  "valor": -1234.5
+ },
+ {
   "esperado": "$ 89.900",
   "pais": "CL",
   "valor": 89900
@@ -150,6 +170,16 @@
   "valor": 1500000
  },
  {
+  "esperado": "$ -6",
+  "pais": "CL",
+  "valor": -5.5
+ },
+ {
+  "esperado": "$ -1.234",
+  "pais": "CL",
+  "valor": -1234.5
+ },
+ {
   "esperado": "$ 89.900",
   "pais": "CO",
   "valor": 89900
@@ -198,6 +228,16 @@
   "esperado": "$ 1.500.000",
   "pais": "CO",
   "valor": 1500000
+ },
+ {
+  "esperado": "$ -6",
+  "pais": "CO",
+  "valor": -5.5
+ },
+ {
+  "esperado": "$ -1.234",
+  "pais": "CO",
+  "valor": -1234.5
  },
  {
   "esperado": "89.900,00 €",
@@ -250,6 +290,16 @@
   "valor": 1500000
  },
  {
+  "esperado": "-5,50 €",
+  "pais": "ES",
+  "valor": -5.5
+ },
+ {
+  "esperado": "-1.234,50 €",
+  "pais": "ES",
+  "valor": -1234.5
+ },
+ {
   "esperado": "$89,900.00",
   "pais": "MX",
   "valor": 89900
@@ -298,6 +348,16 @@
   "esperado": "$1,500,000.00",
   "pais": "MX",
   "valor": 1500000
+ },
+ {
+  "esperado": "$-5.50",
+  "pais": "MX",
+  "valor": -5.5
+ },
+ {
+  "esperado": "$-1,234.50",
+  "pais": "MX",
+  "valor": -1234.5
  },
  {
   "esperado": "S/89,900.00",
@@ -350,6 +410,16 @@
   "valor": 1500000
  },
  {
+  "esperado": "S/-5.50",
+  "pais": "PE",
+  "valor": -5.5
+ },
+ {
+  "esperado": "S/-1,234.50",
+  "pais": "PE",
+  "valor": -1234.5
+ },
+ {
   "esperado": "$89,900.00",
   "pais": "US",
   "valor": 89900
@@ -398,5 +468,15 @@
   "esperado": "$1,500,000.00",
   "pais": "US",
   "valor": 1500000
+ },
+ {
+  "esperado": "$-5.50",
+  "pais": "US",
+  "valor": -5.5
+ },
+ {
+  "esperado": "$-1,234.50",
+  "pais": "US",
+  "valor": -1234.5
  }
 ]

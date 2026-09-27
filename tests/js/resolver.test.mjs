@@ -15,6 +15,12 @@ test("resolver da lo mismo que documento.resolver en cada destino", () => {
   }
 });
 
+test("resolver quita la voz con por_destino null para ese destino exacto (pt_BR)", () => {
+  const res = resolver(TABLA.doc, "pt", "BR");
+  const pVoz = res.pistas.find((p) => p.id === "p_voz");
+  assert.ok(!pVoz.clips.some((c) => c.id === "voz_hook"), "voz_hook debería haberse quitado en pt_BR");
+});
+
 test("resolver no toca el documento de entrada", () => {
   const antes = JSON.stringify(TABLA.doc);
   resolver(TABLA.doc, "es", "CO");

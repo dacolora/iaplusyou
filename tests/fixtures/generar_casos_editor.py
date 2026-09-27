@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(AQUI)))
 
 from final_edition import documento, tipos  # noqa: E402
 
-VALORES_PRECIO = (89900, 24.99, 1234567.891, 499.5, 0, 0.125, 1.005, 2.675, 19.995, 1500000)
+VALORES_PRECIO = (89900, 24.99, 1234567.891, 499.5, 0, 0.125, 1.005, 2.675, 19.995, 1500000, -5.5, -1234.5)
 
 
 def casos_precios():
@@ -42,7 +42,7 @@ def _doc_resolver():
          "recorte": {"desde_ms": 0, "hasta_ms": 4000}},
     ]})
     doc["variables"] = {"textos": {"hook": {"es_CO": "Tu piel, en 7 días", "es": "Tu piel en 7 días",
-                                            "en_US": "Your skin in 7 days"}},
+                                            "en_US": "Your skin in 7 days", "pt": "Sua pele em 7 dias"}},
                         "voz": {}, "precios": {"es_CO": 89900, "es_MX": 499.5, "en_US": 24.99}}
     doc["subtitulos"] = {"palabras": {"es_CO": [{"t_ms": 0, "dur_ms": 400, "texto": "Tu"}],
                                       "es": [{"t_ms": 0, "dur_ms": 500, "texto": "Tu"}]}}

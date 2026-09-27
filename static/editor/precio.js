@@ -25,9 +25,18 @@ function centavos(valor) {
 export function formatearPrecio(valor, pais) {
   const simbolo = SIMBOLOS[pais];
   if (simbolo === undefined) throw new Error(`No sé formatear precios de ${pais}.`);
-  if (SIN_DECIMALES.has(pais)) return `${simbolo} ${miles(String(redondearPar(valor)), ".")}`;
+  if (SIN_DECIMALES.has(pais)) {
+    // El signo sale del entero YA redondeado (como Python: int(round(valor))
+    // nunca es "-0"), no del valor original.
+    const entero = redondearPar(valor);
+    const signo = entero < 0 ? "-" : "";
+    return `${simbolo} ${signo}${miles(String(Math.abs(entero)), ".")}`;
+  }
+  // Aquí el signo sí sale del valor original (como f"{valor:,.2f}" de Python):
+  // -0.001 en US da "$-0.00", con el signo aunque los dígitos sean cero.
+  const signo = valor < 0 ? "-" : "";
   const [ent, dec] = centavos(valor);
-  if (pais === "BR") return `${simbolo} ${miles(ent, ".")},${dec}`;
-  if (pais === "ES") return `${miles(ent, ".")},${dec} ${simbolo}`;
-  return `${simbolo}${miles(ent, ",")}.${dec}`;
+  if (pais === "BR") return `${simbolo} ${signo}${miles(ent, ".")},${dec}`;
+  if (pais === "ES") return `${signo}${miles(ent, ".")},${dec} ${simbolo}`;
+  return `${simbolo}${signo}${miles(ent, ",")}.${dec}`;
 }
