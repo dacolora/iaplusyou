@@ -147,6 +147,13 @@
 
     function json(r) { return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo guardar.'); return j; }); }
     function mensaje(e) { return e instanceof TypeError ? 'Sin conexión: no se guardó. Intenta de nuevo.' : e.message; }
+    // `f.reset()` limpia los <input> pero no el `data-sucio` que puso el
+    // listener global de base.html: sin esto, un formulario ya guardado
+    // (persona rápida, nueva campaña) seguía contando como «cambios sin
+    // guardar» para `haySinGuardar()` y bloqueaba una recarga legítima.
+    function limpiarSucio(raiz) {
+      raiz.querySelectorAll('[data-sucio]').forEach(function (el) { delete el.dataset.sucio; });
+    }
     function marcarUrl(cid) {
       var u = new URL(location.href);
       if (cid) u.searchParams.set('panel', cid); else u.searchParams.delete('panel');
@@ -219,7 +226,7 @@
         err.hidden = true;
         fetch(f.action, {method: 'POST', headers: HJ,
                          body: JSON.stringify({persona_id: f.persona_id.value, catalogo_id: f.catalogo_id.value})})
-          .then(json).then(function (j) { location.href = j.url; })
+          .then(json).then(function (j) { limpiarSucio(f); location.href = j.url; })
           .catch(function (e) { err.textContent = mensaje(e); err.hidden = false; });
       } else if (f.matches('[data-persona-rapida]')) {
         ev.preventDefault();
@@ -233,6 +240,7 @@
               sel.dispatchEvent(new Event('change', {bubbles: true}));
             }
             f.reset();
+            limpiarSucio(f);
             var d = f.closest('details'); if (d) d.open = false;
           })
           .catch(function (e) { errP.textContent = mensaje(e); errP.hidden = false; });
@@ -248,11 +256,16 @@
       fetch(campos.dataset.url, {method: 'POST', headers: HJ, body: JSON.stringify({campo: el.dataset.campo, valor: valor})})
         .then(json).then(function (j) {
           el.dataset.guardado = el.value;
+          delete el.dataset.sucio;
           document.getElementById('tablero-linea').textContent = j.linea;
           document.getElementById('tablero-resumen').textContent = j.resumen;
           if (el.dataset.campo === 'pais') location.reload();
         })
-        .catch(function (e) { el.value = el.dataset.guardado || ''; err.textContent = mensaje(e); err.hidden = false; });
+        .catch(function (e) {
+          el.value = el.dataset.guardado || '';
+          delete el.dataset.sucio;
+          err.textContent = mensaje(e); err.hidden = false;
+        });
     }
     campos.addEventListener('change', function (ev) {
       var texto = campos.querySelector('[data-momento-texto]');
@@ -339,6 +352,7 @@
         .then(T.json)
         .then(function (j) {
           el.dataset.guardado = JSON.stringify(valor);
+          delete el.dataset.sucio;
           var t = document.getElementById('campana-' + r.dataset.cid);
           if (t && j.tarjeta) {
             t.outerHTML = j.tarjeta;
@@ -352,6 +366,7 @@
         })
         .catch(function (e) {
           ponerValor(el, JSON.parse(el.dataset.guardado || 'null'));
+          delete el.dataset.sucio;
           if (err) { err.textContent = T.mensaje(e); err.hidden = false; }
         });
     }
@@ -372,6 +387,7 @@
           return;
         }
         t.value = '';
+        delete t.dataset.sucio;
         if (familias().indexOf(v) < 0) guardar(cajaFamilias(), familias().concat([v]));
         return;
       }

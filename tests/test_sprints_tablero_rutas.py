@@ -284,6 +284,25 @@ def test_guardar_repetida_devuelve_el_aviso(app):
     assert j["ok"] and "campaña 1" in j["aviso"]
 
 
+def test_autoguardado_limpia_data_sucio(app):
+    """F2 (ronda final): sin borrar `data-sucio` del campo que ya se guardó,
+    `haySinGuardar()` (base.html) seguía viéndolo sucio y `recargarOAvisar`
+    mostraba «cambios sin guardar» en falso cuando, por ejemplo, terminaba
+    «Sugerir con IA» -- guardarSprint y guardar (panel) deben limpiarlo tanto
+    al guardar como al restaurar el valor por error; la búsqueda de familia,
+    al vaciarse; persona-rápida/nueva-campaña, al terminar (`f.reset()` no
+    toca los `data-*`)."""
+    from sprints import datos
+    sid = _sprint(datos)
+    html = app["c"].get(f"/cliente/acme/sprints/{sid}").data.decode()
+    cabecera = html[html.index("function guardarSprint"):html.index("campos.addEventListener")]
+    assert cabecera.count("delete el.dataset.sucio;") == 2
+    panel_js = html[html.index("function guardar(el, valor)"):html.index("function cajaFamilias")]
+    assert panel_js.count("delete el.dataset.sucio;") == 2
+    assert "delete t.dataset.sucio;" in html
+    assert "function limpiarSucio(" in html and html.count("limpiarSucio(f)") == 2
+
+
 def test_sugeridos_siguen_el_enfoque_y_avisan_lo_aflojado(app):
     from sprints import datos
     uno = _referente(1, "UGC")
