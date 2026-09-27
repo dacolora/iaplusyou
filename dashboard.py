@@ -3941,7 +3941,9 @@ def _nice_max(valor):
 
 
 def _compacto(valor):
-    """Etiqueta corta para el eje: 1,2 M / 250 k / 12."""
+    """Etiqueta corta para el eje: 1,2 M / 250 k / 12 en español; 1.2 M / 250 k /
+    12 en inglés (idiomas.separador_decimal — el recorte de ceros es a medida,
+    así que no usa `idiomas.numero` completo)."""
     v = float(valor or 0)
     if v >= 1_000_000:
         t = f"{v / 1_000_000:.1f}".rstrip("0").rstrip(".") + " M"
@@ -3951,7 +3953,7 @@ def _compacto(valor):
         t = str(int(v))
     else:
         t = f"{v:.2f}".rstrip("0").rstrip(".")   # 0,5 y 0,25, no 0,50
-    return t.replace(".", ",")
+    return t.replace(".", idiomas.separador_decimal())
 
 
 def _grafico_tablero(serie):
@@ -3990,7 +3992,9 @@ def _grafico_tablero(serie):
             "x": round(x, 2), "x_centro": round(x + paso / 2, 2), "ancho": round(ancho_barra, 2),
             "gasto_y": y_de(gasto), "ingresos_y": y_de(ingresos),
             "etiqueta": idiomas.dia_mes(fecha_dia) if i % 5 == 0 else "",
-            "titulo": f"{dd}/{mm} · gasto {tablero.dinero(gasto, moneda)} · ingresos {tablero.dinero(ingresos, moneda)}",
+            "titulo": gettext("%(dd)s/%(mm)s · gasto %(gasto)s · ingresos %(ingresos)s",
+                              dd=dd, mm=mm, gasto=tablero.dinero(gasto, moneda),
+                              ingresos=tablero.dinero(ingresos, moneda)),
         })
     marcas = [{"valor": maximo * k / 4, "y": y_de(maximo * k / 4), "texto": _compacto(maximo * k / 4)} for k in range(5)]
     puntos = " ".join(f"{d['x_centro']},{d['ingresos_y']}" for d in salida)

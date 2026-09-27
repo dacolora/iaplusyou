@@ -27,7 +27,7 @@
   <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto') }}">
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro a proveedores →', '%(num)s cobros a proveedores →', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro(s) a proveedores →', '%(num)s cobro(s) a proveedores →', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </a>
 </div>
 {% else %}
@@ -70,12 +70,12 @@
   <a class="kpi-tile kpi-tile-enlace" href="#settings" data-ir-tab="settings" title="{{ _('Videos, imágenes, guiones, finales y textos con IA pagados este mes; detalle en Configuración › Gasto') }}">
     <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro a proveedores →', '%(num)s cobros a proveedores →', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ ngettext('%(num)s cobro(s) a proveedores →', '%(num)s cobro(s) a proveedores →', gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </a>
   <div class="kpi-tile">
     <span>{{ _('Experimentos corriendo') }}</span>
     <strong>{{ r.experimentos_corriendo }}</strong>
-    <small>{{ ngettext('%(num)s pieza activa', '%(num)s piezas activas', r.piezas_activas) }}</small>
+    <small>{{ ngettext('%(num)s pieza(s) activa(s)', '%(num)s pieza(s) activa(s)', r.piezas_activas) }}</small>
   </div>
   <a class="kpi-tile kpi-tile-enlace" href="#experimentos" data-ir-tab="experimentos">
     <span>{{ _('Propuestas pendientes') }}</span>

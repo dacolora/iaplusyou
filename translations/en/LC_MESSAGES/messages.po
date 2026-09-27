@@ -128,6 +128,10 @@ msgid "%(cuenta)s «en prueba» %(verbo)s en ningún experimento abierto."
 msgstr "%(cuenta)s marked “in testing” %(verbo)s in any open experiment."
 
 #, python-format
+msgid "%(dd)s/%(mm)s · gasto %(gasto)s · ingresos %(ingresos)s"
+msgstr "%(dd)s/%(mm)s · spend %(gasto)s · revenue %(ingresos)s"
+
+#, python-format
 msgid "%(error)s No se publicó nada."
 msgstr "%(error)s Nothing was published."
 
@@ -426,8 +430,8 @@ msgstr[0] "%(num)s ad"
 msgstr[1] "%(num)s ads"
 
 #, python-format
-msgid "%(num)s cobro a proveedores →"
-msgid_plural "%(num)s cobros a proveedores →"
+msgid "%(num)s cobro(s) a proveedores →"
+msgid_plural "%(num)s cobro(s) a proveedores →"
 msgstr[0] "%(num)s charge to providers →"
 msgstr[1] "%(num)s charges to providers →"
 
@@ -462,8 +466,8 @@ msgstr[0] "%(num)s piece"
 msgstr[1] "%(num)s pieces"
 
 #, python-format
-msgid "%(num)s pieza activa"
-msgid_plural "%(num)s piezas activas"
+msgid "%(num)s pieza(s) activa(s)"
+msgid_plural "%(num)s pieza(s) activa(s)"
 msgstr[0] "%(num)s active piece"
 msgstr[1] "%(num)s active pieces"
 

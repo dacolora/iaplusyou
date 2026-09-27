@@ -195,6 +195,15 @@ def numero(valor, decimales=0, idioma=None):
     return format_decimal(valor, patron, locale=_loc(idioma))
 
 
+def separador_decimal(idioma=None):
+    """«,» en español, «.» en inglés (CLDR): el símbolo que usa `numero`,
+    para un formato a medida (como el eje compacto del gráfico del Tablero,
+    con su propio recorte de ceros) que solo necesita cambiar el símbolo,
+    no recalcular todo con `numero`."""
+    from babel.numbers import get_decimal_symbol
+    return get_decimal_symbol(_loc(idioma))
+
+
 def _app_fuera_de_peticion():
     global _app_fuera
     if _app_fuera is None:

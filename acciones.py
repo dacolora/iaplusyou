@@ -426,6 +426,10 @@ def _precio_estimado(cliente, ex, accion, payload):
 
     Nunca lanza: sin sesión/modelo conocidos el texto es «precio no
     disponible» (`usd` None). No bloquea nada: solo informa."""
+    # `gastos.SIN_PRECIO` está marcado con N_ (no traducido): quien lo mira
+    # (no el proyecto, ver global-constraints) recibe el texto en su idioma,
+    # así que pasa por gettext acá — nunca crudo en el payload/JSON de vuelta.
+    sin_precio = gettext(gastos.SIN_PRECIO)
     try:
         pz = _pieza(ex, payload.get("ep_id"))
         cf_id = derivaciones._cf_id_de(pz)
@@ -440,7 +444,7 @@ def _precio_estimado(cliente, ex, accion, payload):
             n_paises = 1
         final_1 = gastos.estimar("final", paises=1)
         if final_1["usd"] is None:
-            return {"usd": None, "texto": gastos.SIN_PRECIO}
+            return {"usd": None, "texto": sin_precio}
         final = n_paises * final_1["usd"]
         usd = n_re * final
         duracion = sesion.get("duracion_objetivo")
@@ -449,11 +453,11 @@ def _precio_estimado(cliente, ex, accion, payload):
             modelo = derivaciones.modelo_regeneracion(sesion, k)
             video = gastos.estimar("video", modelo=modelo, duracion=duracion, con_sonido=con_sonido)
             if video["usd"] is None:
-                return {"usd": None, "texto": gastos.SIN_PRECIO}
+                return {"usd": None, "texto": sin_precio}
             usd += video["usd"] + final
-        return {"usd": round(usd, 4), "texto": f"{gastos.formatear(usd)} aprox."}
+        return {"usd": round(usd, 4), "texto": gettext("%(precio)s aprox.", precio=gastos.formatear(usd))}
     except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la acción
-        return {"usd": None, "texto": gastos.SIN_PRECIO}
+        return {"usd": None, "texto": sin_precio}
 
 
 def pedir(cliente, experimento_id, accion, payload, motivo):

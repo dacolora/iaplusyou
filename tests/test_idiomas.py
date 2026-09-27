@@ -166,6 +166,7 @@ def test_formatos_de_fecha_y_numero():
     assert idiomas.numero(1250000, idioma="es") == "1.250.000" and idiomas.numero(1250000, idioma="en") == "1,250,000"
     assert idiomas.numero(4000, idioma="es") == "4.000"
     assert idiomas.numero(12.5, 2, idioma="es") == "12,50" and idiomas.numero(12.5, 2, idioma="en") == "12.50"
+    assert idiomas.separador_decimal("es") == "," and idiomas.separador_decimal("en") == "."
 
 
 def test_activo_sigue_al_contexto(app_prueba):

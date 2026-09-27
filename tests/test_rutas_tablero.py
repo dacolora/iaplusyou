@@ -4,6 +4,7 @@ una parte del tablero explote (`_contexto_tablero`). Sin red: meta_conexion
 y tiendas se fingen con monkeypatch, como en test_tablero."""
 import pytest
 
+import idiomas
 from tests.test_experimentos_db import PAISES, _pieza
 
 AHORA = "2026-09-16T10:00:00"
@@ -174,6 +175,36 @@ def test_grafico_tablero_tope_menor_que_uno(app):
     assert d._nice_max(0.001) == 0.001 and d._nice_max(0.0011) == 0.002
 
 
+def test_grafico_tooltip_en_ingles(app):
+    """Fix round 1: el tooltip nativo (<title>) sigue el idioma de quien
+    mira — nunca «gasto»/«ingresos» crudos para alguien viendo en inglés;
+    los números del tooltip usan el separador de miles de ese idioma
+    (`tablero.dinero` ya pasa por `idiomas.numero`)."""
+    d = app["dashboard"]
+    dias = [{"dia": f"2026-09-{i:02d}", "gasto": 1000.0 * i, "compras": 0, "ingresos": 0.0} for i in range(1, 31)]
+    dias[-1]["ingresos"] = 42000.0
+    with idiomas.en_idioma("en"):
+        g = d._grafico_tablero({"moneda": "COP", "dias": dias})
+    titulo = g["dias"][0]["titulo"]
+    assert "spend" in titulo and "revenue" in titulo
+    assert "gasto" not in titulo and "ingresos" not in titulo
+    assert titulo == "01/09 · spend 1,000 COP · revenue 0 COP"
+    # En español el tooltip queda exactamente como antes (test_grafico_tablero_geometria).
+    g_es = d._grafico_tablero({"moneda": "COP", "dias": dias})
+    assert g_es["dias"][0]["titulo"] == "01/09 · gasto 1.000 COP · ingresos 0 COP"
+
+
+def test_compacto_eje_en_ingles(app):
+    """Fix round 1: `_compacto` (etiquetas del eje) usa el separador decimal
+    del idioma activo — coma en español (sin cambios), punto en inglés."""
+    d = app["dashboard"]
+    assert d._compacto(1_200_000) == "1,2 M"
+    assert d._compacto(0.5) == "0,5"
+    with idiomas.en_idioma("en"):
+        assert d._compacto(1_200_000) == "1.2 M"
+        assert d._compacto(0.5) == "0.5"
+
+
 def test_top_ganadora_de_experimento_cerrado_lo_avisa(app, base_temporal, monkeypatch):
     import experimentos as ex
     eid, _ep = _sembrar(base_temporal)
@@ -301,8 +332,7 @@ def test_tile_generacion_este_mes(app, base_temporal, monkeypatch):
     tb = html[html.index('id="tab-tablero"'):html.index('id="tab-creativeflowplus"')]
     ini = tb.index("Generación este mes")
     tile = tb[tb.rindex("<a", 0, ini):tb.index("</a>", ini)]
-    # Task 6: pluralización real (ngettext), ya no el placeholder "cobro(s)".
-    assert "US$ 0,87" in tile and "2 cobros a proveedores" in tile
+    assert "US$ 0,87" in tile and "2 cobro(s) a proveedores" in tile
     assert 'data-ir-tab="settings"' in tile
     assert "250 COP" in tb   # la pauta sigue en su moneda, al lado
 
