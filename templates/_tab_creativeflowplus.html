@@ -1027,6 +1027,15 @@
     mostrarInicio();
     vigilarCancion();
 
+    // Enter en un campo de una línea NO envía: «Generar» cobra y solo se lanza
+    // con su botón (antes, Enter en «Sonido de la escena» generaba el video).
+    // El link (#fp-form-link) sí se agrega con Enter: su dueño es otro
+    // formulario y no gasta.
+    form.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      if (e.target.tagName === 'INPUT' && e.target.form === form) e.preventDefault();
+    });
+
     engancharBandeja();
 
     // Validación en sitio: el error se muestra en rojo junto al cuadro, no arriba.
