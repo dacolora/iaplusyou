@@ -1023,11 +1023,17 @@ def test_la_revision_del_lote_muestra_la_doctrina(con_ideas, monkeypatch, tmp_pa
     """Doctrina, bloque 3: la misma etiqueta que en Experimentos, junto al QA."""
     import creative_flow
     from sprints import datos
-    c, sid, ii = con_ideas["c"], con_ideas["sid"], con_ideas["ii"]
+    c, sid, iv, ii = con_ideas["c"], con_ideas["sid"], con_ideas["iv"], con_ideas["ii"]
+    # Una pieza con doctrina para mejorar
     cf = creative_flow.crear("acme", [], ["E"], [], "a", 8, "", "A")
     creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2/v.mp4",
                              revision_doctrina={"video_url": "https://r2/v.mp4", "reglas": [],
                                                 "puntos": [{"n": 1, "estado": "mejorar", "detalle": "x"}]})
-    datos.actualizar_idea("acme", ii, cf_id=cf, qa={"veredicto": "pasa", "score": 90, "checks": {}})
+    datos.actualizar_idea("acme", iv, cf_id=cf, qa={"veredicto": "pasa", "score": 90, "checks": {}})
+    # Otra pieza sin doctrina: debería mostrar "sin revisar"
+    cf2 = creative_flow.crear("acme", [], ["E"], [], "a", 8, "", "A")
+    creative_flow.actualizar("acme", cf2, estado="video_listo", video_url="https://r2/v2.mp4")
+    datos.actualizar_idea("acme", ii, cf_id=cf2, qa={"veredicto": "pasa", "score": 90, "checks": {}})
     html = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
     assert "Doctrina: 1 por mejorar" in html
+    assert "Doctrina: sin revisar" in html

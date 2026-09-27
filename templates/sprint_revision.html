@@ -57,7 +57,8 @@
         <span class="sprint-qa-score sprint-qa-{{ p.qa.veredicto }}">{{ p.qa.score }}</span>
         {% for k in checks %}{% set ch = (p.qa.checks or {}).get(k) %}{% if ch %}<span class="qa-check {{ 'ok' if ch.ok else 'mal' }}" title="{{ k | replace('_', ' ') }}: {{ ch.nota }}">{{ '✓' if ch.ok else '✗' }}</span>{% endif %}{% endfor %}
         <small class="vacio">{{ p.qa.veredicto }}</small>
-        {% if p.doctrina and p.doctrina.estado == 'mejorar' %}<span class="tag-estado" title="Revisión de la doctrina: se ve en Crear">Doctrina: {{ p.doctrina.n }} por mejorar</span>{% elif p.doctrina and p.doctrina.estado == 'bien' %}<span class="tag-estado">Doctrina: bien</span>{% endif %}
+        {% set doc = p.doctrina or {} %}
+        {% if doc.estado == 'mejorar' %}<span class="tag-estado" title="Revisión de la doctrina: se ve en Crear">Doctrina: {{ doc.n }} por mejorar</span>{% elif doc.estado == 'bien' %}<span class="tag-estado" title="Revisión de la doctrina">Doctrina: bien</span>{% elif doc.estado %}<span class="tag-estado" title="Se revisa desde la pieza en Crear">Doctrina: sin revisar</span>{% endif %}
       </div>
       {% elif p.estado in ("listo", "degradada") %}<small class="vacio sprint-analizando">QA pendiente…</small>{% endif %}
       {% if p.revision == "rechazada" and p.revision_motivo %}<small class="tag-error">Motivo: {{ p.revision_motivo }}</small>{% endif %}
