@@ -175,3 +175,77 @@ def test_guardar_rechaza_el_logo_de_marca_de_otro_proyecto(dashboard, encolados)
     r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": doc, "version_n": ed["version_n"]})
     assert r.status_code == 400 and "no son de este proyecto" in r.get_json()["error"]
     assert ediciones.cargar("acme", ed["id"])["documento"]["marca"]["logo_material_id"] is None
+
+
+def _edicion_con_pieza():
+    import creative_flow
+    import ediciones
+    ed, clon, voz = _edicion()
+    cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
+    creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2.test/v.mp4")
+    import db
+    with db.conectar() as con:
+        con.execute(db.edicion.update().where(db.edicion.c.id == ed["id"]).values(cf_id=cf))
+    return ediciones.cargar("acme", ed["id"]), cf
+
+
+def test_producir_congela_la_version_y_encola_un_render_por_destino(dashboard, encolados):
+    import ediciones
+    ed, cf = _edicion_con_pieza()
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 200, r.get_json()
+    cuerpo = r.get_json()
+    assert cuerpo["producidas"] == [{"destino": "es_CO", "final_id": f"{cf}__es_CO", "encolada": True}]
+    assert cuerpo["url"].endswith(f"#final?cf={cf}")
+    (args, kw), = [(a, k) for a, k in encolados if a[1] == "edicion_producir"]
+    version = ediciones.versiones("acme", ed["id"])[-1]
+    assert args[2] == {"cliente": "acme", "edicion_id": ed["id"], "version_id": version["id"],
+                       "final_id": f"{cf}__es_CO", "idioma": "es", "pais": "CO"}
+    assert kw["max_intentos"] == 1 and kw["duracion_estimada"] >= 20 and kw["cliente"] == "acme"
+
+
+def test_producir_pide_la_version_guardada_y_destinos_del_documento(dashboard, encolados):
+    ed, _cf = _edicion_con_pieza()
+    c = _cliente_admin(dashboard)
+    url = f"/cliente/acme/ediciones/{ed['id']}/producir"
+    assert c.post(url, json={"version_n": ed["version_n"] + 5, "destinos": ["es_CO"]}).status_code == 409
+    assert c.post(url, json={"version_n": ed["version_n"], "destinos": ["pt_BR"]}).status_code == 400
+    assert c.post(url, json={"version_n": ed["version_n"], "destinos": []}).status_code == 400
+    assert c.post(url, json={"version_n": ed["version_n"], "destinos": ["../x"]}).status_code == 400
+    assert c.post(url, json={"version_n": ed["version_n"], "destinos": ["es_CO"]},
+                  headers={"Sec-Fetch-Site": "cross-site"}).status_code == 403
+    assert not [a for a, _k in encolados if a[1] == "edicion_producir"]
+
+
+def test_producir_sin_pieza_de_crear_no_se_puede(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 400 and "video de Crear" in r.get_json()["error"]
+
+
+def test_producir_avisa_los_textos_sin_traducir(dashboard, encolados):
+    import ediciones
+    ed, _cf = _edicion_con_pieza()
+    doc = ed["documento"]
+    doc["pistas"].append({"id": "p_texto", "tipo": "texto", "clips": [
+        {"id": "t1", "inicio_ms": 0, "duracion_ms": 1000, "texto": {"variable": "hook"}, "estilo": {"fuente": "Inter-Bold"}}]})
+    doc["variables"]["textos"] = {"hook": {"es_CO": "Hola"}}
+    doc["variables"]["precios"] = {"en_US": 10}
+    nuevo = ediciones.guardar("acme", ed["id"], doc, ed["version_n"])
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": nuevo, "destinos": ["es_CO", "en_US"]})
+    assert r.status_code == 400
+    assert any(p.startswith("en_US") for p in r.get_json()["problemas"])
+
+
+def test_producir_no_repite_un_render_que_ya_corre(dashboard, encolados, monkeypatch):
+    import trabajos
+    ed, _cf = _edicion_con_pieza()
+    monkeypatch.setattr(trabajos, "en_curso", lambda job_id: True)
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 200
+    assert r.get_json()["producidas"][0]["encolada"] is False
+    assert not [a for a, _k in encolados if a[1] == "edicion_producir"]

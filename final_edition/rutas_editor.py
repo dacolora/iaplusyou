@@ -3,15 +3,22 @@
 acceso al proyecto (admin a todo; un cliente solo al suyo) — decisión de
 Daniel del 2026-09-27: el editor es para todos, sin esperar a la capa 7.
 `ediciones.cargar` filtra por cliente: una edición de otro proyecto es 404."""
+import re
+
 from flask import Blueprint, abort, jsonify, render_template, request, url_for
 
+import creative_flow
 import ediciones
 import materiales
+import trabajos
 from final_edition import documento as documento_mod
-from final_edition import vista_previa
+from final_edition import estimar, vista_previa
 from final_edition.documento import DocumentoInvalido
+from tareas import edicion as tareas_edicion
 
 bp = Blueprint("editor", __name__, url_prefix="/cliente/<cliente>/ediciones")
+
+_DESTINO_RE = re.compile(r"^[a-z]{2}_[A-Z]{2}$")
 
 
 def _cargar(cliente, edicion_id):
@@ -73,3 +80,52 @@ def guardar(cliente, edicion_id):
     except ediciones.Conflicto as e:
         return jsonify({"error": str(e)}), 409
     return jsonify({"version_n": nuevo})
+
+
+@bp.post("/<int:edicion_id>/producir")
+def producir(cliente, edicion_id):
+    """Producir desde el editor (spec §6): congela la versión guardada y encola
+    un render por destino. Gratis: voz, música y video ya son materiales."""
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    ed = _cargar(cliente, edicion_id)
+    if not ed:
+        return jsonify({"error": "No existe esa edición."}), 404
+    if not ed.get("cf_id"):
+        return jsonify({"error": "Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí."}), 400
+    cuerpo = request.get_json(silent=True) or {}
+    if cuerpo.get("version_n") != ed["version_n"]:
+        return jsonify({"error": "La edición cambió: espera a que termine de guardarse y vuelve a intentar."}), 409
+    doc = ed["documento"]
+    validos = set(vista_previa.destinos(doc))
+    destinos = cuerpo.get("destinos")
+    if not isinstance(destinos, list) or not destinos or any(
+            not isinstance(d, str) or not _DESTINO_RE.match(d) or d not in validos for d in destinos):
+        return jsonify({"error": "Elige al menos un destino de esta edición."}), 400
+    problemas = []
+    for d in destinos:
+        idioma, pais = d.split("_")
+        try:
+            documento_mod.resolver(doc, idioma, pais)
+        except DocumentoInvalido as e:
+            problemas.append(f"{d}: {e}")
+    if problemas:
+        return jsonify({"error": "Hay textos sin traducir para algún destino.", "problemas": problemas}), 400
+    version = ediciones.versionar(cliente, edicion_id, motivo="producir")
+    segundos = estimar.segundos(doc)
+    producidas = []
+    for d in destinos:
+        idioma, pais = d.split("_")
+        job_id = tareas_edicion.job_id_producir(cliente, edicion_id, idioma, pais)
+        if trabajos.en_curso(job_id):
+            producidas.append({"destino": d, "final_id": f"{ed['cf_id']}__{d}", "encolada": False})
+            continue
+        final_id = creative_flow.crear_final(cliente, ed["cf_id"], idioma, pais)
+        encolada = trabajos.encolar(job_id, "edicion_producir",
+                                    {"cliente": cliente, "edicion_id": edicion_id, "version_id": version["id"],
+                                     "final_id": final_id, "idioma": idioma, "pais": pais},
+                                    duracion_estimada=segundos, etapas=list(tareas_edicion.ETAPAS_EDICION),
+                                    cliente=cliente, max_intentos=1)
+        producidas.append({"destino": d, "final_id": final_id, "encolada": bool(encolada)})
+    return jsonify({"producidas": producidas,
+                    "url": url_for("ver_cliente", cliente=cliente) + f"#final?cf={ed['cf_id']}"})
