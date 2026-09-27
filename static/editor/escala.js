@@ -1,7 +1,12 @@
 // Escala de la línea de tiempo del editor: milisegundos ↔ píxeles, el imán
 // (bordes de clips, 0 y el cabezal), la regla, el orden de las filas en
-// pantalla, la tira de fotogramas de un clip y dónde cae un clip de la
-// principal que se suelta. Puro: lo prueba Node.
+// pantalla, la tira de fotogramas de un clip, dónde cae un clip de la
+// principal que se suelta, qué operación pide soltar un arrastre, cómo se ve
+// el clip mientras se arrastra y los nombres de filas y clips. Puro: lo
+// prueba Node (linea_tiempo.js solo pone esto en el DOM).
+import { ID_SONIDO } from "./operaciones.js";
+import { formatearPrecio, SIMBOLOS } from "./precio.js";
+import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
 import { pistaPrincipal } from "./tiempo.js";
 
 export const PPS_MIN = 20;
@@ -79,4 +84,105 @@ export function fondoTira(clip, material, pps) {
 export function indiceDestino(doc, clipId, xMs) {
   const otros = (pistaPrincipal(doc)?.clips ?? []).filter((c) => c.id !== clipId);
   return otros.filter((c) => xMs > c.inicio_ms + c.duracion_ms / 2).length;
+}
+
+// Mover con imán: pega el inicio o el fin del clip, el que quede más cerca de
+// un candidato; si ninguno de los dos pega, queda donde se soltó (un borde
+// que no pegó nunca le gana a uno que sí).
+export function imanBordes(inicioMs, duracionMs, candidatos, toleranciaMs) {
+  let mejor = inicioMs;
+  let distancia = Infinity;
+  for (const c of candidatos) {
+    const dInicio = Math.abs(c - inicioMs);
+    if (dInicio <= toleranciaMs && dInicio < distancia) {
+      mejor = c;
+      distancia = dInicio;
+    }
+    const dFin = Math.abs(c - (inicioMs + duracionMs));
+    if (dFin <= toleranciaMs && dFin < distancia) {
+      mejor = c - duracionMs;
+      distancia = dFin;
+    }
+  }
+  return mejor;
+}
+
+// Qué operación (de operaciones.js) pide soltar un arrastre: [nombre, ...args]
+// sin el documento ni las duraciones, o null si nada cambia. `modo` es
+// "mover" o "recorte" (con `lado` "inicio" | "fin"); `deltaMs`, cuánto se
+// corrió el puntero. La principal se reordena por el centro del clip; lo demás
+// se corre en el tiempo con imán en sus dos bordes; un recorte pega el borde
+// arrastrado.
+export function soltar(doc, clipId, { modo, lado, deltaMs, toleranciaMs, cabezalMs = 0 }) {
+  let pista = null;
+  let clip = null;
+  for (const p of doc.pistas ?? []) {
+    const c = p.clips.find((x) => x.id === clipId);
+    if (c) {
+      pista = p;
+      clip = c;
+      break;
+    }
+  }
+  if (!clip) return null;
+  const delta = Math.round(Number(deltaMs) || 0);
+  const cand = candidatosIman(doc, clipId, cabezalMs);
+  if (modo === "mover") {
+    if (pista === pistaPrincipal(doc)) {
+      const destino = indiceDestino(doc, clipId, clip.inicio_ms + clip.duracion_ms / 2 + delta);
+      return destino === pista.clips.indexOf(clip) ? null : ["moverPrincipal", clipId, destino];
+    }
+    const inicio = Math.max(0, imanBordes(clip.inicio_ms + delta, clip.duracion_ms, cand, toleranciaMs));
+    return inicio === clip.inicio_ms ? null : ["moverA", clipId, inicio];
+  }
+  if (modo === "recorte" && (lado === "inicio" || lado === "fin")) {
+    const borde = lado === "inicio" ? clip.inicio_ms : clip.inicio_ms + clip.duracion_ms;
+    const d = iman(borde + delta, cand, toleranciaMs) - borde;
+    return d === 0 ? null : ["recortar", clipId, lado, d];
+  }
+  return null;
+}
+
+// El clip mientras se arrastra (px, relativo a donde estaba): se corre
+// entero, o se estira/encoge por el borde tomado con el otro quieto.
+export const ANCHO_MIN_PX = 4;
+
+export function estiloArrastre({ modo, lado, dx, ancho }) {
+  if (modo !== "recorte") return { x: dx, ancho };
+  if (lado === "inicio") {
+    const w = Math.max(ANCHO_MIN_PX, ancho - dx);
+    return { x: ancho - w, ancho: w };
+  }
+  return { x: 0, ancho: Math.max(ANCHO_MIN_PX, ancho + dx) };
+}
+
+const NOMBRE_ROL = { voz: "Voz", musica: "Música", sonido: "Sonido", efecto: "Efecto", subida: "Audio", grabacion: "Grabación" };
+const NOMBRE_TIPO = { texto: "Textos", imagen: "Imágenes", superpuesto: "Video encima", video: "Video", audio: "Audio" };
+
+export function nombreFila(pista, doc) {
+  if (pista === pistaPrincipal(doc)) return pista.tipo === "video" ? "Video" : "Imágenes";
+  if (pista.id === ID_SONIDO) return "Sonido de la escena";
+  if (pista.tipo === "audio") return NOMBRE_ROL[pista.clips?.[0]?.rol_audio] ?? "Audio";
+  return NOMBRE_TIPO[pista.tipo] ?? "Pista";
+}
+
+// Lo que se escribe dentro del clip (los de video llevan su tira de
+// fotogramas). Un texto variable muestra su valor en el destino elegido
+// (`<idioma>_<PAIS>`, como resolver.js), o su nombre si no lo tiene.
+export function etiquetaClip(pista, clip, doc = null, destino = null) {
+  if (pista.tipo === "texto") {
+    const t = clip.texto ?? {};
+    if (t.literal !== undefined && t.literal !== null) return String(t.literal);
+    const rol = t.variable ?? "texto";
+    const [idioma, pais] = String(destino ?? "").split("_");
+    if (rol === VARIABLE_PRECIO) {
+      const precio = destino ? doc?.variables?.precios?.[destino] : null;
+      return precio !== undefined && precio !== null && pais in SIMBOLOS ? formatearPrecio(precio, pais) : "Precio";
+    }
+    const valor = destino ? valorDestino(doc?.variables?.textos?.[rol], idioma, pais) : null;
+    return valor === null || valor === undefined ? `Texto «${rol}»` : String(valor);
+  }
+  if (pista.tipo === "audio") return NOMBRE_ROL[clip.rol_audio] ?? "Audio";
+  if (pista.tipo === "imagen") return "Imagen";
+  return "";
 }

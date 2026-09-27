@@ -14,24 +14,71 @@
   .editor-barra h1 { flex: 1 1 12rem; min-width: 0; margin: 0; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .editor-destino { display: flex; align-items: center; gap: .4rem; }
   .editor-escena { flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; min-height: 0; }
-  #lienzo { display: block; width: auto; height: auto; max-width: 100%; max-height: min(72vh, 900px); background: #000; border-radius: var(--radius-sm); }
+  /* El lienzo deja lugar a la línea de tiempo: en pantalla grande se ven los
+     dos sin bajar (≈ 520 px de barra, transporte, herramientas y línea). */
+  #lienzo { display: block; width: auto; height: auto; max-width: 100%; max-height: max(220px, min(900px, calc(100vh - 520px))); background: #000; border-radius: var(--radius-sm); }
   .editor-avisos { display: grid; gap: .3rem; justify-items: center; padding: 0 1rem; }
   .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; }
   .editor-aviso.error { color: var(--error); }
   .editor-transporte { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem calc(.8rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); }
   .editor-transporte input[type="range"] { flex: 1; min-width: 0; }
   #tiempo { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .88rem; white-space: nowrap; }
+  /* Edición (capa 4a): herramientas, línea de tiempo y «Producir». La línea
+     corre de lado DENTRO de su caja; la página nunca. */
+  .editor-herramientas { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding: .6rem 1rem; border-top: 1px solid var(--border); }
+  .editor-velocidad, .editor-zoom { display: inline-flex; flex-direction: row; align-items: center; gap: .35rem; font-size: .85rem; color: var(--muted); }
+  .editor-velocidad select { width: auto; padding: .35rem .5rem; }
+  .editor-guardado { margin-left: auto; font-size: .82rem; color: var(--muted); }
+  .editor-guardado[data-estado="error"], .editor-guardado[data-estado="conflicto"] { color: var(--error); }
+  .editor-zoom { padding: 0 1rem calc(.8rem + env(safe-area-inset-bottom, 0px)); }
+  .linea { padding: 0 1rem .5rem; min-width: 0; }
+  .linea-scroll { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); touch-action: pan-x pan-y; }
+  .linea-lienzo { position: relative; min-height: 120px; user-select: none; -webkit-user-select: none; }
+  .linea-regla { position: relative; height: 20px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .linea-marca { position: absolute; top: 3px; font-size: .68rem; color: var(--muted); transform: translateX(2px); white-space: nowrap; }
+  .linea-filas { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+  .linea-fila { position: relative; }
+  .linea-clip { position: absolute; top: 0; bottom: 0; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--border); overflow: hidden; cursor: grab; }
+  .linea-video, .linea-superpuesto { background-color: var(--panel-hover); background-repeat: no-repeat; }
+  .linea-texto { background: color-mix(in srgb, var(--accent) 35%, var(--panel-2)); }
+  .linea-audio { background: color-mix(in srgb, var(--ok) 25%, var(--panel-2)); }
+  .linea-imagen { background: color-mix(in srgb, var(--warn) 25%, var(--panel-2)); }
+  .linea-espejo { opacity: .55; cursor: default; }
+  .linea-seleccion { outline: 2px solid var(--accent-texto); outline-offset: 0; z-index: 2; touch-action: none; }
+  .linea-arrastrando { opacity: .8; z-index: 3; cursor: grabbing; }
+  .linea-etiqueta { display: block; padding: 0 .45rem; font-size: .72rem; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .linea-insignia { position: absolute; right: 12px; top: 4px; font-size: .7rem; color: var(--text); background: color-mix(in srgb, var(--bg) 75%, transparent); padding: 0 .3rem; border-radius: 4px; }
+  .linea-asa { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; background: var(--border-soft); }
+  .linea-asa[data-lado="inicio"] { left: 0; }
+  .linea-asa[data-lado="fin"] { right: 0; }
+  .linea-seleccion .linea-asa { background: var(--accent-texto); }
+  .linea-cabezal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--error); pointer-events: none; z-index: 4; }
+  .editor-dialogo { max-width: min(92vw, 420px); padding: 1.2rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); }
+  .editor-dialogo::backdrop { background: color-mix(in srgb, var(--bg) 70%, transparent); }
+  .editor-dialogo h2 { margin: 0 0 .6rem; font-size: 1.05rem; color: var(--text); text-transform: none; letter-spacing: 0; }
+  .editor-dialogo h2::before { display: none; }
+  .editor-dialogo p { font-size: .9rem; line-height: 1.5; }
+  .editor-dialogo .checks-plataformas label { text-transform: none; }
+  .editor-dialogo-acciones { display: flex; justify-content: flex-end; gap: .5rem; margin-top: 1rem; }
+  @media (pointer: coarse) {
+    .linea-asa { width: 18px; }
+  }
+  @media (max-width: 760px) {
+    #lienzo { max-height: 40vh; }
+    .editor-herramientas { gap: .35rem; }
+  }
 </style>
 </head>
 <body class="editor">
 <header class="editor-barra">
-  <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='final') }}">← Final edition</a>
+  <a class="btn-sm" href="{{ datos.urls.final }}">← Final edition</a>
   <h1>{{ edicion.nombre }}</h1>
   <div class="editor-destino">
     <label class="campo-label" for="destino">Destino</label>
     <select id="destino"></select>
   </div>
   <span class="badge">Vista previa</span>
+  <button id="producir" type="button" class="btn-generar btn-sm">Producir</button>
 </header>
 <main class="editor-escena">
   <canvas id="lienzo" aria-label="Vista previa del video"></canvas>
@@ -43,6 +90,8 @@
   <p id="aviso-preparando" class="editor-aviso" hidden></p>
   <p id="aviso-audio" class="editor-aviso" hidden></p>
   <p id="aproximada" class="editor-aviso" hidden>Transición vista de forma aproximada: el video final la hace completa.</p>
+  <p id="aviso-edicion" class="editor-aviso error" hidden></p>
+  <p id="producir-hecho" class="editor-aviso" hidden><span id="producir-hecho-texto"></span> <a id="producir-hecho-enlace" href="{{ datos.urls.final }}">Ir a Final edition</a></p>
 </section>
 <footer class="editor-transporte">
   <button id="inicio" class="btn-sm" type="button" aria-label="Ir al inicio">⏮</button>
@@ -50,7 +99,29 @@
   <span id="tiempo">0:00.0 / 0:00.0</span>
   <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="Posición en el video">
 </footer>
+<section class="editor-herramientas" aria-label="Herramientas de edición">
+  <button id="h-deshacer" type="button" class="btn-sm" aria-label="Deshacer" title="Deshacer (Ctrl/Cmd+Z)">↶</button>
+  <button id="h-rehacer" type="button" class="btn-sm" aria-label="Rehacer" title="Rehacer (Ctrl/Cmd+Shift+Z)">↷</button>
+  <button id="h-cortar" type="button" class="btn-sm" title="Cortar el video donde está el cabezal (S)">✂ Cortar</button>
+  <button id="h-duplicar" type="button" class="btn-sm" title="Duplicar el clip elegido">Duplicar</button>
+  <button id="h-borrar" type="button" class="btn-sm" title="Borrar el clip elegido (Supr)">Borrar</button>
+  <label class="editor-velocidad">Velocidad <select id="h-velocidad"></select></label>
+  <span id="estado-guardado" class="editor-guardado" data-estado="guardado" aria-live="polite">Guardado</span>
+  <button id="recargar" type="button" class="btn-sm" hidden>Recargar</button>
+</section>
+<section id="linea" class="linea" aria-label="Línea de tiempo"></section>
+<label class="editor-zoom">Zoom <input id="linea-zoom" type="range"></label>
+<dialog id="producir-dialogo" class="editor-dialogo" aria-labelledby="producir-titulo">
+  <h2 id="producir-titulo">Producir</h2>
+  <p>Elige los destinos. Es gratis: la voz, la música y el video ya están hechos. Tarda <span id="producir-tiempo"></span>.</p>
+  <div id="producir-destinos" class="checks-plataformas"></div>
+  <p id="producir-aviso" class="editor-aviso error" hidden></p>
+  <div class="editor-dialogo-acciones">
+    <button id="producir-cancelar" type="button" class="btn-sm">Cancelar</button>
+    <button id="producir-confirmar" type="button" class="btn-generar">Producir</button>
+  </div>
+</dialog>
 <script type="application/json" id="datos-editor">{{ datos|tojson }}</script>
-<script type="module" src="{{ url_for('static', filename='editor/vista.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='editor/pagina_editor.js') }}"></script>
 </body>
 </html>

@@ -62,9 +62,13 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     assert r.status_code == 200
     html = r.get_data(as_text=True)
     for id_ in ("lienzo", "destino", "reproducir", "inicio", "tiempo", "barra", "aviso-destino", "aviso-faltan",
-                "aviso-recortes", "aviso-preparando", "aviso-audio", "aproximada"):
+                "aviso-recortes", "aviso-preparando", "aviso-audio", "aproximada",
+                "producir", "linea", "linea-zoom", "h-cortar", "h-borrar", "h-duplicar", "h-velocidad", "h-deshacer",
+                "h-rehacer", "estado-guardado", "recargar", "aviso-edicion", "producir-dialogo", "producir-destinos",
+                "producir-confirmar", "producir-cancelar", "producir-aviso", "producir-tiempo", "producir-hecho",
+                "producir-hecho-texto", "producir-hecho-enlace"):
         assert f'id="{id_}"' in html, id_
-    assert "editor/vista.js" in html and 'type="module"' in html
+    assert "editor/pagina_editor.js" in html and 'type="module"' in html
     assert "Demo &lt;editor&gt;" in html                     # el nombre va escapado
     assert '@font-face' in html and 'font-family: "SpaceGrotesk-Bold"' in html
     assert 'href="/cliente/acme#final"' in html              # vuelve a la pestaña Final edition
@@ -315,3 +319,10 @@ def test_editar_este_video_rechaza_piezas_sin_video_y_otro_origen(dashboard, enc
     r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/desde/{cf}", headers={"Sec-Fetch-Site": "cross-site"})
     assert r.status_code == 403
     assert not [a for a, _k in encolados if a[1] == "edicion_desde_clon"]
+
+
+def test_el_editor_de_una_pieza_vuelve_a_esa_pieza(dashboard, encolados):
+    ed, cf = _edicion_con_pieza()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    assert f'href="/cliente/acme#final?cf={cf}"' in html     # «← Final edition» abre esa pieza
+    assert _datos(html)["cf_id"] == cf                         # con pieza, «Producir» queda habilitado
