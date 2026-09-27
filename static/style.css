@@ -2226,7 +2226,7 @@ img.img-rota { object-fit: contain; background: var(--panel-2); padding: 12%; }
   background: var(--panel-2); border: 1px dashed var(--border); display: block; }
 .tablero-miniaturas img { border-style: solid; }
 .tablero-tarjeta-cantidades { font-size: .85rem; color: var(--muted); }
-.tablero-siguiente { color: var(--accent); font-weight: 600; font-size: .9rem; }
+.tablero-siguiente { color: var(--accent-texto); font-weight: 600; font-size: .9rem; }
 .tablero-fondo { position: fixed; inset: 0; background: rgba(10, 10, 25, .35); z-index: 60; }
 .tablero-panel { position: fixed; top: 0; right: 0; bottom: 0; width: min(560px, 100%); background: var(--panel);
   border-left: 1px solid var(--border); box-shadow: var(--shadow); z-index: 61; overflow-y: auto; padding: 1rem 1.2rem 2rem; }
