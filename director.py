@@ -19,6 +19,7 @@ import anthropic
 
 import doctrina
 import flowplus_prompt
+import idiomas
 from providers import flowplus_modelos
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
@@ -104,7 +105,7 @@ _FAMILIAS = {
 
 def _system(familia, cierre, n, duracion, idioma):
     return _FAMILIAS[familia].format(cierre=cierre) + _REGLAS_COMUNES.format(
-        n_planos=n, duracion=duracion, camaras=", ".join(flowplus_prompt.CAMARAS), idioma="español" if idioma == "es" else "inglés",
+        n_planos=n, duracion=duracion, camaras=", ".join(flowplus_prompt.CAMARAS), idioma=idiomas.nombre_para_claude(idioma),
         max_chars=MAX_CARACTERES_PROMPT)
 
 
@@ -181,18 +182,18 @@ def _validar_planos(planos, n_esperado, duracion, tokens_validos, nombre):
         raise ValueError(f"{nombre}: los planos terminan en {esperado_inicio} s y el video dura {duracion} s")
 
 
-def _componer(cliente, sesion, planos, cierre):
+def _componer(cliente, sesion, planos, cierre, idioma):
     refs = list(sesion.get("referencias") or [])
     info = flowplus_prompt.ENFOQUES.get(sesion.get("enfoque") or "producto")
     return flowplus_prompt.armar(
         sesion.get("accion_central") or "", refs, con_persona=info["con_persona"] if info else False,
         guia_marca=sesion.get("guia_marca") or "", negative_marca=sesion.get("negative_marca"),
         logos=[r for r in refs if r.get("logo")], enfoque=sesion.get("enfoque"), contexto=sesion.get("contexto"),
-        sonido=None, con_sonido=bool(sesion.get("con_sonido")), planos=planos, cierre_sonido=cierre,
+        sonido=None, con_sonido=bool(sesion.get("con_sonido")), planos=planos, cierre_sonido=cierre, idioma=idioma,
     )
 
 
-def _validar_y_componer(cliente, sesion, datos, n, duracion, cierre):
+def _validar_y_componer(cliente, sesion, datos, n, duracion, cierre, idioma):
     tokens = {r["token"] for r in (sesion.get("referencias") or []) if r.get("token")}
     _validar_planos(datos.get("planos"), n, duracion, tokens, "planos")
     _validar_planos(datos.get("planos_b"), n, duracion, tokens, "planos_b")
@@ -206,11 +207,11 @@ def _validar_y_componer(cliente, sesion, datos, n, duracion, cierre):
     # cuenta y harían fallar al director siempre (spec ruling F1).
     con_sonido = bool(sesion.get("con_sonido"))
     for nombre, planos in (("planos", datos["planos"]), ("planos_b", datos["planos_b"])):
-        bloque = "\n".join(flowplus_prompt._bloque_planos(planos, con_sonido))
+        bloque = "\n".join(flowplus_prompt._bloque_planos(planos, con_sonido, idioma))
         if len(bloque) > MAX_CARACTERES_PROMPT:
             raise ValueError(f"{nombre}: los planos pasan de {MAX_CARACTERES_PROMPT} caracteres")
-    prompt_a = _componer(cliente, sesion, datos["planos"], cierre)
-    prompt_b = _componer(cliente, sesion, datos["planos_b"], cierre)
+    prompt_a = _componer(cliente, sesion, datos["planos"], cierre, idioma)
+    prompt_b = _componer(cliente, sesion, datos["planos_b"], cierre, idioma)
     return {"planos": datos["planos"], "planos_b": datos["planos_b"], "prompt_a": prompt_a, "prompt_b": prompt_b,
             "diferencia_b": str(datos["diferencia_b"]).strip()}
 
@@ -232,7 +233,7 @@ def compilar(cliente, sesion, idioma="es"):
     n = n_planos(duracion)
     cierre = flowplus_modelos.cierre_sonido(modelo)
     idioma = "en" if idioma == "en" else "es"
-    system = doctrina.bloque_system("video", extra=_system(familia, cierre, n, duracion, idioma))
+    system = doctrina.bloque_system("video", extra=_system(familia, cierre, n, duracion, idioma), idioma=idioma)
     mensajes = [{"role": "user", "content": _mensaje(sesion, idioma)}]
     client = anthropic.Anthropic(api_key=_api_key())
     ultimo_error = None
@@ -259,7 +260,7 @@ def compilar(cliente, sesion, idioma="es"):
             continue
         try:
             datos = _extraer_json(texto)
-            resultado = _validar_y_componer(cliente, sesion, datos, n, duracion, cierre)
+            resultado = _validar_y_componer(cliente, sesion, datos, n, duracion, cierre, idioma)
         except (ValueError, TypeError, KeyError) as e:
             ultimo_error = str(e)
             mensajes = mensajes + [{"role": "assistant", "content": texto},

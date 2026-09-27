@@ -2403,7 +2403,6 @@ def guardar_preferencias_flowplus(cliente):
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
     proyectos.guardar_preferencias_flowplus(
         cliente, modelo_video, modelo_imagen,
-        idioma_prompt=(request.form.get("idioma_prompt") or "es").strip(),
         duracion_defecto=request.form.get("duracion_defecto") or 8)
     flash(gettext("Modelos por defecto de FlowPlus actualizados."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
@@ -6255,6 +6254,9 @@ def cf_crear_video(cliente):
     elif musica_estilo not in fe_tipos.ESTILOS_MUSICA:
         musica_estilo = ""
     prefs = proyectos.preferencias_flowplus(cliente)
+    # Idioma del proyecto (spec 2026-09-26 §B4): reemplaza la vieja preferencia
+    # `idioma_prompt` de FlowPlus — es lo que reciben el director y los prompts.
+    idioma = idiomas.de_proyecto(cliente)
     modelo = (request.form.get("modelo") or "").strip()
     if tipo == "imagen":
         if modelo not in flowplus_modelos.IMAGEN:
@@ -6367,13 +6369,13 @@ def cf_crear_video(cliente):
         aspect_ratio=aspect_ratio, tipo=tipo, modelo=modelo, referencias=referencias,
         con_persona=info["con_persona"], enfoque=enfoque, enfoque_nombre=info["nombre"],
         con_sonido=con_sonido, sonido_texto=sonido_texto, musica_estilo=musica_estilo, musica_inicio_s=musica_inicio_s,
-        prompt_fuente=accion_central, calidad=calidad, idioma_prompt=prefs["idioma_prompt"],
+        prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma,
         preset_camara=None, plantilla=None,
     )
     directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else "Tu texto, tal cual")
     if tipo == "imagen":
         # La imagen no pasa por el director (spec §2.2): va el texto tal cual.
-        prompt_final = flowplus_prompt.tal_cual(accion_central, referencias)
+        prompt_final = flowplus_prompt.tal_cual(accion_central, referencias, idioma=idioma)
         creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **directo)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
@@ -6387,7 +6389,7 @@ def cf_crear_video(cliente):
         # Generación directa: el texto de la persona tal cual; el sonido solo si
         # ella lo escribió (el check sigue pidiendo el audio nativo del modelo).
         prompt_final = flowplus_prompt.tal_cual(
-            accion_central, referencias, sonido=(sonido_texto or None) if con_sonido else None)
+            accion_central, referencias, sonido=(sonido_texto or None) if con_sonido else None, idioma=idioma)
         creative_flow.actualizar(cliente, cf_id, prompt_relleno=prompt_final, **directo)
         entry = creative_flow.cargar(cliente)[cf_id]
         lanzado = _lanzar_video_cf(cliente, cf_id, entry)
@@ -6489,7 +6491,7 @@ def fp_sugerir_sonido(cliente):
     e = cuerpo.get("enfoque")
     enfoque = e if isinstance(e, str) and e in flowplus_prompt.ENFOQUES else "producto"
     try:
-        texto = sonido_mod.sugerir_descripcion(escena, enfoque)
+        texto = sonido_mod.sugerir_descripcion(escena, enfoque, idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         return jsonify({"error": f"No se pudo sugerir ({type(e).__name__})."}), 502
     return jsonify({"sonido": texto})

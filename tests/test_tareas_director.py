@@ -109,12 +109,15 @@ def test_interrumpida_no_pisa_una_sesion_que_ya_avanzo(base_temporal, monkeypatc
     assert not e.get("director")
 
 
-def test_idioma_viene_de_la_preferencia_del_proyecto(base_temporal, monkeypatch, tmp_path):
+def test_idioma_viene_del_idioma_del_proyecto(base_temporal, monkeypatch, tmp_path):
+    """Fase 3 (spec 2026-09-26 §B4): el idioma que recibe el director es
+    `idiomas.de_proyecto`, no una preferencia de FlowPlus."""
     import creative_flow as cf
+    import idiomas
     import proyectos
     import tareas.director as td
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
-    proyectos.guardar_preferencias_flowplus("acme", "wan3", "seedream_v5_pro", idioma_prompt="en", duracion_defecto=8)
+    idiomas.guardar_de_proyecto("acme", "en")
     cid = _sesion(cf)
     visto = {}
     monkeypatch.setattr(td.director, "compilar", lambda cliente, sesion, idioma="es": visto.update(idioma=idioma) or _resultado())

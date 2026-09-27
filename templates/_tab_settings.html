@@ -483,13 +483,6 @@
   </div>
   <div class="fila-campos-idea" style="margin-top:.8rem;">
     <div>
-      <label class="campo-label">{{ _('Idioma del prompt que arma la IA') }}</label>
-      <select name="idioma_prompt">
-        <option value="es" {% if preferencias_flowplus.idioma_prompt != "en" %}selected{% endif %}>{{ _('Español (los tokens Image N y el cierre de sonido van en inglés)') }}</option>
-        <option value="en" {% if preferencias_flowplus.idioma_prompt == "en" %}selected{% endif %}>{{ _('Inglés completo (para la prueba A/B)') }}</option>
-      </select>
-    </div>
-    <div>
       <label class="campo-label">{{ _('Duración que sale marcada en Crear') }}</label>
       <select name="duracion_defecto">
         {% for d in duraciones_crear %}<option value="{{ d }}" {% if preferencias_flowplus.duracion_defecto == d %}selected{% endif %}>{{ d }} s</option>{% endfor %}

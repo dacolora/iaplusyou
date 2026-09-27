@@ -209,6 +209,7 @@ def armar_prompt_sesion(cliente, extra, enfoque, con_sonido=None):
     muda no lleva línea SONIDO aunque tenga texto guardado. Devuelve
     (prompt, info_enfoque). No llama a ningún modelo: es texto puro."""
     import flowplus_prompt
+    import idiomas
     import marca as marca_mod
     info = flowplus_prompt.ENFOQUES[enfoque]
     referencias = list(extra.get("referencias") or [])
@@ -223,6 +224,7 @@ def armar_prompt_sesion(cliente, extra, enfoque, con_sonido=None):
         guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
         logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
         sonido=(extra.get("sonido_texto") or None) if con_sonido else None, con_sonido=con_sonido,
+        idioma=idiomas.de_proyecto(cliente),
     )
     return prompt, info
 

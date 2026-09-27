@@ -11,7 +11,7 @@ import creative_flow
 import director
 import flowplus_lanzar
 import flowplus_prompt
-import proyectos
+import idiomas
 import trabajos
 from providers import flowplus_modelos
 from tareas import al_interrumpir, registrar
@@ -37,6 +37,7 @@ def _fallback(cliente, entry, motivo):
         negative_marca=sesion["negative_marca"], logos=[r for r in refs if r.get("logo")], enfoque=sesion["enfoque"],
         contexto=sesion["contexto"], sonido=(sesion["sonido_texto"] or None) if sesion["con_sonido"] else None,
         con_sonido=sesion["con_sonido"], cierre_sonido=flowplus_modelos.cierre_sonido(modelo) if modelo else None,
+        idioma=idiomas.de_proyecto(cliente),
     )
     return prompt, {"estado": "fallback", "aviso": motivo, "planos": None, "planos_b": None, "prompt_b": None,
                     "diferencia_b": None, "modelo_claude": None, "version": director.VERSION, "usd": 0.0}
@@ -49,7 +50,7 @@ def ejecutar(tarea):
     jid = tarea.get("job_id") or job_id(cliente, cf_id)
     trabajos.reportar(jid, etapa=ETAPA_LEER)
     entry = creative_flow.cargar(cliente)[cf_id]
-    idioma = proyectos.preferencias_flowplus(cliente).get("idioma_prompt") or "es"
+    idioma = idiomas.de_proyecto(cliente)
     trabajos.reportar(jid, etapa=ETAPA_PLANOS)
     try:
         r = director.compilar(cliente, creative_flow.datos_para_director(cliente, entry), idioma=idioma)

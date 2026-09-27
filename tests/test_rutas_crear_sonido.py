@@ -84,7 +84,7 @@ def test_formulario_de_crear_trae_sonido_musica_y_sugerir(app, monkeypatch, tmp_
 
 def test_sugerir_sonido_ruta(app, monkeypatch):
     from final_edition import sonido
-    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None: f"{enfoque}: pasos y risas")
+    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None, idioma=None: f"{enfoque}: pasos y risas")
     r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "una niña salta", "enfoque": "persona"})
     assert r.status_code == 200 and r.get_json() == {"sonido": "persona: pasos y risas"}
     assert app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": ""}).status_code == 400
@@ -96,11 +96,11 @@ def test_sugerir_sonido_ruta_hardening(app, monkeypatch):
     ruta con un 500 — cae a "producto". Y un 502 nunca repite el texto de la
     excepción en el body (puede traer detalles internos)."""
     from final_edition import sonido
-    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None: f"{enfoque}: pasos y risas")
+    monkeypatch.setattr(sonido, "sugerir_descripcion", lambda escena, enfoque, persona=None, idioma=None: f"{enfoque}: pasos y risas")
     r = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": ["a"]})
     assert r.status_code == 200 and r.get_json() == {"sonido": "producto: pasos y risas"}
 
-    def _boom(escena, enfoque, persona=None):
+    def _boom(escena, enfoque, persona=None, idioma=None):
         raise RuntimeError("secreto")
     monkeypatch.setattr(sonido, "sugerir_descripcion", _boom)
     r2 = app["c"].post("/cliente/acme/creative_flow/sugerir_sonido", json={"escena": "x", "enfoque": "producto"})

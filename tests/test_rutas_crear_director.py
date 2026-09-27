@@ -22,15 +22,18 @@ def app(base_temporal, monkeypatch, tmp_path):
     return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "encolados": encolados}
 
 
-def test_settings_guarda_idioma_y_duracion_por_defecto(app):
+def test_settings_guarda_duracion_por_defecto(app):
+    """Fase 3 (spec 2026-09-26 §B4): el idioma ya no es una preferencia de
+    FlowPlus (el select desapareció de Configuración; el idioma del proyecto
+    se elige en Generación, fase 2)."""
     import proyectos
     r = app["c"].post("/cliente/acme/preferencias_flowplus/guardar", data={
-        "modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro", "idioma_prompt": "en", "duracion_defecto": "10"})
+        "modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro", "duracion_defecto": "10"})
     assert r.status_code == 302
     p = proyectos.preferencias_flowplus("acme")
-    assert p["idioma_prompt"] == "en" and p["duracion_defecto"] == 10
+    assert p == {"modelo_video": "wan3", "modelo_imagen": "seedream_v5_pro", "duracion_defecto": 10}
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert 'name="idioma_prompt"' in html and '<option value="en" selected>' in html
+    assert 'name="idioma_prompt"' not in html
     assert 'name="duracion_defecto"' in html
 
 
@@ -255,7 +258,7 @@ def test_reusar_precarga_sonido_musica_y_calidad(app):
 
 def test_formulario_trae_armar_prompt_borrador_y_duracion_de_la_preferencia(app):
     import proyectos
-    proyectos.guardar_preferencias_flowplus("acme", "wan3", "seedream_v5_pro", idioma_prompt="es", duracion_defecto=8)
+    proyectos.guardar_preferencias_flowplus("acme", "wan3", "seedream_v5_pro", duracion_defecto=8)
     html = app["c"].get("/cliente/acme").get_data(as_text=True)
     # Desde 2026-09-21 el botón principal genera; «Armar prompt con IA» es la ayuda opcional.
     assert "Generar video" in html and "Crear super prompt con IA (gratis)" in html     # texto del botón desde a8b1c9b

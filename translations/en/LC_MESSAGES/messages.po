@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Creatv VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-27 05:00-0500\n"
+"POT-Creation-Date: 2026-09-27 05:59-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -260,6 +260,9 @@ msgstr "When connecting, choose that Page: its page token (<code>page_id</code>)
 
 msgid "Al volver, la tienda queda conectada y se sincroniza sola cada 6 h."
 msgstr "When you come back, the store is connected and syncs on its own every 6 h."
+
+msgid "Alguien recibe la compra y abre la caja o bolsa hasta descubrir el producto, con la emoción de estrenarlo."
+msgstr "Someone receives their purchase and opens the box or bag until they discover the product, with the thrill of trying it for the first time."
 
 msgid "Analizando referencias…"
 msgstr "Analyzing references…"
@@ -792,6 +795,9 @@ msgstr ""
 "  <code>@Logo N</code> with the instruction to reproduce it exactly — that way the model doesn't invent brands or letters.\n"
 "  Upload 1 or 2 (PNG with a clean background, or a sharp photo of the logo on the product)."
 
+msgid "El producto solo, sin nadie: vacío, sin usar, sobre la superficie o flotando."
+msgstr "The product alone, with nobody: empty, unused, on the surface or floating."
+
 msgid "El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta."
 msgstr "The server doesn't have email configured; let the administrator know so they can confirm your account."
 
@@ -1013,9 +1019,6 @@ msgstr "That's already your email and it's confirmed."
 
 msgid "España"
 msgstr "Spain"
-
-msgid "Español (los tokens Image N y el cierre de sonido van en inglés)"
-msgstr "Spanish (the Image N tokens and the sound closing line are in English)"
 
 msgid "Espera un momento antes de pedir otro correo de verificación."
 msgstr "Wait a moment before requesting another verification email."
@@ -1279,9 +1282,6 @@ msgstr "Login configuration id"
 msgid "Identificador de la app"
 msgstr "App id"
 
-msgid "Idioma del prompt que arma la IA"
-msgstr "Language of the prompt the AI puts together"
-
 msgid "Idioma del proyecto"
 msgstr "Project language"
 
@@ -1308,9 +1308,6 @@ msgstr "Included in Atria's monthly plan (1 200 calls/month); it doesn't charge 
 
 msgid "Informe de operación y desarrollo"
 msgstr "Operations and development report"
-
-msgid "Inglés completo (para la prueba A/B)"
-msgstr "Full English (for the A/B test)"
 
 msgid "Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token."
 msgstr "Log in with the store's account and authorize the app: no token gets pasted."
@@ -2121,6 +2118,9 @@ msgstr "Without this the “Connect with MercadoLibre” button doesn't show up 
 msgid "Sin referencias de marca todavía."
 msgstr "No brand references yet."
 
+msgid "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos."
+msgstr "No references or product: the model gets the text as-is, with no brand or logos."
+
 msgid "Sin verificar ahora (Meta no respondió)."
 msgstr "Not verified right now (Meta didn't respond)."
 
@@ -2163,6 +2163,9 @@ msgstr ""
 
 msgid "Solo producto"
 msgstr "Product only"
+
+msgid "Solo texto"
+msgstr "Text only"
 
 msgid "Solo texto, sin imagen de referencia"
 msgstr "Text only, no reference image"
@@ -2405,6 +2408,12 @@ msgstr "A user with the 'cliente' role needs an assigned project."
 
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
+
+msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
+msgstr "A real person using the product naturally; the product is still the star."
+
+msgid "Unboxing"
+msgstr "Unboxing"
 
 msgid "Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido."
 msgstr "Uses ONLY the first image as the starting frame; the framing and format come from that image. Up to 30 s. Cinematic quality, the most expensive. Scene sound included."
