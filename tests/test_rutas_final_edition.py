@@ -655,13 +655,30 @@ def test_creative_flow_items_resuelve_el_producto_una_sola_vez_por_productos_ids
 
     def fake(cliente, entry, precio):
         llamadas.append(tuple(entry.get("productos_ids") or ()))
-        return {"nombre": "Chancla", "sofisticacion": 3}
+        return {"nombre": "Chancla", "sofisticacion": 3, "pruebas": []}   # resuelto en el catálogo
     monkeypatch.setattr(final_edition, "_producto", fake)
     cf1 = _sesion_video_listo("acme")
     cf2 = creative_flow.crear("acme", [], ["Chancla Rose"], [], "otra acción", 8, "", "A")
     creative_flow.actualizar("acme", cf2, estado="video_listo", video_url="https://r2/otra.mp4")
     dashboard._creative_flow_items("acme")
     assert llamadas == [("Chancla Rose",)]           # una sola llamada para las dos piezas
+
+
+def test_creative_flow_items_no_comparte_el_producto_de_respaldo(base_temporal, monkeypatch):
+    """Re-revisión del bloque 3: si el nombre no está en el catálogo, `_producto`
+    arma uno de respaldo con los datos de ESA pieza; recordarlo por
+    `productos_ids` le daba a otra pieza el texto de la primera."""
+    import creative_flow
+    import dashboard
+    from doctrina import revisor
+    vistos = {}
+    monkeypatch.setattr(revisor, "reglas", lambda d: vistos.update({d["cf_id"]: d["producto"].get("nombre")}) or [])
+    cf1 = creative_flow.crear("acme", [], ["Zapato Fantasma"], [], "primera acción", 8, "", "A")
+    cf2 = creative_flow.crear("acme", [], ["Zapato Fantasma"], [], "segunda acción", 8, "", "A")
+    for cf in (cf1, cf2):
+        creative_flow.actualizar("acme", cf, estado="video_listo", video_url=f"https://r2/{cf}.mp4")
+    dashboard._creative_flow_items("acme")
+    assert vistos[cf1] != vistos[cf2]
 
 
 def test_creative_flow_items_reglas_vacias_si_reunir_falla(base_temporal, monkeypatch):

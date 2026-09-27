@@ -2593,13 +2593,18 @@ def _creative_flow_items(cliente):
             try:
                 clave = tuple(entry.get("productos_ids") or ())
                 if clave:
-                    if clave not in productos_por_ids:
+                    producto = productos_por_ids.get(clave)
+                    if producto is None:
                         try:
-                            productos_por_ids[clave] = final_edition._producto(cliente, entry, None) or {}
+                            producto = final_edition._producto(cliente, entry, None) or {}
                         except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
-                            productos_por_ids[clave] = {}
+                            producto = {}
+                        # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
+                        # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
+                        if "pruebas" in producto or not producto:
+                            productos_por_ids[clave] = producto
                     d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
-                                                guia=guia_marca, producto=productos_por_ids[clave])
+                                                guia=guia_marca, producto=producto)
                 else:
                     d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=guia_marca)
                 item["reglas"] = doctrina_revisor.reglas(d)
