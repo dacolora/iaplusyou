@@ -56,18 +56,29 @@ def _sin_cierre(texto, etiqueta):
     return (texto or "").replace(f"</{etiqueta}>", "")
 
 
-def candidatos(cliente, etapa, excluir_ids=None, limite=200, consciencia=None, familia=None):
+def candidatos(cliente, etapa, excluir_ids=None, limite=200, consciencia=None, familia=None, marcas_nombres=None,
+               paginas=None, idioma=None):
     """Referentes visibles de esa etapa, ya clasificados (`fuente`/`claude`) y
     fuera de `excluir_ids`, en el orden que ya usa `referentes.datos.listar`
     (más días primero). Cuando `consciencia` es uno de
     `referentes.datos.CONSCIENCIAS` también filtra por ese nivel, y `familia`
-    por esa familia exacta. No aplica el desempate por familia — eso es `elegir`."""
+    por esa familia exacta. `marcas_nombres`/`paginas`/`idioma` son la consulta
+    restringida que usa `_candidatos_con` para que las marcas a imitar o el
+    idioma de la campaña entren al pool aunque el `limite` general no alcance
+    a traerlas (spec 2026-09-26, fix de la ronda final — F1). No aplica el
+    desempate por familia — eso es `elegir`."""
     excluir = set(excluir_ids or ())
     filtros = {"etapa": etapa}
     if consciencia in referentes_datos.CONSCIENCIAS:
         filtros["consciencia"] = consciencia
     if familia:
         filtros["familia"] = familia
+    if marcas_nombres:
+        filtros["marcas_nombres"] = list(marcas_nombres)
+    if paginas:
+        filtros["paginas"] = list(paginas)
+    if idioma:
+        filtros["idioma"] = idioma
     filas = referentes_datos.listar(cliente, filtros, pagina=1, por_pagina=limite)["items"]
     return [r for r in filas if r["id"] not in excluir and r.get("clasificacion") in CLASIFICACIONES_USABLES]
 
@@ -127,15 +138,33 @@ def preferencia(c, marcas=(), idioma=None):
             (c.get("variantes") or 0) * max(c.get("dias") or 0, 1))
 
 
-def _candidatos_con(cliente, etapa, consciencia, familias, excluir, limite):
-    if not familias:
-        return candidatos(cliente, etapa, excluir, limite=limite, consciencia=consciencia)
+def _candidatos_con(cliente, etapa, consciencia, familias, excluir, limite, marcas=(), idioma=None):
+    """El pool de candidatos para esta etapa/consciencia/familias. Cuando la
+    campaña tiene marcas a imitar o idioma (F1, ronda final): además del pool
+    general, agrega una consulta restringida a esas marcas/ese idioma (mismos
+    etapa/consciencia/familia) para que esas filas entren aunque el `limite`
+    general (200) no alcance a traerlas — la biblioteca puede tener miles de
+    filas por etapa. El orden final no importa aquí: `sugerir_campana` y
+    `candidatos_aflojando` vuelven a ordenar por `preferencia` después."""
+    fams = list(familias) or [None]
+    nombres = sorted({(m.get("nombre") or "").strip().lower() for m in marcas or ()} - {""})
+    paginas = sorted({str(m["pagina_id"]) for m in marcas or () if m.get("pagina_id")})
     vistos, salida = set(), []
-    for f in familias:
-        for c in candidatos(cliente, etapa, excluir, limite=limite, consciencia=consciencia, familia=f):
+
+    def _agregar(filas):
+        for c in filas:
             if c["id"] not in vistos:
                 vistos.add(c["id"])
                 salida.append(c)
+
+    for f in fams:
+        if nombres or paginas:
+            _agregar(candidatos(cliente, etapa, excluir, limite=limite, consciencia=consciencia, familia=f,
+                                marcas_nombres=nombres or None, paginas=paginas or None))
+        if idioma:
+            _agregar(candidatos(cliente, etapa, excluir, limite=limite, consciencia=consciencia, familia=f,
+                                idioma=idioma))
+        _agregar(candidatos(cliente, etapa, excluir, limite=limite, consciencia=consciencia, familia=f))
     return salida
 
 
@@ -173,7 +202,7 @@ def sugerir_campana(cliente, enfoque, excluir_ids, objetivo, limite=200):
         if afloja:
             aflojado.append(afloja)
         ya = excluir | {e["id"] for e in elegidos}
-        orden = sorted(_candidatos_con(cliente, etapa, cons, fams, ya, limite),
+        orden = sorted(_candidatos_con(cliente, etapa, cons, fams, ya, limite, marcas, idioma),
                        key=lambda c: preferencia(c, marcas, idioma), reverse=True)
         for c in orden:
             if len(elegidos) >= objetivo:
@@ -199,7 +228,7 @@ def candidatos_aflojando(cliente, enfoque, excluir_ids, minimo=20, limite=200):
         if afloja:
             aflojado.append(afloja)
         ya = excluir | {c["id"] for c in salida}
-        salida += sorted(_candidatos_con(cliente, etapa, cons, fams, ya, limite),
+        salida += sorted(_candidatos_con(cliente, etapa, cons, fams, ya, limite, marcas, idioma),
                          key=lambda c: preferencia(c, marcas, idioma), reverse=True)
     return salida, aflojado
 

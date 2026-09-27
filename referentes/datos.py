@@ -205,6 +205,24 @@ def _condiciones(cliente, filtros):
     if q:
         like = f"%{q}%"
         cond.append(sa.or_(t.c.titular.ilike(like), t.c.firma.ilike(like), t.c.marca.ilike(like)))
+    # Filtros opcionales para el pool de sugeridos de Sprints (spec 2026-09-26,
+    # fix de la ronda final): una campaña con marcas a imitar o idioma necesita
+    # poder pedir DIRECTO esas filas, porque la biblioteca puede tener miles
+    # por etapa y el `limite` general (200) nunca las alcanzaría. `marcas_nombres`
+    # y `paginas` se combinan con OR entre sí (una marca puede matchear por
+    # nombre o por página) y con AND contra el resto de los filtros de arriba.
+    marcas_nombres = [str(x).strip().lower() for x in (f.get("marcas_nombres") or ()) if str(x).strip()]
+    paginas = [str(x).strip() for x in (f.get("paginas") or ()) if str(x).strip()]
+    if marcas_nombres or paginas:
+        opciones_marca = []
+        if paginas:
+            opciones_marca.append(t.c.pagina_id.in_(paginas))
+        if marcas_nombres:
+            opciones_marca.append(sa.func.lower(t.c.marca).in_(marcas_nombres))
+        cond.append(sa.or_(*opciones_marca))
+    idioma = _texto(f.get("idioma"), 5)
+    if idioma:
+        cond.append(t.c.idioma == idioma)
     return cond
 
 

@@ -323,3 +323,40 @@ def test_sugerir_ia_manda_el_enfoque(monkeypatch):
     sugerir.sugerir_ia([_cand(1, "A")], "p", "pr", "t", 1, enfoque_texto="marcas a imitar: Crocs")
     texto = pedidos[0]["messages"][0]["content"]
     assert "<enfoque>marcas a imitar: Crocs</enfoque>" in texto
+
+
+# --------------------------- F1 (ronda final): el pool de 200 no puede tapar
+# una marca/idioma que la campaña sí pide — base real, no el fake `listar`.
+
+def _fila_pool(referentes_datos, anuncio_id, dias, marca="", pagina_id=None, idioma="en", etapa="TOF"):
+    rid, _ = referentes_datos.guardar_referente({
+        "anuncio_id": anuncio_id, "fuente": "copycoders", "imagen_origen": f"https://cdn/{anuncio_id}.jpg",
+        "etapa": etapa, "clasificacion": "claude", "dias": dias, "variantes": 1, "marca": marca,
+        "pagina_id": pagina_id, "idioma": idioma, "familia": "ugc"})
+    referentes_datos.marcar_imagen(rid, "ok", f"https://r2/{anuncio_id}.jpg")
+    return rid
+
+
+def test_sugerir_campana_encuentra_marca_pagina_e_idioma_fuera_del_pool_de_200(base_temporal):
+    """300 filas TOF con `dias` altos (llenan el pool general de 200, ordenado
+    por dias DESC) más tres filas «de nicho» con dias=1 -- cada una solo
+    identificable por marca, por pagina_id o por idioma. Sin la consulta
+    restringida (F1), ninguna de las tres entraría nunca al pool y
+    `sugerir_campana` jamás las devolvería."""
+    import referentes.datos as referentes_datos
+    import referentes.sugerir as sugerir
+
+    for i in range(300):
+        _fila_pool(referentes_datos, f"pool-{i}", dias=1000 - i)
+    crocs_id = _fila_pool(referentes_datos, "crocs-1", dias=1, marca="Crocs")
+    hoka_id = _fila_pool(referentes_datos, "hoka-1", dias=1, pagina_id="555")
+    es_id = _fila_pool(referentes_datos, "es-1", dias=1, idioma="es")
+
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "marcas": [{"nombre": "crocs"}]}, set(), 1)
+    assert r["items"][0]["id"] == crocs_id
+
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "marcas": [{"nombre": "hoka", "pagina_id": "555"}]}, set(), 1)
+    assert r["items"][0]["id"] == hoka_id
+
+    r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "idioma": "es"}, set(), 1)
+    assert r["items"][0]["id"] == es_id
