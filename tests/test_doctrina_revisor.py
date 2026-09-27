@@ -431,3 +431,17 @@ def test_reunir_con_producto_dado_no_escanea_el_catalogo(base_temporal, monkeypa
     assert d["producto"] == {"nombre": "Dado a mano"}
     sin = revisor.reunir("acme", cf_id, producto=None)
     assert sin["producto"] == {}
+
+
+def test_texto_para_revision_omite_la_guia_si_con_guia_es_false(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I7): el QA arma su propio texto con
+    PROMPT_QA, que ya trae la guía de marca — el texto de `reunir` no debe
+    repetirla."""
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    d = revisor.reunir("acme", cf_id, guia="Tono cálido, luz natural")
+    con_guia = revisor.texto_para_revision(d, [])
+    assert "GUÍA DE ESTILO DE LA MARCA" in con_guia and "Tono cálido, luz natural" in con_guia
+    sin_guia = revisor.texto_para_revision(d, [], con_guia=False)
+    assert "GUÍA DE ESTILO DE LA MARCA" not in sin_guia and "Tono cálido, luz natural" not in sin_guia

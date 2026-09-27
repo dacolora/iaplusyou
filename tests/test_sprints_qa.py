@@ -74,6 +74,9 @@ def test_evaluar_arma_prompt_y_mezcla_formato(base_temporal, monkeypatch, tmp_pa
     assert capturado["m"] == qa.MAX_TOKENS and "Revisar" in capturado["s"][0]["text"]
     assert len([b for b in capturado["c"] if b["type"] == "image"]) == 4                       # 0,3 · 3 · 6 · 7,7 s
     assert "Segundo 0,3:" in [b.get("text") for b in capturado["c"]]
+    # I7 (revisión final): PROMPT_QA ya trae la guía de marca — el texto de la
+    # doctrina (revisor.texto_para_revision) no debe repetirla.
+    assert texto.count("GUÍA DE ESTILO DE LA MARCA") == 1
     # Imagen sin archivo local: usa la URL y formato no verificado.
     monkeypatch.setattr(analisis, "_llamar_contando", lambda content, max_tokens=700, system=None: capturado.update(
         c=content) or (json.dumps({"score": 50, "checks": CHECKS_OK}), 800, 100))

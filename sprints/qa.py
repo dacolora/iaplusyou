@@ -1,8 +1,9 @@
 """
 Control de calidad automático de una pieza generada (spec §2.4): Claude con
-visión (imagen, o tres fotogramas del video) juzga cuatro cosas y ffprobe
-verifica el formato. El resultado se guarda en `campana_pieza.qa`; el QA nunca
-genera ni gasta en proveedores de video: marca, explica y la persona decide.
+visión (imagen, o los fotogramas del revisor de la doctrina, hasta 8) juzga
+cuatro cosas y ffprobe verifica el formato. El resultado se guarda en
+`campana_pieza.qa`; el QA nunca genera ni gasta en proveedores de video:
+marca, explica y la persona decide.
 
 Doctrina, bloque 3: en la misma llamada Claude revisa también los 12 puntos de
 `doctrina/textos/revisar.md` (rebanada «revisar» en el system, los DATOS de
@@ -26,7 +27,6 @@ from sprints.analisis import AnalisisInvalido
 CHECKS = ("consistencia_visual", "presencia_marca", "compatibilidad_campana", "calidad_minima", "formato")
 CHECKS_IA = CHECKS[:4]
 UMBRAL_DEFECTO = 70
-COSTO_USD_ESTIMADO = 0.02
 TOLERANCIA_DURACION = 0.2
 # Pensamiento adaptativo + los 12 puntos de la doctrina: con 600 la respuesta
 # puede llegar vacía (ver CLAUDE.md, topes de 4 000–16 000).
@@ -200,7 +200,8 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
         d = None
     avisos = revisor.reglas(d) if d else []
     if d:
-        texto += "\n\n" + revisor.texto_para_revision(d, avisos)
+        # con_guia=False: PROMPT_QA ya trae «GUÍA DE ESTILO DE LA MARCA» arriba.
+        texto += "\n\n" + revisor.texto_para_revision(d, avisos, con_guia=False)
     es_temporal = bool(ruta and ruta != entry.get("video_local"))
     try:
         imagenes = _bloques_imagen(entry, ruta)
