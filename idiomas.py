@@ -14,7 +14,9 @@ inglés. Mientras tanto el selector solo lo ve el admin.
 El texto en español es la fuente (msgid); el inglés vive en
 translations/en/LC_MESSAGES/messages.po (catalogo_i18n.py lo extrae y compila).
 Import liviano a propósito (flask_babel, usuarios y proyectos se importan dentro
-de las funciones): providers/ y otros módulos del worker importan N_ de acá."""
+de las funciones): providers/ y otros módulos del worker importan N_ de acá.
+Formatos de fecha y número por idioma: activo, mes_largo, meses_cortos,
+fecha_corta, dia_mes, numero (Babel/CLDR)."""
 import os
 from contextlib import contextmanager
 
@@ -100,6 +102,19 @@ def guardar_de_proyecto(cliente, idioma):
     _json_store.guardar(proyectos._path(cliente), datos)
 
 
+def de_tarea(tarea):
+    """Idioma del proyecto de una fila `tarea` (columna `cliente`, o
+    `payload.cliente`). Sin proyecto, uno interno («_creatv») o si leerlo
+    falla: DEFECTO."""
+    cliente = tarea.get("cliente") or (tarea.get("payload") or {}).get("cliente")
+    if not cliente or str(cliente).startswith("_"):
+        return DEFECTO
+    try:
+        return de_proyecto(cliente)
+    except Exception:  # noqa: BLE001 — leer el idioma nunca tumba una tarea
+        return DEFECTO
+
+
 def de_peticion():
     """locale_selector de Flask-Babel: la persona en sesión, si no la cookie,
     si no DEFECTO. Sin contexto de petición (un gettext() suelto en un
@@ -121,6 +136,63 @@ def traducir(texto):
         return texto
     from flask_babel import gettext
     return gettext(texto)
+
+
+def activo():
+    """Idioma del contexto actual: el forzado con en_idioma, el de la
+    petición (Flask-Babel), o DEFECTO fuera de toda app."""
+    try:
+        from flask_babel import get_locale
+        loc = get_locale()
+    except Exception:  # noqa: BLE001 — fuera de toda app no hay locale
+        loc = None
+    return (normalizar(str(loc)) if loc else None) or DEFECTO
+
+
+def _loc(idioma):
+    return normalizar(idioma) or activo()
+
+
+def mes_largo(numero, idioma=None):
+    """«septiembre» / «September» (CLDR, forma suelta)."""
+    from babel.dates import get_month_names
+    return get_month_names("wide", context="stand-alone", locale=_loc(idioma))[int(numero)]
+
+
+def meses_cortos(idioma=None):
+    """Los 12 meses abreviados de CLDR («ene», …, «sept», …, «dic» / «Jan», …)."""
+    from babel.dates import get_month_names
+    nombres = get_month_names("abbreviated", context="format", locale=_loc(idioma))
+    return [nombres[i] for i in range(1, 13)]
+
+
+def fecha_corta(fecha, con_hora=False, idioma=None):
+    """«20 sept» / «20 Sep»; con hora, «25 sept · 15:04». `fecha` es date o
+    datetime (un datetime sin zona se toma tal cual, sin convertir)."""
+    from babel.dates import format_date, format_datetime
+    loc = _loc(idioma)
+    if con_hora:
+        return format_datetime(fecha, "d MMM · HH:mm", locale=loc)
+    return format_date(fecha, "d MMM", locale=loc)
+
+
+_PATRON_DIA_MES = {"es": "dd/MM", "en": "MM/dd"}
+
+
+def dia_mes(fecha, idioma=None):
+    """Día y mes en números: «20/09» en español, «09/20» en inglés."""
+    from babel.dates import format_date
+    loc = _loc(idioma)
+    return format_date(fecha, _PATRON_DIA_MES[loc], locale=loc)
+
+
+def numero(valor, decimales=0, idioma=None):
+    """Miles y decimales del idioma: «1.250.000» / «1,250,000»; con
+    decimales=2, «12,50» / «12.50». El patrón explícito agrupa también los
+    números de 4 cifras («4.000»), como el código de antes."""
+    from babel.numbers import format_decimal
+    patron = "#,##0" + ("." + "0" * int(decimales) if decimales else "")
+    return format_decimal(valor, patron, locale=_loc(idioma))
 
 
 def _app_fuera_de_peticion():

@@ -150,3 +150,28 @@ def test_orden_idioma():
     en = idiomas.orden_idioma("en")
     assert "inglés" in en and "English" in en
     assert "español" in idiomas.orden_idioma("es")
+
+
+def test_formatos_de_fecha_y_numero():
+    import datetime
+    d = datetime.date(2026, 9, 20)
+    t = datetime.datetime(2026, 9, 25, 15, 4)
+    assert idiomas.mes_largo(9, "es") == "septiembre" and idiomas.mes_largo(9, "en") == "September"
+    assert idiomas.meses_cortos("es")[0] == "ene" and idiomas.meses_cortos("en")[8] == "Sep"
+    assert len(idiomas.meses_cortos("es")) == 12
+    assert idiomas.fecha_corta(d, idioma="es") == "20 sept" and idiomas.fecha_corta(d, idioma="en") == "20 Sep"
+    assert idiomas.fecha_corta(t, con_hora=True, idioma="es") == "25 sept · 15:04"
+    assert idiomas.fecha_corta(t, con_hora=True, idioma="en") == "25 Sep · 15:04"
+    assert idiomas.dia_mes(d, "es") == "20/09" and idiomas.dia_mes(d, "en") == "09/20"
+    assert idiomas.numero(1250000, idioma="es") == "1.250.000" and idiomas.numero(1250000, idioma="en") == "1,250,000"
+    assert idiomas.numero(4000, idioma="es") == "4.000"
+    assert idiomas.numero(12.5, 2, idioma="es") == "12,50" and idiomas.numero(12.5, 2, idioma="en") == "12.50"
+
+
+def test_activo_sigue_al_contexto(app_prueba):
+    assert idiomas.activo() == "es"                      # sin contexto: DEFECTO (fijo en "es" en tests)
+    with idiomas.en_idioma("en"):
+        assert idiomas.activo() == "en"
+        assert idiomas.mes_largo(1) == "January"          # sin idioma explícito: el del contexto
+    with app_prueba.test_request_context("/", headers={"Cookie": "idioma=en"}):
+        assert idiomas.activo() == "en"

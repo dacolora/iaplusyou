@@ -23,6 +23,7 @@ from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cola
 import db
+import idiomas
 import tareas
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -69,11 +70,20 @@ def encolar_periodicas():
         cola.encolar(tipo, {}, job_id=f"periodica__{tipo}")
 
 
+def idioma_de_tarea(tarea):
+    """Alias de idiomas.de_tarea (los tests y el resto del worker lo llaman así)."""
+    return idiomas.de_tarea(tarea)
+
+
 def ejecutar(tarea):
+    """Corre la tarea en el idioma de su proyecto (spec 2026-09-26 §B8): todo
+    gettext de adentro — motivos, eventos, avisos, el mensaje que devuelve y
+    el texto de una excepción — sale en ese idioma."""
     fn = tareas.REGISTRO.get(tarea["tipo"])
     if fn is None:
         raise RuntimeError(f"tipo de tarea desconocido: {tarea['tipo']}")
-    return fn(tarea)
+    with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        return fn(tarea)
 
 
 MENSAJE_INTERRUMPIDA = "Se interrumpió por un reinicio del servidor. Vuelve a intentar."
