@@ -47,7 +47,7 @@ ancla del «¿Por qué?» en `/cliente/<c>/doctrina#<rebanada>`.
 | `arranque_consciencia` | 1 | hay consciencia y arranque (`lead`) y el arranque no está en `doctrina.lead_por_consciencia(consciencia)` |
 | `promesa_multiple` | 2 | `doctrina.validar_angulo(angulo)` devuelve `promesa_multiple` |
 | `sin_mecanismo` | 5 | sofisticación (del ángulo o fija del producto) ≥ 3 y el ángulo no tiene mecanismo |
-| `cifra_no_verificada` | 4 | `doctrina.verificar_cifras` encuentra cifras en el guion (texto de voz y de pantalla) o en el caption que no están en los datos verificables (ficha del producto con sus pruebas, `doctrina.texto_verificable(angulo)`, el texto que escribió la persona en Crear y la guía de marca); una por cifra |
+| `cifra_no_verificada` | 4 | `doctrina.verificar_cifras` encuentra cifras en el caption que no están en los datos verificables (ficha del producto con sus pruebas, `doctrina.texto_verificable(angulo)`, el texto que escribió la persona en Crear, la guía de marca y el guion); una por cifra. El guion no se revisa aquí: sus cifras ya se verificaron (bloqueante) al escribirlo, y las que la persona edite a mano son suyas |
 | `sin_cta` | 9 | hay guion y su último bloque no tiene `rol == "cta"` |
 | `gancho_distinto` | 12 | la pieza viene de una idea de sprint y el gancho de la idea no es el del ángulo (comparación sin mayúsculas ni espacios de más) |
 
@@ -61,8 +61,8 @@ salvo la foto que queda dentro de una revisión de Claude (§4).
   del sprint si la hay (`extra.sprint`), el guion base (`creative_flow.guion_base`), el último caption no vacío de las
   `publicacion` de la pieza, el producto (`final_edition._producto`, con pruebas y sofisticación) y la guía de marca
   (`marca.guia_efectiva`). `reglas()` y el texto para Claude salen de este mismo dict.
-- **Fotogramas** (`doctrina.revisor.tiempos(duracion)` + `fotogramas(ruta, tiempos)`): uno en 0,3 s (el gancho) y
-  luego uno cada 3 s; si pasan de 8, se reparten 8 a lo largo del video. JPEG a 640 px. Cada fotograma va precedido
+- **Fotogramas** (`doctrina.revisor.tiempos(duracion)` + `fotogramas(ruta, tiempos)`): uno en 0,3 s (el gancho),
+  luego uno cada 3 s y uno cerca del final (el cierre); si pasan de 8, se reparten 8 a lo largo del video. JPEG a 640 px. Cada fotograma va precedido
   de «Segundo N:» para que Claude cite dónde. Una imagen va por URL, sin fotogramas.
 - **Llamada**: `generador_prompts.MODEL`, `system = doctrina.bloque_system("revisar", extra=INSTRUCCIONES_REVISAR)`,
   tope de salida 6000 (pensamiento adaptativo), vía `sprints.analisis._llamar_contando` (cuenta la caché). Respuesta
@@ -73,7 +73,7 @@ salvo la foto que queda dentro de una revisión de Claude (§4).
   "resumen", "reglas": <foto de reglas()>, "origen": "boton|sprint", "modelo", "usd", "revisado_en"}`.
   `creative_flow.duplicar` no la copia (pertenece al video generado). **Vigente** solo si `video_url` coincide con
   el de la pieza; si no, se muestra como «de una versión anterior».
-- **Tarea** `pieza_revisar` (`tareas/doctrina.py`): `max_intentos=1`, `job_id = f"{cliente}__cf{cf_id}__revisar"`,
+- **Tarea** `pieza_revisar` (`tareas/doctrina.py`): `max_intentos=1`, `job_id = f"{cliente}__{cf_id}__revisar"` (como los demás trabajos de Crear),
   payload `{cliente, cf_id}`. Gasto tipo nuevo `revision` («Revisión de la doctrina»), referencia
   `revision:<cf_id>:t<tarea_id>`, costo real (`nicho.avatares.costo_real`); también cuando la respuesta no sirvió
   (detalle «revisión · respuesta inválida»), y en ese caso guarda `revision_doctrina = {"error": ..., "video_url",
@@ -92,8 +92,9 @@ salvo la foto que queda dentro de una revisión de Claude (§4).
   «Revisar con la doctrina (≈ US$ X)» o «Revisar de nuevo (≈ US$ X)», o la barra de progreso si hay un trabajo en
   curso (`iniciarPolling`, los `<script>` clonados no corren: se usa el `data-poll-job` que ya arranca `abrir()`).
 - **Experimentos** (galería): `experimentos.elegibles` agrega `doctrina = {"estado": "sin_revisar|vieja|bien|
-  mejorar|error", "n": <puntos para mejorar + avisos de la foto de reglas>}` leyendo solo `concepto.extra` (ya está en
-  la consulta: cero llamadas nuevas). Etiqueta en cada pieza. En el paso 3 («Revisa»), una línea con las piezas
+  mejorar|error", "n": <puntos para mejorar + avisos de la foto de reglas guardada con la revisión>}` leyendo solo
+  `concepto.extra` (ya está en la consulta: cero llamadas nuevas); una final se muestra con la revisión de su pieza de
+  origen sin mirar si es vieja. Sin revisión de Claude, «Doctrina: sin revisar» (las reglas vivas se ven en Crear). Etiqueta en cada pieza. En el paso 3 («Revisa»), una línea con las piezas
   elegidas que tienen puntos para mejorar. Nunca bloquea.
 - **Sprints**: la página de revisión del lote muestra la misma etiqueta en cada tarjeta, junto al QA.
 
@@ -105,8 +106,9 @@ salvo la foto que queda dentro de una revisión de Claude (§4).
 - Tope de salida 600 → 6000; la llamada va por `_llamar_contando` y `evaluar` devuelve los tokens.
 - La parte de doctrina es opcional para el QA: si viene mal, el QA se guarda igual sin ella.
 - Si el QA se guarda (misma sesión), `revision_doctrina` se guarda con `origen: "sprint"`.
-- `ejecutar_qa_pieza` registra por fin su gasto real (tipo `revision`, referencia `qa:<cp_id>:t<tarea_id>`), también
-  cuando la visión falla después de pagar (tokens en la excepción).
+- `ejecutar_qa_pieza` registra por fin su gasto real (tipo `revision`, referencia `qa:<cp_id>:t<tarea_id>:i<intento>`:
+  el QA reintenta hasta 3 veces y cada intento cobra), también cuando la visión falla después de pagar (tokens en la
+  excepción).
 
 ## 7. Errores y límites
 
