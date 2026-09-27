@@ -609,6 +609,40 @@ def test_items_de_crear_traen_la_revision_y_las_reglas(base_temporal, monkeypatc
     assert sin["revision_estado"] is None and sin["reglas"] == []
 
 
+def test_creative_flow_items_resuelve_el_producto_una_sola_vez_por_productos_ids(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I1): dos piezas terminadas con los mismos
+    `productos_ids` no deben escanear el catálogo dos veces — `_producto` se
+    memoiza por tupla de `productos_ids` para toda la lista de Crear."""
+    import creative_flow
+    import dashboard
+    import final_edition
+    llamadas = []
+
+    def fake(cliente, entry, precio):
+        llamadas.append(tuple(entry.get("productos_ids") or ()))
+        return {"nombre": "Chancla", "sofisticacion": 3}
+    monkeypatch.setattr(final_edition, "_producto", fake)
+    cf1 = _sesion_video_listo("acme")
+    cf2 = creative_flow.crear("acme", [], ["Chancla Rose"], [], "otra acción", 8, "", "A")
+    creative_flow.actualizar("acme", cf2, estado="video_listo", video_url="https://r2/otra.mp4")
+    dashboard._creative_flow_items("acme")
+    assert llamadas == [("Chancla Rose",)]           # una sola llamada para las dos piezas
+
+
+def test_creative_flow_items_reglas_vacias_si_reunir_falla(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I9): un fallo de `reunir` (informativo) no
+    debe tumbar la lista de Crear — la pieza sigue apareciendo, sin reglas."""
+    import dashboard
+    from doctrina import revisor
+    cf_id = _sesion_video_listo()
+
+    def rompe(*a, **k):
+        raise RuntimeError("boom")
+    monkeypatch.setattr(revisor, "reunir", rompe)
+    item = next(i for i in dashboard._creative_flow_items("acme") if i["id"] == cf_id)
+    assert item["reglas"] == []
+
+
 def test_ruta_revisar_encola_solo_piezas_terminadas(base_temporal, monkeypatch):
     import creative_flow
     import dashboard

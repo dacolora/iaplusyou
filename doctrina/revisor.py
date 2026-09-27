@@ -243,12 +243,13 @@ def ultimo_caption(cliente, cf_id):
     return (fila[0] if fila else "") or ""
 
 
-def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR):
+def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_SIN_DAR):
     """Todo lo que miran las reglas y Claude de una pieza de Crear. `entry`:
     la sesión ya cargada (la lista de Crear la pasa para no recargar todo).
-    `guion`/`guia`: ya leídos por quien llama, para no repetir la lectura."""
+    `guion`/`guia`/`producto`: ya resueltos por quien llama, para no repetir
+    la lectura (`producto` en particular evita escanear el catálogo una vez
+    por pieza en la lista de Crear — ver `dashboard._creative_flow_items`)."""
     import creative_flow
-    import final_edition
     import marca
     if entry is None:
         entry = creative_flow.cargar(cliente).get(cf_id)
@@ -257,10 +258,14 @@ def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR):
     angulo = entry.get("angulo") if isinstance(entry.get("angulo"), dict) and entry.get("angulo") else None
     if guion is _SIN_DAR:
         guion = creative_flow.guion_base(cliente, cf_id) if (entry.get("tipo") or "video") != "imagen" else None
-    try:
-        producto = final_edition._producto(cliente, entry, None) or {}
-    except Exception:  # noqa: BLE001 — sin producto la revisión sigue (las cifras quedan más estrictas)
-        producto = {}
+    if producto is _SIN_DAR:
+        import final_edition
+        try:
+            producto = final_edition._producto(cliente, entry, None) or {}
+        except Exception:  # noqa: BLE001 — sin producto la revisión sigue (las cifras quedan más estrictas)
+            producto = {}
+    else:
+        producto = producto or {}
     sprint = entry.get("sprint") if isinstance(entry.get("sprint"), dict) else None
     idea = None
     if sprint and sprint.get("cp_id"):

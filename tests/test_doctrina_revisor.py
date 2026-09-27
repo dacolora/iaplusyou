@@ -340,3 +340,18 @@ def test_reunir_con_guion_y_guia_dados_no_refetcha(base_temporal, monkeypatch):
     d = revisor.reunir("acme", cf_id, guion=guion_dado, guia=guia_dada)
     assert d["guion"] == guion_dado and d["guia"] == "Tono cálido"
     assert "Tono cálido" in d["verificables"] and "¿Caliente?" in d["verificables"]
+
+
+def test_reunir_con_producto_dado_no_escanea_el_catalogo(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I1): la lista de Crear ya resolvió el
+    producto una vez por `productos_ids` y se lo pasa a `reunir` — no debe
+    volver a llamar a `final_edition._producto` (que escanea el catálogo)."""
+    import final_edition
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    monkeypatch.setattr(final_edition, "_producto", lambda cliente, entry, precio: (_ for _ in ()).throw(
+        AssertionError("_producto no debe ser llamado cuando producto es dado")))
+    d = revisor.reunir("acme", cf_id, producto={"nombre": "Dado a mano"})
+    assert d["producto"] == {"nombre": "Dado a mano"}
+    sin = revisor.reunir("acme", cf_id, producto=None)
+    assert sin["producto"] == {}

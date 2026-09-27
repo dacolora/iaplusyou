@@ -2512,6 +2512,7 @@ def _swap_items(cliente):
 
 
 def _creative_flow_items(cliente):
+    import final_edition
     data = creative_flow.cargar(cliente)
     # Id numérico de la pieza por sesión, UNA consulta para toda la pestaña:
     # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
@@ -2522,6 +2523,12 @@ def _creative_flow_items(cliente):
         guia_marca = marca_mod.guia_efectiva(cliente) or ""
     except Exception:  # noqa: BLE001 — es informativa, nunca bloquea
         guia_marca = ""
+    # Doctrina, bloque 3, revisión final (I1): `final_edition._producto`
+    # escanea el catálogo (archivo + tabla `producto`); con muchas piezas
+    # del mismo producto eso se notaba (+2,4 s con 500 piezas/100 productos).
+    # Memo por tupla de `productos_ids`, una sola resolución por producto
+    # distinto en toda la lista, no por pieza.
+    productos_por_ids = {}
     items = []
     for cf_id, entry in sorted(
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
@@ -2582,8 +2589,18 @@ def _creative_flow_items(cliente):
             item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
             item["revision_n"] = doctrina_revisor.contar(item["revision"])
             try:
-                item["reglas"] = doctrina_revisor.reglas(doctrina_revisor.reunir(cliente, cf_id, entry=entry,
-                                                                                  guion=item["guion_base"], guia=guia_marca))
+                clave = tuple(entry.get("productos_ids") or ())
+                if clave:
+                    if clave not in productos_por_ids:
+                        try:
+                            productos_por_ids[clave] = final_edition._producto(cliente, entry, None) or {}
+                        except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
+                            productos_por_ids[clave] = {}
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
+                                                guia=guia_marca, producto=productos_por_ids[clave])
+                else:
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=guia_marca)
+                item["reglas"] = doctrina_revisor.reglas(d)
             except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
                 item["reglas"] = []
             jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
