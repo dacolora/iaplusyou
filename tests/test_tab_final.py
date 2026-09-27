@@ -58,6 +58,12 @@ def test_cada_pieza_enlaza_sus_ediciones_en_el_editor(app, pieza):
     assert "Abrir en el editor" in html
 
 
+def test_cada_video_listo_se_puede_editar_gratis(app, pieza):
+    html = _seccion(app["c"].get("/cliente/acme").get_data(as_text=True), "final")
+    assert f"/cliente/acme/ediciones/desde/{pieza}" in html
+    assert "Editar este video" in html
+
+
 def test_las_rutas_fe_vuelven_a_la_pestana(app, pieza, monkeypatch):
     import trabajos
     monkeypatch.setattr(trabajos, "encolar", lambda *a, **k: True)

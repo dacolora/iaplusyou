@@ -5,7 +5,7 @@ Daniel del 2026-09-27: el editor es para todos, sin esperar a la capa 7.
 `ediciones.cargar` filtra por cliente: una edición de otro proyecto es 404."""
 import re
 
-from flask import Blueprint, abort, jsonify, render_template, request, url_for
+from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 import creative_flow
 import ediciones
@@ -140,3 +140,22 @@ def producir(cliente, edicion_id):
         producidas.append({"destino": d, "final_id": final_id, "encolada": bool(encolada)})
     return jsonify({"producidas": producidas,
                     "url": url_for("ver_cliente", cliente=cliente) + f"#final?cf={ed['cf_id']}"})
+
+
+@bp.post("/desde/<cf_id>")
+def desde_clon(cliente, cf_id):
+    """«Editar este video» (gratis): encola la preparación y vuelve a la pieza
+    en Final edition, donde la barra muestra el avance."""
+    if not _mismo_origen():
+        return jsonify({"error": "Pedido rechazado: no viene de esta página."}), 403
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    volver = url_for("ver_cliente", cliente=cliente)
+    if not entry or entry.get("estado") != "video_listo" or (entry.get("tipo") or "video") == "imagen":
+        flash("Esa pieza no tiene un video listo para editar.", "error")
+        return redirect(volver + "#final")
+    encolado = trabajos.encolar(tareas_edicion.job_id_desde_clon(cliente, cf_id), "edicion_desde_clon",
+                                {"cliente": cliente, "cf_id": cf_id}, duracion_estimada=40,
+                                etapas=[("Preparando el video", 100)], cliente=cliente, max_intentos=2)
+    flash("Preparando el video para el editor… en unos segundos aparece «Abrir en el editor»." if encolado
+          else "Ya se estaba preparando ese video.", "ok")
+    return redirect(volver + f"#final?cf={cf_id}")

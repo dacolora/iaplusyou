@@ -290,3 +290,24 @@ def test_producir_valida_la_forma_del_cuerpo(dashboard, encolados):
     assert c.post(url, json={"version_n": True, "destinos": ["es_CO"]}).status_code == 400   # bool no es int
     assert c.post(url, json={"version_n": ed["version_n"], "destinos": "es_CO"}).status_code == 400  # no es lista
     assert not [a for a, _k in encolados if a[1] == "edicion_producir"]
+
+
+def test_editar_este_video_encola_la_preparacion_gratis(dashboard, encolados):
+    import creative_flow
+    cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
+    creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2.test/v.mp4")
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/desde/{cf}")
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"#final?cf={cf}")
+    (args, kw), = [(a, k) for a, k in encolados if a[1] == "edicion_desde_clon"]
+    assert args[0] == f"acme__{cf}__editor" and args[2] == {"cliente": "acme", "cf_id": cf}
+    assert kw["max_intentos"] == 2 and kw["cliente"] == "acme"
+
+
+def test_editar_este_video_rechaza_piezas_sin_video_y_otro_origen(dashboard, encolados):
+    import creative_flow
+    cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/desde/{cf}")
+    assert r.status_code == 302 and r.headers["Location"].endswith("#final")
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/desde/{cf}", headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    assert not [a for a, _k in encolados if a[1] == "edicion_desde_clon"]

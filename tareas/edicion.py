@@ -1,6 +1,7 @@
 """Tareas del worker para el editor (spec §2.4):
   edicion_producir  {cliente, edicion_id, version_id, final_id, idioma, pais}  max_intentos=1
   edicion_proxy     {cliente, material_id}                                     max_intentos=3
+  edicion_desde_clon {cliente, cf_id}                                          max_intentos=2
   materiales_limpiar {}                                                         periódica diaria
 `edicion_producir` renderiza el documento CONGELADO en la versión (no el
 vivo), así lo que se produjo siempre se puede volver a ver. Contrato con la
@@ -9,7 +10,10 @@ ruta que la encola (capa 3): `ediciones.versionar` → `creative_flow.crear_fina
 encuentran, la tarea falla y lo dice) → `trabajos.encolar(..., max_intentos=1,
 duracion_estimada=estimar.segundos(doc), etapas=ETAPAS_EDICION)`. `idioma` y
 `pais` se validan con forma (`[a-z]{2}` / `[A-Z]{2}`) antes de tocar el disco
-porque forman parte del nombre de la carpeta de trabajo."""
+porque forman parte del nombre de la carpeta de trabajo. `edicion_desde_clon`
+(capa 4a, «Editar este video») hace el trabajo pesado de
+`final_edition.edicion_clon.crear` (bajar el clon, medirlo) fuera del hilo de
+Flask; no paga nada, así que un reintento no importa (`max_intentos=2`)."""
 import math
 import os
 import re
@@ -31,6 +35,7 @@ ETAPAS_EDICION = (("Preparando materiales", 15), ("Renderizando", 70), ("Subiend
 _EXT = {"video": "mp4", "imagen": "png", "audio": "wav", "png_texto": "png", "proxy": "mp4"}
 _IDIOMA_RE = re.compile(r"[a-z]{2}")
 _PAIS_RE = re.compile(r"[A-Z]{2}")
+_CF_RE = re.compile(r"[A-Za-z0-9_-]{1,80}")
 
 # Proxy de la vista previa (spec §2.3): lado CORTO en 540 (un vertical sale
 # 540x960, no 304x540), cuadro clave cada 15 cuadros (medio segundo a 30 fps)
@@ -60,6 +65,10 @@ def job_id_producir(cliente, edicion_id, idioma, pais):
 
 def job_id_proxy(cliente, material_id):
     return f"{cliente}__mat{int(material_id)}__proxy"
+
+
+def job_id_desde_clon(cliente, cf_id):
+    return f"{cliente}__{cf_id}__editor"
 
 
 def _carpeta(cliente, nombre):
@@ -276,3 +285,15 @@ def ejecutar_proxy(tarea):
 def ejecutar_limpiar(tarea):
     n = materiales.limpiar_sin_uso(dias=30)
     return f"{n} materiales efímeros borrados."
+
+
+@registrar("edicion_desde_clon")
+def ejecutar_desde_clon(tarea):
+    """«Editar este video»: baja y mide el clon y crea la edición (gratis).
+    `cf_id` forma el nombre de la carpeta: se valida antes de tocar el disco."""
+    from final_edition import edicion_clon
+    p = tarea["payload"]
+    if not isinstance(p.get("cf_id"), str) or not _CF_RE.fullmatch(p["cf_id"]):
+        raise ValueError(f"cf_id inválido: {p.get('cf_id')!r}")
+    eid = edicion_clon.crear(p["cliente"], p["cf_id"], _carpeta(p["cliente"], f"clon_{p['cf_id']}"))
+    return f"Edición {eid} lista para editar."
