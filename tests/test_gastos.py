@@ -235,5 +235,7 @@ def test_clasificacion_en_tipos():
 def test_tarifas_de_la_doctrina_bloque_2():
     import gastos
     assert "ideas" in gastos.TIPOS and "pedidos" in gastos.TIPOS
-    assert gastos.estimar("reescribir_idea")["usd"] == 0.06
-    assert gastos.estimar("pedidos_producto")["usd"] == 0.04
+    # Medido en la prueba real (2026-09-27, caché fría = el peor caso):
+    # reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007; redondeado hacia arriba.
+    assert gastos.estimar("reescribir_idea")["usd"] == 0.03
+    assert gastos.estimar("pedidos_producto")["usd"] == 0.01

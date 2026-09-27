@@ -77,10 +77,10 @@ TARIFAS = {
     "whisper": 0.01,
     "final": 0.10,
     # Doctrina, bloque 2: una llamada con la doctrina en el system y pensamiento
-    # adaptativo (casi toda la salida es pensamiento). Redondeado hacia arriba;
-    # se ajusta con lo medido en la prueba real.
-    "reescribir_idea": 0.06,
-    "pedidos_producto": 0.04,
+    # adaptativo. Medido en la prueba real (2026-09-27) con la caché fría, el
+    # peor caso: reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007. Redondeado hacia arriba.
+    "reescribir_idea": 0.03,
+    "pedidos_producto": 0.01,
 }
 
 SIN_PRECIO = "precio no disponible"

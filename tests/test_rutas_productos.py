@@ -927,7 +927,7 @@ def test_lo_que_claude_necesita_en_catalogo(app, monkeypatch):
     html = c.get("/cliente/acme").data.decode()
     tarjeta = html.split('id="producto-cojin_azul"', 1)[1].split("</details>", 1)[0]
     assert "Lo que Claude necesita" in tarjeta and "Pega un comentario" in tarjeta and "2 pedidos de Claude" in tarjeta
-    assert "Actualizar lo que Claude necesita (US$ 0,04 aprox.)" in tarjeta
+    assert "Actualizar lo que Claude necesita (US$ 0,01 aprox.)" in tarjeta
     c.post(f"/cliente/acme/productos/{pid}/pedidos/{k1}/responder", data={"texto": "Súper suaves", "fuente": "comentarios"})
     assert _fila_por_activo("cojin_azul")["extra"]["pruebas"][0]["pedido_id"] == k1
     c.post(f"/cliente/acme/productos/{pid}/pedidos/{k2}/descartar")

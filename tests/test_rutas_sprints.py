@@ -1058,7 +1058,7 @@ def test_boton_reescribir_idea_con_su_precio(con_ideas, monkeypatch):
     assert "Reescribir la idea con este ángulo" not in html          # sin ángulo no hay botón
     datos.actualizar_idea("acme", ii, extra={"angulo": ANGULO_IDEA})
     html = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/ideas").data.decode()
-    assert "Reescribir la idea con este ángulo (US$ 0,06 aprox.)" in html
+    assert "Reescribir la idea con este ángulo (US$ 0,03 aprox.)" in html
     c.post(f"/cliente/acme/sprints/ideas/{ii}/reescribir")
     t = con_ideas["encolados"][-1]
     assert t["tipo"] == "sprint_reescribir_idea" and t["payload"] == {"cliente": "acme", "cp_id": ii}
