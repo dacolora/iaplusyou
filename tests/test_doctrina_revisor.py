@@ -458,3 +458,16 @@ def test_las_instrucciones_avisan_que_claude_no_escucha_el_audio():
     from sprints import qa
     assert FRASE_SIN_AUDIO in revisor.INSTRUCCIONES_REVISAR
     assert FRASE_SIN_AUDIO in qa.PROMPT_QA
+
+
+def test_el_guion_se_presenta_como_de_la_edicion_final(base_temporal, monkeypatch):
+    """Prueba real (2026-09-27): con el guion listado a secas, Claude buscaba su
+    voz y su texto en pantalla en los fotogramas del video crudo (que todavía no
+    los tiene) y marcaba «mejorar» en texto en pantalla, cierre y mismo mensaje."""
+    import creative_flow
+    from doctrina import revisor
+    cf_id = _pieza(monkeypatch)
+    creative_flow.guardar_guion_base("acme", cf_id, {"bloques": [{"rol": "hook", "texto_voz": "¿Frío?"}]})
+    texto = revisor.texto_para_revision(revisor.reunir("acme", cf_id), [])
+    assert "GUION DE LA EDICIÓN FINAL" in texto and "no están en los fotogramas" in texto
+    assert "edición final" in revisor.INSTRUCCIONES_REVISAR and "no los busques en los fotogramas" in revisor.INSTRUCCIONES_REVISAR

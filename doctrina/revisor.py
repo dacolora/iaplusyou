@@ -42,6 +42,8 @@ contesta con un hecho de la pieza, nunca con una opinión:
 - "no_aplica": no se puede juzgar con lo que hay (por ejemplo, sin guion no hay cierre hablado; en una imagen no hay
   ritmo ni sonido); dilo en el detalle.
 No escuchas el audio: lo que dependa del sonido (voz, música, sonido de la escena) es "no_aplica" salvo que el guion o el caption lo digan.
+El GUION, si lo hay, es de la edición final: su voz y su texto en pantalla se ponen después sobre este video,
+así que no los busques en los fotogramas; juzga si el video y el guion cuentan la misma promesa.
 No inventes lo que no ves en los fotogramas ni en los DATOS. La REVISIÓN RÁPIDA ya encontró lo que dice: tenlo en
 cuenta, no la repitas palabra por palabra. Escribe en español simple, para el dueño de la marca, máximo dos frases por
 punto.
@@ -307,7 +309,8 @@ def texto_para_revision(d, avisos, con_guia=True):
     lineas.append("LO QUE PIDIÓ LA PERSONA: " + (str(entry.get("accion_central") or "").strip() or "(nada escrito)"))
     bloques = bloques_guion(d.get("guion"))
     if bloques:
-        lineas.append("GUION:")
+        lineas.append("GUION DE LA EDICIÓN FINAL (su voz y su texto en pantalla se agregan después sobre este video: "
+                      "no están en los fotogramas):")
         for b in bloques:
             lineas.append(f"- {b.get('rol')} [{b.get('inicio_s')}–{b.get('fin_s')} s]: voz «{b.get('texto_voz') or ''}»"
                           f" · pantalla «{b.get('texto_pantalla') or ''}»")

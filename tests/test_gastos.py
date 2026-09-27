@@ -247,4 +247,5 @@ def test_tarifa_y_tipo_de_la_revision_de_la_doctrina():
     import gastos
     assert "revision" in gastos.TIPOS and dashboard.NOMBRES_TIPO_GASTO["revision"] == "Revisión de la doctrina (IA)"
     r = gastos.estimar("revision_pieza")
-    assert r["usd"] == gastos.TARIFAS["revision_pieza"] == 0.05 and "0,05" in r["texto"]
+    # Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas): ≈ US$ 0,060; redondeado hacia arriba.
+    assert r["usd"] == gastos.TARIFAS["revision_pieza"] == 0.07 and "0,07" in r["texto"]

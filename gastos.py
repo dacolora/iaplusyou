@@ -82,8 +82,9 @@ TARIFAS = {
     "reescribir_idea": 0.03,
     "pedidos_producto": 0.01,
     # Doctrina, bloque 3: una llamada con visión (hasta 8 fotogramas) y la rebanada
-    # «revisar». Inicial; se ajusta con lo medido en la prueba real.
-    "revision_pieza": 0.05,
+    # «revisar». Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas):
+    # ≈ US$ 0,060 (casi todo es la salida con pensamiento); redondeado hacia arriba.
+    "revision_pieza": 0.07,
 }
 
 SIN_PRECIO = "precio no disponible"
