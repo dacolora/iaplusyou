@@ -17,6 +17,7 @@ anotar("recortar_inicio", () => op.recortar(docBase(), "v1", "inicio", -800, D))
 anotar("mover_principal", () => op.moverPrincipal(docBase(), "v1", 0, D));
 anotar("mover_texto", () => op.moverA(docBase(), "t1", 5000, D));
 anotar("velocidad", () => op.cambiarVelocidad(docBase(), "v1", 0.5, D));
+anotar("velocidad_al_borde_del_material", () => op.cambiarVelocidad(docBase(), "v1", 1.5, D));
 anotar("transicion_normalizada", () => {
   const d = docBase();
   d.pistas[0].clips[0].transicion = { tipo: "fundido", duracion_ms: 500 };

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   borrar, cambiarVelocidad, cortarEn, duplicar, idNuevo, MIN_CLIP_MS, moverA, moverPrincipal, normalizar,
-  OperacionInvalida, recortar,
+  OperacionInvalida, recortar, VELOCIDADES,
 } from "../../static/editor/operaciones.js";
 import { docBase, DURACIONES } from "./doc_base.mjs";
 
@@ -86,6 +86,16 @@ test("cambiarVelocidad conserva el tramo de fuente y quita el sonido de ese clip
   assert.deepEqual(sonido(doc), [[2000, 4000, 4000]]);
   invalida(() => cambiarVelocidad(docBase(), "v0", 3, DURACIONES), /velocidad/);
   invalida(() => cambiarVelocidad(docBase(), "t1", 2, DURACIONES), /video/);
+});
+
+test("cambiarVelocidad nunca pide más material del que hay (v1 ya llega al final del clon)", () => {
+  for (const v of VELOCIDADES) {
+    const { doc } = cambiarVelocidad(docBase(), "v1", v, DURACIONES);
+    const clip = doc.pistas[0].clips.find((c) => c.id === "v1");
+    assert.ok(clip.recorte.hasta_ms <= DURACIONES[1],
+      `${v}×: recorte.hasta_ms ${clip.recorte.hasta_ms} pasa del material (${DURACIONES[1]})`);
+    assert.ok(clip.duracion_ms >= MIN_CLIP_MS, `${v}×: duracion_ms ${clip.duracion_ms} < MIN_CLIP_MS`);
+  }
 });
 
 test("normalizar acorta o quita la transición cuya cola no cabe en el material", () => {

@@ -219,9 +219,16 @@ export function cambiarVelocidad(doc, clipId, velocidad, duraciones = {}) {
   }
   if (!VELOCIDADES.includes(velocidad)) throw new OperacionInvalida(`Esa velocidad no está disponible (${velocidad}×).`);
   const tramo = fuente(clip);
-  const nueva = Math.round(tramo / velocidad);
-  if (nueva < MIN_CLIP_MS) throw new OperacionInvalida("El clip quedaría demasiado corto a esa velocidad.");
   const desde = clip.recorte?.desde_ms ?? 0;
+  const material = duraciones[clip.material_id];
+  let nueva = Math.round(tramo / velocidad);
+  if (material !== undefined && material !== null) {
+    // Igual que recortar(..., "fin", ...): acotar con Math.floor para que
+    // desde + round(duracion_ms × velocidad) nunca pase del material real.
+    const maxDuracion = Math.max(0, Math.floor((material - desde) / velocidad));
+    nueva = Math.min(nueva, maxDuracion);
+  }
+  if (nueva < MIN_CLIP_MS) throw new OperacionInvalida("El clip quedaría demasiado corto a esa velocidad.");
   clip.velocidad = velocidad;
   clip.duracion_ms = nueva;
   clip.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(nueva * velocidad) };
