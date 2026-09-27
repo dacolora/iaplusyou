@@ -78,6 +78,14 @@ def test_la_deteccion_funciona():
     assert espanol_visible('<input id="campo" placeholder="Escribe aquí">', ("campo",)) == ["Escribe aquí"]
 
 
+def test_deteccion_exige_que_el_id_pedido_exista():
+    # Un id renombrado (o que nunca existió) no debe pasar en silencio: sin
+    # esto p.region terminaba en 0 tanto si el id se encontró y se cerró bien
+    # como si nunca apareció, así que la guardia de una región nunca fallaba.
+    with pytest.raises(AssertionError):
+        espanol_visible('<div id="otro">x</div>', ("no-existe",))
+
+
 @pytest.mark.parametrize("url", ["/", "/login", "/recuperar", "/privacidad", "/terminos", "/eliminar-datos"])
 def test_publicas_en_ingles(publico_en, url):
     fugas = espanol_visible(html_de(publico_en, url))

@@ -718,6 +718,11 @@ Luego `venv/bin/python3 catalogo_i18n.py actualizar`, traducir con `docs/i18n/gl
 (`tests/test_i18n_catalogo.py` falla si falta). Idioma de la persona en `usuarios.json`, del proyecto en
 `proyecto.json`, cookie `idioma` antes del login; `idiomas.en_idioma(x)` para correos y worker.
 `idiomas.DEFECTO`/`ACTIVO_PARA_TODOS` cambian al cerrar la fase 6; los tests fijan español (`conftest`).
+Trampa: `_('…', x=dato)` con variables devuelve `Markup`, que ya escapó `x` como HTML, así que
+`|tojson` detrás lo vuelve a escapar (doble escape) — arma esa cadena de JS con gettext en Python,
+o usa `|tojson` solo sobre texto fijo y une los datos en JS; y nunca metas `|tojson` dentro de un
+atributo con comillas dobles (`onsubmit="…"`), porque emite `"` que cierra el atributo a la mitad —
+usa comillas simples o un `data-*`.
 
 **Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
 ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)

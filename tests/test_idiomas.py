@@ -131,6 +131,15 @@ def test_gettext_sin_contexto_devuelve_el_espanol():
     assert gettext("Hola") == "Hola"
 
 
+def test_de_peticion_sin_contexto_de_peticion_no_lanza(app_prueba):
+    # Un app_context sin request (un gettext() suelto en el worker o en un
+    # test) no tiene sesión ni cookies: de_peticion debe devolver DEFECTO en
+    # vez de que Flask lance RuntimeError al leer session/request.
+    with app_prueba.app_context():
+        assert idiomas.de_peticion() == idiomas.DEFECTO
+        assert gettext("Hola") == "Hola"
+
+
 def test_nombre_para_claude():
     assert idiomas.nombre_para_claude("en") == "inglés"
     assert idiomas.nombre_para_claude("es") == "español"

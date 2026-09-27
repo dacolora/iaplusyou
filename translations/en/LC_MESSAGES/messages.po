@@ -2067,6 +2067,9 @@ msgstr "If %(correo)s is correct, the link will arrive in a few minutes (check s
 msgid "Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app."
 msgstr "If Meta shows a permissions error, ask them to add your Facebook as a tester of the app."
 
+msgid "Si el botón no funciona, copia este enlace en tu navegador:"
+msgstr "If the button doesn't work, copy this link into your browser:"
+
 msgid "Si es Gmail: en myaccount.google.com › Seguridad activa la «Verificación en dos pasos» y luego, en «Contraseñas de aplicación», crea una para «Creatv»: los 16 caracteres que te da son SMTP_PASS (no la contraseña normal de la cuenta). SMTP_USER es la dirección completa y SMTP_FROM la misma."
 msgstr "If it's Gmail: in myaccount.google.com › Security turn on “2-Step Verification” and then, in “App passwords”, create one for “Creatv”: the 16 characters it gives you are SMTP_PASS (not the account's normal password). SMTP_USER is the full address and SMTP_FROM the same one."
 

@@ -92,8 +92,12 @@ def guardar_de_proyecto(cliente, idioma):
 
 def de_peticion():
     """locale_selector de Flask-Babel: la persona en sesión, si no la cookie,
-    si no DEFECTO."""
-    from flask import request, session
+    si no DEFECTO. Sin contexto de petición (un gettext() suelto en un
+    app_context de worker/test) no hay ni sesión ni cookies que mirar: DEFECTO
+    tal cual, en vez de que Flask lance RuntimeError."""
+    from flask import has_request_context, request, session
+    if not has_request_context():
+        return DEFECTO
     usuario = session.get("usuario")
     if usuario:
         return de_usuario(usuario)

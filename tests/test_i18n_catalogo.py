@@ -3,6 +3,7 @@ tiene su inglés, el .mo versionado está al día con el .po, y nada pisa `_`.""
 import glob
 import os
 import re
+import tokenize
 
 from babel.messages.pofile import read_po
 
@@ -11,6 +12,10 @@ import catalogo_i18n
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MARCADOR = re.compile(r"%\((\w+)\)[sd]")
 PORCENTAJE_SUELTO = re.compile(r"%(?!%|\(\w+\)[sd])")
+# Llamada de traducción dentro de las llaves {…} de un f-string: en Python 3.9
+# el extractor de Babel ve el f-string como un único token STRING y nunca
+# entra a mirar dentro de sus llaves (cuentas.py:237 era así).
+GETTEXT_EN_LLAVES_FSTRING = re.compile(r"\{[^{}]*\b(?:gettext|ngettext|N_)\s*\(")
 
 
 def _po():
@@ -63,3 +68,26 @@ def test_python_no_importa_gettext_como_guion_bajo():
     malos = [os.path.relpath(r, RAIZ) for r in catalogo_i18n.archivos_py()
              if re.search(r"import\s+.*\bgettext\s+as\s+_\b", open(r, encoding="utf-8").read())]
     assert not malos, "Usa gettext/ngettext con su nombre (el _ se usa como variable descartable): " + ", ".join(malos)
+
+
+def test_gettext_no_dentro_de_llaves_de_fstring():
+    """Babel extrae de un .py sin ejecutarlo; en Python 3.9 un f-string es un
+    único token STRING, así que gettext(...)/ngettext(...)/N_(...) escrito
+    dentro de sus {…} nunca llega al catálogo (queda mudo en producción)."""
+    malos = []
+    for ruta in catalogo_i18n.archivos_py():
+        with open(ruta, "rb") as f:
+            try:
+                tokens = list(tokenize.tokenize(f.readline))
+            except (tokenize.TokenizeError, SyntaxError, IndentationError):
+                continue
+        for tok in tokens:
+            if tok.type != tokenize.STRING:
+                continue
+            prefijo = tok.string[:2].lower()
+            if "f" not in prefijo:
+                continue
+            if GETTEXT_EN_LLAVES_FSTRING.search(tok.string):
+                malos.append(f"{os.path.relpath(ruta, RAIZ)}:{tok.start[0]}: {tok.string[:100]!r}")
+    assert not malos, ("gettext/ngettext/N_ dentro de las llaves de un f-string (Babel no lo ve, "
+                        "calcúlalo en una variable antes): \n" + "\n".join(malos))

@@ -63,7 +63,10 @@ def actualizar():
     if cat is None:
         cat = plantilla
     else:
-        cat.update(plantilla, no_fuzzy_matching=True)
+        # update_creation_date=False: si no, cada corrida reescribe
+        # POT-Creation-Date aunque no cambie ningún texto, y el .po (y su
+        # .mo) quedan con un diff de puro ruido en cada commit.
+        cat.update(plantilla, no_fuzzy_matching=True, update_creation_date=False)
     os.makedirs(os.path.dirname(PO), exist_ok=True)
     with open(PO, "wb") as f:
         write_po(f, cat, width=0, no_location=True, sort_output=True, ignore_obsolete=True, include_previous=False)

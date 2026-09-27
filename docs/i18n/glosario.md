@@ -39,13 +39,20 @@ partida a revisar por Daniel. Lo usa quien traduzca `translations/en/LC_MESSAGES
 
 - Tuteo (español informal, "vos"/"tú") → "you" en inglés (sin formalidad artificial).
 - Mayúscula solo al inicio de la frase, igual que el español (nunca Title Case en inglés).
-- Emojis, `·`, números y marcadores `%(x)s` quedan intactos — se copian tal cual, nunca se traducen
-  ni se reordenan.
+- Emojis, `·` y marcadores `%(x)s` quedan intactos — se copian tal cual, nunca se traducen ni se
+  reordenan.
 - Las etiquetas HTML dentro de una frase quedan intactas y en el mismo lugar relativo (la frase
   completa es un solo `msgid`, nunca partida en varios).
-- Comillas españolas « » se convierten a comillas inglesas " " (curly, `“ ”`) en el `msgstr`.
-- Todo `%` literal (no parte de un marcador `%(x)s`) se escribe `%%`, tanto en el `msgid` como en el
-  `msgstr` — Jinja "newstyle" siempre aplica `%` al texto.
+- Comillas: « » y las rectas `" "` en español se convierten a comillas curvas `“ ”` en el `msgstr`
+  en inglés.
+- `%` literal (no parte de un marcador `%(x)s`) se escribe `%%` en plantillas (Jinja "newstyle"
+  aplica `%` a todo el texto, haya o no marcador) y en una llamada de Python que pasa variables
+  (`gettext("...%%...", x=...)`, mismo motivo). En una llamada de Python SIN variables
+  (`gettext("100% listo")`) no hay interpolación de por medio: ahí un `%` literal va suelto, tal
+  cual — duplicarlo mostraría los dos signos.
+- Números: la coma decimal del español pasa a punto en inglés y el separador de miles a coma
+  (`0,028` → `0.028`; `1.234.567` → `1,234,567`) — cambia solo el separador, nunca el valor ni el
+  símbolo de moneda (ver «No se traduce»).
 
 ## No se traduce
 

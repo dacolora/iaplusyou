@@ -228,13 +228,17 @@ def _armar_correo(tipo, usuario, enlace):
     cuerpo = f"{intro}\n\n{enlace}\n\n{cierre}\n\n— {NOMBRE_PLATAFORMA}\n"
     e = html_mod.escape
     parrafos = "".join(f"<p>{e(p)}</p>" for p in intro.split("\n\n"))
+    # gettext() tiene que quedar fuera de la f-string: el extractor de Babel en
+    # Python 3.9 recorre un f-string como un único token STRING y no ve las
+    # llamadas dentro de sus llaves (tests/test_i18n_catalogo.py lo vigila).
+    copia_enlace = gettext("Si el botón no funciona, copia este enlace en tu navegador:")
     html = (
         f"<!DOCTYPE html><html lang=\"{idioma}\"><body style=\"font-family:Arial,Helvetica,sans-serif;"
         "color:#222;line-height:1.5\">"
         f"{parrafos}"
         f"<p><a href=\"{e(enlace)}\" style=\"display:inline-block;padding:10px 18px;background:#1f6feb;"
         f"color:#fff;text-decoration:none;border-radius:6px\">{e(boton)}</a></p>"
-        f"<p style=\"font-size:13px;color:#555\">{e(gettext('Si el botón no funciona, copia este enlace en tu navegador:'))}<br>"
+        f"<p style=\"font-size:13px;color:#555\">{e(copia_enlace)}<br>"
         f"<a href=\"{e(enlace)}\">{e(enlace)}</a></p>"
         f"<p style=\"font-size:13px;color:#555\">{e(cierre)}</p>"
         f"<p>— {e(NOMBRE_PLATAFORMA)}</p>"

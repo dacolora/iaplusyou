@@ -29,10 +29,14 @@ class _Visible(HTMLParser):
         self.region = 0 if self.ids else 1
         self.oculto = 0
         self.trozos = []
+        self.vistos = set()
 
     def handle_starttag(self, tag, attrs):
         a = {k: v for k, v in attrs if v is not None}
-        abre = bool(self.ids) and a.get("id") in self.ids
+        el_id = a.get("id")
+        abre = bool(self.ids) and el_id in self.ids
+        if abre:
+            self.vistos.add(el_id)
         is_void = tag in VACIOS
         if not is_void:
             self.pila.append((tag, abre))
@@ -69,7 +73,12 @@ def espanol_visible(html, ids=None):
     p = _Visible(ids)
     p.feed(html)
     if ids:
-        assert p.region == 0 or p.trozos, f"no encontré los elementos {ids}"
+        # p.region siempre vuelve a 0 al terminar el parseo (abre/cierra se
+        # balancean), incluso cuando NINGÚN id pedido apareció nunca — así que
+        # comparar contra region no detecta un id renombrado. Se exige en
+        # cambio que cada id pedido se haya visto de verdad.
+        faltan = set(ids) - p.vistos
+        assert not faltan, f"no encontré los elementos {sorted(faltan)}"
     return [t for t in p.trozos if _con_marca(t)]
 
 
