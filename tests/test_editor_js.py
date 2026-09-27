@@ -53,3 +53,12 @@ def test_casos_del_editor_al_dia():
         with open(os.path.join(RAIZ, "tests", "fixtures", nombre), encoding="utf-8") as f:
             assert f.read() == gen.texto(funcion), (
                 f"{nombre} quedó viejo: correr `venv/bin/python3 tests/fixtures/generar_casos_editor.py`")
+
+
+def test_ducking_de_mezcla_es_legible_por_el_navegador():
+    # audio.js::parsearDucking lee "clave=valor:clave=valor" con estas cuatro claves.
+    from final_edition import mezcla
+    for cadena in (mezcla.DUCKING_VOZ_SOBRE_MUSICA, mezcla.DUCKING_VOZ_SOBRE_SONIDO):
+        partes = dict(p.split("=") for p in cadena.split(":"))
+        assert set(partes) == {"threshold", "ratio", "attack", "release"}
+        assert all(float(v) > 0 for v in partes.values())
