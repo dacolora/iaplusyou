@@ -418,6 +418,55 @@ def test_traer_form_sin_consulta_ofrece_boton_ver_precio(app, monkeypatch):
     assert 'data-precio="' in html
 
 
+def _script_modal_referentes(html):
+    """El <script> de _tab_referentes.html que maneja el diálogo y el precio en
+    vivo de «Traer referentes» (vive fuera del condicional de biblioteca vacía)."""
+    ini = html.index("var modal = document.getElementById('ref-modal');")
+    return html[ini:html.index("</script>", ini)]
+
+
+def test_traer_form_marca_lo_que_refresca_el_precio(app, monkeypatch):
+    """Incidente 2026-09-27: el refresco de precio solo reemplaza lo que depende
+    del servidor, así que esas partes tienen que poder encontrarse por id."""
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
+    for id_ in ("traer-precio", "traer-aviso", "traer-enviar"):
+        assert f'id="{id_}"' in html
+
+
+def test_refresco_de_precio_no_reemplaza_el_formulario(app):
+    """Incidente 2026-09-27: cada pausa al escribir pedía el precio y metía el
+    fragmento ENTERO con `cuerpo.innerHTML = html`. Lo tecleado mientras llegaba
+    la respuesta se perdía («crema antiarrugas» quedaba «cremaarrugas»), el
+    scroll del formulario volvía arriba y los campos nuevos nacían sin la marca
+    `data-sucio` de base.html -- así un trabajo que terminaba en otra pestaña
+    recargaba la página y cerraba el modal. Ahora solo se tocan el precio, el
+    aviso de la fuente y el estado del botón, y una respuesta vieja se ignora."""
+    js = _script_modal_referentes(app["c"].get("/cliente/acme").data.decode())
+    precio = js[js.index("function refrescarPrecioTraer"):js.index("cuerpo.addEventListener('input'")]
+    assert "innerHTML = html" not in precio
+    for id_ in ("traer-precio", "traer-aviso", "traer-enviar"):
+        assert id_ in precio
+    assert "pedidoPrecioTraer" in precio                      # descarta respuestas que llegan tarde
+
+
+def test_enter_en_un_campo_no_lanza_el_barrido(app):
+    """Incidente 2026-09-27: Enter en «Palabra clave» hacía el envío implícito
+    del navegador -> POST traer_post -> barrido encolado (gasta) y la página se
+    recargaba, cerrando el modal. Solo el botón «Traer y clasificar» lanza."""
+    js = _script_modal_referentes(app["c"].get("/cliente/acme").data.decode())
+    enter = js[js.index("addEventListener('keydown'"):]
+    assert "'Enter'" in enter[:400] and "preventDefault()" in enter[:600]
+
+
+def test_soltar_una_seleccion_fuera_no_cierra_el_dialogo(app):
+    """Incidente 2026-09-27: seleccionar texto arrastrando y soltar fuera del
+    diálogo da un 'click' con target = el <dialog> y lo cerraba. Solo se cierra
+    si el clic también empezó en el fondo."""
+    js = _script_modal_referentes(app["c"].get("/cliente/acme").data.decode())
+    assert "modal.addEventListener('mousedown'" in js
+
+
 def test_traer_form_pagina_id_con_link_extrae_solo_el_id(app, monkeypatch):
     """Important 2: pegar el link completo del Ad Library en el campo de
     marca (el placeholder invita a hacerlo) debe extraer solo el
