@@ -496,4 +496,4 @@ def test_sin_momento_sigue_la_temporada_y_sin_enfoque_lo_dice(base_temporal, mon
     ctx = ideas.contexto_campana("acme", datos.campana("acme", cid))
     p = ideas.armar_prompt(ctx, 1, 1)
     assert "Navidad" in p and "regalos" in p and "(sin enfoque definido" in p and "MARCAS A IMITAR" in p
-    assert ideas.instrucciones(ctx).endswith("Todo en español.")
+    assert "que va en inglés" in ideas.instrucciones(ctx)      # sprint nuevo: base en inglés

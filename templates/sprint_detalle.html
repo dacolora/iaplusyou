@@ -55,13 +55,6 @@
       <small class="campo-error" hidden></small></label>
     <label>Fin <input type="date" data-campo="fin" value="{{ sprint.fin }}">
       <small class="campo-error" hidden></small></label>
-    <label>País <select data-campo="pais">
-        <option value="">Sin país</option>
-        {% for p in paises %}<option value="{{ p.codigo }}" {% if p.codigo == sprint.pais %}selected{% endif %}>{{ p.bandera }} {{ p.nombre }}</option>{% endfor %}
-      </select><small class="campo-error" hidden></small></label>
-    <label>Idioma de los textos <select data-campo="idioma">
-        {% for cod, nombre in idiomas.items() %}<option value="{{ cod }}" {% if cod == sprint.idioma %}selected{% endif %}>{{ nombre }}</option>{% endfor %}
-      </select><small class="campo-error" hidden></small></label>
     <label>Momento del mes <select data-campo="momento">
         <option value="">Ninguno</option>
         {% for p in presets %}<option value="{{ p.clave }}" {% if p.clave == momento_valor %}selected{% endif %}>{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
@@ -289,7 +282,6 @@
           delete el.dataset.sucio;
           document.getElementById('tablero-linea').textContent = j.linea;
           document.getElementById('tablero-resumen').textContent = j.resumen;
-          if (el.dataset.campo === 'pais') location.reload();
         })
         .catch(function (e) {
           el.value = el.dataset.guardado || '';

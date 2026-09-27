@@ -21,7 +21,6 @@ import gastos
 import proyectos
 import tiendas
 import trabajos
-from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
@@ -99,17 +98,14 @@ def _productos(cliente):
     return list(productos_dict.values())
 
 
-def _paises():
-    return [{"codigo": codigo, "nombre": p["nombre"], "bandera": p["bandera"], "idioma": p["idioma"]}
-            for codigo, p in fe_tipos.PAISES.items()]
-
-
 def contexto(cliente):
     """Lo que necesita _tab_sprints.html. Se llama desde dashboard.ver_cliente."""
     lista = []
     for sp in datos.sprints(cliente):
         sp["progreso"] = progreso.progreso_sprint(sp["campanas"])
         lista.append(sp)
+    # El sprint no lleva país (es para todos): el «Momento del mes» sale del
+    # calendario del proyecto (el país de Temporadas).
     pais = proyectos.pais(cliente)
     inicio, fin = tablero.mes_siguiente(date.today())
     anio = int(inicio[:4])
@@ -117,10 +113,7 @@ def contexto(cliente):
         "sprints_lista": lista,
         "pais_calendario": pais,
         "presets_temporadas": calendario.presets(pais, anio),
-        "presets_por_pais": {codigo: calendario.presets(codigo, anio) for codigo in fe_tipos.PAISES},
         "calendario_fallback": not calendario.tiene_calendario(pais),
-        "paises_sprint": _paises(),
-        "idiomas_sprint": datos.IDIOMAS_NOMBRE,
         "inicio_defecto": inicio,
         "fin_defecto": fin,
         "hoy": date.today().isoformat(),
@@ -313,7 +306,8 @@ def _momento_desde(cliente, valor, pais, inicio):
 
 # ------------------------------------------------------------ tablero ---
 
-CAMPOS_SPRINT = ("nombre", "inicio", "fin", "pais", "idioma", "marcas", "momento")
+# Sin «pais» ni «idioma» desde 2026-09-27: el sprint es para todos los países.
+CAMPOS_SPRINT = ("nombre", "inicio", "fin", "marcas", "momento")
 
 
 def _productos_planos(cliente):
@@ -341,11 +335,11 @@ def _aviso_identica(cliente, cid):
             "Si es a propósito, cambia algo para que no salgan piezas repetidas.")
 
 
-CAMPOS_CAMPANA = ("persona_id", "catalogo_id", "funnel", "consciencia", "dolor", "familias", "pais", "idioma",
+CAMPOS_CAMPANA = ("persona_id", "catalogo_id", "funnel", "consciencia", "dolor", "familias",
                   "marcas", "n_videos", "n_imagenes", "referencias_objetivo")
 # Cambiar estos datos cambia más que la tarjeta (familias sugeridas, lo heredado,
 # los sugeridos, los enlaces): el panel se vuelve a cargar entero.
-CAMPOS_RECARGAN_PANEL = ("persona_id", "catalogo_id", "funnel", "consciencia", "familias", "pais", "idioma", "marcas",
+CAMPOS_RECARGAN_PANEL = ("persona_id", "catalogo_id", "funnel", "consciencia", "familias", "marcas",
                          "referencias_objetivo")
 
 
@@ -366,7 +360,10 @@ def _enlaces(cliente, sp, c):
     cons = referentes_sugerir.consciencia_en(c.get("consciencia"))
     if cons:
         filtros["consciencia"] = cons
-    traer = {"campana": c["id"], "pais": ef["pais"] or proyectos.pais(cliente), "idioma": ef["idioma"]}
+    # Un sprint sin país (todos) no manda país: «Traer referentes» queda en «Todos los países».
+    traer = {"campana": c["id"], "idioma": ef["idioma"]}
+    if ef["pais"]:
+        traer["pais"] = ef["pais"]
     con_pagina = next((m for m in ef["marcas"] if m.get("pagina_id")), None)
     if con_pagina:
         traer.update(modo="marca", pagina_id=con_pagina["pagina_id"])
@@ -434,14 +431,11 @@ def campana_panel(cliente, sid, cid):
     sugeridas = referentes_datos.familias_frecuentes(cliente, etapa=(c.get("funnel") or "tof").upper(),
                                                     consciencia=referentes_sugerir.consciencia_en(c.get("consciencia")))
     job = tareas_sprints.job_id_sugerir_biblioteca(cliente, cid)
-    pais_sprint = fe_tipos.PAISES.get(sp.get("pais") or "") or {}
     return render_template(
         "_sprint_panel.html", cliente=cliente, sprint=sp, c=c, personas=personas_, productos=productos,
         consciencias=doctrina.CONSCIENCIAS_NOMBRE, funnels=datos.FUNNELS_NOMBRE,
         sugerencias_dolor=tablero.sugerencias_dolor(datos.persona(cliente, c["persona_id"])),
         familias=familias, familias_sugeridas=[f for f in sugeridas if f not in (c.get("familias") or [])],
-        paises=_paises(), idiomas=datos.IDIOMAS_NOMBRE,
-        pais_sprint=" ".join(x for x in (pais_sprint.get("bandera"), pais_sprint.get("nombre")) if x) or "sin país",
         marcas_texto=tablero.marcas_texto(c.get("marcas")), candidatos_ia=candidatos_ia,
         trabajo_sugerir_ia={"job_id": job} if trabajos.en_curso(job) else None,
         precio_sugerir_ia=gastos.estimar("sugerir_ia"), aviso=_aviso_identica(cliente, cid),
@@ -589,7 +583,6 @@ def crear(cliente):
     `campanas_json` sigue aceptándose (scripts y pruebas) pero ya no es obligatorio."""
     try:
         campanas = _validar_campanas(cliente, _campanas_desde_form())
-        pais = request.form.get("pais") or proyectos.pais(cliente)
         inicio = request.form.get("inicio")
         momento = request.form.get("momento") or ""
         if momento == "propio":
@@ -597,9 +590,9 @@ def crear(cliente):
         sid = datos.crear_sprint(cliente, request.form.get("nombre"), inicio, request.form.get("fin"),
                                  destinos=[d for d in request.form.getlist("destinos") if d],
                                  referencias_objetivo_defecto=request.form.get("referencias_objetivo") or 5,
-                                 notas=request.form.get("notas"), pais=pais,
-                                 idioma=request.form.get("idioma") or "es", marcas=request.form.get("marcas") or "",
-                                 momento=_momento_desde(cliente, momento, pais, inicio))
+                                 notas=request.form.get("notas"), pais=None, idioma=datos.IDIOMA_BASE,
+                                 marcas=request.form.get("marcas") or "",
+                                 momento=_momento_desde(cliente, momento, None, inicio))
         try:
             for c in campanas:
                 datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
@@ -627,9 +620,9 @@ def ver(cliente, sid):
     pais = sp.get("pais") or proyectos.pais(cliente)
     momento = sp.get("momento") or {}
     return render_template("sprint_detalle.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
-                           sprint=sp, linea=tablero.linea_sprint(sp, fe_tipos.PAISES), resumen=tablero.resumen(sp),
-                           productos_sprint=productos, personas_sprint=datos.personas(cliente), paises=_paises(),
-                           idiomas=datos.IDIOMAS_NOMBRE, presets=calendario.presets(pais, int(sp["inicio"][:4])),
+                           sprint=sp, linea=tablero.linea_sprint(sp), resumen=tablero.resumen(sp),
+                           productos_sprint=productos, personas_sprint=datos.personas(cliente),
+                           presets=calendario.presets(pais, int(sp["inicio"][:4])),
                            momento_valor=momento.get("clave") or ("propio" if momento else ""),
                            marcas_texto=tablero.marcas_texto(sp.get("marcas")),
                            panel_inicial=request.args.get("panel", type=int),
@@ -664,7 +657,7 @@ def sprint_campo(cliente, sid):
     except datos.ErrorDatos as e:
         return jsonify({"ok": False, "error": str(e)}), 400
     nuevo = datos.sprint(cliente, sid, con_eventos=False)
-    return jsonify({"ok": True, "linea": tablero.linea_sprint(nuevo, fe_tipos.PAISES), "resumen": tablero.resumen(nuevo)})
+    return jsonify({"ok": True, "linea": tablero.linea_sprint(nuevo), "resumen": tablero.resumen(nuevo)})
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/tarjeta")

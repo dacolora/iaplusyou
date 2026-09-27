@@ -172,9 +172,13 @@ brand reference images to auto-write that guía de estilo.
 **Sprints de contenido** (`sprints/` + `tareas/sprints.py`, spec
 `docs/superpowers/specs/2026-09-16-sprints-design.md`): a monthly production plan.
 Since 2026-09-26 it is a **board** (spec `docs/superpowers/specs/2026-09-26-sprints-tablero-design.md`):
-«+ Nuevo sprint» is a short form (month, país/idioma, optional «momento del mes» from
-`sprints.calendario.presets(pais)` — the tab renders every country's presets with `data-pais` — or
-free text, brands to imitate) and the sprint page (`sprint_detalle.html`) is a board with one card
+«+ Nuevo sprint» is a short form (month, optional «momento del mes» from the PROJECT's calendar
+`sprints.calendario.presets(proyectos.pais(cliente))` or free text, brands to imitate). Since 2026-09-27
+a sprint is **for every country**: no país/idioma in the form, the sprint header or the campaign panel
+(`CAMPOS_SPRINT`/`CAMPOS_CAMPANA` refuse them), new sprints store `pais=NULL` and
+`idioma=datos.IDIOMA_BASE` ("en"), the idea prompt says «todos los países… cada país los adapta después
+en la edición final», and localization per country/language is final edition's job; old sprints keep the
+país/idioma they had (still read through `efectivos`). The sprint page (`sprint_detalle.html`) is a board with one card
 per campaign (`_sprint_tarjeta.html`, «Siguiente: …» from the pure `sprints/tablero.py`) plus a side
 panel (`_sprint_panel.html`, fetched; all its JS lives in `sprint_detalle.html` because scripts in
 fetched fragments never run) that saves field by field (`sprints.campana_campo` /

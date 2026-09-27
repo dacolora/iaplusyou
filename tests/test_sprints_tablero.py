@@ -56,10 +56,9 @@ def test_resumen_y_linea_del_sprint():
           "campanas": [_c(referencias_listas=3, n_videos=5, n_imagenes=5), _c(referencias_listas=7, n_videos=3, n_imagenes=0)]}
     assert tablero.resumen(sp) == "2 campañas · 13 piezas planeadas · 8/10 referentes elegidos"
     assert tablero.resumen({"campanas": []}) == "0 campañas · 0 piezas planeadas · 0/0 referentes elegidos"
-    paises = {"CO": {"nombre": "Colombia", "bandera": "🇨🇴"}}
-    assert tablero.linea_sprint(sp, paises) == "1–31 oct · 🇨🇴 español · Hot Sale · imita: Crocs, Hoka"
+    assert tablero.linea_sprint(sp) == "1–31 oct · Hot Sale · imita: Crocs, Hoka"   # sin país ni idioma
     otro = {"inicio": "2026-10-20", "fin": "2026-11-10", "pais": None, "idioma": "en", "momento": None, "marcas": []}
-    assert tablero.linea_sprint(otro, paises) == "20 oct – 10 nov · inglés"
+    assert tablero.linea_sprint(otro) == "20 oct – 10 nov"
 
 
 def test_marcas_texto():

@@ -142,7 +142,12 @@ def _mercado_texto(ctx):
     m = ctx.get("mercado") or {}
     pais = (fe_tipos.PAISES.get(m.get("pais") or "") or {}).get("nombre") or m.get("pais")
     idioma = datos.IDIOMAS_NOMBRE.get(m.get("idioma") or "es", m.get("idioma"))
-    return (f"{pais} · " if pais else "") + f"el gancho y los textos en pantalla van en {idioma}"
+    if not pais:
+        # Sprint para todos los países (2026-09-27): se escribe en el idioma base
+        # y la edición final adapta el gancho y los textos a cada país.
+        return (f"todos los países · el gancho y los textos en pantalla van en {idioma}; "
+                "cada país los adapta después en la edición final")
+    return f"{pais} · el gancho y los textos en pantalla van en {idioma}"
 
 
 def _referencias_texto(refs):

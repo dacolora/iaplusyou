@@ -96,21 +96,9 @@
   </section>
 
   <section class="panel-seccion">
-    <h3>Mercado y marcas</h3>
-    <div class="panel-fila">
-      <label>País
-        <select data-campo="pais">
-          <option value="">Del sprint ({{ pais_sprint }})</option>
-          {% for p in paises %}<option value="{{ p.codigo }}" {% if p.codigo == c.pais %}selected{% endif %}>{{ p.bandera }} {{ p.nombre }} (solo aquí)</option>{% endfor %}
-        </select>
-        <small class="campo-error" hidden></small></label>
-      <label>Idioma de los textos
-        <select data-campo="idioma">
-          <option value="">Del sprint ({{ idiomas.get(sprint.idioma or 'es') }})</option>
-          {% for cod, nombre in idiomas.items() %}<option value="{{ cod }}" {% if cod == c.idioma %}selected{% endif %}>{{ nombre }} (solo aquí)</option>{% endfor %}
-        </select>
-        <small class="campo-error" hidden></small></label>
-    </div>
+    {# Sin país ni idioma desde 2026-09-27: la campaña es para todos los países
+       y la edición final adapta cada uno. #}
+    <h3>Marcas</h3>
     <label>Marcas a imitar
       <small class="vacio">{% if ef.hereda.marcas %}Del sprint: {{ (ef.marcas | map(attribute='nombre') | join(', ')) or 'ninguna' }}. Escribe aquí para cambiarlas solo en esta campaña.{% else %}Solo esta campaña (bórralas para volver a las del sprint).{% endif %}</small>
       <textarea data-campo="marcas" rows="2" placeholder="Una por línea">{{ marcas_texto }}</textarea>
