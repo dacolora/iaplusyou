@@ -33,7 +33,12 @@ def ver(cliente, edicion_id):
     ed = _cargar(cliente, edicion_id)
     if not ed:
         abort(404)
-    datos = vista_previa.datos_pagina(cliente, ed, url_for("editor.materiales_json", cliente=cliente, edicion_id=edicion_id))
+    base = url_for("ver_cliente", cliente=cliente)
+    urls = {"materiales": url_for("editor.materiales_json", cliente=cliente, edicion_id=edicion_id),
+            "guardar": url_for("editor.guardar", cliente=cliente, edicion_id=edicion_id),
+            "producir": url_for("editor.producir", cliente=cliente, edicion_id=edicion_id),
+            "final": base + "#final" + (f"?cf={ed['cf_id']}" if ed.get("cf_id") else "")}
+    datos = vista_previa.datos_pagina(cliente, ed, urls)
     vista_previa.encolar_proxies(cliente, datos["pendientes"])
     return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos)
 

@@ -10,7 +10,7 @@ import os
 
 import materiales
 import trabajos
-from final_edition import mezcla
+from final_edition import estimar, mezcla
 from final_edition.documento import FORMATOS
 from final_edition.motor import compilador, subtitulos
 from tareas import edicion as tareas_edicion
@@ -54,7 +54,8 @@ def materiales_para(cliente, doc):
         extra = m.get("extra") or {}
         out[int(mid)] = {"id": int(mid), "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
                          "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
-                         "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version")}
+                         "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
+                         "tira_url": extra.get("tira_url")}
     return out
 
 
@@ -123,7 +124,7 @@ def documento_para_vista(doc, mats):
     return copia, None
 
 
-def datos_pagina(cliente, edicion, url_materiales):
+def datos_pagina(cliente, edicion, urls):
     mats = materiales_para(cliente, edicion["documento"])
     doc, aviso = documento_para_vista(edicion["documento"], mats)
     return {
@@ -135,5 +136,7 @@ def datos_pagina(cliente, edicion, url_materiales):
         "faltantes": faltantes(doc, mats),
         "destinos": destinos(doc),
         "config": config_navegador(),
-        "urls": {"materiales": url_materiales},
+        "estimado_s": estimar.segundos(doc),
+        "cf_id": edicion.get("cf_id"),
+        "urls": urls,
     }

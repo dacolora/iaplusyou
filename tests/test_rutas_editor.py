@@ -76,7 +76,11 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     assert datos["destinos"] == ["es_CO"]
     assert datos["documento"]["pistas"][0]["clips"][0]["id"] == "v0"
     assert datos["config"]["formatos"]["9:16"] == [1080, 1920]
-    assert datos["urls"]["materiales"] == f"/cliente/acme/ediciones/{ed['id']}/materiales"
+    assert datos["urls"] == {"materiales": f"/cliente/acme/ediciones/{ed['id']}/materiales",
+                             "guardar": f"/cliente/acme/ediciones/{ed['id']}",
+                             "producir": f"/cliente/acme/ediciones/{ed['id']}/producir",
+                             "final": "/cliente/acme#final"}
+    assert datos["estimado_s"] >= 20 and datos["cf_id"] is None
     assert [a[1] for a, _k in encolados] == ["edicion_proxy"]
     assert encolados[0][0][2] == {"cliente": "acme", "material_id": clon["id"]}
 
