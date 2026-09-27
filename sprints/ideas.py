@@ -434,7 +434,11 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
                                         duracion_s=i["duracion_s"], plataformas=i["plataformas"],
                                         extra={"angulo": i["angulo"]}))
     if reemplaza is not None and creadas:      # `creadas` solo trae ideas del tipo de la vieja
-        datos.actualizar_idea(cliente, reemplaza, estado_idea="descartada")
+        # Mientras Claude respondía, «Generar» pudo darle una sesión pagada a la
+        # vieja: descartada, su pieza desaparecería de Piezas, revisión y entrega.
+        # En ese caso se quedan las dos.
+        if (datos.idea(cliente, reemplaza) or {}).get("sin_sesion"):
+            datos.actualizar_idea(cliente, reemplaza, estado_idea="descartada")
     datos.registrar_evento(cliente, campana["sprint_id"], "ideas_propuestas",
                            f"{len(creadas)} idea(s) propuesta(s) para la campaña {campana['orden'] + 1}",
                            {"campana_id": campana_id, "cp_ids": creadas, "reemplaza": reemplaza,

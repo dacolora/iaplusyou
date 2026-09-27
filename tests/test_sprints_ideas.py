@@ -143,6 +143,24 @@ def test_otra_idea_que_falla_deja_la_vieja_como_estaba(base_temporal, monkeypatc
         ideas.proponer("acme", cid, reemplaza=999)
 
 
+def test_otra_idea_no_descarta_una_vieja_que_se_genero_mientras_claude_respondia(base_temporal, monkeypatch):
+    """Re-revisión de la ronda final: mientras Claude escribe el reemplazo, la
+    vieja sigue aprobada y «Generar» puede darle una sesión pagada. Descartarla
+    después escondería esa pieza de Piezas, revisión y entrega: se queda viva."""
+    from sprints import analisis, datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    vieja = datos.crear_idea("acme", cid, "video", "Vieja", "x", estado_idea="aprobada")
+
+    def _llamar_falso(content, max_tokens=700, system=None):
+        assert datos.reclamar_cf("acme", vieja, "cf-pagada")        # «Generar» le dio sesión en ese rato
+        return json.dumps({"ideas": [dict(IDEA_V, titulo="La nueva")]})
+    monkeypatch.setattr(analisis, "_llamar_contando", _contando(_llamar_falso))
+    nuevas = ideas.proponer("acme", cid, reemplaza=vieja)
+    assert len(nuevas) == 1
+    assert datos.idea("acme", vieja)["estado_idea"] == "aprobada"
+    assert vieja in [p["id"] for p in datos.campana("acme", cid)["piezas"]]
+
+
 def test_max_tokens_para_escala_con_la_cantidad_de_ideas():
     from sprints import ideas
     assert ideas.max_tokens_para(1) == 5200
