@@ -42,13 +42,14 @@
           {% if p.revision != "rechazada" %}<button type="button" class="btn-xs btn-rechazar" data-pieza-accion="rechazar">Rechazar</button>{% endif %}
           <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}">Abrir en Crear</a>
         {% endif %}
+        {% set precio = ('US$ %.2f' % p.costo_regenerar) if p.costo_regenerar is not none else 'precio no disponible' %}
         {% if p.estado == "error" %}
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}"
-                data-confirmar="Reintentar gasta de nuevo (US$ {{ p.costo_regenerar }}). ¿Seguir?">Reintentar (US$ {{ p.costo_regenerar }})</button>
+                data-confirmar="Reintentar gasta de nuevo ({{ precio }}). ¿Seguir?">Reintentar ({{ precio }})</button>
         {% endif %}
         {% if p.estado in ("listo", "degradada", "error") %}
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_regenerar', cliente=cliente, cp_id=p.id) }}"
-                data-confirmar="Regenerar crea una pieza nueva con la misma idea (US$ {{ p.costo_regenerar }}). ¿Seguir?">Regenerar (US$ {{ p.costo_regenerar }})</button>
+                data-confirmar="Regenerar crea una pieza nueva con la misma idea ({{ precio }}). ¿Seguir?">Regenerar ({{ precio }})</button>
         {% endif %}
       </div>
       <div class="panel-rechazo" data-rechazo hidden>

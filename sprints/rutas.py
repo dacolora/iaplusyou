@@ -422,19 +422,35 @@ def _contexto_ideas(cliente, c):
     }
 
 
+def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
+    """Lo que cuesta reintentar o regenerar la pieza: con SU modelo (reintentar
+    relanza su sesión y regenerar la duplica con el mismo modelo), con la
+    duración recortada al rango de ese modelo. Si el modelo de la pieza ya no
+    está en el registro, el del proyecto. None si no hay estimado: el botón
+    dice «precio no disponible», nunca «US$ 0»."""
+    es_video = p["tipo"] == "video"
+    registro = flowplus_modelos.VIDEO if es_video else flowplus_modelos.IMAGEN
+    modelo = p.get("modelo") if p.get("modelo") in registro else (modelo_video if es_video else modelo_imagen)
+    try:
+        if es_video:
+            est = flowplus_modelos.estimate_video(modelo, produccion._duracion(p, modelo))
+        else:
+            est = flowplus_modelos.estimate_imagen(modelo, n_referencias=produccion._n_referencias(cliente, c))
+        usd = float((est or {}).get("usd") or 0.0)
+    except Exception:  # noqa: BLE001 — sin estimado no se inventa un precio
+        return None
+    return round(usd, 4) if usd > 0 else None
+
+
 def _piezas_de(cliente, c, modelo_video, modelo_imagen):
     """Piezas con sesión de una campaña, con su costo de regeneración
     (estimado gratis, el mismo que muestra el botón antes de gastar)."""
     salida = []
     for p in c["piezas"]:
-        if p["tipo"] == "video":
-            costo = (flowplus_modelos.estimate_video(modelo_video, produccion._duracion(p)) or {}).get("usd") or 0.0
-        else:
-            costo = (flowplus_modelos.estimate_imagen(modelo_imagen, n_referencias=produccion._n_referencias(cliente, c))
-                     or {}).get("usd") or 0.0
         salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
                        "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
-                       "funnel": c.get("funnel") or "tof", "costo_regenerar": round(float(costo), 3)})
+                       "funnel": c.get("funnel") or "tof",
+                       "costo_regenerar": _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen)})
     return salida
 
 

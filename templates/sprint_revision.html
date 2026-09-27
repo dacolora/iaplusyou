@@ -66,12 +66,13 @@
         <button type="button" class="btn-xs btn-peligro js-rechazar">Rechazar</button>
         <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}" title="Abrir en Crear (final edition, experimentos)">Final edition</a>
         {% endif %}
+        {% set precio = ('USD %.2f' % p.costo_regenerar) if p.costo_regenerar is not none else 'precio no disponible' %}
         {% if p.estado == "error" %}
-        <form method="post" action="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit="return confirm('Reintentar gasta de nuevo (USD {{ p.costo_regenerar }}). ¿Seguir?');"><input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">Reintentar (USD {{ p.costo_regenerar }})</button></form>
+        <form method="post" action="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit="return confirm('Reintentar gasta de nuevo ({{ precio }}). ¿Seguir?');"><input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">Reintentar ({{ precio }})</button></form>
         {% endif %}
         {% if p.estado in ("listo", "degradada", "error") %}
-        <form method="post" action="{{ url_for('sprints.pieza_regenerar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit="return confirm('Regenerar crea una pieza nueva con la misma idea (USD {{ p.costo_regenerar }}). ¿Seguir?');">
-          <input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">Regenerar (USD {{ p.costo_regenerar }})</button>
+        <form method="post" action="{{ url_for('sprints.pieza_regenerar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit="return confirm('Regenerar crea una pieza nueva con la misma idea ({{ precio }}). ¿Seguir?');">
+          <input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">Regenerar ({{ precio }})</button>
         </form>
         {% endif %}
         <a class="btn-xs" href="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id, panel=p.campana_id, paso='piezas') }}">Abrir en el panel</a>

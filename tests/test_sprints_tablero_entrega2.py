@@ -212,3 +212,41 @@ def test_revision_del_sprint_renovada(con_ideas, monkeypatch, tmp_path):
     assert f"/cliente/acme/sprints/{sid}?panel={cid}&amp;paso=piezas" in html and "Abrir en el panel" in html
     assert "data-motivo" in html and "data-rechazo" in html and "prompt(" not in html
     assert "if (e.metaKey || e.ctrlKey || e.altKey) return;" in html       # los atajos siguen
+
+
+# ------------------------------------------- ronda final (revisión + pantalla) ---
+
+def _tablero(c, sid):
+    return c.get(f"/cliente/acme/sprints/{sid}").data.decode()
+
+
+def _js_panel(html):
+    """El segundo <script> del tablero: los listeners del panel."""
+    return html[html.index("// Panel de la campaña: autoguardado"):]
+
+
+def test_precio_de_reintentar_y_regenerar_es_el_del_modelo_de_la_pieza(con_ideas, monkeypatch, tmp_path):
+    """F2 + F6: la pieza se hizo con Kling O3 Pro (no el modelo del proyecto,
+    Wan 3.0): el precio es el de Kling, con la duración recortada a su rango
+    (20 s → 15 s: US$ 0.14 × 15 = 2.10), con dos decimales, en el panel y en la
+    revisión del sprint. Sin estimado: «precio no disponible», nunca «US$ 0»."""
+    import creative_flow
+    from providers import flowplus_modelos
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    creative_flow.actualizar("acme", cfs[iv], modelo="kling_o3_pro")
+    datos.actualizar_idea("acme", iv, duracion_s=20)
+    piezas = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
+    assert "Regenerar (US$ 2.10)" in piezas and "(US$ 2.10). ¿Seguir?" in piezas
+    assert "Regenerar (US$ 0.09)" in piezas              # la imagen: dos decimales, no «0.093»
+    revision = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert "Regenerar (USD 2.10)" in revision and "(USD 2.10). ¿Seguir?" in revision
+    creative_flow.actualizar("acme", cfs[iv], modelo="modelo_que_ya_no_existe")      # cae al del proyecto
+    assert "Regenerar (US$ 2.00)" in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
+    monkeypatch.setattr(flowplus_modelos, "estimate_imagen", lambda *a, **k: {})
+    piezas = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
+    assert "Regenerar (precio no disponible)" in piezas and "(precio no disponible). ¿Seguir?" in piezas
+    assert "US$ 0)" not in piezas and "US$ 0.00)" not in piezas
+    revision = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
+    assert "Regenerar (precio no disponible)" in revision
