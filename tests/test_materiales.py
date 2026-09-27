@@ -195,3 +195,33 @@ def test_bytes_usados_suma_por_cliente(base_temporal, r2_falso):
     m.registrar("acme", tipo="audio", origen="subida", url="u2", hash="x2", bytes=30)
     m.registrar("otro", tipo="audio", origen="subida", url="u3", hash="x3", bytes=999)
     assert m.bytes_usados("acme") == 100
+
+
+def test_actualizar_extra_mezcla_sin_pisar(base_temporal):
+    import materiales
+    m = materiales.registrar("acme", tipo="audio", origen="voz", url="u", hash="h", bytes=1, extra={"texto": "hola"})
+    m2 = materiales.actualizar_extra("acme", m["id"], palabras=[{"t_ms": 0, "dur_ms": 100, "texto": "hola"}])
+    assert m2["extra"] == {"texto": "hola", "palabras": [{"t_ms": 0, "dur_ms": 100, "texto": "hola"}]}
+    assert materiales.actualizar_extra("otro", m["id"], x=1) is None     # otro cliente no toca la fila
+    assert materiales.obtener("acme", m["id"])["extra"]["texto"] == "hola"
+
+
+def test_descargar_copia_el_archivo_local_si_sigue_ahi(base_temporal, tmp_path, monkeypatch):
+    import materiales
+    origen = tmp_path / "clon.mp4"
+    origen.write_bytes(b"video")
+    mat = {"url": "https://r2/no-se-usa", "extra": {"local": str(origen)}}
+    destino = str(tmp_path / "w" / "1.mp4")
+    assert materiales.descargar(mat, destino) == destino and open(destino, "rb").read() == b"video"
+    # el local ya no existe: se baja de R2 como siempre
+    mat["extra"]["local"] = str(tmp_path / "borrado.mp4")
+    visto = {}
+
+    class R:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def raise_for_status(self): pass
+        def iter_content(self, n): yield b"r2"
+    monkeypatch.setattr("requests.get", lambda url, stream=True, timeout=120: visto.update(url=url) or R())
+    materiales.descargar(mat, destino)
+    assert visto["url"] == "https://r2/no-se-usa" and open(destino, "rb").read() == b"r2"

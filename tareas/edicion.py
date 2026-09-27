@@ -21,7 +21,7 @@ import creative_flow
 import ediciones
 import materiales
 import trabajos
-from final_edition import cortes, motor
+from final_edition import cortes, motor, rasterizar
 from final_edition import documento as documento_mod
 from final_edition.motor import compilador
 from storage import r2_uploader
@@ -59,7 +59,8 @@ def preparar_rutas(cliente, doc, carpeta):
     """Baja los materiales del documento a `carpeta` y devuelve `rutas`
     ({material_id: ruta, "png:<clip_id>": ruta, "ass": ruta}). De paso, con
     las filas ya en mano: estampa `ancho_px`/`alto_px` en los clips `imagen`
-    que no los traen (tamaño natural medido al subir) y pasa los recortes por
+    que no los traen (tamaño natural medido al subir), rasteriza con Pillow
+    los clips de texto sin `pngs` y pasa los recortes por
     `compilador.verificar_recortes` con las duraciones reales (`duracion_ms`
     de la fila, cuando el proxy ya la midió) — modifica `doc` en el sitio."""
     rutas = {"ass": os.path.join(carpeta, "subtitulos.ass")}
@@ -80,6 +81,23 @@ def preparar_rutas(cliente, doc, carpeta):
         mat = materiales.obtener(cliente, mid)
         if mat:
             rutas[f"png:{clip_id}"] = materiales.descargar(mat, os.path.join(carpeta, f"png_{clip_id}.png"))
+    # Textos sin PNG del navegador (la vía automática no tiene navegador):
+    # el servidor los rasteriza con las mismas TTF. El doc ya está resuelto
+    # (literal); un clip variable aquí es un error de quien llama.
+    for p in doc.get("pistas") or []:
+        if p.get("tipo") != "texto":
+            continue
+        for cl in p.get("clips") or []:
+            clave = f"png:{cl['id']}"
+            if clave in rutas:
+                continue
+            literal = (cl.get("texto") or {}).get("literal")
+            if literal is None:
+                raise RuntimeError(f"El clip de texto {cl['id']} no está resuelto (¿falta documento.resolver?).")
+            medidas = rasterizar.png_texto(literal, cl.get("estilo") or {}, doc["formato"],
+                                           os.path.join(carpeta, f"png_{cl['id']}.png"))
+            rutas[clave] = os.path.join(carpeta, f"png_{cl['id']}.png")
+            cl["ancho_px"], cl["alto_px"] = medidas["ancho_px"], medidas["alto_px"]
     for p in doc.get("pistas") or []:
         if p.get("tipo") != "imagen":
             continue
@@ -92,63 +110,73 @@ def preparar_rutas(cliente, doc, carpeta):
     return rutas
 
 
+def renderizar_final(cliente, final_id, version_id, idioma, pais, avisar=None):
+    """Renderiza la versión CONGELADA `version_id` para `idioma`/`pais` y
+    sube el mp4/png con clave versionada (`<final_id>__v<version_id>`;
+    miniatura primero). Devuelve {url_video, url_miniatura, duracion_s,
+    tramos, con_ass, version_id, es_imagen}. NO toca la fila final: eso lo
+    hace quien llama (`edicion_producir` o `final_edition.produccion`).
+    Lanza si algo falla y deja la carpeta de trabajo (el .filtergraph.txt es
+    la evidencia); en éxito la borra. `avisar` recibe las etapas de
+    ETAPAS_EDICION y las del motor ("Renderizando tramo i/n")."""
+    avisar = avisar or (lambda n: None)
+    # idioma/pais forman el nombre de la carpeta de trabajo: se validan
+    # ANTES de tocar el disco (un `../x` no debe ni crearla).
+    if not isinstance(idioma, str) or not _IDIOMA_RE.fullmatch(idioma):
+        raise ValueError(f"idioma inválido: {idioma!r} (se esperan dos letras minúsculas).")
+    if not isinstance(pais, str) or not _PAIS_RE.fullmatch(pais):
+        raise ValueError(f"país inválido: {pais!r} (se esperan dos letras mayúsculas).")
+    v = ediciones.version(cliente, version_id)
+    if not v:
+        raise RuntimeError("No existe esa versión de la edición.")
+    carpeta = _carpeta(cliente, f"{v['edicion_id']}_{idioma}_{pais}")
+    # Como mucho una corrida fallida por destino queda en disco: un
+    # reintento arranca de carpeta limpia (vacía pero existente).
+    shutil.rmtree(carpeta, ignore_errors=True)
+    os.makedirs(carpeta, exist_ok=True)
+    avisar(ETAPAS_EDICION[0][0])
+    doc = documento_mod.resolver(documento_mod.validar(documento_mod.migrar(v["documento"])), idioma, pais)
+    rutas = preparar_rutas(cliente, doc, carpeta)
+    avisar(ETAPAS_EDICION[1][0])
+    es_imagen = documento_mod.duracion_ms(doc) == 0
+    salida = os.path.join(carpeta, f"{final_id}.{'png' if es_imagen else 'mp4'}")
+    res = motor.renderizar(doc, rutas, salida, on_etapa=avisar, nucleos=int(os.environ.get("RENDER_NUCLEOS", "1")))
+    avisar(ETAPAS_EDICION[2][0])
+    # Claves versionadas (I1, capa 1): un reintento nunca pisa el archivo
+    # que la fila todavía enlaza. La miniatura sube ANTES que el video.
+    if es_imagen:
+        url = r2_uploader.upload_image(res["archivo"], f"clientes/{cliente}/finales/{final_id}__v{v['id']}.png")
+        url_mini = url
+    else:
+        url_mini = r2_uploader.upload_image(res["miniatura"], f"clientes/{cliente}/finales/{final_id}__v{v['id']}.png")
+        url = r2_uploader.upload_video(res["archivo"], f"clientes/{cliente}/finales/{final_id}__v{v['id']}.mp4")
+    shutil.rmtree(carpeta, ignore_errors=True)
+    return {"url_video": url, "url_miniatura": url_mini, "duracion_s": float(res["duracion_s"]), "tramos": res["tramos"],
+            "con_ass": res["con_ass"], "version_id": v["id"], "es_imagen": es_imagen}
+
+
 @registrar("edicion_producir")
 def ejecutar_producir(tarea):
     p = tarea["payload"]
     cliente, final_id = p["cliente"], p["final_id"]
     job_id = tarea.get("job_id") or job_id_producir(cliente, p["edicion_id"], p["idioma"], p["pais"])
     avisar = lambda n: trabajos.reportar(job_id, etapa=n)
-    # Sin gasto: los materiales ya existen; la capa 2 registra voz/música nuevas.
+    # Sin gasto: los materiales ya existen (la vía automática paga en
+    # final_edition.produccion, no aquí).
     try:
-        # idioma/pais forman el nombre de la carpeta de trabajo: se validan
-        # ANTES de crearla (un `../x` no debe ni tocar el disco).
-        if not isinstance(p.get("idioma"), str) or not _IDIOMA_RE.fullmatch(p["idioma"]):
-            raise ValueError(f"idioma inválido: {p.get('idioma')!r} (se esperan dos letras minúsculas).")
-        if not isinstance(p.get("pais"), str) or not _PAIS_RE.fullmatch(p["pais"]):
-            raise ValueError(f"país inválido: {p.get('pais')!r} (se esperan dos letras mayúsculas).")
-        carpeta = _carpeta(cliente, f"{p['edicion_id']}_{p['idioma']}_{p['pais']}")
-        # Como en final_edition/__init__.py: como mucho una corrida fallida
-        # por destino queda en disco — un reintento siempre arranca de
-        # carpeta limpia (_carpeta ya hizo su propio os.makedirs; lo
-        # repetimos después del rmtree para dejarla vacía pero existente).
-        shutil.rmtree(carpeta, ignore_errors=True)
-        os.makedirs(carpeta, exist_ok=True)
-        avisar(ETAPAS_EDICION[0][0])
-        v = ediciones.version(cliente, p["version_id"])
-        if not v:
-            raise RuntimeError("No existe esa versión de la edición.")
-        doc = documento_mod.resolver(documento_mod.validar(documento_mod.migrar(v["documento"])), p["idioma"], p["pais"])
-        rutas = preparar_rutas(cliente, doc, carpeta)
-        avisar(ETAPAS_EDICION[1][0])
-        es_imagen = documento_mod.duracion_ms(doc) == 0
-        salida = os.path.join(carpeta, f"{final_id}.{'png' if es_imagen else 'mp4'}")
-        res = motor.renderizar(doc, rutas, salida, on_etapa=avisar, nucleos=int(os.environ.get("RENDER_NUCLEOS", "1")))
-        avisar(ETAPAS_EDICION[2][0])
-        # I1 (review): claves versionadas por edicion_version_id — un
-        # reintento (misma final, versión nueva) nunca pisa el archivo que la
-        # fila todavía enlaza mientras se sube el nuevo. La miniatura sube
-        # ANTES que el video para que, si el proceso muere entre ambas
-        # subidas, nunca quede un video sin su miniatura.
-        if es_imagen:
-            url = r2_uploader.upload_image(res["archivo"], f"clientes/{cliente}/finales/{final_id}__v{v['id']}.png")
-            url_mini = url
-        else:
-            url_mini = r2_uploader.upload_image(res["miniatura"], f"clientes/{cliente}/finales/{final_id}__v{v['id']}.png")
-            url = r2_uploader.upload_video(res["archivo"], f"clientes/{cliente}/finales/{final_id}__v{v['id']}.mp4")
+        res = renderizar_final(cliente, final_id, p["version_id"], p["idioma"], p["pais"], avisar)
         # La fila final la crea la ruta (creative_flow.crear_final) antes de
         # encolar: si no está, esto no puede "terminar bien" en silencio.
-        if not creative_flow.actualizar_final(cliente, final_id, estado="listo", url_video=url, url_miniatura=url_mini,
-                                              duracion_s=res["duracion_s"],
-                                              capas={"render": {"edicion_version_id": v["id"], "tramos": res["tramos"], "con_ass": res["con_ass"]}}):
+        if not creative_flow.actualizar_final(cliente, final_id, estado="listo", url_video=res["url_video"],
+                                              url_miniatura=res["url_miniatura"], duracion_s=res["duracion_s"],
+                                              capas={"render": {"edicion_version_id": res["version_id"], "tramos": res["tramos"],
+                                                                "con_ass": res["con_ass"]}}):
             raise RuntimeError(f"La final {final_id} no existe; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
-        if not ediciones.apuntar_final(cliente, final_id, v["id"]):
+        if not ediciones.apuntar_final(cliente, final_id, res["version_id"]):
             raise RuntimeError(f"La final {final_id} no existe en pieza; la ruta debe crearla con creative_flow.crear_final antes de encolar.")
-        shutil.rmtree(carpeta, ignore_errors=True)
         return f"Final {p['idioma']}/{p['pais']} lista."
     except Exception as e:
-        # I3 (review): nunca un token crudo en la columna de error (Meta/
-        # TikTok los meten en mensajes de excepción reales). Aquí sí es
-        # best-effort: si la final no existe no hay dónde anotarlo.
+        # I3 (capa 1): nunca un token crudo en la columna de error.
         creative_flow.actualizar_final(cliente, final_id, estado="error",
                                        error=cola.recortar(cola.sin_token(str(e)), 500))
         raise  # la carpeta queda: el .filtergraph.txt es la evidencia para depurar.
@@ -212,7 +240,10 @@ def ejecutar_proxy(tarea):
             cortes.ffmpeg(["-i", original, "-vf", f"fps=1,scale=160:-2,tile={celdas}x1", "-frames:v", "1", "-q:v", "6", tira], timeout=600)
             campos["url_proxy"] = r2_uploader.upload_file(proxy, f"clientes/{cliente}/materiales/{mid}_proxy.mp4", "video/mp4")
             extra["tira_url"] = r2_uploader.upload_file(tira, f"clientes/{cliente}/materiales/{mid}_tira.jpg", "image/jpeg")
-            extra["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
+            if "cortes_ms" not in extra:
+                # `insumos.clon` ya los midió al crear el material (I4,
+                # plan-mandated capa 2): no repetir el trabajo de `scdet`.
+                extra["cortes_ms"] = [int(round(c * 1000)) for c in cortes.detectar_cortes(original)]
         else:  # audio (único otro tipo posible tras el chequeo de arriba)
             campos["duracion_ms"] = int(round(cortes.duracion(original) * 1000))
             extra["picos"] = _picos(original)

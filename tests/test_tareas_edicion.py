@@ -19,7 +19,11 @@ def entorno(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(r2_uploader, "upload_file", lambda p, k, ct: f"https://r2/{k}")
     monkeypatch.setattr(r2_uploader, "upload_video", lambda p, k: f"https://r2/{k}")
     monkeypatch.setattr(r2_uploader, "upload_image", lambda p, k: f"https://r2/{k}")
-    monkeypatch.setattr(materiales, "descargar", lambda mat, destino: (open(destino, "wb").write(b"x"), destino)[1])
+    def _descargar(mat, destino):
+        os.makedirs(os.path.dirname(destino), exist_ok=True)
+        open(destino, "wb").write(b"x")
+        return destino
+    monkeypatch.setattr(materiales, "descargar", _descargar)
     for i, (tipo, origen) in enumerate([("video", "crear"), ("audio", "voz"), ("audio", "musica")], start=1):
         materiales.registrar("acme", tipo=tipo, origen=origen, url=f"https://r2/m{i}", hash=f"h{i}", bytes=1)
     return te
@@ -28,6 +32,30 @@ def entorno(base_temporal, monkeypatch, tmp_path):
 def test_job_ids(entorno):
     assert entorno.job_id_producir("acme", 7, "es", "CO") == "acme__ed7__es_CO__producir"
     assert entorno.job_id_proxy("acme", 3) == "acme__mat3__proxy"
+
+
+def test_renderizar_final_devuelve_urls_versionadas_y_limpia_la_carpeta(entorno, monkeypatch, tmp_path):
+    import ediciones
+    from final_edition import motor
+    ed = ediciones.crear("acme", "video", "e", _doc(), cf_id="cf_1")
+    v = ediciones.versionar("acme", ed["id"], "producir")
+
+    def fake_render(doc, rutas, salida, on_etapa=None, nucleos=1):
+        open(salida, "wb").write(b"mp4")
+        mini = salida.replace(".mp4", "_miniatura.png"); open(mini, "wb").write(b"png")
+        return {"archivo": salida, "miniatura": mini, "duracion_s": 7.0, "tramos": 1, "con_ass": False}
+    monkeypatch.setattr(motor, "renderizar", fake_render)
+    etapas = []
+    res = entorno.renderizar_final("acme", "cf_1__es_CO", v["id"], "es", "CO", etapas.append)
+    assert res["url_video"].endswith(f"/finales/cf_1__es_CO__v{v['id']}.mp4")
+    assert res["url_miniatura"].endswith(f"/finales/cf_1__es_CO__v{v['id']}.png")
+    assert res["version_id"] == v["id"] and res["duracion_s"] == 7.0 and res["es_imagen"] is False
+    assert etapas[0] == "Preparando materiales" and etapas[-1] == "Subiendo"
+    assert not os.path.exists(str(tmp_path / "salidas" / "acme" / "ediciones" / f"{ed['id']}_es_CO"))
+    with pytest.raises(ValueError, match="idioma"):
+        entorno.renderizar_final("acme", "cf_1__es_CO", v["id"], "../x", "CO")
+    with pytest.raises(RuntimeError, match="versión"):
+        entorno.renderizar_final("acme", "cf_1__es_CO", 999, "es", "CO")
 
 
 def test_producir_renderiza_con_el_documento_de_la_version_y_actualiza_la_final(entorno, monkeypatch):
@@ -97,6 +125,30 @@ def test_producir_no_deja_tokens_en_el_error(entorno, monkeypatch):
         entorno.ejecutar_producir({"payload": {"cliente": "acme", "edicion_id": ed["id"], "version_id": v["id"],
                                                "final_id": "cf_1__es_CO", "idioma": "es", "pais": "CO"}, "job_id": "j"})
     assert "abc123" not in actualizado["error"] and "fallo" in actualizado["error"]
+
+
+def test_preparar_rutas_rasteriza_los_textos_sin_png_del_navegador(entorno, tmp_path):
+    from final_edition import documento as d
+    doc = d.resolver(d.validar(_doc()), "es", "CO")
+    rutas = entorno.preparar_rutas("acme", doc, str(tmp_path / "w"))
+    assert os.path.exists(rutas["png:t1"]) and rutas["png:t1"].endswith("png_t1.png")
+    clip = doc["pistas"][1]["clips"][0]
+    assert clip["ancho_px"] > 0 and clip["alto_px"] > 0
+
+
+def test_preparar_rutas_respeta_el_png_del_navegador(entorno, tmp_path, monkeypatch):
+    import materiales
+    from final_edition import documento as d, rasterizar
+    png = materiales.registrar("acme", tipo="png_texto", origen="texto", url="https://r2/png", hash="hp", bytes=1)
+    base = _doc()
+    base["pngs"] = {"t1": png["id"]}
+    doc = d.resolver(d.validar(base), "es", "CO")
+
+    def _no(*a, **k):
+        raise AssertionError("no debía rasterizar: el navegador ya mandó el PNG")
+    monkeypatch.setattr(rasterizar, "png_texto", _no)
+    rutas = entorno.preparar_rutas("acme", doc, str(tmp_path / "w"))
+    assert rutas["png:t1"].endswith("png_t1.png") and "ancho_px" not in doc["pistas"][1]["clips"][0]
 
 
 def test_producir_falla_si_la_final_no_existe(entorno, monkeypatch):
@@ -206,6 +258,26 @@ def test_proxy_genera_540p_tira_y_cortes_y_los_guarda(entorno, monkeypatch, tmp_
     # I2 (review): la carpeta de trabajo se borra siempre (éxito o no) en edicion_proxy.
     carpeta = os.path.join(os.environ["CREATV_SALIDAS"], "acme", "ediciones", f"proxy_{mat['id']}")
     assert not os.path.exists(carpeta)
+
+
+def test_proxy_no_repite_cortes_si_extra_ya_los_trae(entorno, monkeypatch, tmp_path):
+    # I4 (plan-mandated, capa 2): `insumos.clon` ya midió los cortes al crear
+    # el material (extra.cortes_ms) — `ejecutar_proxy` no debe volver a
+    # correr `cortes.detectar_cortes` (ffmpeg real, caro) por él.
+    import materiales
+    from final_edition import cortes
+    mat = materiales.registrar("acme", tipo="video", origen="crear", url="https://r2/m4", hash="h4", bytes=1,
+                               extra={"cortes_ms": [900]})
+    monkeypatch.setattr(cortes, "ffmpeg", lambda args, timeout=300: open(args[-1], "wb").write(b"x"))
+    monkeypatch.setattr(cortes, "duracion", lambda p: 8.0)
+    monkeypatch.setattr(cortes, "ffprobe_json", lambda p: {"streams": [{"codec_type": "video", "width": 540, "height": 960}], "format": {"duration": "8.0"}})
+
+    def _no_llamar(p, umbral=10.0):
+        raise AssertionError("detectar_cortes no debía llamarse: extra ya traía cortes_ms")
+    monkeypatch.setattr(cortes, "detectar_cortes", _no_llamar)
+    entorno.ejecutar_proxy({"payload": {"cliente": "acme", "material_id": mat["id"]}, "job_id": "x"})
+    m2 = materiales.obtener("acme", mat["id"])
+    assert m2["extra"]["cortes_ms"] == [900]
 
 
 @pytest.mark.slow

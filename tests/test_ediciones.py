@@ -119,3 +119,16 @@ def test_apuntar_final_escribe_edicion_version_id(base_temporal):
     # I12: devuelve las filas tocadas para que la tarea note una final ausente
     assert e.apuntar_final("acme", "cf_9__es_CO", v["id"]) == 0
     assert e.apuntar_final("otro", "cf_1__es_CO", v["id"]) == 0
+
+
+def test_buscar_origen_encuentra_la_receta_y_salta_las_degradadas(base_temporal):
+    import ediciones
+    doc = d.nuevo_video("9:16")
+    a = ediciones.crear("acme", "video", "a", {**doc, "origen": {"receta": "r1", "degradada": False}}, cf_id="cf_1")
+    b = ediciones.crear("acme", "video", "b", {**doc, "origen": {"receta": "r1"}}, cf_id="cf_1")
+    ediciones.crear("acme", "video", "c", {**doc, "origen": {"receta": "r2", "degradada": True}}, cf_id="cf_1")
+    ediciones.crear("acme", "video", "d", {**doc, "origen": {"receta": "r1"}}, cf_id="cf_2")
+    assert ediciones.buscar_origen("acme", "cf_1", "r1")["id"] == b["id"]      # la más reciente
+    assert ediciones.buscar_origen("acme", "cf_1", "r2") is None                # degradada: no se reutiliza
+    assert ediciones.buscar_origen("otro", "cf_1", "r1") is None
+    assert a["id"] < b["id"]

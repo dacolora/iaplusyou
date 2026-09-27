@@ -21,6 +21,9 @@ Si la pista principal termina antes que el tramo (la voz sigue después del
 último clip), su último cuadro se clona con `tpad` hasta el fin del tramo:
 el video nunca acaba antes que el audio.
 
+Ken Burns: `ken_burns` en un clip de la principal agrega `zoompan`
+(1.0→1.08) tras `fps=`; `on` se desplaza por la ventana del tramo.
+
 Capas (PNG de texto e imágenes): cada una se escala a la caja que da
 `geometria.caja` (`scale=w:h`, misma regla de píxeles que el navegador) y,
 con `opacidad < 1`, se atenúa el alfa (`format=rgba,colorchannelmixer=aa=`).
@@ -55,6 +58,29 @@ from final_edition.motor import subtitulos as sub_mod
 
 _XFADE = {"fundido": "fade", "deslizar": "slideleft", "zoom": "zoomin", "desenfoque": "fadeblack"}
 _DESPLAZ_ANIM_PX = 60
+ZOOM_KEN_BURNS = 1.08
+
+
+def _zoompan(clip, corte_ini_ms, fps, ancho, alto):
+    """Ken Burns de un clip de la principal (`ken_burns`: in | out): el
+    zoompan de render.py, 1.0 → 1.08 (o al revés) a lo largo del clip
+    ENTERO, con `on` desplazado por los cuadros que la ventana del tramo ya
+    consumió (`corte_ini_ms`) para que el zoom siga donde iba y no reinicie
+    en cada tramo. La cola de una transición satura en el extremo (min/max).
+    '' si el clip no lo pide."""
+    modo = clip.get("ken_burns")
+    if modo not in ("in", "out"):
+        return ""
+    n = max(1, round(clip["duracion_ms"] * fps / 1000))
+    off = round(corte_ini_ms * fps / 1000)
+    paso = ZOOM_KEN_BURNS - 1
+    if modo == "in":
+        z = f"min(1+{paso:.2f}*(on+{off})/{n},{ZOOM_KEN_BURNS})"
+    else:
+        z = f"max({ZOOM_KEN_BURNS}-{paso:.2f}*(on+{off})/{n},1)"
+    return f",zoompan=z='{z}':d=1:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={ancho}x{alto}:fps={fps}"
+
+
 # Respaldo: el navegador manda ancho_px/alto_px con cada PNG (capa 3).
 _CAPA_ANCHO_DEFECTO = 400
 _CAPA_ALTO_DEFECTO = 200
@@ -269,7 +295,8 @@ def compilar(doc, rutas, ventana=None, con_ass=True):
         else:
             setpts = "setpts=PTS-STARTPTS" if vel == 1.0 else f"setpts=(PTS-STARTPTS)/{vel}"
             partes.append(f"[0:v]trim=start={_s(desde)}:end={_s(hasta)},{setpts},"
-                          f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={fps},format=yuv420p[v{i}]")
+                          f"scale={ancho}:{alto}:force_original_aspect_ratio=increase,crop={ancho}:{alto},fps={fps}"
+                          f"{_zoompan(cl, corte_ini, fps, ancho, alto)},format=yuv420p[v{i}]")
         etiquetas.append((f"[v{i}]", cl))
     # Relleno: si la principal termina antes que el tramo (la voz sigue), el
     # último cuadro se clona hasta `dur_tramo`. Cero para una imagen.

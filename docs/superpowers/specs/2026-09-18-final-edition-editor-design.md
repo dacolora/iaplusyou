@@ -111,7 +111,9 @@ Reglas que hacen que el mismo documento sirva para todo:
 > Estado: **capa 1 implementada** (plan
 > `docs/superpowers/plans/2026-09-18-editor-capa1-documento-motor.md`). Subtítulos
 > por ASS solo donde ffmpeg trae libass (VPS); sin libass se omiten y el render lo
-> avisa. Pendiente de la capa 2: el borrador automático produce una `edicion`.
+> avisa. **Capa 2 implementada** (plan
+> `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`): `final_producir` produce por
+> el editor.
 >
 > Decisiones de implementación que ajustan la letra de este capítulo:
 > - **Transición** (§2.1): una `transicion` de `d` ms en el clip A ocupa el
@@ -158,6 +160,51 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   sobre él): con clips reordenados ffmpeg decodifica y retiene todo lo que
 >   hay entre recortes — medido 1,39 GB de RSS en un reorden de 10 s. Cambia
 >   `Plan.entradas`, así que va en una tarea propia.
+>
+> Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
+> - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,
+>   `subtitulos.palabras` y el `por_destino` de los clips de voz aceptan `<idioma>` o
+>   `<idioma>_<PAIS>`; al resolver gana la clave más específica
+>   (`documento.valor_destino`); el borrador escribe el destino base bajo las dos.
+> - **`precio` es una variable reservada**: un clip `texto: {"variable": "precio"}` se
+>   resuelve con `tipos.formatear_precio`; sin precio para ese país el clip
+>   **desaparece** (hoy: sin badge), nunca se convierte de moneda.
+> - **Rasterizado en el servidor (Pillow) para los clips sin PNG del navegador**: la
+>   vía automática no tiene navegador (las derivaciones producen en el worker);
+>   `preparar_rutas` rasteriza con las mismas TTF de `static/fonts/`. Esos PNG no son
+>   materiales (se regeneran en milisegundos).
+> - **Ken Burns** = `ken_burns: in|out` en los clips de la pista principal, compilado
+>   como el `zoompan` de `render.py` (1.0 → 1.08), con desplazamiento por ventana de
+>   tramo.
+> - **Una sola tarea**: `final_producir` hace guion → borrador → traducción → versión
+>   → render y reporta las mismas 5 etapas de siempre; no encola una segunda tarea, el
+>   `job_id` que consulta la tarjeta no cambia.
+> - **Reutilización por receta**: `borrador.receta(guion_base, opciones, formato)` es
+>   el hash de todo lo que determina el borrador; misma receta → misma edición (el
+>   segundo destino solo paga su traducción y su voz); un borrador **degradado** (voz o
+>   música fallaron) nunca se reutiliza.
+> - **La voz se ajusta a la ventana del bloque en un material derivado**: el TTS crudo
+>   (lo que cuesta) se cachea por `hash(texto_voz, voz, idioma)`; si no cabe, un
+>   material derivado con `atempo` ≤ 1.35× y recorte (gratis, `padre_id`) lo ajusta;
+>   las palabras de Whisper quedan en `material.extra.palabras`.
+> - **El clon y la música no se vuelven a subir**: el material apunta a la URL que ya
+>   tienen en R2 (`video_url_crudo`, `musica/<estilo>_<seg>.wav`); `extra.local` deja
+>   que `materiales.descargar` copie el archivo local si sigue en disco.
+> - **Logo**: material `imagen`/`marca` vía `marca.logo_material_id`, como capa
+>   `imagen` centrada ENCIMA de la tarjeta del CTA (no dentro): la composición no
+>   depende de cuántas líneas tenga el CTA en cada idioma.
+> - **El modal de Crear no cambia en esta capa**: «Preparar guion con IA» sigue igual;
+>   «Crear borrador» / «Editar final» llegan con las capas 3–4.
+> - **Interruptor `FINAL_EDITION_LEGADO=1`**: el `producir` de siempre se conserva como
+>   `producir_legado`, cubierto por las pruebas viejas con ese entorno; se retira junto
+>   con `render.py`/`texto.py` al final (§5).
+> - **La voz de los subtítulos** va por ASS karaoke (capa 1) en vez de PNG por grupo;
+>   en la Mac sin libass se omiten (avisado), en el VPS entran; el color de resaltado
+>   es el del estilo `karaoke`, no el acento de marca (pendiente de la capa 4).
+> - **Nombres**: `borrador` es el MÓDULO puro (`final_edition/borrador.py`); la función
+>   del botón «Crear borrador» de esta spec llega en la capa 4 como
+>   `produccion.crear_borrador(cliente, cf_id, opciones)` — en esta capa nadie la
+>   necesita (el modal no cambia).
 
 `final_edition/motor/` recibe un documento resuelto (variables ya sustituidas)
 y devuelve mp4 o png. Reemplaza `render.py`.
@@ -219,8 +266,10 @@ esperado.
   destino, `max_intentos=1` (paga solo materiales nuevos). Etapas: materiales →
   voz → música → render → subida.
 - `edicion_proxy` `{cliente, material_id}`: `max_intentos=3`, gratis.
-- `final_producir` (existente) pasa a: borrador → documento por defecto →
-  `edicion_producir`. Derivaciones y experimentos no cambian.
+- `final_producir` (existente) pasa a: borrador → documento → traducción del
+  destino → versión → render (en la MISMA tarea, por
+  `tareas.edicion.renderizar_final`; ver la decisión 5 del bloque de estado).
+  Derivaciones y experimentos no cambian.
 - Periódica `materiales_limpiar` (diaria): borra `png_texto` y proxies sin uso
   hace 30 días; originales, voces y músicas se conservan.
 
