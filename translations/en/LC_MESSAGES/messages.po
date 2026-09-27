@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Creatv VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-26 18:39-0500\n"
+"POT-Creation-Date: 2026-09-26 18:56-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -70,6 +70,18 @@ msgid "%(num)d rechazado"
 msgid_plural "%(num)d rechazados"
 msgstr[0] "%(num)d rejected"
 msgstr[1] "%(num)d rejected"
+
+#, python-format
+msgid "%(num)s experimento vivo"
+msgid_plural "%(num)s experimentos vivos"
+msgstr[0] "%(num)s live experiment"
+msgstr[1] "%(num)s live experiments"
+
+#, python-format
+msgid "%(num)s publicación en curso"
+msgid_plural "%(num)s publicaciones en curso"
+msgstr[0] "%(num)s post in progress"
+msgstr[1] "%(num)s posts in progress"
 
 msgid "(los que no aparezcan, agrégalos primero desde <em>Casos de uso › Personalizar</em>). Copia el <strong>identificador de configuración</strong>."
 msgstr "(add any that don't appear first from <em>Use cases › Customize</em>). Copy the <strong>configuration id</strong>."
@@ -1592,6 +1604,10 @@ msgstr "Tasks waiting"
 
 msgid "Te mandamos un enlace para confirmarlo; con él también recuperas la contraseña si la olvidas."
 msgstr "We'll send you a link to confirm it; you can also use it to recover your password if you forget it."
+
+#, python-format
+msgid "Termina o cierra primero: %(partes)s"
+msgstr "Finish or close first: %(partes)s"
 
 msgid "Terminó con error."
 msgstr "Finished with an error."

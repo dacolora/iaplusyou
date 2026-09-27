@@ -5,7 +5,7 @@ test aquí."""
 import pytest
 
 import idiomas
-from tests.i18n_util import espanol_visible
+from tests.i18n_util import _con_marca, espanol_visible
 
 CLAVES = [
     "ANTHROPIC_API_KEY", "FAL_KEY", "HF_API_KEY_ID", "HF_API_KEY_SECRET", "R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID",
@@ -106,3 +106,35 @@ def test_config_puesta_y_conexiones_admin(admin_en):
 def test_config_conexiones_cliente(cliente_en):
     fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("config-ap-conexiones",))
     assert not fugas, fugas[:15]
+
+
+def test_bloqueo_cambio_forma_en_ingles_y_espanol_intacto(app_i18n, monkeypatch):
+    """El aviso de _bloqueo_cambio_forma (Configuración > Meta, mostrado dentro
+    de config-ap-conexiones vía _meta_conectar.html y en los flash de
+    meta_forma/meta_agencia_salir) va con ngettext/gettext desde 6e5c9... — se
+    prueba la función directo (más liviano que armar un experimento vivo de
+    verdad + una publicación orgánica en_cola solo para renderizar la página):
+    en español (sin catálogo) tiene que salir BYTE a byte igual que antes de
+    envolverla, y en inglés no puede dejar ninguna marca de español."""
+    monkeypatch.setattr(app_i18n.experimentos, "cargar", lambda cliente: [{"estado": "corriendo"}])
+    monkeypatch.setattr(app_i18n.organico, "listar", lambda cliente: [{"estado": "en_cola"}, {"estado": "en_cola"}])
+
+    with idiomas.en_idioma("es"):
+        es = app_i18n._bloqueo_cambio_forma("acme")
+    assert es == "Termina o cierra primero: 1 experimento vivo · 2 publicaciones en curso"
+
+    with idiomas.en_idioma("en"):
+        en = app_i18n._bloqueo_cambio_forma("acme")
+    assert not _con_marca(en), en
+    assert en == "Finish or close first: 1 live experiment · 2 posts in progress"
+
+    # Un solo caso (singular real, no monkeypatch de una lista con un elemento
+    # cualquiera) para que la concordancia "1 ... vivo" / "1 live experiment"
+    # (sin la "s") quede probada de verdad, no solo el plural.
+    monkeypatch.setattr(app_i18n.organico, "listar", lambda cliente: [])
+    with idiomas.en_idioma("es"):
+        es_singular = app_i18n._bloqueo_cambio_forma("acme")
+    assert es_singular == "Termina o cierra primero: 1 experimento vivo"
+    with idiomas.en_idioma("en"):
+        en_singular = app_i18n._bloqueo_cambio_forma("acme")
+    assert en_singular == "Finish or close first: 1 live experiment"

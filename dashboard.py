@@ -3236,7 +3236,10 @@ def _portafolio_valido(texto):
 
 def _bloqueo_cambio_forma(cliente, experimentos_lista=None):
     """None si el proyecto puede cambiar de forma; si no, el motivo (spec §4):
-    experimentos vivos o publicaciones orgánicas en curso."""
+    experimentos vivos o publicaciones orgánicas en curso. Cada pieza pasa por
+    ngettext/gettext con %(num)s / %(partes)s para que el inglés salga sin
+    perder la concordancia singular/plural — el español (locale por defecto,
+    sin catálogo) sale idéntico a como salía con los f-strings de antes."""
     lista = experimentos.cargar(cliente) if experimentos_lista is None else experimentos_lista
     vivos = sum(1 for e in lista if e.get("estado") in experimentos.ESTADOS_VIVOS)
     en_curso = sum(1 for p in organico.listar(cliente) if p.get("estado") in ("en_cola", "publicando"))
@@ -3244,10 +3247,10 @@ def _bloqueo_cambio_forma(cliente, experimentos_lista=None):
         return None
     partes = []
     if vivos:
-        partes.append(f"{vivos} experimento{'s' if vivos != 1 else ''} vivo{'s' if vivos != 1 else ''}")
+        partes.append(ngettext("%(num)s experimento vivo", "%(num)s experimentos vivos", vivos))
     if en_curso:
-        partes.append(f"{en_curso} publicaci{'ones' if en_curso != 1 else 'ón'} en curso")
-    return "Termina o cierra primero: " + " · ".join(partes)
+        partes.append(ngettext("%(num)s publicación en curso", "%(num)s publicaciones en curso", en_curso))
+    return gettext("Termina o cierra primero: %(partes)s", partes=" · ".join(partes))
 
 
 @app.route("/cliente/<cliente>/meta/forma", methods=["POST"])
