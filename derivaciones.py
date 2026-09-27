@@ -60,6 +60,7 @@ import trabajos
 from final_edition import ETAPAS_FINAL
 from final_edition.tipos import PAISES
 from flowplus_prompt import ORDEN_ENFOQUES as ENFOQUES
+from idiomas import N_
 from providers import flowplus_modelos
 from tareas import final_edition as tareas_fe
 from tareas.flowplus import ETAPAS_CREATIVE_FLOW
@@ -68,6 +69,14 @@ TIPOS_VARIANTE = ("hook", "estructura")
 _ESCALONES = {1: ("reedicion", "hook"), 2: ("reedicion", "estructura"), 3: ("regeneracion", None)}
 _ESTADOS_FINAL_OK = ("listo", "degradada")
 _PENDIENTES = ("produciendo_clon", "produciendo_finales")
+# Rótulos para la UI (misma clave guardada, nunca traducida): |traducir en la
+# plantilla, nunca acá.
+ETIQUETAS_ESTADO = {
+    "produciendo": N_("produciendo"), "produciendo_clon": N_("produciendo clon"),
+    "produciendo_finales": N_("produciendo finales"), "listo": N_("listo"), "error": N_("error"),
+}
+ETIQUETAS_CLASE = {"reedicion": N_("reedición"), "regeneracion": N_("regeneración")}
+ETIQUETAS_VARIANTE = {"hook": N_("hook"), "estructura": N_("estructura")}
 
 
 # ------------------------------------------------------------ helpers ---

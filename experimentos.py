@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+from idiomas import N_
 
 ESTADOS_EXPERIMENTO = ("armando", "lanzando", "pausado", "corriendo", "cerrado", "error",
                        "esperando_aprobacion", "decidido")
@@ -17,6 +18,25 @@ ESTADOS_PIEZA = ("en_cola", "publicando", "pausado", "activo", "error")
 # por los pedidos de la tienda conectada (utm_content → experimento_pieza),
 # por Triple Whale (SQL: ads_table + pixel_joined_tvf), o no se miden.
 ATRIBUCIONES = ("pixel", "tienda", "triple_whale", "ninguna")
+# Rótulos para la UI (misma clave guardada, nunca traducida): |traducir en la
+# plantilla, nunca acá (N_ solo marca para el catálogo).
+ETIQUETAS_ESTADO = {
+    "armando": N_("armando"), "lanzando": N_("lanzando"), "pausado": N_("pausado"),
+    "corriendo": N_("corriendo"), "cerrado": N_("cerrado"), "error": N_("error"),
+    "esperando_aprobacion": N_("esperando aprobación"), "decidido": N_("decidido"),
+}
+# Sirve también para el estado de cada país (experimento.paises[].estado) y
+# para «Anuncios sueltos» (ads.py usa los mismos valores).
+ETIQUETAS_ESTADO_PIEZA = {
+    "en_cola": N_("en cola"), "publicando": N_("publicando"), "pausado": N_("pausado"),
+    "activo": N_("activo"), "error": N_("error"),
+}
+ETIQUETAS_VEREDICTO = {
+    "ganador": N_("ganador"), "perdedor": N_("perdedor"), "inconcluso": N_("inconcluso"), "pendiente": N_("pendiente"),
+}
+ETIQUETAS_TIPO_PIEZA = {
+    "final": N_("final"), "video": N_("video"), "clon_limpio": N_("clon limpio"), "imagen": N_("imagen"),
+}
 _EXP_COLS = ("estado", "error", "meta_campaign_id", "gasto_acumulado", "paises", "nombre", "tope_total",
              "dias", "destino_url", "edad_min", "edad_max", "extra", "modo", "reglas", "atribucion", "objetivo_meta")
 _EP_COLS = ("estado", "error", "meta_adset_id", "meta_ad_id", "meta_creative_id", "estado_meta",

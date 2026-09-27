@@ -89,9 +89,15 @@ def test_arbol_oculta_thruplay_en_imagenes(app, base_temporal):
 
 def test_boton_lanzar_se_bloquea_tras_confirmar(app, base_temporal):
     """M4: tras el confirm() el botón se deshabilita y dice «Lanzando…»
-    para que un doble clic no cree dos experimentos."""
+    para que un doble clic no cree dos experimentos.
+
+    Idioma (Task 5, fase 4): ese texto ahora sale de `TEXTO_LANZANDO`
+    (`{{ _('Lanzando…')|tojson }}`, obligatorio dentro de <script>) para poder
+    traducirse — `tojson` escapa «…» como `\\u2026` (el navegador lo decodifica
+    igual), así que la comprobación es por la variable, no por el carácter
+    exacto en el HTML crudo."""
     _pieza(base_temporal)
     html = _html(app)
     inicio = html.index("EN PAUSA (no gasta hasta que actives)")
     handler = html[inicio:html.index("// El setTimeout", inicio)]
-    assert "ev.submitter" in handler and "disabled = true" in handler and "Lanzando…" in handler
+    assert "ev.submitter" in handler and "disabled = true" in handler and "TEXTO_LANZANDO" in handler

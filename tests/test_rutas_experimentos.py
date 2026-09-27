@@ -470,5 +470,9 @@ def test_probar_exige_meta_conectado(app, monkeypatch, base_temporal):
 def test_nombre_experimento_automatico():
     import datetime
     import dashboard
-    assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Prueba 20 sep · 3 piezas · CO, MX"
+    import idiomas
+    # El mes corto sale de CLDR (spec 2026-09-26 §B1): «sept», ya no «sep».
+    assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Prueba 20 sept · 3 piezas · CO, MX"
     assert dashboard.nombre_experimento_automatico(1, ["CO"], datetime.date(2026, 1, 5)) == "Prueba 5 ene · 1 pieza · CO"
+    with idiomas.en_idioma("en"):
+        assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Test 20 Sep · 3 pieces · CO, MX"

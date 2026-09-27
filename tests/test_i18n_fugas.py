@@ -319,3 +319,33 @@ def test_flash_eliminar_imagen_inexistente_en_ingles(admin_en):
     admin_en.post("/cliente/acme/productos/cualquier-id/imagenes/no-existe.jpg/eliminar",
                   data={"categoria": "producto"}, headers=MISMO_ORIGEN)
     assert "I couldn&#39;t find that image." in html_de(admin_en, "/cliente/acme")
+
+
+def _experimento_sembrado():
+    import experimentos
+    return experimentos.crear("acme", "Summer test", [{"pais": "CO", "presupuesto_dia": 20000}], "OUTCOME_TRAFFIC",
+                              7, 100000, "https://shop.example/p", "COP", atribucion="ninguna")
+
+
+def test_experimentos_admin_en_ingles(admin_en):
+    _experimento_sembrado()
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("tab-experimentos",))
+    assert not fugas, fugas[:15]
+
+
+def test_experimentos_cliente_en_ingles(cliente_en):
+    _experimento_sembrado()
+    fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("tab-experimentos",))
+    assert not fugas, fugas[:15]
+
+
+def test_etiquetas_de_estado_en_ingles(admin_en):
+    _experimento_sembrado()
+    html = html_de(admin_en, "/cliente/acme")
+    assert ">drafting<" in html and ">queued<" in html
+    assert ">armando<" not in html and ">en_cola<" not in html
+
+
+def test_flash_de_experimentos_en_ingles(admin_en):
+    admin_en.post("/cliente/acme/experimentos/probar", data={}, headers=MISMO_ORIGEN)
+    assert "Connect Meta in Settings before testing pieces." in html_de(admin_en, "/cliente/acme")

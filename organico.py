@@ -27,6 +27,7 @@ from datetime import datetime, timedelta
 
 import requests
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import cola
 import db
@@ -42,6 +43,14 @@ from uploaders import tiktok_uploader
 log = logging.getLogger("creatv.organico")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+class YaPublicada(ValueError):
+    """Ya hay una publicación viva (en cola, publicándose o publicada) de esa
+    pieza en esa plataforma. Subclase de ValueError (no un texto) para que
+    quien la atrapa (dashboard.org_publicar, acciones.py) la distinga sin
+    mirar el mensaje: el mensaje se traduce al idioma de quien mira, así que
+    comparar contra un fragmento de texto en español dejaría de funcionar."""
 
 PLATAFORMAS = {
     "instagram": {"nombre": "Instagram Reels", "links": False, "max_caption": 2200},
@@ -156,28 +165,28 @@ def crear(cliente, pieza_id, plataforma, caption, titulo=None, origen="manual", 
     ese cliente/pieza, o ya hay una publicación viva (en cola, publicándose
     o publicada) de esa pieza en esa plataforma. Devuelve el id."""
     if plataforma not in PLATAFORMAS:
-        raise ValueError(f"Plataforma desconocida: {plataforma}")
+        raise ValueError(gettext("Plataforma desconocida: %(plataforma)s", plataforma=plataforma))
     if origen not in ORIGENES:
-        raise ValueError(f"Origen desconocido: {origen}")
+        raise ValueError(gettext("Origen desconocido: %(origen)s", origen=origen))
     caption = (caption or "").strip()
     if not caption:
-        raise ValueError("El texto de la publicación no puede estar vacío.")
+        raise ValueError(gettext("El texto de la publicación no puede estar vacío."))
     titulo = (titulo or "").strip()[:MAX_TITULO_COLUMNA] or None
     nombre = PLATAFORMAS[plataforma]["nombre"]
     p = db.publicacion
     with db.conectar() as con:
         if _fila_pieza(con, cliente, pieza_id) is None:
-            raise ValueError("Esa pieza no existe en este proyecto.")
+            raise ValueError(gettext("Esa pieza no existe en este proyecto."))
         if ep_id is not None:
             ep = con.execute(sa.select(db.experimento_pieza.c.pieza_id).where(
                 db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)).first()
             if ep is None or ep[0] != pieza_id:
-                raise ValueError("Esa pieza no está en el experimento.")
+                raise ValueError(gettext("Esa pieza no está en el experimento."))
         viva = con.execute(sa.select(p.c.id).where(
             p.c.cliente == cliente, p.c.pieza_id == pieza_id, p.c.plataforma == plataforma,
             p.c.estado.in_(ESTADOS_VIVOS))).first()
         if viva:
-            raise ValueError(f"Esa pieza ya está publicada (o en cola) en {nombre}.")
+            raise YaPublicada(gettext("Esa pieza ya está publicada (o en cola) en %(nombre)s.", nombre=nombre))
         ahora = db.ahora()
         try:
             return con.execute(p.insert().values(
@@ -186,16 +195,16 @@ def crear(cliente, pieza_id, plataforma, caption, titulo=None, origen="manual", 
                 titulo=titulo, origen=origen, extra={})).inserted_primary_key[0]
         except sa.exc.IntegrityError:
             # Dos procesos crearon a la vez: gana el índice único parcial.
-            raise ValueError(f"Esa pieza ya está publicada (o en cola) en {nombre}.") from None
+            raise YaPublicada(gettext("Esa pieza ya está publicada (o en cola) en %(nombre)s.", nombre=nombre)) from None
 
 
 def actualizar(cliente, pub_id, **campos):
     """Actualiza columnas de una publicación del cliente. False si no existe."""
     malos = set(campos) - set(_COLS_ACTUALIZABLES)
     if malos:
-        raise ValueError(f"Campos no permitidos: {sorted(malos)}")
+        raise ValueError(gettext("Campos no permitidos: %(campos)s", campos=sorted(malos)))
     if "estado" in campos and campos["estado"] not in ESTADOS:
-        raise ValueError(f"Estado desconocido: {campos['estado']}")
+        raise ValueError(gettext("Estado desconocido: %(estado)s", estado=campos["estado"]))
     if "titulo" in campos and campos["titulo"] is not None:
         campos["titulo"] = str(campos["titulo"])[:MAX_TITULO_COLUMNA]
     if "error" in campos and campos["error"] is not None:
@@ -208,7 +217,7 @@ def actualizar(cliente, pub_id, **campos):
         except sa.exc.IntegrityError:
             # Volver a `en_cola` una fila cuando ya hay otra viva de la misma
             # (pieza, plataforma): gana el índice único parcial.
-            raise ValueError("Ya hay una publicación en curso o publicada para esa plataforma.") from None
+            raise YaPublicada(gettext("Ya hay una publicación en curso o publicada para esa plataforma.")) from None
         return r.rowcount > 0
 
 
@@ -328,7 +337,7 @@ def contexto_pieza(cliente, pieza_id):
     with db.conectar() as con:
         pz = _fila_pieza(con, cliente, pieza_id)
         if pz is None:
-            raise ValueError("Esa pieza no existe en este proyecto.")
+            raise ValueError(gettext("Esa pieza no existe en este proyecto."))
         cp = con.execute(sa.select(db.concepto).where(db.concepto.c.id == pz._mapping[db.pieza.c.concepto_id])).first()
         ex = con.execute(sa.select(db.experimento.c.destino_url, db.experimento.c.producto_id)
                          .select_from(db.experimento_pieza.join(db.experimento, db.experimento.c.id == db.experimento_pieza.c.experimento_id))
@@ -513,7 +522,7 @@ def redactar(cliente, pieza_id, plataformas):
     `ajustar` (URLs, hashtags, máximos). No escribe nada."""
     plataformas = [p for p in plataformas if p in PLATAFORMAS]
     if not plataformas:
-        raise ValueError("Elige al menos una plataforma.")
+        raise ValueError(gettext("Elige al menos una plataforma."))
     contexto = contexto_pieza(cliente, pieza_id)
     try:
         textos = generador_prompts.caption_organico(contexto, plataformas)

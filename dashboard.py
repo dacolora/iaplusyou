@@ -64,6 +64,7 @@ import creative_flow
 import flowplus_lanzar
 import cola
 import db
+import derivaciones
 import experimentos
 import lanzador
 import acciones
@@ -1705,6 +1706,13 @@ def ver_cliente(cliente):
         correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
         modos_exp=modos.MODOS,
         nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
+        etiquetas_exp={
+            "estado": experimentos.ETIQUETAS_ESTADO, "pieza": experimentos.ETIQUETAS_ESTADO_PIEZA,
+            "veredicto": experimentos.ETIQUETAS_VEREDICTO, "tipo": experimentos.ETIQUETAS_TIPO_PIEZA,
+            "derivacion": derivaciones.ETIQUETAS_ESTADO, "clase": derivaciones.ETIQUETAS_CLASE,
+            "variante": derivaciones.ETIQUETAS_VARIANTE,
+        },
+        meses_cortos=idiomas.meses_cortos(),
         productos_tienda=productos_tienda,
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
@@ -2745,10 +2753,13 @@ def ver_swap(cliente):
 # perdía fidelidad de color/diseño y no garantizaba preservar la foto).
 # Mínimo diario que Meta acepta por divisa (aprox., para avisar antes de fallar).
 PRESUPUESTO_MINIMO_DIARIO = {"USD": 1, "COP": 4000, "MXN": 20, "EUR": 1, "BRL": 5, "PEN": 4, "CLP": 1000, "ARS": 1000}
-# Rótulos en español del objetivo de Meta en «Probar en Meta › Avanzado» (Bloque 6).
-# El valor sigue siendo el enum de Meta; solo cambia lo que se lee.
-NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": "Compras (requiere Pixel)", "OUTCOME_TRAFFIC": "Tráfico (clics al enlace)",
-                        "OUTCOME_ENGAGEMENT": "Interacción", "OUTCOME_LEADS": "Clientes potenciales"}
+# Rótulos del objetivo de Meta en «Probar en Meta › Avanzado» (Bloque 6). El
+# valor sigue siendo el enum de Meta; solo cambia lo que se lee (marcado con
+# N_, traducido donde se muestra con |traducir).
+NOMBRES_OBJETIVO_EXP = {"OUTCOME_SALES": idiomas.N_("Compras (requiere Pixel)"),
+                        "OUTCOME_TRAFFIC": idiomas.N_("Tráfico (clics al enlace)"),
+                        "OUTCOME_ENGAGEMENT": idiomas.N_("Interacción"),
+                        "OUTCOME_LEADS": idiomas.N_("Clientes potenciales")}
 
 PROVEEDORES_SWAP_IMAGEN = ("nano_banana", "nano_banana_fal", "qwen_edit", "nano_banana_pro_ultra", "seedream_v5_pro")
 PROVEEDORES_SWAP_VIDEO = (
@@ -2979,7 +2990,7 @@ def nueva_campana(cliente):
     """Campañas ya no existe como pestaña (se fundió en Experimentos). La ruta
     se conserva para enlaces/formularios viejos, pero no crea nada: avisa y
     manda a Experimentos, donde una pieza se mete en un experimento."""
-    flash("Campañas ya no existe: crea un experimento con esa pieza.", "warn")
+    flash(gettext("Campañas ya no existe: crea un experimento con esa pieza."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -3816,7 +3827,7 @@ def publicar_ad(cliente):
     Experimentos y publicar es lanzar un experimento (exp_lanzar). La ruta se
     conserva para formularios viejos, pero no toca el anuncio ni encola nada
     (la tarea del worker `meta_publicar` sigue existiendo en tareas/meta.py)."""
-    flash("Campañas ya no existe: crea un experimento con esa pieza.", "warn")
+    flash(gettext("Campañas ya no existe: crea un experimento con esa pieza."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -3825,7 +3836,7 @@ def actualizar_resultados_ad(cliente, ad_id):
     data = ads_mod.cargar(cliente)
     entry = data.get(ad_id)
     if not entry or not entry.get("meta_ids", {}).get("ad_id"):
-        flash("Ese anuncio todavía no está publicado en Meta.", "error")
+        flash(gettext("Ese anuncio todavía no está publicado en Meta."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     # El snapshot lo trae el worker (tareas/meta.py, meta_refrescar); la
     # tarjeta se recarga sola por el polling.
@@ -3836,9 +3847,9 @@ def actualizar_resultados_ad(cliente, ad_id):
         cliente=cliente, duracion_estimada=10, max_intentos=1,
     )
     if arranco:
-        flash("Actualizando resultados…", "ok")
+        flash(gettext("Actualizando resultados…"), "ok")
     else:
-        flash("Ya se están actualizando.", "warn")
+        flash(gettext("Ya se están actualizando."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -3848,14 +3859,14 @@ def cambiar_estado_ad(cliente, ad_id):
     módulo que puede hacer que empiece a gastarse presupuesto de verdad."""
     nuevo_estado = request.form.get("estado", "").strip()
     if nuevo_estado not in ("ACTIVE", "PAUSED"):
-        flash("Estado inválido.", "error")
+        flash(gettext("Estado inválido."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
     data = ads_mod.cargar(cliente)
     entry = data.get(ad_id)
     campaign_id = (entry or {}).get("meta_ids", {}).get("campaign_id")
     if not campaign_id:
-        flash("Ese anuncio todavía no está publicado en Meta.", "error")
+        flash(gettext("Ese anuncio todavía no está publicado en Meta."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
     # Serializado: meta_auth.configurar() escribe credenciales globales del
@@ -3872,9 +3883,9 @@ def cambiar_estado_ad(cliente, ad_id):
                 if oid:
                     meta_campaign.actualizar_estado(oid, nuevo_estado)
             ads_mod.actualizar(cliente, ad_id, estado="activo" if nuevo_estado == "ACTIVE" else "pausado")
-            flash("Listo." if nuevo_estado == "ACTIVE" else "Pausado.", "ok")
+            flash(gettext("Listo.") if nuevo_estado == "ACTIVE" else gettext("Pausado."), "ok")
         except Exception as e:
-            flash(f"No pude cambiar el estado: {e}", "error")
+            flash(gettext("No pude cambiar el estado: %(error)s", error=e), "error")
         finally:
             meta_auth.limpiar()
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
@@ -3886,10 +3897,10 @@ def reintentar_ad(cliente, ad_id):
     formulario, sin tener que quitarlo y agregarlo de nuevo."""
     entry = ads_mod.cargar(cliente).get(ad_id)
     if not entry or entry.get("estado") != "error":
-        flash("Ese anuncio no está en error.", "error")
+        flash(gettext("Ese anuncio no está en error."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     ads_mod.actualizar(cliente, ad_id, estado="en_cola", error=None)
-    flash("Listo para volver a publicar.", "ok")
+    flash(gettext("Listo para volver a publicar."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -3899,7 +3910,7 @@ def eliminar_ad(cliente, ad_id):
     publicó (eso se hace desde Meta Ads Manager, a propósito: esta app nunca
     borra algo que ya está corriendo en la plataforma de otro)."""
     ads_mod.eliminar(cliente, ad_id)
-    flash("Eliminado de la lista.", "ok")
+    flash(gettext("Eliminado de la lista."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -4236,7 +4247,7 @@ def exp_crear(cliente):
     lo pide."""
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash("Conecta Meta en Configuración antes de crear un experimento.", "error")
+        flash(gettext("Conecta Meta en Configuración antes de crear un experimento."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     nombre = (request.form.get("nombre") or "").strip()[:200]
@@ -4251,20 +4262,20 @@ def exp_crear(cliente):
         paises = [{"pais": p, "idioma": fe_tipos.PAISES[p]["idioma"],
                    "presupuesto_dia": float(request.form.get(f"presupuesto_{p}") or 0)} for p in codigos]
     except ValueError:
-        flash("Revisa los números del formulario.", "error")
+        flash(gettext("Revisa los números del formulario."), "error")
         return volver
     # float("nan")/float("inf") no disparan ValueError arriba, y nan<=0 y
     # nan<minimo son ambos False — sin este chequeo un tope o presupuesto
     # NaN/inf crea el experimento y falla después en lanzador.centavos
     # (int(nan) -> ValueError), gastando el único intento del job.
     if not math.isfinite(tope) or any(not math.isfinite(p["presupuesto_dia"]) for p in paises):
-        flash("Revisa los números del formulario.", "error")
+        flash(gettext("Revisa los números del formulario."), "error")
         return volver
     if (not nombre or objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
             or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
-        flash("Faltan datos: nombre, objetivo, al menos un país, días (1–90), tope, edades (13–65) "
-              "y una URL de destino http(s).", "error")
+        flash(gettext("Faltan datos: nombre, objetivo, al menos un país, días (1–90), tope, edades (13–65) "
+                      "y una URL de destino http(s)."), "error")
         return volver
     # Meta interpreta daily_budget en la moneda de FACTURACIÓN de la cuenta
     # publicitaria, sin importar qué país apunte ese adset (una cuenta en COP
@@ -4273,7 +4284,8 @@ def exp_crear(cliente):
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
     bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
     if bajos:
-        flash(f"El presupuesto diario no alcanza el mínimo de Meta ({minimo} {moneda}) en: {', '.join(bajos)}.", "error")
+        flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                      minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
         return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
@@ -4282,15 +4294,15 @@ def exp_crear(cliente):
     # sugerida (Pixel vivo → pixel, tienda conectada → tienda, si no ninguna).
     atribucion = request.form.get("atribucion") or None
     if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
-        flash("La atribución tiene que ser pixel, tienda o ninguna.", "error")
+        flash(gettext("La atribución tiene que ser pixel, tienda o ninguna."), "error")
         return volver
     # Bloque 6: optimizar por compras exige que Meta vea las compras, o sea
     # el Pixel disparando y atribución pixel. El objetivo no se puede cambiar
     # después de lanzar (Meta no lo permite), así que se corta acá y no en
     # el lanzador, donde ya sería un experimento armado que no puede salir.
     if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
-        flash("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
-              "Configuración, o elige el objetivo de tráfico.", "error")
+        flash(gettext("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
+                      "Configuración, o elige el objetivo de tráfico."), "error")
         return volver
     eid = experimentos.crear(cliente, nombre, paises, objetivo, dias, tope, destino, moneda, edad_min, edad_max,
                              modo=modo, atribucion=atribucion)
@@ -4298,18 +4310,16 @@ def exp_crear(cliente):
     experimentos.registrar_evento(
         cliente, eid, "creado",
         f"Experimento creado con {len(paises)} países (modo {modo}, atribución {ex['atribucion']})")
-    flash(f"Experimento «{nombre}» creado. Agrega piezas y lánzalo cuando esté listo.", "ok")
+    flash(gettext("Experimento «%(nombre)s» creado. Agrega piezas y lánzalo cuando esté listo.", nombre=nombre), "ok")
     return volver
 
 
-_MESES_CORTOS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
-
-
 def nombre_experimento_automatico(n_piezas, paises, cuando=None):
-    """«Prueba 20 sep · 3 piezas · CO, MX» — el nombre que la galería propone."""
+    """«Prueba 20 sept · 3 piezas · CO, MX» — el nombre que la galería propone,
+    en el idioma de quien lo crea (fecha de CLDR, spec 2026-09-26 §B1)."""
     cuando = cuando or datetime.now().date()
-    piezas = "1 pieza" if n_piezas == 1 else f"{n_piezas} piezas"
-    return f"Prueba {cuando.day} {_MESES_CORTOS[cuando.month - 1]} · {piezas} · {', '.join(sorted(paises))}"
+    return gettext("Prueba %(fecha)s · %(piezas)s · %(paises)s", fecha=idiomas.fecha_corta(cuando),
+                   piezas=ngettext("%(num)s pieza", "%(num)s piezas", n_piezas), paises=", ".join(sorted(paises)))
 
 
 @app.route("/cliente/<cliente>/experimentos/probar", methods=["POST"])
@@ -4320,7 +4330,7 @@ def exp_probar(cliente):
     siendo un clic aparte."""
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     if meta_conexion.estado(cliente).get("estado") != "conectado":
-        flash("Conecta Meta en Configuración antes de probar piezas.", "error")
+        flash(gettext("Conecta Meta en Configuración antes de probar piezas."), "error")
         return volver
     moneda = (meta_conexion.cargar(cliente) or {}).get("moneda") or "USD"
     objetivo = request.form.get("objetivo") or ""
@@ -4339,43 +4349,44 @@ def exp_probar(cliente):
         paises = [{"pais": p, "idioma": fe_tipos.PAISES[p]["idioma"],
                    "presupuesto_dia": float(request.form.get(f"presupuesto_{p}") or 0)} for p in codigos]
     except ValueError:
-        flash("Revisa los números del formulario.", "error")
+        flash(gettext("Revisa los números del formulario."), "error")
         return volver
     if not math.isfinite(tope) or any(not math.isfinite(p["presupuesto_dia"]) for p in paises):
-        flash("Revisa los números del formulario.", "error")
+        flash(gettext("Revisa los números del formulario."), "error")
         return volver
     if not piezas_ids:
-        flash("Marca al menos una pieza en la galería.", "error")
+        flash(gettext("Marca al menos una pieza en la galería."), "error")
         return volver
     if not codigos:
         # Antes de filtrar las combinaciones por país: sin país quedarían
         # vacías y el aviso hablaría de la cuadrícula, no del país.
-        flash("Marca al menos un país.", "error")
+        flash(gettext("Marca al menos un país."), "error")
         return volver
     combinaciones = [(pid, pais) for pid, pais in combinaciones if pid in piezas_ids and pais in codigos]
     if not combinaciones:
-        flash("Marca al menos una combinación pieza × país en el paso de revisar.", "error")
+        flash(gettext("Marca al menos una combinación pieza × país en el paso de revisar."), "error")
         return volver
     if (objetivo not in meta_campaign.OBJETIVOS_VALIDOS_FASE1 or not codigos
             or not destino.startswith(("http://", "https://")) or not (1 <= dias <= 90) or tope <= 0
             or not (13 <= edad_min <= edad_max <= 65)):
-        flash("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s).", "error")
+        flash(gettext("Faltan datos: objetivo, al menos un país, días (1–90), tope, edades (13–65) y una URL de destino http(s)."), "error")
         return volver
     minimo = PRESUPUESTO_MINIMO_DIARIO.get(moneda, 1)
     bajos = [p["pais"] for p in paises if p["presupuesto_dia"] < minimo]
     if bajos:
-        flash(f"El presupuesto diario no alcanza el mínimo de Meta ({minimo} {moneda}) en: {', '.join(bajos)}.", "error")
+        flash(gettext("El presupuesto diario no alcanza el mínimo de Meta (%(minimo)s %(moneda)s) en: %(paises)s.",
+                      minimo=minimo, moneda=moneda, paises=", ".join(bajos)), "error")
         return volver
     modo = request.form.get("modo") or "manual"
     if modo not in modos.MODOS:
         modo = "manual"
     atribucion = request.form.get("atribucion") or None
     if atribucion is not None and atribucion not in experimentos.ATRIBUCIONES:
-        flash("La atribución tiene que ser pixel, tienda o ninguna.", "error")
+        flash(gettext("La atribución tiene que ser pixel, tienda o ninguna."), "error")
         return volver
     if objetivo == "OUTCOME_SALES" and (atribucion or experimentos.atribucion_sugerida(cliente)) != "pixel":
-        flash("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
-              "Configuración, o elige el objetivo de tráfico.", "error")
+        flash(gettext("Optimizar por compras requiere el Pixel activo y atribución pixel: pulsa «Comprobar Pixel» en "
+                      "Configuración, o elige el objetivo de tráfico."), "error")
         return volver
     n_piezas = len({pid for pid, _ in combinaciones})
     nombre = (request.form.get("nombre") or "").strip()[:200] or nombre_experimento_automatico(n_piezas, codigos)
@@ -4391,9 +4402,9 @@ def exp_probar(cliente):
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
     if arranco:
         experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash(f"«{nombre}»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", "ok")
+        flash(gettext("«%(nombre)s»: lanzando a Meta en pausa. Cuando termine, actívalo desde su tarjeta.", nombre=nombre), "ok")
     else:
-        flash(f"«{nombre}» quedó creado; ya se estaba lanzando.", "warn")
+        flash(gettext("«%(nombre)s» quedó creado; ya se estaba lanzando.", nombre=nombre), "warn")
     return volver
 
 
@@ -4403,12 +4414,12 @@ def _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais):
     Compartida por exp_agregar_pieza y exp_meter_pieza (Crear -> Experimentos)."""
     ex = experimentos.obtener(cliente, experimento_id)
     if not ex:
-        return "Ese experimento no existe."
+        return gettext("Ese experimento no existe.")
     if ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
-        return "Ese experimento ya no acepta piezas nuevas."
+        return gettext("Ese experimento ya no acepta piezas nuevas.")
     candidata = next((p for p in experimentos.elegibles(cliente) if p["pieza_id"] == pieza_id), None)
     if not candidata:
-        return "Esa pieza no está disponible (o no está lista)."
+        return gettext("Esa pieza no está disponible (o no está lista).")
     pais, error = experimentos.validar_combinacion(candidata, {p["pais"] for p in ex["paises"]}, pais)
     if error:
         return error
@@ -4427,10 +4438,10 @@ def exp_agregar_pieza(cliente, eid):
         pieza_id = creative_flow.pieza_id_por_legado(cliente, legado_id) if legado_id else None
     pais = (request.form.get("pais") or "").strip() or None
     if not pieza_id:
-        flash("No encontré esa pieza.", "error")
+        flash(gettext("No encontré esa pieza."), "error")
     else:
         error = _agregar_pieza_validada(cliente, eid, pieza_id, pais)
-        flash(error, "error") if error else flash("Pieza agregada.", "ok")
+        flash(error, "error") if error else flash(gettext("Pieza agregada."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -4443,11 +4454,11 @@ def exp_quitar_pieza(cliente, eid, ep_id):
     # y está a punto de publicar en Meta — el anuncio queda huérfano allá.
     ex = experimentos.obtener(cliente, eid)
     if not ex or ex["estado"] not in ("armando", "error") or ex["meta_campaign_id"]:
-        flash("Ese experimento ya no acepta cambios de piezas.", "error")
+        flash(gettext("Ese experimento ya no acepta cambios de piezas."), "error")
     elif experimentos.quitar_pieza(cliente, eid, ep_id):
-        flash("Pieza quitada.", "ok")
+        flash(gettext("Pieza quitada."), "ok")
     else:
-        flash("No pude quitar esa pieza (¿ya está en Meta?).", "error")
+        flash(gettext("No pude quitar esa pieza (¿ya está en Meta?)."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -4466,10 +4477,10 @@ def exp_meter_pieza(cliente):
     pais = (request.form.get("pais") or "").strip() or None
     pieza_id = creative_flow.pieza_id_por_legado(cliente, legado_id) if legado_id else None
     if not pieza_id or not experimento_id:
-        flash("No encontré esa pieza o ese experimento.", "error")
+        flash(gettext("No encontré esa pieza o ese experimento."), "error")
     else:
         error = _agregar_pieza_validada(cliente, experimento_id, pieza_id, pais)
-        flash(error, "error") if error else flash("Pieza enviada al experimento.", "ok")
+        flash(error, "error") if error else flash(gettext("Pieza enviada al experimento."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
 
@@ -4482,18 +4493,19 @@ def exp_lanzar(cliente, eid):
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     ex = experimentos.obtener(cliente, eid)
     if not ex:
-        flash("Ese experimento no existe.", "error")
+        flash(gettext("Ese experimento no existe."), "error")
         return volver
     if ex["estado"] not in ("armando", "error"):
-        flash("Ese experimento ya fue lanzado.", "error")
+        flash(gettext("Ese experimento ya fue lanzado."), "error")
         return volver
     if not ex["piezas"]:
-        flash("El experimento no tiene piezas: agrega al menos una antes de lanzar.", "error")
+        flash(gettext("El experimento no tiene piezas: agrega al menos una antes de lanzar."), "error")
         return volver
     paises_con_piezas = {p["pais"] for p in ex["piezas"]}
     faltan = [p["pais"] for p in ex["paises"] if p["pais"] not in paises_con_piezas]
     if faltan:
-        flash(f"Sin piezas para: {', '.join(faltan)}. Agrega una pieza por país o quita el país.", "error")
+        flash(gettext("Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país.",
+                      paises=", ".join(faltan)), "error")
         return volver
     job_id = tareas_exp.job_id_lanzar(cliente, eid)
     # M2: encolar primero y solo marcar "lanzando" si de verdad arrancó — si
@@ -4504,9 +4516,9 @@ def exp_lanzar(cliente, eid):
                                cliente=cliente, duracion_estimada=120, etapas=lanzador.ETAPAS_LANZAR, max_intentos=1)
     if arranco:
         experimentos.actualizar(cliente, eid, estado="lanzando", error=None)
-        flash("Lanzando el experimento a Meta (queda en pausa)…", "ok")
+        flash(gettext("Lanzando el experimento a Meta (queda en pausa)…"), "ok")
     else:
-        flash("Ya se está lanzando ese experimento.", "warn")
+        flash(gettext("Ya se está lanzando ese experimento."), "warn")
     return volver
 
 
@@ -4515,17 +4527,17 @@ def exp_estado(cliente, eid):
     estado = (request.form.get("estado") or "").strip()
     pais = (request.form.get("pais") or "").strip() or None
     if estado not in ("ACTIVE", "PAUSED"):
-        flash("Estado inválido.", "error")
+        flash(gettext("Estado inválido."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
                 lanzador.cambiar_estado(cliente, eid, estado, pais=pais)
-            flash("Listo." if estado == "ACTIVE" else "Pausado.", "ok")
+            flash(gettext("Listo.") if estado == "ACTIVE" else gettext("Pausado."), "ok")
         except ValueError as e:
             flash(str(e), "error")
         except Exception as e:
-            flash(f"No pude cambiar el estado: {cola.sin_token(str(e))}", "error")
+            flash(gettext("No pude cambiar el estado: %(error)s", error=cola.sin_token(str(e))), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -4544,20 +4556,20 @@ def exp_presupuesto(cliente, eid):
     try:
         presupuesto_dia = float(request.form.get("presupuesto_dia") or 0)
     except ValueError:
-        flash("El presupuesto debe ser un número.", "error")
+        flash(gettext("El presupuesto debe ser un número."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     if not math.isfinite(presupuesto_dia) or presupuesto_dia < minimo:
-        flash(f"El presupuesto diario mínimo es {minimo} {moneda}.", "error")
+        flash(gettext("El presupuesto diario mínimo es %(minimo)s %(moneda)s.", minimo=minimo, moneda=moneda), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
                 lanzador.cambiar_presupuesto_pais(cliente, eid, pais, presupuesto_dia)
-            flash("Presupuesto actualizado.", "ok")
+            flash(gettext("Presupuesto actualizado."), "ok")
         except ValueError as e:
             flash(str(e), "error")
         except Exception as e:
-            flash(f"No pude cambiar el presupuesto: {cola.sin_token(str(e))}", "error")
+            flash(gettext("No pude cambiar el presupuesto: %(error)s", error=cola.sin_token(str(e))), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -4565,7 +4577,7 @@ def exp_presupuesto(cliente, eid):
 def exp_refrescar(cliente, eid):
     ex = experimentos.obtener(cliente, eid)
     if not ex or not ex["meta_campaign_id"]:
-        flash("Ese experimento todavía no está en Meta.", "error")
+        flash(gettext("Ese experimento todavía no está en Meta."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     job_id = tareas_exp.job_id_refrescar(cliente, eid)
     # M10: max_intentos=2 como la periódica (tareas/experimentos.py) — refrescar
@@ -4573,9 +4585,9 @@ def exp_refrescar(cliente, eid):
     arranco = trabajos.encolar(job_id, "exp_refrescar", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=30, max_intentos=2)
     if arranco:
-        flash("Actualizando resultados…", "ok")
+        flash(gettext("Actualizando resultados…"), "ok")
     else:
-        flash("Ya se están actualizando.", "warn")
+        flash(gettext("Ya se están actualizando."), "warn")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
@@ -4584,10 +4596,10 @@ def exp_cerrar(cliente, eid):
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
     ex = experimentos.obtener(cliente, eid)
     if not ex:
-        flash("Ese experimento no existe.", "error")
+        flash(gettext("Ese experimento no existe."), "error")
         return volver
     if ex["estado"] == "cerrado":
-        flash("Ese experimento ya estaba cerrado.", "ok")
+        flash(gettext("Ese experimento ya estaba cerrado."), "ok")
         return volver
     # "lanzando" nunca se cierra desde acá: el worker está a mitad de crear
     # campaña/adsets/anuncios en Meta y, al terminar, vuelve a escribir
@@ -4596,17 +4608,17 @@ def exp_cerrar(cliente, eid):
     # se puede cerrar desde armando/error (nunca se lanzó) o pausado/corriendo
     # (ya está en Meta).
     if ex["estado"] not in ("pausado", "corriendo", "armando", "error"):
-        flash("Espera a que termine el lanzamiento antes de cerrar.", "error")
+        flash(gettext("Espera a que termine el lanzamiento antes de cerrar."), "error")
         return volver
     with _ENV_LOCK:
         try:
             with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
                 lanzador.cerrar(cliente, eid)
-            flash("Experimento cerrado.", "ok")
+            flash(gettext("Experimento cerrado."), "ok")
         except ValueError as e:
             flash(str(e), "error")
         except Exception as e:
-            flash(f"No pude cerrar el experimento: {cola.sin_token(str(e))}", "error")
+            flash(gettext("No pude cerrar el experimento: %(error)s", error=cola.sin_token(str(e))), "error")
     return volver
 
 
@@ -4623,33 +4635,33 @@ def exp_modo(cliente, eid):
     modo = (request.form.get("modo") or "").strip()
     ex = experimentos.obtener(cliente, eid)
     if not ex:
-        flash("Ese experimento no existe.", "error")
+        flash(gettext("Ese experimento no existe."), "error")
         return _volver_exp(cliente)
     if modo not in modos.MODOS:
-        flash("Modo inválido.", "error")
+        flash(gettext("Modo inválido."), "error")
         return _volver_exp(cliente)
     if ex["estado"] == "cerrado":
-        flash("Un experimento cerrado no cambia de modo.", "error")
+        flash(gettext("Un experimento cerrado no cambia de modo."), "error")
         return _volver_exp(cliente)
     if modo != ex["modo"]:
         experimentos.actualizar(cliente, eid, modo=modo)
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
             experimentos.registrar_evento(cliente, eid, "modo", f"Modo cambiado de {ex['modo']} a {modo}.",
                                           {"antes": ex["modo"], "despues": modo})
-    flash(f"Modo: {modo}.", "ok")
+    flash(gettext("Modo: %(modo)s.", modo=modo), "ok")
     return _volver_exp(cliente)
 
 
 def _flash_reglas_invalidas(errores):
     nombres = ", ".join(errores)
-    flash(f"Revisa estos valores, deben ser números: {nombres}. No se guardó nada.", "error")
+    flash(gettext("Revisa estos valores, deben ser números: %(nombres)s. No se guardó nada.", nombres=nombres), "error")
 
 
 @app.route("/cliente/<cliente>/experimentos/<int:eid>/reglas", methods=["POST"])
 def exp_reglas(cliente, eid):
     ex = experimentos.obtener(cliente, eid)
     if not ex:
-        flash("Ese experimento no existe.", "error")
+        flash(gettext("Ese experimento no existe."), "error")
         return _volver_exp(cliente)
     reglas, errores = decisor.reglas_desde_formulario(request.form)
     if errores:
@@ -4657,7 +4669,7 @@ def exp_reglas(cliente, eid):
         return _volver_exp(cliente)
     experimentos.actualizar(cliente, eid, reglas=reglas)
     experimentos.registrar_evento(cliente, eid, "reglas", "Reglas del experimento actualizadas.", {"reglas": reglas})
-    flash("Reglas guardadas. Lo vacío hereda de Configuración.", "ok")
+    flash(gettext("Reglas guardadas. Lo vacío hereda de Configuración."), "ok")
     return _volver_exp(cliente)
 
 
@@ -4668,12 +4680,12 @@ def exp_decidir_ahora(cliente, eid):
     como propuesta."""
     ex = experimentos.obtener(cliente, eid)
     if not ex or ex["estado"] != "corriendo":
-        flash("Solo se evalúa un experimento que está corriendo.", "error")
+        flash(gettext("Solo se evalúa un experimento que está corriendo."), "error")
         return _volver_exp(cliente)
     job_id = tareas_exp.job_id_decidir(cliente, eid)
     arranco = trabajos.encolar(job_id, "exp_decidir", {"cliente": cliente, "experimento_id": eid},
                                cliente=cliente, duracion_estimada=60, max_intentos=1)
-    flash("Evaluando…" if arranco else "Ya se está evaluando.", "ok" if arranco else "warn")
+    flash(gettext("Evaluando…") if arranco else gettext("Ya se está evaluando."), "ok" if arranco else "warn")
     return _volver_exp(cliente)
 
 
@@ -4725,7 +4737,7 @@ def _overrides_organico(cliente, form, payload):
     payload = dict(payload)
     plataformas = [p for p in form.getlist("plataformas") if p in organico.PLATAFORMAS]
     if not plataformas:
-        return payload, "Marca al menos una plataforma para publicar."
+        return payload, gettext("Marca al menos una plataforma para publicar.")
     captions = {p: dict(v) for p, v in (payload.get("captions") or {}).items() if isinstance(v, dict)}
     for p in plataformas:
         caption = (form.get(f"caption_{p}") or "").strip()
@@ -4751,7 +4763,7 @@ def prop_aprobar(cliente, pid):
     # proyecto devuelve None y no se ejecuta nada.
     pr = propuestas.obtener(cliente, pid)
     if not pr or pr["estado"] != "pendiente":
-        flash("Esa propuesta no existe o ya estaba resuelta.", "error")
+        flash(gettext("Esa propuesta no existe o ya estaba resuelta."), "error")
         return _volver_exp(cliente)
     payload, error = (_overrides_organico(cliente, request.form, pr["payload"]) if pr["accion"] == "publicar_organico"
                       else (pr["payload"], None))
@@ -4760,7 +4772,7 @@ def prop_aprobar(cliente, pid):
         return _volver_exp(cliente)
     pr = propuestas.resolver(cliente, pid, "aprobada")
     if not pr:
-        flash("Esa propuesta no existe o ya estaba resuelta.", "error")
+        flash(gettext("Esa propuesta no existe o ya estaba resuelta."), "error")
         return _volver_exp(cliente)
     pr = dict(pr, payload=payload)
     error = _ejecutar_propuesta(cliente, pr)
@@ -4773,14 +4785,14 @@ def prop_aprobar(cliente, pid):
 def prop_rechazar(cliente, pid):
     pr = propuestas.resolver(cliente, pid, "rechazada")
     if not pr:
-        flash("Esa propuesta no existe o ya estaba resuelta.", "error")
+        flash(gettext("Esa propuesta no existe o ya estaba resuelta."), "error")
         return _volver_exp(cliente)
     with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
         experimentos.registrar_evento(cliente, pr["experimento_id"], "propuesta",
                                       f"Propuesta #{pr['id']} ({pr['accion']}) rechazada a mano.",
                                       {"accion": pr["accion"], "payload": pr["payload"], "propuesta_id": pr["id"]},
                                       ep_id=_ep_id_evento(cliente, pr))
-    flash("Propuesta rechazada.", "ok")
+    flash(gettext("Propuesta rechazada."), "ok")
     return _volver_exp(cliente)
 
 
@@ -4791,11 +4803,11 @@ def prop_aprobar_todas(cliente, eid):
     (no se aprueban), para que la persona decida con el error a la vista."""
     ex = experimentos.obtener(cliente, eid)
     if not ex:
-        flash("Ese experimento no existe.", "error")
+        flash(gettext("Ese experimento no existe."), "error")
         return _volver_exp(cliente)
     pendientes = propuestas.pendientes(cliente, eid)
     if not pendientes:
-        flash("No había propuestas pendientes.", "ok")
+        flash(gettext("No había propuestas pendientes."), "ok")
         return _volver_exp(cliente)
     hechas = 0
     for pr in pendientes:
@@ -4804,11 +4816,12 @@ def prop_aprobar_todas(cliente, eid):
             continue   # alguien la resolvió entre medio
         error = _ejecutar_propuesta(cliente, aprobada)
         if error:
-            flash(f"Me detuve en la propuesta #{pr['id']} ({pr['accion']}): {error}", "error")
+            flash(gettext("Me detuve en la propuesta #%(id)s (%(accion)s): %(error)s",
+                          id=pr["id"], accion=pr["accion"], error=error), "error")
             break
         hechas += 1
     if hechas:
-        flash(f"{hechas} propuesta(s) ejecutada(s).", "ok")
+        flash(gettext("%(hechas)s propuesta(s) ejecutada(s).", hechas=hechas), "ok")
     return _volver_exp(cliente)
 
 
@@ -4855,7 +4868,7 @@ def _pieza_de_ep(cliente, ep_id):
 
 
 def _nombres_org(plataformas):
-    return ", ".join(organico.PLATAFORMAS.get(p, {}).get("nombre", p) for p in plataformas)
+    return ", ".join(idiomas.traducir(organico.PLATAFORMAS.get(p, {}).get("nombre", p)) for p in plataformas)
 
 
 def _encolar_organico(cliente, pieza_id, pub_ids):
@@ -4883,13 +4896,13 @@ def org_redactar(cliente):
     pieza_id = _int_form("pieza_id")
     plataformas = [p for p in request.form.getlist("plataformas") if p in organico.PLATAFORMAS]
     if not pieza_id or not plataformas:
-        return jsonify({"error": "Elige la pieza y al menos una plataforma."}), 400
+        return jsonify({"error": gettext("Elige la pieza y al menos una plataforma.")}), 400
     try:
         textos = organico.redactar(cliente, pieza_id, plataformas)
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:  # noqa: BLE001 — el error vuelve al form, nunca un token
-        return jsonify({"error": f"No pude redactar el texto: {cola.sin_token(str(e))}"}), 500
+        return jsonify({"error": gettext("No pude redactar el texto: %(error)s", error=cola.sin_token(str(e)))}), 500
     return jsonify({p: {"titulo": t.get("titulo") or "", "caption": t.get("caption") or "",
                         "fallback": bool((t.get("extra") or {}).get("fallback"))} for p, t in textos.items()})
 
@@ -4909,24 +4922,25 @@ def org_publicar(cliente):
     ep_id = _int_form("ep_id")
     pieza_id = _int_form("pieza_id") or (_pieza_de_ep(cliente, ep_id) if ep_id else None)
     if not pieza_id:
-        flash("No encontré esa pieza.", "error")
+        flash(gettext("No encontré esa pieza."), "error")
         return _volver_org(cliente)
     pedidas = [p for p in organico.ORDEN if p in request.form.getlist("plataformas")]
     if not pedidas:
-        flash("Marca al menos una plataforma para publicar.", "error")
+        flash(gettext("Marca al menos una plataforma para publicar."), "error")
         return _volver_org(cliente)
     canales = {c["plataforma"]: c for c in organico.canales(cliente)}
     sin_canal = [p for p in pedidas if not canales[p]["disponible"]]
     if sin_canal:
-        flash("Sin canal conectado: " + "; ".join(f"{canales[p]['nombre']} ({canales[p]['motivo']})" for p in sin_canal)
-              + ". Actívalo en Configuración › Canales orgánicos. No se publicó nada.", "error")
+        flash(gettext("Sin canal conectado: %(canales)s. Actívalo en Configuración › Canales orgánicos. No se publicó nada.",
+                      canales="; ".join(f"{idiomas.traducir(canales[p]['nombre'])} ({idiomas.traducir(canales[p]['motivo'])})"
+                                       for p in sin_canal)), "error")
         return _volver_org(cliente)
     textos = {p: {"caption": (request.form.get(f"caption_{p}") or "").strip(),
                   "titulo": (request.form.get(f"titulo_{p}") or "").strip() or None} for p in pedidas}
     sin_texto = [p for p in pedidas if not textos[p]["caption"]]
     if sin_texto:
-        flash(f"Falta el texto para {_nombres_org(sin_texto)}: escríbelo o pulsa «Escribir texto con IA». "
-              "No se publicó nada.", "error")
+        flash(gettext("Falta el texto para %(plataformas)s: escríbelo o pulsa «Escribir texto con IA». "
+                      "No se publicó nada.", plataformas=_nombres_org(sin_texto)), "error")
         return _volver_org(cliente)
     try:
         textos = organico.normalizar_captions(cliente, pieza_id, textos)
@@ -4934,7 +4948,7 @@ def org_publicar(cliente):
         flash(str(e), "error")
         return _volver_org(cliente)
     if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pieza_id)):
-        flash("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine.", "warn")
+        flash(gettext("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine."), "warn")
         return _volver_org(cliente)
 
     pub_ids, creadas, saltadas = [], [], []
@@ -4943,23 +4957,24 @@ def org_publicar(cliente):
             pub_ids.append(organico.crear(cliente, pieza_id, p, textos[p]["caption"], titulo=textos[p]["titulo"],
                                           origen="manual", ep_id=ep_id))
             creadas.append(p)
+        except organico.YaPublicada:
+            saltadas.append(p)
+            continue
         except ValueError as e:
-            if "ya está publicada" in str(e):
-                saltadas.append(p)
-                continue
             # Creación parcial: lo ya creado no puede quedar `en_cola` sin tarea
             # (bloquearía la plataforma por unicidad); en `error` se reintenta.
             for pub_id in pub_ids:
                 organico.actualizar(cliente, pub_id, estado="error",
                                     error=f"No se creó la publicación en {_nombres_org([p])}: {e}")
-            flash(f"{e} No se publicó nada.", "error")
+            flash(gettext("%(error)s No se publicó nada.", error=e), "error")
             return _volver_org(cliente)
     if saltadas:
-        flash(f"Ya estaba publicada (o en cola) en {_nombres_org(saltadas)}: no se publica dos veces.", "warn")
+        flash(gettext("Ya estaba publicada (o en cola) en %(plataformas)s: no se publica dos veces.",
+                      plataformas=_nombres_org(saltadas)), "warn")
     if not pub_ids:
         return _volver_org(cliente)
     if not _encolar_organico(cliente, pieza_id, pub_ids):
-        flash("Ya había una publicación de esta pieza en curso; las nuevas quedaron para reintentar.", "error")
+        flash(gettext("Ya había una publicación de esta pieza en curso; las nuevas quedaron para reintentar."), "error")
         return _volver_org(cliente)
     if ep_id:
         eid = experimentos.experimento_de_pieza(cliente, ep_id)
@@ -4969,7 +4984,8 @@ def org_publicar(cliente):
                                           f"Publicación orgánica en cola a mano: {_nombres_org(creadas)}.",
                                           {"accion": "publicar_organico", "plataformas": creadas,
                                            "publicaciones": pub_ids}, ep_id=ep_id)
-    flash(f"Publicación orgánica en cola: {_nombres_org(creadas)}. Te avisamos cuando salga.", "ok")
+    flash(gettext("Publicación orgánica en cola: %(plataformas)s. Te avisamos cuando salga.",
+                  plataformas=_nombres_org(creadas)), "ok")
     return _volver_org(cliente)
 
 
@@ -4982,22 +4998,24 @@ def org_reintentar(cliente, pub_id):
     automático: max_intentos=1 en la tarea."""
     pub = organico.obtener(cliente, pub_id)
     if not pub:
-        flash("Esa publicación no existe.", "error")
+        flash(gettext("Esa publicación no existe."), "error")
         return _volver_org(cliente)
     if pub["estado"] != "error":
-        flash("Solo se reintenta una publicación que falló.", "error")
+        flash(gettext("Solo se reintenta una publicación que falló."), "error")
         return _volver_org(cliente)
     if pub["id_externo"]:
-        flash(f"Esa publicación ya se subió a {pub['nombre_plataforma']} (id {pub['id_externo']}); "
-              "revisa la plataforma antes de volver a publicarla.", "warn")
+        flash(gettext("Esa publicación ya se subió a %(plataforma)s (id %(id)s); "
+                      "revisa la plataforma antes de volver a publicarla.",
+                      plataforma=idiomas.traducir(pub["nombre_plataforma"]), id=pub["id_externo"]), "warn")
         return _volver_org(cliente)
     vivas = {p["plataforma"] for p in organico.listar(cliente, pieza_id=pub["pieza_id"])
              if p["estado"] in organico.ESTADOS_VIVOS}
     if pub["plataforma"] in vivas:
-        flash(f"Ya hay una publicación en curso o publicada para {pub['nombre_plataforma']}; no se reintenta.", "warn")
+        flash(gettext("Ya hay una publicación en curso o publicada para %(plataforma)s; no se reintenta.",
+                      plataforma=idiomas.traducir(pub["nombre_plataforma"])), "warn")
         return _volver_org(cliente)
     if trabajos.en_curso(tareas_org.job_id_publicar(cliente, pub["pieza_id"])):
-        flash("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine.", "warn")
+        flash(gettext("Ya hay una publicación orgánica de esta pieza en curso; espera a que termine."), "warn")
         return _volver_org(cliente)
     try:
         organico.actualizar(cliente, pub_id, estado="en_cola", error=None)
@@ -5006,9 +5024,9 @@ def org_reintentar(cliente, pub_id):
         flash(str(e), "warn")
         return _volver_org(cliente)
     if not _encolar_organico(cliente, pub["pieza_id"], [pub_id]):
-        flash("Ya había una publicación de esta pieza en curso; vuelve a intentarlo cuando termine.", "error")
+        flash(gettext("Ya había una publicación de esta pieza en curso; vuelve a intentarlo cuando termine."), "error")
         return _volver_org(cliente)
-    flash(f"Reintentando en {pub['nombre_plataforma']}.", "ok")
+    flash(gettext("Reintentando en %(plataforma)s.", plataforma=idiomas.traducir(pub["nombre_plataforma"])), "ok")
     return _volver_org(cliente)
 
 
@@ -5021,7 +5039,7 @@ def cfg_reglas(cliente):
         _flash_reglas_invalidas(errores)
         return volver
     proyectos.guardar_reglas_defecto(cliente, reglas)
-    flash("Reglas por defecto guardadas.", "ok")
+    flash(gettext("Reglas por defecto guardadas."), "ok")
     return volver
 
 

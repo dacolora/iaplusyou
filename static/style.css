@@ -1734,7 +1734,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .exp-pasos-nav li { cursor:pointer; }
 .exp-pasos-nav li.activo { color:var(--accent-texto); }
 .exp-pasos-botones { display:flex; gap:.6rem; margin-top:1rem; }
-.exp-cuenta { font-weight:600; margin-top:.8rem; }
+.exp-resumen { font-weight:600; margin-top:.8rem; }
 .exp-cuadricula table { border-collapse:collapse; margin:.6rem 0; }
 .exp-cuadricula th, .exp-cuadricula td { border:1px solid var(--border); padding:.3rem .6rem; text-align:center; font-size:.85rem; }
 .exp-cuadricula tbody th { text-align:left; font-weight:500; text-transform:none; letter-spacing:0; }
