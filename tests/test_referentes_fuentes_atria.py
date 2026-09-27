@@ -154,6 +154,18 @@ def test_traer_modo_palabra_normaliza_y_pagina(monkeypatch, base_temporal):
     assert sesion.llamadas[1][1]["cursor"] == FIXTURE_SEARCH["data"]["cursor"]
 
 
+def test_traer_modo_palabra_ordena_por_relevancia(monkeypatch, base_temporal):
+    """Sin `order` Atria ordena por `newest` y su búsqueda acepta cualquier
+    palabra (incluida «de»): un barrido de «dolor de pies» trajo 500 anuncios
+    sin relación (2026-09-27). `best_match` es su orden por relevancia."""
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(time, "sleep", lambda s: None)
+    sesion = _SesionFalsa([_RespuestaFalsa(FIXTURE_SEARCH)])
+    monkeypatch.setattr(atria, "_sesion", lambda: sesion)
+    next(atria.traer({"modo": "palabra", "palabra": "dolor de pies", "idioma": "es"}, 2, lambda **kw: None))
+    assert sesion.llamadas[0][1]["order"] == "best_match"
+
+
 def test_traer_modo_marca_usa_brand_library(monkeypatch, base_temporal):
     monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
     monkeypatch.setattr(time, "sleep", lambda s: None)

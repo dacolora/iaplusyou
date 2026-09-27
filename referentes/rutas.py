@@ -16,13 +16,15 @@ from flask import Blueprint, abort, flash, jsonify, redirect, render_template, r
 import catalogo_productos
 import creative_flow
 import doctrina
+from doctrina import producto as doctrina_producto
 import flowplus_lanzar
 import gastos
 import marca as marca_mod
 import proyectos
+import tiendas
 from nicho.avatares import costo_real, modelo_actual
 from providers import flowplus_modelos
-from referentes import datos, fuentes, recrear
+from referentes import datos, fuentes, recrear, traducir
 from referentes.fuentes.base import ErrorFuente
 from sprints import datos as sprints_datos
 from tareas import referentes as tareas_referentes
@@ -138,6 +140,11 @@ def traer_post(cliente):
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
         flash("Escribe una palabra clave.", "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
+    try:
+        consulta = traducir.preparar_consulta(consulta, cliente)     # palabra → inglés, idioma en
+    except traducir.TraduccionInvalida as e:
+        flash(str(e), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
     modulo = fuentes.por_tipo(fuente)
     try:
@@ -195,6 +202,12 @@ def recrear_adaptar(cliente, rid):
     producto = catalogo_productos.encontrar(cliente, cuerpo.get("producto_id"), categoria="producto") if cuerpo.get("producto_id") else None
     if not producto:
         return jsonify({"error": "Elige un producto primero."}), 400
+    # Doctrina, bloque 2: la sofisticación elegida en Catálogo manda en el ángulo.
+    # Revisión final #6: descartada si no es 1-5 (dato corrupto), como ideas y el guion.
+    fila = tiendas.por_activo(cliente).get(producto.get("id")) or {}
+    sof = (fila.get("extra") or {}).get("sofisticacion")
+    producto = dict(producto, sofisticacion=sof if sof in doctrina.SOFISTICACIONES else None,
+                    pruebas=doctrina_producto.pruebas(fila))
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
     try:
         resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""),
@@ -310,6 +323,9 @@ def _vista_barrido(b):
                                         f"&view_all_page_id={consulta.get('pagina_id') or ''}")
     else:
         busqueda, enlace = f"«{consulta.get('palabra') or ''}»", None
+        original = consulta.get("palabra_original")
+        if original and original.strip().lower() != (consulta.get("palabra") or "").strip().lower():
+            busqueda = f"«{original}» → «{consulta.get('palabra') or ''}»"     # lo escrito → lo buscado en inglés
     return {"fecha": fecha, "estado": estado, "tono": tono, "busqueda": busqueda, "enlace": enlace,
             "detalle": " · ".join(d for d in detalle if d)}
 

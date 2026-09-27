@@ -309,3 +309,120 @@ def test_texto_verificable_vacio_para_none_o_no_dict():
     assert doctrina.texto_verificable(None) == ""
     assert doctrina.texto_verificable("texto") == ""
     assert doctrina.texto_verificable(["a"]) == ""
+
+
+# ---------------------------------------------------------- bloque 2 ---
+
+def test_validar_angulo_con_fijos_reemplaza_y_reevalua_las_reglas():
+    import doctrina
+    a = dict(ANGULO_OK, consciencia="inconsciente", sofisticacion=1, mecanismo=None)
+    limpio, errores = doctrina.validar_angulo(a, fijos={"consciencia": "consciente_del_problema", "sofisticacion": 4})
+    assert limpio["consciencia"] == "consciente_del_problema" and limpio["sofisticacion"] == 4
+    assert "mecanismo_obligatorio" in errores          # con 4 fijo hace falta mecanismo
+    # «problema_solucion» es el recomendado para consciente del problema: sin aviso de arranque
+    assert not any("arranque fuera" in f for f in limpio["faltantes"])
+
+
+def test_validar_angulo_con_fijos_vacios_no_toca_nada():
+    import doctrina
+    limpio, _ = doctrina.validar_angulo(ANGULO_OK, fijos={"consciencia": "", "sofisticacion": None})
+    assert limpio["consciencia"] == "consciente_del_problema" and limpio["sofisticacion"] == 3
+
+
+def test_mensaje_error_habla_en_simple():
+    import doctrina
+    assert doctrina.mensaje_error("campo_faltante:gancho") == "Falta el gancho."
+    assert "una sola frase" in doctrina.mensaje_error("promesa_multiple")
+    assert "mecanismo" in doctrina.mensaje_error("mecanismo_obligatorio")
+    assert "12 palabras" in doctrina.mensaje_error("gancho_largo")
+    assert "«47»" in doctrina.mensaje_error("cifra_no_verificada:47")
+    assert doctrina.mensaje_error("otra_cosa") == "otra_cosa"
+
+
+def test_angulo_desde_formulario_no_bloquea_marca_editado_y_limpia_faltantes():
+    import doctrina
+    datos = dict(ANGULO_OK, gancho="uno dos tres cuatro cinco seis siete ocho nueve diez once doce trece",
+                 origen="ideas", faltantes=["esto no viene del navegador"])
+    guardados = ["error: cifra_no_verificada:47", "arranque fuera de lo recomendado: x", "faltan comentarios reales"]
+    limpio, avisos = doctrina.angulo_desde_formulario(datos, guardados, ahora="2026-09-26T10:00:00")
+    assert limpio["gancho"].endswith("trece")                      # se guarda igual
+    assert any("12 palabras" in a for a in avisos)                 # pero avisa en simple
+    assert limpio["faltantes"] == ["faltan comentarios reales"]    # sin error: ni arranque viejo
+    assert limpio["origen"] == "ideas" and limpio["editado_en"] == "2026-09-26T10:00:00"
+
+
+def test_angulo_desde_formulario_no_verifica_cifras_de_la_persona():
+    import doctrina
+    datos = dict(ANGULO_OK, promesa="dura 3 años o te devolvemos el 100 % del dinero")
+    limpio, avisos = doctrina.angulo_desde_formulario(datos, [], ahora="t")
+    assert limpio["promesa"].startswith("dura 3 años") and not any("cifra" in a for a in avisos)
+
+
+def test_angulo_desde_formulario_avisa_si_la_cifra_marcada_sigue_ahi():
+    """Doctrina, bloque 2 (revisión final #2): §11 dice «la interfaz lo dice»
+    — si la persona deja la cifra que Claude no pudo verificar, se avisa que
+    se usará tal cual; si la cambió, no hay nada que avisar."""
+    import doctrina
+    guardados = ["error: cifra_no_verificada:47", "faltan comentarios reales"]
+    con_la_cifra = dict(ANGULO_OK, promesa="el 47 % de las clientas repite")
+    limpio, avisos = doctrina.angulo_desde_formulario(con_la_cifra, guardados, ahora="t")
+    assert any("«47»" in a and "tal cual" in a for a in avisos)
+    sin_la_cifra = dict(ANGULO_OK, promesa="la mayoría de las clientas repite")
+    limpio2, avisos2 = doctrina.angulo_desde_formulario(sin_la_cifra, guardados, ahora="t")
+    assert not any("«47»" in a for a in avisos2)
+
+
+def test_texto_verificable_cuenta_lo_editado_a_mano_aunque_hubiera_errores():
+    import doctrina
+    a = dict(ANGULO_OK, faltantes=["error: cifra_no_verificada:47"], promesa="el 47 % repite")
+    assert "el 47 % repite" not in doctrina.texto_verificable(a)
+    assert "el 47 % repite" in doctrina.texto_verificable(dict(a, editado_en="2026-09-26T10:00:00"))
+
+
+def test_datos_fijos_texto():
+    import doctrina
+    assert doctrina.datos_fijos_texto() == ""
+    t = doctrina.datos_fijos_texto("consciente del problema", "3")
+    assert "Consciencia de la persona (fija, no la cambies): consciente del problema" in t
+    assert "Sofisticación del mercado (fija, no la cambies): 3 — ya no creen: hace falta mecanismo" in t
+    assert doctrina.datos_fijos_texto("rarísimo", 9) == ""
+    # Prueba real (2026-09-27): con 3 o más, sin decirlo, Claude dejaba el
+    # ángulo sin «mecanismo» y el guion pagaba una vuelta de corrección.
+    assert "llena «mecanismo»" in doctrina.datos_fijos_texto(sofisticacion=3)
+    assert "llena «mecanismo»" not in doctrina.datos_fijos_texto(sofisticacion=2)
+
+
+def test_etiquetas_para_el_cliente_cubren_todo_el_vocabulario():
+    import doctrina
+    assert set(doctrina.CONSCIENCIAS_CLIENTE) == set(doctrina.CONSCIENCIAS)
+    assert set(doctrina.SOFISTICACIONES_CLIENTE) == set(doctrina.SOFISTICACIONES)
+
+
+def test_validar_angulo_nunca_lanza_con_fijos_no_dict():
+    import doctrina
+    limpio, errores = doctrina.validar_angulo(ANGULO_OK, fijos=["no", "dict"])
+    assert limpio["sofisticacion"] == 3  # sin cambios por fijos no-dict
+
+
+def test_mensaje_error_valor_invalido_correcta_gramatica():
+    import doctrina
+    assert doctrina.mensaje_error("valor_invalido:lead") == "Revisa el arranque: ese valor no es válido."
+
+
+def test_resumen_angulo_y_globales_de_plantilla():
+    import doctrina
+    assert doctrina.resumen_angulo(None) == "" and doctrina.resumen_angulo({}) == ""
+    assert doctrina.resumen_angulo(ANGULO_OK) == ("Consciente del problema · problema-solución · "
+                                                   "“Si ya se te rompió la tercera chancla este verano, mira esto”")
+    g = doctrina.globales_plantilla()
+    assert {"CONSCIENCIAS_CLIENTE", "SOFISTICACIONES_CLIENTE", "FUENTES_PRUEBA_CLIENTE", "LEADS_NOMBRE",
+            "PREFIJO_ERROR", "lead_por_consciencia", "resumen_angulo", "mensaje_error"} <= set(g)
+    assert set(doctrina.FUENTES_PRUEBA_CLIENTE) == set(doctrina.FUENTES_PRUEBA)
+
+def test_sofisticacion_infinity_no_explota():
+    """OverflowError en int(inf): debe devolver None sin reventar."""
+    import doctrina
+    limpio, avisos = doctrina.angulo_desde_formulario({"sofisticacion": float("inf")}, [], ahora="t")
+    assert limpio["sofisticacion"] is None
+    assert any("no es válido" in a for a in avisos)
+    assert doctrina.datos_fijos_texto(sofisticacion=float("inf")) == ""

@@ -25,6 +25,8 @@
         {% if comercial.url_compra and comercial.url_compra.startswith(("http://", "https://")) %}· <a class="prod-url" style="display:inline;" href="{{ comercial.url_compra }}" target="_blank" rel="noopener">{{ comercial.url_compra | truncate(40, True) }}</a>{% elif comercial.url_compra %}· <span class="prod-url" style="display:inline;">{{ comercial.url_compra | truncate(40, True) }}</span>{% else %}· <span title="{{ _('Sin URL de compra: el experimento no sabrá adónde mandar el clic') }}">{{ _('sin URL de compra') }}</span>{% endif %}
         · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir }}</span>
         {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
+        {% set n_pedidos = ((comercial.extra or {}).get('pedidos') or []) | selectattr('estado', 'equalto', 'abierto') | list | length %}
+        {% if n_pedidos %}<span class="tag-estado">{{ ngettext('%(num)s pedido de Claude', '%(num)s pedidos de Claude', n_pedidos) }}</span>{% endif %}
         {% if comercial.prioridad %}<span class="tag-estado">{{ _('prioridad %(n)s', n=comercial.prioridad) }}</span>{% endif %}
         {% if comercial.n_experimentos %}<span class="tag-estado">{{ _('en %(n)s experimento(s)', n=comercial.n_experimentos) }}</span>{% endif %}
       </span>
@@ -116,5 +118,6 @@
             data-usos="{{ p.usos }}"
             data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ categoria_actual }}">{{ _('Eliminar') }}</button>
   </div>
+  {% if categoria_actual == 'producto' and comercial %}{% include "_producto_doctrina.html" %}{% endif %}
 </details>
 {% endfor %}

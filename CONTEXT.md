@@ -99,3 +99,24 @@ Cómo el producto logra la promesa, solo con lo que dice su ficha.
 **Prueba**:
 Un hecho que respalda la promesa con su fuente: la ficha del producto, un comentario real o algo que la pieza muestra
 pasar. Sin fuente no es prueba.
+
+**Datos del mercado**:
+La consciencia de una persona y la sofisticación de un producto elegidas a mano; cuando existen, Claude no las decide.
+_Avoid_: segmentación, nivel
+
+**Prueba del producto**:
+Un hecho real con su fuente (dato que dio el cliente o comentario real de un comprador) guardado en el producto; entra
+en todo lo que se escribe con ese producto y cuenta como dato verificado.
+_Avoid_: testimonio inventado, beneficio
+
+**Pedido**:
+Algo concreto que Claude necesita del cliente para escribir mejor sobre un producto («pega un comentario real sobre…»);
+responderlo crea una prueba del producto.
+
+**Ángulo editado a mano**:
+Un ángulo guardado desde la app; pasa a ser de quien lo editó y sus cifras se usan tal cual.
+
+**Revisión de la doctrina**:
+Los 12 puntos de la lista de revisión contestados sobre una pieza terminada: las reglas gratis siempre a la vista y, si
+se pide, la revisión de Claude con los fotogramas. Solo informa; nunca bloquea ni reescribe.
+_Avoid_: QA (el QA de Sprints revisa la calidad técnica; desde el bloque 3 trae también la revisión)

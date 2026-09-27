@@ -59,12 +59,16 @@ def rechazar(cliente, cp_id, motivo):
     return True
 
 
-def aprobar_pasaron_qa(cliente, sprint_id):
+def aprobar_pasaron_qa(cliente, sprint_id, campana_id=None):
+    """Aprueba las piezas terminadas, pendientes, cuyo QA pasó; con
+    `campana_id`, solo las de esa campaña (pestaña Piezas del panel)."""
     sp = datos.sprint(cliente, sprint_id, con_eventos=False)
     if not sp:
         raise datos.ErrorDatos("Ese sprint no existe.")
     n = 0
     for c in sp["campanas"]:
+        if campana_id is not None and c["id"] != campana_id:
+            continue
         for p in c["piezas"]:
             if p.get("revision") == "pendiente" and p.get("estado") in TERMINADAS and (p.get("qa") or {}).get("veredicto") == "pasa":
                 if aprobar(cliente, p["id"]):

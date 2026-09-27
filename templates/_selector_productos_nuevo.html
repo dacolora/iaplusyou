@@ -30,6 +30,10 @@
     var modo = detalle.dataset.modo;
     var total = opciones.length;
     var textoInicial = resumen.textContent;
+    // Crear abre el catálogo en un <dialog> (sel_dialogo): el resumen no es un
+    // <summary> y «+ Nuevo producto» (su formulario vive fuera del diálogo)
+    // cierra el diálogo para que el formulario se vea.
+    var enDialogo = detalle.tagName !== "DETAILS";
 
     // El resumen dice qué quedó elegido aunque el panel esté cerrado.
     function actualizarResumen() {
@@ -41,7 +45,7 @@
       } else {
         var nombres = marcados.map(function (l) { return l.querySelector("input").dataset.nombre; });
         var lista = nombres.length <= 3 ? nombres.join(", ") : {{ _('%(n)s productos', n='__N__')|tojson }}.replace('__N__', nombres.length);
-        resumen.textContent = lista + {{ _(' — cambiar →')|tojson }};
+        resumen.textContent = enDialogo ? {{ _('Elegidos: %(lista)s', lista='__LISTA__')|tojson }}.replace('__LISTA__', lista) : lista + {{ _(' — cambiar →')|tojson }};
       }
     }
     opciones.forEach(function (l) { l.querySelector("input").addEventListener("change", actualizarResumen); });
@@ -59,7 +63,12 @@
         vacio.style.display = (visibles === 0 && total > 0) ? "block" : "none";
       });
     }
-    nuevoBtn.addEventListener("click", function () { nuevo.hidden = false; nuevo.querySelector("input[name=nombre]").focus(); });
+    nuevoBtn.addEventListener("click", function () {
+      if (enDialogo && detalle.closest("dialog")) detalle.closest("dialog").close();
+      nuevo.hidden = false;
+      if (enDialogo) nuevo.scrollIntoView({block: "center"});
+      nuevo.querySelector("input[name=nombre]").focus();
+    });
     nuevoCancelar.addEventListener("click", function () { nuevo.hidden = true; });
   })();
 </script>

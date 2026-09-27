@@ -80,7 +80,7 @@ def test_formulario_de_crear_trae_sonido_musica_y_sugerir(app, monkeypatch, tmp_
     # Task 4 (fase 3): el id se renombró a fp-check-sonido — "fp-con-sonido"
     # disparaba un falso positivo del guion (\bcon\b) en la guardia de idioma
     # ahora que _tab_creativeflowplus.html está en PLANTILLAS_TRADUCIDAS.
-    assert 'id="fp-check-sonido"' in html and ' checked> Sonido de la escena' in html
+    assert 'id="fp-check-sonido" checked>' in html and "<strong>Sonido de la escena</strong>" in html
     assert 'name="musica_estilo"' in html and '<option value="lujo" selected>' in html
     assert 'id="fp-sugerir-sonido"' in html and 'data-recargo="0.028"' in html
 

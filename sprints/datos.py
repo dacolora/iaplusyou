@@ -42,6 +42,10 @@ FUNNELS_NOMBRE = {"tof": "Top of Funnel", "mof": "Middle of Funnel", "bof": "Bot
 IDIOMAS = ("es", "en", "pt", "fr", "it", "de")        # los mismos de «Traer referentes»
 IDIOMAS_NOMBRE = {"es": "español", "en": "inglés", "pt": "portugués", "fr": "francés", "it": "italiano",
                   "de": "alemán"}
+# Desde 2026-09-27 un sprint es para todos los países: no lleva país y se
+# trabaja en inglés; cada país/idioma lo resuelve después la edición final.
+# Los sprints viejos conservan el país y el idioma que tenían.
+IDIOMA_BASE = "en"
 PAIS_ISO = re.compile(r"^[A-Z]{2}$")
 _RE_PAGINA_META = re.compile(r"view_all_page_id=(\d+)")
 MAX_MARCAS = 10
@@ -438,7 +442,7 @@ def eventos(cliente, sprint_id, limite=50):
 # ------------------------------------------------------------ sprints ---
 
 def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objetivo_defecto=5, notas="",
-                 pais=None, idioma="es", marcas=None, momento=None):
+                 pais=None, idioma=IDIOMA_BASE, marcas=None, momento=None):
     nombre = _texto(nombre, 200)
     if not nombre:
         raise ErrorDatos("El sprint necesita un nombre.")
@@ -449,7 +453,7 @@ def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objeti
         raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
     if objetivo < 1:
         raise ErrorDatos("El objetivo de referencias debe ser al menos 1.")
-    pais, idioma = _pais(pais), _idioma(idioma) or "es"
+    pais, idioma = _pais(pais), _idioma(idioma) or IDIOMA_BASE
     marcas, momento = normalizar_marcas(marcas), _momento(momento)
     ahora = db.ahora()
     with db.conectar() as con:

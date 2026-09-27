@@ -101,3 +101,20 @@ def test_boton_lanzar_se_bloquea_tras_confirmar(app, base_temporal):
     inicio = html.index("EN PAUSA (no gasta hasta que actives)")
     handler = html[inicio:html.index("// El setTimeout", inicio)]
     assert "ev.submitter" in handler and "disabled = true" in handler and "TEXTO_LANZANDO" in handler
+
+
+def test_galeria_muestra_la_doctrina_y_el_paso_3_la_avisa(app, base_temporal):
+    """Doctrina, bloque 3: etiqueta en cada pieza y aviso en el paso 3; nunca bloquea."""
+    from tests.test_experimentos_db import _pieza_revisada
+    rev = {"video_url": "https://r2/c.mp4", "puntos": [{"n": 6, "estado": "mejorar", "detalle": "x"}], "reglas": []}
+    con = _pieza_revisada(base_temporal, "cf_d1", rev)
+    bien = _pieza_revisada(base_temporal, "cf_d2", dict(rev, puntos=[{"n": 6, "estado": "pasa"}]))
+    _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_d3")
+    html = _html(app)
+    assert "Doctrina: 1 por mejorar" in html and "Doctrina: bien" in html and "Doctrina: sin revisar" in html
+    assert f'name="piezas" value="{con}"' in html and 'data-doctrina-n="1"' in html
+    assert f'name="piezas" value="{bien}"' in html and 'data-doctrina-n="0"' in html
+    # Idioma (fase 4): el aviso del paso 3 es una constante de JS con |tojson,
+    # que escapa los no-ASCII («según» sale como según).
+    assert 'id="exp-doctrina-aviso"' in html and "AVISO_DOCTRINA_VARIAS" in html
+    assert "puntos para mejorar seg\\u00fan la doctrina" in html

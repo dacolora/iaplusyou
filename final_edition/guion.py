@@ -80,7 +80,7 @@ FORMATO_JSON = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional
  "idioma": "es", "pais": "CO", "moneda": null, "precio_texto": null}"""
 
 FORMATO_JSON_CON_ANGULO = """Responde ÚNICAMENTE con un JSON estricto (sin texto adicional ni markdown) con esta forma:
-{"angulo": {"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": null, "pruebas": [{"texto": "...", "fuente": "ficha"}], "lead": "...", "gancho": "...", "faltantes": []},
+{"angulo": {"audiencia": "...", "consciencia": "...", "sofisticacion": 3, "deseo": "...", "promesa": "...", "mecanismo": "una frase (o null; obligatorio si sofisticacion es 3 o más)", "pruebas": [{"texto": "...", "fuente": "ficha"}], "lead": "...", "gancho": "...", "faltantes": []},
  "bloques": [{"rol": "hook", "texto_pantalla": "...", "texto_voz": "...", "inicio_s": 0, "fin_s": 2}, ...],
  "idioma": "es", "pais": "CO", "moneda": null, "precio_texto": null}"""
 
@@ -239,8 +239,9 @@ def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_h
         partes.append(angulo_txt + "\nEscribe el guion DESDE este ángulo: mismo arranque, misma promesa, mismas "
                                    "pruebas; no lo reinventes.")
     else:
+        fijos_txt = doctrina.datos_fijos_texto(sofisticacion=(producto or {}).get("sofisticacion"))
         partes.append("Primero decide el ángulo (clave \"angulo\" del JSON) aplicando la doctrina y después escribe "
-                      "el guion desde él.")
+                      "el guion desde él." + (f"\nDatos del mercado elegidos por el cliente:\n{fijos_txt}" if fijos_txt else ""))
 
     frames = []
     if referencia:
@@ -433,6 +434,8 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
                                 doctrina.texto_verificable(angulo),
                                 _precio_verificable((producto or {}).get("precio"), pais_base))
 
+    # Datos del mercado elegidos a mano (doctrina, bloque 2): mandan sobre Claude.
+    fijos = {"sofisticacion": (producto or {}).get("sofisticacion")}
     errores_extra = None
     if not angulo:
         # Se le pidió a Claude decidir el ángulo: sus errores (campo_faltante,
@@ -440,7 +443,7 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
         # vez de descubrirse recién después, sin poder pedir que los arregle.
         def errores_extra(g):
             crudo = g.get("angulo") if isinstance(g.get("angulo"), dict) else {}
-            _, errores_angulo = doctrina.validar_angulo(crudo, datos)
+            _, errores_angulo = doctrina.validar_angulo(crudo, datos, fijos=fijos)
             return [f"Ángulo: {e}" for e in errores_angulo]
 
     guion, costo = _generar_con_correccion(
@@ -451,7 +454,7 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
     )
     if not angulo:
         crudo = guion.get("angulo") if isinstance(guion.get("angulo"), dict) else {}
-        limpio, errores_angulo = doctrina.validar_angulo(crudo, datos)
+        limpio, errores_angulo = doctrina.validar_angulo(crudo, datos, fijos=fijos)
         limpio["origen"] = "guion"
         guion["angulo"] = doctrina.anotar_errores(limpio, errores_angulo)
     return guion, costo

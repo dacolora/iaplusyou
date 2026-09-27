@@ -1,0 +1,92 @@
+"""Datos de la página de vista previa del editor: destinos, materiales,
+proxies pendientes y la configuración compartida con el motor de ffmpeg."""
+import json
+
+from final_edition import documento, vista_previa
+
+
+def test_destinos_base_primero_y_sin_claves_de_solo_idioma():
+    doc = documento.nuevo_video("9:16")
+    doc["guion"] = {"idioma": "es", "pais": "MX"}
+    doc["variables"] = {"textos": {"hook": {"es": "a", "es_MX": "b", "en_US": "c"}}, "voz": {}, "precios": {"es_CO": 1}}
+    assert vista_previa.destinos(doc) == ["es_MX", "en_US", "es_CO"]
+
+
+def test_destinos_sin_claves_usa_el_idioma_base_y_el_pais_del_guion():
+    doc = documento.nuevo_video("9:16")
+    assert vista_previa.destinos(doc) == ["es_CO"]
+    doc["idioma_base"] = "pt"
+    doc["guion"] = {"pais": "BR"}
+    assert vista_previa.destinos(doc) == ["pt_BR"]
+
+
+def test_destinos_incluye_voces_y_subtitulos_por_destino():
+    doc = documento.nuevo_video("9:16")
+    doc["subtitulos"] = {"palabras": {"en_US": [], "es": []}}
+    doc["pistas"].append({"id": "a", "tipo": "audio", "clips": [{"id": "x", "por_destino": {"pt_BR": None, "es": None}}]})
+    assert vista_previa.destinos(doc) == ["en_US", "pt_BR"]
+
+
+def test_pendientes_video_sin_proxy_o_viejo_y_audio_sin_picos():
+    mats = {1: {"tipo": "video", "url_proxy": None}, 2: {"tipo": "video", "url_proxy": "u", "proxy_version": None},
+            3: {"tipo": "video", "url_proxy": "u", "proxy_version": 2}, 4: {"tipo": "audio", "picos": None},
+            5: {"tipo": "audio", "picos": []}, 6: {"tipo": "imagen"}}
+    assert vista_previa.pendientes(mats) == [1, 2, 4]
+
+
+def test_config_navegador_sale_de_los_modulos():
+    from final_edition import mezcla
+    from final_edition.motor import subtitulos
+    cfg = vista_previa.config_navegador()
+    assert cfg["formatos"]["9:16"] == [1080, 1920] and cfg["fps"] == 30 and cfg["ventana_picos_ms"] == 50
+    assert cfg["mezcla"]["presets"] == mezcla.PRESETS
+    assert cfg["mezcla"]["preset_defecto"] == mezcla.PRESET_DEFECTO
+    assert cfg["mezcla"]["ducking_musica"] == mezcla.DUCKING_VOZ_SOBRE_MUSICA
+    assert cfg["mezcla"]["ducking_sonido"] == mezcla.DUCKING_VOZ_SOBRE_SONIDO
+    assert (cfg["mezcla"]["vol_musica_sola"], cfg["mezcla"]["vol_musica_con_sonido"]) == (mezcla.VOL_MUSICA_SOLA, mezcla.VOL_MUSICA_CON_SONIDO)
+    assert cfg["subtitulos"]["estilos"] == subtitulos.ESTILOS_ASS
+    assert cfg["subtitulos"]["em_por_tam"] == subtitulos.escala_libass()
+    assert {"Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"} <= set(cfg["fuentes"])
+    json.dumps(cfg)
+
+
+def test_materiales_para_y_faltantes(base_temporal):
+    import materiales
+    m = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v.wav", hash="h1", bytes=1,
+                             duracion_ms=100, extra={"picos": [0.5]})
+    doc = {"materiales": [m["id"], 999]}
+    mats = vista_previa.materiales_para("acme", doc)
+    assert list(mats) == [m["id"]]
+    assert mats[m["id"]]["picos"] == [0.5] and mats[m["id"]]["url"] == "https://r2.test/v.wav"
+    assert vista_previa.faltantes(doc, mats) == [999]
+    assert vista_previa.materiales_para("otro", doc) == {}
+
+
+def test_la_vista_previa_usa_los_recortes_del_render(base_temporal):
+    # Revisión de la Task 5: sin cola en el material, el render hace corte seco
+    # (compilador.verificar_recortes); la vista previa no debe mostrar un fundido.
+    import materiales
+    clon = materiales.registrar("acme", tipo="video", origen="crear", url="u", hash="h", bytes=1, duracion_ms=4000)
+    doc = documento.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [
+        {"id": "a", "inicio_ms": 0, "duracion_ms": 2000, "material_id": clon["id"], "recorte": {"desde_ms": 2000, "hasta_ms": 4000},
+         "transicion": {"tipo": "fundido", "duracion_ms": 500}},
+        {"id": "b", "inicio_ms": 2000, "duracion_ms": 2000, "material_id": clon["id"], "recorte": {"desde_ms": 0, "hasta_ms": 2000}}]
+    doc = documento.validar(doc)
+    mats = vista_previa.materiales_para("acme", doc)
+    vista, aviso = vista_previa.documento_para_vista(doc, mats)
+    assert aviso is None and vista["pistas"][0]["clips"][0]["transicion"] is None
+    assert doc["pistas"][0]["clips"][0]["transicion"]["tipo"] == "fundido"      # el original no se toca
+    doc["pistas"][0]["clips"][1]["recorte"]["desde_ms"] = 3000                  # b pide 3000–5000 de un clon de 4000
+    vista2, aviso2 = vista_previa.documento_para_vista(doc, mats)
+    assert "'b'" in aviso2 and vista2 is doc
+
+
+def test_encolar_proxies_uno_por_material_gratis_y_con_reintentos(monkeypatch):
+    import trabajos
+    llamadas = []
+    monkeypatch.setattr(trabajos, "encolar", lambda *a, **k: llamadas.append((a, k)) or True)
+    assert vista_previa.encolar_proxies("acme", [3, 7]) == 2
+    args, kw = llamadas[0]
+    assert args[:3] == ("acme__mat3__proxy", "edicion_proxy", {"cliente": "acme", "material_id": 3})
+    assert kw["max_intentos"] == 3 and kw["cliente"] == "acme"

@@ -82,12 +82,10 @@ def _fechas_cortas(inicio, fin):
     return f"{i.day} {MESES[i.month - 1]} – {f.day} {MESES[f.month - 1]}"
 
 
-def linea_sprint(sp, paises):
-    """«1–31 oct · 🇨🇴 español · Hot Sale · imita: Crocs, Hoka» (cabecera del tablero)."""
+def linea_sprint(sp):
+    """«1–31 oct · Hot Sale · imita: Crocs, Hoka» (cabecera del tablero). Sin
+    país ni idioma: el sprint es para todos los países (2026-09-27)."""
     partes = [_fechas_cortas(sp["inicio"], sp["fin"])]
-    bandera = ((paises or {}).get(sp.get("pais") or "") or {}).get("bandera") or (sp.get("pais") or "")
-    idioma = datos.IDIOMAS_NOMBRE.get(sp.get("idioma") or "es", sp.get("idioma"))
-    partes.append(f"{bandera} {idioma}".strip())
     if (sp.get("momento") or {}).get("nombre"):
         partes.append(sp["momento"]["nombre"])
     if sp.get("marcas"):
@@ -98,3 +96,31 @@ def linea_sprint(sp, paises):
 def marcas_texto(marcas):
     """Lista de marcas -> el texto que las vuelve a producir en `normalizar_marcas`."""
     return "\n".join(m["nombre"] + (f" {m['pagina_id']}" if m.get("pagina_id") else "") for m in marcas or [])
+
+
+PASOS = ("armar", "ideas", "piezas")
+_PASO_POR_CLAVE = {"referentes": "armar", "aprobar": "ideas", "ideas": "ideas", "generar": "ideas",
+                   "generando": "piezas", "errores": "piezas", "revisar": "piezas", "lista": "piezas"}
+
+
+def paso_por_defecto(c):
+    """La pestaña del panel que toca según el siguiente paso de la campaña."""
+    return _PASO_POR_CLAVE.get(siguiente_paso(c)["clave"], "armar")
+
+
+def resolver_paso(pedido, c):
+    """La pestaña pedida si existe; si no, la que toca."""
+    return pedido if pedido in PASOS else paso_por_defecto(c)
+
+
+def pestanas(c):
+    """Lo que dice cada pestaña del panel: «✓» o «listos/objetivo» en Armar,
+    aprobadas/planeadas en Ideas y terminadas/planeadas en Piezas."""
+    objetivo = int(c.get("referencias_objetivo") or 1)
+    listas = int(c.get("referencias_listas") or 0)
+    planeadas = int(c.get("n_videos") or 0) + int(c.get("n_imagenes") or 0)
+    vivas = [i for i in c.get("ideas") or [] if i.get("estado_idea") != "descartada"]
+    aprobadas = sum(1 for i in vivas if i.get("estado_idea") == "aprobada")
+    terminadas = sum(1 for p in c.get("piezas") or [] if p.get("estado") in datos._PIEZA_TERMINADA)
+    return {"armar": "✓" if listas >= objetivo else f"{listas}/{objetivo}",
+            "ideas": f"{aprobadas}/{planeadas}", "piezas": f"{terminadas}/{planeadas}"}

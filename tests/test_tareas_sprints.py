@@ -114,7 +114,8 @@ def test_proponer_ideas_tarea_y_encolar(base_temporal, monkeypatch):
     from sprints import datos, ideas
     from tareas import sprints as ts
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(ideas, "proponer", lambda c, cid_, n_videos=None, n_imagenes=None, reemplaza=None: [1, 2])
+    monkeypatch.setattr(ideas, "proponer",
+                        lambda c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None: [1, 2])
     tareas.cargar_todas()
     msg = tareas.REGISTRO["sprint_proponer_ideas"]({"payload": {"cliente": "acme", "campana_id": cid, "n_videos": 2, "n_imagenes": 0}})
     assert "2 ideas" in msg
@@ -123,7 +124,7 @@ def test_proponer_ideas_tarea_y_encolar(base_temporal, monkeypatch):
     assert ts.encolar_ideas("acme", cid, n_videos=3, reemplaza=7) is True
     job_id, tipo, payload, kw = encolados[0]
     assert job_id == f"acme__campana{cid}__ideas" and tipo == "sprint_proponer_ideas"
-    assert payload == {"cliente": "acme", "campana_id": cid, "n_videos": 3, "n_imagenes": None, "reemplaza": 7} and kw["max_intentos"] == 2
+    assert payload == {"cliente": "acme", "campana_id": cid, "n_videos": 3, "n_imagenes": None, "reemplaza": 7} and kw["max_intentos"] == 1
 
 
 def _pieza_lista(datos, creative_flow, cliente="acme", estado_pieza="video_listo"):
@@ -161,6 +162,87 @@ def test_qa_pieza_guarda_resultado_y_error(base_temporal, monkeypatch):
     marca = datos.idea("acme", cp)["qa"]
     assert marca == {"veredicto": "error", "score": None, "checks": {}, "nota": "visión caída", "cf_id": cf}
     assert tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": 999}}) == "La pieza ya no existe."
+
+
+def test_qa_pieza_registra_el_gasto_y_guarda_la_doctrina_en_la_sesion(base_temporal, monkeypatch):
+    """Doctrina, bloque 3: el QA por fin registra su gasto real (una fila por
+    intento, también si falla después de pagar) y la revisión de los 12
+    puntos queda en la sesión de Crear."""
+    import creative_flow
+    import gastos
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    rev = {"video_url": "https://r2/v.mp4", "puntos": [], "resumen": "ok", "reglas": [], "origen": "sprint"}
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {
+        "score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x",
+        "tokens_entrada": 1500, "tokens_salida": 400, "doctrina": dict(rev)})
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 1, "payload": {"cliente": "acme", "cp_id": cp}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["tipo"] == "revision" and g["referencia"] == f"qa:{cp}:t31:i1" and "doctrina" in g["detalle"]
+    assert creative_flow.cargar("acme")[cf]["revision_doctrina"] == rev
+    qa_guardado = datos.idea("acme", cp)["qa"]
+    assert "doctrina" not in qa_guardado and "tokens_entrada" not in qa_guardado
+
+    def falla(*a, **k):
+        e = qa.AnalisisInvalido("Claude no devolvió JSON.")
+        e.tokens_entrada, e.tokens_salida = 1400, 100
+        raise e
+    monkeypatch.setattr(qa, "evaluar", falla)
+    with pytest.raises(qa.AnalisisInvalido):
+        tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 2, "payload": {"cliente": "acme", "cp_id": cp}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["referencia"] == f"qa:{cp}:t31:i2" and "respuesta inválida" in g["detalle"]
+
+
+def test_qa_pieza_no_revienta_si_falla_guardar_la_doctrina(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I4): si guardar `revision_doctrina` en la
+    sesión revienta, el QA (ya pagado y guardado) no debe reintentarse por
+    eso — solo queda rastro en la bitácora."""
+    import bitacora
+    import creative_flow
+    import gastos
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    rev = {"video_url": "https://r2/v.mp4", "puntos": [], "resumen": "ok", "reglas": [], "origen": "sprint"}
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {
+        "score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x",
+        "tokens_entrada": 1500, "tokens_salida": 400, "doctrina": dict(rev)})
+    original = creative_flow.actualizar
+
+    def falla_solo_doctrina(cliente, cf_id, **campos):
+        if "revision_doctrina" in campos:
+            raise RuntimeError("db caída")
+        return original(cliente, cf_id, **campos)
+    monkeypatch.setattr(creative_flow, "actualizar", falla_solo_doctrina)
+    tareas.cargar_todas()
+    msg = tareas.REGISTRO["sprint_qa_pieza"]({"id": 31, "intentos": 1, "payload": {"cliente": "acme", "cp_id": cp}})
+    assert "pasa" in msg
+    assert datos.idea("acme", cp)["qa"]["veredicto"] == "pasa"          # el QA sí se guardó
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["tipo"] == "revision"                                      # el gasto sí se registró
+    filas = bitacora.leer(cliente="acme", brief_id=cf)
+    assert any(f["etapa"] == "sprint_qa" and f["estado"] == "doctrina_no_guardada" for f in filas)
+
+
+def test_qa_sin_doctrina_no_toca_una_revision_existente(base_temporal, monkeypatch):
+    """Bloque 3, revisión final (I9): con `doctrina=None` (el QA solo, sin
+    revisión útil) la sesión conserva la revisión que ya tenía — por ejemplo,
+    una hecha con el botón de Crear."""
+    import creative_flow
+    import tareas
+    from sprints import datos, qa
+    sid, cid, cp, cf = _pieza_lista(datos, creative_flow)
+    previa = {"video_url": "https://r2/v.mp4", "puntos": [], "resumen": "de antes", "reglas": [], "origen": "boton"}
+    creative_flow.actualizar("acme", cf, revision_doctrina=previa)
+    monkeypatch.setattr(qa, "evaluar", lambda c, i, e, ca, umbral=None: {
+        "score": 80, "checks": {}, "veredicto": "pasa", "modelo": "m", "costo_usd": 0.02, "evaluado_en": "x",
+        "tokens_entrada": 0, "tokens_salida": 0, "doctrina": None})
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_qa_pieza"]({"payload": {"cliente": "acme", "cp_id": cp}})
+    assert creative_flow.cargar("acme")[cf]["revision_doctrina"] == previa
 
 
 def test_qa_pieza_error_no_se_reencola_y_un_intento_bueno_pisa_el_marcador(base_temporal, monkeypatch):
@@ -345,8 +427,9 @@ def test_ejecutar_sugerir_biblioteca_guarda_sugerencias(base_temporal, monkeypat
     assert c["extra"]["sugerencias_ia"] == [{"referente_id": 5, "razon": "encaja"}]
     filas = [f for f in gastos.historial("acme") if f["tipo"] == "sugerir_ia"]
     assert len(filas) == 1 and filas[0]["usd"] > 0
-    assert enfoques[0]["etapa"] == "TOF" and enfoques[0]["idioma"] == "es"
-    assert "idioma de la audiencia: español" in textos[0][2]
+    # Sprint nuevo: para todos los países, en inglés (2026-09-27).
+    assert enfoques[0]["etapa"] == "TOF" and enfoques[0]["idioma"] == "en"
+    assert "idioma de la audiencia: inglés" in textos[0][2]
 
 
 def test_ejecutar_sugerir_biblioteca_sin_candidatos(base_temporal, monkeypatch):
@@ -409,6 +492,49 @@ def test_sugerir_biblioteca_le_pasa_la_consciencia_de_la_persona(base_temporal, 
     assert "consciente del problema" in visto["persona"]
 
 
+def test_reescribir_idea_registra_el_gasto_real(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (§3.5): pagada, gasto tipo «ideas» con los tokens
+    reales — también cuando la respuesta no sirvió."""
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    tareas.cargar_todas()
+    monkeypatch.setattr(ideas, "reescribir", lambda cliente, cp_id: (1000, 2000))
+    tareas.REGISTRO["sprint_reescribir_idea"]({"id": 7, "payload": {"cliente": "acme", "cp_id": 3}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["tipo"] == "ideas" and g["referencia"] == "idea:reescribir:3:t7" and g["usd"] > 0
+
+    def falla(cliente, cp_id):
+        e = ideas.AnalisisInvalido("Claude no devolvió JSON.")
+        e.tokens_entrada, e.tokens_salida = 400, 50
+        raise e
+    monkeypatch.setattr(ideas, "reescribir", falla)
+    with pytest.raises(ideas.AnalisisInvalido):
+        tareas.REGISTRO["sprint_reescribir_idea"]({"id": 8, "payload": {"cliente": "acme", "cp_id": 3}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["referencia"] == "idea:reescribir:3:t8" and "inválida" in g["detalle"]
+
+
+def test_reescribir_idea_con_pieza_registra_su_propio_detalle(base_temporal, monkeypatch):
+    """Doctrina, bloque 2 (revisión final #3): cuando «Generar lote» se
+    adelanta, el gasto queda con su propio detalle, distinto del de una
+    respuesta inválida cualquiera."""
+    import gastos
+    import tareas
+    from sprints import ideas
+    tareas.cargar_todas()
+
+    def con_pieza(cliente, cp_id):
+        e = ideas.IdeaConPieza("La idea ya tiene una pieza generada; no se reescribió.")
+        e.tokens_entrada, e.tokens_salida = 400, 50
+        raise e
+    monkeypatch.setattr(ideas, "reescribir", con_pieza)
+    with pytest.raises(ideas.IdeaConPieza):
+        tareas.REGISTRO["sprint_reescribir_idea"]({"id": 9, "payload": {"cliente": "acme", "cp_id": 3}})
+    g = gastos.historial("acme", limite=1)[0]
+    assert g["referencia"] == "idea:reescribir:3:t9" and g["detalle"] == "reescribir idea · la idea ya tenía pieza"
+
+
 def test_sugerir_biblioteca_usa_el_enfoque_de_la_campana(base_temporal, monkeypatch):
     import tareas
     import referentes.sugerir as referentes_sugerir
@@ -430,3 +556,57 @@ def test_sugerir_biblioteca_usa_el_enfoque_de_la_campana(base_temporal, monkeypa
     assert "pies fríos" in vistos["persona"] and "consciente del problema" in vistos["persona"]
     assert vistos["temporada"] == "Hot Sale"
     assert "UGC" in vistos["enfoque_texto"] and "Crocs" in vistos["enfoque_texto"] and "inglés" in vistos["enfoque_texto"]
+
+
+def test_proponer_ideas_registra_el_gasto_real(base_temporal, monkeypatch):
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    sid, cid, rid = _referencia(datos)
+
+    def proponer(c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None):
+        uso["entrada"] += 5000
+        uso["salida"] += 2000
+        return [11, 12]
+    monkeypatch.setattr(ideas, "proponer", proponer)
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_proponer_ideas"]({"id": 7, "payload": {"cliente": "acme", "campana_id": cid}})
+    filas = [f for f in gastos.historial("acme") if f["tipo"] == "ideas"]
+    assert len(filas) == 1 and filas[0]["usd"] > 0 and filas[0]["referencia"] == f"idea:proponer:{cid}:t7"
+
+
+def test_proponer_ideas_registra_lo_pagado_si_falla(base_temporal, monkeypatch):
+    import pytest
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    sid, cid, rid = _referencia(datos)
+
+    def proponer(c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None):
+        uso["entrada"] += 3000
+        raise ideas.AnalisisInvalido("Claude no devolvió JSON.")
+    monkeypatch.setattr(ideas, "proponer", proponer)
+    tareas.cargar_todas()
+    with pytest.raises(ideas.AnalisisInvalido):
+        tareas.REGISTRO["sprint_proponer_ideas"]({"id": 8, "payload": {"cliente": "acme", "campana_id": cid}})
+    filas = [f for f in gastos.historial("acme") if f["tipo"] == "ideas"]
+    assert len(filas) == 1 and "no sirvió" in filas[0]["detalle"]
+
+
+def test_proponer_ideas_sin_llamadas_no_registra_gasto(base_temporal, monkeypatch):
+    import gastos
+    import tareas
+    from sprints import datos, ideas
+    sid, cid, rid = _referencia(datos)
+    monkeypatch.setattr(ideas, "proponer", lambda c, cid_, n_videos=None, n_imagenes=None, reemplaza=None, uso=None: [])
+    tareas.cargar_todas()
+    tareas.REGISTRO["sprint_proponer_ideas"]({"id": 9, "payload": {"cliente": "acme", "campana_id": cid}})
+    assert not [f for f in gastos.historial("acme") if f["tipo"] == "ideas"]
+
+
+def test_encolar_ideas_no_se_reintenta_sola(base_temporal, monkeypatch):
+    from tareas import sprints as ts
+    vistos = []
+    monkeypatch.setattr(ts.trabajos, "encolar", lambda job_id, tipo, payload, **kw: vistos.append(kw) or True)
+    ts.encolar_ideas("acme", 5)
+    assert vistos[0]["max_intentos"] == 1

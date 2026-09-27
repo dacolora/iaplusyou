@@ -9,9 +9,10 @@ Ids de trabajo (los mismos que usan las rutas para encolar y consultar):
   sprint_analizar_referencia -> f"{cliente}__ref{referencia_id}__analizar"          (max_intentos=3)
   sprint_sugerir_personas    -> f"{cliente}__sprints__sugerir_personas"             (max_intentos=2)
   sprint_referencia_link     -> f"{cliente}__campana{campana_id}__link"             (max_intentos=2)
-  sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=2)
+  sprint_proponer_ideas      -> f"{cliente}__campana{campana_id}__ideas"            (max_intentos=1, pagada)
   sprint_qa_pieza            -> f"{cliente}__cp{cp_id}__qa"                         (max_intentos=3)
   referentes_sugerir_ia      -> f"{cliente}__campana{campana_id}__sugerir_biblioteca" (max_intentos=1)
+  sprint_reescribir_idea     -> f"{cliente}__cp{cp_id}__reescribir"                   (max_intentos=1, pagada)
 
 `sprint_qa_pendientes` es la periódica (worker.PERIODICAS, cada 300 s) que
 encola sprint_qa_pieza para toda pieza lista sin qa, y avisa (notificaciones)
@@ -137,15 +138,66 @@ def job_id_ideas(cliente, campana_id):
 def encolar_ideas(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None):
     return trabajos.encolar(job_id_ideas(cliente, campana_id), "sprint_proponer_ideas",
                             {"cliente": cliente, "campana_id": campana_id, "n_videos": n_videos, "n_imagenes": n_imagenes,
-                             "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40, max_intentos=2)
+                             "reemplaza": reemplaza}, cliente=cliente, duracion_estimada=40,
+                            max_intentos=1)  # pagada: nunca se reintenta sola
+
+
+def job_id_reescribir(cliente, cp_id):
+    return f"{cliente}__cp{cp_id}__reescribir"
+
+
+def encolar_reescribir(cliente, cp_id):
+    """«Reescribir la idea con este ángulo» (doctrina, bloque 2): pagada, un
+    clic con precio a la vista, nunca se reintenta sola."""
+    return trabajos.encolar(job_id_reescribir(cliente, cp_id), "sprint_reescribir_idea",
+                            {"cliente": cliente, "cp_id": cp_id}, cliente=cliente, duracion_estimada=40, max_intentos=1)
+
+
+@registrar("sprint_reescribir_idea")
+def ejecutar_reescribir_idea(tarea):
+    p = tarea["payload"]
+    cliente, cp_id = p["cliente"], int(p["cp_id"])
+    referencia = f"idea:reescribir:{cp_id}{ref_sufijo(tarea)}"
+    try:
+        ent, sal = ideas.reescribir(cliente, cp_id)
+    except ideas.AnalisisInvalido as e:
+        ent, sal = getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0
+        detalle = ("reescribir idea · la idea ya tenía pieza" if isinstance(e, ideas.IdeaConPieza)
+                   else "reescribir idea · respuesta inválida")
+        if ent or sal:
+            gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
+                                    detalle=detalle,
+                                    extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+        raise
+    gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
+                            detalle="reescribir idea desde su ángulo",
+                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+    return "Idea reescrita desde su ángulo."
 
 
 @registrar("sprint_proponer_ideas")
 def ejecutar_proponer_ideas(tarea):
+    """Propone ideas con Claude y registra su gasto real (tokens de todas las
+    llamadas, incluida la corrección), también cuando la respuesta no sirvió
+    — en ese caso la excepción sigue subiendo para que la cola marque error."""
     p = tarea["payload"]
     cliente, campana_id = p["cliente"], int(p["campana_id"])
-    creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
-                             reemplaza=p.get("reemplaza"))
+    uso = {"entrada": 0, "salida": 0}
+    referencia = f"idea:proponer:{campana_id}{ref_sufijo(tarea)}"
+
+    def _registrar(detalle):
+        if uso["entrada"] or uso["salida"]:
+            gastos.registrar_seguro(cliente, "ideas", costo_real(uso["entrada"], uso["salida"]), referencia,
+                                    proveedor="anthropic", detalle=detalle,
+                                    extra={"tokens_entrada": uso["entrada"], "tokens_salida": uso["salida"],
+                                           "modelo": modelo_actual()})
+    try:
+        creadas = ideas.proponer(cliente, campana_id, n_videos=p.get("n_videos"), n_imagenes=p.get("n_imagenes"),
+                                 reemplaza=p.get("reemplaza"), uso=uso)
+    except Exception:
+        _registrar("proponer ideas · la respuesta no sirvió")
+        raise
+    _registrar(f"proponer {len(creadas)} idea(s)")
     c = datos.campana(cliente, campana_id)
     if c:
         estado.recalcular(cliente, c["sprint_id"])
@@ -236,6 +288,13 @@ def encolar_qa(cliente, cp_id):
                             cliente=cliente, duracion_estimada=30, max_intentos=3)
 
 
+def _gasto_qa(cliente, referencia, ent, sal, detalle):
+    if ent or sal:
+        gastos.registrar_seguro(cliente, "revision", costo_real(ent, sal), referencia, proveedor="anthropic",
+                                detalle=detalle, extra={"tokens_entrada": ent, "tokens_salida": sal,
+                                                        "modelo": modelo_actual()})
+
+
 @registrar("sprint_qa_pieza")
 def ejecutar_qa_pieza(tarea):
     """QA de una pieza lista. Si falla, la tarea reintenta sola (max 3): el QA
@@ -245,7 +304,11 @@ def ejecutar_qa_pieza(tarea):
     periódica evaluará la sesión nueva. Un fallo (descarga, ffprobe, visión)
     deja el marcador terminal `veredicto="error"` antes de subir la
     excepción: la cola agota sus intentos, pero la periódica ya no la vuelve
-    a encolar cada 5 min; «Repetir QA» (rutas.pieza_qa) limpia el marcador."""
+    a encolar cada 5 min; «Repetir QA» (rutas.pieza_qa) limpia el marcador.
+
+    Doctrina, bloque 3: registra el gasto real de la visión (tipo «revision»,
+    una fila por intento, también si la respuesta no sirvió) y guarda en la
+    sesión la revisión de los 12 puntos que vino en la misma llamada."""
     p = tarea["payload"]
     cliente, cp_id = p["cliente"], int(p["cp_id"])
     i = datos.idea(cliente, cp_id)
@@ -259,16 +322,32 @@ def ejecutar_qa_pieza(tarea):
     sp = datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}
     umbral = (sp.get("extra") or {}).get("qa_umbral") or qa.UMBRAL_DEFECTO
     campana["marca"] = proyectos.nombre_visible(cliente)
+    referencia = f"qa:{cp_id}{ref_sufijo(tarea)}:i{tarea.get('intentos') or 0}"
     try:
         resultado = dict(qa.evaluar(cliente, i, entry, campana, umbral=umbral))
     except Exception as e:
+        _gasto_qa(cliente, referencia, getattr(e, "tokens_entrada", 0) or 0, getattr(e, "tokens_salida", 0) or 0,
+                  "control de calidad · respuesta inválida")
         datos.guardar_qa(cliente, cp_id, cf_id, {"veredicto": "error", "score": None, "checks": {}, "nota": str(e)[:300],
                                                  "cf_id": cf_id})
         raise
+    revision = resultado.pop("doctrina", None)
+    _gasto_qa(cliente, referencia, resultado.pop("tokens_entrada", 0) or 0, resultado.pop("tokens_salida", 0) or 0,
+              "control de calidad del sprint" + (" y doctrina" if revision else ""))
     resultado["cf_id"] = cf_id
     if not datos.guardar_qa(cliente, cp_id, cf_id, resultado):
         bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado", "QA descartado: la pieza fue regenerada")
         return "QA descartado: la pieza fue regenerada mientras se evaluaba."
+    if revision:
+        # Bloque 3, revisión final (I4): el QA ya se pagó y ya se guardó
+        # arriba (`datos.guardar_qa`); este segundo guardado, en la sesión de
+        # Crear, es informativo — que falle no debe tumbar la tarea (la cola
+        # reintentaría y cobraría de nuevo un QA que ya se hizo). Queda
+        # rastro en la bitácora.
+        try:
+            creative_flow.actualizar(cliente, cf_id, revision_doctrina=revision)
+        except Exception as e:  # noqa: BLE001
+            bitacora.registrar(cliente, cf_id, "sprint_qa", "doctrina_no_guardada", str(e)[:200])
     datos.registrar_evento(cliente, i["sprint_id"], "qa_evaluada",
                            f"QA de «{i['titulo']}»: {resultado['veredicto']} ({resultado['score']})",
                            {"cp_id": cp_id, "score": resultado["score"], "veredicto": resultado["veredicto"]},

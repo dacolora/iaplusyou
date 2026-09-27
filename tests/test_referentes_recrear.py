@@ -173,6 +173,13 @@ def test_adaptar_da_espacio_para_pensar_y_responder(monkeypatch):
     assert 591 * 4 <= topes[0] <= 16000
 
 
+def test_max_tokens_adaptar_en_el_rango_de_claude_md(monkeypatch):
+    """Bloque 2, revisión final #6: 3000 seguía corto para el pensamiento
+    adaptativo de Sonnet 5 (CLAUDE.md pide 4 000-16 000 en estos sitios)."""
+    from referentes import recrear
+    assert 4000 <= recrear.MAX_TOKENS_ADAPTAR <= 16000
+
+
 def test_llamar_cortada_por_max_tokens_lanza_con_tokens(monkeypatch):
     import anthropic
     from referentes import recrear
@@ -280,3 +287,33 @@ def test_llamar_manda_la_doctrina_de_angulo_y_gancho(monkeypatch):
     monkeypatch.setattr(anthropic, "Anthropic", _A)
     recrear._llamar("hola")
     assert vistos[0]["system"][0]["text"] == doctrina.texto("angulo", "gancho")
+
+
+def test_adaptar_respeta_la_sofisticacion_elegida(monkeypatch):
+    """Doctrina, bloque 2 (§4.3)."""
+    from referentes import recrear
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return (_respuesta(), 200, 60)
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), dict(_producto(), sofisticacion=1), "titular viejo")
+    assert "<mercado>- Sofisticación del mercado (fija, no la cambies): 1" in pedido["texto"]
+    assert resultado["angulo"]["sofisticacion"] == 1
+    recrear.adaptar(_referente(), _familia(), _producto(), "titular viejo")
+    assert "<mercado>no elegidos: decide tú la sofisticación</mercado>" in pedido["texto"]
+
+
+def test_adaptar_lleva_las_pruebas_del_producto(monkeypatch):
+    from referentes import recrear
+    pedido = {}
+
+    def falso(texto, max_tokens):
+        pedido["texto"] = texto
+        return (_respuesta(angulo=dict(ANGULO_RECREAR, promesa="el 98 % repite")), 200, 60)
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    producto = dict(_producto(), pruebas=[{"texto": "El 98 % repite la compra", "fuente": "comentarios"}])
+    resultado, _, _ = recrear.adaptar(_referente(), _familia(), producto, "titular viejo")
+    assert "<pruebas_producto>- El 98 % repite la compra (comentario real de un comprador)</pruebas_producto>" in pedido["texto"]
+    assert not any("cifra_no_verificada" in f for f in resultado["angulo"]["faltantes"])

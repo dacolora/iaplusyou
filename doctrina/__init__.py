@@ -11,6 +11,8 @@ import functools
 import os
 import re
 
+from idiomas import N_
+
 # ------------------------------------------------------------ vocabulario ---
 
 CONSCIENCIAS = ("inconsciente", "consciente_del_problema", "consciente_de_la_solucion",
@@ -30,6 +32,25 @@ SOFISTICACIONES_NOMBRE = {1: "nadie prometió esto antes", 2: "ya se prometió: 
                           3: "ya no creen: hace falta mecanismo", 4: "copiaron el mecanismo: agrandarlo",
                           5: "mercado agotado: identificación"}
 FUENTES_PRUEBA = ("ficha", "comentarios", "demostracion")
+# Etiquetas para quien usa la app (bloque 2): qué tanto sabe la persona y
+# cuántas promesas parecidas vio ya, en palabras simples.
+CONSCIENCIAS_CLIENTE = {
+    "inconsciente": "No sabe que tiene el problema",
+    "consciente_del_problema": "Sabe que tiene el problema, pero no conoce soluciones",
+    "consciente_de_la_solucion": "Conoce soluciones, pero no tu producto",
+    "consciente_del_producto": "Conoce tu producto, pero aún no se decide",
+    "muy_consciente": "Ya lo quiere: solo le falta la oferta",
+}
+FUENTES_PRUEBA_CLIENTE = {"ficha": "Dato del producto", "comentarios": "Comentario real de un comprador",
+                          "demostracion": "Se ve en el video"}
+# N_: se traducen donde se muestran (|traducir en Catálogo); el valor no cambia.
+SOFISTICACIONES_CLIENTE = {
+    1: N_("Nadie le ha prometido esto"),
+    2: N_("Ya se lo prometieron: hay que prometer más grande"),
+    3: N_("Ya no cree en promesas: hay que explicar cómo funciona"),
+    4: N_("Ya vio cómo funciona en otros: hay que mejorar el cómo"),
+    5: N_("Ya no cree en nada de esto: hay que hablarle de quién es"),
+}
 REBANADAS = ("base", "investigar", "angulo", "gancho", "guion", "video", "caption", "clasificar", "revisar")
 ANGULO_VERSION = 1
 ANGULO_ORIGENES = ("ideas", "guion", "recrear")
@@ -181,14 +202,29 @@ def _texto(valor, tope=MAX_CARACTERES_CAMPO):
     return " ".join(str(valor if valor is not None else "").split())[:tope]
 
 
-def validar_angulo(angulo, datos_texto=None):
+def validar_angulo(angulo, datos_texto=None, fijos=None):
     """(ángulo limpio, errores) según el spec §4.2. Nunca lanza: quien llama
-    decide si pide corrección (errores) o guarda igual con los faltantes."""
+    decide si pide corrección (errores) o guarda igual con los faltantes.
+
+    `fijos` (bloque 2, §4.3): {"consciencia": ..., "sofisticacion": ...}
+    elegidos a mano para la persona o el producto. Reemplazan lo que diga
+    Claude ANTES de revisar las reglas, así el mecanismo obligatorio y el
+    arranque recomendado se evalúan con los valores que mandan. Un valor
+    vacío (None, "") no fija nada."""
     # Convertir angulo a dict, tratando no-dict como {}
     if isinstance(angulo, dict):
         a = dict(angulo)
     else:
         a = {}
+    # Convertir fijos a dict, tratando no-dict como {}
+    if isinstance(fijos, dict):
+        fijos_dict = fijos
+    else:
+        fijos_dict = {}
+    for campo in ("consciencia", "sofisticacion"):
+        valor = fijos_dict.get(campo)
+        if valor not in (None, ""):
+            a[campo] = valor
     limpio = angulo_vacio()
     errores = []
     # Normalizar faltantes: si es string, envolver; si no es list, usar []
@@ -210,7 +246,7 @@ def validar_angulo(angulo, datos_texto=None):
         errores.append("valor_invalido:consciencia")
     try:
         limpio["sofisticacion"] = int(a.get("sofisticacion")) if a.get("sofisticacion") not in (None, "") else None
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         limpio["sofisticacion"] = None
         errores.append("valor_invalido:sofisticacion")
     if limpio["sofisticacion"] is not None and limpio["sofisticacion"] not in SOFISTICACIONES:
@@ -328,6 +364,118 @@ def angulo_a_texto(angulo):
     return "\n".join(lineas)
 
 
+_NOMBRE_CAMPO = {"audiencia": "a quién le habla", "consciencia": "qué tanto sabe la audiencia",
+                 "sofisticacion": "la sofisticación del mercado", "deseo": "el deseo", "promesa": "la promesa",
+                 "lead": "el arranque", "gancho": "el gancho", "mecanismo": "el mecanismo"}
+_ARRANQUE_FUERA = "arranque fuera de lo recomendado"
+
+
+def mensaje_error(codigo):
+    """Frase simple para la persona a partir de un código de `validar_angulo`
+    («promesa_multiple», «campo_faltante:gancho», «cifra_no_verificada:47»…)."""
+    base, _, detalle = str(codigo).partition(":")
+    nombre = _NOMBRE_CAMPO.get(detalle, detalle)
+    if base == "campo_faltante":
+        return f"Falta {nombre}."
+    if base == "valor_invalido":
+        return f"Revisa {nombre}: ese valor no es válido."
+    if base == "promesa_multiple":
+        return "La promesa tiene más de una idea o es muy larga: déjala en una sola frase."
+    if base == "mecanismo_obligatorio":
+        return ("Si tu cliente ya vio tres o más promesas parecidas, hace falta el mecanismo: "
+                "cómo logra el producto lo que promete.")
+    if base == "gancho_largo":
+        return f"El gancho pasa de {MAX_PALABRAS_GANCHO} palabras: acórtalo."
+    if base == "cifra_no_verificada":
+        return f"La cifra «{detalle}» no está en los datos del producto."
+    return str(codigo)
+
+
+def angulo_desde_formulario(datos, faltantes_guardados=None, ahora=None):
+    """(ángulo limpio, avisos) para un ángulo editado a mano (bloque 2, §3.4).
+
+    `datos`: lo que mandó el editor (sin `faltantes`: esos no se editan).
+    `faltantes_guardados`: los del ángulo que había; se conservan sin las
+    líneas «error: …» ni «arranque fuera de lo recomendado» (quien edita se
+    hace cargo; la segunda la vuelve a poner `validar_angulo` si aplica, sin
+    duplicarla). Las cifras NO se verifican: las escribió la persona. Los
+    `avisos` son frases simples y nunca bloquean el guardado. Conserva
+    `origen` si viene y marca `editado_en` con `ahora`.
+
+    §11 (revisión final #2): si una cifra que Claude había marcado como no
+    verificada (`error: cifra_no_verificada:X`) SIGUE apareciendo tal cual en
+    lo que la persona mandó, se avisa que se usará igual — de lo contrario
+    ese aviso solo existía escondido en `faltantes` y la interfaz nunca lo
+    mostraba antes de guardar."""
+    d = dict(datos) if isinstance(datos, dict) else {}
+    guardados = [f for f in (faltantes_guardados or []) if isinstance(f, str)]
+    d["faltantes"] = [f for f in guardados if not f.startswith(PREFIJO_ERROR) and not f.startswith(_ARRANQUE_FUERA)]
+    limpio, errores = validar_angulo(d)
+    if d.get("origen") in ANGULO_ORIGENES:
+        limpio["origen"] = d["origen"]
+    limpio["editado_en"] = ahora
+    avisos = [mensaje_error(e) for e in errores]
+    texto_persona = " ".join(str(d.get(c) or "") for c in _CAMPOS_TEXTO)
+    texto_persona += " " + " ".join(str(p.get("texto") or "") for p in (d.get("pruebas") or []) if isinstance(p, dict))
+    prefijo_cifra = f"{PREFIJO_ERROR}cifra_no_verificada:"
+    for f in guardados:
+        if f.startswith(prefijo_cifra):
+            cifra = f[len(prefijo_cifra):]
+            if cifra and cifra in texto_persona:
+                avisos.append(f"{mensaje_error(f'cifra_no_verificada:{cifra}')} Si la dejas, se usa tal cual.")
+    return limpio, avisos
+
+
+def resumen_angulo(angulo):
+    """Una línea para el `<summary>` del editor: «Consciente del problema ·
+    problema-solución · “gancho”»; "" si el ángulo no dice nada todavía."""
+    if not isinstance(angulo, dict):
+        return ""
+    partes = []
+    cons = normalizar_consciencia(angulo.get("consciencia"))
+    if cons:
+        partes.append(CONSCIENCIAS_NOMBRE[cons].capitalize())
+    if angulo.get("lead") in LEADS:
+        partes.append(LEADS_NOMBRE[angulo["lead"]])
+    if angulo.get("gancho"):
+        partes.append(f"“{angulo['gancho']}”")
+    return " · ".join(partes)
+
+
+def globales_plantilla():
+    """Lo que las plantillas de los bloques 2 y 3 necesitan (selectores de
+    persona y producto, editor del ángulo, revisión de la pieza). `dashboard`
+    lo registra en Jinja; las pruebas que renderizan plantillas sueltas hacen
+    lo mismo."""
+    from doctrina import revisor  # tarde: revisor importa este módulo
+    return {"CONSCIENCIAS_CLIENTE": CONSCIENCIAS_CLIENTE, "SOFISTICACIONES_CLIENTE": SOFISTICACIONES_CLIENTE,
+            "FUENTES_PRUEBA_CLIENTE": FUENTES_PRUEBA_CLIENTE, "LEADS_NOMBRE": LEADS_NOMBRE,
+            "PREFIJO_ERROR": PREFIJO_ERROR, "lead_por_consciencia": lead_por_consciencia,
+            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error, "PUNTOS_REVISION": revisor.PUNTO}
+
+
+def datos_fijos_texto(consciencia=None, sofisticacion=None):
+    """Líneas para los DATOS de un prompt con los datos del mercado elegidos a
+    mano (bloque 2, §4.3); "" si no hay ninguno. Normaliza y descarta lo que
+    no está en el vocabulario."""
+    lineas = []
+    cons = normalizar_consciencia(consciencia)
+    if cons:
+        lineas.append(f"- Consciencia de la persona (fija, no la cambies): {CONSCIENCIAS_NOMBRE[cons]}")
+    try:
+        sof = int(sofisticacion) if sofisticacion not in (None, "") else None
+    except (TypeError, ValueError, OverflowError):
+        sof = None
+    if sof in SOFISTICACIONES:
+        linea = f"- Sofisticación del mercado (fija, no la cambies): {sof} — {SOFISTICACIONES_NOMBRE[sof]}"
+        if sof >= 3:
+            # La misma regla que `validar_angulo` (mecanismo_obligatorio):
+            # sin decirla, Claude lo omitía y el guion pagaba una corrección.
+            linea += " (llena «mecanismo» en el ángulo: el porqué funciona)"
+        lineas.append(linea)
+    return "\n".join(lineas)
+
+
 def texto_verificable(angulo):
     """La parte de un ángulo que cuenta como dato ya verificado, para meter en
     `datos_texto` (nunca en lo que se le MUESTRA a Claude: eso sigue siendo
@@ -344,7 +492,8 @@ def texto_verificable(angulo):
     partes = [p.get("texto", "") for p in (angulo.get("pruebas") or []) if isinstance(p, dict)]
     faltantes = angulo.get("faltantes") or []
     con_errores = any(str(f).startswith(PREFIJO_ERROR) for f in faltantes)
-    if not con_errores:
+    # Editado a mano (bloque 2, §3.4): lo que escribió la persona es dato suyo.
+    if not con_errores or angulo.get("editado_en"):
         for campo in ("audiencia", "deseo", "promesa", "mecanismo", "gancho"):
             valor = angulo.get(campo)
             if valor:

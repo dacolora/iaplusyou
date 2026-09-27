@@ -1,179 +1,32 @@
-{% from "_sprint_macros.html" import sugerido %}
-{# Panel de una campaña (spec 2026-09-26 §Panel). Fragmento por fetch
-   (sprints.campana_panel): sus <script> no correrían, así que todo el JS vive
-   en sprint_detalle.html. Cada [data-campo] se guarda solo en
-   sprints.campana_campo; lo heredado del sprint se ve y se cambia «solo aquí». #}
-{% set ef = c.efectivos %}
-<div class="panel-campana" data-cid="{{ c.id }}"
+{# Panel de una campaña (specs 2026-09-26 §Panel y 2026-09-27 entrega 2): fragmento
+   por fetch (sprints.campana_panel) con tres pestañas — Armar · Ideas · Piezas —
+   que se muestran u ocultan en el navegador (`data-pestana`); `paso` es la que
+   abre. Sus <script> no correrían: todo el JS vive en sprint_detalle.html. #}
+<div class="panel-campana" data-cid="{{ c.id }}" data-paso="{{ paso }}"
      data-url-campo="{{ url_for('sprints.campana_campo', cliente=cliente, sid=sprint.id, cid=c.id) }}"
-     data-url-sugeridos="{{ url_for('sprints.campana_sugeridos', cliente=cliente, sid=sprint.id, cid=c.id) }}">
+     data-url-sugeridos="{{ url_for('sprints.campana_sugeridos', cliente=cliente, sid=sprint.id, cid=c.id) }}"
+     data-url-piezas="{{ url_for('sprints.campana_piezas', cliente=cliente, sid=sprint.id, cid=c.id) }}">
   <header class="panel-campana-cab">
     <div>
       <h2>Campaña {{ c.orden + 1 }} · {{ (c.funnel or 'tof') | upper }}</h2>
-      <small class="vacio">Todo se guarda solo</small>
+      <small class="vacio">{{ c.persona_nombre }} · {{ c.producto.nombre if c.producto else c.catalogo_id }} · Todo se guarda solo</small>
     </div>
     <button type="button" class="btn-xs" data-panel-cerrar aria-label="Cerrar">✕</button>
   </header>
+  <nav class="panel-pestanas" role="tablist" aria-label="Pasos de la campaña">
+    {% for clave, nombre in (("armar", "Armar"), ("ideas", "Ideas"), ("piezas", "Piezas")) %}
+    <button type="button" role="tab" class="panel-pestana" data-ir-paso="{{ clave }}"
+            aria-selected="{{ 'true' if paso == clave else 'false' }}">{{ nombre }} <span>{{ pestanas[clave] }}</span></button>
+    {% endfor %}
+  </nav>
   <p class="panel-campana-aviso" data-aviso {% if not aviso %}hidden{% endif %}>{{ aviso or '' }}</p>
-
-  <section class="panel-seccion">
-    <h3>Audiencia y producto</h3>
-    <div class="panel-fila">
-      <label>Persona
-        <select data-campo="persona_id">
-          {% for p in personas %}<option value="{{ p.id }}" {% if p.id == c.persona_id %}selected{% endif %}>{{ p.nombre }}{% if p.origen == 'investigada' %} · del Nicho{% endif %}</option>{% endfor %}
-        </select>
-        <small class="campo-error" hidden></small></label>
-      <label>Producto
-        <select data-campo="catalogo_id">
-          {% if not c.producto %}<option value="{{ c.catalogo_id }}" selected>{{ c.catalogo_id }} (ya no está en el catálogo)</option>{% endif %}
-          {% for p in productos %}<option value="{{ p.id }}" {% if p.id == c.catalogo_id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
-        </select>
-        <small class="campo-error" hidden></small></label>
-    </div>
-    <details class="panel-persona-rapida">
-      <summary class="btn-xs">+ Crear persona rápida</summary>
-      <form data-persona-rapida action="{{ url_for('sprints.persona_crear', cliente=cliente) }}">
-        <input name="nombre" required maxlength="120" placeholder="Nombre (p. ej. Mamá práctica)">
-        <input name="resumen" maxlength="200" placeholder="Una línea: qué quiere o qué le duele">
-        <button type="submit" class="btn-sm">Crear y usar</button>
-        <small class="campo-error" hidden></small>
-      </form>
-    </details>
-  </section>
-
-  <section class="panel-seccion">
-    <h3>Enfoque</h3>
-    <div data-campo-caja>
-      <span class="campo-label">Etapa</span>
-      <div class="panel-opciones" role="radiogroup" aria-label="Etapa" data-campo="funnel" data-tipo="radio">
-        {% for k, nombre in funnels.items() %}
-        <label title="{{ nombre }}"><input type="radio" name="funnel-{{ c.id }}" value="{{ k }}" {% if k == c.funnel %}checked{% endif %}> {{ k | upper }}</label>
-        {% endfor %}
-      </div>
-      <small class="campo-error" hidden></small>
-    </div>
-    <div data-campo-caja>
-      <span class="campo-label">Qué tanto sabe la audiencia</span>
-      <div class="panel-opciones" role="radiogroup" aria-label="Consciencia" data-campo="consciencia" data-tipo="radio">
-        <label><input type="radio" name="consciencia-{{ c.id }}" value="" {% if not c.consciencia %}checked{% endif %}> sin definir</label>
-        {% for k, nombre in consciencias.items() %}
-        <label><input type="radio" name="consciencia-{{ c.id }}" value="{{ k }}" {% if k == c.consciencia %}checked{% endif %}> {{ nombre }}</label>
-        {% endfor %}
-      </div>
-      <small class="campo-error" hidden></small>
-    </div>
-    <label>Dolor o deseo
-      <input data-campo="dolor" value="{{ c.dolor or '' }}" maxlength="300" placeholder="pies fríos en casa">
-      <small class="campo-error" hidden></small></label>
-    {% if sugerencias_dolor %}
-    <p class="panel-sugerencias">De {{ c.persona_nombre }}:
-      {% for s in sugerencias_dolor %}<button type="button" class="chip-sugerencia" data-poner="dolor" data-valor="{{ s }}">{{ s }}</button>{% endfor %}</p>
-    {% endif %}
-  </section>
-
-  <section class="panel-seccion">
-    <h3>Formato de los anuncios</h3>
-    <div data-campo-caja>
-      <div class="panel-familias" data-campo="familias" data-tipo="familias">
-        {% for f in c.familias or [] %}<span class="chip-familia" data-familia="{{ f }}">{{ f }} <button type="button" data-quitar-familia aria-label="Quitar {{ f }}">✕</button></span>{% endfor %}
-        <input class="panel-familia-buscar" list="familias-biblioteca" data-agregar-familia
-               placeholder="+ familia (busca entre {{ familias | length }})" aria-label="Agregar una familia de formato">
-      </div>
-      <small class="campo-error" hidden></small>
-    </div>
-    <datalist id="familias-biblioteca">{% for f in familias %}<option value="{{ f.nombre }}">{{ f.n }} anuncios</option>{% endfor %}</datalist>
-    {% if familias_sugeridas %}
-    <p class="panel-sugerencias">Sugeridas para {{ (c.funnel or 'tof') | upper }}{% if c.consciencia_nombre %} · {{ c.consciencia_nombre }}{% endif %}:
-      {% for f in familias_sugeridas %}<button type="button" class="chip-sugerencia" data-sumar-familia="{{ f }}">{{ f }}</button>{% endfor %}</p>
-    {% endif %}
-  </section>
-
-  <section class="panel-seccion">
-    <h3>Mercado y marcas</h3>
-    <div class="panel-fila">
-      <label>País
-        <select data-campo="pais">
-          <option value="">Del sprint ({{ pais_sprint }})</option>
-          {% for p in paises %}<option value="{{ p.codigo }}" {% if p.codigo == c.pais %}selected{% endif %}>{{ p.bandera }} {{ p.nombre }} (solo aquí)</option>{% endfor %}
-        </select>
-        <small class="campo-error" hidden></small></label>
-      <label>Idioma de los textos
-        <select data-campo="idioma">
-          <option value="">Del sprint ({{ idiomas.get(sprint.idioma or 'es') }})</option>
-          {% for cod, nombre in idiomas.items() %}<option value="{{ cod }}" {% if cod == c.idioma %}selected{% endif %}>{{ nombre }} (solo aquí)</option>{% endfor %}
-        </select>
-        <small class="campo-error" hidden></small></label>
-    </div>
-    <label>Marcas a imitar
-      <small class="vacio">{% if ef.hereda.marcas %}Del sprint: {{ (ef.marcas | map(attribute='nombre') | join(', ')) or 'ninguna' }}. Escribe aquí para cambiarlas solo en esta campaña.{% else %}Solo esta campaña (bórralas para volver a las del sprint).{% endif %}</small>
-      <textarea data-campo="marcas" rows="2" placeholder="Una por línea">{{ marcas_texto }}</textarea>
-      <small class="campo-error" hidden></small></label>
-  </section>
-
-  <section class="panel-seccion">
-    <h3>Piezas</h3>
-    <div class="panel-fila panel-fila-3">
-      <label>Videos <input type="number" min="0" max="50" data-campo="n_videos" value="{{ c.n_videos }}">
-        <small class="campo-error" hidden></small></label>
-      <label>Imágenes <input type="number" min="0" max="50" data-campo="n_imagenes" value="{{ c.n_imagenes }}">
-        <small class="campo-error" hidden></small></label>
-      <label>Referentes <input type="number" min="1" max="20" data-campo="referencias_objetivo" value="{{ c.referencias_objetivo }}">
-        <small class="campo-error" hidden></small></label>
-    </div>
-  </section>
-
-  <section class="panel-seccion">
-    <h3>Referentes · {{ c.referencias_listas }} de {{ c.referencias_objetivo }} elegidos</h3>
-    <div class="panel-elegidos">
-      {% for r in c.referencias_lista %}
-      <figure class="panel-elegido">
-        <img src="{{ r.frame_url or r.url }}" alt="" loading="lazy">
-        <button type="button" class="panel-quitar" data-quitar-ref="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}"
-                aria-label="Quitar este referente" title="Quitar">✕</button>
-        {% if r.estado != 'lista' %}<figcaption>falta describir</figcaption>{% endif %}
-      </figure>
-      {% endfor %}
-      {% for _ in range([0, (c.referencias_objetivo or 1) - (c.referencias_lista | length)] | max) %}<span class="panel-elegido panel-elegido-vacio"></span>{% endfor %}
-    </div>
-    {% if c.referencias_lista | rejectattr('estado', 'equalto', 'lista') | list %}
-    <p class="vacio">Los que dicen «falta describir» no cuentan todavía: <a href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">descríbelos aquí</a>.</p>
-    {% endif %}
-
-    {% if candidatos_ia %}
-    <p class="panel-sub">Elegidos por la IA</p>
-    <div class="panel-sugeridos-grid">{% for s in candidatos_ia %}{{ sugerido(s, cliente, c.id, s.razon) }}{% endfor %}</div>
-    {% endif %}
-    {% if trabajo_sugerir_ia %}
-    <div class="barra-progreso" id="trabajo-{{ trabajo_sugerir_ia.job_id }}" data-poll-job="{{ trabajo_sugerir_ia.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
-    {% endif %}
-    <div class="panel-sugeridos" data-sugeridos><p class="vacio">Buscando referentes para esta campaña…</p></div>
-
-    <div class="panel-acciones">
-      <button type="button" class="btn-sm" data-sugerir-ia="{{ url_for('sprints.campana_sugerir_ia', cliente=cliente, cid=c.id) }}">✨ Sugerir con IA ({{ precio_sugerir_ia.texto }})</button>
-      <a class="btn-sm" href="{{ enlaces.biblioteca }}">Buscar en la biblioteca</a>
-      <a class="btn-sm" href="{{ enlaces.traer }}">Traer nuevos de Meta</a>
-    </div>
-    <details class="panel-subir">
-      <summary class="btn-sm">Subir · link · fotos del producto</summary>
-      <form method="post" enctype="multipart/form-data" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=c.id) }}">
-        <input type="hidden" name="volver" value="tablero">
-        <label>Archivos (jpg, png, webp, mp4, mov, webm) <input type="file" name="archivos" multiple accept="image/*,video/*"></label>
-        <label>O un link (Instagram, TikTok, YouTube…) <input type="url" name="link" placeholder="https://"></label>
-        <button type="submit" class="btn-sm">Agregar</button>
-      </form>
-      <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=c.id) }}">
-        <input type="hidden" name="volver" value="tablero">
-        <button type="submit" class="btn-sm">Traer las fotos del producto</button>
-      </form>
-    </details>
-  </section>
-
+  <div data-pestana="armar" role="tabpanel" {% if paso != 'armar' %}hidden{% endif %}>{% include "_sprint_panel_armar.html" %}</div>
+  <div data-pestana="ideas" role="tabpanel" {% if paso != 'ideas' %}hidden{% endif %}>{% include "_sprint_panel_ideas.html" %}</div>
+  <div data-pestana="piezas" role="tabpanel" {% if paso != 'piezas' %}hidden{% endif %}>{% include "_sprint_panel_piezas.html" %}</div>
   <footer class="panel-campana-pie">
     <form method="post" action="{{ url_for('sprints.campana_eliminar', cliente=cliente, sid=sprint.id, cid=c.id) }}"
           onsubmit="return confirm('¿Eliminar esta campaña y sus referentes?');">
       <button type="submit" class="btn-xs btn-rechazar">Eliminar campaña</button>
     </form>
-    <a href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=sprint.id, cid=c.id) }}">Ideas de esta campaña →</a>
   </footer>
 </div>

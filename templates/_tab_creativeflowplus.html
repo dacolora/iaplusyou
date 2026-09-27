@@ -1,162 +1,205 @@
-{# Bloque 7: «Publicar orgánico» en el detalle de una final lista (macro
-   compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
-{% from "_organico_publicar.html" import bloque_organico with context %}
-<p class="vacio" style="padding-top:0;">
-  {{ _('Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.
-  Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:') }}
-</p>
-<ul style="margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.95rem;">
-  <li><strong>{{ _('Generar video') }}</strong>: {{ _('Tu texto va tal cual al modelo (Wan 3.0, Kling O3 Pro o Seedance 2.5).') }}</li>
-  <li><strong>{{ _('Crear super prompt') }}</strong>: {{ _('La IA arma un prompt detallado por planos desde tu idea y las referencias. Lo revisas, editas y regeneras (gratis) antes de generar el video — perfecto si no sabes qué escribir.') }}</li>
-</ul>
-<p class="vacio" style="padding-top:0;margin-top:0.5rem;">{{ _('Las imágenes van solas a Seedream V5 Pro. Ninguna genera costos hasta que pulses "Generar".') }}</p>
+{% from "_revision_doctrina.html" import revision_doctrina %}
+{# Formulario de Crear como compositor (spec 2026-09-27-crear-compositor-design.md).
+   Una tarjeta en dos mitades: arriba la bandeja de referencias (FUERA de
+   #form-flowplus porque lleva sus propios <form> de quitar/vaciar — los
+   formularios no se anidan) y abajo el formulario: el texto y la barra de
+   «pastillas». Cada pastilla abre un menú con los controles REALES (radios y
+   selects de siempre), así que el servidor recibe los mismos campos. Subir y
+   pegar un link usan los formularios vacíos de aquí abajo vía el atributo form=. #}
+{% set total_catalogo = namespace(n=0) %}{% for cid, lista in activos_por_categoria.items() %}{% set total_catalogo.n = total_catalogo.n + (lista | length) %}{% endfor %}
+<form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir" hidden></form>
+<form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" id="fp-form-link" hidden></form>
 
-<div class="form-nueva-idea" style="margin-top:1rem;">
-  <label class="campo-label">{{ _('Referencias') }} <span class="vacio" style="display:inline;padding:0;font-weight:normal;">({{ _('opcional') }})</span></label>
-  <p class="vacio" style="padding-top:0;font-size:.78rem;">
-    {{ _('Sube imágenes y videos, o pega un link (TrendTrack, TikTok, Instagram, YouTube). Cada uno queda como
-    <code>@Imagen N</code> / <code>@Video N</code> y puedes nombrarlo en el texto. Un video de link sirve como referencia
-    de movimiento y estructura para recrearlo con tu producto — no se publica ni se copia tal cual.') }}
-  </p>
-  <div class="fila-campos-idea">
-    <form method="post" action="{{ url_for('fp_subir_referencias', cliente=cliente) }}" enctype="multipart/form-data" id="fp-form-subir">
-      <input type="file" name="referencias" id="fp-input-archivos" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple>
-      <noscript><button type="submit">{{ _('Subir') }}</button></noscript>
-    </form>
-    <form method="post" action="{{ url_for('fp_agregar_link', cliente=cliente) }}" style="display:flex;gap:.4rem;" id="fp-form-link">
-      <input type="url" name="link" placeholder="{{ _('https://app.trendtrack.io/… o TikTok / Instagram / YouTube') }}" style="flex:1;margin:0;" required>
-      <button class="btn-guardar btn-sm" type="submit">{{ _('Agregar link') }}</button>
-    </form>
-  </div>
-  <div id="fp-subida" class="vacio" style="font-size:.78rem;display:none;margin-top:.5rem;">
-    <div class="barra-progreso"><div class="barra-progreso-fill" id="fp-subida-barra" style="width:0%"></div></div>
-    <span id="fp-subida-texto">{{ _('Subiendo…') }}</span>
-  </div>
-  <div id="fp-bandeja-wrap">
-    {% include "_flowplus_bandeja.html" %}
-  </div>
-</div>
-
-<form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" class="form-nueva-idea" id="form-flowplus" style="margin-top:1rem;">
-  {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
-  <input type="hidden" name="bandeja_vista" value="1">
-  <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Del catálogo: productos, personajes, entornos') }} <span class="vacio" style="display:inline;padding:0;font-weight:normal;">({{ _('opcional') }})</span></label>
-  {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus" %}
-  {% include "_selector_productos.html" %}
-  {% endwith %}
-
-  <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Qué tiene que pasar') }}</label>
-  <div class="banco-prompts" id="fp-etiquetas" style="margin-bottom:.4rem;"></div>
-  <textarea name="accion_central" id="fp-texto" rows="3" placeholder="{{ _('ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1') }}"></textarea>
-  <p class="campo-error" id="fp-texto-error" hidden>{{ _('Escribe qué tiene que pasar en el video.') }}</p>
-
-  <p class="vacio" style="font-size:.78rem;">
-    {{ _('Una pieza por clic. Sale solo el producto; si eliges un personaje del catálogo, la escena lo lleva a él.
-    Sin referencias ni catálogo, el modelo recibe tu texto tal cual (sin logos ni guía de marca).') }}
-  </p>
-  {% if logos %}
-  <p class="vacio" style="font-size:.76rem;">{{ _('Con referencias o catálogo se adjuntan %(n)s logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings.', n=(logos | length)) }}</p>
-  {% else %}
-  <p class="vacio" style="font-size:.76rem;">{{ _('Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación con referencias o catálogo (evita marcas inventadas).') }}</p>
-  {% endif %}
-
-  <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('¿Qué quieres generar?') }}</label>
-  <div class="checks-plataformas" id="fp-tipo">
-    <label><input type="radio" name="tipo" value="video" checked> {{ _('Video') }}</label>
-    <label><input type="radio" name="tipo" value="imagen"> {{ _('Imagen') }}</label>
-  </div>
-
-  <div id="fp-bloque-video">
-    <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Modelo de video') }}</label>
-    <div class="checks-plataformas">
-      {% for id, m in modelos_flowplus_video.items() %}
-      <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">{{ _('· $%(precio)s/s con sonido · hasta %(n)s ref.', precio=("%.3f"|format(m.usd_por_segundo_efectivo)), n=m.max_referencias) }}</span></label>
-      {% endfor %}
+<div class="crear-comp" id="crear-comp">
+  <div class="crear-comp-arriba">
+    <div id="fp-bandeja-wrap">
+      {% include "_flowplus_bandeja.html" %}
     </div>
-    <div class="fila-campos-idea" style="margin-top:.8rem;">
-      <div>
-        <label class="campo-label">{{ _('Duración') }}</label>
-        <select name="duracion_objetivo" id="fp-duracion">
-          {% for d in duraciones_crear %}
-          <option value="{{ d }}"{% if d == preferencias_flowplus.duracion_defecto %} selected{% endif %}>{{ d }} s</option>
-          {% endfor %}
-        </select>
-        <p class="vacio" id="fp-duracion-nota" style="font-size:.74rem;padding:0;">{{ _('Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.') }}</p>
-        <p class="vacio" id="fp-duracion-larga" style="font-size:.74rem;padding:0;color:var(--warn);" hidden>{{ _('Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.') }}</p>
-      </div>
-      <div>
-        <label class="campo-label">{{ _('Formato') }}</label>
-        <select name="aspect_ratio" id="fp-formato-video">
-          {% for f, nombre in formatos_nombres.items() %}
-          <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre|traducir }}</option>
-          {% endfor %}
-        </select>
-        <p class="vacio" id="fp-formato-nota" style="font-size:.74rem;padding:0;" hidden>{{ _('Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen.') }}</p>
-      </div>
+    <div class="crear-refs" id="fp-catalogo-elegidos" hidden></div>
+    <div class="crear-subida" id="fp-subida" hidden>
+      <div class="barra-progreso"><div class="barra-progreso-fill" id="fp-subida-barra"></div></div>
+      <span id="fp-subida-texto">{{ _('Subiendo…') }}</span>
     </div>
-    <div class="fila-campos-idea" style="margin-top:.8rem;">
-      <div>
-        <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" id="fp-check-sonido" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena') }}</label>
-        <div style="display:flex;gap:.4rem;align-items:center;margin-top:.4rem;">
-          <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="{{ _('ej. risas de niños, pasos sobre baldosa, respiración agitada al final') }}" style="flex:1;">
-          <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">{{ _('Sugerir') }}</button>
-        </div>
-        <p class="vacio" style="font-size:.74rem;padding:0;">{{ _('Audio nativo del modelo, sin diálogo ni música. Vacío = ambiente natural de la escena.') }}</p>
-      </div>
-      <div>
-        <label class="campo-label">{{ _('Música al crear') }}</label>
-        <select name="musica_estilo" id="fp-musica">
-          <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>{{ _('ninguna') }}</option>
-          <optgroup label="{{ _('Estilos IA') }}">
-            {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ nombres_estilo_musica.get(e, e)|traducir }}</option>{% endfor %}
-          </optgroup>
-          <optgroup label="{{ _('Mi música') }}" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
-            {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
-          </optgroup>
-        </select>
-        <p class="vacio" style="font-size:.74rem;padding:0;">{{ _('Se mezcla debajo del sonido. Estilos IA: USD 0,02 la primera vez por estilo y duración. Mi música: gratis.') }}</p>
-        <div id="fp-musica-inicio-wrap" hidden style="margin-top:.4rem;">
-          <audio id="fp-musica-audio" controls preload="none" style="width:100%;height:32px;"></audio>
-          <div style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin-top:.3rem;">
-            <label style="font-size:.8rem;">{{ _('Empieza en el segundo') }}
-              <input type="number" name="musica_inicio_s" id="fp-musica-inicio" min="0" step="1" value="0" style="width:5rem;">
-            </label>
-            <button type="button" class="btn-sm" id="fp-musica-usar">{{ _('Usar donde va el reproductor') }}</button>
+  </div>
+
+  <form method="post" action="{{ url_for('cf_crear_video', cliente=cliente) }}" id="form-flowplus" class="crear-comp-form">
+    {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
+    <input type="hidden" name="bandeja_vista" value="1">
+    <input type="hidden" name="modelo" id="fp-modelo">
+    <div class="crear-comp-abajo">
+      <div class="banco-prompts crear-etiquetas" id="fp-etiquetas"></div>
+      <label class="crear-oculto-lector" for="fp-texto">{{ _('Qué tiene que pasar') }}</label>
+      <textarea name="accion_central" id="fp-texto" rows="4" placeholder="{{ _('Describe qué tiene que pasar. Ej.: @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1') }}"></textarea>
+      <p class="campo-error" id="fp-texto-error" hidden>{{ _('Escribe qué tiene que pasar en el video.') }}</p>
+
+      <div class="crear-barra">
+        <div class="crear-pills">
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill crear-mas" data-menu="fp-menu-mas" aria-expanded="false" aria-label="{{ _('Agregar referencias') }}">+</button>
+            <div class="crear-menu" id="fp-menu-mas" hidden>
+              <label class="crear-menu-item">
+                <span class="crear-menu-ico" aria-hidden="true">⬆</span>
+                <span><strong>{{ _('Subir imágenes o videos') }}</strong><small>{{ _('JPG, PNG, WEBP, MP4 o MOV; también puedes arrastrarlos a la caja. Cada uno queda como @Imagen N / @Video N para nombrarlo en el texto.') }}</small></span>
+                <input type="file" name="referencias" id="fp-input-archivos" form="fp-form-subir" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov,.webm" multiple hidden>
+              </label>
+              <button type="button" class="crear-menu-item" id="fp-abrir-link">
+                <span class="crear-menu-ico" aria-hidden="true">🔗</span>
+                <span><strong>{{ _('Pegar un link') }}</strong><small>{{ _('TikTok, Instagram, YouTube o TrendTrack: sirve de referencia de movimiento y estructura; no se publica ni se copia tal cual.') }}</small></span>
+              </button>
+              <div class="crear-menu-fila" id="fp-link-caja" hidden>
+                <input type="url" name="link" form="fp-form-link" placeholder="https://…" required>
+                <button type="submit" class="btn-sm" form="fp-form-link">{{ _('Agregar') }}</button>
+              </div>
+              <button type="button" class="crear-menu-item" id="fp-abrir-catalogo">
+                <span class="crear-menu-ico" aria-hidden="true">▦</span>
+                <span><strong>{{ _('Del catálogo') }}</strong><small>{{ _('%(n)s productos, personajes y entornos, con buscador.', n=total_catalogo.n) }}</small></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill" data-menu="fp-menu-tipo" aria-expanded="false" id="fp-pill-tipo">{{ _('🎬 Video') }}</button>
+            <div class="crear-menu" id="fp-menu-tipo" hidden>
+              <div class="crear-opciones" id="fp-tipo">
+                <label class="crear-opcion"><input type="radio" name="tipo" value="video" checked><span><strong>{{ _('Video') }}</strong><small>{{ _('Con el sonido de la escena, hasta 30 s') }}</small></span></label>
+                <label class="crear-opcion"><input type="radio" name="tipo" value="imagen"><span><strong>{{ _('Imagen') }}</strong><small>{{ _('Una imagen fija en 2k') }}</small></span></label>
+              </div>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill" data-menu="fp-menu-modelo" aria-expanded="false" id="fp-pill-modelo">{{ _('Modelo') }}</button>
+            <div class="crear-menu crear-menu-ancho" id="fp-menu-modelo" hidden>
+              <div class="crear-opciones" data-solo-video>
+                {% for id, m in modelos_flowplus_video.items() %}
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd-seg="{{ m.usd_por_segundo_efectivo }}" data-recargo="{{ m.audio_nativo.recargo_usd_s }}" data-max="{{ m.max_referencias }}" data-min-duracion="{{ m.min_duracion }}" data-max-duracion="{{ m.max_duracion }}" data-formatos="{{ m.formatos | join(',') }}" data-formatos-texto="{{ (m.formatos_texto or m.formatos) | join(',') }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ ngettext('hasta %(num)s referencia', 'hasta %(num)s referencias', m.max_referencias) }} · {{ m.min_duracion }}–{{ m.max_duracion }} s</small></span><em>${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s</em></label>
+                {% endfor %}
+              </div>
+              <div class="crear-opciones" data-solo-imagen hidden>
+                {% for id, m in modelos_flowplus_imagen.items() %}
+                <label class="crear-opcion crear-modelo" title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-nombre="{{ m.nombre|traducir }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}><span><strong>{{ m.nombre|traducir }}</strong><small>{{ _('hasta %(n)s referencias · 2k', n=m.max_referencias) }}</small></span><em>${{ "%.3f"|format(m.usd) }}</em></label>
+                {% endfor %}
+              </div>
+              <label class="crear-interruptor" id="fp-calidad-wrap" data-solo-video>
+                <input type="checkbox" name="calidad" value="borrador" id="fp-calidad">
+                <span><strong>{{ _('Borrador a 480p') }}</strong><small>{{ _('Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final.') }}</small></span>
+              </label>
+              <p class="crear-nota" data-solo-video>{{ _('Precios con el sonido de la escena incluido.') }}</p>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona" data-solo-video>
+            <button type="button" class="crear-pill" data-menu="fp-menu-duracion" aria-expanded="false" id="fp-pill-duracion">{{ _('⏱ Duración') }}</button>
+            <div class="crear-menu" id="fp-menu-duracion" hidden>
+              <p class="crear-menu-titulo">{{ _('Duración') }}</p>
+              <div class="crear-fichas" data-fichas-de="fp-duracion"></div>
+              <select name="duracion_objetivo" id="fp-duracion" hidden>
+                {% for d in duraciones_crear %}
+                <option value="{{ d }}"{% if d == preferencias_flowplus.duracion_defecto %} selected{% endif %}>{{ d }} s</option>
+                {% endfor %}
+              </select>
+              <p class="crear-nota crear-nota-aviso" id="fp-duracion-larga" hidden>{{ _('Los modelos rinden mejor hasta 15 s; para algo más largo, genera dos piezas y únelas después en la edición final.') }}</p>
+              <p class="crear-nota" id="fp-duracion-nota">{{ _('Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30.') }}</p>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona">
+            <button type="button" class="crear-pill" data-menu="fp-menu-formato" aria-expanded="false" id="fp-pill-formato">{{ _('▯ Formato') }}</button>
+            <div class="crear-menu" id="fp-menu-formato" hidden>
+              <p class="crear-menu-titulo">{{ _('Formato') }}</p>
+              <div data-solo-video>
+                <div class="crear-fichas" data-fichas-de="fp-formato-video"></div>
+                <select name="aspect_ratio" id="fp-formato-video" hidden>
+                  {% for f, nombre in formatos_nombres.items() %}
+                  <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre|traducir }}</option>
+                  {% endfor %}
+                </select>
+                <p class="crear-nota" id="fp-formato-nota" hidden>{{ _('Con una imagen de referencia este modelo no elige formato: sigue el de esa imagen.') }}</p>
+              </div>
+              <div data-solo-imagen hidden>
+                <div class="crear-fichas" data-fichas-de="fp-formato-imagen"></div>
+                <select name="aspect_ratio_imagen" id="fp-formato-imagen" hidden>
+                  {% for f, nombre in formatos_nombres.items() %}
+                  <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre|traducir }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona" data-solo-video>
+            <button type="button" class="crear-pill" data-menu="fp-menu-sonido" aria-expanded="false" id="fp-pill-sonido">{{ _('🔊 Sonido') }}</button>
+            <div class="crear-menu crear-menu-ancho" id="fp-menu-sonido" hidden>
+              <label class="crear-interruptor">
+                <input type="checkbox" name="con_sonido" value="si" id="fp-check-sonido" {% if preferencias_sonido.con_sonido %}checked{% endif %}>
+                <span><strong>{{ _('Sonido de la escena') }}</strong><small>{{ _('Audio nativo del modelo, sin diálogo ni música.') }}</small></span>
+              </label>
+              <div class="crear-menu-fila">
+                <input type="text" name="sonido" id="fp-sonido" maxlength="200" placeholder="{{ _('ej. risas de niños, pasos sobre baldosa, respiración agitada al final') }}">
+                <button type="button" class="btn-sm" id="fp-sugerir-sonido" data-url="{{ url_for('fp_sugerir_sonido', cliente=cliente) }}">{{ _('Sugerir') }}</button>
+              </div>
+              <p class="crear-nota">{{ _('Vacío = ambiente natural de la escena.') }}</p>
+            </div>
+          </div>
+
+          <div class="crear-pill-zona" data-solo-video>
+            <button type="button" class="crear-pill" data-menu="fp-menu-musica" aria-expanded="false" id="fp-pill-musica">{{ _('🎵 Música') }}</button>
+            <div class="crear-menu crear-menu-ancho crear-menu-der" id="fp-menu-musica" hidden>
+              <select name="musica_estilo" id="fp-musica" hidden>
+                <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>{{ _('ninguna') }}</option>
+                <optgroup label="{{ _('Estilos IA') }}">
+                  {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ nombres_estilo_musica.get(e, e)|traducir }}</option>{% endfor %}
+                </optgroup>
+                <optgroup label="{{ _('Mi música') }}" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
+                  {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
+                </optgroup>
+              </select>
+              <div class="crear-musica" id="fp-musica-opciones"></div>
+              <div class="crear-musica-inicio" id="fp-musica-inicio-wrap" hidden>
+                <audio id="fp-musica-audio" controls preload="none"></audio>
+                <div class="crear-menu-fila">
+                  <label class="crear-inicio">{{ _('Empieza en el segundo') }} <input type="number" name="musica_inicio_s" id="fp-musica-inicio" min="0" step="1" value="0"></label>
+                  <button type="button" class="btn-sm" id="fp-musica-usar">{{ _('Usar donde va el reproductor') }}</button>
+                </div>
+              </div>
+              <div class="crear-menu-sep"></div>
+              <div id="mm-wrap">{% include "_mi_musica.html" %}</div>
+            </div>
           </div>
         </div>
-        <div id="mm-wrap">{% include "_mi_musica.html" %}</div>
+
+        <div class="crear-generar">
+          <span class="crear-precio" id="fp-precio"></span>
+          <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo">{{ _('Generar video') }}</button>
+        </div>
       </div>
     </div>
-    <div style="margin-top:.8rem;" id="fp-calidad-wrap">
-      <label class="fe-check"><input type="checkbox" name="calidad" value="borrador" id="fp-calidad"> {{ _('Borrador a 480p (solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final)') }}</label>
-    </div>
-  </div>
 
-  <div id="fp-bloque-imagen" hidden>
-    <label class="campo-label" style="margin-top:1rem;display:block;">{{ _('Modelo de imagen') }}</label>
-    <div class="checks-plataformas">
-      {% for id, m in modelos_flowplus_imagen.items() %}
-      <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" data-usd="{{ m.usd }}" data-max="{{ m.max_referencias }}" data-formatos="{{ m.formatos | join(',') }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }} · 2k</span></label>
-      {% endfor %}
+    <div class="crear-pie">
+      {% set n_logos = logos | length %}
+      <span id="fp-ayuda-boton">{{ _('Tu texto va tal cual al modelo') }}<span id="fp-pie-logos" hidden> · {% if n_logos > 1 %}{{ _('se adjuntan tus %(n)s logos oficiales', n=n_logos) }}{% elif n_logos == 1 %}{{ _('se adjunta tu logo oficial') }}{% else %}{{ _('sin logo oficial: súbelo en FlowSettings › Logos') }}{% endif %}</span> · {{ _('se cobra al generar.') }}</span>
+      {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
+         cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
+         quien tiene una idea pero quiere que la IA arme los planos. Nunca obligatorio. #}
+      <button type="submit" class="crear-enlace" id="fp-armar" name="modo_prompt" value="director" data-solo-video title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('¿No sabes qué escribir?') }} <strong>{{ _('Crear super prompt con IA (gratis)') }}</strong></button>
     </div>
-    <div style="margin-top:.8rem;">
-      <label class="campo-label">{{ _('Formato') }}</label>
-      <select name="aspect_ratio_imagen" id="fp-formato-imagen">
-        {% for f, nombre in formatos_nombres.items() %}
-        <option value="{{ f }}"{% if f == "9:16" %} selected{% endif %}>{{ nombre|traducir }}</option>
-        {% endfor %}
-      </select>
-    </div>
-  </div>
-  <input type="hidden" name="modelo" id="fp-modelo">
 
-  {# Dos caminos (2026-09-21): «Generar» manda el texto de la persona tal cual y
-     cobra al generar; «Crear super prompt» (director, gratis) es la ayuda para
-     quien tiene una idea pero quiere que la IA arme los planos — revisa, edita y regenera antes de generar. #}
-  <button class="btn-generar" type="submit" id="fp-generar" name="modo_prompt" value="directo" style="margin-top:1.2rem;">{{ _('Generar video') }}</button>
-  <button class="btn-guardar" type="submit" id="fp-armar" name="modo_prompt" value="director" style="margin-top:1.2rem;margin-left:.5rem;" title="{{ _('La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada.') }}">{{ _('Crear super prompt con IA (gratis)') }}</button>
-  <p class="vacio" id="fp-ayuda-boton" style="font-size:.76rem;">{{ _('Se cobra al generar, no antes.') }}</p>
-</form>
+    <dialog class="generado-modal crear-catalogo" id="fp-catalogo">
+      <button type="button" class="generado-cerrar" data-cerrar-catalogo aria-label="{{ _('Cerrar') }}">×</button>
+      <div class="modal-form ancho">
+        <header class="modal-form-cab">
+          <h3>{{ _('Del catálogo') }}</h3>
+          <p>{{ _('Marca lo que debe salir en la pieza: productos, personajes o entornos. Es opcional; si eliges un personaje, la escena lo lleva a él.') }}</p>
+        </header>
+        {% with sel_id="plus", sel_campo="productos_catalogo", sel_modo="checkbox", sel_volver="creativeflowplus", sel_dialogo=True %}
+        {% include "_selector_productos.html" %}
+        {% endwith %}
+        <footer class="modal-form-pie"><span></span><button type="button" class="btn-generar" data-cerrar-catalogo>{{ _('Listo') }}</button></footer>
+      </div>
+    </dialog>
+  </form>
+  <div class="crear-velo" id="crear-velo"></div>
+</div>
 
 {% with sel_id="plus", sel_volver="creativeflowplus" %}
 {% include "_selector_productos_nuevo.html" %}
@@ -223,21 +266,20 @@
             </div>
           </form>
         </div>
-        {% elif item.trabajo_guion %}
-        {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
-           <template> del detalle, cuyos <script> clonados nunca corren) para
-           que el polling arranque al cargar la página y un fallo se vea. #}
+        {% elif item.trabajo_revision %}
+        {# Doctrina, bloque 3: la barra de «Revisar con la doctrina» va en la tarjeta. #}
         <div class="generado-velo">
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Escribiendo el guion…') }}</div>
-          <script>iniciarPolling({{ item.trabajo_guion.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_guion.job_id) | tojson }});</script>
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_revision.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+          <div class="progreso-texto">{{ _('Revisando con la doctrina…') }}</div>
+          <script>iniciarPolling({{ item.trabajo_revision.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_revision.job_id) | tojson }});</script>
         </div>
         {% endif %}
       </div>
       <div class="generado-pie">
         <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
         {% if item.variante %}<span class="generado-badge">{{ _('Versión %(v)s', v=item.variante) }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">{{ _('Versión A') }}</span>{% endif %}
-        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.campana_ideas', cliente=cliente, sid=item.sprint.sprint_id, cid=item.sprint.campana_id) }}" title="{{ item.sprint.sprint_nombre }}">{{ _('Sprint · Campaña %(n)s', n=item.sprint.campana_n) }}</a>{% endif %}
+        {% if item.revision_estado in ("bien", "mejorar") %}<span class="generado-badge" title="{{ _('Revisión de la doctrina') }}">{% if item.revision_estado == "bien" %}{{ _('Doctrina: bien') }}{% else %}{{ _('Doctrina: %(n)s por mejorar', n=item.revision_n) }}{% endif %}</span>{% endif %}
+        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.ver', cliente=cliente, sid=item.sprint.sprint_id, panel=item.sprint.campana_id, paso='piezas') }}" title="{{ item.sprint.sprint_nombre }}">{{ _('Sprint · Campaña %(n)s', n=item.sprint.campana_n) }}</a>{% endif %}
         <small>{{ item.modelo_nombre|traducir }}{% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="{{ _('El video trae el sonido de la escena') }}">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="{{ _('El proveedor entregó el video sin pista de audio') }}">{{ _('🔇 sin sonido') }}</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="{{ _('Música al crear: %(estilo)s', estilo=item.capas.musica.estilo) }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
       </div>
       <template class="generado-detalle">
@@ -297,136 +339,15 @@
           {% if item.estado == "error" %}
           <p class="tag-error">{{ item.error }}</p>
           {% endif %}
-
-          {% if item.estado == "video_listo" and item.tipo != "imagen" %}
-          <section class="fe-seccion">
-            <h4 class="fe-titulo">Final edition</h4>
-            <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.') }}</p>
-            {% if not item.guion_base %}
-              {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Se está escribiendo el guion… la página se recarga sola cuando esté listo.') }}</p>
-              {% else %}
-              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar">
-                <label>{{ _('Precio (opcional)') }}
-                  <input type="number" name="precio" min="0" step="any" placeholder="{{ _('p.ej. 89900') }}" style="width:9rem;">
-                </label>
-                <label>{{ _('Idioma base') }}
-                  <select name="idioma_base">
-                    <option value="es">Español</option>
-                    <option value="en">English</option>
-                    <option value="pt">Português</option>
-                  </select>
-                </label>
-                <button type="submit" class="btn-guardar btn-sm">{{ _('Preparar guion con IA') }}{% if precios and precios.guion and precios.guion.usd is not none %} ≈ {{ precios.guion.usd | usd }}{% endif %}</button>
-              </form>
-              {% endif %}
-            {% else %}
-              {% set _g = item.guion_base %}
-              <form method="post" action="{{ url_for('fe_guardar_guion', cliente=cliente, cf_id=item.id) }}" class="fe-guion">
-                {% for b in _g.bloques %}
-                <div class="fe-bloque">
-                  <div class="fe-bloque-cab"><strong>{{ loop.index }}. {{ b.rol }}</strong> <small>{{ b.inicio_s }}s – {{ b.fin_s }}s</small></div>
-                  <label>{{ _('Texto en pantalla') }} <input type="text" name="bloque_{{ loop.index0 }}_pantalla" value="{{ b.texto_pantalla }}" maxlength="80"></label>
-                  <label>{{ _('Texto de voz') }} <textarea name="bloque_{{ loop.index0 }}_voz" rows="2">{{ b.texto_voz }}</textarea></label>
-                </div>
-                {% endfor %}
-                <button type="submit" class="btn-guardar btn-sm">{{ _('Guardar guion') }}</button>
-              </form>
-              {% if item.trabajo_guion %}
-              <p class="vacio" style="padding:0;font-size:.76rem;">{{ _('Se está escribiendo el guion… la página se recarga sola cuando esté listo.') }}</p>
-              {% else %}
-              <form method="post" action="{{ url_for('fe_preparar', cliente=cliente, cf_id=item.id) }}" class="fe-preparar"
-                    onsubmit='return confirm({{ _('¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones).')|tojson }});'>
-                <input type="hidden" name="idioma_base" value="{{ _g.idioma if _g.idioma in ('es', 'en', 'pt') else 'es' }}">
-                <button type="submit" class="btn-rechazar btn-sm">{{ _('Volver a escribir con IA') }}</button>
-              </form>
-              {% endif %}
-
-              {% set _finales_por_destino = {} %}
-              {% for f in item.finales if f.estado in ("listo", "degradada") %}
-              {% set _nada = _finales_por_destino.__setitem__(f.idioma ~ "_" ~ f.pais, f) %}
-              {% endfor %}
-              <h5 class="fe-subtitulo">{{ _('Producir finales') }}</h5>
-              <form method="post" action="{{ url_for('fe_producir', cliente=cliente, cf_id=item.id) }}" class="fe-producir"
-                    data-moneda-base="{{ paises_fe[_g.pais].moneda if _g.pais in paises_fe else '' }}"
-                    onsubmit="return feConfirmarReemplazo(this);">
-                <div class="fe-destinos checks-plataformas">
-                  {% for codigo, p in paises_fe.items() %}
-                  {% set _ya = _finales_por_destino.get(p.idioma ~ "_" ~ codigo) %}
-                  <label class="fe-destino">
-                    <input type="checkbox" name="destinos" value="{{ p.idioma }}_{{ codigo }}" {% if _ya %}data-ya-producida="1"{% endif %}>
-                    {{ p.bandera }} {{ p.nombre|traducir }} <small>({{ p.idioma }})</small>
-                    <input type="number" name="precio_{{ p.idioma }}_{{ codigo }}" min="0" step="any"
-                           placeholder="{{ _('Precio (opcional)') }}" class="fe-precio-destino" data-moneda="{{ p.moneda }}" style="width:8rem;"
-                           {% if codigo == _g.pais and _g.precio_base is not none %}value="{{ _g.precio_base }}"{% endif %}>
-                    {% if _ya %}<small class="tag-estado">{{ _('(ya producida — se reemplaza)') }}</small>{% endif %}
-                  </label>
-                  {% endfor %}
-                </div>
-                <div class="fe-opciones">
-                  <label>{{ _('Voz') }}
-                    <select name="voz">
-                      {% for v in (voces_fe.get(_g.idioma) or voces_fe.get("es") or []) %}
-                      <option value="{{ v }}">{{ v }}</option>
-                      {% endfor %}
-                    </select>
-                  </label>
-                  <label>{{ _('Música') }}
-                    <select name="estilo_musica">
-                      {% for e in estilos_fe %}
-                      <option value="{{ e }}">{{ nombres_estilo_musica.get(e, e)|traducir }}</option>
-                      {% endfor %}
-                      <optgroup label="{{ _('Mi música') }}" class="mm-opciones"{% if not mi_musica %} hidden{% endif %}>
-                        {% for c in mi_musica %}<option value="mat:{{ c.id }}" data-url="{{ c.url }}" data-duracion="{{ c.duracion_s }}">{{ c.nombre }}</option>{% endfor %}
-                      </optgroup>
-                    </select>
-                  </label>
-                  <label>{{ _('Empieza en el segundo') }} <small>({{ _('Mi música') }})</small>
-                    <input type="number" name="musica_inicio_s" min="0" step="1" value="0" style="width:5rem;">
-                  </label>
-                  <label>{{ _('Precio base') }} <input type="number" name="precio" min="0" step="any"
-                         placeholder="{{ _('opcional, país base') }}" style="width:8rem;" oninput="feAplicarPrecioBase(this)"></label>
-                  <label class="fe-check"><input type="checkbox" name="con_voz" value="si" checked> {{ _('con voz') }}</label>
-                  <label class="fe-check"><input type="checkbox" name="con_musica" value="si" checked> {{ _('con música') }}</label>
-                  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if not (item.capas.sonido and item.capas.sonido.estado == "ausente") %}checked{% endif %}> {{ _('con sonido de la escena') }}{% if item.capas.sonido and item.capas.sonido.estado == "ausente" %} <small class="tag-estado">{{ _('(este clon no trae sonido)') }}</small>{% endif %}</label>
-                  <label>{{ _('Mezcla') }}
-                    <select name="mezcla">
-                      {% for p in presets_mezcla %}<option value="{{ p }}">{{ p | replace("_", " ") }}</option>{% endfor %}
-                    </select>
-                  </label>
-                </div>
-                {% set _cu = (' ' ~ _('≈ %(usd)s c/u', usd=(precios.final_por_pais.usd | usd))) if (precios and precios.final_por_pais and precios.final_por_pais.usd is not none) else "" %}
-                <button type="submit" class="btn-generar btn-sm fe-producir-btn" data-plantilla="{{ _('Producir {n} finales') }}{{ _cu }}" data-sin-n="{{ _('Producir finales') }}{{ _cu }}">{{ _('Producir finales') }}{{ _cu }}</button>
-              </form>
-            {% endif %}
-
-            {% if item.finales %}
-            <h5 class="fe-subtitulo">{{ _('Finales de esta pieza') }}</h5>
-            <ul class="fe-lista">
-              {% for f in item.finales %}
-              <li class="fe-final">
-                <span class="fe-final-mini">{% if f.url_miniatura %}<img src="{{ f.url_miniatura }}" alt="">{% endif %}</span>
-                <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
-                <span class="tag-estado">{{ f.estado }}</span>
-                {% if f.estado == "generando" %}
-                <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}</span>
-                {% elif f.estado == "error" and f.error %}
-                <span class="tag-error" style="font-size:.72rem;">{{ f.error }}</span>
-                {% endif %}
-                {% if f.video_url %}<a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>{% endif %}
-                <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _('¿Descartar esta final?')|tojson }});' style="display:inline;">
-                  <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
-                </form>
-              </li>
-              {% endfor %}
-            </ul>
-            {% endif %}
-          </section>
-          {% endif %}
+          {% if item.revision_estado %}{{ revision_doctrina(item, cliente) }}{% endif %}
 
           <div class="detalle-acciones">
             {% if item.estado == "video_listo" %}
             <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
+            {% endif %}
+            {% if item.estado == "video_listo" and item.tipo != "imagen" %}
+            <a class="btn-generar btn-sm" href="#final?cf={{ item.id }}"
+               onclick="var d = document.getElementById('generado-modal'); if (d) d.close(); location.hash = this.getAttribute('href'); return false;">{{ _('Llevar a final edition') }}</a>
             {% endif %}
             {% if item.estado in ("video_listo", "error", "prompt_listo") %}
             <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
@@ -465,88 +386,6 @@
         </div>
       </template>
     </div>
-    {% for f in item.finales %}
-    {% set _bandera = paises_fe[f.pais].bandera if f.pais in paises_fe else "" %}
-    <div class="generado generado-final" data-cf="{{ f.id }}" tabindex="0" role="button">
-      <div class="generado-media">
-        {% if f.estado in ("listo", "degradada") and f.video_url %}
-        <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" muted playsinline preload="metadata"></video>
-        {% elif f.url_miniatura %}
-        <img src="{{ f.url_miniatura }}" alt="" loading="lazy" class="generado-portada">
-        {% else %}
-        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="metadata" class="generado-portada"></video>
-        {% endif %}
-        <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
-        {% if f.estado == "generando" %}
-        <div class="generado-velo">
-          {% if f.trabajo %}
-          <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Produciendo… 0%% · 0s') }}</div>
-          <script>iniciarPolling({{ f.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ f.trabajo.job_id) | tojson }});</script>
-          {% else %}
-          <span class="generado-estado">{{ _('Interrumpida') }}</span>
-          {% endif %}
-        </div>
-        {% elif f.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
-        {% elif f.estado == "degradada" %}
-        <div class="generado-velo"><span class="generado-estado">{{ _('Sin voz/música') }}</span></div>
-        {% endif %}
-      </div>
-      <div class="generado-pie">
-        <strong>{{ _('Final %(id)s', id=(f.idioma ~ '_' ~ f.pais)) }}</strong>
-        <small>{{ _('Final de %(enfoque)s', enfoque=((item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')))) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>
-      </div>
-      <template class="generado-detalle">
-        <div class="detalle-media">
-          {% if f.video_url %}
-          <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" controls autoplay muted loop playsinline></video>
-          {% elif f.url_miniatura %}
-          <img src="{{ f.url_miniatura }}" alt="">
-          {% else %}
-          <video src="{{ item.video_url }}" muted playsinline style="opacity:.6;"></video>
-          {% endif %}
-        </div>
-        <div class="detalle-info">
-          <p class="campo-label">Final edition</p>
-          <p class="detalle-texto">{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · {{ f.idioma }}</p>
-          <p class="vacio" style="padding:0;font-size:.78rem;">
-            {{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}
-            {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
-            {% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}
-            · <span class="tag-estado">{{ f.estado }}</span>
-          </p>
-          {% if f.capas %}
-          <p class="campo-label" style="margin-top:.8rem;">{{ _('Capas') }}</p>
-          <ul class="fe-capas">
-            {% for nombre, capa in f.capas.items() %}
-            <li><strong>{{ nombre }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ capa.estado }}</span>{% if capa.costo_usd %} · {{ capa.costo_usd | usd }}{% endif %}{% if capa.error %} <span class="tag-error" style="font-size:.72rem;">{{ capa.error }}</span>{% endif %}</li>
-            {% endfor %}
-          </ul>
-          {% endif %}
-          {% if f.estado == "error" and f.error %}
-          <p class="tag-error">{{ f.error }}</p>
-          {% endif %}
-          <div class="detalle-acciones">
-            {% if f.video_url %}
-            <a class="btn-generar btn-sm" href="{{ f.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
-            {% endif %}
-            <form method="post" action="{{ url_for('fe_descartar', cliente=cliente, cf_id=item.id, final_id=f.id) }}" onsubmit='return confirm({{ _('¿Descartar esta final?')|tojson }});' style="display:inline;">
-              <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
-            </form>
-            {% if f.estado in ("listo", "degradada") and f.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ f.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
-            {% endif %}
-          </div>
-          {% if f.estado in ("listo", "degradada") and f.video_url and f.pieza_id %}
-          {# Bloque 7: mismo bloque que en Experimentos (sin ep_id: sale de Crear). #}
-          <p class="campo-label" style="margin-top:.8rem;">{{ _('Publicación orgánica') }}</p>
-          {{ bloque_organico(f.pieza_id, "creativeflowplus") }}
-          {% endif %}
-        </div>
-      </template>
-    </div>
-    {% endfor %}
     {% endfor %}
   </div>
 </div>
@@ -556,32 +395,6 @@
   <div id="generado-modal-cuerpo" class="generado-modal-cuerpo"></div>
 </dialog>
 <script>
-  // Precio base -> se copia solo a los destinos cuya moneda coincide con la
-  // del país base (nunca convierte), y solo si el usuario no escribió ya un
-  // precio propio para ese destino. Global (window.*) porque el formulario
-  // "Producir finales" vive dentro de un <template> clonado — sus <script>
-  // internos nunca corren, pero los atributos onXXX sí, y al clonar buscan la
-  // función en window en el momento del evento (no al parsear el template).
-  window.feAplicarPrecioBase = function (input) {
-    var form = input.closest('form');
-    if (!form) return;
-    var monedaBase = form.dataset.monedaBase || '';
-    form.querySelectorAll('.fe-precio-destino').forEach(function (destino) {
-      if (destino.dataset.moneda === monedaBase && !destino.value) {
-        destino.value = input.value;
-      }
-    });
-  };
-  // Confirma si algún destino marcado ya tiene una final producida (se
-  // reemplaza al volver a producir).
-  window.feConfirmarReemplazo = function (form) {
-    var reemplaza = false;
-    form.querySelectorAll('input[name="destinos"]:checked').forEach(function (cb) {
-      if (cb.dataset.yaProducida) reemplaza = true;
-    });
-    if (!reemplaza) return true;
-    return confirm({{ _('Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine).')|tojson }});
-  };
   // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear). Declarada
   // en este script sin envoltorio, así es global: la usan dos scripts, el estimado del formulario y el botón A+B del
   // modal (el formulario de generar vive en un <template> clonado).
@@ -601,14 +414,9 @@
       if (!tpl) return;
       cuerpo.innerHTML = '';
       cuerpo.appendChild(tpl.content.cloneNode(true));
-      // Los <script> clonados no corren: una barra de trabajo dentro del
-      // detalle (publicación orgánica en curso) arranca su polling acá.
-      cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
-        if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
-      });
       modal.showModal();
     }
-    document.querySelectorAll('.generado').forEach(function (card) {
+    document.querySelectorAll('#creativeflowplus-resultados .generado').forEach(function (card) {
       card.addEventListener('click', function (e) { if (!e.target.closest('form, a, button')) abrir(card); });
       card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); } });
       var v = card.querySelector('.generado-media video');
@@ -617,19 +425,9 @@
         card.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
       }
     });
-    // "Producir N finales": el formulario vive en un <template> clonado, así
-    // que el listener va delegado sobre el cuerpo del modal.
-    cuerpo.addEventListener('change', function (e) {
-      if (!e.target.matches('input[name="destinos"]')) return;
-      var form = e.target.closest('form');
-      var btn = form && form.querySelector('.fe-producir-btn');
-      if (!btn) return;
-      var n = form.querySelectorAll('input[name="destinos"]:checked').length;
-      btn.textContent = n ? btn.dataset.plantilla.replace('{n}', n) : btn.dataset.sinN;
-    });
     // Costo A+B: el formulario de generar también vive en el <template> clonado,
-    // así que el checkbox "Generar también la versión B" se delega igual que
-    // "Producir N finales" arriba — un listener en la carga de la página nunca
+    // así que el checkbox "Generar también la versión B" se delega sobre el
+    // cuerpo del modal — un listener en la carga de la página nunca
     // vería el checkbox (no existe hasta que se clona el detalle).
     cuerpo.addEventListener('change', function (e) {
       if (!e.target.matches || !e.target.matches('.fp-version-b')) return;
@@ -638,13 +436,6 @@
       var usd = f ? parseFloat(f.dataset.usd || '0') : 0;
       if (!btn || !usd) return;
       btn.textContent = btn.textContent.replace(/\s*≈ US\$ [^ ]*$/, '') + ' ≈ ' + formatearUSD(e.target.checked ? usd * 2 : usd);
-    });
-    cuerpo.addEventListener('submit', function (e) {
-      var form = e.target;
-      if (form.classList.contains('fe-producir') && !form.querySelectorAll('input[name="destinos"]:checked').length) {
-        e.preventDefault();
-        alert({{ _('Marca al menos un destino.')|tojson }});
-      }
     });
     document.getElementById('generado-cerrar').addEventListener('click', function () { modal.close(); });
     modal.addEventListener('click', function (e) { if (e.target === modal) modal.close(); });
@@ -657,11 +448,12 @@
     // Tipo (video/imagen), modelo elegido y costo en el botón.
     // formatearUSD es global (window.formatearUSD, script de arriba).
     var form = document.getElementById('form-flowplus');
-    var bloqueVideo = document.getElementById('fp-bloque-video');
-    var bloqueImagen = document.getElementById('fp-bloque-imagen');
+    var comp = document.getElementById('crear-comp');
     var campoModelo = document.getElementById('fp-modelo');
     var botonGenerar = document.getElementById('fp-generar');
-    var ayudaBoton = document.getElementById('fp-ayuda-boton');
+    var precio = document.getElementById('fp-precio');
+    var calidadWrap = document.getElementById('fp-calidad-wrap');
+    var pieLogos = document.getElementById('fp-pie-logos');
     var duracion = document.getElementById('fp-duracion');
     function tipoActual() { return form.querySelector('input[name=tipo]:checked').value; }
     function modeloActual() {
@@ -738,12 +530,14 @@
       if (notaDuracion) notaDuracion.hidden = m.value !== 'wan3';
       var calidad = document.getElementById('fp-calidad');
       if (calidad) { calidad.disabled = m.value !== 'wan3'; if (calidad.disabled) calidad.checked = false; }
+      if (calidadWrap) calidadWrap.hidden = m.value !== 'wan3';
       var larga = document.getElementById('fp-duracion-larga');
       if (larga) larga.hidden = parseInt(duracion.value, 10) <= 15;
     }
     function refrescar() {
       var esImagen = tipoActual() === 'imagen';
-      bloqueVideo.hidden = esImagen; bloqueImagen.hidden = !esImagen;
+      comp.querySelectorAll('[data-solo-video]').forEach(function (el) { el.hidden = esImagen; });
+      comp.querySelectorAll('[data-solo-imagen]').forEach(function (el) { el.hidden = !esImagen; });
       var m = modeloActual();
       campoModelo.value = m ? m.value : '';
       ajustarSegunModelo(m, esImagen);
@@ -760,17 +554,13 @@
         }
       }
       // «Generar» (video o imagen) cobra al generar con el texto de la persona;
-      // «Armar prompt con IA» solo existe para video (la imagen nunca pasa por
-      // el director). Mismo formato que gastos.formatear: «≈ US$ 1,00».
-      var btnArmar = document.getElementById('fp-armar');
-      if (btnArmar) btnArmar.hidden = esImagen;
-      if (esImagen) {
-        botonGenerar.textContent = {{ _('Generar imagen')|tojson }} + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = {{ _('Se cobra al generar, no antes.')|tojson }};
-      } else {
-        botonGenerar.textContent = {{ _('Generar video')|tojson }} + (usd ? ' ≈ ' + formatearUSD(usd) : '');
-        if (ayudaBoton) ayudaBoton.textContent = {{ _('«Generar» manda tu texto tal cual y se cobra al generar; «Crear super prompt» es gratis y te deja revisar el prompt antes de gastar.')|tojson }};
-      }
+      // el precio va al lado, con el formato de gastos.formatear: «≈ US$ 1,00».
+      // «Crear super prompt» solo existe para video (la imagen nunca pasa por
+      // el director): lo oculta [data-solo-video].
+      botonGenerar.textContent = esImagen ? {{ _('Generar imagen')|tojson }} : {{ _('Generar video')|tojson }};
+      precio.textContent = usd ? '≈ ' + formatearUSD(usd) : '';
+      if (pieLogos) pieLogos.hidden = sinAdjuntos();
+      pintarFichas(); pintarMusica(); pintarPastillas();
     }
     form.querySelectorAll('input[name=tipo], input[name=modelo_video], input[name=modelo_imagen]').forEach(function (i) { i.addEventListener('change', refrescar); });
     duracion.addEventListener('change', refrescar);
@@ -779,6 +569,175 @@
       var el = document.getElementById(id);
       if (el) el.addEventListener('change', refrescar);
     });
+    [formatoVideo, formatoImagen].forEach(function (s) { if (s) s.addEventListener('change', refrescar); });
+    document.getElementById('fp-sonido').addEventListener('input', function () { pintarPastillas(); });
+
+    // Duración y formato: los <select> de siempre son la fuente de verdad (el
+    // servidor y limitarSelect los leen); el menú dibuja una ficha por opción y
+    // la deshabilitada sale tachada.
+    // Selector partido: la heurística de idioma confunde el «de» de «data-fichas-de».
+    var SEL_FICHAS = '[data-fichas-d' + 'e]';
+    function pintarFichas() {
+      comp.querySelectorAll(SEL_FICHAS).forEach(function (caja) {
+        var sel = document.getElementById(caja.dataset.fichasDe);
+        caja.innerHTML = '';
+        Array.prototype.forEach.call(sel.options, function (o) {
+          var b = document.createElement('button');
+          b.type = 'button'; b.className = 'crear-ficha';
+          b.textContent = o.textContent.split(' (')[0]; b.title = o.textContent;
+          b.dataset.valor = o.value;
+          b.disabled = o.disabled || sel.disabled;
+          b.setAttribute('aria-pressed', (!sel.disabled && o.value === sel.value) ? 'true' : 'false');
+          caja.appendChild(b);
+        });
+      });
+    }
+    comp.addEventListener('click', function (e) {
+      var ficha = e.target.closest(SEL_FICHAS + ' .crear-ficha');
+      if (!ficha || ficha.disabled) return;
+      var sel = document.getElementById(ficha.closest(SEL_FICHAS).dataset.fichasDe);
+      sel.value = ficha.dataset.valor;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      cerrarMenus();
+    });
+
+    // Música: el <select> #fp-musica sigue siendo la fuente de verdad (lo leen
+    // el servidor y mostrarInicio); el menú lo dibuja como «Sin música», fichas
+    // de estilos IA y la lista de Mi música.
+    function pintarMusica() {
+      var caja = document.getElementById('fp-musica-opciones');
+      if (!caja) return;
+      caja.innerHTML = '';
+      function boton(valor, texto, clase) {
+        var b = document.createElement('button');
+        b.type = 'button'; b.className = clase; b.dataset.musica = valor; b.textContent = texto;
+        b.setAttribute('aria-pressed', musicaSel.value === valor ? 'true' : 'false');
+        return b;
+      }
+      caja.appendChild(boton('', {{ _('Sin música')|tojson }}, 'crear-opcion-simple'));
+      Array.prototype.forEach.call(musicaSel.querySelectorAll('optgroup'), function (g) {
+        var opciones = g.querySelectorAll('option');
+        if (g.hidden || !opciones.length) return;
+        var propia = g.classList.contains('mm-opciones');
+        var t = document.createElement('p');
+        t.className = 'crear-menu-titulo';
+        t.textContent = propia ? {{ _('Mi música · gratis')|tojson }} : {{ _('Estilos IA · US$ 0,02 la primera vez por estilo y duración')|tojson }};
+        caja.appendChild(t);
+        var lista = document.createElement('div');
+        lista.className = propia ? 'crear-opciones' : 'crear-fichas';
+        Array.prototype.forEach.call(opciones, function (o) {
+          lista.appendChild(boton(o.value, (propia ? '▶ ' : '') + o.textContent, propia ? 'crear-opcion-simple' : 'crear-ficha'));
+        });
+        caja.appendChild(lista);
+      });
+    }
+    comp.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-musica]');
+      if (!b) return;
+      musicaSel.value = b.dataset.musica;
+      musicaSel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    // Cada pastilla dice lo elegido.
+    function recortar(t, n) { return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+    function pill(id, texto, aviso) {
+      var b = document.getElementById(id);
+      if (!b) return;
+      b.textContent = texto;
+      b.classList.toggle('co' + 'n-aviso', !!aviso);  // literal partido: la heurística de idioma confunde "con" en "con-aviso"
+    }
+    function pintarPastillas() {
+      var esImagen = tipoActual() === 'imagen';
+      var m = modeloActual();
+      var cal = document.getElementById('fp-calidad');
+      pill('fp-pill-tipo', esImagen ? {{ _('🖼 Imagen')|tojson }} : {{ _('🎬 Video')|tojson }});
+      pill('fp-pill-modelo', m ? m.dataset.nombre + (!esImagen && cal && cal.checked ? {{ _(' · borrador')|tojson }} : '') : {{ _('Modelo')|tojson }});
+      pill('fp-pill-duracion', '⏱ ' + duracion.value + ' s', parseInt(duracion.value, 10) > 15);
+      var selFormato = esImagen ? formatoImagen : formatoVideo;
+      pill('fp-pill-formato', (!esImagen && formatoVideo.disabled) ? {{ _('▯ Formato de la imagen')|tojson }} : '▯ ' + selFormato.value);
+      var cs = document.getElementById('fp-check-sonido');
+      var desc = document.getElementById('fp-sonido').value.trim();
+      pill('fp-pill-sonido', !cs.checked ? {{ _('🔇 Sin sonido')|tojson }} : '🔊 ' + (desc ? recortar(desc, 22) : {{ _('Sonido')|tojson }}));
+      var o = musicaSel.selectedOptions[0];
+      pill('fp-pill-musica', '🎵 ' + (!musicaSel.value ? {{ _('Sin música')|tojson }} : recortar(o ? o.textContent : musicaSel.value, 22)));
+    }
+
+    // Menús de las pastillas: uno abierto a la vez; se cierran con clic fuera,
+    // con Escape o al elegir en los de una sola opción. En el celular suben
+    // como hoja desde abajo (CSS) y #crear-velo oscurece el fondo.
+    function cerrarMenus() {
+      comp.querySelectorAll('.crear-menu').forEach(function (mn) { mn.hidden = true; });
+      comp.querySelectorAll('[data-menu]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+      document.body.classList.remove('crear-menu-abierto');
+    }
+    comp.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-menu]');
+      if (!b) return;
+      var menu = document.getElementById(b.dataset.menu);
+      var abrir = menu.hidden;
+      cerrarMenus();
+      if (!abrir) return;
+      menu.hidden = false;
+      b.setAttribute('aria-expanded', 'true');
+      document.body.classList.add('crear-menu-abierto');
+    });
+    document.addEventListener('click', function (e) {
+      // Un clic que redibujó su propio menú (p. ej. elegir música) deja el
+      // target fuera del DOM: eso no es un clic fuera.
+      if (!e.target.isConnected || e.target.closest('.crear-pill-zona')) return;
+      cerrarMenus();
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') cerrarMenus(); });
+    form.addEventListener('change', function (e) {
+      if (e.target.name === 'tipo' || e.target.name === 'modelo_video' || e.target.name === 'modelo_imagen') cerrarMenus();
+    });
+
+    // «+»: pegar link y catálogo.
+    document.getElementById('fp-abrir-link').addEventListener('click', function () {
+      var caja = document.getElementById('fp-link-caja');
+      caja.hidden = !caja.hidden;
+      if (!caja.hidden) caja.querySelector('input').focus();
+    });
+    var dlgCatalogo = document.getElementById('fp-catalogo');
+    var catElegidos = document.getElementById('fp-catalogo-elegidos');
+    document.getElementById('fp-abrir-catalogo').addEventListener('click', function () {
+      cerrarMenus();
+      dlgCatalogo.showModal();
+    });
+    var presionEnFondo = false;
+    dlgCatalogo.addEventListener('mousedown', function (e) { presionEnFondo = e.target === dlgCatalogo; });
+    dlgCatalogo.addEventListener('click', function (e) {
+      if (e.target.closest('[data-cerrar-catalogo]') || (e.target === dlgCatalogo && presionEnFondo)) dlgCatalogo.close();
+      presionEnFondo = false;
+    });
+    dlgCatalogo.addEventListener('close', function () { pintarCatalogo(); refrescar(); });
+    // Lo marcado en el catálogo se ve en la tarjeta como las referencias
+    // subidas; la × lo desmarca.
+    function pintarCatalogo() {
+      var marcados = form.querySelectorAll('input[name=productos_catalogo]:checked');
+      catElegidos.innerHTML = '';
+      marcados.forEach(function (cb) {
+        var fig = document.createElement('figure');
+        fig.className = 'crear-ref';
+        var foto = cb.parentElement.querySelector('img');
+        var img = document.createElement('img');
+        img.src = foto ? foto.src : ''; img.alt = '';
+        var cap = document.createElement('figcaption');
+        cap.textContent = cb.dataset.nombre;
+        var x = document.createElement('button');
+        x.type = 'button'; x.className = 'crear-ref-quitar'; x.textContent = '×';
+        x.setAttribute('aria-label', {{ _('Quitar %(referencia)s', referencia='__REF__')|tojson }}.replace('__REF__', cb.dataset.nombre));
+        x.addEventListener('click', function () {
+          cb.checked = false;
+          cb.dispatchEvent(new Event('change', { bubbles: true }));
+          pintarCatalogo();
+        });
+        fig.appendChild(img); fig.appendChild(cap); fig.appendChild(x);
+        catElegidos.appendChild(fig);
+      });
+      catElegidos.hidden = !marcados.length;
+    }
+    pintarCatalogo();
     refrescar();
 
     // Chips @Imagen N / @Video N de la bandeja: insertan la etiqueta en el texto.
@@ -793,7 +752,7 @@
                                      body: JSON.stringify({escena: texto.value, enfoque: enfoque})})
         .then(function (r) { return r.json().then(function (j) { return {ok: r.ok, j: j}; }); })
         .then(function (res) {
-          if (res.ok && res.j.sonido) document.getElementById('fp-sonido').value = res.j.sonido;
+          if (res.ok && res.j.sonido) { document.getElementById('fp-sonido').value = res.j.sonido; pintarPastillas(); }
           else alert(res.j.error || {{ _('No se pudo sugerir.')|tojson }});
         })
         .catch(function () { alert({{ _('No se pudo sugerir.')|tojson }}); })
@@ -825,13 +784,13 @@
     function aplicar(d) {
       if (d.html !== undefined) { wrap.innerHTML = d.html; engancharBandeja(); refrescar(); }
       if (d.etiquetas) pintarChips(d.etiquetas);
-      if (d.error) { subidaTexto.textContent = d.error; subida.style.display = 'block'; subidaBarra.style.width = '0%'; }
+      if (d.error) { subidaTexto.textContent = d.error; subida.hidden = false; subidaBarra.style.width = '0%'; }
       vigilarLink();
     }
     function enviar(url, body) {
       return fetch(url, { method: 'POST', body: body, headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { return r.json(); }).then(aplicar)
-        .catch(function () { subidaTexto.textContent = {{ _('Se perdió la conexión; recarga la página.')|tojson }}; subida.style.display = 'block'; });
+        .catch(function () { subidaTexto.textContent = {{ _('Se perdió la conexión; recarga la página.')|tojson }}; subida.hidden = false; });
     }
     function engancharBandeja() {
       wrap.querySelectorAll('form[data-fp]').forEach(function (f) {
@@ -860,11 +819,12 @@
     var formSubir = document.getElementById('fp-form-subir');
     inputArchivos.addEventListener('change', function () {
       if (!inputArchivos.files.length) return;
+      cerrarMenus();
       var fd = new FormData(formSubir);
       var xhr = new XMLHttpRequest();
       xhr.open('POST', formSubir.action);
       xhr.setRequestHeader('X-Requested-With', 'fetch');
-      subida.style.display = 'block'; subidaBarra.style.width = '0%';
+      subida.hidden = false; subidaBarra.style.width = '0%';
       subidaTexto.textContent = {{ _('Subiendo')|tojson }} + ' ' + inputArchivos.files.length + ' ' + {{ _('archivo(s)… 0%%')|tojson }};
       xhr.upload.onprogress = function (ev) {
         if (!ev.lengthComputable) return;
@@ -873,18 +833,41 @@
         subidaTexto.textContent = pct < 100 ? ({{ _('Subiendo…')|tojson }} + ' ' + pct + '%') : {{ _('Procesando (fotogramas y almacenamiento)…')|tojson }};
       };
       xhr.onload = function () {
-        try { var d = JSON.parse(xhr.responseText); aplicar(d); subida.style.display = d.error ? 'block' : 'none'; }
+        try { var d = JSON.parse(xhr.responseText); aplicar(d); subida.hidden = !d.error; }
         catch (e) { subidaTexto.textContent = {{ _('Error al subir; recarga la página.')|tojson }}; }
         inputArchivos.value = '';
       };
       xhr.onerror = function () { subidaTexto.textContent = {{ _('Error de red al subir.')|tojson }}; };
       xhr.send(fd);
     });
+    // Arrastrar archivos sobre la tarjeta = «Subir imágenes o videos».
+    function traeArchivos(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1; }
+    ['dragenter', 'dragover'].forEach(function (t) {
+      comp.addEventListener(t, function (e) {
+        if (!traeArchivos(e)) return;
+        e.preventDefault();
+        comp.classList.add('soltando');
+      });
+    });
+    comp.addEventListener('dragleave', function (e) {
+      if (!comp.contains(e.relatedTarget)) comp.classList.remove('soltando');
+    });
+    comp.addEventListener('drop', function (e) {
+      comp.classList.remove('soltando');
+      if (!traeArchivos(e) || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      inputArchivos.files = e.dataTransfer.files;
+      inputArchivos.dispatchEvent(new Event('change'));
+    });
+    // El campo del link vive en el menú «+» pero su dueño es #fp-form-link
+    // (atributo form=): se lee por form.elements, no por querySelector.
     var formLink = document.getElementById('fp-form-link');
     formLink.addEventListener('submit', function (e) {
       e.preventDefault();
       var fd = new FormData(formLink);
-      formLink.querySelector('input[name=link]').value = '';
+      formLink.elements.link.value = '';
+      document.getElementById('fp-link-caja').hidden = true;
+      cerrarMenus();
       enviar(formLink.action, fd);
     });
 
@@ -919,7 +902,9 @@
     document.getElementById('fp-musica-usar').addEventListener('click', function () {
       inicioInput.value = Math.floor(audioPrev.currentTime || 0);
     });
-    // Los dos selectores (Crear y, dentro de cada <template> de detalle, «Producir finales»).
+    // Los selectores de «Mi música» de toda la página: el de Crear y el de
+    // «Producir finales» dentro de cada <template> de detalle de la pestaña
+    // Final edition (y el del detalle abierto, que ya es parte del documento).
     function pintarCanciones(canciones) {
       var grupos = Array.prototype.slice.call(document.querySelectorAll('optgroup.mm-opciones'));
       document.querySelectorAll('template.generado-detalle').forEach(function (t) {
@@ -1020,6 +1005,15 @@
     });
     mostrarInicio();
     vigilarCancion();
+
+    // Enter en un campo de una línea NO envía: «Generar» cobra y solo se lanza
+    // con su botón (antes, Enter en «Sonido de la escena» generaba el video).
+    // El link (#fp-form-link) sí se agrega con Enter: su dueño es otro
+    // formulario y no gasta.
+    form.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' || e.isComposing) return;
+      if (e.target.tagName === 'INPUT' && e.target.form === form) e.preventDefault();
+    });
 
     engancharBandeja();
 

@@ -77,17 +77,21 @@
     // "sucio" todo campo editado y, si hay alguno, no se recarga a ciegas: se
     // avisa en el propio .progreso-texto con un botón para recargar cuando el
     // usuario quiera.
-    // 'change' además de 'input' para cubrir los <select>, que no emiten 'input'
-    // en todos los navegadores y quedaban fuera de la guardia.
-    ['input', 'change'].forEach(function (evento) {
-      document.addEventListener(evento, function (e) {
-        var el = e.target;
-        if (!el) return;
-        if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT' && el.tagName !== 'SELECT') return;
-        if (el.type === 'file' || el.type === 'radio' || el.type === 'checkbox') return;
-        el.dataset.sucio = '1';
-      });
-    });
+    function marcarSucio(e) {
+      var el = e.target;
+      if (!el) return;
+      if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT' && el.tagName !== 'SELECT') return;
+      if (el.type === 'file' || el.type === 'radio' || el.type === 'checkbox') return;
+      el.dataset.sucio = '1';
+    }
+    document.addEventListener('input', marcarSucio);
+    // 'change' SOLO para los <select>, que no emiten 'input' en todos los
+    // navegadores. Todo lo que se escribe ya emitió 'input'; en un campo de
+    // texto 'change' llega al salir del campo (blur), DESPUÉS de que un
+    // autoguardado con espera (ideas del sprint, editor del ángulo) ya borró
+    // la marca — volver a marcarlo ahí lo dejaba sucio para siempre y
+    // `recargarOAvisar` pedía «Recargar ahora» en vez de recargar sola.
+    document.addEventListener('change', function (e) { if (e.target && e.target.tagName === 'SELECT') marcarSucio(e); });
 
     // Al enviar un formulario, lo que estaba sucio ahí adentro ya se está
     // guardando: dejarlo marcado bloquearía recargas legítimas para siempre.

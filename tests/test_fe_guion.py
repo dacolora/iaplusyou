@@ -124,6 +124,16 @@ def test_generar_guion_base_una_llamada(monkeypatch):
     assert g["idioma"] == "es" and g["pais"] == "CO"
 
 
+def test_el_formato_con_angulo_no_ensena_un_mecanismo_vacio_con_sofisticacion_alta():
+    """Prueba real (2026-09-27): el ejemplo de JSON traía `"sofisticacion": 3`
+    junto a `"mecanismo": null`, justo lo que `validar_angulo` rechaza
+    (mecanismo_obligatorio): Claude lo copiaba y cada guion sin ángulo pagaba
+    una vuelta de corrección. El ejemplo dice la regla, como en las ideas."""
+    from final_edition import guion
+    assert '"mecanismo": null' not in guion.FORMATO_JSON_CON_ANGULO
+    assert "obligatorio si sofisticacion es 3 o más" in guion.FORMATO_JSON_CON_ANGULO
+
+
 def test_generar_guion_base_con_referencia_envia_frames_como_imagenes(monkeypatch):
     from final_edition import guion
     urls = ["https://x/f1.jpg", "https://x/f2.jpg", "https://x/f3.jpg"]
@@ -505,3 +515,15 @@ def test_variar_hook_conserva_el_cta_y_pide_no_repetir_el_gancho_anterior(monkey
     mensaje = kw["messages"][0]["content"]
     assert "hook" in mensaje.lower() and "CTA" in mensaje
     assert "no repitas" in _sys(kw).lower()
+
+
+def test_la_sofisticacion_elegida_manda_en_el_angulo_del_guion(monkeypatch):
+    """Doctrina, bloque 2 (§4.3): con la sofisticación del producto elegida,
+    el guion la recibe como fija y el ángulo que decide Claude la respeta."""
+    from final_edition import guion
+    producto = dict(PRODUCTO, sofisticacion=4)
+    reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=dict(ANG, sofisticacion=2)))])
+    g, _ = guion.generar_guion_base(producto, None, "producto", 10.0, "es", "", "")
+    mensaje = reg.kwargs[0]["messages"][0]["content"]
+    assert "Sofisticación del mercado (fija, no la cambies): 4" in mensaje
+    assert g["angulo"]["sofisticacion"] == 4

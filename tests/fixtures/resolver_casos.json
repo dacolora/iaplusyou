@@ -1,0 +1,1392 @@
+{
+ "casos": [
+  {
+   "esperado": {
+    "destino": {
+     "idioma": "es",
+     "pais": "CO",
+     "precio": 89900
+    },
+    "esquema": 1,
+    "formato": "9:16",
+    "fps": 30,
+    "guion": null,
+    "idioma_base": "es",
+    "marca": {
+     "color": "#7c3aed",
+     "logo_material_id": null,
+     "marca_de_agua": null
+    },
+    "materiales": [
+     1,
+     2,
+     9
+    ],
+    "mezcla": {
+     "preset": "equilibrada",
+     "volumenes": null
+    },
+    "miniatura_ms": 0,
+    "origen": null,
+    "paginas": [],
+    "pistas": [
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "v0",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_video",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "video"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "SpaceGrotesk-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "texto": {
+         "literal": "Tu piel, en 7 días"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_precio",
+        "inicio_ms": 1000,
+        "keyframes": [],
+        "texto": {
+         "literal": "$ 89.900"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 1000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_fijo",
+        "inicio_ms": 3000,
+        "keyframes": [],
+        "texto": {
+         "literal": "Compra ya"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       }
+      ],
+      "id": "p_texto",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "texto"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "bloque": "hook",
+        "duracion_ms": 1800,
+        "id": "voz_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 2,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 1800
+        },
+        "rol_audio": "voz",
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "sonido",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "rol_audio": "sonido",
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_voz",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "audio"
+     }
+    ],
+    "pngs": {
+     "t_precio": 9
+    },
+    "subtitulos": {
+     "estilo_id": "karaoke",
+     "palabras": [
+      {
+       "dur_ms": 400,
+       "t_ms": 0,
+       "texto": "Tu"
+      }
+     ],
+     "posicion": 0.78
+    },
+    "variables": {
+     "precios": {
+      "en_US": 24.99,
+      "es_CO": 89900,
+      "es_MX": 499.5
+     },
+     "textos": {
+      "hook": {
+       "en_US": "Your skin in 7 days",
+       "es": "Tu piel en 7 días",
+       "es_CO": "Tu piel, en 7 días",
+       "pt": "Sua pele em 7 dias"
+      }
+     },
+     "voz": {}
+    }
+   },
+   "idioma": "es",
+   "pais": "CO"
+  },
+  {
+   "esperado": {
+    "destino": {
+     "idioma": "es",
+     "pais": "MX",
+     "precio": 499.5
+    },
+    "esquema": 1,
+    "formato": "9:16",
+    "fps": 30,
+    "guion": null,
+    "idioma_base": "es",
+    "marca": {
+     "color": "#7c3aed",
+     "logo_material_id": null,
+     "marca_de_agua": null
+    },
+    "materiales": [
+     1,
+     2,
+     9
+    ],
+    "mezcla": {
+     "preset": "equilibrada",
+     "volumenes": null
+    },
+    "miniatura_ms": 0,
+    "origen": null,
+    "paginas": [],
+    "pistas": [
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "v0",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_video",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "video"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "SpaceGrotesk-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "texto": {
+         "literal": "Tu piel en 7 días"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_precio",
+        "inicio_ms": 1000,
+        "keyframes": [],
+        "texto": {
+         "literal": "$499.50"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 1000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_fijo",
+        "inicio_ms": 3000,
+        "keyframes": [],
+        "texto": {
+         "literal": "Compra ya"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       }
+      ],
+      "id": "p_texto",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "texto"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "bloque": "hook",
+        "duracion_ms": 1800,
+        "id": "voz_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 2,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 1800
+        },
+        "rol_audio": "voz",
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "sonido",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "rol_audio": "sonido",
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_voz",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "audio"
+     }
+    ],
+    "pngs": {
+     "t_precio": 9
+    },
+    "subtitulos": {
+     "estilo_id": "karaoke",
+     "palabras": [
+      {
+       "dur_ms": 500,
+       "t_ms": 0,
+       "texto": "Tu"
+      }
+     ],
+     "posicion": 0.78
+    },
+    "variables": {
+     "precios": {
+      "en_US": 24.99,
+      "es_CO": 89900,
+      "es_MX": 499.5
+     },
+     "textos": {
+      "hook": {
+       "en_US": "Your skin in 7 days",
+       "es": "Tu piel en 7 días",
+       "es_CO": "Tu piel, en 7 días",
+       "pt": "Sua pele em 7 dias"
+      }
+     },
+     "voz": {}
+    }
+   },
+   "idioma": "es",
+   "pais": "MX"
+  },
+  {
+   "esperado": {
+    "destino": {
+     "idioma": "es",
+     "pais": "AR",
+     "precio": null
+    },
+    "esquema": 1,
+    "formato": "9:16",
+    "fps": 30,
+    "guion": null,
+    "idioma_base": "es",
+    "marca": {
+     "color": "#7c3aed",
+     "logo_material_id": null,
+     "marca_de_agua": null
+    },
+    "materiales": [
+     1,
+     2
+    ],
+    "mezcla": {
+     "preset": "equilibrada",
+     "volumenes": null
+    },
+    "miniatura_ms": 0,
+    "origen": null,
+    "paginas": [],
+    "pistas": [
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "v0",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_video",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "video"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "SpaceGrotesk-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "texto": {
+         "literal": "Tu piel en 7 días"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 1000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_fijo",
+        "inicio_ms": 3000,
+        "keyframes": [],
+        "texto": {
+         "literal": "Compra ya"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       }
+      ],
+      "id": "p_texto",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "texto"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "bloque": "hook",
+        "duracion_ms": 1800,
+        "id": "voz_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 2,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 1800
+        },
+        "rol_audio": "voz",
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "sonido",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "rol_audio": "sonido",
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_voz",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "audio"
+     }
+    ],
+    "pngs": {},
+    "subtitulos": {
+     "estilo_id": "karaoke",
+     "palabras": [
+      {
+       "dur_ms": 500,
+       "t_ms": 0,
+       "texto": "Tu"
+      }
+     ],
+     "posicion": 0.78
+    },
+    "variables": {
+     "precios": {
+      "en_US": 24.99,
+      "es_CO": 89900,
+      "es_MX": 499.5
+     },
+     "textos": {
+      "hook": {
+       "en_US": "Your skin in 7 days",
+       "es": "Tu piel en 7 días",
+       "es_CO": "Tu piel, en 7 días",
+       "pt": "Sua pele em 7 dias"
+      }
+     },
+     "voz": {}
+    }
+   },
+   "idioma": "es",
+   "pais": "AR"
+  },
+  {
+   "esperado": {
+    "destino": {
+     "idioma": "en",
+     "pais": "US",
+     "precio": 24.99
+    },
+    "esquema": 1,
+    "formato": "9:16",
+    "fps": 30,
+    "guion": null,
+    "idioma_base": "es",
+    "marca": {
+     "color": "#7c3aed",
+     "logo_material_id": null,
+     "marca_de_agua": null
+    },
+    "materiales": [
+     1,
+     5,
+     9
+    ],
+    "mezcla": {
+     "preset": "equilibrada",
+     "volumenes": null
+    },
+    "miniatura_ms": 0,
+    "origen": null,
+    "paginas": [],
+    "pistas": [
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "v0",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_video",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "video"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "SpaceGrotesk-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "texto": {
+         "literal": "Your skin in 7 days"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_precio",
+        "inicio_ms": 1000,
+        "keyframes": [],
+        "texto": {
+         "literal": "$24.99"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 1000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_fijo",
+        "inicio_ms": 3000,
+        "keyframes": [],
+        "texto": {
+         "literal": "Compra ya"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       }
+      ],
+      "id": "p_texto",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "texto"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "bloque": "hook",
+        "duracion_ms": 1500,
+        "id": "voz_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 5,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 1500
+        },
+        "rol_audio": "voz",
+        "velocidad": 1.0
+       },
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "sonido",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "rol_audio": "sonido",
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_voz",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "audio"
+     }
+    ],
+    "pngs": {
+     "t_precio": 9
+    },
+    "subtitulos": {
+     "estilo_id": "karaoke",
+     "palabras": [],
+     "posicion": 0.78
+    },
+    "variables": {
+     "precios": {
+      "en_US": 24.99,
+      "es_CO": 89900,
+      "es_MX": 499.5
+     },
+     "textos": {
+      "hook": {
+       "en_US": "Your skin in 7 days",
+       "es": "Tu piel en 7 días",
+       "es_CO": "Tu piel, en 7 días",
+       "pt": "Sua pele em 7 dias"
+      }
+     },
+     "voz": {}
+    }
+   },
+   "idioma": "en",
+   "pais": "US"
+  },
+  {
+   "esperado": {
+    "destino": {
+     "idioma": "pt",
+     "pais": "BR",
+     "precio": null
+    },
+    "esquema": 1,
+    "formato": "9:16",
+    "fps": 30,
+    "guion": null,
+    "idioma_base": "es",
+    "marca": {
+     "color": "#7c3aed",
+     "logo_material_id": null,
+     "marca_de_agua": null
+    },
+    "materiales": [
+     1
+    ],
+    "mezcla": {
+     "preset": "equilibrada",
+     "volumenes": null
+    },
+    "miniatura_ms": 0,
+    "origen": null,
+    "paginas": [],
+    "pistas": [
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "v0",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        },
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_video",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "video"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "duracion_ms": 2000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "SpaceGrotesk-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_hook",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "texto": {
+         "literal": "Sua pele em 7 dias"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       },
+       {
+        "duracion_ms": 1000,
+        "estilo": {
+         "alineacion": "centro",
+         "ancho_max": null,
+         "color": "#FFFFFF",
+         "contorno": null,
+         "fondo": null,
+         "fuente": "Inter-Bold",
+         "interlineado": 1.1,
+         "peso": 700,
+         "sombra": null,
+         "tamano": 0.04
+        },
+        "id": "t_fijo",
+        "inicio_ms": 3000,
+        "keyframes": [],
+        "texto": {
+         "literal": "Compra ya"
+        },
+        "transform": {
+         "ancla": "centro",
+         "escala": 1.0,
+         "opacidad": 1.0,
+         "rotacion": 0.0,
+         "x": 0.5,
+         "y": 0.5
+        }
+       }
+      ],
+      "id": "p_texto",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "texto"
+     },
+     {
+      "bloqueada": false,
+      "clips": [
+       {
+        "audio": {
+         "ducking": true,
+         "fundido_entrada_ms": 0,
+         "fundido_salida_ms": 0,
+         "volumen": 1.0
+        },
+        "duracion_ms": 4000,
+        "id": "sonido",
+        "inicio_ms": 0,
+        "keyframes": [],
+        "material_id": 1,
+        "recorte": {
+         "desde_ms": 0,
+         "hasta_ms": 4000
+        },
+        "rol_audio": "sonido",
+        "velocidad": 1.0
+       }
+      ],
+      "id": "p_voz",
+      "oculta": false,
+      "silenciada": false,
+      "tipo": "audio"
+     }
+    ],
+    "pngs": {},
+    "subtitulos": {
+     "estilo_id": "karaoke",
+     "palabras": [],
+     "posicion": 0.78
+    },
+    "variables": {
+     "precios": {
+      "en_US": 24.99,
+      "es_CO": 89900,
+      "es_MX": 499.5
+     },
+     "textos": {
+      "hook": {
+       "en_US": "Your skin in 7 days",
+       "es": "Tu piel en 7 días",
+       "es_CO": "Tu piel, en 7 días",
+       "pt": "Sua pele em 7 dias"
+      }
+     },
+     "voz": {}
+    }
+   },
+   "idioma": "pt",
+   "pais": "BR"
+  },
+  {
+   "error": "VariableSinValor",
+   "idioma": "en",
+   "pais": "GB"
+  }
+ ],
+ "doc": {
+  "esquema": 1,
+  "formato": "9:16",
+  "fps": 30,
+  "guion": null,
+  "idioma_base": "es",
+  "marca": {
+   "color": "#7c3aed",
+   "logo_material_id": null,
+   "marca_de_agua": null
+  },
+  "materiales": [
+   1,
+   2,
+   5,
+   9
+  ],
+  "mezcla": {
+   "preset": "equilibrada",
+   "volumenes": null
+  },
+  "miniatura_ms": 0,
+  "origen": null,
+  "paginas": [],
+  "pistas": [
+   {
+    "bloqueada": false,
+    "clips": [
+     {
+      "audio": {
+       "ducking": true,
+       "fundido_entrada_ms": 0,
+       "fundido_salida_ms": 0,
+       "volumen": 1.0
+      },
+      "duracion_ms": 4000,
+      "id": "v0",
+      "inicio_ms": 0,
+      "keyframes": [],
+      "material_id": 1,
+      "recorte": {
+       "desde_ms": 0,
+       "hasta_ms": 4000
+      },
+      "transform": {
+       "ancla": "centro",
+       "escala": 1.0,
+       "opacidad": 1.0,
+       "rotacion": 0.0,
+       "x": 0.5,
+       "y": 0.5
+      },
+      "velocidad": 1.0
+     }
+    ],
+    "id": "p_video",
+    "oculta": false,
+    "silenciada": false,
+    "tipo": "video"
+   },
+   {
+    "bloqueada": false,
+    "clips": [
+     {
+      "duracion_ms": 2000,
+      "estilo": {
+       "alineacion": "centro",
+       "ancho_max": null,
+       "color": "#FFFFFF",
+       "contorno": null,
+       "fondo": null,
+       "fuente": "SpaceGrotesk-Bold",
+       "interlineado": 1.1,
+       "peso": 700,
+       "sombra": null,
+       "tamano": 0.04
+      },
+      "id": "t_hook",
+      "inicio_ms": 0,
+      "keyframes": [],
+      "texto": {
+       "variable": "hook"
+      },
+      "transform": {
+       "ancla": "centro",
+       "escala": 1.0,
+       "opacidad": 1.0,
+       "rotacion": 0.0,
+       "x": 0.5,
+       "y": 0.5
+      }
+     },
+     {
+      "duracion_ms": 2000,
+      "estilo": {
+       "alineacion": "centro",
+       "ancho_max": null,
+       "color": "#FFFFFF",
+       "contorno": null,
+       "fondo": null,
+       "fuente": "Inter-Bold",
+       "interlineado": 1.1,
+       "peso": 700,
+       "sombra": null,
+       "tamano": 0.04
+      },
+      "id": "t_precio",
+      "inicio_ms": 1000,
+      "keyframes": [],
+      "texto": {
+       "variable": "precio"
+      },
+      "transform": {
+       "ancla": "centro",
+       "escala": 1.0,
+       "opacidad": 1.0,
+       "rotacion": 0.0,
+       "x": 0.5,
+       "y": 0.5
+      }
+     },
+     {
+      "duracion_ms": 1000,
+      "estilo": {
+       "alineacion": "centro",
+       "ancho_max": null,
+       "color": "#FFFFFF",
+       "contorno": null,
+       "fondo": null,
+       "fuente": "Inter-Bold",
+       "interlineado": 1.1,
+       "peso": 700,
+       "sombra": null,
+       "tamano": 0.04
+      },
+      "id": "t_fijo",
+      "inicio_ms": 3000,
+      "keyframes": [],
+      "texto": {
+       "literal": "Compra ya"
+      },
+      "transform": {
+       "ancla": "centro",
+       "escala": 1.0,
+       "opacidad": 1.0,
+       "rotacion": 0.0,
+       "x": 0.5,
+       "y": 0.5
+      }
+     }
+    ],
+    "id": "p_texto",
+    "oculta": false,
+    "silenciada": false,
+    "tipo": "texto"
+   },
+   {
+    "bloqueada": false,
+    "clips": [
+     {
+      "audio": {
+       "ducking": true,
+       "fundido_entrada_ms": 0,
+       "fundido_salida_ms": 0,
+       "volumen": 1.0
+      },
+      "bloque": "hook",
+      "duracion_ms": 1800,
+      "id": "voz_hook",
+      "inicio_ms": 0,
+      "keyframes": [],
+      "material_id": 2,
+      "por_destino": {
+       "en_US": {
+        "duracion_ms": 1500,
+        "material_id": 5
+       },
+       "es": {
+        "duracion_ms": 1800,
+        "material_id": 2
+       },
+       "es_CO": {
+        "duracion_ms": 1800,
+        "material_id": 2
+       },
+       "pt_BR": null
+      },
+      "recorte": {
+       "desde_ms": 0,
+       "hasta_ms": 1800
+      },
+      "rol_audio": "voz",
+      "velocidad": 1.0
+     },
+     {
+      "audio": {
+       "ducking": true,
+       "fundido_entrada_ms": 0,
+       "fundido_salida_ms": 0,
+       "volumen": 1.0
+      },
+      "duracion_ms": 4000,
+      "id": "sonido",
+      "inicio_ms": 0,
+      "keyframes": [],
+      "material_id": 1,
+      "recorte": {
+       "desde_ms": 0,
+       "hasta_ms": 4000
+      },
+      "rol_audio": "sonido",
+      "velocidad": 1.0
+     }
+    ],
+    "id": "p_voz",
+    "oculta": false,
+    "silenciada": false,
+    "tipo": "audio"
+   }
+  ],
+  "pngs": {
+   "t_precio": 9
+  },
+  "subtitulos": {
+   "estilo_id": "karaoke",
+   "palabras": {
+    "es": [
+     {
+      "dur_ms": 500,
+      "t_ms": 0,
+      "texto": "Tu"
+     }
+    ],
+    "es_CO": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Tu"
+     }
+    ]
+   },
+   "posicion": 0.78
+  },
+  "variables": {
+   "precios": {
+    "en_US": 24.99,
+    "es_CO": 89900,
+    "es_MX": 499.5
+   },
+   "textos": {
+    "hook": {
+     "en_US": "Your skin in 7 days",
+     "es": "Tu piel en 7 días",
+     "es_CO": "Tu piel, en 7 días",
+     "pt": "Sua pele em 7 dias"
+    }
+   },
+   "voz": {}
+  }
+ }
+}

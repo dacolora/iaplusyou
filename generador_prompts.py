@@ -9,6 +9,7 @@ import anthropic
 
 import doctrina
 import idiomas
+from doctrina import producto as doctrina_producto
 
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5")
 
@@ -425,6 +426,9 @@ def caption_organico(contexto, plataformas):
         partes.append(f"<guion>\n{guion}\n</guion>")
     if contexto.get("hashtags_base"):
         partes.append("Hashtags sugeridos: " + " ".join(contexto["hashtags_base"]))
+    pruebas_txt = doctrina_producto.pruebas_texto(contexto.get("pruebas"))
+    if pruebas_txt:
+        partes.append("<pruebas_producto>\n" + pruebas_txt.replace("</pruebas_producto>", "") + "\n</pruebas_producto>")
     angulo = contexto.get("angulo")
     if angulo:
         partes.append("<angulo>\n" + doctrina.angulo_a_texto(angulo).replace("</angulo>", "") + "\n</angulo>")

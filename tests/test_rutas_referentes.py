@@ -24,6 +24,10 @@ def app(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
     (tmp_path / "clientes" / "acme").mkdir(parents=True)
     (tmp_path / "clientes" / "otro").mkdir(parents=True)
+    # Barridos por palabra: la traducción al inglés llama a Claude. En los
+    # tests nunca sale a la red: devuelve la palabra tal cual.
+    from referentes import traducir
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: (texto.rsplit("Keyword: ", 1)[-1].strip(), 0, 0))
     return {"dashboard": dashboard, "c": _cliente_admin(dashboard), "productos": productos}
 
 
@@ -418,6 +422,55 @@ def test_traer_form_sin_consulta_ofrece_boton_ver_precio(app, monkeypatch):
     assert 'data-precio="' in html
 
 
+def _script_modal_referentes(html):
+    """El <script> de _tab_referentes.html que maneja el diálogo y el precio en
+    vivo de «Traer referentes» (vive fuera del condicional de biblioteca vacía)."""
+    ini = html.index("var modal = document.getElementById('ref-modal');")
+    return html[ini:html.index("</script>", ini)]
+
+
+def test_traer_form_marca_lo_que_refresca_el_precio(app, monkeypatch):
+    """Incidente 2026-09-27: el refresco de precio solo reemplaza lo que depende
+    del servidor, así que esas partes tienen que poder encontrarse por id."""
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    html = app["c"].get("/cliente/acme/referentes/traer", headers={"X-Requested-With": "fetch"}).data.decode()
+    for id_ in ("traer-precio", "traer-aviso", "traer-enviar"):
+        assert f'id="{id_}"' in html
+
+
+def test_refresco_de_precio_no_reemplaza_el_formulario(app):
+    """Incidente 2026-09-27: cada pausa al escribir pedía el precio y metía el
+    fragmento ENTERO con `cuerpo.innerHTML = html`. Lo tecleado mientras llegaba
+    la respuesta se perdía («crema antiarrugas» quedaba «cremaarrugas»), el
+    scroll del formulario volvía arriba y los campos nuevos nacían sin la marca
+    `data-sucio` de base.html -- así un trabajo que terminaba en otra pestaña
+    recargaba la página y cerraba el modal. Ahora solo se tocan el precio, el
+    aviso de la fuente y el estado del botón, y una respuesta vieja se ignora."""
+    js = _script_modal_referentes(app["c"].get("/cliente/acme").data.decode())
+    precio = js[js.index("function refrescarPrecioTraer"):js.index("cuerpo.addEventListener('input'")]
+    assert "innerHTML = html" not in precio
+    for id_ in ("traer-precio", "traer-aviso", "traer-enviar"):
+        assert id_ in precio
+    assert "pedidoPrecioTraer" in precio                      # descarta respuestas que llegan tarde
+
+
+def test_enter_en_un_campo_no_lanza_el_barrido(app):
+    """Incidente 2026-09-27: Enter en «Palabra clave» hacía el envío implícito
+    del navegador -> POST traer_post -> barrido encolado (gasta) y la página se
+    recargaba, cerrando el modal. Solo el botón «Traer y clasificar» lanza."""
+    js = _script_modal_referentes(app["c"].get("/cliente/acme").data.decode())
+    enter = js[js.index("addEventListener('keydown'"):]
+    assert "'Enter'" in enter[:400] and "preventDefault()" in enter[:600]
+
+
+def test_soltar_una_seleccion_fuera_no_cierra_el_dialogo(app):
+    """Incidente 2026-09-27: seleccionar texto arrastrando y soltar fuera del
+    diálogo da un 'click' con target = el <dialog> y lo cerraba. Solo se cierra
+    si el clic también empezó en el fondo."""
+    js = _script_modal_referentes(app["c"].get("/cliente/acme").data.decode())
+    assert "modal.addEventListener('mousedown'" in js
+
+
 def test_traer_form_pagina_id_con_link_extrae_solo_el_id(app, monkeypatch):
     """Important 2: pegar el link completo del Ad Library en el campo de
     marca (el placeholder invita a hacerlo) debe extraer solo el
@@ -505,6 +558,83 @@ def test_traer_post_tope_excede_2000_se_recorta(app, monkeypatch):
         "fuente": "atria", "modo": "palabra", "palabra": "x", "idioma": "en", "tope": "999999",
     })
     assert llamadas[0][3] <= 2000  # el 4to posicional de encolar_barrer(cliente, fuente, consulta, tope, ...) es tope
+
+
+def _gastos_de(cliente):
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == cliente))]
+
+
+def test_traer_post_traduce_la_palabra_y_busca_en_ingles(app, monkeypatch):
+    """2026-09-27: los barridos por palabra van SIEMPRE en inglés (pedido del
+    usuario tras «DOLOR DE PIES» en inglés = pasteles). Se traduce lo escrito,
+    se guarda la original, se fuerza idioma en y se registra el gasto."""
+    from referentes import traducir
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ('"foot pain"\n', 40, 6))
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 1)
+    app["c"].post("/cliente/acme/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "dolor de pies",
+                                                         "idioma": "es", "tope": "20"})
+    consulta = llamadas[0][2]
+    assert (consulta["palabra"], consulta["palabra_original"], consulta["idioma"]) == ("foot pain", "dolor de pies", "en")
+    (g,) = _gastos_de("acme")
+    assert g["tipo"] == "otro" and g["usd"] > 0 and "dolor de pies" in g["detalle"] and "foot pain" in g["detalle"]
+
+
+def test_traer_post_si_no_se_puede_traducir_no_lanza_nada(app, monkeypatch):
+    from referentes import traducir
+    from tareas import referentes as tareas_referentes
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: (_ for _ in ()).throw(RuntimeError("Anthropic caído")))
+    llamadas = []
+    monkeypatch.setattr(tareas_referentes, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or 1)
+    c = app["c"]
+    c.post("/cliente/acme/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "dolor de pies", "tope": "20"})
+    assert llamadas == []
+    with c.session_transaction() as s:
+        assert any("traducir" in m for _, m in s.get("_flashes", []))
+
+
+def test_admin_barrido_global_tambien_en_ingles(app, monkeypatch):
+    from referentes import traducir
+    from tareas import referentes as tr
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ("shoes", 30, 2))
+    llamadas = []
+    monkeypatch.setattr(tr, "encolar_barrer", lambda *a, **kw: llamadas.append(a) or True)
+    app["c"].post("/admin/referentes/traer", data={"fuente": "atria", "modo": "palabra", "palabra": "zapatos", "idioma": "es",
+                                                  "tope": "50"}, headers={"Sec-Fetch-Site": "same-origin"})
+    assert (llamadas[0][2]["palabra"], llamadas[0][2]["idioma"]) == ("shoes", "en")
+    assert [g["tipo"] for g in _gastos_de("_creatv")] == ["otro"]
+
+
+def test_mis_barridos_muestra_lo_escrito_y_lo_buscado(app):
+    from referentes import datos
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "foot pain", "palabra_original": "dolor de pies",
+                                          "idioma": "en"}, 20)
+    html = app["c"].get("/cliente/acme/referentes/barridos").get_data(as_text=True)
+    assert "«dolor de pies» → «foot pain»" in html
+
+
+def test_formularios_de_barrido_ya_no_piden_idioma(app, monkeypatch):
+    monkeypatch.setenv("ATRIA_API_KEY", "atria-sk_test")
+    html = app["c"].get("/cliente/acme/referentes/traer").get_data(as_text=True)
+    assert 'name="idioma"' not in html and "inglés" in html
+    html = app["c"].get("/admin/referentes").get_data(as_text=True)
+    assert 'name="idioma"' not in html
+
+
+def test_al_ingles_limpia_comillas_y_rechaza_vacio(monkeypatch):
+    from referentes import traducir
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ("«foot pain relief»\nExplanation…", 1, 1))
+    assert traducir.al_ingles("alivio del dolor de pies")[0] == "foot pain relief"
+    monkeypatch.setattr(traducir, "_llamar", lambda texto: ("  ", 1, 1))
+    with pytest.raises(traducir.TraduccionInvalida):
+        traducir.al_ingles("x")
 
 
 def test_traer_post_sin_marca_ni_palabra_falla(app, monkeypatch):
@@ -944,3 +1074,41 @@ def test_admin_referentes_sin_pendientes_ni_errores_no_ofrece_botones(app, monke
     html = app["c"].get("/admin/referentes").data.decode()
     assert "Clasificar pendientes" not in html
     assert "Reintentar imágenes" not in html
+
+
+def test_recrear_adaptar_le_pasa_la_sofisticacion_del_catalogo(app, monkeypatch):
+    """Doctrina, bloque 2: la ruta lee la sofisticación de la fila `producto`."""
+    import tiendas
+    from referentes import recrear
+    ids = _sembrar()
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    tiendas.anotar_extra("acme", fila, sofisticacion=5)
+    visto = {}
+
+    def falso(texto, max_tokens):
+        visto["texto"] = texto
+        return '{"titular": "SE ACABA HOY", "prompt": "Con Image 1 e Image 2..."}', 150, 40
+    monkeypatch.setattr(recrear, "_llamar", falso)
+    app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
+    assert "Sofisticación del mercado (fija, no la cambies): 5" in visto["texto"]
+
+
+def test_recrear_adaptar_descarta_una_sofisticacion_invalida_del_catalogo(app, monkeypatch):
+    """Bloque 2, revisión final #6: sofisticación fuera de 1-5 (dato corrupto
+    en `producto.extra`) se descarta en la ruta antes de fijarla en el
+    ángulo, igual que ya hacen ideas y el guion
+    (`sof if sof in doctrina.SOFISTICACIONES else None`)."""
+    import tiendas
+    from referentes import recrear
+    ids = _sembrar()
+    fila = tiendas.asegurar_manual("acme", "espejo_led", "Espejo LED")
+    tiendas.anotar_extra("acme", fila, sofisticacion=9)
+    visto = {}
+
+    def falso_adaptar(referente, familia, producto, titular_actual, guia=""):
+        visto["sofisticacion"] = producto.get("sofisticacion")
+        return {"titular": "T", "prompt": "P", "angulo": {}}, 10, 5
+    monkeypatch.setattr(recrear, "adaptar", falso_adaptar)
+    r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
+    assert r.status_code == 200
+    assert visto["sofisticacion"] is None

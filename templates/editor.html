@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{ edicion.nombre }} · Vista previa</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<style>
+  {% for f in datos.config.fuentes %}
+  @font-face { font-family: "{{ f }}"; src: url("{{ url_for('static', filename='fonts/' ~ f ~ '.ttf') }}") format("truetype"); font-display: block; }
+  {% endfor %}
+  body.editor { margin: 0; min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; background: var(--bg); color: var(--text); }
+  .editor-barra { display: flex; align-items: center; gap: .6rem 1rem; flex-wrap: wrap; padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
+  .editor-barra h1 { flex: 1 1 12rem; min-width: 0; margin: 0; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .editor-destino { display: flex; align-items: center; gap: .4rem; }
+  .editor-escena { flex: 1; display: flex; align-items: center; justify-content: center; padding: 1rem; min-height: 0; }
+  #lienzo { display: block; width: auto; height: auto; max-width: 100%; max-height: min(72vh, 900px); background: #000; border-radius: var(--radius-sm); }
+  .editor-avisos { display: grid; gap: .3rem; justify-items: center; padding: 0 1rem; }
+  .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; }
+  .editor-aviso.error { color: var(--error); }
+  .editor-transporte { display: flex; align-items: center; gap: .8rem; padding: .8rem 1rem calc(.8rem + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); }
+  .editor-transporte input[type="range"] { flex: 1; min-width: 0; }
+  #tiempo { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .88rem; white-space: nowrap; }
+</style>
+</head>
+<body class="editor">
+<header class="editor-barra">
+  <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='final') }}">← Final edition</a>
+  <h1>{{ edicion.nombre }}</h1>
+  <div class="editor-destino">
+    <label class="campo-label" for="destino">Destino</label>
+    <select id="destino"></select>
+  </div>
+  <span class="badge">Vista previa</span>
+</header>
+<main class="editor-escena">
+  <canvas id="lienzo" aria-label="Vista previa del video"></canvas>
+</main>
+<section class="editor-avisos" aria-live="polite">
+  <p id="aviso-destino" class="editor-aviso" hidden></p>
+  <p id="aviso-faltan" class="editor-aviso" hidden></p>
+  <p id="aviso-recortes" class="editor-aviso" hidden></p>
+  <p id="aviso-preparando" class="editor-aviso" hidden></p>
+  <p id="aviso-audio" class="editor-aviso" hidden></p>
+  <p id="aproximada" class="editor-aviso" hidden>Transición vista de forma aproximada: el video final la hace completa.</p>
+</section>
+<footer class="editor-transporte">
+  <button id="inicio" class="btn-sm" type="button" aria-label="Ir al inicio">⏮</button>
+  <button id="reproducir" class="btn-generar" type="button" aria-label="Reproducir">▶</button>
+  <span id="tiempo">0:00.0 / 0:00.0</span>
+  <input id="barra" type="range" min="0" max="0" step="1" value="0" aria-label="Posición en el video">
+</footer>
+<script type="application/json" id="datos-editor">{{ datos|tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='editor/vista.js') }}"></script>
+</body>
+</html>

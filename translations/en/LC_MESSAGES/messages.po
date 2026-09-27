@@ -63,6 +63,9 @@ msgstr " pieces selected"
 msgid " · "
 msgstr " · "
 
+msgid " · borrador"
+msgstr " · draft"
+
 msgid " · hasta "
 msgstr " · up to "
 
@@ -270,8 +273,16 @@ msgid "%(n)s personas"
 msgstr "%(n)s people"
 
 #, python-format
+msgid "%(n)s pieza elegida tiene puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual."
+msgstr "%(n)s chosen piece has points to improve according to the doctrine (shown in Create). You can launch anyway."
+
+#, python-format
 msgid "%(n)s pieza(s)"
 msgstr "%(n)s piece(s)"
+
+#, python-format
+msgid "%(n)s piezas elegidas tienen puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual."
+msgstr "%(n)s chosen pieces have points to improve according to the doctrine (shown in Create). You can launch anyway."
 
 #, python-format
 msgid "%(n)s producto(s) guardado(s) sin activo todavía: el resto se completa solo en las próximas corridas."
@@ -284,6 +295,10 @@ msgstr "%(n)s new product(s)"
 #, python-format
 msgid "%(n)s productos"
 msgstr "%(n)s products"
+
+#, python-format
+msgid "%(n)s productos, personajes y entornos, con buscador."
+msgstr "%(n)s products, characters and settings, with search."
 
 #, python-format
 msgid "%(n)s propuesta(s)"
@@ -460,6 +475,12 @@ msgstr[0] "%(num)s country"
 msgstr[1] "%(num)s countries"
 
 #, python-format
+msgid "%(num)s pedido de Claude"
+msgid_plural "%(num)s pedidos de Claude"
+msgstr[0] "%(num)s request from Claude"
+msgstr[1] "%(num)s requests from Claude"
+
+#, python-format
 msgid "%(num)s pieza"
 msgid_plural "%(num)s piezas"
 msgstr[0] "%(num)s piece"
@@ -563,9 +584,6 @@ msgstr "(the server has no email configured; let the administrator know)"
 msgid "(entra al loop de experimentos)"
 msgstr "(enters the experiments loop)"
 
-msgid "(este clon no trae sonido)"
-msgstr "(this clone has no sound)"
-
 msgid "(imagen)"
 msgstr "(image)"
 
@@ -580,9 +598,6 @@ msgstr "(suggested)"
 
 msgid "(sugerido)"
 msgstr "(suggested)"
-
-msgid "(ya producida — se reemplaza)"
-msgstr "(already produced — will be replaced)"
 
 #, python-format
 msgid "+ Nuevo %(nombre)s"
@@ -857,11 +872,11 @@ msgstr "Add a payment method to your ad account (link below): without it Meta wo
 msgid "Agregar"
 msgstr "Add"
 
-msgid "Agregar link"
-msgstr "Add link"
-
 msgid "Agregar pieza"
 msgstr "Add piece"
+
+msgid "Agregar referencias"
+msgstr "Add references"
 
 msgid "Ahora esto se hace con un experimento: crea uno (o usa uno en armado) y mete la pieza."
 msgstr "This is now done with an experiment: create one (or use one being drafted) and add the piece to it."
@@ -871,9 +886,6 @@ msgstr "The default one is being used now."
 
 msgid "Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro."
 msgstr "When connecting, choose that Page: its page token (<code>page_id</code>) gets saved to publish videos on the wall."
-
-msgid "Al menos un destino marcado ya tiene una final producida: se reemplaza por la nueva (la anterior se ve hasta que termine)."
-msgstr "At least one checked destination already has a produced final cut: it gets replaced by the new one (the previous one stays visible until it's done)."
 
 msgid "Al volver a armar, Claude recibe esta lista para corregirla."
 msgstr "When reassembling, Claude gets this list to fix it."
@@ -999,8 +1011,14 @@ msgstr "Building the prompt with AI…"
 msgid "Armando el prompt con IA… en unos segundos aparece aquí para que lo revises y generes."
 msgstr "Building the prompt with AI… it'll appear here in a few seconds for you to review and generate."
 
+msgid "Armando lo que Claude necesita… la lista se actualiza sola."
+msgstr "Putting together what Claude needs… the list updates on its own."
+
 msgid "Armar clips"
 msgstr "Assemble clips"
+
+msgid "Arrastra aquí imágenes o videos, o toca <strong>+</strong> para sumar referencias o elegir del catálogo. Son opcionales: sin nada, se genera solo con tu texto."
+msgstr "Drag images or videos here, or tap <strong>+</strong> to add references or pick from the catalog. They're optional: with nothing, it generates from your text alone."
 
 msgid "Atria (biblioteca de referentes: Ad Library de Meta)"
 msgstr "Atria (swipe file: Meta's Ad Library)"
@@ -1012,8 +1030,8 @@ msgstr "Attribution"
 msgid "Atribución no válida: %(atribucion)s (usa pixel, tienda o ninguna)."
 msgstr "Invalid attribution: %(atribucion)s (use pixel, store or none)."
 
-msgid "Audio nativo del modelo, sin diálogo ni música. Vacío = ambiente natural de la escena."
-msgstr "The model's native audio, no dialogue or music. Empty = the scene's natural ambience."
+msgid "Audio nativo del modelo, sin diálogo ni música."
+msgstr "The model's native audio, no dialogue or music."
 
 msgid "Avanzado (objetivo, atribución, modo, destino)"
 msgstr "Advanced (objective, attribution, mode, destination)"
@@ -1040,8 +1058,8 @@ msgstr "Video block (repeats in every clip)"
 msgid "Bolso o accesorio que se carga"
 msgstr "Bag or accessory that's carried"
 
-msgid "Borrador a 480p (solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final)"
-msgstr "Draft at 480p (Wan 3.0 only, half price: to test the prompt before the final version)"
+msgid "Borrador a 480p"
+msgstr "Draft at 480p"
 
 msgid "Borrar"
 msgstr "Delete"
@@ -1111,6 +1129,9 @@ msgstr ""
 "    <code>clientes/%(cliente)s/marca/root.json</code>, not from AI-generated text. To\n"
 "    edit them, edit the file directly (or ask Claude Code to update it) — they're not\n"
 "    rewritten from the dashboard, so they never drift from the source of truth."
+
+msgid "Cada idea, guion y caption sigue la doctrina de venta de Creatv:"
+msgstr "Every idea, script and caption follows Creatv's sales doctrine:"
 
 msgid "Cadera / entrepierna"
 msgstr "Hips / groin"
@@ -1204,9 +1225,6 @@ msgstr "Song ready in My music."
 msgid "Cantidad"
 msgstr "Count"
 
-msgid "Capas"
-msgstr "Layers"
-
 msgid "Carga tu catálogo"
 msgstr "Upload your catalog"
 
@@ -1291,6 +1309,9 @@ msgstr "Claude didn't find any script lines in the text. Check that you pasted t
 msgid "Claude no escribió el prompt de %(faltan)s. Vuelve a intentarlo."
 msgstr "Claude didn't write the prompt for %(faltan)s. Try again."
 
+msgid "Claude no ha pedido nada para este producto todavía: aparece cuando escribe ideas o guiones con él."
+msgstr "Claude hasn't asked for anything for this product yet: requests show up when it writes ideas or scripts with it."
+
 msgid "Claude no pudo responder esta vez."
 msgstr "Claude couldn't respond this time."
 
@@ -1368,6 +1389,9 @@ msgstr ""
 "  and experiments are decided by sales. Without a Pixel, the connected\n"
 "  store's orders are used (Shopify/WooCommerce) or, if there's none, traffic."
 
+msgid "Con el sonido de la escena, hasta 30 s"
+msgstr "With the scene sound, up to 30 s"
+
 msgid "Con el usuario y la contraseña de tu empresa."
 msgstr "With your company's username and password."
 
@@ -1385,10 +1409,6 @@ msgstr "With a person"
 
 msgid "Con qué se miden las ventas de este experimento"
 msgstr "What this experiment's sales are measured with"
-
-#, python-format
-msgid "Con referencias o catálogo se adjuntan %(n)s logo(s) oficial(es) del proyecto como @Logo N para que la marca salga exacta. Se gestionan en FlowSettings."
-msgstr "With references or catalog, %(n)s official project logo(s) are attached as @Logo N so the brand comes out exact. Managed in FlowSettings."
 
 msgid "Con tu propia app: sigue los pasos de la tarjeta de Meta."
 msgstr "With your own app: follow the steps on the Meta card."
@@ -1700,9 +1720,6 @@ msgstr "Create my project →"
 msgid "Crear producto"
 msgstr "Create product"
 
-msgid "Crear super prompt"
-msgstr "Create super prompt"
-
 msgid "Crear super prompt con IA (gratis)"
 msgstr "Create super prompt with AI (free)"
 
@@ -1754,6 +1771,9 @@ msgstr "Invalid body: a JSON object was expected."
 msgid "Cuándo"
 msgstr "When"
 
+msgid "Cuántas promesas parecidas vio ya tu cliente"
+msgstr "How many similar promises your customer has already seen"
+
 msgid ""
 "Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,\n"
 "      final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app\n"
@@ -1771,6 +1791,9 @@ msgstr "How to activate it"
 
 msgid "Cómo conseguirla"
 msgstr "How to get it"
+
+msgid "Cómo escribe Creatv →"
+msgstr "How Creatv writes →"
 
 msgid "Cómo instalar el Pixel según tu plataforma"
 msgstr "How to install the Pixel depending on your platform"
@@ -1801,12 +1824,12 @@ msgstr "Copy it as YOUTUBE_API_KEY in the server's .env and restart both service
 msgid "Deja al menos una casilla marcada en la cuadrícula."
 msgstr "Leave at least one checkbox selected in the grid."
 
+msgid "Del catálogo"
+msgstr "From the catalog"
+
 #, python-format
 msgid "Del catálogo (opcional, %(n)s) →"
 msgstr "From the catalog (optional, %(n)s) →"
-
-msgid "Del catálogo: productos, personajes, entornos"
-msgstr "From the catalog: products, characters, settings"
 
 msgid "Demasiados registros seguidos desde esta conexión. Espera un rato e inténtalo de nuevo."
 msgstr "Too many sign-ups in a row from this connection. Wait a while and try again."
@@ -1884,8 +1907,11 @@ msgstr "Describe the video's visual style."
 msgid "Describe la música que quieres."
 msgstr "Describe the music you want."
 
-msgid "Describir con IA → rellena el texto"
-msgstr "Describe with AI → fills in the text"
+msgid "Describe qué tiene que pasar. Ej.: @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"
+msgstr "Describe what has to happen. E.g.: @Imagen 1 is the product; a girl discovers it and jumps for joy, the camera follows her like in @Video 1"
+
+msgid "Describir con IA"
+msgstr "Describe with AI"
 
 msgid "Descripción"
 msgstr "Description"
@@ -1929,6 +1955,16 @@ msgstr "On-camera dialogue"
 
 msgid "Diálogo a cámara: el personaje dice las líneas"
 msgstr "On-camera dialogue: the character says the lines"
+
+#, python-format
+msgid "Doctrina: %(n)s por mejorar"
+msgstr "Doctrine: %(n)s to improve"
+
+msgid "Doctrina: bien"
+msgstr "Doctrine: good"
+
+msgid "Doctrina: sin revisar"
+msgstr "Doctrine: not reviewed"
 
 msgid "Dominio de la tienda"
 msgstr "Store domain"
@@ -2218,6 +2254,10 @@ msgstr "The video comes with the scene's sound"
 
 msgid "El último clip tiene que terminar en un cuadro sostenido sin diálogo. "
 msgstr "The last clip has to end on a held frame with no dialogue. "
+
+#, python-format
+msgid "Elegidos: %(lista)s"
+msgstr "Chosen: %(lista)s"
 
 msgid "Elegir"
 msgstr "Choose"
@@ -2510,6 +2550,9 @@ msgstr "That piece comes from an image session: it can't be derived or rescued (
 msgid "Esa pieza ya está publicada (o en cola) en %(nombre)s."
 msgstr "That piece is already published (or queued) on %(nombre)s."
 
+msgid "Esa pieza ya no existe."
+msgstr "That piece no longer exists."
+
 msgid "Esa propuesta no existe o ya estaba resuelta."
 msgstr "That proposal doesn't exist or was already resolved."
 
@@ -2575,13 +2618,6 @@ msgstr "Describe what should happen"
 msgid "Escribe qué tiene que pasar en el video."
 msgstr "Write what has to happen in the video."
 
-msgid ""
-"Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.\n"
-"  Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:"
-msgstr ""
-"Write what has to happen and, if you want, upload reference images (product, person, place) or pick from the catalog.\n"
-"  Without references or catalog it generates from your text alone. Two paths:"
-
 msgid "Escribe un correo válido."
 msgstr "Enter a valid email."
 
@@ -2590,9 +2626,6 @@ msgstr "Enter a valid email: that's where the link to confirm your account and r
 
 msgid "Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises."
 msgstr "Writing the script with AI… it'll appear here in a few seconds for you to review."
-
-msgid "Escribiendo el guion…"
-msgstr "Writing the script…"
 
 msgid "Escribiendo planos"
 msgstr "Writing shots"
@@ -2675,6 +2708,9 @@ msgstr "That country doesn't exist in the experiment."
 
 msgid "Ese país no tiene conjunto en Meta."
 msgstr "That country has no ad set on Meta."
+
+msgid "Ese pedido ya no está abierto."
+msgstr "That request is no longer open."
 
 msgid "Ese precio es para un guion de unas 750 palabras; uno más largo cuesta un poco más."
 msgstr "That price is for a script of about 750 words; a longer one costs a bit more."
@@ -2808,6 +2844,9 @@ msgstr "Visual style, in English"
 msgid "Estilos IA"
 msgstr "AI styles"
 
+msgid "Estilos IA · US$ 0,02 la primera vez por estilo y duración"
+msgstr "AI styles · US$ 0.02 the first time per style and duration"
+
 #, python-format
 msgid "Estimado: %(estimado)s s"
 msgstr "Estimated: %(estimado)s s"
@@ -2939,20 +2978,8 @@ msgid "Fecha"
 msgstr "Date"
 
 #, python-format
-msgid "Final %(id)s"
-msgstr "Final cut %(id)s"
-
-#, python-format
 msgid "Final %(idioma)s_%(pais)s"
 msgstr "Final %(idioma)s_%(pais)s"
-
-#, python-format
-msgid "Final de %(enfoque)s"
-msgstr "Final cut of %(enfoque)s"
-
-#, python-format
-msgid "Final de: %(texto)s"
-msgstr "Final cut of: %(texto)s"
 
 msgid "Final descartada."
 msgstr "Final cut discarded."
@@ -2966,14 +2993,14 @@ msgstr "Final edition needs a finished video (not an image or a session that has
 msgid "Finales"
 msgstr "Final cuts"
 
-msgid "Finales de esta pieza"
-msgstr "This piece's final cuts"
-
 msgid "Flux Kontext Pro"
 msgstr "Flux Kontext Pro"
 
 msgid "Formato"
 msgstr "Format"
+
+msgid "Formato inválido."
+msgstr "Invalid format."
 
 msgid "Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm."
 msgstr "Unsupported format. Use jpg, jpeg, png, webp, mp4, mov or webm."
@@ -3135,6 +3162,9 @@ msgstr "Google › App passwords"
 msgid "Gorra / sombrero"
 msgstr "Cap / hat"
 
+msgid "Gracias: quedó como prueba del producto y Claude ya la puede usar."
+msgstr "Thanks: it's saved as product proof and Claude can now use it."
+
 msgid "Gratis para uso propio (100 llamadas por minuto). Si el producto se vende, Reddit pide permiso comercial."
 msgstr "Free for your own use (100 calls per minute). If the product is sold, Reddit requires commercial permission."
 
@@ -3180,9 +3210,6 @@ msgstr "Save password"
 msgid "Guardar correo"
 msgstr "Save email"
 
-msgid "Guardar guion"
-msgstr "Save script"
-
 msgid "Guardar identidad de marca"
 msgstr "Save brand identity"
 
@@ -3218,9 +3245,6 @@ msgstr "Save sound when creating"
 
 msgid "Guion"
 msgstr "Script"
-
-msgid "Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país."
-msgstr "AI script, voice, music, and on-screen text over this video, in each country's language and currency."
 
 msgid "Guion elegido"
 msgstr "Chosen script"
@@ -3332,6 +3356,9 @@ msgstr "Your ad account's ID (optional, starts with act_)"
 msgid "ID de tu portafolio comercial"
 msgstr "Your business portfolio's ID"
 
+msgid "Ideas de sprint (IA)"
+msgstr "Sprint ideas (AI)"
+
 msgid "Identidad de marca"
 msgstr "Brand identity"
 
@@ -3340,9 +3367,6 @@ msgstr "Login configuration id"
 
 msgid "Identificador de la app"
 msgstr "App id"
-
-msgid "Idioma base"
-msgstr "Base language"
 
 msgid "Idioma del proyecto"
 msgstr "Project language"
@@ -3479,9 +3503,6 @@ msgstr "Engagement"
 msgid "Interno (Creatv)"
 msgstr "Internal (Creatv)"
 
-msgid "Interrumpida"
-msgstr "Interrupted"
-
 msgid "Interrumpido"
 msgstr "Interrupted"
 
@@ -3498,6 +3519,9 @@ msgstr "Go to %(tab)s →"
 msgid "Ir a Crear"
 msgstr "Go to Create"
 
+msgid "JPG, PNG, WEBP, MP4 o MOV; también puedes arrastrarlos a la caja. Cada uno queda como @Imagen N / @Video N para nombrarlo en el texto."
+msgstr "JPG, PNG, WEBP, MP4 or MOV; you can also drag them into the box. Each one becomes @Imagen N / @Video N so you can name it in the text."
+
 msgid "Jornadas de trabajo"
 msgstr "Work days"
 
@@ -3512,9 +3536,6 @@ msgstr "Kling Omni O3 Pro Video Edit"
 
 msgid "La IA arma el prompt por planos desde tu idea y las referencias. Revisas, editas y puedes regenerar antes de generar. No cuesta nada."
 msgstr "The AI builds the prompt by shots from your idea and the references. You review, edit, and can regenerate before generating. It costs nothing."
-
-msgid "La IA arma un prompt detallado por planos desde tu idea y las referencias. Lo revisas, editas y regeneras (gratis) antes de generar el video — perfecto si no sabes qué escribir."
-msgstr "The AI builds a detailed prompt by shots from your idea and the references. You review it, edit it, and regenerate (free) before generating the video — perfect if you don't know what to write."
 
 #, python-format
 msgid "La IA no pudo armar los planos (%(aviso)s); este es el prompt básico. Puedes editarlo o rearmar."
@@ -3671,9 +3692,6 @@ msgstr "The two passwords don't match."
 msgid "Las finales van a su propio país; los clones sin texto a cualquiera."
 msgstr "Final cuts go to their own country; text-free clones to any of them."
 
-msgid "Las imágenes van solas a Seedream V5 Pro. Ninguna genera costos hasta que pulses \"Generar\"."
-msgstr "Images go straight to Seedream V5 Pro. Nothing costs anything until you tap “Generate”."
-
 msgid "Las líneas a quitar tienen que ser números."
 msgstr "The lines to remove have to be numbers."
 
@@ -3726,6 +3744,9 @@ msgstr "Ready to publish again."
 msgid "Listo."
 msgstr "Done."
 
+msgid "Listo: Claude no lo volverá a pedir."
+msgstr "Done: Claude won't ask for it again."
+
 msgid "Listo: Creatv recibió tu solicitud y te avisa por correo cuando quede conectado."
 msgstr "Done: Creatv received your request and will email you once it's connected."
 
@@ -3766,6 +3787,9 @@ msgstr "Keys and connections for the project, your account, stores, channels and
 
 msgid "Llegaron de un archivo, una URL o tu tienda pero todavía no tienen fotos en el catálogo, así que Crear no puede usarlos. Súbeles fotos (o créalos con las fotos de la tienda) y pasan a la lista de productos."
 msgstr "They came from a file, a URL or your store but don't have photos in the catalog yet, so Create can't use them. Upload photos for them (or create them with the store's photos) and they move to the product list."
+
+msgid "Llevar a final edition"
+msgstr "Take to Final edition"
 
 msgid "Lo pagado a los proveedores de IA este mes, todos los proyectos"
 msgstr "What was paid to AI providers this month, all projects"
@@ -3881,9 +3905,6 @@ msgstr "Brand"
 msgid "Marca al menos un destino (idioma y país) válido para producir."
 msgstr "Check at least one valid destination (language and country) to produce."
 
-msgid "Marca al menos un destino."
-msgstr "Check at least one destination."
-
 msgid "Marca al menos un país."
 msgstr "Select at least one country."
 
@@ -3904,6 +3925,9 @@ msgstr "Check the lines that come out. They're removed whole; line 1 (the hook) 
 
 msgid "Marca lo que Creatv va a operar: en <em>Cuentas publicitarias</em>, tu cuenta con <strong>Administrar campañas</strong>; en <em>Páginas</em>, tu Página con <strong>Crear anuncios</strong> y, si quieres publicar Reels y posts, también <strong>Crear contenido</strong>; en <em>Cuentas de Instagram</em>, tu cuenta con lo mismo (opcional)."
 msgstr "Check what Creatv is going to operate: in <em>Ad accounts</em>, your account with <strong>Manage campaigns</strong>; in <em>Pages</em>, your Page with <strong>Create ads</strong> and, if you want to publish Reels and posts, also <strong>Create content</strong>; in <em>Instagram accounts</em>, your account with the same (optional)."
+
+msgid "Marca lo que debe salir en la pieza: productos, personajes o entornos. Es opcional; si eliges un personaje, la escena lo lleva a él."
+msgstr "Tick what should appear in the piece: products, characters or settings. It's optional; if you choose a character, the scene features them."
 
 msgid "Marca los permisos de lectura y «offline_access» (para renovar el token solo)."
 msgstr "Check the read permissions and “offline_access” (to renew the token on its own)."
@@ -4007,14 +4031,14 @@ msgstr "Meta: Summary in %(moneda)s"
 msgid "Meter en experimento"
 msgstr "Add to experiment"
 
-msgid "Mezcla"
-msgstr "Mix"
-
 msgid "Mezclando sonido"
 msgstr "Mixing sound"
 
 msgid "Mi música"
 msgstr "My music"
+
+msgid "Mi música · gratis"
+msgstr "My music · free"
 
 msgid "Mirando las referencias…"
 msgstr "Looking at the references…"
@@ -4027,12 +4051,6 @@ msgstr "Attribution model"
 
 msgid "Modelo de foto inválido."
 msgstr "Invalid photo model."
-
-msgid "Modelo de imagen"
-msgstr "Image model"
-
-msgid "Modelo de video"
-msgstr "Video model"
 
 msgid "Modelo de video inválido."
 msgstr "Invalid video model."
@@ -4129,6 +4147,12 @@ msgstr "Music when creating"
 #, python-format
 msgid "Música al crear: %(estilo)s"
 msgstr "Music when created: %(estilo)s"
+
+msgid "Nada elegido todavía."
+msgstr "Nothing chosen yet."
+
+msgid "Nadie le ha prometido esto"
+msgstr "Nobody has promised them this"
 
 msgid "Nano Banana"
 msgstr "Nano Banana"
@@ -4665,6 +4689,9 @@ msgstr "Country"
 msgid "Pedido rechazado: no viene de esta página."
 msgstr "Request rejected: it doesn't come from this page."
 
+msgid "Pedidos al cliente (IA)"
+msgstr "Client requests (AI)"
+
 msgid "Pedir otro enlace"
 msgstr "Request another link"
 
@@ -4706,6 +4733,9 @@ msgstr ""
 
 msgid "Pega un link primero."
 msgstr "Paste a link first."
+
+msgid "Pegar un link"
+msgstr "Paste a link"
 
 msgid "Pensando…"
 msgstr "Thinking…"
@@ -4815,17 +4845,14 @@ msgstr "Price"
 msgid "Precio (opcional)"
 msgstr "Price (optional)"
 
-msgid "Precio base"
-msgstr "Base price"
+msgid "Precios con el sonido de la escena incluido."
+msgstr "Prices include the scene sound."
 
 msgid "Preferencias de sonido guardadas."
 msgstr "Sound preferences saved."
 
 msgid "Prenda de vestir (saco, camiseta, chaqueta)"
 msgstr "Clothing (sweater, t-shirt, jacket)"
-
-msgid "Preparar guion con IA"
-msgstr "Prepare script with AI"
 
 msgid "Presupuesto actualizado."
 msgstr "Budget updated."
@@ -4889,19 +4916,8 @@ msgid "Procesando…"
 msgstr "Processing…"
 
 #, python-format
-msgid "Produciendo %(n)s finales… cada una aparece en Generados cuando termina."
-msgstr "Producing %(n)s final cuts… each one appears in Generated when it's done."
-
-#, python-format
-msgid "Produciendo… 0%% · 0s"
-msgstr "Producing… 0%% · 0s"
-
-msgid "Producir finales"
-msgstr "Produce final cuts"
-
-#, python-brace-format
-msgid "Producir {n} finales"
-msgstr "Produce {n} final cuts"
+msgid "Produciendo %(n)s finales… cada una aparece aquí, en Finales, cuando termina."
+msgstr "Producing %(n)s final cuts… each one appears here, in Final cuts, when it's done."
 
 msgid "Producto"
 msgstr "Product"
@@ -5014,14 +5030,17 @@ msgstr "Projects"
 msgid "Prueba %(fecha)s · %(piezas)s · %(paises)s"
 msgstr "Test %(fecha)s · %(piezas)s · %(paises)s"
 
+msgid "Prueba borrada."
+msgstr "Proof deleted."
+
 msgid "Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto."
 msgstr "Test it with “Resend” in Settings › Account: the confirmation email should arrive. Below, in “Notice email”, write which address gets this project's notices."
 
+msgid "Prueba guardada: Claude ya la puede usar con este producto."
+msgstr "Proof saved: Claude can now use it with this product."
+
 msgid "Publicación automática"
 msgstr "Automatic publishing"
-
-msgid "Publicación orgánica"
-msgstr "Organic post"
 
 msgid "Publicación orgánica con errores"
 msgstr "Organic post with errors"
@@ -5107,6 +5126,9 @@ msgstr "Public and irreversible."
 msgid "Público e irreversible: revisa el texto antes."
 msgstr "Public and irreversible: review the text first."
 
+msgid "Que Claude lo decida"
+msgstr "Let Claude decide"
+
 msgid "Que Creatv lo gestione"
 msgstr "Let Creatv manage it"
 
@@ -5116,6 +5138,10 @@ msgstr "Let Creatv manage it: follow the steps on the Meta card."
 msgid "Quitar"
 msgstr "Remove"
 
+#, python-format
+msgid "Quitar %(referencia)s"
+msgstr "Remove %(referencia)s"
+
 msgid "Quitar app"
 msgstr "Remove app"
 
@@ -5124,6 +5150,9 @@ msgstr "Remove from the list"
 
 msgid "Quitar esta foto"
 msgstr "Remove this photo"
+
+msgid "Quitar todas"
+msgstr "Remove all"
 
 msgid "Quién sostiene qué"
 msgstr "Who holds what"
@@ -5335,14 +5364,29 @@ msgstr "Check that the lines are exactly the script's: this is where each clip's
 msgid "Revisa, edita si quieres y haz clic en «Generar video»."
 msgstr "Review it, edit if you want, and click “Generate video”."
 
+msgid "Revisando con la doctrina…"
+msgstr "Reviewing with the doctrine…"
+
 msgid "Revisando el audio…"
 msgstr "Checking the audio…"
+
+msgid "Revisando la pieza con la doctrina: la página se recarga sola cuando esté lista."
+msgstr "Reviewing the piece against the doctrine: the page reloads on its own when it's ready."
 
 msgid "Revisar"
 msgstr "Review"
 
 msgid "Revisar otra vez"
 msgstr "Check again"
+
+msgid "Revisión de la doctrina"
+msgstr "Doctrine review"
+
+msgid "Revisión de la doctrina (IA)"
+msgstr "Doctrine review (AI)"
+
+msgid "Revisión de la doctrina: se ve en Crear"
+msgstr "Doctrine review: shown in Create"
 
 msgid "Ritmo de lectura (palabras por segundo; 2,4 es natural)"
 msgstr "Reading pace (words per second; 2.4 is natural)"
@@ -5373,9 +5417,6 @@ msgstr "System health"
 msgid "Se agrega: "
 msgstr "Added: "
 
-msgid "Se cobra al generar, no antes."
-msgstr "You're charged when you generate, not before."
-
 msgid "Se crea una sola vez en <a href=\"https://developers.facebook.com/apps/creation/\" target=\"_blank\" rel=\"noopener\">developers.facebook.com</a>."
 msgstr "It's created once, at <a href=\"https://developers.facebook.com/apps/creation/\" target=\"_blank\" rel=\"noopener\">developers.facebook.com</a>."
 
@@ -5394,9 +5435,6 @@ msgstr "The %(n)s proposals will run in order. The ones that scale, derive, resc
 msgid "Se eliminará «%(nombre)s» y sus %(fotos)s foto(s) de referencia."
 msgstr "“%(nombre)s” and its %(fotos)s reference photo(s) will be deleted."
 
-msgid "Se está escribiendo el guion… la página se recarga sola cuando esté listo."
-msgstr "The script is being written… the page reloads on its own once it's ready."
-
 #, python-format
 msgid "Se guardó localmente pero falló la subida a R2: %(error)s"
 msgstr "Saved locally but the upload to R2 failed: %(error)s"
@@ -5410,9 +5448,6 @@ msgstr "The answer was interrupted. Send your message again."
 
 msgid "Se interrumpió; vuelve a intentarlo."
 msgstr "It was interrupted; try again."
-
-msgid "Se mezcla debajo del sonido. Estilos IA: USD 0,02 la primera vez por estilo y duración. Mi música: gratis."
-msgstr "Mixed underneath the sound. AI styles: USD 0.02 the first time per style and duration. My music: free."
 
 #, python-format
 msgid "Se muestran los últimos %(n)s cobros"
@@ -5451,6 +5486,9 @@ msgstr "Removed: "
 
 msgid "Se retoma el lanzamiento donde quedó (no se duplican objetos en Meta). ¿Seguimos?"
 msgstr "The launch will resume where it left off (no objects get duplicated on Meta). Continue?"
+
+msgid "Se revisa desde la pieza en Crear"
+msgstr "Reviewed from the piece in Create"
 
 msgid "Se suma a la regla base de la categoría:"
 msgstr "This adds to the category's base rule:"
@@ -5505,6 +5543,9 @@ msgstr "If it's Gmail: in myaccount.google.com › Security turn on “2-Step Ve
 
 msgid "Si ese correo está registrado, te llegará un enlace para restablecer la contraseña (vence en 1 hora; revisa también el spam)."
 msgstr "If that email is registered, a link to reset the password will arrive (expires in 1 hour; check spam too)."
+
+msgid "Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto."
+msgstr "If you choose it, Claude writes at that level in this product's ideas, scripts and adaptations."
 
 msgid "Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador."
 msgstr "If you want to change ad account or Page, or go back to using your own Meta app, ask the admin."
@@ -5586,6 +5627,9 @@ msgstr "No evidence yet: %(imp)s impressions (minimum %(imp_min)s), spend %(gast
 msgid "Sin hooks alternativos."
 msgstr "No alternate hooks."
 
+msgid "Sin música"
+msgstr "No music"
+
 msgid "Sin personajes."
 msgstr "No characters."
 
@@ -5609,9 +5653,6 @@ msgstr "No brand references yet."
 msgid "Sin referencias ni producto: el modelo recibe el texto tal cual, sin marca ni logos."
 msgstr "No references or product: the model gets the text as-is, with no brand or logos."
 
-msgid "Sin referencias: se genera solo con tu texto. Si quieres, sube archivos, pega un link o elige del catálogo abajo."
-msgstr "No references: it generates from your text alone. If you want, upload files, paste a link, or pick from the catalog below."
-
 msgid "Sin texto: se redacta con IA al aprobar (o escríbelo aquí)"
 msgstr "No text: it's written with AI on approval (or write it here)"
 
@@ -5620,9 +5661,6 @@ msgstr "Untitled"
 
 msgid "Sin verificar ahora (Meta no respondió)."
 msgstr "Not verified right now (Meta didn't respond)."
-
-msgid "Sin voz/música"
-msgstr "No voice/music"
 
 msgid "Sin zonas: el producto no va sobre una persona (una cobija, un objeto de escena)."
 msgstr "No zones: the product doesn't go on a person (a blanket, a scene object)."
@@ -5656,6 +5694,9 @@ msgstr "Request canceled."
 msgid "Solicitud enviada el %(fecha)s: Creatv la está revisando y te avisa por correo."
 msgstr "Request sent on %(fecha)s: Creatv is reviewing it and will email you."
 
+msgid "Solo Wan 3.0, mitad de precio: para probar el prompt antes de la versión final."
+msgstr "Wan 3.0 only, half price: to test the prompt before the final version."
+
 #, python-format
 msgid ""
 "Solo cambia lo que se ve. El identificador interno sigue siendo\n"
@@ -5677,6 +5718,9 @@ msgstr "Only .csv or .xlsx files are accepted."
 msgid "Solo se evalúa un experimento que está corriendo."
 msgstr "Only an experiment that's running can be evaluated."
 
+msgid "Solo se puede revisar una pieza terminada."
+msgstr "Only a finished piece can be reviewed."
+
 msgid "Solo se reintenta una publicación que falló."
 msgstr "Only a post that failed can be retried."
 
@@ -5695,6 +5739,9 @@ msgid ""
 msgstr ""
 "These are the providers' real prices (WaveSpeed, fal.ai, Anthropic); ad spend is charged on your Meta account\n"
 "  and isn't part of this total. No spend blocks an action: it's only reported."
+
+msgid "Sonido"
+msgstr "Sound"
 
 msgid "Sonido al crear"
 msgstr "Sound when creating"
@@ -5718,18 +5765,6 @@ msgstr "Sprints"
 
 msgid "Sube al menos una foto."
 msgstr "Upload at least one photo."
-
-msgid "Sube el logo oficial en FlowSettings › Logos y se adjuntará solo en cada generación con referencias o catálogo (evita marcas inventadas)."
-msgstr "Upload the official logo in FlowSettings › Logos and it'll attach itself to every generation with references or catalog (avoids made-up brands)."
-
-msgid ""
-"Sube imágenes y videos, o pega un link (TrendTrack, TikTok, Instagram, YouTube). Cada uno queda como\n"
-"    <code>@Imagen N</code> / <code>@Video N</code> y puedes nombrarlo en el texto. Un video de link sirve como referencia\n"
-"    de movimiento y estructura para recrearlo con tu producto — no se publica ni se copia tal cual."
-msgstr ""
-"Upload images and videos, or paste a link (TrendTrack, TikTok, Instagram, YouTube). Each one becomes\n"
-"    <code>@Imagen N</code> / <code>@Video N</code> and you can name it in the text. A link video works as a reference\n"
-"    for movement and structure to recreate with your product — it's never posted or copied as-is."
 
 msgid "Sube solo música tuya o con licencia: Meta silencia o rechaza anuncios con canciones protegidas."
 msgstr "Only upload music that's yours or licensed: Meta mutes or rejects ads with protected songs."
@@ -5757,14 +5792,14 @@ msgstr "Uploading…"
 msgid "Subiendo… 0%%"
 msgstr "Uploading… 0%%"
 
-msgid "Subir"
-msgstr "Upload"
-
 msgid "Subir canción"
 msgstr "Upload song"
 
 msgid "Subir fotos"
 msgstr "Upload photos"
+
+msgid "Subir imágenes o videos"
+msgstr "Upload images or videos"
 
 msgid "Subir personaje (imagen o video)"
 msgstr "Upload character (image or video)"
@@ -5840,12 +5875,6 @@ msgstr "Post text"
 msgid "Texto de la publicación (TikTok no tiene título aparte)"
 msgstr "Post text (TikTok doesn't have a separate title)"
 
-msgid "Texto de voz"
-msgstr "Voice text"
-
-msgid "Texto en pantalla"
-msgstr "On-screen text"
-
 msgid "Texto listo, pero sin IA en alguna plataforma: revísalo bien."
 msgstr "Text is ready, but without AI on some platform: review it carefully."
 
@@ -5885,6 +5914,9 @@ msgstr "Stores"
 
 msgid "Tienes cambios sin guardar, por eso no se recargó sola."
 msgstr "You have unsaved changes, so it didn't reload on its own."
+
+msgid "TikTok, Instagram, YouTube o TrendTrack: sirve de referencia de movimiento y estructura; no se publica ni se copia tal cual."
+msgstr "TikTok, Instagram, YouTube or TrendTrack: it's a reference for movement and structure; it isn't published or copied as-is."
 
 msgid "Tipo"
 msgstr "Type"
@@ -6120,8 +6152,8 @@ msgstr "Your project uses its own Meta app: CreatvMachine operates only with you
 msgid "Tu sesión se cerró; entra de nuevo."
 msgstr "Your session closed; log in again."
 
-msgid "Tu texto va tal cual al modelo (Wan 3.0, Kling O3 Pro o Seedance 2.5)."
-msgstr "Your text goes to the model as-is (Wan 3.0, Kling O3 Pro, or Seedance 2.5)."
+msgid "Tu texto va tal cual al modelo"
+msgstr "Your text goes to the model as-is"
 
 msgid "Tu texto, tal cual"
 msgstr "Your text, as-is"
@@ -6171,15 +6203,11 @@ msgstr "One of the pieces is not available (or not ready)."
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
 
+msgid "Una imagen fija en 2k"
+msgstr "A still image in 2k"
+
 msgid "Una persona real usando el producto de forma natural; el producto sigue siendo el protagonista."
 msgstr "A real person using the product naturally; the product is still the star."
-
-msgid ""
-"Una pieza por clic. Sale solo el producto; si eliges un personaje del catálogo, la escena lo lleva a él.\n"
-"    Sin referencias ni catálogo, el modelo recibe tu texto tal cual (sin logos ni guía de marca)."
-msgstr ""
-"One piece per click. Only the product appears; if you pick a character from the catalog, the scene features them.\n"
-"    Without references or catalog, the model gets your text as-is (no logos or brand guide)."
 
 msgid "Una por línea; por ejemplo, los diálogos exactos del guion. Claude no las puede tocar."
 msgstr "One per line; for example, the exact dialogue lines from the script. Claude can't touch them."
@@ -6242,8 +6270,8 @@ msgstr "VIDEO"
 msgid "Va al final de cada prompt de clip en todos los videos de este proyecto. Déjalo vacío para volver al de fábrica."
 msgstr "Goes at the end of every clip prompt in every video of this project. Leave it empty to go back to the default."
 
-msgid "Vaciar"
-msgstr "Clear"
+msgid "Vacío = ambiente natural de la escena."
+msgstr "Empty = the scene's natural ambience."
 
 msgid "Vacío = hereda de Configuración (el valor gris es el que aplica hoy). «Sin umbral» apaga esa comparación en este experimento."
 msgstr "Empty = inherits from Settings (the gray value is the one that applies today). “No threshold” turns off that comparison in this experiment."
@@ -6399,9 +6427,6 @@ msgstr "Check again"
 msgid "Volver a conectar"
 msgstr "Reconnect"
 
-msgid "Volver a escribir con IA"
-msgstr "Rewrite with AI"
-
 msgid "Volver a iniciar sesión"
 msgstr "Back to log in"
 
@@ -6410,9 +6435,6 @@ msgstr "Try again"
 
 msgid "Volver al original"
 msgstr "Revert to the original"
-
-msgid "Voz"
-msgstr "Voice"
 
 msgid "Voz (solo en diálogo)"
 msgstr "Voice (dialogue mode only)"
@@ -6515,6 +6537,12 @@ msgstr "There is already an organic post of %(nombre)s in progress; it will not 
 msgid "Ya hay una publicación orgánica de esta pieza en curso; espera a que termine."
 msgstr "There's already an organic post of this piece in progress; wait for it to finish."
 
+msgid "Ya no cree en nada de esto: hay que hablarle de quién es"
+msgstr "They don't believe any of this anymore: you have to speak to who they are"
+
+msgid "Ya no cree en promesas: hay que explicar cómo funciona"
+msgstr "They no longer believe promises: you have to explain how it works"
+
 msgid "Ya se estaba armando ese prompt — espera a que termine."
 msgstr "That prompt was already being built — wait for it to finish."
 
@@ -6529,6 +6557,9 @@ msgstr "It was already being rebuilt."
 
 msgid "Ya se estaban produciendo esas finales."
 msgstr "Those final cuts were already being produced."
+
+msgid "Ya se está armando la lista de este producto."
+msgstr "This product's list is already being put together."
 
 msgid "Ya se está creando el activo de ese producto — espera a que termine."
 msgstr "That product's asset is already being created — wait for it to finish."
@@ -6555,8 +6586,14 @@ msgstr "That store is already syncing."
 msgid "Ya se están actualizando."
 msgstr "Already updating."
 
+msgid "Ya se lo prometieron: hay que prometer más grande"
+msgstr "They've already been promised it: you have to promise bigger"
+
 msgid "Ya tengo cuenta"
 msgstr "I already have an account"
+
+msgid "Ya vio cómo funciona en otros: hay que mejorar el cómo"
+msgstr "They've seen how it works elsewhere: you have to improve the how"
 
 msgid "YouTube Data API (Nicho: comentarios de videos)"
 msgstr "YouTube Data API (Niche: video comments)"
@@ -6650,15 +6687,6 @@ msgstr "with the same photo of 3 people, it didn't change anyone's footwear"
 msgid "con la misma foto de 3 personas, resultado peor que la versión directa: le puso calzado a la persona que iba DESCALZA y dejó a las dos con calzado puesto sin cambiar. No usar como alternativa cuando falle la versión directa"
 msgstr "with the same photo of 3 people, worse result than the direct version: it put shoes on the person who was BAREFOOT and left the two who already had shoes unchanged. Don't use it as a fallback when the direct version fails"
 
-msgid "con música"
-msgstr "with music"
-
-msgid "con sonido de la escena"
-msgstr "with scene sound"
-
-msgid "con voz"
-msgstr "with voice"
-
 msgid "conecta más en"
 msgstr "connect more at"
 
@@ -6749,9 +6777,6 @@ msgstr "real editor: preserves movement and scene, the cheapest of the ones that
 
 msgid "ej. 89900"
 msgstr "e.g. 89900"
-
-msgid "ej. @Imagen 1 es el producto; una niña lo descubre y salta de alegría, la cámara la sigue como en @Video 1"
-msgstr "e.g. @Imagen 1 is the product; a girl discovers it and jumps for joy, the camera follows her like in @Video 1"
 
 msgid "ej. Clip 3: Ana en la cocina"
 msgstr "e.g. Clip 3: Ana in the kitchen"
@@ -6938,6 +6963,16 @@ msgid "generación este mes"
 msgstr "generation this month"
 
 #, python-format
+msgid "hasta %(n)s referencias · 2k"
+msgstr "up to %(n)s references · 2k"
+
+#, python-format
+msgid "hasta %(num)s referencia"
+msgid_plural "hasta %(num)s referencias"
+msgstr[0] "up to %(num)s reference"
+msgstr[1] "up to %(num)s references"
+
+#, python-format
 msgid ""
 "hay %(n)s generaciones fallidas sin costo registrado — la\n"
 "  mayoría fueron rechazos del proveedor (error 400 o falta de créditos), donde el modelo\n"
@@ -6955,9 +6990,6 @@ msgstr "tools for something else (shot retakes, lip-sync/dialogue, extending the
 
 msgid "hook"
 msgstr "hook"
-
-msgid "https://app.trendtrack.io/… o TikTok / Instagram / YouTube"
-msgstr "https://app.trendtrack.io/… or TikTok / Instagram / YouTube"
 
 #, python-format
 msgid "id %(id)s"
@@ -6980,9 +7012,6 @@ msgstr "revenue"
 
 msgid "ingresos / gasto"
 msgstr "revenue / spend"
-
-msgid "interrumpida"
-msgstr "interrupted"
 
 #, python-format
 msgid "la final %(clave)s falló"
@@ -7128,17 +7157,8 @@ msgstr "nombre, precio, moneda, url_compra, fotos (multiple with |), descripcion
 msgid "o tráelos de un archivo, una URL o tu tienda"
 msgstr "or bring them in from a file, a URL or your store"
 
-msgid "opcional"
-msgstr "optional"
-
-msgid "opcional, país base"
-msgstr "optional, base country"
-
 msgid "orgánicas este mes"
 msgstr "organic this month"
-
-msgid "p.ej. 89900"
-msgstr "e.g. 89900"
 
 msgid "pais"
 msgstr "country"
@@ -7194,9 +7214,6 @@ msgstr "producing clone"
 
 msgid "produciendo finales"
 msgstr "producing final cuts"
-
-msgid "produciendo…"
-msgstr "producing…"
 
 msgid "productos"
 msgstr "products"
@@ -7267,6 +7284,16 @@ msgstr "roas"
 msgid "rota"
 msgstr "broken"
 
+msgid "se adjunta tu logo oficial"
+msgstr "your official logo is attached"
+
+#, python-format
+msgid "se adjuntan tus %(n)s logos oficiales"
+msgstr "your %(n)s official logos are attached"
+
+msgid "se cobra al generar."
+msgstr "charged when you generate."
+
 msgid "se cobra en tu cuenta de Meta"
 msgstr "charged on your Meta account"
 
@@ -7318,6 +7345,9 @@ msgstr "no spend measured this month"
 
 msgid "sin generación pagada"
 msgstr "no paid generation"
+
+msgid "sin logo oficial: súbelo en FlowSettings › Logos"
+msgstr "no official logo: upload it in FlowSettings › Logos"
 
 msgid "sin motivo"
 msgstr "no reason given"
@@ -7504,13 +7534,6 @@ msgstr "“%(nombre)s”: launching to Meta paused. When it's done, activate it 
 msgid "«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3."
 msgstr "“Create credentials” › “API key”; in “API restrictions” limit it to YouTube Data API v3."
 
-msgid "«Generar» manda tu texto tal cual y se cobra al generar; «Crear super prompt» es gratis y te deja revisar el prompt antes de gastar."
-msgstr "“Generate” sends your text as-is and charges you when it generates; “Create super prompt” is free and lets you review the prompt before spending."
-
-#, python-format
-msgid "· $%(precio)s/s con sonido · hasta %(n)s ref."
-msgstr "· $%(precio)s/s with sound · up to %(n)s ref."
-
 #, python-format
 msgid "¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»)."
 msgstr "Archive “%(nombre)s”? It doesn't get deleted: it's hidden from the list and the store sync won't show it again (you get it back from “Show archived”)."
@@ -7527,9 +7550,6 @@ msgstr "How much and for how long?"
 
 msgid "¿Cómo quieres conectar Meta?"
 msgstr "How do you want to connect Meta?"
-
-msgid "¿Descartar esta final?"
-msgstr "Discard this final cut?"
 
 msgid "¿Descartar esta pieza?"
 msgstr "Discard this piece?"
@@ -7556,6 +7576,9 @@ msgstr "Delete this product?"
 #, python-format
 msgid "¿Marcar a %(usuario)s como verificado sin que abra el enlace del correo?"
 msgstr "Mark %(usuario)s as verified without them opening the email link?"
+
+msgid "¿No sabes qué escribir?"
+msgstr "Not sure what to write?"
 
 #, python-format
 msgid "¿No tienes proyecto todavía? <a href=\"%(url)s\">Crea uno en un minuto</a>."
@@ -7585,17 +7608,11 @@ msgstr "Remove this project's Meta app? You'll have to register it again to reco
 msgid "¿Quitar todas las referencias?"
 msgstr "Remove all references?"
 
-msgid "¿Qué quieres generar?"
-msgstr "What do you want to generate?"
-
 msgid "¿Seguro? Toca otra vez"
 msgstr "Sure? Tap again"
 
 msgid "¿Ve la foto del producto?"
 msgstr "Does it see the product photo?"
-
-msgid "¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones)."
-msgstr "Rewrite the script with AI? This replaces the current script (including your edits)."
 
 msgid "¿Volver a usar tu propia app de Meta? Creatv deja de operar este proyecto; si tenías tu propia conexión se restaura."
 msgstr "Go back to using your own Meta app? Creatv stops operating this project; if you had your own connection it's restored."
@@ -7645,10 +7662,6 @@ msgid "≈ %(usd)s"
 msgstr "≈ %(usd)s"
 
 #, python-format
-msgid "≈ %(usd)s c/u"
-msgstr "≈ %(usd)s each"
-
-#, python-format
 msgid "≈ %(usd)s la regla con IA"
 msgstr "≈ %(usd)s for the AI rule"
 
@@ -7656,8 +7669,17 @@ msgstr "≈ %(usd)s for the AI rule"
 msgid "≈ %(usd)s la regla con IA por producto"
 msgstr "≈ %(usd)s for the AI rule per product"
 
+msgid "⏱ Duración"
+msgstr "⏱ Duration"
+
 msgid "⏳ Descargando el video del link… aparece aquí solo cuando termine."
 msgstr "⏳ Downloading the link's video… it'll appear here only when it's done."
+
+msgid "▯ Formato"
+msgstr "▯ Format"
+
+msgid "▯ Formato de la imagen"
+msgstr "▯ The image's format"
 
 #, python-format
 msgid "⚠️ La IA no pudo armar los planos (%(aviso)s). Aquí va el prompt básico que puedes editar."
@@ -7669,6 +7691,12 @@ msgstr "✏️ Super prompt (editable)"
 msgid "✓ Pasa"
 msgstr "✓ Pass"
 
+msgid "🎬 Video"
+msgstr "🎬 Video"
+
+msgid "🎵 Música"
+msgstr "🎵 Music"
+
 msgid "👆 Revisa el prompt arriba antes de generar"
 msgstr "👆 Review the prompt above before generating"
 
@@ -7678,6 +7706,15 @@ msgstr "💾 Save changes"
 msgid "🔄 Rearmar con IA"
 msgstr "🔄 Rebuild with AI"
 
+msgid "🔇 Sin sonido"
+msgstr "🔇 No sound"
+
 msgid "🔇 sin sonido"
 msgstr "🔇 no sound"
+
+msgid "🔊 Sonido"
+msgstr "🔊 Sound"
+
+msgid "🖼 Imagen"
+msgstr "🖼 Image"
 

@@ -230,3 +230,30 @@ def test_estimar_clasificacion_defecto_uno():
 def test_clasificacion_en_tipos():
     import gastos
     assert "clasificacion" in gastos.TIPOS
+
+
+def test_tarifas_de_la_doctrina_bloque_2():
+    import gastos
+    assert "ideas" in gastos.TIPOS and "pedidos" in gastos.TIPOS
+    # Medido en la prueba real (2026-09-27, caché fría = el peor caso):
+    # reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007; redondeado hacia arriba.
+    assert gastos.estimar("reescribir_idea")["usd"] == 0.03
+    assert gastos.estimar("pedidos_producto")["usd"] == 0.01
+
+
+def test_tarifa_y_tipo_de_la_revision_de_la_doctrina():
+    """Doctrina, bloque 3: la revisión con Claude es su propio tipo de gasto."""
+    import dashboard
+    import gastos
+    assert "revision" in gastos.TIPOS and dashboard.NOMBRES_TIPO_GASTO["revision"] == "Revisión de la doctrina (IA)"
+    r = gastos.estimar("revision_pieza")
+    # Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas): ≈ US$ 0,060; redondeado hacia arriba.
+    assert r["usd"] == gastos.TARIFAS["revision_pieza"] == 0.07 and "0,07" in r["texto"]
+
+
+def test_estimar_proponer_ideas_por_numero_de_ideas():
+    import gastos
+    tres = gastos.estimar("proponer_ideas", n=3)
+    assert tres["usd"] == round(gastos.IDEAS_BASE_USD + 3 * gastos.IDEAS_POR_IDEA_USD, 4)
+    assert "aprox" in tres["texto"] and tres["detalle"] == "3 idea(s) con Claude"
+    assert gastos.estimar("proponer_ideas", n=0)["usd"] == gastos.estimar("proponer_ideas", n=1)["usd"]

@@ -1,0 +1,282 @@
+[
+ {
+  "esperado": [
+   {
+    "dur_ms": 900,
+    "palabras": [
+     {
+      "dur_ms": 400,
+      "t_ms": 0,
+      "texto": "Hola"
+     },
+     {
+      "dur_ms": 500,
+      "t_ms": 400,
+      "texto": "mundo"
+     }
+    ],
+    "t_ms": 0
+   }
+  ],
+  "palabras": [
+   {
+    "dur_ms": 400,
+    "t_ms": 0,
+    "texto": "Hola"
+   },
+   {
+    "dur_ms": 500,
+    "t_ms": 400,
+    "texto": "mundo"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 1180,
+    "palabras": [
+     {
+      "dur_ms": 280,
+      "t_ms": 0,
+      "texto": "p0"
+     },
+     {
+      "dur_ms": 280,
+      "t_ms": 300,
+      "texto": "p1"
+     },
+     {
+      "dur_ms": 280,
+      "t_ms": 600,
+      "texto": "p2"
+     },
+     {
+      "dur_ms": 280,
+      "t_ms": 900,
+      "texto": "p3"
+     }
+    ],
+    "t_ms": 0
+   },
+   {
+    "dur_ms": 1180,
+    "palabras": [
+     {
+      "dur_ms": 280,
+      "t_ms": 1200,
+      "texto": "p4"
+     },
+     {
+      "dur_ms": 280,
+      "t_ms": 1500,
+      "texto": "p5"
+     },
+     {
+      "dur_ms": 280,
+      "t_ms": 1800,
+      "texto": "p6"
+     },
+     {
+      "dur_ms": 280,
+      "t_ms": 2100,
+      "texto": "p7"
+     }
+    ],
+    "t_ms": 1200
+   },
+   {
+    "dur_ms": 280,
+    "palabras": [
+     {
+      "dur_ms": 280,
+      "t_ms": 2400,
+      "texto": "p8"
+     }
+    ],
+    "t_ms": 2400
+   }
+  ],
+  "palabras": [
+   {
+    "dur_ms": 280,
+    "t_ms": 0,
+    "texto": "p0"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 300,
+    "texto": "p1"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 600,
+    "texto": "p2"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 900,
+    "texto": "p3"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 1200,
+    "texto": "p4"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 1500,
+    "texto": "p5"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 1800,
+    "texto": "p6"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 2100,
+    "texto": "p7"
+   },
+   {
+    "dur_ms": 280,
+    "t_ms": 2400,
+    "texto": "p8"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 300,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 0,
+      "texto": "antes"
+     }
+    ],
+    "t_ms": 0
+   },
+   {
+    "dur_ms": 300,
+    "palabras": [
+     {
+      "dur_ms": 300,
+      "t_ms": 1000,
+      "texto": "después"
+     }
+    ],
+    "t_ms": 1000
+   }
+  ],
+  "palabras": [
+   {
+    "dur_ms": 300,
+    "t_ms": 0,
+    "texto": "antes"
+   },
+   {
+    "dur_ms": 300,
+    "t_ms": 1000,
+    "texto": "después"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 900,
+    "palabras": [
+     {
+      "dur_ms": 900,
+      "t_ms": 0,
+      "texto": "larga"
+     }
+    ],
+    "t_ms": 0
+   },
+   {
+    "dur_ms": 950,
+    "palabras": [
+     {
+      "dur_ms": 950,
+      "t_ms": 900,
+      "texto": "más"
+     }
+    ],
+    "t_ms": 900
+   }
+  ],
+  "palabras": [
+   {
+    "dur_ms": 900,
+    "t_ms": 0,
+    "texto": "larga"
+   },
+   {
+    "dur_ms": 950,
+    "t_ms": 900,
+    "texto": "más"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 700,
+    "palabras": [
+     {
+      "dur_ms": 200,
+      "t_ms": 0,
+      "texto": "(a)"
+     },
+     {
+      "dur_ms": 200,
+      "t_ms": 500,
+      "texto": "b"
+     }
+    ],
+    "t_ms": 0
+   }
+  ],
+  "palabras": [
+   {
+    "dur_ms": 200,
+    "t_ms": 500,
+    "texto": "b"
+   },
+   {
+    "dur_ms": 200,
+    "t_ms": 0,
+    "texto": "{a}"
+   }
+  ]
+ },
+ {
+  "esperado": [
+   {
+    "dur_ms": 200,
+    "palabras": [
+     {
+      "dur_ms": 200,
+      "t_ms": 0,
+      "texto": "con espacios"
+     }
+    ],
+    "t_ms": 0
+   }
+  ],
+  "palabras": [
+   {
+    "dur_ms": 200,
+    "t_ms": 0,
+    "texto": "  con   espacios "
+   }
+  ]
+ },
+ {
+  "esperado": [],
+  "palabras": []
+ }
+]

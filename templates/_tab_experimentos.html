@@ -50,7 +50,8 @@
     <label class="exp-tarjeta" data-tipo="{{ 'imagen' if el.es_imagen else ('final' if el.tipo == 'final' else 'video') }}" data-origen="{{ el.origen }}">
       <input type="checkbox" name="piezas" value="{{ el.pieza_id }}" form="exp-probar"
              data-pais="{{ el.pais or '' }}" data-imagen="{{ '1' if el.es_imagen else '0' }}" data-nombre="{{ el.nombre }}"
-             data-final="{{ '1' if el.tipo == 'final' else '0' }}">
+             data-final="{{ '1' if el.tipo == 'final' else '0' }}"
+             data-doctrina-n="{{ (el.doctrina or {}).get('n', 0) if (el.doctrina or {}).get('estado') == 'mejorar' else 0 }}">
       <span class="exp-tarjeta-media">
         {% if el.url_miniatura %}<img src="{{ el.url_miniatura }}" alt="" loading="lazy">
         {% elif el.es_imagen %}<img src="{{ el.url_video }}" alt="" loading="lazy">
@@ -61,6 +62,10 @@
         <small>{% if el.es_imagen %}{{ _('Imagen') }}{% if el.formato %} · {{ el.formato }}{% endif %}{% elif el.tipo == "final" %}{{ _('Final %(idioma)s_%(pais)s', idioma=el.idioma, pais=el.pais) }}{% else %}{{ _('Video') }}{% if el.duracion_s %} · {{ _('%(n)s s', n=(el.duracion_s | int)) }}{% endif %}{% if el.formato %} · {{ el.formato }}{% endif %}{% endif %}
           · {% if el.origen == "sprint" %}{{ _('Sprint %(nombre)s · Campaña %(n)s', nombre=el.sprint.sprint_nombre, n=el.sprint.campana_n) }}{% elif el.origen == "final" %}{{ _('Final edition') }}{% else %}{{ _('Crear') }}{% endif %}</small>
         {% for x in el.en_experimentos %}<span class="tag-estado">{{ _('en prueba: %(nombre)s', nombre=x.nombre) }}</span>{% endfor %}
+        {% set doc = el.doctrina or {} %}
+        {% if doc.estado == 'mejorar' %}<span class="tag-estado" title="{{ _('Revisión de la doctrina: se ve en Crear') }}">{{ _('Doctrina: %(n)s por mejorar', n=doc.n) }}</span>
+        {% elif doc.estado == 'bien' %}<span class="tag-estado" title="{{ _('Revisión de la doctrina') }}">{{ _('Doctrina: bien') }}</span>
+        {% elif doc.estado %}<span class="tag-estado" title="{{ _('Se revisa desde la pieza en Crear') }}">{{ _('Doctrina: sin revisar') }}</span>{% endif %}
       </span>
     </label>
     {% endfor %}
@@ -109,6 +114,7 @@
   <section data-paso="3" hidden>
     <h4>{{ _('Revisar') }}</h4>
     <p class="vacio">{{ _('Cada casilla es un anuncio (pieza × país). Las finales solo van a su país.') }}</p>
+    <p class="vacio" id="exp-doctrina-aviso" hidden></p>
     <div id="exp-cuadricula" class="exp-cuadricula"></div>
     {# Desde Catálogo › Productos («Crear experimento») llega ?exp_nombre=&exp_destino=:
        un nombre ya puesto cuenta como «tocado» para que el JS no lo pise con el automático. #}
@@ -441,6 +447,9 @@
     var PLANTILLA_CONFIRMAR_LANZAR = {{ _('Se crean la campaña, los conjuntos y los anuncios en Meta, EN PAUSA (no gasta hasta que actives). %(resumen)s ¿Seguimos?', resumen='{resumen}')|tojson }};
     var TEXTO_LANZANDO = {{ _('Lanzando…')|tojson }};
     var ETIQUETA_IMAGEN = {{ _('(imagen)')|tojson }};
+    var PLANTILLA_DOCTRINA_N = {{ _('Doctrina: %(n)s por mejorar', n='{n}')|tojson }};
+    var AVISO_DOCTRINA_UNA = {{ _('%(n)s pieza elegida tiene puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual.', n='{n}')|tojson }};
+    var AVISO_DOCTRINA_VARIAS = {{ _('%(n)s piezas elegidas tienen puntos para mejorar según la doctrina (se ven en Crear). Puedes lanzar igual.', n='{n}')|tojson }};
 
     function irA(n) {
       form.querySelectorAll('[data-paso]').forEach(function (s) { s.hidden = s.dataset.paso !== String(n); });
@@ -506,8 +515,15 @@
           return '<td>' + (cabe ? '<input type="checkbox" name="combinaciones" value="' + c.value + ':' + p + '" checked>' : '<span class="vacio">—</span>') + '</td>';
         }).join('');
         var nombreSeguro = document.createElement('div'); nombreSeguro.textContent = c.dataset.nombre;
-        return '<tr><th>' + nombreSeguro.innerHTML + (c.dataset.imagen === '1' ? ' <small>' + ETIQUETA_IMAGEN + '</small>' : '') + '</th>' + celdas + '</tr>';
+        var nDoctrina = parseInt(c.dataset.doctrinaN || '0', 10);
+        return '<tr><th>' + nombreSeguro.innerHTML + (c.dataset.imagen === '1' ? ' <small>' + ETIQUETA_IMAGEN + '</small>' : '') +
+          (nDoctrina ? ' <small class="tag-estado">' + PLANTILLA_DOCTRINA_N.replace('{n}', nDoctrina) + '</small>' : '') + '</th>' + celdas + '</tr>';
       }).join('');
+      // Doctrina, bloque 3: solo informa; se puede lanzar igual.
+      var conDoctrina = marcadas().filter(function (c) { return parseInt(c.dataset.doctrinaN || '0', 10) > 0; }).length;
+      var avisoDoctrina = document.getElementById('exp-doctrina-aviso');
+      avisoDoctrina.hidden = !conDoctrina;
+      avisoDoctrina.textContent = conDoctrina ? (conDoctrina === 1 ? AVISO_DOCTRINA_UNA : AVISO_DOCTRINA_VARIAS).replace('{n}', conDoctrina) : '';
       cuadricula.innerHTML = '<table><thead><tr><th></th>' + ps.map(function (p) { return '<th>' + p + '</th>'; }).join('') + '</tr></thead><tbody>' + filas + '</tbody></table>';
       cuadricula.querySelectorAll('input[name=combinaciones]').forEach(function (i) { i.addEventListener('change', refrescarCuenta); });
     }

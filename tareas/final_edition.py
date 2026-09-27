@@ -1,6 +1,7 @@
 """
-Tareas del worker para Final Edition (Crear): preparar el guion base de una
-sesión y producir una pieza final por idioma/país. Los cuerpos viven en
+Tareas del worker para Final Edition (su pestaña; hasta 2026-09-27 vivía en
+Crear): preparar el guion base de una sesión y producir una pieza final por
+idioma/país. Los cuerpos viven en
 `final_edition` (`preparar_guion` / `producir`); acá solo se cablea el payload,
 el reporte de etapas y el mensaje que ve la persona.
 

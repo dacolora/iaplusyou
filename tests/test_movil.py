@@ -23,3 +23,14 @@ def test_css_del_celular():
     assert "translateX(-100%)" in bloque
     assert "body.menu-abierto .sidebar" in bloque
     assert "--sb: 0px" in bloque
+
+
+def test_acciones_de_la_cabecera_no_pasan_del_ancho():
+    """Sprints, entrega 2 (ronda final F4): `.panel-cabecera-acciones` con
+    `flex: 0 0 auto` tomaba el ancho de una sola línea; en el tablero del sprint
+    («+ Campaña · Generar lote (1) · Revisar (1/2 listas) · Más») medía 434 px a
+    375 px y la página corría de lado."""
+    import re
+    css = open("static/style.css", encoding="utf-8").read()
+    acciones = re.search(r"\.panel-cabecera-acciones \{[^}]*\}", css).group(0)
+    assert "flex-wrap: wrap" in acciones and "max-width: 100%" in acciones

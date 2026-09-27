@@ -71,7 +71,16 @@
       if (abrir) cargarEnDialogo(abrir.dataset.recrearAbrir).then(function (ok) { if (ok) modal.showModal(); });
     });
     document.getElementById('ref-modal-cerrar').addEventListener('click', function () { modal.close(); });
-    modal.addEventListener('click', function (ev) { if (ev.target === modal) modal.close(); });
+    // Clic en el fondo cierra, pero solo si también EMPEZÓ en el fondo:
+    // seleccionar texto arrastrando y soltar fuera del diálogo da un 'click'
+    // con target = el <dialog> (el ancestro común) y lo cerraba con todo lo
+    // escrito (incidente 2026-09-27).
+    var presionEnFondo = false;
+    modal.addEventListener('mousedown', function (ev) { presionEnFondo = ev.target === modal; });
+    modal.addEventListener('click', function (ev) {
+      if (ev.target === modal && presionEnFondo) modal.close();
+      presionEnFondo = false;
+    });
 
     // Precio en vivo de «Traer referentes» (Critical 1): el formulario
     // (#form-traer, en _referentes_traer.html) se carga y se recarga siempre
@@ -82,38 +91,53 @@
     // en el mismo mecanismo fue justo el bug del atributo `data-recrear-campo`
     // sobrante que este fix también limpia en la plantilla).
     var temporizadorPrecioTraer = null;
+    var pedidoPrecioTraer = 0;   // solo la respuesta del último pedido se pinta
     function refrescarPrecioTraer(form, inmediato) {
       if (!form || !form.dataset.precio) return;
       clearTimeout(temporizadorPrecioTraer);
       var ejecutar = function () {
-        // El fetch reemplaza TODO #form-traer (más simple que un endpoint de
-        // precio aparte, y `_consulta_desde` ya vuelca de nuevo cada valor
-        // enviado en `value=`/`checked` -- por eso alcanza con recuperar foco
-        // y cursor del campo que se estaba editando).
-        var activo = document.activeElement;
-        var nombreActivo = (activo && form.contains(activo) && activo.name) ? activo.name : null;
-        var cursor = (nombreActivo && typeof activo.selectionStart === 'number') ? activo.selectionStart : null;
+        // Pide el fragmento entero (más simple que un endpoint de precio
+        // aparte) pero copia SOLO lo que depende del servidor: el precio, el
+        // aviso de la fuente y si «Traer y clasificar» está habilitado. NUNCA
+        // se reemplaza el formulario (incidente 2026-09-27): lo tecleado
+        // mientras llegaba la respuesta se perdía, el scroll volvía arriba y
+        // los campos nuevos nacían sin la marca `data-sucio` de base.html, así
+        // que un trabajo que terminaba recargaba la página y cerraba el modal.
+        var n = ++pedidoPrecioTraer;
         var url = form.dataset.precio + '?' + new URLSearchParams(new FormData(form)).toString();
         fetch(url, { headers: { 'X-Requested-With': 'fetch' } })
           .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
           .then(function (html) {
-            cuerpo.innerHTML = html;
-            if (nombreActivo) {
-              // En un grupo de radios, el elegido (si no, el foco caería en el primero).
-              var nuevo = cuerpo.querySelector('[name="' + nombreActivo + '"]:checked') ||
-                          cuerpo.querySelector('[name="' + nombreActivo + '"]');
-              if (nuevo) {
-                nuevo.focus();
-                if (cursor !== null && typeof nuevo.setSelectionRange === 'function') {
-                  try { nuevo.setSelectionRange(cursor, cursor); } catch (e) { /* tipos sin selección (number, checkbox) */ }
-                }
-              }
-            }
+            if (n !== pedidoPrecioTraer || !form.isConnected) return;   // llegó tarde o el formulario ya no está
+            var fresco = new DOMParser().parseFromString(html, 'text/html');
+            ['traer-aviso', 'traer-precio'].forEach(function (id) {
+              var actual = form.querySelector('#' + id), nuevo = fresco.getElementById(id);
+              if (actual && nuevo) actual.innerHTML = nuevo.innerHTML;
+            });
+            var enviar = form.querySelector('#traer-enviar'), enviarNuevo = fresco.getElementById('traer-enviar');
+            if (enviar && enviarNuevo) enviar.disabled = enviarNuevo.disabled;
           })
           .catch(function () { /* el precio queda como estaba; no interrumpe el llenado del formulario */ });
       };
       if (inmediato) ejecutar(); else temporizadorPrecioTraer = setTimeout(ejecutar, 400);
     }
+    // Enter en un campo NO envía el formulario (el envío implícito del
+    // navegador lanzaba el barrido, que gasta, y recargaba la página): solo el
+    // botón «Traer y clasificar» lanza. Enter pide el precio al instante.
+    cuerpo.addEventListener('keydown', function (ev) {
+      if (ev.key !== 'Enter' || ev.isComposing || ev.target.tagName !== 'INPUT') return;
+      var form = ev.target.closest('#form-traer');
+      if (!form) return;
+      ev.preventDefault();
+      refrescarPrecioTraer(form, true);
+    });
+    // Ya enviado, ninguna respuesta de precio pendiente vuelve a habilitar el
+    // botón que base.html deshabilitó contra el doble clic.
+    cuerpo.addEventListener('submit', function (ev) {
+      if (ev.target.id !== 'form-traer') return;
+      clearTimeout(temporizadorPrecioTraer);
+      pedidoPrecioTraer++;
+    });
     cuerpo.addEventListener('input', function (ev) {
       var form = ev.target.closest('#form-traer');
       if (!form || ev.target.tagName === 'SELECT') return;

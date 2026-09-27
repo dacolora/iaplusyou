@@ -28,8 +28,12 @@ def _esperado():
 def test_filtergraph_del_fixture_basico_sin_ass():
     plan = c.compilar(_doc(), RUTAS, con_ass=False)
     assert plan.filtergraph.split(";") == _esperado()
-    assert [e["ruta"] for e in plan.entradas] == ["/m/clon.mp4", "/m/t1.png", "/m/voz.wav", "/m/musica.wav"]
-    assert plan.entradas[3]["opciones"] == ["-stream_loop", "-1"]
+    assert [e["ruta"] for e in plan.entradas] == ["/m/clon.mp4", "/m/clon.mp4", "/m/t1.png", "/m/voz.wav", "/m/musica.wav"]
+    # una entrada por clip de la principal: c1 lleva su cola de transición (3500 + 500)
+    assert plan.entradas[0]["opciones"] == ["-ss", "0.000", "-t", "4.000"]
+    assert plan.entradas[1]["opciones"] == ["-ss", "3.500", "-t", "3.500"]
+    assert plan.entradas[2]["opciones"] == []
+    assert plan.entradas[4]["opciones"] == ["-stream_loop", "-1"]
     assert plan.salida_audio and plan.duracion_ms == 7000 and (plan.ancho, plan.alto) == (1080, 1920)
     assert plan.overlays == 1
 
@@ -41,7 +45,7 @@ def test_con_ass_agrega_un_solo_filtro_subtitles_y_el_texto():
     assert plan.ass_texto.startswith("[Script Info]")
     # los textos libres siguen siendo PNG aunque haya ASS (escalados a su
     # caja y luego superpuestos)
-    assert "[1:v]scale=400:200[l1]" in plan.filtergraph and "[l1]overlay" in plan.filtergraph
+    assert "[2:v]scale=400:200[l1]" in plan.filtergraph and "[l1]overlay" in plan.filtergraph
 
 
 def test_sin_subtitulos_en_el_idioma_no_hay_filtro():
@@ -51,7 +55,8 @@ def test_sin_subtitulos_en_el_idioma_no_hay_filtro():
 
 def test_ventana_desplaza_tiempos_a_cero():
     plan = c.compilar(_doc(), RUTAS, ventana=(3500, 7000), con_ass=False)
-    assert "trim=start=3.500:end=7.000" in plan.filtergraph
+    assert plan.entradas[0]["opciones"] == ["-ss", "3.500", "-t", "3.500"]
+    assert "[0:v]setpts=PTS-STARTPTS," in plan.filtergraph
     assert "xfade" not in plan.filtergraph
     assert plan.duracion_ms == 3500
     assert "overlay" not in plan.filtergraph  # el texto t1 termina en 2700 < 3500
@@ -81,7 +86,8 @@ def test_transicion_con_velocidad_escala_la_cola():
     plan = c.compilar(doc, RUTAS, con_ass=False)
     # 3500 ms de salida a 2x = 7000 ms de fuente, más la cola de transición
     # (500 ms de salida) también a 2x = 1000 ms de fuente -> 8000.
-    assert "trim=start=0.000:end=8.000" in plan.filtergraph
+    assert plan.entradas[0]["opciones"] == ["-ss", "0.000", "-t", "8.000"]
+    assert "[0:v]setpts=(PTS-STARTPTS)/2.0," in plan.filtergraph
     # el offset del xfade es tiempo de SALIDA: no lo toca la velocidad.
     assert "xfade=transition=fade:duration=0.500:offset=3.500" in plan.filtergraph
 
@@ -178,11 +184,34 @@ def test_documento_sin_audio_no_inventa_silencio():
     assert plan.salida_audio is False
 
 
-def test_dos_fuentes_en_la_principal_es_error():
+def test_dos_fuentes_en_la_principal_entran_cada_una_con_su_tramo():
     doc = _doc()
     doc["pistas"][0]["clips"][1]["material_id"] = 99
-    with pytest.raises(ValueError, match="más de una fuente"):
-        c.compilar(doc, {**RUTAS, 99: "/m/otro.mp4"}, con_ass=False)
+    plan = c.compilar(doc, {**RUTAS, 99: "/m/otro.mp4"}, con_ass=False)
+    assert [e["ruta"] for e in plan.entradas[:2]] == ["/m/clon.mp4", "/m/otro.mp4"]
+    assert plan.entradas[1]["opciones"] == ["-ss", "3.500", "-t", "3.500"]
+    assert "[1:v]setpts=PTS-STARTPTS," in plan.filtergraph
+
+
+def test_clips_reordenados_no_comparten_entrada():
+    # c2 (3500–7000 del clon) va primero y c1 (0–3500) después: cada uno lee
+    # solo su tramo, nunca "todo lo que hay entre recortes".
+    doc = _doc()
+    c1, c2 = doc["pistas"][0]["clips"]
+    c1["transicion"] = None
+    c2["inicio_ms"], c1["inicio_ms"] = 0, 3500
+    doc["pistas"][0]["clips"] = [c2, c1]
+    plan = c.compilar(doc, RUTAS, con_ass=False)
+    assert plan.entradas[0]["opciones"] == ["-ss", "3.500", "-t", "3.500"]
+    assert plan.entradas[1]["opciones"] == ["-ss", "0.000", "-t", "3.500"]
+    assert "trim=start" not in plan.filtergraph.replace("atrim=start", "")
+
+
+def test_ruta_faltante_de_un_clip_principal_nombra_el_material():
+    doc = _doc()
+    doc["pistas"][0]["clips"][1]["material_id"] = 77
+    with pytest.raises(ValueError, match="'77'"):
+        c.compilar(doc, RUTAS, con_ass=False)
 
 
 def test_ruta_faltante_es_error_con_el_clip():
@@ -259,16 +288,16 @@ def test_capa_png_se_escala_a_su_caja():
     doc = _doc()
     doc["pistas"][1]["clips"][0]["transform"]["escala"] = 1.5
     plan = c.compilar(doc, RUTAS, con_ass=False)
-    assert "[1:v]scale=600:300[l1]" in plan.filtergraph
+    assert "[2:v]scale=600:300[l1]" in plan.filtergraph
     assert "[vc][l1]overlay=" in plan.filtergraph
-    assert "[vc][1:v]overlay" not in plan.filtergraph
+    assert "[vc][2:v]overlay" not in plan.filtergraph
 
 
 def test_capa_con_opacidad_aplica_colorchannelmixer():
     doc = _doc()
     doc["pistas"][1]["clips"][0]["transform"]["opacidad"] = 0.5
     plan = c.compilar(doc, RUTAS, con_ass=False)
-    assert "[1:v]scale=400:200,format=rgba,colorchannelmixer=aa=0.5[l1]" in plan.filtergraph
+    assert "[2:v]scale=400:200,format=rgba,colorchannelmixer=aa=0.5[l1]" in plan.filtergraph
 
 
 def test_imagen_con_capa_de_texto_sale_overlay_sin_enable():
@@ -369,8 +398,8 @@ def test_pista_imagen_antes_de_la_de_video_no_es_la_principal():
                                         "transform": dict(_TRANSFORM), "ancho_px": 200, "alto_px": 100, "keyframes": []}]})
     plan = c.compilar(doc, {**RUTAS, 5: "/m/logo.png"}, con_ass=False)
     assert plan.entradas[0]["ruta"] == "/m/clon.mp4"
-    assert "[0:v]trim=start=0.000:end=4.000" in plan.filtergraph
-    assert "[1:v]scale=200:100[l1]" in plan.filtergraph
+    assert plan.entradas[0]["opciones"] == ["-ss", "0.000", "-t", "4.000"]
+    assert "[2:v]scale=200:100[l1]" in plan.filtergraph
     assert plan.overlays == 2
 
 

@@ -5,7 +5,10 @@ Si el ffmpeg de la máquina no trae libass (la Mac de desarrollo), el render
 omite los subtítulos y lo avisa por `on_etapa` (`motor/render.tiene_libass`);
 en el VPS (ffmpeg 8 con libass) entran por el filtro `subtitles`. Este módulo
 es puro y se prueba en todas partes."""
+import functools
+import os
 import re
+import struct
 
 from final_edition.documento import FORMATOS
 
@@ -22,6 +25,31 @@ _ESTILOS = {
     "palabra_grande": {"tam": 96, "primario": "&H00FFFFFF&", "secundario": "&H007CAEED&", "contorno": "&H00000000&", "fondo": "&H00000000&", "borde": 1, "grosor": 4, "sombra": 2, "negrita": -1},
     "minimal":        {"tam": 52, "primario": "&H00FFFFFF&", "secundario": "&H00FFFFFF&", "contorno": "&H00000000&", "fondo": "&H00000000&", "borde": 1, "grosor": 2, "sombra": 0, "negrita": 0},
 }
+
+# Público para la vista previa del editor (final_edition/vista_previa.py):
+# el navegador dibuja con estos mismos valores.
+ESTILOS_ASS = _ESTILOS
+_TTF_SUBTITULOS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                               "static", "fonts", "Inter-Bold.ttf")
+
+
+@functools.lru_cache(maxsize=8)
+def escala_libass(ruta_ttf=None):
+    """em del navegador por cada unidad de `Fontsize` del .ass. libass (como
+    VSFilter) dimensiona la fuente para que usWinAscent + usWinDescent de la
+    tabla OS/2 midan `Fontsize`; en CSS el tamaño es el em. Se lee de la TTF
+    (tablas `head` y `OS/2`) para no copiar métricas a mano."""
+    with open(ruta_ttf or _TTF_SUBTITULOS, "rb") as f:
+        datos = f.read()
+    n = struct.unpack(">H", datos[4:6])[0]
+    tablas = {}
+    for i in range(n):
+        etiqueta, _suma, offset, _largo = struct.unpack(">4sIII", datos[12 + 16 * i: 28 + 16 * i])
+        tablas[etiqueta] = offset
+    upm = struct.unpack(">H", datos[tablas[b"head"] + 18: tablas[b"head"] + 20])[0]
+    os2 = tablas[b"OS/2"]
+    win_asc, win_desc = struct.unpack(">HH", datos[os2 + 74: os2 + 78])
+    return upm / float(win_asc + win_desc)
 
 
 def _tiempo_ass(ms):

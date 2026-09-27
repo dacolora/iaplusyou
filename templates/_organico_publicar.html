@@ -1,4 +1,4 @@
-{# Bloque 7: publicación orgánica de una pieza (Experimentos y Crear).
+{# Bloque 7: publicación orgánica de una pieza (Experimentos y Final edition).
    Macros — se importan `with context` para ver canales_org,
    publicaciones_por_pieza, trabajos_org, plataformas_org y cliente:
 
@@ -13,7 +13,7 @@
    Publicar es público e irreversible: el submit pide confirm() y nada se
    publica sin ese clic.
 
-   En Crear el bloque vive dentro de un <template> clonado: sus <script>
+   En Final edition el bloque vive dentro de un <template> clonado: sus <script>
    no corren, así que TODO el JS está en window.* (org_scripts, pintado una
    sola vez en cliente.html) y se llama por atributos onXXX; la barra lleva
    data-poll-job para que el modal arranque el polling al clonar. #}
@@ -51,8 +51,8 @@
   {% endif %}
 
   {% if trabajo %}
-  {# El id lleva el sitio (experimentos/creativeflowplus): la misma pieza
-     puede pintarse en Experimentos y en Crear a la vez, y con ids iguales
+  {# El id lleva el sitio (experimentos/final): la misma pieza
+     puede pintarse en Experimentos y en Final edition a la vez, y con ids iguales
      getElementById solo actualizaría la primera barra. #}
   {% set contenedor_id = "trabajo-" ~ trabajo.job_id ~ "-" ~ volver %}
   <div class="barra-progreso" id="{{ contenedor_id }}" data-poll-job="{{ trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>

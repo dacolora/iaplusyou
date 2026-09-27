@@ -28,10 +28,12 @@ def test_crear_sprint_guarda_mercado_marcas_y_momento(base_temporal):
     assert s["momento"]["mood_visual"]["paleta"] == ["#fff"]
 
 
-def test_crear_sprint_sin_mercado_queda_en_espanol(base_temporal):
+def test_crear_sprint_sin_mercado_queda_para_todos_los_paises_en_ingles(base_temporal):
+    """Desde 2026-09-27 el sprint no lleva país: se trabaja en inglés y cada país
+    se resuelve en la edición final."""
     from sprints import datos
     s = datos.sprint("acme", datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31"))
-    assert s["pais"] is None and s["idioma"] == "es" and s["marcas"] == [] and s["momento"] is None
+    assert s["pais"] is None and s["idioma"] == "en" and s["marcas"] == [] and s["momento"] is None
 
 
 @pytest.mark.parametrize("campos", [dict(pais="Colombia"), dict(idioma="xx"), dict(marcas=5),
@@ -115,7 +117,8 @@ def test_actualizar_campana_valida_cada_campo(base_temporal, campos):
 def test_efectivos_hereda_del_sprint_y_cambia_solo_aqui(base_temporal):
     from sprints import datos
     pid = _persona(datos)
-    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31", pais="CO", marcas="Crocs",
+    # Un sprint viejo, con país e idioma (los nuevos no llevan país y van en inglés).
+    sid = datos.crear_sprint("acme", "Octubre", "2026-10-01", "2026-10-31", pais="CO", idioma="es", marcas="Crocs",
                              momento="Hot Sale")
     cid = datos.agregar_campana("acme", sid, pid, "espejo_led", None, 1, 0)
     ef = datos.efectivos_de("acme", datos.campana("acme", cid))

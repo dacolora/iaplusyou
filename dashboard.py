@@ -51,6 +51,7 @@ import meta_agencia
 import flowplus_prompt
 import referencias_flowplus
 import materiales
+import ediciones
 import mi_musica
 import referencias_link
 import generador_prompts
@@ -61,6 +62,8 @@ import ads as ads_mod
 from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
+import doctrina
+from doctrina import revisor as doctrina_revisor
 import flowplus_lanzar
 import cola
 import db
@@ -90,6 +93,7 @@ from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
 from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
+from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
@@ -117,6 +121,9 @@ FRAME_SUFFIX = ".frame.jpg"
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
+# Vocabulario de la doctrina en palabras simples para los selectores de
+# persona y producto (bloque 2 de la doctrina).
+app.jinja_env.globals.update(doctrina.globales_plantilla())
 
 # Idioma (spec 2026-09-26-idioma-y-modo-oscuro §B1): el español es la fuente;
 # el inglés sale de translations/ (catalogo_i18n.py). idiomas.de_peticion elige.
@@ -198,6 +205,9 @@ app.register_blueprint(guiones_rutas.bp)
 
 from guiones import rutas_pipeline as guiones_pipeline  # noqa: E402  (panel de guiones de Flow Plus)
 app.register_blueprint(guiones_pipeline.bp)
+
+from final_edition import rutas_editor  # noqa: E402  (vista previa del editor, capa 3)
+app.register_blueprint(rutas_editor.bp)
 
 # Cargar el .env de un cliente muta os.environ (variables globales del proceso).
 # Como publicar ahora corre en un hilo de fondo, dos publicaciones de clientes
@@ -440,6 +450,11 @@ def _sin_cache(resp):
     # (p. ej. el panel de Meta) pueden cargarlos por fetch.
     if request.path.startswith("/static/img/"):
         resp.headers["Access-Control-Allow-Origin"] = "*"
+    # Módulos ES del editor: se importan entre sí por ruta relativa, sin el
+    # ?v= de _version_estaticos; sin revalidar, un despliegue dejaría módulos
+    # viejos mezclados con nuevos. `no-cache` = siempre pregunta (304 barato).
+    if request.path.startswith("/static/editor/"):
+        resp.headers["Cache-Control"] = "no-cache"
     return resp
 
 
@@ -1655,6 +1670,7 @@ def ver_cliente(cliente):
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
         creative_flow_items=_creative_flow_items(cliente),
+        ediciones_por_cf=_ediciones_por_cf(cliente),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         fp_prefill=session.pop("fp_prefill", None),
@@ -1724,6 +1740,7 @@ def ver_cliente(cliente):
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
+        precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         estado_pixel=estado_pixel,
         meta_conectado=meta_conectado,
         atribucion_sugerida=atribucion_sug,
@@ -2503,7 +2520,24 @@ def _campos_comerciales(form):
     return campos
 
 
-def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False):
+_SIN_CAMBIO = object()
+
+
+def _sofisticacion_form(form):
+    """1–5 del selector «Cuántas promesas parecidas vio ya tu cliente»;
+    None = «Que Claude lo decida»; `_SIN_CAMBIO` si el formulario no trae
+    el campo (un formulario viejo no debe borrar lo elegido)."""
+    if "sofisticacion" not in form:
+        return _SIN_CAMBIO
+    try:
+        valor = int(form.get("sofisticacion") or 0)
+    except ValueError:
+        return None
+    return valor if valor in doctrina.SOFISTICACIONES else None
+
+
+def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False,
+                          sofisticacion=_SIN_CAMBIO):
     """Escribe lo comercial del activo `producto_id` en su fila `producto`
     (`tiendas.asegurar_manual` la crea si no existe). Una fila sin moneda
     hereda la de la cuenta de Meta (o COP). `desarchivar`: al CREAR el
@@ -2526,7 +2560,20 @@ def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, de
     if desarchivar and (fila or {}).get("archivado"):
         valores["archivado"] = False
     tiendas.marcar_producto(cliente, pid, **valores)
+    if sofisticacion is not _SIN_CAMBIO:
+        tiendas.anotar_extra(cliente, pid, sofisticacion=sofisticacion)
     return pid
+
+
+@app.route("/cliente/<cliente>/doctrina")
+def doctrina_pagina(cliente):
+    """«Cómo escribe Creatv» (doctrina, bloque 2, §6): las nueve rebanadas de
+    `doctrina/textos/*.md`, de solo lectura, para cualquier usuario con acceso
+    al proyecto (lo exige `_guard_por_cliente`). Lee los mismos archivos que
+    recibe Claude: la página nunca se desincroniza de lo que está en uso."""
+    from doctrina import pagina as doctrina_pagina_mod
+    return render_template("doctrina.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           secciones=doctrina_pagina_mod.secciones())
 
 
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
@@ -2563,7 +2610,8 @@ def crear_producto(cliente):
         # Solo lo que se vende tiene fila comercial (precio, url de compra,
         # en prueba): un personaje o un entorno no van a un experimento.
         _guardar_fila_producto(cliente, producto_id, nombre, descripcion,
-                               _campos_comerciales(request.form), desarchivar=True)
+                               _campos_comerciales(request.form), desarchivar=True,
+                               sofisticacion=_sofisticacion_form(request.form))
     flash(gettext("Producto creado: %(nombre)s (%(n)s foto(s)).", nombre=nombre, n=guardadas), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
@@ -2611,7 +2659,8 @@ def actualizar_producto(cliente, producto_id):
         # La fila comercial se crea aquí si el activo es anterior a que
         # existiera (no hay migración: se enlaza al primer uso).
         _guardar_fila_producto(cliente, producto_id, request.form.get("nombre"),
-                               request.form.get("descripcion"), _campos_comerciales(request.form))
+                               request.form.get("descripcion"), _campos_comerciales(request.form),
+                               sofisticacion=_sofisticacion_form(request.form))
     flash(gettext("Producto actualizado."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
@@ -2687,11 +2736,23 @@ def _swap_items(cliente):
 
 
 def _creative_flow_items(cliente):
+    import final_edition
     data = creative_flow.cargar(cliente)
     # Id numérico de la pieza por sesión, UNA consulta para toda la pestaña:
     # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
     # (#experimentos?piezas=<pieza_id>). Las finales ya traen su pieza_id.
     pieza_ids = creative_flow.piezas_ids_por_legado(cliente)
+    # Doctrina, bloque 3: leer la guía una sola vez (no por pieza).
+    try:
+        guia_marca = marca_mod.guia_efectiva(cliente) or ""
+    except Exception:  # noqa: BLE001 — es informativa, nunca bloquea
+        guia_marca = ""
+    # Doctrina, bloque 3, revisión final (I1): `final_edition._producto`
+    # escanea el catálogo (archivo + tabla `producto`); con muchas piezas
+    # del mismo producto eso se notaba (+2,4 s con 500 piezas/100 productos).
+    # Memo por tupla de `productos_ids`, una sola resolución por producto
+    # distinto en toda la lista, no por pieza.
+    productos_por_ids = {}
     items = []
     for cf_id, entry in sorted(
         data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
@@ -2743,6 +2804,39 @@ def _creative_flow_items(cliente):
                 jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
                 f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
                 item["finales"].append(f)
+        # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
+        # Las reglas son gratis y se calculan al renderizar; la revisión de
+        # Claude es la guardada. Sin ninguna de las dos, la sección no pesa.
+        item["revision"], item["revision_estado"], item["reglas"], item["trabajo_revision"] = None, None, [], None
+        item["revision_error"] = None
+        if entry.get("estado") == "video_listo" and entry.get("video_url"):
+            item["revision"] = entry.get("revision_doctrina")
+            item["revision_error"] = entry.get("revision_doctrina_error")
+            item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
+            item["revision_n"] = doctrina_revisor.contar(item["revision"])
+            try:
+                clave = tuple(entry.get("productos_ids") or ())
+                if clave:
+                    producto = productos_por_ids.get(clave)
+                    if producto is None:
+                        try:
+                            producto = final_edition._producto(cliente, entry, None) or {}
+                        except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
+                            producto = {}
+                        # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
+                        # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
+                        if "pruebas" in producto or not producto:
+                            productos_por_ids[clave] = producto
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
+                                                guia=guia_marca, producto=producto)
+                else:
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=guia_marca)
+                item["reglas"] = doctrina_revisor.reglas(d)
+            except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
+                item["reglas"] = []
+            jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
+            item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
+            item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
         items.append(item)
     return items
 
@@ -3754,6 +3848,12 @@ def admin_referentes_traer():
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
         flash("Escribe una palabra clave.", "error")
         return redirect(url_for("admin_referentes"))
+    from referentes import traducir
+    try:
+        consulta = traducir.preparar_consulta(consulta, None)     # palabra → inglés, idioma en (gasto a _creatv)
+    except traducir.TraduccionInvalida as e:
+        flash(str(e), "error")
+        return redirect(url_for("admin_referentes"))
     tope = min(max(1, _entero(request.form.get("tope"), 200)), 2000)
     modulo = fuentes.por_tipo(fuente)
     try:
@@ -4151,7 +4251,8 @@ NOMBRES_TIPO_GASTO = {
     "guion": idiomas.N_("Guiones"), "final": idiomas.N_("Finales"), "regla_producto": idiomas.N_("Reglas de producto (IA)"),
     "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
     "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
-    "otro": idiomas.N_("Otros"),
+    "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
+    "revision": idiomas.N_("Revisión de la doctrina (IA)"), "otro": idiomas.N_("Otros"),
 }
 
 
@@ -4876,8 +4977,11 @@ def _trabajos_organico(cliente, publicaciones_por_pieza):
 
 def _volver_org(cliente):
     """Vuelve a la pestaña de donde salió el clic (`volver` en el form):
-    Crear (creativeflowplus) o Experimentos (por defecto)."""
-    anchor = "creativeflowplus" if request.form.get("volver") == "creativeflowplus" else "experimentos"
+    Final edition (final; desde 2026-09-27 las finales viven ahí), Crear
+    (creativeflowplus: formularios pintados antes de la mudanza) o
+    Experimentos (por defecto)."""
+    volver = request.form.get("volver")
+    anchor = volver if volver in ("final", "creativeflowplus") else "experimentos"
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=anchor))
 
 
@@ -5190,6 +5294,10 @@ def _trabajos_productos(cliente, tiendas_cliente, productos=()):
     «Crear activo» está corriendo, para pintar la barra. Los `vincular` salen
     de UNA consulta a la cola (cola.job_ids_vivos), no de una por producto."""
     vivos = cola.job_ids_vivos(cliente, "producto_vincular") if productos else set()
+    # «Actualizar lo que Claude necesita» (doctrina, bloque 2), también en una sola consulta.
+    vivos_pedidos = cola.job_ids_vivos(cliente, tareas_doctrina.TIPO_PEDIDOS) if productos else set()
+    pedidos = {prod["id"]: {"job_id": tareas_doctrina.job_id_pedidos(cliente, prod["id"])} for prod in productos
+               if tareas_doctrina.job_id_pedidos(cliente, prod["id"]) in vivos_pedidos}
     vincular = {}
     for prod in productos:
         jid = tareas_tiendas.job_id_vincular(cliente, prod["id"])
@@ -5207,7 +5315,7 @@ def _trabajos_productos(cliente, tiendas_cliente, productos=()):
             if trabajos.en_curso(jid):
                 por_tienda[t["id"]] = {"job_id": jid}
                 break
-    return {"importar": importar, "tiendas": por_tienda, "vincular": vincular}
+    return {"importar": importar, "tiendas": por_tienda, "vincular": vincular, "pedidos": pedidos}
 
 
 @app.route("/cliente/<cliente>/productos/importar/archivo", methods=["POST"])
@@ -5278,6 +5386,73 @@ def prod_importar_url(cliente):
         flash(gettext("Leyendo la página del producto… aparece aquí cuando termine."), "ok")
     else:
         flash(gettext("Ya hay una importación desde URL en curso — espera a que termine."), "warn")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pruebas", methods=["POST"])
+def prod_prueba_agregar(cliente, pid):
+    """Doctrina, bloque 2 (§5.4): agrega una prueba real al producto."""
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid):
+        flash(gettext("No encontré ese producto."), "error")
+        return _volver_productos(cliente)
+    try:
+        doctrina_producto.agregar_prueba(cliente, pid, request.form.get("texto"), request.form.get("fuente"))
+        flash(gettext("Prueba guardada: Claude ya la puede usar con este producto."), "ok")
+    except doctrina_producto.ErrorPrueba as e:
+        flash(str(e), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pruebas/<prueba_id>/borrar", methods=["POST"])
+def prod_prueba_borrar(cliente, pid, prueba_id):
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid) or not doctrina_producto.borrar_prueba(cliente, pid, prueba_id):
+        flash(gettext("No encontré ese producto."), "error")
+    else:
+        flash(gettext("Prueba borrada."), "ok")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/actualizar", methods=["POST"])
+def prod_pedidos_actualizar(cliente, pid):
+    """«Actualizar lo que Claude necesita» (doctrina, bloque 2, §5.3): encola la
+    tarea pagada; el precio ya está en el botón. Sin faltantes no encola."""
+    from doctrina import pedidos as doctrina_pedidos
+    fila = tiendas.producto(cliente, pid)
+    if not fila:
+        flash(gettext("No encontré ese producto."), "error")
+    elif not doctrina_pedidos.faltantes_del_producto(cliente, fila):
+        flash(gettext("Claude no ha pedido nada para este producto todavía: aparece cuando escribe ideas o guiones con él."), "ok")
+    elif tareas_doctrina.encolar_pedidos(cliente, pid):
+        flash(gettext("Armando lo que Claude necesita… la lista se actualiza sola."), "ok")
+    else:
+        flash(gettext("Ya se está armando la lista de este producto."), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/responder", methods=["POST"])
+def prod_pedido_responder(cliente, pid, pedido_id):
+    """La respuesta queda como prueba del producto y el pedido se cierra."""
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid):
+        flash(gettext("No encontré ese producto."), "error")
+        return _volver_productos(cliente)
+    try:
+        doctrina_producto.responder(cliente, pid, pedido_id, request.form.get("texto"), request.form.get("fuente"))
+        flash(gettext("Gracias: quedó como prueba del producto y Claude ya la puede usar."), "ok")
+    except doctrina_producto.ErrorPrueba as e:
+        flash(str(e), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/descartar", methods=["POST"])
+def prod_pedido_descartar(cliente, pid, pedido_id):
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid) or not doctrina_producto.descartar(cliente, pid, pedido_id):
+        flash(gettext("Ese pedido ya no está abierto."), "error")
+    else:
+        flash(gettext("Listo: Claude no lo volverá a pedir."), "ok")
     return _volver_productos(cliente)
 
 
@@ -5868,8 +6043,20 @@ def cf_descartar(cliente, cf_id):
 IDIOMAS_FE = ("es", "en", "pt")
 
 
-def _volver_crear(cliente):
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+def _volver_final(cliente):
+    """Las rutas de final edition vuelven a su pestaña (desde 2026-09-27 ya no
+    viven en Crear)."""
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="final"))
+
+
+def _ediciones_por_cf(cliente):
+    """{cf_id: [ediciones de esa pieza, la más reciente primero]} para la
+    pestaña Final edition (filas sin el documento)."""
+    out = {}
+    for e in ediciones.listar(cliente):
+        if e.get("cf_id"):
+            out.setdefault(e["cf_id"], []).append(e)
+    return out
 
 
 def _precio_form(valor):
@@ -5881,6 +6068,39 @@ def _precio_form(valor):
         return float(valor)
     except ValueError:
         return None
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/angulo", methods=["POST"])
+def cf_angulo(cliente, cf_id):
+    """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una
+    pieza de Crear (`concepto.extra.angulo`, el que usan el guion, las
+    variantes y los captions). JSON {angulo} → {ok, angulo, avisos, resumen}.
+    Los avisos no bloquean: se guarda igual."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry:
+        return jsonify({"ok": False, "error": gettext("Esa pieza ya no existe.")}), 404
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("angulo"), dict):
+        return jsonify({"ok": False, "error": gettext("Formato inválido.")}), 400
+    previo = entry.get("angulo") if isinstance(entry.get("angulo"), dict) else {}
+    limpio, avisos = doctrina.angulo_desde_formulario(dict(cuerpo["angulo"], origen=previo.get("origen")),
+                                                      previo.get("faltantes"), ahora=db.ahora())
+    creative_flow.actualizar(cliente, cf_id, angulo=limpio)
+    return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/revisar", methods=["POST"])
+def cf_revisar(cliente, cf_id):
+    """Doctrina, bloque 3: encola «Revisar con la doctrina» de una pieza
+    terminada (pagada: el precio va en el botón; un clic repetido no lanza
+    dos porque el `job_id` es determinista). Solo informa, nunca bloquea."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry or entry.get("estado") != "video_listo" or not entry.get("video_url"):
+        flash(gettext("Solo se puede revisar una pieza terminada."), "error")
+        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+    tareas_doctrina.encolar_revisar(cliente, cf_id)
+    flash(gettext("Revisando la pieza con la doctrina: la página se recarga sola cuando esté lista."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
 def _sesion_con_video(cliente, cf_id):
@@ -5899,7 +6119,7 @@ def _sesion_con_video(cliente, cf_id):
 def fe_preparar(cliente, cf_id):
     """Encola la escritura del guion base (capa 0, Anthropic). No produce nada."""
     if _sesion_con_video(cliente, cf_id) is None:
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     idioma_base = request.form.get("idioma_base") or "es"
     if idioma_base not in IDIOMAS_FE:
         idioma_base = "es"
@@ -5911,7 +6131,7 @@ def fe_preparar(cliente, cf_id):
     )
     flash(gettext("Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises.") if encolado
           else gettext("Ya se estaba escribiendo el guion de esta pieza."), "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/guion", methods=["POST"])
@@ -5919,11 +6139,11 @@ def fe_guardar_guion(cliente, cf_id):
     """Guarda la edición del guion base: solo cambian los textos (pantalla y
     voz) de cada bloque; tiempos, roles, idioma y país se conservan."""
     if _sesion_con_video(cliente, cf_id) is None:
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base or not base.get("bloques"):
         flash(gettext("Primero prepara el guion con IA; después lo editas."), "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     guion = dict(base)
     guion["bloques"] = []
     for i, bloque in enumerate(base["bloques"]):
@@ -5935,10 +6155,10 @@ def fe_guardar_guion(cliente, cf_id):
     errores = fe_tipos.validar_guion(guion, duracion)
     if errores:
         flash(gettext("No se guardó el guion: %(errores)s", errores=" ".join(errores)), "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     creative_flow.guardar_guion_base(cliente, cf_id, guion)
     flash(gettext("Guion guardado. Ahora elige los destinos y produce las finales."), "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 def _destinos_form(valores):
@@ -5958,15 +6178,15 @@ def fe_producir(cliente, cf_id):
     """Encola una tarea `final_producir` por cada destino marcado. Exige guion
     base ya preparado (y revisado): sin él no se gasta nada."""
     if _sesion_con_video(cliente, cf_id) is None:
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     base = creative_flow.guion_base(cliente, cf_id)
     if not base:
         flash(gettext("Primero prepara el guion con IA y revísalo; sin guion no se produce nada."), "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     destinos = _destinos_form(request.form.getlist("destinos"))
     if not destinos:
         flash(gettext("Marca al menos un destino (idioma y país) válido para producir."), "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
 
     idioma_base = base.get("idioma") if base.get("idioma") in IDIOMAS_FE else "es"
     voces_validas = {v for lista in fal_audio.VOCES.values() for v in lista}
@@ -6016,10 +6236,10 @@ def fe_producir(cliente, cf_id):
         ):
             encolados += 1
     if encolados:
-        flash(gettext("Produciendo %(n)s finales… cada una aparece en Generados cuando termina.", n=encolados), "ok")
+        flash(gettext("Produciendo %(n)s finales… cada una aparece aquí, en Finales, cuando termina.", n=encolados), "ok")
     else:
         flash(gettext("Ya se estaban produciendo esas finales."), "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/descartar", methods=["POST"])
@@ -6030,12 +6250,12 @@ def fe_descartar(cliente, cf_id, final_id):
         # Borrar la fila mientras el worker la escribe la dejaría resucitar a
         # medias (actualizar_final sobre una pieza que ya no existe).
         flash(gettext("Esa final se está produciendo; espera a que termine."), "error")
-        return _volver_crear(cliente)
+        return _volver_final(cliente)
     if not final or not creative_flow.eliminar_final(cliente, final_id):
         flash(gettext("Esa final ya no existe."), "error")
     else:
         flash(gettext("Final descartada."), "ok")
-    return _volver_crear(cliente)
+    return _volver_final(cliente)
 
 
 def _lanzar_video_cf(cliente, cf_id, entry):

@@ -55,7 +55,7 @@ def test_clases_de_encabezado_y_estado_vacio():
 
 
 PESTANAS = [("tablero", "Tablero"), ("nicho", "Nicho"), ("referentes", "Referentes"),
-            ("creativeflowplus", "Crear"), ("experimentos", "Experimentos"), ("sprints", "Sprints"),
+            ("creativeflowplus", "Crear"), ("final", "Final edition"), ("experimentos", "Experimentos"), ("sprints", "Sprints"),
             ("catalogo", "Catálogo"), ("settings", "Configuración")]
 
 

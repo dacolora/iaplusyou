@@ -149,13 +149,15 @@ def test_org_publicar_crea_publicaciones_y_encola_con_max_intentos_1(app, base_t
     assert any("en cola: Instagram Reels, Facebook (Página)" in m for m in _flashes(app["c"]))
 
 
-def test_org_publicar_vuelve_a_crear_y_guarda_ep_id(app, base_temporal):
+def test_org_publicar_vuelve_a_final_edition_y_guarda_ep_id(app, base_temporal):
+    """Desde 2026-09-27 las finales viven en la pestaña Final edition: su
+    bloque orgánico manda volver=final y la ruta vuelve ahí."""
     import experimentos as ex
     eid = _experimento()
     pid, ep = _pieza_en(base_temporal, eid)
     r = app["c"].post("/cliente/acme/organico/publicar",
-                      data=dict(FORM_OK, ep_id=str(ep), plataformas=["instagram"], volver="creativeflowplus"))
-    assert r.headers["Location"].endswith("#creativeflowplus")
+                      data=dict(FORM_OK, ep_id=str(ep), plataformas=["instagram"], volver="final"))
+    assert r.headers["Location"].endswith("#final")
     pubs = app["organico"].listar("acme", pieza_id=pid)
     assert [(p["plataforma"], p["experimento_pieza_id"]) for p in pubs] == [("instagram", ep)]
     e = ex.obtener("acme", eid)
@@ -268,6 +270,8 @@ def test_org_reintentar_solo_en_error(app, base_temporal):
     org = app["organico"]
     pub = org.crear("acme", pid, "facebook", "texto #a #b #c")
     org.actualizar("acme", pub, estado="error", error="Graph dijo que no")
+    # Un formulario pintado antes de la mudanza a Final edition (2026-09-27)
+    # todavía manda volver=creativeflowplus: se respeta.
     r = app["c"].post(f"/cliente/acme/organico/{pub}/reintentar", data={"volver": "creativeflowplus"})
     assert r.status_code == 302 and r.headers["Location"].endswith("#creativeflowplus")
     fila = org.obtener("acme", pub)
@@ -532,20 +536,23 @@ def test_experimentos_muestra_barra_si_hay_trabajo(app, base_temporal, monkeypat
     assert 'name="caption_facebook"' not in html   # mientras publica no hay formulario
 
 
-def test_crear_muestra_bloque_en_final_lista(app, base_temporal):
+def test_final_edition_muestra_bloque_en_final_lista(app, base_temporal):
+    """Las finales (y su «Publicar orgánico») salieron de Crear a la pestaña
+    Final edition el 2026-09-27."""
     import creative_flow as cf
     from tests.test_rutas_final_edition import _sesion_video_listo
     cf_id = _sesion_video_listo()
     fid = cf.crear_final("acme", cf_id, "es", "CO")
     cf.actualizar_final("acme", fid, estado="listo", url_video="https://r2/f.mp4")
     pid = cf.pieza_id_por_legado("acme", fid)
-    html = _seccion(_html(app), "creativeflowplus")
+    html = _seccion(_html(app), "final")
     assert "Publicación orgánica" in html and f'name="pieza_id" value="{pid}"' in html
-    assert 'name="volver" value="creativeflowplus"' in html
+    assert 'name="volver" value="final"' in html
     assert "window.orgConfirmar" in html and 'name="ep_id"' not in html
+    assert "Publicación orgánica" not in _seccion(_html(app), "creativeflowplus")
     # Una final en error no lo muestra.
     cf.actualizar_final("acme", fid, estado="error")
-    assert "Publicación orgánica" not in _seccion(_html(app), "creativeflowplus")
+    assert "Publicación orgánica" not in _seccion(_html(app), "final")
 
 
 def test_pagina_trae_los_scripts_una_vez(app):

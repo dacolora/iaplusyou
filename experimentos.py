@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from flask_babel import gettext
 
 import db
+from doctrina import revisor as doctrina_revisor
 from idiomas import N_
 
 ESTADOS_EXPERIMENTO = ("armando", "lanzando", "pausado", "corriendo", "cerrado", "error",
@@ -574,7 +575,9 @@ def elegibles(cliente):
     """Todo lo que se puede probar en Meta: finales listas/degradadas (van a su
     país), clones de video listos e imágenes listas (van a cualquier país).
     Piezas sin URL pública no entran. Cada elemento trae de dónde viene
-    (`origen`, `sprint`), su formato y en qué experimentos vivos está."""
+    (`origen`, `sprint`), su formato, en qué experimentos vivos está y
+    `doctrina` ({"estado", "n"} de la revisión guardada en su sesión, doctrina
+    bloque 3; una final muestra la de su pieza de origen, sin mirar si es vieja)."""
     pz, cp = db.pieza, db.concepto
     q = (sa.select(pz, cp.c.extra.label("c_extra"))
          .select_from(pz.outerjoin(cp, cp.c.id == pz.c.concepto_id))
@@ -600,7 +603,9 @@ def elegibles(cliente):
                         "idioma": m[pz.c.idioma], "pais": m[pz.c.pais] if tipo == "final" else None,
                         "duracion_s": m[pz.c.duracion_s], "formato": m[pz.c.aspect_ratio],
                         "origen": origen, "sprint": sprint, "creado_en": m[pz.c.creado_en],
-                        "en_experimentos": vivos.get(m[pz.c.id], [])})
+                        "en_experimentos": vivos.get(m[pz.c.id], []),
+                        "doctrina": doctrina_revisor.resumen_galeria(
+                            extra_c.get("revision_doctrina"), None if tipo == "final" else m[pz.c.url_video])})
     return out
 
 
