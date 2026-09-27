@@ -58,6 +58,27 @@ def test_versionar_y_restaurar(base_temporal):
     assert [v["n"] for v in e.versiones("acme", ed["id"])] == [1]
 
 
+def test_versionar_con_version_n_rechaza_stale_y_no_crea_version(base_temporal):
+    ed = e.crear("acme", "video", "e", _doc())
+    e.guardar("acme", ed["id"], _doc(), version_n=0)   # ahora version_n=1 en la fila
+    with pytest.raises(e.Conflicto) as ei:
+        e.versionar("acme", ed["id"], "producir", version_n=0)   # stale
+    assert "cambió" in str(ei.value)
+    assert e.versiones("acme", ed["id"]) == []
+
+
+def test_versionar_con_version_n_vigente_congela(base_temporal):
+    ed = e.crear("acme", "video", "e", _doc())
+    v = e.versionar("acme", ed["id"], "producir", version_n=0)
+    assert v["n"] == 1
+
+
+def test_versionar_con_version_n_en_edicion_inexistente_dice_no_existe(base_temporal):
+    with pytest.raises(e.Conflicto) as ei:
+        e.versionar("acme", 999999, "producir", version_n=0)
+    assert "No existe" in str(ei.value)
+
+
 def test_versionar_concurrente_no_repite_n(base_temporal):
     import threading
     ed = e.crear("acme", "video", "e", _doc())

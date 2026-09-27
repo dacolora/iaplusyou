@@ -93,14 +93,22 @@ def producir(cliente, edicion_id):
         return jsonify({"error": "No existe esa edición."}), 404
     if not ed.get("cf_id"):
         return jsonify({"error": "Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí."}), 400
-    cuerpo = request.get_json(silent=True) or {}
-    if cuerpo.get("version_n") != ed["version_n"]:
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("version_n"), int) \
+            or isinstance(cuerpo.get("version_n"), bool) or not isinstance(cuerpo.get("destinos"), list) \
+            or not all(isinstance(d, str) for d in cuerpo.get("destinos")):
+        return jsonify({"error": "Pedido inválido: se esperaba {version_n, destinos}."}), 400
+    # Chequeo rápido en memoria: un 409 inmediato sin tocar la base cuando la
+    # versión ya se ve distinta a simple vista. No reemplaza el CAS de abajo
+    # (fix round 1, Important): entre esta lectura y `ediciones.versionar` un
+    # autoguardado de otra pestaña puede colarse, así que `versionar` vuelve a
+    # comparar `version_n` dentro de la misma transacción que congela.
+    if cuerpo["version_n"] != ed["version_n"]:
         return jsonify({"error": "La edición cambió: espera a que termine de guardarse y vuelve a intentar."}), 409
     doc = ed["documento"]
     validos = set(vista_previa.destinos(doc))
-    destinos = cuerpo.get("destinos")
-    if not isinstance(destinos, list) or not destinos or any(
-            not isinstance(d, str) or not _DESTINO_RE.match(d) or d not in validos for d in destinos):
+    destinos = cuerpo["destinos"]
+    if not destinos or any(not _DESTINO_RE.match(d) or d not in validos for d in destinos):
         return jsonify({"error": "Elige al menos un destino de esta edición."}), 400
     problemas = []
     for d in destinos:
@@ -111,7 +119,10 @@ def producir(cliente, edicion_id):
             problemas.append(f"{d}: {e}")
     if problemas:
         return jsonify({"error": "Hay textos sin traducir para algún destino.", "problemas": problemas}), 400
-    version = ediciones.versionar(cliente, edicion_id, motivo="producir")
+    try:
+        version = ediciones.versionar(cliente, edicion_id, motivo="producir", version_n=cuerpo["version_n"])
+    except ediciones.Conflicto as e:
+        return jsonify({"error": str(e)}), 409
     segundos = estimar.segundos(doc)
     producidas = []
     for d in destinos:

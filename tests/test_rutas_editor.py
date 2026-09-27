@@ -249,3 +249,44 @@ def test_producir_no_repite_un_render_que_ya_corre(dashboard, encolados, monkeyp
     assert r.status_code == 200
     assert r.get_json()["producidas"][0]["encolada"] is False
     assert not [a for a, _k in encolados if a[1] == "edicion_producir"]
+
+
+def test_producir_detecta_un_guardado_colado_antes_de_congelar(dashboard, encolados, monkeypatch):
+    # Fix round 1 (Important): la ruta leía `version_n` una vez al comienzo y
+    # solo mucho después llamaba a `ediciones.versionar`, que congelaba lo
+    # que hubiera EN ESE MOMENTO en la fila — un autoguardado de otra pestaña
+    # colado justo en el medio congelaba un documento que nunca pasó por la
+    # validación de destinos, y la versión vieja no se rechazaba. Se simula
+    # el autoguardado colado dentro de una función que la ruta llama DESPUÉS
+    # del chequeo rápido en memoria pero ANTES de `ediciones.versionar`.
+    import ediciones
+    from final_edition import rutas_editor
+    ed, _cf = _edicion_con_pieza()
+    original = rutas_editor.vista_previa.destinos
+
+    def _colado(doc):
+        ediciones.guardar("acme", ed["id"], ed["documento"], ed["version_n"])
+        return original(doc)
+
+    monkeypatch.setattr(rutas_editor.vista_previa, "destinos", _colado)
+    r = _cliente_admin(dashboard).post(f"/cliente/acme/ediciones/{ed['id']}/producir",
+                                       json={"version_n": ed["version_n"], "destinos": ["es_CO"]})
+    assert r.status_code == 409
+    assert not [a for a, _k in encolados if a[1] == "edicion_producir"]
+    assert ediciones.versiones("acme", ed["id"]) == []
+
+
+def test_producir_valida_la_forma_del_cuerpo(dashboard, encolados):
+    # Fix round 1 (Minor): un cuerpo sin JSON válido, sin version_n o sin
+    # destinos daba 409 ("La edición cambió") en vez de un 400 claro, porque
+    # `request.get_json(silent=True) or {}` convertía cualquier cosa rara en
+    # `{}` y `cuerpo.get("version_n")` daba None, distinto de `ed["version_n"]`.
+    ed, _cf = _edicion_con_pieza()
+    c = _cliente_admin(dashboard)
+    url = f"/cliente/acme/ediciones/{ed['id']}/producir"
+    assert c.post(url, data="no es json", content_type="application/json").status_code == 400
+    assert c.post(url, json={"destinos": ["es_CO"]}).status_code == 400             # falta version_n
+    assert c.post(url, json={"version_n": ed["version_n"]}).status_code == 400      # falta destinos
+    assert c.post(url, json={"version_n": True, "destinos": ["es_CO"]}).status_code == 400   # bool no es int
+    assert c.post(url, json={"version_n": ed["version_n"], "destinos": "es_CO"}).status_code == 400  # no es lista
+    assert not [a for a, _k in encolados if a[1] == "edicion_producir"]
