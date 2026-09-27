@@ -47,6 +47,11 @@ _RE_PAGINA_META = re.compile(r"view_all_page_id=(\d+)")
 MAX_MARCAS = 10
 MAX_FAMILIAS = 8
 LARGO_DOLOR = 300
+# F6 (ronda final): sin tope, `referencias_objetivo` gigante producía una
+# tarjeta de varios MB (`_sprint_panel.html` dibuja un placeholder vacío por
+# cada unidad que falta).
+MAX_REFERENCIAS_OBJETIVO = 20
+MAX_PIEZAS = 50
 
 _PERSONA_COLS = ("nombre", "resumen", "descripcion", "edad_rango", "tono", "senales_visuales", "palabras_clave",
                  "color", "origen", "archivada", "extra")
@@ -575,7 +580,15 @@ def _cantidades(n_videos, n_imagenes):
         raise ErrorDatos("Las cantidades no pueden ser negativas.")
     if n_videos + n_imagenes < 1:
         raise ErrorDatos("Una campaña necesita al menos un video o una imagen.")
+    if n_videos > MAX_PIEZAS or n_imagenes > MAX_PIEZAS:
+        raise ErrorDatos(f"Máximo {MAX_PIEZAS} videos o imágenes por campaña.")
     return n_videos, n_imagenes
+
+
+def _tope_referencias_objetivo(objetivo):
+    if objetivo > MAX_REFERENCIAS_OBJETIVO:
+        raise ErrorDatos(f"El objetivo de referencias no puede pasar de {MAX_REFERENCIAS_OBJETIVO}.")
+    return objetivo
 
 
 def validar_cantidades(n_videos, n_imagenes):
@@ -618,10 +631,11 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id=No
             objetivo = int(referencias_objetivo or sp.referencias_objetivo_defecto or 5)
         except (TypeError, ValueError):
             raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+        objetivo = _tope_referencias_objetivo(max(1, objetivo))
         cid = con.execute(c.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, sprint_id=sprint_id, persona_id=persona_id,
             catalogo_id=catalogo_id, producto_id=None, temporada_id=temporada_id, n_videos=n_videos,
-            n_imagenes=n_imagenes, referencias_objetivo=max(1, objetivo), estado="planeada", orden=orden,
+            n_imagenes=n_imagenes, referencias_objetivo=objetivo, estado="planeada", orden=orden,
             funnel=funnel, consciencia=consciencia, dolor=dolor, familias=familias, extra={})).inserted_primary_key[0]
         _evento(con, cliente, sprint_id, cid, "campana_agregada", "Campaña agregada",
                 {"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id,
@@ -648,6 +662,7 @@ def actualizar_campana(cliente, campana_id, /, **campos):
             campos["referencias_objetivo"] = max(1, int(campos["referencias_objetivo"]))
         except (TypeError, ValueError):
             raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+        campos["referencias_objetivo"] = _tope_referencias_objetivo(campos["referencias_objetivo"])
     if "funnel" in campos and campos["funnel"] not in FUNNELS:
         raise ErrorDatos("La etapa debe ser TOF, MOF o BOF.")
     if "consciencia" in campos:

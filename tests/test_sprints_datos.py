@@ -93,6 +93,30 @@ def test_campana_repetida_y_cantidades(base_temporal):
     assert tipos[0] == "campana_eliminada" and "campana_agregada" in tipos
 
 
+def test_campana_topes_de_cantidades_y_referencias(base_temporal):
+    """F6 (ronda final): sin tope, `referencias_objetivo` gigante (100000)
+    producía una tarjeta de 4.5 MB (el panel dibuja un placeholder vacío por
+    cada unidad que falta -- `_sprint_panel.html`). Tope: 20 referencias, 50
+    videos o imágenes, en creación y en autoguardado."""
+    from sprints import datos
+    pid, tid, sid = _base(datos)
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 51, 0)
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 0, 51)
+    with pytest.raises(datos.ErrorDatos):
+        datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 1, 0, referencias_objetivo=21)
+    cid = datos.agregar_campana("acme", sid, pid, "espejo_led", tid, 50, 50, referencias_objetivo=20)
+    assert datos.campana("acme", cid)["n_videos"] == 50 and datos.campana("acme", cid)["referencias_objetivo"] == 20
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_campana("acme", cid, n_videos=51)
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_campana("acme", cid, n_imagenes=51)
+    with pytest.raises(datos.ErrorDatos):
+        datos.actualizar_campana("acme", cid, referencias_objetivo=100000)
+    assert datos.actualizar_campana("acme", cid, n_videos=50, n_imagenes=50)
+
+
 def test_sprints_lista_con_totales(base_temporal):
     from sprints import datos
     pid, tid, sid = _base(datos)
