@@ -87,7 +87,7 @@ def entorno(base_temporal, tmp_path, monkeypatch, clip):
     def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None,
                      angulo=None):
         llamadas["generar"] = dict(producto=producto, referencia=referencia, enfoque=enfoque,
-                                   duracion_s=duracion_s, idioma_base=idioma_base, marca=marca)
+                                   duracion_s=duracion_s, idioma_base=idioma_base, marca=marca, angulo=angulo)
         return dict(GUION_BASE), 0.01
     monkeypatch.setattr(guion_mod, "generar_guion_base", fake_generar)
 
@@ -211,6 +211,32 @@ def test_preparar_guion_guarda_el_angulo_nuevo_y_no_pisa_uno_existente(entorno, 
                         lambda *a, **k: (dict(GUION_BASE, angulo=dict(nuevo, promesa="otra")), 0.01))
     final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
     assert cf.cargar("acme")[entorno["cf_id"]]["angulo"]["promesa"] == "p"      # el ángulo de la sesión manda
+
+
+def test_preparar_guion_no_pisa_el_angulo_que_la_persona_llena_mientras_claude_escribe(entorno, monkeypatch):
+    """Doctrina, bloque 2 (revisión final #7, ahora alcanzable tras el #1): la
+    sesión no tenía ángulo al arrancar (`angulo_sesion` queda None), pero si
+    la persona lo llena en el editor MIENTRAS Claude escribe el guion (misma
+    carrera del bug crítico #1), el de la persona manda — `preparar_guion`
+    debe releer la sesión justo antes de guardar, no confiar en la foto de
+    antes de llamar a Claude."""
+    import creative_flow as cf
+    de_claude = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+                 "promesa": "promesa de claude", "mecanismo": None, "pruebas": [], "lead": "problema_solucion",
+                 "gancho": "gancho de claude", "faltantes": [], "origen": "guion"}
+    de_la_persona = {"audiencia": "a", "consciencia": "consciente_del_problema", "sofisticacion": 2, "deseo": "d",
+                     "promesa": "promesa de la persona", "mecanismo": None, "pruebas": [],
+                     "lead": "problema_solucion", "gancho": "gancho de la persona", "faltantes": []}
+
+    def generar_con_carrera(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
+                            canal_optimo=None, angulo=None):
+        # Mientras "Claude" trabaja, la persona guarda su ángulo en el editor.
+        cf.actualizar("acme", entorno["cf_id"], angulo=de_la_persona)
+        return dict(GUION_BASE, angulo=de_claude), 0.01
+    monkeypatch.setattr(guion_mod, "generar_guion_base", generar_con_carrera)
+    final_edition.preparar_guion("acme", entorno["cf_id"], {"precio": 89900})
+    guardado = cf.cargar("acme")[entorno["cf_id"]]["angulo"]
+    assert guardado["promesa"] == "promesa de la persona"
 
 
 def test_preparar_guion_no_guarda_un_angulo_vacio_si_claude_no_lo_decidio(entorno, monkeypatch):
@@ -644,3 +670,46 @@ def test_producir_con_cancion_propia_usa_su_tramo_sin_costo(entorno, monkeypatch
     assert f["capas"]["musica"]["parametros"] == {"estilo": "Jingle", "url": "https://r2/clientes/acme/materiales/h.mp3",
                                                   "material_id": 3, "inicio_s": 12}
     assert entorno["render"]["musica"].endswith("propia.wav")
+
+
+def test_un_angulo_a_medio_llenar_no_manda_en_el_guion(entorno):
+    """Doctrina, bloque 2 (§3.4): un ángulo empezado a mano sin promesa o sin
+    gancho no es un ángulo: Claude decide uno completo."""
+    import creative_flow as cf
+    cf.actualizar("acme", entorno["cf_id"], angulo={"audiencia": "pies fríos", "promesa": "", "gancho": "",
+                                                    "editado_en": "2026-09-26T10:00:00"})
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["angulo"] is None
+    completo = {"audiencia": "pies fríos", "promesa": "pies calientes", "gancho": "¿Pies fríos?", "editado_en": "t"}
+    cf.actualizar("acme", entorno["cf_id"], angulo=completo)
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["angulo"]["gancho"] == "¿Pies fríos?"
+
+
+def test_preparar_guion_lleva_las_pruebas_del_producto(entorno, monkeypatch):
+    """Doctrina, bloque 2 (§5.5)."""
+    import catalogo_productos
+    import tiendas
+    from doctrina import producto as dp
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [
+        {"id": "chancla_rose", "nombre": "Chancla Rose", "descripcion": "Chancla cómoda", "tipo": "calzado", "regla": ""}])
+    pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
+    dp.agregar_prueba("acme", pid, "Suela que dura 3 veranos", "ficha")
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["producto"]["pruebas"] == [{"texto": "Suela que dura 3 veranos", "fuente": "ficha"}]
+
+
+def test_preparar_guion_tolera_una_prueba_sin_fuente_y_omite_las_sin_texto(entorno, monkeypatch):
+    """Bloque 2, revisión final #6: `_producto` leía `x["texto"]`/`x["fuente"]`
+    a lo bruto; `producto.extra` es JSON libre (no todo pasa por
+    `doctrina.producto.agregar_prueba`, que sí exige fuente), así que una
+    prueba sin `fuente` tumbaba `preparar_guion` con un KeyError en vez de
+    solo dejarla sin fuente; una sin `texto` ni eso: se omite."""
+    import catalogo_productos
+    import tiendas
+    monkeypatch.setattr(catalogo_productos, "listar", lambda cliente, categoria="producto": [
+        {"id": "chancla_rose", "nombre": "Chancla Rose", "descripcion": "Chancla cómoda", "tipo": "calzado", "regla": ""}])
+    pid = tiendas.asegurar_manual("acme", "chancla_rose", "Chancla Rose", "Chancla cómoda")
+    tiendas.anotar_extra("acme", pid, pruebas=[{"texto": "sin fuente"}, {"fuente": "ficha"}])
+    final_edition.preparar_guion("acme", entorno["cf_id"])
+    assert entorno["generar"]["producto"]["pruebas"] == [{"texto": "sin fuente", "fuente": None}]

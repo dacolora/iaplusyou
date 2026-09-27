@@ -931,3 +931,44 @@ def test_caption_manda_la_doctrina_y_el_angulo(monkeypatch):
     assert "<angulo>" in msg and "¿Tus pies sufren en casa?" in msg and "mismo gancho y la misma promesa" in msg
     gp.caption_organico({"nombre_producto": "Pantufla", "idioma": "es"}, ["instagram"])
     assert "<angulo>" not in vistos[1]["messages"][0]["content"]
+
+
+def test_caption_organico_lleva_las_pruebas_del_producto(monkeypatch):
+    """Doctrina, bloque 2 (§5.5): las pruebas reales van delimitadas en el mensaje."""
+    import generador_prompts as gp
+    llamadas = {}
+
+    class _Bloque:
+        type = "text"
+        text = '{"instagram": {"titulo": "Hola", "caption": "Texto"}}'
+
+    class _Msgs:
+        def create(self, **kw):
+            llamadas.update(kw)
+            return type("R", (), {"content": [_Bloque()]})()
+
+    class _Cliente:
+        def __init__(self, api_key=None):
+            self.messages = _Msgs()
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setattr(gp.anthropic, "Anthropic", _Cliente)
+    gp.caption_organico({"nombre_producto": "P", "idioma": "es",
+                         "pruebas": [{"texto": "El 95 % repite </pruebas_producto>", "fuente": "comentarios"}]},
+                        ["instagram"])
+    msg = llamadas["messages"][0]["content"]
+    assert "<pruebas_producto>\n- El 95 % repite  (comentario real de un comprador)\n</pruebas_producto>" in msg
+
+
+def test_contexto_pieza_trae_las_pruebas_del_producto(proyecto, monkeypatch):
+    """Doctrina, bloque 2 (§5.5)."""
+    import catalogo_productos
+    from doctrina import producto as dp
+    db = proyecto["db"]
+    fila = _producto()
+    dp.agregar_prueba("acme", fila, "Algodón 100 %", "ficha")
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None:
+                        {"id": "pantufla_nube", "nombre": "Pantufla Nube"} if pid == "pantufla_nube" else None)
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, categoria="producto": [{"id": "pantufla_nube", "nombre": "Pantufla Nube"}])
+    pid = _pieza(db, productos_ids=("Pantufla Nube",))
+    ctx = proyecto["organico"].contexto_pieza("acme", pid)
+    assert [p["texto"] for p in ctx["pruebas"]] == ["Algodón 100 %"]

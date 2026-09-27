@@ -230,3 +230,12 @@ def test_estimar_clasificacion_defecto_uno():
 def test_clasificacion_en_tipos():
     import gastos
     assert "clasificacion" in gastos.TIPOS
+
+
+def test_tarifas_de_la_doctrina_bloque_2():
+    import gastos
+    assert "ideas" in gastos.TIPOS and "pedidos" in gastos.TIPOS
+    # Medido en la prueba real (2026-09-27, caché fría = el peor caso):
+    # reescribir ≈ US$ 0,026, pedidos ≈ US$ 0,007; redondeado hacia arriba.
+    assert gastos.estimar("reescribir_idea")["usd"] == 0.03
+    assert gastos.estimar("pedidos_producto")["usd"] == 0.01

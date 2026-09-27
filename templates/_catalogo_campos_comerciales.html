@@ -27,6 +27,18 @@
   </div>
 </div>
 
+{# Doctrina, bloque 2: la sofisticación del mercado la elige el cliente y, si la
+   elige, manda sobre lo que decida Claude (ideas, guion, «Adaptar con IA»). #}
+{% set sof_sel = ((comercial.extra or {}).get('sofisticacion') if comercial else None) %}
+<label class="campo-label" style="margin-top:.8rem;display:block;" for="{{ prefijo }}-sofisticacion">Cuántas promesas parecidas vio ya tu cliente</label>
+<select id="{{ prefijo }}-sofisticacion" name="sofisticacion">
+  <option value="">Que Claude lo decida</option>
+  {% for n, texto in SOFISTICACIONES_CLIENTE.items() %}
+  <option value="{{ n }}" {% if sof_sel == n %}selected{% endif %}>{{ n }} · {{ texto }}</option>
+  {% endfor %}
+</select>
+<p class="vacio" style="font-size:.74rem;">Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto.</p>
+
 <label class="campo-label" style="margin-top:.8rem;display:block;" for="{{ prefijo }}-url">URL de compra (opcional)</label>
 {# type=text y no type=url: «wa.me/57…» sin esquema es válido aquí (el servidor le pone https://) y type=url lo rechazaría en el navegador. #}
 <input type="text" inputmode="url" id="{{ prefijo }}-url" name="url_compra" placeholder="https://tutienda.com/producto o wa.me/57300…" value="{{ comercial.url_compra if comercial and comercial.url_compra else '' }}">

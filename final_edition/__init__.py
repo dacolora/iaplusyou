@@ -34,6 +34,8 @@ import requests
 import catalogo_productos
 import creative_flow
 import db
+import doctrina
+from doctrina import producto as doctrina_producto
 import gastos
 import marca
 import proyectos
@@ -189,10 +191,13 @@ def _producto(cliente, entry, precio):
     if p:
         fila = _fila_producto(cliente, p.get("id"))
         usa_tienda = precio is None and fila.get("precio") is not None
+        sof = (fila.get("extra") or {}).get("sofisticacion")
         return {"nombre": p.get("nombre") or visto, "descripcion": p.get("descripcion") or "",
                 "regla": p.get("regla") or "", "precio": _precio_entero(fila.get("precio")) if usa_tienda else precio,
                 "moneda": fila.get("moneda") if usa_tienda else None, "url_compra": fila.get("url_compra"),
-                "tipo": p.get("tipo")}
+                "tipo": p.get("tipo"), "sofisticacion": sof if sof in doctrina.SOFISTICACIONES else None,
+                "pruebas": [{"texto": x.get("texto"), "fuente": x.get("fuente")}
+                           for x in doctrina_producto.pruebas(fila) if x.get("texto")]}
     for r in entry.get("referencias") or []:
         if r.get("categoria") == "producto" and r.get("activo"):
             return {"nombre": r["activo"], "descripcion": "", "regla": r.get("regla") or "", "precio": precio,
@@ -392,7 +397,9 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     costo_whisper = costo
     # Detectar canal óptimo de Triple Whale si existe
     canal_optimo = _canal_optimo_triple_whale(cliente, cf_id)
-    angulo_sesion = entry.get("angulo")
+    # Un ángulo a medio llenar a mano (sin promesa o sin gancho) no manda: Claude
+    # decide uno completo y reemplaza el borrador (doctrina, bloque 2, §3.4).
+    angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
     guion_base, costo_guion = guion_mod.generar_guion_base(
         producto, referencia, enfoque, float(duracion_s), idioma_base,
         _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion)
@@ -422,8 +429,15 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     # Solo uno con promesa y gancho: si Claude lo omitió en las dos vueltas,
     # llega un cascarón de «error: campo_faltante:…» y guardarlo haría que
     # todo guion, variante y caption posterior «escriba desde» la nada.
-    if not angulo_sesion and _angulo_con_contenido(nuevo):
-        creative_flow.actualizar(cliente, cf_id, angulo=nuevo)
+    # Revisión final #7: `angulo_sesion` es la foto de ANTES de llamar a
+    # Claude — si la persona llenó el editor mientras tanto (misma carrera
+    # del bug crítico #1, ahora que sí guarda), se relee la sesión justo
+    # antes de escribir: el de la persona manda, el de Claude solo entra si
+    # sigue sin haber nada.
+    if not angulo_sesion:
+        angulo_actual = _sesion(cliente, cf_id).get("angulo")
+        if not _angulo_con_contenido(angulo_actual) and _angulo_con_contenido(nuevo):
+            creative_flow.actualizar(cliente, cf_id, angulo=nuevo)
     return guion_base, round(costo, 4)
 
 

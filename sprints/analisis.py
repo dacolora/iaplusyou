@@ -53,6 +53,25 @@ def _llamar(content, max_tokens=700, system=None):
     return "".join(b.text for b in resp.content if b.type == "text").strip()
 
 
+def _llamar_contando(content, max_tokens=700, system=None):
+    """Como `_llamar`, pero devuelve (texto, tokens_entrada, tokens_salida)
+    para registrar el gasto real de una acción pagada. `usage.input_tokens`
+    no incluye la caché (la doctrina va en el system con cache_control): se
+    suman como tokens de entrada equivalentes, escribirla a 1,25× y leerla a
+    0,1× (el precio de Anthropic), para que el gasto no quede corto."""
+    import anthropic
+    from generador_prompts import MODEL, _api_key
+    client = anthropic.Anthropic(api_key=_api_key())
+    extra = {"system": system} if system else {}
+    resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
+                                  messages=[{"role": "user", "content": content}], **extra)
+    texto = "".join(b.text for b in resp.content if b.type == "text").strip()
+    u = resp.usage
+    escrita = getattr(u, "cache_creation_input_tokens", None) or 0
+    leida = getattr(u, "cache_read_input_tokens", None) or 0
+    return texto, u.input_tokens + round(escrita * 1.25 + leida * 0.1), u.output_tokens
+
+
 def _parsear_json(texto):
     t = (texto or "").strip()
     if t.startswith("```"):

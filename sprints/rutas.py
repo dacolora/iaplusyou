@@ -15,9 +15,11 @@ from urllib.parse import urlencode
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
 import catalogo_productos
+import db
 import doctrina
 import gastos
 import proyectos
+import tiendas
 import trabajos
 from final_edition import tipos as fe_tipos
 from providers import flowplus_modelos
@@ -164,6 +166,37 @@ def persona_editar(cliente, pid):
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente)
+
+
+@bp.post("/personas/<int:pid>/conciencia")
+def persona_conciencia(cliente, pid):
+    """Doctrina, bloque 2 (§4.1): «Qué tanto sabe» de la persona, elegido a
+    mano en la página de ideas de una campaña. Guarda
+    `persona.extra.conciencia.nivel` (conserva el `detalle` que traiga de
+    Nicho); un nivel vacío («Que Claude lo decida») lo quita. JSON."""
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict):
+        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+    p = datos.persona(cliente, pid)
+    if not p:
+        return jsonify({"ok": False, "error": "Esa persona no existe."}), 404
+    crudo = cuerpo.get("nivel")
+    nivel = doctrina.normalizar_consciencia(crudo)
+    if crudo and not nivel:
+        return jsonify({"ok": False, "error": "Ese nivel no existe."}), 400
+    extra = dict(p.get("extra") or {})
+    conciencia = dict(extra.get("conciencia") or {}) if isinstance(extra.get("conciencia"), dict) else {}
+    if nivel:
+        conciencia.update(nivel=nivel, origen="manual")
+    else:
+        conciencia.pop("nivel", None)
+        conciencia.pop("origen", None)
+    if conciencia:
+        extra["conciencia"] = conciencia
+    else:
+        extra.pop("conciencia", None)
+    datos.actualizar_persona(cliente, pid, extra=extra)
+    return jsonify({"ok": True, "nivel": nivel})
 
 
 @bp.post("/personas/<int:pid>/archivar")
@@ -1003,9 +1036,19 @@ def campana_ideas(cliente, sid, cid):
               "faltan_videos": faltan_v, "faltan_imagenes": faltan_i,
               "pendientes_lote": sum(1 for i in vivas if i["estado_idea"] == "aprobada" and i["sin_sesion"])}
     job = tareas_sprints.job_id_ideas(cliente, cid)
+    # Datos del mercado (doctrina, bloque 2): lo elegido a mano manda sobre Claude.
+    persona = datos.persona(cliente, c["persona_id"]) or {}
+    conciencia = (persona.get("extra") or {}).get("conciencia")
+    nivel_persona = doctrina.normalizar_consciencia(conciencia.get("nivel") if isinstance(conciencia, dict) else None)
+    fila_producto = tiendas.por_activo(cliente).get(c["catalogo_id"]) or {}
+    sof_producto = (fila_producto.get("extra") or {}).get("sofisticacion")
     return render_template("campana_ideas.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
                            sprint=sp, campana=c, ideas=lista, referencias_por_id=refs, conteo=conteo,
                            enfoques=flowplus_prompt_enfoques(), trabajo_ideas={"job_id": job} if trabajos.en_curso(job) else None,
+                           nivel_persona=nivel_persona, sof_producto=sof_producto,
+                           precio_reescribir=gastos.estimar("reescribir_idea")["texto"],
+                           reescribiendo={i["id"]: tareas_sprints.job_id_reescribir(cliente, i["id"]) for i in lista
+                                          if trabajos.en_curso(tareas_sprints.job_id_reescribir(cliente, i["id"]))},
                            **_contexto_lote(cliente))
 
 
@@ -1066,6 +1109,11 @@ def idea_editar(cliente, cp_id):
             return jsonify({"ok": False, "error": "Formato inválido."}), 400
         flash("Formato inválido.", "error")
         return _volver_ideas(i)
+    if "gancho" in campos and isinstance((i.get("extra") or {}).get("angulo"), dict):
+        # El gancho de la tarjeta y el del ángulo son el mismo (doctrina, bloque 2).
+        extra = dict(i["extra"])
+        extra["angulo"] = dict(extra["angulo"], gancho=" ".join((campos["gancho"] or "").split())[:200])
+        campos["extra"] = extra
     try:
         if "titulo" in campos and not (campos["titulo"] or "").strip():
             raise datos.ErrorDatos("Una idea necesita título.")
@@ -1094,6 +1142,46 @@ def idea_aprobar(cliente, cp_id):
 
 
 MENSAJE_IDEA_CON_PIEZA = "Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión."
+
+
+@bp.post("/ideas/<int:cp_id>/reescribir")
+def idea_reescribir(cliente, cp_id):
+    """«Reescribir la idea con este ángulo» (doctrina, bloque 2, §3.5): encola
+    la tarea pagada; el precio ya está en el botón."""
+    i = _idea_o_404(cliente, cp_id)
+    if not i["sin_sesion"]:
+        flash(MENSAJE_IDEA_CON_PIEZA, "error")
+        return _volver_ideas(i)
+    angulo = (i.get("extra") or {}).get("angulo")
+    if not (isinstance(angulo, dict) and angulo.get("promesa")):
+        flash("Esta idea todavía no tiene un ángulo con promesa.", "error")
+        return _volver_ideas(i)
+    if tareas_sprints.encolar_reescribir(cliente, cp_id):
+        flash("Reescribiendo la idea desde su ángulo…", "ok")
+    else:
+        flash("Ya se está reescribiendo esta idea.", "error")
+    return _volver_ideas(i)
+
+
+@bp.post("/ideas/<int:cp_id>/angulo")
+def idea_angulo(cliente, cp_id):
+    """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una idea
+    y su gancho (el de la tarjeta y el del ángulo son el mismo). JSON {angulo}
+    → {ok, angulo, avisos, resumen}; los avisos no bloquean. 409 si la idea ya
+    tiene pieza: desde ahí el ángulo vivo es el de la sesión de Crear."""
+    i = _idea_o_404(cliente, cp_id)
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("angulo"), dict):
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+    if not i["sin_sesion"]:
+        return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 409
+    extra = dict(i.get("extra") or {})
+    previo = extra.get("angulo") if isinstance(extra.get("angulo"), dict) else {}
+    limpio, avisos = doctrina.angulo_desde_formulario(dict(cuerpo["angulo"], origen=previo.get("origen")),
+                                                      previo.get("faltantes"), ahora=db.ahora())
+    extra["angulo"] = limpio
+    datos.actualizar_idea(cliente, cp_id, extra=extra, gancho=limpio["gancho"])
+    return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
 
 
 @bp.post("/ideas/<int:cp_id>/descartar")

@@ -1,6 +1,7 @@
 {# Bloque 7: «Publicar orgánico» en el detalle de una final lista (macro
    compartida con Experimentos; el JS va en window.*, ver _organico_publicar.html). #}
 {% from "_organico_publicar.html" import bloque_organico with context %}
+{% from "_angulo_editor.html" import editor_angulo %}
 <p class="vacio" style="padding-top:0;">
   Escribe qué tiene que pasar y, si quieres, sube imágenes de referencia (producto, persona, lugar) o elige del catálogo.
   Sin referencias ni catálogo se genera solo con tu texto. Dos caminos:
@@ -302,6 +303,8 @@
           <section class="fe-seccion">
             <h4 class="fe-titulo">Final edition</h4>
             <p class="vacio" style="padding:0;font-size:.76rem;">Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.</p>
+            {{ editor_angulo(item.angulo, url_for('cf_angulo', cliente=cliente, cf_id=item.id), cliente,
+                             resumen_vacio="Todavía no tiene ángulo: se decide al preparar el guion") }}
             {% if not item.guion_base %}
               {% if item.trabajo_guion %}
               <p class="vacio" style="padding:0;font-size:.76rem;">Se está escribiendo el guion… la página se recarga sola cuando esté listo.</p>
@@ -606,6 +609,10 @@
       cuerpo.querySelectorAll('[data-poll-job]').forEach(function (el) {
         if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
       });
+      // Bug crítico (doctrina, bloque 2, revisión final): el editor del ángulo
+      // también vive en el <template> clonado — iniciarEditoresAngulo() ya
+      // corrió sobre `document` al cargar la página y nunca vio esto.
+      if (window.iniciarEditoresAngulo) window.iniciarEditoresAngulo(cuerpo);
       modal.showModal();
     }
     document.querySelectorAll('.generado').forEach(function (card) {
@@ -1036,3 +1043,5 @@
     });
   })();
 </script>
+{# Editor del ángulo de cada pieza (doctrina, bloque 2). #}
+<script src="{{ url_for('static', filename='angulo.js') }}"></script>

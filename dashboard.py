@@ -59,6 +59,7 @@ import ads as ads_mod
 from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
+import doctrina
 import flowplus_lanzar
 import cola
 import db
@@ -87,6 +88,7 @@ from tareas import director as tareas_director
 from tareas import experimentos as tareas_exp
 from tareas import organico as tareas_org
 from tareas import tiendas as tareas_tiendas
+from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
@@ -114,6 +116,9 @@ FRAME_SUFFIX = ".frame.jpg"
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 app = Flask(__name__)
+# Vocabulario de la doctrina en palabras simples para los selectores de
+# persona y producto (bloque 2 de la doctrina).
+app.jinja_env.globals.update(doctrina.globales_plantilla())
 
 
 @app.url_defaults
@@ -1517,6 +1522,7 @@ def ver_cliente(cliente):
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
+        precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         estado_pixel=estado_pixel,
         meta_conectado=meta_conectado,
         atribucion_sugerida=atribucion_sug,
@@ -2289,7 +2295,24 @@ def _campos_comerciales(form):
     return campos
 
 
-def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False):
+_SIN_CAMBIO = object()
+
+
+def _sofisticacion_form(form):
+    """1–5 del selector «Cuántas promesas parecidas vio ya tu cliente»;
+    None = «Que Claude lo decida»; `_SIN_CAMBIO` si el formulario no trae
+    el campo (un formulario viejo no debe borrar lo elegido)."""
+    if "sofisticacion" not in form:
+        return _SIN_CAMBIO
+    try:
+        valor = int(form.get("sofisticacion") or 0)
+    except ValueError:
+        return None
+    return valor if valor in doctrina.SOFISTICACIONES else None
+
+
+def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, desarchivar=False,
+                          sofisticacion=_SIN_CAMBIO):
     """Escribe lo comercial del activo `producto_id` en su fila `producto`
     (`tiendas.asegurar_manual` la crea si no existe). Una fila sin moneda
     hereda la de la cuenta de Meta (o COP). `desarchivar`: al CREAR el
@@ -2312,7 +2335,20 @@ def _guardar_fila_producto(cliente, producto_id, nombre, descripcion, campos, de
     if desarchivar and (fila or {}).get("archivado"):
         valores["archivado"] = False
     tiendas.marcar_producto(cliente, pid, **valores)
+    if sofisticacion is not _SIN_CAMBIO:
+        tiendas.anotar_extra(cliente, pid, sofisticacion=sofisticacion)
     return pid
+
+
+@app.route("/cliente/<cliente>/doctrina")
+def doctrina_pagina(cliente):
+    """«Cómo escribe Creatv» (doctrina, bloque 2, §6): las nueve rebanadas de
+    `doctrina/textos/*.md`, de solo lectura, para cualquier usuario con acceso
+    al proyecto (lo exige `_guard_por_cliente`). Lee los mismos archivos que
+    recibe Claude: la página nunca se desincroniza de lo que está en uso."""
+    from doctrina import pagina as doctrina_pagina_mod
+    return render_template("doctrina.html", cliente=cliente, nombre_proyecto=proyectos.nombre_visible(cliente),
+                           secciones=doctrina_pagina_mod.secciones())
 
 
 @app.route("/cliente/<cliente>/productos/crear", methods=["POST"])
@@ -2349,7 +2385,8 @@ def crear_producto(cliente):
         # Solo lo que se vende tiene fila comercial (precio, url de compra,
         # en prueba): un personaje o un entorno no van a un experimento.
         _guardar_fila_producto(cliente, producto_id, nombre, descripcion,
-                               _campos_comerciales(request.form), desarchivar=True)
+                               _campos_comerciales(request.form), desarchivar=True,
+                               sofisticacion=_sofisticacion_form(request.form))
     flash(f"Producto creado: {nombre} ({guardadas} foto(s)).", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor=volver))
 
@@ -2397,7 +2434,8 @@ def actualizar_producto(cliente, producto_id):
         # La fila comercial se crea aquí si el activo es anterior a que
         # existiera (no hay migración: se enlaza al primer uso).
         _guardar_fila_producto(cliente, producto_id, request.form.get("nombre"),
-                               request.form.get("descripcion"), _campos_comerciales(request.form))
+                               request.form.get("descripcion"), _campos_comerciales(request.form),
+                               sofisticacion=_sofisticacion_form(request.form))
     flash("Producto actualizado.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="cambiar"))
 
@@ -3915,7 +3953,8 @@ def tab_descargar_csv(cliente):
 NOMBRES_TIPO_GASTO = {
     "video": "Videos", "imagen": "Imágenes", "swap": "Cambios de producto", "guion": "Guiones",
     "final": "Finales", "regla_producto": "Reglas de producto (IA)", "caption_organico": "Textos orgánicos (IA)",
-    "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)", "otro": "Otros",
+    "musica": "Música", "refinar_prompt": "Correcciones de prompt (Flow Plus)", "guion_clips": "Guiones a clips (Flow Plus)",
+    "ideas": "Ideas de sprint (IA)", "pedidos": "Pedidos al cliente (IA)", "otro": "Otros",
 }
 
 
@@ -4924,6 +4963,10 @@ def _trabajos_productos(cliente, tiendas_cliente, productos=()):
     «Crear activo» está corriendo, para pintar la barra. Los `vincular` salen
     de UNA consulta a la cola (cola.job_ids_vivos), no de una por producto."""
     vivos = cola.job_ids_vivos(cliente, "producto_vincular") if productos else set()
+    # «Actualizar lo que Claude necesita» (doctrina, bloque 2), también en una sola consulta.
+    vivos_pedidos = cola.job_ids_vivos(cliente, tareas_doctrina.TIPO_PEDIDOS) if productos else set()
+    pedidos = {prod["id"]: {"job_id": tareas_doctrina.job_id_pedidos(cliente, prod["id"])} for prod in productos
+               if tareas_doctrina.job_id_pedidos(cliente, prod["id"]) in vivos_pedidos}
     vincular = {}
     for prod in productos:
         jid = tareas_tiendas.job_id_vincular(cliente, prod["id"])
@@ -4941,7 +4984,7 @@ def _trabajos_productos(cliente, tiendas_cliente, productos=()):
             if trabajos.en_curso(jid):
                 por_tienda[t["id"]] = {"job_id": jid}
                 break
-    return {"importar": importar, "tiendas": por_tienda, "vincular": vincular}
+    return {"importar": importar, "tiendas": por_tienda, "vincular": vincular, "pedidos": pedidos}
 
 
 @app.route("/cliente/<cliente>/productos/importar/archivo", methods=["POST"])
@@ -5012,6 +5055,73 @@ def prod_importar_url(cliente):
         flash("Leyendo la página del producto… aparece aquí cuando termine.", "ok")
     else:
         flash("Ya hay una importación desde URL en curso — espera a que termine.", "warn")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pruebas", methods=["POST"])
+def prod_prueba_agregar(cliente, pid):
+    """Doctrina, bloque 2 (§5.4): agrega una prueba real al producto."""
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid):
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    try:
+        doctrina_producto.agregar_prueba(cliente, pid, request.form.get("texto"), request.form.get("fuente"))
+        flash("Prueba guardada: Claude ya la puede usar con este producto.", "ok")
+    except doctrina_producto.ErrorPrueba as e:
+        flash(str(e), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pruebas/<prueba_id>/borrar", methods=["POST"])
+def prod_prueba_borrar(cliente, pid, prueba_id):
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid) or not doctrina_producto.borrar_prueba(cliente, pid, prueba_id):
+        flash("No encontré ese producto.", "error")
+    else:
+        flash("Prueba borrada.", "ok")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/actualizar", methods=["POST"])
+def prod_pedidos_actualizar(cliente, pid):
+    """«Actualizar lo que Claude necesita» (doctrina, bloque 2, §5.3): encola la
+    tarea pagada; el precio ya está en el botón. Sin faltantes no encola."""
+    from doctrina import pedidos as doctrina_pedidos
+    fila = tiendas.producto(cliente, pid)
+    if not fila:
+        flash("No encontré ese producto.", "error")
+    elif not doctrina_pedidos.faltantes_del_producto(cliente, fila):
+        flash("Claude no ha pedido nada para este producto todavía: aparece cuando escribe ideas o guiones con él.", "ok")
+    elif tareas_doctrina.encolar_pedidos(cliente, pid):
+        flash("Armando lo que Claude necesita… la lista se actualiza sola.", "ok")
+    else:
+        flash("Ya se está armando la lista de este producto.", "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/responder", methods=["POST"])
+def prod_pedido_responder(cliente, pid, pedido_id):
+    """La respuesta queda como prueba del producto y el pedido se cierra."""
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid):
+        flash("No encontré ese producto.", "error")
+        return _volver_productos(cliente)
+    try:
+        doctrina_producto.responder(cliente, pid, pedido_id, request.form.get("texto"), request.form.get("fuente"))
+        flash("Gracias: quedó como prueba del producto y Claude ya la puede usar.", "ok")
+    except doctrina_producto.ErrorPrueba as e:
+        flash(str(e), "error")
+    return _volver_productos(cliente)
+
+
+@app.route("/cliente/<cliente>/productos/<int:pid>/pedidos/<pedido_id>/descartar", methods=["POST"])
+def prod_pedido_descartar(cliente, pid, pedido_id):
+    from doctrina import producto as doctrina_producto
+    if not tiendas.producto(cliente, pid) or not doctrina_producto.descartar(cliente, pid, pedido_id):
+        flash("Ese pedido ya no está abierto.", "error")
+    else:
+        flash("Listo: Claude no lo volverá a pedir.", "ok")
     return _volver_productos(cliente)
 
 
@@ -5613,6 +5723,25 @@ def _precio_form(valor):
         return float(valor)
     except ValueError:
         return None
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/angulo", methods=["POST"])
+def cf_angulo(cliente, cf_id):
+    """Doctrina, bloque 2 (§3.3): guarda el ángulo editado a mano de una
+    pieza de Crear (`concepto.extra.angulo`, el que usan el guion, las
+    variantes y los captions). JSON {angulo} → {ok, angulo, avisos, resumen}.
+    Los avisos no bloquean: se guarda igual."""
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if not entry:
+        return jsonify({"ok": False, "error": "Esa pieza ya no existe."}), 404
+    cuerpo = request.get_json(silent=True)
+    if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("angulo"), dict):
+        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+    previo = entry.get("angulo") if isinstance(entry.get("angulo"), dict) else {}
+    limpio, avisos = doctrina.angulo_desde_formulario(dict(cuerpo["angulo"], origen=previo.get("origen")),
+                                                      previo.get("faltantes"), ahora=db.ahora())
+    creative_flow.actualizar(cliente, cf_id, angulo=limpio)
+    return jsonify({"ok": True, "angulo": limpio, "avisos": avisos, "resumen": doctrina.resumen_angulo(limpio)})
 
 
 def _sesion_con_video(cliente, cf_id):
