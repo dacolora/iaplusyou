@@ -401,6 +401,7 @@
       });
       if (typeof window.iniciarEditoresAngulo === 'function') window.iniciarEditoresAngulo(cuerpo);
       estimarLoteCampana();
+      programarPiezas();
     };
     function guardar(el, valor) {
       var r = raiz();
@@ -518,6 +519,30 @@
         })
         .catch(function () { texto.textContent = 'No se pudo calcular el costo.'; });
     }
+    // ---- Pestaña Piezas (entrega 2): revisión y actualización cada 8 s ----
+    var relojPiezas = null;
+    function cajaPiezas() { return cuerpo.querySelector('[data-pestana="piezas"]'); }
+    function escribiendoMotivo() {
+      return Array.prototype.some.call(cuerpo.querySelectorAll('[data-motivo]'),
+                                       function (t) { return t.value.trim() || document.activeElement === t; });
+    }
+    function programarPiezas() {
+      clearTimeout(relojPiezas);
+      relojPiezas = null;
+      var caja = cajaPiezas();
+      if (caja && !caja.hidden && caja.querySelector('[data-piezas-vivas="1"]')) relojPiezas = setTimeout(refrescarPiezas, 8000);
+    }
+    function refrescarPiezas() {
+      var r = raiz(), caja = cajaPiezas();
+      if (!r || !caja) return Promise.resolve();
+      return fetch(r.dataset.urlPiezas, {headers: H})
+        .then(function (x) { return x.ok ? x.text() : Promise.reject(); })
+        .then(function (html) { if (!escribiendoMotivo()) caja.innerHTML = html; programarPiezas(); })
+        .catch(function () { programarPiezas(); });
+    }
+    function trasAccionPieza() { T.refrescarTarjeta(raiz().dataset.cid); return refrescarPiezas(); }
+    document.addEventListener('tablero:paso', programarPiezas);
+    document.addEventListener('tablero:cerrado', function () { clearTimeout(relojPiezas); relojPiezas = null; });
     panel.addEventListener('input', function (ev) {
       var el = ev.target;
       if (el.closest('.angulo-editor')) {
@@ -573,6 +598,44 @@
         fetch(cajaG.dataset.urlLote, {method: 'POST', headers: H, body: fdG}).then(T.json)
           .then(function () { var cid = raiz().dataset.cid; T.refrescarTarjeta(cid); return T.abrir(cid, 'piezas'); })
           .catch(function (e) { generar.disabled = false; errG.textContent = T.mensaje(e); errG.hidden = false; });
+        return;
+      }
+      var accionPieza = ev.target.closest('[data-pieza-accion]');
+      if (accionPieza) {
+        var cardP = accionPieza.closest('.panel-pieza'), errP = cardP.querySelector('[data-error-pieza]');
+        var rechazo = cardP.querySelector('[data-rechazo]'), motivo = rechazo.querySelector('[data-motivo]');
+        var acc = accionPieza.dataset.piezaAccion;
+        errP.hidden = true;
+        if (acc === 'rechazar') { rechazo.hidden = false; motivo.focus(); return; }
+        if (acc === 'cancelar-rechazo') { motivo.value = ''; delete motivo.dataset.sucio; rechazo.hidden = true; return; }
+        var cuerpoRev = {accion: 'aprobar'};
+        if (acc === 'confirmar-rechazo') {
+          if (!motivo.value.trim()) { errP.textContent = 'Escribe por qué no sirve.'; errP.hidden = false; return; }
+          cuerpoRev = {accion: 'rechazar', motivo: motivo.value.trim()};
+        }
+        accionPieza.disabled = true;
+        fetch(cardP.dataset.urlRevision, {method: 'POST', headers: HJ, body: JSON.stringify(cuerpoRev)}).then(T.json)
+          .then(function () { motivo.value = ''; delete motivo.dataset.sucio; return trasAccionPieza(); })
+          .catch(function (e) { accionPieza.disabled = false; errP.textContent = T.mensaje(e); errP.hidden = false; });
+        return;
+      }
+      var postPieza = ev.target.closest('[data-pieza-post]');
+      if (postPieza) {
+        if (postPieza.dataset.confirmar && !confirm(postPieza.dataset.confirmar)) return;
+        var errQ = postPieza.closest('.panel-pieza').querySelector('[data-error-pieza]');
+        postPieza.disabled = true;
+        errQ.hidden = true;
+        fetch(postPieza.dataset.url, {method: 'POST', headers: H}).then(T.json).then(trasAccionPieza)
+          .catch(function (e) { postPieza.disabled = false; errQ.textContent = T.mensaje(e); errQ.hidden = false; });
+        return;
+      }
+      var aprobarQa = ev.target.closest('[data-aprobar-qa]');
+      if (aprobarQa) {
+        aprobarQa.disabled = true;
+        var fdQ = new FormData();
+        fdQ.append('campana_id', aprobarQa.dataset.campana);
+        fetch(aprobarQa.dataset.url, {method: 'POST', headers: H, body: fdQ}).then(T.json).then(trasAccionPieza)
+          .catch(function (e) { aprobarQa.disabled = false; avisar(T.mensaje(e)); });
         return;
       }
       if ((b = ev.target.closest('[data-quitar-familia]'))) {

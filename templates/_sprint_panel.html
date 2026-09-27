@@ -4,7 +4,8 @@
    abre. Sus <script> no correrían: todo el JS vive en sprint_detalle.html. #}
 <div class="panel-campana" data-cid="{{ c.id }}" data-paso="{{ paso }}"
      data-url-campo="{{ url_for('sprints.campana_campo', cliente=cliente, sid=sprint.id, cid=c.id) }}"
-     data-url-sugeridos="{{ url_for('sprints.campana_sugeridos', cliente=cliente, sid=sprint.id, cid=c.id) }}">
+     data-url-sugeridos="{{ url_for('sprints.campana_sugeridos', cliente=cliente, sid=sprint.id, cid=c.id) }}"
+     data-url-piezas="{{ url_for('sprints.campana_piezas', cliente=cliente, sid=sprint.id, cid=c.id) }}">
   <header class="panel-campana-cab">
     <div>
       <h2>Campaña {{ c.orden + 1 }} · {{ (c.funnel or 'tof') | upper }}</h2>

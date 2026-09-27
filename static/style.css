@@ -2315,3 +2315,15 @@ body.panel-abierto { overflow: hidden; }
 .panel-idea-refs img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
 .chip-tipo { font-size: .7rem; font-weight: 700; border: 1px solid var(--border); border-radius: 999px; padding: 0 .45rem; }
 .panel-generar { border: 1px dashed var(--accent); border-radius: var(--radius); padding: .8rem; }
+.panel-piezas-cab { display: flex; justify-content: space-between; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.panel-piezas-cab p { margin: 0; }
+.panel-piezas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: .8rem; margin-top: .8rem; }
+.panel-pieza { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: .6rem; display: grid; gap: .4rem;
+  background: var(--panel); min-width: 0; }
+.panel-pieza-aprobada { border-color: var(--ok); }
+.panel-pieza-rechazada { border-color: var(--error); }
+.panel-pieza-media video, .panel-pieza-media img { width: 100%; max-height: 360px; object-fit: contain; display: block;
+  border-radius: 6px; background: var(--panel-2); }
+.panel-pieza-qa { margin: 0; display: flex; gap: .3rem; align-items: center; flex-wrap: wrap; }
+.panel-rechazo { display: grid; gap: .4rem; }
+.panel-rechazo[hidden] { display: none; }

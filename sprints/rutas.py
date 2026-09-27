@@ -422,6 +422,41 @@ def _contexto_ideas(cliente, c):
     }
 
 
+def _piezas_de(cliente, c, modelo_video, modelo_imagen):
+    """Piezas con sesión de una campaña, con su costo de regeneración
+    (estimado gratis, el mismo que muestra el botón antes de gastar)."""
+    salida = []
+    for p in c["piezas"]:
+        if p["tipo"] == "video":
+            costo = (flowplus_modelos.estimate_video(modelo_video, produccion._duracion(p)) or {}).get("usd") or 0.0
+        else:
+            costo = (flowplus_modelos.estimate_imagen(modelo_imagen, n_referencias=produccion._n_referencias(cliente, c))
+                     or {}).get("usd") or 0.0
+        salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
+                       "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
+                       "funnel": c.get("funnel") or "tof", "costo_regenerar": round(float(costo), 3)})
+    return salida
+
+
+def _piezas_revision(cliente, sp):
+    """Piezas con sesión de todas las campañas del sprint."""
+    mv, mi = produccion.modelos(cliente)
+    return [p for c in sp["campanas"] for p in _piezas_de(cliente, c, mv, mi)]
+
+
+def _contexto_piezas(cliente, sp, c):
+    """Lo que muestra la pestaña Piezas del panel (entrega 2 del tablero)."""
+    mv, mi = produccion.modelos(cliente)
+    piezas = _piezas_de(cliente, c, mv, mi)
+    resumen = next((x for x in produccion.progreso(cliente, sp["id"])["campanas"] if x["id"] == c["id"]), {})
+    vivas = any(produccion.pieza_viva(p) or (p.get("estado") in revision_mod.TERMINADAS and not p.get("qa"))
+                for p in piezas)
+    pasaron_qa = sum(1 for p in piezas if p.get("revision") == "pendiente" and p.get("estado") in revision_mod.TERMINADAS
+                     and (p.get("qa") or {}).get("veredicto") == "pasa")
+    return {"piezas": piezas, "resumen_piezas": resumen, "piezas_vivas": vivas, "pasaron_qa": pasaron_qa,
+            "checks": CHECKS_QA}
+
+
 @bp.get("/<int:sid>/campanas/<int:cid>/panel")
 def campana_panel(cliente, sid, cid):
     """Panel lateral de una campaña (fragmento por fetch). Abrirlo no gasta nada."""
@@ -459,7 +494,16 @@ def campana_panel(cliente, sid, cid):
         enlaces=_enlaces(cliente, sp, c),
         paso=tablero.resolver_paso(request.args.get("paso"), c), pestanas=tablero.pestanas(c),
         sof_producto=sof if sof in doctrina.SOFISTICACIONES else None, intenciones=datos.INTENCIONES_NOMBRE,
-        **_contexto_ideas(cliente, c))
+        **_contexto_ideas(cliente, c), **_contexto_piezas(cliente, sp, c))
+
+
+@bp.get("/<int:sid>/campanas/<int:cid>/piezas")
+def campana_piezas(cliente, sid, cid):
+    """Solo la pestaña Piezas: el panel la vuelve a pedir cada 8 s mientras
+    algo se genera o espera QA. No gasta nada."""
+    sp, c = _campana_del_sprint(cliente, sid, cid)
+    return render_template("_sprint_panel_piezas.html", cliente=cliente, sprint=sp, c=c,
+                           **_contexto_piezas(cliente, sp, c))
 
 
 @bp.get("/<int:sid>/campanas/<int:cid>/sugeridos")
@@ -1299,10 +1343,12 @@ def lote(cliente, sid):
 
 
 def _volver_pieza(cliente, i):
-    """A la bandeja si el formulario vino de ahí (`volver=revision`); si no,
-    al sprint."""
+    """A la bandeja si el formulario vino de ahí (`volver=revision`), a la
+    pestaña Piezas del panel (`volver=panel`); si no, al sprint."""
     if request.form.get("volver") == "revision":
         return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
+    if request.form.get("volver") == "panel":
+        return _volver_panel(cliente, i["sprint_id"], i["campana_id"], "piezas")
     return _volver(cliente, i["sprint_id"])
 
 
@@ -1312,9 +1358,14 @@ def pieza_reintentar(cliente, cp_id):
     try:
         ok = produccion.reintentar(cliente, cp_id)
     except datos.ErrorDatos as e:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
         return _volver(cliente, i["sprint_id"])
-    flash("Reintentando la pieza." if ok else "Esa pieza no está en error o ya se está generando.", "ok" if ok else "warn")
+    error = None if ok else "Esa pieza no está en error o ya se está generando."
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "error": error}), (200 if ok else 409)
+    flash("Reintentando la pieza." if ok else error, "ok" if ok else "warn")
     return _volver_pieza(cliente, i)
 
 
@@ -1326,8 +1377,12 @@ def pieza_regenerar(cliente, cp_id):
     except (datos.ErrorDatos, ValueError) as e:
         # ValueError: `creative_flow.duplicar` con una sesión que no existe
         # (cf_id colgado o placeholder) — se muestra como un ErrorDatos.
+        if _quiere_json():
+            return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
         return _volver(cliente, i["sprint_id"])
+    if _quiere_json():
+        return jsonify({"ok": True, "error": None})
     flash("Regenerando la pieza (sesión nueva, misma idea).", "ok")
     return _volver_pieza(cliente, i)
 
@@ -1335,23 +1390,6 @@ def pieza_regenerar(cliente, cp_id):
 # ----------------------------------------------------------- revisión ---
 
 CHECKS_QA = ("consistencia_visual", "presencia_marca", "compatibilidad_campana", "calidad_minima", "formato")
-
-
-def _piezas_revision(cliente, sp):
-    """Piezas con sesión de todas las campañas, con su costo de regeneración
-    (estimado gratis, el mismo que muestra el botón antes de gastar)."""
-    mv, mi = produccion.modelos(cliente)
-    salida = []
-    for c in sp["campanas"]:
-        for p in c["piezas"]:
-            if p["tipo"] == "video":
-                costo = (flowplus_modelos.estimate_video(mv, produccion._duracion(p)) or {}).get("usd") or 0.0
-            else:
-                costo = (flowplus_modelos.estimate_imagen(mi, n_referencias=produccion._n_referencias(cliente, c)) or {}).get("usd") or 0.0
-            salida.append({**p, "campana_n": int(c["orden"]) + 1, "persona_nombre": c["persona_nombre"],
-                           "temporada_nombre": c["temporada_nombre"], "catalogo_id": c["catalogo_id"],
-                           "costo_regenerar": round(float(costo), 3)})
-    return salida
 
 
 @bp.get("/<int:sid>/revision")
@@ -1403,10 +1441,16 @@ def pieza_qa(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
     destino = redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
     if not i.get("cf_id") or i.get("estado") not in revision_mod.TERMINADAS:
+        if _quiere_json():
+            return jsonify({"ok": False, "error": "Esa pieza todavía no está lista para el QA."}), 400
         flash("Esa pieza todavía no está lista para el QA.", "error")
         return destino
     datos.actualizar_idea(cliente, cp_id, qa=None)
-    if tareas_sprints.encolar_qa(cliente, cp_id):
+    ok = tareas_sprints.encolar_qa(cliente, cp_id)
+    if _quiere_json():
+        return jsonify({"ok": bool(ok), "error": None if ok else "Ya hay un QA en curso para esa pieza."}), \
+            (200 if ok else 409)
+    if ok:
         flash("Repitiendo el QA de la pieza; el resultado aparecerá aquí en unos segundos.", "ok")
     else:
         flash("Ya hay un QA en curso para esa pieza.", "warn")
@@ -1416,7 +1460,9 @@ def pieza_qa(cliente, cp_id):
 @bp.post("/<int:sid>/revision/aprobar_qa")
 def revision_aprobar_qa(cliente, sid):
     _sprint_o_404(cliente, sid)
-    n = revision_mod.aprobar_pasaron_qa(cliente, sid)
+    n = revision_mod.aprobar_pasaron_qa(cliente, sid, campana_id=request.form.get("campana_id", type=int))
+    if _quiere_json():
+        return jsonify({"ok": True, "aprobadas": n})
     flash(f"{n} pieza(s) aprobada(s) por haber pasado el QA.", "ok")
     return redirect(url_for("sprints.revision", cliente=cliente, sid=sid))
 

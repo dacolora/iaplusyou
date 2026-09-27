@@ -140,3 +140,64 @@ def test_generar_por_fetch(con_ideas, monkeypatch):
                         {"encoladas": 0, "omitidas": 0, "cf_ids": [], "usd": 0.0})
     r = c.post(f"/cliente/acme/sprints/{sid}/lote", data={"campana_id": cid}, headers=H)
     assert r.status_code == 409 and r.get_json()["error"] == "No había ideas aprobadas sin generar."
+
+
+# --------------------------------------------------------------- piezas ---
+
+def test_pestana_piezas_muestra_estados_qa_y_acciones(con_ideas, monkeypatch, tmp_path):
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    html = _panel(con_ideas["c"], sid, cid, "piezas")
+    for frag in ("Amanecer", "Marco", 'data-piezas-vivas="0"', 'data-pieza-accion="aprobar"',
+                 'data-pieza-accion="rechazar"', "data-motivo", "Regenerar (US$", "Abrir en Crear",
+                 "Aprobar las que pasaron QA (1)", ">90<"):
+        assert frag in html, frag
+    assert "prompt(" not in html
+
+
+def test_piezas_se_piden_solas(con_ideas, monkeypatch, tmp_path):
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    r = con_ideas["c"].get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas")
+    assert r.status_code == 200 and r.data.decode().lstrip().startswith('<div class="panel-piezas"')
+    otro = con_ideas["c"].get(f"/cliente/acme/sprints/{sid}/campanas/999/piezas")
+    assert otro.status_code == 404
+
+
+def test_piezas_vivas_se_marcan(con_ideas):
+    from sprints import datos
+    c, sid, cid, iv = con_ideas["c"], con_ideas["sid"], con_ideas["cid"], con_ideas["iv"]
+    datos.actualizar_idea("acme", iv, cf_id=datos.reserva_placeholder(iv))      # reserva viva = en marcha
+    assert 'data-piezas-vivas="1"' in _panel(c, sid, cid, "piezas")
+
+
+def test_aprobar_qa_solo_de_esta_campana(con_ideas, monkeypatch, tmp_path):
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    url = f"/cliente/acme/sprints/{sid}/revision/aprobar_qa"
+    j = c.post(url, data={"campana_id": cid + 1000}, headers={"X-Requested-With": "fetch"}).get_json()
+    assert j == {"ok": True, "aprobadas": 0} and datos.idea("acme", iv)["revision"] == "pendiente"
+    j = c.post(url, data={"campana_id": cid}, headers={"X-Requested-With": "fetch"}).get_json()
+    assert j == {"ok": True, "aprobadas": 1} and datos.idea("acme", iv)["revision"] == "aprobada"
+
+
+def test_reintentar_regenerar_y_qa_por_fetch(con_ideas, monkeypatch, tmp_path):
+    from sprints import datos, rutas
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    H = {"X-Requested-With": "fetch"}
+    monkeypatch.setattr(rutas.produccion, "reintentar", lambda cliente, cp: False)
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/reintentar", headers=H)
+    assert r.status_code == 409 and not r.get_json()["ok"]
+    monkeypatch.setattr(rutas.produccion, "regenerar", lambda cliente, cp: "cf-nuevo")
+    assert c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", headers=H).get_json() == {"ok": True, "error": None}
+    monkeypatch.setattr(rutas.produccion, "regenerar",
+                        lambda cliente, cp: (_ for _ in ()).throw(datos.ErrorDatos("No se puede.")))
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", headers=H)
+    assert r.status_code == 400 and r.get_json()["error"] == "No se puede."
+    monkeypatch.setattr(rutas.tareas_sprints, "encolar_qa", lambda cliente, cp: True)
+    assert c.post(f"/cliente/acme/sprints/ideas/{iv}/qa", headers=H).get_json()["ok"]
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", data={"volver": "panel"})
+    assert r.headers["Location"].endswith(f"/sprints/{sid}")    # error: vuelve al tablero como antes
+    monkeypatch.setattr(rutas.produccion, "regenerar", lambda cliente, cp: "cf-nuevo")
+    r = c.post(f"/cliente/acme/sprints/ideas/{iv}/regenerar", data={"volver": "panel"})
+    assert r.headers["Location"].endswith(f"/sprints/{sid}?panel={cid}&paso=piezas")
