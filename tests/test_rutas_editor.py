@@ -113,3 +113,48 @@ def test_modulos_del_editor_se_revalidan_siempre(dashboard):
     r = dashboard.app.test_client().get("/static/editor/formatos.js")
     assert r.status_code == 200
     assert r.headers["Cache-Control"] == "no-cache"
+
+
+def _doc_valido(clon_id):
+    from final_edition import documento
+    doc = documento.nuevo_video("9:16")
+    doc["pistas"][0]["clips"] = [{"id": "v0", "inicio_ms": 0, "duracion_ms": 3000, "material_id": clon_id,
+                                  "recorte": {"desde_ms": 0, "hasta_ms": 3000}}]
+    return doc
+
+
+def test_guardar_acepta_la_version_vigente_y_devuelve_la_siguiente(dashboard, encolados):
+    import ediciones
+    ed, clon, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": _doc_valido(clon["id"]), "version_n": ed["version_n"]})
+    assert r.status_code == 200 and r.get_json() == {"version_n": ed["version_n"] + 1}
+    assert ediciones.cargar("acme", ed["id"])["documento"]["pistas"][0]["clips"][0]["duracion_ms"] == 3000
+    viejo = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": _doc_valido(clon["id"]), "version_n": ed["version_n"]})
+    assert viejo.status_code == 409 and "otra pestaña" in viejo.get_json()["error"]
+
+
+def test_guardar_rechaza_documentos_invalidos_y_materiales_ajenos(dashboard, encolados):
+    import materiales
+    ed, clon, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    malo = _doc_valido(clon["id"])
+    malo["pistas"][0]["clips"][0]["inicio_ms"] = 500                     # la principal debe arrancar en 0
+    r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": malo, "version_n": ed["version_n"]})
+    assert r.status_code == 400 and "contigua" in r.get_json()["error"]
+    ajeno = materiales.registrar("otro", tipo="video", origen="crear", url="https://r2.test/x.mp4", hash="h-ajeno", bytes=1)
+    r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": _doc_valido(ajeno["id"]), "version_n": ed["version_n"]})
+    assert r.status_code == 400 and "no son de este proyecto" in r.get_json()["error"]
+    r = c.put(f"/cliente/acme/ediciones/{ed['id']}", json={"documento": "nada", "version_n": "x"})
+    assert r.status_code == 400
+
+
+def test_guardar_exige_mismo_origen_y_acceso(dashboard, encolados):
+    ed, clon, _v = _edicion()
+    cuerpo = {"documento": _doc_valido(clon["id"]), "version_n": ed["version_n"]}
+    r = _cliente_admin(dashboard).put(f"/cliente/acme/ediciones/{ed['id']}", json=cuerpo, headers={"Sec-Fetch-Site": "cross-site"})
+    assert r.status_code == 403
+    r = _cliente(dashboard, "otro", "otro").put(f"/cliente/acme/ediciones/{ed['id']}", json=cuerpo)
+    assert r.status_code == 302
+    r = _cliente_admin(dashboard).put("/cliente/acme/ediciones/999", json=cuerpo)
+    assert r.status_code == 409
