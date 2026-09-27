@@ -11,8 +11,8 @@
 {% set es_admin = session.get('rol') == 'admin' %}
 <div class="panel-cabecera">
   <div>
-    <h2>Configuración</h2>
-    <p class="panel-cabecera-desc">Llaves y conexiones del proyecto, tu cuenta, tiendas, canales y gasto.</p>
+    <h2>{{ _('Configuración') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Llaves y conexiones del proyecto, tu cuenta, tiendas, canales y gasto.') }}</p>
   </div>
 </div>
 
@@ -24,18 +24,18 @@
 <div class="flash warn cuenta-banner" id="cuenta-banner">
   {% if not cuenta_actual.correo %}
   <form method="post" action="{{ url_for('cuenta_correo') }}" class="cuenta-banner-form">
-    <strong>Tu cuenta no tiene correo.</strong> Ponlo para poder confirmarla y recuperar la contraseña si la olvidas.
-    <input type="email" name="correo" placeholder="tu@empresa.com" autocomplete="email" required>
-    <input type="password" name="password" placeholder="Contraseña actual" autocomplete="current-password" required>
-    <button type="submit" class="btn-guardar btn-xs">Guardar correo</button>
+    <strong>{{ _('Tu cuenta no tiene correo.') }}</strong> {{ _('Ponlo para poder confirmarla y recuperar la contraseña si la olvidas.') }}
+    <input type="email" name="correo" placeholder="{{ _('tu@empresa.com') }}" autocomplete="email" required>
+    <input type="password" name="password" placeholder="{{ _('Contraseña actual') }}" autocomplete="current-password" required>
+    <button type="submit" class="btn-guardar btn-xs">{{ _('Guardar correo') }}</button>
   </form>
   {% else %}
   <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="cuenta-banner-form">
-    <strong>Confirma tu correo {{ cuenta_actual.correo }}</strong>: abre el enlace que te mandamos.
+    <strong>{{ _('Confirma tu correo %(correo)s', correo=cuenta_actual.correo) }}</strong>: {{ _('abre el enlace que te mandamos.') }}
     {% if smtp_ok %}
-    <button type="submit" class="btn-guardar btn-xs">Reenviar</button>
+    <button type="submit" class="btn-guardar btn-xs">{{ _('Reenviar') }}</button>
     {% else %}
-    <span>(el servidor no tiene correo configurado; avisa al administrador)</span>
+    <span>{{ _('(el servidor no tiene correo configurado; avisa al administrador)') }}</span>
     {% endif %}
   </form>
   {% endif %}
@@ -383,23 +383,23 @@
 </section>
 
 <section class="config-apartado" id="config-ap-marca" data-apartado="marca">
-<h2>Nombre del proyecto</h2>
+<h2>{{ _('Nombre del proyecto') }}</h2>
 <form method="post" action="{{ url_for('guardar_nombre_proyecto', cliente=cliente) }}" class="form-nueva-idea">
-  <input type="text" name="nombre" value="{{ nombre_proyecto }}" placeholder="Nombre visible del proyecto">
+  <input type="text" name="nombre" value="{{ nombre_proyecto }}" placeholder="{{ _('Nombre visible del proyecto') }}">
   <p class="vacio" style="font-size:.76rem;padding-top:.3rem;">
-    Solo cambia lo que se ve. El identificador interno sigue siendo
-    <code>{{ cliente }}</code>: es la clave de las rutas de almacenamiento, del
+    {{ _('Solo cambia lo que se ve. El identificador interno sigue siendo
+    <code>%(cliente)s</code>: es la clave de las rutas de almacenamiento, del
     historial ya generado y de los tokens de publicación, y renombrarlo los
-    rompería.
+    rompería.', cliente=cliente) }}
   </p>
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar nombre</button>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">{{ _('Guardar nombre') }}</button>
 </form>
 
-<h2>Logos oficiales</h2>
+<h2>{{ _('Logos oficiales') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
+  {{ _('El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia
   <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.
-  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto).
+  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto).') }}
 </p>
 <form method="post" action="{{ url_for('subir_logo', cliente=cliente) }}" enctype="multipart/form-data" class="form-nueva-idea">
   <input type="file" name="imagen" accept=".jpg,.jpeg,.png,.webp" multiple required onchange="this.form.submit()">
@@ -410,8 +410,8 @@
   <figure style="margin:0;text-align:center;">
     <img src="{{ l.url }}" alt="{{ l.nombre }}" style="width:96px;height:96px;object-fit:contain;border-radius:6px;background:var(--fondo-logo);">
     <figcaption class="vacio" style="padding:0;font-size:.68rem;">@Logo {{ loop.index }}</figcaption>
-    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm('¿Quitar este logo?');">
-      <button type="submit" class="btn-rechazar btn-sm">Quitar</button>
+    <form method="post" action="{{ url_for('eliminar_logo', cliente=cliente, nombre=l.nombre) }}" onsubmit="return confirm({{ _('¿Quitar este logo?')|tojson }});">
+      <button type="submit" class="btn-rechazar btn-sm">{{ _('Quitar') }}</button>
     </form>
   </figure>
   {% endfor %}
@@ -422,82 +422,82 @@
 </section>
 
 <section class="config-apartado" id="config-ap-generacion" data-apartado="generacion">
-<h2>Modelos por defecto — Cambiar producto</h2>
+<h2>{{ _('Modelos por defecto — Cambiar producto') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Modelo que viene marcado en Crear › Cambiar producto cada vez que subes una
-  foto o un video. Ahí mismo puedes cambiarlo por generación.
+  {{ _('Modelo que viene marcado en Crear › Cambiar producto cada vez que subes una
+  foto o un video. Ahí mismo puedes cambiarlo por generación.') }}
 </p>
 <form method="post" action="{{ url_for('guardar_preferencias_swap', cliente=cliente) }}" class="form-nueva-idea">
   <div class="fila-campos-idea">
     <div>
-      <label class="campo-label">Modelo para FOTO</label>
+      <label class="campo-label">{{ _('Modelo para FOTO') }}</label>
       <div class="checks-plataformas">
         {% for id in proveedores_swap_imagen %}
-        <label><input type="radio" name="proveedor_foto" value="{{ id }}" {% if preferencias_swap.proveedor_foto == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
+        <label><input type="radio" name="proveedor_foto" value="{{ id }}" {% if preferencias_swap.proveedor_foto == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id)|traducir }}</label>
         {% endfor %}
       </div>
     </div>
     <div>
-      <label class="campo-label">Modelo para VIDEO</label>
+      <label class="campo-label">{{ _('Modelo para VIDEO') }}</label>
       <div class="checks-plataformas">
         {% for id in proveedores_swap_video %}
-        <label><input type="radio" name="proveedor_video" value="{{ id }}" {% if preferencias_swap.proveedor_video == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id) }}</label>
+        <label><input type="radio" name="proveedor_video" value="{{ id }}" {% if preferencias_swap.proveedor_video == id %}checked{% endif %}> {{ nombres_proveedor_swap.get(id, id)|traducir }}</label>
         {% endfor %}
       </div>
     </div>
   </div>
   <label style="display:block;margin-top:.8rem;font-size:.85rem;">
     <input type="checkbox" name="mejorar_calidad" {% if preferencias_swap.mejorar_calidad %}checked{% endif %}>
-    Mejorar la calidad al final (+$0.04, solo aplica a fotos)
+    {{ _('Mejorar la calidad al final (+$0.04, solo aplica a fotos)') }}
   </label>
   <p class="vacio" style="padding-top:.2rem;font-size:.76rem;">
-    Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la
-    imagen, así que no cambia la cara, la pose ni el fondo.
+    {{ _('Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la
+    imagen, así que no cambia la cara, la pose ni el fondo.') }}
   </p>
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos por defecto</button>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar modelos por defecto') }}</button>
 </form>
 
 
-<h2 style="margin-top:2rem;">Modelos por defecto — FlowPlus</h2>
+<h2 style="margin-top:2rem;">{{ _('Modelos por defecto — FlowPlus') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Qué modelo sale marcado al abrir FlowPlus. En cada generación se puede cambiar; esto solo fija el punto de partida. Todos corren por WaveSpeed.
+  {{ _('Qué modelo sale marcado al abrir FlowPlus. En cada generación se puede cambiar; esto solo fija el punto de partida. Todos corren por WaveSpeed.') }}
 </p>
 <form method="post" action="{{ url_for('guardar_preferencias_flowplus', cliente=cliente) }}" class="form-nueva-idea">
   <div class="fila-campos-idea">
     <div>
-      <label class="campo-label">Modelo para VIDEO</label>
+      <label class="campo-label">{{ _('Modelo para VIDEO') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_video.items() %}
-        <label title="{{ m.nota }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}/s con sonido</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_video" value="{{ id }}" {% if preferencias_flowplus.modelo_video == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd_por_segundo_efectivo) }}{{ _('/s con sonido') }}</span></label>
         {% endfor %}
       </div>
     </div>
     <div>
-      <label class="campo-label">Modelo para IMAGEN</label>
+      <label class="campo-label">{{ _('Modelo para IMAGEN') }}</label>
       <div class="checks-plataformas">
         {% for id, m in modelos_flowplus_imagen.items() %}
-        <label title="{{ m.nota }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }}</span></label>
+        <label title="{{ m.nota|traducir }}"><input type="radio" name="modelo_imagen" value="{{ id }}" {% if preferencias_flowplus.modelo_imagen == id %}checked{% endif %}> {{ m.nombre|traducir }} <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· ${{ "%.3f"|format(m.usd) }}</span></label>
         {% endfor %}
       </div>
     </div>
   </div>
   <div class="fila-campos-idea" style="margin-top:.8rem;">
     <div>
-      <label class="campo-label">Idioma del prompt que arma la IA</label>
+      <label class="campo-label">{{ _('Idioma del prompt que arma la IA') }}</label>
       <select name="idioma_prompt">
-        <option value="es" {% if preferencias_flowplus.idioma_prompt != "en" %}selected{% endif %}>Español (los tokens Image N y el cierre de sonido van en inglés)</option>
-        <option value="en" {% if preferencias_flowplus.idioma_prompt == "en" %}selected{% endif %}>Inglés completo (para la prueba A/B)</option>
+        <option value="es" {% if preferencias_flowplus.idioma_prompt != "en" %}selected{% endif %}>{{ _('Español (los tokens Image N y el cierre de sonido van en inglés)') }}</option>
+        <option value="en" {% if preferencias_flowplus.idioma_prompt == "en" %}selected{% endif %}>{{ _('Inglés completo (para la prueba A/B)') }}</option>
       </select>
     </div>
     <div>
-      <label class="campo-label">Duración que sale marcada en Crear</label>
+      <label class="campo-label">{{ _('Duración que sale marcada en Crear') }}</label>
       <select name="duracion_defecto">
         {% for d in duraciones_crear %}<option value="{{ d }}" {% if preferencias_flowplus.duracion_defecto == d %}selected{% endif %}>{{ d }} s</option>{% endfor %}
       </select>
-      <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· los modelos rinden mejor hasta 15 s</span>
+      <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· {{ _('los modelos rinden mejor hasta 15 s') }}</span>
     </div>
   </div>
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar modelos de FlowPlus</button>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar modelos de FlowPlus') }}</button>
 </form>
 
 {% if es_admin %}
@@ -514,21 +514,21 @@
 </form>
 {% endif %}
 
-<h2 style="margin-top:2rem;">Sonido al crear</h2>
+<h2 style="margin-top:2rem;">{{ _('Sonido al crear') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual.
+  {{ _('Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual.') }}
 </p>
 <form method="post" action="{{ url_for('guardar_preferencias_sonido', cliente=cliente) }}" class="form-nueva-idea">
-  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)</label>
+  <label class="fe-check"><input type="checkbox" name="con_sonido" value="si" {% if preferencias_sonido.con_sonido %}checked{% endif %}> {{ _('Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)') }}</label>
   <div style="margin-top:.6rem;">
-    <label class="campo-label">Música al crear</label>
+    <label class="campo-label">{{ _('Música al crear') }}</label>
     <select name="musica_al_crear">
-      <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>ninguna</option>
-      {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ e }}</option>{% endfor %}
+      <option value="" {% if not preferencias_sonido.musica_al_crear %}selected{% endif %}>{{ _('ninguna') }}</option>
+      {% for e in estilos_fe %}<option value="{{ e }}" {% if preferencias_sonido.musica_al_crear == e %}selected{% endif %}>{{ nombres_estilos_musica.get(e, e)|traducir }}</option>{% endfor %}
     </select>
-    <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)</span>
+    <span class="vacio" style="display:inline;padding:0;font-size:.74rem;">· {{ _('USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)') }}</span>
   </div>
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar sonido al crear</button>
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar sonido al crear') }}</button>
 </form>
 
 {% include "_comparacion_modelos.html" %}
@@ -538,7 +538,7 @@
 {# ---- Cuenta: correo (verificado o no) y contraseña del usuario de la
    sesión. cuenta_actual/smtp_ok vienen del context processor
    _cuenta_en_plantillas; el admin ve el bloque con su propia cuenta. ---- #}
-<h2 id="config-cuenta">Cuenta</h2>
+<h2 id="config-cuenta">{{ _('Cuenta') }}</h2>
 {% if idioma_selector_visible %}
 <form method="post" action="{{ url_for('cfg_idioma', cliente=cliente) }}" id="config-idioma" class="fila-campos-idea">
   <input type="hidden" name="alcance" value="cuenta">
@@ -554,59 +554,59 @@
 {% endif %}
 {% if cuenta_actual is defined and cuenta_actual %}
 <p class="vacio" style="padding-top:0;">
-  Usuario <strong>{{ session['usuario'] }}</strong>
+  {{ _('Usuario') }} <strong>{{ session['usuario'] }}</strong>
   {% if cuenta_actual.correo %}
-  · correo <strong>{{ cuenta_actual.correo }}</strong>
-  {% if cuenta_actual.correo_verificado %}<span class="tag-estado tag-en-uso">confirmado</span>
-  {% else %}<span class="tag-estado tag-advertencia">sin confirmar</span>{% endif %}
+  · {{ _('correo') }} <strong>{{ cuenta_actual.correo }}</strong>
+  {% if cuenta_actual.correo_verificado %}<span class="tag-estado tag-en-uso">{{ _('confirmado') }}</span>
+  {% else %}<span class="tag-estado tag-advertencia">{{ _('sin confirmar') }}</span>{% endif %}
   {% else %}
-  · <span class="tag-estado tag-advertencia">sin correo</span>
+  · <span class="tag-estado tag-advertencia">{{ _('sin correo') }}</span>
   {% endif %}
 </p>
 {% if cuenta_actual.correo and not cuenta_actual.correo_verificado %}
 <p class="vacio" style="padding-top:0;">
-  Abre el enlace que te mandamos a {{ cuenta_actual.correo }} para confirmarlo.
+  {{ _('Abre el enlace que te mandamos a %(correo)s para confirmarlo.', correo=cuenta_actual.correo) }}
   {% if smtp_ok %}
-  <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="inline"><button type="submit" class="btn-guardar btn-xs">Reenviar el correo</button></form>
+  <form method="post" action="{{ url_for('reenviar_verificacion') }}" class="inline"><button type="submit" class="btn-guardar btn-xs">{{ _('Reenviar el correo') }}</button></form>
   {% else %}
-  <span class="tag-error">El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.</span>
+  <span class="tag-error">{{ _('El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta.') }}</span>
   {% endif %}
 </p>
 {% endif %}
 <div class="fila-campos-idea" style="align-items:flex-start;">
   <form method="post" action="{{ url_for('cuenta_correo') }}" class="form-nueva-idea" id="form-cuenta-correo">
-    <h3 style="margin-top:0;">{% if cuenta_actual.correo %}Cambiar correo{% else %}Poner correo{% endif %}</h3>
-    <label class="campo-label">Correo nuevo</label>
-    <input type="email" name="correo" autocomplete="email" placeholder="tu@empresa.com" required>
-    <label class="campo-label" style="margin-top:.6rem;display:block;">Contraseña actual</label>
+    <h3 style="margin-top:0;">{% if cuenta_actual.correo %}{{ _('Cambiar correo') }}{% else %}{{ _('Poner correo') }}{% endif %}</h3>
+    <label class="campo-label">{{ _('Correo nuevo') }}</label>
+    <input type="email" name="correo" autocomplete="email" placeholder="{{ _('tu@empresa.com') }}" required>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">{{ _('Contraseña actual') }}</label>
     <input type="password" name="password" autocomplete="current-password" required>
-    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">El correo nuevo queda sin confirmar hasta que abras el enlace que le mandamos.</p>
-    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">{{ _('El correo nuevo queda sin confirmar hasta que abras el enlace que le mandamos.') }}</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">{{ _('Guardar correo') }}</button>
   </form>
   <form method="post" action="{{ url_for('cuenta_password') }}" class="form-nueva-idea" id="form-cuenta-password">
-    <h3 style="margin-top:0;">Cambiar contraseña</h3>
-    <label class="campo-label">Contraseña actual</label>
+    <h3 style="margin-top:0;">{{ _('Cambiar contraseña') }}</h3>
+    <label class="campo-label">{{ _('Contraseña actual') }}</label>
     <input type="password" name="password_actual" autocomplete="current-password" required>
-    <label class="campo-label" style="margin-top:.6rem;display:block;">Nueva (mínimo 8 caracteres)</label>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">{{ _('Nueva (mínimo 8 caracteres)') }}</label>
     <input type="password" name="password" autocomplete="new-password" required minlength="8">
-    <label class="campo-label" style="margin-top:.6rem;display:block;">Repítela</label>
+    <label class="campo-label" style="margin-top:.6rem;display:block;">{{ _('Repítela') }}</label>
     <input type="password" name="confirmacion" autocomplete="new-password" required minlength="8">
-    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue.</p>
-    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Cambiar contraseña</button>
+    <p class="vacio" style="font-size:.74rem;padding-top:.3rem;">{{ _('Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue.') }}</p>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">{{ _('Cambiar contraseña') }}</button>
   </form>
 </div>
 {% else %}
-<p class="vacio">No hay una cuenta en esta sesión.</p>
+<p class="vacio">{{ _('No hay una cuenta en esta sesión.') }}</p>
 {% endif %}
 
-<h2 id="config-correo">Correo de avisos</h2>
+<h2 id="config-correo">{{ _('Correo de avisos') }}</h2>
 <p class="vacio" style="padding-top:0;">
-  A este correo llegan las propuestas que esperan aprobación, los ganadores y
-  los rechazos de Meta. Vacío = sin avisos por correo.
+  {{ _('A este correo llegan las propuestas que esperan aprobación, los ganadores y
+  los rechazos de Meta. Vacío = sin avisos por correo.') }}
 </p>
 <form method="post" action="{{ url_for('cfg_correo', cliente=cliente) }}" class="form-nueva-idea">
-  <input type="email" name="correo" value="{{ correo_notificaciones }}" placeholder="dueño@tuproyecto.com">
-  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">Guardar correo</button>
+  <input type="email" name="correo" value="{{ correo_notificaciones }}" placeholder="{{ _('dueño@tuproyecto.com') }}">
+  <button class="btn-guardar btn-sm" type="submit" style="margin-top:.5rem;">{{ _('Guardar correo') }}</button>
 </form>
 </section>
 
@@ -616,46 +616,46 @@
    ver_cliente: gasto_mes, pauta_mes, gastos_por_tipo, gastos_historial. ---- #}
 <div class="panel-cabecera tb-cabecera" id="config-gasto">
   <div>
-    <h2 style="margin-top:0;">Gasto</h2>
+    <h2 style="margin-top:0;">{{ _('Gasto') }}</h2>
     <p class="vacio" style="padding-top:0;">
-      Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,
+      {{ _('Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,
       final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app
-      muestran el precio aproximado antes de gastar; esta lista es el precio real después.
+      muestran el precio aproximado antes de gastar; esta lista es el precio real después.') }}
     </p>
   </div>
-  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>Descargar CSV del mes</a>
+  <a class="btn-guardar btn-sm tb-csv" href="{{ url_for('gasto_csv', cliente=cliente) }}" download>{{ _('Descargar CSV del mes') }}</a>
 </div>
 
 <div class="tb-tiles gasto-tiles">
   <div class="kpi-tile">
-    <span>Generación este mes</span>
+    <span>{{ _('Generación este mes') }}</span>
     <strong>{{ (gasto_mes.total if gasto_mes else 0) | usd }}</strong>
-    <small>{% if gasto_mes and gasto_mes.n %}{{ gasto_mes.n }} cobro(s) a proveedores{% else %}sin generación pagada{% endif %}</small>
+    <small>{% if gasto_mes and gasto_mes.n %}{{ _('%(n)s cobro(s) a proveedores', n=gasto_mes.n) }}{% else %}{{ _('sin generación pagada') }}{% endif %}</small>
   </div>
   {% for p in pauta_mes %}
   <div class="kpi-tile">
-    <span>Pauta este mes{% if pauta_mes | length > 1 %} · {{ p.moneda }}{% endif %}</span>
+    <span>{{ _('Pauta este mes') }}{% if pauta_mes | length > 1 %} · {{ p.moneda }}{% endif %}</span>
     <strong>{{ p.gasto | dinero(p.moneda) }}</strong>
-    <small>se cobra en tu cuenta de Meta</small>
+    <small>{{ _('se cobra en tu cuenta de Meta') }}</small>
   </div>
   {% else %}
   <div class="kpi-tile">
-    <span>Pauta este mes</span>
+    <span>{{ _('Pauta este mes') }}</span>
     <strong class="tb-sin-dato">—</strong>
-    <small>sin pauta corriendo</small>
+    <small>{{ _('sin pauta corriendo') }}</small>
   </div>
   {% endfor %}
 </div>
 
 {% if gastos_por_tipo %}
-<h3 style="margin-top:1.2rem;">Por tipo</h3>
+<h3 style="margin-top:1.2rem;">{{ _('Por tipo') }}</h3>
 <table class="gasto-tabla">
-  <thead><tr><th>Tipo</th><th class="num">Cantidad</th><th class="num">US$</th></tr></thead>
+  <thead><tr><th>{{ _('Tipo') }}</th><th class="num">{{ _('Cantidad') }}</th><th class="num">US$</th></tr></thead>
   <tbody>
     {% for t in gastos_por_tipo %}
-    <tr><td>{{ t.nombre }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td></tr>
+    <tr><td>{{ t.nombre|traducir }}</td><td class="num">{{ t.n }}</td><td class="num">{{ t.usd | usd }}</td></tr>
     {% endfor %}
-    <tr class="gasto-total"><td>Total</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td></tr>
+    <tr class="gasto-total"><td>{{ _('Total') }}</td><td class="num">{{ gasto_mes.n }}</td><td class="num">{{ gasto_mes.total | usd }}</td></tr>
   </tbody>
 </table>
 {% endif %}
@@ -663,16 +663,16 @@
 {# M6: el límite de 200 es fijo (sin paginación real); el scroll + la nota
    de abajo alcanzan para el brief de hoy, pero si el volumen de cobros
    crece, una Task futura debería paginar de verdad en vez de solo recortar. #}
-<h3 style="margin-top:1.2rem;">Historial</h3>
+<h3 style="margin-top:1.2rem;">{{ _('Historial') }}</h3>
 {% if gastos_historial %}
 <div class="gasto-historial">
   <table class="gasto-tabla">
-    <thead><tr><th>Fecha</th><th>Tipo</th><th>Detalle</th><th class="num">US$</th></tr></thead>
+    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Tipo') }}</th><th>{{ _('Detalle') }}</th><th class="num">US$</th></tr></thead>
     <tbody>
       {% for g in gastos_historial %}
       <tr>
         <td class="gasto-fecha">{{ g.creado_en[:16] | replace("T", " ") }}</td>
-        <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo) }}</td>
+        <td>{{ nombres_tipo_gasto.get(g.tipo, g.tipo)|traducir }}</td>
         <td class="gasto-detalle" title="{{ g.referencia }}">{{ g.detalle or g.referencia }}{% if g.proveedor %} <small class="vacio" style="display:inline;padding:0;">· {{ g.proveedor }}</small>{% endif %}</td>
         <td class="num">{{ g.usd | usd }}</td>
       </tr>
@@ -680,53 +680,53 @@
     </tbody>
   </table>
 </div>
-<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">Se muestran los últimos {{ gastos_historial | length }} cobros{% if gastos_historial | length >= 200 %} (el CSV trae todos los del mes){% endif %}.</p>
+<p class="vacio" style="padding-top:.3rem;font-size:.74rem;">{{ _('Se muestran los últimos %(n)s cobros', n=gastos_historial | length) }}{% if gastos_historial | length >= 200 %} {{ _('(el CSV trae todos los del mes)') }}{% endif %}.</p>
 {% else %}
-<p class="vacio">Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.</p>
+<p class="vacio">{{ _('Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear.') }}</p>
 {% endif %}
 <p class="vacio gasto-nota" style="font-size:.78rem;">
-  Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta
-  y no entra en este total. Ningún gasto bloquea una acción: solo se informa.
+  {{ _('Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta
+  y no entra en este total. Ningún gasto bloquea una acción: solo se informa.') }}
 </p>
 
 {% if session.get('rol') == 'admin' %}
 {# Informe para sustentar la cuenta de cobro. TODO lo que se muestra acá sale de
    una fuente verificable: la bitácora (CSV append-only), el estado en disco o el
    historial de git. Nada estimado se presenta como medido. #}
-<h3>Informe de operación y desarrollo</h3>
+<h3>{{ _('Informe de operación y desarrollo') }}</h3>
 <p class="vacio" style="padding-top:0;">
-  Todo lo de abajo es verificable: sale de la bitácora, del estado en disco y del
-  historial de git de este repositorio. No hay nada estimado presentado como medido.
+  {{ _('Todo lo de abajo es verificable: sale de la bitácora, del estado en disco y del
+  historial de git de este repositorio. No hay nada estimado presentado como medido.') }}
 </p>
 
 <div class="informe-tarjetas">
   <div class="informe-tarjeta">
     <span class="informe-num">${{ "%.2f"|format(informe.operacion.total_usd) }}</span>
-    <span class="informe-label">Gasto real en APIs de IA</span>
+    <span class="informe-label">{{ _('Gasto real en APIs de IA') }}</span>
   </div>
   <div class="informe-tarjeta">
     <span class="informe-num">{{ informe.operacion.facturadas }}</span>
-    <span class="informe-label">Generaciones completadas y cobradas</span>
+    <span class="informe-label">{{ _('Generaciones completadas y cobradas') }}</span>
   </div>
   <div class="informe-tarjeta">
     <span class="informe-num">{{ informe.operacion.eventos_bitacora }}</span>
-    <span class="informe-label">Eventos en bitácora{% if informe.operacion.primer_evento %}<br>{{ informe.operacion.primer_evento }} → {{ informe.operacion.ultimo_evento }}{% endif %}</span>
+    <span class="informe-label">{{ _('Eventos en bitácora') }}{% if informe.operacion.primer_evento %}<br>{{ informe.operacion.primer_evento }} → {{ informe.operacion.ultimo_evento }}{% endif %}</span>
   </div>
   <div class="informe-tarjeta">
     <span class="informe-num">{{ informe.desarrollo.tiempo.horas }} h</span>
-    <span class="informe-label">Horas de desarrollo medidas</span>
+    <span class="informe-label">{{ _('Horas de desarrollo medidas') }}</span>
   </div>
 </div>
 
-<h4 style="margin-top:1.5rem;">Gasto por modelo</h4>
+<h4 style="margin-top:1.5rem;">{{ _('Gasto por modelo') }}</h4>
 <div style="overflow-x:auto;">
 <table>
-  <thead><tr><th>Modelo</th><th>Generaciones</th><th>Costo</th></tr></thead>
+  <thead><tr><th>{{ _('Modelo') }}</th><th>{{ _('Generaciones') }}</th><th>{{ _('Costo') }}</th></tr></thead>
   <tbody>
     {% for modelo, d in informe.operacion.por_modelo.items() %}
     <tr><td>{{ modelo }}</td><td>{{ d.n }}</td><td>${{ "%.3f"|format(d.usd) }}</td></tr>
     {% endfor %}
-    <tr><td><strong>Total</strong></td>
+    <tr><td><strong>{{ _('Total') }}</strong></td>
         <td><strong>{{ informe.operacion.facturadas }}</strong></td>
         <td><strong>${{ "%.3f"|format(informe.operacion.total_usd) }}</strong></td></tr>
   </tbody>
@@ -735,40 +735,40 @@
 
 {% if informe.operacion.fallidas or informe.operacion.borradas_pero_registradas %}
 <p class="vacio" style="font-size:.78rem;">
-  Nota de transparencia:
+  {{ _('Nota de transparencia:') }}
   {% if informe.operacion.fallidas %}
-  hay {{ informe.operacion.fallidas }} generaciones fallidas sin costo registrado — la
+  {{ _('hay %(n)s generaciones fallidas sin costo registrado — la
   mayoría fueron rechazos del proveedor (error 400 o falta de créditos), donde el modelo
-  no llegó a ejecutarse y por tanto no se facturaron.
+  no llegó a ejecutarse y por tanto no se facturaron.', n=informe.operacion.fallidas) }}
   {% endif %}
   {% if informe.operacion.borradas_pero_registradas %}
-  Además, la bitácora conserva {{ informe.operacion.borradas_pero_registradas }} generaciones
+  {{ _('Además, la bitácora conserva %(n)s generaciones
   exitosas que se eliminaron desde la interfaz: se ejecutaron y se pagaron, pero su costo
-  individual ya no es recuperable.
+  individual ya no es recuperable.', n=informe.operacion.borradas_pero_registradas) }}
   {% endif %}
 </p>
 {% endif %}
 
-<h4 style="margin-top:1.5rem;">Lo que tomó construirlo</h4>
+<h4 style="margin-top:1.5rem;">{{ _('Lo que tomó construirlo') }}</h4>
 <div style="overflow-x:auto;">
 <table>
   <tbody>
-    <tr><td>Período de desarrollo</td><td>{{ informe.desarrollo.desde }} → {{ informe.desarrollo.hasta }}</td></tr>
-    <tr><td>Commits</td><td>{{ informe.desarrollo.commits }}</td></tr>
-    <tr><td>Código entregado</td><td>{{ "{:,}".format(informe.desarrollo.lineas) }} líneas en {{ informe.desarrollo.archivos }} archivos</td></tr>
-    <tr><td>Integraciones con modelos de IA</td><td>{{ informe.desarrollo.proveedores | length }} ({{ informe.desarrollo.proveedores | join(", ") }})</td></tr>
-    <tr><td>Publicación automática</td><td>{{ informe.desarrollo.plataformas | join(", ") }}</td></tr>
-    <tr><td>Jornadas de trabajo</td><td>{{ informe.desarrollo.tiempo.dias }} días</td></tr>
-    <tr><td><strong>Horas medidas</strong></td><td><strong>{{ informe.desarrollo.tiempo.horas }} h</strong></td></tr>
+    <tr><td>{{ _('Período de desarrollo') }}</td><td>{{ informe.desarrollo.desde }} → {{ informe.desarrollo.hasta }}</td></tr>
+    <tr><td>{{ _('Commits') }}</td><td>{{ informe.desarrollo.commits }}</td></tr>
+    <tr><td>{{ _('Código entregado') }}</td><td>{{ _('%(n)s líneas en %(archivos)s archivos', n="{:,}".format(informe.desarrollo.lineas), archivos=informe.desarrollo.archivos) }}</td></tr>
+    <tr><td>{{ _('Integraciones con modelos de IA') }}</td><td>{{ informe.desarrollo.proveedores | length }} ({{ informe.desarrollo.proveedores | join(", ") }})</td></tr>
+    <tr><td>{{ _('Publicación automática') }}</td><td>{{ informe.desarrollo.plataformas | join(", ") }}</td></tr>
+    <tr><td>{{ _('Jornadas de trabajo') }}</td><td>{{ _('%(n)s días', n=informe.desarrollo.tiempo.dias) }}</td></tr>
+    <tr><td><strong>{{ _('Horas medidas') }}</strong></td><td><strong>{{ informe.desarrollo.tiempo.horas }} h</strong></td></tr>
   </tbody>
 </table>
 </div>
 
 <details style="margin-top:.8rem;">
-  <summary class="btn-guardar btn-sm">Ver el detalle día por día →</summary>
+  <summary class="btn-guardar btn-sm">{{ _('Ver el detalle día por día →') }}</summary>
   <div style="overflow-x:auto;margin-top:.8rem;">
   <table>
-    <thead><tr><th>Fecha</th><th>Commits</th><th>Desde</th><th>Hasta</th><th>Horas</th></tr></thead>
+    <thead><tr><th>{{ _('Fecha') }}</th><th>{{ _('Commits') }}</th><th>{{ _('Desde') }}</th><th>{{ _('Hasta') }}</th><th>{{ _('Horas') }}</th></tr></thead>
     <tbody>
       {% for d in informe.desarrollo.tiempo.detalle %}
       <tr><td>{{ d.fecha }}</td><td>{{ d.commits }}</td><td>{{ d.desde }}</td><td>{{ d.hasta }}</td><td>{{ d.horas }}</td></tr>
@@ -777,10 +777,10 @@
   </table>
   </div>
   <p class="vacio" style="font-size:.76rem;">
-    Cómo se mide: el tiempo entre el primer y el último commit de cada día. Es un
+    {{ _('Cómo se mide: el tiempo entre el primer y el último commit de cada día. Es un
     <strong>piso, no un estimado</strong> — no cuenta el trabajo previo al primer commit
     del día, las sesiones que terminaron sin commit, ni los días de un solo commit (que
-    aparecen en 0 h). El tiempo real invertido es mayor que esta cifra.
+    aparecen en 0 h). El tiempo real invertido es mayor que esta cifra.') }}
   </p>
 </details>
 {% endif %}

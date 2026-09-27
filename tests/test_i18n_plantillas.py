@@ -14,6 +14,7 @@ PLANTILLAS_TRADUCIDAS = [
     "index.html", "legal.html", "panel.html",
     "_llave_tarjeta.html", "_meta_conectar.html", "_meta_elegir_forma.html",
     "_meta_agencia_cliente.html", "_meta_propia_guia.html",
+    "_tab_settings.html", "_seccion_marca.html", "_comparacion_modelos.html",
 ]
 
 

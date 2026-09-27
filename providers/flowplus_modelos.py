@@ -40,11 +40,12 @@ bytedance/seedream-v5.0-pro (text-to-image, sin sufijo).
 """
 import requests
 
+from idiomas import N_
 from providers import wavespeed_common, wan3_client, wavespeed_imagen
 
 VIDEO = {
     "wan3": {
-        "nombre": "Wan 3.0",
+        "nombre": N_("Wan 3.0"),
         "familia": "wan",
         "path": wan3_client.MODEL_PATH,
         "path_texto": "alibaba/wan-3.0/text-to-video",
@@ -56,10 +57,10 @@ VIDEO = {
         "formatos": ("9:16", "16:9", "1:1", "4:3", "3:4"),
         "max_videos": 5,
         "audio_nativo": {"parametro": "enable_audio", "recargo_usd_s": 0.0},
-        "nota": "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido.",
+        "nota": N_("Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."),
     },
     "kling_o3_pro": {
-        "nombre": "Kling O3 Pro",
+        "nombre": N_("Kling O3 Pro"),
         "familia": "kling",
         "path": "kwaivgi/kling-video-o3-pro/reference-to-video",
         "path_texto": "kwaivgi/kling-video-o3-pro/text-to-video",
@@ -71,10 +72,10 @@ VIDEO = {
         "formatos": ("9:16", "16:9", "1:1"),
         "max_videos": 0,
         "audio_nativo": {"parametro": "sound", "recargo_usd_s": 0.028},
-        "nota": "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado).",
+        "nota": N_("Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado)."),
     },
     "seedance25": {
-        "nombre": "Seedance 2.5",
+        "nombre": N_("Seedance 2.5"),
         "familia": "seedance",
         "path": "bytedance/seedance-2.5/image-to-video",
         "path_texto": "bytedance/seedance-2.5/text-to-video",
@@ -87,19 +88,19 @@ VIDEO = {
         "formatos_texto": ("9:16", "16:9", "1:1", "4:3", "3:4"),   # sin imagen sí se elige
         "max_videos": 0,
         "audio_nativo": {"parametro": "generate_audio", "recargo_usd_s": 0.0},
-        "nota": "Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido.",
+        "nota": N_("Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido."),
     },
 }
 
 IMAGEN = {
     "seedream_v5_pro": {
-        "nombre": "Seedream V5.0 Pro",
+        "nombre": N_("Seedream V5.0 Pro"),
         "path": wavespeed_imagen.MODELO_SEEDREAM,
         "path_texto": "bytedance/seedream-v5.0-pro",
         "max_referencias": wavespeed_imagen.MAX_IMAGENES_SEEDREAM,
         "usd": wavespeed_imagen.COSTO_USD_SEEDREAM["2k"],
         "formatos": ("9:16", "1:1", "4:5", "16:9", "3:4", "4:3"),
-        "nota": "Imagen 2k a partir de tus referencias y el texto, en el formato que elijas. Realismo fotográfico.",
+        "nota": N_("Imagen 2k a partir de tus referencias y el texto, en el formato que elijas. Realismo fotográfico."),
     },
 }
 

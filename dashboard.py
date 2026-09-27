@@ -549,12 +549,12 @@ def _subir_asset(cliente, subcarpeta, archivo):
     un fotograma con ffmpeg (Higgsfield no acepta video como referencia).
     Devuelve (ok, mensaje)."""
     if not archivo or not archivo.filename:
-        return False, "No elegiste ningún archivo."
+        return False, gettext("No elegiste ningún archivo.")
 
     nombre = secure_filename(archivo.filename)
     ext = os.path.splitext(nombre)[1].lower()
     if ext not in IMAGE_EXTS and ext not in VIDEO_EXTS:
-        return False, "Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm."
+        return False, gettext("Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm.")
 
     carpeta = os.path.join(_client_dir(cliente), subcarpeta)
     os.makedirs(carpeta, exist_ok=True)
@@ -565,30 +565,31 @@ def _subir_asset(cliente, subcarpeta, archivo):
         try:
             r2_uploader.upload_video(local_path, f"clientes/{cliente}/{subcarpeta}/{nombre}")
         except Exception as e:
-            return False, f"Se guardó localmente pero falló la subida del video a R2: {e}"
+            return False, gettext("Se guardó localmente pero falló la subida del video a R2: %(error)s", error=e)
 
         frame_name = nombre + FRAME_SUFFIX
         frame_path = os.path.join(carpeta, frame_name)
         try:
             _extraer_frame(local_path, frame_path)
             r2_uploader.upload_image(frame_path, f"clientes/{cliente}/{subcarpeta}/{frame_name}")
-            return True, f"Video subido y fotograma de referencia extraído: {nombre}"
+            return True, gettext("Video subido y fotograma de referencia extraído: %(nombre)s", nombre=nombre)
         except Exception as e:
-            return False, (
-                f"El video {nombre} se subió, pero no pude extraer su fotograma de referencia "
-                f"(no se puede usar hasta resolver esto): {e}"
-            )
+            return False, gettext(
+                "El video %(nombre)s se subió, pero no pude extraer su fotograma de referencia "
+                "(no se puede usar hasta resolver esto): %(error)s", nombre=nombre, error=e)
     else:
         try:
             r2_uploader.upload_image(local_path, f"clientes/{cliente}/{subcarpeta}/{nombre}")
-            return True, f"Subido: {nombre}"
+            return True, gettext("Subido: %(nombre)s", nombre=nombre)
         except Exception as e:
-            return False, f"Se guardó localmente pero falló la subida a R2: {e}"
+            return False, gettext("Se guardó localmente pero falló la subida a R2: %(error)s", error=e)
 
 
 def _eliminar_asset(cliente, subcarpeta, nombre):
     """Borra un archivo ya subido (imagen o video, más su .frame.jpg si aplica)
-    local y de R2. No falla si alguna de las dos copias ya no existía."""
+    local y de R2. No falla si alguna de las dos copias ya no existía.
+    Devuelve (ok, mensaje) — solo `eliminar_logo` usa el mensaje; los demás
+    llamadores flashean el suyo propio y lo ignoran."""
     carpeta = os.path.join(_client_dir(cliente), subcarpeta)
     nombres = [nombre, nombre + FRAME_SUFFIX]
     for n in nombres:
@@ -599,6 +600,7 @@ def _eliminar_asset(cliente, subcarpeta, nombre):
             r2_uploader.delete_file(f"clientes/{cliente}/{subcarpeta}/{n}")
         except Exception:
             pass  # si R2 no está configurado o el objeto ya no existe, seguimos
+    return True, gettext("Eliminado: %(nombre)s", nombre=nombre)
 
 
 @app.route("/cliente/<cliente>/personaje/subir", methods=["POST"])
@@ -654,7 +656,7 @@ def subir_logo(cliente):
         else:
             flash(mensaje, "error")
     if ok_n:
-        flash(f"{ok_n} logo(s) guardado(s). Se usan como referencia en cada generación de FlowPlus.", "ok")
+        flash(gettext("%(n)s logo(s) guardado(s). Se usan como referencia en cada generación de FlowPlus.", n=ok_n), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -1669,6 +1671,7 @@ def ver_cliente(cliente):
         paises_fe=fe_tipos.PAISES,
         voces_fe=fal_audio.VOCES,
         estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
+        nombres_estilos_musica=fe_tipos.NOMBRES_ESTILOS_MUSICA,
         **_contexto_mi_musica(cliente),
         presets_mezcla=list(fe_mezcla.PRESETS),
         experimentos=experimentos_exp,
@@ -2366,7 +2369,7 @@ def guardar_nombre_proyecto(cliente):
     """Cambia SOLO el nombre visible. La carpeta (el id) no se toca: es la clave
     de las rutas de R2, del historial y de los tokens de publicación."""
     proyectos.guardar_nombre(cliente, request.form.get("nombre"))
-    flash("Nombre del proyecto actualizado.", "ok")
+    flash(gettext("Nombre del proyecto actualizado."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -2380,14 +2383,14 @@ def guardar_preferencias_swap(cliente):
     mejorar_calidad = bool(request.form.get("mejorar_calidad"))
 
     if proveedor_foto not in PROVEEDORES_SWAP_IMAGEN:
-        flash("Modelo de foto inválido.", "error")
+        flash(gettext("Modelo de foto inválido."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
     if proveedor_video not in PROVEEDORES_SWAP_VIDEO:
-        flash("Modelo de video inválido.", "error")
+        flash(gettext("Modelo de video inválido."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
     proyectos.guardar_preferencias(cliente, proveedor_foto, proveedor_video, mejorar_calidad)
-    flash("Modelos por defecto actualizados.", "ok")
+    flash(gettext("Modelos por defecto actualizados."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -2396,13 +2399,13 @@ def guardar_preferencias_flowplus(cliente):
     modelo_video = request.form.get("modelo_video", "").strip()
     modelo_imagen = request.form.get("modelo_imagen", "").strip()
     if modelo_video not in flowplus_modelos.VIDEO or modelo_imagen not in flowplus_modelos.IMAGEN:
-        flash("Modelo inválido.", "error")
+        flash(gettext("Modelo inválido."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
     proyectos.guardar_preferencias_flowplus(
         cliente, modelo_video, modelo_imagen,
         idioma_prompt=(request.form.get("idioma_prompt") or "es").strip(),
         duracion_defecto=request.form.get("duracion_defecto") or 8)
-    flash("Modelos por defecto de FlowPlus actualizados.", "ok")
+    flash(gettext("Modelos por defecto de FlowPlus actualizados."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -2413,7 +2416,7 @@ def guardar_preferencias_sonido(cliente):
     if estilo not in fe_tipos.ESTILOS_MUSICA:
         estilo = ""
     proyectos.guardar_preferencias_sonido(cliente, con_sonido, estilo)
-    flash("Preferencias de sonido guardadas.", "ok")
+    flash(gettext("Preferencias de sonido guardadas."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
 
 
@@ -2739,24 +2742,27 @@ PROVEEDORES_SWAP_VIDEO = (
     "seedance25_edit", "kling_o3_pro_edit", "luma_ray32_edit",
 )
 
+# Nombres mostrados en el selector de modelo (Configuración > Generación y
+# Crear > Cambiar producto): constante de módulo que se muestra, marcada con
+# N_ y traducida donde se usa ({{ valor|traducir }} en las plantillas).
 NOMBRES_PROVEEDOR_SWAP = {
-    "nano_banana": "Nano Banana",
-    "nano_banana_fal": "Nano Banana (vía fal)",
-    "qwen_edit": "Qwen Image Edit Plus",
-    "nano_banana_pro_ultra": "Nano Banana Pro Ultra (4k)",
-    "seedream_v5_pro": "Seedream V5.0 Pro Edit (2k)",
-    "kling_o1": "Kling O1",
-    "luma_modify": "Luma Ray3 Modify",
-    "wan_animate_replace": "Wan-2.2 Animate Replace",
-    "wan27_edit": "Wan 2.7 Video Edit",
-    "seedance25_edit": "Seedance 2.5 Video Edit",
-    "kling_o3_pro_edit": "Kling Omni O3 Pro Video Edit",
-    "luma_ray32_edit": "Luma Ray 3.2 Video Edit",
+    "nano_banana": idiomas.N_("Nano Banana"),
+    "nano_banana_fal": idiomas.N_("Nano Banana (vía fal)"),
+    "qwen_edit": idiomas.N_("Qwen Image Edit Plus"),
+    "nano_banana_pro_ultra": idiomas.N_("Nano Banana Pro Ultra (4k)"),
+    "seedream_v5_pro": idiomas.N_("Seedream V5.0 Pro Edit (2k)"),
+    "kling_o1": idiomas.N_("Kling O1"),
+    "luma_modify": idiomas.N_("Luma Ray3 Modify"),
+    "wan_animate_replace": idiomas.N_("Wan-2.2 Animate Replace"),
+    "wan27_edit": idiomas.N_("Wan 2.7 Video Edit"),
+    "seedance25_edit": idiomas.N_("Seedance 2.5 Video Edit"),
+    "kling_o3_pro_edit": idiomas.N_("Kling Omni O3 Pro Video Edit"),
+    "luma_ray32_edit": idiomas.N_("Luma Ray 3.2 Video Edit"),
     # ya no seleccionables, pero se mantienen para mostrar el nombre en swaps viejos:
-    "flux_kontext": "Flux Kontext Pro",
-    "higgsfield": "Higgsfield",
-    "gemini_omni_edit": "Gemini Omni Flash Edit",
-    "wan3_reference": "Wan 3.0 (referencia, no edición)",
+    "flux_kontext": idiomas.N_("Flux Kontext Pro"),
+    "higgsfield": idiomas.N_("Higgsfield"),
+    "gemini_omni_edit": idiomas.N_("Gemini Omni Flash Edit"),
+    "wan3_reference": idiomas.N_("Wan 3.0 (referencia, no edición)"),
 }
 
 
@@ -5006,10 +5012,10 @@ def cfg_correo(cliente):
     volver = redirect(url_for("ver_cliente", cliente=cliente, _anchor="settings"))
     correo = (request.form.get("correo") or "").strip()
     if correo and not _CORREO_RE.match(correo):
-        flash("Ese correo no parece válido.", "error")
+        flash(gettext("Ese correo no parece válido."), "error")
         return volver
     proyectos.guardar_correo_notificaciones(cliente, correo)
-    flash("Correo guardado." if correo else "Avisos por correo desactivados.", "ok")
+    flash(gettext("Correo guardado.") if correo else gettext("Avisos por correo desactivados."), "ok")
     return volver
 
 

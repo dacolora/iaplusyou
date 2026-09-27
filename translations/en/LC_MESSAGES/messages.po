@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Creatv VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-09-26 18:56-0500\n"
+"POT-Creation-Date: 2026-09-27 05:00-0500\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: en\n"
@@ -19,6 +19,21 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
+msgid "$0.04 por corrida"
+msgstr "$0.04 per run"
+
+msgid "$0.05–$0.20 / seg según resolución"
+msgstr "$0.05–$0.20 / sec depending on resolution"
+
+msgid "$0.10 / seg en 720p, $0.15 / seg en 1080p"
+msgstr "$0.10 / sec at 720p, $0.15 / sec at 1080p"
+
+msgid "$0.11–$1.10 / seg según resolución (480p a 4k)"
+msgstr "$0.11–$1.10 / sec depending on resolution (480p to 4k)"
+
+msgid "$0.15 en 4k · $0.18 en 8k"
+msgstr "$0.15 at 4k · $0.18 at 8k"
+
 #, python-format
 msgid "%(monto)s generación"
 msgstr "%(monto)s generation"
@@ -26,6 +41,26 @@ msgstr "%(monto)s generation"
 #, python-format
 msgid "%(monto)s pauta"
 msgstr "%(monto)s ad spend"
+
+#, python-format
+msgid "%(n)s cobro(s) a proveedores"
+msgstr "%(n)s charge(s) to providers"
+
+#, python-format
+msgid "%(n)s días"
+msgstr "%(n)s days"
+
+#, python-format
+msgid "%(n)s logo(s) guardado(s). Se usan como referencia en cada generación de FlowPlus."
+msgstr "%(n)s logo(s) saved. They're used as reference in every FlowPlus generation."
+
+#, python-format
+msgid "%(n)s líneas en %(archivos)s archivos"
+msgstr "%(n)s lines across %(archivos)s files"
+
+#, python-format
+msgid "%(nombre)s — v%(version)s · %(n)s invariantes · actualizado %(actualizado)s"
+msgstr "%(nombre)s — v%(version)s · %(n)s invariants · updated %(actualizado)s"
 
 #, python-format
 msgid "%(num)d cobro"
@@ -83,11 +118,20 @@ msgid_plural "%(num)s publicaciones en curso"
 msgstr[0] "%(num)s post in progress"
 msgstr[1] "%(num)s posts in progress"
 
+msgid "(el CSV trae todos los del mes)"
+msgstr "(the CSV includes all of this month's)"
+
+msgid "(el servidor no tiene correo configurado; avisa al administrador)"
+msgstr "(the server has no email configured; let the administrator know)"
+
 msgid "(los que no aparezcan, agrégalos primero desde <em>Casos de uso › Personalizar</em>). Copia el <strong>identificador de configuración</strong>."
 msgstr "(add any that don't appear first from <em>Use cases › Customize</em>). Copy the <strong>configuration id</strong>."
 
 msgid ". Estaba conectado a"
 msgstr ". It was connected to"
+
+msgid "/s con sonido"
+msgstr "/s with sound"
 
 msgid "12 de septiembre de 2026"
 msgstr "September 12, 2026"
@@ -118,6 +162,23 @@ msgstr "<a href=\"%(url)s\">Swipe file →</a> import copycoders' swipe file and
 
 msgid "<strong>Arriba del panel, «Modo de la app»: pásala de Desarrollo a Live.</strong> Sin esto Meta rechaza cada anuncio (subcódigo 1885183). En Live sin App Review solo pueden usar la app las personas con rol en ella: conecta con el Facebook que la administra."
 msgstr "<strong>At the top of the panel, “App mode”: switch it from Development to Live.</strong> Without this Meta rejects every ad (subcode 1885183). In Live without App Review only people with a role on the app can use it: connect with the Facebook that administers it."
+
+msgid ""
+"<strong>Límite real confirmado (2 sep 2026, foto real de 3 personas — una\n"
+"      descalza, dos con calzado puesto):</strong> ninguno de los 3 modelos de\n"
+"      foto disponibles hoy cambia de forma confiable el calzado de TODAS las\n"
+"      personas de una foto en una sola pasada — el prompt ya se corrigió para\n"
+"      pedirlo explícitamente (antes decía \"la persona\" en singular, ahora pide\n"
+"      contar personas y editar a todas), pero el límite real es del modelo, no\n"
+"      del wording. Detalle por modelo abajo."
+msgstr ""
+"<strong>Confirmed real limit (Sep 2, 2026, real photo of 3 people — one\n"
+"      barefoot, two wearing shoes):</strong> none of the 3 photo models\n"
+"      available today reliably changes the footwear of ALL the\n"
+"      people in a photo in a single pass — the prompt was already corrected to\n"
+"      ask for it explicitly (it used to say \"the person\" in the singular, now it asks to\n"
+"      count people and edit all of them), but the real limit is the model's, not\n"
+"      the wording's. Detail per model below."
 
 msgid "<strong>MercadoLibre:</strong> no aplica — no se puede instalar código en una publicación. Los experimentos de MELI se deciden por tráfico."
 msgstr "<strong>MercadoLibre:</strong> doesn't apply — you can't install code on a listing. MELI experiments are decided by traffic."
@@ -152,6 +213,13 @@ msgstr "<strong>Variables in the server's <code>.env</code>:</strong>"
 msgid "<strong>WooCommerce:</strong> instala el plugin <em>Facebook for WooCommerce</em> y conéctalo con tu Business Manager; el Pixel y los eventos de compra quedan puestos."
 msgstr "<strong>WooCommerce:</strong> install the <em>Facebook for WooCommerce</em> plugin and connect it to your Business Manager; the Pixel and the purchase events get set up."
 
+msgid ""
+"A este correo llegan las propuestas que esperan aprobación, los ganadores y\n"
+"  los rechazos de Meta. Vacío = sin avisos por correo."
+msgstr ""
+"Proposals waiting for approval, winners and\n"
+"  Meta rejections all land in this email. Empty = no email notifications."
+
 msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
 msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
 
@@ -161,11 +229,25 @@ msgstr "Below, in <em>Connect store › Shopify</em>, paste the token along with
 msgid "Abajo, en <em>Conectar tienda › WooCommerce</em>, pégalos con la URL de la tienda, que tiene que ir por <code>https://</code>."
 msgstr "Below, in <em>Connect store › WooCommerce</em>, paste them with the store's URL, which has to be over <code>https://</code>."
 
+#, python-format
+msgid "Abre el enlace que te mandamos a %(correo)s para confirmarlo."
+msgstr "Open the link we sent to %(correo)s to confirm it."
+
 msgid "Abre la sección «API» (o «Developers») de tu cuenta y crea una llave nueva."
 msgstr "Open the “API” (or “Developers”) section of your account and create a new key."
 
 msgid "Abrir el menú"
 msgstr "Open the menu"
+
+#, python-format
+msgid ""
+"Además, la bitácora conserva %(n)s generaciones\n"
+"  exitosas que se eliminaron desde la interfaz: se ejecutaron y se pagaron, pero su costo\n"
+"  individual ya no es recuperable."
+msgstr ""
+"Also, the log keeps %(n)s successful\n"
+"  generations that were deleted from the interface: they ran and were paid for, but their individual\n"
+"  cost can no longer be recovered."
 
 msgid "Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio."
 msgstr "Add a payment method to the ad account in business.facebook.com › Settings › Billing: without it Meta won't activate any ad."
@@ -179,8 +261,29 @@ msgstr "When connecting, choose that Page: its page token (<code>page_id</code>)
 msgid "Al volver, la tienda queda conectada y se sincroniza sola cada 6 h."
 msgstr "When you come back, the store is connected and syncs on its own every 6 h."
 
+msgid "Analizando referencias…"
+msgstr "Analyzing references…"
+
+msgid "Analizar referencias y generar guía de estilo"
+msgstr "Analyze references and generate style guide"
+
 msgid "Anota el servidor y el puerto (Gmail: smtp.gmail.com y 587, STARTTLS)."
 msgstr "Note the server and the port (Gmail: smtp.gmail.com and 587, STARTTLS)."
+
+msgid ""
+"Antes de dejar seleccionable un modelo, lo probamos con la misma foto/video\n"
+"      real y verificamos su esquema de API contra la documentación oficial del\n"
+"      proveedor (no blogs de terceros). El criterio para entrar a la lista de\n"
+"      arriba es uno solo: tiene que poder VER la foto de referencia del producto\n"
+"      (no solo una descripción en texto) para clonar tu foto/video original y\n"
+"      cambiar únicamente el calzado."
+msgstr ""
+"Before making a model selectable, we test it with the same real photo/video\n"
+"      and check its API schema against the provider's official documentation\n"
+"      (not third-party blogs). There's only one criterion for making it onto the\n"
+"      list above: it has to be able to SEE the product's reference photo\n"
+"      (not just a text description) in order to clone your original photo/video and\n"
+"      change only the footwear."
 
 msgid "Anthropic (guiones y prompts)"
 msgstr "Anthropic (scripts and prompts)"
@@ -200,6 +303,9 @@ msgstr "Meta app removed from this project. The existing connection stays until 
 msgid "App de Meta registrada para este proyecto. Ahora sí: Conectar con Meta."
 msgstr "Meta app registered for this project. Now: Connect with Meta."
 
+msgid "Argentina"
+msgstr "Argentina"
+
 msgid "Atria (biblioteca de referentes: Ad Library de Meta)"
 msgstr "Atria (swipe file: Meta's Ad Library)"
 
@@ -209,17 +315,43 @@ msgstr "Let Creatv know"
 msgid "Avisar a Creatv para que lo termine a mano"
 msgstr "Let Creatv know to finish it by hand"
 
+msgid "Avisos por correo desactivados."
+msgstr "Email notifications turned off."
+
+msgid "Brasil"
+msgstr "Brazil"
+
 msgid "Busca videos por palabras clave y trae sus comentarios a un estudio de Nicho. Es una llave distinta del OAuth de publicación."
 msgstr "Searches videos by keyword and brings their comments into a Niche study. It's a different key from the publishing OAuth."
 
 msgid "Buscar mis activos"
 msgstr "Search my assets"
 
+#, python-format
+msgid ""
+"Cada idea que generes aquí pasa por estas %(n)s reglas antes de\n"
+"    convertirse en prompts — no se pueden saltar. Vienen de\n"
+"    <code>clientes/%(cliente)s/marca/root.json</code>, no de un texto generado por IA. Para\n"
+"    editarlas, edita el archivo directamente (o pídele a Claude Code que lo actualice) — no se\n"
+"    reescriben desde el dashboard, para que nunca se desalineen de la fuente de verdad."
+msgstr ""
+"Every idea you generate here goes through these %(n)s rules before\n"
+"    turning into prompts — they can't be skipped. They come from\n"
+"    <code>clientes/%(cliente)s/marca/root.json</code>, not from AI-generated text. To\n"
+"    edit them, edit the file directly (or ask Claude Code to update it) — they're not\n"
+"    rewritten from the dashboard, so they never drift from the source of truth."
+
 msgid "Cambia el idioma de las pantallas y de todo lo que se genera en tu proyecto."
 msgstr "Changes the language of the screens and of everything generated in your project."
 
 msgid "Cambia solo tu idioma. El del proyecto está en Generación."
 msgstr "Changes only your language. The project's is under Generation."
+
+msgid "Cambiar contraseña"
+msgstr "Change password"
+
+msgid "Cambiar correo"
+msgstr "Change email"
 
 msgid "Cambiar de forma: que Creatv lo gestione"
 msgstr "Change form: let Creatv manage it"
@@ -246,6 +378,9 @@ msgstr "Organic channels"
 msgid "Cancelar solicitud"
 msgstr "Cancel request"
 
+msgid "Cantidad"
+msgstr "Count"
+
 msgid "Carga tu catálogo"
 msgstr "Upload your catalog"
 
@@ -267,6 +402,9 @@ msgstr "Close the menu"
 msgid "Cerrar sesión"
 msgstr "Log out"
 
+msgid "Chile"
+msgstr "Chile"
+
 msgid "Cinco minutos. No creas nada en Meta."
 msgstr "Five minutes. You don't create anything on Meta."
 
@@ -275,6 +413,12 @@ msgstr "App secret"
 
 msgid "Cloudflare R2 (almacenamiento)"
 msgstr "Cloudflare R2 (storage)"
+
+msgid "Colombia"
+msgstr "Colombia"
+
+msgid "Commits"
+msgstr "Commits"
 
 msgid "Comparte tu cuenta publicitaria y tu Página con Creatv desde tu Business Suite, como con cualquier agencia. Creatv solo ve lo que compartas y lo puedes revocar cuando quieras."
 msgstr "Share your ad account and your Page with Creatv from your Business Suite, just like with any agency. Creatv only sees what you share and you can revoke it whenever you want."
@@ -372,6 +516,10 @@ msgid "Configuración"
 msgstr "Settings"
 
 #, python-format
+msgid "Confirma tu correo %(correo)s"
+msgstr "Confirm your email %(correo)s"
+
+#, python-format
 msgid "Confirma tu correo en %(plataforma)s"
 msgstr "Confirm your email at %(plataforma)s"
 
@@ -380,6 +528,9 @@ msgstr "Confirm my email"
 
 msgid "Contraseña"
 msgstr "Password"
+
+msgid "Contraseña actual"
+msgstr "Current password"
 
 msgid "Contraseña cambiada. Entra con la nueva."
 msgstr "Password changed. Log in with the new one."
@@ -437,8 +588,14 @@ msgstr "Email"
 msgid "Correo confirmado. ¡Gracias!"
 msgstr "Email confirmed. Thanks!"
 
+msgid "Correo de avisos"
+msgstr "Notification email"
+
 msgid "Correo de la plataforma (cuentas y avisos)"
 msgstr "Platform email (accounts and notices)"
+
+msgid "Correo guardado."
+msgstr "Email saved."
 
 #, python-format
 msgid "Correo guardado. Si %(correo)s es correcto, te llega el enlace de confirmación en unos minutos."
@@ -451,6 +608,12 @@ msgstr "Email saved: %(correo)s. The server doesn't have email configured, so we
 #, python-format
 msgid "Correo guardado: %(correo)s. Espera un momento antes de pedir el enlace de confirmación."
 msgstr "Email saved: %(correo)s. Wait a moment before requesting the confirmation link."
+
+msgid "Correo nuevo"
+msgstr "New email"
+
+msgid "Costo"
+msgstr "Cost"
 
 msgid "Crea la app (tipo <strong>Negocio</strong>) y elige tu <strong>portafolio comercial</strong>."
 msgstr "Create the app (type <strong>Business</strong>) and choose your <strong>business portfolio</strong>."
@@ -488,6 +651,9 @@ msgstr "Creatv hasn't activated this option yet; try again later."
 msgid "Cuando las variables estén, aquí aparece el botón <em>Conectar con MercadoLibre</em>."
 msgstr "Once the variables are set, the <em>Connect with MercadoLibre</em> button shows up here."
 
+msgid "Cuenta"
+msgstr "Account"
+
 msgid "Cuenta publicitaria"
 msgstr "Ad account"
 
@@ -497,6 +663,18 @@ msgstr "Account and notices"
 msgid "Cuándo"
 msgstr "When"
 
+msgid ""
+"Cuánto costó de verdad lo que este proyecto generó este mes: cada video, imagen, guion,\n"
+"      final o texto con IA deja su cobro aquí apenas el proveedor lo cobra. Los botones de la app\n"
+"      muestran el precio aproximado antes de gastar; esta lista es el precio real después."
+msgstr ""
+"What this project actually generated this month really cost: every video, image, script,\n"
+"      final cut or AI text leaves its charge here as soon as the provider charges it. The app's buttons\n"
+"      show the approximate price before spending; this list is the real price afterward."
+
+msgid "Código entregado"
+msgstr "Code delivered"
+
 msgid "Cómo activarlo"
 msgstr "How to activate it"
 
@@ -505,6 +683,20 @@ msgstr "How to get it"
 
 msgid "Cómo instalar el Pixel según tu plataforma"
 msgstr "How to install the Pixel depending on your platform"
+
+msgid "Cómo salen marcados el sonido de la escena y la música al abrir Crear. En cada generación se puede cambiar. Los lotes de los sprints usan esto tal cual."
+msgstr "How the scene sound and music come pre-selected when you open Create. It can be changed per generation. Sprint batches use this as-is."
+
+msgid ""
+"Cómo se mide: el tiempo entre el primer y el último commit de cada día. Es un\n"
+"    <strong>piso, no un estimado</strong> — no cuenta el trabajo previo al primer commit\n"
+"    del día, las sesiones que terminaron sin commit, ni los días de un solo commit (que\n"
+"    aparecen en 0 h). El tiempo real invertido es mayor que esta cifra."
+msgstr ""
+"How it's measured: the time between the first and last commit of each day. It's a\n"
+"    <strong>floor, not an estimate</strong> — it doesn't count work before the day's first commit,\n"
+"    sessions that ended with no commit, or single-commit days (which\n"
+"    show up as 0 h). The real time invested is higher than this figure."
 
 msgid "Cómo se paga:"
 msgstr "How it's paid:"
@@ -524,11 +716,17 @@ msgstr "Download it, edit from the result, or launch it as an ad."
 msgid "Descargar CSV del mes"
 msgstr "Download this month's CSV"
 
+msgid "Descartado"
+msgstr "Discarded"
+
 msgid "Desconectar"
 msgstr "Disconnect"
 
 msgid "Descripción «creatv», usuario un administrador, permisos <em>Lectura</em>. Pulsa <em>Generar clave de API</em>."
 msgstr "Description “creatv”, user an admin, permissions <em>Read</em>. Press <em>Generate API key</em>."
+
+msgid "Desde"
+msgstr "From"
 
 msgid "Detalle"
 msgstr "Detail"
@@ -542,6 +740,9 @@ msgstr "Store domain"
 msgid "Dominio de la tienda (Shopify)"
 msgstr "Store domain (Shopify)"
 
+msgid "Duración que sale marcada en Crear"
+msgstr "Duration that comes pre-selected in Create"
+
 msgid ""
 "Dónde sale la ganadora de un experimento (o cualquier final que elijas) como\n"
 "  contenido orgánico, sin pauta: Instagram Reels, Facebook (Página), TikTok y\n"
@@ -552,6 +753,9 @@ msgstr ""
 "  organic content, with no ad spend: Instagram Reels, Facebook (Page), TikTok and\n"
 "  YouTube Shorts. Only connected channels are offered; publishing always\n"
 "  asks for your click (or the engine's proposal, with the text in view)."
+
+msgid "Ej: paleta cálida, tonos tierra, iluminación de atardecer, ambientes rústicos..."
+msgstr "E.g.: warm palette, earth tones, sunset lighting, rustic settings..."
 
 msgid "El Pixel está disparando."
 msgstr "The Pixel is firing."
@@ -568,6 +772,9 @@ msgstr "Access doesn't expire."
 msgid "El correo no es válido."
 msgstr "The email isn't valid."
 
+msgid "El correo nuevo queda sin confirmar hasta que abras el enlace que le mandamos."
+msgstr "The new email stays unconfirmed until you open the link we sent you."
+
 #, python-format
 msgid "El enlace vence en %(vence)s y sirve una sola vez. Si no pediste cambiar tu contraseña, ignora este correo: tu cuenta sigue igual."
 msgstr "The link expires in %(vence)s and works only once. If you didn't ask to change your password, ignore this email: your account stays the same."
@@ -576,11 +783,24 @@ msgstr "The link expires in %(vence)s and works only once. If you didn't ask to 
 msgid "El enlace vence en %(vence)s. Si no creaste una cuenta en %(plataforma)s, ignora este correo."
 msgstr "The link expires in %(vence)s. If you didn't create an account at %(plataforma)s, ignore this email."
 
+msgid ""
+"El logo tal como debe verse en el producto. En cada generación de FlowPlus se adjunta como referencia\n"
+"  <code>@Logo N</code> con la instrucción de reproducirlo exacto — así el modelo no inventa marcas ni letras.\n"
+"  Sube 1 o 2 (PNG con fondo limpio, o una foto nítida del logo en el producto)."
+msgstr ""
+"The logo exactly as it should look on the product. It's attached to every FlowPlus generation as reference\n"
+"  <code>@Logo N</code> with the instruction to reproduce it exactly — that way the model doesn't invent brands or letters.\n"
+"  Upload 1 or 2 (PNG with a clean background, or a sharp photo of the logo on the product)."
+
 msgid "El servidor no tiene correo configurado; avisa al administrador para que confirme tu cuenta."
 msgstr "The server doesn't have email configured; let the administrator know so they can confirm your account."
 
 msgid "El usuario debe tener entre 3 y 40 caracteres: solo minúsculas, números, puntos, guiones y guiones bajos."
 msgstr "The username must be between 3 and 40 characters: only lowercase letters, numbers, dots, hyphens and underscores."
+
+#, python-format
+msgid "El video %(nombre)s se subió, pero no pude extraer su fotograma de referencia (no se puede usar hasta resolver esto): %(error)s"
+msgstr "The video %(nombre)s was uploaded, but I couldn't extract its reference frame (it can't be used until this is fixed): %(error)s"
 
 msgid "Elegir"
 msgstr "Choose"
@@ -602,6 +822,10 @@ msgstr "Choose one of the two ways to connect."
 
 msgid "Eliminación de datos"
 msgstr "Data deletion"
+
+#, python-format
+msgid "Eliminado: %(nombre)s"
+msgstr "Deleted: %(nombre)s"
 
 msgid "Empieza hoy"
 msgstr "Get started today"
@@ -664,6 +888,15 @@ msgstr "In the Google Cloud project where “YouTube Data API v3” is already e
 
 msgid "En error"
 msgstr "Failed"
+
+msgid "En uso"
+msgstr "In use"
+
+msgid "En uso — recomendado"
+msgstr "In use — recommended"
+
+msgid "En uso — recomendado por defecto"
+msgstr "In use — recommended by default"
 
 msgid "En «Billing» agrega una tarjeta o saldo prepago."
 msgstr "In “Billing” add a card or prepaid balance."
@@ -754,6 +987,9 @@ msgstr "Enter a valid email."
 msgid "Escribe un correo válido: ahí te llega el enlace para confirmar la cuenta y recuperar la contraseña."
 msgstr "Enter a valid email: that's where the link to confirm your account and recover your password arrives."
 
+msgid "Ese correo no parece válido."
+msgstr "That email doesn't look valid."
+
 msgid "Ese correo ya está en uso."
 msgstr "That email is already in use."
 
@@ -775,11 +1011,20 @@ msgstr "That store type doesn't connect from here (Shopify or WooCommerce; Merca
 msgid "Ese ya es tu correo y está confirmado."
 msgstr "That's already your email and it's confirmed."
 
+msgid "España"
+msgstr "Spain"
+
+msgid "Español (los tokens Image N y el cierre de sonido van en inglés)"
+msgstr "Spanish (the Image N tokens and the sound closing line are in English)"
+
 msgid "Espera un momento antes de pedir otro correo de verificación."
 msgstr "Wait a moment before requesting another verification email."
 
 msgid "Estado"
 msgstr "Status"
+
+msgid "Estados Unidos"
+msgstr "United States"
 
 msgid "Este mes"
 msgstr "This month"
@@ -799,6 +1044,9 @@ msgstr "This project isn't in agency mode."
 
 msgid "Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada."
 msgstr "This project uses Creatv's agency connection: you don't have to register an app or connect anything."
+
+msgid "Eventos en bitácora"
+msgstr "Log events"
 
 msgid "Experimentos"
 msgstr "Experiments"
@@ -834,11 +1082,23 @@ msgstr "Missing token_youtube.json (authorize from your Mac with auth/auth_youtu
 msgid "Faltan:"
 msgstr "Missing:"
 
+msgid "Fecha"
+msgstr "Date"
+
 msgid "Finales"
 msgstr "Final cuts"
 
+msgid "Flux Kontext Pro"
+msgstr "Flux Kontext Pro"
+
+msgid "Formato no soportado. Usa jpg, jpeg, png, webp, mp4, mov o webm."
+msgstr "Unsupported format. Use jpg, jpeg, png, webp, mp4, mov or webm."
+
 msgid "Fotos del producto, tus personajes, tus espacios y el logo."
 msgstr "Photos of the product, your characters, your spaces and the logo."
+
+msgid "Fuerza del estilo (0-1)"
+msgstr "Style strength (0-1)"
 
 msgid "Gasto"
 msgstr "Spend"
@@ -846,11 +1106,26 @@ msgstr "Spend"
 msgid "Gasto del mes (US$)"
 msgstr "Spend this month (US$)"
 
+msgid "Gasto por modelo"
+msgstr "Spend by model"
+
+msgid "Gasto real en APIs de IA"
+msgstr "Real spend on AI APIs"
+
+msgid "Gemini Omni Flash Edit"
+msgstr "Gemini Omni Flash Edit"
+
 msgid "Genera la imagen candidata y el video de cada pieza."
 msgstr "Generates the candidate image and the video for each piece."
 
 msgid "Genera y publica"
 msgstr "Generate and publish"
+
+msgid "Generaciones"
+msgstr "Generations"
+
+msgid "Generaciones completadas y cobradas"
+msgstr "Completed and charged generations"
 
 msgid "Generación"
 msgstr "Generation"
@@ -863,6 +1138,9 @@ msgstr "Generation (US$)"
 
 msgid "Generación del mes (US$): lo pagado a los proveedores de IA este mes"
 msgstr "Generation this month (US$): what was paid to AI providers this month"
+
+msgid "Generación este mes"
+msgstr "Generation this month"
 
 msgid "Generación por mes (US$)"
 msgstr "Generation by month (US$)"
@@ -900,14 +1178,47 @@ msgstr "Save Meta app"
 msgid "Guardar contraseña"
 msgstr "Save password"
 
+msgid "Guardar correo"
+msgstr "Save email"
+
+msgid "Guardar identidad de marca"
+msgstr "Save brand identity"
+
 msgid "Guardar idioma"
 msgstr "Save language"
+
+msgid "Guardar modelos de FlowPlus"
+msgstr "Save FlowPlus models"
+
+msgid "Guardar modelos por defecto"
+msgstr "Save default models"
+
+msgid "Guardar nombre"
+msgstr "Save name"
+
+msgid "Guardar sonido al crear"
+msgstr "Save sound when creating"
 
 msgid "Guiones"
 msgstr "Scripts"
 
 msgid "Guiones a clips (Flow Plus)"
 msgstr "Scripts to clips (Flow Plus)"
+
+msgid "Guía de estilo (editable a mano, se usa en cada generación de prompts)"
+msgstr "Style guide (hand-editable, used in every prompt generation)"
+
+msgid "Hasta"
+msgstr "To"
+
+msgid "Hasta 10 imágenes y 5 videos de referencia (1-15 s), 720p, hasta 30 s (con videos de referencia, sus segundos más los del resultado no pasan de 30). El único que usa videos tal cual. Sonido de la escena incluido."
+msgstr "Up to 10 images and 5 reference videos (1-15 s), 720p, up to 30 s (with reference videos, their seconds plus the result's don't exceed 30). The only one that uses videos as-is. Scene sound included."
+
+msgid "Hasta 7 imágenes. De un video usa solo un fotograma. Movimiento y realismo de personas muy buenos. Hasta 15 s. El sonido de la escena cuesta 0,028 USD/s más (ya incluido en el estimado)."
+msgstr "Up to 7 images. From a video it only uses one frame. Very good movement and realism for people. Up to 15 s. The scene sound costs USD 0.028/s more (already included in the estimate)."
+
+msgid "Higgsfield"
+msgstr "Higgsfield"
 
 msgid "Higgsfield (video e imagen)"
 msgstr "Higgsfield (video and image)"
@@ -935,6 +1246,15 @@ msgstr ""
 "\n"
 "To finish creating your account at %(plataforma)s confirm this email is yours by opening this link:"
 
+msgid "Horas"
+msgstr "Hours"
+
+msgid "Horas de desarrollo medidas"
+msgstr "Measured development hours"
+
+msgid "Horas medidas"
+msgstr "Measured hours"
+
 msgid "ID de Creatv"
 msgstr "Creatv's ID"
 
@@ -950,11 +1270,17 @@ msgstr "Your ad account's ID (optional, starts with act_)"
 msgid "ID de tu portafolio comercial"
 msgstr "Your business portfolio's ID"
 
+msgid "Identidad de marca"
+msgstr "Brand identity"
+
 msgid "Identificador de configuración de inicio de sesión"
 msgstr "Login configuration id"
 
 msgid "Identificador de la app"
 msgstr "App id"
+
+msgid "Idioma del prompt que arma la IA"
+msgstr "Language of the prompt the AI puts together"
 
 msgid "Idioma del proyecto"
 msgstr "Project language"
@@ -971,11 +1297,20 @@ msgstr "Same as YouTube, <strong>on your Mac</strong>: <code>venv/bin/python aut
 msgid "Imagen"
 msgstr "Image"
 
+msgid "Imagen 2k a partir de tus referencias y el texto, en el formato que elijas. Realismo fotográfico."
+msgstr "2k image from your references and the text, in the format you choose. Photographic realism."
+
 msgid "Imágenes"
 msgstr "Images"
 
 msgid "Incluido en el plan mensual de Atria (1 200 llamadas/mes); no cobra por resultado. El contador de uso está en Referentes (admin)."
 msgstr "Included in Atria's monthly plan (1 200 calls/month); it doesn't charge per result. The usage counter is in Swipe file (admin)."
+
+msgid "Informe de operación y desarrollo"
+msgstr "Operations and development report"
+
+msgid "Inglés completo (para la prueba A/B)"
+msgstr "Full English (for the A/B test)"
 
 msgid "Inicia sesión con la cuenta de la tienda y autoriza la app: no se pega ningún token."
 msgstr "Log in with the store's account and authorize the app: no token gets pasted."
@@ -1001,8 +1336,23 @@ msgstr "Log in"
 msgid "Inicias sesión con la cuenta de la tienda y autorizas la app: no se pega ningún token."
 msgstr "You log in with the store's account and authorize the app: no token gets pasted."
 
+msgid "Integraciones con modelos de IA"
+msgstr "AI model integrations"
+
 msgid "Interno (Creatv)"
 msgstr "Internal (Creatv)"
+
+msgid "Jornadas de trabajo"
+msgstr "Work days"
+
+msgid "Kling O1"
+msgstr "Kling O1"
+
+msgid "Kling O3 Pro"
+msgstr "Kling O3 Pro"
+
+msgid "Kling Omni O3 Pro Video Edit"
+msgstr "Kling Omni O3 Pro Video Edit"
 
 msgid "La app de Meta necesita el permiso <code>instagram_content_publish</code> aprobado en <strong>App Review</strong>; sin él Meta rechaza la publicación."
 msgstr "The Meta app needs the <code>instagram_content_publish</code> permission approved in <strong>App Review</strong>; without it Meta rejects the post."
@@ -1034,6 +1384,9 @@ msgstr "The ad account doesn't have any Pixel."
 
 msgid "La pauta se cobra en tu cuenta publicitaria; la API no cuesta."
 msgstr "Ad spend is charged to your ad account; the API itself is free."
+
+msgid "Las demás sesiones abiertas con la contraseña anterior se cierran; esta sigue."
+msgstr "Other sessions open with the previous password are closed; this one stays open."
 
 msgid "Las dos contraseñas no coinciden."
 msgstr "The two passwords don't match."
@@ -1067,14 +1420,32 @@ msgstr "Invalid or revoked key, or missing the 'Data Out' scope."
 msgid "Llave y dominio de tienda son requeridos."
 msgstr "API key and store domain are required."
 
+msgid "Llaves y conexiones del proyecto, tu cuenta, tiendas, canales y gasto."
+msgstr "Keys and connections for the project, your account, stores, channels and spend."
+
 msgid "Lo pagado a los proveedores de IA este mes, todos los proyectos"
 msgstr "What was paid to AI providers this month, all projects"
 
 msgid "Lo que escribe la IA y los anuncios de este proyecto salen en este idioma."
 msgstr "What the AI writes and this project's ads come out in this language."
 
+msgid "Lo que le falta a esta matriz"
+msgstr "What this matrix is missing"
+
+msgid "Lo que tomó construirlo"
+msgstr "What it took to build this"
+
+msgid "Logos oficiales"
+msgstr "Official logos"
+
 msgid "Luego, en «Conectar tu tienda» › MercadoLibre, pulsa «Conectar con MercadoLibre»."
 msgstr "Then, in “Connect your store” › MercadoLibre, press “Connect with MercadoLibre”."
+
+msgid "Luma Ray 3.2 Video Edit"
+msgstr "Luma Ray 3.2 Video Edit"
+
+msgid "Luma Ray3 Modify"
+msgstr "Luma Ray3 Modify"
 
 msgid "Manda el enlace para confirmar el correo de cada cuenta y el de recuperar la contraseña; también los avisos (propuestas pendientes, ganadores, rechazos de Meta, lanzamientos fallidos)."
 msgstr "Sends the link to confirm each account's email and the password-recovery one; also the notices (pending proposals, winners, Meta rejections, failed launches)."
@@ -1093,6 +1464,9 @@ msgstr "Check the read permissions and “offline_access” (to renew the token 
 
 msgid "Marcar verificado"
 msgstr "Mark verified"
+
+msgid "Mejorar la calidad al final (+$0.04, solo aplica a fotos)"
+msgstr "Improve quality at the end (+$0.04, photos only)"
 
 msgid "Menú"
 msgstr "Menu"
@@ -1135,11 +1509,57 @@ msgstr "Meta no longer accepts this project's connection"
 msgid "Meta ya no acepta la conexión de la agencia"
 msgstr "Meta no longer accepts the agency's connection"
 
+msgid "Modelo"
+msgstr "Model"
+
 msgid "Modelo de atribución"
 msgstr "Attribution model"
 
+msgid "Modelo de foto inválido."
+msgstr "Invalid photo model."
+
+msgid "Modelo de video inválido."
+msgstr "Invalid video model."
+
+msgid "Modelo inválido."
+msgstr "Invalid model."
+
+msgid "Modelo para FOTO"
+msgstr "Model for PHOTO"
+
+msgid "Modelo para IMAGEN"
+msgstr "Model for IMAGE"
+
+msgid "Modelo para VIDEO"
+msgstr "Model for VIDEO"
+
+msgid ""
+"Modelo que viene marcado en Crear › Cambiar producto cada vez que subes una\n"
+"  foto o un video. Ahí mismo puedes cambiarlo por generación."
+msgstr ""
+"The model that comes pre-selected in Create › Change product every time you upload a\n"
+"  photo or a video. You can change it per generation right there."
+
 msgid "Modelo:"
 msgstr "Model:"
+
+msgid "Modelos de imagen (foto)"
+msgstr "Image models (photo)"
+
+msgid "Modelos de video"
+msgstr "Video models"
+
+msgid "Modelos por defecto actualizados."
+msgstr "Default models updated."
+
+msgid "Modelos por defecto de FlowPlus actualizados."
+msgstr "Default FlowPlus models updated."
+
+msgid "Modelos por defecto — Cambiar producto"
+msgstr "Default models — Change product"
+
+msgid "Modelos por defecto — FlowPlus"
+msgstr "Default models — FlowPlus"
 
 msgid "Moneda"
 msgstr "Currency"
@@ -1147,11 +1567,29 @@ msgstr "Currency"
 msgid "Monto"
 msgstr "Amount"
 
+msgid "Más barato que 2.5"
+msgstr "Cheaper than 2.5"
+
+msgid "México"
+msgstr "Mexico"
+
 msgid "Mínimo 8 caracteres. Al guardarla se cierran las sesiones abiertas con la anterior."
 msgstr "At least 8 characters. Saving it closes the sessions open with the previous one."
 
 msgid "Música"
 msgstr "Music"
+
+msgid "Música al crear"
+msgstr "Music when creating"
+
+msgid "Nano Banana"
+msgstr "Nano Banana"
+
+msgid "Nano Banana (vía fal)"
+msgstr "Nano Banana (via fal)"
+
+msgid "Nano Banana Pro Ultra (4k)"
+msgstr "Nano Banana Pro Ultra (4k)"
 
 msgid "Nicho"
 msgstr "Niche"
@@ -1159,12 +1597,30 @@ msgstr "Niche"
 msgid "Ninguna tienda conectada todavía."
 msgstr "No store connected yet."
 
+msgid "No aplica"
+msgstr "Not applicable"
+
+msgid "No aplica — recibe el resultado ya generado"
+msgstr "Not applicable — it receives the already-generated result"
+
+msgid "No elegiste ningún archivo."
+msgstr "You didn't pick a file."
+
+msgid "No evaluado a fondo"
+msgstr "Not thoroughly evaluated"
+
 #, python-format
 msgid "No existe el usuario '%(usuario)s'."
 msgstr "User '%(usuario)s' doesn't exist."
 
 msgid "No había ninguna solicitud pendiente."
 msgstr "There was no pending request."
+
+msgid "No hay una cuenta en esta sesión."
+msgstr "There's no account in this session."
+
+msgid "No publicado"
+msgstr "Not published"
 
 msgid "No pude calcular el panel esta vez. El detalle quedó en el log del servidor; vuelve a cargar en un momento."
 msgstr "I couldn't calculate the panel this time. The detail was logged on the server; reload in a moment."
@@ -1209,11 +1665,41 @@ msgstr "You don't have to get any key: Creatv connects its Business Manager once
 msgid "No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta»."
 msgstr "It doesn't go in the .env: each project registers its own Meta app (id, secret and Facebook Login configuration) in the “Connect your Meta account” block below, and presses “Connect with Meta” right there."
 
+msgid "No verificado"
+msgstr "Not verified"
+
+msgid "No — es generativo, no editor"
+msgstr "No — it's generative, not an editor"
+
+msgid "No — solo recibe 1 imagen de entrada"
+msgstr "No — it only accepts 1 input image"
+
+msgid "No — solo texto"
+msgstr "No — text only"
+
+msgid "No — solo texto (misma familia que Gemini Omni Flash Edit)"
+msgstr "No — text only (same family as Gemini Omni Flash Edit)"
+
 msgid "Nombre de tu empresa o marca"
 msgstr "Your company or brand name"
 
+msgid "Nombre del proyecto"
+msgstr "Project name"
+
+msgid "Nombre del proyecto actualizado."
+msgstr "Project name updated."
+
+msgid "Nombre visible del proyecto"
+msgstr "Project's visible name"
+
 msgid "Nota (opcional)"
 msgstr "Note (optional)"
+
+msgid "Nota de transparencia:"
+msgstr "Transparency note:"
+
+msgid "Nueva (mínimo 8 caracteres)"
+msgstr "New (minimum 8 characters)"
 
 msgid "Nueva contraseña"
 msgstr "New password"
@@ -1273,6 +1759,9 @@ msgstr "Meta ad spend"
 msgid "Pauta en Meta este mes, en la moneda de la cuenta publicitaria"
 msgstr "Meta ad spend this month, in the ad account's currency"
 
+msgid "Pauta este mes"
+msgstr "Ad spend this month"
+
 msgid "Pedir otro enlace"
 msgstr "Request another link"
 
@@ -1284,6 +1773,12 @@ msgstr "Paste the five variables in the server's .env and restart."
 
 msgid "Pega los tres datos aquí, guarda y pulsa «Conectar con Meta»."
 msgstr "Paste the three values here, save and press “Connect with Meta”."
+
+msgid "Período de desarrollo"
+msgstr "Development period"
+
+msgid "Perú"
+msgstr "Peru"
 
 msgid "Piezas"
 msgstr "Pieces"
@@ -1312,8 +1807,14 @@ msgstr "Privacy policy"
 msgid "Pon REDDIT_USER_AGENT con la forma «creatv-machine/1.0 (by u/tu_usuario)» y reinicia los dos servicios."
 msgstr "Set REDDIT_USER_AGENT to the form “creatv-machine/1.0 (by u/your_username)” and restart both services."
 
+msgid "Poner correo"
+msgstr "Add email"
+
 msgid "Ponle un nombre a la empresa."
 msgstr "Give the company a name."
+
+msgid "Ponlo para poder confirmarla y recuperar la contraseña si la olvidas."
+msgstr "Add one so you can confirm it and recover your password if you forget it."
 
 msgid "Por créditos: ~1.5 por imagen y ~8 por video; se compran por paquetes."
 msgstr "By credits: ~1.5 per image and ~8 per video; bought in packages."
@@ -1323,6 +1824,12 @@ msgstr "To review"
 
 msgid "Por tipo"
 msgstr "By type"
+
+msgid "Precio"
+msgstr "Price"
+
+msgid "Preferencias de sonido guardadas."
+msgstr "Sound preferences saved."
 
 msgid "Primero Facebook (arriba): Instagram publica a través de la Página."
 msgstr "First Facebook (above): Instagram publishes through the Page."
@@ -1370,6 +1877,9 @@ msgstr "Projects"
 msgid "Prueba con «Reenviar» en Configuración › Cuenta: debe llegar el correo de confirmación. Abajo, en «Correo de avisos», escribe a qué dirección llegan los avisos de este proyecto."
 msgstr "Test it with “Resend” in Settings › Account: the confirmation email should arrive. Below, in “Notice email”, write which address gets this project's notices."
 
+msgid "Publicación automática"
+msgstr "Automatic publishing"
+
 msgid "Publicados"
 msgstr "Published"
 
@@ -1412,8 +1922,17 @@ msgstr "Let Creatv manage it"
 msgid "Que Creatv lo gestione: sigue los pasos de la tarjeta de Meta."
 msgstr "Let Creatv manage it: follow the steps on the Meta card."
 
+msgid "Quitar"
+msgstr "Remove"
+
 msgid "Quitar app"
 msgstr "Remove app"
+
+msgid "Qué modelo sale marcado al abrir FlowPlus. En cada generación se puede cambiar; esto solo fija el punto de partida. Todos corren por WaveSpeed."
+msgstr "Which model comes pre-selected when you open FlowPlus. It can be changed per generation; this only sets the starting point. All of them run through WaveSpeed."
+
+msgid "Qwen Image Edit Plus"
+msgstr "Qwen Image Edit Plus"
 
 msgid "Recarga esta página. TikTok no tiene título aparte: el texto de la publicación es el caption completo (sin enlaces; se agrega «Link en bio»)."
 msgstr "Reload this page. TikTok has no separate title: the post's text is the full caption (no links; “Link in bio” gets added)."
@@ -1432,6 +1951,24 @@ msgstr "Recover password"
 
 msgid "Reddit (Nicho: comentarios reales)"
 msgstr "Reddit (Niche: real comments)"
+
+msgid "Redundante"
+msgstr "Redundant"
+
+msgid "Reenviar"
+msgstr "Resend"
+
+msgid "Reenviar el correo"
+msgstr "Resend the email"
+
+msgid ""
+"Referencias visuales (imágenes o videos) que definen el look de este proyecto — paleta,\n"
+"  tono, iluminación, ambientación. La guía de estilo se aplica automáticamente cada vez\n"
+"  que se generan prompts nuevos, para que el contenido no pierda identidad."
+msgstr ""
+"Visual references (images or videos) that define this project's look — palette,\n"
+"  tone, lighting, setting. The style guide is applied automatically every time\n"
+"  new prompts are generated, so the content never loses its identity."
 
 msgid "Referencias, un texto y listo: varias versiones de un mismo concepto — solo producto, con persona, unboxing — con el modelo que elijas. Pega un link de TikTok o TrendTrack y recréalo con tu marca."
 msgstr "References, a text and that's it: several versions of the same concept — product only, with a person, unboxing — with the model you choose. Paste a TikTok or TrendTrack link and recreate it with your brand."
@@ -1471,6 +2008,18 @@ msgstr "System health"
 msgid "Se crea una sola vez en <a href=\"https://developers.facebook.com/apps/creation/\" target=\"_blank\" rel=\"noopener\">developers.facebook.com</a>."
 msgstr "It's created once, at <a href=\"https://developers.facebook.com/apps/creation/\" target=\"_blank\" rel=\"noopener\">developers.facebook.com</a>."
 
+#, python-format
+msgid "Se guardó localmente pero falló la subida a R2: %(error)s"
+msgstr "Saved locally but the upload to R2 failed: %(error)s"
+
+#, python-format
+msgid "Se guardó localmente pero falló la subida del video a R2: %(error)s"
+msgstr "Saved locally but the video upload to R2 failed: %(error)s"
+
+#, python-format
+msgid "Se muestran los últimos %(n)s cobros"
+msgstr "Showing the last %(n)s charges"
+
 msgid "Se paga por resultado (Amazon ≈ US$ 3 por 1 000 reseñas; TikTok ≈ US$ 0,50 por 1 000 comentarios) más cómputo; el estimado se muestra antes de cada clic."
 msgstr "Pay per result (Amazon ≈ US$ 3 per 1 000 reviews; TikTok ≈ US$ 0,50 per 1 000 comments) plus compute; the estimate is shown before every click."
 
@@ -1488,6 +2037,25 @@ msgstr "Lost track of this generation."
 
 msgid "Se perdió la conexión con el servidor."
 msgstr "Lost the connection to the server."
+
+msgid "Seedance 2.5"
+msgstr "Seedance 2.5"
+
+msgid "Seedance 2.5 Video Edit"
+msgstr "Seedance 2.5 Video Edit"
+
+msgid "Seedream V5.0 Pro"
+msgstr "Seedream V5.0 Pro"
+
+msgid "Seedream V5.0 Pro Edit (2k)"
+msgstr "Seedream V5.0 Pro Edit (2k)"
+
+msgid ""
+"Segunda pasada con Bria: sube la resolución <strong>sin regenerar</strong> la\n"
+"    imagen, así que no cambia la cara, la pose ni el fondo."
+msgstr ""
+"Second pass with Bria: it raises the resolution <strong>without regenerating</strong> the\n"
+"    image, so it doesn't change the face, the pose or the background."
 
 msgid "Sesión cerrada."
 msgstr "Session closed."
@@ -1550,6 +2118,9 @@ msgstr "Without this nobody can confirm their email or recover their password on
 msgid "Sin esto no aparece el botón «Conectar con MercadoLibre» en Tienda."
 msgstr "Without this the “Connect with MercadoLibre” button doesn't show up in Store."
 
+msgid "Sin referencias de marca todavía."
+msgstr "No brand references yet."
+
 msgid "Sin verificar ahora (Meta no respondió)."
 msgstr "Not verified right now (Meta didn't respond)."
 
@@ -1568,6 +2139,9 @@ msgstr "Syncing…"
 msgid "Sincronizar"
 msgstr "Sync"
 
+msgid "Sistema de marca real"
+msgstr "Real brand system"
+
 msgid "Solicitud cancelada."
 msgstr "Request canceled."
 
@@ -1575,11 +2149,39 @@ msgstr "Request canceled."
 msgid "Solicitud enviada el %(fecha)s: Creatv la está revisando y te avisa por correo."
 msgstr "Request sent on %(fecha)s: Creatv is reviewing it and will email you."
 
+#, python-format
+msgid ""
+"Solo cambia lo que se ve. El identificador interno sigue siendo\n"
+"    <code>%(cliente)s</code>: es la clave de las rutas de almacenamiento, del\n"
+"    historial ya generado y de los tokens de publicación, y renombrarlo los\n"
+"    rompería."
+msgstr ""
+"This only changes what's shown. The internal identifier stays\n"
+"    <code>%(cliente)s</code>: it's the key for the storage paths, the\n"
+"    history already generated and the publishing tokens, and renaming it\n"
+"    would break them."
+
 msgid "Solo producto"
 msgstr "Product only"
 
+msgid "Solo texto, sin imagen de referencia"
+msgstr "Text only, no reference image"
+
 msgid "Solo tú ves esta pantalla — cada proyecto tiene su propio usuario y contraseña, restringido a lo suyo."
 msgstr "Only you see this screen — each project has its own username and password, restricted to its own."
+
+msgid ""
+"Son los precios reales de los proveedores (WaveSpeed, fal.ai, Anthropic); la pauta se cobra en tu cuenta de Meta\n"
+"  y no entra en este total. Ningún gasto bloquea una acción: solo se informa."
+msgstr ""
+"These are the providers' real prices (WaveSpeed, fal.ai, Anthropic); ad spend is charged on your Meta account\n"
+"  and isn't part of this total. No spend blocks an action: it's only reported."
+
+msgid "Sonido al crear"
+msgstr "Sound when creating"
+
+msgid "Sonido de la escena (audio nativo del modelo; Kling cobra 0,028 USD/s más)"
+msgstr "Scene sound (the model's native audio; Kling charges USD 0.028/s more)"
 
 msgid "Sprints"
 msgstr "Sprints"
@@ -1592,6 +2194,43 @@ msgstr ""
 "Upload your products, characters and spaces once. Generate videos and images with the\n"
 "      best models on the market, swap the product in real photos and videos, and launch campaigns on\n"
 "      Meta from the same place — no agency, no editor, no waiting."
+
+#, python-format
+msgid "Subido: %(nombre)s"
+msgstr "Uploaded: %(nombre)s"
+
+msgid "Subir referencia de marca"
+msgstr "Upload brand reference"
+
+msgid "Sí"
+msgstr "Yes"
+
+msgid "Sí — 1 imagen"
+msgstr "Yes — 1 image"
+
+msgid "Sí — 1 imagen (start_image)"
+msgstr "Yes — 1 image (start_image)"
+
+msgid "Sí — editores reales, misma familia"
+msgstr "Yes — real editors, same family"
+
+msgid "Sí — hasta 10 imágenes de referencia"
+msgstr "Yes — up to 10 reference images"
+
+msgid "Sí — hasta 14 imágenes en una lista plana"
+msgstr "Yes — up to 14 images in a flat list"
+
+msgid "Sí — hasta 3 imágenes de referencia"
+msgstr "Yes — up to 3 reference images"
+
+msgid "Sí — hasta 4 imágenes citables (@Image1, @Image2…)"
+msgstr "Yes — up to 4 citable images (@Image1, @Image2…)"
+
+msgid "Sí — hasta 4 imágenes de referencia"
+msgstr "Yes — up to 4 reference images"
+
+msgid "Sí — hasta 9 imágenes y 3 videos de referencia"
+msgstr "Yes — up to 9 images and 3 reference videos"
 
 msgid "Tablero"
 msgstr "Dashboard"
@@ -1643,6 +2282,9 @@ msgstr "We haven't checked this account's Pixel yet. Checking it takes a few sec
 msgid "Todavía no hay cobros registrados."
 msgstr "No charges recorded yet."
 
+msgid "Todavía no hay cobros registrados. Aparecerán aquí cuando generes algo en Crear."
+msgstr "No charges recorded yet. They'll show up here once you generate something in Create."
+
 msgid "Todavía no hay proyectos."
 msgstr "No projects yet."
 
@@ -1656,6 +2298,13 @@ msgstr "Not yet possible: <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> 
 #, python-format
 msgid "Todavía no vemos activos compartidos desde el portafolio %(portafolio)s. A veces Meta tarda unos minutos: revisa que el ID de Creatv sea el de arriba y que hayas marcado la cuenta y la Página."
 msgstr "We still don't see assets shared from portfolio %(portafolio)s. Meta sometimes takes a few minutes: check that Creatv's ID is the one above and that you checked the account and the Page."
+
+msgid ""
+"Todo lo de abajo es verificable: sale de la bitácora, del estado en disco y del\n"
+"  historial de git de este repositorio. No hay nada estimado presentado como medido."
+msgstr ""
+"Everything below is verifiable: it comes from the log, the state on disk and the\n"
+"  git history of this repository. Nothing estimated is presented as measured."
 
 msgid ""
 "Todo lo que el proyecto necesita para generar piezas, guardarlas y pagar\n"
@@ -1675,6 +2324,9 @@ msgstr "All projects"
 
 msgid "Todos los proyectos."
 msgstr "All projects."
+
+msgid "Total"
+msgstr "Total"
 
 msgid "Total proyectos"
 msgstr "Total projects"
@@ -1718,6 +2370,9 @@ msgstr "Your email"
 msgid "Tu correo ya está confirmado."
 msgstr "Your email is already confirmed."
 
+msgid "Tu cuenta no tiene correo."
+msgstr "Your account has no email."
+
 msgid "Tu cuenta publicitaria"
 msgstr "Your ad account"
 
@@ -1742,11 +2397,20 @@ msgstr "Terms of service"
 msgid "URL de la tienda"
 msgstr "Store URL"
 
+msgid "USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)"
+msgstr "USD 0.02 only the first time per style and duration (after that it comes from the cache)"
+
 msgid "Un usuario con rol 'cliente' necesita un proyecto asignado."
 msgstr "A user with the 'cliente' role needs an assigned project."
 
 msgid "Una foto o video real de tu cliente, tu producto puesto encima. Misma pose, mismo fondo, mismo movimiento. Ideal para catálogos enteros en una tarde."
 msgstr "A real photo or video of your customer, your product placed on it. Same pose, same background, same motion. Great for whole catalogs in one afternoon."
+
+msgid "Usa SOLO la primera imagen como fotograma de arranque; el encuadre y el formato salen de esa imagen. Hasta 30 s. Calidad cinematográfica, el más caro. Sonido de la escena incluido."
+msgstr "Uses ONLY the first image as the starting frame; the framing and format come from that image. Up to 30 s. Cinematic quality, the most expensive. Scene sound included."
+
+msgid "Usado en otra parte"
+msgstr "Used elsewhere"
 
 msgid "Usuario"
 msgstr "Username"
@@ -1760,6 +2424,9 @@ msgstr "Incorrect username or password."
 
 msgid "Usuarios"
 msgstr "Users"
+
+msgid "Variable"
+msgstr "Variable"
 
 msgid "Vas a iniciar sesión en MercadoLibre y autorizar la app: traemos tus publicaciones activas y tus ventas. No se pega ningún token."
 msgstr "You're going to log in to MercadoLibre and authorize the app: we bring in your active listings and your sales. No token gets pasted."
@@ -1776,11 +2443,27 @@ msgstr "Attribution window"
 msgid "Ventana:"
 msgstr "Window:"
 
+msgid "Ver el detalle día por día →"
+msgstr "See the day-by-day detail →"
+
 msgid "Ver el detalle en Configuración › Gasto"
 msgstr "See the detail in Settings › Spend"
 
+msgid "Ver invariant_block / negative_prompt aplicados (texto crudo del prompt)"
+msgstr "View the applied invariant_block / negative_prompt (raw prompt text)"
+
+msgid "Ver por qué usamos estos modelos (comparación completa) →"
+msgstr "See why we use these models (full comparison) →"
+
 msgid "Verificado"
 msgstr "Verified"
+
+msgid "Video sin fotograma —"
+msgstr "Video without a frame —"
+
+#, python-format
+msgid "Video subido y fotograma de referencia extraído: %(nombre)s"
+msgstr "Video uploaded and reference frame extracted: %(nombre)s"
 
 msgid "Video · 10s"
 msgstr "Video · 10s"
@@ -1815,6 +2498,18 @@ msgstr "Reconnect Meta so the linked account's <code>ig_user_id</code> gets save
 msgid "Vuelves a conectar cada 60 días."
 msgstr "You reconnect every 60 days."
 
+msgid "Wan 2.7 Video Edit"
+msgstr "Wan 2.7 Video Edit"
+
+msgid "Wan 3.0"
+msgstr "Wan 3.0"
+
+msgid "Wan 3.0 (referencia, no edición)"
+msgstr "Wan 3.0 (reference, no editing)"
+
+msgid "Wan-2.2 Animate Replace"
+msgstr "Wan-2.2 Animate Replace"
+
 msgid "WooCommerce, paso a paso"
 msgstr "WooCommerce, step by step"
 
@@ -1842,11 +2537,26 @@ msgstr "I already have an account"
 msgid "YouTube Data API (Nicho: comentarios de videos)"
 msgstr "YouTube Data API (Niche: video comments)"
 
+msgid "abre el enlace que te mandamos."
+msgstr "open the link we sent you."
+
 msgid "ahora mismo"
 msgstr "right now"
 
 msgid "business.facebook.com › Facturación"
 msgstr "business.facebook.com › Billing"
+
+msgid "calmado"
+msgstr "Calm"
+
+msgid "con 3 personas en cuadro (2 con calzado puesto), edita bien a la más prominente pero deja a la segunda con su calzado original, incluso pidiéndole explícitamente contar y editar a todas. El mejor de los 3 disponibles hoy, no perfecto"
+msgstr "with 3 people in frame (2 wearing shoes), it edits the most prominent one well but leaves the second one with their original footwear, even when explicitly asked to count and edit everyone. The best of the 3 available today, not perfect"
+
+msgid "con la misma foto de 3 personas, no cambió el calzado de nadie"
+msgstr "with the same photo of 3 people, it didn't change anyone's footwear"
+
+msgid "con la misma foto de 3 personas, resultado peor que la versión directa: le puso calzado a la persona que iba DESCALZA y dejó a las dos con calzado puesto sin cambiar. No usar como alternativa cuando falle la versión directa"
+msgstr "with the same photo of 3 people, worse result than the direct version: it put shoes on the person who was BAREFOOT and left the two who already had shoes unchanged. Don't use it as a fallback when the direct version fails"
 
 msgid "conectada"
 msgstr "connected"
@@ -1860,8 +2570,17 @@ msgstr "configuration"
 msgid "configurada"
 msgstr "configured"
 
+msgid "confirmado"
+msgstr "confirmed"
+
+msgid "confirmado en uso real (2 sep 2026) como el único de los editores de video conectados que cambia el calzado de VARIAS personas en el mismo video, no solo de la más prominente. El más caro de los que sí editan de verdad, pero es el único que resuelve el caso multi-persona"
+msgstr "confirmed in real use (Sep 2, 2026) as the only one of the connected video editors that changes the footwear of SEVERAL people in the same video, not just the most prominent one. The most expensive of the ones that actually edit, but it's the only one that solves the multi-person case"
+
 msgid "console.cloud.google.com › APIs y servicios › Credenciales"
 msgstr "console.cloud.google.com › APIs & Services › Credentials"
+
+msgid "correo"
+msgstr "email"
 
 #, python-format
 msgid "del %(desde)s al %(hasta)s · todos los proyectos"
@@ -1870,14 +2589,41 @@ msgstr "from %(desde)s to %(hasta)s · all projects"
 msgid "desde"
 msgstr "since"
 
+msgid "desde $0.04 / seg"
+msgstr "from $0.04 / sec"
+
+msgid "desde $0.144 / seg (540p/5s)"
+msgstr "from $0.144 / sec (540p/5s)"
+
+msgid "dueño@tuproyecto.com"
+msgstr "owner@yourproject.com"
+
+msgid "editor real: preserva movimiento y escena, el más barato de los que sí editan de verdad"
+msgstr "real editor: preserves movement and scene, the cheapest of the ones that actually edit"
+
 msgid "ej. Happy Flops"
 msgstr "e.g. Happy Flops"
+
+msgid "el de mayor calidad: sale directo en 4k y acepta muchas más referencias del producto (13 contra las 2 de los de fal). Su documentación oficial NO dice nada sobre editar a varias personas, así que no se sabe si resuelve ese límite"
+msgstr "the highest quality one: it outputs directly in 4k and accepts many more product references (13 versus the 2 from the fal ones). Its official documentation says NOTHING about editing several people, so it's not known whether it solves that limit"
+
+msgid "el más barato de los editores reales, buena opción cuando el video tiene una sola persona en cuadro"
+msgstr "the cheapest of the real editors, a good option when the video has only one person in frame"
+
+msgid "el producto solo se le puede describir en texto, no mostrárselo"
+msgstr "the product can only be described to it in text, not shown to it"
 
 msgid "el worker es el proceso que genera, publica y sincroniza; si se atasca, todo espera"
 msgstr "the worker is the process that generates, publishes and syncs; if it gets stuck, everything waits"
 
+msgid "en 720p"
+msgstr "at 720p"
+
 msgid "en la cola"
 msgstr "in the queue"
+
+msgid "energetico"
+msgstr "Energetic"
 
 msgid "esperan una aprobación"
 msgstr "waiting for an approval"
@@ -1891,14 +2637,66 @@ msgstr "fal.ai (voice and music)"
 msgid "falta"
 msgstr "missing"
 
+msgid "genera desde cero, no edita"
+msgstr "generates from scratch, doesn't edit"
+
 msgid "generación este mes"
 msgstr "generation this month"
+
+#, python-format
+msgid ""
+"hay %(n)s generaciones fallidas sin costo registrado — la\n"
+"  mayoría fueron rechazos del proveedor (error 400 o falta de créditos), donde el modelo\n"
+"  no llegó a ejecutarse y por tanto no se facturaron."
+msgstr ""
+"there are %(n)s failed generations with no cost recorded — most\n"
+"  were provider rejections (error 400 or insufficient credits), where the model\n"
+"  never ran and so was never billed."
+
+msgid "hecho específicamente para reemplazar un elemento en un video real, sin ni siquiera necesitar prompt"
+msgstr "built specifically to replace an element in a real video, without even needing a prompt"
+
+msgid "herramientas para otra cosa (retakes de un plano, lip-sync/diálogo, extender el encuadre), no para reemplazar un objeto en el video"
+msgstr "tools for something else (shot retakes, lip-sync/dialogue, extending the frame), not for replacing an object in the video"
+
+msgid "imagen"
+msgstr "image"
 
 msgid "lo de este mes, proyecto por proyecto"
 msgstr "this month's numbers, project by project"
 
+msgid "los modelos rinden mejor hasta 15 s"
+msgstr "models perform better up to 15 s"
+
+msgid "lujo"
+msgstr "Luxury"
+
+msgid "mismo problema que Flux Kontext"
+msgstr "same problem as Flux Kontext"
+
+msgid "mismo problema: sin soporte de imagen de referencia del producto"
+msgstr "same problem: no support for a product reference image"
+
+msgid "modelo de nicho, sin evidencia de que su calidad supere a los editores ya en uso"
+msgstr "niche model, with no evidence that its quality beats the editors already in use"
+
+msgid "muy nuevo en el catálogo, sin datos de calidad/fidelidad todavía"
+msgstr "very new in the catalog, no quality/fidelity data yet"
+
+msgid "ninguna"
+msgstr "none"
+
 msgid "no"
 msgstr "no"
+
+msgid "no está disponible en fal.ai (confirmado con llamadas reales, 404); tampoco encontrado en WaveSpeed. Su propia API pasó a ser solo Enterprise"
+msgstr "it's not available on fal.ai (confirmed with real calls, 404); not found on WaveSpeed either. Its own API became Enterprise-only"
+
+msgid "no se puede usar aún"
+msgstr "can't be used yet"
+
+msgid "no tiene modo de edición (verificado en WaveSpeed, 1 sep 2026), así que no entra a \"cambiar calzado\"; se usa en la pestaña CreativeFlowPlus para generación nueva, donde eso sí es lo que se busca"
+msgstr "it has no edit mode (verified on WaveSpeed, Sep 1, 2026), so it's not part of \"change footwear\"; it's used in the CreativeFlowPlus tab for new generation, where that's exactly what's wanted"
 
 msgid "parcial"
 msgstr "partial"
@@ -1920,8 +2718,20 @@ msgstr[1] "projects"
 msgid "publicados"
 msgstr "published"
 
+msgid "regenera la escena completa; en pruebas reales cambió a la persona"
+msgstr "it regenerates the whole scene; in real tests it changed the person"
+
 msgid "rota"
 msgstr "broken"
+
+msgid "se cobra en tu cuenta de Meta"
+msgstr "charged on your Meta account"
+
+msgid "seg"
+msgstr "sec"
+
+msgid "segunda pasada opcional. Es el único upscaler del catálogo cuya documentación oficial afirma que \"preserva el contenido original <em>sin regeneración</em>\", que es la condición no negociable acá: la foto tiene que seguir siendo la misma persona, misma pose, mismo fondo. Los Clarity y ultimate-image-upscaler se describen a sí mismos como generativos (uno hasta expone un parámetro <code>creativity</code> para \"agregar detalle generado\") — por eso quedaron fuera"
+msgstr "optional second pass. It's the only upscaler in the catalog whose official documentation states it \"preserves the original content <em>without regeneration</em>\", which is the non-negotiable condition here: the photo has to remain the same person, same pose, same background. Clarity and ultimate-image-upscaler describe themselves as generative (one even exposes a <code>creativity</code> parameter for \"adding generated detail\") — that's why they were left out"
 
 msgid "sin Instagram vinculado"
 msgstr "no Instagram linked"
@@ -1938,17 +2748,38 @@ msgstr "not connected"
 msgid "sin conexión"
 msgstr "not connected"
 
+msgid "sin confirmar"
+msgstr "unconfirmed"
+
 msgid "sin contar anuncios sueltos"
 msgstr "not counting standalone ads"
+
+msgid "sin correo"
+msgstr "no email"
 
 msgid "sin gasto medido este mes"
 msgstr "no spend measured this month"
 
+msgid "sin generación pagada"
+msgstr "no paid generation"
+
 msgid "sin más reintentos"
 msgstr "no more retries"
 
+msgid "sin pauta corriendo"
+msgstr "no ad spend running"
+
 msgid "sin verificar ahora (Meta no respondió)"
 msgstr "not verified right now (Meta didn't respond)"
+
+msgid "style_id de Higgsfield (opcional, avanzado)"
+msgstr "Higgsfield style_id (optional, advanced)"
+
+msgid "su esquema no tiene un campo \"video a editar\": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base. WaveSpeed sí resolvió esto con un endpoint <code>video-edit</code> real, que es el que usamos arriba en vez de este"
+msgstr "its schema has no \"video to edit\" field: all references feed a new prompt-guided generation (like Higgsfield Soul), not an edit that preserves the base video. WaveSpeed did solve this with a real <code>video-edit</code> endpoint, which is the one we use above instead of this one"
+
+msgid "sucesor de Luma Ray3 Modify, más barato por segundo"
+msgstr "successor to Luma Ray3 Modify, cheaper per second"
 
 msgid "sí"
 msgstr "yes"
@@ -1956,8 +2787,38 @@ msgstr "yes"
 msgid "tu@empresa.com"
 msgstr "you@company.com"
 
+msgid "urbano"
+msgstr "Urban"
+
+msgid "uuid, solo si ya lo creaste en el panel de Higgsfield"
+msgstr "uuid, only if you already created it in the Higgsfield panel"
+
+msgid "versiones anteriores/más baratas de Seedance 2.5 Video Edit, que ya usamos (mejor calidad, mismo enfoque)"
+msgstr "earlier/cheaper versions of Seedance 2.5 Video Edit, which we already use (better quality, same approach)"
+
+msgid "versión anterior a Wan 2.7 Video Edit (que sí usamos) y sin soporte de imagen de referencia del producto"
+msgstr "earlier version than Wan 2.7 Video Edit (which we do use) and with no support for a product reference image"
+
+msgid "versión más nueva que Kling O1, mismo precio por segundo"
+msgstr "newer version than Kling O1, same price per second"
+
 msgid "videos, imágenes y finales listos"
 msgstr "videos, images and final cuts ready"
+
+msgid "vía WaveSpeed AI"
+msgstr "via WaveSpeed AI"
+
+msgid "vía WaveSpeed AI — no edita, solo mejora"
+msgstr "via WaveSpeed AI — doesn't edit, only upscales"
+
+msgid "vía fal.ai"
+msgstr "via fal.ai"
+
+msgid "y sus variantes Turbo, vía WaveSpeed AI"
+msgstr "and its Turbo variants, via WaveSpeed AI"
+
+msgid "ya usamos Kling O1 (vía fal.ai) y Kling O3 Pro (más nuevo, vía WaveSpeed); no suma nada nuevo probar las versiones intermedias"
+msgstr "we already use Kling O1 (via fal.ai) and Kling O3 Pro (newer, via WaveSpeed); testing the intermediate versions doesn't add anything new"
 
 msgid "¡Listo! Tienes cambios sin guardar en esta página."
 msgstr "Done! You have unsaved changes on this page."
@@ -1997,8 +2858,14 @@ msgstr "Prefer that Creatv manage it? Change"
 msgid "¿Prefieres usar tu propia app? Cambiar"
 msgstr "Prefer to use your own app? Change"
 
+msgid "¿Quitar este logo?"
+msgstr "Remove this logo?"
+
 msgid "¿Quitar la app de Meta de este proyecto? Tendrás que registrarla de nuevo para volver a conectar."
 msgstr "Remove this project's Meta app? You'll have to register it again to reconnect."
+
+msgid "¿Ve la foto del producto?"
+msgstr "Does it see the product photo?"
 
 msgid "¿Volver a usar tu propia app de Meta? Creatv deja de operar este proyecto; si tenías tu propia conexión se restaura."
 msgstr "Go back to using your own Meta app? Creatv stops operating this project; if you had your own connection it's restored."

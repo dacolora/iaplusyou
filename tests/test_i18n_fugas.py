@@ -108,6 +108,16 @@ def test_config_conexiones_cliente(cliente_en):
     assert not fugas, fugas[:15]
 
 
+def test_configuracion_entera_admin(admin_en):
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("tab-settings",))
+    assert not fugas, fugas[:15]
+
+
+def test_configuracion_entera_cliente(cliente_en):
+    fugas = espanol_visible(html_de(cliente_en, "/cliente/acme"), ("tab-settings",))
+    assert not fugas, fugas[:15]
+
+
 def test_bloqueo_cambio_forma_en_ingles_y_espanol_intacto(app_i18n, monkeypatch):
     """El aviso de _bloqueo_cambio_forma (Configuración > Meta, mostrado dentro
     de config-ap-conexiones vía _meta_conectar.html y en los flash de
