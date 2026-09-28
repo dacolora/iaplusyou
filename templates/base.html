@@ -1,14 +1,31 @@
 <!doctype html>
-<html lang="es">
+<html lang="{{ idioma_ui }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}Pipeline{% endblock %} · Creatv Flow</title>
+  <title>{% block title %}{{ _('Pipeline') }}{% endblock %} · Creatv Flow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script>
+    // Textos compartidos del JS de esta plantilla (spec 2026-09-26 §Task 4):
+    // un solo lugar donde Jinja traduce, en vez de repetir _()|tojson en cada
+    // punto donde se usan.
+    var T_BASE = {
+      procesando: {{ _('Procesando…')|tojson }},
+      cambiosSinGuardar: {{ _('Tienes cambios sin guardar, por eso no se recargó sola.')|tojson }},
+      recargarAhora: {{ _('Recargar ahora')|tojson }},
+      generando: {{ _('Generando…')|tojson }},
+      rastroPerdidoRecargando: {{ _('Se perdió el rastro de esta generación (¿se reinició el servidor?). Recargando…')|tojson }},
+      rastroPerdido: {{ _('Se perdió el rastro de esta generación.')|tojson }},
+      error: {{ _('Error:')|tojson }},
+      trabajoNoCompletado: {{ _('No se pudo completar el trabajo.')|tojson }},
+      terminoConError: {{ _('Terminó con error.')|tojson }},
+      listoCambiosSinGuardar: {{ _('¡Listo! Tienes cambios sin guardar en esta página.')|tojson }},
+      conexionPerdida: {{ _('Se perdió la conexión con el servidor.')|tojson }}
+    };
+
     // Foto que no carga (archivo borrado, R2 que no responde): en vez del ícono
     // roto con el texto alternativo cortado («HOrig»), un recuadro neutro. En
     // <head> y en captura (el error no burbujea), así atrapa también las fotos
@@ -43,7 +60,7 @@
       e.target.querySelectorAll('button[type="submit"]').forEach(function (btn) {
         btn.disabled = true;
         if (!btn.dataset.textoOriginal) btn.dataset.textoOriginal = btn.textContent;
-        btn.textContent = 'Procesando…';
+        btn.textContent = T_BASE.procesando;
       });
     });
 
@@ -109,11 +126,11 @@
         banner.className = 'aviso-recarga-global';
         document.body.appendChild(banner);
       }
-      banner.textContent = mensaje + ' Tienes cambios sin guardar, por eso no se recargó sola. ';
+      banner.textContent = mensaje + ' ' + T_BASE.cambiosSinGuardar + ' ';
       var boton = document.createElement('button');
       boton.type = 'button';
       boton.className = 'btn-aprobar btn-sm';
-      boton.textContent = 'Recargar ahora';
+      boton.textContent = T_BASE.recargarAhora;
       boton.addEventListener('click', function () { location.reload(); });
       banner.appendChild(boton);
     }
@@ -163,7 +180,7 @@
       // primer tick las pisaba con "Generando…", que es simplemente falso. Se
       // rescata ese texto (todo lo anterior al '·', sin el 0% de relleno) y se
       // usa como fallback propio de cada tarjeta.
-      var etiquetaBase = 'Generando…';
+      var etiquetaBase = T_BASE.generando;
       if (texto) {
         var previo = texto.textContent.split('·')[0].replace(/\s*\d+(\.\d+)?%\s*$/, '').trim();
         if (previo) etiquetaBase = previo;
@@ -184,9 +201,9 @@
               // Se perdió el rastro del trabajo (típicamente porque se reinició
               // el proceso a mitad de la generación). Antes esto recargaba a
               // ciegas y el usuario no entendía por qué la barra se quedó en 0%.
-              if (texto) texto.textContent = 'Se perdió el rastro de esta generación (¿se reinició el servidor?). Recargando…';
+              if (texto) texto.textContent = T_BASE.rastroPerdidoRecargando;
               setTimeout(function () {
-                recargarOAvisar(texto, 'Se perdió el rastro de esta generación.');
+                recargarOAvisar(texto, T_BASE.rastroPerdido);
               }, 1500);
               return;
             }
@@ -221,10 +238,10 @@
             if (data.estado === 'en_progreso') {
               setTimeout(tick, 1500);
             } else if (data.estado === 'error') {
-              alert('Error: ' + (data.mensaje || 'No se pudo completar el trabajo.'));
-              recargarOAvisar(texto, 'Terminó con error.');
+              alert(T_BASE.error + ' ' + (data.mensaje || T_BASE.trabajoNoCompletado));
+              recargarOAvisar(texto, T_BASE.terminoConError);
             } else {
-              recargarOAvisar(texto, '¡Listo! Tienes cambios sin guardar en esta página.');
+              recargarOAvisar(texto, T_BASE.listoCambiosSinGuardar);
             }
           })
           .catch(function () {
@@ -232,7 +249,7 @@
             if (reintentos < 6) {
               setTimeout(tick, 2000);
             } else {
-              recargarOAvisar(texto, 'Se perdió la conexión con el servidor.');
+              recargarOAvisar(texto, T_BASE.conexionPerdida);
             }
           });
       }
@@ -275,6 +292,45 @@
         setTimeout(function () { el.classList.add('aparece-visible'); }, i * 40);
       });
     });
+
+    // Videos de las listas (incidente 2026-09-28): la página de un proyecto
+    // trae todas sus pestañas a la vez y cada video con preload=metadata se
+    // pedía al abrirla aunque su pestaña estuviera oculta — cientos de pedidos
+    // a R2 que dejaban la página «cargando». Las tarjetas nacen con
+    // preload="none" y data-precarga, y acá se piden solo cuando entran en
+    // pantalla: una pestaña oculta o un <details> cerrado nunca entran.
+    (function () {
+      var vistos = new WeakSet();
+      function precargar(v) {
+        if (v.readyState === 0) { v.preload = 'metadata'; v.load(); }
+      }
+      var io = ('IntersectionObserver' in window) ? new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          io.unobserve(e.target);
+          precargar(e.target);
+        });
+      }, { rootMargin: '400px 0px' }) : null;
+      function observar(raiz) {
+        if (!raiz.querySelectorAll) return;
+        var lista = (raiz.matches && raiz.matches('video[data-precarga]')) ? [raiz] : [];
+        raiz.querySelectorAll('video[data-precarga]').forEach(function (v) { lista.push(v); });
+        lista.forEach(function (v) {
+          if (vistos.has(v)) return;
+          vistos.add(v);
+          if (io) io.observe(v); else precargar(v);
+        });
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        observar(document);
+        // Los fragmentos que llegan por fetch (paneles, fichas) también.
+        new MutationObserver(function (cambios) {
+          cambios.forEach(function (c) {
+            c.addedNodes.forEach(function (n) { if (n.nodeType === 1) observar(n); });
+          });
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+    })();
   </script>
 </head>
 <body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}">
@@ -283,10 +339,10 @@
   {% include "_sidebar.html" %}
   <div class="sidebar-fondo" id="sidebar-fondo"></div>
   {% endif %}
-  <header>
+  <header id="barra-superior">
     {% if request.view_args and request.view_args.cliente %}
-    <button type="button" class="menu-movil" id="menu-movil" aria-controls="sidebar" aria-expanded="false" aria-label="Abrir el menú">
-      <span aria-hidden="true">☰</span> Menú
+    <button type="button" class="menu-movil" id="menu-movil" aria-controls="sidebar" aria-expanded="false" aria-label="{{ _('Abrir el menú') }}">
+      <span aria-hidden="true">☰</span> {{ _('Menú') }}
     </button>
     {% endif %}
     <a class="marca-header" href="{{ url_for('index') }}">
@@ -296,7 +352,7 @@
     {% if request.view_args and request.view_args.cliente %}
     <nav class="header-nav">
       {% if session.get('rol') == 'admin' %}
-      <a href="{{ url_for('panel') }}">Proyectos</a>
+      <a href="{{ url_for('panel') }}">{{ _('Proyectos') }}</a>
       <span class="header-sep">/</span>
       {% endif %}
       <span class="header-actual">{{ nombre_proyecto or request.view_args.cliente }}</span>
@@ -306,8 +362,14 @@
     {% if session.get('usuario') %}
     <form method="post" action="{{ url_for('logout') }}" class="header-logout">
       <span class="header-usuario">{{ session['usuario'] }}</span>
-      <button type="submit">Cerrar sesión</button>
+      <button type="submit">{{ _('Cerrar sesión') }}</button>
     </form>
+    {% endif %}
+    {% if idioma_enlaces_publicos %}
+    <nav class="idioma-enlaces" aria-label="Language / Idioma">
+      <a href="{{ url_for('cambiar_idioma', codigo='en', next=request.path) }}">English</a> ·
+      <a href="{{ url_for('cambiar_idioma', codigo='es', next=request.path) }}">Español</a>
+    </nav>
     {% endif %}
   </header>
   <main>

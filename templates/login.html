@@ -1,22 +1,22 @@
 {% extends "base.html" %}
-{% block title %}Iniciar sesión{% endblock %}
+{% block title %}{{ _('Iniciar sesión') }}{% endblock %}
 {% block content %}
 <section class="login-caja aparece">
   <span class="eyebrow">Creatv Machine</span>
-  <h1 style="margin-bottom:.3rem;">Entrar a tu proyecto</h1>
-  <p class="hero-sub" style="margin-bottom:1.4rem;">Con el usuario y la contraseña de tu empresa.</p>
+  <h1 style="margin-bottom:.3rem;">{{ _('Entrar a tu proyecto') }}</h1>
+  <p class="hero-sub" style="margin-bottom:1.4rem;">{{ _('Con el usuario y la contraseña de tu empresa.') }}</p>
   <form method="post" action="{{ url_for('login') }}" class="form-nueva-idea">
-    <label class="campo-label">Usuario</label>
+    <label class="campo-label">{{ _('Usuario') }}</label>
     <input type="text" name="usuario" autocomplete="username" required autofocus>
-    <label class="campo-label" style="margin-top:.8rem;display:block;">Contraseña</label>
+    <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Contraseña') }}</label>
     <input type="password" name="password" autocomplete="current-password" required>
-    <button type="submit" class="btn-generar" style="margin-top:1rem;width:100%;">Entrar</button>
+    <button type="submit" class="btn-generar" style="margin-top:1rem;width:100%;">{{ _('Entrar') }}</button>
   </form>
   <p class="vacio" style="margin-top:1rem;font-size:.82rem;">
-    <a href="{{ url_for('recuperar') }}">¿Olvidaste tu contraseña?</a>
+    <a href="{{ url_for('recuperar') }}">{{ _('¿Olvidaste tu contraseña?') }}</a>
   </p>
   <p class="vacio" style="margin-top:.4rem;font-size:.82rem;">
-    ¿No tienes proyecto todavía? <a href="{{ url_for('index') }}#empezar">Crea uno en un minuto</a>.
+    {{ _('¿No tienes proyecto todavía? <a href="%(url)s">Crea uno en un minuto</a>.', url=url_for('index') + '#empezar') }}
   </p>
 </section>
 {% endblock %}

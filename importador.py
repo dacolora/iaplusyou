@@ -25,8 +25,8 @@ para que la tarea encole otra corrida (ver `tareas/tiendas.py`); los ya
 ligados siempre se refrescan (barato) y no cuentan para el tope.
 
 Un producto que falle no frena a los demás: el error queda listado en
-`errores` (texto en español, sin URLs completas ni credenciales) y el
-resumen sigue. Las fotos se bajan primero a una carpeta temporal y solo se
+`errores` (texto en el idioma del proyecto, sin URLs completas ni
+credenciales) y el resumen sigue. Las fotos se bajan primero a una carpeta temporal y solo se
 mueven a la carpeta del activo cuando hay al menos una — así una descarga
 fallida no deja carpetas fantasma ni gasta la llamada a Claude.
 """
@@ -39,11 +39,13 @@ import unicodedata
 from urllib.parse import urljoin, urlparse
 
 import requests
+from flask_babel import gettext
 
 import catalogo_productos
 import db
 import gastos
 import generador_prompts
+import idiomas
 import prompt_swap
 import tiendas
 from conectores import csv_excel
@@ -300,7 +302,7 @@ def _id_activo_disponible(cliente, nombre, fuente_id, producto_id):
 def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
     """Liga el producto (fila `producto`) a un activo del catálogo de Crear.
     Devuelve el `activo_id` (None si no se pudo). Si se pasa `errores` (lista),
-    ahí deja los avisos en español; nunca lanza por un producto concreto.
+    ahí deja los avisos; nunca lanza por un producto concreto.
     Nunca marca `activo_catalogo_id` en la fila del producto a menos que el
     activo termine con al menos una imagen — un activo sin fotos no aparece
     en `catalogo_productos.listar()`, y quedaría ligado a algo invisible que
@@ -365,7 +367,8 @@ def vincular_activo(cliente, producto_id, forzar_fotos=False, errores=None):
             return None
         if fallidas:
             errores.append(_aviso(prod, f"{fallidas} foto(s) no se pudieron descargar."))
-        regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "")
+        regla = generador_prompts.regla_fidelidad(nombre, descripcion, prod.get("categoria") or "",
+                                                   idiomas.de_proyecto(cliente))
         if regla:
             # Claude respondió (una regla vacía es el fallback sin llamada o
             # con error, que no cobra). Tarifa fija: el SDK no devuelve el
@@ -531,19 +534,20 @@ def desde_url(cliente, url, on_progreso=None, max_activos=None):
 
 
 def resumen_texto(resumen):
-    """Frase en español para la barra/el mensaje de la tarea."""
-    partes = [f"{resumen.get('nuevos', 0)} producto(s) nuevo(s)",
-              f"{resumen.get('actualizados', 0)} actualizado(s)",
-              f"{resumen.get('activos', 0)} con activo en el catálogo"]
+    """Frase en el idioma del proyecto para la barra/el mensaje de la tarea."""
+    partes = [gettext("%(n)s producto(s) nuevo(s)", n=resumen.get("nuevos", 0)),
+              gettext("%(n)s actualizado(s)", n=resumen.get("actualizados", 0)),
+              gettext("%(n)s con activo en el catálogo", n=resumen.get("activos", 0))]
     texto = ", ".join(partes) + "."
     pendientes = int(resumen.get("pendientes") or 0)
     if pendientes:
-        texto += (f" {pendientes} producto(s) guardado(s) sin activo todavía: "
-                  "el resto se completa solo en las próximas corridas.")
+        texto += " " + gettext(
+            "%(n)s producto(s) guardado(s) sin activo todavía: el resto se completa solo en las próximas corridas.",
+            n=pendientes)
     errores = resumen.get("errores") or []
     if errores:
         muestra = "; ".join(errores[:3])
         if len(errores) > 3:
-            muestra += f"; y {len(errores) - 3} más"
-        texto += f" {len(errores)} aviso(s): {muestra}"
+            muestra += "; " + gettext("y %(n)s más", n=len(errores) - 3)
+        texto += " " + gettext("%(n)s aviso(s): %(muestra)s", n=len(errores), muestra=muestra)
     return texto

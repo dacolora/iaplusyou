@@ -9,25 +9,25 @@
 {% if modo_meta == "agencia" %}
 {% set md = meta_detalle or {} %}
 <div class="idea-block meta-agencia-tarjeta" style="border-left:3px solid var(--accent);">
-  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">Gestionado por Creatv</div></div></div>
+  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">{{ _('Gestionado por Creatv') }}</div></div></div>
   <p class="vacio" style="padding-top:0;">
-    Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada.
-    Cuenta publicitaria <strong>{{ md.ad_account_nombre or md.ad_account_id or '—' }}</strong>{% if md.moneda %} ({{ md.moneda }}){% endif %} ·
-    Página <strong>{{ md.page_nombre or md.page_id or 'sin Página (solo anuncios)' }}</strong>
-    {% if md.ig_username %}· Instagram @{{ md.ig_username }}{% elif md.page_id %}· sin Instagram vinculado{% endif %}
-    {% if md.asignado_en %}· desde {{ md.asignado_en[:10] }}{% endif %}.
+    {{ _('Este proyecto usa la conexión de agencia de Creatv: no tienes que registrar una app ni conectar nada.') }}
+    {{ _('Cuenta publicitaria') }} <strong>{{ md.ad_account_nombre or md.ad_account_id or '—' }}</strong>{% if md.moneda %} ({{ md.moneda }}){% endif %} ·
+    {{ _('Página') }} <strong>{{ md.page_nombre or md.page_id or _('sin Página (solo anuncios)') }}</strong>
+    {% if md.ig_username %}· Instagram @{{ md.ig_username }}{% elif md.page_id %}· {{ _('sin Instagram vinculado') }}{% endif %}
+    {% if md.asignado_en %}· {{ _('desde') }} {{ md.asignado_en[:10] }}{% endif %}.
   </p>
   {% if not agencia_conectada %}
-  <p class="tag-error">La conexión de agencia no está activa ahora mismo{% if capacidades_meta.motivo %} ({{ capacidades_meta.motivo }}){% endif %}: los anuncios y la publicación orgánica esperan a que el administrador la vuelva a conectar.</p>
+  <p class="tag-error">{{ _('La conexión de agencia no está activa ahora mismo') }}{% if capacidades_meta.motivo %} ({{ capacidades_meta.motivo }}){% endif %}{{ _(': los anuncios y la publicación orgánica esperan a que el administrador la vuelva a conectar.') }}</p>
   {% elif capacidades_meta.estado == "roto" %}
-  <p class="tag-error">Meta ya no acepta la conexión de la agencia{% if capacidades_meta.motivo %} ({{ capacidades_meta.motivo }}){% endif %}: avísale al administrador.</p>
+  <p class="tag-error">{{ _('Meta ya no acepta la conexión de la agencia') }}{% if capacidades_meta.motivo %} ({{ capacidades_meta.motivo }}){% endif %}{{ _(': avísale al administrador.') }}</p>
   {% elif capacidades_meta.verificado is defined and not capacidades_meta.verificado %}
-  <p class="vacio" style="padding-top:0;"><em>Sin verificar ahora (Meta no respondió).</em></p>
+  <p class="vacio" style="padding-top:0;"><em>{{ _('Sin verificar ahora (Meta no respondió).') }}</em></p>
   {% endif %}
   <p class="vacio" style="padding-top:0;">
-    {% if motivo_bloqueo_forma %}Para volver a tu propia app, {{ motivo_bloqueo_forma[0]|lower }}{{ motivo_bloqueo_forma[1:] }}.
-    {% else %}<form method="post" action="{{ url_for('meta_agencia_salir', cliente=cliente) }}" style="display:inline;" onsubmit="return confirm('¿Volver a usar tu propia app de Meta? Creatv deja de operar este proyecto; si tenías tu propia conexión se restaura.');"><button type="submit" class="btn-rechazar btn-sm">Cambiar de forma: usar mi propia app</button></form>{% endif %}
-    {% if cuenta_actual is defined and cuenta_actual and cuenta_actual.rol == "admin" %}<a href="{{ url_for('admin_meta') }}">Gestionar la conexión de agencia →</a>{% endif %}
+    {% if motivo_bloqueo_forma %}{{ _('Para volver a tu propia app,') }} {{ motivo_bloqueo_forma[0]|lower }}{{ motivo_bloqueo_forma[1:] }}.
+    {% else %}<form method="post" action="{{ url_for('meta_agencia_salir', cliente=cliente) }}" style="display:inline;" onsubmit='return confirm({{ _('¿Volver a usar tu propia app de Meta? Creatv deja de operar este proyecto; si tenías tu propia conexión se restaura.')|tojson }});'><button type="submit" class="btn-rechazar btn-sm">{{ _('Cambiar de forma: usar mi propia app') }}</button></form>{% endif %}
+    {% if cuenta_actual is defined and cuenta_actual and cuenta_actual.rol == "admin" %}<a href="{{ url_for('admin_meta') }}">{{ _('Gestionar la conexión de agencia →') }}</a>{% endif %}
   </p>
 </div>
 
@@ -43,9 +43,9 @@
 {% include "_meta_propia_guia.html" %}
 {% else %}
 <div class="vacio" style="padding-top:0;">
-  App de Meta del proyecto: <strong>{{ meta_app.app_id }}</strong> · configuración <strong>{{ meta_app.login_config_id }}</strong>
-  <form method="post" action="{{ url_for('meta_app_borrar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit="return confirm('¿Quitar la app de Meta de este proyecto? Tendrás que registrarla de nuevo para volver a conectar.');">
-    <button type="submit" class="btn-rechazar btn-sm">Quitar app</button>
+  {{ _('App de Meta del proyecto:') }} <strong>{{ meta_app.app_id }}</strong> · {{ _('configuración') }} <strong>{{ meta_app.login_config_id }}</strong>
+  <form method="post" action="{{ url_for('meta_app_borrar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit='return confirm({{ _('¿Quitar la app de Meta de este proyecto? Tendrás que registrarla de nuevo para volver a conectar.')|tojson }});'>
+    <button type="submit" class="btn-rechazar btn-sm">{{ _('Quitar app') }}</button>
   </form>
 </div>
 {% endif %}
@@ -53,48 +53,48 @@
 {% set cm = capacidades_meta %}
 {% if cm.estado == "sin_conectar" %}
 <div class="idea-block" style="border-left:3px solid var(--accent);">
-  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">Conecta tu cuenta de Meta</div></div></div>
+  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">{{ _('Conecta tu cuenta de Meta') }}</div></div></div>
   <p class="vacio" style="padding-top:0;">
-    Para publicar anuncios y también contenido orgánico en tu Página de Facebook y tu Instagram.
+    {{ _('Para publicar anuncios y también contenido orgánico en tu Página de Facebook y tu Instagram.
     Vas a iniciar sesión con tu Facebook y elegir tu cuenta publicitaria y tu Página — nunca ves ni pegas un token.
-    Inicia sesión con el Facebook que administra esa app.
+    Inicia sesión con el Facebook que administra esa app.') }}
   </p>
   {% if meta_app %}
-  <a class="btn-generar" href="{{ url_for('meta_conectar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">Conectar con Meta</a>
-  {% if agencia_disponible %}<form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}" style="display:inline;margin-left:.5rem;"><input type="hidden" name="forma" value="agencia"><button type="submit" class="btn-sm">¿Prefieres que Creatv lo gestione? Cambiar</button></form>{% endif %}
+  <a class="btn-generar" href="{{ url_for('meta_conectar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">{{ _('Conectar con Meta') }}</a>
+  {% if agencia_disponible %}<form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}" style="display:inline;margin-left:.5rem;"><input type="hidden" name="forma" value="agencia"><button type="submit" class="btn-sm">{{ _('¿Prefieres que Creatv lo gestione? Cambiar') }}</button></form>{% endif %}
   {% else %}
-  <p class="vacio" style="padding-top:0;"><em>Primero registra tu app de Meta arriba.</em></p>
+  <p class="vacio" style="padding-top:0;"><em>{{ _('Primero registra tu app de Meta arriba.') }}</em></p>
   {% endif %}
 </div>
 
 {% elif cm.estado == "roto" %}
 <div class="idea-block" style="border-left:3px solid var(--error);">
-  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">Meta ya no acepta la conexión de este proyecto</div></div></div>
+  <div class="idea-header"><div><span class="idea-label">Meta</span><div class="idea-texto">{{ _('Meta ya no acepta la conexión de este proyecto') }}</div></div></div>
   <p class="vacio" style="padding-top:0;">
-    El acceso fue revocado o expiró{% if cm.motivo %} ({{ cm.motivo }}){% endif %}. Estaba conectado a
+    {{ _('El acceso fue revocado o expiró') }}{% if cm.motivo %} ({{ cm.motivo }}){% endif %}{{ _('. Estaba conectado a') }}
     <strong>{{ cm.detalle.ad_account_nombre or cm.detalle.ad_account_id }}</strong> · <strong>{{ cm.detalle.page_nombre or cm.detalle.page_id }}</strong>.
   </p>
   {% if meta_app %}
-  <a class="btn-generar" href="{{ url_for('meta_conectar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">Volver a conectar</a>
+  <a class="btn-generar" href="{{ url_for('meta_conectar', cliente=cliente) }}" style="display:inline-block;text-decoration:none;">{{ _('Volver a conectar') }}</a>
   {% endif %}
   <form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;">
-    <button type="submit" class="btn-rechazar btn-sm">Desconectar</button>
+    <button type="submit" class="btn-rechazar btn-sm">{{ _('Desconectar') }}</button>
   </form>
 </div>
 
 {% else %}
 <div class="vacio" style="padding-top:0;">
-  Meta conectado: <strong>{{ cm.detalle.ad_account_nombre or cm.detalle.ad_account_id }}</strong> ·
-  Página <strong>{{ cm.detalle.page_nombre or cm.detalle.page_id }}</strong>
-  {% if cm.detalle.ig_username %}· Instagram @{{ cm.detalle.ig_username }}{% else %}· sin Instagram vinculado{% endif %}
-  {% if cm.detalle.conectado_en %}· desde {{ cm.detalle.conectado_en[:10] }}{% endif %}
-  {% if not cm.verificado %}· <em>sin verificar ahora (Meta no respondió)</em>{% endif %}
-  <form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit="return confirm('¿Desconectar Meta de este proyecto? No se borra nada en Meta.');">
-    <button type="submit" class="btn-rechazar btn-sm">Desconectar</button>
+  {{ _('Meta conectado:') }} <strong>{{ cm.detalle.ad_account_nombre or cm.detalle.ad_account_id }}</strong> ·
+  {{ _('Página') }} <strong>{{ cm.detalle.page_nombre or cm.detalle.page_id }}</strong>
+  {% if cm.detalle.ig_username %}· Instagram @{{ cm.detalle.ig_username }}{% else %}· {{ _('sin Instagram vinculado') }}{% endif %}
+  {% if cm.detalle.conectado_en %}· {{ _('desde') }} {{ cm.detalle.conectado_en[:10] }}{% endif %}
+  {% if not cm.verificado %}· <em>{{ _('sin verificar ahora (Meta no respondió)') }}</em>{% endif %}
+  <form method="post" action="{{ url_for('meta_desconectar', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit='return confirm({{ _('¿Desconectar Meta de este proyecto? No se borra nada en Meta.')|tojson }});'>
+    <button type="submit" class="btn-rechazar btn-sm">{{ _('Desconectar') }}</button>
   </form>
   {% if agencia_disponible %}
-    {% if motivo_bloqueo_forma %}<span class="vacio">· Para que Creatv lo gestione, {{ motivo_bloqueo_forma[0]|lower }}{{ motivo_bloqueo_forma[1:] }}.</span>
-    {% else %}<form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit="return confirm('¿Cambiar de forma? Tu conexión actual sigue viva hasta que conectes por la agencia; ahí queda guardada como respaldo.');"><input type="hidden" name="forma" value="agencia"><button type="submit" class="btn-sm">Cambiar de forma: que Creatv lo gestione</button></form>{% endif %}
+    {% if motivo_bloqueo_forma %}<span class="vacio">· {{ _('Para que Creatv lo gestione,') }} {{ motivo_bloqueo_forma[0]|lower }}{{ motivo_bloqueo_forma[1:] }}.</span>
+    {% else %}<form method="post" action="{{ url_for('meta_forma', cliente=cliente) }}" style="display:inline;margin-left:.5rem;" onsubmit='return confirm({{ _('¿Cambiar de forma? Tu conexión actual sigue viva hasta que conectes por la agencia; ahí queda guardada como respaldo.')|tojson }});'><input type="hidden" name="forma" value="agencia"><button type="submit" class="btn-sm">{{ _('Cambiar de forma: que Creatv lo gestione') }}</button></form>{% endif %}
   {% endif %}
 </div>
 {% endif %}

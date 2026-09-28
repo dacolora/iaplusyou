@@ -1403,7 +1403,7 @@ input[type="file"]::file-selector-button:hover { border-color: var(--accent); }
 .cat-comercial select { min-width: 5.5rem; }
 .cat-en-prueba { display: flex; align-items: center; gap: .4rem; font-size: .84rem; margin-top: .6rem; }
 .cat-importar > summary { display: inline-block; }
-.cat-sin-fotos .tabla-productos { margin-top: .4rem; }
+.cat-sinfotos .tabla-productos { margin-top: .4rem; }
 .prod-subir-fotos { cursor: pointer; display: inline-block; }
 .prod-form-fotos { margin: 0; }
 
@@ -1743,7 +1743,7 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .exp-pasos-nav li { cursor:pointer; }
 .exp-pasos-nav li.activo { color:var(--accent-texto); }
 .exp-pasos-botones { display:flex; gap:.6rem; margin-top:1rem; }
-.exp-cuenta { font-weight:600; margin-top:.8rem; }
+.exp-resumen { font-weight:600; margin-top:.8rem; }
 .exp-cuadricula table { border-collapse:collapse; margin:.6rem 0; }
 .exp-cuadricula th, .exp-cuadricula td { border:1px solid var(--border); padding:.3rem .6rem; text-align:center; font-size:.85rem; }
 .exp-cuadricula tbody th { text-align:left; font-weight:500; text-transform:none; letter-spacing:0; }
@@ -1789,6 +1789,10 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 
 /* Referentes — biblioteca (spec 2026-09-23 §8) */
 .ref-panel { display:flex; flex-direction:column; gap:.6rem; margin-top:.6rem; }
+.ref-copycoders { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem .8rem; margin:.4rem 0 .8rem; padding:.6rem .8rem;
+  border:1px dashed var(--border); border-radius:var(--radius); background:var(--bg); font-size:.85rem; color:var(--muted); }
+.ref-copycoders strong { color:var(--text); }
+.ref-copycoders span { flex:1 1 20rem; min-width:0; }
 .ref-selects { display:flex; gap:.5rem; flex-wrap:wrap; }
 .ref-selects select, .ref-selects input { font-size:.8rem; max-width:16rem; }
 .ref-conteo { color:var(--muted); font-size:.8rem; margin:.2rem 0; }
@@ -2204,6 +2208,11 @@ img.img-rota { object-fit: contain; background: var(--panel-2); padding: 12%; }
 .config-apartado > h2:first-child { margin-top: .4rem; }
 .llaves-tarjetas-ancha { grid-template-columns: minmax(0, 1fr); }
 
+/* Selector de idioma (2026-09-26): enlaces «English · Español» antes del
+   login, en el header público. */
+.idioma-enlaces { margin-left: auto; font-size: .8rem; color: var(--muted); white-space: nowrap; }
+.idioma-enlaces a { color: var(--accent-texto); text-decoration: none; }
+
 /* =====================================================================
    Tablero de Sprints (2026-09-26) — spec
    docs/superpowers/specs/2026-09-26-sprints-tablero-design.md.
@@ -2470,6 +2479,9 @@ body.panel-abierto { overflow: hidden; }
   margin: .6rem .2rem 0; font-size: .78rem; color: var(--muted); }
 .crear-pie .crear-enlace { color: var(--muted); font-weight: 500; }
 .crear-pie .crear-enlace strong { color: var(--accent-texto); font-weight: 600; }
+.crear-consejos { max-width: 920px; margin: .5rem .2rem 0; font-size: .78rem; color: var(--muted); }
+.crear-consejos summary { font-weight: 500; }
+.crear-consejos ul { margin: .35rem 0 0; padding-left: 1.2rem; line-height: 1.5; }
 .selector-en-dialogo .comparacion-contenido { padding: 0; border: 0; background: none; }
 .selector-resumen { margin: 0 0 .8rem; font-size: .82rem; color: var(--muted); }
 

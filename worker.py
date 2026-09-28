@@ -23,6 +23,7 @@ from sqlalchemy.dialects.sqlite import insert as insert_sqlite
 
 import cola
 import db
+import idiomas
 import tareas
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -34,7 +35,10 @@ log = logging.getLogger("creatv.worker")
 # las ventas de este ciclo y no las de hace 2 h.
 PERIODICAS = [("tienda_sync_pedidos_todas", 7200), ("exp_refrescar_todos", 7200), ("exp_decidir_todos", 3600),
               ("exp_avanzar_todos", 600), ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
-              ("materiales_limpiar", 86400)]
+              ("materiales_limpiar", 86400),
+              # Auditoría 2026-09-28: salidas/ crecía 2 GB cada dos semanas, tarea
+              # sumaba ~485 filas vacías al día y la base solo se respaldaba a mano.
+              ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400)]
 
 # Parada limpia: SIGINT/SIGTERM (systemd manda SIGINT, TimeoutStopSec=600) solo
 # levantan esta bandera; el bucle termina la tarea en curso y recién ahí sale.
@@ -69,11 +73,20 @@ def encolar_periodicas():
         cola.encolar(tipo, {}, job_id=f"periodica__{tipo}")
 
 
+def idioma_de_tarea(tarea):
+    """Alias de idiomas.de_tarea (los tests y el resto del worker lo llaman así)."""
+    return idiomas.de_tarea(tarea)
+
+
 def ejecutar(tarea):
+    """Corre la tarea en el idioma de su proyecto (spec 2026-09-26 §B8): todo
+    gettext de adentro — motivos, eventos, avisos, el mensaje que devuelve y
+    el texto de una excepción — sale en ese idioma."""
     fn = tareas.REGISTRO.get(tarea["tipo"])
     if fn is None:
         raise RuntimeError(f"tipo de tarea desconocido: {tarea['tipo']}")
-    return fn(tarea)
+    with idiomas.en_idioma(idiomas.de_tarea(tarea)):
+        return fn(tarea)
 
 
 MENSAJE_INTERRUMPIDA = "Se interrumpió por un reinicio del servidor. Vuelve a intentar."

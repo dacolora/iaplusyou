@@ -42,7 +42,7 @@ def app(base_temporal, tmp_path, monkeypatch):
     monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: False)
     ejecutadas = []
 
-    def _ejecutar(cliente, eid, accion, payload):
+    def _ejecutar(cliente, eid, accion, payload, **kw):
         ejecutadas.append((cliente, eid, accion, dict(payload)))
         return f"{accion} hecho."
     monkeypatch.setattr(dashboard.acciones, "ejecutar", _ejecutar)

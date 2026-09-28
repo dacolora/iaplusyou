@@ -5,11 +5,15 @@ referencia (mismo producto, distintos ángulos/tomas) para darle a Nano Banana
 la mejor fidelidad posible al generar. Al usuario solo se le muestra UNA foto
 representativa por producto — las demás son material interno.
 """
+import hashlib
 import os
 import re
 import unicodedata
 
+from flask_babel import gettext
+
 import _json_store
+import idiomas
 import mapa_corporal
 import prompt_swap
 
@@ -41,25 +45,37 @@ DESCRIPCIONES = {
 # consistencia, que es lo que se le dice al modelo para que NO cambie el activo.
 CATEGORIAS = {
     "producto": {
-        "nombre": "Producto", "plural": "Productos", "carpeta": "productos", "meta": "productos.json",
-        "etiqueta": "@Producto", "descripcion_ui": "Lo que vendes: calzado, ropa, decoración, comida, lo que sea.",
-        "regla": ("Reprodúcelo idéntico a su referencia: misma forma, mismo color, misma textura y el mismo "
-                  "logotipo o marca tal como aparece, en el mismo lugar. No inventes ni cambies letras, logos ni etiquetas."),
+        "nombre": idiomas.N_("Producto"), "plural": idiomas.N_("Productos"), "carpeta": "productos", "meta": "productos.json",
+        "etiqueta": "@Producto", "descripcion_ui": idiomas.N_("Lo que vendes: calzado, ropa, decoración, comida, lo que sea."),
+        "regla": idiomas.N_(
+            "Reprodúcelo idéntico a su referencia: misma forma, mismo color, misma textura y el mismo "
+            "logotipo o marca tal como aparece, en el mismo lugar. No inventes ni cambies letras, logos ni etiquetas."),
+        "regla_en": ("Reproduce it identical to its reference: same shape, same color, same texture and the "
+                     "same logo or brand exactly as it appears, in the same place. Do not invent or change "
+                     "letters, logos or labels."),
         "con_mapa": True,
     },
     "personaje": {
-        "nombre": "Personaje", "plural": "Personajes", "carpeta": "personajes_catalogo", "meta": "personajes_catalogo.json",
-        "etiqueta": "@Personaje", "descripcion_ui": "La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre.",
-        "regla": ("Es la MISMA persona/personaje en todas las tomas: misma cara, mismos rasgos, mismo pelo, misma "
-                  "complexión y la misma ropa y accesorios que en las referencias. No cambies edad, género, piel ni estilo. "
-                  "Manos y pies anatómicamente correctos."),
+        "nombre": idiomas.N_("Personaje"), "plural": idiomas.N_("Personajes"), "carpeta": "personajes_catalogo", "meta": "personajes_catalogo.json",
+        "etiqueta": "@Personaje", "descripcion_ui": idiomas.N_("La cara de la marca: una persona real, un embajador o un personaje creado que debe verse igual siempre."),
+        "regla": idiomas.N_(
+            "Es la MISMA persona/personaje en todas las tomas: misma cara, mismos rasgos, mismo pelo, misma "
+            "complexión y la misma ropa y accesorios que en las referencias. No cambies edad, género, piel ni estilo. "
+            "Manos y pies anatómicamente correctos."),
+        "regla_en": ("It is the SAME person/character in every shot: same face, same features, same hair, "
+                     "same build and the same clothes and accessories as in the references. Do not change "
+                     "age, gender, skin or style. Anatomically correct hands and feet."),
         "con_mapa": False,
     },
     "entorno": {
-        "nombre": "Entorno", "plural": "Entornos", "carpeta": "entornos", "meta": "entornos.json",
-        "etiqueta": "@Entorno", "descripcion_ui": "Lugares y escenas: tu tienda, un showroom, la sala donde va el espejo.",
-        "regla": ("La escena ocurre en ESTE lugar: conserva paredes, piso, muebles, decoración y luz tal como se ven en las "
-                  "referencias. El producto y las personas se integran ahí; no reconstruyas ni redecores el espacio."),
+        "nombre": idiomas.N_("Entorno"), "plural": idiomas.N_("Entornos"), "carpeta": "entornos", "meta": "entornos.json",
+        "etiqueta": "@Entorno", "descripcion_ui": idiomas.N_("Lugares y escenas: tu tienda, un showroom, la sala donde va el espejo."),
+        "regla": idiomas.N_(
+            "La escena ocurre en ESTE lugar: conserva paredes, piso, muebles, decoración y luz tal como se ven en las "
+            "referencias. El producto y las personas se integran ahí; no reconstruyas ni redecores el espacio."),
+        "regla_en": ("The scene takes place in THIS place: keep walls, floor, furniture, decoration and light "
+                     "exactly as seen in the references. The product and the people blend in there; do not "
+                     "rebuild or redecorate the space."),
         "con_mapa": False,
     },
 }
@@ -68,6 +84,12 @@ CATEGORIA_POR_DEFECTO = "producto"
 
 def categoria_valida(cat):
     return cat if cat in CATEGORIAS else CATEGORIA_POR_DEFECTO
+
+
+def regla_categoria(categoria, idioma="es"):
+    """Regla de consistencia de la categoría en el idioma de los prompts del proyecto."""
+    info = CATEGORIAS[categoria_valida(categoria)]
+    return info["regla_en"] if idioma == "en" else info["regla"]
 
 
 def _carpeta(cliente, categoria=CATEGORIA_POR_DEFECTO):
@@ -134,6 +156,7 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
         return []
     meta = cargar_meta(cliente, categoria)
     info_cat = CATEGORIAS[categoria]
+    idioma = idiomas.de_proyecto(cliente)
     productos = []
     public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
 
@@ -161,13 +184,13 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
                     "id": id_producto,
                     "categoria": categoria,
                     "etiqueta_base": info_cat["etiqueta"],
-                    "regla": (info_cat["regla"] + (" " + propio_base.get("regla", "").strip() if propio_base.get("regla") else "")).strip(),
+                    "regla": (regla_categoria(categoria, idioma) + (" " + propio_base.get("regla", "").strip() if propio_base.get("regla") else "")).strip(),
                     "regla_propia": (propio_base.get("regla") or "").strip(),
                     "nombre": nombre_mostrado,
                     "descripcion": propio_var.get("descripcion") or "",
                     "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
                     "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
-                    "mapa_texto": mapa_corporal.describir(propio_base.get("zonas")),
+                    "mapa_texto": mapa_corporal.describir(propio_base.get("zonas"), idioma),
                     "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
                         mapa_corporal.preset_de(propio_base.get("zonas"))),
                     "referencias": [os.path.join(ruta_variante, f) for f in archivos],
@@ -184,13 +207,13 @@ def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
                 "id": nombre_carpeta,
                 "categoria": categoria,
                 "etiqueta_base": info_cat["etiqueta"],
-                "regla": (info_cat["regla"] + (" " + propio_base["regla"].strip() if propio_base.get("regla") else "")).strip(),
+                "regla": (regla_categoria(categoria, idioma) + (" " + propio_base["regla"].strip() if propio_base.get("regla") else "")).strip(),
                 "regla_propia": (propio_base.get("regla") or "").strip(),
                 "nombre": propio_base.get("nombre") or NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
                 "descripcion": propio_base.get("descripcion") or DESCRIPCIONES.get(nombre_carpeta, ""),
                 "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
                 "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
-                "mapa_texto": mapa_corporal.describir(propio_base.get("zonas")),
+                "mapa_texto": mapa_corporal.describir(propio_base.get("zonas"), idioma),
                 "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
                     mapa_corporal.preset_de(propio_base.get("zonas"))),
                 "referencias": [os.path.join(ruta_carpeta, f) for f in archivos],
@@ -207,6 +230,37 @@ def listar_todo(cliente):
     for cat in CATEGORIAS:
         todo.extend(listar(cliente, cat))
     return todo
+
+
+ANCHOS_MINIATURA = (320,)
+
+
+def miniatura(ruta, ancho=320):
+    """Ruta de una miniatura JPEG de `ancho` px de la foto `ruta`, hecha con
+    Pillow y guardada en data/miniaturas/ con la fecha y el tamaño del
+    original en el nombre (una foto reemplazada da otra miniatura; las
+    huérfanas pesan KB). Las fotos del catálogo se sirven originales (2–6 MB
+    cada una) y el selector de Crear las muestra a 80 px: 32 fotos eran 34 MB
+    por carga (auditoría 2026-09-28). Si Pillow no puede abrir el archivo,
+    devuelve `ruta` tal cual y se sirve el original."""
+    st = os.stat(ruta)
+    clave = hashlib.sha1(f"{ruta}|{int(st.st_mtime)}|{st.st_size}|{ancho}".encode()).hexdigest()
+    carpeta = os.path.join(BASE_DIR, "data", "miniaturas")
+    destino = os.path.join(carpeta, f"{clave}.jpg")
+    if os.path.exists(destino):
+        return destino
+    try:
+        from PIL import Image, ImageOps
+        with Image.open(ruta) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            im.thumbnail((ancho, ancho * 2))
+            os.makedirs(carpeta, exist_ok=True)
+            tmp = f"{destino}.{os.getpid()}.parcial"
+            im.save(tmp, "JPEG", quality=82, optimize=True)
+            os.replace(tmp, destino)
+    except Exception:  # noqa: BLE001 — no es una imagen que Pillow entienda: va el original
+        return ruta
+    return destino
 
 
 def encontrar(cliente, producto_id, categoria=None):
@@ -264,7 +318,12 @@ def crear(cliente, nombre, descripcion="", tipo=None, zonas=None, categoria=CATE
     producto_id = producto_id or id_desde_nombre(nombre)
     carpeta = carpeta_de(cliente, producto_id, categoria)
     if os.path.isdir(carpeta):
-        raise ValueError(f"Ya existe un {CATEGORIAS[categoria]['nombre'].lower()} con ese nombre ({producto_id}).")
+        # nombre_categoria por variable local: gettext(CATEGORIAS[categoria]["nombre"])
+        # directo hace que el extractor de Babel, al no ver un string literal,
+        # grabe por error un msgid "nombre" (la clave del subscript).
+        nombre_categoria = CATEGORIAS[categoria]["nombre"]
+        raise ValueError(gettext("Ya existe un %(tipo)s con ese nombre (%(id)s).",
+                                 tipo=gettext(nombre_categoria).lower(), id=producto_id))
     os.makedirs(carpeta, exist_ok=True)
 
     def _poner(meta):
@@ -327,10 +386,10 @@ def eliminar_imagen(cliente, producto_id, nombre_archivo, categoria=CATEGORIA_PO
     seguro = os.path.basename(nombre_archivo)
     ruta = os.path.join(carpeta, seguro)
     if not os.path.isfile(ruta):
-        return False, "No encontré esa imagen."
+        return False, gettext("No encontré esa imagen.")
     restantes = [f for f in os.listdir(carpeta) if f.lower().endswith(IMAGE_EXTS) and f != seguro]
     if not restantes:
-        return False, ("Es la única foto del producto. Si quieres quitarla, sube otra primero "
-                       "o elimina el producto completo.")
+        return False, gettext("Es la única foto del producto. Si quieres quitarla, sube otra primero "
+                              "o elimina el producto completo.")
     os.remove(ruta)
-    return True, f"Imagen eliminada: {seguro}"
+    return True, gettext("Imagen eliminada: %(nombre)s", nombre=seguro)

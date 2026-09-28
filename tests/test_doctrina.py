@@ -80,6 +80,17 @@ def test_bloque_system_lleva_cache_y_extra_aparte():
     assert len(doctrina.bloque_system("video")) == 1
 
 
+def test_bloque_system_con_idioma_rodea_las_instrucciones():
+    import doctrina
+    import idiomas
+    bloques = doctrina.bloque_system("base", extra="Haz esto.", idioma="en")
+    assert bloques[0]["cache_control"]                    # la doctrina sigue con caché
+    extra = bloques[1]["text"]
+    orden = idiomas.orden_idioma("en")
+    assert extra.startswith(orden) and extra.endswith(orden) and "Haz esto." in extra
+    assert doctrina.bloque_system("base", extra="Haz esto.")[1]["text"] == "Haz esto."
+
+
 def test_cada_principio_cita_su_fuente():
     """Cada rebanada nombra al menos dos de los autores entre paréntesis: así
     quien lea el .md puede ir al libro (spec §3.1)."""
@@ -168,6 +179,14 @@ def test_verificar_cifras():
     assert doctrina.verificar_cifras("lista para 2026", "lanzamiento 2026") == []
     assert doctrina.verificar_cifras("$120 hoy", "precio: 120 USD") == []
     assert doctrina.verificar_cifras("sin cifras aquí", "") == []
+
+
+def test_verificar_cifras_reconoce_formatos_en_ingles():
+    import doctrina
+    assert doctrina.verificar_cifras("3 out of 10 customers", "") == ["3 out of 10"]
+    assert doctrina.verificar_cifras("works 3 times faster", "") == ["3 times"]
+    assert doctrina.verificar_cifras("only $1,200", "precio 1200") == []
+    assert doctrina.verificar_cifras("save 40%", "") == ["40%"]
 
 
 def test_angulo_a_texto_muestra_los_campos_con_nombre_y_omite_vacios():

@@ -16,31 +16,31 @@
 {% if sel_dialogo %}
 {# En un <dialog> (Crear › «+» › Del catálogo): sin <summary>; el resumen es un párrafo. #}
 <div class="selector-productos selector-en-dialogo" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
-  <p class="selector-resumen" id="sel-{{ sel_id }}-resumen">Nada elegido todavía.</p>
+  <p class="selector-resumen" id="sel-{{ sel_id }}-resumen">{{ _('Nada elegido todavía.') }}</p>
 {% else %}
 <details class="comparacion-modelos selector-productos" id="sel-{{ sel_id }}" data-modo="{{ _modo }}">
   <summary class="btn-guardar btn-sm" id="sel-{{ sel_id }}-resumen">
-    {% if _modo == "radio" %}Elegir producto ({{ productos | length }}) →{% else %}Del catálogo (opcional, {{ _total.n }}) →{% endif %}
+    {% if _modo == "radio" %}{{ _('Elegir producto (%(n)s) →', n=(productos | length)) }}{% else %}{{ _('Del catálogo (opcional, %(n)s) →', n=_total.n) }}{% endif %}
   </summary>
 {% endif %}
   <div class="comparacion-contenido">
     <div style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-bottom:.8rem;">
-      <input type="text" id="sel-{{ sel_id }}-buscador" placeholder="Buscar por nombre…" style="flex:1;min-width:180px;margin:0;">
-      <button type="button" class="btn-guardar btn-sm" id="sel-{{ sel_id }}-nuevo-btn">+ Nuevo producto</button>
+      <input type="text" id="sel-{{ sel_id }}-buscador" placeholder="{{ _('Buscar por nombre…') }}" style="flex:1;min-width:180px;margin:0;">
+      <button type="button" class="btn-guardar btn-sm" id="sel-{{ sel_id }}-add-btn">{{ _('+ Nuevo producto') }}</button>
     </div>
-    <p class="vacio" id="sel-{{ sel_id }}-vacio" style="display:none;">Ningún producto coincide con esa búsqueda.</p>
+    <p class="vacio" id="sel-{{ sel_id }}-vacio" style="display:none;">{{ _('Ningún producto coincide con esa búsqueda.') }}</p>
     {% if not _total.n %}
-    <p class="vacio">No hay nada en el catálogo todavía — crea el primero con "+ Nuevo producto" o en Catálogo.</p>
+    <p class="vacio">{{ _('No hay nada en el catálogo todavía — crea el primero con "+ Nuevo producto" o en Catálogo.') }}</p>
     {% endif %}
     <div id="sel-{{ sel_id }}-grilla">
       {% for cid, lista in _activos.items() %}
       {% if lista %}
-      {% if _modo == "checkbox" %}<p class="campo-label" style="margin:.6rem 0 .3rem;">{{ categorias[cid].plural if categorias is defined else "Productos" }}</p>{% endif %}
+      {% if _modo == "checkbox" %}<p class="campo-label" style="margin:.6rem 0 .3rem;">{{ categorias[cid].plural if categorias is defined else _('Productos') }}</p>{% endif %}
       <div class="catalogo-productos">
         {% for p in lista %}
         <label class="producto-opcion" data-nombre="{{ p.nombre | lower }}">
           <input type="{{ _modo }}" name="{{ sel_campo }}" value="{% if _modo == 'checkbox' %}{{ cid }}:{% endif %}{{ p.id }}" data-nombre="{{ p.nombre }}" {% if _modo == "radio" %}required{% endif %}>
-          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid) }}" alt="{{ p.nombre }}">
+          <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=cid, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
           <span>{{ p.nombre }}</span>
         </label>
         {% endfor %}

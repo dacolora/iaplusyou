@@ -6,9 +6,11 @@ Meta viven en lanzador.py. Campañas (ads.py) sigue usando el experimento legado
 "Anuncios sueltos" y no pasa por aquí.
 """
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
 from doctrina import revisor as doctrina_revisor
+from idiomas import N_
 
 ESTADOS_EXPERIMENTO = ("armando", "lanzando", "pausado", "corriendo", "cerrado", "error",
                        "esperando_aprobacion", "decidido")
@@ -17,6 +19,38 @@ ESTADOS_PIEZA = ("en_cola", "publicando", "pausado", "activo", "error")
 # por los pedidos de la tienda conectada (utm_content → experimento_pieza),
 # por Triple Whale (SQL: ads_table + pixel_joined_tvf), o no se miden.
 ATRIBUCIONES = ("pixel", "tienda", "triple_whale", "ninguna")
+# Rótulos para la UI (misma clave guardada, nunca traducida): |traducir en la
+# plantilla, nunca acá (N_ solo marca para el catálogo).
+ETIQUETAS_ESTADO = {
+    "armando": N_("armando"), "lanzando": N_("lanzando"), "pausado": N_("pausado"),
+    "corriendo": N_("corriendo"), "cerrado": N_("cerrado"), "error": N_("error"),
+    "esperando_aprobacion": N_("esperando aprobación"), "decidido": N_("decidido"),
+}
+# Sirve también para el estado de cada país (experimento.paises[].estado) y
+# para «Anuncios sueltos» (ads.py usa los mismos valores).
+ETIQUETAS_ESTADO_PIEZA = {
+    "en_cola": N_("en cola"), "publicando": N_("publicando"), "pausado": N_("pausado"),
+    "activo": N_("activo"), "error": N_("error"),
+}
+ETIQUETAS_VEREDICTO = {
+    "ganador": N_("ganador"), "perdedor": N_("perdedor"), "inconcluso": N_("inconcluso"), "pendiente": N_("pendiente"),
+}
+ETIQUETAS_TIPO_PIEZA = {
+    "final": N_("final"), "video": N_("video"), "clon_limpio": N_("clon limpio"), "imagen": N_("imagen"),
+}
+ETIQUETAS_ATRIBUCION = {
+    "pixel": N_("pixel"), "tienda": N_("tienda"), "triple_whale": N_("Triple Whale"), "ninguna": N_("ninguna"),
+}
+# Rótulo de cada `evento.tipo` (bitácora del experimento) — cubre todos los
+# tipos que registran experimentos.registrar_evento en dashboard.py,
+# acciones.py, organico.py, derivaciones.py, lanzador.py y tareas/experimentos.py.
+ETIQUETAS_EVENTO = {
+    "creado": N_("creado"), "modo": N_("modo"), "reglas": N_("reglas"), "accion": N_("acción"),
+    "propuesta": N_("propuesta"), "error": N_("error"), "publicacion": N_("publicación"),
+    "derivacion": N_("derivación"), "lanzamiento": N_("lanzamiento"), "estado": N_("estado"),
+    "presupuesto": N_("presupuesto"), "rechazo_meta": N_("rechazo de Meta"), "veredicto": N_("veredicto"),
+    "imagen": N_("imagen"), "escalado": N_("escalado"), "tope": N_("tope"),
+}
 _EXP_COLS = ("estado", "error", "meta_campaign_id", "gasto_acumulado", "paises", "nombre", "tope_total",
              "dias", "destino_url", "edad_min", "edad_max", "extra", "modo", "reglas", "atribucion", "objetivo_meta")
 _EP_COLS = ("estado", "error", "meta_adset_id", "meta_ad_id", "meta_creative_id", "estado_meta",
@@ -74,7 +108,7 @@ def crear(cliente, nombre, paises, objetivo_meta, dias, tope_total, destino_url,
     if atribucion is None:
         atribucion = atribucion_sugerida(cliente)
     if atribucion not in ATRIBUCIONES:
-        raise ValueError(f"Atribución no válida: {atribucion!r} (usa pixel, tienda o ninguna).")
+        raise ValueError(gettext("Atribución no válida: %(atribucion)s (usa pixel, tienda o ninguna).", atribucion=repr(atribucion)))
     ahora = db.ahora()
     with db.conectar() as con:
         return con.execute(db.experimento.insert().values(
@@ -248,10 +282,11 @@ def validar_combinacion(candidata, paises_experimento, pais):
     if candidata["tipo"] == "final":
         pais_final = candidata["pais"]
         if pais not in (None, "") and pais != pais_final:
-            return pais_final, f"Esa final es de {pais_final}; no se puede meter a otro país."
+            return pais_final, gettext("Esa final es de %(pais)s; no se puede meter a otro país.", pais=pais_final)
         return pais_final, None
     if pais not in paises_experimento:
-        return pais, f"Ese país no está en el experimento (elige entre {', '.join(sorted(paises_experimento))})."
+        return pais, gettext("Ese país no está en el experimento (elige entre %(paises)s).",
+                             paises=", ".join(sorted(paises_experimento)))
     return pais, None
 
 
@@ -268,7 +303,7 @@ def crear_con_piezas(cliente, datos, combinaciones):
     for pieza_id, pais in combinaciones:
         cand = elegibles_por_id.get(pieza_id)
         if not cand:
-            raise ErrorCombinacion("Una de las piezas no está disponible (o no está lista).")
+            raise ErrorCombinacion(gettext("Una de las piezas no está disponible (o no está lista)."))
         pais_ok, error = validar_combinacion(cand, paises_exp, pais)
         if error and cand["tipo"] == "final":
             continue
@@ -279,7 +314,7 @@ def crear_con_piezas(cliente, datos, combinaciones):
         vistas.add((pieza_id, pais_ok))
         finales.append((pieza_id, pais_ok))
     if not finales:
-        raise ErrorCombinacion("Ninguna pieza cabe en los países elegidos: revisa el reparto.")
+        raise ErrorCombinacion(gettext("Ninguna pieza cabe en los países elegidos: revisa el reparto."))
     # exp_lanzar rechaza un experimento con un país sin piezas ("Sin piezas
     # para: …") — pero eso ocurre en el worker, después de gastar el único
     # intento de la cola. Se valida acá, antes de crear nada, para que la
@@ -288,13 +323,14 @@ def crear_con_piezas(cliente, datos, combinaciones):
     # a otro país).
     faltan = sorted(paises_exp - {pais for _, pais in finales})
     if faltan:
-        raise ErrorCombinacion(f"Sin piezas para: {', '.join(faltan)}. Quita ese país o marca una pieza para él.")
+        raise ErrorCombinacion(gettext("Sin piezas para: %(faltan)s. Quita ese país o marca una pieza para él.",
+                                       faltan=", ".join(faltan)))
     ahora = db.ahora()
     atribucion = datos.get("atribucion")
     if atribucion is None:
         atribucion = atribucion_sugerida(cliente)
     if atribucion not in ATRIBUCIONES:
-        raise ValueError(f"Atribución no válida: {atribucion!r} (usa pixel, tienda o ninguna).")
+        raise ValueError(gettext("Atribución no válida: %(atribucion)s (usa pixel, tienda o ninguna).", atribucion=repr(atribucion)))
     with db.conectar() as con:
         eid = con.execute(db.experimento.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, nombre=datos["nombre"], modo=datos.get("modo", "manual"),

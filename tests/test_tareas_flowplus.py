@@ -563,3 +563,37 @@ def test_ejecutar_video_mezcla_una_cancion_propia_desde_su_segundo(base_temporal
     assert e["capas"]["musica"] == {"estilo": "Mi jingle", "url": "https://r2/clientes/acme/materiales/h.mp3",
                                     "costo_usd": 0.0, "estado": "ok", "material_id": 3, "inicio_s": 12, "fuente": "subida"}
     assert e["usd"] == pytest.approx(0.7)
+
+
+def test_avisar_fase_reporta_el_puesto_en_cola_en_el_idioma_del_proyecto(monkeypatch, tmp_path):
+    """Fix round 1 (Task 4): `_texto_fase` compone "<fase> (puesto N)" DENTRO
+    de `idiomas.en_idioma(idiomas.de_proyecto(cliente))` — es un mensaje de
+    fondo (spec §B8), no una pantalla que alguien esté mirando, y una vez
+    compuesto con el número de puesto `estado_trabajo` ya no puede volver a
+    traducirlo al responder. Sin proyecto (o en "es") el español sale
+    idéntico a como salía antes de este fix."""
+    import idiomas
+    import proyectos
+    import tareas.flowplus as fp
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
+    reportado = {}
+    monkeypatch.setattr(fp.trabajos, "reportar", lambda job_id, detalle=None: reportado.__setitem__("detalle", detalle))
+    avisar = fp._avisar_fase_de("job1", "acme")
+
+    # Sin proyecto.json (idioma por defecto, "es"): igual que siempre.
+    avisar({"fase": "IN_QUEUE", "queue_position": 3})
+    assert reportado["detalle"] == "en cola (puesto 3)"
+
+    # Proyecto en inglés: el mismo mensaje, en inglés.
+    idiomas.guardar_de_proyecto("acme", "en")
+    avisar({"fase": "IN_QUEUE", "queue_position": 3})
+    assert reportado["detalle"] == "queued (position 3)"
+
+    # Sin posición (fase sola), mismo idioma: también traducida.
+    avisar({"fase": "IN_PROGRESS"})
+    assert reportado["detalle"] == "the model is working"
+
+    # De vuelta a español: byte a byte lo mismo que antes del fix.
+    idiomas.guardar_de_proyecto("acme", "es")
+    avisar({"fase": "IN_QUEUE", "queue_position": 3})
+    assert reportado["detalle"] == "en cola (puesto 3)"

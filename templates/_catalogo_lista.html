@@ -9,26 +9,26 @@
   <summary class="swap-card-resumen">
     <span class="idea-chevron">▸</span>
     <span class="swap-thumb">
-      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=categoria_actual) }}" alt="{{ p.nombre }}" loading="lazy">
+      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=categoria_actual, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
     </span>
     <span class="swap-resumen-texto">
       <strong>{{ p.nombre }}</strong>
       <span class="swap-resumen-meta">
-        {% if con_mapa %}{{ tipos_producto[p.tipo].etiqueta if p.tipo in tipos_producto else p.tipo }} · {% endif %}{{ p.imagenes | length }} foto(s)
-        {% if p.mapa_etiqueta %}· <span class="badge">{{ p.mapa_etiqueta }}</span>{% endif %}
-        {% if p.usos %}· {{ p.usos }} uso(s){% endif %}
+        {% if con_mapa %}{{ (tipos_producto[p.tipo].etiqueta|traducir) if p.tipo in tipos_producto else p.tipo }} · {% endif %}{{ _('%(n)s foto(s)', n=(p.imagenes | length)) }}
+        {% if p.mapa_etiqueta %}· <span class="badge">{{ p.mapa_etiqueta|traducir }}</span>{% endif %}
+        {% if p.usos %}· {{ _('%(n)s uso(s)', n=p.usos) }}{% endif %}
       </span>
       {% if comercial %}
       <span class="swap-resumen-meta cat-comercial-linea">
-        {% if comercial.precio is not none %}<strong>{{ comercial.precio | dinero(comercial.moneda or '') }}</strong>{% else %}<span title="Sin precio: escríbelo abajo para que el anuncio lo muestre">sin precio</span>{% endif %}
+        {% if comercial.precio is not none %}<strong>{{ comercial.precio | dinero(comercial.moneda or '') }}</strong>{% else %}<span title="{{ _('Sin precio: escríbelo abajo para que el anuncio lo muestre') }}">{{ _('sin precio') }}</span>{% endif %}
         {# Solo http(s) se vuelve enlace: una URL importada de un CSV puede traer cualquier esquema. #}
-        {% if comercial.url_compra and comercial.url_compra.startswith(("http://", "https://")) %}· <a class="prod-url" style="display:inline;" href="{{ comercial.url_compra }}" target="_blank" rel="noopener">{{ comercial.url_compra | truncate(40, True) }}</a>{% elif comercial.url_compra %}· <span class="prod-url" style="display:inline;">{{ comercial.url_compra | truncate(40, True) }}</span>{% else %}· <span title="Sin URL de compra: el experimento no sabrá adónde mandar el clic">sin URL de compra</span>{% endif %}
-        · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente) }}</span>
-        {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">en prueba</span>{% endif %}
+        {% if comercial.url_compra and comercial.url_compra.startswith(("http://", "https://")) %}· <a class="prod-url" style="display:inline;" href="{{ comercial.url_compra }}" target="_blank" rel="noopener">{{ comercial.url_compra | truncate(40, True) }}</a>{% elif comercial.url_compra %}· <span class="prod-url" style="display:inline;">{{ comercial.url_compra | truncate(40, True) }}</span>{% else %}· <span title="{{ _('Sin URL de compra: el experimento no sabrá adónde mandar el clic') }}">{{ _('sin URL de compra') }}</span>{% endif %}
+        · <span class="tag-estado badge-fuente badge-fuente-{{ comercial.fuente }}">{{ etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir }}</span>
+        {% if comercial.en_prueba %}<span class="tag-estado tag-en-uso">{{ _('en prueba') }}</span>{% endif %}
         {% set n_pedidos = ((comercial.extra or {}).get('pedidos') or []) | selectattr('estado', 'equalto', 'abierto') | list | length %}
-        {% if n_pedidos %}<span class="tag-estado">{{ n_pedidos }} pedido{{ 's' if n_pedidos != 1 }} de Claude</span>{% endif %}
-        {% if comercial.prioridad %}<span class="tag-estado">prioridad {{ comercial.prioridad }}</span>{% endif %}
-        {% if comercial.n_experimentos %}<span class="tag-estado">en {{ comercial.n_experimentos }} experimento(s)</span>{% endif %}
+        {% if n_pedidos %}<span class="tag-estado">{{ ngettext('%(num)s pedido de Claude', '%(num)s pedidos de Claude', n_pedidos) }}</span>{% endif %}
+        {% if comercial.prioridad %}<span class="tag-estado">{{ _('prioridad %(n)s', n=comercial.prioridad) }}</span>{% endif %}
+        {% if comercial.n_experimentos %}<span class="tag-estado">{{ _('en %(n)s experimento(s)', n=comercial.n_experimentos) }}</span>{% endif %}
       </span>
       {% endif %}
     </span>
@@ -37,9 +37,9 @@
   <div class="producto-gestion-fotos">
     {% for img in p.imagenes %}
     <div class="producto-gestion-foto">
-      <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=categoria_actual) }}" alt="{{ img }}" loading="lazy">
+      <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=categoria_actual, w=320) }}" alt="{{ img }}" loading="lazy">
       <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
-        <button type="submit" title="Quitar esta foto">✕</button>
+        <button type="submit" title="{{ _('Quitar esta foto') }}">✕</button>
       </form>
     </div>
     {% endfor %}
@@ -49,29 +49,29 @@
   <form method="post" action="{{ url_for('actualizar_producto', cliente=cliente, producto_id=p.id) }}" class="form-nueva-idea"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
     <div class="fila-campos-idea">
       <div>
-        <label class="campo-label">Nombre</label>
+        <label class="campo-label">{{ _('Nombre') }}</label>
         <input type="text" name="nombre" value="{{ p.nombre }}" required>
       </div>
       {% if con_mapa %}
       <div>
-        <label class="campo-label">Tipo</label>
+        <label class="campo-label">{{ _('Tipo') }}</label>
         <select name="tipo">
           {% for tid, t in tipos_producto.items() %}
-          <option value="{{ tid }}" {% if p.tipo == tid %}selected{% endif %}>{{ t.etiqueta }}</option>
+          <option value="{{ tid }}" {% if p.tipo == tid %}selected{% endif %}>{{ t.etiqueta|traducir }}</option>
           {% endfor %}
         </select>
       </div>
       {% endif %}
     </div>
 
-    <label class="campo-label" style="margin-top:.8rem;display:block;">Descripción</label>
+    <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Descripción') }}</label>
     <textarea name="descripcion" rows="2">{{ p.descripcion }}</textarea>
 
-    <label class="campo-label" style="margin-top:.8rem;display:block;">Regla de consistencia (opcional)</label>
-    <input type="text" name="regla" value="{{ p.regla_propia or '' }}" placeholder="Lo que nunca debe cambiar en este activo">
+    <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Regla de consistencia (opcional)') }}</label>
+    <input type="text" name="regla" value="{{ p.regla_propia or '' }}" placeholder="{{ _('Lo que nunca debe cambiar en este activo') }}">
 
     {% if con_mapa %}
-    <label class="campo-label" style="margin-top:.8rem;display:block;">Mapa corporal</label>
+    <label class="campo-label" style="margin-top:.8rem;display:block;">{{ _('Mapa corporal') }}</label>
     {% with zonas=zonas_cuerpo, presets=presets_cuerpo, etiquetas_presets=etiquetas_presets, seleccionadas=p.zonas %}
       {% include "_maniqui.html" %}
     {% endwith %}
@@ -79,28 +79,33 @@
 
     {% if con_mapa and p.mapa_texto %}
     <details style="margin-top:.4rem;">
-      <summary class="btn-guardar btn-sm">Ver la instrucción exacta que recibe el modelo →</summary>
+      <summary class="btn-guardar btn-sm">{{ _('Ver la instrucción exacta que recibe el modelo →') }}</summary>
+      {# p.mapa_texto: instrucción real ya escrita en el idioma DEL PROYECTO
+         (mapa_corporal.describir vía catalogo_productos.listar), no en el de
+         quien mira la pantalla — es justo lo que se le manda al modelo. #}
       <p class="vacio" style="font-size:.76rem;margin-top:.5rem;">{{ p.mapa_texto }}</p>
     </details>
     {% endif %}
 
     {% if categoria_actual == 'producto' %}
     {% if comercial and comercial.fuente != 'manual' %}
-    <p class="vacio cat-sincronizado" style="font-size:.76rem;margin-top:.8rem;" title="La próxima sincronización o importación puede volver a escribir el nombre y la descripción con lo que diga la tienda; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan.">
-      Sincronizado de {{ etiquetas_fuente.get(comercial.fuente, comercial.fuente) }}{% if comercial.fuente_id and comercial.fuente in ('url',) %} ({{ comercial.fuente_id | truncate(40, True) }}){% endif %}: la tienda manda sobre el nombre y la descripción.
+    <p class="vacio cat-sincronizado" style="font-size:.76rem;margin-top:.8rem;" title="{{ _('La próxima sincronización o importación puede volver a escribir el nombre y la descripción con lo que diga la tienda; el precio, la URL de compra, «en prueba» y la prioridad que pongas aquí se respetan.') }}">
+      {{ _('Sincronizado de %(fuente)s%(detalle)s: la tienda manda sobre el nombre y la descripción.',
+           fuente=(etiquetas_fuente.get(comercial.fuente, comercial.fuente)|traducir),
+           detalle=((' (' ~ (comercial.fuente_id | truncate(40, True)) ~ ')') if (comercial.fuente_id and comercial.fuente in ('url',)) else '')) }}
     </p>
     {% endif %}
     {% with prefijo="edit-" ~ p.id %}{% include "_catalogo_campos_comerciales.html" %}{% endwith %}
     {% endif %}
 
-    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">Guardar cambios</button>
+    <button class="btn-guardar btn-sm" type="submit" style="margin-top:.8rem;">{{ _('Guardar cambios') }}</button>
   </form>
 
   <div class="producto-gestion-acciones">
     {% if comercial %}
-    <form method="post" action="{{ url_for('prod_experimento', cliente=cliente, pid=comercial.id) }}" class="inline" title="Abre Experimentos con el nombre y la URL de compra de este producto ya puestos">
+    <form method="post" action="{{ url_for('prod_experimento', cliente=cliente, pid=comercial.id) }}" class="inline" title="{{ _('Abre Experimentos con el nombre y la URL de compra de este producto ya puestos') }}">
       <input type="hidden" name="pid" value="{{ comercial.id }}">
-      <button type="submit" class="btn-generar btn-sm">Crear experimento</button>
+      <button type="submit" class="btn-generar btn-sm">{{ _('Crear experimento') }}</button>
     </form>
     {% endif %}
     <form method="post" action="{{ url_for('subir_imagen_producto', cliente=cliente, producto_id=p.id) }}" enctype="multipart/form-data"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
@@ -111,7 +116,7 @@
             data-producto-nombre="{{ p.nombre }}"
             data-fotos="{{ p.imagenes | length }}"
             data-usos="{{ p.usos }}"
-            data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ categoria_actual }}">Eliminar</button>
+            data-accion="{{ url_for('eliminar_producto', cliente=cliente, producto_id=p.id) }}" data-categoria="{{ categoria_actual }}">{{ _('Eliminar') }}</button>
   </div>
   {% if categoria_actual == 'producto' and comercial %}{% include "_producto_doctrina.html" %}{% endif %}
 </details>

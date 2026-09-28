@@ -13,6 +13,7 @@ import math
 import sqlalchemy as sa
 
 import db
+import proyectos
 
 ETAPAS = ("TOF", "MOF", "BOF")
 CONSCIENCIAS = ("unaware", "problem-aware", "solution-aware", "product-aware", "most-aware")
@@ -31,6 +32,7 @@ ETIQUETAS_CONSCIENCIA = {"unaware": "inconsciente", "problem-aware": "consciente
                          "solution-aware": "consciente de la solución", "product-aware": "consciente del producto",
                          "most-aware": "muy consciente"}
 POR_PAGINA = 60
+DOLORES_MAX = 60      # las opciones del filtro «dolor» que salen de la base (rutas recorta a 50)
 CLIENTE_CREATV = "_creatv"
 
 _CAMPOS_ANUNCIO = ("pagina_id", "fuente", "marca", "url_anuncio", "url_marca", "titular", "cuerpo", "idioma", "pais",
@@ -58,6 +60,25 @@ def _texto(v, largo=None):
 
 def _visible(t, cliente):
     return sa.or_(t.c.cliente.is_(None), t.c.cliente == cliente)
+
+
+def _visible_listado(t, cliente):
+    """Lo que se LISTA para un proyecto (grid, filtros, sugeridos de Sprints):
+    como `_visible`, pero sin la biblioteca global de copycoders mientras el
+    proyecto no la traiga (`proyectos.referentes_copycoders`, incidente
+    2026-09-28). Un referente puntual (ficha, Recrear, uno ya usado en un
+    sprint) se sigue abriendo por id con `_visible`."""
+    if cliente is None or proyectos.referentes_copycoders(cliente):
+        return _visible(t, cliente)
+    return sa.or_(sa.and_(t.c.cliente.is_(None), t.c.fuente != "copycoders"), t.c.cliente == cliente)
+
+
+def total_copycoders():
+    """Cuántos anuncios tiene la biblioteca global de copycoders (con imagen)."""
+    t = db.referente
+    with db.conectar() as con:
+        return int(con.execute(sa.select(sa.func.count()).select_from(t).where(
+            t.c.cliente.is_(None), t.c.fuente == "copycoders", t.c.estado_imagen == "ok")).scalar() or 0)
 
 
 def _entero(v):
@@ -92,7 +113,7 @@ def familia_asegurar(nombre, descripcion="", origen="copycoders"):
 def familias(cliente=None):
     t, r = db.referente_familia, db.referente
     conteo = (sa.select(r.c.familia, sa.func.count().label("n"))
-              .where(_visible(r, cliente), r.c.estado_imagen == "ok").group_by(r.c.familia).subquery())
+              .where(_visible_listado(r, cliente), r.c.estado_imagen == "ok").group_by(r.c.familia).subquery())
     q = (sa.select(t, sa.func.coalesce(conteo.c.n, 0).label("n"))
          .select_from(t.outerjoin(conteo, conteo.c.familia == t.c.nombre)).order_by(t.c.nombre))
     with db.conectar() as con:
@@ -187,7 +208,7 @@ def referente(cliente, referente_id):
 def _condiciones(cliente, filtros):
     f = filtros or {}
     t = db.referente
-    cond = [_visible(t, cliente), t.c.estado_imagen == "ok"]
+    cond = [_visible_listado(t, cliente), t.c.estado_imagen == "ok"]
     if f.get("etapa") in ETAPAS:
         cond.append(t.c.etapa == f["etapa"])
     if f.get("consciencia") in CONSCIENCIAS:
@@ -204,7 +225,7 @@ def _condiciones(cliente, filtros):
     q = _texto(f.get("q"), 80)
     if q:
         like = f"%{q}%"
-        cond.append(sa.or_(t.c.titular.ilike(like), t.c.firma.ilike(like), t.c.marca.ilike(like)))
+        cond.append(sa.or_(t.c.titular.ilike(like), t.c.firma.ilike(like), t.c.marca.ilike(like), t.c.dolor.ilike(like)))
     # Filtros opcionales para el pool de sugeridos de Sprints (spec 2026-09-26,
     # fix de la ronda final): una campaña con marcas a imitar o idioma necesita
     # poder pedir DIRECTO esas filas, porque la biblioteca puede tener miles
@@ -256,17 +277,21 @@ def familias_frecuentes(cliente, etapa=None, consciencia=None, limite=6):
 
 def opciones(cliente):
     t = db.referente
-    base = [_visible(t, cliente), t.c.estado_imagen == "ok"]
+    base = [_visible_listado(t, cliente), t.c.estado_imagen == "ok"]
 
-    def _grupo(con, col):
+    def _grupo(con, col, limite=None):
         q = (sa.select(col, sa.func.count().label("n")).where(*base, col.isnot(None), col != "")
              .group_by(col).order_by(sa.desc("n"), col))
+        if limite:
+            q = q.limit(limite)
         return [(r[0], int(r[1])) for r in con.execute(q)]
 
     with db.conectar() as con:
         total = con.execute(sa.select(sa.func.count()).select_from(t).where(*base)).scalar() or 0
+        # «dolor» son miles de valores distintos con copycoders: el filtro solo
+        # muestra los más frecuentes (referentes.rutas.MAX_DOLORES_FILTRO).
         return {"total": int(total), "familias": _grupo(con, t.c.familia), "marcas": _grupo(con, t.c.marca),
-                "dolores": _grupo(con, t.c.dolor), "fuentes": _grupo(con, t.c.fuente)}
+                "dolores": _grupo(con, t.c.dolor, limite=DOLORES_MAX), "fuentes": _grupo(con, t.c.fuente)}
 
 
 # ---------------------------------------------------------------- imágenes ---

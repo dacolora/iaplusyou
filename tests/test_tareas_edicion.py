@@ -402,3 +402,16 @@ def test_proxy_deja_el_lado_corto_en_540(tmp_path, entrada, esperado):
 def test_proxy_version_es_2():
     from tareas import edicion
     assert edicion.PROXY_VERSION == 2
+
+
+def test_tarea_desde_clon_crea_la_edicion(base_temporal, monkeypatch, tmp_path):
+    from final_edition import edicion_clon
+    from tareas import edicion
+    monkeypatch.setenv("CREATV_SALIDAS", str(tmp_path))
+    llamadas = []
+    monkeypatch.setattr(edicion_clon, "crear", lambda cliente, cf_id, carpeta: llamadas.append((cliente, cf_id, carpeta)) or 42)
+    msg = edicion.ejecutar_desde_clon({"payload": {"cliente": "acme", "cf_id": "cf_1"}})
+    assert "42" in msg
+    assert llamadas[0][:2] == ("acme", "cf_1") and llamadas[0][2].endswith("clon_cf_1")
+    with pytest.raises(ValueError):
+        edicion.ejecutar_desde_clon({"payload": {"cliente": "acme", "cf_id": "../x"}})

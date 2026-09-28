@@ -21,7 +21,7 @@ def app(base_temporal, monkeypatch, tmp_path):
     monkeypatch.setattr(dashboard.trabajos, "en_curso", lambda job_id: False)
     ejecutadas = []
 
-    def _ejecutar(cliente, eid, accion, payload):
+    def _ejecutar(cliente, eid, accion, payload, **kw):
         ejecutadas.append((cliente, eid, accion, dict(payload)))
         return f"{accion} hecho."
     monkeypatch.setattr(dashboard.acciones, "ejecutar", _ejecutar)
@@ -167,7 +167,7 @@ def test_error_al_ejecutar_deja_pendiente_y_avisa(app, monkeypatch):
     eid = _experimento()
     pid = propuestas.crear("acme", eid, "escalar", {"pais": "CO"}, "ganador")
 
-    def _falla(cliente, eid_, accion, payload):
+    def _falla(cliente, eid_, accion, payload, **kw):
         raise ValueError("Ese país no tiene conjunto.")
     monkeypatch.setattr(d.acciones, "ejecutar", _falla)
     app["c"].post(f"/cliente/acme/propuestas/{pid}/aprobar")
@@ -183,7 +183,7 @@ def test_aprobar_todas_para_en_el_primer_error(app, monkeypatch):
     p2 = propuestas.crear("acme", eid, "pausar", {"ep_id": 1}, "perdedor")
     llamadas = []
 
-    def _falla_primera(cliente, eid_, accion, payload):
+    def _falla_primera(cliente, eid_, accion, payload, **kw):
         llamadas.append(accion)
         raise RuntimeError("Meta caída access_token=SECRETO")
     monkeypatch.setattr(d.acciones, "ejecutar", _falla_primera)

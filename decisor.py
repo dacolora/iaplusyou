@@ -3,7 +3,14 @@ Decisor (spec §5): función pura sobre snapshots + reglas + contexto. Tráfico
 filtra (puerta 1), ventas decide (puerta 2, solo con atribución). Nunca toca
 la base ni Meta: quien la llama (tareas/experimentos.exp_decidir) arma el
 contexto y ejecuta/propone la acción según el modo.
+
+`decidir` sigue pura: el `motivo` sale de `gettext`, que fuera de una llamada
+dentro de `idiomas.en_idioma(...)` devuelve el español tal cual (locale por
+defecto), así que la función no gana ningún efecto de red ni de app.
 """
+from flask_babel import gettext
+
+from idiomas import N_
 
 REGLAS_DEFECTO = {
     "ventana_horas": 48, "impresiones_min": 1000, "gasto_min_x_presupuesto": 2.0,
@@ -19,14 +26,15 @@ _UMBRALES_DESACTIVABLES = {"cpc_max", "ctr_min", "thruplay_min", "cpa_max", "roa
 # Alias públicos para los formularios (dashboard) — misma tupla de claves.
 ENTEROS = frozenset(_ENTEROS)
 UMBRALES_DESACTIVABLES = frozenset(_UMBRALES_DESACTIVABLES)
-# Texto corto de cada regla para la UI (misma clave que REGLAS_DEFECTO).
+# Texto corto de cada regla para la UI (misma clave que REGLAS_DEFECTO). N_:
+# se traduce donde se muestra (|traducir en la plantilla), no acá.
 ETIQUETAS = {
-    "ventana_horas": "Ventana de tráfico (horas)", "impresiones_min": "Impresiones mínimas",
-    "gasto_min_x_presupuesto": "Gasto mínimo (x presupuesto diario)", "cpc_max": "CPC máximo",
-    "ctr_min": "CTR mínimo (%)", "thruplay_min": "ThruPlay mínimo (0–1)",
-    "ventana_ventas_horas": "Ventana de ventas (horas)", "cpa_max": "CPA máximo", "roas_min": "ROAS mínimo",
-    "n_reediciones": "Re-ediciones por derivación", "n_regeneraciones": "Regeneraciones por derivación",
-    "escalar_pct_dia": "Escalar (% por día)", "escalar_tope_dia": "Tope diario al escalar",
+    "ventana_horas": N_("Ventana de tráfico (horas)"), "impresiones_min": N_("Impresiones mínimas"),
+    "gasto_min_x_presupuesto": N_("Gasto mínimo (x presupuesto diario)"), "cpc_max": N_("CPC máximo"),
+    "ctr_min": N_("CTR mínimo (%)"), "thruplay_min": N_("ThruPlay mínimo (0–1)"),
+    "ventana_ventas_horas": N_("Ventana de ventas (horas)"), "cpa_max": N_("CPA máximo"), "roas_min": N_("ROAS mínimo"),
+    "n_reediciones": N_("Re-ediciones por derivación"), "n_regeneraciones": N_("Regeneraciones por derivación"),
+    "escalar_pct_dia": N_("Escalar (% por día)"), "escalar_tope_dia": N_("Tope diario al escalar"),
 }
 
 
@@ -107,7 +115,7 @@ def decidir(snapshots, reglas, contexto):
     r = dict(REGLAS_DEFECTO, **(reglas or {}))
     c = contexto or {}
     if not snapshots:
-        return _resultado("pendiente", "Todavía no hay métricas.", None, 0, {})
+        return _resultado("pendiente", gettext("Todavía no hay métricas."), None, 0, {})
     u = snapshots[-1]
     numeros = {k: _f(u, k) for k in ("impresiones", "clics_enlace", "ctr", "cpc", "thruplay_rate", "gasto", "compras", "cpa", "roas")}
     numeros["impresiones"] = int(numeros["impresiones"]); numeros["compras"] = int(numeros["compras"])
@@ -125,54 +133,68 @@ def decidir(snapshots, reglas, contexto):
                  or (horas >= r["ventana_horas"] and numeros["impresiones"] > 0))
     if not evidencia:
         if dias and transcurridos >= dias:
-            return _resultado("inconcluso", f"Cerró la ventana de {int(dias)} días sin evidencia suficiente "
-                              f"({numeros['impresiones']} impresiones, gasto {numeros['gasto']:.2f}).", "pausar", 0, numeros)
-        return _resultado("pendiente", f"Sin evidencia todavía: {numeros['impresiones']} impresiones "
-                          f"(mínimo {r['impresiones_min']}), gasto {numeros['gasto']:.2f} (mínimo {gasto_min:.2f}), "
-                          f"{horas:.0f} h de {r['ventana_horas']}.", None, 0, numeros)
+            return _resultado("inconcluso", gettext(
+                "Cerró la ventana de %(dias)s días sin evidencia suficiente (%(imp)s impresiones, gasto %(gasto)s).",
+                dias=int(dias), imp=numeros["impresiones"], gasto=f"{numeros['gasto']:.2f}"), "pausar", 0, numeros)
+        return _resultado("pendiente", gettext(
+            "Sin evidencia todavía: %(imp)s impresiones (mínimo %(imp_min)s), gasto %(gasto)s (mínimo %(gasto_min)s), "
+            "%(horas)s h de %(ventana)s.", imp=numeros["impresiones"], imp_min=r["impresiones_min"],
+            gasto=f"{numeros['gasto']:.2f}", gasto_min=f"{gasto_min:.2f}", horas=f"{horas:.0f}", ventana=r["ventana_horas"]),
+            None, 0, numeros)
 
     # Puerta 1: tráfico.
     fallas = []
     if r["cpc_max"] is not None and numeros["cpc"] > r["cpc_max"]:
-        fallas.append(f"CPC {numeros['cpc']:.2f} > {r['cpc_max']:.2f}")
+        fallas.append(gettext("CPC %(cpc)s > %(cpc_max)s", cpc=f"{numeros['cpc']:.2f}", cpc_max=f"{r['cpc_max']:.2f}"))
     if r["ctr_min"] is not None and numeros["ctr"] < r["ctr_min"]:
-        fallas.append(f"CTR {numeros['ctr']:.2f}% < {r['ctr_min']:.2f}%")
+        fallas.append(gettext("CTR %(ctr)s%% < %(ctr_min)s%%", ctr=f"{numeros['ctr']:.2f}", ctr_min=f"{r['ctr_min']:.2f}"))
     if r["thruplay_min"] is not None and not c.get("es_imagen") and numeros["thruplay_rate"] < r["thruplay_min"]:
-        fallas.append(f"ThruPlay {numeros['thruplay_rate'] * 100:.0f}% < {r['thruplay_min'] * 100:.0f}%")
+        fallas.append(gettext("ThruPlay %(tp)s%% < %(tp_min)s%%",
+                              tp=f"{numeros['thruplay_rate'] * 100:.0f}", tp_min=f"{r['thruplay_min'] * 100:.0f}"))
     escalon = int(c.get("escalon_rescate") or 0)
     if fallas:
         accion = "archivar" if escalon >= 3 else "rescatar"
-        return _resultado("perdedor", "No pasó la puerta de tráfico: " + "; ".join(fallas) + ".", accion, 1, numeros)
+        return _resultado("perdedor", gettext("No pasó la puerta de tráfico: %(fallas)s.", fallas="; ".join(fallas)),
+                          accion, 1, numeros)
 
     # Puerta 2: ventas (solo con atribución y al menos un umbral de venta activo).
     con_atribucion = c.get("atribucion") in ("pixel", "tienda", "triple_whale")
     sin_umbrales_venta = r["roas_min"] is None and r["cpa_max"] is None
     if con_atribucion and not sin_umbrales_venta:
         if horas < r["ventana_ventas_horas"]:
-            return _resultado("pendiente", f"Pasó tráfico; esperando {r['ventana_ventas_horas']} h para medir ventas "
-                              f"({horas:.0f} h).", None, 2, numeros)
+            return _resultado("pendiente", gettext(
+                "Pasó tráfico; esperando %(ventana)s h para medir ventas (%(horas)s h).",
+                ventana=r["ventana_ventas_horas"], horas=f"{horas:.0f}"), None, 2, numeros)
         ok_roas = r["roas_min"] is not None and numeros["roas"] >= r["roas_min"]
         ok_cpa = r["cpa_max"] is not None and numeros["compras"] > 0 and numeros["cpa"] <= r["cpa_max"]
         if not (ok_roas or ok_cpa):
             accion = "archivar" if escalon >= 3 else "rescatar"
-            return _resultado("perdedor", f"Pasó tráfico pero no ventas: ROAS {numeros['roas']:.2f} "
-                              f"(mínimo {r['roas_min']}), CPA {numeros['cpa']:.2f}"
-                              + (f" (máximo {r['cpa_max']})" if r["cpa_max"] is not None else "") + ".", accion, 2, numeros)
-        motivo_ventas = f"ROAS {numeros['roas']:.2f} ≥ {r['roas_min']}" if ok_roas else f"CPA {numeros['cpa']:.2f} ≤ {r['cpa_max']}"
+            cpa_max_txt = gettext(" (máximo %(cpa_max)s)", cpa_max=r["cpa_max"]) if r["cpa_max"] is not None else ""
+            return _resultado("perdedor", gettext(
+                "Pasó tráfico pero no ventas: ROAS %(roas)s (mínimo %(roas_min)s), CPA %(cpa)s%(cpa_max_txt)s.",
+                roas=f"{numeros['roas']:.2f}", roas_min=r["roas_min"], cpa=f"{numeros['cpa']:.2f}",
+                cpa_max_txt=cpa_max_txt), accion, 2, numeros)
+        motivo_ventas = (gettext("ROAS %(roas)s ≥ %(roas_min)s", roas=f"{numeros['roas']:.2f}", roas_min=r["roas_min"])
+                         if ok_roas else
+                         gettext("CPA %(cpa)s ≤ %(cpa_max)s", cpa=f"{numeros['cpa']:.2f}", cpa_max=r["cpa_max"]))
         puerta = 2
     elif con_atribucion:
-        motivo_ventas = "sin umbrales de ventas"
+        motivo_ventas = gettext("sin umbrales de ventas")
         puerta = 1
     else:
-        motivo_ventas = "sin ventas medibles"
+        motivo_ventas = gettext("sin ventas medibles")
         puerta = 1
 
     # Ranking: tercio superior de su país cuando hay ≥ 3 anuncios.
     total = int(c.get("total_pais") or 1)
     pos = _int_or_none(c.get("posicion"))
     if total >= 3 and pos is not None and pos > max(1, total // 3):
-        return _resultado("pendiente", f"Pasa umbrales pero no está en el tercio superior de su país "
-                          f"(posición {pos} de {total}).", None, puerta, numeros)
-    thruplay_txt = "" if c.get("es_imagen") else f"ThruPlay {numeros['thruplay_rate'] * 100:.0f}% — "
-    return _resultado("ganador", f"Ganador: CTR {numeros['ctr']:.2f}%, CPC {numeros['cpc']:.2f}, "
-                      f"{thruplay_txt}{motivo_ventas}.", "escalar_y_derivar", puerta, numeros)
+        return _resultado("pendiente", gettext(
+            "Pasa umbrales pero no está en el tercio superior de su país (posición %(pos)s de %(total)s).",
+            pos=pos, total=total), None, puerta, numeros)
+    thruplay_txt = ("" if c.get("es_imagen") else
+                    gettext("ThruPlay %(tp)s%% — ", tp=f"{numeros['thruplay_rate'] * 100:.0f}"))
+    return _resultado("ganador", gettext(
+        "Ganador: CTR %(ctr)s%%, CPC %(cpc)s, %(thruplay_txt)s%(motivo_ventas)s.",
+        ctr=f"{numeros['ctr']:.2f}", cpc=f"{numeros['cpc']:.2f}", thruplay_txt=thruplay_txt,
+        motivo_ventas=motivo_ventas), "escalar_y_derivar", puerta, numeros)

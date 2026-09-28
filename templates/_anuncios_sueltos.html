@@ -9,8 +9,8 @@
 {% set mon_sueltos = capacidades_meta.detalle.moneda or "USD" %}
 
 <div class="panel-cabecera anuncios-sueltos" id="anuncios-sueltos" style="margin-top:2.5rem;">
-  <h2>Anuncios sueltos (anteriores)</h2>
-  <p class="vacio">Venían de la pestaña Campañas. Se siguen midiendo y se pueden pausar/activar; para lanzar algo nuevo crea un experimento.</p>
+  <h2>{{ _('Anuncios sueltos (anteriores)') }}</h2>
+  <p class="vacio">{{ _('Venían de la pestaña Campañas. Se siguen midiendo y se pueden pausar/activar; para lanzar algo nuevo crea un experimento.') }}</p>
 </div>
 
 <div class="swaps-lista">
@@ -21,15 +21,15 @@
       <span class="idea-chevron">▸</span>
       <span class="swap-thumb">
         {% if entry.contenido_tipo == "video" %}
-        <video src="{{ entry.contenido_url }}#t=0.1" muted playsinline preload="metadata"></video>
+        <video src="{{ entry.contenido_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
         {% else %}
-        <img src="{{ entry.contenido_url }}" alt="{{ entry.nombre }}">
+        <img src="{{ entry.contenido_url }}" alt="{{ entry.nombre }}" loading="lazy">
         {% endif %}
       </span>
       <span class="swap-resumen-texto">
         <strong>{{ entry.nombre }}</strong>
         <span class="swap-resumen-meta">
-          {{ entry.fuente }} · <span class="tag-estado">{{ entry.estado }}</span>
+          {{ entry.fuente }} · <span class="tag-estado">{{ etiquetas_exp.pieza.get(entry.estado, entry.estado)|traducir }}</span>
           {% if m.estado_meta_texto %}· {{ m.estado_meta_texto }}{% endif %}
         </span>
       </span>
@@ -42,23 +42,23 @@
     {% if entry.meta_ids and entry.meta_ids.ad_id %}
     <div class="ad-resultados">
       <div class="ad-resultados-cab">
-        <strong>Resultados</strong>
+        <strong>{{ _('Resultados') }}</strong>
         <span class="vacio" style="padding:0;font-size:.76rem;">
-          {% if m.estado_meta_texto %}Estado en Meta: <strong>{{ m.estado_meta_texto }}</strong> · {% endif %}
-          {% if m.actualizado_en %}actualizado {{ m.actualizado_en[:16].replace("T", " ") }}{% else %}todavía no se han traído resultados{% endif %}
+          {% if m.estado_meta_texto %}{{ _('Estado en Meta:') }} <strong>{{ m.estado_meta_texto }}</strong> · {% endif %}
+          {% if m.actualizado_en %}{{ _('actualizado %(cuando)s', cuando=m.actualizado_en[:16].replace("T", " ")) }}{% else %}{{ _('todavía no se han traído resultados') }}{% endif %}
         </span>
       </div>
-      {% if m.motivo_rechazo %}<p class="tag-error">Meta no lo está mostrando: {{ m.motivo_rechazo }}</p>{% endif %}
+      {% if m.motivo_rechazo %}<p class="tag-error">{{ _('Meta no lo está mostrando: %(motivo)s', motivo=m.motivo_rechazo) }}</p>{% endif %}
       <div class="kpis">
-        <div class="kpi"><span>Impresiones</span><strong>{{ m.impresiones or 0 }}</strong><small>{% if m.cpm %}CPM {{ "{:,.0f}".format(m.cpm).replace(",", ".") }} {{ mon_sueltos }}{% else %}—{% endif %}</small></div>
-        <div class="kpi"><span>Clics</span><strong>{{ m.clics or 0 }}</strong><small>{% if m.resultado_nombre and m.resultado %}{{ m.resultado }} {{ m.resultado_nombre | lower }}{% else %}—{% endif %}</small></div>
-        <div class="kpi"><span>CTR</span><strong>{{ "%.2f"|format(m.ctr or 0) }}%</strong><small>{% if m.reach %}{{ m.reach }} personas{% else %}—{% endif %}</small></div>
-        <div class="kpi"><span>CPC</span><strong>{% if m.cpc %}{{ "{:,.0f}".format(m.cpc).replace(",", ".") }} {{ mon_sueltos }}{% else %}—{% endif %}</strong><small>{% if m.costo_por_resultado %}{{ "{:,.0f}".format(m.costo_por_resultado).replace(",", ".") }} {{ mon_sueltos }} por resultado{% else %}—{% endif %}</small></div>
-        <div class="kpi"><span>Gasto</span><strong>{{ "{:,.0f}".format(m.gasto_usd or 0).replace(",", ".") }} {{ mon_sueltos }}</strong><small>{% if entry.presupuesto_diario %}de {{ "{:,.0f}".format(entry.presupuesto_diario).replace(",", ".") }}/día{% elif entry.presupuesto_diario_usd %}de {{ "{:,.0f}".format(entry.presupuesto_diario_usd).replace(",", ".") }}/día{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>{{ _('Impresiones') }}</span><strong>{{ m.impresiones or 0 }}</strong><small>{% if m.cpm %}{{ _('CPM %(valor)s %(moneda)s', valor=("{:,.0f}".format(m.cpm).replace(",", ".")), moneda=mon_sueltos) }}{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>{{ _('Clics') }}</span><strong>{{ m.clics or 0 }}</strong><small>{% if m.resultado_nombre and m.resultado %}{{ m.resultado }} {{ m.resultado_nombre | lower }}{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>CTR</span><strong>{{ "%.2f"|format(m.ctr or 0) }}%</strong><small>{% if m.reach %}{{ _('%(n)s personas', n=m.reach) }}{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>CPC</span><strong>{% if m.cpc %}{{ "{:,.0f}".format(m.cpc).replace(",", ".") }} {{ mon_sueltos }}{% else %}—{% endif %}</strong><small>{% if m.costo_por_resultado %}{{ _('%(valor)s %(moneda)s por resultado', valor=("{:,.0f}".format(m.costo_por_resultado).replace(",", ".")), moneda=mon_sueltos) }}{% else %}—{% endif %}</small></div>
+        <div class="kpi"><span>{{ _('Gasto') }}</span><strong>{{ "{:,.0f}".format(m.gasto_usd or 0).replace(",", ".") }} {{ mon_sueltos }}</strong><small>{% if entry.presupuesto_diario %}{{ _('de %(valor)s/día', valor=("{:,.0f}".format(entry.presupuesto_diario).replace(",", "."))) }}{% elif entry.presupuesto_diario_usd %}{{ _('de %(valor)s/día', valor=("{:,.0f}".format(entry.presupuesto_diario_usd).replace(",", "."))) }}{% else %}—{% endif %}</small></div>
       </div>
       {% if not m.impresiones %}
       <p class="vacio" style="font-size:.76rem;">
-        {% if m.estado_meta == "PENDING_REVIEW" or not m.estado_meta %}Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras.{% elif entry.estado == "pausado" %}El anuncio está pausado: no se muestra ni gasta. Actívalo para que empiece a circular.{% else %}Todavía sin impresiones — dale a «Actualizar métricas» en unas horas.{% endif %}
+        {% if m.estado_meta == "PENDING_REVIEW" or not m.estado_meta %}{{ _('Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras.') }}{% elif entry.estado == "pausado" %}{{ _('El anuncio está pausado: no se muestra ni gasta. Actívalo para que empiece a circular.') }}{% else %}{{ _('Todavía sin impresiones — dale a «Actualizar métricas» en unas horas.') }}{% endif %}
       </p>
       {% endif %}
     </div>
@@ -68,42 +68,42 @@
     {% if trabajo_ad %}
     {# El worker está publicando o trayendo métricas: barra + recarga sola al terminar. #}
     <div class="barra-progreso" id="trabajo-{{ trabajo_ad.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-    <div class="progreso-texto">{% if entry.estado == "publicando" %}Publicando en Meta…{% else %}Actualizando métricas…{% endif %} 0% · 0s</div>
+    <div class="progreso-texto">{% if entry.estado == "publicando" %}{{ _('Publicando en Meta…') }}{% else %}{{ _('Actualizando métricas…') }}{% endif %} {{ _('0%% · 0s') }}</div>
     <script>iniciarPolling({{ trabajo_ad.job_id | tojson }}, {{ ("trabajo-" ~ trabajo_ad.job_id) | tojson }});</script>
     {% endif %}
 
     <div class="exp-acciones">
       {% if entry.meta_ids and entry.meta_ids.ad_id %}
       <form method="post" action="{{ url_for('actualizar_resultados_ad', cliente=cliente, ad_id=ad_id) }}" class="inline">
-        <button type="submit" class="btn-guardar btn-sm">Actualizar métricas</button>
+        <button type="submit" class="btn-guardar btn-sm">{{ _('Actualizar métricas') }}</button>
       </form>
       {% if entry.estado == "activo" %}
       <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" class="inline">
         <input type="hidden" name="estado" value="PAUSED">
         {% if capacidades_meta.estado == "conectado" %}
-        <button type="submit" class="btn-rechazar btn-sm">Pausar</button>
+        <button type="submit" class="btn-rechazar btn-sm">{{ _('Pausar') }}</button>
         {% else %}
-        <span class="vacio">Reconecta Meta para pausar.</span>
+        <span class="vacio">{{ _('Reconecta Meta para pausar.') }}</span>
         {% endif %}
       </form>
       {% elif entry.estado == "pausado" %}
-      <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit="return confirm('Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?');">
+      <form method="post" action="{{ url_for('cambiar_estado_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit='return confirm({{ _("Activar empieza a gastar presupuesto real en Meta. ¿Seguimos?")|tojson }});'>
         <input type="hidden" name="estado" value="ACTIVE">
         {% if capacidades_meta.estado == "conectado" %}
-        <button type="submit" class="btn-aprobar btn-sm">Activar</button>
+        <button type="submit" class="btn-aprobar btn-sm">{{ _('Activar') }}</button>
         {% else %}
-        <span class="vacio">Reconecta Meta para activar.</span>
+        <span class="vacio">{{ _('Reconecta Meta para activar.') }}</span>
         {% endif %}
       </form>
       {% endif %}
       {% endif %}
       {% if entry.estado == "error" %}
       <form method="post" action="{{ url_for('reintentar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline">
-        <button type="submit" class="btn-generar btn-sm">Volver a intentar</button>
+        <button type="submit" class="btn-generar btn-sm">{{ _('Volver a intentar') }}</button>
       </form>
       {% endif %}
-      <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit="return confirm('¿Quitar de la lista? Esto NO borra el anuncio en Meta si ya se publicó.');">
-        <button type="submit" class="btn-rechazar btn-sm">Quitar de la lista</button>
+      <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit='return confirm({{ _("¿Quitar de la lista? Esto NO borra el anuncio en Meta si ya se publicó.")|tojson }});'>
+        <button type="submit" class="btn-rechazar btn-sm">{{ _('Quitar de la lista') }}</button>
       </form>
     </div>
   </details>
@@ -112,32 +112,32 @@
 
 {% if en_cola_sueltos %}
 <div class="anuncios-sueltos-cola" style="margin-top:1.2rem;">
-  <h3>Piezas que estaban listas para publicar ({{ en_cola_sueltos | length }})</h3>
-  <p class="vacio">Ahora esto se hace con un experimento: crea uno (o usa uno en armado) y mete la pieza.</p>
+  <h3>{{ _('Piezas que estaban listas para publicar (%(n)s)', n=en_cola_sueltos|length) }}</h3>
+  <p class="vacio">{{ _('Ahora esto se hace con un experimento: crea uno (o usa uno en armado) y mete la pieza.') }}</p>
   <ul class="exp-piezas">
     {% for ad_id, entry in ads.items() if entry.estado == "en_cola" %}
     {% set elegible = (elegibles_exp | selectattr("url_video", "equalto", entry.contenido_url) | list | first) if elegibles_exp else none %}
     <li class="exp-pieza anuncio-suelto-en-cola" id="ad-{{ ad_id }}">
       <span class="exp-pieza-mini">
-        {% if entry.contenido_tipo == "video" %}<video src="{{ entry.contenido_url }}#t=0.1" muted playsinline preload="metadata"></video>{% else %}<img src="{{ entry.contenido_url }}" alt="">{% endif %}
+        {% if entry.contenido_tipo == "video" %}<video src="{{ entry.contenido_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>{% else %}<img src="{{ entry.contenido_url }}" alt="" loading="lazy">{% endif %}
       </span>
-      <span class="exp-pieza-nombre">{{ entry.nombre }} <small>({{ entry.fuente }})</small> <span class="tag-estado">en cola</span></span>
+      <span class="exp-pieza-nombre">{{ entry.nombre }} <small>({{ entry.fuente }})</small> <span class="tag-estado">{{ _('en cola') }}</span></span>
       {% if elegible and experimentos_armando %}
       <form method="post" action="{{ url_for('exp_meter_pieza', cliente=cliente) }}" class="inline exp-meter">
         <input type="hidden" name="legado_id" value="{{ elegible.legado_id }}">
         <input type="hidden" name="volver" value="experimentos">
         <select name="experimento_id">{% for e in experimentos_armando %}<option value="{{ e.id }}">{{ e.nombre }}</option>{% endfor %}</select>
         <select name="pais">{% for codigo in paises_fe %}<option value="{{ codigo }}"{% if elegible.pais == codigo %} selected{% endif %}>{{ codigo }}</option>{% endfor %}</select>
-        <button type="submit" class="btn-guardar btn-sm">Meter en experimento</button>
+        <button type="submit" class="btn-guardar btn-sm">{{ _('Meter en experimento') }}</button>
       </form>
       {% elif elegible and elegible.pieza_id %}
       {# Sin experimento en armado: el mismo «Probar en Meta» de Crear (galería con la pieza marcada). #}
-      <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ elegible.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">Probar en Meta</a>
+      <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ elegible.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
       {% elif not elegible %}
-      <small class="vacio">Esta pieza ya no está en Crear: genera una nueva y métela en un experimento.</small>
+      <small class="vacio">{{ _('Esta pieza ya no está en Crear: genera una nueva y métela en un experimento.') }}</small>
       {% endif %}
-      <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit="return confirm('¿Quitar de la lista?');">
-        <button type="submit" class="btn-rechazar btn-xs">Quitar de la lista</button>
+      <form method="post" action="{{ url_for('eliminar_ad', cliente=cliente, ad_id=ad_id) }}" class="inline" onsubmit='return confirm({{ _("¿Quitar de la lista?")|tojson }});'>
+        <button type="submit" class="btn-rechazar btn-xs">{{ _('Quitar de la lista') }}</button>
       </form>
     </li>
     {% endfor %}

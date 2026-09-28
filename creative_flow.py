@@ -160,6 +160,15 @@ def guion_base(cliente, cf_id):
                            .where(db.concepto.c.id == f[0])).scalar()
 
 
+def guiones_base(cliente):
+    """{cf_id: guion_base} de todas las sesiones del proyecto en UNA consulta
+    (la lista de Crear lo pedía sesión por sesión; incidente 2026-09-28)."""
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.concepto.c.legado_id, db.concepto.c.guion_base)
+                            .where(db.concepto.c.cliente == cliente, db.concepto.c.legado_id.isnot(None))).fetchall()
+    return {f[0]: f[1] for f in filas}
+
+
 def eliminar(cliente, cf_id):
     with db.conectar() as con:
         f = _ids(con, cliente, cf_id)
@@ -209,6 +218,7 @@ def armar_prompt_sesion(cliente, extra, enfoque, con_sonido=None):
     muda no lleva línea SONIDO aunque tenga texto guardado. Devuelve
     (prompt, info_enfoque). No llama a ningún modelo: es texto puro."""
     import flowplus_prompt
+    import idiomas
     import marca as marca_mod
     info = flowplus_prompt.ENFOQUES[enfoque]
     referencias = list(extra.get("referencias") or [])
@@ -223,6 +233,7 @@ def armar_prompt_sesion(cliente, extra, enfoque, con_sonido=None):
         guia_marca=marca_mod.guia_efectiva(cliente), negative_marca=marca_mod.negative_prompt_efectivo(cliente),
         logos=[r for r in referencias if r.get("logo")], enfoque=enfoque,
         sonido=(extra.get("sonido_texto") or None) if con_sonido else None, con_sonido=con_sonido,
+        idioma=idiomas.de_proyecto(cliente),
     )
     return prompt, info
 
@@ -450,6 +461,23 @@ def finales(cliente, cf_id):
         filas = con.execute(sa.select(db.pieza).where(
             db.pieza.c.tipo == "final", db.pieza.c.padre_pieza_id == f[1]).order_by(db.pieza.c.id)).fetchall()
     return [_final_a_dict(_Cols(fila, db.pieza)) for fila in filas]
+
+
+def finales_por_sesion(cliente):
+    """{cf_id: [finales]} de todo el proyecto en UNA consulta: los mismos dicts
+    que `finales`, en el mismo orden (por id). Las sesiones sin finales no
+    aparecen (`.get(cf_id, [])`)."""
+    padre = db.pieza.alias("padre")
+    q = (sa.select(db.pieza, db.concepto.c.legado_id.label("cf_legado"))
+         .select_from(db.pieza.join(padre, padre.c.id == db.pieza.c.padre_pieza_id)
+                      .join(db.concepto, db.concepto.c.id == padre.c.concepto_id))
+         .where(db.pieza.c.tipo == "final", padre.c.tipo != "final", db.concepto.c.cliente == cliente)
+         .order_by(db.pieza.c.id))
+    out = {}
+    with db.conectar() as con:
+        for fila in con.execute(q).fetchall():
+            out.setdefault(fila._mapping["cf_legado"], []).append(_final_a_dict(_Cols(fila, db.pieza)))
+    return out
 
 
 def final_por_legado(cliente, final_id):

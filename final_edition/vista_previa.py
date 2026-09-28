@@ -10,7 +10,7 @@ import os
 
 import materiales
 import trabajos
-from final_edition import mezcla
+from final_edition import estimar, mezcla
 from final_edition.documento import FORMATOS
 from final_edition.motor import compilador, subtitulos
 from tareas import edicion as tareas_edicion
@@ -54,7 +54,8 @@ def materiales_para(cliente, doc):
         extra = m.get("extra") or {}
         out[int(mid)] = {"id": int(mid), "tipo": m["tipo"], "url": m["url"], "url_proxy": m.get("url_proxy"),
                          "duracion_ms": m.get("duracion_ms"), "ancho": m.get("ancho"), "alto": m.get("alto"),
-                         "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version")}
+                         "picos": extra.get("picos"), "proxy_version": extra.get("proxy_version"),
+                         "tira_url": extra.get("tira_url")}
     return out
 
 
@@ -90,7 +91,9 @@ def encolar_proxies(cliente, ids):
 def destinos(doc):
     """Destinos (`<idioma>_<PAIS>`) que el documento menciona en textos,
     voces, precios, subtítulos o voces por destino; el del guion base
-    primero. Sin ninguno: el idioma base con el país del guion (o CO)."""
+    primero. Sin ninguno: el idioma base con el país del guion, o el de
+    `origen.pais` (la edición armada desde el clon lleva el del proyecto),
+    o CO."""
     claves = set()
     var = doc.get("variables") or {}
     for grupo in ("textos", "voz"):
@@ -101,7 +104,8 @@ def destinos(doc):
     for p in doc.get("pistas") or []:
         for c in p.get("clips") or []:
             claves.update(k for k in (c.get("por_destino") or {}) if "_" in k)
-    base = f"{doc.get('idioma_base') or 'es'}_{(doc.get('guion') or {}).get('pais') or 'CO'}"
+    pais = (doc.get("guion") or {}).get("pais") or (doc.get("origen") or {}).get("pais") or "CO"
+    base = f"{doc.get('idioma_base') or 'es'}_{pais}"
     if not claves:
         claves.add(base)
     return sorted(claves, key=lambda k: (k != base, k))
@@ -123,7 +127,7 @@ def documento_para_vista(doc, mats):
     return copia, None
 
 
-def datos_pagina(cliente, edicion, url_materiales):
+def datos_pagina(cliente, edicion, urls):
     mats = materiales_para(cliente, edicion["documento"])
     doc, aviso = documento_para_vista(edicion["documento"], mats)
     return {
@@ -135,5 +139,7 @@ def datos_pagina(cliente, edicion, url_materiales):
         "faltantes": faltantes(doc, mats),
         "destinos": destinos(doc),
         "config": config_navegador(),
-        "urls": {"materiales": url_materiales},
+        "estimado_s": estimar.segundos(doc),
+        "cf_id": edicion.get("cf_id"),
+        "urls": urls,
     }

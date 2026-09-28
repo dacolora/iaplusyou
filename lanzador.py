@@ -6,6 +6,8 @@ Meta lo devuelve, así un reintento retoma donde quedó sin duplicar nada. Todo
 nace PAUSED: activar es otro clic (cambiar_estado). Las credenciales se cargan
 y limpian bajo el lock de tareas.meta (mismo motivo que allá).
 """
+from flask_babel import gettext
+
 import atribucion
 import cola
 import db
@@ -68,13 +70,15 @@ def traducir_error_meta(mensaje, modo="propia"):
     texto = str(mensaje or "")
     if any(marca in texto for marca in _APP_EN_DESARROLLO):
         if modo == "agencia":
-            return ("Meta rechazó el anuncio porque la app de Meta de Creatv (modo agencia) está en modo Desarrollo "
-                    "(subcódigo 1885183). Avísale al admin de Creatv para que la pase a modo Live y luego reintenta el "
-                    "lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se duplica nada.")
-        return ("Meta rechazó el anuncio porque la app de Meta de este proyecto está en modo Desarrollo (subcódigo "
-                "1885183). Pásala a modo Live en developers.facebook.com › Mis apps › tu app › «Modo de la app» y "
-                "reintenta el lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se "
-                "duplica nada.")
+            return gettext(
+                "Meta rechazó el anuncio porque la app de Meta de Creatv (modo agencia) está en modo Desarrollo "
+                "(subcódigo 1885183). Avísale al admin de Creatv para que la pase a modo Live y luego reintenta el "
+                "lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se duplica nada.")
+        return gettext(
+            "Meta rechazó el anuncio porque la app de Meta de este proyecto está en modo Desarrollo (subcódigo "
+            "1885183). Pásala a modo Live en developers.facebook.com › Mis apps › tu app › «Modo de la app» y "
+            "reintenta el lanzamiento: la campaña, los conjuntos y los videos ya creados se reutilizan, no se "
+            "duplica nada.")
     return texto
 
 
@@ -85,15 +89,16 @@ def _validar_para_lanzar(cliente, experimento_id):
     falla acá no debe dejar el experimento colgado en 'lanzando' para siempre."""
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     if ex["estado"] not in ("armando", "error", "lanzando"):
-        raise ValueError("Ese experimento ya fue lanzado.")
+        raise ValueError(gettext("Ese experimento ya fue lanzado."))
     if not ex["piezas"]:
-        raise ValueError("El experimento no tiene piezas: agrega al menos una antes de lanzar.")
+        raise ValueError(gettext("El experimento no tiene piezas: agrega al menos una antes de lanzar."))
     paises_con_piezas = {p["pais"] for p in ex["piezas"]}
     faltan = [p["pais"] for p in ex["paises"] if p["pais"] not in paises_con_piezas]
     if faltan:
-        raise ValueError(f"Sin piezas para: {', '.join(faltan)}. Agrega una pieza por país o quita el país.")
+        raise ValueError(gettext("Sin piezas para: %(paises)s. Agrega una pieza por país o quita el país.",
+                                 paises=", ".join(faltan)))
     return ex
 
 
@@ -111,9 +116,11 @@ def _promoted_object_para(cliente, ex):
         px = meta_conexion.estado_pixel(cliente)
     if not px or px.get("estado") != "ok" or not px.get("pixel_id"):
         detalle = (px or {}).get("detalle") or ""
-        raise ValueError("Este experimento optimiza por compras y el Pixel no está activo"
-                         f"{' (' + detalle.rstrip('.') + ')' if detalle else ''}. "
-                         "Comprueba el Pixel en Configuración o crea el experimento con objetivo de tráfico.")
+        detalle_txt = f" ({detalle.rstrip('.')})" if detalle else ""
+        raise ValueError(gettext(
+            "Este experimento optimiza por compras y el Pixel no está activo%(detalle)s. "
+            "Comprueba el Pixel en Configuración o crea el experimento con objetivo de tráfico.",
+            detalle=detalle_txt))
     return {"pixel_id": px["pixel_id"], "custom_event_type": "PURCHASE"}
 
 
@@ -168,10 +175,21 @@ def _crear_anuncios(cliente, ex, creds, adsets, cache=None):
         ad_id = meta_ad.crear_ad(f"{pz['nombre']} — {pz['pais']}", adsets[pz["pais"]], creative_id)["id"]
         experimentos.actualizar_pieza(cliente, pz["id"], meta_ad_id=ad_id, estado="pausado",
                                       presupuesto_dia_actual=next(p["presupuesto_dia"] for p in ex["paises"] if p["pais"] == pz["pais"]))
-        experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", f"Anuncio creado: {pz['nombre']} ({pz['pais']})",
+        experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
+                                      gettext("Anuncio creado: %(nombre)s (%(pais)s)", nombre=pz["nombre"], pais=pz["pais"]),
                                       {"ad_id": ad_id}, ep_id=pz["id"])
         creadas += 1
     return creadas
+
+
+def _avisar_error_lanzamiento(cliente, ex, experimento_id, mensaje):
+    """Aviso `error_lanzamiento` (antes en línea en el `except` de `lanzar`,
+    mismo texto)."""
+    notificaciones.avisar(cliente, "error_lanzamiento",
+                          gettext("Falló el lanzamiento de «%(experimento)s»", experimento=ex["nombre"]),
+                          gettext("El experimento «%(experimento)s» (#%(id)s) no se pudo lanzar a Meta.\n\n"
+                                  "Motivo: %(mensaje)s\n\nRevísalo en el panel y vuelve a intentar.",
+                                  experimento=ex["nombre"], id=experimento_id, mensaje=mensaje))
 
 
 def lanzar(cliente, experimento_id, on_etapa=None):
@@ -194,7 +212,7 @@ def lanzar(cliente, experimento_id, on_etapa=None):
             cap = centavos(ex["tope_total"], moneda) if float(ex["tope_total"] or 0) >= _MIN_POR_MONEDA.get(moneda, SPEND_CAP_MINIMO_USD) else None
             campaign_id = meta_campaign.crear_campaign(ex["nombre"], ex["objetivo_meta"], spend_cap_centavos=cap)["id"]
             experimentos.actualizar(cliente, experimento_id, meta_campaign_id=campaign_id)
-            experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", "Campaña creada en Meta (en pausa)",
+            experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", gettext("Campaña creada en Meta (en pausa)"),
                                           {"campaign_id": campaign_id, "spend_cap": cap})
         etapa(ETAPAS_LANZAR[1][0])
         adsets = {}
@@ -206,8 +224,10 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                                                   centavos(p["presupuesto_dia"], moneda), int(ex["dias"] or 7),
                                                   promoted_object=promoted_object)["id"]
                 experimentos.actualizar_pais(cliente, experimento_id, p["pais"], meta_adset_id=adset_id, estado="pausado")
-                con_pixel = f" (optimiza compras con el Pixel {promoted_object['pixel_id']})" if promoted_object else ""
-                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento", f"Conjunto {p['pais']} creado{con_pixel}",
+                con_pixel = (gettext(" (optimiza compras con el Pixel %(pixel_id)s)", pixel_id=promoted_object["pixel_id"])
+                            if promoted_object else "")
+                experimentos.registrar_evento(cliente, experimento_id, "lanzamiento",
+                                              gettext("Conjunto %(pais)s creado%(con_pixel)s", pais=p["pais"], con_pixel=con_pixel),
                                               {"adset_id": adset_id, "presupuesto_dia": p["presupuesto_dia"],
                                                "pixel_id": promoted_object["pixel_id"] if promoted_object else None})
             adsets[p["pais"]] = adset_id
@@ -225,14 +245,12 @@ def lanzar(cliente, experimento_id, on_etapa=None):
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="en_cola")
         experimentos.actualizar(cliente, experimento_id, estado="error", error=mensaje)
         # El evento conserva el texto crudo de Meta (sin token) para diagnosticar.
-        experimentos.registrar_evento(cliente, experimento_id, "error", f"Falló el lanzamiento: {mensaje}",
+        experimentos.registrar_evento(cliente, experimento_id, "error", gettext("Falló el lanzamiento: %(mensaje)s", mensaje=mensaje),
                                       {"detalle": cola.recortar(crudo)} if mensaje != crudo else None)
-        notificaciones.avisar(cliente, "error_lanzamiento", f"Falló el lanzamiento de «{ex['nombre']}»",
-                              f"El experimento «{ex['nombre']}» (#{experimento_id}) no se pudo lanzar a Meta.\n\n"
-                              f"Motivo: {mensaje}\n\nRevísalo en el panel y vuelve a intentar.")
+        _avisar_error_lanzamiento(cliente, ex, experimento_id, mensaje)
         raise
     experimentos.actualizar(cliente, experimento_id, estado="pausado", error=None)
-    return "Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar."
+    return gettext("Experimento en Meta, en pausa. Actívalo cuando quieras empezar a gastar.")
 
 
 def _piezas_de(ex, pais=None):
@@ -272,12 +290,12 @@ def pieza_retirada(pz):
 
 def cambiar_estado(cliente, experimento_id, status, pais=None):
     if status not in ("ACTIVE", "PAUSED"):
-        raise ValueError("Estado no permitido.")
+        raise ValueError(gettext("Estado no permitido."))
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None or not ex["meta_campaign_id"] or ex["estado"] in ("armando", "lanzando", "error"):
-        raise ValueError("Ese experimento todavía no está en Meta.")
+        raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     if ex["estado"] == "cerrado":
-        raise ValueError("Ese experimento está cerrado.")
+        raise ValueError(gettext("Ese experimento está cerrado."))
     local = "activo" if status == "ACTIVE" else "pausado"
     saltadas = []
 
@@ -291,7 +309,7 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
         else:
             p = next((p for p in ex["paises"] if p["pais"] == pais), None)
             if not p or not p.get("meta_adset_id"):
-                raise ValueError("Ese país no tiene conjunto en Meta.")
+                raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
             if status == "ACTIVE" and ex["estado"] != "corriendo":
                 # Activar un solo país no sirve de nada si la campaña sigue en pausa
                 # en Meta: sin ella, el conjunto no entrega aunque quede ACTIVE local.
@@ -329,37 +347,41 @@ def cambiar_estado(cliente, experimento_id, status, pais=None):
         otros_activos = any(p["estado"] == "activo" for p in ex["paises"] if p["pais"] != pais)
         if not otros_activos:
             experimentos.actualizar(cliente, experimento_id, estado="pausado")
-    mensaje = f"{'Activado' if status == 'ACTIVE' else 'Pausado'}{' ' + pais if pais else ' todo el experimento'}"
+    objetivo = pais or gettext("todo el experimento")
+    mensaje = (gettext("Activado %(objetivo)s", objetivo=objetivo) if status == "ACTIVE" else
+               gettext("Pausado %(objetivo)s", objetivo=objetivo))
     if saltadas:
-        mensaje += (". Siguen en pausa (retiradas por el decisor): "
-                    + ", ".join(f"{p['nombre']} ({p['pais']})" for p in saltadas))
+        detalle = ", ".join(f"{p['nombre']} ({p['pais']})" for p in saltadas)
+        mensaje += gettext(". Siguen en pausa (retiradas por el decisor): %(detalle)s", detalle=detalle)
     experimentos.registrar_evento(cliente, experimento_id, "estado", mensaje,
                                   {"saltadas": [p["id"] for p in saltadas]} if saltadas else None)
 
 
 def cambiar_presupuesto_pais(cliente, experimento_id, pais, presupuesto_dia):
     if float(presupuesto_dia or 0) <= 0:
-        raise ValueError("El presupuesto diario debe ser mayor que cero.")
+        raise ValueError(gettext("El presupuesto diario debe ser mayor que cero."))
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     if ex["estado"] == "cerrado":
-        raise ValueError("Ese experimento está cerrado.")
+        raise ValueError(gettext("Ese experimento está cerrado."))
     if ex["estado"] in ("armando", "lanzando", "error"):
         # M1: mientras lanza, lanzador.lanzar hace un read-modify-write sobre
         # experimento.paises sin ningún lock — si esta ruta escribiera encima
         # a mitad de ese lanzamiento podría perder el meta_adset_id que el
         # worker acaba de guardar, y el reintento crearía un segundo adset.
-        raise ValueError("Ese experimento todavía no está en Meta.")
+        raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     p = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
     if not p or not p.get("meta_adset_id"):
-        raise ValueError("Ese país no tiene conjunto en Meta.")
+        raise ValueError(gettext("Ese país no tiene conjunto en Meta."))
     moneda = ex["moneda"] or "USD"
     _con_credenciales(cliente, lambda _c: meta_adset.actualizar_presupuesto(p["meta_adset_id"], centavos(presupuesto_dia, moneda)))
     experimentos.actualizar_pais(cliente, experimento_id, pais, presupuesto_dia=float(presupuesto_dia))
     for pz in _piezas_de(ex, pais):
         experimentos.actualizar_pieza(cliente, pz["id"], presupuesto_dia_actual=float(presupuesto_dia))
-    experimentos.registrar_evento(cliente, experimento_id, "presupuesto", f"Presupuesto diario de {pais}: {presupuesto_dia} {moneda}",
+    experimentos.registrar_evento(cliente, experimento_id, "presupuesto",
+                                  gettext("Presupuesto diario de %(pais)s: %(presupuesto)s %(moneda)s",
+                                          pais=pais, presupuesto=presupuesto_dia, moneda=moneda),
                                   {"anterior": p["presupuesto_dia"], "nuevo": float(presupuesto_dia)})
 
 
@@ -372,9 +394,9 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
     el estado del experimento no lo cambia esta función."""
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     if ex["estado"] not in ("pausado", "corriendo", "decidido") or not ex["meta_campaign_id"]:
-        raise ValueError("Ese experimento todavía no está en Meta.")
+        raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     adsets = {p["pais"]: p["meta_adset_id"] for p in ex["paises"] if p.get("meta_adset_id")}
     piezas_nuevas = [p for p in ex["piezas"] if p["estado"] == "en_cola" and p["pais"] in adsets]
     if not piezas_nuevas:
@@ -404,11 +426,13 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
                 mensaje = traducir_error_meta(crudo, modo)
                 experimentos.actualizar_pieza(cliente, pz["id"], estado="error", error=mensaje)
                 experimentos.registrar_evento(cliente, experimento_id, "error",
-                                              f"No se pudo crear el anuncio de {pz['nombre']} ({pz['pais']}): {mensaje}",
+                                              gettext("No se pudo crear el anuncio de %(nombre)s (%(pais)s): %(mensaje)s",
+                                                      nombre=pz["nombre"], pais=pz["pais"], mensaje=mensaje),
                                               {"detalle": cola.recortar(crudo)} if mensaje != crudo else None, ep_id=pz["id"])
                 fallidas.append(pz["nombre"])
         if fallidas:
-            raise RuntimeError(f"Fallaron {len(fallidas)} pieza(s) al crear su anuncio: {', '.join(fallidas)}")
+            raise RuntimeError(gettext("Fallaron %(n)s pieza(s) al crear su anuncio: %(nombres)s",
+                                       n=len(fallidas), nombres=", ".join(fallidas)))
         return creadas
 
     return _con_credenciales(cliente, _correr)
@@ -417,21 +441,22 @@ def lanzar_piezas_nuevas(cliente, experimento_id):
 def _experimento_de_pieza(cliente, ep_id):
     experimento_id = experimentos.experimento_de_pieza(cliente, ep_id)
     if experimento_id is None:
-        raise ValueError("Esa pieza no existe.")
+        raise ValueError(gettext("Esa pieza no existe."))
     ex = experimentos.obtener(cliente, experimento_id)
     pz = next((p for p in (ex["piezas"] if ex else []) if p["id"] == ep_id), None)
     if pz is None:
-        raise ValueError("Esa pieza no existe.")
+        raise ValueError(gettext("Esa pieza no existe."))
     return ex, pz
 
 
 def pausar_pieza(cliente, ep_id):
     ex, pz = _experimento_de_pieza(cliente, ep_id)
     if not pz["meta_ad_id"]:
-        raise ValueError("Esa pieza todavía no tiene anuncio en Meta.")
+        raise ValueError(gettext("Esa pieza todavía no tiene anuncio en Meta."))
     _con_credenciales(cliente, lambda _c: meta_ad.actualizar_estado(pz["meta_ad_id"], "PAUSED"))
     experimentos.actualizar_pieza(cliente, ep_id, estado="pausado")
-    experimentos.registrar_evento(cliente, ex["id"], "estado", f"Pausado: {pz['nombre']} ({pz['pais']})", ep_id=ep_id)
+    experimentos.registrar_evento(cliente, ex["id"], "estado",
+                                  gettext("Pausado: %(nombre)s (%(pais)s)", nombre=pz["nombre"], pais=pz["pais"]), ep_id=ep_id)
 
 
 def activar_pieza(cliente, ep_id):
@@ -448,9 +473,9 @@ def activar_pieza(cliente, ep_id):
     reactiva el conjunto incondicionalmente dentro de esa rama."""
     ex, pz = _experimento_de_pieza(cliente, ep_id)
     if ex["estado"] not in ("pausado", "corriendo", "decidido"):
-        raise ValueError("Ese experimento todavía no está en Meta.")
+        raise ValueError(gettext("Ese experimento todavía no está en Meta."))
     if not pz["meta_ad_id"]:
-        raise ValueError("Esa pieza todavía no tiene anuncio en Meta.")
+        raise ValueError(gettext("Esa pieza todavía no tiene anuncio en Meta."))
     pais = next((p for p in ex["paises"] if p["pais"] == pz["pais"]), None)
     campaña_pausada = ex["estado"] == "pausado"
     pais_pausado = bool(pais) and pais["estado"] != "activo"
@@ -472,7 +497,8 @@ def activar_pieza(cliente, ep_id):
         # (pieza de rescate aprobada después) vuelve a 'corriendo' para que
         # exp_decidir_todos la evalúe; si no, la escalera se queda sin juez.
         _a_corriendo(cliente, ex["id"])
-    experimentos.registrar_evento(cliente, ex["id"], "estado", f"Activado: {pz['nombre']} ({pz['pais']})", ep_id=ep_id)
+    experimentos.registrar_evento(cliente, ex["id"], "estado",
+                                  gettext("Activado: %(nombre)s (%(pais)s)", nombre=pz["nombre"], pais=pz["pais"]), ep_id=ep_id)
 
 
 def escalar_pais(cliente, experimento_id, pais, pct, tope_dia=None):
@@ -482,10 +508,10 @@ def escalar_pais(cliente, experimento_id, pais, pct, tope_dia=None):
     sin cambios."""
     ex = experimentos.obtener(cliente, experimento_id)
     if ex is None:
-        raise ValueError("Ese experimento no existe.")
+        raise ValueError(gettext("Ese experimento no existe."))
     p = next((p for p in ex.get("paises", []) if p["pais"] == pais), None)
     if not p:
-        raise ValueError("Ese país no existe en el experimento.")
+        raise ValueError(gettext("Ese país no existe en el experimento."))
     actual = float(p["presupuesto_dia"] or 0)
     nuevo = round(actual * (1 + float(pct) / 100), 2)
     if tope_dia is not None:
@@ -527,7 +553,8 @@ def _avisar_moneda_no_comparable(cliente, ex, ajenas):
     monedas = ", ".join(sorted(ajenas))
     experimentos.registrar_evento(
         cliente, ex["id"], "atribucion",
-        f"Ventas en {monedas}, cuenta en {ex['moneda']}: ROAS no comparable, se usa CPA",
+        gettext("Ventas en %(monedas)s, cuenta en %(moneda)s: ROAS no comparable, se usa CPA",
+                monedas=monedas, moneda=ex["moneda"]),
         {"monedas_tienda": sorted(ajenas), "moneda_cuenta": ex["moneda"]})
     experimentos.actualizar_extra(cliente, ex["id"], lambda extra: {**extra, "aviso_moneda": monedas})
 
@@ -581,7 +608,7 @@ def _obtener_metricas_triple_whale(cliente, ex, pz):
     except Exception as e:
         experimentos.registrar_evento(
             cliente, ex["id"], "error",
-            f"Error al traer métricas de Triple Whale: {cola.sin_token(str(e))}", ep_id=pz["id"])
+            gettext("Error al traer métricas de Triple Whale: %(error)s", error=cola.sin_token(str(e))), ep_id=pz["id"])
         return None
 
 
@@ -627,7 +654,8 @@ def refrescar(cliente, experimento_id):
             except Exception as e:
                 experimentos.registrar_evento(
                     cliente, experimento_id, "error",
-                    f"No se pudo refrescar {pz['nombre']} ({pz['pais']}): {cola.sin_token(str(e))}", ep_id=pz["id"])
+                    gettext("No se pudo refrescar %(nombre)s (%(pais)s): %(error)s",
+                            nombre=pz["nombre"], pais=pz["pais"], error=cola.sin_token(str(e))), ep_id=pz["id"])
         return n
 
     n = _con_credenciales(cliente, _correr)
@@ -648,13 +676,15 @@ ESTADOS_META_RECHAZO = ("DISAPPROVED", "WITH_ISSUES")
 def _avisar_rechazo_meta(cliente, ex, pz, estado_meta, motivo):
     """Evento `rechazo_meta` + aviso por correo la primera vez que un anuncio
     pasa a DISAPPROVED/WITH_ISSUES (no en cada refresco mientras siga así)."""
-    detalle = cola.sin_token(str(motivo)) if motivo else "Meta no dio un motivo"
-    texto = f"Meta rechazó el anuncio de {pz['nombre']} ({pz['pais']}): {estado_meta}. {detalle}"
+    detalle = cola.sin_token(str(motivo)) if motivo else gettext("Meta no dio un motivo")
+    texto = gettext("Meta rechazó el anuncio de %(nombre)s (%(pais)s): %(estado_meta)s. %(detalle)s",
+                    nombre=pz["nombre"], pais=pz["pais"], estado_meta=estado_meta, detalle=detalle)
     experimentos.registrar_evento(cliente, ex["id"], "rechazo_meta", texto,
                                   {"estado_meta": estado_meta, "motivo": detalle}, ep_id=pz["id"])
-    notificaciones.avisar(cliente, "rechazo_meta", f"Meta rechazó un anuncio de «{ex['nombre']}»",
-                          f"{texto}\n\nEl anuncio no entrega hasta que se corrija o se reemplace. "
-                          f"Revísalo en el panel del experimento #{ex['id']}.")
+    notificaciones.avisar(cliente, "rechazo_meta",
+                          gettext("Meta rechazó un anuncio de «%(experimento)s»", experimento=ex["nombre"]),
+                          gettext("%(texto)s\n\nEl anuncio no entrega hasta que se corrija o se reemplace. "
+                                  "Revísalo en el panel del experimento #%(id)s.", texto=texto, id=ex["id"]))
 
 
 def cerrar(cliente, experimento_id):
@@ -662,4 +692,4 @@ def cerrar(cliente, experimento_id):
     if ex and ex["meta_campaign_id"] and ex["estado"] in ("corriendo", "pausado"):
         cambiar_estado(cliente, experimento_id, "PAUSED")
     experimentos.actualizar(cliente, experimento_id, estado="cerrado")
-    experimentos.registrar_evento(cliente, experimento_id, "estado", "Experimento cerrado")
+    experimentos.registrar_evento(cliente, experimento_id, "estado", gettext("Experimento cerrado"))

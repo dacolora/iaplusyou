@@ -53,11 +53,12 @@ def test_config_navegador_sale_de_los_modulos():
 def test_materiales_para_y_faltantes(base_temporal):
     import materiales
     m = materiales.registrar("acme", tipo="audio", origen="voz", url="https://r2.test/v.wav", hash="h1", bytes=1,
-                             duracion_ms=100, extra={"picos": [0.5]})
+                             duracion_ms=100, extra={"picos": [0.5], "tira_url": "https://r2.test/t.jpg"})
     doc = {"materiales": [m["id"], 999]}
     mats = vista_previa.materiales_para("acme", doc)
     assert list(mats) == [m["id"]]
     assert mats[m["id"]]["picos"] == [0.5] and mats[m["id"]]["url"] == "https://r2.test/v.wav"
+    assert mats[m["id"]]["tira_url"] == "https://r2.test/t.jpg"
     assert vista_previa.faltantes(doc, mats) == [999]
     assert vista_previa.materiales_para("otro", doc) == {}
 

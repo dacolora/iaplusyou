@@ -27,12 +27,14 @@ from datetime import datetime, timedelta
 
 import requests
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import cola
 import db
 import experimentos
 import gastos
 import generador_prompts
+import idiomas
 import meta_conexion
 import publicador
 import tiendas
@@ -43,9 +45,17 @@ log = logging.getLogger("creatv.organico")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+class YaPublicada(ValueError):
+    """Ya hay una publicación viva (en cola, publicándose o publicada) de esa
+    pieza en esa plataforma. Subclase de ValueError (no un texto) para que
+    quien la atrapa (dashboard.org_publicar, acciones.py) la distinga sin
+    mirar el mensaje: el mensaje se traduce al idioma de quien mira, así que
+    comparar contra un fragmento de texto en español dejaría de funcionar."""
+
 PLATAFORMAS = {
     "instagram": {"nombre": "Instagram Reels", "links": False, "max_caption": 2200},
-    "facebook": {"nombre": "Facebook (Página)", "links": True, "max_caption": 5000},
+    "facebook": {"nombre": idiomas.N_("Facebook (Página)"), "links": True, "max_caption": 5000},
     "tiktok": {"nombre": "TikTok", "links": False, "max_caption": 2200, "max_titulo": 150},
     "youtube": {"nombre": "YouTube Shorts", "links": True, "max_caption": 5000, "max_titulo": 100},
 }
@@ -73,12 +83,12 @@ _RE_PALABRA = re.compile(r"[A-Za-zÀ-ɏ0-9]+")
 _STOPWORDS = {"de", "del", "la", "el", "los", "las", "con", "para", "por", "sin", "the", "and", "of", "for",
               "un", "una", "unos", "unas", "en", "y", "o", "a", "al", "lo", "que", "se", "su", "sus"}
 
-# Copy fija que `fallback`/`ajustar` inyectan, en el idioma de la pieza
+# Copy fija que `fallback`/`ajustar` inyectan, en el idioma del proyecto
 # (`contexto["idioma"]`); español por defecto si no hay traducción.
 _COPY = {
-    "es": {"link_bio": "Link en bio.", "cta": "Consíguelo aquí"},
-    "en": {"link_bio": "Link in bio.", "cta": "Get it here"},
-    "pt": {"link_bio": "Link na bio.", "cta": "Garanta o seu"},
+    "es": {"link_bio": "Link en bio.", "cta": "Consíguelo aquí", "escribenos": "Escríbenos para conseguirlo."},
+    "en": {"link_bio": "Link in bio.", "cta": "Get it here", "escribenos": "Message us to get it."},
+    "pt": {"link_bio": "Link na bio.", "cta": "Garanta o seu", "escribenos": "Fale com a gente para garantir o seu."},
 }
 
 
@@ -114,16 +124,16 @@ def canales(cliente):
     for p in ORDEN:
         disponible, motivo = True, ""
         if p == "facebook" and not tiene_pagina:
-            disponible, motivo = False, "Conecta Meta con una Página"
+            disponible, motivo = False, idiomas.N_("Conecta Meta con una Página")
         elif p == "instagram":
             if not tiene_pagina:
-                disponible, motivo = False, "Conecta Meta con una Página"
+                disponible, motivo = False, idiomas.N_("Conecta Meta con una Página")
             elif not meta.get("ig_user_id"):
-                disponible, motivo = False, "La cuenta de Instagram no está vinculada a la Página"
+                disponible, motivo = False, idiomas.N_("La cuenta de Instagram no está vinculada a la Página")
         elif p == "youtube" and not os.path.exists(tokens["youtube"]):
-            disponible, motivo = False, "Falta token_youtube.json (autoriza desde tu Mac con auth/auth_youtube.py)"
+            disponible, motivo = False, idiomas.N_("Falta token_youtube.json (autoriza desde tu Mac con auth/auth_youtube.py)")
         elif p == "tiktok" and not os.path.exists(tokens["tiktok"]):
-            disponible, motivo = False, "Falta token_tiktok.json (autoriza desde tu Mac con auth/auth_tiktok.py)"
+            disponible, motivo = False, idiomas.N_("Falta token_tiktok.json (autoriza desde tu Mac con auth/auth_tiktok.py)")
         out.append({"plataforma": p, "nombre": PLATAFORMAS[p]["nombre"], "disponible": disponible, "motivo": motivo})
     return out
 
@@ -156,28 +166,28 @@ def crear(cliente, pieza_id, plataforma, caption, titulo=None, origen="manual", 
     ese cliente/pieza, o ya hay una publicación viva (en cola, publicándose
     o publicada) de esa pieza en esa plataforma. Devuelve el id."""
     if plataforma not in PLATAFORMAS:
-        raise ValueError(f"Plataforma desconocida: {plataforma}")
+        raise ValueError(gettext("Plataforma desconocida: %(plataforma)s", plataforma=plataforma))
     if origen not in ORIGENES:
-        raise ValueError(f"Origen desconocido: {origen}")
+        raise ValueError(gettext("Origen desconocido: %(origen)s", origen=origen))
     caption = (caption or "").strip()
     if not caption:
-        raise ValueError("El texto de la publicación no puede estar vacío.")
+        raise ValueError(gettext("El texto de la publicación no puede estar vacío."))
     titulo = (titulo or "").strip()[:MAX_TITULO_COLUMNA] or None
     nombre = PLATAFORMAS[plataforma]["nombre"]
     p = db.publicacion
     with db.conectar() as con:
         if _fila_pieza(con, cliente, pieza_id) is None:
-            raise ValueError("Esa pieza no existe en este proyecto.")
+            raise ValueError(gettext("Esa pieza no existe en este proyecto."))
         if ep_id is not None:
             ep = con.execute(sa.select(db.experimento_pieza.c.pieza_id).where(
                 db.experimento_pieza.c.id == ep_id, db.experimento_pieza.c.cliente == cliente)).first()
             if ep is None or ep[0] != pieza_id:
-                raise ValueError("Esa pieza no está en el experimento.")
+                raise ValueError(gettext("Esa pieza no está en el experimento."))
         viva = con.execute(sa.select(p.c.id).where(
             p.c.cliente == cliente, p.c.pieza_id == pieza_id, p.c.plataforma == plataforma,
             p.c.estado.in_(ESTADOS_VIVOS))).first()
         if viva:
-            raise ValueError(f"Esa pieza ya está publicada (o en cola) en {nombre}.")
+            raise YaPublicada(gettext("Esa pieza ya está publicada (o en cola) en %(nombre)s.", nombre=nombre))
         ahora = db.ahora()
         try:
             return con.execute(p.insert().values(
@@ -186,16 +196,16 @@ def crear(cliente, pieza_id, plataforma, caption, titulo=None, origen="manual", 
                 titulo=titulo, origen=origen, extra={})).inserted_primary_key[0]
         except sa.exc.IntegrityError:
             # Dos procesos crearon a la vez: gana el índice único parcial.
-            raise ValueError(f"Esa pieza ya está publicada (o en cola) en {nombre}.") from None
+            raise YaPublicada(gettext("Esa pieza ya está publicada (o en cola) en %(nombre)s.", nombre=nombre)) from None
 
 
 def actualizar(cliente, pub_id, **campos):
     """Actualiza columnas de una publicación del cliente. False si no existe."""
     malos = set(campos) - set(_COLS_ACTUALIZABLES)
     if malos:
-        raise ValueError(f"Campos no permitidos: {sorted(malos)}")
+        raise ValueError(gettext("Campos no permitidos: %(campos)s", campos=sorted(malos)))
     if "estado" in campos and campos["estado"] not in ESTADOS:
-        raise ValueError(f"Estado desconocido: {campos['estado']}")
+        raise ValueError(gettext("Estado desconocido: %(estado)s", estado=campos["estado"]))
     if "titulo" in campos and campos["titulo"] is not None:
         campos["titulo"] = str(campos["titulo"])[:MAX_TITULO_COLUMNA]
     if "error" in campos and campos["error"] is not None:
@@ -208,7 +218,7 @@ def actualizar(cliente, pub_id, **campos):
         except sa.exc.IntegrityError:
             # Volver a `en_cola` una fila cuando ya hay otra viva de la misma
             # (pieza, plataforma): gana el índice único parcial.
-            raise ValueError("Ya hay una publicación en curso o publicada para esa plataforma.") from None
+            raise YaPublicada(gettext("Ya hay una publicación en curso o publicada para esa plataforma.")) from None
         return r.rowcount > 0
 
 
@@ -322,12 +332,14 @@ def contexto_pieza(cliente, pieza_id):
     clon: `concepto.extra.accion_central`), producto (tiendas.por_activo
     por el primer `productos_ids` del concepto — id o nombre visible, ver
     `_activo` — o el catálogo directamente), `url_compra` (del producto, o
-    `destino_url` del último experimento que contiene la pieza), idioma,
-    hashtags base y el `angulo` decidido para la pieza (dict o None)."""
+    `destino_url` del último experimento que contiene la pieza), idioma (el de
+    la pieza o `concepto.idioma_base`; el del proyecto solo si ninguno de los
+    dos existe), hashtags base y el `angulo` decidido para la pieza (dict o
+    None)."""
     with db.conectar() as con:
         pz = _fila_pieza(con, cliente, pieza_id)
         if pz is None:
-            raise ValueError("Esa pieza no existe en este proyecto.")
+            raise ValueError(gettext("Esa pieza no existe en este proyecto."))
         cp = con.execute(sa.select(db.concepto).where(db.concepto.c.id == pz._mapping[db.pieza.c.concepto_id])).first()
         ex = con.execute(sa.select(db.experimento.c.destino_url, db.experimento.c.producto_id)
                          .select_from(db.experimento_pieza.join(db.experimento, db.experimento.c.id == db.experimento_pieza.c.experimento_id))
@@ -365,7 +377,8 @@ def contexto_pieza(cliente, pieza_id):
         nombre = accion or f"Pieza {pieza_id}"
     if not url_compra and ex and ex[0]:
         url_compra = ex[0]
-    idioma = pm[db.pieza.c.idioma] or (cp._mapping[db.concepto.c.idioma_base] if cp else None) or "es"
+    idioma = (pm[db.pieza.c.idioma] or (cp._mapping[db.concepto.c.idioma_base] if cp else None)
+              or idiomas.de_proyecto(cliente))
     return {"nombre_producto": nombre, "descripcion": descripcion, "url_compra": url_compra, "idioma": idioma,
             "guion_texto": guion_texto, "hashtags_base": _hashtags_de(nombre), "angulo": c_extra.get("angulo"),
             "pruebas": doctrina_producto.pruebas(producto) if producto else []}
@@ -389,7 +402,7 @@ def fallback(contexto, plataforma):
     if conf["links"] and contexto.get("url_compra"):
         cta = f"{copy['cta']}: {contexto['url_compra']}"
     elif conf["links"]:
-        cta = "Escríbenos para conseguirlo."
+        cta = copy["escribenos"]
     else:
         cta = copy["link_bio"]
     tags = " ".join(_hashtags_de(nombre) or ["#reels", "#tiktok", "#shorts"][:HASHTAGS_MIN])
@@ -513,7 +526,7 @@ def redactar(cliente, pieza_id, plataformas):
     `ajustar` (URLs, hashtags, máximos). No escribe nada."""
     plataformas = [p for p in plataformas if p in PLATAFORMAS]
     if not plataformas:
-        raise ValueError("Elige al menos una plataforma.")
+        raise ValueError(gettext("Elige al menos una plataforma."))
     contexto = contexto_pieza(cliente, pieza_id)
     try:
         textos = generador_prompts.caption_organico(contexto, plataformas)

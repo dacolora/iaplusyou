@@ -467,7 +467,7 @@ tracks are cached in `data/musica/` and mirrored to R2. Worker tasks live in
 only keeps «Llevar a final edition» (`#final?cf=<id>` opens that piece), and the `fe_*` routes
 return to `#final`.
 
-**Editor (capas 1–3, 2026-09):** the editor's source of truth is a JSON document
+**Editor (capas 1–4a, 2026-09):** the editor's source of truth is a JSON document
 (`final_edition/documento.py`: validate, resolve variables per idioma/país, migrate
 schema). `validar` is the contract everything else leans on: the principal `video` track
 must be contiguous from 0 (first clip at 0, each clip starts where the previous ends —
@@ -548,6 +548,24 @@ are short-side 540 with a keyframe every 15 frames (`tareas.edicion.PROXY_VERSIO
 re-queues older ones, free) and polls for them at most 5 min, swapping each one in as soon as it is ready
 (never while playing). `sembrar_edicion_demo.py` builds a local demo edition (no spend, no R2); its CLI
 refuses when `PLATAFORMA_URL` (env or root `.env`) points to a non-local host.
+Capa 4a (2026-09-27): the page edits — `static/editor/operaciones.js` (pure: cut at playhead, delete
+with ripple on the principal, duplicate, trim from either edge, reorder the principal, move other
+layers with snapping, speed 0.5–2×; every result passes `documento.validar`, checked by
+`tests/test_operaciones_editor.py` on the real JS output; `p_sonido` is rebuilt as a mirror of the
+principal, without the clips at speed ≠ 1; `normalizar` mirrors `verificar_recortes`: it shortens any clip
+that asks for more material than exists — counting with `Math.round`, which is never below Python's
+round-half-to-even, so what fits in the browser fits in the render — and then the transitions; a voice clip with
+`por_destino` can be moved or deleted but not trimmed, since `resolver` replaces it whole per destino),
+`historial.js` (undo/redo in memory), `guardado.js` (debounced PUT `editor.guardar` with CAS
+`version_n`, 409 → «Recargar»; the route refuses materials from another project), a DOM timeline
+(`escala.js` pure + `linea_tiempo.js`) and `pagina_editor.js`; «Editar este video» in the Final edition
+tab (`editor.desde_clon` → free worker task `edicion_desde_clon`, `final_edition/edicion_clon.py`: the
+raw clon as one clip + mirrored scene sound, destino `es_<proyectos.pais>` via `origen.pais`) and «Producir»
+from the editor (`editor.producir`: `versionar` → `crear_final` → `edicion_producir` per destino, free; each
+destino is first resolved and checked with `verificar_recortes`, a destino whose paid `final_producir` is running
+is refused, and a final with video NOT made from this edición — `ediciones.edicion_de_final` — needs
+`reemplazar: true`, which the dialog asks for). The editor and the automatic path now share the borrador:
+`produccion.traducir` re-applies its pure steps on a CAS conflict (up to 2 retries) instead of paying again.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios
@@ -769,6 +787,31 @@ from them —, so the POST to `cf_crear_video` is unchanged; upload/link inputs 
 `form=`, the catalog opens as a `<dialog>` (`_selector_productos.html` with `sel_dialogo=True`; «Cambiar producto»
 keeps its `<details>`), and Enter in a one-line input never submits it (it used to generate and charge).
 
+**Idioma** (`idiomas.py`, `catalogo_i18n.py`, spec `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md`):
+Flask-Babel; el español es el msgid y el inglés vive en `translations/en/LC_MESSAGES/messages.po` (+ `.mo` en
+git). **Todo texto nuevo que vea una persona pasa por el catálogo**: plantillas `{{ _('…') }}` (`%` literal =
+`%%`, variables `%(x)s`, dentro de `<script>` con `|tojson`, nunca `{% set _ = %}`); Python
+`gettext`/`ngettext` de `flask_babel` (nunca `as _`); constantes de módulo con `idiomas.N_` + `|traducir`.
+Luego `venv/bin/python3 catalogo_i18n.py actualizar`, traducir con `docs/i18n/glosario.md` y `compilar`
+(`tests/test_i18n_catalogo.py` falla si falta). Idioma de la persona en `usuarios.json`, del proyecto en
+`proyecto.json`, cookie `idioma` antes del login; `idiomas.en_idioma(x)` para correos y worker.
+Desde 2026-09-28 (decisión de Daniel) `idiomas.DEFECTO` es `"en"` y `ACTIVO_PARA_TODOS` es `True` para
+todos: quien no eligió idioma ve la app en inglés y el selector queda visible para cualquier cliente; los
+tests siguen fijos en español (`conftest`). Sprints, Nicho, Referentes, Final edition/editor, las páginas de
+admin y el mapa del código siguen solo en español hasta que cierren las fases 5-6.
+Fase 3 (Crear en el idioma del proyecto): las llamadas a Claude reciben el idioma con
+`idiomas.de_proyecto(cliente)`, pasado a `doctrina.bloque_system(..., idioma=)` o envuelto a mano con
+`idiomas.orden_idioma` (va al inicio Y al final de las instrucciones del sitio; el prompt para el modelo de
+video/imagen y los tokens `Image N`/`Video N` siguen siempre en inglés, nunca en el idioma del proyecto —
+`idiomas._ORDENES` trae esa excepción). Los textos de fondo (hilos de `trabajos.iniciar`, tareas del worker, sin
+contexto de petición) se arman dentro de `idiomas.en_idioma(idiomas.de_proyecto(cliente))`; los mensajes que
+devuelve una ruta siguen el idioma de quien mira la pantalla.
+Trampa: `_('…', x=dato)` con variables devuelve `Markup`, que ya escapó `x` como HTML, así que
+`|tojson` detrás lo vuelve a escapar (doble escape) — arma esa cadena de JS con gettext en Python,
+o usa `|tojson` solo sobre texto fijo y une los datos en JS; y nunca metas `|tojson` dentro de un
+atributo con comillas dobles (`onsubmit="…"`), porque emite `"` que cierra el atributo a la mitad —
+usa comillas simples o un `data-*`.
+
 **Doctrina de venta y ángulo** (`doctrina/`, spec `docs/superpowers/specs/2026-09-25-doctrina-copywriting-design.md`,
 ADR 0004): los principios de seis libros de copywriting (Kennedy, Hopkins, Ogilvy, Great Leads, Schwartz, Theriot)
 destilados en nuestras palabras en `doctrina/textos/*.md`, por rebanadas (`base` siempre + `investigar`, `angulo`,
@@ -836,6 +879,30 @@ en el system, mismos fotogramas, tope 6 000), por fin registra su gasto real (ti
 `qa:<cp_id>:t<tarea>:i<intento>`) y guarda la revisión en la sesión (`origen: sprint`). La galería de Experimentos
 (`elegibles()["doctrina"]`, aviso en el paso 3) y la revisión del lote muestran la etiqueta con `resumen_galeria`,
 leyendo solo `concepto.extra`. Nada de esto bloquea ni reescribe.
+
+**Rendimiento y almacenamiento (auditoría 2026-09-28, tras el incidente de la página que se
+quedaba cargando):** `/cliente/<c>` trae todas las pestañas en un solo HTML (3 MB en happyflops:
+Crear, Final edition y Experimentos repiten las mismas piezas con sus `<template>` de detalle), así
+que lo que se agrega ahí le cuesta a TODAS las cargas. Reglas que salieron de la auditoría: los
+`<video>` de listas nacen `preload="none" data-precarga` (base.html los pide al entrar en pantalla;
+`tests/test_referentes_copycoders_proyecto.py` rechaza `preload="metadata"`) y las `<img>` van
+`loading="lazy"`; las fotos del catálogo se piden con `?w=320` (`catalogo_productos.miniatura`,
+Pillow, caché en `data/miniaturas/`); nada de una consulta por tarjeta: `ver_cliente` corre bajo
+`trabajos.con_vivos_precargados` (UNA lectura de los job_ids vivos para todos los `en_curso`) y la
+lista de Crear usa `creative_flow.guiones_base`/`finales_por_sesion` y
+`doctrina.revisor.ultimos_captions` (`tests/test_perf_pagina_proyecto.py` falla si el número de
+consultas vuelve a crecer con las piezas); `informe.completo` solo se arma para el admin; los
+estáticos con `?v=` salen `immutable` un año (`/static/editor/` sigue `no-cache`); la biblioteca de
+copycoders está apagada por proyecto hasta que la persona la trae (`proyectos.referentes_copycoders`).
+Mantenimiento diario en el worker (`tareas/mantenimiento.py`): `salidas_limpiar` borra de `salidas/`
+lo que tenga más de 14 días (todo lo de ahí es copia de trabajo: el video vive en R2 y
+`publicador.archivo_local`, `final_edition._clon_local`, `materiales.descargar` y `sprints.qa`
+lo vuelven a bajar), `cola_limpiar` purga las `tarea` cerradas (7 días; periódicas, 1 día) y
+`db_respaldar` guarda `data/respaldos/creatv_<fecha>.db` (`Connection.backup`, 7 copias). Sigue
+pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones viejas de finales,
+`materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`),
+`metrica_snapshot` inserta cada 2 h aunque nada cambie, y la carga por fragmentos de las pestañas
+pesadas.
 
 ## Agent skills
 

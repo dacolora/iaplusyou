@@ -28,6 +28,7 @@ import os
 from datetime import datetime
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import bitacora
 import catalogo_productos
@@ -36,6 +37,7 @@ import creative_flow
 import db
 import doctrina
 import gastos
+import idiomas
 import notificaciones
 import proyectos
 import referencias_link
@@ -84,7 +86,7 @@ def ejecutar_analizar(tarea):
     if not ref:
         return "La referencia ya no existe."
     try:
-        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente))
+        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": str(e)})
         raise
@@ -378,6 +380,21 @@ def _sprints_con_lote():
     return [(f.cliente, f.id, f.nombre) for f in filas if (f.extra or {}).get("lote_en_curso")]
 
 
+def _avisar_lote_terminado(cliente, sid, nombre, listas, errores):
+    """Evento `lote_terminado` + aviso `sprint_lote`, en el idioma del
+    proyecto: lo llama la periódica `sprint_qa_pendientes`, que recorre
+    varios proyectos y no tiene un idioma propio."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        datos.registrar_evento(cliente, sid, "lote_terminado",
+                               gettext("Lote terminado: %(listas)s lista(s), %(errores)s con error",
+                                       listas=listas, errores=errores),
+                               {"listas": listas, "errores": errores})
+        notificaciones.avisar(cliente, "sprint_lote", gettext("Lote terminado: %(nombre)s", nombre=nombre),
+                              gettext("El lote del sprint «%(nombre)s» terminó: %(listas)s pieza(s) lista(s) y "
+                                      "%(errores)s con error. Entra a la bandeja de revisión para aprobar o rechazar.",
+                                      nombre=nombre, listas=listas, errores=errores))
+
+
 @registrar("sprint_qa_pendientes")
 def ejecutar_qa_pendientes(tarea):
     """Periódica (5 min): encola el QA de las piezas listas sin evaluar y avisa
@@ -404,11 +421,7 @@ def ejecutar_qa_pendientes(tarea):
         listas = sum(1 for p in piezas if p.get("estado") in ("listo", "degradada"))
         errores = sum(1 for p in piezas if p.get("estado") == "error")
         datos.actualizar_extra_sprint(cliente, sid, lambda e: {**e, "lote_en_curso": False})
-        datos.registrar_evento(cliente, sid, "lote_terminado", f"Lote terminado: {listas} lista(s), {errores} con error",
-                               {"listas": listas, "errores": errores})
-        notificaciones.avisar(cliente, "sprint_lote", f"Lote terminado: {nombre}",
-                              f"El lote del sprint «{nombre}» terminó: {listas} pieza(s) lista(s) y {errores} con error. "
-                              "Entra a la bandeja de revisión para aprobar o rechazar.")
+        _avisar_lote_terminado(cliente, sid, nombre, listas, errores)
         terminados += 1
     return f"{n} pieza(s) a QA; {terminados} lote(s) terminado(s)."
 

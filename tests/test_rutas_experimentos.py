@@ -470,8 +470,12 @@ def test_probar_exige_meta_conectado(app, monkeypatch, base_temporal):
 def test_nombre_experimento_automatico():
     import datetime
     import dashboard
-    assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Prueba 20 sep · 3 piezas · CO, MX"
+    import idiomas
+    # El mes corto sale de CLDR (spec 2026-09-26 §B1): «sept», ya no «sep».
+    assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Prueba 20 sept · 3 piezas · CO, MX"
     assert dashboard.nombre_experimento_automatico(1, ["CO"], datetime.date(2026, 1, 5)) == "Prueba 5 ene · 1 pieza · CO"
+    with idiomas.en_idioma("en"):
+        assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Test 20 Sep · 3 pieces · CO, MX"
 
 
 def test_aprendizajes_se_agregan_se_ven_y_se_quitan(app, tmp_path, monkeypatch):
@@ -505,6 +509,6 @@ def test_la_fila_de_una_perdedora_muestra_su_diagnostico(app, base_temporal):
     ex.marcar_pieza("acme", ep, diagnostico={"causas": [{"codigo": "sin_urgencia", "detalle": "no aprieta", "evidencia": "CTR 0,4 %"}],
                                              "siguiente": {"que": "oferta", "porque": "hay que dar un motivo"}})
     html = c.get("/cliente/acme").get_data(as_text=True)
-    assert "sin urgencia en el deseo" in html and "Siguiente: oferta — hay que dar un motivo" in html and "#diagnosticar" in html
+    assert "sin urgencia en el deseo" in html and "Siguiente: revisar la oferta — hay que dar un motivo" in html and "#diagnosticar" in html
     ex.marcar_pieza("acme", ep, diagnostico={"error": "Claude no devolvió JSON."})
     assert "El diagnóstico no se pudo hacer: Claude no devolvió JSON." in c.get("/cliente/acme").get_data(as_text=True)

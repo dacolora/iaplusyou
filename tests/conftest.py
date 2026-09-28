@@ -87,3 +87,13 @@ def _sin_cache_meta():
     limpiar()
     yield
     limpiar()
+
+
+@pytest.fixture(autouse=True)
+def idioma_de_tests(monkeypatch):
+    """Los tests existentes comparan textos en español: el idioma por defecto
+    queda fijo en "es" aunque idiomas.DEFECTO cambie a "en" (fase 6). Un test
+    de inglés lo pide explícitamente (usuario con idioma "en" o cookie)."""
+    import idiomas
+    monkeypatch.setattr(idiomas, "DEFECTO", "es")
+    monkeypatch.setattr(idiomas, "ACTIVO_PARA_TODOS", False)

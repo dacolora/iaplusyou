@@ -21,7 +21,7 @@ def test_analizar_referencia_guarda_analisis(base_temporal, monkeypatch):
     from sprints import analisis, datos
     from tareas import sprints as ts
     sid, cid, rid = _referencia(datos)
-    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="": {"resumen": "ok", "paleta": ["#000"]})
+    monkeypatch.setattr(analisis, "analizar", lambda ref, marca="", idioma="es": {"resumen": "ok", "paleta": ["#000"]})
     tareas.cargar_todas()
     assert "sprint_analizar_referencia" in tareas.REGISTRO
     msg = tareas.REGISTRO["sprint_analizar_referencia"]({"payload": {"cliente": "acme", "referencia_id": rid},
@@ -35,7 +35,7 @@ def test_analizar_referencia_error_deja_rastro(base_temporal, monkeypatch):
     import tareas
     from sprints import analisis, datos
     sid, cid, rid = _referencia(datos)
-    def rompe(ref, marca=""):
+    def rompe(ref, marca="", idioma="es"):
         raise RuntimeError("Claude caído")
     monkeypatch.setattr(analisis, "analizar", rompe)
     tareas.cargar_todas()

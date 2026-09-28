@@ -5,7 +5,11 @@ cada línea y cada hook estén literales en el texto original. La persona
 revisa y corrige antes de confirmar.
 """
 import logging
+from contextlib import nullcontext
 
+from flask_babel import gettext
+
+import idiomas
 from guiones import claude, datos, notion
 from guiones.refinador import DatoInvalido, _normalizar
 
@@ -91,7 +95,7 @@ def desde_formulario(form, lectura_previa, texto_crudo):
              "hook_con_estilo_distinto": form.get("hook_con_estilo_distinto") in (True, "1", "on", "true")}
     lec = numerar(crudo, texto_crudo, previas=[l["texto"] for l in lectura_previa.get("lineas", [])])
     if not lec["lineas"]:
-        raise DatoInvalido("El guion necesita al menos una línea.")
+        raise DatoInvalido(gettext("El guion necesita al menos una línea."))
     return lec
 
 
@@ -101,40 +105,51 @@ def _mensajes(texto_crudo):
 
 
 def leer_lote(lote_id, llamar=None):
-    """Hilo de «Leer guion»: deja el lote `leido` (con sus guiones) o en `error`. Nunca lanza."""
+    """Hilo de «Leer guion»: deja el lote `leido` (con sus guiones) o en `error`. Nunca lanza.
+
+    Corre en un hilo de trabajos.iniciar (sin contexto de petición): los avisos
+    que deja en el lote se arman con gettext dentro de idiomas.en_idioma(idiomas.de_proyecto(cliente))
+    para que salgan en el idioma del proyecto, no en el de quien lo lanzó."""
+    lote = None
     try:
         lote = datos.lote_para_leer(lote_id)
         if lote is None or lote["estado"] != "leyendo":
             return
-        if lote["fuente"] == "notion" and not lote["texto_crudo"]:
-            llave = notion.llave(lote["cliente"])
-            if not llave:
-                datos.fallar_lote(lote_id, "No encuentro la llave de Notion de este proyecto; vuelve a conectarla.")
+        with idiomas.en_idioma(idiomas.de_proyecto(lote["cliente"])):
+            if lote["fuente"] == "notion" and not lote["texto_crudo"]:
+                llave = notion.llave(lote["cliente"])
+                if not llave:
+                    datos.fallar_lote(lote_id, gettext(
+                        "No encuentro la llave de Notion de este proyecto; vuelve a conectarla."))
+                    return
+                try:
+                    titulo, texto = notion.leer_pagina(llave, lote["notion_page_id"])
+                except notion.ErrorNotion as e:
+                    datos.fallar_lote(lote_id, str(e))
+                    return
+                datos.poner_texto_lote(lote_id, titulo, texto)
+                lote = datos.lote_para_leer(lote_id)
+                if lote is None or lote["estado"] != "leyendo" or not lote["texto_crudo"]:
+                    return
+            data, usd, error = claude.pedir_json(
+                lote["cliente"], "leer", lote_id, SISTEMA, _mensajes(lote["texto_crudo"]),
+                f"Leer guion · {(lote['titulo'] or '')[:60]}", llamar_fn=llamar, max_tokens=16000, timeout=240)
+            if error:
+                datos.fallar_lote(lote_id, error, usd)
                 return
-            try:
-                titulo, texto = notion.leer_pagina(llave, lote["notion_page_id"])
-            except notion.ErrorNotion as e:
-                datos.fallar_lote(lote_id, str(e))
+            crudos = [g for g in (data.get("guiones") or []) if isinstance(g, dict)][:MAX_GUIONES]
+            lecturas = [lec for lec in (numerar(g, lote["texto_crudo"]) for g in crudos) if lec["lineas"]]
+            if not lecturas:
+                datos.fallar_lote(lote_id, gettext(
+                    "Claude no encontró líneas de guion en el texto. Revisa que pegaste el guion completo."), usd)
                 return
-            datos.poner_texto_lote(lote_id, titulo, texto)
-            lote = datos.lote_para_leer(lote_id)
-            if lote is None or lote["estado"] != "leyendo" or not lote["texto_crudo"]:
-                return
-        data, usd, error = claude.pedir_json(
-            lote["cliente"], "leer", lote_id, SISTEMA, _mensajes(lote["texto_crudo"]),
-            f"Leer guion · {(lote['titulo'] or '')[:60]}", llamar_fn=llamar, max_tokens=16000, timeout=240)
-        if error:
-            datos.fallar_lote(lote_id, error, usd)
-            return
-        crudos = [g for g in (data.get("guiones") or []) if isinstance(g, dict)][:MAX_GUIONES]
-        lecturas = [lec for lec in (numerar(g, lote["texto_crudo"]) for g in crudos) if lec["lineas"]]
-        if not lecturas:
-            datos.fallar_lote(lote_id, "Claude no encontró líneas de guion en el texto. Revisa que pegaste el guion completo.", usd)
-            return
-        datos.terminar_lectura(lote_id, lecturas, usd)
+            datos.terminar_lectura(lote_id, lecturas, usd)
     except Exception:  # noqa: BLE001 — corre en un hilo
         log.exception("guiones: no se pudo leer el lote %s", lote_id)
         try:
-            datos.fallar_lote(lote_id, "No se pudo leer el guion. Vuelve a intentarlo.")
+            cliente = lote["cliente"] if isinstance(lote, dict) else None
+            forzar_idioma = idiomas.en_idioma(idiomas.de_proyecto(cliente)) if cliente else nullcontext()
+            with forzar_idioma:
+                datos.fallar_lote(lote_id, gettext("No se pudo leer el guion. Vuelve a intentarlo."))
         except Exception:  # noqa: BLE001
             log.exception("guiones: tampoco se pudo marcar el error del lote %s", lote_id)

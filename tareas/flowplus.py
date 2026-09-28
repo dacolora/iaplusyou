@@ -13,22 +13,29 @@ from datetime import datetime
 
 import requests
 
+from flask_babel import gettext
+
 import bitacora
 import creative_flow
 import estado as estado_mod
 import gastos
+import idiomas
 import trabajos
 from final_edition import cortes, mezcla, musica
+from idiomas import N_
 from providers import flowplus_modelos
 from storage import r2_uploader
 from tareas import al_interrumpir, ref_sufijo, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-ETAPA_MODELO = "Generando con el modelo"
-ETAPA_DESCARGAR = "Descargando el resultado"
-ETAPA_MEZCLA = "Mezclando sonido"
-ETAPA_GUARDAR_VIDEO = "Guardando el video"
+# N_(...): dashboard.estado_trabajo traduce etapa/mensaje/detalle con gettext
+# al responder (idioma de quien mira la pantalla), no acá — este módulo corre
+# en el worker, sin idioma de petición.
+ETAPA_MODELO = N_("Generando con el modelo")
+ETAPA_DESCARGAR = N_("Descargando el resultado")
+ETAPA_MEZCLA = N_("Mezclando sonido")
+ETAPA_GUARDAR_VIDEO = N_("Guardando el video")
 # CreativeFlowPlus: el modelo se lleva casi todo el tiempo (timeout de 1200s);
 # la mezcla (clon + música, video copiado sin recodificar) son segundos.
 ETAPAS_CREATIVE_FLOW = [
@@ -43,15 +50,15 @@ PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
 _FASES_PROVEEDOR = {
-    "IN_QUEUE": "en cola",
-    "IN_PROGRESS": "el modelo está trabajando",
-    "created": "en cola",
-    "processing": "el modelo está trabajando",
-    "queued": "en cola",
-    "starting": "arrancando",
-    "running": "el modelo está trabajando",
-    "in_progress": "el modelo está trabajando",
-    "pending": "en cola",
+    "IN_QUEUE": N_("en cola"),
+    "IN_PROGRESS": N_("el modelo está trabajando"),
+    "created": N_("en cola"),
+    "processing": N_("el modelo está trabajando"),
+    "queued": N_("en cola"),
+    "starting": N_("arrancando"),
+    "running": N_("el modelo está trabajando"),
+    "in_progress": N_("el modelo está trabajando"),
+    "pending": N_("en cola"),
 }
 
 # Estados terminales: el poll también los emite en su última vuelta, pero mostrar
@@ -107,10 +114,18 @@ def _aspect_ratio_para_plataformas(platforms):
     return "9:16"
 
 
-def _texto_fase(info):
-    """Traduce a español el estado crudo que reporta un proveedor durante el poll.
-    Con fallback: si aparece una fase que no conocemos se muestra tal cual en vez
-    de tragarse la información (los proveedores agregan estados sin avisar)."""
+def _texto_fase(info, cliente):
+    """Traduce el estado crudo que reporta un proveedor durante el poll, en el
+    idioma del PROYECTO (spec §B8: mensajes de fondo, no de una pantalla que
+    alguien está mirando en este momento — nadie puede reabrir esta llamada
+    más tarde para traducirla en el idioma del visitante). Con fallback: si
+    aparece una fase que no conocemos se muestra tal cual en vez de tragarse
+    la información (los proveedores agregan estados sin avisar).
+
+    El resultado ya viene compuesto con la posición en cola cuando la hay
+    (`"%(fase)s (puesto %(n)s)"`): estado_trabajo ya no puede traducirlo de
+    nuevo al responder (el número lo vuelve un string distinto por cada
+    llamada), así que tiene que salir bien armado desde acá."""
     if not info:
         return None
     fase = info.get("fase")
@@ -120,19 +135,21 @@ def _texto_fase(info):
     if not texto:
         return None
     posicion = info.get("queue_position")
-    if posicion is not None:
-        texto = f"{texto} (puesto {posicion})"
-    return texto
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        fase_traducida = gettext(texto)
+        if posicion is not None:
+            return gettext("%(fase)s (puesto %(n)s)", fase=fase_traducida, n=posicion)
+        return fase_traducida
 
 
-def _avisar_fase_de(job_id):
+def _avisar_fase_de(job_id, cliente):
     """Devuelve el callback on_progreso que esperan los clientes de proveedores
     (Higgsfield, fal.ai, WaveSpeed): traduce la fase cruda del poll y la publica
     como detalle del trabajo. Envuelto en try/except porque un fallo REPORTANDO
     jamás puede tumbar una generación que ya gastó créditos."""
     def avisar_fase(info):
         try:
-            texto = _texto_fase(info)
+            texto = _texto_fase(info, cliente)
             if texto:
                 trabajos.reportar(job_id, detalle=texto)
         except Exception:
@@ -184,7 +201,7 @@ def ejecutar_imagen(tarea):
     out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.png")
-    avisar_fase = _avisar_fase_de(job_id)
+    avisar_fase = _avisar_fase_de(job_id, cliente)
     costo = None
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
@@ -218,7 +235,7 @@ def ejecutar_imagen(tarea):
         # deja obsoleta la revisión (y el error) de la doctrina anterior.
         revision_doctrina=None, revision_doctrina_error=None,
     )
-    return "Imagen de FlowPlus lista."
+    return N_("Imagen de FlowPlus lista.")
 
 
 @registrar("flowplus_video")
@@ -237,7 +254,7 @@ def ejecutar_video(tarea):
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f"{cf_id}.mp4")
 
-    avisar_fase = _avisar_fase_de(job_id)
+    avisar_fase = _avisar_fase_de(job_id, cliente)
     costo = None
     detalle_gasto = f"{modelo} · {int(duracion)} s" + ("" if con_sonido else " · sin sonido") + (" · borrador 480p" if calidad == "borrador" else "")
 
@@ -349,4 +366,4 @@ def ejecutar_video(tarea):
         "publicado_en": None,
     }
     estado_mod.guardar(cliente, estado)
-    return "Video de FlowPlus listo, pendiente de revisión."
+    return N_("Video de FlowPlus listo, pendiente de revisión.")

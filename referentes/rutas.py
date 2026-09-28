@@ -12,6 +12,7 @@ import re
 from uuid import uuid4
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask_babel import gettext
 
 import catalogo_productos
 import creative_flow
@@ -38,12 +39,35 @@ _FILTROS = ("etapa", "consciencia", "familia", "dolor", "marca", "fuente", "q")
 # igual gasta una llamada real contra Atria antes de fallar (Important 2).
 _RE_VIEW_ALL_PAGE_ID = re.compile(r"view_all_page_id=(\d+)")
 
+# Los filtros de «dolor» solo muestran los más frecuentes: con la biblioteca de
+# copycoders son casi 3 000 distintos y el menú entero pesaba en cada carga de
+# la página del proyecto (incidente 2026-09-28). El resto se encuentra con el
+# buscador, que también mira el dolor.
+MAX_DOLORES_FILTRO = 50
+
 
 def contexto(cliente):
     """Lo que necesita _tab_referentes.html. Se llama desde dashboard.ver_cliente."""
-    return {"ref_opciones": datos.opciones(cliente), "ref_etapas": datos.ETAPAS, "ref_consciencias": datos.CONSCIENCIAS,
+    opciones = datos.opciones(cliente)
+    opciones["dolores"] = opciones["dolores"][:MAX_DOLORES_FILTRO]
+    return {"ref_opciones": opciones, "ref_etapas": datos.ETAPAS, "ref_consciencias": datos.CONSCIENCIAS,
             "ref_etiquetas_etapa": datos.ETIQUETAS_ETAPA, "ref_etiquetas_consciencia": datos.ETIQUETAS_CONSCIENCIA,
-            "ref_fuentes": datos.FUENTES}
+            "ref_fuentes": datos.FUENTES, "ref_copycoders_activa": proyectos.referentes_copycoders(cliente),
+            "ref_copycoders_total": datos.total_copycoders()}
+
+
+@bp.post("/copycoders")
+def copycoders(cliente):
+    """Trae (o quita) la biblioteca global de copycoders para ESTE proyecto.
+    No copia ni borra nada: solo decide si se lista en Referentes y en los
+    sugeridos de Sprints."""
+    activa = request.form.get("activa") == "1"
+    proyectos.guardar_referentes_copycoders(cliente, activa)
+    if activa:
+        flash(gettext("Listo: la biblioteca de copycoders ya aparece en Referentes."), "ok")
+    else:
+        flash(gettext("Quitamos la biblioteca de copycoders de este proyecto. Puedes volver a traerla cuando quieras."), "ok")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
 
 
 def filtros_desde(args):

@@ -167,6 +167,18 @@ Reglas que hacen que el mismo documento sirva para todo:
 >   capa 3 fue manual, en cuatro instantes: 1000/3000/4250/7200 ms); el audio decodifica
 >   los archivos (`decodeAudioData`) en vez de nodos de `<video>`, y por eso R2 necesita
 >   CORS.
+> - **Capa 4a implementada** (plan `docs/superpowers/plans/2026-09-27-editor-capa4a-editar.md`):
+>   primera entrega del editor que EDITA. Línea de tiempo en DOM, no en canvas (y sin
+>   Preact todavía: `static/editor/pagina_editor.js` es un módulo suelto que une la vista
+>   previa, la línea de tiempo, las operaciones, el autoguardado y «Producir»).
+>   `operaciones.js` (cortar, borrar con ripple en la principal, duplicar, recortar, mover,
+>   cambiar velocidad) es puro y valida contra Python (`tests/test_operaciones_editor.py`
+>   corre el JS real en Node); `p_sonido` (el sonido de la escena) se rehace como espejo de
+>   la principal en cada operación. «Editar este video» arma la edición gratis desde el
+>   clon crudo (`editor.desde_clon` → `edicion_desde_clon` → `final_edition/edicion_clon.py`);
+>   producir ya se puede hacer desde el editor en esta capa (`editor.producir`: congela la
+>   versión por CAS, un `edicion_producir` gratis por destino) — la pantalla completa de
+>   destinos y traducciones (§4, "Producir") sigue en la capa 5.
 >
 > Decisiones de la capa 2 (plan `docs/superpowers/plans/2026-09-20-editor-capa2-borrador.md`):
 > - **Traducción por destino, con respaldo por idioma**: `variables.textos/voz`,
@@ -356,6 +368,13 @@ vivo, sin servidor.
 
 ## 4. Interfaz
 
+> Ajuste de la capa 4a (plan `docs/superpowers/plans/2026-09-27-editor-capa4a-editar.md`): el
+> timeline se construyó en DOM + Pointer Events (`static/editor/linea_tiempo.js`), no en
+> `<canvas>` como dice más abajo — un clip es un elemento posicionado con CSS, no un dibujo
+> por cuadro, y así arrastrar/recortar/soltar reutiliza los eventos y la delegación del DOM
+> en vez de reimplementar hit-testing. Tampoco entró Preact: la página (`pagina_editor.js`)
+> sigue siendo módulos ES sueltos que pintan a mano, como la vista previa de la capa 3.
+
 Una sola disposición vertical (CapCut móvil); en computador el timeline es más
 alto y el panel de propiedades va a la derecha. Sin hover, sin clic derecho.
 
@@ -441,6 +460,12 @@ Deshacer/rehacer solo en memoria. Producir: `POST .../producir` → versión →
 PNG de textos como `material` → `pieza tipo=final` por destino (como hoy) →
 `edicion_producir` por destino.
 
+> Nota (capa 4a, 2026-09-27): el borrador ya no es solo del worker: el editor
+> lo abre y lo autoguarda con el mismo CAS por `version_n`. La vía automática
+> (`produccion.traducir`), si choca con un autoguardado después de pagar la
+> localización y la voz, recarga la edición y vuelve a aplicar solo sus pasos
+> puros (`agregar_destino` / `fijar_precio`), hasta 2 veces, sin volver a pagar.
+
 Borrador: `final_edition.borrador(cliente, cf_id) -> edicion_id` (guion con
 Claude, cortes, voz por bloque cacheada, música, textos hook/badge/CTA en las
 posiciones actuales, subtítulos, variables prellenadas). "Preparar guion" pasa a
@@ -485,6 +510,13 @@ Producción: Producir → destinos, precios, traducciones pendientes, costo y
 tiempo → confirmar → PNG por idioma subidos → versión → una tarea por destino
 → barra de progreso por etapas (`iniciarPolling`) → final como hoy (aprobar,
 publicar, experimento, entrega) → "Ajustar este destino".
+
+> Nota (capa 4a, 2026-09-27): «Producir» desde el editor revisa los recortes de
+> cada destino con `compilador.verificar_recortes` antes de congelar (400 con los
+> problemas, en vez de fallar en el worker), no produce un destino cuya final con
+> voz (`final_producir`) está en curso, y pregunta antes de reemplazar una final
+> con video que no salió de esta edición (409 con `reemplazos`; se reenvía con
+> `reemplazar: true` desde «Reemplazar y producir»).
 
 Se conserva sin tocar: `mezcla.py`, `voz.py` (+ caché por bloque), `musica.py`,
 `guion.py`, `cortes.py` (detección), `tipos.py`, `providers/fal_audio.py`, la

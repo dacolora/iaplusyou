@@ -12,6 +12,7 @@ import doctrina
 from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import producto as doctrina_producto
 import flowplus_prompt
+import idiomas
 import marca
 import proyectos
 import tiendas
@@ -304,11 +305,18 @@ def armar_datos(ctx):
         aprendizajes=ctx.get("aprendizajes") or "APRENDIZAJES DEL PROYECTO: ninguno todavía")
 
 
-def instrucciones(ctx):
-    idioma = (ctx.get("mercado") or {}).get("idioma") or "es"
-    idioma_textos = ("Todo en español." if idioma == "es" else
-                     f"Todo en español salvo el gancho (el texto en pantalla), que va en "
-                     f"{datos.IDIOMAS_NOMBRE.get(idioma, idioma)}, el idioma del MERCADO.")
+def instrucciones(ctx, idioma="es"):
+    """Las instrucciones del sitio. Todo en el idioma del PROYECTO (spec
+    2026-09-26 §B4) salvo el gancho, que va en el idioma del MERCADO del
+    sprint cuando es otro (2026-09-27: los sprints nuevos trabajan en inglés)."""
+    idioma = idiomas.normalizar(idioma) or "es"
+    mercado = (ctx.get("mercado") or {}).get("idioma") or "es"
+    nombre = idiomas.nombre_para_claude(idioma)
+    if mercado == idioma:
+        idioma_textos = f"Todo en {nombre}."
+    else:
+        idioma_textos = (f"Todo en {nombre} salvo el gancho (el texto en pantalla), que va en "
+                         f"{datos.IDIOMAS_NOMBRE.get(mercado, mercado)}, el idioma del MERCADO.")
     return INSTRUCCIONES_IDEAS.format(
         consciencias=", ".join(f'"{c}"' for c in doctrina.CONSCIENCIAS),
         fuentes=", ".join(f'"{f}"' for f in doctrina.FUENTES_PRUEBA),
@@ -317,6 +325,19 @@ def instrucciones(ctx):
         duraciones=list(ctx.get("duraciones") or (8,)),
         plataformas=", ".join(f'"{p}"' for p in datos.PLATAFORMAS),
         idioma_textos=idioma_textos)
+
+
+def orden_ideas(idioma, mercado):
+    """La orden de idioma del proyecto para las ideas; si el gancho va en otro
+    idioma (el del MERCADO), la orden lo nombra como su única excepción — sin
+    eso, «escribe TODO en X» al principio y al final pisaría el del gancho."""
+    idioma = idiomas.normalizar(idioma) or "es"
+    orden = idiomas.orden_idioma(idioma)
+    mercado = mercado or "es"
+    if mercado != idioma:
+        orden += (f" Única excepción: el gancho (el texto en pantalla) va en "
+                  f"{datos.IDIOMAS_NOMBRE.get(mercado, mercado)}, el idioma del MERCADO.")
+    return orden
 
 
 def max_tokens_para(n_ideas):
@@ -403,9 +424,12 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     if n_videos + n_imagenes == 0:
         return []
     ctx = contexto_campana(cliente, campana)
+    idioma = idiomas.de_proyecto(cliente)
+    orden = orden_ideas(idioma, (ctx.get("mercado") or {}).get("idioma"))
     validos = {r["id"] for r in ctx["referencias"]}
     datos_msg = armar_prompt(ctx, n_videos, n_imagenes)
-    system = doctrina.bloque_system("angulo", "gancho", "video", extra=instrucciones(ctx))
+    system = doctrina.bloque_system("angulo", "gancho", "video",
+                                    extra=f"{orden}\n\n{instrucciones(ctx, idioma)}\n\n{orden}")
     content = [{"type": "text", "text": datos_msg}]
     tokens = max_tokens_para(n_videos + n_imagenes)
 
@@ -498,7 +522,8 @@ def reescribir(cliente, cp_id):
                + f"\n\nIDEA ACTUAL ({idea['tipo']}): {idea['titulo']} — {idea['escena']}")
     crudo, ent, sal = analisis._llamar_contando([{"type": "text", "text": mensaje}], max_tokens=max_tokens_para(1),
                                                 system=doctrina.bloque_system("gancho", "video",
-                                                                              extra=INSTRUCCIONES_REESCRIBIR))
+                                                                              extra=INSTRUCCIONES_REESCRIBIR,
+                                                                              idioma=idiomas.de_proyecto(cliente)))
     try:
         t = (crudo or "").strip()
         ini, fin = t.find("{"), t.rfind("}")

@@ -10,21 +10,25 @@ import os
 import subprocess
 import tempfile
 
+from flask_babel import gettext
+
 import doctrina
+import idiomas
+from idiomas import N_
 
 PUNTOS = (
-    (1, "gancho", "Gancho", "gancho"),
-    (2, "una_idea", "Una sola idea", "angulo"),
-    (3, "reason_why", "El porqué", "base"),
-    (4, "pruebas", "Pruebas", "base"),
-    (5, "mecanismo", "Mecanismo", "angulo"),
-    (6, "visuales", "Visuales", "video"),
-    (7, "ojos", "Texto en pantalla", "video"),
-    (8, "lado_brillante", "Lado brillante", "guion"),
-    (9, "cierre", "Cierre", "guion"),
-    (10, "marca", "Marca", "revisar"),
-    (11, "aburrimiento", "Aburrimiento", "revisar"),
-    (12, "mismo_mensaje", "Mismo mensaje", "angulo"),
+    (1, "gancho", N_("Gancho"), "gancho"),
+    (2, "una_idea", N_("Una sola idea"), "angulo"),
+    (3, "reason_why", N_("El porqué"), "base"),
+    (4, "pruebas", N_("Pruebas"), "base"),
+    (5, "mecanismo", N_("Mecanismo"), "angulo"),
+    (6, "visuales", N_("Visuales"), "video"),
+    (7, "ojos", N_("Texto en pantalla"), "video"),
+    (8, "lado_brillante", N_("Lado brillante"), "guion"),
+    (9, "cierre", N_("Cierre"), "guion"),
+    (10, "marca", N_("Marca"), "revisar"),
+    (11, "aburrimiento", N_("Aburrimiento"), "revisar"),
+    (12, "mismo_mensaje", N_("Mismo mensaje"), "angulo"),
 )
 PUNTO = {n: {"n": n, "clave": c, "titulo": t, "rebanada": r} for n, c, t, r in PUNTOS}
 ESTADOS = ("pasa", "mejorar", "no_aplica")
@@ -45,7 +49,7 @@ No escuchas el audio: lo que dependa del sonido (voz, música, sonido de la esce
 El GUION, si lo hay, es de la edición final: su voz y su texto en pantalla se ponen después sobre este video,
 así que no los busques en los fotogramas; juzga si el video y el guion cuentan la misma promesa.
 No inventes lo que no ves en los fotogramas ni en los DATOS. La REVISIÓN RÁPIDA ya encontró lo que dice: tenlo en
-cuenta, no la repitas palabra por palabra. Escribe en español simple, para el dueño de la marca, máximo dos frases por
+cuenta, no la repitas palabra por palabra. Escribe en __IDIOMA__ simple, para el dueño de la marca, máximo dos frases por
 punto.
 Responde SOLO un JSON: {"puntos": [{"n": 1, "estado": "pasa|mejorar|no_aplica", "detalle": "...", "donde": "..."}, ...
 hasta el 12], "resumen": "una frase con lo más importante para mejorar, o que la pieza está lista"}"""
@@ -101,35 +105,47 @@ def reglas(datos):
     if a:
         gancho = " ".join(str(a.get("gancho") or "").split())
         if gancho and _palabras(gancho) > doctrina.MAX_PALABRAS_GANCHO:
-            aviso(1, "gancho_largo", f"El gancho tiene {_palabras(gancho)} palabras: con {doctrina.MAX_PALABRAS_GANCHO} "
-                                     "o menos se lee en tres segundos.", "angulo")
+            aviso(1, "gancho_largo",
+                  gettext("El gancho tiene %(n)s palabras: con %(max)s o menos se lee en tres segundos.",
+                          n=_palabras(gancho), max=doctrina.MAX_PALABRAS_GANCHO), "angulo")
         cons = doctrina.normalizar_consciencia(a.get("consciencia"))
         recomendados = doctrina.lead_por_consciencia(cons) if cons else ()
         lead = a.get("lead")
         if cons and lead in doctrina.LEADS and recomendados and lead not in recomendados:
+            nombre_lead, nombre_cons = doctrina.LEADS_NOMBRE[lead], doctrina.CONSCIENCIAS_NOMBRE[cons]
+            o = gettext("o")
+            opciones = []
+            for x in recomendados:
+                nombre_x = doctrina.LEADS_NOMBRE[x]
+                opciones.append(gettext("«%(lead)s»", lead=idiomas.traducir(nombre_x)))
             aviso(1, "arranque_consciencia",
-                  f"El arranque «{doctrina.LEADS_NOMBRE[lead]}» no es de los recomendados para una audiencia "
-                  f"{doctrina.CONSCIENCIAS_NOMBRE[cons]}: mejor "
-                  + " o ".join(f"«{doctrina.LEADS_NOMBRE[x]}»" for x in recomendados) + ".", "angulo")
+                  gettext("El arranque «%(lead)s» no es de los recomendados para una audiencia %(consciencia)s: "
+                          "mejor %(opciones)s.", lead=idiomas.traducir(nombre_lead),
+                          consciencia=idiomas.traducir(nombre_cons), opciones=f" {o} ".join(opciones)),
+                  "angulo")
         _, errores = doctrina.validar_angulo(a)
         if "promesa_multiple" in errores:
-            aviso(2, "promesa_multiple", "La promesa dice más de una cosa: una pieza vende una sola idea.", "angulo")
+            aviso(2, "promesa_multiple", gettext("La promesa dice más de una cosa: una pieza vende una sola idea."),
+                  "angulo")
         fija = _entero(datos.get("sofisticacion_fija"))
         sof = fija if fija in doctrina.SOFISTICACIONES else _entero(a.get("sofisticacion"))
         if sof is not None and sof >= 3 and not str(a.get("mecanismo") or "").strip():
-            aviso(5, "sin_mecanismo", f"El mercado ya vio promesas parecidas (sofisticación {sof}) y el ángulo no dice "
-                                      "por qué funciona el producto (el mecanismo).", "angulo")
+            aviso(5, "sin_mecanismo",
+                  gettext("El mercado ya vio promesas parecidas (sofisticación %(sof)s) y el ángulo no dice por qué "
+                          "funciona el producto (el mecanismo).", sof=sof), "angulo")
     caption = str(datos.get("caption") or "")
     for cifra in doctrina.verificar_cifras(caption, datos.get("verificables") or ""):
-        aviso(4, "cifra_no_verificada", f"La cifra «{cifra}» del caption no está en los datos del producto ni en sus "
-                                        "pruebas: si es real, agrégala como prueba del producto.", "caption")
+        aviso(4, "cifra_no_verificada",
+              gettext("La cifra «%(cifra)s» del caption no está en los datos del producto ni en sus pruebas: si es "
+                      "real, agrégala como prueba del producto.", cifra=cifra), "caption")
     bloques = bloques_guion(datos.get("guion"))
     if bloques and bloques[-1].get("rol") != "cta":
-        aviso(9, "sin_cta", "El guion no termina con una llamada a la acción.", "guion")
+        aviso(9, "sin_cta", gettext("El guion no termina con una llamada a la acción."), "guion")
     idea = datos.get("idea") if isinstance(datos.get("idea"), dict) else None
     if a and idea and idea.get("gancho") and a.get("gancho") and _norm(idea["gancho"]) != _norm(a["gancho"]):
-        aviso(12, "gancho_distinto", "El gancho de la idea del sprint no es el del ángulo: la pieza puede estar "
-                                     "contando dos cosas distintas.", "idea")
+        aviso(12, "gancho_distinto",
+              gettext("El gancho de la idea del sprint no es el del ángulo: la pieza puede estar contando dos cosas "
+                      "distintas."), "idea")
     return sorted(avisos, key=lambda x: x["n"])
 
 
@@ -168,14 +184,14 @@ def parsear_revision(texto):
     t = (texto or "").strip()
     ini, fin = t.find("{"), t.rfind("}")
     if ini < 0 or fin <= ini:
-        raise ErrorRevision("Claude no devolvió JSON.")
+        raise ErrorRevision(gettext("Claude no devolvió JSON."))
     try:
         data = json.loads(t[ini:fin + 1])
     except ValueError as e:
-        raise ErrorRevision(f"JSON inválido: {e}")
+        raise ErrorRevision(gettext("JSON inválido: %(error)s", error=e))
     crudos = data.get("puntos") if isinstance(data, dict) else None
     if not isinstance(crudos, list):
-        raise ErrorRevision("El JSON no trae la lista «puntos».")
+        raise ErrorRevision(gettext("El JSON no trae la lista «puntos»."))
     puntos = {}
     for p in crudos:
         if not isinstance(p, dict):
@@ -184,18 +200,18 @@ def parsear_revision(texto):
         if n not in PUNTO:
             continue
         if n in puntos:
-            raise ErrorRevision(f"El punto {n} viene dos veces.")
+            raise ErrorRevision(gettext("El punto %(n)s viene dos veces.", n=n))
         estado = p.get("estado")
         if estado not in ESTADOS:
-            raise ErrorRevision(f"El punto {n} trae un estado que no existe: «{estado}».")
+            raise ErrorRevision(gettext("El punto %(n)s trae un estado que no existe: «%(estado)s».", n=n, estado=estado))
         detalle = " ".join(str(p.get("detalle") or "").split())[:MAX_DETALLE]
         if estado == "mejorar" and not detalle:
-            raise ErrorRevision(f"El punto {n} dice «mejorar» sin decir qué.")
+            raise ErrorRevision(gettext("El punto %(n)s dice «mejorar» sin decir qué.", n=n))
         puntos[n] = {"n": n, "estado": estado, "detalle": detalle,
                      "donde": " ".join(str(p.get("donde") or "").split())[:80]}
     faltan = [n for n in PUNTO if n not in puntos]
     if faltan:
-        raise ErrorRevision("Faltan los puntos " + ", ".join(str(n) for n in faltan) + ".")
+        raise ErrorRevision(gettext("Faltan los puntos %(puntos)s.", puntos=", ".join(str(n) for n in faltan)))
     resumen = " ".join(str(data.get("resumen") or "").split())[:300]
     return {"puntos": [puntos[n] for n in sorted(puntos)], "resumen": resumen}
 
@@ -249,10 +265,29 @@ def ultimo_caption(cliente, cf_id):
     return (fila[0] if fila else "") or ""
 
 
-def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_SIN_DAR):
+def ultimos_captions(cliente):
+    """{cf_id: último caption no vacío} de todo el proyecto en UNA consulta —
+    lo mismo que `ultimo_caption`, para la lista de Crear."""
+    import sqlalchemy as sa
+
+    import db
+    pub, pz, cp = db.publicacion, db.pieza, db.concepto
+    with db.conectar() as con:
+        filas = con.execute(
+            sa.select(cp.c.legado_id, pub.c.caption)
+            .select_from(pub.join(pz, pz.c.id == pub.c.pieza_id).join(cp, cp.c.id == pz.c.concepto_id))
+            .where(cp.c.cliente == cliente, pub.c.caption.isnot(None), pub.c.caption != "")
+            .order_by(pub.c.id.desc())).fetchall()
+    out = {}
+    for legado, caption in filas:
+        out.setdefault(legado, caption or "")
+    return out
+
+
+def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_SIN_DAR, caption=_SIN_DAR):
     """Todo lo que miran las reglas y Claude de una pieza de Crear. `entry`:
     la sesión ya cargada (la lista de Crear la pasa para no recargar todo).
-    `guion`/`guia`/`producto`: ya resueltos por quien llama, para no repetir
+    `guion`/`guia`/`producto`/`caption`: ya resueltos por quien llama, para no repetir
     la lectura (`producto` en particular evita escanear el catálogo una vez
     por pieza en la lista de Crear — ver `dashboard._creative_flow_items`)."""
     import creative_flow
@@ -260,7 +295,7 @@ def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_
     if entry is None:
         entry = creative_flow.cargar(cliente).get(cf_id)
     if not entry:
-        raise ErrorRevision("Esa pieza ya no existe.")
+        raise ErrorRevision(gettext("Esa pieza ya no existe."))
     angulo = entry.get("angulo") if isinstance(entry.get("angulo"), dict) and entry.get("angulo") else None
     if guion is _SIN_DAR:
         guion = creative_flow.guion_base(cliente, cf_id) if (entry.get("tipo") or "video") != "imagen" else None
@@ -284,7 +319,7 @@ def reunir(cliente, cf_id, entry=None, guion=_SIN_DAR, guia=_SIN_DAR, producto=_
     verificables = "\n".join(x for x in (json.dumps(producto, ensure_ascii=False), doctrina.texto_verificable(angulo),
                                          str(entry.get("accion_central") or ""), guia, *textos_guion(guion)) if x)
     return {"entry": entry, "cf_id": cf_id, "angulo": angulo, "guion": guion, "producto": producto, "idea": idea,
-            "caption": ultimo_caption(cliente, cf_id), "guia": guia,
+            "caption": ultimo_caption(cliente, cf_id) if caption is _SIN_DAR else (caption or ""), "guia": guia,
             "sofisticacion_fija": producto.get("sofisticacion"), "verificables": verificables}
 
 
@@ -397,10 +432,11 @@ def revisar(cliente, cf_id):
         try:
             _guardar_error(mensaje)
         except Exception as e:  # noqa: BLE001
-            raise ErrorRevision("No se pudo guardar la revisión.", ent, sal) from e
+            raise ErrorRevision(gettext("No se pudo guardar la revisión."), ent, sal) from e
 
+    idioma = idiomas.de_proyecto(cliente)
     if entry.get("estado") != "video_listo" or not video_url:
-        mensaje = "Solo se revisa una pieza terminada."
+        mensaje = gettext("Solo se revisa una pieza terminada.")
         _guardar_error(mensaje)
         raise ErrorRevision(mensaje)
     ruta = qa.archivo_local(entry) if (entry.get("tipo") or "video") != "imagen" else None
@@ -413,12 +449,13 @@ def revisar(cliente, cf_id):
             except OSError:
                 pass
     if not visuales:
-        mensaje = "No se pudo sacar ningún fotograma del video."
+        mensaje = gettext("No se pudo sacar ningún fotograma del video.")
         _guardar_error(mensaje)
         raise ErrorRevision(mensaje)
     avisos = reglas(d)
     content = [{"type": "text", "text": texto_para_revision(d, avisos)}] + visuales
-    system = doctrina.bloque_system("revisar", extra=INSTRUCCIONES_REVISAR)
+    system = doctrina.bloque_system("revisar", extra=INSTRUCCIONES_REVISAR.replace(
+        "__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma=idioma)
     texto, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
     try:
         r = parsear_revision(texto)
@@ -429,7 +466,7 @@ def revisar(cliente, cf_id):
             texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system)
             ent, sal = ent + e2, sal + s2
         except Exception as falla:  # noqa: BLE001
-            mensaje = str(falla)[:300] or "La corrección falló."
+            mensaje = str(falla)[:300] or gettext("La corrección falló.")
             _guardar_error_pagado(mensaje, ent, sal)
             raise ErrorRevision(mensaje, ent, sal) from falla
         try:
@@ -444,5 +481,5 @@ def revisar(cliente, cf_id):
     try:
         creative_flow.actualizar(cliente, cf_id, revision_doctrina=rev, revision_doctrina_error=None)
     except Exception as e:  # noqa: BLE001 — no perder el gasto si el guardado revienta
-        raise ErrorRevision("No se pudo guardar la revisión.", ent, sal) from e
+        raise ErrorRevision(gettext("No se pudo guardar la revisión."), ent, sal) from e
     return rev, ent, sal

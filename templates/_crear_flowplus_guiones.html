@@ -3,8 +3,8 @@
    los formularios como JSON y consulta cada 2 s mientras haya un trabajo en
    curso. El único innerHTML es ese fragmento del servidor; lo que viene de una
    respuesta JSON se pinta con textContent. #}
-<section class="gpg" id="gpg" aria-label="Guiones">
-  <div id="gpg-panel" aria-live="polite"><p class="vacio">Cargando tus guiones…</p></div>
+<section class="gpg" id="gpg" aria-label="{{ _('Guiones') }}">
+  <div id="gpg-panel" aria-live="polite"><p class="vacio">{{ _('Cargando tus guiones…') }}</p></div>
 </section>
 <script>
   (function () {
@@ -90,7 +90,9 @@
       var q = [];
       if (sel.guion) q.push('guion=' + encodeURIComponent(sel.guion));
       if (sel.video) q.push('video=' + encodeURIComponent(sel.video));
-      return fetch(BASE + '/panel' + (q.length ? '?' + q.join('&') : ''), { credentials: 'same-origin' })
+      // X-Requested-With: sin la cabecera, cada sondeo (cada 2 s) también
+      // calculaba el chip de gasto de la barra lateral (auditoría 2026-09-28).
+      return fetch(BASE + '/panel' + (q.length ? '?' + q.join('&') : ''), { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
         .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
         .then(function (html) {
           if (miPeticion !== peticionN) return;  // llegó tarde: una petición más nueva ya está en curso o resuelta
@@ -111,7 +113,7 @@
         })
         .catch(function () {
           if (miPeticion !== peticionN) return;
-          errorEn(panel, 'No se pudo cargar el panel de guiones. Recarga la página.');
+          errorEn(panel, {{ _('No se pudo cargar el panel de guiones. Recarga la página.')|tojson }});
         });
     }
 
@@ -136,7 +138,7 @@
       if (boton) boton.disabled = true;
       return enviar(ruta, cuerpo).then(function (res) {
         if (!res.ok) {
-          errorEn(caja, res.d.error || ('Algo salió mal (HTTP ' + res.status + ').'), res.d.problemas);
+          errorEn(caja, res.d.error || ({{ _('Algo salió mal (HTTP %(status)s).', status='__STATUS__')|tojson }}.replace('__STATUS__', res.status)), res.d.problemas);
           if (boton) boton.disabled = false;
           return;
         }
@@ -148,7 +150,7 @@
         if (sel.guion + ':' + sel.video !== antes) sucios = {}; else olvidarCambiosEn(caja);
         cargar();
       }, function () {
-        errorEn(caja, 'No hay conexión con el servidor.');
+        errorEn(caja, {{ _('No hay conexión con el servidor.')|tojson }});
         if (boton) boton.disabled = false;
       });
     }

@@ -1,191 +1,191 @@
 <details class="comparacion-modelos">
-  <summary class="btn-guardar btn-sm">Ver por qué usamos estos modelos (comparación completa) →</summary>
+  <summary class="btn-guardar btn-sm">{{ _('Ver por qué usamos estos modelos (comparación completa) →') }}</summary>
   <div class="comparacion-contenido">
     <p class="vacio" style="padding-top:0;">
-      Antes de dejar seleccionable un modelo, lo probamos con la misma foto/video
+      {{ _('Antes de dejar seleccionable un modelo, lo probamos con la misma foto/video
       real y verificamos su esquema de API contra la documentación oficial del
       proveedor (no blogs de terceros). El criterio para entrar a la lista de
       arriba es uno solo: tiene que poder VER la foto de referencia del producto
       (no solo una descripción en texto) para clonar tu foto/video original y
-      cambiar únicamente el calzado.
+      cambiar únicamente el calzado.') }}
     </p>
 
-    <h3>Modelos de imagen (foto)</h3>
+    <h3>{{ _('Modelos de imagen (foto)') }}</h3>
     <p class="vacio" style="padding-top:0;">
-      <strong>Límite real confirmado (2 sep 2026, foto real de 3 personas — una
+      {{ _('<strong>Límite real confirmado (2 sep 2026, foto real de 3 personas — una
       descalza, dos con calzado puesto):</strong> ninguno de los 3 modelos de
       foto disponibles hoy cambia de forma confiable el calzado de TODAS las
       personas de una foto en una sola pasada — el prompt ya se corrigió para
       pedirlo explícitamente (antes decía "la persona" en singular, ahora pide
       contar personas y editar a todas), pero el límite real es del modelo, no
-      del wording. Detalle por modelo abajo.
+      del wording. Detalle por modelo abajo.') }}
     </p>
     <div style="overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Modelo</th><th>Precio</th><th>¿Ve la foto del producto?</th><th>Estado</th></tr>
+        <tr><th>{{ _('Modelo') }}</th><th>{{ _('Precio') }}</th><th>{{ _('¿Ve la foto del producto?') }}</th><th>{{ _('Estado') }}</th></tr>
       </thead>
       <tbody>
         <tr>
           <td>Nano Banana <span class="comparacion-nota">(Gemini 2.5 Flash Image)</span></td>
-          <td>$0.039 / imagen</td>
-          <td>Sí</td>
-          <td><span class="tag-estado tag-en-uso">En uso — recomendado</span> — con 3 personas en cuadro (2 con calzado puesto), edita bien a la más prominente pero deja a la segunda con su calzado original, incluso pidiéndole explícitamente contar y editar a todas. El mejor de los 3 disponibles hoy, no perfecto</td>
+          <td>$0.039 / {{ _('imagen') }}</td>
+          <td>{{ _('Sí') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso — recomendado') }}</span> — {{ _('con 3 personas en cuadro (2 con calzado puesto), edita bien a la más prominente pero deja a la segunda con su calzado original, incluso pidiéndole explícitamente contar y editar a todas. El mejor de los 3 disponibles hoy, no perfecto') }}</td>
         </tr>
         <tr>
-          <td>Nano Banana <span class="comparacion-nota">(vía fal.ai)</span></td>
-          <td>$0.039 / imagen</td>
-          <td>Sí</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — con la misma foto de 3 personas, resultado peor que la versión directa: le puso calzado a la persona que iba DESCALZA y dejó a las dos con calzado puesto sin cambiar. No usar como alternativa cuando falle la versión directa</td>
+          <td>Nano Banana <span class="comparacion-nota">({{ _('vía fal.ai') }})</span></td>
+          <td>$0.039 / {{ _('imagen') }}</td>
+          <td>{{ _('Sí') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('con la misma foto de 3 personas, resultado peor que la versión directa: le puso calzado a la persona que iba DESCALZA y dejó a las dos con calzado puesto sin cambiar. No usar como alternativa cuando falle la versión directa') }}</td>
         </tr>
         <tr>
           <td>Qwen Image Edit Plus</td>
-          <td>$0.03 / imagen</td>
-          <td>Sí</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — con la misma foto de 3 personas, no cambió el calzado de nadie</td>
+          <td>$0.03 / {{ _('imagen') }}</td>
+          <td>{{ _('Sí') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('con la misma foto de 3 personas, no cambió el calzado de nadie') }}</td>
         </tr>
         <tr>
-          <td>Nano Banana Pro Ultra <span class="comparacion-nota">(Gemini 3.0 Pro Image, vía WaveSpeed AI)</span></td>
-          <td>$0.15 en 4k · $0.18 en 8k</td>
-          <td>Sí — hasta 14 imágenes en una lista plana</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — el de mayor calidad: sale directo en 4k y acepta muchas más referencias del producto (13 contra las 2 de los de fal). Su documentación oficial NO dice nada sobre editar a varias personas, así que no se sabe si resuelve ese límite</td>
+          <td>Nano Banana Pro Ultra <span class="comparacion-nota">(Gemini 3.0 Pro Image, {{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('$0.15 en 4k · $0.18 en 8k') }}</td>
+          <td>{{ _('Sí — hasta 14 imágenes en una lista plana') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('el de mayor calidad: sale directo en 4k y acepta muchas más referencias del producto (13 contra las 2 de los de fal). Su documentación oficial NO dice nada sobre editar a varias personas, así que no se sabe si resuelve ese límite') }}</td>
         </tr>
         <tr>
-          <td>Bria Increase Resolution <span class="comparacion-nota">(vía WaveSpeed AI — no edita, solo mejora)</span></td>
-          <td>$0.04 por corrida</td>
-          <td>No aplica — recibe el resultado ya generado</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — segunda pasada opcional. Es el único upscaler del catálogo cuya documentación oficial afirma que "preserva el contenido original <em>sin regeneración</em>", que es la condición no negociable acá: la foto tiene que seguir siendo la misma persona, misma pose, mismo fondo. Los Clarity y ultimate-image-upscaler se describen a sí mismos como generativos (uno hasta expone un parámetro <code>creativity</code> para "agregar detalle generado") — por eso quedaron fuera</td>
+          <td>Bria Increase Resolution <span class="comparacion-nota">({{ _('vía WaveSpeed AI — no edita, solo mejora') }})</span></td>
+          <td>{{ _('$0.04 por corrida') }}</td>
+          <td>{{ _('No aplica — recibe el resultado ya generado') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('segunda pasada opcional. Es el único upscaler del catálogo cuya documentación oficial afirma que "preserva el contenido original <em>sin regeneración</em>", que es la condición no negociable acá: la foto tiene que seguir siendo la misma persona, misma pose, mismo fondo. Los Clarity y ultimate-image-upscaler se describen a sí mismos como generativos (uno hasta expone un parámetro <code>creativity</code> para "agregar detalle generado") — por eso quedaron fuera') }}</td>
         </tr>
         <tr>
           <td>Flux Kontext Pro</td>
-          <td>$0.04 / imagen</td>
-          <td>No — solo recibe 1 imagen de entrada</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — el producto solo se le puede describir en texto, no mostrárselo</td>
+          <td>$0.04 / {{ _('imagen') }}</td>
+          <td>{{ _('No — solo recibe 1 imagen de entrada') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Descartado') }}</span> — {{ _('el producto solo se le puede describir en texto, no mostrárselo') }}</td>
         </tr>
         <tr>
           <td>Higgsfield (Soul)</td>
-          <td>~$0.07 / imagen</td>
-          <td>No — es generativo, no editor</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — regenera la escena completa; en pruebas reales cambió a la persona</td>
+          <td>~$0.07 / {{ _('imagen') }}</td>
+          <td>{{ _('No — es generativo, no editor') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Descartado') }}</span> — {{ _('regenera la escena completa; en pruebas reales cambió a la persona') }}</td>
         </tr>
       </tbody>
     </table>
     </div>
 
-    <h3>Modelos de video</h3>
+    <h3>{{ _('Modelos de video') }}</h3>
     <div style="overflow-x:auto;">
     <table>
       <thead>
-        <tr><th>Modelo</th><th>Precio</th><th>¿Ve la foto del producto?</th><th>Estado</th></tr>
+        <tr><th>{{ _('Modelo') }}</th><th>{{ _('Precio') }}</th><th>{{ _('¿Ve la foto del producto?') }}</th><th>{{ _('Estado') }}</th></tr>
       </thead>
       <tbody>
         <tr>
           <td>Kling O1 <span class="comparacion-nota">(video-to-video edit)</span></td>
-          <td>$0.168 / seg</td>
-          <td>Sí — hasta 4 imágenes citables (@Image1, @Image2…)</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — el más barato de los editores reales, buena opción cuando el video tiene una sola persona en cuadro</td>
+          <td>$0.168 / {{ _('seg') }}</td>
+          <td>{{ _('Sí — hasta 4 imágenes citables (@Image1, @Image2…)') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('el más barato de los editores reales, buena opción cuando el video tiene una sola persona en cuadro') }}</td>
         </tr>
         <tr>
           <td>Luma Ray3 Modify</td>
-          <td>$0.35 / seg</td>
-          <td>Sí — 1 imagen</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span></td>
+          <td>$0.35 / {{ _('seg') }}</td>
+          <td>{{ _('Sí — 1 imagen') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span></td>
         </tr>
         <tr>
           <td>Wan-2.2 Animate Replace</td>
-          <td>desde $0.04 / seg <span class="comparacion-nota">(480p; $0.08/seg en 720p)</span></td>
-          <td>Sí — 1 imagen</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — hecho específicamente para reemplazar un elemento en un video real, sin ni siquiera necesitar prompt</td>
+          <td>{{ _('desde $0.04 / seg') }} <span class="comparacion-nota">(480p; $0.08/seg {{ _('en 720p') }})</span></td>
+          <td>{{ _('Sí — 1 imagen') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('hecho específicamente para reemplazar un elemento en un video real, sin ni siquiera necesitar prompt') }}</td>
         </tr>
         <tr>
-          <td>Wan 2.7 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>$0.10 / seg en 720p, $0.15 / seg en 1080p</td>
-          <td>Sí — hasta 3 imágenes de referencia</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — editor real: preserva movimiento y escena, el más barato de los que sí editan de verdad</td>
+          <td>Wan 2.7 Video Edit <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('$0.10 / seg en 720p, $0.15 / seg en 1080p') }}</td>
+          <td>{{ _('Sí — hasta 3 imágenes de referencia') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('editor real: preserva movimiento y escena, el más barato de los que sí editan de verdad') }}</td>
         </tr>
         <tr>
-          <td>Seedance 2.5 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>$0.11–$1.10 / seg según resolución (480p a 4k)</td>
-          <td>Sí — hasta 4 imágenes de referencia</td>
-          <td><span class="tag-estado tag-en-uso">En uso — recomendado por defecto</span> — confirmado en uso real (2 sep 2026) como el único de los editores de video conectados que cambia el calzado de VARIAS personas en el mismo video, no solo de la más prominente. El más caro de los que sí editan de verdad, pero es el único que resuelve el caso multi-persona</td>
+          <td>Seedance 2.5 Video Edit <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('$0.11–$1.10 / seg según resolución (480p a 4k)') }}</td>
+          <td>{{ _('Sí — hasta 4 imágenes de referencia') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso — recomendado por defecto') }}</span> — {{ _('confirmado en uso real (2 sep 2026) como el único de los editores de video conectados que cambia el calzado de VARIAS personas en el mismo video, no solo de la más prominente. El más caro de los que sí editan de verdad, pero es el único que resuelve el caso multi-persona') }}</td>
         </tr>
         <tr>
-          <td>Kling Omni O3 Pro Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>$0.168 / seg</td>
-          <td>Sí — hasta 4 imágenes de referencia</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — versión más nueva que Kling O1, mismo precio por segundo</td>
+          <td>Kling Omni O3 Pro Video Edit <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>$0.168 / {{ _('seg') }}</td>
+          <td>{{ _('Sí — hasta 4 imágenes de referencia') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('versión más nueva que Kling O1, mismo precio por segundo') }}</td>
         </tr>
         <tr>
-          <td>Luma Ray 3.2 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>desde $0.144 / seg (540p/5s)</td>
-          <td>Sí — 1 imagen (start_image)</td>
-          <td><span class="tag-estado tag-en-uso">En uso</span> — sucesor de Luma Ray3 Modify, más barato por segundo</td>
+          <td>Luma Ray 3.2 Video Edit <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('desde $0.144 / seg (540p/5s)') }}</td>
+          <td>{{ _('Sí — 1 imagen (start_image)') }}</td>
+          <td><span class="tag-estado tag-en-uso">{{ _('En uso') }}</span> — {{ _('sucesor de Luma Ray3 Modify, más barato por segundo') }}</td>
         </tr>
         <tr>
           <td>Gemini Omni Flash Edit</td>
-          <td>No publicado</td>
-          <td>No — solo texto</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — mismo problema que Flux Kontext</td>
+          <td>{{ _('No publicado') }}</td>
+          <td>{{ _('No — solo texto') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Descartado') }}</span> — {{ _('mismo problema que Flux Kontext') }}</td>
         </tr>
         <tr>
-          <td>Google Gemini Omni 1.1 Flash Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>No verificado</td>
-          <td>No — solo texto (misma familia que Gemini Omni Flash Edit)</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — mismo problema: sin soporte de imagen de referencia del producto</td>
+          <td>Google Gemini Omni 1.1 Flash Video Edit <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('No verificado') }}</td>
+          <td>{{ _('No — solo texto (misma familia que Gemini Omni Flash Edit)') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Descartado') }}</span> — {{ _('mismo problema: sin soporte de imagen de referencia del producto') }}</td>
         </tr>
         <tr>
-          <td>Seedance <span class="comparacion-nota">(reference-to-video, vía fal.ai)</span></td>
-          <td>No publicado</td>
-          <td>Sí — hasta 9 imágenes y 3 videos de referencia</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — su esquema no tiene un campo "video a editar": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base. WaveSpeed sí resolvió esto con un endpoint <code>video-edit</code> real, que es el que usamos arriba en vez de este</td>
+          <td>Seedance <span class="comparacion-nota">(reference-to-video, {{ _('vía fal.ai') }})</span></td>
+          <td>{{ _('No publicado') }}</td>
+          <td>{{ _('Sí — hasta 9 imágenes y 3 videos de referencia') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Descartado') }}</span> — {{ _('su esquema no tiene un campo "video a editar": todas las referencias alimentan una generación nueva guiada por el prompt (como Higgsfield Soul), no una edición que preserve el video base. WaveSpeed sí resolvió esto con un endpoint <code>video-edit</code> real, que es el que usamos arriba en vez de este') }}</td>
         </tr>
         <tr>
-          <td>Seedance 2.0 / 2.0 Fast / 2.0 Mini Video Edit <span class="comparacion-nota">(y sus variantes Turbo, vía WaveSpeed AI)</span></td>
-          <td>Más barato que 2.5</td>
-          <td>Sí — editores reales, misma familia</td>
-          <td><span class="tag-estado tag-descartado">Redundante</span> — versiones anteriores/más baratas de Seedance 2.5 Video Edit, que ya usamos (mejor calidad, mismo enfoque)</td>
+          <td>Seedance 2.0 / 2.0 Fast / 2.0 Mini Video Edit <span class="comparacion-nota">({{ _('y sus variantes Turbo, vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('Más barato que 2.5') }}</td>
+          <td>{{ _('Sí — editores reales, misma familia') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Redundante') }}</span> — {{ _('versiones anteriores/más baratas de Seedance 2.5 Video Edit, que ya usamos (mejor calidad, mismo enfoque)') }}</td>
         </tr>
         <tr>
-          <td>Kling Omni O1 / O1 Std Video Edit (Fast) <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>Variable</td>
-          <td>Sí — editores reales, misma familia</td>
-          <td><span class="tag-estado tag-descartado">Redundante</span> — ya usamos Kling O1 (vía fal.ai) y Kling O3 Pro (más nuevo, vía WaveSpeed); no suma nada nuevo probar las versiones intermedias</td>
+          <td>Kling Omni O1 / O1 Std Video Edit (Fast) <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('Variable') }}</td>
+          <td>{{ _('Sí — editores reales, misma familia') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Redundante') }}</span> — {{ _('ya usamos Kling O1 (vía fal.ai) y Kling O3 Pro (más nuevo, vía WaveSpeed); no suma nada nuevo probar las versiones intermedias') }}</td>
         </tr>
         <tr>
-          <td>Wan 2.2 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>$0.04–$0.08 / seg</td>
-          <td>Solo texto, sin imagen de referencia</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — versión anterior a Wan 2.7 Video Edit (que sí usamos) y sin soporte de imagen de referencia del producto</td>
+          <td>Wan 2.2 Video Edit <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>$0.04–$0.08 / {{ _('seg') }}</td>
+          <td>{{ _('Solo texto, sin imagen de referencia') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Descartado') }}</span> — {{ _('versión anterior a Wan 2.7 Video Edit (que sí usamos) y sin soporte de imagen de referencia del producto') }}</td>
         </tr>
         <tr>
-          <td>Alibaba Happy Horse 1.0 Video Edit <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
-          <td>No verificado</td>
-          <td>No verificado</td>
-          <td><span class="tag-estado tag-descartado">No evaluado a fondo</span> — modelo de nicho, sin evidencia de que su calidad supere a los editores ya en uso</td>
+          <td>Alibaba Happy Horse 1.0 Video Edit <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('No verificado') }}</td>
+          <td>{{ _('No verificado') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('No evaluado a fondo') }}</span> — {{ _('modelo de nicho, sin evidencia de que su calidad supere a los editores ya en uso') }}</td>
         </tr>
         <tr>
-          <td>Grok Imagine Video Edit <span class="comparacion-nota">(xAI, vía WaveSpeed AI)</span></td>
-          <td>No verificado</td>
-          <td>No verificado</td>
-          <td><span class="tag-estado tag-descartado">No evaluado a fondo</span> — muy nuevo en el catálogo, sin datos de calidad/fidelidad todavía</td>
+          <td>Grok Imagine Video Edit <span class="comparacion-nota">(xAI, {{ _('vía WaveSpeed AI') }})</span></td>
+          <td>{{ _('No verificado') }}</td>
+          <td>{{ _('No verificado') }}</td>
+          <td><span class="tag-estado tag-descartado">{{ _('No evaluado a fondo') }}</span> — {{ _('muy nuevo en el catálogo, sin datos de calidad/fidelidad todavía') }}</td>
         </tr>
         <tr>
-          <td>LTX-2 Retake, InfiniteTalk (Fast), Video Outpainter <span class="comparacion-nota">(vía WaveSpeed AI)</span></td>
+          <td>LTX-2 Retake, InfiniteTalk (Fast), Video Outpainter <span class="comparacion-nota">({{ _('vía WaveSpeed AI') }})</span></td>
           <td>—</td>
           <td>—</td>
-          <td><span class="tag-estado tag-descartado">No aplica</span> — herramientas para otra cosa (retakes de un plano, lip-sync/diálogo, extender el encuadre), no para reemplazar un objeto en el video</td>
+          <td><span class="tag-estado tag-descartado">{{ _('No aplica') }}</span> — {{ _('herramientas para otra cosa (retakes de un plano, lip-sync/diálogo, extender el encuadre), no para reemplazar un objeto en el video') }}</td>
         </tr>
         <tr>
-          <td>Wan 3.0 <span class="comparacion-nota">(reference-to-video: genera desde cero, no edita)</span></td>
-          <td>$0.05–$0.20 / seg según resolución</td>
-          <td>Sí — hasta 10 imágenes de referencia</td>
-          <td><span class="tag-estado tag-advertencia">Usado en otra parte</span> — no tiene modo de edición (verificado en WaveSpeed, 1 sep 2026), así que no entra a "cambiar calzado"; se usa en la pestaña CreativeFlowPlus para generación nueva, donde eso sí es lo que se busca</td>
+          <td>Wan 3.0 <span class="comparacion-nota">(reference-to-video: {{ _('genera desde cero, no edita') }})</span></td>
+          <td>{{ _('$0.05–$0.20 / seg según resolución') }}</td>
+          <td>{{ _('Sí — hasta 10 imágenes de referencia') }}</td>
+          <td><span class="tag-estado tag-advertencia">{{ _('Usado en otra parte') }}</span> — {{ _('no tiene modo de edición (verificado en WaveSpeed, 1 sep 2026), así que no entra a "cambiar calzado"; se usa en la pestaña CreativeFlowPlus para generación nueva, donde eso sí es lo que se busca') }}</td>
         </tr>
         <tr>
           <td>Runway Aleph 2.0</td>
           <td>—</td>
           <td>—</td>
-          <td><span class="tag-estado tag-descartado">Descartado</span> — no está disponible en fal.ai (confirmado con llamadas reales, 404); tampoco encontrado en WaveSpeed. Su propia API pasó a ser solo Enterprise</td>
+          <td><span class="tag-estado tag-descartado">{{ _('Descartado') }}</span> — {{ _('no está disponible en fal.ai (confirmado con llamadas reales, 404); tampoco encontrado en WaveSpeed. Su propia API pasó a ser solo Enterprise') }}</td>
         </tr>
       </tbody>
     </table>

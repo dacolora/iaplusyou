@@ -8,6 +8,7 @@ import json
 
 import catalogo_productos
 import doctrina
+import idiomas
 import marca
 import proyectos
 from sprints import analisis
@@ -22,7 +23,7 @@ Guía de estilo de la marca:
 Productos del catálogo:
 {productos}
 
-Propón {cuantas} arquetipos de cliente (personas) distintos entre sí y realistas para esta marca en Latinoamérica. Responde SOLO con un objeto JSON con la forma {{"personas": [...]}}, donde cada persona tiene exactamente estas claves: "nombre" (2 o 3 palabras, ej. "Cliente Premium"), "resumen" (una línea de máximo 15 palabras), "descripcion" (quién es, qué le importa, qué le duele; 40 a 70 palabras), "edad_rango" (ej. "30-45"), "tono" (cómo hablarle, máximo 12 palabras), "senales_visuales" (lista de 3 a 5 escenarios, estilos de vida u objetos que la rodean), "palabras_clave" (lista de 3 a 6 palabras) y "conciencia" (objeto {{"nivel": uno de {niveles}, "detalle": una línea que lo justifica}}: qué tanto sabe esta persona de su problema, de las soluciones y de estos productos). Todo en español, sin texto fuera del JSON."""
+Propón {cuantas} arquetipos de cliente (personas) distintos entre sí y realistas para esta marca en Latinoamérica. Responde SOLO con un objeto JSON con la forma {{"personas": [...]}}, donde cada persona tiene exactamente estas claves: "nombre" (2 o 3 palabras, ej. "Cliente Premium"), "resumen" (una línea de máximo 15 palabras), "descripcion" (quién es, qué le importa, qué le duele; 40 a 70 palabras), "edad_rango" (ej. "30-45"), "tono" (cómo hablarle, máximo 12 palabras), "senales_visuales" (lista de 3 a 5 escenarios, estilos de vida u objetos que la rodean), "palabras_clave" (lista de 3 a 6 palabras) y "conciencia" (objeto {{"nivel": uno de {niveles}, "detalle": una línea que lo justifica}}: qué tanto sabe esta persona de su problema, de las soluciones y de estos productos). Todo en {idioma}, sin texto fuera del JSON."""
 
 
 def _parsear(texto):
@@ -62,14 +63,16 @@ def _parsear(texto):
 
 def sugerir_personas(cliente, cuantas=3):
     cuantas = max(1, int(cuantas or 3))
+    idioma = idiomas.de_proyecto(cliente)
     guia = (marca.guia_efectiva(cliente) or "").strip() or "(sin guía de estilo todavía)"
     productos = catalogo_productos.listar(cliente, "producto")
     lista = "\n".join(f"- {p['nombre']}" + (f": {p['descripcion']}" if p.get("descripcion") else "") for p in productos)
     texto = PROMPT_PERSONAS.format(marca=proyectos.nombre_visible(cliente), guia=guia,
                                    productos=lista or "- (catálogo vacío)", cuantas=cuantas,
-                                   niveles=", ".join(f'"{n}"' for n in doctrina.CONSCIENCIAS))
+                                   niveles=", ".join(f'"{n}"' for n in doctrina.CONSCIENCIAS),
+                                   idioma=idiomas.nombre_para_claude(idioma))
     personas = _parsear(analisis._llamar([{"type": "text", "text": texto}], max_tokens=6000,
-                                         system=doctrina.bloque_system("investigar")))[:cuantas]
+                                         system=doctrina.bloque_system("investigar", idioma=idioma)))[:cuantas]
     for i, p in enumerate(personas):
         p["color"] = COLORES[i % len(COLORES)]
     return personas

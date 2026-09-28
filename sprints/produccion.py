@@ -14,6 +14,7 @@ import cola
 import creative_flow
 import flowplus_lanzar
 import flowplus_prompt
+import idiomas
 import marca
 import proyectos
 import tareas.director as tareas_director
@@ -217,7 +218,8 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     prompt = flowplus_prompt.armar(idea["escena"], referencias, con_persona=info["con_persona"],
                                    guia_marca=marca.guia_efectiva(cliente), negative_marca=marca.negative_prompt_efectivo(cliente),
                                    logos=[r for r in referencias if r.get("logo")], enfoque=enfoque, contexto=contexto,
-                                   sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido)
+                                   sonido=(sonido_texto or None) if con_sonido else None, con_sonido=con_sonido,
+                                   idioma=idiomas.de_proyecto(cliente))
     plataformas = list(idea.get("plataformas") or [])
     cf_id = creative_flow.crear(
         cliente, [], productos_sel, [], idea["escena"], _duracion(idea, modelo_video) if idea["tipo"] == "video" else 0,

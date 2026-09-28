@@ -287,6 +287,36 @@ def test_materiales_se_deriva_de_clips_y_pngs():
     assert d.validar(doc)["materiales"] == [1, 2, 3, 7, 42]
 
 
+def test_materiales_se_deriva_tambien_del_logo_de_marca():
+    # el logo puede vivir solo en marca.logo_material_id, sin ningún clip
+    # que lo use todavía (p. ej. asignado desde el editor antes de que
+    # borrador.py lo baje a una pista "p_logo"): también debe contar para
+    # en_uso/marcar_uso y para el chequeo de "materiales de otro proyecto"
+    # de la ruta de guardar.
+    doc = cargar("video_basico.json")
+    doc["marca"]["logo_material_id"] = 9
+    assert d.validar(doc)["materiales"] == [1, 2, 3, 9]
+
+
+def test_marca_null_toma_la_marca_por_defecto():
+    # como `variables`: un "marca": null explícito no tumba validar (antes
+    # AttributeError → 500 en el autoguardado).
+    doc = cargar("video_basico.json")
+    doc["marca"] = None
+    assert d.validar(doc)["marca"] == {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None}
+
+
+def test_logo_material_id_no_positivo_es_documento_invalido():
+    doc = cargar("video_basico.json")
+    doc["marca"]["logo_material_id"] = 0
+    with pytest.raises(d.DocumentoInvalido, match="marca.logo_material_id"):
+        d.validar(doc)
+    doc = cargar("video_basico.json")
+    doc["marca"]["logo_material_id"] = "7"
+    with pytest.raises(d.DocumentoInvalido, match="marca.logo_material_id"):
+        d.validar(doc)
+
+
 def _doc_texto(texto, estilo=None):
     doc = cargar("video_basico.json")
     clip = doc["pistas"][1]["clips"][0]

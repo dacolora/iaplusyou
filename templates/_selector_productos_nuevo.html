@@ -2,18 +2,18 @@
    del <form> principal de la pestaña (los formularios no se anidan). Mismos
    parámetros sel_id / sel_volver. #}
 <form method="post" action="{{ url_for('crear_producto', cliente=cliente) }}" enctype="multipart/form-data"
-      class="form-nueva-idea" id="sel-{{ sel_id }}-nuevo" hidden style="margin-top:.8rem;">
+      class="form-nueva-idea" id="sel-{{ sel_id }}-add" hidden style="margin-top:.8rem;">
   <input type="hidden" name="volver" value="{{ sel_volver }}">
-  <label class="campo-label">Nuevo producto</label>
+  <label class="campo-label">{{ _('Nuevo producto') }}</label>
   <div class="fila-campos-idea">
-    <input type="text" name="nombre" placeholder="Nombre (ej. HOriginal Rose)" required>
-    <input type="text" name="descripcion" placeholder="Descripción corta (opcional)">
+    <input type="text" name="nombre" placeholder="{{ _('Nombre (ej. HOriginal Rose)') }}" required>
+    <input type="text" name="descripcion" placeholder="{{ _('Descripción corta (opcional)') }}">
   </div>
-  <label class="campo-label" style="margin-top:.6rem;display:block;">Fotos del producto (varias, con fondo limpio)</label>
+  <label class="campo-label" style="margin-top:.6rem;display:block;">{{ _('Fotos del producto (varias, con fondo limpio)') }}</label>
   <input type="file" name="imagenes" accept=".jpg,.jpeg,.png,.webp" multiple required>
-  <p class="vacio" style="font-size:.76rem;">Tipo y mapa corporal se ajustan después en FlowCatálogo.</p>
-  <button class="btn-generar btn-sm" type="submit" style="margin-top:.6rem;">Crear producto</button>
-  <button class="btn-rechazar btn-sm" type="button" id="sel-{{ sel_id }}-nuevo-cancelar" style="margin-left:.4rem;">Cancelar</button>
+  <p class="vacio" style="font-size:.76rem;">{{ _('Tipo y mapa corporal se ajustan después en FlowCatálogo.') }}</p>
+  <button class="btn-generar btn-sm" type="submit" style="margin-top:.6rem;">{{ _('Crear producto') }}</button>
+  <button class="btn-rechazar btn-sm" type="button" id="sel-{{ sel_id }}-add-cancelar" style="margin-left:.4rem;">{{ _('Cancelar') }}</button>
 </form>
 
 <script>
@@ -23,9 +23,9 @@
     var resumen = document.getElementById(id + "-resumen");
     var buscador = document.getElementById(id + "-buscador");
     var vacio = document.getElementById(id + "-vacio");
-    var nuevo = document.getElementById(id + "-nuevo");
-    var nuevoBtn = document.getElementById(id + "-nuevo-btn");
-    var nuevoCancelar = document.getElementById(id + "-nuevo-cancelar");
+    var nuevo = document.getElementById(id + "-add");
+    var nuevoBtn = document.getElementById(id + "-add-btn");
+    var nuevoCancelar = document.getElementById(id + "-add-cancelar");
     var opciones = Array.prototype.slice.call(document.querySelectorAll("#" + id + "-grilla .producto-opcion"));
     var modo = detalle.dataset.modo;
     var total = opciones.length;
@@ -40,12 +40,12 @@
       var marcados = opciones.filter(function (l) { return l.querySelector("input").checked; });
       if (!marcados.length) { resumen.textContent = textoInicial; return; }
       if (modo === "radio") {
-        resumen.textContent = "Producto: " + marcados[0].querySelector("input").dataset.nombre + " — cambiar →";
+        resumen.textContent = {{ _('Producto: %(nombre)s — cambiar →', nombre='__NOMBRE__')|tojson }}.replace('__NOMBRE__', marcados[0].querySelector("input").dataset.nombre);
         detalle.open = false;
       } else {
         var nombres = marcados.map(function (l) { return l.querySelector("input").dataset.nombre; });
-        var lista = nombres.length <= 3 ? nombres.join(", ") : nombres.length + " productos";
-        resumen.textContent = enDialogo ? "Elegidos: " + lista : lista + " — cambiar →";
+        var lista = nombres.length <= 3 ? nombres.join(", ") : {{ _('%(n)s productos', n='__N__')|tojson }}.replace('__N__', nombres.length);
+        resumen.textContent = enDialogo ? {{ _('Elegidos: %(lista)s', lista='__LISTA__')|tojson }}.replace('__LISTA__', lista) : lista + {{ _(' — cambiar →')|tojson }};
       }
     }
     opciones.forEach(function (l) { l.querySelector("input").addEventListener("change", actualizarResumen); });

@@ -1,0 +1,131 @@
+"""Tareas periódicas de mantenimiento (auditoría de rendimiento y
+almacenamiento del 2026-09-28: nada se limpiaba nunca).
+
+  salidas_limpiar {}   diaria — borra de `salidas/` los archivos con más de
+                       SALIDAS_DIAS días. Todo lo que vive ahí es una copia
+                       de trabajo: el video ya está en R2 y quien lo necesita
+                       de nuevo lo vuelve a bajar (final_edition._clon_local,
+                       materiales.descargar, sprints.qa.archivo_local,
+                       publicador.archivo_local).
+  cola_limpiar {}      diaria — cola.limpiar_terminadas: filas hecha/error
+                       viejas y las periódicas vacías.
+  db_respaldar {}      diaria — copia de data/creatv.db en data/respaldos/
+                       (Connection.backup, seguro con WAL), conserva las
+                       últimas RESPALDOS_CONSERVAR. Antes solo había
+                       respaldos a mano en cada despliegue.
+Ninguna gasta ni toca R2.
+"""
+import logging
+import os
+import sqlite3
+import time
+from datetime import datetime
+
+import cola
+import db
+from tareas import registrar
+
+log = logging.getLogger(__name__)
+
+SALIDAS_DIAS = 14
+RESPALDOS_CONSERVAR = 7
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def carpeta_salidas():
+    return os.environ.get("CREATV_SALIDAS") or os.path.join(BASE_DIR, "salidas")
+
+
+def limpiar_salidas(dias=SALIDAS_DIAS, raiz=None):
+    """Borra los archivos de `salidas/` con más de `dias` días (por fecha de
+    modificación) y las carpetas que queden vacías debajo de `salidas/<c>/`
+    (nunca `salidas/` ni `salidas/<c>/`: hay escritores que las dan por
+    hechas). Devuelve (archivos, bytes)."""
+    raiz = raiz or carpeta_salidas()
+    if not os.path.isdir(raiz):
+        return 0, 0
+    limite = time.time() - dias * 86400
+    n = 0
+    total = 0
+    for carpeta, _dirs, archivos in os.walk(raiz):
+        for nombre in archivos:
+            ruta = os.path.join(carpeta, nombre)
+            try:
+                st = os.stat(ruta)
+                if st.st_mtime < limite:
+                    os.remove(ruta)
+                    n += 1
+                    total += st.st_size
+            except OSError as e:  # un archivo que otro proceso acaba de mover: se sigue
+                log.warning("no se pudo borrar %s: %s", ruta, e)
+    # Carpetas vacías, de abajo hacia arriba, solo a partir del tercer nivel.
+    for carpeta, _dirs, _archivos in os.walk(raiz, topdown=False):
+        rel = os.path.relpath(carpeta, raiz)
+        if rel == "." or os.sep not in rel:
+            continue
+        try:
+            if not os.listdir(carpeta):      # os.walk listó los hijos antes de que se borraran
+                os.rmdir(carpeta)
+        except OSError:
+            pass
+    return n, total
+
+
+def _ruta_sqlite():
+    url = db.url()
+    if not url.startswith("sqlite:///"):
+        return None
+    return url[len("sqlite:///"):]
+
+
+def respaldar_db(conservar=RESPALDOS_CONSERVAR, carpeta=None):
+    """Copia la base con `Connection.backup` (consistente aunque haya escrituras
+    en curso) a `<carpeta>/creatv_<fecha>.db` y borra las copias más viejas
+    que las últimas `conservar`. Devuelve la ruta del respaldo o None si la
+    base no es SQLite."""
+    ruta = _ruta_sqlite()
+    if not ruta or not os.path.exists(ruta):
+        return None
+    carpeta = carpeta or os.path.join(os.path.dirname(ruta), "respaldos")
+    os.makedirs(carpeta, exist_ok=True)
+    destino = os.path.join(carpeta, "creatv_" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".db")
+    origen = sqlite3.connect(ruta)
+    try:
+        copia = sqlite3.connect(destino)
+        try:
+            origen.backup(copia)
+            # La copia hereda el modo WAL de la base viva; un respaldo tiene que
+            # ser UN archivo (sin -wal/-shm al lado) para copiarlo o restaurarlo.
+            copia.execute("pragma journal_mode=DELETE")
+        finally:
+            copia.close()
+    finally:
+        origen.close()
+    for sobra in (destino + "-wal", destino + "-shm"):
+        if os.path.exists(sobra):
+            os.remove(sobra)
+    viejos = sorted(f for f in os.listdir(carpeta) if f.startswith("creatv_") and f.endswith(".db"))
+    for nombre in viejos[:-conservar] if conservar > 0 else viejos:
+        try:
+            os.remove(os.path.join(carpeta, nombre))
+        except OSError as e:
+            log.warning("no se pudo borrar el respaldo %s: %s", nombre, e)
+    return destino
+
+
+@registrar("salidas_limpiar")
+def ejecutar_salidas_limpiar(tarea):
+    n, total = limpiar_salidas()
+    return f"{n} archivos borrados de salidas/ ({total / 1e6:.0f} MB)."
+
+
+@registrar("cola_limpiar")
+def ejecutar_cola_limpiar(tarea):
+    n = cola.limpiar_terminadas()
+    return f"{n} tareas viejas borradas."
+
+
+@registrar("db_respaldar")
+def ejecutar_db_respaldar(tarea):
+    destino = respaldar_db()
+    return f"Respaldo en {destino}." if destino else "La base no es SQLite: sin respaldo."
