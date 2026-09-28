@@ -3,6 +3,15 @@ import os
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _con_copycoders(monkeypatch):
+    """Estos casos siembran la biblioteca global de copycoders y la leen desde
+    un proyecto: el proyecto la trajo (desde 2026-09-28 nace apagada; el caso
+    apagado vive en test_referentes_copycoders_proyecto.py)."""
+    import proyectos
+    monkeypatch.setattr(proyectos, "referentes_copycoders", lambda cliente: True)
+
 FIXTURE = os.path.join(os.path.dirname(__file__), "fixtures", "copycoders_swipe.html")
 
 
@@ -563,6 +572,31 @@ def test_fase_clasificando_registra_gasto_y_actualiza_referente(tmp_path, monkey
     r = datos.referente(cliente, rid)
     assert r["clasificacion"] == "claude" and r["familia"] == "EMERGING: X"
     assert any(f["nombre"] == "EMERGING: X" for f in datos.familias())
+
+
+def test_fase_clasificando_marca_el_barrido_como_clasificando(tmp_path, monkeypatch):
+    """«Mis barridos» decía «Guardando imágenes» mientras clasificaba (2026-09-27):
+    la fase nunca ponía `estado=clasificando`. Mientras clasifica debe decirlo."""
+    from referentes import clasificar, datos
+    from tareas import referentes as tareas_ref
+    cliente = _cliente_de_prueba(tmp_path, monkeypatch)
+    bid = datos.crear_barrido(cliente, "atria", {}, 5)
+    datos.actualizar_barrido(bid, estado="guardando")
+    rid, _ = datos.guardar_referente({"anuncio_id": "9", "fuente": "atria", "imagen_origen": "https://x/9.jpg",
+                                      "marca": "M", "titular": "T", "cuerpo": "", "idioma": "en"},
+                                     cliente=cliente, barrido_id=bid)
+    datos.marcar_imagen(rid, "ok", "https://r2/9.jpg")
+    vistos = []
+
+    def _clasificar(referente, vocabulario):
+        vistos.append(datos.barrido(bid)["estado"])
+        return ({"etapa": "TOF", "consciencia": "unaware", "familia": None, "familia_nueva": None,
+                 "dolor": "d", "firma": "f"}, 900, 60)
+    monkeypatch.setattr(clasificar, "clasificar", _clasificar)
+    tareas_ref.ejecutar_barrer({"id": 1, "payload": {"cliente": cliente, "barrido_id": bid, "fase": "clasificando",
+                                                     "consulta": {"fuente": "atria"}, "tope": 5}})
+    assert vistos == ["clasificando"]
+    assert datos.barrido(bid)["estado"] == "listo"
 
 
 def test_fase_clasificando_barrido_global_registra_gasto_bajo_creatv(monkeypatch, base_temporal):

@@ -1,0 +1,1072 @@
+{
+ "products": [
+  {
+   "id": 15662296400249,
+   "title": "HappyFlops Polkadots",
+   "handle": "happyflops-polkadots",
+   "body_html": "<p></p>",
+   "published_at": "2026-07-23T08:45:48+02:00",
+   "created_at": "2026-07-22T09:10:54+02:00",
+   "updated_at": "2026-09-28T18:09:05+02:00",
+   "vendor": "HappyFlops WW",
+   "product_type": "",
+   "tags": [
+    "New design"
+   ],
+   "variants": [
+    {
+     "id": 64028613411193,
+     "title": "Sand Mini / EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option1": "Sand Mini",
+     "option2": "EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-CM903023",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699575824761,
+      "product_id": 15662296400249,
+      "position": 1,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:58+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot6_01.png?v=1784704258",
+      "variant_ids": [
+       64028613411193,
+       64028613443961
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028613443961,
+     "title": "Sand Mini / EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option1": "Sand Mini",
+     "option2": "EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option3": null,
+     "sku": "DSHD2-CM903024",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699575824761,
+      "product_id": 15662296400249,
+      "position": 1,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:58+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot6_01.png?v=1784704258",
+      "variant_ids": [
+       64028613411193,
+       64028613443961
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028613607801,
+     "title": "Black Pop / EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option1": "Black Pop",
+     "option2": "EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-CM903030",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576021369,
+      "product_id": 15662296400249,
+      "position": 7,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot1_01.png?v=1784704259",
+      "variant_ids": [
+       64028613607801,
+       64028613640569
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 5,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028613640569,
+     "title": "Black Pop / EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option1": "Black Pop",
+     "option2": "EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option3": null,
+     "sku": "DSHD2-CM903031",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576021369,
+      "product_id": 15662296400249,
+      "position": 7,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot1_01.png?v=1784704259",
+      "variant_ids": [
+       64028613607801,
+       64028613640569
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 6,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028613804409,
+     "title": "Midnight Mini / EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option1": "Midnight Mini",
+     "option2": "EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-CM903016",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576217977,
+      "product_id": 15662296400249,
+      "position": 13,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot4_01.png?v=1784704259",
+      "variant_ids": [
+       64028613804409,
+       64028613837177
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 9,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028613837177,
+     "title": "Midnight Mini / EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option1": "Midnight Mini",
+     "option2": "EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option3": null,
+     "sku": "DSHD2-CM903017",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576217977,
+      "product_id": 15662296400249,
+      "position": 13,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot4_01.png?v=1784704259",
+      "variant_ids": [
+       64028613804409,
+       64028613837177
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 10,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028614001017,
+     "title": "Berry Pop / EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option1": "Berry Pop",
+     "option2": "EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-CM903009",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576414585,
+      "product_id": 15662296400249,
+      "position": 19,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot3_01.png?v=1784704259",
+      "variant_ids": [
+       64028614001017,
+       64028614033785
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 13,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028614033785,
+     "title": "Berry Pop / EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option1": "Berry Pop",
+     "option2": "EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option3": null,
+     "sku": "DSHD2-CM903010",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576414585,
+      "product_id": 15662296400249,
+      "position": 19,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot3_01.png?v=1784704259",
+      "variant_ids": [
+       64028614001017,
+       64028614033785
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 14,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028614197625,
+     "title": "Snow Pop / EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option1": "Snow Pop",
+     "option2": "EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-CM903037",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576611193,
+      "product_id": 15662296400249,
+      "position": 25,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot2_01.png?v=1784704259",
+      "variant_ids": [
+       64028614197625,
+       64028614230393
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 17,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028614230393,
+     "title": "Snow Pop / EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option1": "Snow Pop",
+     "option2": "EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option3": null,
+     "sku": "DSHD2-CM903038",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576611193,
+      "product_id": 15662296400249,
+      "position": 25,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot2_01.png?v=1784704259",
+      "variant_ids": [
+       64028614197625,
+       64028614230393
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 18,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028614394233,
+     "title": "Snow Mini / EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option1": "Snow Mini",
+     "option2": "EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-CM903002",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576807801,
+      "product_id": 15662296400249,
+      "position": 31,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot5_01.png?v=1784704259",
+      "variant_ids": [
+       64028614394233,
+       64028614427001
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 21,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 64028614427001,
+     "title": "Snow Mini / EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option1": "Snow Mini",
+     "option2": "EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm",
+     "option3": null,
+     "sku": "DSHD2-CM903003",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": {
+      "id": 81699576807801,
+      "product_id": 15662296400249,
+      "position": 31,
+      "created_at": "2026-07-22T09:10:54+02:00",
+      "updated_at": "2026-07-22T09:10:59+02:00",
+      "alt": null,
+      "width": 930,
+      "height": 992,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot5_01.png?v=1784704259",
+      "variant_ids": [
+       64028614394233,
+       64028614427001
+      ]
+     },
+     "available": true,
+     "price": "39.95",
+     "grams": 0,
+     "compare_at_price": null,
+     "position": 22,
+     "product_id": 15662296400249,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 81699575824761,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 1,
+     "updated_at": "2026-07-22T09:10:58+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [
+      64028613411193,
+      64028613443961
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot6_01.png?v=1784704258",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699575857529,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 2,
+     "updated_at": "2026-07-22T09:10:59+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot6_02.png?v=1784704259",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699575890297,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 3,
+     "updated_at": "2026-07-22T09:11:00+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot6_03.png?v=1784704260",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699575923065,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 4,
+     "updated_at": "2026-07-22T09:11:00+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot6_04.png?v=1784704260",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699575955833,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 5,
+     "updated_at": "2026-07-22T09:10:59+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot6_05.png?v=1784704259",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699576021369,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 7,
+     "updated_at": "2026-07-22T09:10:59+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [
+      64028613607801,
+      64028613640569
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot1_01.png?v=1784704259",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699576217977,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 13,
+     "updated_at": "2026-07-22T09:10:59+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [
+      64028613804409,
+      64028613837177
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot4_01.png?v=1784704259",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699576414585,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 19,
+     "updated_at": "2026-07-22T09:10:59+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [
+      64028614001017,
+      64028614033785
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot3_01.png?v=1784704259",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699576611193,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 25,
+     "updated_at": "2026-07-22T09:10:59+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [
+      64028614197625,
+      64028614230393
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot2_01.png?v=1784704259",
+     "width": 930,
+     "height": 992
+    },
+    {
+     "id": 81699576807801,
+     "created_at": "2026-07-22T09:10:54+02:00",
+     "position": 31,
+     "updated_at": "2026-07-22T09:10:59+02:00",
+     "product_id": 15662296400249,
+     "variant_ids": [
+      64028614394233,
+      64028614427001
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HPolkadot5_01.png?v=1784704259",
+     "width": 930,
+     "height": 992
+    }
+   ],
+   "options": [
+    {
+     "name": "Colour",
+     "position": 1,
+     "values": [
+      "Sand Mini",
+      "Black Pop",
+      "Midnight Mini",
+      "Berry Pop",
+      "Snow Pop",
+      "Snow Mini"
+     ]
+    },
+    {
+     "name": "Size",
+     "position": 2,
+     "values": [
+      "EU 36/37 | UK 3.5/4 | US M 4.5/5 - US W 6/6.5 | AU M 3.5/4 - AU W 6/6.5 | MX 24cm",
+      "EU 38/39 | UK 5/6 | US M 6/6.5 - US W 7.5/8 | AU M 5/6 - AU W 7.5/8 | MX 25cm"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15522799124857,
+   "title": "HappySandals Helsinki",
+   "handle": "helsinki",
+   "body_html": "<p>Slides ligeras y <b>suaves</b> para todo el día.</p>",
+   "published_at": "2025-05-30T10:21:12+02:00",
+   "created_at": "2026-06-01T15:57:07+02:00",
+   "updated_at": "2026-09-28T18:09:05+02:00",
+   "vendor": "HappyFlops WW",
+   "product_type": "",
+   "tags": [
+    "New design"
+   ],
+   "variants": [
+    {
+     "id": 57361685512569,
+     "title": "Sand Beige / EU 35 | UK 3 | US M 4 - US W 5.5 | AU M 3 - AU W 5.5 | MX 23.5cm",
+     "option1": "Sand Beige",
+     "option2": "EU 35 | UK 3 | US M 4 - US W 5.5 | AU M 3 - AU W 5.5 | MX 23.5cm",
+     "option3": null,
+     "sku": "DSHD2-BF155001",
+     "requires_shipping": true,
+     "taxable": false,
+     "featured_image": {
+      "id": 80035064578425,
+      "product_id": 15522799124857,
+      "position": 13,
+      "created_at": "2026-06-01T15:57:09+02:00",
+      "updated_at": "2026-06-01T15:57:13+02:00",
+      "alt": null,
+      "width": 1395,
+      "height": 1488,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HSHelsinki-Beige_1.png?v=1780322233",
+      "variant_ids": [
+       57361685512569,
+       57361685545337
+      ]
+     },
+     "available": true,
+     "price": "59.95",
+     "grams": 0,
+     "compare_at_price": "0.00",
+     "position": 1,
+     "product_id": 15522799124857,
+     "created_at": "2026-06-01T15:57:12+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 57361685545337,
+     "title": "Sand Beige / EU 36 | UK 3.5 | US M 4.5 - US W 6 | AU M 3.5 - AU W 6 | MX 24cm",
+     "option1": "Sand Beige",
+     "option2": "EU 36 | UK 3.5 | US M 4.5 - US W 6 | AU M 3.5 - AU W 6 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-BF155002",
+     "requires_shipping": true,
+     "taxable": false,
+     "featured_image": {
+      "id": 80035064578425,
+      "product_id": 15522799124857,
+      "position": 13,
+      "created_at": "2026-06-01T15:57:09+02:00",
+      "updated_at": "2026-06-01T15:57:13+02:00",
+      "alt": null,
+      "width": 1395,
+      "height": 1488,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HSHelsinki-Beige_1.png?v=1780322233",
+      "variant_ids": [
+       57361685512569,
+       57361685545337
+      ]
+     },
+     "available": true,
+     "price": "59.95",
+     "grams": 0,
+     "compare_at_price": "0.00",
+     "position": 2,
+     "product_id": 15522799124857,
+     "created_at": "2026-06-01T15:57:12+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 57361685807481,
+     "title": "Deep Black / EU 35 | UK 3 | US M 4 - US W 5.5 | AU M 3 - AU W 5.5 | MX 23.5cm",
+     "option1": "Deep Black",
+     "option2": "EU 35 | UK 3 | US M 4 - US W 5.5 | AU M 3 - AU W 5.5 | MX 23.5cm",
+     "option3": null,
+     "sku": "DSHD2-BF155010",
+     "requires_shipping": true,
+     "taxable": false,
+     "featured_image": {
+      "id": 80035064611193,
+      "product_id": 15522799124857,
+      "position": 14,
+      "created_at": "2026-06-01T15:57:09+02:00",
+      "updated_at": "2026-06-01T15:57:13+02:00",
+      "alt": null,
+      "width": 1395,
+      "height": 1488,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HSHelsinki-Black_1.png?v=1780322233",
+      "variant_ids": [
+       57361685807481,
+       57361685840249
+      ]
+     },
+     "available": true,
+     "price": "59.95",
+     "grams": 0,
+     "compare_at_price": "0.00",
+     "position": 10,
+     "product_id": 15522799124857,
+     "created_at": "2026-06-01T15:57:12+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    },
+    {
+     "id": 57361685840249,
+     "title": "Deep Black / EU 36 | UK 3.5 | US M 4.5 - US W 6 | AU M 3.5 - AU W 6 | MX 24cm",
+     "option1": "Deep Black",
+     "option2": "EU 36 | UK 3.5 | US M 4.5 - US W 6 | AU M 3.5 - AU W 6 | MX 24cm",
+     "option3": null,
+     "sku": "DSHD2-BF155011",
+     "requires_shipping": true,
+     "taxable": false,
+     "featured_image": {
+      "id": 80035064611193,
+      "product_id": 15522799124857,
+      "position": 14,
+      "created_at": "2026-06-01T15:57:09+02:00",
+      "updated_at": "2026-06-01T15:57:13+02:00",
+      "alt": null,
+      "width": 1395,
+      "height": 1488,
+      "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HSHelsinki-Black_1.png?v=1780322233",
+      "variant_ids": [
+       57361685807481,
+       57361685840249
+      ]
+     },
+     "available": true,
+     "price": "59.95",
+     "grams": 0,
+     "compare_at_price": "0.00",
+     "position": 11,
+     "product_id": 15522799124857,
+     "created_at": "2026-06-01T15:57:12+02:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 80035064185209,
+     "created_at": "2026-06-01T15:57:09+02:00",
+     "position": 1,
+     "updated_at": "2026-06-01T15:57:13+02:00",
+     "product_id": 15522799124857,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/Scherm_afbeelding2025-05-16om15.00.22_35a25259-72d1-419b-9597-a260d17d9df2.png?v=1780322233",
+     "width": 1634,
+     "height": 1634
+    },
+    {
+     "id": 80035064217977,
+     "created_at": "2026-06-01T15:57:09+02:00",
+     "position": 2,
+     "updated_at": "2026-06-01T15:57:13+02:00",
+     "product_id": 15522799124857,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/var3_535030e2-c15a-4ece-bf41-16a5f5d893fc.png?v=1780322233",
+     "width": 1000,
+     "height": 1000
+    },
+    {
+     "id": 80035064250745,
+     "created_at": "2026-06-01T15:57:09+02:00",
+     "position": 3,
+     "updated_at": "2026-06-01T15:57:13+02:00",
+     "product_id": 15522799124857,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/1.DiepZwart_1718d5c4-1054-4d1c-82f5-c2918ec549a3.png?v=1780322233",
+     "width": 1600,
+     "height": 1600
+    },
+    {
+     "id": 80035064283513,
+     "created_at": "2026-06-01T15:57:09+02:00",
+     "position": 4,
+     "updated_at": "2026-06-01T15:57:13+02:00",
+     "product_id": 15522799124857,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/var1_8dddfcae-2f5a-4607-857f-6e427d0de87f.png?v=1780322233",
+     "width": 1600,
+     "height": 1600
+    },
+    {
+     "id": 80035064578425,
+     "created_at": "2026-06-01T15:57:09+02:00",
+     "position": 13,
+     "updated_at": "2026-06-01T15:57:13+02:00",
+     "product_id": 15522799124857,
+     "variant_ids": [
+      57361685512569,
+      57361685545337
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HSHelsinki-Beige_1.png?v=1780322233",
+     "width": 1395,
+     "height": 1488
+    },
+    {
+     "id": 80035064611193,
+     "created_at": "2026-06-01T15:57:09+02:00",
+     "position": 14,
+     "updated_at": "2026-06-01T15:57:13+02:00",
+     "product_id": 15522799124857,
+     "variant_ids": [
+      57361685807481,
+      57361685840249
+     ],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HSHelsinki-Black_1.png?v=1780322233",
+     "width": 1395,
+     "height": 1488
+    }
+   ],
+   "options": [
+    {
+     "name": "Colour",
+     "position": 1,
+     "values": [
+      "Sand Beige",
+      "Deep Black"
+     ]
+    },
+    {
+     "name": "Size",
+     "position": 2,
+     "values": [
+      "EU 35 | UK 3 | US M 4 - US W 5.5 | AU M 3 - AU W 5.5 | MX 23.5cm",
+      "EU 36 | UK 3.5 | US M 4.5 - US W 6 | AU M 3.5 - AU W 6 | MX 24cm"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 15347966116217,
+   "title": "Shipping protection",
+   "handle": "shipping-protection",
+   "body_html": "<p>Protect your order against damage, loss, or theft during shipping.</p>",
+   "published_at": "2025-02-27T17:14:46+01:00",
+   "created_at": "2026-02-07T19:29:13+01:00",
+   "updated_at": "2026-09-28T18:09:05+02:00",
+   "vendor": "HappyFlops WW",
+   "product_type": "UpCart - Shipping Protection",
+   "tags": [],
+   "variants": [
+    {
+     "id": 56622067843449,
+     "title": "Default Title",
+     "option1": "Default Title",
+     "option2": null,
+     "option3": null,
+     "sku": null,
+     "requires_shipping": false,
+     "taxable": false,
+     "featured_image": null,
+     "available": true,
+     "price": "1.99",
+     "grams": 0,
+     "compare_at_price": "0.00",
+     "position": 1,
+     "product_id": 15347966116217,
+     "created_at": "2026-02-07T19:29:17+01:00",
+     "updated_at": "2026-09-28T18:09:05+02:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 78631458242937,
+     "created_at": "2026-02-07T19:29:15+01:00",
+     "position": 1,
+     "updated_at": "2026-02-07T19:29:17+01:00",
+     "product_id": 15347966116217,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/default2_d33fac72-dc47-4bfe-ba46-48d831caf7a1.svg?v=1770488957",
+     "width": 80,
+     "height": 80
+    },
+    {
+     "id": 78631458275705,
+     "created_at": "2026-02-07T19:29:15+01:00",
+     "position": 2,
+     "updated_at": "2026-02-07T19:29:18+01:00",
+     "product_id": 15347966116217,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/shipping-protection-v2.png?v=1770488958",
+     "width": 196,
+     "height": 172
+    }
+   ],
+   "options": [
+    {
+     "name": "Title",
+     "position": 1,
+     "values": [
+      "Default Title"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 900000000001,
+   "title": "HappyBlanket",
+   "handle": "happyblanket",
+   "body_html": "<p>Slides ligeras y <b>suaves</b> para todo el día.</p>",
+   "published_at": "2026-05-01T10:00:00+02:00",
+   "created_at": "2026-06-01T15:57:07+02:00",
+   "updated_at": "2026-09-28T18:09:05+02:00",
+   "vendor": "HappyFlops WW",
+   "product_type": "Textil",
+   "tags": [
+    "hogar"
+   ],
+   "variants": [
+    {
+     "id": 910000000001,
+     "title": "Single",
+     "option1": "Single",
+     "option2": null,
+     "option3": null,
+     "sku": "HB-S",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "49.95",
+     "grams": 900,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 900000000001,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "updated_at": "2026-05-01T10:00:00+02:00"
+    },
+    {
+     "id": 910000000002,
+     "title": "Double",
+     "option1": "Double",
+     "option2": null,
+     "option3": null,
+     "sku": "HB-D",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "69.95",
+     "grams": 1400,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 900000000001,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "updated_at": "2026-05-01T10:00:00+02:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 920000000001,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "position": 1,
+     "updated_at": "2026-05-01T10:00:00+02:00",
+     "product_id": 900000000001,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HappyBlanket_1.png?v=1",
+     "width": 1200,
+     "height": 1200
+    },
+    {
+     "id": 920000000002,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "position": 2,
+     "updated_at": "2026-05-01T10:00:00+02:00",
+     "product_id": 900000000001,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HappyBlanket_2.png?v=1",
+     "width": 1200,
+     "height": 1200
+    },
+    {
+     "id": 920000000003,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "position": 3,
+     "updated_at": "2026-05-01T10:00:00+02:00",
+     "product_id": 900000000001,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HappyBlanket_3.png?v=1",
+     "width": 1200,
+     "height": 1200
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "Single",
+      "Double"
+     ]
+    }
+   ]
+  },
+  {
+   "id": 900000000002,
+   "title": "Borrador secreto",
+   "handle": "borrador-secreto",
+   "body_html": "<p>Slides ligeras y <b>suaves</b> para todo el día.</p>",
+   "published_at": null,
+   "created_at": "2026-06-01T15:57:07+02:00",
+   "updated_at": "2026-09-28T18:09:05+02:00",
+   "vendor": "HappyFlops WW",
+   "product_type": "Textil",
+   "tags": [
+    "hogar"
+   ],
+   "variants": [
+    {
+     "id": 910000000001,
+     "title": "Single",
+     "option1": "Single",
+     "option2": null,
+     "option3": null,
+     "sku": "HB-S",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": true,
+     "price": "49.95",
+     "grams": 900,
+     "compare_at_price": null,
+     "position": 1,
+     "product_id": 900000000001,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "updated_at": "2026-05-01T10:00:00+02:00"
+    },
+    {
+     "id": 910000000002,
+     "title": "Double",
+     "option1": "Double",
+     "option2": null,
+     "option3": null,
+     "sku": "HB-D",
+     "requires_shipping": true,
+     "taxable": true,
+     "featured_image": null,
+     "available": false,
+     "price": "69.95",
+     "grams": 1400,
+     "compare_at_price": null,
+     "position": 2,
+     "product_id": 900000000001,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "updated_at": "2026-05-01T10:00:00+02:00"
+    }
+   ],
+   "images": [
+    {
+     "id": 920000000001,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "position": 1,
+     "updated_at": "2026-05-01T10:00:00+02:00",
+     "product_id": 900000000001,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HappyBlanket_1.png?v=1",
+     "width": 1200,
+     "height": 1200
+    },
+    {
+     "id": 920000000002,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "position": 2,
+     "updated_at": "2026-05-01T10:00:00+02:00",
+     "product_id": 900000000001,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HappyBlanket_2.png?v=1",
+     "width": 1200,
+     "height": 1200
+    },
+    {
+     "id": 920000000003,
+     "created_at": "2026-05-01T10:00:00+02:00",
+     "position": 3,
+     "updated_at": "2026-05-01T10:00:00+02:00",
+     "product_id": 900000000001,
+     "variant_ids": [],
+     "src": "https://cdn.shopify.com/s/files/1/0923/1840/0889/files/HappyBlanket_3.png?v=1",
+     "width": 1200,
+     "height": 1200
+    }
+   ],
+   "options": [
+    {
+     "name": "Size",
+     "position": 1,
+     "values": [
+      "Single",
+      "Double"
+     ]
+    }
+   ]
+  }
+ ]
+}

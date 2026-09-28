@@ -31,7 +31,7 @@ def test_galeria_sin_meta_no_deja_probar(app, monkeypatch, base_temporal):
     _pieza(base_temporal)
     monkeypatch.setattr(app["dashboard"].meta_conexion, "estado", lambda c: {"estado": "sin_conectar", "verificado": False, "detalle": {}})
     html = _html(app)
-    assert 'id="exp-galeria"' in html and "Conecta Meta en Configuración para probar" in html
+    assert 'id="exp-galeria"' in html and "Conecta Meta arriba para probar" in html
     assert 'action="/cliente/acme/experimentos/probar"' not in html
 
 
@@ -61,8 +61,12 @@ def test_crear_enlaza_a_la_galeria_con_la_pieza(app, base_temporal):
     cid = cf.crear("acme", [], ["P"], [], "gira", 5, "", "A", referencias_urls=["https://x/1.png"])
     cf.actualizar("acme", cid, estado="video_listo", tipo="video", modelo="wan3", video_url="https://r2/v.mp4")
     pieza_id = cf.pieza_id_por_legado("acme", cid)
-    html = _html(app)
-    assert f'href="#experimentos?piezas={pieza_id}"' in html and 'action="/cliente/acme/experimentos/meter"' not in html
+    # «Probar en Meta» va en el detalle de la pieza, que llega por fetch
+    # (tarjetas ligeras, 2026-09-28).
+    detalle = app["c"].get(f"/cliente/acme/creative_flow/{cid}/detalle").get_data(as_text=True)
+    assert f'href="#experimentos?piezas={pieza_id}"' in detalle
+    assert 'action="/cliente/acme/experimentos/meter"' not in detalle
+    assert 'action="/cliente/acme/experimentos/meter"' not in _html(app)
 
 
 def test_arbol_oculta_thruplay_en_imagenes(app, base_temporal):

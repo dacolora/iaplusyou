@@ -11,7 +11,7 @@ Esquema verificado contra wavespeed.ai/models/alibaba/wan-3.0/reference-to-video
 (1 sep 2026):
   POST https://api.wavespeed.ai/api/v3/alibaba/wan-3.0/reference-to-video
     { "prompt": str, "resolution": "480p"|"720p"|"1080p", "aspect_ratio": str,
-      "duration": int (2-30), "enable_audio": bool,
+      "duration": int (2-30), "generate_audio": bool,
       "reference_images": [url, ...] (hasta 10),
       "reference_videos": [url, ...] (opcional, hasta 5, no usado por este cliente),
       "reference_audios": [url, ...] (opcional, hasta 5, no usado por este cliente) }
@@ -30,6 +30,13 @@ vivo (2s, 480p, una imagen de referencia real de `happyflops`) — devolvió un
 video generado exitosamente (`.../predictions/09053c080b1844b9b7b3d095cf4e41af/1.mp4`).
 El payload documentado arriba es correcto tal cual está.
 
+2026-09-28: el esquema publicado (wavespeed.ai/models/alibaba/wan-3.0/
+reference-to-video/llms.txt) llama `generate_audio` al parámetro del audio
+(default true); `enable_audio`, que mandábamos, ya no figura — WaveSpeed lo
+ignoraba y «sin sonido» no apagaba nada. Además, apenas WaveSpeed devuelve el
+id de la predicción se avisa por `on_progreso` (wavespeed_common.avisar_lanzada)
+para que la sesión lo guarde y un tiempo agotado se pueda recuperar.
+
 Requiere WAVESPEED_API_KEY en el .env (la misma que ya usa wavespeed_client.py).
 """
 import requests
@@ -42,7 +49,7 @@ COSTO_USD_POR_SEGUNDO = {"480p": 0.05, "720p": 0.10, "1080p": 0.20}
 
 
 def generar_video(prompt, reference_images, duration=12, resolution="720p",
-                   aspect_ratio="9:16", enable_audio=False, on_progreso=None,
+                   aspect_ratio="9:16", generate_audio=False, on_progreso=None,
                    reference_videos=None):
     """reference_images: lista de URLs públicas, en el orden
     personajes -> productos -> escenas (así @Imagen 1, @Imagen 2... del prompt
@@ -58,7 +65,7 @@ def generar_video(prompt, reference_images, duration=12, resolution="720p",
         "resolution": resolution,
         "aspect_ratio": aspect_ratio,
         "duration": duration,
-        "enable_audio": enable_audio,
+        "generate_audio": generate_audio,
         "reference_images": list(reference_images or [])[:10],
     }
     if reference_videos:
@@ -72,6 +79,7 @@ def generar_video(prompt, reference_images, duration=12, resolution="720p",
     prediction_id = (resp.json().get("data") or {}).get("id")
     if not prediction_id:
         raise RuntimeError(f"WaveSpeed no devolvió un id de predicción: {resp.text[:500]}")
+    wavespeed_common.avisar_lanzada(on_progreso, prediction_id)
 
     resultado = wavespeed_common.poll_hasta_listo(
         prediction_id, "Wan 3.0", timeout_seconds=1200, on_progreso=on_progreso,

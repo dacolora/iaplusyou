@@ -1,30 +1,32 @@
 {# Ficha de un referente (referentes.ficha), cargada en el <dialog> de la
-   pestaña. Contexto: cliente, r (referente), familia (dict|None), etiquetas_*. #}
+   pestaña. Contexto: cliente, r (referente), familia (dict|None), etiquetas_*
+   (N_, se muestran con |traducir). El nombre de la familia (r.familia) nunca
+   se traduce. #}
 <div class="generado-modal-cuerpo ref-ficha">
   <div class="detalle-media"><img src="{{ r.imagen_url }}" alt=""></div>
   <div class="detalle-info">
-    <h3>{{ r.titular or '(sin titular)' }}</h3>
+    <h3>{{ r.titular or _('(sin titular)') }}</h3>
     <p class="ref-etiquetas">
       <span class="tag-estado ref-marca">{{ r.marca }}</span>
-      {% if r.consciencia %}<span class="tag-estado">{{ etiquetas_consciencia.get(r.consciencia, r.consciencia) }}</span>{% endif %}
-      {% if r.etapa %}<span class="tag-estado">{{ etiquetas_etapa.get(r.etapa, r.etapa) }}</span>{% endif %}
-      {% if r.dolor %}<span class="tag-estado">dolor: {{ r.dolor }}</span>{% endif %}
+      {% if r.consciencia %}<span class="tag-estado">{{ etiquetas_consciencia.get(r.consciencia, r.consciencia) | traducir }}</span>{% endif %}
+      {% if r.etapa %}<span class="tag-estado">{{ etiquetas_etapa.get(r.etapa, r.etapa) | traducir }}</span>{% endif %}
+      {% if r.dolor %}<span class="tag-estado">{{ _('dolor: %(dolor)s', dolor=(etiquetas_dolor[r.dolor] | traducir) if r.dolor in etiquetas_dolor else r.dolor) }}</span>{% endif %}
     </p>
     {% if r.familia %}
-    <p><strong>Formato:</strong> {{ r.familia }}{% if familia and familia.descripcion %} — {{ familia.descripcion }}{% endif %}</p>
+    <p><strong>{{ _('Formato:') }}</strong> {{ r.familia }}{% if familia and familia.descripcion %} — {{ familia.descripcion }}{% endif %}</p>
     {% endif %}
-    {% if r.firma %}<p><strong>Por qué funciona:</strong> {{ r.firma }}</p>{% endif %}
-    {% if r.cuerpo %}<details><summary>Copy del anuncio</summary><p class="ref-cuerpo">{{ r.cuerpo }}</p></details>{% endif %}
-    <p class="vacio">{% if r.dias %}{{ r.dias }} días corriendo{% endif %}{% if r.variantes %} · {{ r.variantes }} variante{{ 's' if r.variantes != 1 }}{% endif %} · fuente: {{ r.fuente }}{% if r.extra and r.extra.sweep %} · barrido {{ r.extra.sweep }}{% endif %}</p>
+    {% if r.firma %}<p><strong>{{ _('Por qué funciona:') }}</strong> {{ r.firma }}</p>{% endif %}
+    {% if r.cuerpo %}<details><summary>{{ _('Copy del anuncio') }}</summary><p class="ref-cuerpo">{{ r.cuerpo }}</p></details>{% endif %}
+    <p class="vacio">{% if r.dias %}{{ ngettext('%(num)d día corriendo', '%(num)d días corriendo', r.dias) }}{% endif %}{% if r.variantes %} · {{ ngettext('%(num)d variante', '%(num)d variantes', r.variantes) }}{% endif %} · {{ _('fuente: %(fuente)s', fuente=r.fuente) }}{% if r.extra and r.extra.sweep %} · {{ _('barrido %(barrido)s', barrido=r.extra.sweep) }}{% endif %}</p>
     <div class="detalle-acciones">
-      <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}">Recrear con mi producto</button>
-      <button type="button" class="btn-guardar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id, tipo='video') }}">Como video</button>
-      <button type="button" class="btn-guardar btn-sm" data-recrear-abrir="{{ url_for('referentes.usar_en_sprint', cliente=cliente, rid=r.id) }}">Usar en sprint</button>
-      {% if r.url_anuncio %}<a class="btn-guardar btn-sm" href="{{ r.url_anuncio }}" target="_blank" rel="noopener">Ver en Ad Library →</a>{% endif %}
-      {% if r.url_marca %}<a class="btn-guardar btn-sm" href="{{ r.url_marca }}" target="_blank" rel="noopener">Librería viva de la marca →</a>{% endif %}
+      <button type="button" class="btn-generar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id) }}">{{ _('Recrear con mi producto') }}</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-abrir="{{ url_for('referentes.recrear_form', cliente=cliente, rid=r.id, tipo='video') }}">{{ _('Como video') }}</button>
+      <button type="button" class="btn-guardar btn-sm" data-recrear-abrir="{{ url_for('referentes.usar_en_sprint', cliente=cliente, rid=r.id) }}">{{ _('Usar en sprint') }}</button>
+      {% if r.url_anuncio %}<a class="btn-guardar btn-sm" href="{{ r.url_anuncio }}" target="_blank" rel="noopener">{{ _('Ver en Ad Library →') }}</a>{% endif %}
+      {% if r.url_marca %}<a class="btn-guardar btn-sm" href="{{ r.url_marca }}" target="_blank" rel="noopener">{{ _('Librería viva de la marca →') }}</a>{% endif %}
     </div>
     {% if usos %}
-    <p class="vacio ref-usos"><a href="#creativeflowplus" onclick="document.querySelector('.sidebar-item[data-tab=creativeflowplus]').click(); return false;">Usado {{ usos }} {{ 'vez' if usos == 1 else 'veces' }} →</a></p>
+    <p class="vacio ref-usos"><a href="#creativeflowplus" onclick="document.querySelector('.sidebar-item[data-tab=creativeflowplus]').click(); return false;">{{ ngettext('Usado %(num)d vez →', 'Usado %(num)d veces →', usos) }}</a></p>
     {% endif %}
   </div>
 </div>

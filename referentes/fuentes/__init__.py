@@ -9,11 +9,14 @@ mismo, no una instancia. `llaves_faltantes` solo mira
 import importlib
 import os
 
+from idiomas import N_
+
 REGISTRO = {
     "atria": "referentes.fuentes.atria",
     "apify": "referentes.fuentes.apify_adlibrary",
 }
-NOMBRES = {"atria": "Atria (Ad Library de Meta)", "apify": "Apify (Ad Library de Meta)"}
+# Se muestran con |traducir / idiomas.traducir (la clave no cambia).
+NOMBRES = {"atria": N_("Atria (Ad Library de Meta)"), "apify": N_("Apify (Ad Library de Meta)")}
 LLAVES = {
     "atria": ("ATRIA_API_KEY",),
     "apify": ("APIFY_TOKEN",),

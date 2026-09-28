@@ -11,7 +11,11 @@ def test_vocabulario_es_el_del_spec():
     assert doctrina.SOFISTICACIONES[3] == "mecanismo" and doctrina.SOFISTICACIONES[5] == "identificacion"
     assert doctrina.FUENTES_PRUEBA == ("ficha", "comentarios", "demostracion")
     assert doctrina.REBANADAS == ("base", "investigar", "angulo", "gancho", "guion", "video", "caption",
-                                  "clasificar", "revisar")
+                                  "clasificar", "revisar", "diagnosticar")
+    assert [c for c, _ in doctrina.CAUSAS_PERDIDA] == ["gancho", "sin_urgencia", "muy_educativo", "estacionalidad",
+                                                        "repeticion", "landing", "posicionamiento", "creativo"]
+    assert set(doctrina.CAUSAS_NO_CREATIVAS) <= set(doctrina.CAUSAS_NOMBRE)
+    assert doctrina.SIGUIENTES_PASOS == ("gancho", "estructura", "regenerar", "oferta", "landing", "pausar")
     assert doctrina.ANGULO_VERSION == 1
 
 
@@ -426,3 +430,15 @@ def test_sofisticacion_infinity_no_explota():
     assert limpio["sofisticacion"] is None
     assert any("no es válido" in a for a in avisos)
     assert doctrina.datos_fijos_texto(sofisticacion=float("inf")) == ""
+
+
+def test_la_rebanada_diagnosticar_nombra_las_ocho_causas():
+    """Doctrina, bloque 4: el texto que recibe Claude nombra cada código de
+    CAUSAS_PERDIDA (así el JSON que devuelve usa los mismos)."""
+    import doctrina
+    t = doctrina._cargar("diagnosticar")
+    for codigo, _ in doctrina.CAUSAS_PERDIDA:
+        assert f"**{codigo}**" in t, codigo
+    assert "Theriot" in t and "Hopkins" in t
+    assert "diagnosticar" in doctrina.COMBINACIONES and doctrina.COMBINACIONES["flowplus_clips"] == ("video", "gancho")
+

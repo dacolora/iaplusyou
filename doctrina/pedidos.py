@@ -9,10 +9,12 @@ import json
 import re
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import catalogo_productos
 import db
 import doctrina
+import idiomas
 from doctrina import producto as doctrina_producto
 
 MAX_FALTANTES_PROMPT = 40
@@ -20,7 +22,7 @@ MAX_TOKENS = 4000
 _INTERNOS = re.compile(r"consciencia|conciencia|sofisticaci", re.IGNORECASE)
 
 INSTRUCCIONES_PEDIDOS = """Eres el estratega de Creatv. Recibes lo que faltó en los datos de un producto cuando se \
-escribieron sus anuncios. Conviértelo en máximo 5 pedidos concretos para el cliente, en español, en imperativo y fáciles \
+escribieron sus anuncios. Conviértelo en máximo 5 pedidos concretos para el cliente, en __IDIOMA__, en imperativo y fáciles \
 de responder en un minuto («Pega un comentario real de una compradora sobre…», «Dinos cuánto dura…»). Junta los que \
 piden lo mismo; prioriza lo que más mejora los anuncios (pruebas reales, cifras verificables, comentarios de compradores). \
 Nunca pidas algo que ya está en las pruebas del producto ni lo que el cliente ya respondió o descartó, y nunca pidas el \
@@ -91,11 +93,14 @@ def resumir(cliente, producto_id):
     import tiendas
     fila = tiendas.producto(cliente, producto_id)
     if not fila:
-        raise ErrorPedidos("No encontré ese producto.")
+        raise ErrorPedidos(gettext("No encontré ese producto."))
     faltantes = faltantes_del_producto(cliente, fila)
     if not faltantes:
         return 0, 0, 0
-    crudo, ent, sal = _llamar(_mensaje(fila, faltantes), doctrina.bloque_system(extra=INSTRUCCIONES_PEDIDOS))
+    idioma = idiomas.de_proyecto(cliente)
+    crudo, ent, sal = _llamar(_mensaje(fila, faltantes),
+                              doctrina.bloque_system(extra=INSTRUCCIONES_PEDIDOS.replace(
+                                  "__IDIOMA__", idiomas.nombre_para_claude(idioma)), idioma=idioma))
     try:
         t = (crudo or "").strip()
         ini, fin = t.find("{"), t.rfind("}")
@@ -103,9 +108,9 @@ def resumir(cliente, producto_id):
         lista = data.get("pedidos") if isinstance(data, dict) else None
         nuevos = [p for p in lista or [] if isinstance(p, dict) and str(p.get("texto") or "").strip()]
         if not nuevos:
-            raise ErrorPedidos("Claude no devolvió pedidos.")
+            raise ErrorPedidos(gettext("Claude no devolvió pedidos."))
     except (ValueError, ErrorPedidos) as e:
-        err = e if isinstance(e, ErrorPedidos) else ErrorPedidos(f"JSON inválido: {e}")
+        err = e if isinstance(e, ErrorPedidos) else ErrorPedidos(gettext("JSON inválido: %(error)s", error=e))
         err.tokens_entrada, err.tokens_salida = ent, sal
         raise err
     escritos = doctrina_producto.reemplazar_abiertos(cliente, producto_id, nuevos)

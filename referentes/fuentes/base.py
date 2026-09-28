@@ -4,8 +4,9 @@ fuente (`atria.py`, y en el bloque 5 `apify_adlibrary.py`) con tres funciones
 de nivel de módulo: `estimar(consulta, tope)`, `probar()`,
 `traer(consulta, tope, avanzar)`. `ErrorFuente` es el único error que una
 fuente deja escapar hacia la ruta o el worker: `.usuario` (== `str(e)`) es un
-mensaje en español apto para mostrarse tal cual y nunca lleva llaves ni HTML
-ajeno.
+mensaje ya traducido (`gettext`: el idioma de quien mira en una ruta, el del
+proyecto en el worker) apto para mostrarse tal cual y nunca lleva llaves ni
+HTML ajeno.
 
 `AVISO_CUOTA_AGOTADA`: valor que una fuente puede pasar como `detalle` a
 `avanzar()` (nunca como excepción) para señalar que dejó de traer páginas
@@ -29,7 +30,7 @@ AVISO_CUOTA_AGOTADA = "cuota_agotada"
 
 
 class ErrorFuente(Exception):
-    """Error mostrable al usuario. `usuario` es el mensaje en español (sin
+    """Error mostrable al usuario. `usuario` es el mensaje ya traducido (sin
     llaves, sin HTML) y `str(e)` devuelve exactamente lo mismo. `costo_real`
     (opcional) es el monto ya cobrado por el proveedor cuando la corrida
     falló DESPUÉS de pagar (p. ej. Apify: la corrida se factura aunque su

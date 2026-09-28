@@ -1,0 +1,20 @@
+{# QA de una pieza de sprint (sprints/qa.py): el puntaje, las marcas ✓/✗ y,
+   al tocar la fila, la razón de cada chequeo. Hasta 2026-09-28 las razones
+   vivían solo en el `title` (pasar el cursor), invisibles en el celular.
+   Lo usan sprint_revision.html y _sprint_panel_piezas.html. Los nombres van
+   dentro del macro para que se traduzcan en cada render (un `set` de módulo
+   podría quedar cacheado en un solo idioma). #}
+{% from "_sprint_macros.html" import etiqueta_sprint %}
+{% macro qa_detalle(qa, checks) %}
+{% set nombres_qa = {"consistencia_visual": _("Consistencia visual"), "presencia_marca": _("Presencia de marca"),
+                     "compatibilidad_campana": _("Encaje con la campaña"), "calidad_minima": _("Calidad mínima"),
+                     "formato": _("Formato")} %}
+<details class="qa-detalle">
+  <summary><span class="sprint-qa-score sprint-qa-{{ qa.veredicto }}">{{ qa.score }}</span>
+    {% for k in checks %}{% set ch = (qa.checks or {}).get(k) %}{% if ch %}<span class="qa-check {{ 'ok' if ch.ok else 'mal' }}" title="{{ nombres_qa.get(k, k) }}: {{ ch.nota }}">{{ '✓' if ch.ok else '✗' }}</span>{% endif %}{% endfor %}
+    <small class="vacio">{{ etiqueta_sprint(qa.veredicto) }} · {{ _('ver por qué') }}</small></summary>
+  <ul class="qa-razones">
+    {% for k in checks %}{% set ch = (qa.checks or {}).get(k) %}{% if ch %}<li class="{{ 'ok' if ch.ok else 'mal' }}">{{ '✓' if ch.ok else '✗' }} <strong>{{ nombres_qa.get(k, k) }}</strong>: {{ ch.nota }}</li>{% endif %}{% endfor %}
+  </ul>
+</details>
+{% endmacro %}

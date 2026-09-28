@@ -1,4 +1,15 @@
+import pytest
+
 import referentes.sugerir as sugerir
+
+
+@pytest.fixture(autouse=True)
+def _con_copycoders(monkeypatch):
+    """Estos casos siembran la biblioteca global de copycoders y la leen desde
+    un proyecto: el proyecto la trajo (desde 2026-09-28 nace apagada; el caso
+    apagado vive en test_referentes_copycoders_proyecto.py)."""
+    import proyectos
+    monkeypatch.setattr(proyectos, "referentes_copycoders", lambda cliente: True)
 
 
 def _cand(id, familia, variantes=1, dias=1, dolor="d", firma="f"):
@@ -360,3 +371,10 @@ def test_sugerir_campana_encuentra_marca_pagina_e_idioma_fuera_del_pool_de_200(b
 
     r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "idioma": "es"}, set(), 1)
     assert r["items"][0]["id"] == es_id
+
+
+def test_preferencia_reconoce_la_marca_aunque_cambien_las_tildes():
+    from referentes import sugerir
+    c = {"marca": "Cröcs Élite", "pagina_id": None, "idioma": "en", "variantes": 1, "dias": 1}
+    assert sugerir.preferencia(c, marcas=[{"nombre": "crocs elite"}])[0] == 1
+    assert sugerir.preferencia(c, marcas=[{"nombre": "Nike"}])[0] == 0

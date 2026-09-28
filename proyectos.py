@@ -162,6 +162,19 @@ def guardar_meta_forma(cliente, forma):
     _json_store.guardar(_path(cliente), datos)
 
 
+def referentes_copycoders(cliente):
+    """¿Este proyecto quiere ver la biblioteca global de copycoders (miles de
+    anuncios) en Referentes y en las sugerencias de Sprints? Nace apagada: la
+    persona la trae si la va a usar (incidente 2026-09-28)."""
+    return bool(cargar(cliente).get("referentes_copycoders"))
+
+
+def guardar_referentes_copycoders(cliente, activa):
+    datos = cargar(cliente)
+    datos["referentes_copycoders"] = bool(activa)
+    _json_store.guardar(_path(cliente), datos)
+
+
 PAISES_CALENDARIO = ("CO", "MX", "US", "ES", "BR", "AR", "CL", "PE")
 
 
@@ -190,3 +203,50 @@ def guardar_bloque_global_flowplus(cliente, texto):
     datos = cargar(cliente)
     datos["flowplus_bloque_global"] = (texto or "").strip()
     _json_store.guardar(_path(cliente), datos)
+
+
+# Doctrina, bloque 4 (§5): aprendizajes por proyecto — una línea por veredicto
+# del motor («Ganó en CO: …») o escrita a mano. Los más nuevos primero.
+MAX_APRENDIZAJES = 40
+
+
+def aprendizajes(cliente):
+    lista = cargar(cliente).get("aprendizajes") or []
+    return [x for x in lista if isinstance(x, dict) and x.get("texto") and x.get("id")]
+
+
+def _cargar_para_escribir(cliente):
+    """`cargar` devuelve {} también cuando el archivo existe y no se pudo leer;
+    escribir encima dejaría el proyecto solo con aprendizajes (reglas, idioma,
+    correo… perdidos). Con un archivo no vacío que se lee como {}, se
+    prefiere no escribir."""
+    ruta = _path(cliente)
+    data = cargar(cliente)
+    if not data and os.path.exists(ruta) and os.path.getsize(ruta) > 2:
+        raise OSError(f"{ruta} no se pudo leer: no se sobrescribe")
+    return data
+
+
+def agregar_aprendizaje(cliente, item):
+    """Guarda `item` (dict de doctrina.aprendizajes) al frente; corta a
+    MAX_APRENDIZAJES. Le pone `en` si no lo trae."""
+    from datetime import datetime
+    item = dict(item)
+    if not item.get("en"):
+        item["en"] = datetime.now().isoformat(timespec="seconds")
+    data = _cargar_para_escribir(cliente)
+    data["aprendizajes"] = [item] + [x for x in aprendizajes(cliente) if x.get("id") != item.get("id")][:MAX_APRENDIZAJES - 1]
+    _json_store.guardar(_path(cliente), data)
+    return item
+
+
+def quitar_aprendizaje(cliente, aid):
+    """True si existía y se quitó."""
+    data = _cargar_para_escribir(cliente)
+    lista = aprendizajes(cliente)
+    nueva = [x for x in lista if x.get("id") != aid]
+    if len(nueva) == len(lista):
+        return False
+    data["aprendizajes"] = nueva
+    _json_store.guardar(_path(cliente), data)
+    return True

@@ -42,6 +42,7 @@ import notificaciones
 import proyectos
 import referencias_link
 import trabajos
+from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import sugerir as referentes_sugerir
 from sprints import analisis, archivos, datos, entrega, estado, ideas, produccion, qa, sugerencias
@@ -84,14 +85,14 @@ def ejecutar_analizar(tarea):
     cliente, rid = p["cliente"], int(p["referencia_id"])
     ref = datos.referencia(cliente, rid)
     if not ref:
-        return "La referencia ya no existe."
+        return gettext("La referencia ya no existe.")
     try:
-        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente))
+        resultado = analisis.analizar(ref, marca=proyectos.nombre_visible(cliente), idioma=idiomas.de_proyecto(cliente))
     except Exception as e:
         datos.actualizar_referencia(cliente, rid, analisis_estado="error", analisis={"error": str(e)})
         raise
     datos.actualizar_referencia(cliente, rid, analisis=resultado, analisis_estado="listo")
-    return "Referencia analizada."
+    return gettext("Referencia analizada.")
 
 
 @al_interrumpir("sprint_analizar_referencia")
@@ -113,7 +114,7 @@ def ejecutar_sugerir(tarea):
                             palabras_clave=persona.get("palabras_clave"), color=persona.get("color"),
                             origen="sugerida_ia",
                             extra={"conciencia": persona["conciencia"]} if persona.get("conciencia") else None)
-    return f"{len(propuestas)} personas sugeridas — revísalas y edítalas."
+    return gettext("%(n)s personas sugeridas — revísalas y edítalas.", n=len(propuestas))
 
 
 @registrar("sprint_referencia_link")
@@ -128,7 +129,7 @@ def ejecutar_link(tarea):
     rid = datos.agregar_referencia(cliente, campana_id, info["tipo"], info["url"], frame_url=info["frame_url"],
                                    ruta_local=info["ruta_local"], origen="link", titulo=info["titulo"])
     encolar_analisis(cliente, rid)
-    return "Referencia agregada desde el link."
+    return gettext("Referencia agregada desde el link.")
 
 
 def job_id_ideas(cliente, campana_id):
@@ -172,7 +173,7 @@ def ejecutar_reescribir_idea(tarea):
     gastos.registrar_seguro(cliente, "ideas", costo_real(ent, sal), referencia, proveedor="anthropic",
                             detalle="reescribir idea desde su ángulo",
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
-    return "Idea reescrita desde su ángulo."
+    return gettext("Idea reescrita desde su ángulo.")
 
 
 @registrar("sprint_proponer_ideas")
@@ -201,7 +202,7 @@ def ejecutar_proponer_ideas(tarea):
     c = datos.campana(cliente, campana_id)
     if c:
         estado.recalcular(cliente, c["sprint_id"])
-    return f"{len(creadas)} ideas propuestas — revísalas y aprueba las que sirvan."
+    return gettext("%(n)s ideas propuestas — revísalas y aprueba las que sirvan.", n=len(creadas))
 
 
 def job_id_sugerir_biblioteca(cliente, campana_id):
@@ -228,7 +229,7 @@ def ejecutar_sugerir_biblioteca(tarea):
     cliente, cid = p["cliente"], int(p["campana_id"])
     c = datos.campana(cliente, cid)
     if not c:
-        return "Esa campaña ya no existe."
+        return gettext("Esa campaña ya no existe.")
     persona = datos.persona(cliente, c["persona_id"]) or {}
     producto = catalogo_productos.encontrar(cliente, c["catalogo_id"], categoria="producto") or {}
     temporada = datos.temporada(cliente, c["temporada_id"]) or {}
@@ -240,7 +241,7 @@ def ejecutar_sugerir_biblioteca(tarea):
                "familias": c.get("familias") or [], "idioma": ef["idioma"], "marcas": ef["marcas"]}
     candidatos, _ = referentes_sugerir.candidatos_aflojando(cliente, enfoque, ya_ids, minimo=20)
     if not candidatos:
-        return "No hay candidatos nuevos en la biblioteca para esta etapa."
+        return gettext("No hay candidatos nuevos en la biblioteca para esta etapa.")
     objetivo = max(1, (c.get("referencias_objetivo") or 1) - len(refs_actuales))
     nivel = doctrina.normalizar_consciencia(enfoque["consciencia"])
     persona_texto = ". ".join(x for x in (persona.get("resumen"), persona.get("descripcion"), persona.get("tono"),
@@ -257,7 +258,8 @@ def ejecutar_sugerir_biblioteca(tarea):
         f"idioma de la audiencia: {datos.IDIOMAS_NOMBRE.get(enfoque['idioma'], enfoque['idioma'])}") if x)
     try:
         elegidos, ent, sal = referentes_sugerir.sugerir_ia(candidatos[:60], persona_texto, producto_texto,
-                                                            temporada_texto, objetivo, enfoque_texto=enfoque_texto)
+                                                            temporada_texto, objetivo, enfoque_texto=enfoque_texto,
+                                                            idioma=idiomas.de_proyecto(cliente))
     except referentes_sugerir.SugerenciaInvalida as e:
         ent = getattr(e, "tokens_entrada", 0) or 0
         sal = getattr(e, "tokens_salida", 0) or 0
@@ -274,7 +276,7 @@ def ejecutar_sugerir_biblioteca(tarea):
     extra_actual = dict(c.get("extra") or {})
     extra_actual["sugerencias_ia"] = elegidos
     datos.actualizar_campana(cliente, cid, extra=extra_actual)
-    return f"{len(elegidos)} sugerencia(s) de la biblioteca lista(s) para revisar."
+    return gettext("%(n)s sugerencia(s) de la biblioteca lista(s) para revisar.", n=len(elegidos))
 
 
 def job_id_qa(cliente, cp_id):
@@ -313,12 +315,12 @@ def ejecutar_qa_pieza(tarea):
     cliente, cp_id = p["cliente"], int(p["cp_id"])
     i = datos.idea(cliente, cp_id)
     if not i or not i.get("cf_id"):
-        return "La pieza ya no existe."
+        return gettext("La pieza ya no existe.")
     cf_id = i["cf_id"]
     entry = creative_flow.cargar(cliente).get(cf_id)
     campana = datos.campana(cliente, i["campana_id"])
     if not entry or not campana:
-        return "La pieza ya no existe."
+        return gettext("La pieza ya no existe.")
     sp = datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}
     umbral = (sp.get("extra") or {}).get("qa_umbral") or qa.UMBRAL_DEFECTO
     campana["marca"] = proyectos.nombre_visible(cliente)
@@ -336,8 +338,9 @@ def ejecutar_qa_pieza(tarea):
               "control de calidad del sprint" + (" y doctrina" if revision else ""))
     resultado["cf_id"] = cf_id
     if not datos.guardar_qa(cliente, cp_id, cf_id, resultado):
-        bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado", "QA descartado: la pieza fue regenerada")
-        return "QA descartado: la pieza fue regenerada mientras se evaluaba."
+        bitacora.registrar(cliente, cf_id, "sprint_qa", "descartado",
+                           gettext("QA descartado: la pieza fue regenerada"))
+        return gettext("QA descartado: la pieza fue regenerada mientras se evaluaba.")
     if revision:
         # Bloque 3, revisión final (I4): el QA ya se pagó y ya se guardó
         # arriba (`datos.guardar_qa`); este segundo guardado, en la sesión de
@@ -348,11 +351,12 @@ def ejecutar_qa_pieza(tarea):
             creative_flow.actualizar(cliente, cf_id, revision_doctrina=revision)
         except Exception as e:  # noqa: BLE001
             bitacora.registrar(cliente, cf_id, "sprint_qa", "doctrina_no_guardada", str(e)[:200])
-    datos.registrar_evento(cliente, i["sprint_id"], "qa_evaluada",
-                           f"QA de «{i['titulo']}»: {resultado['veredicto']} ({resultado['score']})",
+    mensaje = datos.texto_guardado(cliente, N_("QA de «%(titulo)s»: %(veredicto)s (%(score)s)"),
+                                   titulo=i['titulo'], veredicto=resultado['veredicto'], score=resultado['score'])
+    datos.registrar_evento(cliente, i["sprint_id"], "qa_evaluada", mensaje,
                            {"cp_id": cp_id, "score": resultado["score"], "veredicto": resultado["veredicto"]},
                            campana_id=i["campana_id"])
-    return f"QA: {resultado['veredicto']} ({resultado['score']}/100)."
+    return gettext("QA: %(veredicto)s (%(score)s/100).", veredicto=resultado['veredicto'], score=resultado['score'])
 
 
 def _piezas_listas_sin_qa():
@@ -423,7 +427,7 @@ def ejecutar_qa_pendientes(tarea):
         datos.actualizar_extra_sprint(cliente, sid, lambda e: {**e, "lote_en_curso": False})
         _avisar_lote_terminado(cliente, sid, nombre, listas, errores)
         terminados += 1
-    return f"{n} pieza(s) a QA; {terminados} lote(s) terminado(s)."
+    return gettext("%(n)s pieza(s) a QA; %(terminados)s lote(s) terminado(s).", n=n, terminados=terminados)
 
 
 def job_id_zip(cliente, sprint_id):
@@ -440,4 +444,4 @@ def encolar_zip(cliente, sprint_id):
 def ejecutar_empaquetar(tarea):
     p = tarea["payload"]
     info = entrega.empaquetar(p["cliente"], int(p["sprint_id"]))
-    return f"Zip listo con {info['n']} pieza(s)."
+    return gettext("Zip listo con %(n)s pieza(s).", n=info['n'])

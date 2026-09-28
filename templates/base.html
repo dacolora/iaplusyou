@@ -23,7 +23,10 @@
       trabajoNoCompletado: {{ _('No se pudo completar el trabajo.')|tojson }},
       terminoConError: {{ _('Terminó con error.')|tojson }},
       listoCambiosSinGuardar: {{ _('¡Listo! Tienes cambios sin guardar en esta página.')|tojson }},
-      conexionPerdida: {{ _('Se perdió la conexión con el servidor.')|tojson }}
+      conexionPerdida: {{ _('Se perdió la conexión con el servidor.')|tojson }},
+      cargando: {{ _('Cargando…')|tojson }},
+      detalleNoCargo: {{ _('No se pudo cargar el detalle. Recarga la página.')|tojson }},
+      detalleNoExiste: {{ _('Esta pieza ya no existe o no tiene este detalle.')|tojson }}
     };
 
     // Foto que no carga (archivo borrado, R2 que no responde): en vez del ícono
@@ -82,6 +85,9 @@
       if (!el) return;
       if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT' && el.tagName !== 'SELECT') return;
       if (el.type === 'file' || el.type === 'radio' || el.type === 'checkbox') return;
+      // Un buscador (type="search" o data-busqueda) filtra, no guarda: perder lo
+      // escrito ahí no cuesta nada y no debe frenar una recarga.
+      if (el.type === 'search' || el.hasAttribute('data-busqueda')) return;
       el.dataset.sucio = '1';
     }
     document.addEventListener('input', marcarSucio);
@@ -135,6 +141,16 @@
       banner.appendChild(boton);
     }
 
+    // Ritmo del sondeo (auditoría 2026-09-28): 1,5 s el primer minuto, 3 s
+    // hasta los cinco minutos, 5 s después. Un render de 10 min ya no cuesta
+    // 400 consultas.
+    function intervaloSondeo(inicioMs) {
+      var t = Date.now() - inicioMs;
+      if (t < 60000) return 1500;
+      if (t < 300000) return 3000;
+      return 5000;
+    }
+
     function iniciarPolling(jobId, contenedorId) {
       // El elemento se busca ANTES de marcar la clave: si se marcara primero y
       // el contenedor no existiera, la clave quedaría envenenada para toda la
@@ -186,8 +202,16 @@
         if (previo) etiquetaBase = previo;
       }
       var reintentos = 0;
+      var inicio = Date.now();
+      var pausado = false;
+      // Con la pestaña del navegador oculta no se consulta nada; al volver,
+      // un tick inmediato pone la barra al día.
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && pausado) { pausado = false; tick(); }
+      });
 
       function tick() {
+        if (document.hidden) { pausado = true; return; }
         // cache: 'no-store' para que ningún intermediario devuelva un estado viejo.
         fetch('/trabajo/' + encodeURIComponent(jobId) + '/estado', { cache: 'no-store' })
           .then(function (r) { return r.json(); })
@@ -236,7 +260,7 @@
             }
 
             if (data.estado === 'en_progreso') {
-              setTimeout(tick, 1500);
+              setTimeout(tick, intervaloSondeo(inicio));
             } else if (data.estado === 'error') {
               alert(T_BASE.error + ' ' + (data.mensaje || T_BASE.trabajoNoCompletado));
               recargarOAvisar(texto, T_BASE.terminoConError);
@@ -256,6 +280,57 @@
 
       tick();
     }
+
+    // Toda barra de progreso lleva data-poll-job (spec 2026-09-28 «tarjetas
+    // ligeras»): una sola función arranca el sondeo de las que haya bajo
+    // `raiz`, al cargar la página, al agregar tarjetas («Ver más») y al llenar
+    // un modal por fetch. Las tarjetas ya no traen un script embebido con
+    // iniciarPolling(...): en un fragmento insertado con innerHTML nunca corre.
+    function arrancarSondeos(raiz) {
+      if (!raiz || !raiz.querySelectorAll) return;
+      var lista = (raiz.matches && raiz.matches('[data-poll-job]')) ? [raiz] : [];
+      raiz.querySelectorAll('[data-poll-job]').forEach(function (el) { lista.push(el); });
+      lista.forEach(function (el) {
+        if (el.dataset.sondeando || !el.id) return;
+        el.dataset.sondeando = '1';
+        iniciarPolling(el.dataset.pollJob, el.id);
+      });
+    }
+    window.arrancarSondeos = arrancarSondeos;
+    document.addEventListener('DOMContentLoaded', function () { arrancarSondeos(document); });
+
+    // Modal de detalle por fetch (Crear y Final edition): abre al instante con
+    // «Cargando…», pide el HTML y solo lo pinta si sigue siendo el último
+    // pedido (dos clics rápidos no se pisan). Nada se cachea: el detalle trae
+    // formularios con estado vivo (guion, ángulo, finales en curso).
+    function avisoVacio(texto) {
+      var p = document.createElement('p');
+      p.className = 'vacio';
+      p.textContent = texto;
+      return p;
+    }
+    function abrirDetalleRemoto(modal, cuerpo, url, alInsertar) {
+      var n = (modal._pedidoDetalle = (modal._pedidoDetalle || 0) + 1);
+      cuerpo.innerHTML = '';
+      cuerpo.appendChild(avisoVacio(T_BASE.cargando));
+      if (!modal.open) modal.showModal();
+      fetch(url, { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error(String(r.status))); })
+        .then(function (html) {
+          if (n !== modal._pedidoDetalle || !modal.open) return;
+          cuerpo.innerHTML = html;
+          arrancarSondeos(cuerpo);
+          if (alInsertar) alInsertar(cuerpo);
+        })
+        .catch(function (err) {
+          if (n !== modal._pedidoDetalle || !modal.open) return;
+          cuerpo.innerHTML = '';
+          // 404: la pieza se descartó o el enlace pide un detalle que no tiene
+          // (p. ej. #final?cf= de una imagen); lo demás es red o servidor.
+          cuerpo.appendChild(avisoVacio(err && err.message === '404' ? T_BASE.detalleNoExiste : T_BASE.detalleNoCargo));
+        });
+    }
+    window.abrirDetalleRemoto = abrirDetalleRemoto;
 
     // Al terminar un trabajo se hace location.reload(), y eso devolvía todas las
     // tarjetas <details> colapsadas: el refresco SÍ ocurría, pero el usuario veía
@@ -292,6 +367,49 @@
         setTimeout(function () { el.classList.add('aparece-visible'); }, i * 40);
       });
     });
+
+    // Videos de las listas (incidente 2026-09-28): la página de un proyecto
+    // trae todas sus pestañas a la vez y cada video con preload=metadata se
+    // pedía al abrirla aunque su pestaña estuviera oculta — cientos de pedidos
+    // a R2 que dejaban la página «cargando». Las tarjetas nacen con
+    // preload="none" y data-precarga, y acá se piden solo cuando entran en
+    // pantalla: una pestaña oculta o un <details> cerrado nunca entran.
+    (function () {
+      var vistos = new WeakSet();
+      function precargar(v) {
+        if (v.readyState === 0) { v.preload = 'metadata'; v.load(); }
+      }
+      var io = ('IntersectionObserver' in window) ? new IntersectionObserver(function (entradas) {
+        entradas.forEach(function (e) {
+          if (!e.isIntersecting) return;
+          io.unobserve(e.target);
+          precargar(e.target);
+        });
+      }, { rootMargin: '400px 0px' }) : null;
+      function observar(raiz) {
+        if (!raiz.querySelectorAll) return;
+        var lista = (raiz.matches && raiz.matches('video[data-precarga]')) ? [raiz] : [];
+        raiz.querySelectorAll('video[data-precarga]').forEach(function (v) { lista.push(v); });
+        lista.forEach(function (v) {
+          if (vistos.has(v)) return;
+          vistos.add(v);
+          if (io) io.observe(v); else precargar(v);
+        });
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        observar(document);
+        // Los fragmentos que llegan por fetch (paneles, fichas) también.
+        new MutationObserver(function (cambios) {
+          cambios.forEach(function (c) {
+            c.addedNodes.forEach(function (n) {
+              if (n.nodeType !== 1) return;
+              observar(n);
+              if (window.arrancarSondeos) arrancarSondeos(n);
+            });
+          });
+        }).observe(document.body, { childList: true, subtree: true });
+      });
+    })();
   </script>
 </head>
 <body class="{% if request.view_args and request.view_args.cliente %}con-sidebar{% endif %}">
@@ -365,5 +483,6 @@
     })();
   </script>
   {% endif %}
+  <script src="{{ url_for('static', filename='tablas.js') }}" defer></script>
 </body>
 </html>

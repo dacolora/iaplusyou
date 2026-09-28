@@ -1,11 +1,12 @@
-{# Card de investigación automática de Nicho Parte 3 #}
+{# Card de investigación automática de Nicho Parte 3. Contexto: investigacion,
+   etiquetas_inv, etiquetas_paso, etiquetas_paso_estado (nicho.rutas.ver). #}
 <div class="card-nicho card-investigacion">
   <div class="card-title">
-    <h3>Investigación automática</h3>
+    <h3>{{ _('Investigación automática') }}</h3>
     {% if investigacion.estado %}
-      <span class="badge badge-{{ investigacion.estado }}">{{ investigacion.estado | upper }}</span>
+      <span class="badge badge-{{ investigacion.estado }}">{{ (etiquetas_inv.get(investigacion.estado, investigacion.estado)|traducir)|upper }}</span>
     {% else %}
-      <span class="badge badge-neutral">Sin iniciar</span>
+      <span class="badge badge-neutral">{{ _('Sin iniciar') }}</span>
     {% endif %}
   </div>
 
@@ -16,26 +17,26 @@
        ramas dedicadas como código muerto que nunca se alcanzaba. #}
     <form method="post" action="{{ url_for('nicho.investigacion_iniciar', cliente=cliente, eid=estudio.id) }}" class="form-investigacion">
       <fieldset>
-        <legend>Configura tu investigación</legend>
+        <legend>{{ _('Configura tu investigación') }}</legend>
         
         <div class="form-group">
-          <label for="inv_pais">País:</label>
+          <label for="inv_pais">{{ _('País:') }}</label>
           <select id="inv_pais" name="pais" required>
-            <option value="">-- Selecciona --</option>
+            <option value="">{{ _('-- Selecciona --') }}</option>
             <option value="CO" {% if estudio.pais == 'CO' %}selected{% endif %}>Colombia</option>
-            <option value="MX" {% if estudio.pais == 'MX' %}selected{% endif %}>México</option>
+            <option value="MX" {% if estudio.pais == 'MX' %}selected{% endif %}>{{ _('México') }}</option>
             <option value="AR" {% if estudio.pais == 'AR' %}selected{% endif %}>Argentina</option>
-            <option value="BR" {% if estudio.pais == 'BR' %}selected{% endif %}>Brasil</option>
+            <option value="BR" {% if estudio.pais == 'BR' %}selected{% endif %}>{{ _('Brasil') }}</option>
             <option value="CL" {% if estudio.pais == 'CL' %}selected{% endif %}>Chile</option>
-            <option value="PE" {% if estudio.pais == 'PE' %}selected{% endif %}>Perú</option>
+            <option value="PE" {% if estudio.pais == 'PE' %}selected{% endif %}>{{ _('Perú') }}</option>
             <option value="US" {% if estudio.pais == 'US' %}selected{% endif %}>USA</option>
-            <option value="ES" {% if estudio.pais == 'ES' %}selected{% endif %}>España</option>
-            <option value="SE" {% if estudio.pais == 'SE' %}selected{% endif %}>Suecia</option>
+            <option value="ES" {% if estudio.pais == 'ES' %}selected{% endif %}>{{ _('España') }}</option>
+            <option value="SE" {% if estudio.pais == 'SE' %}selected{% endif %}>{{ _('Suecia') }}</option>
           </select>
         </div>
 
         <div class="form-group">
-          <label>Plataformas de búsqueda:</label>
+          <label>{{ _('Plataformas de búsqueda:') }}</label>
           <div class="chips">
             <label class="chip">
               <input type="checkbox" name="plataformas" value="amazon"> Amazon
@@ -50,7 +51,7 @@
         </div>
 
         <div class="form-group">
-          <label>Redes sociales:</label>
+          <label>{{ _('Redes sociales:') }}</label>
           <div class="chips">
             <label class="chip">
               <input type="checkbox" name="redes" value="reddit"> Reddit
@@ -62,26 +63,26 @@
         </div>
 
         <div class="form-group" id="cost-estimate" style="display: none;">
-          <label>Costo estimado:</label>
+          <label>{{ _('Costo estimado:') }}</label>
           <div class="cost-breakdown">
-            <p id="cost-text" class="cost-total">Calculando...</p>
+            <p id="cost-text" class="cost-total">{{ _('Calculando...') }}</p>
             <details>
-              <summary>Desglose</summary>
+              <summary>{{ _('Desglose') }}</summary>
               <div id="cost-details"></div>
             </details>
           </div>
         </div>
 
         <div class="form-group">
-          <label for="inv_presupuesto">Presupuesto a aprobar (USD):</label>
+          <label for="inv_presupuesto">{{ _('Presupuesto a aprobar (USD):') }}</label>
           <input type="number" id="inv_presupuesto" name="presupuesto_usd" min="0.01" step="0.01" 
-                 placeholder="Ej: 10.00" required>
-          <small>Aproximadamente {{ price_estimate }}</small>
+                 placeholder="{{ _('Ej: %(n)s', n='10.00') }}" required>
+          <small>{{ _('Aproximadamente %(precio)s', precio=price_estimate) }}</small>
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Iniciar investigación</button>
-          <button type="button" class="btn btn-secondary" onclick="this.form.reset()">Limpiar</button>
+          <button type="submit" class="btn btn-primary">{{ _('Iniciar investigación') }}</button>
+          <button type="button" class="btn btn-secondary" onclick="this.form.reset()">{{ _('Limpiar') }}</button>
         </div>
       </fieldset>
     </form>
@@ -93,6 +94,10 @@
       const costText = document.getElementById('cost-text');
       const costDetails = document.getElementById('cost-details');
       const presupuesto = document.getElementById('inv_presupuesto');
+      const TXT_ERROR = {{ _('Error: %(error)s', error='{error}')|tojson }};
+      const TXT_EJ = {{ _('Ej: %(n)s', n='{n}')|tojson }};
+      const TXT_BUSQUEDA = {{ _('búsqueda')|tojson }}, TXT_RESENAS = {{ _('reseñas')|tojson }};
+      const TXT_AVATARES = {{ _('Avatares')|tojson }}, TXT_ERROR_COSTO = {{ _('Error calculando costo')|tojson }};
 
       async function calcularCosto() {
         const pais = document.getElementById('inv_pais').value;
@@ -111,22 +116,22 @@
           );
           const data = await response.json();
           if (data.error) {
-            costText.textContent = 'Error: ' + data.error;
+            costText.textContent = TXT_ERROR.replace('{error}', function () { return data.error; });
           } else {
             costText.textContent = `Total: ${data.texto}`;
-            presupuesto.placeholder = `Ej: ${data.total_usd}`;
+            presupuesto.placeholder = TXT_EJ.replace('{n}', function () { return String(data.total_usd); });
             
             if (data.filas && data.filas.length > 0) {
               costDetails.innerHTML = data.filas.map(f => 
-                `<div class="cost-row"><strong>${f.nombre}</strong>: $${f.busqueda_usd} búsqueda + $${f.resenas_usd} reseñas</div>`
+                `<div class="cost-row"><strong>${f.nombre}</strong>: $${f.busqueda_usd} ${TXT_BUSQUEDA} + $${f.resenas_usd} ${TXT_RESENAS}</div>`
               ).join('') + 
               `<div class="cost-row"><strong>Claude</strong>: $${data.claude_usd}</div>` +
-              `<div class="cost-row"><strong>Avatares</strong>: $${data.avatares_usd}</div>`;
+              `<div class="cost-row"><strong>${TXT_AVATARES}</strong>: $${data.avatares_usd}</div>`;
             }
           }
           costEstimate.style.display = 'block';
         } catch (e) {
-          costText.textContent = 'Error calculando costo';
+          costText.textContent = TXT_ERROR_COSTO;
         }
       }
 
@@ -143,20 +148,20 @@
       <div class="progress-bar">
         <div class="progress-fill" style="width: 50%;"></div>
       </div>
-      <p class="progress-text">Paso actual: <strong>{{ investigacion.estado }}</strong></p>
+      <p class="progress-text">{{ _('Paso actual:') }} <strong>{{ etiquetas_inv.get(investigacion.estado, investigacion.estado)|traducir }}</strong></p>
       
       {% if investigacion.pasos %}
         <details>
-          <summary>Detalles de pasos</summary>
+          <summary>{{ _('Detalles de pasos') }}</summary>
           <ul class="pasos-list">
             {% for paso, info in investigacion.pasos.items() %}
               <li>
-                <span class="paso-name">{{ paso }}</span>
+                <span class="paso-name">{{ etiquetas_paso.get(paso, paso)|traducir }}</span>
                 <span class="paso-estado badge-{{ info.estado or 'pendiente' }}">
-                  {{ info.estado or 'pendiente' }}
+                  {{ etiquetas_paso_estado.get(info.estado or 'pendiente', info.estado)|traducir }}
                 </span>
-                {% if info.productos %}<span class="badge">{{ info.productos }} productos</span>{% endif %}
-                {% if info.relevantes %}<span class="badge">{{ info.relevantes }} relevantes</span>{% endif %}
+                {% if info.productos %}<span class="badge">{{ _('%(n)s productos', n=info.productos) }}</span>{% endif %}
+                {% if info.relevantes %}<span class="badge">{{ _('%(n)s relevantes', n=info.relevantes) }}</span>{% endif %}
               </li>
             {% endfor %}
           </ul>
@@ -165,7 +170,7 @@
 
       <div class="investigacion-actions">
         <form method="post" action="{{ url_for('nicho.investigacion_cancelar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
-          <button type="submit" class="btn btn-sm btn-secondary">Cancelar investigación</button>
+          <button type="submit" class="btn btn-sm btn-secondary">{{ _('Cancelar investigación') }}</button>
         </form>
       </div>
     </div>
@@ -174,32 +179,32 @@
     {# Investigación completada #}
     <div class="investigacion-resultado">
       <div class="alert alert-success">
-        <strong>Investigación completada</strong>
+        <strong>{{ _('Investigación completada') }}</strong>
       </div>
       
       {% set resumen = investigacion %}
       <div class="resultado-stats">
         <div class="stat">
-          <span class="label">Consultas:</span>
+          <span class="label">{{ _('Consultas:') }}</span>
           <span class="value">{{ resumen.consultas | length }}</span>
         </div>
         <div class="stat">
-          <span class="label">Productos encontrados:</span>
+          <span class="label">{{ _('Productos encontrados:') }}</span>
           <span class="value">{{ resumen.productos }}</span>
         </div>
         <div class="stat">
-          <span class="label">Relevantes:</span>
+          <span class="label">{{ _('Relevantes:') }}</span>
           <span class="value">{{ resumen.relevantes }}</span>
         </div>
         <div class="stat">
-          <span class="label">Gasto:</span>
+          <span class="label">{{ _('Gasto:') }}</span>
           <span class="value">${{ "%.2f" | format(resumen.gastado) }}</span>
         </div>
       </div>
 
       {% if resumen.consultas %}
         <div class="consultas-usadas">
-          <h4>Consultas usadas:</h4>
+          <h4>{{ _('Consultas usadas:') }}</h4>
           <ul>
             {% for c in resumen.consultas %}
               <li>{{ c }}</li>
@@ -210,9 +215,9 @@
 
       <div class="investigacion-actions">
         <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
-          <button type="submit" class="btn btn-sm btn-primary">Investigar de nuevo</button>
+          <button type="submit" class="btn btn-sm btn-primary">{{ _('Investigar de nuevo') }}</button>
         </form>
-        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">Cerrar</button>
+        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">{{ _('Cerrar') }}</button>
       </div>
     </div>
 
@@ -220,24 +225,24 @@
     {# Investigación pausada #}
     <div class="investigacion-pausa">
       <div class="alert alert-warning">
-        <strong>Investigación pausada</strong>
+        <strong>{{ _('Investigación pausada') }}</strong>
         {% if investigacion.detenida_por %}
-          <p>Razón: {{ investigacion.detenida_por }}</p>
+          <p>{{ _('Razón: %(motivo)s', motivo=investigacion.detenida_por|traducir) }}</p>
         {% endif %}
       </div>
 
       {% if investigacion.ultimo_error %}
         <div class="alert alert-error">
-          <strong>Último error:</strong>
+          <strong>{{ _('Último error:') }}</strong>
           <p>{{ investigacion.ultimo_error }}</p>
         </div>
       {% endif %}
 
       <div class="investigacion-actions">
         <form method="post" action="{{ url_for('nicho.investigacion_reanudar', cliente=cliente, eid=estudio.id) }}" style="display: inline;">
-          <button type="submit" class="btn btn-sm btn-primary">Reanudar investigación</button>
+          <button type="submit" class="btn btn-sm btn-primary">{{ _('Reanudar investigación') }}</button>
         </form>
-        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">Cerrar</button>
+        <button class="btn btn-sm btn-secondary" onclick="this.closest('.card-investigacion').remove()">{{ _('Cerrar') }}</button>
       </div>
     </div>
   {% endif %}

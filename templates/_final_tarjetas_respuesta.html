@@ -1,0 +1,1 @@
+{% from "_final_tarjetas.html" import lista_videos_fe, lista_finales_fe with context %}{% if lista == "videos" %}{{ lista_videos_fe(items, desde, total) }}{% else %}{{ lista_finales_fe(items, desde, total) }}{% endif %}

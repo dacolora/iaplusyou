@@ -8,6 +8,8 @@ necesita sus llaves del `.env` raíz (`LLAVES`); `llaves_faltantes` solo mira
 import importlib
 import os
 
+from idiomas import N_
+
 REGISTRO = {
     "texto": ("nicho.fuentes.texto", "FuenteTexto"),
     "csv": ("nicho.fuentes.archivo", "FuenteArchivo"),
@@ -15,7 +17,7 @@ REGISTRO = {
     "youtube": ("nicho.fuentes.youtube", "FuenteYouTube"),
     "apify": ("nicho.fuentes.apify", "FuenteApify"),
 }
-NOMBRES = {"texto": "Texto pegado", "csv": "CSV o Excel", "reddit": "Reddit", "youtube": "YouTube",
+NOMBRES = {"texto": N_("Texto pegado"), "csv": N_("CSV o Excel"), "reddit": "Reddit", "youtube": "YouTube",
            "apify": "Amazon / TikTok (Apify)"}
 CONECTADAS = ("reddit", "youtube", "apify")
 LLAVES = {

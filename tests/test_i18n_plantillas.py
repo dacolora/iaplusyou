@@ -28,6 +28,25 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
     # (Crear › detalle de la pieza; Catálogo › ficha del producto).
     "_revision_doctrina.html", "_producto_doctrina.html",
+    # Task 4 (fase 5): Sprints — tablero, panel de campaña, referencias, revisión,
+    # entrega; el editor del ángulo y la página de la doctrina.
+    "_tab_sprints.html", "_sprint_macros.html", "_sprint_nav.html", "_sprint_tarjeta.html",
+    "_sprint_panel.html", "_sprint_panel_armar.html", "_sprint_panel_ideas.html",
+    "_sprint_panel_piezas.html", "_sprint_sugeridos.html", "_sprint_lote_modal.html",
+    "sprint_detalle.html", "sprint_revision.html", "sprint_entrega.html", "campana_referencias.html",
+    "_angulo_editor.html", "doctrina.html",
+    # Task 5 (fase 5): Nicho — pestaña, página del estudio, avatares,
+    # comentarios e investigación.
+    "_tab_nicho.html", "_nicho_avatares.html", "_nicho_comentarios.html",
+    "_nicho_investigacion.html", "_nicho_nav.html", "nicho_estudio.html",
+    # Doctrina bloque 4: la sección de aprendizajes dentro de Experimentos.
+    "_aprendizajes.html",
+    # Merge de main (2026-09-28): las razones del QA con un toque, dentro de Sprints.
+    "_sprint_qa.html",
+    # Task 6 (fase 5): Referentes — pestaña, grid, ficha, Recrear, Usar en
+    # sprint, Traer referentes y Mis barridos.
+    "_tab_referentes.html", "_referente_ficha.html", "_referente_recrear.html", "_referente_usar_en_sprint.html",
+    "_referentes_barridos.html", "_referentes_grid.html", "_referentes_traer.html",
 ]
 
 

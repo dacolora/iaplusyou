@@ -4,7 +4,7 @@
 <p class="sprint-migas">
   <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='sprints') }}">← Sprints</a>
   {% if sprint %} · <a href="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id) }}">{{ sprint.nombre }}</a>{% endif %}
-  {% if campana %} · Campaña {{ campana.orden + 1 }}{% endif %}
+  {% if campana %} · {{ _('Campaña %(n)s', n=campana.orden + 1) }}{% endif %}
 </p>
 <script>
   document.querySelectorAll('.sidebar-item[data-tab]').forEach(function (b) {

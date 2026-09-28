@@ -262,7 +262,7 @@ def test_responder_con_cambio_guarda_propuesta_y_gasto(base_temporal):
     assert ultimo["role"] == "user"
     assert CLIP in ultimo["content"] and "habitación cálida" in ultimo["content"] and DIALOGO in ultimo["content"]
     assert "Guion del espejo LED" in ultimo["content"]
-    assert "JSON" in registro[0]["system"]
+    assert "JSON" in registro[0]["system"][-1]["text"]
 
 
 def test_responder_sin_cambio(base_temporal):

@@ -3,6 +3,15 @@ import pytest
 import sqlalchemy as sa
 
 
+@pytest.fixture(autouse=True)
+def _con_copycoders(monkeypatch):
+    """Estos casos siembran la biblioteca global de copycoders y la leen desde
+    un proyecto: el proyecto la trajo (desde 2026-09-28 nace apagada; el caso
+    apagado vive en test_referentes_copycoders_proyecto.py)."""
+    import proyectos
+    monkeypatch.setattr(proyectos, "referentes_copycoders", lambda cliente: True)
+
+
 def _anuncio(**extra):
     base = {"anuncio_id": "1931355470987046", "pagina_id": "110920097280290", "fuente": "copycoders",
             "marca": "Lulutox Tea", "url_anuncio": "https://www.facebook.com/ads/library/?id=1931355470987046",
@@ -340,3 +349,23 @@ def test_borrar_de_barrido_quita_sus_referentes_y_las_familias_de_claude_que_que
     with db.conectar() as con:
         assert [f[0] for f in con.execute(sa.select(db.referente.c.anuncio_id))] == ["b1"]
     assert datos.barrido(a) is not None      # el barrido queda (historial del gasto)
+
+
+def test_busqueda_y_marcas_sin_importar_tildes_ni_mayusculas(base_temporal):
+    """«Élite» se encuentra escribiendo «elite», y «camara» encuentra «Cámara»:
+    el lower() de SQLite no pliega tildes (ni pasa a minúscula lo que no es ASCII)."""
+    from referentes import datos
+    rid, _ = datos.guardar_referente(_anuncio(anuncio_id="900", marca="ÉLITE Cröcs", titular="La Cámara lenta"))
+    datos.marcar_imagen(rid, "ok", "https://r2/referentes/900.jpg")
+    por_marca = datos.listar("acme", {"marcas_nombres": ["élite crocs"]})
+    assert [r["id"] for r in por_marca["items"]] == [rid]
+    assert [r["id"] for r in datos.listar("acme", {"marcas_nombres": ["Elite Crocs"]})["items"]] == [rid]
+    assert [r["id"] for r in datos.listar("acme", {"q": "camara"})["items"]] == [rid]
+    assert [r["id"] for r in datos.listar("acme", {"q": "CÁMARA"})["items"]] == [rid]
+    assert datos.listar("acme", {"q": "cama rota"})["total"] == 0
+
+
+def test_pliegue_quita_tildes_y_mayusculas():
+    import db
+    assert db.pliegue("  ÉLITE Cröcs Ñandú ") == "elite crocs nandu"
+    assert db.pliegue(None) == ""

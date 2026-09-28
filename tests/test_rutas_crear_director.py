@@ -146,14 +146,21 @@ def test_rearmar_desde_prompt_pendiente_con_trabajo_vivo_se_rechaza(app, monkeyp
     assert "no se puede rearmar ahora" in html
 
 
+def _detalle(app, cf_id):
+    """El detalle de la pieza: llega por fetch al abrir la tarjeta (tarjetas
+    ligeras, 2026-09-28), ya no va embebido en la página."""
+    r = app["c"].get(f"/cliente/acme/creative_flow/{cf_id}/detalle")
+    assert r.status_code == 200
+    return r.get_data(as_text=True)
+
+
 def test_tarjeta_prompt_pendiente_huerfana_trae_boton_rearmar(app):
-    """F4 (plantilla): la tarjeta de una sesión prompt_pendiente sin trabajo
+    """F4 (plantilla): el detalle de una sesión prompt_pendiente sin trabajo
     vivo ofrece el mismo formulario de «Rearmar el prompt» que error."""
     import creative_flow as cf
     _crear(app)
     (cf_id, _), = cf.cargar("acme").items()
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
-    assert f'action="/cliente/acme/creative_flow/{cf_id}/rearmar"' in html
+    assert f'action="/cliente/acme/creative_flow/{cf_id}/rearmar"' in _detalle(app, cf_id)
 
 
 def test_items_traen_trabajo_del_director_y_costo_con_calidad(app, monkeypatch):
@@ -288,15 +295,17 @@ def test_tarjeta_pendiente_muestra_la_barra_del_director(app, monkeypatch):
 
 
 def test_tarjeta_lista_trae_el_editor_rearmar_y_version_b(app):
+    """El editor de los planos, Rearmar y la casilla de la versión B van en el
+    detalle de la pieza (por fetch)."""
     import creative_flow as cf
     cf_id = _lista(app)
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    html = _detalle(app, cf_id)
     assert f'action="/cliente/acme/creative_flow/{cf_id}/prompt"' in html and 'name="prompt_a"' in html and 'name="prompt_b"' in html
     assert f'action="/cliente/acme/creative_flow/{cf_id}/rearmar"' in html
     assert 'name="version_b" value="si"' in html and "otro" in html      # diferencia_b visible
     assert "Generar video ≈ US$ 0,80" in html    # 8 s x 0,10, formato de gastos.formatear; texto desde 74eba25
     cf.actualizar("acme", cf_id, director={"estado": "fallback", "aviso": "Anthropic caído", "prompt_b": None})
-    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    html = _detalle(app, cf_id)
     assert "no pudo armar los planos" in html and "Anthropic caído" in html and 'name="version_b"' not in html
 
 

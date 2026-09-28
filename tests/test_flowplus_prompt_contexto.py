@@ -23,7 +23,7 @@ def test_contexto_agrega_audiencia_y_temporada_al_principio():
     assert i_aud < i_tem < i_prod
     assert "Busca calidad" in lineas[i_aud] and "cocina moderna, luz natural" in lineas[i_aud] and "cercano" in lineas[i_aud]
     assert "Navidad" in lineas[i_tem] and "#B3001B" in lineas[i_tem] and "luces, mesa" in lineas[i_tem]
-    assert p.endswith("Recordatorio final: el producto permanece solo y sin nadie durante todo el video.")
+    assert p.splitlines()[-1].startswith("EVITAR: ") and "sin nadie" not in p
 
 
 def test_contexto_parcial_no_rompe():

@@ -11,42 +11,42 @@
    cada innerHTML y llama iniciarPolling por su cuenta. #}
 <div class="modal-form ancho">
   <header class="modal-form-cab">
-    <h3>Mis barridos</h3>
-    <p>Cada búsqueda que hiciste con «Traer referentes», con lo que trajo y lo que costó.</p>
+    <h3>{{ _('Mis barridos') }}</h3>
+    <p>{{ _('Cada búsqueda que hiciste con «Traer referentes», con lo que trajo y lo que costó.') }}</p>
   </header>
   {% if not barridos %}
-  <p class="vacio">Todavía no has traído referentes. <a data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">Traer referentes →</a></p>
+  <p class="vacio">{{ _('Todavía no has traído referentes.') }} <a data-recrear-abrir="{{ url_for('referentes.traer_form', cliente=cliente) }}">{{ _('Traer referentes →') }}</a></p>
   {% else %}
   <div class="modal-form-tabla">
   <table class="tabla-admin">
-    <tr><th>Fecha</th><th>Búsqueda</th><th>Estado</th><th>Anuncios</th><th>Clasificados</th><th>Costo</th><th></th></tr>
+    <tr><th>{{ _('Fecha') }}</th><th>{{ _('Búsqueda') }}</th><th>{{ _('Estado') }}</th><th>{{ _('Anuncios') }}</th><th>{{ _('Clasificados') }}</th><th>{{ _('Costo') }}</th><th></th></tr>
     {% for b in barridos %}
     {% set v = b.vista %}
     <tr id="barrido-{{ b.id }}">
       <td class="barrido-fecha">{{ v.fecha }}</td>
       <td>
-        {{ v.busqueda }}{% if v.enlace %} · <a href="{{ v.enlace }}" target="_blank" rel="noopener">ver en Meta ↗</a>{% endif %}
+        {{ v.busqueda }}{% if v.enlace %} · <a href="{{ v.enlace }}" target="_blank" rel="noopener">{{ _('ver en Meta ↗') }}</a>{% endif %}
         <small class="barrido-sub">{{ v.detalle }}</small>
       </td>
       <td>
         <span class="tag-estado tag-{{ v.tono }}">{{ v.estado }}</span>
         {% if b.aviso %}<small class="barrido-sub">{{ b.aviso }}</small>{% endif %}
       </td>
-      <td class="num">{{ b.traidos }} de {{ b.tope }}</td>
-      <td class="num">{{ b.clasificados }}{% if b.pendientes %}<small class="barrido-sub">{{ b.pendientes }} sin clasificar</small>{% endif %}</td>
+      <td class="num">{{ _('%(traidos)s de %(tope)s', traidos=b.traidos, tope=b.tope) }}</td>
+      <td class="num">{{ b.clasificados }}{% if b.pendientes %}<small class="barrido-sub">{{ _('%(n)s sin clasificar', n=b.pendientes) }}</small>{% endif %}</td>
       <td class="num">{{ b.usd_real | usd if b.usd_real else '—' }}</td>
       <td>
         {% if b.trabajo %}
-        <div class="barra-progreso" id="trabajo-{{ b.trabajo }}" data-poll-job="{{ b.trabajo }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
+        <div class="barrido-progreso"><div class="barra-progreso" id="trabajo-{{ b.trabajo }}" data-poll-job="{{ b.trabajo }}"><div class="barra-progreso-fill"></div></div><span class="progreso-texto"></span></div>
         {% else %}
           {% if b.pendientes %}
           <form method="post" action="{{ url_for('referentes.clasificar_pendientes', cliente=cliente, bid=b.id) }}" class="inline">
-            <button type="submit" class="btn-xs">Clasificar pendientes{% if b.precio_clasificar %} ({{ b.precio_clasificar }}){% endif %}</button>
+            <button type="submit" class="btn-xs">{{ _('Clasificar pendientes') }}{% if b.precio_clasificar %} ({{ b.precio_clasificar }}){% endif %}</button>
           </form>
           {% endif %}
           {% if b.imagenes_error %}
           <form method="post" action="{{ url_for('referentes.reintentar_imagenes', cliente=cliente, bid=b.id) }}" class="inline">
-            <button type="submit" class="btn-xs">Reintentar imágenes</button>
+            <button type="submit" class="btn-xs">{{ _('Reintentar imágenes') }}</button>
           </form>
           {% endif %}
         {% endif %}

@@ -63,7 +63,7 @@ def test_planificar_derivar_crea_hijo_con_reediciones_y_regeneraciones(ent):
     assert d["tipo"] == "derivar" and d["estado"] == "produciendo" and d["origen_ep_id"] == ep and d["cf_id"] == cf_id
     reed = [i for i in d["items"] if i["clase"] == "reedicion"]
     regen = [i for i in d["items"] if i["clase"] == "regeneracion"]
-    assert [(i["variante"], i["variante_tipo"]) for i in reed] == [(1, "hook"), (2, "estructura"), (3, "hook")]
+    assert [(i["variante"], i["variante_tipo"]) for i in reed] == [(1, "hook"), (2, "hook"), (3, "hook")]   # bloque 4: solo gancho
     assert all(i["cf_id"] == cf_id and i["paises"] == ["CO", "MX"] and i["estado"] == "produciendo_finales" for i in reed)
     assert len(regen) == 2 and all(i["estado"] == "produciendo_clon" for i in regen)
     sesiones = cf.cargar("acme")
@@ -79,7 +79,7 @@ def test_planificar_derivar_crea_hijo_con_reediciones_y_regeneraciones(ent):
     assert all(e["max_intentos"] == 1 for e in ent["encolados"])
     assert {(e["payload"]["idioma"], e["payload"]["pais"]) for e in finales} == {("es", "CO"), ("es", "MX")}
     assert sorted((e["payload"]["opciones"]["variante"], e["payload"]["opciones"]["variante_tipo"]) for e in finales
-                  if e["payload"]["pais"] == "CO") == [(1, "hook"), (2, "estructura"), (3, "hook")]
+                  if e["payload"]["pais"] == "CO") == [(1, "hook"), (2, "hook"), (3, "hook")]
     assert all(e["job_id"].endswith(f"__v{e['payload']['opciones']['variante']}__final") for e in finales)
     assert {e["job_id"] for e in clones} == {f"acme__{i['cf_id']}__creative_flow" for i in regen}
     assert all(f["estado"] == "generando" for f in cf.finales("acme", cf_id) if f["variante"])
@@ -101,7 +101,7 @@ def test_variantes_siguen_la_numeracion_existente(ent):
     hijo = dv.planificar("acme", eid, "derivar", {"ep_id": ep, "motivo": "x"})
     d = _derivacion(ex, hijo)
     assert [(i["clase"], i["variante"], i["variante_tipo"]) for i in d["items"]] == [
-        ("reedicion", 3, "hook"), ("reedicion", 4, "estructura")]
+        ("reedicion", 3, "hook"), ("reedicion", 4, "hook")]
 
 
 def test_avanzar_regeneracion_y_cierre_lanza_y_pide_activar(ent):
@@ -674,3 +674,75 @@ def test_derivar_usa_el_idioma_de_cada_pais_del_experimento(ent):
     assert dv._idiomas(pz, [{"pais": "CO", "idioma": "es"}, {"pais": "BR", "idioma": "pt"}]) == {"CO": "en", "BR": "pt"}
     assert dv._idiomas(pz, [{"pais": "CO", "idioma": "es"}, {"pais": "BR", "idioma": "pt"}], solo=["BR"]) == {"BR": "pt"}
     assert dv._idiomas({"tipo": "clon"}, [{"pais": "MX"}]) == {"MX": "es"}     # sin idioma: base del país
+
+
+ANGULO_D = {"consciencia": "consciente_del_problema", "lead": "problema_solucion", "gancho": "¿Pies fríos?",
+            "promesa": "pies calientes"}
+
+
+def test_derivar_da_a_cada_reedicion_otro_arranque_y_los_ganchos_usados(ent, monkeypatch):
+    """Doctrina, bloque 4 (§4): nuevos ganchos alrededor del mismo mensaje."""
+    import proyectos
+    dv, ex, cf, eid, ep, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"], ent["cf_id"]
+    cf.actualizar("acme", cf_id, angulo=dict(ANGULO_D), productos_ids=["Hcozy"])
+    cf.actualizar_final("acme", ent["final_id"], capas={"guion": {"parametros": {"angulo": {"lead": "secreto", "gancho": "Lo que nadie dice"}}}})
+    monkeypatch.setattr(proyectos, "aprendizajes", lambda c: [{"texto": "Perdió en MX: «x»", "producto": "Hcozy"}])
+    ex.actualizar("acme", eid, reglas={"n_reediciones": 3, "n_regeneraciones": 0})
+    hijo = dv.planificar("acme", eid, "derivar", {"ep_id": ep, "motivo": "x"})
+    items = _derivacion(ex, hijo)["items"]
+    ctxs = [i["contexto_variante"] for i in items]
+    import doctrina
+    otros = [l for l in doctrina.lead_por_consciencia("consciente_del_problema") if l != "problema_solucion"]
+    # La sesión ya probó problema_solucion (su ángulo) y secreto (la final v2): a
+    # ninguna hermana le queda un arranque recomendado — cambian el patrón.
+    assert otros == ["secreto"] and [c["lead_objetivo"] for c in ctxs] == [None, None, None]
+    assert [c["hermana"] for c in ctxs] == [{"k": 1, "n": 3}, {"k": 2, "n": 3}, {"k": 3, "n": 3}]
+    assert all(c["ganchos_usados"] == ["¿Pies fríos?", "Lo que nadie dice"] for c in ctxs)
+    assert all("aprendizajes" not in c and "diagnostico" not in c for c in ctxs)   # no se guardan en el experimento
+    finales = [e for e in ent["encolados"] if e["tipo"] == "final_producir"]
+    assert all(e["payload"]["opciones"]["contexto_variante"]["ganchos_usados"] == ["¿Pies fríos?", "Lo que nadie dice"] for e in finales)
+    assert all("Perdió en MX" in e["payload"]["opciones"]["contexto_variante"]["aprendizajes"] for e in finales)
+    # Sin finales previas: una hermana por arranque libre, nunca el mismo dos veces, nunca el actual.
+    assert dv._lead_objetivo(ANGULO_D, 0) == "secreto" and dv._lead_objetivo(ANGULO_D, 1) is None
+    assert dv._lead_objetivo(ANGULO_D, 0, excluir=("secreto",)) is None
+    assert dv._lead_objetivo({}, 0) is None and dv._lead_objetivo({"consciencia": "muy_consciente", "lead": "oferta"}, 0) is None
+
+
+@pytest.mark.parametrize("escalon,salto,esperado", [
+    (0, 2, ("reedicion", "estructura", 2)), (0, 3, ("regeneracion", None, 3)), (1, 2, ("reedicion", "estructura", 2)),
+    (2, 2, ("regeneracion", None, 3)), (0, 0, ("reedicion", "hook", 1))])
+def test_rescatar_salta_de_escalon_segun_el_diagnostico_sin_volver_atras(ent, escalon, salto, esperado):
+    dv, ex, eid, ep = ent["dv"], ent["ex"], ent["eid"], ent["ep"]
+    ex.actualizar_pieza("acme", ep, escalon_rescate=escalon)
+    ex.marcar_pieza("acme", ep, diagnostico={"causas": [{"codigo": "gancho", "detalle": "no retiene"}],
+                                             "siguiente": {"que": "estructura", "porque": "p", "hipotesis": "h"}})
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep, "motivo": "perdedora", "salto": salto})
+    item = _derivacion(ex, eid)["items"][0]
+    pz = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]
+    assert (item["clase"], item["variante_tipo"], pz["escalon_rescate"]) == esperado
+    if item["clase"] == "reedicion":
+        assert item["contexto_variante"]["diagnostico"]["causas"][0]["codigo"] == "gancho"
+        assert ("lead_objetivo" in item["contexto_variante"]) == (item["variante_tipo"] == "hook")
+        assert dv._opciones_de(item)["contexto_variante"] == item["contexto_variante"]
+    else:
+        assert dv._opciones_de(item) == {"variante": None}
+
+
+def test_el_rescate_excluye_el_arranque_de_la_pieza_que_perdio(ent, monkeypatch):
+    """H3 (re-revisión): la costura del rescate — el lead de la variante de la
+    pieza queda fuera, además del de la sesión."""
+    import db
+    dv, ex, cf, eid, ep, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"], ent["cf_id"]
+    cf.actualizar("acme", cf_id, angulo=dict(ANGULO_D))                       # sesión: problema_solucion
+    pieza_id = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]["pieza_id"]
+    with db.conectar() as con:                                                  # la pieza probó «secreto»
+        con.execute(db.pieza.update().where(db.pieza.c.id == pieza_id).values(
+            capas={"guion": {"parametros": {"angulo": {"lead": "secreto", "gancho": "S"}}}}))
+    vistos = []
+    real = dv._contexto_variante
+    monkeypatch.setattr(dv, "_contexto_variante", lambda *a, **k: (vistos.append(k), real(*a, **k))[1])
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep, "motivo": "perdedora"})
+    assert vistos[0]["excluir"] == ("secreto",) and vistos[0]["k"] == 0
+    item = _derivacion(ex, eid)["items"][0]
+    assert item["variante_tipo"] == "hook" and item["contexto_variante"]["lead_objetivo"] is None
+    assert "S" in item["contexto_variante"]["ganchos_usados"] or item["contexto_variante"]["ganchos_usados"] == ["¿Pies fríos?"]

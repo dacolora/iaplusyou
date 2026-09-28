@@ -23,7 +23,7 @@
 <section class="admin-bloque">
   <div class="admin-cabecera"><h2>Swipe file de copycoders</h2></div>
   <form method="post" action="{{ url_for('admin_referentes_importar') }}" class="agencia-form">
-    <label>URL <input type="url" name="url" value="{{ url_swipe }}" style="min-width:32rem"></label>
+    <label>URL <input type="url" name="url" value="{{ url_swipe }}" style="width:100%"></label>
     <button type="submit" class="btn-generar btn-sm" {% if trabajo %}disabled{% endif %}>Importar</button>
   </form>
   <p class="vacio">Última importación:
@@ -166,17 +166,25 @@
 
 <section class="admin-bloque">
   <div class="admin-cabecera"><h2>Familias ({{ familias | length }})</h2></div>
+  {% if familias_en_en_curso %}
+  <p class="vacio">{{ _('Escribiendo en inglés las descripciones que faltan…') }}</p>
+  {% elif familias_sin_en %}
+  <form method="post" action="{{ url_for('admin_referentes_familias_en') }}" class="inline">
+    <button type="submit" class="btn-generar btn-sm">{{ ngettext('Escribir en inglés la %(num)d descripción que falta ≈ %(precio)s', 'Escribir en inglés las %(num)d descripciones que faltan ≈ %(precio)s', familias_sin_en | length, precio=precio_familias_en) }}</button>
+  </form>
+  {% endif %}
   <div class="admin-scroll"><table class="tabla-admin">
-    <tr><th>Familia</th><th>Descripción</th><th>Referentes</th><th>Origen</th><th></th></tr>
+    <tr><th>Familia</th><th>Descripción</th><th>{{ _('Descripción (inglés)') }}</th><th>Referentes</th><th>Origen</th><th></th></tr>
     {% for f in familias %}
     <tr>
       <td>{{ f.nombre }}</td>
       <td>
-        <form method="post" action="{{ url_for('admin_referentes_familia', familia_id=f.id) }}" class="inline">
+        <form id="familia-{{ f.id }}" method="post" action="{{ url_for('admin_referentes_familia', familia_id=f.id) }}" class="inline">
           <input type="text" name="descripcion" value="{{ f.descripcion or '' }}" style="width:22rem">
           <button type="submit" class="btn-xs">Guardar</button>
         </form>
       </td>
+      <td><input type="text" name="descripcion_en" form="familia-{{ f.id }}" value="{{ f.descripcion_en or '' }}" style="width:22rem"></td>
       <td>{{ f.n }}</td>
       <td>{{ f.origen }}</td>
     </tr>

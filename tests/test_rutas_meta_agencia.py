@@ -382,9 +382,9 @@ def test_proyecto_asignado_ve_gestionado_por_creatv(app, monkeypatch):
     html_cliente = _cliente_rol_cliente(app["dashboard"]).get("/cliente/acme").get_data(as_text=True)
     assert "Gestionado por Creatv" in html_cliente and 'href="/admin/meta"' not in html_cliente
     assert "Conectar con Meta" not in html_cliente and TOKEN_FALSO not in html_cliente
-    # Puesta a punto: la tarjeta Meta está «configurada» con el texto de agencia.
-    ini = html.index('id="llave-meta"'); tarjeta = html[ini:html.index("</article>", ini)]
-    assert ">configurada<" in tarjeta and "modo agencia" in tarjeta
+    # La tarjeta de llave de Meta ya no se pinta en Configuración (2026-09-28):
+    # la conexión vive solo en Experimentos.
+    assert 'id="llave-meta"' not in html
 
 
 def test_proyecto_asignado_con_agencia_caida(app, monkeypatch):
@@ -392,8 +392,7 @@ def test_proyecto_asignado_con_agencia_caida(app, monkeypatch):
     html = app["admin"].get("/cliente/acme").get_data(as_text=True)
     assert "Gestionado por Creatv" in html and "no está activa ahora mismo" in html
     assert "Conectar con Meta" not in html and TOKEN_FALSO not in html
-    ini = html.index('id="llave-meta"'); tarjeta = html[ini:html.index("</article>", ini)]
-    assert ">falta<" in tarjeta
+    assert 'id="llave-meta"' not in html
 
 
 def test_proyecto_en_modo_propia_sigue_igual(app, monkeypatch):
@@ -428,17 +427,6 @@ def test_rutas_propias_en_modo_agencia_avisan_y_no_tocan_nada(app, monkeypatch, 
     assert llamadas == []
     assert json.load(open(app["tmp"] / "clientes" / "acme" / "meta.json")) == datos
     assert not os.path.exists(app["tmp"] / "clientes" / "acme" / "meta_app.json")
-
-
-def test_estado_llaves_meta_segun_modo(app):
-    d = app["dashboard"]
-    por_id = lambda **k: {l["id"]: l for l in d._estado_llaves(**k)}["meta"]
-    assert por_id()["estado"] == "falta"
-    assert por_id(meta_app_registrada=True)["estado"] == "configurada"
-    ag = por_id(modo_meta="agencia", agencia_conectada=True)
-    assert ag["estado"] == "configurada" and "Creatv" in ag["nota"] and 3 <= len(ag["pasos"]) <= 5
-    caida = por_id(modo_meta="agencia", agencia_conectada=False, meta_app_registrada=True)
-    assert caida["estado"] == "falta" and "administrador" in caida["faltan"][0]
 
 
 def test_panel_enlaza_al_panel_de_agencia(app, monkeypatch):

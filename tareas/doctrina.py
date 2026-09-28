@@ -14,6 +14,8 @@ también si la respuesta no sirvió.
 12 puntos de `textos/revisar.md` sobre la pieza terminada
 (`doctrina.revisor.revisar`). Mismas reglas de pago; gasto tipo «revision».
 """
+from flask_babel import gettext
+
 import gastos
 import trabajos
 from doctrina import pedidos, revisor
@@ -53,7 +55,8 @@ def ejecutar_pedidos(tarea):
                "pedidos al cliente · respuesta inválida")
         raise
     _gasto(cliente, referencia, ent, sal, "pedidos al cliente")
-    return f"{n} pedido(s) listos para el cliente." if n else "Claude no ha pedido nada para este producto."
+    return (gettext("%(n)s pedido(s) listos para el cliente.", n=n) if n
+            else gettext("Claude no ha pedido nada para este producto."))
 
 
 def job_id_revisar(cliente, cf_id):
@@ -78,4 +81,5 @@ def ejecutar_revisar(tarea):
         raise
     _gasto(cliente, referencia, ent, sal, "revisión de la doctrina", tipo="revision")
     n = revisor.contar(rev)
-    return f"Revisión lista: {n} punto(s) para mejorar." if n else "Revisión lista: la pieza pasa todo."
+    return (gettext("Revisión lista: %(n)s punto(s) para mejorar.", n=n) if n
+            else gettext("Revisión lista: la pieza pasa todo."))

@@ -6,6 +6,21 @@ import pytest
 
 from tests.test_experimentos_db import PAISES, _pieza
 
+
+@pytest.fixture(autouse=True)
+def _sin_diagnostico_real(monkeypatch, tmp_path):
+    """Doctrina, bloque 4: `exp_decidir` diagnostica cada perdedora (Claude,
+    pagado) y deja aprendizajes en proyecto.json — acá ninguna prueba paga ni
+    toca clientes/ del repo. El diagnóstico falso falla como cuando no hay red;
+    la prueba que quiere uno de verdad lo reemplaza después."""
+    import proyectos
+    from doctrina import diagnostico
+
+    def sin_red(*a, **k):
+        raise diagnostico.ErrorDiagnostico("sin Claude en las pruebas")
+    monkeypatch.setattr(diagnostico, "diagnosticar", sin_red)
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"proyecto_{cliente}.json"))
+
 GANADOR = {"impresiones": 5000, "clics_enlace": 100, "ctr": 2.0, "cpc": 0.3, "thruplay_rate": 0.3, "gasto": 10.0}
 PERDEDOR = {"impresiones": 5000, "clics_enlace": 5, "ctr": 0.2, "cpc": 3.0, "thruplay_rate": 0.05, "gasto": 10.0}
 
@@ -348,11 +363,14 @@ def test_periodica_decidir_registrada():
     import worker
     # F4 (Bloque 5): los pedidos se sincronizan/atribuyen antes de refrescar
     # experimentos en el mismo tick, para que el snapshot por tienda no vea
-    # ventas de hace un ciclo.
-    assert worker.PERIODICAS == [("tienda_sync_pedidos_todas", 7200), ("exp_refrescar_todos", 7200),
+    # ventas de hace un ciclo. Triple Whale (spec 2026-09-28) va en el mismo
+    # lugar: su copia se pide antes de refrescar experimentos.
+    assert worker.PERIODICAS == [("tienda_sync_pedidos_todas", 7200), ("tw_sincronizar_todas", 7200),
+                                 ("exp_refrescar_todos", 7200),
                                  ("exp_decidir_todos", 3600), ("exp_avanzar_todos", 600),
                                  ("tienda_sync_productos_todas", 21600), ("sprint_qa_pendientes", 300),
-                                 ("materiales_limpiar", 86400)]
+                                 ("materiales_limpiar", 86400),
+                                 ("salidas_limpiar", 86400), ("cola_limpiar", 86400), ("db_respaldar", 86400)]
 
 
 def test_semi_perdedora_se_pausa_ya_y_el_rescate_queda_propuesto(ent, monkeypatch):

@@ -11,9 +11,12 @@ import time
 from datetime import date
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import db
 import doctrina
+import idiomas
+from idiomas import N_
 from referentes import datos as referentes_datos
 
 # Un color CSS hexadecimal (#rgb, #rrggbb, #rrggbbaa…). Todo lo que se pinta con
@@ -23,10 +26,10 @@ COLOR_HEX = re.compile(r"^#[0-9a-fA-F]{3,8}$")
 INTENCIONES = ("estilo_visual", "composicion", "paleta", "movimiento_camara", "tipografia",
                "transiciones", "storytelling", "iluminacion", "angulo_producto", "formato", "otro")
 INTENCIONES_NOMBRE = {
-    "estilo_visual": "Estilo visual", "composicion": "Composición", "paleta": "Paleta de colores",
-    "movimiento_camara": "Movimiento de cámara", "tipografia": "Tipografía", "transiciones": "Transiciones",
-    "storytelling": "Storytelling", "iluminacion": "Iluminación", "angulo_producto": "Ángulo de producto",
-    "formato": "Formato", "otro": "Otro",
+    "estilo_visual": N_("Estilo visual"), "composicion": N_("Composición"), "paleta": N_("Paleta de colores"),
+    "movimiento_camara": N_("Movimiento de cámara"), "tipografia": N_("Tipografía"),
+    "transiciones": N_("Transiciones"), "storytelling": N_("Storytelling"), "iluminacion": N_("Iluminación"),
+    "angulo_producto": N_("Ángulo de producto"), "formato": N_("Formato"), "otro": N_("Otro"),
 }
 ESTADOS_SPRINT = ("planeando", "referencias", "listo_para_generar", "generando", "revision", "completado")
 ESTADOS_CAMPANA = ("planeada", "referencias", "ideas_propuestas", "ideas_aprobadas", "generando", "revision", "completada")
@@ -109,16 +112,25 @@ class ErrorDatos(ValueError):
 # ------------------------------------------------------------ helpers ---
 
 def _fecha(valor, campo):
+    """`campo` siempre es "inicio" o "fin" (los únicos que pasan _rango y
+    _momento): mensaje completo por caso en vez de una variable a medio
+    traducir ("The fin date isn't valid…", fix round 1)."""
     try:
         return date.fromisoformat(str(valor or "")[:10])
     except ValueError:
-        raise ErrorDatos(f"La fecha de {campo} no es válida (usa AAAA-MM-DD).")
+        if campo == "fin":
+            raise ErrorDatos(gettext("La fecha de fin no es válida (usa AAAA-MM-DD)."))
+        raise ErrorDatos(gettext("La fecha de inicio no es válida (usa AAAA-MM-DD)."))
 
 
 def _rango(inicio, fin, que):
+    """`que` siempre es "el sprint" o "la temporada": mensaje completo por
+    caso, no una variable a medio traducir ("In el sprint…", fix round 1)."""
     i, f = _fecha(inicio, "inicio"), _fecha(fin, "fin")
     if i >= f:
-        raise ErrorDatos(f"En {que}, la fecha de inicio debe ser anterior a la de fin.")
+        if que == "la temporada":
+            raise ErrorDatos(gettext("En la temporada, la fecha de inicio debe ser anterior a la de fin."))
+        raise ErrorDatos(gettext("En el sprint, la fecha de inicio debe ser anterior a la de fin."))
     return i.isoformat(), f.isoformat()
 
 
@@ -133,7 +145,7 @@ def _fila(con, tabla, fila_id, cliente):
 def _actualizar(con, tabla, fila_id, cliente, permitidas, campos):
     malos = set(campos) - set(permitidas)
     if malos:
-        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+        raise ErrorDatos(gettext("Campos no editables: %(malos)s", malos=", ".join(sorted(malos))))
     r = con.execute(tabla.update().where(tabla.c.id == fila_id, tabla.c.cliente == cliente)
                     .values(actualizado_en=db.ahora(), **campos))
     return r.rowcount == 1
@@ -164,7 +176,7 @@ def _color(v):
     if not v:
         return None
     if not isinstance(v, str) or not COLOR_HEX.match(v):
-        raise ErrorDatos("El color debe ser hexadecimal, como #4d8dff.")
+        raise ErrorDatos(gettext("El color debe ser hexadecimal, como #4d8dff."))
     return v
 
 
@@ -183,7 +195,7 @@ def _pais(v):
     if not v:
         return None
     if not PAIS_ISO.match(v):
-        raise ErrorDatos("El país debe ser un código de 2 letras, como CO.")
+        raise ErrorDatos(gettext("El país debe ser un código de 2 letras, como CO."))
     return v
 
 
@@ -192,7 +204,8 @@ def _idioma(v):
     if not v:
         return None
     if v not in IDIOMAS:
-        raise ErrorDatos(f"Idioma no disponible: {v}. Opciones: {', '.join(IDIOMAS)}.")
+        raise ErrorDatos(gettext("Idioma no disponible: %(v)s. Opciones: %(opciones)s.",
+                                v=v, opciones=", ".join(IDIOMAS)))
     return v
 
 
@@ -208,11 +221,16 @@ def _marca_de_texto(x):
     return {"nombre": x}
 
 
-def normalizar_marcas(v):
+def normalizar_marcas(v, cliente=None):
     """Marcas a imitar como lista de {nombre, pagina_id?}. Acepta la lista ya
     armada o el texto del formulario: una por línea (o separadas por coma),
     cada una con el link del Ad Library o el id de su página si se tiene. Sin
-    repetidas (por nombre, sin importar mayúsculas); máximo MAX_MARCAS."""
+    repetidas (por nombre, sin importar mayúsculas ni tildes); máximo MAX_MARCAS.
+
+    `cliente` (fix round 1, Task 4): el nombre por defecto «Página N» (cuando
+    no se escribió nombre, solo el id) se guarda en el idioma del proyecto.
+    Sin `cliente` (pruebas directas del módulo) queda en español, igual que
+    antes."""
     if v is None:
         return []
     if isinstance(v, str):
@@ -220,23 +238,28 @@ def normalizar_marcas(v):
     elif isinstance(v, list):
         items = v
     else:
-        raise ErrorDatos("Las marcas deben ser una lista.")
+        raise ErrorDatos(gettext("Las marcas deben ser una lista."))
     salida, vistas = [], set()
     for it in items:
         if isinstance(it, str):
             it = _marca_de_texto(it.strip())
         if not isinstance(it, dict):
-            raise ErrorDatos("Cada marca necesita un nombre.")
+            raise ErrorDatos(gettext("Cada marca necesita un nombre."))
         pagina = _texto(it.get("pagina_id")) or None
         if pagina and not pagina.isdigit():
-            raise ErrorDatos("El id de página de Meta son solo dígitos.")
-        nombre = _texto(it.get("nombre"), 80) or (f"Página {pagina}" if pagina else "")
-        if not nombre or nombre.lower() in vistas:
+            raise ErrorDatos(gettext("El id de página de Meta son solo dígitos."))
+        if pagina:
+            fallback = (texto_guardado(cliente, N_("Página %(pagina)s"), pagina=pagina) if cliente
+                       else f"Página {pagina}")
+        else:
+            fallback = ""
+        nombre = _texto(it.get("nombre"), 80) or fallback
+        if not nombre or db.pliegue(nombre) in vistas:
             continue
-        vistas.add(nombre.lower())
+        vistas.add(db.pliegue(nombre))
         salida.append({"nombre": nombre, "pagina_id": pagina} if pagina else {"nombre": nombre})
     if len(salida) > MAX_MARCAS:
-        raise ErrorDatos(f"Máximo {MAX_MARCAS} marcas a imitar.")
+        raise ErrorDatos(gettext("Máximo %(n)s marcas a imitar.", n=MAX_MARCAS))
     return salida
 
 
@@ -248,7 +271,7 @@ def _momento(v):
     if isinstance(v, str):
         v = {"nombre": v}
     if not isinstance(v, dict):
-        raise ErrorDatos("El momento del mes no es válido.")
+        raise ErrorDatos(gettext("El momento del mes no es válido."))
     nombre = _texto(v.get("nombre"), 120)
     if not nombre:
         return None
@@ -270,14 +293,14 @@ def _consciencia(v):
         return None
     n = doctrina.normalizar_consciencia(v)
     if not n:
-        raise ErrorDatos("Ese nivel de consciencia no existe.")
+        raise ErrorDatos(gettext("Ese nivel de consciencia no existe."))
     return n
 
 
 def _dolor(v):
     v = _texto(v)
     if len(v) > LARGO_DOLOR:
-        raise ErrorDatos(f"El dolor o deseo va en una frase corta (máximo {LARGO_DOLOR} caracteres).")
+        raise ErrorDatos(gettext("El dolor o deseo va en una frase corta (máximo %(n)s caracteres).", n=LARGO_DOLOR))
     return v
 
 
@@ -286,19 +309,19 @@ def _familias(cliente, v):
     if v in (None, ""):
         return []
     if not isinstance(v, list):
-        raise ErrorDatos("Las familias deben ser una lista.")
+        raise ErrorDatos(gettext("Las familias deben ser una lista."))
     nombres = []
     for x in v:
         x = _texto(x, 120)
         if x and x not in nombres:
             nombres.append(x)
     if len(nombres) > MAX_FAMILIAS:
-        raise ErrorDatos(f"Máximo {MAX_FAMILIAS} familias de formato por campaña.")
+        raise ErrorDatos(gettext("Máximo %(n)s familias de formato por campaña.", n=MAX_FAMILIAS))
     if nombres:
         existentes = {f["nombre"] for f in referentes_datos.familias(cliente)}
         for x in nombres:
             if x not in existentes:
-                raise ErrorDatos(f"«{x}» no es una familia de la biblioteca.")
+                raise ErrorDatos(gettext("«%(x)s» no es una familia de la biblioteca.", x=x))
     return nombres
 
 
@@ -315,9 +338,10 @@ def crear_persona(cliente, nombre, resumen="", descripcion="", edad_rango="", to
                   palabras_clave=None, color=None, origen="manual", extra=None):
     nombre = _texto(nombre, 120)
     if not nombre:
-        raise ErrorDatos("La persona necesita un nombre.")
+        raise ErrorDatos(gettext("La persona necesita un nombre."))
     if origen not in ORIGENES_PERSONA:
-        raise ErrorDatos(f"Origen de persona inválido: {origen}. Opciones: {ORIGENES_PERSONA}")
+        raise ErrorDatos(gettext("Origen de persona inválido: %(origen)s. Opciones: %(opciones)s",
+                                origen=origen, opciones=ORIGENES_PERSONA))
     ahora = db.ahora()
     with db.conectar() as con:
         return con.execute(db.persona.insert().values(
@@ -332,9 +356,9 @@ def actualizar_persona(cliente, persona_id, /, **campos):
     if "nombre" in campos:
         campos["nombre"] = _texto(campos["nombre"], 120)
         if not campos["nombre"]:
-            raise ErrorDatos("La persona necesita un nombre.")
+            raise ErrorDatos(gettext("La persona necesita un nombre."))
     if "origen" in campos and campos["origen"] not in ORIGENES_PERSONA:
-        raise ErrorDatos(f"Origen de persona inválido: {campos['origen']}")
+        raise ErrorDatos(gettext("Origen de persona inválido: %(origen)s", origen=campos['origen']))
     if "color" in campos:
         campos["color"] = _color(campos["color"])
     with db.conectar() as con:
@@ -365,9 +389,10 @@ def persona(cliente, persona_id):
 def crear_temporada(cliente, nombre, inicio, fin, contexto="", mood_visual=None, tipo="propia"):
     nombre = _texto(nombre, 120)
     if not nombre:
-        raise ErrorDatos("La temporada necesita un nombre.")
+        raise ErrorDatos(gettext("La temporada necesita un nombre."))
     if tipo not in TIPOS_TEMPORADA:
-        raise ErrorDatos(f"Tipo de temporada inválido: {tipo}. Opciones: {TIPOS_TEMPORADA}")
+        raise ErrorDatos(gettext("Tipo de temporada inválido: %(tipo)s. Opciones: %(opciones)s",
+                                tipo=tipo, opciones=TIPOS_TEMPORADA))
     inicio, fin = _rango(inicio, fin, "la temporada")
     ahora = db.ahora()
     with db.conectar() as con:
@@ -381,9 +406,9 @@ def actualizar_temporada(cliente, temporada_id, /, **campos):
     if "nombre" in campos:
         campos["nombre"] = _texto(campos["nombre"], 120)
         if not campos["nombre"]:
-            raise ErrorDatos("La temporada necesita un nombre.")
+            raise ErrorDatos(gettext("La temporada necesita un nombre."))
     if "tipo" in campos and campos["tipo"] not in TIPOS_TEMPORADA:
-        raise ErrorDatos(f"Tipo de temporada inválido: {campos['tipo']}")
+        raise ErrorDatos(gettext("Tipo de temporada inválido: %(tipo)s", tipo=campos['tipo']))
     if "mood_visual" in campos:
         campos["mood_visual"] = _mood(campos["mood_visual"])
     if "inicio" in campos or "fin" in campos:
@@ -415,6 +440,14 @@ def temporada(cliente, temporada_id):
 
 # ------------------------------------------------------------ eventos ---
 
+def texto_guardado(cliente, msgid, **valores):
+    """Un texto que se GUARDA (evento, aviso) en el idioma del proyecto aunque
+    lo arme una ruta (spec 2026-09-26 §B8). `msgid` va marcado con `N_` donde
+    se escribe, para el catálogo."""
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        return gettext(msgid, **valores)
+
+
 def _evento(con, cliente, sprint_id, campana_id, tipo, mensaje, datos_=None):
     return con.execute(db.sprint_evento.insert().values(
         cliente=cliente, sprint_id=sprint_id, campana_id=campana_id, tipo=tipo, mensaje=mensaje,
@@ -445,16 +478,17 @@ def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objeti
                  pais=None, idioma=IDIOMA_BASE, marcas=None, momento=None):
     nombre = _texto(nombre, 200)
     if not nombre:
-        raise ErrorDatos("El sprint necesita un nombre.")
+        raise ErrorDatos(gettext("El sprint necesita un nombre."))
     inicio, fin = _rango(inicio, fin, "el sprint")
     try:
         objetivo = int(referencias_objetivo_defecto if referencias_objetivo_defecto is not None else 5)
     except (TypeError, ValueError):
-        raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+        raise ErrorDatos(gettext("El objetivo de referencias debe ser un número entero."))
     if objetivo < 1:
-        raise ErrorDatos("El objetivo de referencias debe ser al menos 1.")
+        raise ErrorDatos(gettext("El objetivo de referencias debe ser al menos 1."))
+    objetivo = _tope_referencias_objetivo(objetivo)
     pais, idioma = _pais(pais), _idioma(idioma) or IDIOMA_BASE
-    marcas, momento = normalizar_marcas(marcas), _momento(momento)
+    marcas, momento = normalizar_marcas(marcas, cliente=cliente), _momento(momento)
     ahora = db.ahora()
     with db.conectar() as con:
         sid = con.execute(db.sprint.insert().values(
@@ -462,7 +496,8 @@ def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objeti
             estado="planeando", destinos=list(destinos or []), referencias_objetivo_defecto=objetivo,
             notas=_texto(notas), archivado=False, extra={}, pais=pais, idioma=idioma, marcas=marcas,
             momento=momento)).inserted_primary_key[0]
-        _evento(con, cliente, sid, None, "sprint_creado", f"Sprint «{nombre}» creado", {"inicio": inicio, "fin": fin})
+        mensaje = texto_guardado(cliente, N_("Sprint «%(nombre)s» creado"), nombre=nombre)
+        _evento(con, cliente, sid, None, "sprint_creado", mensaje, {"inicio": inicio, "fin": fin})
     return sid
 
 
@@ -470,17 +505,17 @@ def actualizar_sprint(cliente, sprint_id, /, **campos):
     if "nombre" in campos:
         campos["nombre"] = _texto(campos["nombre"], 200)
         if not campos["nombre"]:
-            raise ErrorDatos("El sprint necesita un nombre.")
+            raise ErrorDatos(gettext("El sprint necesita un nombre."))
     if "pais" in campos:
         campos["pais"] = _pais(campos["pais"])
     if "idioma" in campos:
         campos["idioma"] = _idioma(campos["idioma"]) or "es"
     if "marcas" in campos:
-        campos["marcas"] = normalizar_marcas(campos["marcas"])
+        campos["marcas"] = normalizar_marcas(campos["marcas"], cliente=cliente)
     if "momento" in campos:
         campos["momento"] = _momento(campos["momento"])
     if "estado" in campos and campos["estado"] not in ESTADOS_SPRINT:
-        raise ErrorDatos(f"Estado de sprint inválido: {campos['estado']}")
+        raise ErrorDatos(gettext("Estado de sprint inválido: %(estado)s", estado=campos['estado']))
     if "inicio" in campos or "fin" in campos:
         actual = sprint(cliente, sprint_id, con_eventos=False) or {}
         campos["inicio"], campos["fin"] = _rango(campos.get("inicio", actual.get("inicio")),
@@ -579,19 +614,19 @@ def _cantidades(n_videos, n_imagenes):
     try:
         n_videos, n_imagenes = int(n_videos or 0), int(n_imagenes or 0)
     except (TypeError, ValueError):
-        raise ErrorDatos("Las cantidades de videos e imágenes deben ser números enteros.")
+        raise ErrorDatos(gettext("Las cantidades de videos e imágenes deben ser números enteros."))
     if n_videos < 0 or n_imagenes < 0:
-        raise ErrorDatos("Las cantidades no pueden ser negativas.")
+        raise ErrorDatos(gettext("Las cantidades no pueden ser negativas."))
     if n_videos + n_imagenes < 1:
-        raise ErrorDatos("Una campaña necesita al menos un video o una imagen.")
+        raise ErrorDatos(gettext("Una campaña necesita al menos un video o una imagen."))
     if n_videos > MAX_PIEZAS or n_imagenes > MAX_PIEZAS:
-        raise ErrorDatos(f"Máximo {MAX_PIEZAS} videos o imágenes por campaña.")
+        raise ErrorDatos(gettext("Máximo %(n)s videos o imágenes por campaña.", n=MAX_PIEZAS))
     return n_videos, n_imagenes
 
 
 def _tope_referencias_objetivo(objetivo):
     if objetivo > MAX_REFERENCIAS_OBJETIVO:
-        raise ErrorDatos(f"El objetivo de referencias no puede pasar de {MAX_REFERENCIAS_OBJETIVO}.")
+        raise ErrorDatos(gettext("El objetivo de referencias no puede pasar de %(n)s.", n=MAX_REFERENCIAS_OBJETIVO))
     return objetivo
 
 
@@ -610,23 +645,24 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id=No
     temporada_id = temporada_id or None          # la temporada es opcional (migración 0020)
     catalogo_id = _texto(catalogo_id, 120)
     if not catalogo_id:
-        raise ErrorDatos("Elige un producto.")
+        raise ErrorDatos(gettext("Elige un producto."))
     if funnel not in FUNNELS:
-        raise ErrorDatos(f"Funnel inválido: {funnel}. Opciones: {FUNNELS}")
+        raise ErrorDatos(gettext("Funnel inválido: %(funnel)s. Opciones: %(opciones)s",
+                                funnel=funnel, opciones=FUNNELS))
     dolor, familias = _dolor(dolor), _familias(cliente, familias)
     consciencia = _consciencia(consciencia)
     ahora = db.ahora()
     with db.conectar() as con:
         sp = _fila(con, db.sprint, sprint_id, cliente)
         if not sp:
-            raise ErrorDatos("Ese sprint no existe.")
+            raise ErrorDatos(gettext("Ese sprint no existe."))
         p = _fila(con, db.persona, persona_id, cliente)
         if not p:
-            raise ErrorDatos("Esa persona no existe en este proyecto.")
+            raise ErrorDatos(gettext("Esa persona no existe en este proyecto."))
         if consciencia is None:
             consciencia = consciencia_de_persona(_a_dict(p))
         if temporada_id and not _fila(con, db.temporada, temporada_id, cliente):
-            raise ErrorDatos("Esa temporada no existe en este proyecto.")
+            raise ErrorDatos(gettext("Esa temporada no existe en este proyecto."))
         c = db.campana
         # max+1 y no count: si se borró una campaña intermedia, count repetiría un número ya usado.
         orden = con.execute(sa.select(sa.func.coalesce(sa.func.max(c.c.orden), -1) + 1)
@@ -634,14 +670,14 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id=No
         try:
             objetivo = int(referencias_objetivo or sp.referencias_objetivo_defecto or 5)
         except (TypeError, ValueError):
-            raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+            raise ErrorDatos(gettext("El objetivo de referencias debe ser un número entero."))
         objetivo = _tope_referencias_objetivo(max(1, objetivo))
         cid = con.execute(c.insert().values(
             cliente=cliente, creado_en=ahora, actualizado_en=ahora, sprint_id=sprint_id, persona_id=persona_id,
             catalogo_id=catalogo_id, producto_id=None, temporada_id=temporada_id, n_videos=n_videos,
             n_imagenes=n_imagenes, referencias_objetivo=objetivo, estado="planeada", orden=orden,
             funnel=funnel, consciencia=consciencia, dolor=dolor, familias=familias, extra={})).inserted_primary_key[0]
-        _evento(con, cliente, sprint_id, cid, "campana_agregada", "Campaña agregada",
+        _evento(con, cliente, sprint_id, cid, "campana_agregada", texto_guardado(cliente, N_("Campaña agregada")),
                 {"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id,
                  "n_videos": n_videos, "n_imagenes": n_imagenes, "funnel": funnel, "consciencia": consciencia})
         con.execute(db.sprint.update().where(db.sprint.c.id == sprint_id).values(actualizado_en=ahora))
@@ -660,15 +696,15 @@ def actualizar_campana(cliente, campana_id, /, **campos):
         campos["n_videos"], campos["n_imagenes"] = _cantidades(campos.get("n_videos", _actual().get("n_videos")),
                                                                campos.get("n_imagenes", _actual().get("n_imagenes")))
     if "estado" in campos and campos["estado"] not in ESTADOS_CAMPANA:
-        raise ErrorDatos(f"Estado de campaña inválido: {campos['estado']}")
+        raise ErrorDatos(gettext("Estado de campaña inválido: %(estado)s", estado=campos['estado']))
     if "referencias_objetivo" in campos:
         try:
             campos["referencias_objetivo"] = max(1, int(campos["referencias_objetivo"]))
         except (TypeError, ValueError):
-            raise ErrorDatos("El objetivo de referencias debe ser un número entero.")
+            raise ErrorDatos(gettext("El objetivo de referencias debe ser un número entero."))
         campos["referencias_objetivo"] = _tope_referencias_objetivo(campos["referencias_objetivo"])
     if "funnel" in campos and campos["funnel"] not in FUNNELS:
-        raise ErrorDatos("La etapa debe ser TOF, MOF o BOF.")
+        raise ErrorDatos(gettext("La etapa debe ser TOF, MOF o BOF."))
     if "consciencia" in campos:
         campos["consciencia"] = _consciencia(campos["consciencia"])
     if "dolor" in campos:
@@ -680,19 +716,19 @@ def actualizar_campana(cliente, campana_id, /, **campos):
     if "idioma" in campos:
         campos["idioma"] = _idioma(campos["idioma"])
     if "marcas" in campos:
-        campos["marcas"] = normalizar_marcas(campos["marcas"]) or None      # vacío = hereda del sprint
+        campos["marcas"] = normalizar_marcas(campos["marcas"], cliente=cliente) or None      # vacío = hereda del sprint
     if "catalogo_id" in campos:
         campos["catalogo_id"] = _texto(campos["catalogo_id"], 120)
         if not campos["catalogo_id"]:
-            raise ErrorDatos("Elige un producto.")
+            raise ErrorDatos(gettext("Elige un producto."))
     if "persona_id" in campos:
         try:
             campos["persona_id"] = int(campos["persona_id"])
         except (TypeError, ValueError):
-            raise ErrorDatos("Esa persona no existe en este proyecto.")
+            raise ErrorDatos(gettext("Esa persona no existe en este proyecto."))
         p = persona(cliente, campos["persona_id"])
         if not p:
-            raise ErrorDatos("Esa persona no existe en este proyecto.")
+            raise ErrorDatos(gettext("Esa persona no existe en este proyecto."))
         if "consciencia" not in campos and not _actual().get("consciencia"):
             campos["consciencia"] = consciencia_de_persona(p)
     with db.conectar() as con:
@@ -708,7 +744,7 @@ def eliminar_campana(cliente, campana_id):
         con.execute(db.campana_pieza.delete().where(db.campana_pieza.c.campana_id == campana_id))
         con.execute(db.sprint_evento.update().where(db.sprint_evento.c.campana_id == campana_id).values(campana_id=None))
         con.execute(db.campana.delete().where(db.campana.c.id == campana_id))
-        _evento(con, cliente, f.sprint_id, None, "campana_eliminada", "Campaña eliminada",
+        _evento(con, cliente, f.sprint_id, None, "campana_eliminada", texto_guardado(cliente, N_("Campaña eliminada")),
                 {"campana_id": campana_id, "catalogo_id": f.catalogo_id})
     return True
 
@@ -766,7 +802,7 @@ def intencion_valida(lista):
     lista = [str(x) for x in (lista or []) if x]
     malas = [x for x in lista if x not in INTENCIONES]
     if malas:
-        raise ErrorDatos(f"Intención desconocida: {', '.join(malas)}")
+        raise ErrorDatos(gettext("Intención desconocida: %(malas)s", malas=", ".join(malas)))
     return list(dict.fromkeys(lista))    # sin repetidos, en orden
 
 
@@ -777,18 +813,18 @@ def _estado_referencia(descripcion):
 def agregar_referencia(cliente, campana_id, tipo, url, frame_url=None, ruta_local=None, origen="archivo", titulo="",
                        intencion=None, descripcion=""):
     if tipo not in ("imagen", "video"):
-        raise ErrorDatos(f"Tipo de referencia inválido: {tipo}")
+        raise ErrorDatos(gettext("Tipo de referencia inválido: %(tipo)s", tipo=tipo))
     if origen not in ORIGENES_REFERENCIA:
-        raise ErrorDatos(f"Origen de referencia inválido: {origen}")
+        raise ErrorDatos(gettext("Origen de referencia inválido: %(origen)s", origen=origen))
     if not (url or "").strip():
-        raise ErrorDatos("La referencia necesita una URL.")
+        raise ErrorDatos(gettext("La referencia necesita una URL."))
     intencion = intencion_valida(intencion)
     descripcion = _texto(descripcion)
     ahora = db.ahora()
     with db.conectar() as con:
         c = _fila(con, db.campana, campana_id, cliente)
         if not c:
-            raise ErrorDatos("Esa campaña no existe.")
+            raise ErrorDatos(gettext("Esa campaña no existe."))
         r = db.referencia
         orden = con.execute(sa.select(sa.func.count()).select_from(r).where(r.c.campana_id == campana_id)).scalar() or 0
         rid = con.execute(r.insert().values(
@@ -796,7 +832,8 @@ def agregar_referencia(cliente, campana_id, tipo, url, frame_url=None, ruta_loca
             frame_url=frame_url, ruta_local=ruta_local, origen=origen, titulo=_texto(titulo, 200), intencion=intencion,
             intencion_otro=None, descripcion=descripcion, analisis=None, analisis_estado="pendiente",
             estado=_estado_referencia(descripcion), orden=orden, extra={})).inserted_primary_key[0]
-        _evento(con, cliente, c.sprint_id, campana_id, "referencia_agregada", f"Referencia agregada ({tipo}, {origen})",
+        mensaje = texto_guardado(cliente, N_("Referencia agregada (%(tipo)s, %(origen)s)"), tipo=tipo, origen=origen)
+        _evento(con, cliente, c.sprint_id, campana_id, "referencia_agregada", mensaje,
                 {"referencia_id": rid, "titulo": _texto(titulo, 200)})
     return rid
 
@@ -810,7 +847,7 @@ def actualizar_referencia(cliente, referencia_id, /, **campos):
     if "intencion_otro" in campos:
         campos["intencion_otro"] = _texto(campos["intencion_otro"], 200) or None
     if "analisis_estado" in campos and campos["analisis_estado"] not in ("pendiente", "listo", "error"):
-        raise ErrorDatos(f"Estado de análisis inválido: {campos['analisis_estado']}")
+        raise ErrorDatos(gettext("Estado de análisis inválido: %(estado)s", estado=campos['analisis_estado']))
     permitidas = _REFERENCIA_COLS + ("estado",)
     if "descripcion" in campos:
         campos["estado"] = _estado_referencia(campos["descripcion"])
@@ -826,7 +863,8 @@ def quitar_referencia(cliente, referencia_id):
         c = con.execute(sa.select(db.campana.c.sprint_id).where(db.campana.c.id == f.campana_id)).first()
         con.execute(db.referencia.delete().where(db.referencia.c.id == referencia_id))
         if c:
-            _evento(con, cliente, c.sprint_id, f.campana_id, "referencia_quitada", "Referencia quitada",
+            _evento(con, cliente, c.sprint_id, f.campana_id, "referencia_quitada",
+                    texto_guardado(cliente, N_("Referencia quitada")),
                     {"referencia_id": referencia_id, "titulo": f.titulo})
     return True
 
@@ -857,9 +895,9 @@ def reutilizar_referencia(cliente, referencia_id, campana_destino_id):
     """Copia la referencia (con su análisis) a otra campaña, origen `reutilizada`."""
     origen = referencia(cliente, referencia_id)
     if not origen:
-        raise ErrorDatos("Esa referencia no existe.")
+        raise ErrorDatos(gettext("Esa referencia no existe."))
     if origen["campana_id"] == campana_destino_id:
-        raise ErrorDatos("Esa referencia ya está en esta campaña.")
+        raise ErrorDatos(gettext("Esa referencia ya está en esta campaña."))
     rid = agregar_referencia(cliente, campana_destino_id, origen["tipo"], origen["url"], frame_url=origen["frame_url"],
                              ruta_local=origen["ruta_local"], origen="reutilizada", titulo=origen["titulo"],
                              intencion=origen["intencion"], descripcion=origen["descripcion"])
@@ -879,14 +917,16 @@ def agregar_referencia_biblioteca(cliente, campana_id, referente_id):
         return ya[0]["id"]
     ref = referentes_datos.referente(cliente, referente_id)
     if not ref or ref.get("estado_imagen") != "ok":
-        raise ErrorDatos("Ese referente no existe.")
+        raise ErrorDatos(gettext("Ese referente no existe."))
+    idioma = idiomas.de_proyecto(cliente)
+    ref = referentes_datos.localizado(ref, idioma)
     familia = next((f for f in referentes_datos.familias(cliente) if f["nombre"] == ref.get("familia")), None)
     firma = ref.get("firma") or ""
     rid = agregar_referencia(cliente, campana_id, "imagen", ref["imagen_url"], frame_url=ref["imagen_url"],
                              origen="biblioteca", titulo=ref.get("titular") or "", intencion=["formato"],
                              descripcion=firma)
     actualizar_referencia(cliente, rid, analisis={
-        "familia": ref.get("familia"), "descripcion_familia": familia.get("descripcion") if familia else None,
+        "familia": ref.get("familia"), "descripcion_familia": referentes_datos.descripcion_familia(familia, idioma),
         "etapa": ref.get("etapa"), "consciencia": ref.get("consciencia"), "dolor": ref.get("dolor"),
         "firma": firma, "resumen": firma, "lead": (ref.get("extra") or {}).get("lead"),
     }, analisis_estado="listo", extra={"referente_id": referente_id})
@@ -899,13 +939,15 @@ def _ideas(con, cliente, campana_id=None, cp_id=None):
     """Ideas de una campaña unidas (LEFT JOIN) con la sesión de Crear que las
     generó: `pieza.legado_id == campana_pieza.cf_id`. Las finales tienen otro
     legado_id (`cf__idioma_pais`) y otro tipo, así que nunca se confunden."""
-    cp, pz, c = db.campana_pieza, db.pieza, db.campana
+    cp, pz, c, co = db.campana_pieza, db.pieza, db.campana, db.concepto
     q = (sa.select(cp, c.c.sprint_id.label("sprint_id"), c.c.orden.label("campana_orden"),
                    pz.c.estado.label("estado"), pz.c.url_video, pz.c.url_miniatura, pz.c.url_local,
-                   pz.c.costo_usd, pz.c.error.label("pieza_error"), pz.c.modelo)
+                   pz.c.costo_usd, pz.c.error.label("pieza_error"), pz.c.modelo,
+                   pz.c.extra.label("pieza_extra"), co.c.extra.label("concepto_extra"))
          .select_from(cp.join(c, c.c.id == cp.c.campana_id)
                       .outerjoin(pz, sa.and_(pz.c.legado_id == cp.c.cf_id, pz.c.cliente == cp.c.cliente,
-                                             pz.c.tipo.in_(TIPOS_PIEZA))))
+                                             pz.c.tipo.in_(TIPOS_PIEZA)))
+                      .outerjoin(co, co.c.id == pz.c.concepto_id))
          .where(cp.c.cliente == cliente))
     if campana_id is not None:
         q = q.where(cp.c.campana_id == campana_id)
@@ -917,6 +959,10 @@ def _ideas(con, cliente, campana_id=None, cp_id=None):
         d["referencias_ids"] = list(d.get("referencias_ids") or [])
         d["plataformas"] = list(d.get("plataformas") or [])
         d["extra"] = d.get("extra") or {}
+        # «Sonido de la escena» de la sesión (el mismo orden que creative_flow._a_dict:
+        # la pieza pisa al concepto); None si no hay sesión o no lo guardó.
+        sesion = {**(d.pop("concepto_extra", None) or {}), **(d.pop("pieza_extra", None) or {})}
+        d["con_sonido"] = bool(sesion["con_sonido"]) if "con_sonido" in sesion else None
         # Sin sesión de Crear que la represente: cf_id NULL o una reserva
         # vencida. Es lo que `produccion.pendientes` y los botones «Generar
         # lote» miran; una reserva viva NO es sin_sesion (otro lote la tiene).
@@ -927,11 +973,11 @@ def _ideas(con, cliente, campana_id=None, cp_id=None):
 
 def _validar_idea(campos):
     if "tipo" in campos and campos["tipo"] not in TIPOS_PIEZA:
-        raise ErrorDatos(f"Tipo de pieza inválido: {campos['tipo']}")
+        raise ErrorDatos(gettext("Tipo de pieza inválido: %(tipo)s", tipo=campos['tipo']))
     if "estado_idea" in campos and campos["estado_idea"] not in ESTADOS_IDEA:
-        raise ErrorDatos(f"Estado de idea inválido: {campos['estado_idea']}")
+        raise ErrorDatos(gettext("Estado de idea inválido: %(estado)s", estado=campos['estado_idea']))
     if "revision" in campos and campos["revision"] not in REVISIONES:
-        raise ErrorDatos(f"Revisión inválida: {campos['revision']}")
+        raise ErrorDatos(gettext("Revisión inválida: %(revision)s", revision=campos['revision']))
     if "plataformas" in campos:
         campos["plataformas"] = [p for p in (campos["plataformas"] or []) if p in PLATAFORMAS]
     if "referencias_ids" in campos:
@@ -940,7 +986,7 @@ def _validar_idea(campos):
         try:
             campos["duracion_s"] = float(campos["duracion_s"])
         except (TypeError, ValueError):
-            raise ErrorDatos("La duración debe ser un número.")
+            raise ErrorDatos(gettext("La duración debe ser un número."))
     for k in ("titulo", "escena", "sonido", "gancho", "revision_motivo"):
         if k in campos and campos[k] is not None:
             campos[k] = _texto(campos[k], 200 if k in ("titulo", "gancho") else None)
@@ -953,12 +999,12 @@ def crear_idea(cliente, campana_id, tipo, titulo, escena, sonido="", enfoque=Non
                             "referencias_ids": referencias_ids, "duracion_s": duracion_s, "plataformas": plataformas,
                             "estado_idea": estado_idea})
     if not campos["titulo"] or not campos["escena"]:
-        raise ErrorDatos("Una idea necesita título y escena.")
+        raise ErrorDatos(gettext("Una idea necesita título y escena."))
     ahora = db.ahora()
     with db.conectar() as con:
         c = _fila(con, db.campana, campana_id, cliente)
         if not c:
-            raise ErrorDatos("Esa campaña no existe.")
+            raise ErrorDatos(gettext("Esa campaña no existe."))
         cp = db.campana_pieza
         orden = con.execute(sa.select(sa.func.coalesce(sa.func.max(cp.c.orden), -1)).where(cp.c.campana_id == campana_id)).scalar() + 1
         cp_id = con.execute(cp.insert().values(
@@ -968,8 +1014,9 @@ def crear_idea(cliente, campana_id, tipo, titulo, escena, sonido="", enfoque=Non
             plataformas=campos["plataformas"], estado_idea=campos["estado_idea"], cf_id=None, qa=None,
             revision="pendiente", revision_motivo=None, textos=None, orden=orden,
             extra=dict(extra) if isinstance(extra, dict) else {})).inserted_primary_key[0]
-        _evento(con, cliente, c.sprint_id, campana_id, "idea_creada", f"Idea «{campos['titulo']}» ({campos['tipo']})",
-                {"cp_id": cp_id})
+        mensaje = texto_guardado(cliente, N_("Idea «%(titulo)s» (%(tipo)s)"),
+                                 titulo=campos['titulo'], tipo=campos['tipo'])
+        _evento(con, cliente, c.sprint_id, campana_id, "idea_creada", mensaje, {"cp_id": cp_id})
     return cp_id
 
 
@@ -997,11 +1044,12 @@ def eliminar_idea(cliente, cp_id):
         if not f:
             return False
         if f.cf_id:
-            raise ErrorDatos("Esa idea ya tiene una pieza generada; descártala en vez de borrarla.")
+            raise ErrorDatos(gettext("Esa idea ya tiene una pieza generada; descártala en vez de borrarla."))
         c = con.execute(sa.select(db.campana.c.sprint_id).where(db.campana.c.id == f.campana_id)).first()
         con.execute(db.campana_pieza.delete().where(db.campana_pieza.c.id == cp_id))
         if c:
-            _evento(con, cliente, c.sprint_id, f.campana_id, "idea_eliminada", f"Idea «{f.titulo}» eliminada", {"cp_id": cp_id})
+            mensaje = texto_guardado(cliente, N_("Idea «%(titulo)s» eliminada"), titulo=f.titulo)
+            _evento(con, cliente, c.sprint_id, f.campana_id, "idea_eliminada", mensaje, {"cp_id": cp_id})
     return True
 
 

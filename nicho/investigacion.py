@@ -11,6 +11,10 @@ max_intentos=2 (Claude, barato); búsquedas y reseñas en max_intentos=1
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 
+from flask_babel import gettext
+
+from idiomas import N_
+
 # ------ Enums y constantes ------
 
 ESTADOS_CADENA = (
@@ -23,6 +27,18 @@ PASOS_CADENA = (
     "seleccionar", "resenas:amazon", "resenas:meli", "resenas:tiktok_shop",
     "redes:reddit", "redes:youtube", "generar"
 )
+
+# La clave guardada no cambia; la etiqueta se traduce al mostrarla (|traducir / gettext).
+ETIQUETAS_ESTADO = {"consultas": N_("consultas"), "buscando": N_("buscando"), "seleccionando": N_("seleccionando"),
+                    "resenas": N_("resenas"), "redes": N_("redes"), "generando": N_("generando"), "lista": N_("lista"),
+                    "detenida": N_("detenida"), "interrumpida": N_("interrumpida")}
+ETIQUETAS_ESTADO_PASO = {"hecho": N_("hecho"), "en_curso": N_("en_curso"), "error": N_("error"), "vacio": N_("vacio"),
+                         "pendiente": N_("pendiente")}
+ETIQUETAS_PASO = {"consultas": N_("consultas"), "buscar:amazon": N_("buscar:amazon"), "buscar:meli": N_("buscar:meli"),
+                  "buscar:tiktok_shop": N_("buscar:tiktok_shop"), "seleccionar": N_("seleccionar"),
+                  "resenas:amazon": N_("resenas:amazon"), "resenas:meli": N_("resenas:meli"),
+                  "resenas:tiktok_shop": N_("resenas:tiktok_shop"), "redes:reddit": N_("redes:reddit"),
+                  "redes:youtube": N_("redes:youtube"), "generar": N_("generar")}
 
 TOPES_DEFECTO = {
     "consultas": 3,
@@ -176,7 +192,7 @@ def estimar(estudio: Dict[str, Any], pais: str, plataformas: List[str],
             "nombre": plat_module.PLATAFORMAS.get(plat_clave, {}).get("nombre", plat_clave.title()),
             "busqueda_usd": round(busqueda_usd, 2),
             "resenas_usd": round(resenas_usd, 2),
-            "texto": f"Búsqueda + reseñas"
+            "texto": gettext("Búsqueda + reseñas")
         })
         total += busqueda_usd + resenas_usd
 
@@ -193,7 +209,8 @@ def estimar(estudio: Dict[str, Any], pais: str, plataformas: List[str],
         "claude_usd": round(claude_usd, 2),
         "avatares_usd": round(avatares_usd, 2),
         "total_usd": round(total, 2),
-        "texto": f"Investigación: {len(plataformas)} plataforma(s), {len(redes)} red(es)"
+        "texto": gettext("Investigación: %(plataformas)s plataforma(s), %(redes)s red(es)",
+                         plataformas=len(plataformas), redes=len(redes))
     }
 
 

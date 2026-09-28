@@ -8,6 +8,8 @@ estado de todas las piezas de un sprint para el tablero.
 """
 import os
 
+from flask_babel import gettext
+
 import bitacora
 import catalogo_productos
 import cola
@@ -19,6 +21,7 @@ import marca
 import proyectos
 import tareas.director as tareas_director
 import trabajos
+from idiomas import N_
 from providers import flowplus_modelos
 from sprints import datos, estado
 from storage import r2_uploader
@@ -56,7 +59,7 @@ def modelos(cliente, modelo_video=None, modelo_imagen=None):
 def _sprint(cliente, sprint_id):
     sp = datos.sprint(cliente, sprint_id, con_eventos=False)
     if not sp:
-        raise datos.ErrorDatos("Ese sprint no existe.")
+        raise datos.ErrorDatos(gettext("Ese sprint no existe."))
     return sp
 
 
@@ -116,8 +119,11 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
     segundos = videos * SEGUNDOS_VIDEO + imagenes * SEGUNDOS_IMAGEN
     acumulado = float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0)
     nombre_v, nombre_i = flowplus_modelos.VIDEO[mv]["nombre"], flowplus_modelos.IMAGEN[mi]["nombre"]
-    texto = (f"{videos} video(s) ({nombre_v}) y {imagenes} imagen(es) ({nombre_i}): USD {usd:.2f} estimado · "
-             f"acumulado del sprint USD {acumulado:.2f} · tiempo estimado {_texto_tiempo(segundos)}")
+    texto = gettext(
+        "%(videos)s video(s) (%(modelo_v)s) y %(imagenes)s imagen(es) (%(modelo_i)s): USD %(usd)s estimado · "
+        "acumulado del sprint USD %(acumulado)s · tiempo estimado %(tiempo)s",
+        videos=videos, modelo_v=nombre_v, imagenes=imagenes, modelo_i=nombre_i,
+        usd=f"{usd:.2f}", acumulado=f"{acumulado:.2f}", tiempo=_texto_tiempo(segundos))
     return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "segundos": segundos, "modelo_video": mv,
             "modelo_imagen": mi, "modelo_video_nombre": nombre_v, "modelo_imagen_nombre": nombre_i,
             "acumulado_usd": round(acumulado, 4), "texto": texto}
@@ -154,13 +160,13 @@ def referencias_sesion(cliente, campana, idea, modelo_video="wan3"):
     activo = catalogo_productos.encontrar(cliente, campana["catalogo_id"], categoria="producto")
     ruta = (activo.get("referencias") or [None])[0] if activo else None
     if not activo or not ruta:
-        raise datos.ErrorDatos("El producto de la campaña no está en el catálogo o no tiene foto.")
+        raise datos.ErrorDatos(gettext("El producto de la campaña no está en el catálogo o no tiene foto."))
     info_cat = catalogo_productos.CATEGORIAS["producto"]
     try:
         url = r2_uploader.upload_image(ruta, f"clientes/{cliente}/{info_cat['carpeta']}/{activo['id']}/{os.path.basename(ruta)}")
     except Exception as e:
         bitacora.registrar(cliente, activo["id"], "sprint_producto", "error", str(e))
-        raise datos.ErrorDatos(f"No se pudo subir la foto del producto: {e}")
+        raise datos.ErrorDatos(gettext("No se pudo subir la foto del producto: %(error)s", error=e))
     referencias.append({"tipo": "imagen", "url": url, "frame_url": url, "etiqueta": "@Producto 1",
                         "categoria": "producto", "activo": activo["nombre"], "regla": activo.get("regla") or "",
                         "producto": activo["nombre"]})
@@ -256,7 +262,7 @@ def crear_sesion(cliente, sprint, campana, idea, modelo_video, modelo_imagen, re
     if reserva is None:
         datos.actualizar_idea(cliente, idea["id"], cf_id=cf_id)
     elif not datos.reclamar_cf(cliente, idea["id"], cf_id, esperado=reserva):
-        raise datos.ErrorDatos("Otro lote tomó esta idea mientras se armaba la sesión.")
+        raise datos.ErrorDatos(gettext("Otro lote tomó esta idea mientras se armaba la sesión."))
     return cf_id
 
 
@@ -315,7 +321,9 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
         except Exception as e:
             datos.reclamar_cf(cliente, i["id"], None, esperado=reserva)
             omitidas += 1
-            datos.registrar_evento(cliente, sprint_id, "pieza_omitida", f"«{i['titulo']}» no se pudo preparar: {e}",
+            mensaje = datos.texto_guardado(cliente, N_("«%(titulo)s» no se pudo preparar: %(error)s"),
+                                           titulo=i['titulo'], error=str(e))
+            datos.registrar_evento(cliente, sprint_id, "pieza_omitida", mensaje,
                                    {"cp_id": i["id"], "error": str(e)}, campana_id=c["id"])
             continue
         entry = creative_flow.cargar(cliente)[cf_id]
@@ -331,8 +339,11 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
             extra["modelos_lote"] = {"video": mv, "imagen": mi}
             return extra
         datos.actualizar_extra_sprint(cliente, sprint_id, _sumar)
-        datos.registrar_evento(cliente, sprint_id, "lote_encolado",
-                               f"Lote de {encoladas} pieza(s) encolado: {est['videos']} video(s), {est['imagenes']} imagen(es), USD {est['usd']:.2f} estimado",
+        mensaje = datos.texto_guardado(
+            cliente, N_("Lote de %(encoladas)s pieza(s) encolado: %(videos)s video(s), %(imagenes)s imagen(es), "
+                       "USD %(usd)s estimado"),
+            encoladas=encoladas, videos=est['videos'], imagenes=est['imagenes'], usd=f"{est['usd']:.2f}")
+        datos.registrar_evento(cliente, sprint_id, "lote_encolado", mensaje,
                                {"encoladas": encoladas, "omitidas": omitidas, "usd": est["usd"], "campana_id": campana_id,
                                 "modelo_video": mv, "modelo_imagen": mi}, campana_id=campana_id)
         estado.recalcular(cliente, sprint_id)
@@ -342,7 +353,7 @@ def lanzar_lote(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_i
 def _idea_con_sesion(cliente, cp_id):
     i = datos.idea(cliente, cp_id)
     if not i or not i.get("cf_id"):
-        raise datos.ErrorDatos("Esa pieza no tiene una sesión generada.")
+        raise datos.ErrorDatos(gettext("Esa pieza no tiene una sesión generada."))
     return i
 
 
@@ -354,7 +365,8 @@ def reintentar(cliente, cp_id):
         return False
     ok = flowplus_lanzar.lanzar(cliente, i["cf_id"], entry, prioridad=PRIORIDAD_LOTE)
     if ok:
-        datos.registrar_evento(cliente, i["sprint_id"], "pieza_reintentada", f"Reintento de «{i['titulo']}»",
+        mensaje = datos.texto_guardado(cliente, N_("Reintento de «%(titulo)s»"), titulo=i['titulo'])
+        datos.registrar_evento(cliente, i["sprint_id"], "pieza_reintentada", mensaje,
                                {"cp_id": cp_id, "cf_id": i["cf_id"]}, campana_id=i["campana_id"])
         # Como `regenerar`: el lote vuelve a estar en curso, así la periódica
         # avisa «lote terminado» cuando la última pieza reintentada acaba.
@@ -377,14 +389,15 @@ def regenerar(cliente, cp_id):
     nuevo = creative_flow.duplicar(cliente, i["cf_id"])
     if not datos.reclamar_cf(cliente, cp_id, nuevo, esperado=i["cf_id"]):
         creative_flow.archivar_concepto(cliente, nuevo, "regeneración duplicada")
-        raise datos.ErrorDatos("Esa pieza ya se está regenerando.")
+        raise datos.ErrorDatos(gettext("Esa pieza ya se está regenerando."))
     extra = dict(i.get("extra") or {})
     extra["cf_anteriores"] = list(extra.get("cf_anteriores") or []) + [i["cf_id"]]
     datos.actualizar_idea(cliente, cp_id, qa=None, revision="pendiente", revision_motivo=None, extra=extra)
     entry = creative_flow.cargar(cliente)[nuevo]
     if not _encolar_pieza(cliente, nuevo, entry):
-        raise datos.ErrorDatos("No se pudo encolar la regeneración.")
-    datos.registrar_evento(cliente, i["sprint_id"], "pieza_regenerada", f"Regeneración de «{i['titulo']}»",
+        raise datos.ErrorDatos(gettext("No se pudo encolar la regeneración."))
+    mensaje = datos.texto_guardado(cliente, N_("Regeneración de «%(titulo)s»"), titulo=i['titulo'])
+    datos.registrar_evento(cliente, i["sprint_id"], "pieza_regenerada", mensaje,
                            {"cp_id": cp_id, "cf_id": nuevo, "anterior": i["cf_id"]}, campana_id=i["campana_id"])
     datos.actualizar_extra_sprint(cliente, i["sprint_id"], lambda extra: {**extra, "lote_en_curso": True})
     estado.recalcular(cliente, i["sprint_id"])
@@ -430,7 +443,7 @@ def _resumen(piezas, planeadas):
 def progreso(cliente, sprint_id):
     sp = estado.recalcular(cliente, sprint_id)
     if not sp:
-        raise datos.ErrorDatos("Ese sprint no existe.")
+        raise datos.ErrorDatos(gettext("Ese sprint no existe."))
     campanas = []
     todas = []
     for c in sp["campanas"]:
