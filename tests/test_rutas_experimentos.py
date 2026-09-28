@@ -492,3 +492,19 @@ def test_aprendizajes_se_agregan_se_ven_y_se_quitan(app, tmp_path, monkeypatch):
     assert c.post(f"/cliente/acme/aprendizajes/{lista[0]['id']}/quitar").status_code == 302
     assert proyectos.aprendizajes("acme") == []
     assert c.post("/cliente/acme/aprendizajes/nada/quitar").status_code == 302
+
+
+def test_la_fila_de_una_perdedora_muestra_su_diagnostico(app, base_temporal):
+    """Doctrina, bloque 4 (§6)."""
+    import experimentos as ex
+    c = app["c"]
+    pid = _pieza(base_temporal, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_d")
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ep = ex.agregar_pieza("acme", eid, pid, "CO")
+    ex.actualizar_pieza("acme", ep, veredicto="perdedor", veredicto_motivo="m")
+    ex.marcar_pieza("acme", ep, diagnostico={"causas": [{"codigo": "sin_urgencia", "detalle": "no aprieta", "evidencia": "CTR 0,4 %"}],
+                                             "siguiente": {"que": "oferta", "porque": "hay que dar un motivo"}})
+    html = c.get("/cliente/acme").get_data(as_text=True)
+    assert "sin urgencia en el deseo" in html and "Siguiente: oferta — hay que dar un motivo" in html and "#diagnosticar" in html
+    ex.marcar_pieza("acme", ep, diagnostico={"error": "Claude no devolvió JSON."})
+    assert "El diagnóstico no se pudo hacer: Claude no devolvió JSON." in c.get("/cliente/acme").get_data(as_text=True)

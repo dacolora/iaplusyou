@@ -51,6 +51,8 @@ import cola
 import creative_flow
 import db
 import decisor
+import doctrina
+from doctrina import aprendizajes as doctrina_aprendizajes
 import experimentos
 import lanzador
 import proyectos
@@ -134,10 +136,48 @@ def _otro(lista, actual, k):
     return otros[k % len(otros)]
 
 
-def _item_reedicion(cf_id, variante, variante_tipo, idiomas):
+def _item_reedicion(cf_id, variante, variante_tipo, idiomas, contexto=None):
     return {"clase": "reedicion", "variante": variante, "variante_tipo": variante_tipo, "cf_id": cf_id,
             "paises": list(idiomas), "idiomas": dict(idiomas), "estado": "produciendo_finales",
-            "finales": {}, "ep_ids": [], "error": None}
+            "finales": {}, "ep_ids": [], "error": None, "contexto_variante": contexto}
+
+
+def _ganchos_usados(cliente, cf_id, sesion):
+    """El gancho del ángulo de la sesión y los de sus variantes ya producidas
+    (`capas.guion.parametros.angulo.gancho`), sin repetir."""
+    a = sesion.get("angulo") if isinstance(sesion.get("angulo"), dict) else {}
+    vistos = []
+    for g in [a.get("gancho")] + [(((f.get("capas") or {}).get("guion") or {}).get("parametros") or {}).get("angulo", {}).get("gancho")
+                                  for f in creative_flow.finales(cliente, cf_id)]:
+        g = " ".join(str(g or "").split())
+        if g and g.lower() not in [x.lower() for x in vistos]:
+            vistos.append(g)
+    return vistos
+
+
+def _lead_objetivo(angulo, k):
+    """El k-ésimo arranque recomendado para la consciencia del ángulo, distinto
+    del actual (cíclico); None sin consciencia conocida."""
+    a = angulo if isinstance(angulo, dict) else {}
+    recomendados = list(doctrina.lead_por_consciencia(a.get("consciencia")))
+    if not recomendados:
+        return None
+    otros = [l for l in recomendados if l != a.get("lead")] or recomendados
+    return otros[k % len(otros)]
+
+
+def _contexto_variante(cliente, cf_id, sesion, k=None, diagnostico=None):
+    """Lo que la variante recibe además del ángulo (doctrina, bloque 4, §4):
+    el arranque objetivo (derivar: uno distinto por re-edición), los ganchos
+    ya usados y los aprendizajes del proyecto; el rescate suma su diagnóstico."""
+    ctx = {"ganchos_usados": _ganchos_usados(cliente, cf_id, sesion),
+           "aprendizajes": doctrina_aprendizajes.texto_para_prompt(
+               proyectos.aprendizajes(cliente), producto=(sesion.get("productos_ids") or [None])[0])}
+    if k is not None:
+        ctx["lead_objetivo"] = _lead_objetivo(sesion.get("angulo"), k)
+    if isinstance(diagnostico, dict) and diagnostico.get("causas"):
+        ctx["diagnostico"] = {"causas": diagnostico.get("causas"), "siguiente": diagnostico.get("siguiente")}
+    return ctx
 
 
 def modelo_regeneracion(sesion, k):
@@ -239,7 +279,7 @@ def planificar(cliente, experimento_id, tipo, payload):
     if tipo == "derivar":
         return _planificar_derivar(cliente, ex, pz, motivo)
     if tipo == "rescatar":
-        return _planificar_rescatar(cliente, ex, pz, motivo)
+        return _planificar_rescatar(cliente, ex, pz, motivo, payload)
     raise ValueError(f"Tipo de derivación desconocido: {tipo!r}.")
 
 
@@ -255,8 +295,11 @@ def _planificar_derivar(cliente, ex, pz, motivo):
     # un hijo huérfano sin derivación.
     items = []
     base = _siguiente_variante(cliente, cf_id, idiomas)
+    sesion = _sesion(cliente, cf_id) or {}
+    # Doctrina, bloque 4 (§4): nuevos ganchos alrededor del mismo mensaje —
+    # todas las re-ediciones son de gancho, cada una con otro arranque.
     for k in range(n_re):
-        items.append(_item_reedicion(cf_id, base + k, TIPOS_VARIANTE[k % 2], idiomas))
+        items.append(_item_reedicion(cf_id, base + k, "hook", idiomas, _contexto_variante(cliente, cf_id, sesion, k=k)))
     for k in range(n_rg):
         items.append(_item_regeneracion(cliente, cf_id, k, idiomas))
     hijo = experimentos.crear_hijo(cliente, ex["id"], f"{ex['nombre']} · derivado de {pz['nombre']}"[:200], pz["id"])
@@ -273,16 +316,22 @@ def _planificar_derivar(cliente, ex, pz, motivo):
     return hijo
 
 
-def _planificar_rescatar(cliente, ex, pz, motivo):
+def _planificar_rescatar(cliente, ex, pz, motivo, payload=None):
     cf_id = _cf_id_de(pz)
     _rechazar_imagen(cliente, cf_id)
-    escalon = int(pz.get("escalon_rescate") or 0) + 1
+    # Doctrina, bloque 4 (§4): el diagnóstico puede saltar escalones (nunca
+    # volver atrás): `salto` 2 = otra estructura, 3 = regenerar.
+    salto = int((payload or {}).get("salto") or 0)
+    escalon = max(int(pz.get("escalon_rescate") or 0) + 1, salto)
     if escalon not in _ESCALONES:
         raise ValueError(f"{pz['nombre']} ya agotó los {len(_ESCALONES)} escalones de rescate.")
     idiomas = _idiomas(pz, ex["paises"], solo=[pz["pais"]])
     clase, variante_tipo = _ESCALONES[escalon]
     if clase == "reedicion":
-        item = _item_reedicion(cf_id, _siguiente_variante(cliente, cf_id, idiomas), variante_tipo, idiomas)
+        sesion = _sesion(cliente, cf_id) or {}
+        contexto = _contexto_variante(cliente, cf_id, sesion, k=0 if variante_tipo == "hook" else None,
+                                      diagnostico=(pz.get("extra") or {}).get("diagnostico"))
+        item = _item_reedicion(cf_id, _siguiente_variante(cliente, cf_id, idiomas), variante_tipo, idiomas, contexto)
     else:
         item = _item_regeneracion(cliente, cf_id, 0, idiomas)
     experimentos.actualizar_pieza(cliente, pz["id"], escalon_rescate=escalon)
@@ -353,7 +402,10 @@ def _estado_final(cliente, legado):
 
 def _opciones_de(item):
     if item["clase"] == "reedicion":
-        return {"variante": item["variante"], "variante_tipo": item["variante_tipo"]}
+        o = {"variante": item["variante"], "variante_tipo": item["variante_tipo"]}
+        if item.get("contexto_variante"):
+            o["contexto_variante"] = item["contexto_variante"]
+        return o
     return {"variante": None}
 
 

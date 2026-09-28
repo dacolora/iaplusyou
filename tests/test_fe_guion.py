@@ -539,3 +539,22 @@ def test_el_guion_base_recibe_los_aprendizajes_del_proyecto(monkeypatch):
     reg = _instalar_fake(monkeypatch, [json.dumps(dict(_guion_valido(), angulo=ANG))])
     guion.generar_guion_base(PRODUCTO, None, "producto", 10.0, "es", "", "", aprendizajes="")
     assert "YA SE PROBÓ" not in reg.kwargs[0]["messages"][0]["content"]
+
+
+def test_variar_recibe_el_contexto_de_la_derivacion(monkeypatch):
+    """Doctrina, bloque 4 (§4): arranque objetivo, ganchos usados, diagnóstico y aprendizajes."""
+    from final_edition import guion
+    variante = dict(_guion_valido(), angulo_variante={"lead": "secreto", "gancho": "Nuevo gancho"})
+    reg = _instalar_fake(monkeypatch, [json.dumps(variante)])
+    contexto = {"lead_objetivo": "secreto", "ganchos_usados": ["¿Pies fríos?", "Lo que nadie dice"],
+                "diagnostico": {"causas": [{"codigo": "gancho", "detalle": "no retiene"}],
+                                "siguiente": {"que": "gancho", "hipotesis": "otro arranque retiene"}},
+                "aprendizajes": "LO QUE YA SE PROBÓ EN ESTE PROYECTO:\n- Perdió en CO: «x»"}
+    guion.variar_guion(_guion_valido(), "hook", "", angulo=ANG, contexto=contexto)
+    m = reg.kwargs[0]["messages"][0]["content"]
+    assert "Usa el arranque «secreto»" in m and "«¿Pies fríos?»; «Lo que nadie dice»" in m
+    assert "Por qué perdió la versión anterior" in m and "el gancho no retiene: no retiene" in m
+    assert "Hipótesis: otro arranque retiene" in m and "Perdió en CO: «x»" in m
+    reg = _instalar_fake(monkeypatch, [json.dumps(variante)])
+    guion.variar_guion(_guion_valido(), "hook", "", angulo=ANG)
+    assert "Usa el arranque" not in reg.kwargs[0]["messages"][0]["content"]

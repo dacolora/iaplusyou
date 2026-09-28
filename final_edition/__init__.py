@@ -546,7 +546,8 @@ def producir_legado(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, 
         angulo_variante = None
         if variante_tipo:
             guion_base, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, _guia_marca(cliente),
-                                                                angulo=entry.get("angulo"))
+                                                                angulo=entry.get("angulo"),
+                                                                contexto=o.get("contexto_variante"))
             costo += float(costo_variante or 0.0)
             angulo_variante = guion_base.pop("angulo_variante", None)
     except Exception as e:

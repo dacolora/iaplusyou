@@ -456,7 +456,8 @@ def globales_plantilla():
     return {"CONSCIENCIAS_CLIENTE": CONSCIENCIAS_CLIENTE, "SOFISTICACIONES_CLIENTE": SOFISTICACIONES_CLIENTE,
             "FUENTES_PRUEBA_CLIENTE": FUENTES_PRUEBA_CLIENTE, "LEADS_NOMBRE": LEADS_NOMBRE,
             "PREFIJO_ERROR": PREFIJO_ERROR, "lead_por_consciencia": lead_por_consciencia,
-            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error, "PUNTOS_REVISION": revisor.PUNTO}
+            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error, "PUNTOS_REVISION": revisor.PUNTO,
+            "CAUSAS_NOMBRE": CAUSAS_NOMBRE}
 
 
 def datos_fijos_texto(consciencia=None, sofisticacion=None):

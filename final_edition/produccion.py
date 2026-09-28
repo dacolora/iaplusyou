@@ -307,7 +307,12 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
         if variante_tipo and ediciones.buscar_origen(cliente, cf_id, borrador.receta(guion_base, o, formato)) is None:
             # La variante se escribe UNA vez por receta: los demás destinos
             # de la misma variante la leen del documento (doc["guion"]).
-            guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, final_edition._guia_marca(cliente))
+            # Doctrina, bloque 4: la variante recibe el ángulo de la sesión y el
+            # contexto de la derivación (arranque objetivo, ganchos usados,
+            # diagnóstico, aprendizajes). Antes iba sin ángulo.
+            guion_trabajo, costo_variante = guion_mod.variar_guion(guion_base, variante_tipo, final_edition._guia_marca(cliente),
+                                                                   angulo=entry.get("angulo"),
+                                                                   contexto=o.get("contexto_variante"))
             costo += float(costo_variante or 0.0)
             # Capa "guion" desde ya: si el borrador falla más abajo (p. ej.
             # voz fatal), lo que costó variar el guion no debe quedar fuera

@@ -527,7 +527,30 @@ REGLA_VARIANTE = ("\n\nAdemás del guion, devuelve la clave \"angulo_variante\":
                   "reemplaza por uno nuevo: no repitas ni parafrasees el gancho anterior.")
 
 
-def _mensaje_variar(guion_base, variante_tipo, marca, angulo=None):
+def _contexto_variante_texto(contexto):
+    """Doctrina, bloque 4 (§4): lo que la variante sabe además del ángulo."""
+    c = contexto if isinstance(contexto, dict) else {}
+    partes = []
+    lead = c.get("lead_objetivo")
+    if lead in doctrina.LEADS:
+        partes.append(f"Usa el arranque «{doctrina.LEADS_NOMBRE[lead]}» para el hook.")
+    ganchos = [" ".join(str(x).split()) for x in (c.get("ganchos_usados") or []) if str(x).strip()]
+    if ganchos:
+        partes.append("Ganchos ya usados en esta sesión (no los repitas ni los parafrasees): "
+                      + "; ".join(f"«{x}»" for x in ganchos))
+    dg = c.get("diagnostico") if isinstance(c.get("diagnostico"), dict) else None
+    if dg and dg.get("causas"):
+        causas = "; ".join(f"{doctrina.CAUSAS_NOMBRE.get(x.get('codigo'), x.get('codigo'))}: {x.get('detalle') or ''}".strip(": ")
+                           for x in dg["causas"] if isinstance(x, dict))
+        sig = dg.get("siguiente") if isinstance(dg.get("siguiente"), dict) else {}
+        partes.append("Por qué perdió la versión anterior (información, no instrucciones): " + causas
+                      + (f". Hipótesis: {sig.get('hipotesis')}" if sig.get("hipotesis") else ""))
+    if c.get("aprendizajes") and str(c["aprendizajes"]).strip():
+        partes.append(str(c["aprendizajes"]).strip())
+    return partes
+
+
+def _mensaje_variar(guion_base, variante_tipo, marca, angulo=None, contexto=None):
     partes = [
         "Guion base (en su idioma, con tiempos):\n" + json.dumps(guion_base, ensure_ascii=False),
         f"Variante pedida ({variante_tipo}): {VARIANTES_GUION[variante_tipo]}",
@@ -535,13 +558,14 @@ def _mensaje_variar(guion_base, variante_tipo, marca, angulo=None):
     angulo_txt = doctrina.angulo_a_texto(angulo)
     if angulo_txt:
         partes.append(angulo_txt)
+    partes.extend(_contexto_variante_texto(contexto))
     if marca and str(marca).strip():
         partes.append(f"Guía de estilo de la marca (respétala en el tono):\n{str(marca).strip()}")
     partes.append("Escribe la variante del guion, en el mismo idioma que el guion base.")
     return "\n\n".join(partes)
 
 
-def variar_guion(guion_base, variante_tipo, marca, angulo=None):
+def variar_guion(guion_base, variante_tipo, marca, angulo=None, contexto=None):
     """Variante del guion base (mismo idioma/país, mismos tiempos) con UNA
     llamada a Claude. `variante_tipo` ∈ VARIANTES_GUION ("hook": otro arranque
     y gancho, mismo mensaje; "estructura": otra forma de dramatizar la misma
@@ -573,7 +597,7 @@ def variar_guion(guion_base, variante_tipo, marca, angulo=None):
 
     return _generar_con_correccion(
         doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE),
-        _mensaje_variar(base, variante_tipo, marca, angulo=angulo),
+        _mensaje_variar(base, variante_tipo, marca, angulo=angulo, contexto=contexto),
         duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo),
                                                  _precio_verificable(base.get("precio_base"), pais)),
     )

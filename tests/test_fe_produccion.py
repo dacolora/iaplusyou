@@ -56,7 +56,8 @@ def entorno(base_temporal, tmp_path, monkeypatch):
         return g, 0.02
     monkeypatch.setattr(guion_mod, "localizar_guion", fake_localizar)
 
-    def fake_variar(guion_base, tipo, marca, angulo=None):
+    def fake_variar(guion_base, tipo, marca, angulo=None, **kw):
+        ll["variar_kw"] = dict(kw, angulo=angulo)
         ll["variar"] += 1
         g = copy.deepcopy(guion_base)
         g["bloques"][0]["texto_pantalla"], g["bloques"][0]["texto_voz"] = "HOOK2", "Hook dos"
