@@ -1642,9 +1642,6 @@ def ver_cliente(cliente):
     # Bloque 7: canales orgánicos del proyecto, publicaciones por pieza (UNA
     # consulta) y qué piezas tienen una publicación orgánica corriendo en el
     # worker (UNA consulta a la cola, como _trabajos_productos).
-    canales_org = organico.canales(cliente)
-    publicaciones_por_pieza = organico.por_pieza(cliente)
-    trabajos_org = _trabajos_organico(cliente, publicaciones_por_pieza)
     # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
     # sale la pauta por moneda; la generación viene de la tabla `gasto`.
     tablero_ctx = _contexto_tablero(cliente)
@@ -1764,11 +1761,7 @@ def ver_cliente(cliente):
             session.get("rol")),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
-        canales_org=canales_org,
         **gasto_ctx,
-        plataformas_org=organico.PLATAFORMAS,
-        publicaciones_por_pieza=publicaciones_por_pieza,
-        trabajos_org=trabajos_org,
         **sprints_rutas.contexto(cliente),
         **nicho_rutas.contexto(cliente),
         **referentes_rutas.contexto(cliente),
@@ -2909,10 +2902,23 @@ def _listas_crear_final(items, n=TARJETAS_POR_PAGINA):
             "finales": finales[corte], "finales_total": len(finales)}
 
 
+def _contexto_organico(cliente):
+    """Lo que necesita el bloque «Publicar orgánico» (_organico_publicar.html),
+    que va en el detalle de una final y en Experimentos."""
+    publicaciones_por_pieza = organico.por_pieza(cliente)
+    return {
+        "canales_org": organico.canales(cliente),
+        "plataformas_org": organico.PLATAFORMAS,
+        "publicaciones_por_pieza": publicaciones_por_pieza,
+        "trabajos_org": _trabajos_organico(cliente, publicaciones_por_pieza),
+    }
+
+
 def _contexto_final_edition(cliente):
     """Contexto que leen los detalles de Final edition: la página y las rutas
     de detalle (fe_detalle_video / fe_detalle_final) lo reciben igual."""
     return {
+        **_contexto_organico(cliente),
         "paises_fe": fe_tipos.PAISES,
         "voces_fe": fal_audio.VOCES,
         "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
@@ -6133,6 +6139,43 @@ def cf_detalle(cliente, cf_id):
     if item is None:
         abort(404)
     return render_template("_crear_detalle_respuesta.html", cliente=cliente, item=item)
+
+
+@app.route("/cliente/<cliente>/final/tarjetas")
+def final_tarjetas(cliente):
+    """«Ver más» de Final edition: `lista=videos` (videos listos) o
+    `lista=finales`; las TARJETAS_POR_PAGINA siguientes desde `desde`."""
+    lista = request.args.get("lista")
+    if lista not in ("videos", "finales"):
+        abort(400)
+    desde = _pagina_desde(request.args.get("desde"))
+    completas = _listas_crear_final(_creative_flow_items(cliente), n=None)
+    todos = completas["final_videos"] if lista == "videos" else completas["finales"]
+    return render_template("_final_tarjetas_respuesta.html", cliente=cliente, lista=lista,
+                           items=todos[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(todos),
+                           **_contexto_final_edition(cliente))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/detalle")
+def fe_detalle_video(cliente, cf_id):
+    """Detalle de un video listo en Final edition (guion, «Producir finales»,
+    editor). 404 si no es un video listo de este proyecto."""
+    item = _creative_flow_item(cliente, cf_id)
+    if item is None or item.get("estado") != "video_listo" or (item.get("tipo") or "video") == "imagen":
+        abort(404)
+    return render_template("_final_detalle_respuesta.html", cliente=cliente, item=item, f=None,
+                           **_contexto_final_edition(cliente))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/detalle")
+def fe_detalle_final(cliente, cf_id, final_id):
+    """Detalle de una final (capas, descargar, descartar, publicación orgánica)."""
+    item = _creative_flow_item(cliente, cf_id)
+    f = next((x for x in ((item or {}).get("finales") or []) if x["id"] == final_id), None)
+    if item is None or f is None:
+        abort(404)
+    return render_template("_final_detalle_respuesta.html", cliente=cliente, item=item, f=f,
+                           **_contexto_final_edition(cliente))
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])

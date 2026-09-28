@@ -238,7 +238,7 @@
 <script>
   // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear). Declarada
   // en este script sin envoltorio, así es global: la usan dos scripts, el estimado del formulario y el botón A+B del
-  // modal (el formulario de generar vive en un <template> clonado).
+  // modal (el formulario de generar llega por fetch con el detalle).
   function formatearUSD(usd) {
     if (usd > 0 && usd < 0.01) return 'US$ <0,01';
     var partes = usd.toFixed(2).split('.');
@@ -768,8 +768,8 @@
       inicioInput.value = Math.floor(audioPrev.currentTime || 0);
     });
     // Los selectores de «Mi música» de toda la página: el de Crear y el de
-    // «Producir finales» dentro de cada <template> de detalle de la pestaña
-    // Final edition (y el del detalle abierto, que ya es parte del documento).
+    // «Producir finales» del detalle abierto en Final edition (el detalle
+    // llega por fetch con la lista al día; este repinta el que ya está abierto).
     function pintarCanciones(canciones) {
       var grupos = Array.prototype.slice.call(document.querySelectorAll('optgroup.mm-opciones'));
       document.querySelectorAll('template.generado-detalle').forEach(function (t) {

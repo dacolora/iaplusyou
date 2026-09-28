@@ -41,11 +41,11 @@ def _sembrar(n, cliente="acme", desde=0, tipo="video", estado="video_listo", con
         campos = {"estado": estado, "tipo": tipo}
         if estado == "video_listo":
             campos["video_url"] = f"https://r2/videos/{cf_id}.mp4"
-        if guion:
-            campos["guion_base"] = {"idioma": "es", "pais": "CO", "precio_base": None,
-                                    "bloques": [{"rol": "gancho", "inicio_s": 0, "fin_s": 3,
-                                                 "texto_pantalla": "Hola", "texto_voz": "Hola"}]}
         creative_flow.actualizar(cliente, cf_id, **campos)
+        if guion:
+            creative_flow.guardar_guion_base(cliente, cf_id, {
+                "idioma": "es", "pais": "CO", "precio_base": None,
+                "bloques": [{"rol": "gancho", "inicio_s": 0, "fin_s": 3, "texto_pantalla": "Hola", "texto_voz": "Hola"}]})
         if con_final:
             fid = creative_flow.crear_final(cliente, cf_id, "es", "CO")
             creative_flow.actualizar_final(cliente, fid, estado="listo", url_video=f"https://r2/finales/{fid}.mp4",
@@ -153,3 +153,49 @@ def test_tarjeta_con_trabajo_vivo_usa_data_poll_job(app):
     crear = _pestana(html, "tab-creativeflowplus", "tab-final")
     assert f'data-poll-job="{jid}"' in crear and f'id="trabajo-{jid}"' in crear
     assert "<script>iniciarPolling" not in crear
+
+
+# ------------------------------------------------------------ Task 4: Final edition
+
+def test_final_pinta_24_videos_y_finales_sin_detalle_embebido(app):
+    _sembrar(30, con_final=True, guion=True)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    final = _pestana(html, "tab-final", "tab-experimentos")
+    assert "<template" not in final and "<script>iniciarPolling" not in final
+    videos = final.split('id="fe-videos"')[1].split('id="fe-finales"')[0]
+    finales = final.split('id="fe-finales"')[1].split('id="fe-modal"')[0]
+    assert videos.count('class="generado"') == 24 and 'data-siguiente="24"' in videos
+    assert finales.count('class="generado generado-final"') == 24 and 'data-siguiente="24"' in finales
+    assert "Videos listos (30)" in final and "Finales (30)" in final
+    assert videos.count('/final/detalle"') == 24 and finales.count('__es_CO/detalle"') == 24
+
+
+def test_final_ver_mas_y_lista_invalida(app):
+    _sembrar(26, con_final=True)
+    c = app["c"]
+    assert c.get("/cliente/acme/final/tarjetas?lista=videos&desde=24").get_data(as_text=True).count('class="generado"') == 2
+    assert c.get("/cliente/acme/final/tarjetas?lista=finales&desde=24").get_data(as_text=True).count("generado-final") == 2
+    assert c.get("/cliente/acme/final/tarjetas?lista=x").status_code == 400
+
+
+def test_detalle_de_video_y_de_final(app):
+    (con_guion,) = _sembrar(1, con_final=True, guion=True)
+    (sin_guion,) = _sembrar(1, desde=1)
+    (imagen,) = _sembrar(1, desde=2, tipo="imagen")
+    c = app["c"]
+    html = c.get(f"/cliente/acme/creative_flow/{con_guion}/final/detalle").get_data(as_text=True)
+    assert "Producir finales" in html and "Guardar guion" in html and "angulo-editor" in html
+    html = c.get(f"/cliente/acme/creative_flow/{sin_guion}/final/detalle").get_data(as_text=True)
+    assert "Preparar guion" in html and "Producir finales" not in html
+    assert c.get(f"/cliente/acme/creative_flow/{imagen}/final/detalle").status_code == 404
+    assert c.get(f"/cliente/otro/creative_flow/{con_guion}/final/detalle").status_code == 404
+    fid = f"{con_guion}__es_CO"
+    html = c.get(f"/cliente/acme/creative_flow/{con_guion}/final/{fid}/detalle").get_data(as_text=True)
+    assert "Capas" in html and "Descartar" in html
+    assert c.get(f"/cliente/acme/creative_flow/{sin_guion}/final/{fid}/detalle").status_code == 404
+
+
+def test_final_js_abre_por_enlace_aunque_la_tarjeta_no_este():
+    js = _plantilla("_tab_final.html")
+    assert "template.generado-detalle" not in js and "data-detalle" in _plantilla("_final_tarjetas.html")
+    assert "fe_detalle_video" in js and "URL_DETALLE" in js and "abrirDetalleRemoto(" in js and "iniciarEditoresAngulo" in js
