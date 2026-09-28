@@ -9,7 +9,7 @@
 {%- endmacro %}
 
 {% macro chip_estado(estado) -%}
-<span class="tag-estado estado-sprint estado-sprint-{{ estado }}">{{ estado | replace("_", " ") }}</span>
+<span class="tag-estado estado-sprint estado-sprint-{{ estado }}">{{ {"revision": "revisión"}.get(estado, estado | replace("_", " ")) }}</span>
 {%- endmacro %}
 
 {% macro barra(pct, texto) -%}

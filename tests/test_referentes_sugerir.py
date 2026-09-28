@@ -371,3 +371,10 @@ def test_sugerir_campana_encuentra_marca_pagina_e_idioma_fuera_del_pool_de_200(b
 
     r = sugerir.sugerir_campana("acme", {"etapa": "TOF", "idioma": "es"}, set(), 1)
     assert r["items"][0]["id"] == es_id
+
+
+def test_preferencia_reconoce_la_marca_aunque_cambien_las_tildes():
+    from referentes import sugerir
+    c = {"marca": "Cröcs Élite", "pagina_id": None, "idioma": "en", "variantes": 1, "dias": 1}
+    assert sugerir.preferencia(c, marcas=[{"nombre": "crocs elite"}])[0] == 1
+    assert sugerir.preferencia(c, marcas=[{"nombre": "Nike"}])[0] == 0

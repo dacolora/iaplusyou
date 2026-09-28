@@ -234,7 +234,11 @@ producto») and links each piece to its panel. «Proponer ideas» shows
 `analisis._llamar_contando`, also when the answer was unusable, `max_intentos=1`). The routes the
 panel calls answer JSON when asked (`_quiere_json`); plain form posts still redirect (to the panel's tab when `volver=panel`). `base.html`'s unsaved-changes guard marks on `input`, and on `change` only `<select>`s.
 `static/angulo.js` clears `data-sucio` on its own fields only after a save that covered the
-latest edit.
+latest edit. It also makes anything that reads the angle on the server wait for its pending
+save (`guardarAngulosPendientes`: «Reescribir», «Aprobar», any form submit — re-sent with `requestSubmit`,
+so its `confirm()` asks once); a reload of the SAME campaign's panel keeps what was being typed, which
+`<details>` were open and the cursor (`tomarEscrito`/`devolverEscrito`). The Blueprint refuses POSTs the
+browser marks as cross-site (`Sec-Fetch-Site`), like Flow Plus and the editor.
 
 **Nicho y avatares** (`nicho/` + `tareas/nicho.py`, spec
 `docs/superpowers/specs/2026-09-18-nicho-avatares-design.md`): personas nacidas de
@@ -279,7 +283,9 @@ copycoders + las que Claude proponga como `EMERGING`), dolor y firma («por qué
 funciona»). Tablas `referente` (`anuncio_id` = id del Ad Library de Meta, UNIQUE
 global; `cliente` NULL = global de Creatv, `<cliente>` = solo ese proyecto; solo
 se lista con `estado_imagen=ok`, la copia en R2 `referentes/<anuncio_id>.jpg`),
-`referente_familia` y `barrido`. `referentes/datos.py` es el único escritor.
+`referente_familia` y `barrido`. `referentes/datos.py` es el único escritor. La búsqueda (`q`) y las marcas a imitar
+comparan sin tildes ni mayúsculas con `db.pliegue`, que `db.engine()` también registra como función SQL
+`pliegue(col)` en cada conexión (el `lower()` de SQLite solo baja ASCII).
 Bloque 1: importación del swipe file de copycoders (`referentes/copycoders.py`
 lee `const DATA=[...]` del HTML público; tarea `referentes_importar_copycoders`
 por fases `anuncios → imagenes → traducir` con continuaciones `__cont`, la única

@@ -8,6 +8,7 @@ import json
 
 import anthropic
 
+import db
 import doctrina
 from generador_prompts import MODEL, _api_key
 from referentes import datos as referentes_datos
@@ -131,9 +132,9 @@ def preferencia(c, marcas=(), idioma=None):
     """Clave de orden de un candidato para una campaña: primero las marcas a
     imitar (por nombre o por id de página), luego el idioma de la campaña,
     luego `variantes × max(días, 1)` (más tiempo y más versiones al aire)."""
-    nombres = {(m.get("nombre") or "").strip().lower() for m in marcas or ()} - {""}
+    nombres = {db.pliegue(m.get("nombre")) for m in marcas or ()} - {""}
     paginas = {str(m["pagina_id"]) for m in marcas or () if m.get("pagina_id")}
-    de_marca = (c.get("marca") or "").strip().lower() in nombres or str(c.get("pagina_id") or "") in paginas
+    de_marca = db.pliegue(c.get("marca")) in nombres or str(c.get("pagina_id") or "") in paginas
     return (int(bool(de_marca)), int(bool(idioma) and c.get("idioma") == idioma),
             (c.get("variantes") or 0) * max(c.get("dias") or 0, 1))
 
@@ -147,7 +148,7 @@ def _candidatos_con(cliente, etapa, consciencia, familias, excluir, limite, marc
     filas por etapa. El orden final no importa aquí: `sugerir_campana` y
     `candidatos_aflojando` vuelven a ordenar por `preferencia` después."""
     fams = list(familias) or [None]
-    nombres = sorted({(m.get("nombre") or "").strip().lower() for m in marcas or ()} - {""})
+    nombres = sorted({db.pliegue(m.get("nombre")) for m in marcas or ()} - {""})
     paginas = sorted({str(m["pagina_id"]) for m in marcas or () if m.get("pagina_id")})
     vistos, salida = set(), []
 

@@ -1061,6 +1061,9 @@ msgstr "Assembled"
 msgid "Armando clips…"
 msgstr "Assembling clips…"
 
+msgid "Armando el prompt"
+msgstr "Building the prompt"
+
 msgid "Armando el prompt con IA…"
 msgstr "Building the prompt with AI…"
 
@@ -2528,6 +2531,9 @@ msgstr ""
 msgid "En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio."
 msgstr "In business.facebook.com › Settings › Billing add a payment method to the ad account: without it Meta won't activate any ad."
 
+msgid "En cola"
+msgstr "Queued"
+
 msgid "En corrección"
 msgstr "Being fixed"
 
@@ -3306,6 +3312,9 @@ msgstr "Generation by month (US$)"
 msgid "Generados (%(n)s)"
 msgstr "Generated (%(n)s)"
 
+msgid "Generando"
+msgstr "Generating"
+
 #, python-format
 msgid "Generando %(que)s con %(modelo)s…"
 msgstr "Generating %(que)s with %(modelo)s…"
@@ -3974,6 +3983,12 @@ msgstr "Free-form"
 
 msgid "Link de Notion"
 msgstr "Notion link"
+
+msgid "Lista"
+msgstr "Ready"
+
+msgid "Lista, con avisos"
+msgstr "Ready, with warnings"
 
 msgid "Listo"
 msgstr "Done"
@@ -5268,6 +5283,9 @@ msgstr "Chosen prompt"
 
 msgid "Prompt guardado. Ahora sí: genera cuando quieras."
 msgstr "Prompt saved. Now you're set: generate whenever you want."
+
+msgid "Prompt listo"
+msgstr "Prompt ready"
 
 msgid "Prompt listo — revísalo y genera."
 msgstr "Prompt ready — review it and generate."

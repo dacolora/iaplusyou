@@ -9,6 +9,7 @@ manteniendo la misma API de dicts.
 """
 import contextlib
 import os
+import unicodedata
 from datetime import datetime
 
 import sqlalchemy as sa
@@ -32,6 +33,16 @@ def asegurar_carpeta():
         os.makedirs(os.path.dirname(u.replace("sqlite:///", "")) or ".", exist_ok=True)
 
 
+def pliegue(texto):
+    """Texto para comparar sin tildes ni mayúsculas: «ÉLITE Cröcs» -> «elite crocs».
+    También es la función SQL `pliegue(col)` de cada conexión (el lower() de SQLite
+    solo baja ASCII y no quita tildes)."""
+    if texto is None:
+        return ""
+    sin_marcas = "".join(ch for ch in unicodedata.normalize("NFKD", str(texto)) if not unicodedata.combining(ch))
+    return sin_marcas.casefold().strip()
+
+
 def engine():
     """Engine singleton del proceso. SQLite con WAL para que gunicorn (hilos) y
     el worker (otro proceso) lean y escriban a la vez sin 'database is locked'."""
@@ -48,6 +59,7 @@ def engine():
             cur.execute("PRAGMA busy_timeout=5000")
             cur.execute("PRAGMA foreign_keys=ON")
             cur.close()
+            dbapi_con.create_function("pliegue", 1, pliegue, deterministic=True)
     return _ENGINE
 
 

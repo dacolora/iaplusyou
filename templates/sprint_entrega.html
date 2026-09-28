@@ -7,7 +7,7 @@
 <div class="pagina-cabecera sprint-cabecera">
   <div>
     <h1>Entrega de {{ sprint.nombre }}</h1>
-    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ resumen.aprobadas }} aprobadas · {{ resumen.rechazadas }} rechazadas · {{ resumen.sin_revisar }} sin revisar · USD {{ '%.2f' % resumen.costo_usd }} gastado (estimado USD {{ '%.2f' % resumen.costo_estimado_usd }}){% if resumen.dias %} · {{ resumen.dias }} días{% endif %}</p>
+    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ resumen.aprobadas }} {{ 'aprobada' if (resumen.aprobadas) == 1 else 'aprobadas' }} · {{ resumen.rechazadas }} {{ 'rechazada' if (resumen.rechazadas) == 1 else 'rechazadas' }} · {{ resumen.sin_revisar }} sin revisar · USD {{ '%.2f' % resumen.costo_usd }} gastado (estimado USD {{ '%.2f' % resumen.costo_estimado_usd }}){% if resumen.dias %} · {{ resumen.dias }} días{% endif %}</p>
   </div>
 </div>
 
