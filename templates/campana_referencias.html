@@ -158,8 +158,9 @@
 
     // 2) Autoguardado por tarjeta (intención, otro, descripción) con espera de 800 ms.
     document.querySelectorAll('.sprint-ref').forEach(function (card) {
-      var temporizador = null;
+      var temporizador = null, cambios = 0;
       function guardar() {
+        var enviado = cambios;
         var intencion = Array.prototype.map.call(card.querySelectorAll('input[name=intencion]:checked'), function (i) { return i.value; });
         var otro = card.querySelector('input[name=intencion_otro]');
         otro.hidden = intencion.indexOf('otro') < 0;
@@ -168,6 +169,10 @@
           .then(function (r) { return r.json(); })
           .then(function (j) {
             if (!j.ok) { alert(j.error); return; }
+            // Lo escrito queda guardado solo si nada cambió mientras este guardado volaba
+            // (si cambió, lo agarra el siguiente): así la marca «sin guardar» no queda pegada.
+            if (enviado === cambios) card.querySelectorAll('input[name=intencion_otro], textarea[name=descripcion]')
+              .forEach(function (el) { delete el.dataset.sucio; });
             card.querySelector('.sprint-ref-estado').textContent = ETIQUETAS_REF[j.estado] || j.estado;
             document.getElementById('refs-contador').textContent = TEXTO_REFS.referenciasListas.replace('{listas}', j.referencias_listas).replace('{objetivo}', j.referencias_objetivo);
             var pct = Math.min(100, Math.round(100 * j.referencias_listas / Math.max(1, j.referencias_objetivo)));
@@ -175,12 +180,13 @@
             var ok = card.querySelector('.sprint-guardado'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500);
           }).catch(function () {});
       }
-      function programar() { clearTimeout(temporizador); temporizador = setTimeout(guardar, 800); }
-      card.querySelectorAll('input[name=intencion]').forEach(function (i) { i.addEventListener('change', guardar); });
+      // base.html marca «sin guardar» al escribir; el guardado de arriba la borra.
+      function programar() { cambios++; clearTimeout(temporizador); temporizador = setTimeout(guardar, 800); }
+      card.querySelectorAll('input[name=intencion]').forEach(function (i) {
+        i.addEventListener('change', function () { cambios++; guardar(); });
+      });
       card.querySelector('input[name=intencion_otro]').addEventListener('input', programar);
-      var ta = card.querySelector('textarea[name=descripcion]');
-      ta.addEventListener('input', function () { ta.dataset.sucio = '1'; programar(); });
-      ta.addEventListener('blur', function () { delete ta.dataset.sucio; });
+      card.querySelector('textarea[name=descripcion]').addEventListener('input', programar);
     });
 
     // 3) Análisis en curso: se consulta el estado cada 4 s y se pinta sin recargar.

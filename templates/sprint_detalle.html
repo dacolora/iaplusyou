@@ -387,21 +387,38 @@
         .catch(function (e) {
           el.value = el.dataset.guardado || '';
           delete el.dataset.sucio;
+          if (el.dataset.campo === 'momento') {
+            // Si vuelve a un momento del calendario, el texto propio se esconde: escondido no cuenta.
+            var texto = campos.querySelector('[data-momento-texto]');
+            texto.hidden = el.value !== 'propio';
+            if (texto.hidden) delete texto.dataset.sucio;
+          }
           err.textContent = mensaje(e); err.hidden = false;
         });
+    }
+    // «Otro (escríbelo)…» con el texto vacío no tiene nada que guardar (sigue valiendo el
+    // momento guardado): esas dos marcas de «sin guardar» frenaban recargas en falso.
+    function sinTextoPropio() {
+      delete campos.querySelector('[data-momento-texto]').dataset.sucio;
+      delete campos.querySelector('[data-campo="momento"]').dataset.sucio;
     }
     campos.addEventListener('change', function (ev) {
       var texto = campos.querySelector('[data-momento-texto]');
       var momento = campos.querySelector('[data-campo="momento"]');
       if (ev.target === texto) {
         if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim());
+        else sinTextoPropio();
         return;
       }
       var el = ev.target.closest('[data-campo]');
       if (!el) return;
       if (el === momento) {
         texto.hidden = momento.value !== 'propio';
-        if (momento.value === 'propio') { if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim()); else texto.focus(); return; }
+        if (momento.value === 'propio') {
+          if (texto.value.trim()) guardarSprint(momento, 'propio:' + texto.value.trim());
+          else { sinTextoPropio(); texto.focus(); }
+          return;
+        }
       }
       guardarSprint(el, el.value);
     });
