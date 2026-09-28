@@ -575,3 +575,59 @@ def test_exportacion_md_en_ingles(admin_en):
     texto = admin_en.get(f"/cliente/acme/nicho/{eid}/exportar.md").get_data(as_text=True)
     encabezados = [l for l in texto.splitlines() if l.startswith("#")]
     assert encabezados and not any(_con_marca(l) for l in encabezados), encabezados
+
+
+# ------ Task 6 (fase 5): Referentes ------
+
+def _referente_sembrado():
+    import proyectos
+    from referentes import datos
+    proyectos.guardar_referentes_copycoders("acme", True)   # la biblioteca de copycoders visible en el grid
+    datos.familia_asegurar("Price Slash Hero", "Big struck-through price.")
+    rid, _ = datos.guardar_referente({
+        "anuncio_id": "900", "pagina_id": "1", "fuente": "copycoders", "marca": "Glow Tea",
+        "url_anuncio": "https://www.facebook.com/ads/library/?id=900", "titular": "Save big today", "idioma": "en",
+        "tipo": "imagen", "imagen_origen": "https://cdn/x.jpg", "dias": 10, "variantes": 2, "activo": True,
+        "etapa": "BOF", "consciencia": "most-aware", "familia": "Price Slash Hero", "dolor": "ninguno-oferta",
+        "firma": "Shows the saving first.", "clasificacion": "fuente",
+        "extra": {"i18n": {"en": {"firma": "Shows the saving first."}}}})
+    datos.marcar_imagen(rid, "ok", "https://r2/referentes/900.jpg")
+    return rid
+
+
+def test_pestana_referentes_en_ingles(admin_en):
+    _referente_sembrado()
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("tab-referentes",))
+    assert not fugas, fugas[:15]
+
+
+@pytest.mark.parametrize("ruta", ["grid", "{rid}/ficha", "traer", "{rid}/recrear", "{rid}/usar_en_sprint"])
+def test_fragmentos_de_referentes_en_ingles(admin_en, monkeypatch, ruta):
+    import catalogo_productos
+    # Un producto con fotos: sin él, Recrear solo muestra el aviso de catálogo vacío
+    # y ni el formulario ni el prompt entrarían en la revisión.
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [PRODUCTO_EN])
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None: PRODUCTO_EN)
+    rid = _referente_sembrado()
+    idiomas.guardar_de_proyecto("acme", "en")        # el prompt de Recrear sale en el idioma del proyecto
+    r = admin_en.get(f"/cliente/acme/referentes/{ruta.format(rid=rid)}", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200, (ruta, r.status_code)
+    html = r.get_data(as_text=True)
+    if ruta == "grid":
+        assert "Save big today" in html, "el referente sembrado no está en el grid"
+    if ruta == "{rid}/recrear":
+        assert "LED mirror" in html and "Static social media ad" in html, "sin el formulario ni el prompt en inglés"
+    fugas = espanol_visible(html)
+    assert not fugas, (ruta, fugas[:15])
+
+
+def test_mis_barridos_en_ingles(admin_en, monkeypatch):
+    import db
+    from referentes import datos
+    monkeypatch.setattr(db, "ahora", lambda: "2026-09-25T15:04:09")
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "foot pain", "palabra_original": "sore feet",
+                                          "idioma": "en", "formato": "imagen", "pais": "US"}, 50)
+    html = admin_en.get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    assert "25 Sep · 15:04" in html
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]

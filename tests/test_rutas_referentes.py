@@ -872,7 +872,7 @@ def test_barridos_muestran_fecha_legible(app, monkeypatch):
     monkeypatch.setattr(db, "ahora", lambda: "2026-09-25T15:04:09")
     datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 50)
     html = _barridos_html(app)
-    assert "25 sep · 15:04" in html
+    assert "25 sept · 15:04" in html
     assert "2026-09-25T15:04" not in html
 
 

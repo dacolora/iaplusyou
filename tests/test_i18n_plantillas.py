@@ -43,6 +43,10 @@ PLANTILLAS_TRADUCIDAS = [
     "_aprendizajes.html",
     # Merge de main (2026-09-28): las razones del QA con un toque, dentro de Sprints.
     "_sprint_qa.html",
+    # Task 6 (fase 5): Referentes — pestaña, grid, ficha, Recrear, Usar en
+    # sprint, Traer referentes y Mis barridos.
+    "_tab_referentes.html", "_referente_ficha.html", "_referente_recrear.html", "_referente_usar_en_sprint.html",
+    "_referentes_barridos.html", "_referentes_grid.html", "_referentes_traer.html",
 ]
 
 
