@@ -807,7 +807,7 @@ fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.b
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`). Crear's «Desde referencias» form is a **composer**
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» at the end of `style.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
 (spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
 (OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
 whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips
@@ -865,7 +865,7 @@ localizar no verifica cifras (convierte unidades y precio y el base ya se verifi
 país base; si no, el guion no recibe precio. Vocabulario único:
 `doctrina.CONSCIENCIAS` (el de Nicho; `normalizar_consciencia` traduce el inglés de referentes y
 `referentes.sugerir.NIVEL_A_CONSCIENCIA` se deriva de ahí), `LEADS`, `SOFISTICACIONES`. Nada de esto agrega pantallas
-ni migraciones (bloque 1 de 4; los bloques 2–4 están en el §14 del spec). Los topes de salida de estos sitios son
+ni migraciones (bloque 1 de 4; los bloques 2–4 vienen en sus propios párrafos). Los topes de salida de estos sitios son
 amplios (4 000–16 000 tokens): el pensamiento adaptativo de `claude-sonnet-5` los consume y con topes chicos la
 respuesta llega vacía (prueba real del 2026-09-26).
 
@@ -908,6 +908,48 @@ en el system, mismos fotogramas, tope 6 000), por fin registra su gasto real (ti
 (`elegibles()["doctrina"]`, aviso en el paso 3) y la revisión del lote muestran la etiqueta con `resumen_galeria`,
 leyendo solo `concepto.extra`. Nada de esto bloquea ni reescribe.
 
+**Doctrina, bloque 4: cerrar el ciclo** (spec
+`docs/superpowers/specs/2026-09-28-doctrina-bloque-4-cerrar-el-ciclo-design.md`): lo que el motor aprende de cada prueba
+vuelve a la siguiente pieza. (1) **Diagnóstico de una perdedora** (`doctrina/diagnostico.py`; rebanada `diagnosticar` =
+la lista de Theriot: `CAUSAS_PERDIDA` (ocho causas, `CAUSAS_NOMBRE` con `N_`), `CAUSAS_NO_CREATIVAS` = landing,
+estacionalidad, posicionamiento, `SIGUIENTES_PASOS`/`SIGUIENTES_NOMBRE`): `exp_decidir` pide la pausa primero (el anuncio deja de gastar
+aunque Claude tarde) y después diagnostica cada `perdedor` nuevo en `_diagnosticar` (timeout 120 s, un reintento;
+una final variada se diagnostica con SU guion) — `pistas()` (puras y gratis: ThruPlay bajo el mínimo → gancho; CTR bajo con retención → sin_urgencia;
+puerta 2 → landing; frecuencia ≥ 3 → repetición; CPC alto con CTR normal → subasta_cara) y una llamada a Claude con los
+DATOS (veredicto y números, ángulo, revisión de la doctrina, guion base, producto; una corrección; `ErrorDiagnostico`
+lleva los tokens pagados; `idioma=` del proyecto). Se guarda en `experimento_pieza.extra.diagnostico`
+(`{version, causas, siguiente, aprendizaje, pistas, modelo, usd, en}` o `{error, pistas, en}`), gasto tipo `revision`,
+tarifa `diagnostico_pieza`, referencia `diagnostico:<ep_id>:t<tarea>` (también con respuesta inválida), evento
+`diagnostico`; nunca frena el veredicto. (2) **El diagnóstico guía el rescate** (`decision_rescate`): `siguiente`
+estructura/regenerar → `payload.salto` 2/3 (`derivaciones._planificar_rescatar` toma `max(escalón siguiente, salto)`:
+nunca vuelve atrás; `acciones._precio_estimado` cobra el escalón real) y oferta/landing/pausar, o causa principal no
+creativa, → `payload.solo_proponer` (`acciones.pedir` deja `propuesta` en todo modo, con el diagnóstico en el motivo).
+`derivar` hace todas las re-ediciones de gancho (ya no alterna hook/estructura) con `contexto_variante =
+{lead_objetivo (el k-ésimo arranque recomendado que no sea el actual ni uno ya probado por una final de la sesión;
+None cuando no queda ninguno: la variante cambia el patrón del gancho), hermana {k, n} cuando se producen varias a
+la vez, ganchos_usados (el del ángulo de la sesión + `capas.guion.parametros.angulo.gancho` de cada final)}`; el
+rescate suma `diagnostico` (causas + siguiente) y excluye el arranque de la pieza que perdió. Los aprendizajes NO se
+guardan en el experimento: `_opciones_de(item, cliente)` los agrega al encolar. `variar_guion(..., angulo=,
+contexto=)` lo escribe en el mensaje (`_contexto_variante_texto`, ganchos y aprendizajes entre etiquetas) — también
+en `final_edition/produccion.py`, que antes variaba sin ángulo y que ahora guarda el `angulo_variante` en
+`capas.guion.parametros.angulo` como el legado (también para los destinos que reutilizan el borrador). (3) **Aprendizajes por proyecto** (`doctrina/aprendizajes.py`;
+`proyecto.json["aprendizajes"]` vía `proyectos.aprendizajes/agregar_aprendizaje/quitar_aprendizaje`, tope 40, los más
+nuevos primero): una línea por ganador o perdedor (`desde_veredicto`: «Ganó en CO: «gancho» (arranque X, audiencia Y)
+para P — CTR 2,1 %, ThruPlay 34 %.» / «Perdió en …: … — motivo. Diagnóstico: …»; gettext, así que sale en el idioma
+del proyecto) o escrita a mano (sección «Aprendizajes del proyecto» al final de Experimentos, `_aprendizajes.html`,
+rutas `apr_agregar`/`apr_quitar`). `texto_para_prompt(lista, producto=)` (los del mismo producto primero, 10, entre `<aprendizajes>`) entra
+como DATOS en las ideas de sprint (`contexto_campana["aprendizajes"]`; las cifras del ángulo se verifican contra
+los DATOS SIN aprendizajes), en el guion base (`generar_guion_base(aprendizajes=)`) y en las variantes. La línea
+del motor cabe en 650 caracteres con la frase del diagnóstico entera (`MAX_TEXTO_MOTOR`); a mano, 300. (4) UI: bajo un veredicto `perdedor` la fila de la pieza
+muestra las causas (`CAUSAS_NOMBRE|traducir`, `title` = detalle y evidencia), «Siguiente: …» y «¿Por qué?» →
+`#diagnosticar` de la página de la doctrina; con error, el motivo. (5) Flow Plus: `guiones/clips.py`, `recorte.py`,
+`imagenes.py` y `refinador.py` arman su system con `doctrina.bloque_system(*COMBINACIONES["flowplus_*"], extra=,
+idioma=)` (clips y refinador `video`+`gancho`, recorte `gancho`, imágenes solo la base; la lectura no lleva doctrina) y
+`guiones.claude.tokens_entrada_equivalentes` suma la caché al gasto (1,25× escribir, 0,1× leer) en `llamar` y en la
+llamada directa del refinador. Límites: un diagnóstico por veredicto; nada se aplica solo salvo lo que el modo ya
+ejecutaba; sin migraciones (todo vive en `extra` y en `proyecto.json`). Con esto los cuatro bloques del spec original
+(§14) están en `main`.
+
 **Rendimiento y almacenamiento (auditoría 2026-09-28, tras el incidente de la página que se
 quedaba cargando):** `/cliente/<c>` trae todas las pestañas en un solo HTML (3 MB en happyflops:
 Crear, Final edition y Experimentos repiten las mismas piezas con sus `<template>` de detalle), así
@@ -929,8 +971,28 @@ lo vuelven a bajar), `cola_limpiar` purga las `tarea` cerradas (7 días; periód
 `db_respaldar` guarda `data/respaldos/creatv_<fecha>.db` (`Connection.backup`, 7 copias). Sigue
 pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones viejas de finales,
 `materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`),
-`metrica_snapshot` inserta cada 2 h aunque nada cambie, y la carga por fragmentos de las pestañas
-pesadas.
+`metrica_snapshot` inserta cada 2 h aunque nada cambie.
+**Tarjetas ligeras y detalle bajo demanda** (spec
+`docs/superpowers/specs/2026-09-28-tarjetas-ligeras-detalle-bajo-demanda-design.md`): el 61 % de
+la página eran los `<template class="generado-detalle">` de Crear y Final edition (1,86 MB de 3,03).
+Ya no existen: las tarjetas son macros (`_crear_tarjetas.html`: `tarjeta_crear`/`lista_crear`;
+`_final_tarjetas.html`: `tarjeta_video_fe`/`tarjeta_final_fe`/`lista_videos_fe`/`lista_finales_fe`),
+la página pinta las 24 más recientes por lista (`TARJETAS_POR_PAGINA`, `_listas_crear_final`; los
+contadores muestran el total) y «Ver más» pide las siguientes a `crear_tarjetas` /
+`final_tarjetas?lista=videos|finales` (`?desde=N`, `_pagina_desde`). El detalle llega por fetch al
+abrir la tarjeta (`data-detalle` → `cf_detalle`, `fe_detalle_video`, `fe_detalle_final`; macros en
+`_crear_detalle.html` / `_final_detalle.html`, armadas con `_creative_flow_item(cliente, cf_id)` y
+`_contexto_final_edition(cliente)`, que incluye `_contexto_organico`), nunca se cachea, y
+`base.html` lo pinta con `abrirDetalleRemoto(modal, cuerpo, url, alInsertar)` («Cargando…» al
+instante, solo el último pedido gana). `#final?cf=<id>` abre la pieza aunque no esté pintada.
+Reglas: **ninguna barra de progreso lleva `<script>`** — todas `data-poll-job="<job_id>"` sobre el
+`div.barra-progreso#trabajo-<job_id>` y `arrancarSondeos(raiz)` (DOMContentLoaded + el
+MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los clics de tarjetas
+van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
+con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
+`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
+alcance (anotado en el spec §7): el JS embebido a estáticos, Catálogo/Experimentos por fragmentos,
+el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, el flujo viejo «Nueva idea».
 
 ## Agent skills
 

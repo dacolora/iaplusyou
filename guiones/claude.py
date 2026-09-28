@@ -25,6 +25,17 @@ class RespuestaFallida(RuntimeError):
     tokens_salida = 0
 
 
+def tokens_entrada_equivalentes(uso):
+    """`input_tokens` más la caché de prompts (la doctrina va en el system con
+    cache_control desde el bloque 4 §7): escribirla cuesta 1,25× y leerla 0,1×
+    — igual que `sprints.analisis._llamar_contando`, para que el gasto no
+    quede corto."""
+    entrada = int(getattr(uso, "input_tokens", 0) or 0)
+    escrita = int(getattr(uso, "cache_creation_input_tokens", 0) or 0)
+    leida = int(getattr(uso, "cache_read_input_tokens", 0) or 0)
+    return entrada + round(escrita * 1.25 + leida * 0.1)
+
+
 def llamar(system, messages, max_tokens=8000, timeout=150):
     """(texto, tokens_entrada, tokens_salida). El mensaje de una `RespuestaFallida`
     sale en el idioma que `pedir_json` haya dejado activo (el de la pantalla
@@ -34,7 +45,7 @@ def llamar(system, messages, max_tokens=8000, timeout=150):
     api = anthropic.Anthropic(api_key=_api_key(), timeout=timeout, max_retries=0)
     resp = api.messages.create(model=MODEL, max_tokens=max_tokens, system=system, messages=messages)
     uso = getattr(resp, "usage", None)
-    entrada = int(getattr(uso, "input_tokens", 0) or 0)
+    entrada = tokens_entrada_equivalentes(uso)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason in ("refusal", "max_tokens"):
         mensaje = (gettext("Claude no quiso responder esa solicitud.") if resp.stop_reason == "refusal"

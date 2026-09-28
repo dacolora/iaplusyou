@@ -17,12 +17,13 @@ def test_a_html_escapa_antes_de_convertir():
     assert "<script>" not in html and "&lt;script&gt;" in html and "<strong>&lt;b&gt;x&lt;/b&gt;</strong>" in html
 
 
-def test_secciones_trae_las_nueve_rebanadas_en_orden():
+def test_secciones_trae_todas_las_rebanadas_en_orden():
     import doctrina
     from doctrina import pagina
     secciones = pagina.secciones()
     assert [s[0] for s in secciones] == list(doctrina.REBANADAS)
     assert all(str(s[2]).strip() for s in secciones)
+    assert dict((s[0], s[1]) for s in secciones)["diagnosticar"] == "Cuando pierde"     # bloque 4
 
 
 def test_ruta_de_la_doctrina_exige_acceso_al_proyecto(base_temporal, monkeypatch, tmp_path):

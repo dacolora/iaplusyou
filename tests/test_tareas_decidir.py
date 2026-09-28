@@ -6,6 +6,21 @@ import pytest
 
 from tests.test_experimentos_db import PAISES, _pieza
 
+
+@pytest.fixture(autouse=True)
+def _sin_diagnostico_real(monkeypatch, tmp_path):
+    """Doctrina, bloque 4: `exp_decidir` diagnostica cada perdedora (Claude,
+    pagado) y deja aprendizajes en proyecto.json — acá ninguna prueba paga ni
+    toca clientes/ del repo. El diagnóstico falso falla como cuando no hay red;
+    la prueba que quiere uno de verdad lo reemplaza después."""
+    import proyectos
+    from doctrina import diagnostico
+
+    def sin_red(*a, **k):
+        raise diagnostico.ErrorDiagnostico("sin Claude en las pruebas")
+    monkeypatch.setattr(diagnostico, "diagnosticar", sin_red)
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"proyecto_{cliente}.json"))
+
 GANADOR = {"impresiones": 5000, "clics_enlace": 100, "ctr": 2.0, "cpc": 0.3, "thruplay_rate": 0.3, "gasto": 10.0}
 PERDEDOR = {"impresiones": 5000, "clics_enlace": 5, "ctr": 0.2, "cpc": 3.0, "thruplay_rate": 0.05, "gasto": 10.0}
 

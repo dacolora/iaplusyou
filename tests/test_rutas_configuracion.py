@@ -450,24 +450,27 @@ def test_sidebar_chip_con_pauta(app, monkeypatch):
 
 def test_precios_en_botones_crear_y_catalogo(app, monkeypatch):
     """Precio a la vista ANTES de gastar: Crear (guion, finales, Generar por
-    JS), Catálogo (regla con IA al importar)."""
+    JS), Catálogo (regla con IA al importar). El guion y «Producir finales»
+    van en el detalle de Final edition, que llega por fetch (tarjetas
+    ligeras, 2026-09-28)."""
     import creative_flow as cf
     from tests.test_rutas_final_edition import GUION_BASE
     monkeypatch.setattr(app["dashboard"].trabajos, "encolar", lambda *a, **k: True)
     cf_id = cf.crear("acme", [], ["Chancla"], [], "camina", 8, "", "A")
     cf.actualizar("acme", cf_id, estado="video_listo", video_url="https://r2/clon.mp4", enfoque="producto", usd=0.85)
-    html = app["c"].get("/cliente/acme").data.decode()
-    assert "Preparar guion con IA ≈ US$ 0,02" in html
+    ruta_detalle = f"/cliente/acme/creative_flow/{cf_id}/final/detalle"
+    assert "Preparar guion con IA ≈ US$ 0,02" in app["c"].get(ruta_detalle).data.decode()
     cf.guardar_guion_base("acme", cf_id, GUION_BASE)
+    detalle = app["c"].get(ruta_detalle).data.decode()
+    assert 'data-plantilla="Producir {n} finales ≈ US$ 0,10 c/u"' in detalle
+    assert ">Producir finales ≈ US$ 0,10 c/u</button>" in detalle
     html = app["c"].get("/cliente/acme").data.decode()
-    assert 'data-plantilla="Producir {n} finales ≈ US$ 0,10 c/u"' in html
-    assert ">Producir finales ≈ US$ 0,10 c/u</button>" in html
-    # Costo real de la pieza, con el mismo formato.
+    # Costo real de la pieza, con el mismo formato (en la tarjeta).
     assert "costó US$ 0,85" in html
     # Generar video/imagen: el estimado se calcula en JS con el formato «≈ US$ 1,00»
     # y va al lado del botón (#fp-precio, compositor de Crear 2026-09-27).
     assert "function formatearUSD" in html and "precio.textContent = usd ? '≈ ' + formatearUSD(usd)" in html
-    assert "(~$" not in html
+    assert "(~$" not in html and "(~$" not in detalle
     # Catálogo: la regla con IA se cobra al importar; crear a mano no gasta.
     cat = html[html.index('<section id="tab-catalogo"'):html.index('<section id="tab-settings"')]
     assert "≈ US$ 0,01 la regla con IA" in cat and "no gasta: la regla la escribes tú" in cat
