@@ -3,6 +3,21 @@ import pytest
 from tests.test_experimentos_db import PAISES
 
 
+@pytest.fixture(autouse=True)
+def _sin_diagnostico_real(monkeypatch, tmp_path):
+    """Doctrina, bloque 4: `exp_decidir` diagnostica cada perdedora (Claude,
+    pagado) y deja aprendizajes en proyecto.json — acá ninguna prueba paga ni
+    toca clientes/ del repo. El diagnóstico falso falla como cuando no hay red;
+    la prueba que quiere uno de verdad lo reemplaza después."""
+    import proyectos
+    from doctrina import diagnostico
+
+    def sin_red(*a, **k):
+        raise diagnostico.ErrorDiagnostico("sin Claude en las pruebas")
+    monkeypatch.setattr(diagnostico, "diagnosticar", sin_red)
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"proyecto_{cliente}.json"))
+
+
 def test_job_ids():
     from tareas import experimentos as te
     assert te.job_id_lanzar("acme", 3) == "acme__exp3__lanzar"
