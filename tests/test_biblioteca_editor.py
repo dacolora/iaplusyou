@@ -107,6 +107,63 @@ def test_subir_imagen_sin_proxy(entorno):
     assert not trabajos.en_curso(te.job_id_proxy("acme", m["id"]))
 
 
+def _jpg_bytes(orientacion=None, tam=(64, 32)):
+    """Un JPEG de 64×32 (izquierda roja, derecha azul) con la orientación EXIF
+    dada: 6 es como guarda un celular una foto vertical (los píxeles de lado)."""
+    from PIL import Image
+    im = Image.new("RGB", tam, (255, 0, 0))
+    im.paste((0, 0, 255), (tam[0] // 2, 0, tam[0], tam[1]))
+    buf = io.BytesIO()
+    if orientacion is None:
+        im.save(buf, format="JPEG", quality=90)
+    else:
+        exif = Image.Exif()
+        exif[0x0112] = orientacion
+        im.save(buf, format="JPEG", quality=90, exif=exif.tobytes())
+    return buf.getvalue()
+
+
+def _capturar_subidas(monkeypatch):
+    """Lo que de verdad llega a R2: medidas, orientación EXIF y formato del archivo subido."""
+    import materiales
+    from PIL import Image
+    vistos = []
+
+    def _subir(local, key, ct):
+        with Image.open(local) as im:
+            vistos.append({"tam": im.size, "orientacion": im.getexif().get(0x0112), "formato": im.format,
+                           "arriba": im.convert("RGB").getpixel((im.size[0] // 2, 2)), "ct": ct})
+        return f"https://r2/{key}"
+    monkeypatch.setattr(materiales.r2_uploader, "upload_file", _subir)
+    return vistos
+
+
+def test_subir_foto_girada_por_exif_sube_la_copia_derecha(entorno, monkeypatch, tmp_path):
+    """Fix final 3: una foto de celular (orientación 6) se medía con los píxeles
+    de lado — 64×32 en vez de 32×64 — y el editor la mostraba aplastada."""
+    vistos = _capturar_subidas(monkeypatch)
+    m = entorno.subir("acme", _Archivo("vertical.jpg", _jpg_bytes(orientacion=6)))
+    assert (m["ancho"], m["alto"]) == (32, 64)
+    assert len(vistos) == 1
+    subido = vistos[0]
+    assert subido["tam"] == (32, 64) and subido["formato"] == "JPEG" and subido["ct"] == "image/jpeg"
+    assert subido["orientacion"] in (None, 1)                       # ya derecha: nadie la vuelve a girar
+    rojo, _verde, azul = subido["arriba"]
+    assert rojo > 200 and azul < 60                                 # girada 90° a la derecha: arriba quedó el rojo
+    # la copia derecha se borra con el temporal
+    assert os.listdir(os.path.join(str(tmp_path), "clientes", "acme", "tmp_editor")) == []
+
+
+def test_subir_foto_sin_giro_sube_el_archivo_tal_cual(entorno, monkeypatch):
+    import materiales
+    datos = _jpg_bytes(orientacion=1)
+    vistos = _capturar_subidas(monkeypatch)
+    m = entorno.subir("acme", _Archivo("horizontal.jpg", datos))
+    assert (m["ancho"], m["alto"]) == (64, 32) and vistos[0]["tam"] == (64, 32)
+    import hashlib
+    assert materiales.obtener("acme", m["id"])["hash"] == hashlib.sha256(datos).hexdigest()
+
+
 def test_subir_audio_encola_el_proxy(entorno):
     import trabajos
     from tareas import edicion as te

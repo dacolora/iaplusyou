@@ -11,7 +11,7 @@ import os
 import uuid
 
 import sqlalchemy as sa
-from PIL import Image
+from PIL import Image, ImageOps, JpegImagePlugin
 
 import creative_flow
 import db
@@ -46,6 +46,41 @@ def _carpeta_tmp(cliente):
     carpeta = os.path.join(final_edition.BASE_DIR, "clientes", cliente, "tmp_editor")
     os.makedirs(carpeta, exist_ok=True)
     return carpeta
+
+
+_ORIENTACION = 0x0112     # etiqueta EXIF «Orientation»
+
+
+def _enderezar(local, ext):
+    """Una foto de celular guarda los píxeles de lado y dice en su EXIF cómo
+    girarlos (orientación ≠ 1). El editor, el lienzo y el render usan los
+    píxeles tal cual, así que se sube una copia YA girada: mismo formato (un
+    JPEG conserva sus tablas de calidad; un WebP, calidad 95), sin EXIF (ni la
+    orientación, que la volvería a girar, ni la ubicación). Devuelve la ruta de
+    esa copia, al lado del temporal, o None si la foto ya está derecha."""
+    try:
+        with Image.open(local) as im:
+            orientacion = im.getexif().get(_ORIENTACION, 1)
+            if orientacion in (None, 1):
+                return None
+            formato = im.format
+            opciones = {}
+            if im.info.get("icc_profile"):
+                opciones["icc_profile"] = im.info["icc_profile"]
+            if formato == "JPEG":
+                if getattr(im, "quantization", None):
+                    opciones["qtables"] = im.quantization
+                muestreo = JpegImagePlugin.get_sampling(im)
+                if muestreo != -1:
+                    opciones["subsampling"] = muestreo
+            elif formato == "WEBP":
+                opciones["quality"] = 95
+            derecha = ImageOps.exif_transpose(im)
+            destino = os.path.splitext(local)[0] + f"_derecha{ext}"
+            derecha.save(destino, format=formato, **opciones)
+        return destino
+    except (OSError, ValueError, SyntaxError) as e:
+        raise SubidaInvalida("No pude leer esa imagen.") from e
 
 
 def _medir(tipo, local):
@@ -108,6 +143,20 @@ def subir(cliente, archivo):
 
 
 def _procesar(cliente, local, ext, tipo, content_type, nombre_archivo):
+    """Una foto girada por EXIF se mide y se sube ya derecha (`_enderezar`);
+    esa copia se borra al terminar, como el temporal."""
+    derecha = _enderezar(local, ext) if tipo == "imagen" else None
+    try:
+        return _guardar(cliente, derecha or local, ext, tipo, content_type, nombre_archivo)
+    finally:
+        if derecha:
+            try:
+                os.remove(derecha)
+            except OSError:
+                pass
+
+
+def _guardar(cliente, local, ext, tipo, content_type, nombre_archivo):
     tam = os.path.getsize(local)
     duracion_ms, ancho, alto, tiene_audio = _medir(tipo, local)
     try:
