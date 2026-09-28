@@ -18,8 +18,11 @@ MODELO_TTS = "fal-ai/elevenlabs/tts/multilingual-v2"
 MODELO_STT = "fal-ai/whisper"
 MODELO_MUSICA = "fal-ai/stable-audio"
 
-# $/carácter, $/minuto de audio y $/pista, estimados (ver Global Constraints del plan).
-COSTO_USD_POR_CARACTER = 0.0003
+# $/carácter del TTS: fal cobra «$0.1 per 1000 characters» para
+# fal-ai/elevenlabs/tts/multilingual-v2 (verificado el 2026-09-28; la constante
+# estuvo 3× alta desde el 2026-09-15). $/minuto de Whisper y $/pista de Stable
+# Audio siguen estimados (ver Global Constraints del plan de Bloque 2).
+COSTO_USD_POR_CARACTER = 0.0001
 COSTO_USD_POR_MINUTO_AUDIO = 0.002
 COSTO_USD_POR_PISTA_MUSICA = 0.02
 
@@ -51,9 +54,13 @@ VOCES = {
 }
 
 
-def tts(texto, voz="Rachel", idioma="es", on_progreso=None):
+def tts(texto, voz="Rachel", idioma="es", on_progreso=None, velocidad=None):
     """Sintetiza `texto` con la voz `voz` (ver VOCES). Devuelve
-    {"url": mp3 público, "costo_usd": len(texto) * COSTO_USD_POR_CARACTER}."""
+    {"url": mp3 público, "costo_usd": len(texto) * COSTO_USD_POR_CARACTER}.
+    `velocidad` (0,7–1,2, el `speed` del modelo) solo viaja cuando no es None
+    ni 1,0. `idioma` NO se manda como language_code: ElevenLabs solo lo acepta
+    en Turbo/Flash v2.5 y multilingual-v2 devolvería error; el modelo detecta
+    el idioma solo."""
     if not texto:
         raise ValueError("fal_audio.tts: texto vacío.")
 
@@ -63,6 +70,8 @@ def tts(texto, voz="Rachel", idioma="es", on_progreso=None):
         "stability": 0.5,
         "similarity_boost": 0.75,
     }
+    if velocidad is not None and abs(float(velocidad) - 1.0) > 1e-9:
+        payload["speed"] = round(float(velocidad), 2)
     data = fal_client.llamar(MODELO_TTS, payload, timeout=180, on_progreso=on_progreso)
 
     url = (data.get("audio") or {}).get("url")
