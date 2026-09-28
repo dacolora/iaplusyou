@@ -23,12 +23,16 @@ def test_las_operaciones_del_navegador_dejan_documentos_validos():
     assert r.returncode == 0, r.stderr[-3000:]
     casos = json.loads(r.stdout)
     assert len(casos) >= 12
+    assert sum(c["nombre"].startswith("al_final_") for c in casos) == 6 * 16   # cada velocidad, al final del archivo
     for caso in casos:
         doc = documento.validar(caso["doc"])
         ids = [c["id"] for p in doc["pistas"] for c in p["clips"]]
         assert len(ids) == len(set(ids)), caso["nombre"]
+        duraciones = {int(k): v for k, v in (caso.get("duraciones") or DURACIONES).items()}
         antes = json.dumps(doc["pistas"][0]["clips"], sort_keys=True)
-        compilador.verificar_recortes(copy.deepcopy(doc), DURACIONES)          # nada pide material de más
-        normal = compilador.verificar_recortes(copy.deepcopy(doc), DURACIONES)
+        try:
+            normal = compilador.verificar_recortes(copy.deepcopy(doc), duraciones)   # nada pide material de más
+        except ValueError as e:
+            pytest.fail(f"{caso['nombre']}: {e}")
         assert json.dumps(normal["pistas"][0]["clips"], sort_keys=True) == antes, (
             f"{caso['nombre']}: el navegador no normalizó las transiciones como el compilador")

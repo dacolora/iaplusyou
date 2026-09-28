@@ -3,9 +3,10 @@
 // dejan el documento dentro del contrato de final_edition/documento.validar
 // (principal contigua desde 0, ids únicos, velocidad 0.5–2 en video y 1 en
 // audio) y terminan en `normalizar`, el espejo de
-// compilador.verificar_recortes para las transiciones. La pista `p_sonido`
-// (el sonido de la escena, espejo de la principal que arma el borrador) se
-// rehace con los mismos cortes para que siga pegada a la imagen.
+// compilador.verificar_recortes: ningún clip pide más material del que hay y
+// las transiciones caben. La pista `p_sonido` (el sonido de la escena, espejo
+// de la principal que arma el borrador) se rehace con los mismos cortes para
+// que siga pegada a la imagen.
 import { pistaPrincipal } from "./tiempo.js";
 
 export const MIN_CLIP_MS = 100;
@@ -81,11 +82,46 @@ export function sincronizarSonido(doc) {
   return doc;
 }
 
-// Espejo de compilador.verificar_recortes para las transiciones de la
-// principal: la cola de A (`d` ms de salida × velocidad) tiene que caber en
-// el material; si no, se acorta a lo que queda o pasa a corte seco. La
-// transición del último clip no se toca (el compilador tampoco).
+// Primera mitad de compilador.verificar_recortes: ningún clip de video
+// (principal o superpuesto) ni de audio (salvo la música, que entra en bucle)
+// pide más fuente que su material: recorte.desde_ms + round(duracion_ms ×
+// velocidad) <= material. Python redondea a la par (round-half-to-even) y
+// Math.round sube los .5, así que la cuenta de aquí nunca da menos que la de
+// Python: lo que cabe aquí cabe allá. Sin esto, las dos mitades de un corte (o
+// un recorte del inicio) a velocidad ≠ 1 en un clip que llega al final del
+// archivo piden 1 ms de más y el render falla. El clip se acorta lo justo (sin
+// bajar de MIN_CLIP_MS); si ni así cabe, su punto de entrada se corre hacia
+// atrás. `p_sonido` no se mira: se rehace desde la principal.
+function ajustarAlMaterial(doc, duraciones) {
+  for (const pista of doc.pistas) {
+    if (!["video", "superpuesto", "audio"].includes(pista.tipo) || pista.id === ID_SONIDO) continue;
+    for (const c of pista.clips) {
+      if (pista.tipo === "audio" && (c.rol_audio ?? "subida") === "musica") continue;
+      const material = duraciones[c.material_id];
+      if (material === undefined || material === null) continue;
+      let desde = c.recorte?.desde_ms ?? 0;
+      if (desde + fuente(c) <= material) continue;
+      const v = vel(c);
+      let dur = Math.max(MIN_CLIP_MS, Math.min(c.duracion_ms, Math.floor((material - desde) / v)));
+      while (dur > MIN_CLIP_MS && desde + Math.round(dur * v) > material) dur--;
+      if (desde + Math.round(dur * v) > material) desde = Math.max(0, material - Math.round(dur * v));
+      c.duracion_ms = dur;
+      c.recorte = { desde_ms: desde, hasta_ms: desde + Math.round(dur * v) };
+    }
+  }
+  const p = pistaPrincipal(doc);
+  if (p && p.tipo === "video") recolocar(p);
+}
+
+// Espejo de compilador.verificar_recortes: primero ningún clip pide material
+// de más (`ajustarAlMaterial`, con la principal otra vez contigua desde 0 y
+// el sonido de la escena rehecho); después, en la principal, la cola de A
+// (`d` ms de salida × velocidad) tiene que caber en el material; si no, se
+// acorta a lo que queda o pasa a corte seco. La transición del último clip no
+// se toca (el compilador tampoco).
 export function normalizar(doc, duraciones = {}) {
+  ajustarAlMaterial(doc, duraciones);
+  sincronizarSonido(doc);
   const p = pistaPrincipal(doc);
   if (!p || p.tipo !== "video") return doc;
   p.clips.forEach((c, i) => {
@@ -100,7 +136,6 @@ export function normalizar(doc, duraciones = {}) {
 }
 
 function terminar(doc, seleccion, duraciones) {
-  sincronizarSonido(doc);
   normalizar(doc, duraciones);
   return { doc, seleccion };
 }
