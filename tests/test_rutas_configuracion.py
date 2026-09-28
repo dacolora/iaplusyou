@@ -75,12 +75,11 @@ def test_estado_llaves_solo_mira_presencia(app, monkeypatch):
     monkeypatch.setenv("HF_API_KEY_ID", "solo-el-id")          # secreto ausente → parcial
     monkeypatch.setenv("R2_ACCOUNT_ID", "   ")                  # solo espacios = ausente
     llaves = d._estado_llaves()
-    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "meta", "smtp", "meli", "reddit", "youtube_api", "apify", "atria"]
+    assert [l["id"] for l in llaves] == ["anthropic", "fal", "higgsfield", "r2", "smtp", "meli", "reddit", "youtube_api", "apify", "atria"]
     por_id = {l["id"]: l for l in llaves}
     assert por_id["anthropic"]["estado"] == "configurada" and por_id["anthropic"]["faltan"] == []
     assert por_id["higgsfield"]["estado"] == "parcial" and por_id["higgsfield"]["faltan"] == ["HF_API_KEY_SECRET"]
     assert por_id["r2"]["estado"] == "falta" and por_id["fal"]["estado"] == "falta"
-    assert por_id["meta"]["variables"] == [] and por_id["meta"]["estado"] == "falta"   # la app es del proyecto, no del .env
     assert por_id["smtp"]["opcional"] and por_id["meli"]["opcional"] and not por_id["anthropic"]["opcional"]
     # Sin request: el paso de MELI lleva el texto genérico; con URL, la real.
     assert any("<url del sitio>/meli/callback" in p for p in por_id["meli"]["pasos"])
