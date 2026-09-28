@@ -6115,6 +6115,26 @@ def rechazar(cliente, brief_id):
     return redirect(url_for("ver_cliente", cliente=cliente))
 
 
+@app.route("/cliente/<cliente>/crear/tarjetas")
+def crear_tarjetas(cliente):
+    """«Ver más» de Crear: las TARJETAS_POR_PAGINA siguientes (fragmento HTML;
+    spec 2026-09-28 «tarjetas ligeras»)."""
+    desde = _pagina_desde(request.args.get("desde"))
+    items = _creative_flow_items(cliente)
+    return render_template("_crear_tarjetas_respuesta.html", cliente=cliente,
+                           items=items[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(items))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/detalle")
+def cf_detalle(cliente, cf_id):
+    """El detalle de una pieza (lo que antes iba embebido en un <template>
+    por tarjeta); el modal lo pide al abrir. 404 si no es de este proyecto."""
+    item = _creative_flow_item(cliente, cf_id)
+    if item is None:
+        abort(404)
+    return render_template("_crear_detalle_respuesta.html", cliente=cliente, item=item)
+
+
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])
 def cf_descartar(cliente, cf_id):
     creative_flow.eliminar(cliente, cf_id)

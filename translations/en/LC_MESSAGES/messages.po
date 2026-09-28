@@ -6578,6 +6578,10 @@ msgstr "View the applied invariant_block / negative_prompt (raw prompt text)"
 msgid "Ver la instrucción exacta que recibe el modelo →"
 msgstr "See the exact instruction the model gets →"
 
+#, python-format
+msgid "Ver más (quedan %(n)s)"
+msgstr "Show more (%(n)s left)"
+
 msgid "Ver por qué usamos estos modelos (comparación completa) →"
 msgstr "See why we use these models (full comparison) →"
 

@@ -1,0 +1,78 @@
+{# Tarjetas de Crear (spec 2026-09-28 «tarjetas ligeras»): la página y
+   /crear/tarjetas («Ver más») pintan lo mismo. Sin <template> de detalle (lo
+   trae /creative_flow/<id>/detalle al abrir la tarjeta) y sin <script>: las
+   barras llevan data-poll-job y base.html arranca el sondeo. Se importa
+   `with context` (usa cliente, url_for y _). #}
+{% macro tarjeta_crear(item) %}
+    <div class="generado" data-cf="{{ item.id }}" data-detalle="{{ url_for('cf_detalle', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
+      <div class="generado-media">
+        {% if item.estado == "video_listo" and item.tipo == "imagen" %}
+        <img src="{{ item.video_url }}" alt="" loading="lazy">
+        {% elif item.estado == "video_listo" %}
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
+        {% else %}
+        {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
+        {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
+        {% endif %}
+        <span class="generado-tipo">{% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}</span>
+        {% if item.estado == "video_generando" %}
+        <div class="generado-velo">
+          {% if item.trabajo %}
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}" data-poll-job="{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto">{{ _('Generando… 0%% · 0s') }}</div>
+          {% else %}
+          <span class="generado-estado">{{ _('Interrumpido') }}</span>
+          {% endif %}
+        </div>
+        {% elif item.estado == "error" %}
+        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
+        {% elif item.estado == "prompt_pendiente" %}
+        <div class="generado-velo">
+          {% if item.trabajo_director %}
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_director.job_id }}" data-poll-job="{{ item.trabajo_director.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto">{{ _('Armando el prompt con IA…') }}</div>
+          {% else %}
+          <span class="generado-estado">{{ _('Interrumpido — rearma el prompt') }}</span>
+          {% endif %}
+        </div>
+        {% elif item.estado == "prompt_listo" %}
+        <div class="fe-seccion" style="background:var(--panel-2);padding:0.8rem;border-radius:4px;margin-bottom:0.8rem;">
+          <p class="campo-label" style="margin:0 0 0.4rem 0;">{{ _('✏️ Super prompt (editable)') }}</p>
+          {% if item.director and item.director.estado == "fallback" %}
+          <p class="vacio" style="padding:0;font-size:.75rem;color:var(--error);">{{ _('⚠️ La IA no pudo armar los planos (%(aviso)s). Aquí va el prompt básico que puedes editar.', aviso=item.director.aviso) }}</p>
+          {% else %}
+          <p class="vacio" style="padding:0;font-size:.75rem;">{{ _('Revisa, edita si quieres y haz clic en «Generar video».') }}</p>
+          {% endif %}
+          <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}" style="margin-top:.4rem;">
+            <textarea name="prompt_a" rows="6" style="width:100%;font-size:.8rem;font-family:monospace;padding:.4rem;">{{ item.prompt_relleno }}</textarea>
+            <div style="display:flex;gap:.4rem;margin-top:.3rem;">
+              <button type="submit" class="btn-guardar btn-sm">{{ _('💾 Guardar cambios') }}</button>
+              <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe el prompt. ¿Seguir?')|tojson }});'>
+                <button type="submit" class="btn-sm">{{ _('🔄 Rearmar con IA') }}</button>
+              </form>
+            </div>
+          </form>
+        </div>
+        {% elif item.trabajo_revision %}
+        {# Doctrina, bloque 3: la barra de «Revisar con la doctrina» va en la tarjeta. #}
+        <div class="generado-velo">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_revision.job_id }}" data-poll-job="{{ item.trabajo_revision.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+          <div class="progreso-texto">{{ _('Revisando con la doctrina…') }}</div>
+        </div>
+        {% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
+        {% if item.variante %}<span class="generado-badge">{{ _('Versión %(v)s', v=item.variante) }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">{{ _('Versión A') }}</span>{% endif %}
+        {% if item.revision_estado in ("bien", "mejorar") %}<span class="generado-badge" title="{{ _('Revisión de la doctrina') }}">{% if item.revision_estado == "bien" %}{{ _('Doctrina: bien') }}{% else %}{{ _('Doctrina: %(n)s por mejorar', n=item.revision_n) }}{% endif %}</span>{% endif %}
+        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.ver', cliente=cliente, sid=item.sprint.sprint_id, panel=item.sprint.campana_id, paso='piezas') }}" title="{{ item.sprint.sprint_nombre }}">{{ _('Sprint · Campaña %(n)s', n=item.sprint.campana_n) }}</a>{% endif %}
+        <small>{{ item.modelo_nombre|traducir }}{% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="{{ _('El video trae el sonido de la escena') }}">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="{{ _('El proveedor entregó el video sin pista de audio') }}">{{ _('🔇 sin sonido') }}</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="{{ _('Música al crear: %(estilo)s', estilo=item.capas.musica.estilo) }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
+      </div>
+{% endmacro %}
+
+{% macro lista_crear(items, desde, total) %}
+    {% for item in items %}{{ tarjeta_crear(item) }}{% endfor %}
+    {% if desde + (items | length) < total %}
+    <button type="button" class="btn-sm generados-mas" data-siguiente="{{ desde + (items | length) }}">{{ _('Ver más (quedan %(n)s)', n=total - desde - (items | length)) }}</button>
+    {% endif %}
+{% endmacro %}

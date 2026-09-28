@@ -102,3 +102,54 @@ def test_base_trae_sondeos_por_atributo_ritmo_y_modal_remoto():
     # El observador de nodos insertados arranca sondeos además de videos.
     assert "arrancarSondeos(n)" in base
     assert "setTimeout(tick, intervaloSondeo(inicio))" in base and "setTimeout(tick, 1500)" not in base
+
+
+# ------------------------------------------------------------ Task 3: Crear
+
+def _pestana(html, id_, siguiente):
+    return html.split(f'id="{id_}"')[1].split(f'id="{siguiente}"')[0]
+
+
+def test_crear_pinta_24_tarjetas_sin_detalle_embebido(app):
+    _sembrar(30)
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    crear = _pestana(html, "tab-creativeflowplus", "tab-final")
+    assert '<template class="generado-detalle">' not in crear
+    assert "<script>iniciarPolling" not in crear
+    assert crear.count('class="generado"') == 24
+    assert 'data-siguiente="24"' in crear and "Generados (30)" in crear
+    assert crear.count('data-detalle="/cliente/acme/creative_flow/') == 24
+
+
+def test_crear_ver_mas_y_desde_raro(app):
+    _sembrar(30)
+    c = app["c"]
+    r = c.get("/cliente/acme/crear/tarjetas?desde=24")
+    assert r.status_code == 200 and r.mimetype == "text/html"
+    html = r.get_data(as_text=True)
+    assert html.count('class="generado"') == 6 and "data-siguiente" not in html
+    assert c.get("/cliente/acme/crear/tarjetas?desde=abc").get_data(as_text=True).count('class="generado"') == 24
+
+
+def test_detalle_de_crear(app):
+    (cf,) = _sembrar(1)
+    c = app["c"]
+    r = c.get(f"/cliente/acme/creative_flow/{cf}/detalle")
+    assert r.status_code == 200
+    html = r.get_data(as_text=True)
+    assert "Descargar" in html and f"/flowplus/reusar/{cf}" in html
+    assert "detalle-acciones" in html and "<template" not in html
+    assert c.get("/cliente/acme/creative_flow/cf_nada/detalle").status_code == 404
+    assert c.get(f"/cliente/otro/creative_flow/{cf}/detalle").status_code == 404
+
+
+def test_tarjeta_con_trabajo_vivo_usa_data_poll_job(app):
+    import cola
+    (cf,) = _sembrar(1, estado="video_generando")
+    dashboard = app["dashboard"]
+    jid = dashboard._job_id_creative_flow("acme", cf)
+    cola.encolar("flowplus_video", {"cliente": "acme", "cf_id": cf}, job_id=jid, cliente="acme")
+    html = app["c"].get("/cliente/acme").get_data(as_text=True)
+    crear = _pestana(html, "tab-creativeflowplus", "tab-final")
+    assert f'data-poll-job="{jid}"' in crear and f'id="trabajo-{jid}"' in crear
+    assert "<script>iniciarPolling" not in crear
