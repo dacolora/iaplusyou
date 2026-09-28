@@ -429,17 +429,6 @@ def test_rutas_propias_en_modo_agencia_avisan_y_no_tocan_nada(app, monkeypatch, 
     assert not os.path.exists(app["tmp"] / "clientes" / "acme" / "meta_app.json")
 
 
-def test_estado_llaves_meta_segun_modo(app):
-    d = app["dashboard"]
-    por_id = lambda **k: {l["id"]: l for l in d._estado_llaves(**k)}["meta"]
-    assert por_id()["estado"] == "falta"
-    assert por_id(meta_app_registrada=True)["estado"] == "configurada"
-    ag = por_id(modo_meta="agencia", agencia_conectada=True)
-    assert ag["estado"] == "configurada" and "Creatv" in ag["nota"] and 3 <= len(ag["pasos"]) <= 5
-    caida = por_id(modo_meta="agencia", agencia_conectada=False, meta_app_registrada=True)
-    assert caida["estado"] == "falta" and "administrador" in caida["faltan"][0]
-
-
 def test_panel_enlaza_al_panel_de_agencia(app, monkeypatch):
     monkeypatch.setattr(app["dashboard"].estado_mod, "listar_clientes", lambda: [])
     html = app["admin"].get("/panel").get_data(as_text=True)

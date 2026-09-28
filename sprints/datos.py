@@ -225,7 +225,7 @@ def normalizar_marcas(v, cliente=None):
     """Marcas a imitar como lista de {nombre, pagina_id?}. Acepta la lista ya
     armada o el texto del formulario: una por línea (o separadas por coma),
     cada una con el link del Ad Library o el id de su página si se tiene. Sin
-    repetidas (por nombre, sin importar mayúsculas); máximo MAX_MARCAS.
+    repetidas (por nombre, sin importar mayúsculas ni tildes); máximo MAX_MARCAS.
 
     `cliente` (fix round 1, Task 4): el nombre por defecto «Página N» (cuando
     no se escribió nombre, solo el id) se guarda en el idioma del proyecto.
@@ -254,9 +254,9 @@ def normalizar_marcas(v, cliente=None):
         else:
             fallback = ""
         nombre = _texto(it.get("nombre"), 80) or fallback
-        if not nombre or nombre.lower() in vistas:
+        if not nombre or db.pliegue(nombre) in vistas:
             continue
-        vistas.add(nombre.lower())
+        vistas.add(db.pliegue(nombre))
         salida.append({"nombre": nombre, "pagina_id": pagina} if pagina else {"nombre": nombre})
     if len(salida) > MAX_MARCAS:
         raise ErrorDatos(gettext("Máximo %(n)s marcas a imitar.", n=MAX_MARCAS))
@@ -486,6 +486,7 @@ def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objeti
         raise ErrorDatos(gettext("El objetivo de referencias debe ser un número entero."))
     if objetivo < 1:
         raise ErrorDatos(gettext("El objetivo de referencias debe ser al menos 1."))
+    objetivo = _tope_referencias_objetivo(objetivo)
     pais, idioma = _pais(pais), _idioma(idioma) or IDIOMA_BASE
     marcas, momento = normalizar_marcas(marcas, cliente=cliente), _momento(momento)
     ahora = db.ahora()
@@ -938,13 +939,15 @@ def _ideas(con, cliente, campana_id=None, cp_id=None):
     """Ideas de una campaña unidas (LEFT JOIN) con la sesión de Crear que las
     generó: `pieza.legado_id == campana_pieza.cf_id`. Las finales tienen otro
     legado_id (`cf__idioma_pais`) y otro tipo, así que nunca se confunden."""
-    cp, pz, c = db.campana_pieza, db.pieza, db.campana
+    cp, pz, c, co = db.campana_pieza, db.pieza, db.campana, db.concepto
     q = (sa.select(cp, c.c.sprint_id.label("sprint_id"), c.c.orden.label("campana_orden"),
                    pz.c.estado.label("estado"), pz.c.url_video, pz.c.url_miniatura, pz.c.url_local,
-                   pz.c.costo_usd, pz.c.error.label("pieza_error"), pz.c.modelo)
+                   pz.c.costo_usd, pz.c.error.label("pieza_error"), pz.c.modelo,
+                   pz.c.extra.label("pieza_extra"), co.c.extra.label("concepto_extra"))
          .select_from(cp.join(c, c.c.id == cp.c.campana_id)
                       .outerjoin(pz, sa.and_(pz.c.legado_id == cp.c.cf_id, pz.c.cliente == cp.c.cliente,
-                                             pz.c.tipo.in_(TIPOS_PIEZA))))
+                                             pz.c.tipo.in_(TIPOS_PIEZA)))
+                      .outerjoin(co, co.c.id == pz.c.concepto_id))
          .where(cp.c.cliente == cliente))
     if campana_id is not None:
         q = q.where(cp.c.campana_id == campana_id)
@@ -956,6 +959,10 @@ def _ideas(con, cliente, campana_id=None, cp_id=None):
         d["referencias_ids"] = list(d.get("referencias_ids") or [])
         d["plataformas"] = list(d.get("plataformas") or [])
         d["extra"] = d.get("extra") or {}
+        # «Sonido de la escena» de la sesión (el mismo orden que creative_flow._a_dict:
+        # la pieza pisa al concepto); None si no hay sesión o no lo guardó.
+        sesion = {**(d.pop("concepto_extra", None) or {}), **(d.pop("pieza_extra", None) or {})}
+        d["con_sonido"] = bool(sesion["con_sonido"]) if "con_sonido" in sesion else None
         # Sin sesión de Crear que la represente: cf_id NULL o una reserva
         # vencida. Es lo que `produccion.pendientes` y los botones «Generar
         # lote» miran; una reserva viva NO es sin_sesion (otro lote la tiene).

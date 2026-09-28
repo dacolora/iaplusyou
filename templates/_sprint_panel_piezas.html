@@ -7,7 +7,7 @@
 <div class="panel-piezas" data-piezas-vivas="{{ '1' if piezas_vivas else '0' }}">
   <section class="panel-seccion">
     <div class="panel-piezas-cab">
-      <p>{{ _('%(listas)s listas · %(generando)s generando · %(encoladas)s en cola · %(error)s con error', listas=(rp.listas or 0), generando=(rp.generando or 0), encoladas=(rp.encoladas or 0), error=(rp.error or 0)) }} · <strong>{{ _('%(aprobadas)s aprobadas', aprobadas=(rp.aprobadas or 0)) }}</strong> · {{ _('US$ %(usd)s gastado', usd='%.2f' % (rp.costo_usd or 0)) }}</p>
+      <p>{{ ngettext('%(num)s lista', '%(num)s listas', rp.listas or 0) }} · {{ _('%(generando)s generando · %(encoladas)s en cola · %(error)s con error', generando=(rp.generando or 0), encoladas=(rp.encoladas or 0), error=(rp.error or 0)) }} · <strong>{{ ngettext('%(num)s aprobada', '%(num)s aprobadas', rp.aprobadas or 0) }}</strong> · {{ _('US$ %(usd)s gastado', usd='%.2f' % (rp.costo_usd or 0)) }}</p>
       {% if pasaron_qa %}
       <button type="button" class="btn-generar btn-sm" data-aprobar-qa data-campana="{{ c.id }}"
               data-url="{{ url_for('sprints.revision_aprobar_qa', cliente=cliente, sid=sprint.id) }}">{{ _('Aprobar las que pasaron QA (%(n)s)', n=pasaron_qa) }}</button>

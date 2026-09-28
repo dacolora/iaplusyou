@@ -1,0 +1,10 @@
+{# Nombre legible del estado de una pieza de Crear o de una final (antes se veía
+   el valor interno: «video_listo», «degradada»…). Se importa `with context`. #}
+{% macro etiqueta_estado(estado) -%}
+{%- set nombres = {
+  "pendiente": _('En cola'), "prompt_pendiente": _('Armando el prompt'), "prompt_listo": _('Prompt listo'),
+  "video_generando": _('Generando'), "generando": _('Generando'),
+  "video_listo": _('Lista'), "listo": _('Lista'), "degradada": _('Lista, con avisos'), "error": _('Error'),
+} -%}
+{{ nombres.get(estado, estado) }}
+{%- endmacro %}

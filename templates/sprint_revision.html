@@ -7,7 +7,7 @@
 <div class="pagina-cabecera sprint-cabecera">
   <div>
     <h1>{{ _('Revisión de %(nombre)s', nombre=sprint.nombre) }}</h1>
-    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ _('%(terminadas)s terminadas de %(planeadas)s · %(aprobadas)s aprobadas · %(rechazadas)s rechazadas · %(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s', terminadas=resumen.terminadas, planeadas=resumen.planeadas, aprobadas=resumen.aprobadas, rechazadas=resumen.rechazadas, sin_revisar=resumen.sin_revisar, error=resumen.error, usd='%.2f' % resumen.costo_usd) }}</p>
+    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ ngettext('%(num)s terminada', '%(num)s terminadas', resumen.terminadas) }} {{ _('de %(planeadas)s', planeadas=resumen.planeadas) }} · {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', resumen.aprobadas) }} · {{ ngettext('%(num)s rechazada', '%(num)s rechazadas', resumen.rechazadas) }} · {{ _('%(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s', sin_revisar=resumen.sin_revisar, error=resumen.error, usd='%.2f' % resumen.costo_usd) }}</p>
     <p class="vacio"><span class="solo-teclado">{{ _('Atajos:') }} <kbd>A</kbd> {{ _('aprobar') }} · <kbd>R</kbd> {{ _('rechazar') }} · <kbd>←</kbd> <kbd>→</kbd> {{ _('moverse.') }} </span>{{ _('Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.') }}</p>
   </div>
 </div>
@@ -18,7 +18,7 @@
   </form>
   {% if sprint.estado == "revision" %}
   <form method="post" action="{{ url_for('sprints.cerrar', cliente=cliente, sid=sprint.id) }}" class="inline"
-        onsubmit='return confirm({{ _("¿Cerrar el sprint? %(aprobadas)s aprobadas, %(rechazadas)s rechazadas, %(sin_revisar)s sin revisar.", aprobadas=resumen.aprobadas, rechazadas=resumen.rechazadas, sin_revisar=resumen.sin_revisar)|tojson }});'>
+        onsubmit='return confirm({{ _("¿Cerrar el sprint? %(aprobadas)s, %(rechazadas)s, %(sin_revisar)s sin revisar.", aprobadas=ngettext("%(num)s aprobada", "%(num)s aprobadas", resumen.aprobadas), rechazadas=ngettext("%(num)s rechazada", "%(num)s rechazadas", resumen.rechazadas), sin_revisar=resumen.sin_revisar)|tojson }});'>
     <button type="submit" class="btn-sm">{{ _('Cerrar sprint') }}</button>
   </form>
   {% endif %}

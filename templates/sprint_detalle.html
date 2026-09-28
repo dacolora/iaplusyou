@@ -21,7 +21,7 @@
     <button type="button" class="btn-sm" onclick="abrirLote('')">{{ _('Generar lote (%(n)s)', n=(pendientes_sprint | length)) }}</button>
     {% endif %}
     {% if lote and (lote.listas or lote.error or lote.generando or lote.encoladas) %}
-    <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}">{{ _('Revisar (%(aprobadas)s/%(listas)s listas)', aprobadas=lote.aprobadas, listas=lote.listas) }}</a>
+    <a class="btn-sm" href="{{ url_for('sprints.revision', cliente=cliente, sid=sprint.id) }}">{{ ngettext('Revisar (%(aprobadas)s/%(num)s lista)', 'Revisar (%(aprobadas)s/%(num)s listas)', lote.listas, aprobadas=lote.aprobadas) }}</a>
     {% endif %}
     <details class="tablero-mas">
       <summary class="btn-sm">{{ _('Más') }}</summary>
@@ -69,7 +69,7 @@
 
 {% if lote and (lote.listas or lote.generando or lote.encoladas or lote.error) %}
 <p class="vacio sprint-lote-resumen" id="sprint-lote-resumen">
-  {{ _('%(listas)s listas · %(generando)s generando · %(encoladas)s en cola · %(error)s con error · %(aprobadas)s aprobadas · USD %(usd)s gastado', listas=lote.listas, generando=lote.generando, encoladas=lote.encoladas, error=lote.error, aprobadas=lote.aprobadas, usd='%.2f' % lote.costo_usd) }}
+  {{ ngettext('%(num)s lista', '%(num)s listas', lote.listas) }} · {{ _('%(generando)s generando · %(encoladas)s en cola · %(error)s con error', generando=lote.generando, encoladas=lote.encoladas, error=lote.error) }} · {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', lote.aprobadas) }} · {{ _('USD %(usd)s gastado', usd='%.2f' % lote.costo_usd) }}
 </p>
 {% endif %}
 
@@ -139,7 +139,12 @@
     volverAlTablero: {{ _('Volver al tablero')|tojson }},
     cargandoCampana: {{ _('Cargando la campaña…')|tojson }},
     noSePudoAbrir: {{ _('No se pudo abrir la campaña. Revisa tu conexión e intenta de nuevo.')|tojson }},
-    plantillaLote: {{ _('%(listas)s listas · %(generando)s generando · %(encoladas)s en cola · %(error)s con error · %(aprobadas)s aprobadas · USD %(usd)s gastado', listas='{listas}', generando='{generando}', encoladas='{encoladas}', error='{error}', aprobadas='{aprobadas}', usd='{usd}')|tojson }}
+    lista1: {{ ngettext('%(num)s lista', '%(num)s listas', 1, num='{n}')|tojson }},
+    listasN: {{ ngettext('%(num)s lista', '%(num)s listas', 2, num='{n}')|tojson }},
+    medioLote: {{ _('%(generando)s generando · %(encoladas)s en cola · %(error)s con error', generando='{generando}', encoladas='{encoladas}', error='{error}')|tojson }},
+    aprobada1: {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', 1, num='{n}')|tojson }},
+    aprobadasN: {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', 2, num='{n}')|tojson }},
+    gastadoLote: {{ _('USD %(usd)s gastado', usd='{usd}')|tojson }}
   };
   (function () {
     var panel = document.getElementById('tablero-panel');
@@ -227,6 +232,57 @@
           if (html && t) { t.outerHTML = html; if (panelActualCid === String(cid)) marcarActiva(cid); }
         }).catch(function () {});
     }
+    // Lo que la persona estaba escribiendo (campos con data-sucio) sobrevive a que el
+    // panel de la MISMA campaña se vuelva a pintar: antes se perdía si otro guardado
+    // lo recargaba justo mientras escribía. La clave identifica el campo en el HTML nuevo.
+    function claveCampo(el) {
+      var caja = el.closest('[data-cp], [data-describir], .angulo-editor');
+      var dueno = caja ? (caja.dataset.cp || caja.dataset.describir || caja.dataset.url || '') : '';
+      var nombre = el.dataset.campo || el.dataset.anguloCampo || el.name ||
+                   (el.hasAttribute('data-motivo') ? 'motivo' : '') || (el.hasAttribute('data-descripcion') ? 'descripcion' : '');
+      return nombre ? dueno + '|' + nombre : null;
+    }
+    // Cada <details> del panel (tarjeta de idea, editor del ángulo, «Subir»…) sigue
+    // abierto o cerrado como lo dejó la persona: el HTML nuevo llega todo cerrado.
+    function claveDetalle(d) {
+      return d.dataset.cp ? 'cp|' + d.dataset.cp : d.dataset.url ? 'url|' + d.dataset.url : 'clase|' + d.className;
+    }
+    function tomarEscrito() {
+      var escrito = {}, abiertos = {}, activo = document.activeElement, foco = null;
+      cuerpo.querySelectorAll('input[data-sucio], textarea[data-sucio]').forEach(function (el) {
+        var k = claveCampo(el);
+        if (k) escrito[k] = el.value;
+      });
+      cuerpo.querySelectorAll('details').forEach(function (d) { abiertos[claveDetalle(d)] = d.open; });
+      if (activo && cuerpo.contains(activo) && activo.dataset.sucio) {
+        foco = {clave: claveCampo(activo), ini: activo.selectionStart, fin: activo.selectionEnd};
+      }
+      return {escrito: escrito, abiertos: abiertos, foco: foco};
+    }
+    function devolverEscrito(guardado) {
+      if (!guardado) return;
+      cuerpo.querySelectorAll('details').forEach(function (d) {
+        var k = claveDetalle(d);
+        if (k in guardado.abiertos) d.open = guardado.abiertos[k];
+      });
+      if (!Object.keys(guardado.escrito).length) return;
+      cuerpo.querySelectorAll('input, textarea').forEach(function (el) {
+        var k = claveCampo(el);
+        if (!k || !(k in guardado.escrito) || el.readOnly || el.disabled) return;
+        el.value = guardado.escrito[k];
+        // «input» vuelve a marcarlo sin guardar y agenda el autoguardado de las ideas y del ángulo;
+        // los campos que se guardan al salir (data-campo, descripción) reciben su «change».
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        var alSalir = el.dataset.campo || el.hasAttribute('data-descripcion');
+        if (guardado.foco && guardado.foco.clave === k) {
+          el.focus();
+          try { el.setSelectionRange(guardado.foco.ini, guardado.foco.fin); } catch (e) { /* campos sin selección */ }
+          if (alSalir) el.addEventListener('blur', function () { el.dispatchEvent(new Event('change', {bubbles: true})); }, {once: true});
+        } else if (alSalir) {
+          el.dispatchEvent(new Event('change', {bubbles: true}));
+        }
+      });
+    }
     function abrir(cid, paso) {
       var mismo = panelActualCid === cid;
       if (!paso && mismo) paso = pasoActual;
@@ -243,11 +299,13 @@
         })
         .then(function (html) {
           if (html === null || miPeticion !== peticionPanel) return;
+          var escrito = mismo ? tomarEscrito() : null;
           cuerpo.innerHTML = html;
           var r = cuerpo.querySelector('.panel-campana[data-cid]');
           if (r) irAPaso(r.dataset.paso);
           if (mismo) panel.scrollTop = scroll;
           if (typeof window.tableroPanelListo === 'function') window.tableroPanelListo();
+          devolverEscrito(escrito);
         })
         .catch(function () {
           if (miPeticion !== peticionPanel) return;
@@ -363,7 +421,7 @@
           .then(function (r) { return r.json(); })
           .then(function (j) {
             var res = document.getElementById('sprint-lote-resumen');
-            if (res && j.lote) res.textContent = TEXTO_TABLERO.plantillaLote.replace('{listas}', j.lote.listas).replace('{generando}', j.lote.generando).replace('{encoladas}', j.lote.encoladas).replace('{error}', j.lote.error).replace('{aprobadas}', j.lote.aprobadas).replace('{usd}', j.lote.costo_usd.toFixed(2));
+            if (res && j.lote) res.textContent = (j.lote.listas === 1 ? TEXTO_TABLERO.lista1 : TEXTO_TABLERO.listasN).replace('{n}', j.lote.listas) + ' · ' + TEXTO_TABLERO.medioLote.replace('{generando}', j.lote.generando).replace('{encoladas}', j.lote.encoladas).replace('{error}', j.lote.error) + ' · ' + (j.lote.aprobadas === 1 ? TEXTO_TABLERO.aprobada1 : TEXTO_TABLERO.aprobadasN).replace('{n}', j.lote.aprobadas) + ' · ' + TEXTO_TABLERO.gastadoLote.replace('{usd}', j.lote.costo_usd.toFixed(2));
             if (j.estado !== 'generando' && puedeRecargar()) location.reload();
           }).catch(function () {});
       }, 10000);
@@ -599,6 +657,8 @@
         return guardarIdea(e.card);
       });
       Object.keys(vueloIdea).forEach(function (cp) { promesas.push(vueloIdea[cp]); });
+      // El ángulo de cada idea se autoguarda aparte (angulo.js): también se espera.
+      if (window.guardarAngulosPendientes) promesas.push(window.guardarAngulosPendientes(cuerpo));
       return Promise.all(promesas).then(function (oks) {
         if (oks.indexOf(false) >= 0) throw new Error(TEXTO_PANEL.ideaNoGuardada);
       });
@@ -647,17 +707,20 @@
     function refrescarPiezas() {
       var r = raiz(), caja = cajaPiezas();
       if (!r || !caja) return Promise.resolve();
+      var cid = r.dataset.cid;
       return fetch(r.dataset.urlPiezas, {headers: H})
         .then(function (x) {
           if (x.status === 404) return null;      // la campaña se borró en otra pestaña: no se pregunta más
           return x.ok ? x.text() : Promise.reject();
         })
         .then(function (html) {
+          // Una respuesta de una campaña que ya no está abierta no toca el reloj de la nueva.
+          if (!sigue(cid)) return;
           if (html === null) { clearTimeout(relojPiezas); relojPiezas = null; return; }
           if (!escribiendoMotivo()) caja.innerHTML = html;
           programarPiezas();
         })
-        .catch(function () { programarPiezas(); });
+        .catch(function () { if (sigue(cid)) programarPiezas(); });
     }
     function trasAccionPieza(cid) {
       T.refrescarTarjeta(cid);

@@ -560,6 +560,10 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     cada ESPERA_CONT segundos para siempre, sin que el barrido llegue nunca a
     un estado final."""
     avanzar(ETAPA_CLASIFICAR)
+    # «Mis barridos» lee `barrido.estado`: sin esto seguía en «Guardando
+    # imágenes» durante toda la clasificación (2026-09-27). Al terminar, el
+    # final de esta fase lo deja en listo/parcial como siempre.
+    datos.actualizar_barrido(bid, estado="clasificando")
     cliente = p.get("cliente")
     cliente_gasto = cliente or datos.CLIENTE_CREATV
     tipo_actual = tarea.get("tipo") or TIPO_BARRER

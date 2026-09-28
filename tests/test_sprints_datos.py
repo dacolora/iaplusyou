@@ -64,6 +64,8 @@ def test_sprint_crear_y_validar(base_temporal):
         datos.crear_sprint("acme", "X", "2026-10-31", "2026-10-01")
     with pytest.raises(datos.ErrorDatos):
         datos.crear_sprint("acme", "X", "2026-10-01", "2026-10-31", referencias_objetivo_defecto=0)
+    with pytest.raises(datos.ErrorDatos):      # un POST armado a mano no se salta el tope de las campañas
+        datos.crear_sprint("acme", "X", "2026-10-01", "2026-10-31", referencias_objetivo_defecto=21)
     assert datos.sprint("otro", sid) is None and datos.sprints("otro") == []
 
 

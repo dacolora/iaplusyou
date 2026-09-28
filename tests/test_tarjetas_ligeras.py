@@ -199,3 +199,11 @@ def test_final_js_abre_por_enlace_aunque_la_tarjeta_no_este():
     js = _plantilla("_tab_final.html")
     assert "template.generado-detalle" not in js and "data-detalle" in _plantilla("_final_tarjetas.html")
     assert "fe_detalle_video" in js and "URL_DETALLE" in js and "abrirDetalleRemoto(" in js and "iniciarEditoresAngulo" in js
+
+
+def test_detalle_muestra_el_estado_en_palabras(app):
+    """Antes el detalle de una pieza mostraba el valor interno («video_listo»)."""
+    c, dashboard = app["c"], app["dashboard"]
+    cf = _sembrar(1)[0]
+    html = c.get(f"/cliente/acme/creative_flow/{cf}/detalle").get_data(as_text=True)
+    assert '<span class="tag-estado">Lista</span>' in html and ">video_listo<" not in html
