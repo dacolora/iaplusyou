@@ -3,6 +3,7 @@
 // documento.validar y compilador.verificar_recortes (la referencia es Python).
 import * as op from "../../static/editor/operaciones.js";
 import { docBase, DURACIONES as D } from "./doc_base.mjs";
+import * as prop from "../../static/editor/propiedades_modelo.js";
 
 const casos = [];
 const anotar = (nombre, fn, duraciones) => casos.push({ nombre, doc: fn().doc, ...(duraciones ? { duraciones } : {}) });
@@ -65,6 +66,25 @@ anotar("cambiar_estilo_parcial", () => {
   return op.cambiar(d, "t1", { estilo: { contorno: { grosor: 0.05 } } }, INFO);
 });
 anotar("volumen_sonido", () => op.volumenSonido(op.normalizar(docBase(), INFO), "v0", 0.3, INFO));
+// Capa 4b (Task 7): lo que pide el panel de propiedades.
+anotar("volumen_sonido_espejo_del_borrador", () => op.volumenSonido(docBase(), "v1", 0.3, INFO));
+for (const preset of op.MEZCLAS) anotar(`cambiar_mezcla_${preset}`, () => op.cambiarMezcla(docBase(), preset, INFO));
+anotar("cambiar_desde_propiedades", () => {
+  let d = op.agregarTexto(docBase(), 500, "titulo", INFO).doc;
+  const id = "titulo_2";
+  for (const cambios of [prop.cambioFondo("pildora", null), prop.cambioFondo("caja", { radio: 1 }), prop.cambioGrosor(12, d.formato),
+    prop.cambioSombra(true, d.formato), { estilo: { color: "#FFD60A", alineacion: "izquierda", fuente: "SpaceGrotesk-Bold", tamano: 90 } },
+    { animacion: { entrada: "deslizar" } }, { transform: { x: 0.5, y: 0.5 } }]) {
+    d = op.cambiar(d, id, cambios, INFO).doc;
+  }
+  const img = op.agregarImagen(d, { id: 4, ancho: 600, alto: 400 }, 0, {}, INFO);
+  const clip = img.doc.pistas.flatMap((p) => p.clips).find((c) => c.id === img.seleccion);
+  d = op.cambiar(img.doc, img.seleccion, prop.cambioLlenar(clip, null, img.doc.formato), INFO).doc;
+  d = op.cambiar(d, img.seleccion, { transform: { escala: prop.escalaDePorcentaje(40, clip, null, d.formato), opacidad: 0.5 } }, INFO).doc;
+  d = op.cambiar(d, "a1", { audio: { volumen: 0, fundido_entrada_ms: 300, fundido_salida_ms: 700 } }, INFO).doc;
+  d = op.cambiar(d, "v1", { ken_burns: null }, INFO).doc;
+  return op.cambiarMezcla(d, "ambiente_protagonista", INFO);
+});
 
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {

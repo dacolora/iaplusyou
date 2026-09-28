@@ -87,3 +87,11 @@ def test_ducking_de_mezcla_es_legible_por_el_navegador():
         partes = dict(p.split("=") for p in cadena.split(":"))
         assert set(partes) == {"threshold", "ratio", "attack", "release"}
         assert all(float(v) > 0 for v in partes.values())
+
+
+def test_mezclas_del_panel_iguales_a_python():
+    # El panel de propiedades ofrece estas mezclas (operaciones.cambiarMezcla):
+    # tienen que ser las que conoce el render (mezcla.PRESETS), ni una más.
+    from final_edition import mezcla
+    assert _constante_js("operaciones.js", "MEZCLAS") == list(mezcla.PRESETS)
+    assert mezcla.PRESET_DEFECTO == "equilibrada"

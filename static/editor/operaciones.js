@@ -10,7 +10,7 @@
 //
 // Capa 4b agrega las operaciones que AGREGAN algo nuevo (agregarVideo/
 // Imagen/Audio/Texto), las que CAMBIAN un clip existente (cortarClip,
-// ponerTransicion, editarTexto, cambiar, volumenSonido) y dos ajustes de
+// ponerTransicion, editarTexto, cambiar, volumenSonido, cambiarMezcla) y dos ajustes de
 // contrato: el último parámetro (antes `duraciones`, un mapa plano
 // {material_id: duracion_ms}) ahora se llama `info` y también acepta el mapa
 // rico {material_id: {duracion_ms, tiene_audio}} — un número suelto se lee
@@ -725,14 +725,31 @@ export function cambiar(doc, clipId, cambios, info = {}) {
 
 // Volumen del sonido de la escena (el espejo `s_<id>` en p_sonido) de un
 // clip de la principal — no el volumen del clip mismo, que no se escucha:
-// lo que suena es siempre el espejo.
+// lo que suena es siempre el espejo. Primero se rehace el espejo
+// (sincronizarSonido, lo mismo que hace cualquier operación al terminar): un
+// documento recién salido del borrador nombra sus espejos s0, s1… y sin esto
+// el primer cambio de volumen diría que el clip no tiene sonido.
 export function volumenSonido(doc, clipPrincipalId, volumen, info = {}) {
   const res = structuredClone(doc);
   const p = principalDe(res);
   if (!p.clips.some((c) => c.id === clipPrincipalId)) throw new OperacionInvalida("Ese clip no está en la pista principal.");
+  sincronizarSonido(res, info);
   const sonido = res.pistas.find((x) => x.id === ID_SONIDO);
   const mirror = sonido?.clips.find((c) => c.id === `s_${clipPrincipalId}`.slice(0, 40));
   if (!mirror) throw new OperacionInvalida("Ese clip no tiene sonido de la escena todavía.");
   mirror.audio.volumen = acotar(numeroCambio(volumen, "volumen"), 0, 1);
   return terminar(res, clipPrincipalId, info);
+}
+
+// La mezcla de toda la edición: uno de los presets de final_edition/mezcla.PRESETS
+// (tests/test_editor_js.py compara la lista). Elegir uno quita los volúmenes a
+// medida (`volumenes`, que se suman ENCIMA del preset): si no, lo elegido no se
+// oiría. No elige nada (es de la edición, no de un clip).
+export const MEZCLAS = ["equilibrada", "voz_protagonista", "ambiente_protagonista"];
+
+export function cambiarMezcla(doc, preset, info = {}) {
+  if (!MEZCLAS.includes(preset)) throw new OperacionInvalida(`Esa mezcla no existe (${preset}).`);
+  const res = structuredClone(doc);
+  res.mezcla = { preset, volumenes: null };
+  return terminar(res, null, info);
 }

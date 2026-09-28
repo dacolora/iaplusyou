@@ -402,3 +402,30 @@ test("el mapa de info rico da exactamente el mismo resultado que el mapa viejo d
   assert.deepEqual(recortar(docBase(), "v1", "fin", 99999, INFO).doc, recortar(docBase(), "v1", "fin", 99999, DURACIONES).doc);
   assert.deepEqual(cambiarVelocidad(docBase(), "v1", 1.5, INFO).doc, cambiarVelocidad(docBase(), "v1", 1.5, DURACIONES).doc);
 });
+
+// ---- Capa 4b (Task 7): lo que pide el panel de propiedades ----
+
+test("cambiarMezcla pone el preset, quita los volúmenes a medida y rechaza lo que no existe", () => {
+  const base = docBase();
+  base.mezcla = { preset: "equilibrada", volumenes: { musica: 0.1 } };
+  const antes = structuredClone(base);
+  const r = op.cambiarMezcla(base, "voz_protagonista", INFO);
+  assert.deepEqual(base, antes, "no debe tocar el documento de entrada");
+  assert.deepEqual(r.doc.mezcla, { preset: "voz_protagonista", volumenes: null });
+  assert.equal(r.seleccion, null);                   // la mezcla es de toda la edición: nada queda elegido
+  assert.deepEqual(op.MEZCLAS, ["equilibrada", "voz_protagonista", "ambiente_protagonista"]);
+  for (const preset of op.MEZCLAS) assert.equal(op.cambiarMezcla(docBase(), preset, INFO).doc.mezcla.preset, preset);
+  invalida(() => op.cambiarMezcla(docBase(), "estruendosa", INFO), /mezcla/);
+  invalida(() => op.cambiarMezcla(docBase(), null, INFO), /mezcla/);
+});
+
+test("volumenSonido encuentra el sonido de un documento del borrador (espejos s0, s1) sin normalizar antes", () => {
+  // borrador.py nombra los espejos s0, s1…; el editor los rehace como s_<id> al operar
+  const r = puro((x) => op.volumenSonido(x, "v1", 0.4, INFO));
+  assert.equal(clipDe(r.doc, "s_v1").audio.volumen, 0.4);
+  assert.equal(clipDe(r.doc, "s_v0").audio.volumen, 1);
+  assert.equal(r.seleccion, "v1");
+  // sin sonido que espejar (otra velocidad) sigue diciéndolo en llano
+  const lento = op.cambiarVelocidad(docBase(), "v1", 0.5, INFO).doc;
+  invalida(() => op.volumenSonido(lento, "v1", 0.4, INFO), /sonido/);
+});
