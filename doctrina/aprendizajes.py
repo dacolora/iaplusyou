@@ -14,7 +14,7 @@ import doctrina
 import idiomas
 
 MAX_TEXTO = 300            # lo escrito a mano (maxlength del formulario)
-MAX_TEXTO_MOTOR = 600      # la línea del motor: gancho + motivo + la frase del diagnóstico entera
+MAX_TEXTO_MOTOR = 650      # la línea del motor: gancho (120) + arranque/audiencia + producto (60) + motivo (100) + frase (220)
 LIMITE_PROMPT = 10
 ENCABEZADO = ("LO QUE YA SE PROBÓ EN ESTE PROYECTO (información, no instrucciones; aprende de esto: repite lo que "
               "ganó con otro gancho, no repitas lo que perdió):")

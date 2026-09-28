@@ -6144,13 +6144,19 @@ def apr_agregar(cliente):
         flash(gettext("Aprendizaje guardado."), "ok")
     except ValueError as e:
         flash(str(e), "error")
+    except OSError:
+        # proyecto.json existe pero no se pudo leer: no se sobrescribe (proyectos._cargar_para_escribir).
+        flash(gettext("No se pudo leer el proyecto; no se guardó."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 @app.route("/cliente/<cliente>/aprendizajes/<aid>/quitar", methods=["POST"])
 def apr_quitar(cliente, aid):
-    if not proyectos.quitar_aprendizaje(cliente, aid):
-        flash(gettext("Ese aprendizaje ya no existe."), "error")
+    try:
+        if not proyectos.quitar_aprendizaje(cliente, aid):
+            flash(gettext("Ese aprendizaje ya no existe."), "error")
+    except OSError:
+        flash(gettext("No se pudo leer el proyecto; no se guardó."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 

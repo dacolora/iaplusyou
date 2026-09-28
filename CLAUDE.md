@@ -912,7 +912,7 @@ del proyecto) o escrita a mano (sección «Aprendizajes del proyecto» al final 
 rutas `apr_agregar`/`apr_quitar`). `texto_para_prompt(lista, producto=)` (los del mismo producto primero, 10, entre `<aprendizajes>`) entra
 como DATOS en las ideas de sprint (`contexto_campana["aprendizajes"]`; las cifras del ángulo se verifican contra
 los DATOS SIN aprendizajes), en el guion base (`generar_guion_base(aprendizajes=)`) y en las variantes. La línea
-del motor cabe en 600 caracteres con la frase del diagnóstico entera (`MAX_TEXTO_MOTOR`); a mano, 300. (4) UI: bajo un veredicto `perdedor` la fila de la pieza
+del motor cabe en 650 caracteres con la frase del diagnóstico entera (`MAX_TEXTO_MOTOR`); a mano, 300. (4) UI: bajo un veredicto `perdedor` la fila de la pieza
 muestra las causas (`CAUSAS_NOMBRE|traducir`, `title` = detalle y evidencia), «Siguiente: …» y «¿Por qué?» →
 `#diagnosticar` de la página de la doctrina; con error, el motivo. (5) Flow Plus: `guiones/clips.py`, `recorte.py`,
 `imagenes.py` y `refinador.py` arman su system con `doctrina.bloque_system(*COMBINACIONES["flowplus_*"], extra=,

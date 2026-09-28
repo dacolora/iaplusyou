@@ -391,3 +391,43 @@ def test_una_final_se_diagnostica_con_su_propio_guion(base_temporal, monkeypatch
     _decisor_fijo(monkeypatch, te, "perdedor", "rescatar")
     te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
     assert vistos and vistos[0]["guion"]["bloques"][0]["texto_voz"] == "propio"
+
+
+def test_una_inconclusa_que_se_pausa_no_se_diagnostica_ni_paga(base_temporal, monkeypatch, tmp_path):
+    """N1 (re-revisión): la rama «pausar» la produce el veredicto inconcluso."""
+    import experimentos as ex
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import _pieza
+    tareas.cargar_todas()
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    _pedidas(monkeypatch, te)
+    llamadas = []
+    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", lambda *a, **k: llamadas.append(1))
+    eid, ep = _experimento_activo(ex, _pieza(base_temporal))
+    _decisor_fijo(monkeypatch, te, "inconcluso", "pausar")
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    assert llamadas == [] and "diagnostico" not in ex.piezas("acme", eid)[0]["extra"]
+    assert proyectos.aprendizajes("acme") == []
+
+
+def test_la_ganadora_aprende_antes_de_sus_acciones(base_temporal, monkeypatch, tmp_path):
+    """N2 (re-revisión): si escalar/derivar/orgánico lanzan, la línea ya quedó."""
+    import experimentos as ex
+    import organico
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import _pieza
+    tareas.cargar_todas()
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    monkeypatch.setattr(organico, "disponibles", lambda c: [])
+    orden = []
+    monkeypatch.setattr(te.acciones, "pedir", lambda c, e, accion, payload, motivo: (orden.append(accion), ("ejecutada", "ok"))[1])
+    real = proyectos.agregar_aprendizaje
+    monkeypatch.setattr(proyectos, "agregar_aprendizaje", lambda c, item: (orden.append("aprender"), real(c, item))[1])
+    eid, ep = _experimento_activo(ex, _pieza(base_temporal, legado="cf_9__es_CO"))
+    _decisor_fijo(monkeypatch, te, "ganador", "escalar_y_derivar")
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    assert orden[0] == "aprender" and "escalar" in orden

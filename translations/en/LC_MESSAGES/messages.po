@@ -4686,6 +4686,9 @@ msgstr "Couldn't reach Notion; try again in a moment."
 msgid "No se pudo leer el guion. Vuelve a intentarlo."
 msgstr "Couldn't read the script. Try again."
 
+msgid "No se pudo leer el proyecto; no se guardó."
+msgstr "The project couldn't be read; nothing was saved."
+
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
 msgstr "Could not pause for reaching the cap: %(error)s"

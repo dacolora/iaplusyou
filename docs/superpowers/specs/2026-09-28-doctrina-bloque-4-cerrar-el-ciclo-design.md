@@ -56,8 +56,10 @@ regla de Hopkins (una pérdida es un dato: se anota la hipótesis y lo que se ca
   modelo, usd, en}` (vía `experimentos.marcar_pieza`, con lock); si falla, `extra.diagnostico = {"error", "pistas",
   "en"}`. Gasto tipo `revision`, tarifa `diagnostico_pieza` (inicial US$ 0,03; se mide en la prueba real),
   referencia `diagnostico:<ep_id>:t<tarea_id>`, también cuando la respuesta no sirvió.
-- **Cuándo corre** (ruling): dentro de `exp_decidir`, automáticamente, para cada pieza nueva en `perdedor` (video o
-  imagen), antes de pedir la pausa y el rescate; una vez por veredicto. Justificación: el decisor ya corre solo
+- **Cuándo corre** (ruling, corregido en la ejecución): dentro de `exp_decidir`, automáticamente, para cada pieza
+  nueva en `perdedor` (video o imagen), DESPUÉS de pedir la pausa (el anuncio deja de gastar aunque Claude tarde o el
+  worker muera en el medio) y antes del rescate, al que informa; una vez por veredicto; la llamada corre con timeout
+  de 120 s y un reintento. Una «inconclusa» que solo se pausa no se diagnostica. Justificación: el decisor ya corre solo
   («sin mi pc prendido»), el rescate que propone gasta mucho más que el diagnóstico, y la propuesta necesita el texto.
   Un fallo del diagnóstico nunca frena el veredicto ni la pausa: queda el evento y se sigue.
 - `experimentos._piezas` expone además `angulo` (el de la sesión, con `lead`/`gancho` de la variante si la pieza es
@@ -75,10 +77,15 @@ regla de Hopkins (una pérdida es un dato: se anota la hipótesis y lo que se ca
     `acciones.pedir` deja siempre una propuesta (también en modo `auto`) con motivo «el diagnóstico apunta a
     <causa>, no al creativo: decide tú si rescatar»; la pausa sí se ejecuta según el modo, como hoy.
 - `derivaciones._planificar_derivar`: todas las re-ediciones son `hook` (antes alternaban hook/estructura; Theriot:
-  nuevos ganchos alrededor del mismo mensaje). Cada item lleva `contexto_variante = {"lead_objetivo", "ganchos_usados",
-  "aprendizajes"}`: `lead_objetivo` = el k-ésimo arranque recomendado para la consciencia del ángulo distinto del
-  actual (cíclico; None si no hay consciencia), `ganchos_usados` = el gancho del ángulo + los de las variantes ya
-  producidas de la sesión. `_planificar_rescatar` agrega `diagnostico` (causas + siguiente) al contexto.
+  nuevos ganchos alrededor del mismo mensaje). Cada item lleva `contexto_variante = {"lead_objetivo", "hermana",
+  "ganchos_usados"}` (corregido en la ejecución): `lead_objetivo` = el k-ésimo arranque recomendado para la
+  consciencia del ángulo que no sea el actual ni uno ya probado por una final de la sesión (ni, en el rescate, el de
+  la pieza que perdió); NO es cíclico: cuando no queda ninguno es None y la variante cambia el patrón del gancho;
+  `hermana = {k, n}` cuando se producen varias a la vez; `ganchos_usados` = el gancho del ángulo + los de las
+  variantes ya producidas de la sesión. Los aprendizajes no se guardan en el item (pesan y envejecen):
+  `_opciones_de(item, cliente)` los agrega al encolar. `_planificar_rescatar` agrega `diagnostico` (causas +
+  siguiente) al contexto. La línea de aprendizaje del motor cabe en 650 caracteres con la frase del diagnóstico
+  entera; a mano, 300.
 - `_opciones_de(item)` pasa `contexto_variante` en las opciones de `final_producir`; `final_edition.producir`
   (legado) y `final_edition/produccion.producir` (el camino por defecto) llaman
   `variar_guion(guion_base, variante_tipo, marca, angulo=entry["angulo"], contexto=o.get("contexto_variante"))`.

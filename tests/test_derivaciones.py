@@ -726,3 +726,23 @@ def test_rescatar_salta_de_escalon_segun_el_diagnostico_sin_volver_atras(ent, es
         assert dv._opciones_de(item)["contexto_variante"] == item["contexto_variante"]
     else:
         assert dv._opciones_de(item) == {"variante": None}
+
+
+def test_el_rescate_excluye_el_arranque_de_la_pieza_que_perdio(ent, monkeypatch):
+    """H3 (re-revisión): la costura del rescate — el lead de la variante de la
+    pieza queda fuera, además del de la sesión."""
+    import db
+    dv, ex, cf, eid, ep, cf_id = ent["dv"], ent["ex"], ent["cf"], ent["eid"], ent["ep"], ent["cf_id"]
+    cf.actualizar("acme", cf_id, angulo=dict(ANGULO_D))                       # sesión: problema_solucion
+    pieza_id = [p for p in ex.piezas("acme", eid) if p["id"] == ep][0]["pieza_id"]
+    with db.conectar() as con:                                                  # la pieza probó «secreto»
+        con.execute(db.pieza.update().where(db.pieza.c.id == pieza_id).values(
+            capas={"guion": {"parametros": {"angulo": {"lead": "secreto", "gancho": "S"}}}}))
+    vistos = []
+    real = dv._contexto_variante
+    monkeypatch.setattr(dv, "_contexto_variante", lambda *a, **k: (vistos.append(k), real(*a, **k))[1])
+    dv.planificar("acme", eid, "rescatar", {"ep_id": ep, "motivo": "perdedora"})
+    assert vistos[0]["excluir"] == ("secreto",) and vistos[0]["k"] == 0
+    item = _derivacion(ex, eid)["items"][0]
+    assert item["variante_tipo"] == "hook" and item["contexto_variante"]["lead_objetivo"] is None
+    assert "S" in item["contexto_variante"]["ganchos_usados"] or item["contexto_variante"]["ganchos_usados"] == ["¿Pies fríos?"]

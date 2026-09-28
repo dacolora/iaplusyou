@@ -178,7 +178,8 @@ def _anotar_diagnostico(cliente, ex, pz, diagnostico, evento, datos=None):
         experimentos.marcar_pieza(cliente, pz["id"], diagnostico=diagnostico)
         experimentos.registrar_evento(cliente, ex["id"], "diagnostico", evento, datos, ep_id=pz["id"])
     except Exception as e:  # noqa: BLE001
-        log.warning("diagnóstico no guardado (%s, ep %s): %s", cliente, pz["id"], type(e).__name__)
+        log.warning("diagnóstico no guardado (%s, ep %s): %s: %s", cliente, pz["id"], type(e).__name__,
+                    cola.sin_token(str(e))[:200], exc_info=True)
 
 
 def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
@@ -272,6 +273,15 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
     resultado["veredictos"].append((pz, v))
     accion = v["accion"]
     diagnostico, diagnosticado = None, False
+
+    def _diag():
+        # Solo una PERDEDORA se diagnostica: una «inconclusa» también se pausa
+        # (cerró la ventana sin evidencia) y no paga nada.
+        return _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea) if v["veredicto"] == "perdedor" else None
+
+    if v["veredicto"] == "ganador":
+        # Antes de las acciones: si escalar/derivar/orgánico lanzan, la línea ya quedó.
+        _aprender(cliente, ex, pz, v, None)
     # Una pieza de imagen no se deriva ni se rescata (derivaciones rechaza
     # las sesiones de imagen: sería un evento `error`, o una propuesta que
     # falla al aprobarla). Ganadora: solo escala. Perdedora: solo se pausa.
@@ -305,7 +315,7 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
         # Doctrina, bloque 4: el diagnóstico va DESPUÉS de la pausa (el anuncio
         # deja de gastar aunque Claude tarde o el worker muera en el medio) y
         # ANTES del rescate, al que informa.
-        diagnostico, diagnosticado = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea), True
+        diagnostico, diagnosticado = _diag(), True
         if not es_imagen:
             decision = doctrina_diagnostico.decision_rescate(diagnostico)
             payload = {"ep_id": ep_id}
@@ -317,15 +327,15 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
             _pedir(cliente, ex["id"], "rescatar", payload, motivo, resultado)
     elif accion == "archivar":
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
-        diagnostico, diagnosticado = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea), True
+        diagnostico, diagnosticado = _diag(), True
         _pedir(cliente, ex["id"], "archivar", {"ep_id": ep_id, "cf_id": _cf_id(pz), "motivo": v["motivo"]},
                v["motivo"], resultado)
     elif accion == "pausar":
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
-        diagnostico, diagnosticado = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea), True
-    if v["veredicto"] == "perdedor" and not diagnosticado:
-        diagnostico = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea)
-    if v["veredicto"] in ("ganador", "perdedor"):
+        diagnostico, diagnosticado = _diag(), True
+    if v["veredicto"] == "perdedor":
+        if not diagnosticado:
+            diagnostico = _diag()
         _aprender(cliente, ex, pz, v, diagnostico)
 
 

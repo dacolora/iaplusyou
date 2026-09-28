@@ -400,9 +400,9 @@ def producir(cliente, cf_id, idioma, pais, opciones=None, on_etapa=None, ref_suf
             _capa(capas, "voz", "fal/elevenlabs", capas_t["voz"]["parametros"],
                   float(previa.get("costo_usd") or 0.0) + capas_t["voz"]["costo_usd"], estado=estado,
                   error=capas_t["voz"].get("error") or previa.get("error"))
+        # (`guion_destino` arma un dict nuevo sin `angulo_variante`: el ángulo de
+        # la variante vive en capas.guion.parametros.angulo, como en el legado.)
         guion = borrador.guion_destino(edicion["documento"], idioma, pais)
-        if isinstance(guion, dict):
-            guion.pop("angulo_variante", None)      # vive en capas.guion.parametros.angulo, como en el legado
         # 5. versión congelada + render del motor + subida (claves versionadas)
         avisar(ETAPAS_FINAL[4][0])
         version = ediciones.versionar(cliente, edicion["id"], "producir")

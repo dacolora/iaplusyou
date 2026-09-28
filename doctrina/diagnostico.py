@@ -37,7 +37,7 @@ Responde SOLO un JSON:
 {"causas": [{"codigo": "<uno de: {causas}>", "detalle": "qué pasa, en una o dos frases", "evidencia": "el número, el
 segundo o la frase que lo muestra"}],
  "siguiente": {"que": "<uno de: {siguientes}>", "porque": "una frase", "hipotesis": "qué debería pasar si se cambia eso"},
- "aprendizaje": "una frase para este proyecto: en este mercado, X no funcionó porque Y"}
+ "aprendizaje": "una frase para este proyecto, de máximo 200 caracteres: en este mercado, X no funcionó porque Y"}
 Reglas: nombra solo causas con evidencia (la más probable primero); "siguiente" es UNA sola cosa: "gancho" (otro
 arranque, mismo mensaje), "estructura" (otra forma de contar la misma promesa), "regenerar" (concepto nuevo), "oferta"
 (cambiar oferta o urgencia), "landing" (la página, no el creativo), "pausar" (estación o posicionamiento: no gastar

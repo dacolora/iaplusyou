@@ -499,12 +499,14 @@ def _heredar(cliente, d, ep_id):
 def _avanzar_finales(cliente, experimento_id, d, item):
     """Encola las finales que falten, agrega al experimento las que terminaron
     y deja el item `listo` cuando todas están dentro."""
-    opciones = _opciones_de(item, cliente)
+    opciones = None      # perezoso: solo si hay algo que encolar (lee todas las sesiones y proyecto.json)
     listas = set()
     for pais in item["paises"]:
         idioma = item["idiomas"][pais]
         clave = f"{idioma}_{pais}"
         if clave not in item["finales"]:
+            if opciones is None:
+                opciones = _opciones_de(item, cliente)
             item["finales"][clave] = _encolar_final(cliente, item["cf_id"], idioma, pais, opciones)
             continue
         estado, error = _estado_final(cliente, item["finales"][clave])

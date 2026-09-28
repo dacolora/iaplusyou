@@ -455,7 +455,7 @@ def test_variante_escribe_el_guion_variado_una_vez_para_todos_sus_destinos(entor
     assert entorno["variar_kw"] == {"angulo": cf.cargar("acme")[cf_id].get("angulo"), "contexto": contexto}
     assert r["capas"]["guion"]["parametros"]["variante_tipo"] == "hook" and r["capas"]["guion"]["costo_usd"] == 0.02
     assert r["capas"]["guion"]["parametros"]["angulo"] == {"lead": "secreto", "gancho": "Hook dos"}
-    assert r["guion"]["bloques"][0]["texto_pantalla"] == "HOOK2" and "angulo_variante" not in r["guion"]
+    assert r["guion"]["bloques"][0]["texto_pantalla"] == "HOOK2"
     assert cf.guion_base("acme", cf_id)["bloques"][0]["texto_pantalla"] == "Hola"     # el base no se toca
     assert r["capas"]["voz"]["parametros"]["voz"] == fal_audio.VOCES["es"][1]         # "otra" voz que la de defecto
     fid2, r2 = produccion.producir("acme", cf_id, "en", "US", dict(opciones), ref_sufijo=":t2")
