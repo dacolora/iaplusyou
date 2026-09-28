@@ -1,42 +1,42 @@
 {% extends "base.html" %}
-{% from "_sprint_macros.html" import chip_estado, barra, candidatos_biblioteca %}
-{% block title %}Referencias · {{ sprint.nombre }}{% endblock %}
+{% from "_sprint_macros.html" import chip_estado, barra, candidatos_biblioteca, etiqueta_sprint %}
+{% block title %}{{ _('Referencias') }} · {{ sprint.nombre }}{% endblock %}
 {% block content %}
 {% include "_sprint_nav.html" %}
 
 <div class="pagina-cabecera sprint-cabecera">
   <div>
-    <h1>Referencias de la campaña {{ campana.orden + 1 }}</h1>
+    <h1>{{ _('Referencias de la campaña %(n)s', n=campana.orden + 1) }}</h1>
     <p class="vacio">
       <span class="sprint-punto" style="background: {{ campana.persona_color or 'var(--accent)' }}"></span> {{ campana.persona_nombre }}
       · {% if producto and producto.representativa_url %}<img class="sprint-mini" src="{{ producto.representativa_url }}" alt="">{% endif %}{{ producto.nombre if producto else campana.catalogo_id }}
-      · {{ campana.temporada_nombre or "sin temporada" }} · {{ campana.n_videos }} videos · {{ campana.n_imagenes }} imágenes · {{ chip_estado(campana.estado) }}
+      · {{ campana.temporada_nombre or _("sin temporada") }} · {{ _('%(n)s videos', n=campana.n_videos) }} · {{ _('%(n)s imágenes', n=campana.n_imagenes) }} · {{ chip_estado(campana.estado) }}
     </p>
   </div>
 </div>
 
 <section class="sprint-refs-progreso">
-  <strong id="refs-contador">{{ campana.referencias_listas }} / {{ campana.referencias_objetivo }} referencias listas</strong>
+  <strong id="refs-contador">{{ _('%(listas)s / %(objetivo)s referencias listas', listas=campana.referencias_listas, objetivo=campana.referencias_objetivo) }}</strong>
   <div id="refs-barra">{{ barra(campana.progreso.porcentaje, campana.progreso.texto) }}</div>
-  <p class="vacio">Una referencia cuenta cuando tiene descripción. Dinos qué quieres reutilizar de cada una: eso es lo que Claude analiza y lo que después arma las ideas.</p>
+  <p class="vacio">{{ _('Una referencia cuenta cuando tiene descripción. Dinos qué quieres reutilizar de cada una: eso es lo que Claude analiza y lo que después arma las ideas.') }}</p>
   {% for aviso in cobertura %}<p class="tag-estado sprint-aviso">{{ aviso }}</p>{% endfor %}
 </section>
 
 <form method="post" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=campana.id) }}"
       enctype="multipart/form-data" class="sprint-zona" id="zona-subida">
   <label class="sprint-zona-drop" for="input-archivos">
-    <strong>Arrastra imágenes o videos aquí</strong>, o haz clic para elegir (jpg, png, webp, mp4, mov, webm).
+    <strong>{{ _('Arrastra imágenes o videos aquí') }}</strong>, {{ _('o haz clic para elegir (jpg, png, webp, mp4, mov, webm).') }}
     <input type="file" id="input-archivos" name="archivos" multiple accept="image/*,video/*" hidden>
   </label>
   <div class="fe-opciones">
-    <span class="campo-label">Intención inicial (se puede cambiar por referencia):</span>
+    <span class="campo-label">{{ _('Intención inicial (se puede cambiar por referencia):') }}</span>
     {% for clave, nombre in intenciones_sprint.items() if clave != "otro" %}
-    <label class="fe-check"><input type="checkbox" name="intencion" value="{{ clave }}"> {{ nombre }}</label>
+    <label class="fe-check"><input type="checkbox" name="intencion" value="{{ clave }}"> {{ nombre|traducir }}</label>
     {% endfor %}
   </div>
   <div class="fe-opciones">
-    <label>O pega un link (TikTok, Instagram, YouTube) <input type="url" name="link" placeholder="https://..." style="width: 22rem;"></label>
-    <button type="submit" class="btn-generar btn-sm">Subir</button>
+    <label>{{ _('O pega un link (TikTok, Instagram, YouTube)') }} <input type="url" name="link" placeholder="https://..." style="width: 22rem;"></label>
+    <button type="submit" class="btn-generar btn-sm">{{ _('Subir') }}</button>
   </div>
   {% if trabajo_link %}
   <div class="barra-progreso" id="trabajo-{{ trabajo_link.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
@@ -46,22 +46,22 @@
 
 <div class="acciones">
   <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
-    <button type="submit" class="btn-sm">Traer las fotos del producto</button>
+    <button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }}</button>
   </form>
-  <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}">Elegir de la biblioteca</a>
+  <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}">{{ _('Elegir de la biblioteca') }}</a>
   <a class="btn-sm" href="{{ url_for('ver_cliente', cliente=cliente) }}#referentes?etapa={{ campana.funnel.upper() }}&campana={{ campana.id }}&palabra={{ palabra_sugerida | urlencode }}&pais={{ pais_sugerido }}"
-     title="Abre «Traer referentes» ya prellenado con el producto y país de esta campaña — sigue siendo tu decisión lanzarlo y aprobar el costo">Traer referentes nuevos</a>
+     title="{{ _('Abre «Traer referentes» ya prellenado con el producto y país de esta campaña — sigue siendo tu decisión lanzarlo y aprobar el costo') }}">{{ _('Traer referentes nuevos') }}</a>
   <details class="inline sprint-reutilizar">
-    <summary class="btn-sm">Sugerir de la biblioteca (gratis)</summary>
+    <summary class="btn-sm">{{ _('Sugerir de la biblioteca (gratis)') }}</summary>
     {{ candidatos_biblioteca(candidatos_gratis, campana.id, cliente) }}
   </details>
   <details class="inline sprint-reutilizar" {% if candidatos_ia %}open{% endif %}>
-    <summary class="btn-sm">Sugerir con IA ({{ precio_sugerir_ia.texto }})</summary>
+    <summary class="btn-sm">{{ _('Sugerir con IA (%(precio)s)', precio=precio_sugerir_ia.texto) }}</summary>
     {% if candidatos_ia %}
       {{ candidatos_biblioteca(candidatos_ia, campana.id, cliente, con_razon=True) }}
     {% else %}
       <form method="post" action="{{ url_for('sprints.campana_sugerir_ia', cliente=cliente, cid=campana.id) }}" class="inline">
-        <button type="submit" class="btn-generar btn-sm">Pedirle a Claude que sugiera</button>
+        <button type="submit" class="btn-generar btn-sm">{{ _('Pedirle a Claude que sugiera') }}</button>
       </form>
     {% endif %}
     {% if trabajo_sugerir_ia %}
@@ -71,13 +71,13 @@
   </details>
   {% if otras_campanas %}
   <details class="inline sprint-reutilizar">
-    <summary class="btn-sm">Reutilizar de otra campaña</summary>
+    <summary class="btn-sm">{{ _('Reutilizar de otra campaña') }}</summary>
     <ul>
       {% for o in otras_campanas %}{% for r in o.referencias %}
       <li>
         <img class="sprint-mini" src="{{ r.frame_url or r.url }}" alt=""> {{ r.titulo or r.url }} <small>({{ o.campana.persona_nombre }} · {{ o.campana.temporada_nombre }})</small>
         <form method="post" action="{{ url_for('sprints.referencias_reutilizar', cliente=cliente, sid=sprint.id, cid=campana.id) }}" class="inline">
-          <input type="hidden" name="referencia_id" value="{{ r.id }}"><button type="submit" class="btn-xs">Usar</button>
+          <input type="hidden" name="referencia_id" value="{{ r.id }}"><button type="submit" class="btn-xs">{{ _('Usar') }}</button>
         </form>
       </li>
       {% endfor %}{% endfor %}
@@ -93,52 +93,57 @@
     <div class="sprint-ref-media">
       {% if r.tipo == "video" %}<video src="{{ r.url }}" poster="{{ r.frame_url }}" controls muted preload="none"></video>
       {% else %}<img src="{{ r.url }}" alt="{{ r.titulo or '' }}">{% endif %}
-      <span class="tag-estado sprint-ref-estado">{{ r.estado }}</span>
+      <span class="tag-estado sprint-ref-estado">{{ etiqueta_sprint(r.estado) }}</span>
     </div>
     <div class="sprint-ref-cuerpo">
       <small class="vacio">{{ r.titulo or r.url }} · {{ r.origen }}</small>
       <div class="sprint-chips">
         {% for clave, nombre in intenciones_sprint.items() %}
-        <label class="sprint-chip"><input type="checkbox" name="intencion" value="{{ clave }}" {% if clave in (r.intencion or []) %}checked{% endif %}> {{ nombre }}</label>
+        <label class="sprint-chip"><input type="checkbox" name="intencion" value="{{ clave }}" {% if clave in (r.intencion or []) %}checked{% endif %}> {{ nombre|traducir }}</label>
         {% endfor %}
-        <input type="text" name="intencion_otro" value="{{ r.intencion_otro or '' }}" placeholder="otro: ¿qué?" class="mini-input" {% if "otro" not in (r.intencion or []) %}hidden{% endif %}>
+        <input type="text" name="intencion_otro" value="{{ r.intencion_otro or '' }}" placeholder="{{ _('otro: ¿qué?') }}" class="mini-input" {% if "otro" not in (r.intencion or []) %}hidden{% endif %}>
       </div>
-      <textarea name="descripcion" rows="2" placeholder="¿Qué quieres reutilizar de esta referencia? (obligatorio para que cuente)">{{ r.descripcion or '' }}</textarea>
+      <textarea name="descripcion" rows="2" placeholder="{{ _('¿Qué quieres reutilizar de esta referencia? (obligatorio para que cuente)') }}">{{ r.descripcion or '' }}</textarea>
       <div class="sprint-ref-analisis" data-estado="{{ r.analisis_estado }}">
         {% if r.analisis_estado == "listo" and r.analisis %}
           <p>{{ r.analisis.resumen }}</p>
           <div class="sprint-paleta">{% for c in (r.analisis.paleta or []) %}<span title="{{ c }}" style="background: {{ c }}"></span>{% endfor %}</div>
-          <details><summary>Ver análisis completo</summary>
+          <details><summary>{{ _('Ver análisis completo') }}</summary>
             <dl class="sprint-analisis-dl">
-              <dt>Composición</dt><dd>{{ r.analisis.composicion }}</dd>
-              <dt>Iluminación</dt><dd>{{ r.analisis.iluminacion }}</dd>
-              <dt>Movimiento</dt><dd>{{ r.analisis.movimiento }}</dd>
-              <dt>Tipografía</dt><dd>{{ r.analisis.tipografia }}</dd>
-              <dt>Estética</dt><dd>{{ r.analisis.estetica }}</dd>
-              <dt>Storytelling</dt><dd>{{ r.analisis.storytelling }}</dd>
-              <dt>Elementos</dt><dd>{{ (r.analisis.elementos or []) | join(", ") }}</dd>
+              <dt>{{ _('Composición') }}</dt><dd>{{ r.analisis.composicion }}</dd>
+              <dt>{{ _('Iluminación') }}</dt><dd>{{ r.analisis.iluminacion }}</dd>
+              <dt>{{ _('Movimiento') }}</dt><dd>{{ r.analisis.movimiento }}</dd>
+              <dt>{{ _('Tipografía') }}</dt><dd>{{ r.analisis.tipografia }}</dd>
+              <dt>{{ _('Estética') }}</dt><dd>{{ r.analisis.estetica }}</dd>
+              <dt>{{ _('Storytelling') }}</dt><dd>{{ r.analisis.storytelling }}</dd>
+              <dt>{{ _('Elementos') }}</dt><dd>{{ (r.analisis.elementos or []) | join(", ") }}</dd>
             </dl>
           </details>
         {% elif r.analisis_estado == "error" %}
-          <p class="tag-error">No se pudo analizar{% if r.analisis and r.analisis.error %}: {{ r.analisis.error }}{% endif %}</p>
+          <p class="tag-error">{{ _('No se pudo analizar') }}{% if r.analisis and r.analisis.error %}: {{ r.analisis.error }}{% endif %}</p>
         {% else %}
-          <p class="vacio sprint-analizando">Analizando con IA…</p>
+          <p class="vacio sprint-analizando">{{ _('Analizando con IA…') }}</p>
         {% endif %}
       </div>
       <div class="sprint-ref-acciones">
-        <span class="sprint-guardado" hidden>Guardado</span>
-        <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline"><button type="submit" class="btn-xs">Reanalizar</button></form>
+        <span class="sprint-guardado" hidden>{{ _('Guardado') }}</span>
+        <form method="post" action="{{ url_for('sprints.referencia_reanalizar', cliente=cliente, rid=r.id) }}" class="inline"><button type="submit" class="btn-xs">{{ _('Reanalizar') }}</button></form>
         <form method="post" action="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}" class="inline"
-              onsubmit="return confirm('¿Quitar esta referencia?');"><button type="submit" class="btn-xs btn-peligro">Quitar</button></form>
+              onsubmit='return confirm({{ _("¿Quitar esta referencia?")|tojson }});'><button type="submit" class="btn-xs btn-peligro">{{ _('Quitar') }}</button></form>
       </div>
     </div>
   </article>
   {% else %}
-  <p class="vacio" id="refs-vacio">Todavía no hay referencias. Sube las que inspiran esta campaña.</p>
+  <p class="vacio" id="refs-vacio">{{ _('Todavía no hay referencias. Sube las que inspiran esta campaña.') }}</p>
   {% endfor %}
 </div>
 
 <script>
+  var TEXTO_REFS = {
+    referenciasListas: {{ _('%(listas)s / %(objetivo)s referencias listas', listas='{listas}', objetivo='{objetivo}')|tojson }},
+    recargaAnalisis: {{ _('Recarga para ver el análisis completo.')|tojson }},
+    noSePudoAnalizar: {{ _('No se pudo analizar.')|tojson }}
+  };
   (function () {
     // 1) Arrastrar y soltar: los archivos entran al input y el formulario se envía.
     var zona = document.getElementById('zona-subida'), input = document.getElementById('input-archivos');
@@ -160,7 +165,7 @@
           .then(function (j) {
             if (!j.ok) { alert(j.error); return; }
             card.querySelector('.sprint-ref-estado').textContent = j.estado;
-            document.getElementById('refs-contador').textContent = j.referencias_listas + ' / ' + j.referencias_objetivo + ' referencias listas';
+            document.getElementById('refs-contador').textContent = TEXTO_REFS.referenciasListas.replace('{listas}', j.referencias_listas).replace('{objetivo}', j.referencias_objetivo);
             var pct = Math.min(100, Math.round(100 * j.referencias_listas / Math.max(1, j.referencias_objetivo)));
             var fill = document.querySelector('#refs-barra .sprint-barra-fill'); if (fill) fill.style.width = pct + '%';
             var ok = card.querySelector('.sprint-guardado'); ok.hidden = false; setTimeout(function () { ok.hidden = true; }, 1500);
@@ -190,10 +195,10 @@
             if (!/^#[0-9a-fA-F]{3,8}$/.test(c)) return;
             var s = document.createElement('span'); s.title = c; s.style.background = c; pal.appendChild(s);
           });
-          var aviso = document.createElement('p'); aviso.className = 'vacio'; aviso.textContent = 'Recarga para ver el análisis completo.';
+          var aviso = document.createElement('p'); aviso.className = 'vacio'; aviso.textContent = TEXTO_REFS.recargaAnalisis;
           caja.appendChild(p); caja.appendChild(pal); caja.appendChild(aviso);
         } else if (r.analisis_estado === 'error') {
-          var err = document.createElement('p'); err.className = 'tag-error'; err.textContent = 'No se pudo analizar.';
+          var err = document.createElement('p'); err.className = 'tag-error'; err.textContent = TEXTO_REFS.noSePudoAnalizar;
           caja.appendChild(err);
         }
       });

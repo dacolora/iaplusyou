@@ -28,6 +28,13 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
     # (Crear › detalle de la pieza; Catálogo › ficha del producto).
     "_revision_doctrina.html", "_producto_doctrina.html",
+    # Task 4 (fase 5): Sprints — tablero, panel de campaña, referencias, revisión,
+    # entrega; el editor del ángulo y la página de la doctrina.
+    "_tab_sprints.html", "_sprint_macros.html", "_sprint_nav.html", "_sprint_tarjeta.html",
+    "_sprint_panel.html", "_sprint_panel_armar.html", "_sprint_panel_ideas.html",
+    "_sprint_panel_piezas.html", "_sprint_sugeridos.html", "_sprint_lote_modal.html",
+    "sprint_detalle.html", "sprint_revision.html", "sprint_entrega.html", "campana_referencias.html",
+    "_angulo_editor.html", "doctrina.html",
 ]
 
 

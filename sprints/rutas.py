@@ -13,16 +13,19 @@ from datetime import date
 from urllib.parse import urlencode
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask_babel import gettext
 
 import catalogo_productos
 import creative_flow
 import db
 import doctrina
 import gastos
+import idiomas
 import proyectos
 import tiendas
 import trabajos
 from doctrina import revisor as doctrina_revisor
+from idiomas import N_
 from providers import flowplus_modelos
 from referentes import datos as referentes_datos
 from referentes import sugerir as referentes_sugerir
@@ -56,7 +59,7 @@ def _entero(campo, defecto=0):
     try:
         return int(request.form.get(campo) or defecto)
     except ValueError:
-        raise datos.ErrorDatos(f"«{campo}» debe ser un número entero.")
+        raise datos.ErrorDatos(gettext("«%(campo)s» debe ser un número entero.", campo=campo))
 
 
 def _mood_desde_form():
@@ -144,7 +147,7 @@ def persona_crear(cliente):
         return _volver(cliente)
     if _quiere_json():
         return jsonify({"ok": True, "id": pid, "nombre": datos.persona(cliente, pid)["nombre"]})
-    flash("Persona creada.", "ok")
+    flash(gettext("Persona creada."), "ok")
     return _volver(cliente)
 
 
@@ -155,9 +158,9 @@ def persona_editar(cliente, pid):
         if request.form.get("nombre") is not None:
             campos["nombre"] = request.form.get("nombre")
         if not datos.actualizar_persona(cliente, pid, **campos):
-            flash("Esa persona no existe.", "error")
+            flash(gettext("Esa persona no existe."), "error")
         else:
-            flash("Persona guardada.", "ok")
+            flash(gettext("Persona guardada."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente)
@@ -171,14 +174,14 @@ def persona_conciencia(cliente, pid):
     Nicho); un nivel vacío («Que Claude lo decida») lo quita. JSON."""
     cuerpo = request.get_json(silent=True)
     if not isinstance(cuerpo, dict):
-        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+        return jsonify({"ok": False, "error": gettext("El cuerpo debe ser un objeto JSON.")}), 400
     p = datos.persona(cliente, pid)
     if not p:
-        return jsonify({"ok": False, "error": "Esa persona no existe."}), 404
+        return jsonify({"ok": False, "error": gettext("Esa persona no existe.")}), 404
     crudo = cuerpo.get("nivel")
     nivel = doctrina.normalizar_consciencia(crudo)
     if crudo and not nivel:
-        return jsonify({"ok": False, "error": "Ese nivel no existe."}), 400
+        return jsonify({"ok": False, "error": gettext("Ese nivel no existe.")}), 400
     extra = dict(p.get("extra") or {})
     conciencia = dict(extra.get("conciencia") or {}) if isinstance(extra.get("conciencia"), dict) else {}
     if nivel:
@@ -205,9 +208,9 @@ def personas_sugerir(cliente):
     try:
         cuantas = min(5, max(1, _entero("cuantas", 3)))
         if tareas_sprints.encolar_sugerir(cliente, cuantas):
-            flash("Claude está proponiendo personas; aparecerán aquí en unos segundos.", "ok")
+            flash(gettext("Claude está proponiendo personas; aparecerán aquí en unos segundos."), "ok")
         else:
-            flash("Ya hay una sugerencia en curso.", "error")
+            flash(gettext("Ya hay una sugerencia en curso."), "error")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente)
@@ -221,7 +224,7 @@ def temporada_crear(cliente):
         datos.crear_temporada(cliente, request.form.get("nombre"), request.form.get("inicio"), request.form.get("fin"),
                               contexto=request.form.get("contexto"), mood_visual=_mood_desde_form(),
                               tipo=request.form.get("tipo") or "propia")
-        flash("Temporada creada.", "ok")
+        flash(gettext("Temporada creada."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente)
@@ -237,9 +240,9 @@ def temporada_editar(cliente, tid):
         if any(request.form.get(k) is not None for k in ("paleta", "luz", "elementos")):
             campos["mood_visual"] = _mood_desde_form()
         if not datos.actualizar_temporada(cliente, tid, **campos):
-            flash("Esa temporada no existe.", "error")
+            flash(gettext("Esa temporada no existe."), "error")
         else:
-            flash("Temporada guardada.", "ok")
+            flash(gettext("Temporada guardada."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente)
@@ -256,7 +259,7 @@ def temporada_adoptar(cliente):
     try:
         calendario.adoptar(cliente, request.form.get("clave") or "", pais=proyectos.pais(cliente),
                            anio=request.form.get("anio") or None)
-        flash("Temporada agregada desde el calendario.", "ok")
+        flash(gettext("Temporada agregada desde el calendario."), "ok")
     except (datos.ErrorDatos, ValueError) as e:
         flash(str(e), "error")
     return _volver(cliente)
@@ -302,7 +305,9 @@ def _momento_desde(cliente, valor, pais, inicio):
         anio = date.today().year
     p = next((x for x in calendario.presets(pais or proyectos.pais(cliente), anio) if x["clave"] == valor), None)
     if not p:
-        raise datos.ErrorDatos("Ese momento del calendario no existe.")
+        raise datos.ErrorDatos(gettext("Ese momento del calendario no existe."))
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        p = calendario.traducido(p)
     return {k: p[k] for k in ("clave", "nombre", "contexto", "inicio", "fin", "mood_visual")}
 
 
@@ -333,8 +338,8 @@ def _aviso_identica(cliente, cid):
     if not iguales:
         return None
     numeros = ", ".join(str(n) for n in iguales)
-    return (f"Ojo: la campaña {numeros} tiene la misma persona, producto, etapa, consciencia y formato. "
-            "Si es a propósito, cambia algo para que no salgan piezas repetidas.")
+    return gettext("Ojo: la campaña %(numeros)s tiene la misma persona, producto, etapa, consciencia y formato. "
+                   "Si es a propósito, cambia algo para que no salgan piezas repetidas.", numeros=numeros)
 
 
 CAMPOS_CAMPANA = ("persona_id", "catalogo_id", "funnel", "consciencia", "dolor", "familias",
@@ -558,13 +563,13 @@ def campana_campo(cliente, sid, cid):
     _campana_o_404(cliente, sid, cid)
     cuerpo = _json_cuerpo()
     if not cuerpo or cuerpo.get("campo") not in CAMPOS_CAMPANA:
-        return jsonify({"ok": False, "error": "Ese dato no se puede editar aquí."}), 400
+        return jsonify({"ok": False, "error": gettext("Ese dato no se puede editar aquí.")}), 400
     campo, valor = cuerpo["campo"], cuerpo.get("valor")
     if not _valor_simple(campo, valor):
-        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+        return jsonify({"ok": False, "error": gettext("Formato inválido.")}), 400
     try:
         if campo == "catalogo_id" and valor not in {p["id"] for p in _productos_planos(cliente)}:
-            raise datos.ErrorDatos("Ese producto no está en el catálogo.")
+            raise datos.ErrorDatos(gettext("Ese producto no está en el catálogo."))
         datos.actualizar_campana(cliente, cid, **{campo: valor})
     except datos.ErrorDatos as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -615,9 +620,9 @@ def _campanas_desde_form():
         try:
             lista = json.loads(crudo)
         except ValueError:
-            raise datos.ErrorDatos("Las campañas del asistente no se pudieron leer.")
+            raise datos.ErrorDatos(gettext("Las campañas del asistente no se pudieron leer."))
         if not isinstance(lista, list):
-            raise datos.ErrorDatos("Las campañas del asistente no se pudieron leer.")
+            raise datos.ErrorDatos(gettext("Las campañas del asistente no se pudieron leer."))
         return lista
     if request.form.get("persona_id"):
         return [{"persona_id": request.form.get("persona_id"), "catalogo_id": request.form.get("catalogo_id"),
@@ -635,26 +640,27 @@ def _validar_campanas(cliente, lista):
     limpias = []
     for i, c in enumerate(lista, 1):
         if not isinstance(c, dict):
-            raise datos.ErrorDatos(f"Campaña {i}: formato inválido.")
+            raise datos.ErrorDatos(gettext("Campaña %(i)s: formato inválido.", i=i))
         try:
             persona_id = int(c.get("persona_id") or 0)
             temporada_id = int(c.get("temporada_id") or 0) if c.get("temporada_id") else 0
         except (TypeError, ValueError):
-            raise datos.ErrorDatos(f"Campaña {i}: persona o temporada inválida.")
+            raise datos.ErrorDatos(gettext("Campaña %(i)s: persona o temporada inválida.", i=i))
         if not datos.persona(cliente, persona_id):
-            raise datos.ErrorDatos(f"Campaña {i}: esa persona no existe en este proyecto.")
+            raise datos.ErrorDatos(gettext("Campaña %(i)s: esa persona no existe en este proyecto.", i=i))
         if temporada_id and not datos.temporada(cliente, temporada_id):
-            raise datos.ErrorDatos(f"Campaña {i}: esa temporada no existe en este proyecto.")
+            raise datos.ErrorDatos(gettext("Campaña %(i)s: esa temporada no existe en este proyecto.", i=i))
         catalogo_id = (c.get("catalogo_id") or "").strip()
         if catalogo_id not in ids:
-            raise datos.ErrorDatos(f"Campaña {i}: el producto «{catalogo_id}» no está en el catálogo.")
+            raise datos.ErrorDatos(gettext("Campaña %(i)s: el producto «%(catalogo_id)s» no está en el catálogo.",
+                                           i=i, catalogo_id=catalogo_id))
         try:
             n_videos, n_imagenes = datos.validar_cantidades(c.get("n_videos"), c.get("n_imagenes"))
         except datos.ErrorDatos as e:
-            raise datos.ErrorDatos(f"Campaña {i}: {e}")
+            raise datos.ErrorDatos(gettext("Campaña %(i)s: %(e)s", i=i, e=str(e)))
         funnel = c.get("funnel", "tof")
         if funnel not in datos.FUNNELS:
-            raise datos.ErrorDatos(f"Campaña {i}: funnel inválido ({funnel}).")
+            raise datos.ErrorDatos(gettext("Campaña %(i)s: funnel inválido (%(funnel)s).", i=i, funnel=funnel))
         limpias.append({"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id or None,
                         "n_videos": n_videos, "n_imagenes": n_imagenes,
                         "referencias_objetivo": c.get("referencias_objetivo") or None, "funnel": funnel})
@@ -685,8 +691,10 @@ def crear(cliente):
             datos.archivar_sprint(cliente, sid)
             raise
         estado.recalcular(cliente, sid)
-        flash(f"Sprint creado con {len(campanas)} campaña(s)." if campanas
-              else "Sprint creado. Ahora arma sus campañas con «+ Campaña».", "ok")
+        if campanas:
+            flash(gettext("Sprint creado con %(n)s campaña(s).", n=len(campanas)), "ok")
+        else:
+            flash(gettext("Sprint creado. Ahora arma sus campañas con «+ Campaña»."), "ok")
         return _volver(cliente, sid)
     except datos.ErrorDatos as e:
         flash(str(e), "error")
@@ -730,10 +738,10 @@ def sprint_campo(cliente, sid):
     sp = _sprint_o_404(cliente, sid)
     cuerpo = _json_cuerpo()
     if not cuerpo or cuerpo.get("campo") not in CAMPOS_SPRINT:
-        return jsonify({"ok": False, "error": "Ese dato no se puede editar aquí."}), 400
+        return jsonify({"ok": False, "error": gettext("Ese dato no se puede editar aquí.")}), 400
     campo, valor = cuerpo["campo"], cuerpo.get("valor")
     if not _valor_simple(campo, valor):
-        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+        return jsonify({"ok": False, "error": gettext("Formato inválido.")}), 400
     try:
         if campo == "momento":
             valor = _momento_desde(cliente, valor, sp.get("pais"), sp["inicio"])
@@ -758,17 +766,21 @@ def campana_tarjeta(cliente, sid, cid):
 def marcar_listo(cliente, sid):
     sp = _sprint_o_404(cliente, sid)
     if sp["estado"] in ("generando", "revision", "completado"):
-        flash("El sprint ya pasó de la planificación.", "error")
+        flash(gettext("El sprint ya pasó de la planificación."), "error")
         return _volver(cliente, sid)
     extra = dict(sp.get("extra") or {})
     extra["listo_manual"] = True
     datos.actualizar_sprint(cliente, sid, extra=extra)
     faltantes = [c["id"] for c in sp["campanas"] if c["referencias_listas"] < int(c["referencias_objetivo"] or 1)]
-    datos.registrar_evento(cliente, sid, "marcado_listo", "Marcado listo para generar a mano",
+    datos.registrar_evento(cliente, sid, "marcado_listo",
+                           datos.texto_guardado(cliente, N_("Marcado listo para generar a mano")),
                            {"campanas_con_referencias_incompletas": faltantes})
     estado.recalcular(cliente, sid)
-    aviso = f" Ojo: {len(faltantes)} campaña(s) no llegan al objetivo de referencias." if faltantes else ""
-    flash("Sprint marcado como listo para generar." + aviso, "ok")
+    if faltantes:
+        aviso = gettext(" Ojo: %(n)s campaña(s) no llegan al objetivo de referencias.", n=len(faltantes))
+    else:
+        aviso = ""
+    flash(gettext("Sprint marcado como listo para generar.") + aviso, "ok")
     return _volver(cliente, sid)
 
 
@@ -777,7 +789,7 @@ def archivar(cliente, sid):
     desarchivar = request.form.get("desarchivar") is not None
     if not datos.archivar_sprint(cliente, sid, archivado=not desarchivar):
         abort(404)
-    flash("Sprint desarchivado." if desarchivar else "Sprint archivado.", "ok")
+    flash(gettext("Sprint desarchivado.") if desarchivar else gettext("Sprint archivado."), "ok")
     return _volver(cliente)
 
 
@@ -785,7 +797,7 @@ def archivar(cliente, sid):
 def eliminar(cliente, sid):
     _sprint_o_404(cliente, sid)
     if datos.eliminar_sprint(cliente, sid):
-        flash("Sprint eliminado permanentemente.", "ok")
+        flash(gettext("Sprint eliminado permanentemente."), "ok")
     return _volver(cliente)
 
 
@@ -795,10 +807,10 @@ def _nueva_desde_json(cliente, cuerpo):
     except (TypeError, ValueError):
         persona_id = 0
     if not persona_id or not datos.persona(cliente, persona_id):
-        raise datos.ErrorDatos("Elige una persona (o crea una rápida).")
+        raise datos.ErrorDatos(gettext("Elige una persona (o crea una rápida)."))
     catalogo_id = str(cuerpo.get("catalogo_id") or "").strip()
     if catalogo_id not in {p["id"] for p in _productos_planos(cliente)}:
-        raise datos.ErrorDatos("Elige un producto del catálogo.")
+        raise datos.ErrorDatos(gettext("Elige un producto del catálogo."))
     return {"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": None, "n_videos": 5,
             "n_imagenes": 5, "referencias_objetivo": None, "funnel": "tof"}
 
@@ -816,7 +828,7 @@ def campana_agregar(cliente, sid):
         else:
             lista = _validar_campanas(cliente, _campanas_desde_form())
             if not lista:
-                raise datos.ErrorDatos("Faltan los datos de la campaña.")
+                raise datos.ErrorDatos(gettext("Faltan los datos de la campaña."))
             c = lista[0]
         cid = datos.agregar_campana(cliente, sid, c["persona_id"], c["catalogo_id"], c["temporada_id"], c["n_videos"],
                                     c["n_imagenes"], referencias_objetivo=c["referencias_objetivo"], funnel=c["funnel"])
@@ -830,7 +842,7 @@ def campana_agregar(cliente, sid):
     url = url_for("sprints.ver", cliente=cliente, sid=sid, panel=cid)
     if es_json:
         return jsonify({"ok": True, "cid": cid, "aviso": aviso, "url": url})
-    flash("Campaña agregada." + (f" {aviso}" if aviso else ""), "ok")
+    flash(gettext("Campaña agregada.") + (f" {aviso}" if aviso else ""), "ok")
     return redirect(url)
 
 
@@ -842,7 +854,7 @@ def campana_editar(cliente, sid, cid):
                   if request.form.get(k) is not None}
         datos.actualizar_campana(cliente, cid, **campos)
         estado.recalcular(cliente, sid)
-        flash("Campaña guardada.", "ok")
+        flash(gettext("Campaña guardada."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente, sid)
@@ -853,7 +865,7 @@ def campana_eliminar(cliente, sid, cid):
     _campana_o_404(cliente, sid, cid)
     datos.eliminar_campana(cliente, cid)
     estado.recalcular(cliente, sid)
-    flash("Campaña eliminada.", "ok")
+    flash(gettext("Campaña eliminada."), "ok")
     return _volver(cliente, sid)
 
 
@@ -932,15 +944,16 @@ def referencias_subir(cliente, sid, cid):
         subidas += 1
     if link:
         if tareas_sprints.encolar_link(cliente, cid, link):
-            flash("Descargando el link; la referencia aparecerá en unos segundos.", "ok")
+            flash(gettext("Descargando el link; la referencia aparecerá en unos segundos."), "ok")
         else:
-            flash("Ya hay un link descargándose para esta campaña.", "error")
+            flash(gettext("Ya hay un link descargándose para esta campaña."), "error")
     if subidas:
-        flash(f"{subidas} referencia(s) subida(s). Cuéntanos qué reutilizar de cada una.", "ok")
+        flash(gettext("%(n)s referencia(s) subida(s). Cuéntanos qué reutilizar de cada una.", n=subidas), "ok")
     if rechazadas:
-        flash(f"{rechazadas} archivo(s) no son imagen ni video (jpg, png, webp, mp4, mov, webm).", "error")
+        flash(gettext("%(n)s archivo(s) no son imagen ni video (jpg, png, webp, mp4, mov, webm).", n=rechazadas),
+              "error")
     if fallidas:
-        flash(f"{fallidas} archivo(s) no se pudieron guardar.", "error")
+        flash(gettext("%(n)s archivo(s) no se pudieron guardar.", n=fallidas), "error")
     estado.recalcular(cliente, sid)
     if _quiere_json():
         return jsonify({"ok": True, "subidas": subidas, "rechazadas": rechazadas})
@@ -955,7 +968,7 @@ def referencias_catalogo(cliente, sid, cid):
     c = _campana_o_404(cliente, sid, cid)
     producto = catalogo_productos.encontrar(cliente, c["catalogo_id"], "producto")
     if not producto:
-        flash("El producto de la campaña ya no está en el catálogo.", "error")
+        flash(gettext("El producto de la campaña ya no está en el catálogo."), "error")
         return _volver_campana(cliente, sid, cid)
     existentes = {r["url"] for r in datos.referencias(cliente, cid)}
     base = (os.environ.get("R2_PUBLIC_BASE_URL") or "").rstrip("/")
@@ -970,7 +983,10 @@ def referencias_catalogo(cliente, sid, cid):
                                        descripcion=f"Foto real del producto {producto['nombre']}, tal como es.")
         tareas_sprints.encolar_analisis(cliente, rid)
         nuevas += 1
-    flash(f"{nuevas} foto(s) del producto traídas del catálogo." if nuevas else "Las fotos del producto ya estaban.", "ok")
+    if nuevas:
+        flash(gettext("%(n)s foto(s) del producto traídas del catálogo.", n=nuevas), "ok")
+    else:
+        flash(gettext("Las fotos del producto ya estaban."), "ok")
     estado.recalcular(cliente, sid)
     return _volver_campana(cliente, sid, cid)
 
@@ -980,7 +996,7 @@ def referencias_reutilizar(cliente, sid, cid):
     _campana_o_404(cliente, sid, cid)
     try:
         datos.reutilizar_referencia(cliente, _entero("referencia_id"), cid)
-        flash("Referencia reutilizada.", "ok")
+        flash(gettext("Referencia reutilizada."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     estado.recalcular(cliente, sid)
@@ -1012,11 +1028,12 @@ def campana_referencias_biblioteca(cliente, cid):
             continue
     estado.recalcular(cliente, c["sprint_id"])
     if _quiere_json():
-        return jsonify({"ok": n > 0, "agregados": n, "error": None if n else "No se pudo agregar ese referente."})
+        return jsonify({"ok": n > 0, "agregados": n,
+                        "error": None if n else gettext("No se pudo agregar ese referente.")})
     if n:
-        flash(f"{n} referente(s) agregado(s) desde la biblioteca.", "ok")
+        flash(gettext("%(n)s referente(s) agregado(s) desde la biblioteca.", n=n), "ok")
     else:
-        flash("No se agregó ningún referente.", "error")
+        flash(gettext("No se agregó ningún referente."), "error")
     return redirect(url_for("sprints.ver", cliente=cliente, sid=c["sprint_id"], panel=cid))
 
 
@@ -1032,11 +1049,11 @@ def campana_sugerir_ia(cliente, cid):
     ok = tareas_sprints.encolar_sugerir_biblioteca(cliente, cid)
     if _quiere_json():
         return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_sugerir_biblioteca(cliente, cid),
-                        "error": None if ok else "Ya hay una sugerencia en curso para esta campaña."})
+                        "error": None if ok else gettext("Ya hay una sugerencia en curso para esta campaña.")})
     if ok:
-        flash("Claude está buscando referentes de la biblioteca; aparecerán aquí en unos segundos.", "ok")
+        flash(gettext("Claude está buscando referentes de la biblioteca; aparecerán aquí en unos segundos."), "ok")
     else:
-        flash("Ya hay una sugerencia en curso para esta campaña.", "error")
+        flash(gettext("Ya hay una sugerencia en curso para esta campaña."), "error")
     return redirect(url_for("sprints.ver", cliente=cliente, sid=c["sprint_id"], panel=cid))
 
 
@@ -1054,7 +1071,7 @@ def referencia_editar(cliente, rid):
     r = _referencia_o_404(cliente, rid)
     cuerpo = request.get_json(silent=True)
     if cuerpo is not None and not isinstance(cuerpo, dict):
-        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+        return jsonify({"ok": False, "error": gettext("El cuerpo debe ser un objeto JSON.")}), 400
     es_json = cuerpo is not None or _quiere_json()
     fuente = cuerpo if cuerpo is not None else request.form
     campos = {}
@@ -1072,8 +1089,8 @@ def referencia_editar(cliente, rid):
             for k in ("descripcion", "intencion_otro", "titulo") if k in campos)
             or ("intencion" in campos and not isinstance(campos["intencion"], list))):
         if es_json:
-            return jsonify({"ok": False, "error": "Formato inválido."}), 400
-        flash("Formato inválido.", "error")
+            return jsonify({"ok": False, "error": gettext("Formato inválido.")}), 400
+        flash(gettext("Formato inválido."), "error")
         return _volver(cliente, r["sprint_id"], r["campana_id"])
     try:
         datos.actualizar_referencia(cliente, rid, **campos)
@@ -1110,7 +1127,7 @@ def referencia_reanalizar(cliente, rid):
     tareas_sprints.encolar_analisis(cliente, rid)
     if _quiere_json():
         return jsonify({"ok": True})
-    flash("Analizando de nuevo.", "ok")
+    flash(gettext("Analizando de nuevo."), "ok")
     return _volver(cliente, r["sprint_id"], r["campana_id"])
 
 
@@ -1159,11 +1176,12 @@ def ideas_proponer(cliente, sid, cid):
         flash(str(e), "error")
         return _volver_panel(cliente, sid, cid, "ideas")
     ok = tareas_sprints.encolar_ideas(cliente, cid, n_videos=n_v, n_imagenes=n_i)
-    error = None if ok else "Ya hay una propuesta de ideas en curso para esta campaña."
+    error = None if ok else gettext("Ya hay una propuesta de ideas en curso para esta campaña.")
     if _quiere_json():
         return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_ideas(cliente, cid), "error": error}), \
             (200 if ok else 409)
-    flash("Claude está proponiendo ideas; aparecerán aquí en unos segundos." if ok else error, "ok" if ok else "error")
+    flash(gettext("Claude está proponiendo ideas; aparecerán aquí en unos segundos.") if ok else error,
+          "ok" if ok else "error")
     return _volver_panel(cliente, sid, cid, "ideas")
 
 
@@ -1178,7 +1196,7 @@ def ideas_aprobar_todas(cliente, sid, cid):
     estado.recalcular(cliente, sid)
     if _quiere_json():
         return jsonify({"ok": True, "aprobadas": n})
-    flash(f"{n} idea(s) aprobada(s).", "ok")
+    flash(gettext("%(n)s idea(s) aprobada(s).", n=n), "ok")
     return _volver_panel(cliente, sid, cid, "ideas")
 
 
@@ -1191,14 +1209,14 @@ def idea_editar(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
     cuerpo = request.get_json(silent=True)
     if cuerpo is not None and not isinstance(cuerpo, dict):
-        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+        return jsonify({"ok": False, "error": gettext("El cuerpo debe ser un objeto JSON.")}), 400
     es_json = cuerpo is not None or _quiere_json()
     fuente = cuerpo if cuerpo is not None else request.form
     campos = {k: fuente.get(k) for k in ("titulo", "escena", "sonido", "gancho") if k in fuente}
     if any(v is not None and not isinstance(v, str) for v in campos.values()):
         if es_json:
-            return jsonify({"ok": False, "error": "Formato inválido."}), 400
-        flash("Formato inválido.", "error")
+            return jsonify({"ok": False, "error": gettext("Formato inválido.")}), 400
+        flash(gettext("Formato inválido."), "error")
         return _volver_ideas(i)
     if "gancho" in campos and isinstance((i.get("extra") or {}).get("angulo"), dict):
         # El gancho de la tarjeta y el del ángulo son el mismo (doctrina, bloque 2).
@@ -1207,9 +1225,9 @@ def idea_editar(cliente, cp_id):
         campos["extra"] = extra
     try:
         if "titulo" in campos and not (campos["titulo"] or "").strip():
-            raise datos.ErrorDatos("Una idea necesita título.")
+            raise datos.ErrorDatos(gettext("Una idea necesita título."))
         if "escena" in campos and not (campos["escena"] or "").strip():
-            raise datos.ErrorDatos("Una idea necesita escena.")
+            raise datos.ErrorDatos(gettext("Una idea necesita escena."))
         datos.actualizar_idea(cliente, cp_id, **campos)
     except datos.ErrorDatos as e:
         if es_json:
@@ -1218,7 +1236,7 @@ def idea_editar(cliente, cp_id):
         return _volver_ideas(i)
     if es_json:
         return jsonify({"ok": True})
-    flash("Idea guardada.", "ok")
+    flash(gettext("Idea guardada."), "ok")
     return _volver_ideas(i)
 
 
@@ -1232,7 +1250,7 @@ def idea_aprobar(cliente, cp_id):
     return _volver_ideas(i)
 
 
-MENSAJE_IDEA_CON_PIEZA = "Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión."
+MENSAJE_IDEA_CON_PIEZA = N_("Esa idea ya tiene una pieza generada; usa Regenerar desde la revisión.")
 
 
 @bp.post("/ideas/<int:cp_id>/reescribir")
@@ -1241,20 +1259,20 @@ def idea_reescribir(cliente, cp_id):
     la tarea pagada; el precio ya está en el botón."""
     i = _idea_o_404(cliente, cp_id)
     angulo = (i.get("extra") or {}).get("angulo")
-    error = (MENSAJE_IDEA_CON_PIEZA if not i["sin_sesion"] else
+    error = (gettext(MENSAJE_IDEA_CON_PIEZA) if not i["sin_sesion"] else
              None if isinstance(angulo, dict) and angulo.get("promesa") else
-             "Esta idea todavía no tiene un ángulo con promesa.")
+             gettext("Esta idea todavía no tiene un ángulo con promesa."))
     if error:
         if _quiere_json():
             return jsonify({"ok": False, "error": error}), 400
         flash(error, "error")
         return _volver_ideas(i)
     ok = tareas_sprints.encolar_reescribir(cliente, cp_id)
-    error = None if ok else "Ya se está reescribiendo esta idea."
+    error = None if ok else gettext("Ya se está reescribiendo esta idea.")
     if _quiere_json():
         return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_reescribir(cliente, cp_id), "error": error}), \
             (200 if ok else 409)
-    flash("Reescribiendo la idea desde su ángulo…" if ok else error, "ok" if ok else "error")
+    flash(gettext("Reescribiendo la idea desde su ángulo…") if ok else error, "ok" if ok else "error")
     return _volver_ideas(i)
 
 
@@ -1267,9 +1285,9 @@ def idea_angulo(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
     cuerpo = request.get_json(silent=True)
     if not isinstance(cuerpo, dict) or not isinstance(cuerpo.get("angulo"), dict):
-        return jsonify({"ok": False, "error": "Formato inválido."}), 400
+        return jsonify({"ok": False, "error": gettext("Formato inválido.")}), 400
     if not i["sin_sesion"]:
-        return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 409
+        return jsonify({"ok": False, "error": gettext(MENSAJE_IDEA_CON_PIEZA)}), 409
     extra = dict(i.get("extra") or {})
     previo = extra.get("angulo") if isinstance(extra.get("angulo"), dict) else {}
     limpio, avisos = doctrina.angulo_desde_formulario(dict(cuerpo["angulo"], origen=previo.get("origen")),
@@ -1287,8 +1305,8 @@ def idea_descartar(cliente, cp_id):
     # puede fabricarse. Una reserva vencida no es sesión (`sin_sesion`).
     if not i["sin_sesion"]:
         if _quiere_json():
-            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
-        flash(MENSAJE_IDEA_CON_PIEZA, "error")
+            return jsonify({"ok": False, "error": gettext(MENSAJE_IDEA_CON_PIEZA)}), 400
+        flash(gettext(MENSAJE_IDEA_CON_PIEZA), "error")
         return _volver_ideas(i)
     datos.actualizar_idea(cliente, cp_id, estado_idea="descartada")
     estado.recalcular(cliente, i["sprint_id"])
@@ -1307,15 +1325,15 @@ def idea_otra(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
     if not i["sin_sesion"]:
         if _quiere_json():
-            return jsonify({"ok": False, "error": MENSAJE_IDEA_CON_PIEZA}), 400
-        flash(MENSAJE_IDEA_CON_PIEZA, "error")
+            return jsonify({"ok": False, "error": gettext(MENSAJE_IDEA_CON_PIEZA)}), 400
+        flash(gettext(MENSAJE_IDEA_CON_PIEZA), "error")
         return _volver_ideas(i)
     ok = tareas_sprints.encolar_ideas(cliente, i["campana_id"], reemplaza=cp_id)
-    error = None if ok else "Ya hay una propuesta en curso; espera a que termine."
+    error = None if ok else gettext("Ya hay una propuesta en curso; espera a que termine.")
     if _quiere_json():
         return jsonify({"ok": bool(ok), "job_id": tareas_sprints.job_id_ideas(cliente, i["campana_id"]),
                         "error": error}), (200 if ok else 409)
-    flash("Pidiendo otra idea…" if ok else error, "ok" if ok else "error")
+    flash(gettext("Pidiendo otra idea…") if ok else error, "ok" if ok else "error")
     return _volver_ideas(i)
 
 
@@ -1347,13 +1365,15 @@ def lote(cliente, sid):
         flash(str(e), "error")
         return _volver(cliente, sid)
     if not r["encoladas"]:
-        error = "No había ideas aprobadas sin generar." if not r["omitidas"] else "Esas piezas ya se estaban generando."
+        error = (gettext("No había ideas aprobadas sin generar.") if not r["omitidas"]
+                 else gettext("Esas piezas ya se estaban generando."))
         if _quiere_json():
             return jsonify({"ok": False, "error": error, "encoladas": 0, "omitidas": r["omitidas"]}), 409
         flash(error, "warn")
         return _volver(cliente, sid)
-    texto = (f"Lote encolado: {r['encoladas']} pieza(s), USD {r['usd']:.2f} estimado. "
-             "Te avisamos por correo al terminar si está configurado.")
+    texto = gettext("Lote encolado: %(n)s pieza(s), USD %(usd)s estimado. "
+                    "Te avisamos por correo al terminar si está configurado.",
+                    n=r['encoladas'], usd=f"{r['usd']:.2f}")
     if _quiere_json():
         return jsonify({"ok": True, "encoladas": r["encoladas"], "omitidas": r["omitidas"], "usd": r["usd"],
                         "mensaje": texto})
@@ -1381,10 +1401,10 @@ def pieza_reintentar(cliente, cp_id):
             return jsonify({"ok": False, "error": str(e)}), 400
         flash(str(e), "error")
         return _volver(cliente, i["sprint_id"])
-    error = None if ok else "Esa pieza no está en error o ya se está generando."
+    error = None if ok else gettext("Esa pieza no está en error o ya se está generando.")
     if _quiere_json():
         return jsonify({"ok": bool(ok), "error": error}), (200 if ok else 409)
-    flash("Reintentando la pieza." if ok else error, "ok" if ok else "warn")
+    flash(gettext("Reintentando la pieza.") if ok else error, "ok" if ok else "warn")
     return _volver_pieza(cliente, i)
 
 
@@ -1402,7 +1422,7 @@ def pieza_regenerar(cliente, cp_id):
         return _volver(cliente, i["sprint_id"])
     if _quiere_json():
         return jsonify({"ok": True, "error": None})
-    flash("Regenerando la pieza (sesión nueva, misma idea).", "ok")
+    flash(gettext("Regenerando la pieza (sesión nueva, misma idea)."), "ok")
     return _volver_pieza(cliente, i)
 
 
@@ -1427,7 +1447,7 @@ def pieza_revision(cliente, cp_id):
     i = _idea_o_404(cliente, cp_id)
     cuerpo = request.get_json(silent=True)
     if cuerpo is not None and not isinstance(cuerpo, dict):
-        return jsonify({"ok": False, "error": "El cuerpo debe ser un objeto JSON."}), 400
+        return jsonify({"ok": False, "error": gettext("El cuerpo debe ser un objeto JSON.")}), 400
     es_json = cuerpo is not None or _quiere_json()
     fuente = cuerpo if cuerpo is not None else request.form
     accion, motivo = fuente.get("accion"), fuente.get("motivo")
@@ -1437,9 +1457,9 @@ def pieza_revision(cliente, cp_id):
         elif accion == "rechazar":
             ok = revision_mod.rechazar(cliente, cp_id, motivo if isinstance(motivo, str) else "")
         else:
-            raise datos.ErrorDatos("Acción desconocida.")
+            raise datos.ErrorDatos(gettext("Acción desconocida."))
         if not ok:
-            raise datos.ErrorDatos("Esa pieza todavía no está terminada.")
+            raise datos.ErrorDatos(gettext("Esa pieza todavía no está terminada."))
     except datos.ErrorDatos as e:
         if es_json:
             return jsonify({"ok": False, "error": str(e)}), 400
@@ -1449,7 +1469,7 @@ def pieza_revision(cliente, cp_id):
     if es_json:
         return jsonify({"ok": True, "revision": nueva["revision"],
                         "estado_sprint": (datos.sprint(cliente, i["sprint_id"], con_eventos=False) or {}).get("estado")})
-    flash("Pieza aprobada." if accion == "aprobar" else "Pieza rechazada.", "ok")
+    flash(gettext("Pieza aprobada.") if accion == "aprobar" else gettext("Pieza rechazada."), "ok")
     return redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
 
 
@@ -1462,18 +1482,18 @@ def pieza_qa(cliente, cp_id):
     destino = redirect(url_for("sprints.revision", cliente=cliente, sid=i["sprint_id"]))
     if not i.get("cf_id") or i.get("estado") not in revision_mod.TERMINADAS:
         if _quiere_json():
-            return jsonify({"ok": False, "error": "Esa pieza todavía no está lista para el QA."}), 400
-        flash("Esa pieza todavía no está lista para el QA.", "error")
+            return jsonify({"ok": False, "error": gettext("Esa pieza todavía no está lista para el QA.")}), 400
+        flash(gettext("Esa pieza todavía no está lista para el QA."), "error")
         return destino
     datos.actualizar_idea(cliente, cp_id, qa=None)
     ok = tareas_sprints.encolar_qa(cliente, cp_id)
     if _quiere_json():
-        return jsonify({"ok": bool(ok), "error": None if ok else "Ya hay un QA en curso para esa pieza."}), \
+        return jsonify({"ok": bool(ok), "error": None if ok else gettext("Ya hay un QA en curso para esa pieza.")}), \
             (200 if ok else 409)
     if ok:
-        flash("Repitiendo el QA de la pieza; el resultado aparecerá aquí en unos segundos.", "ok")
+        flash(gettext("Repitiendo el QA de la pieza; el resultado aparecerá aquí en unos segundos."), "ok")
     else:
-        flash("Ya hay un QA en curso para esa pieza.", "warn")
+        flash(gettext("Ya hay un QA en curso para esa pieza."), "warn")
     return destino
 
 
@@ -1483,7 +1503,7 @@ def revision_aprobar_qa(cliente, sid):
     n = revision_mod.aprobar_pasaron_qa(cliente, sid, campana_id=request.form.get("campana_id", type=int))
     if _quiere_json():
         return jsonify({"ok": True, "aprobadas": n})
-    flash(f"{n} pieza(s) aprobada(s) por haber pasado el QA.", "ok")
+    flash(gettext("%(n)s pieza(s) aprobada(s) por haber pasado el QA.", n=n), "ok")
     return redirect(url_for("sprints.revision", cliente=cliente, sid=sid))
 
 
@@ -1495,7 +1515,8 @@ def cerrar(cliente, sid):
     except datos.ErrorDatos as e:
         flash(str(e), "error")
         return _volver(cliente, sid)
-    flash(f"Sprint cerrado: {r['aprobadas']} aprobadas, {r['rechazadas']} rechazadas, USD {r['costo_usd']:.2f}.", "ok")
+    flash(gettext("Sprint cerrado: %(aprobadas)s aprobadas, %(rechazadas)s rechazadas, USD %(usd)s.",
+                 aprobadas=r['aprobadas'], rechazadas=r['rechazadas'], usd=f"{r['costo_usd']:.2f}"), "ok")
     return redirect(url_for("sprints.entrega", cliente=cliente, sid=sid))
 
 
@@ -1503,9 +1524,9 @@ def cerrar(cliente, sid):
 def reabrir(cliente, sid):
     _sprint_o_404(cliente, sid)
     if revision_mod.reabrir(cliente, sid):
-        flash("Sprint reabierto a revisión.", "ok")
+        flash(gettext("Sprint reabierto a revisión."), "ok")
     else:
-        flash("Solo se reabre un sprint completado.", "error")
+        flash(gettext("Solo se reabre un sprint completado."), "error")
     return _volver(cliente, sid)
 
 
@@ -1529,9 +1550,9 @@ bp.add_url_rule("/<int:sid>/entrega", endpoint="entrega", view_func=entrega_ver,
 def entrega_zip(cliente, sid):
     _sprint_o_404(cliente, sid)
     if not entrega.enlaces(cliente, sid):
-        flash("No hay piezas aprobadas que entregar.", "error")
+        flash(gettext("No hay piezas aprobadas que entregar."), "error")
     elif tareas_sprints.encolar_zip(cliente, sid):
-        flash("Armando el zip; el enlace aparecerá aquí al terminar.", "ok")
+        flash(gettext("Armando el zip; el enlace aparecerá aquí al terminar."), "ok")
     else:
-        flash("Ya se está armando el zip.", "warn")
+        flash(gettext("Ya se está armando el zip."), "warn")
     return redirect(url_for("sprints.entrega", cliente=cliente, sid=sid))

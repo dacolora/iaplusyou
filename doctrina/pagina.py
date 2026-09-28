@@ -10,10 +10,12 @@ import re
 from markupsafe import Markup, escape
 
 import doctrina
+from idiomas import N_
 
-TITULOS = {"base": "Lo esencial", "investigar": "Investigar", "angulo": "El ángulo", "gancho": "El gancho",
-           "guion": "El guion", "video": "El video", "caption": "El caption", "clasificar": "Leer anuncios ajenos",
-           "revisar": "Revisar antes de lanzar"}
+TITULOS = {"base": N_("Lo esencial"), "investigar": N_("Investigar"), "angulo": N_("El ángulo"),
+          "gancho": N_("El gancho"), "guion": N_("El guion"), "video": N_("El video"),
+          "caption": N_("El caption"), "clasificar": N_("Leer anuncios ajenos"),
+          "revisar": N_("Revisar antes de lanzar")}
 
 _TITULO = re.compile(r"^(#{1,3})\s+(.*)$")
 _VINETA = re.compile(r"^\s*-\s+(.*)$")

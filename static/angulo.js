@@ -70,7 +70,7 @@
     var cuenta = caja.querySelector('.angulo-cuenta-gancho');
     if (!gancho || !cuenta) return;
     var n = gancho.value.trim() ? gancho.value.trim().split(/\s+/).length : 0;
-    cuenta.textContent = n + '/12 palabras';
+    cuenta.textContent = (cuenta.dataset.plantilla || '{n}/12').replace('{n}', n);
   }
 
   function iniciar(caja) {

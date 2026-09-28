@@ -466,3 +466,53 @@ def test_experimentos_doctrina_en_ingles(admin_en):
     html = html_de(admin_en, "/cliente/acme")
     assert "Doctrine: {n} to improve" in html
     assert "chosen pieces have points to improve according to the doctrine" in html
+
+
+PRODUCTO_EN = {"id": "mirror", "nombre": "LED mirror", "descripcion": "round", "representativa_url": "https://r2/m.jpg",
+               "regla": "Identical.", "referencias": []}
+ANGULO_EN = {"audiencia": "people renovating their bathroom", "consciencia": "consciente_de_la_solucion",
+             "sofisticacion": 2, "deseo": "a bathroom that looks new", "promesa": "your bathroom looks new with a new mirror",
+             "mecanismo": None, "pruebas": [{"texto": "light built into the frame", "fuente": "ficha"}], "lead": "promesa",
+             "gancho": "Light that wakes you up", "faltantes": ["error: cifra_no_verificada:47", "real buyer reviews"]}
+
+
+def _sprint_sembrado(monkeypatch):
+    import catalogo_productos
+    from sprints import datos
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [PRODUCTO_EN])
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None: PRODUCTO_EN)
+    idiomas.guardar_de_proyecto("acme", "en")
+    pid = datos.crear_persona("acme", "Premium buyer", resumen="Wants quality")
+    sid = datos.crear_sprint("acme", "October", "2026-10-01", "2026-10-31")
+    cid = datos.agregar_campana("acme", sid, pid, "mirror", None, 2, 1)
+    rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", descripcion="side light")
+    datos.crear_idea("acme", cid, "video", "Sunrise mirror", "The camera circles the mirror.",
+                     gancho=ANGULO_EN["gancho"], extra={"angulo": ANGULO_EN})
+    return sid, cid, rid
+
+
+def test_pestana_sprints_en_ingles(admin_en, monkeypatch):
+    _sprint_sembrado(monkeypatch)
+    html = html_de(admin_en, "/cliente/acme")
+    fugas = espanol_visible(html, ("tab-sprints",))
+    assert not fugas, fugas[:15]
+    tab = html[html.index('id="tab-sprints"'):html.index('id="tab-catalogo"')]
+    for clave in ("planeando", "referencias", "listo para generar"):   # claves crudas que MARCAS no detecta
+        assert f">{clave}<" not in tab
+
+
+@pytest.mark.parametrize("ruta", ["", "/campanas/{cid}", "/campanas/{cid}/panel", "/campanas/{cid}/piezas",
+                                  "/campanas/{cid}/sugeridos", "/campanas/{cid}/tarjeta", "/revision", "/entrega"])
+def test_paginas_de_sprint_en_ingles(admin_en, monkeypatch, ruta):
+    sid, cid, _ = _sprint_sembrado(monkeypatch)
+    html = html_de(admin_en, f"/cliente/acme/sprints/{sid}" + ruta.format(cid=cid))
+    fugas = espanol_visible(html)
+    assert not fugas, (ruta, fugas[:15])
+
+
+def test_pagina_de_la_doctrina_en_ingles(admin_en):
+    """Los textos de la doctrina quedan en español (spec §B4: instrucciones
+    internas); se traduce todo lo demás de la página."""
+    html = html_de(admin_en, "/cliente/acme/doctrina")
+    fugas = espanol_visible(html, ("doctrina-cabecera", "doctrina-indice", "doctrina-pie"))
+    assert not fugas, fugas[:15]

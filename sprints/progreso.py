@@ -2,6 +2,7 @@
 Progreso de campañas y sprints (spec §1.4). Funciones puras sobre los dicts
 que devuelve sprints.datos: sin base de datos, sin Flask.
 """
+from flask_babel import gettext
 
 ETAPAS_REFERENCIAS = ("planeada", "referencias", "ideas_propuestas", "ideas_aprobadas")
 
@@ -28,12 +29,15 @@ def progreso_campana(c):
     estado = c.get("estado") or "planeada"
     if estado in ETAPAS_REFERENCIAS:
         listas, objetivo = int(c.get("referencias_listas") or 0), int(c.get("referencias_objetivo") or 0)
-        return _salida("referencias", fraccion_referencias(listas, objetivo), f"{listas} / {objetivo} referencias", total)
+        return _salida("referencias", fraccion_referencias(listas, objetivo),
+                       gettext("%(listas)s / %(objetivo)s referencias", listas=listas, objetivo=objetivo), total)
     if estado == "generando":
         listas = int(c.get("piezas_listas") or 0)
-        return _salida("produccion", listas / total if total else 0.0, f"{listas} de {total} piezas listas", total)
+        return _salida("produccion", listas / total if total else 0.0,
+                       gettext("%(listas)s de %(total)s piezas listas", listas=listas, total=total), total)
     aprobadas = int(c.get("piezas_aprobadas") or 0)
-    return _salida("revision", aprobadas / total if total else 0.0, f"{aprobadas} de {total} aprobadas", total)
+    return _salida("revision", aprobadas / total if total else 0.0,
+                   gettext("%(aprobadas)s de %(total)s aprobadas", aprobadas=aprobadas, total=total), total)
 
 
 def progreso_sprint(campanas):
@@ -44,10 +48,10 @@ def progreso_sprint(campanas):
     aprobadas = sum(int(c.get("piezas_aprobadas") or 0) for c in campanas)
     if pesos <= 0:
         return {"fraccion": 0.0, "porcentaje": 0, "planeadas": 0, "listas": 0, "aprobadas": 0,
-                "texto": "sin piezas planeadas"}
+                "texto": gettext("sin piezas planeadas")}
     fr = sum(progreso_campana(c)["fraccion"] * planeadas(c) for c in campanas) / pesos
     return {"fraccion": round(fr, 3), "porcentaje": int(round(fr * 100)), "planeadas": pesos, "listas": listas,
-            "aprobadas": aprobadas, "texto": f"{listas} de {pesos} piezas"}
+            "aprobadas": aprobadas, "texto": gettext("%(listas)s de %(pesos)s piezas", listas=listas, pesos=pesos)}
 
 
 def cobertura(campana, referencias):
@@ -56,7 +60,9 @@ def cobertura(campana, referencias):
     avisos = []
     nv, ni = int(campana.get("n_videos") or 0), int(campana.get("n_imagenes") or 0)
     if nv > 0 and not etiquetas & {"movimiento_camara", "transiciones"}:
-        avisos.append(f"Te faltan referencias de movimiento de cámara o transiciones y hay {nv} videos planeados.")
+        avisos.append(gettext("Te faltan referencias de movimiento de cámara o transiciones y hay %(n)s videos "
+                              "planeados.", n=nv))
     if ni > 0 and not etiquetas & {"composicion", "angulo_producto"}:
-        avisos.append(f"Te faltan referencias de composición o ángulo de producto y hay {ni} imágenes planeadas.")
+        avisos.append(gettext("Te faltan referencias de composición o ángulo de producto y hay %(n)s imágenes "
+                              "planeadas.", n=ni))
     return avisos

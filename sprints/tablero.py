@@ -5,13 +5,10 @@ Flask ni base de datos a partir de los dicts de sprints.datos.
 """
 from datetime import date, timedelta
 
+from flask_babel import gettext, ngettext
+
+import idiomas
 from sprints import datos
-
-MESES = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
-
-
-def _plural(n, singular, plural=None):
-    return f"{n} {singular if n == 1 else (plural or singular + 's')}"
 
 
 def siguiente_paso(c):
@@ -19,28 +16,30 @@ def siguiente_paso(c):
     elegir referentes → aprobar/proponer ideas → generar → revisar."""
     faltan = int(c.get("referencias_objetivo") or 1) - int(c.get("referencias_listas") or 0)
     if faltan > 0:
-        return {"clave": "referentes", "texto": f"elegir {_plural(faltan, 'referente')}"}
+        return {"clave": "referentes", "texto": ngettext("elegir %(num)d referente", "elegir %(num)d referentes", faltan)}
     vivas = [i for i in c.get("ideas") or [] if i.get("estado_idea") != "descartada"]
     propuestas = [i for i in vivas if i.get("estado_idea") == "propuesta"]
     if propuestas:
-        return {"clave": "aprobar", "texto": f"aprobar {_plural(len(propuestas), 'idea')}"}
+        return {"clave": "aprobar", "texto": ngettext("aprobar %(num)d idea", "aprobar %(num)d ideas", len(propuestas))}
     if len(vivas) < int(c.get("n_videos") or 0) + int(c.get("n_imagenes") or 0):
-        return {"clave": "ideas", "texto": "proponer ideas"}
+        return {"clave": "ideas", "texto": gettext("proponer ideas")}
     por_generar = [i for i in vivas if i.get("estado_idea") == "aprobada" and i.get("sin_sesion")]
     if por_generar:
-        return {"clave": "generar", "texto": f"generar {_plural(len(por_generar), 'pieza')}"}
+        return {"clave": "generar", "texto": ngettext("generar %(num)d pieza", "generar %(num)d piezas", len(por_generar))}
     piezas = c.get("piezas") or []
     en_curso = [p for p in piezas if p.get("estado") not in datos._PIEZA_TERMINADA and p.get("estado") != "error"]
     if en_curso:
-        return {"clave": "generando", "texto": f"esperar {_plural(len(en_curso), 'pieza')} en producción"}
+        return {"clave": "generando", "texto": ngettext(
+            "esperar %(num)d pieza en producción", "esperar %(num)d piezas en producción", len(en_curso))}
     errores = [p for p in piezas if p.get("estado") == "error"]
     if errores:
-        return {"clave": "errores", "texto": f"reintentar {_plural(len(errores), 'pieza')} con error"}
+        return {"clave": "errores", "texto": ngettext(
+            "reintentar %(num)d pieza con error", "reintentar %(num)d piezas con error", len(errores))}
     por_revisar = [p for p in piezas if p.get("estado") in datos._PIEZA_TERMINADA
                    and p.get("revision") in (None, "", "pendiente")]
     if por_revisar:
-        return {"clave": "revisar", "texto": f"revisar {_plural(len(por_revisar), 'pieza')}"}
-    return {"clave": "lista", "texto": "campaña lista"}
+        return {"clave": "revisar", "texto": ngettext("revisar %(num)d pieza", "revisar %(num)d piezas", len(por_revisar))}
+    return {"clave": "lista", "texto": gettext("campaña lista")}
 
 
 def sugerencias_dolor(persona):
@@ -72,14 +71,17 @@ def resumen(sp):
     planeadas = sum(int(c.get("n_videos") or 0) + int(c.get("n_imagenes") or 0) for c in cs)
     objetivo = sum(int(c.get("referencias_objetivo") or 0) for c in cs)
     elegidos = sum(min(int(c.get("referencias_listas") or 0), int(c.get("referencias_objetivo") or 0)) for c in cs)
-    return f"{_plural(len(cs), 'campaña')} · {planeadas} piezas planeadas · {elegidos}/{objetivo} referentes elegidos"
+    campanas = ngettext("%(num)d campaña", "%(num)d campañas", len(cs))
+    return gettext("%(campanas)s · %(planeadas)s piezas planeadas · %(elegidos)s/%(objetivo)s referentes elegidos",
+                   campanas=campanas, planeadas=planeadas, elegidos=elegidos, objetivo=objetivo)
 
 
 def _fechas_cortas(inicio, fin):
     i, f = date.fromisoformat(inicio), date.fromisoformat(fin)
+    meses = idiomas.meses_cortos()
     if (i.year, i.month) == (f.year, f.month):
-        return f"{i.day}–{f.day} {MESES[i.month - 1]}"
-    return f"{i.day} {MESES[i.month - 1]} – {f.day} {MESES[f.month - 1]}"
+        return f"{i.day}–{f.day} {meses[i.month - 1]}"
+    return f"{i.day} {meses[i.month - 1]} – {f.day} {meses[f.month - 1]}"
 
 
 def linea_sprint(sp):
@@ -89,7 +91,7 @@ def linea_sprint(sp):
     if (sp.get("momento") or {}).get("nombre"):
         partes.append(sp["momento"]["nombre"])
     if sp.get("marcas"):
-        partes.append("imita: " + ", ".join(m["nombre"] for m in sp["marcas"]))
+        partes.append(gettext("imita: %(marcas)s", marcas=", ".join(m["nombre"] for m in sp["marcas"])))
     return " · ".join(partes)
 
 

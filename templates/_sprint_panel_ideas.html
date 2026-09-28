@@ -1,4 +1,5 @@
 {% from "_angulo_editor.html" import editor_angulo %}
+{% from "_sprint_macros.html" import etiqueta_sprint %}
 {# Pestaña «Ideas» del panel (spec 2026-09-27 §Pestaña «Ideas»). Contexto de
    rutas._contexto_ideas: ideas_vivas, ideas_descartadas, conteo_ideas,
    precios_ideas, trabajo_ideas, reescribiendo, enfoques, referencias_por_id y
@@ -11,15 +12,15 @@
     <span class="chip-tipo">{{ i.tipo | upper }}</span>
     <strong>{{ i.titulo }}</strong>
     {% if i.duracion_s %}<small class="vacio">{{ i.duracion_s | int }} s</small>{% endif %}
-    {% if i.enfoque %}<small class="vacio">{{ enfoques.get(i.enfoque, i.enfoque) }}</small>{% endif %}
-    <span class="panel-idea-estado">{{ 'generada' if con_pieza else i.estado_idea }}</span>
+    {% if i.enfoque %}<small class="vacio">{{ enfoques.get(i.enfoque, i.enfoque)|traducir }}</small>{% endif %}
+    <span class="panel-idea-estado">{{ _('generada') if con_pieza else etiqueta_sprint(i.estado_idea) }}</span>
   </summary>
   <div class="panel-idea-cuerpo">
-    <label>Título <input name="titulo" value="{{ i.titulo }}" maxlength="200" {% if con_pieza %}readonly{% endif %}></label>
-    <label>Escena <textarea name="escena" rows="3" {% if con_pieza %}readonly{% endif %}>{{ i.escena }}</textarea></label>
-    {% if i.tipo == "video" %}<label>Sonido <input name="sonido" value="{{ i.sonido or '' }}" {% if con_pieza %}readonly{% endif %}></label>{% endif %}
-    <label>Gancho <input name="gancho" value="{{ i.gancho or '' }}" maxlength="200" {% if con_pieza %}readonly{% endif %}></label>
-    <small class="panel-idea-guardado vacio" hidden>Guardado</small>
+    <label>{{ _('Título') }} <input name="titulo" value="{{ i.titulo }}" maxlength="200" {% if con_pieza %}readonly{% endif %}></label>
+    <label>{{ _('Escena') }} <textarea name="escena" rows="3" {% if con_pieza %}readonly{% endif %}>{{ i.escena }}</textarea></label>
+    {% if i.tipo == "video" %}<label>{{ _('Sonido') }} <input name="sonido" value="{{ i.sonido or '' }}" {% if con_pieza %}readonly{% endif %}></label>{% endif %}
+    <label>{{ _('Gancho') }} <input name="gancho" value="{{ i.gancho or '' }}" maxlength="200" {% if con_pieza %}readonly{% endif %}></label>
+    <small class="panel-idea-guardado vacio" hidden>{{ _('Guardado') }}</small>
     <small class="campo-error" data-error-idea hidden></small>
     {{ editor_angulo((i.extra or {}).get('angulo'), url_for('sprints.idea_angulo', cliente=cliente, cp_id=i.id), cliente,
                      solo_lectura=con_pieza) }}
@@ -28,18 +29,18 @@
     {% endif %}
     <div class="panel-acciones">
       {% if con_pieza %}
-        <button type="button" class="btn-sm" data-ir-paso="piezas">Ver su pieza →</button>
+        <button type="button" class="btn-sm" data-ir-paso="piezas">{{ _('Ver su pieza →') }}</button>
       {% else %}
-        {% if i.estado_idea != "aprobada" %}<button type="button" class="btn-generar btn-xs" data-idea-accion data-url="{{ url_for('sprints.idea_aprobar', cliente=cliente, cp_id=i.id) }}">Aprobar</button>{% endif %}
+        {% if i.estado_idea != "aprobada" %}<button type="button" class="btn-generar btn-xs" data-idea-accion data-url="{{ url_for('sprints.idea_aprobar', cliente=cliente, cp_id=i.id) }}">{{ _('Aprobar') }}</button>{% endif %}
         {% if ((i.extra or {}).get('angulo') or {}).get('promesa') %}
           {% if i.id in reescribiendo %}
           <div class="barra-progreso" id="trabajo-{{ reescribiendo[i.id] }}" data-poll-job="{{ reescribiendo[i.id] }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
           {% else %}
-          <button type="button" class="btn-xs" data-idea-accion data-url="{{ url_for('sprints.idea_reescribir', cliente=cliente, cp_id=i.id) }}">Reescribir la idea con este ángulo ({{ precios_ideas.reescribir }})</button>
+          <button type="button" class="btn-xs" data-idea-accion data-url="{{ url_for('sprints.idea_reescribir', cliente=cliente, cp_id=i.id) }}">{{ _('Reescribir la idea con este ángulo (%(precio)s)', precio=precios_ideas.reescribir) }}</button>
           {% endif %}
         {% endif %}
-        <button type="button" class="btn-xs" data-idea-accion data-url="{{ url_for('sprints.idea_otra', cliente=cliente, cp_id=i.id) }}" {% if trabajo_ideas %}disabled{% endif %}>Otra idea ({{ precios_ideas.otra }})</button>
-        <button type="button" class="btn-xs btn-rechazar" data-idea-accion data-url="{{ url_for('sprints.idea_descartar', cliente=cliente, cp_id=i.id) }}">Descartar</button>
+        <button type="button" class="btn-xs" data-idea-accion data-url="{{ url_for('sprints.idea_otra', cliente=cliente, cp_id=i.id) }}" {% if trabajo_ideas %}disabled{% endif %}>{{ _('Otra idea (%(precio)s)', precio=precios_ideas.otra) }}</button>
+        <button type="button" class="btn-xs btn-rechazar" data-idea-accion data-url="{{ url_for('sprints.idea_descartar', cliente=cliente, cp_id=i.id) }}">{{ _('Descartar') }}</button>
       {% endif %}
     </div>
   </div>
@@ -50,28 +51,28 @@
 {% set faltan = ci.faltan_videos + ci.faltan_imagenes %}
 {% set url_proponer = url_for('sprints.ideas_proponer', cliente=cliente, sid=sprint.id, cid=c.id) %}
 <section class="panel-seccion">
-  <p class="panel-ideas-conteo"><strong>{{ ci.aprobadas }} de {{ ci.planeadas }} aprobadas · videos {{ ci.videos_aprobados }}/{{ c.n_videos }} · imágenes {{ ci.imagenes_aprobadas }}/{{ c.n_imagenes }}</strong></p>
+  <p class="panel-ideas-conteo"><strong>{{ _('%(aprobadas)s de %(planeadas)s aprobadas · videos %(videos_aprobados)s/%(n_videos)s · imágenes %(imagenes_aprobadas)s/%(n_imagenes)s', aprobadas=ci.aprobadas, planeadas=ci.planeadas, videos_aprobados=ci.videos_aprobados, n_videos=c.n_videos, imagenes_aprobadas=ci.imagenes_aprobadas, n_imagenes=c.n_imagenes) }}</strong></p>
   <div class="panel-acciones">
-    <button type="button" class="btn-generar btn-sm" data-proponer data-url="{{ url_proponer }}" {% if trabajo_ideas or not faltan %}disabled{% endif %}>✨ Proponer las que faltan ({{ cuantos(ci.faltan_videos, 'video', 'videos') }}, {{ cuantos(ci.faltan_imagenes, 'imagen', 'imágenes') }}){% if faltan %} ({{ precios_ideas.faltan }}){% endif %}</button>
-    <button type="button" class="btn-sm" data-proponer data-mas="3" data-url="{{ url_proponer }}" {% if trabajo_ideas %}disabled{% endif %}>+3 videos ({{ precios_ideas.mas }})</button>
-    <button type="button" class="btn-sm" data-proponer data-mas="3" data-tipo="imagen" data-url="{{ url_proponer }}" {% if trabajo_ideas %}disabled{% endif %}>+3 imágenes ({{ precios_ideas.mas }})</button>
-    {% if ci.propuestas %}<button type="button" class="btn-sm" data-idea-accion data-url="{{ url_for('sprints.ideas_aprobar_todas', cliente=cliente, sid=sprint.id, cid=c.id) }}">Aprobar todas las propuestas ({{ ci.propuestas }})</button>{% endif %}
+    <button type="button" class="btn-generar btn-sm" data-proponer data-url="{{ url_proponer }}" {% if trabajo_ideas or not faltan %}disabled{% endif %}>✨ {{ _('Proponer las que faltan (%(videos)s, %(imagenes)s)', videos=cuantos(ci.faltan_videos, _('video'), _('videos')), imagenes=cuantos(ci.faltan_imagenes, _('imagen'), _('imágenes'))) }}{% if faltan %} ({{ precios_ideas.faltan }}){% endif %}</button>
+    <button type="button" class="btn-sm" data-proponer data-mas="3" data-url="{{ url_proponer }}" {% if trabajo_ideas %}disabled{% endif %}>{{ _('+3 videos (%(precio)s)', precio=precios_ideas.mas) }}</button>
+    <button type="button" class="btn-sm" data-proponer data-mas="3" data-tipo="imagen" data-url="{{ url_proponer }}" {% if trabajo_ideas %}disabled{% endif %}>{{ _('+3 imágenes (%(precio)s)', precio=precios_ideas.mas) }}</button>
+    {% if ci.propuestas %}<button type="button" class="btn-sm" data-idea-accion data-url="{{ url_for('sprints.ideas_aprobar_todas', cliente=cliente, sid=sprint.id, cid=c.id) }}">{{ _('Aprobar todas las propuestas (%(n)s)', n=ci.propuestas) }}</button>{% endif %}
   </div>
   {% if trabajo_ideas %}
   <div class="barra-progreso" id="trabajo-{{ trabajo_ideas.job_id }}" data-poll-job="{{ trabajo_ideas.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
-  <p class="vacio">Claude está proponiendo ideas; aparecen aquí al terminar.</p>
+  <p class="vacio">{{ _('Claude está proponiendo ideas; aparecen aquí al terminar.') }}</p>
   {% endif %}
 </section>
 
 <section class="panel-seccion panel-ideas">
   {% for i in ideas_vivas %}{{ tarjeta_idea(i) }}{% else %}
   <div class="estado-vacio">
-    <p class="estado-vacio-titulo">Todavía no hay ideas</p>
-    <p class="estado-vacio-texto">Pulsa «Proponer las que faltan»: Claude las escribe con la persona, el producto, el enfoque y los referentes elegidos.</p>
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay ideas') }}</p>
+    <p class="estado-vacio-texto">{{ _('Pulsa «Proponer las que faltan»: Claude las escribe con la persona, el producto, el enfoque y los referentes elegidos.') }}</p>
   </div>
   {% endfor %}
   {% if ideas_descartadas %}
-  <details class="panel-descartadas"><summary>{{ ideas_descartadas | length }} descartada(s)</summary>
+  <details class="panel-descartadas"><summary>{{ _('%(n)s descartada(s)', n=(ideas_descartadas | length)) }}</summary>
     {% for i in ideas_descartadas %}<p class="vacio">{{ i.tipo }} · {{ i.titulo }}</p>{% endfor %}
   </details>
   {% endif %}
@@ -80,20 +81,20 @@
 <section class="panel-seccion panel-generar" data-generar data-campana="{{ c.id }}"
          data-url-estimar="{{ url_for('sprints.lote_estimar', cliente=cliente, sid=sprint.id) }}"
          data-url-lote="{{ url_for('sprints.lote', cliente=cliente, sid=sprint.id) }}">
-  <h3>Generar</h3>
+  <h3>{{ _('Generar') }}</h3>
   {% if ci.por_generar %}
-  <p>{{ ci.por_generar }} aprobada(s) sin generar ({{ cuantos(ci.por_generar_videos, 'video', 'videos') }}, {{ cuantos(ci.por_generar_imagenes, 'imagen', 'imágenes') }})</p>
+  <p>{{ _('%(n)s aprobada(s) sin generar (%(videos)s, %(imagenes)s)', n=ci.por_generar, videos=cuantos(ci.por_generar_videos, _('video'), _('videos')), imagenes=cuantos(ci.por_generar_imagenes, _('imagen'), _('imágenes'))) }}</p>
   <div class="panel-fila">
-    <label>Modelo de video
-      <select data-lote-modelo="video">{% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} (US$ {{ '%.3f' % m.usd_por_segundo_efectivo }}/s con sonido)</option>{% endfor %}</select></label>
-    <label>Modelo de imagen
+    <label>{{ _('Modelo de video') }}
+      <select data-lote-modelo="video">{% for k, m in modelos_video.items() %}<option value="{{ k }}" {% if k == modelo_video_defecto %}selected{% endif %}>{{ m.nombre }} {{ _('(US$ %(precio)s/s con sonido)', precio='%.3f' % m.usd_por_segundo_efectivo) }}</option>{% endfor %}</select></label>
+    <label>{{ _('Modelo de imagen') }}
       <select data-lote-modelo="imagen">{% for k, m in modelos_imagen.items() %}<option value="{{ k }}" {% if k == modelo_imagen_defecto %}selected{% endif %}>{{ m.nombre }}</option>{% endfor %}</select></label>
   </div>
-  <p class="vacio" data-lote-texto>Calculando el costo…</p>
-  <button type="button" class="btn-generar" data-generar-lote disabled>Generar {{ ci.por_generar }} pieza(s)</button>
-  <small class="vacio">Se crea una pieza de Crear por idea aprobada. Ninguna se reintenta sola si falla.</small>
+  <p class="vacio" data-lote-texto>{{ _('Calculando el costo…') }}</p>
+  <button type="button" class="btn-generar" data-generar-lote disabled>{{ _('Generar %(n)s pieza(s)', n=ci.por_generar) }}</button>
+  <small class="vacio">{{ _('Se crea una pieza de Crear por idea aprobada. Ninguna se reintenta sola si falla.') }}</small>
   <small class="campo-error" hidden></small>
   {% else %}
-  <p class="vacio">No hay ideas aprobadas sin generar. Aprueba ideas para poder generarlas.</p>
+  <p class="vacio">{{ _('No hay ideas aprobadas sin generar. Aprueba ideas para poder generarlas.') }}</p>
   {% endif %}
 </section>

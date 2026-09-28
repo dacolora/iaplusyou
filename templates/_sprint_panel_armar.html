@@ -4,75 +4,77 @@
    con todo su contexto; sin <script>. #}
 {% set ef = c.efectivos %}
   <section class="panel-seccion">
-    <h3>Audiencia y producto</h3>
+    <h3>{{ _('Audiencia y producto') }}</h3>
     <div class="panel-fila">
-      <label>Persona
+      <label>{{ _('Persona') }}
         <select data-campo="persona_id">
-          {% for p in personas %}<option value="{{ p.id }}" {% if p.id == c.persona_id %}selected{% endif %}>{{ p.nombre }}{% if p.origen == 'investigada' %} · del Nicho{% endif %}</option>{% endfor %}
+          {% for p in personas %}<option value="{{ p.id }}" {% if p.id == c.persona_id %}selected{% endif %}>{{ p.nombre }}{% if p.origen == 'investigada' %} · {{ _('del Nicho') }}{% endif %}</option>{% endfor %}
         </select>
         <small class="campo-error" hidden></small></label>
-      <label>Producto
+      <label>{{ _('Producto') }}
         <select data-campo="catalogo_id">
-          {% if not c.producto %}<option value="{{ c.catalogo_id }}" selected>{{ c.catalogo_id }} (ya no está en el catálogo)</option>{% endif %}
+          {% if not c.producto %}<option value="{{ c.catalogo_id }}" selected>{{ c.catalogo_id }} ({{ _('ya no está en el catálogo') }})</option>{% endif %}
           {% for p in productos %}<option value="{{ p.id }}" {% if p.id == c.catalogo_id %}selected{% endif %}>{{ p.nombre }}</option>{% endfor %}
         </select>
         <small class="campo-error" hidden></small></label>
     </div>
     <details class="panel-persona-rapida">
-      <summary class="btn-xs">+ Crear persona rápida</summary>
+      <summary class="btn-xs">+ {{ _('Crear persona rápida') }}</summary>
       <form data-persona-rapida action="{{ url_for('sprints.persona_crear', cliente=cliente) }}">
-        <input name="nombre" required maxlength="120" placeholder="Nombre (p. ej. Mamá práctica)">
-        <input name="resumen" maxlength="200" placeholder="Una línea: qué quiere o qué le duele">
-        <button type="submit" class="btn-sm">Crear y usar</button>
+        <input name="nombre" required maxlength="120" placeholder="{{ _('Nombre (p. ej. Mamá práctica)') }}">
+        <input name="resumen" maxlength="200" placeholder="{{ _('Una línea: qué quiere o qué le duele') }}">
+        <button type="submit" class="btn-sm">{{ _('Crear y usar') }}</button>
         <small class="campo-error" hidden></small>
       </form>
     </details>
   </section>
 
   <section class="panel-seccion">
-    <h3>Enfoque</h3>
+    <h3>{{ _('Enfoque') }}</h3>
     <div data-campo-caja>
-      <span class="campo-label">Etapa</span>
-      <div class="panel-opciones" role="radiogroup" aria-label="Etapa" data-campo="funnel" data-tipo="radio">
+      <span class="campo-label">{{ _('Etapa') }}</span>
+      <div class="panel-opciones" role="radiogroup" aria-label="{{ _('Etapa') }}" data-campo="funnel" data-tipo="radio">
         {% for k, nombre in funnels.items() %}
-        <label title="{{ nombre }}"><input type="radio" name="funnel-{{ c.id }}" value="{{ k }}" {% if k == c.funnel %}checked{% endif %}> {{ k | upper }}</label>
+        <label title="{{ nombre|traducir }}"><input type="radio" name="funnel-{{ c.id }}" value="{{ k }}" {% if k == c.funnel %}checked{% endif %}> {{ k | upper }}</label>
         {% endfor %}
       </div>
       <small class="campo-error" hidden></small>
     </div>
     <div data-campo-caja>
-      <span class="campo-label">Qué tanto sabe la audiencia</span>
-      <div class="panel-opciones" role="radiogroup" aria-label="Consciencia" data-campo="consciencia" data-tipo="radio">
-        <label><input type="radio" name="consciencia-{{ c.id }}" value="" {% if not c.consciencia %}checked{% endif %}> sin definir</label>
+      <span class="campo-label">{{ _('Qué tanto sabe la audiencia') }}</span>
+      <div class="panel-opciones" role="radiogroup" aria-label="{{ _('Consciencia') }}" data-campo="consciencia" data-tipo="radio">
+        <label><input type="radio" name="consciencia-{{ c.id }}" value="" {% if not c.consciencia %}checked{% endif %}> {{ _('sin definir') }}</label>
         {% for k, nombre in consciencias.items() %}
-        <label><input type="radio" name="consciencia-{{ c.id }}" value="{{ k }}" {% if k == c.consciencia %}checked{% endif %}> {{ nombre }}</label>
+        <label><input type="radio" name="consciencia-{{ c.id }}" value="{{ k }}" {% if k == c.consciencia %}checked{% endif %}> {{ nombre|traducir }}</label>
         {% endfor %}
       </div>
       <small class="campo-error" hidden></small>
     </div>
-    <label>Dolor o deseo
-      <input data-campo="dolor" value="{{ c.dolor or '' }}" maxlength="300" placeholder="pies fríos en casa">
+    <label>{{ _('Dolor o deseo') }}
+      <input data-campo="dolor" value="{{ c.dolor or '' }}" maxlength="300" placeholder="{{ _('pies fríos en casa') }}">
       <small class="campo-error" hidden></small></label>
     {% if sugerencias_dolor %}
-    <p class="panel-sugerencias">De {{ c.persona_nombre }}:
+    <p class="panel-sugerencias">{{ _('De %(persona)s:', persona=c.persona_nombre) }}
       {% for s in sugerencias_dolor %}<button type="button" class="chip-sugerencia" data-poner="dolor" data-valor="{{ s }}">{{ s }}</button>{% endfor %}</p>
     {% endif %}
-    <p class="panel-sofisticacion vacio">Promesas parecidas que ya vio el cliente de {{ c.producto.nombre if c.producto else c.catalogo_id }}: {% if sof_producto %}{{ sof_producto }} · {{ SOFISTICACIONES_CLIENTE[sof_producto] }}{% else %}Claude lo decide{% endif %} (se cambia en Catálogo).</p>
+    <p class="panel-sofisticacion vacio">{{ _('Promesas parecidas que ya vio el cliente de %(producto)s:', producto=(c.producto.nombre if c.producto else c.catalogo_id)) }} {% if sof_producto %}{{ sof_producto }} · {{ SOFISTICACIONES_CLIENTE[sof_producto]|traducir }}{% else %}{{ _('Claude lo decide') }}{% endif %} {{ _('(se cambia en Catálogo).') }}</p>
   </section>
 
   <section class="panel-seccion">
-    <h3>Formato de los anuncios</h3>
+    <h3>{{ _('Formato de los anuncios') }}</h3>
     <div data-campo-caja>
       <div class="panel-familias" data-campo="familias" data-tipo="familias">
-        {% for f in c.familias or [] %}<span class="chip-familia" data-familia="{{ f }}">{{ f }} <button type="button" data-quitar-familia aria-label="Quitar {{ f }}">✕</button></span>{% endfor %}
+        {% for f in c.familias or [] %}<span class="chip-familia" data-familia="{{ f }}">{{ f }} <button type="button" data-quitar-familia aria-label="{{ _('Quitar %(f)s', f=f) }}">✕</button></span>{% endfor %}
         <input class="panel-familia-buscar" list="familias-biblioteca" data-agregar-familia
-               placeholder="+ familia (busca entre {{ familias | length }})" aria-label="Agregar una familia de formato">
+               placeholder="{{ _('+ familia (busca entre %(n)s)', n=(familias | length)) }}" aria-label="{{ _('Agregar una familia de formato') }}">
       </div>
       <small class="campo-error" hidden></small>
     </div>
-    <datalist id="familias-biblioteca">{% for f in familias %}<option value="{{ f.nombre }}">{{ f.n }} anuncios</option>{% endfor %}</datalist>
+    <datalist id="familias-biblioteca">{% for f in familias %}<option value="{{ f.nombre }}">{{ _('%(n)s anuncios', n=f.n) }}</option>{% endfor %}</datalist>
     {% if familias_sugeridas %}
-    <p class="panel-sugerencias">Sugeridas para {{ (c.funnel or 'tof') | upper }}{% if c.consciencia_nombre %} · {{ c.consciencia_nombre }}{% endif %}:
+    {% set etapa_txt = (c.funnel or 'tof') | upper %}
+    {% if c.consciencia_nombre %}{% set etapa_txt = etapa_txt ~ ' · ' ~ (c.consciencia_nombre|traducir) %}{% endif %}
+    <p class="panel-sugerencias">{{ _('Sugeridas para %(etapa)s:', etapa=etapa_txt) }}
       {% for f in familias_sugeridas %}<button type="button" class="chip-sugerencia" data-sumar-familia="{{ f }}">{{ f }}</button>{% endfor %}</p>
     {% endif %}
   </section>
@@ -80,34 +82,34 @@
   <section class="panel-seccion">
     {# Sin país ni idioma desde 2026-09-27: la campaña es para todos los países
        y la edición final adapta cada uno. #}
-    <h3>Marcas</h3>
-    <label>Marcas a imitar
-      <small class="vacio">{% if ef.hereda.marcas %}Del sprint: {{ (ef.marcas | map(attribute='nombre') | join(', ')) or 'ninguna' }}. Escribe aquí para cambiarlas solo en esta campaña.{% else %}Solo esta campaña (bórralas para volver a las del sprint).{% endif %}</small>
-      <textarea data-campo="marcas" rows="2" placeholder="Una por línea">{{ marcas_texto }}</textarea>
+    <h3>{{ _('Marcas') }}</h3>
+    <label>{{ _('Marcas a imitar') }}
+      <small class="vacio">{% if ef.hereda.marcas %}{{ _('Del sprint: %(marcas)s. Escribe aquí para cambiarlas solo en esta campaña.', marcas=((ef.marcas | map(attribute='nombre') | join(', ')) or _('ninguna'))) }}{% else %}{{ _('Solo esta campaña (bórralas para volver a las del sprint).') }}{% endif %}</small>
+      <textarea data-campo="marcas" rows="2" placeholder="{{ _('Una por línea') }}">{{ marcas_texto }}</textarea>
       <small class="campo-error" hidden></small></label>
   </section>
 
   <section class="panel-seccion">
-    <h3>Piezas</h3>
+    <h3>{{ _('Piezas') }}</h3>
     <div class="panel-fila panel-fila-3">
-      <label>Videos <input type="number" min="0" max="50" data-campo="n_videos" value="{{ c.n_videos }}">
+      <label>{{ _('Videos') }} <input type="number" min="0" max="50" data-campo="n_videos" value="{{ c.n_videos }}">
         <small class="campo-error" hidden></small></label>
-      <label>Imágenes <input type="number" min="0" max="50" data-campo="n_imagenes" value="{{ c.n_imagenes }}">
+      <label>{{ _('Imágenes') }} <input type="number" min="0" max="50" data-campo="n_imagenes" value="{{ c.n_imagenes }}">
         <small class="campo-error" hidden></small></label>
-      <label>Referentes <input type="number" min="1" max="20" data-campo="referencias_objetivo" value="{{ c.referencias_objetivo }}">
+      <label>{{ _('Referentes') }} <input type="number" min="1" max="20" data-campo="referencias_objetivo" value="{{ c.referencias_objetivo }}">
         <small class="campo-error" hidden></small></label>
     </div>
   </section>
 
   <section class="panel-seccion">
-    <h3>Referentes · <span data-ref-listas>{{ c.referencias_listas }}</span> de <span data-ref-objetivo>{{ c.referencias_objetivo }}</span> elegidos</h3>
+    <h3>{{ _('Referentes') }} · <span data-ref-listas>{{ c.referencias_listas }}</span> {{ _('de') }} <span data-ref-objetivo>{{ c.referencias_objetivo }}</span> {{ _('elegidos') }}</h3>
     <div class="panel-elegidos">
       {% for r in c.referencias_lista %}
       <figure class="panel-elegido">
         <img src="{{ r.frame_url or r.url }}" alt="" loading="lazy">
         <button type="button" class="panel-quitar" data-quitar-ref="{{ url_for('sprints.referencia_quitar', cliente=cliente, rid=r.id) }}"
-                aria-label="Quitar este referente" title="Quitar">✕</button>
-        {% if r.estado != 'lista' %}<figcaption><button type="button" class="enlace-describir" data-abrir-describir="{{ r.id }}">Falta describir ✎</button></figcaption>{% endif %}
+                aria-label="{{ _('Quitar este referente') }}" title="{{ _('Quitar') }}">✕</button>
+        {% if r.estado != 'lista' %}<figcaption><button type="button" class="enlace-describir" data-abrir-describir="{{ r.id }}">{{ _('Falta describir ✎') }}</button></figcaption>{% endif %}
       </figure>
       {% endfor %}
       {% for _ in range([0, (c.referencias_objetivo or 1) - (c.referencias_lista | length)] | max) %}<span class="panel-elegido panel-elegido-vacio"></span>{% endfor %}
@@ -115,43 +117,43 @@
     {% for r in c.referencias_lista if r.estado != 'lista' %}
     <div class="panel-describir" data-describir="{{ r.id }}" data-url="{{ url_for('sprints.referencia_editar', cliente=cliente, rid=r.id) }}" hidden>
       <div class="panel-describir-cab"><img src="{{ r.frame_url or r.url }}" alt="" loading="lazy">
-        <p class="panel-sub">Qué tomar de este referente (cuenta cuando tenga descripción)</p></div>
+        <p class="panel-sub">{{ _('Qué tomar de este referente (cuenta cuando tenga descripción)') }}</p></div>
       <div class="panel-opciones">
-        {% for k, nombre in intenciones.items() %}<label><input type="checkbox" value="{{ k }}" data-intencion {% if k in (r.intencion or []) %}checked{% endif %}> {{ nombre }}</label>{% endfor %}
+        {% for k, nombre in intenciones.items() %}<label><input type="checkbox" value="{{ k }}" data-intencion {% if k in (r.intencion or []) %}checked{% endif %}> {{ nombre|traducir }}</label>{% endfor %}
       </div>
-      <label>Descripción
-        <textarea rows="2" data-descripcion maxlength="500" placeholder="Qué se ve y qué quieres copiar">{{ r.descripcion or '' }}</textarea></label>
-      <small class="vacio" data-describir-guardado hidden>Guardado ✓</small>
+      <label>{{ _('Descripción') }}
+        <textarea rows="2" data-descripcion maxlength="500" placeholder="{{ _('Qué se ve y qué quieres copiar') }}">{{ r.descripcion or '' }}</textarea></label>
+      <small class="vacio" data-describir-guardado hidden>{{ _('Guardado ✓') }}</small>
       <small class="campo-error" hidden></small>
     </div>
     {% endfor %}
-    <p class="vacio"><a href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">Más opciones de referencias →</a> (reutilizar de otra campaña, links en descarga)</p>
+    <p class="vacio"><a href="{{ url_for('sprints.campana_ver', cliente=cliente, sid=sprint.id, cid=c.id) }}">{{ _('Más opciones de referencias →') }}</a> {{ _('(reutilizar de otra campaña, links en descarga)') }}</p>
 
     {% if candidatos_ia %}
-    <p class="panel-sub">Elegidos por la IA</p>
+    <p class="panel-sub">{{ _('Elegidos por la IA') }}</p>
     <div class="panel-sugeridos-grid">{% for s in candidatos_ia %}{{ sugerido(s, cliente, c.id, s.razon) }}{% endfor %}</div>
     {% endif %}
     {% if trabajo_sugerir_ia %}
     <div class="barra-progreso" id="trabajo-{{ trabajo_sugerir_ia.job_id }}" data-poll-job="{{ trabajo_sugerir_ia.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
     {% endif %}
-    <div class="panel-sugeridos" data-sugeridos><p class="vacio">Buscando referentes para esta campaña…</p></div>
+    <div class="panel-sugeridos" data-sugeridos><p class="vacio">{{ _('Buscando referentes para esta campaña…') }}</p></div>
 
     <div class="panel-acciones">
-      <button type="button" class="btn-sm" data-sugerir-ia="{{ url_for('sprints.campana_sugerir_ia', cliente=cliente, cid=c.id) }}">✨ Sugerir con IA ({{ precio_sugerir_ia.texto }})</button>
-      <a class="btn-sm" href="{{ enlaces.biblioteca }}">Buscar en la biblioteca</a>
-      <a class="btn-sm" href="{{ enlaces.traer }}">Traer nuevos de Meta</a>
+      <button type="button" class="btn-sm" data-sugerir-ia="{{ url_for('sprints.campana_sugerir_ia', cliente=cliente, cid=c.id) }}">✨ {{ _('Sugerir con IA (%(precio)s)', precio=precio_sugerir_ia.texto) }}</button>
+      <a class="btn-sm" href="{{ enlaces.biblioteca }}">{{ _('Buscar en la biblioteca') }}</a>
+      <a class="btn-sm" href="{{ enlaces.traer }}">{{ _('Traer nuevos de Meta') }}</a>
     </div>
     <details class="panel-subir">
-      <summary class="btn-sm">Subir · link · fotos del producto</summary>
+      <summary class="btn-sm">{{ _('Subir · link · fotos del producto') }}</summary>
       <form method="post" enctype="multipart/form-data" action="{{ url_for('sprints.referencias_subir', cliente=cliente, sid=sprint.id, cid=c.id) }}">
         <input type="hidden" name="volver" value="tablero">
-        <label>Archivos (jpg, png, webp, mp4, mov, webm) <input type="file" name="archivos" multiple accept="image/*,video/*"></label>
-        <label>O un link (Instagram, TikTok, YouTube…) <input type="url" name="link" placeholder="https://"></label>
-        <button type="submit" class="btn-sm">Agregar</button>
+        <label>{{ _('Archivos (jpg, png, webp, mp4, mov, webm)') }} <input type="file" name="archivos" multiple accept="image/*,video/*"></label>
+        <label>{{ _('O un link (Instagram, TikTok, YouTube…)') }} <input type="url" name="link" placeholder="https://"></label>
+        <button type="submit" class="btn-sm">{{ _('Agregar') }}</button>
       </form>
       <form method="post" action="{{ url_for('sprints.referencias_catalogo', cliente=cliente, sid=sprint.id, cid=c.id) }}">
         <input type="hidden" name="volver" value="tablero">
-        <button type="submit" class="btn-sm">Traer las fotos del producto</button>
+        <button type="submit" class="btn-sm">{{ _('Traer las fotos del producto') }}</button>
       </form>
     </details>
   </section>
