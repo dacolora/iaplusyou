@@ -1,8 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  candidatosIman, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, iman, imanBordes, indiceDestino, marcasRegla, msAPx,
-  nombreFila, pasoRegla, pxAMs, soltar,
+  candidatosIman, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, iman, imanBordes, indiceDestino, ladosRecortables,
+  marcasRegla, msAPx, nombreFila, pasoRegla, pxAMs, soltar,
 } from "../../static/editor/escala.js";
 import { docBase } from "./doc_base.mjs";
 
@@ -127,4 +127,27 @@ test("un texto variable se lee con el valor del destino elegido", () => {
   assert.equal(etiquetaClip(texto, { texto: { variable: "cta" } }, doc, "es_CO"), "Texto «cta»");
   assert.equal(etiquetaClip(texto, precio, doc, "es_CO"), "$ 89.900");
   assert.equal(etiquetaClip(texto, precio, doc, "es_MX"), "Precio");     // sin precio en MX: ese texto no sale allá
+});
+
+test("asas de recorte: ninguna en el sonido de la escena ni en una voz que cambia por país", () => {
+  const doc = docBase();
+  const [video, texto, voz, sonido] = doc.pistas;
+  assert.deepEqual(ladosRecortables(video, video.clips[0]), ["inicio", "fin"]);
+  assert.deepEqual(ladosRecortables(texto, texto.clips[0]), ["inicio", "fin"]);
+  assert.deepEqual(ladosRecortables(voz, voz.clips[0]), ["inicio", "fin"]);
+  assert.deepEqual(ladosRecortables(sonido, sonido.clips[0]), []);
+  voz.clips[0].por_destino = { en_US: { material_id: 2, duracion_ms: 2600 } };
+  assert.deepEqual(ladosRecortables(voz, voz.clips[0]), []);
+  voz.clips[0].por_destino = { en_US: null };                     // «ese destino no tiene voz» también cambia por país
+  assert.deepEqual(ladosRecortables(voz, voz.clips[0]), []);
+  voz.clips[0].por_destino = {};
+  assert.deepEqual(ladosRecortables(voz, voz.clips[0]), ["inicio", "fin"]);
+});
+
+test("soltar nunca pide recortar una voz que cambia por país (moverla sí)", () => {
+  const doc = docBase();
+  doc.pistas[2].clips[0].por_destino = { en_US: { material_id: 2, duracion_ms: 2600 } };
+  assert.equal(soltar(doc, "a1", { modo: "recorte", lado: "fin", deltaMs: -700, toleranciaMs: TOL }), null);
+  assert.equal(soltar(doc, "a1", { modo: "recorte", lado: "inicio", deltaMs: 700, toleranciaMs: TOL }), null);
+  assert.deepEqual(soltar(doc, "a1", { modo: "mover", deltaMs: 1500, toleranciaMs: TOL, cabezalMs: 8000 }), ["moverA", "a1", 1500]);
 });

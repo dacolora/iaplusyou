@@ -4,7 +4,7 @@
 // principal que se suelta, qué operación pide soltar un arrastre, cómo se ve
 // el clip mientras se arrastra y los nombres de filas y clips. Puro: lo
 // prueba Node (linea_tiempo.js solo pone esto en el DOM).
-import { ID_SONIDO } from "./operaciones.js";
+import { cambiaPorDestino, ID_SONIDO } from "./operaciones.js";
 import { formatearPrecio, SIMBOLOS } from "./precio.js";
 import { valorDestino, VARIABLE_PRECIO } from "./resolver.js";
 import { pistaPrincipal } from "./tiempo.js";
@@ -107,6 +107,13 @@ export function imanBordes(inicioMs, duracionMs, candidatos, toleranciaMs) {
   return mejor;
 }
 
+// Los bordes de un clip que se pueden arrastrar para recortarlo: ninguno en
+// el sonido de la escena (sigue a la principal) ni en una voz que cambia por
+// país (resolver la cambia entera por la del destino).
+export function ladosRecortables(pista, clip) {
+  return pista.id === ID_SONIDO || cambiaPorDestino(clip) ? [] : ["inicio", "fin"];
+}
+
 // Qué operación (de operaciones.js) pide soltar un arrastre: [nombre, ...args]
 // sin el documento ni las duraciones, o null si nada cambia. `modo` es
 // "mover" o "recorte" (con `lado` "inicio" | "fin"); `deltaMs`, cuánto se
@@ -135,7 +142,7 @@ export function soltar(doc, clipId, { modo, lado, deltaMs, toleranciaMs, cabezal
     const inicio = Math.max(0, imanBordes(clip.inicio_ms + delta, clip.duracion_ms, cand, toleranciaMs));
     return inicio === clip.inicio_ms ? null : ["moverA", clipId, inicio];
   }
-  if (modo === "recorte" && (lado === "inicio" || lado === "fin")) {
+  if (modo === "recorte" && ladosRecortables(pista, clip).includes(lado)) {
     const borde = lado === "inicio" ? clip.inicio_ms : clip.inicio_ms + clip.duracion_ms;
     const d = iman(borde + delta, cand, toleranciaMs) - borde;
     return d === 0 ? null : ["recortar", clipId, lado, d];

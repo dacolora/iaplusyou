@@ -12,8 +12,8 @@
 // (sin deslizar) elige un clip o lleva el cabezal, y solo el clip ya elegido
 // se arrastra — si no, deslizar sobre la fila del video nunca movería la vista.
 import {
-  ANCHO_MIN_PX, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, marcasRegla, msAPx, nombreFila, PPS_DEFECTO,
-  PPS_MAX, PPS_MIN, pxAMs, soltar,
+  ANCHO_MIN_PX, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, ladosRecortables, marcasRegla, msAPx, nombreFila,
+  PPS_DEFECTO, PPS_MAX, PPS_MIN, pxAMs, soltar,
 } from "./escala.js";
 import { ID_SONIDO } from "./operaciones.js";
 import { duracionMs, pistaPrincipal } from "./tiempo.js";
@@ -127,10 +127,8 @@ export class LineaTiempo {
         } else {
           el("span", "linea-etiqueta", c).textContent = etiqueta;
         }
-        if (!espejo) {
-          el("span", "linea-asa", c).dataset.lado = "inicio";
-          el("span", "linea-asa", c).dataset.lado = "fin";
-        }
+        // sin asas: el sonido de la escena y la voz que cambia por país
+        for (const lado of ladosRecortables(pista, clip)) el("span", "linea-asa", c).dataset.lado = lado;
       }
       return fila;
     }));

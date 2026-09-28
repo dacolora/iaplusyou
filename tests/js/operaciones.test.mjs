@@ -207,3 +207,22 @@ test("normalizar acorta lo justo un clip que pide 1 ms de más (y nunca por deba
   normalizar(voz, D);
   assert.deepEqual([voz.pistas[2].clips[0].duracion_ms, voz.pistas[2].clips[0].recorte.hasta_ms], [3000, 3000]);
 });
+
+// ---- Voz por destino: resolver la cambia entera por la de cada país ----
+function conVozPorDestino() {
+  const d = docBase();
+  d.pistas[2].clips[0].por_destino = { en_US: { material_id: 2, duracion_ms: 2600 } };
+  return d;
+}
+
+test("recortar una voz que cambia por país se rechaza en español llano; moverla y borrarla sí se puede", () => {
+  for (const lado of ["inicio", "fin"]) {
+    invalida(() => recortar(conVozPorDestino(), "a1", lado, -300, DURACIONES),
+      /^La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla\.$/);
+  }
+  assert.equal(moverA(conVozPorDestino(), "a1", 500, DURACIONES).doc.pistas[2].clips[0].inicio_ms, 500);
+  assert.equal(borrar(conVozPorDestino(), "a1", DURACIONES).doc.pistas[2].clips.length, 0);
+  const vacio = docBase();
+  vacio.pistas[2].clips[0].por_destino = {};                  // {} no distingue por destino: se recorta como siempre
+  assert.equal(recortar(vacio, "a1", "fin", -500, DURACIONES).doc.pistas[2].clips[0].duracion_ms, 2500);
+});

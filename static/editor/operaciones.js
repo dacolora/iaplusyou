@@ -38,6 +38,13 @@ function buscar(doc, clipId) {
   throw new OperacionInvalida("Ese clip ya no existe en la edición.");
 }
 
+// Una voz con `por_destino` (aunque sea `{en_US: null}`) se cambia ENTERA por
+// la de cada país al resolver (documento.resolver le pone su duración y su
+// recorte): recortarla aquí no cambiaría nada de lo que se ve ni se produce.
+export function cambiaPorDestino(clip) {
+  return Boolean(clip?.por_destino) && Object.keys(clip.por_destino).length > 0;
+}
+
 function noSonido(pista) {
   if (pista.id === ID_SONIDO) {
     throw new OperacionInvalida("El sonido de la escena sigue a los clips de video: edita el clip de video.");
@@ -194,6 +201,9 @@ export function recortar(doc, clipId, lado, deltaMs, duraciones = {}) {
   const res = structuredClone(doc);
   const { pista, clip } = buscar(res, clipId);
   noSonido(pista);
+  if (cambiaPorDestino(clip)) {
+    throw new OperacionInvalida("La voz se ajusta sola a cada país: puedes moverla o borrarla, pero no recortarla.");
+  }
   const esPrincipal = pista === pistaPrincipal(res);
   const conRecorte = pista.tipo === "video" || pista.tipo === "superpuesto" || pista.tipo === "audio";
   const v = vel(clip);
