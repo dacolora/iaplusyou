@@ -12,6 +12,7 @@ import re
 import anthropic
 
 import doctrina
+import idiomas
 from generador_prompts import MODEL, _api_key
 from referentes import datos
 
@@ -36,9 +37,9 @@ Mira la imagen adjunta y responde SOLO con un objeto JSON con exactamente estas 
  "consciencia": "unaware|problem-aware|solution-aware|product-aware|most-aware",
  "familia": "<nombre exacto del vocabulario>" o null,
  "familia_nueva": {{"nombre": "...", "descripcion": "..."}} o null,
- "dolor": "<texto corto>" o "ninguno-oferta" o "ninguno-marca",
+ "dolor": "<texto corto, en {idioma_texto}>" o "ninguno-oferta" o "ninguno-marca",
  "lead": "oferta|promesa|problema_solucion|secreto|proclamacion|historia" o null,
- "firma": "<máximo 40 palabras, en español, por qué funciona: el deseo que canaliza, el arranque, el mecanismo si lo hay y cómo lo prueba>"}}
+ "firma": "<máximo 40 palabras, en {idioma_texto}, por qué funciona: el deseo que canaliza, el arranque, el mecanismo si lo hay y cómo lo prueba>"{traducciones}}}
 
 Usa "familia_nueva" SOLO si ninguna del vocabulario encaja; en ese caso "familia" debe ser null. \
 Sin texto antes ni después del JSON."""
@@ -129,11 +130,30 @@ def _resolver_familia(familia, familia_nueva, vocabulario):
     return None, {"nombre": nombre, "descripcion": str(nueva.get("descripcion") or "").strip()}
 
 
-def validar(data, vocabulario):
+def salida_para(referente):
+    """Idiomas en que se escriben firma y dolor (spec 2026-09-26 §B7): un
+    referente global (`cliente` NULL) sale en español e inglés en la misma
+    llamada; uno de un proyecto, solo en el idioma de ese proyecto."""
+    cliente = (referente or {}).get("cliente")
+    return (idiomas.de_proyecto(cliente),) if cliente else ("es", "en")
+
+
+def _traducciones(otros):
+    """El pedazo del JSON pedido con la segunda versión (vacío con un idioma)."""
+    if not otros:
+        return ""
+    o = otros[0]
+    nombre = idiomas.nombre_para_claude(o)
+    return (f',\n "traducciones": {{"{o}": {{"firma": "<la misma firma, en {nombre}>", '
+            f'"dolor": "<el mismo dolor, en {nombre}; ninguno-oferta y ninguno-marca quedan igual>"}}}}')
+
+
+def validar(data, vocabulario, salida=("es",)):
     """`vocabulario`: lista de nombres de familia ya existentes. Devuelve un
     dict con `etapa, consciencia, familia (str|None), familia_nueva (dict|None),
-    dolor, firma` listo para que el llamador escriba las columnas y, si aplica,
-    cree la familia nueva."""
+    dolor, firma, i18n` listo para que el llamador escriba las columnas y, si
+    aplica, cree la familia nueva. `salida`: idiomas pedidos (spec §B7); el
+    primero es el que llena `dolor`/`firma`, los siguientes van en `i18n`."""
     if not isinstance(data, dict):
         raise ClasificacionInvalida("El JSON no es un objeto.")
     if data.get("etapa") not in datos.ETAPAS:
@@ -151,24 +171,38 @@ def validar(data, vocabulario):
     if not firma:
         raise ClasificacionInvalida("Firma vacía.")
     lead = data.get("lead") if data.get("lead") in doctrina.LEADS else None
+    principal = salida[0] if salida else "es"
+    i18n = {principal: {"firma": firma, "dolor": dolor.strip()}}
+    traducciones = data.get("traducciones") if isinstance(data.get("traducciones"), dict) else {}
+    for o in (salida or ())[1:]:
+        t = traducciones.get(o) if isinstance(traducciones.get(o), dict) else {}
+        firma_o = " ".join(" ".join(str(t.get("firma") or "").split()).split(" ")[:40]).strip()
+        if firma_o:            # un idioma que no vino no es error: la llamada ya se pagó y el principal sirve
+            i18n[o] = {"firma": firma_o, "dolor": str(t.get("dolor") or "").strip() or dolor.strip()}
     return {"etapa": data["etapa"], "consciencia": data["consciencia"], "familia": familia,
-            "familia_nueva": familia_nueva, "dolor": dolor.strip(), "firma": firma, "lead": lead}
+            "familia_nueva": familia_nueva, "dolor": dolor.strip(), "firma": firma, "lead": lead, "i18n": i18n}
 
 
-def clasificar(referente, vocabulario):
-    """Una llamada de visión (spec §5). Devuelve (resultado_validado,
-    tokens_entrada, tokens_salida); lanza ClasificacionInvalida (con
-    tokens_entrada/tokens_salida puestos) si Claude no devuelve algo usable."""
+def clasificar(referente, vocabulario, salida=None):
+    """Una llamada de visión (spec §5). `salida`: idiomas de firma y dolor
+    (sin pasarla, `salida_para(referente)`; spec 2026-09-26 §B7). Devuelve
+    (resultado_validado, tokens_entrada, tokens_salida); lanza
+    ClasificacionInvalida (con tokens_entrada/tokens_salida puestos) si Claude
+    no devuelve algo usable."""
+    salida = tuple(s for s in (salida or salida_para(referente)) if idiomas.normalizar(s)) or ("es",)
+    principal, otros = salida[0], salida[1:2]
     texto = PROMPT.format(
         marca=_sin_cierre(referente.get("marca"), "marca"), titular=_sin_cierre(referente.get("titular"), "titular"),
         cuerpo=_sin_cierre(referente.get("cuerpo"), "cuerpo"), idioma=referente.get("idioma") or "desconocido",
-        vocabulario=_sin_cierre("\n".join(f"- {n}" for n in vocabulario), "vocabulario"))
+        vocabulario=_sin_cierre("\n".join(f"- {n}" for n in vocabulario), "vocabulario"),
+        idioma_texto=idiomas.nombre_para_claude(principal), traducciones=_traducciones(otros))
     content = [{"type": "text", "text": texto},
                {"type": "image", "source": {"type": "url", "url": referente["imagen_url"]}}]
-    crudo, ent, sal = _llamar(content, system=doctrina.bloque_system("clasificar"))
+    # Con dos idiomas no va «escribe TODO en X»: el prompt dice cuál va en cada clave.
+    crudo, ent, sal = _llamar(content, system=doctrina.bloque_system("clasificar", idioma=None if otros else principal))
     try:
         data = _parsear(crudo)
-        resultado = validar(data, vocabulario)
+        resultado = validar(data, vocabulario, salida=(principal,) + otros)
     except ClasificacionInvalida as e:
         e.tokens_entrada, e.tokens_salida = ent, sal
         raise

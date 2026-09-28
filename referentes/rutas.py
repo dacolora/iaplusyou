@@ -196,12 +196,15 @@ def recrear_form(cliente, rid):
     if titular is None:
         titular = r.get("titular") or ""
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
+    idioma = idiomas.de_proyecto(cliente)
+    if familia:
+        familia = dict(familia, descripcion=datos.descripcion_familia(familia, idioma))
     prefs_sonido = proyectos.preferencias_sonido(cliente)
     prompt = precio = None
     if producto:
         guia = marca_mod.guia_efectiva(cliente)
-        prompt = recrear.armar_prompt(r, familia, producto, guia, titular, formato, tipo=tipo,
-                                      con_sonido=prefs_sonido["con_sonido"], idioma=idiomas.de_proyecto(cliente))
+        prompt = recrear.armar_prompt(datos.localizado(r, idioma), familia, producto, guia, titular, formato, tipo=tipo,
+                                      con_sonido=prefs_sonido["con_sonido"], idioma=idioma)
         n_refs = 1 + max(1, min(2, len(producto.get("referencias") or [1])))
         if tipo == "imagen":
             precio = gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs)
@@ -234,9 +237,12 @@ def recrear_adaptar(cliente, rid):
     producto = dict(producto, sofisticacion=sof if sof in doctrina.SOFISTICACIONES else None,
                     pruebas=doctrina_producto.pruebas(fila))
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
+    idioma = idiomas.de_proyecto(cliente)
+    if familia:
+        familia = dict(familia, descripcion=datos.descripcion_familia(familia, idioma))
     try:
-        resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""),
-                                              marca_mod.guia_efectiva(cliente), idioma=idiomas.de_proyecto(cliente))
+        resultado, ent, sal = recrear.adaptar(datos.localizado(r, idioma), familia, producto, str(cuerpo.get("titular") or ""),
+                                              marca_mod.guia_efectiva(cliente), idioma=idioma)
     except recrear.AdaptacionInvalida as e:
         ent = getattr(e, "tokens_entrada", 0) or 0
         sal = getattr(e, "tokens_salida", 0) or 0
@@ -320,6 +326,10 @@ def ficha(cliente, rid):
     if not r or r.get("estado_imagen") != "ok":
         abort(404)
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
+    idioma = idiomas.activo()
+    r = datos.localizado(r, idioma)
+    if familia:
+        familia = dict(familia, descripcion=datos.descripcion_familia(familia, idioma))
     return render_template("_referente_ficha.html", cliente=cliente, r=r, familia=familia,
                            etiquetas_etapa=datos.ETIQUETAS_ETAPA, etiquetas_consciencia=datos.ETIQUETAS_CONSCIENCIA,
                            usos=recrear.usos(cliente, rid))

@@ -3782,7 +3782,7 @@ def admin_referentes():
         except Exception:  # noqa: BLE001 — el precio es informativo, nunca bloquea la página
             est_fuente = None
         if est_fuente:
-            est_clasificacion = gastos.estimar("clasificacion", n=tope_traer)
+            est_clasificacion = gastos.estimar("clasificacion", n=tope_traer, bilingue=True)
             precio_traer = {"fuente": est_fuente, "clasificacion": est_clasificacion,
                             "total_usd": est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)}
 
@@ -3795,7 +3795,12 @@ def admin_referentes():
     for b in barridos_otras_fuentes:
         b["trabajo"] = tareas_ref.trabajo_barrer(b["id"])
         b["imagenes_error"] = ref_datos.contar_imagenes_de_barrido(b["id"])[2]
-        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"])["texto"] if b["pendientes"] else None
+        b["precio_clasificar"] = gastos.estimar("clasificacion", n=b["pendientes"], bilingue=True)["texto"] if b["pendientes"] else None
+
+    familias_sin_en = ref_datos.familias_sin_descripcion_en()
+    precio_familias_en = (gastos.formatear(tareas_ref.copycoders.estimar_describir_familias(
+        [(f["nombre"], [f["descripcion"]]) for f in familias_sin_en], por_llamada=tareas_ref.FAMILIAS_POR_LLAMADA))
+        if familias_sin_en else None)
 
     return render_template("admin_referentes.html", url_swipe=tareas_ref.copycoders.URL_SWIPE,
                            trabajo=({"job_id": tareas_ref.trabajo_importacion()} if tareas_ref.trabajo_importacion() else None),
@@ -3807,7 +3812,9 @@ def admin_referentes():
                            precio_traer=precio_traer, fuente_llaves_faltantes=fuente_llaves_faltantes,
                            atria_llamadas=llamadas_este_mes(), atria_limite=limite_mensual(),
                            fuentes_totales=ref_datos.opciones(None)["fuentes"],
-                           barridos_otras_fuentes=barridos_otras_fuentes)
+                           barridos_otras_fuentes=barridos_otras_fuentes,
+                           familias_sin_en=familias_sin_en, precio_familias_en=precio_familias_en,
+                           familias_en_en_curso=trabajos.en_curso(tareas_ref.JOB_FAMILIAS_EN))
 
 
 @app.route("/admin/referentes/importar", methods=["POST"])
@@ -3865,7 +3872,7 @@ def admin_referentes_traer():
     except ErrorFuente as e:
         flash(e.usuario, "error")
         return redirect(url_for("admin_referentes"))
-    est_clasificacion = gastos.estimar("clasificacion", n=tope)
+    est_clasificacion = gastos.estimar("clasificacion", n=tope, bilingue=True)
     usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
     tareas_ref.encolar_barrer(None, fuente, consulta, tope, usd_estimado, pedido_por=_sesion().get("usuario"))
     flash("Trayendo referentes globales; aparecerán en la tabla de barridos a medida que avanza.", "ok")
@@ -3878,7 +3885,24 @@ def admin_referentes_familia(familia_id):
     if not _mismo_origen():
         abort(403)
     from referentes import datos as ref_datos
-    ref_datos.familia_actualizar(familia_id, request.form.get("descripcion") or "")
+    ref_datos.familia_actualizar(familia_id, request.form.get("descripcion") or "",
+                                 descripcion_en=request.form.get("descripcion_en"))
+    return redirect(url_for("admin_referentes"))
+
+
+@app.route("/admin/referentes/familias/ingles", methods=["POST"])
+@requiere_admin
+def admin_referentes_familias_en():
+    """Descripciones en inglés de las familias que faltan (spec 2026-09-26 §B7):
+    una llamada a Claude por tanda de 40, precio junto al botón, gasto `otro`
+    bajo `_creatv`."""
+    if not _mismo_origen():
+        abort(403)
+    from tareas import referentes as tareas_ref
+    if tareas_ref.encolar_familias_en(pedido_por=_sesion().get("usuario")):
+        flash(gettext("Escribiendo en inglés las descripciones de las familias; recarga en un minuto."), "ok")
+    else:
+        flash(gettext("Ya se están escribiendo las descripciones en inglés."), "warn")
     return redirect(url_for("admin_referentes"))
 
 

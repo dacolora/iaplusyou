@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 
 import requests
 
+import idiomas
 from referentes import datos
 
 URL_SWIPE = "https://go.copycoders.ai/scaling-with-statics-fw/swipe-file/"
@@ -103,6 +104,7 @@ def normalizar(fila, base_url):
     firma = datos._texto(fila.get("sig")) or None
     etapa = fila.get("stage") if fila.get("stage") in datos.ETAPAS else None
     consciencia = fila.get("aw") if fila.get("aw") in datos.CONSCIENCIAS else None
+    dolor = _dolor(fila.get("door"))
     return {
         "anuncio_id": m.group(1), "pagina_id": pagina.group(1) if pagina else None, "fuente": "copycoders",
         "marca": datos._texto(fila.get("brand"), 160), "url_anuncio": _url_segura(fila.get("lib")),
@@ -111,21 +113,27 @@ def normalizar(fila, base_url):
         "dias": datos._entero(fila.get("days")), "variantes": datos._entero(fila.get("variants")),
         "primera_vez": None, "ultima_vez": None, "activo": not bool(fila.get("retired")),
         "etiquetas_fuente": {}, "etapa": etapa, "consciencia": consciencia,
-        "familia": datos._texto(fila.get("family"), 120) or None, "dolor": _dolor(fila.get("door")), "firma": firma,
+        "familia": datos._texto(fila.get("family"), 120) or None, "dolor": dolor, "firma": firma,
         "clasificacion": "fuente",
-        "extra": {"sweep": datos._texto(fila.get("sweep"), 12), "firma_original": firma or "", "traducida": firma is None},
+        "extra": {"sweep": datos._texto(fila.get("sweep"), 12), "firma_original": firma or "", "traducida": firma is None,
+                 "i18n": {"en": {"firma": firma, **({"dolor": dolor} if dolor else {})}} if firma else {}},
     }
 
 
 # ------------------------------------------------------------ Claude ---
 
-PROMPT_TRADUCIR = """Traduce al español neutro (Latinoamérica) estas descripciones de por qué funciona un anuncio estático. Son frases cortas de marketing; conserva el sentido, los nombres de marca y los términos técnicos (GLP-1, ROAS). Máximo 40 palabras cada una.
+# La traducción de firmas de copycoders crea la versión en español de la
+# biblioteca global (extra.i18n.es, spec 2026-09-26 §B7); el inglés es el
+# original. Por eso el destino es fijo y no el idioma de un proyecto.
+DESTINO_TRADUCCION = "español neutro (Latinoamérica)"
+
+PROMPT_TRADUCIR = """Traduce al {destino} estas descripciones de por qué funciona un anuncio estático. Son frases cortas de marketing; conserva el sentido, los nombres de marca y los términos técnicos (GLP-1, ROAS). Máximo 40 palabras cada una.
 
 Responde SOLO con un objeto JSON: la misma clave (el número) y la traducción como valor. Sin texto antes ni después.
 
 {entrada}"""
 
-PROMPT_FAMILIAS = """Eres director creativo de anuncios estáticos. Cada "familia" es un formato de anuncio recurrente. Para cada una escribe UNA línea en español (máximo 25 palabras) que explique en qué consiste el formato, a partir de su nombre y de las descripciones de ejemplo.
+PROMPT_FAMILIAS = """Eres director creativo de anuncios estáticos. Cada "familia" es un formato de anuncio recurrente. Para cada una escribe UNA línea en {idioma} (máximo 25 palabras) que explique en qué consiste el formato, a partir de su nombre y de las descripciones de ejemplo.
 
 Responde SOLO con un objeto JSON: el nombre exacto de la familia como clave y la descripción como valor. Sin texto antes ni después.
 
@@ -174,7 +182,7 @@ def traducir_firmas(pares):
     if not pares:
         return {}, 0, 0
     entrada = json.dumps({str(rid): firma for rid, firma in pares}, ensure_ascii=False, indent=0)
-    texto, ent, sal = _llamar(PROMPT_TRADUCIR.format(entrada=entrada), max_tokens=_tope(len(pares), 100))
+    texto, ent, sal = _llamar(PROMPT_TRADUCIR.format(entrada=entrada, destino=DESTINO_TRADUCCION), max_tokens=_tope(len(pares), 100))
     try:
         data = _parsear_json(texto)
     except FormatoInvalido as e:
@@ -189,14 +197,29 @@ def traducir_firmas(pares):
     return resultado, ent, sal
 
 
-def describir_familias(familias):
+def describir_familias(familias, idioma="es"):
     if not familias:
         return {}, 0, 0
     entrada = json.dumps({nombre: list(ejemplos)[:3] for nombre, ejemplos in familias}, ensure_ascii=False, indent=0)
-    texto, ent, sal = _llamar(PROMPT_FAMILIAS.format(entrada=entrada), max_tokens=_tope(len(familias), 120))
+    texto, ent, sal = _llamar(PROMPT_FAMILIAS.format(entrada=entrada, idioma=idiomas.nombre_para_claude(idioma)),
+                              max_tokens=_tope(len(familias), 120))
     try:
         data = _parsear_json(texto)
     except FormatoInvalido as e:
         raise _con_tokens(e, ent, sal)
     nombres = {nombre for nombre, _ in familias}
     return {k: datos._texto(v) for k, v in data.items() if k in nombres and datos._texto(v)}, ent, sal
+
+
+def estimar_describir_familias(familias, por_llamada=40):
+    """Precio ANTES de gastar (US$) de describir `familias` [(nombre,
+    ejemplos)] en tandas de `por_llamada`: entrada ≈ caracteres / 3,5; salida
+    ≈ 64 tokens por familia (texto y pensamiento, lo medido al traducir
+    firmas) + 2 000 de margen por llamada, con los precios de nicho.avatares."""
+    from nicho.avatares import costo_real
+    total = 0.0
+    for i in range(0, len(familias), por_llamada):
+        tanda = familias[i:i + por_llamada]
+        entrada = json.dumps({n: list(e)[:3] for n, e in tanda}, ensure_ascii=False, indent=0)
+        total += costo_real(int((len(PROMPT_FAMILIAS) + len(entrada)) / 3.5), 2000 + 64 * len(tanda))
+    return round(total, 4)

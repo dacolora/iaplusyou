@@ -14,6 +14,7 @@ import sqlalchemy as sa
 
 import db
 import doctrina
+import idiomas
 from referentes import datos as referentes_datos
 
 # Un color CSS hexadecimal (#rgb, #rrggbb, #rrggbbaa…). Todo lo que se pinta con
@@ -880,13 +881,15 @@ def agregar_referencia_biblioteca(cliente, campana_id, referente_id):
     ref = referentes_datos.referente(cliente, referente_id)
     if not ref or ref.get("estado_imagen") != "ok":
         raise ErrorDatos("Ese referente no existe.")
+    idioma = idiomas.de_proyecto(cliente)
+    ref = referentes_datos.localizado(ref, idioma)
     familia = next((f for f in referentes_datos.familias(cliente) if f["nombre"] == ref.get("familia")), None)
     firma = ref.get("firma") or ""
     rid = agregar_referencia(cliente, campana_id, "imagen", ref["imagen_url"], frame_url=ref["imagen_url"],
                              origen="biblioteca", titulo=ref.get("titular") or "", intencion=["formato"],
                              descripcion=firma)
     actualizar_referencia(cliente, rid, analisis={
-        "familia": ref.get("familia"), "descripcion_familia": familia.get("descripcion") if familia else None,
+        "familia": ref.get("familia"), "descripcion_familia": referentes_datos.descripcion_familia(familia, idioma),
         "etapa": ref.get("etapa"), "consciencia": ref.get("consciencia"), "dolor": ref.get("dolor"),
         "firma": firma, "resumen": firma, "lead": (ref.get("extra") or {}).get("lead"),
     }, analisis_estado="listo", extra={"referente_id": referente_id})

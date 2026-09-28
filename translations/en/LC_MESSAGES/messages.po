@@ -1969,8 +1969,15 @@ msgstr "Describe what has to happen. E.g.: @Imagen 1 is the product; a girl disc
 msgid "Describir con IA"
 msgstr "Describe with AI"
 
+#, python-format
+msgid "Descripciones en inglés: %(n)s de %(total)s."
+msgstr "English descriptions: %(n)s of %(total)s."
+
 msgid "Descripción"
 msgstr "Description"
+
+msgid "Descripción (inglés)"
+msgstr "Description (English)"
 
 msgid "Descripción corta (opcional)"
 msgstr "Short description (optional)"
@@ -2738,11 +2745,23 @@ msgstr "Enter a valid email: that's where the link to confirm your account and r
 msgid "Escribiendo el guion con IA… en unos segundos aparece aquí para que lo revises."
 msgstr "Writing the script with AI… it'll appear here in a few seconds for you to review."
 
+msgid "Escribiendo en inglés las descripciones de las familias; recarga en un minuto."
+msgstr "Writing the families' descriptions in English; reload in a minute."
+
+msgid "Escribiendo en inglés las descripciones que faltan…"
+msgstr "Writing the missing descriptions in English…"
+
 msgid "Escribiendo planos"
 msgstr "Writing shots"
 
 msgid "Escribiendo…"
 msgstr "Writing…"
+
+#, python-format
+msgid "Escribir en inglés la %(num)d descripción que falta ≈ %(precio)s"
+msgid_plural "Escribir en inglés las %(num)d descripciones que faltan ≈ %(precio)s"
+msgstr[0] "Write the %(num)d missing description in English ≈ %(precio)s"
+msgstr[1] "Write the %(num)d missing descriptions in English ≈ %(precio)s"
 
 msgid "Escribir prompts de imágenes"
 msgstr "Write image prompts"
@@ -4417,6 +4436,9 @@ msgstr "No organic channels available to publish %(nombre)s.%(aviso)s"
 
 msgid "No hay conexión con el servidor."
 msgstr "No connection to the server."
+
+msgid "No hay familias sin descripción en inglés."
+msgstr "There are no families missing an English description."
 
 msgid "No hay nada en el catálogo todavía — crea el primero con \"+ Nuevo producto\" o en Catálogo."
 msgstr "There's nothing in the catalog yet — create the first one with “+ New product” or in Catalog."
@@ -6823,6 +6845,9 @@ msgstr "That store is already syncing."
 
 msgid "Ya se están actualizando."
 msgstr "Already updating."
+
+msgid "Ya se están escribiendo las descripciones en inglés."
+msgstr "The English descriptions are already being written."
 
 msgid "Ya se lo prometieron: hay que prometer más grande"
 msgstr "They've already been promised it: you have to promise bigger"

@@ -119,10 +119,13 @@ def familias(cliente=None):
         return [_a_dict(f) for f in con.execute(q)]
 
 
-def familia_actualizar(familia_id, descripcion):
+def familia_actualizar(familia_id, descripcion, descripcion_en=None):
     t = db.referente_familia
+    valores = {"descripcion": _texto(descripcion)}
+    if descripcion_en is not None:
+        valores["descripcion_en"] = _texto(descripcion_en) or None
     with db.conectar() as con:
-        return con.execute(t.update().where(t.c.id == familia_id).values(descripcion=_texto(descripcion))).rowcount == 1
+        return con.execute(t.update().where(t.c.id == familia_id).values(**valores)).rowcount == 1
 
 
 def listar_por_familia(familia, limite=3):
@@ -132,6 +135,33 @@ def listar_por_familia(familia, limite=3):
             sa.select(t).where(t.c.familia == familia, t.c.cliente.is_(None), t.c.estado_imagen == "ok",
                               t.c.firma.isnot(None))
             .order_by(sa.desc(t.c.variantes).nulls_last()).limit(limite))]
+
+
+def familias_sin_descripcion_en():
+    """Familias con descripción en español y sin la de inglés (spec §B7)."""
+    t = db.referente_familia
+    with db.conectar() as con:
+        filas = con.execute(sa.select(t).where(sa.func.coalesce(t.c.descripcion, "") != "",
+                                               sa.func.coalesce(t.c.descripcion_en, "") == "").order_by(t.c.nombre))
+        return [_a_dict(f) for f in filas]
+
+
+def descripcion_familia(f, idioma):
+    """La descripción de una familia en `idioma` (spec §B7): la de inglés si
+    se pide inglés y existe; si no, la de siempre."""
+    if not f:
+        return None
+    if idioma == "en" and (f.get("descripcion_en") or "").strip():
+        return f["descripcion_en"]
+    return f.get("descripcion")
+
+
+def localizado(r, idioma):
+    """Copia de `r` con `firma`/`dolor` en `idioma` si `extra.i18n` los trae
+    (spec §B7); si no, `r` tal cual (las columnas de siempre)."""
+    i18n = ((r.get("extra") or {}).get("i18n") or {}).get(idioma) or {}
+    campos = {k: v for k, v in i18n.items() if k in ("firma", "dolor") and (v or "").strip()}
+    return dict(r, **campos) if campos else r
 
 
 # -------------------------------------------------------------- referentes ---
@@ -407,8 +437,34 @@ def marcar_traducidas(pares):
                 continue
             extra = dict(f.extra or {})
             extra["traducida"] = True
+            extra["i18n"] = {**(extra.get("i18n") or {}), "es": {"firma": firma}}
             n += con.execute(t.update().where(t.c.id == rid)
                              .values(firma=firma, extra=extra, actualizado_en=db.ahora())).rowcount
+    return n
+
+
+def rellenar_i18n_copycoders():
+    """Para lo ya importado de copycoders (spec §B7, sin Claude): la firma
+    original es inglés → i18n.en (con el dolor de origen, que también es
+    inglés o una clave especial); la traducción que ya existe → i18n.es.
+    Devuelve cuántos cambió; una segunda pasada no cambia nada."""
+    t = db.referente
+    n = 0
+    with db.conectar() as con:
+        for f in con.execute(sa.select(t.c.id, t.c.firma, t.c.dolor, t.c.extra).where(t.c.fuente == "copycoders")).all():
+            extra = dict(f.extra or {})
+            i18n = dict(extra.get("i18n") or {})
+            nuevo = dict(i18n)
+            original = (extra.get("firma_original") or "").strip()
+            if original:
+                nuevo["en"] = {"firma": original, **({"dolor": f.dolor} if f.dolor else {})}
+            firma = (f.firma or "").strip()
+            if extra.get("traducida") and firma and firma != original:
+                nuevo["es"] = {"firma": firma}
+            if nuevo != i18n:
+                extra["i18n"] = nuevo
+                con.execute(t.update().where(t.c.id == f.id).values(extra=extra, actualizado_en=db.ahora()))
+                n += 1
     return n
 
 

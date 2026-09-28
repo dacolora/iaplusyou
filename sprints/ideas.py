@@ -248,7 +248,8 @@ def contexto_campana(cliente, campana):
     vivas = [i for i in (campana.get("ideas") or []) if i.get("estado_idea") != "descartada"]
     ef = datos.efectivos_de(cliente, campana)
     nombres_familias = campana.get("familias") or []
-    descripciones = ({f["nombre"]: f.get("descripcion") or "" for f in referentes_datos.familias(cliente)}
+    idioma = idiomas.de_proyecto(cliente) if nombres_familias else "es"
+    descripciones = ({f["nombre"]: referentes_datos.descripcion_familia(f, idioma) or "" for f in referentes_datos.familias(cliente)}
                      if nombres_familias else {})
     return {
         "marca": proyectos.nombre_visible(cliente),

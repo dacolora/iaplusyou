@@ -19,6 +19,7 @@ import os
 from datetime import datetime, timedelta
 
 import anthropic
+from flask_babel import gettext
 
 import cola
 import gastos
@@ -209,6 +210,53 @@ def interrumpida_importar(tarea, mensaje):
     p = tarea.get("payload") or {}
     if p.get("barrido_id"):
         datos.actualizar_barrido(int(p["barrido_id"]), estado="parcial", aviso=cola.recortar(mensaje, 300))
+
+
+TIPO_FAMILIAS_EN = "referentes_familias_en"
+JOB_FAMILIAS_EN = "referentes:familias:en"
+
+
+def encolar_familias_en(pedido_por=None):
+    if trabajos.en_curso(JOB_FAMILIAS_EN):
+        return False
+    return trabajos.encolar(JOB_FAMILIAS_EN, TIPO_FAMILIAS_EN, {"pedido_por": pedido_por},
+                            duracion_estimada=120, max_intentos=1)
+
+
+def _registrar_familias_en(tarea, tanda, ent, sal, detalle):
+    gastos.registrar_seguro(datos.CLIENTE_CREATV, "otro", costo_real(ent, sal),
+                            f"referentes:familias_en{ref_sufijo(tarea)}:{tanda}", detalle=detalle,
+                            proveedor="anthropic",
+                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+
+
+@registrar(TIPO_FAMILIAS_EN)
+def ejecutar_familias_en(tarea):
+    """Descripciones en inglés de las familias (spec §B7): una llamada a
+    Claude por tanda de FAMILIAS_POR_LLAMADA (las ~190 en una sola pasan el
+    tope de 16 000 tokens de salida), con la descripción en español como
+    ejemplo. Gasto tipo `otro` bajo `_creatv` por tanda, también si la
+    respuesta no sirvió; lo ya escrito queda aunque una tanda falle y el
+    próximo clic sigue con lo que falte."""
+    pendientes = datos.familias_sin_descripcion_en()
+    if not pendientes:
+        return gettext("No hay familias sin descripción en inglés.")
+    escritas = 0
+    for n, i in enumerate(range(0, len(pendientes), FAMILIAS_POR_LLAMADA)):
+        tanda = pendientes[i:i + FAMILIAS_POR_LLAMADA]
+        try:
+            desc, ent, sal = copycoders.describir_familias([(f["nombre"], [f["descripcion"]]) for f in tanda], idioma="en")
+        except copycoders.FormatoInvalido as e:
+            if e.tokens_entrada or e.tokens_salida:
+                _registrar_familias_en(tarea, n, e.tokens_entrada, e.tokens_salida,
+                                       f"familias en inglés (respuesta inutilizable: {e})")
+            raise
+        for f in tanda:
+            if f["nombre"] in desc:
+                datos.familia_actualizar(f["id"], f["descripcion"], descripcion_en=desc[f["nombre"]])
+                escritas += 1
+        _registrar_familias_en(tarea, n, ent, sal, "familias en inglés")
+    return gettext("Descripciones en inglés: %(n)s de %(total)s.", n=escritas, total=len(pendientes))
 
 
 # ---------------------------------------------------------------- bloque 4 ---
@@ -461,6 +509,8 @@ def _clasificar_uno(cliente, r):
     extra = dict(r.get("extra") or {})
     if resultado.get("lead"):
         extra["lead"] = resultado["lead"]
+    if resultado.get("i18n"):
+        extra["i18n"] = resultado["i18n"]
     datos.actualizar_referente(r["id"], etapa=resultado["etapa"], consciencia=resultado["consciencia"],
                                familia=familia, dolor=resultado["dolor"], firma=resultado["firma"],
                                clasificacion="claude", extra=extra)

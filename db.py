@@ -391,6 +391,7 @@ referente_familia = Table("referente_familia", metadata,
     Column("id", Integer, primary_key=True),
     Column("nombre", String(120), nullable=False, unique=True),
     Column("descripcion", Text),
+    Column("descripcion_en", Text),                                   # §B7 (migración 0022)
     Column("origen", String(12), nullable=False, default="copycoders"),     # copycoders|claude|admin
     Column("creado_en", String(19), nullable=False),
 )

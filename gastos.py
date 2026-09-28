@@ -73,6 +73,10 @@ TARIFAS = {
     "adaptar_referente": 0.01,
     "sugerir_ia": 0.04,
     "clasificacion": 0.012,
+    # La de siempre + la salida del segundo idioma (~60 tokens más por anuncio,
+    # redondeado hacia arriba): un referente global sale en español e inglés
+    # en la misma llamada (spec §B7).
+    "clasificacion_bilingue": 0.014,
     "refinar_prompt": 0.05,
     "voz": 0.05,
     "musica": 0.02,
@@ -217,7 +221,9 @@ _ESTIMADORES = {
     "adaptar_referente": lambda **_: (TARIFAS["adaptar_referente"], "una llamada corta a Claude"),
     "sugerir_ia": lambda **_: (TARIFAS["sugerir_ia"], "una llamada a Claude"),
     "refinar_prompt": lambda **_: (TARIFAS["refinar_prompt"], "un mensaje a Claude"),
-    "clasificacion": lambda n=1, **_: (TARIFAS["clasificacion"] * max(1, int(n)), f"{max(1, int(n))} anuncio(s) con Claude"),
+    "clasificacion": lambda n=1, bilingue=False, **_: (
+        TARIFAS["clasificacion_bilingue" if bilingue else "clasificacion"] * max(1, int(n)),
+        f"{max(1, int(n))} anuncio(s) con Claude" + (", en español e inglés" if bilingue else "")),
     "musica_elevenlabs": lambda **_: (TARIFAS["musica_elevenlabs"], "una canción de 60 s con ElevenLabs"),
     "guion_clips": _estimar_guion_clips,
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
