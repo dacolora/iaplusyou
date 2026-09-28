@@ -119,7 +119,9 @@ export function ladosRecortables(pista, clip) {
 // "mover" o "recorte" (con `lado` "inicio" | "fin"); `deltaMs`, cuánto se
 // corrió el puntero. La principal se reordena por el centro del clip; lo demás
 // se corre en el tiempo con imán en sus dos bordes; un recorte pega el borde
-// arrastrado.
+// arrastrado, pero nunca a los bordes que el clip tenía (el siguiente de la
+// principal, el sonido espejo, el 0 o el cabezal suelen estar justo ahí: un
+// recorte más corto que la tolerancia se desharía solo).
 export function soltar(doc, clipId, { modo, lado, deltaMs, toleranciaMs, cabezalMs = 0 }) {
   let pista = null;
   let clip = null;
@@ -144,7 +146,8 @@ export function soltar(doc, clipId, { modo, lado, deltaMs, toleranciaMs, cabezal
   }
   if (modo === "recorte" && ladosRecortables(pista, clip).includes(lado)) {
     const borde = lado === "inicio" ? clip.inicio_ms : clip.inicio_ms + clip.duracion_ms;
-    const d = iman(borde + delta, cand, toleranciaMs) - borde;
+    const propios = [clip.inicio_ms, clip.inicio_ms + clip.duracion_ms];
+    const d = iman(borde + delta, cand.filter((c) => !propios.includes(c)), toleranciaMs) - borde;
     return d === 0 ? null : ["recortar", clipId, lado, d];
   }
   return null;

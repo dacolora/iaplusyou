@@ -156,7 +156,12 @@ function montarHerramientas() {
   herramienta("h-duplicar", () => seleccion && operar("duplicar", seleccion));
   herramienta("h-deshacer", deshacer);
   herramienta("h-rehacer", rehacer);
-  $("h-velocidad").addEventListener("change", (e) => seleccion && operar("cambiarVelocidad", seleccion, Number(e.target.value)));
+  // Como los botones: el select no se queda con el foco (si no, S, Supr y
+  // Ctrl+Z irían a él y las flechas cambiarían la velocidad sin querer).
+  $("h-velocidad").addEventListener("change", (e) => {
+    e.target.blur();
+    if (seleccion) operar("cambiarVelocidad", seleccion, Number(e.target.value));
+  });
   $("recargar").addEventListener("click", () => location.reload());
   // Espacio y flechas son de la vista previa (vista.js); estas, de la edición.
   document.addEventListener("keydown", (e) => {

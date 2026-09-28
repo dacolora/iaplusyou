@@ -77,9 +77,20 @@ test("mover una capa pega el borde que quede cerca aunque el otro no pegue", () 
 
 test("recortar pega el borde arrastrado y no pide nada si no se movió", () => {
   assert.deepEqual(soltar(docBase(), "v0", { modo: "recorte", lado: "fin", deltaMs: -1030, toleranciaMs: TOL }), ["recortar", "v0", "fin", -1000]);
-  assert.equal(soltar(docBase(), "v0", { modo: "recorte", lado: "fin", deltaMs: 30, toleranciaMs: TOL }), null);
+  assert.equal(soltar(docBase(), "v0", { modo: "recorte", lado: "fin", deltaMs: 0, toleranciaMs: TOL }), null);
   assert.deepEqual(soltar(docBase(), "t1", { modo: "recorte", lado: "inicio", deltaMs: 1480, toleranciaMs: TOL, cabezalMs: 2500 }), ["recortar", "t1", "inicio", 1500]);
   assert.equal(soltar(docBase(), "nada", { modo: "mover", deltaMs: 500, toleranciaMs: TOL }), null);
+});
+
+test("un recorte corto no vuelve al borde de donde salió (aunque otro clip, el 0 o el cabezal estén ahí)", () => {
+  // v1 empieza donde v0 termina (4000) y el sonido espejo repite los bordes de v0
+  assert.deepEqual(soltar(docBase(), "v0", { modo: "recorte", lado: "fin", deltaMs: 30, toleranciaMs: TOL }), ["recortar", "v0", "fin", 30]);
+  assert.deepEqual(soltar(docBase(), "v0", { modo: "recorte", lado: "fin", deltaMs: -40, toleranciaMs: TOL }), ["recortar", "v0", "fin", -40]);
+  assert.deepEqual(soltar(docBase(), "v0", { modo: "recorte", lado: "inicio", deltaMs: 40, toleranciaMs: TOL }), ["recortar", "v0", "inicio", 40]);
+  assert.deepEqual(soltar(docBase(), "v1", { modo: "recorte", lado: "inicio", deltaMs: 50, toleranciaMs: TOL, cabezalMs: 4000 }),
+    ["recortar", "v1", "inicio", 50]);
+  // los demás bordes siguen pegando
+  assert.deepEqual(soltar(docBase(), "a1", { modo: "recorte", lado: "fin", deltaMs: 950, toleranciaMs: TOL }), ["recortar", "a1", "fin", 1000]);
 });
 
 test("imanBordes: inicio o fin, el más cercano; sin candidato cerca queda igual", () => {
