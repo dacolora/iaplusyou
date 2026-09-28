@@ -21,7 +21,7 @@ def test_todos_los_modelos_declaran_su_audio_nativo():
     for mid, info in fm.VIDEO.items():
         assert info["audio_nativo"]["parametro"], mid
         assert info["audio_nativo"]["recargo_usd_s"] >= 0, mid
-    assert fm.VIDEO["wan3"]["audio_nativo"] == {"parametro": "enable_audio", "recargo_usd_s": 0.0}
+    assert fm.VIDEO["wan3"]["audio_nativo"] == {"parametro": "generate_audio", "recargo_usd_s": 0.0}
     assert fm.VIDEO["kling_o3_pro"]["audio_nativo"] == {"parametro": "sound", "recargo_usd_s": 0.028}
     assert fm.VIDEO["seedance25"]["audio_nativo"] == {"parametro": "generate_audio", "recargo_usd_s": 0.0}
 
@@ -32,8 +32,8 @@ def test_wan3_pide_audio_por_defecto_y_se_puede_apagar(monkeypatch):
                         lambda prompt, refs, **kw: kwargs_vistos.append(kw) or "https://prov/w.mp4")
     fm.generar_video("wan3", "gira", ["https://x/1.png"], 5)
     fm.generar_video("wan3", "gira", ["https://x/1.png"], 5, con_sonido=False)
-    assert kwargs_vistos[0]["enable_audio"] is True
-    assert kwargs_vistos[1]["enable_audio"] is False
+    assert kwargs_vistos[0]["generate_audio"] is True
+    assert kwargs_vistos[1]["generate_audio"] is False
 
 
 def test_kling_y_seedance_piden_audio_por_defecto(monkeypatch):

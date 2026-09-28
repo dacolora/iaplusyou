@@ -26,6 +26,8 @@
     {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
     <input type="hidden" name="bandeja_vista" value="1">
     <input type="hidden" name="modelo" id="fp-modelo">
+    {# Triple Whale: «<evaluación>:<idea>» cuando el texto vino de «Llevar a Crear» (solo lo llena el prefill). #}
+    <input type="hidden" name="origen_tw" id="fp-origen-tw" value="">
     <div class="crear-comp-abajo">
       <div class="banco-prompts crear-etiquetas" id="fp-etiquetas"></div>
       <label class="crear-oculto-lector" for="fp-texto">{{ _('Qué tiene que pasar') }}</label>
@@ -209,6 +211,10 @@
       <li>{{ _('Un solo lugar por video: si nombras varios cuartos, el modelo los recorre.') }}</li>
       <li>{{ _('Adjunta solo las fotos de quien aparece: cada foto adjunta invita al modelo a meter a esa persona.') }}</li>
       <li>{{ _('Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales.') }}</li>
+      {# Incidente 2026-09-28: encabezados pegados en cada clip, menciones de otras herramientas y personajes dobles. #}
+      <li>{{ _('Nombra las referencias con los chips de arriba (@Imagen 1, @Video 1). Si pegas texto de otra herramienta, @Image1, @Image 1 o @[Image 1](image_1) también se entienden; una mención sin referencia en la bandeja no genera.') }}</li>
+      <li>{{ _('No pegues en cada clip el mismo encabezado con el mapa de todas las referencias: el modelo pinta todo lo que lee (el dibujo, la hija, la cocina) aunque ese clip no lo pida. Escribe solo lo que pasa en este clip.') }}</li>
+      <li>{{ _('Si un personaje sale dos veces, casi siempre está adjunto y además descrito con otro nombre, o hay fotos de más en la bandeja: deja solo las de este clip.') }}</li>
     </ul>
   </details>
   <div class="crear-velo" id="crear-velo"></div>
@@ -348,6 +354,7 @@
     var prefill = {{ fp_prefill | tojson }};
     if (prefill) {
       if (ta && prefill.texto) ta.value = prefill.texto;
+      var origenTw = document.getElementById('fp-origen-tw'); if (origenTw && prefill.origen_tw) origenTw.value = prefill.origen_tw;
       var rTipo = form.querySelector('input[name=tipo][value="' + prefill.tipo + '"]');
       if (rTipo) rTipo.checked = true;
       var rModelo = form.querySelector('input[name=modelo_video][value="' + prefill.modelo + '"], input[name=modelo_imagen][value="' + prefill.modelo + '"]');

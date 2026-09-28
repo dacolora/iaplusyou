@@ -77,6 +77,12 @@
               <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
             </form>
             {% endif %}
+            {% if item.estado == "error" and item.prediccion and item.prediccion.id and item.tipo != "imagen" %}
+            {# Incidente 2026-09-28: el worker dejó de esperar pero WaveSpeed sigue con la predicción; se recupera sin pagar. #}
+            <form method="post" action="{{ url_for('cf_recuperar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
+              <button type="submit" class="btn-generar btn-sm">{{ _('Recuperar el video (sin pagar de nuevo)') }}</button>
+            </form>
+            {% endif %}
             {% if item.estado in ("prompt_listo", "error") %}
             <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd if item.costo_estimado else '' }}">
               {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}

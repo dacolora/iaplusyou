@@ -54,6 +54,9 @@ PLANTILLAS_TRADUCIDAS = [
     "_final_tarjetas_respuesta.html", "_final_detalle_respuesta.html",
     "_crear_tarjetas.html", "_crear_detalle.html", "_crear_tarjetas_respuesta.html", "_crear_detalle_respuesta.html",
     "cliente.html", "_etiquetas_estado.html",
+    # Merge de main (2026-09-28, PR #1 Triple Whale): la pestaña y su panel ya
+    # vienen con _() y su inglés en el catálogo; entran a la guardia al fusionar.
+    "_tab_triple_whale.html", "_tw_panel.html",
 ]
 
 

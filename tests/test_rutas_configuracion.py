@@ -233,23 +233,41 @@ def _tarjeta_id(html, id_):
     return html[ini:fin]
 
 
-def test_triple_whale_conectar_guarda_y_muestra_estado(app, monkeypatch):
+def _tw_acepta(monkeypatch, gasto=12.5):
+    """Triple Whale acepta la llave y la consulta de prueba (sin red)."""
     import triple_whale
-    import triple_whale_tiendas
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: True)
+    monkeypatch.setattr(triple_whale, "probar", lambda llave, dominio, moneda=None: {"gasto_7d": gasto})
+
+
+def _tareas_tw():
+    import sqlalchemy as sa
+    import db
+    with db.conectar() as con:
+        return [dict(r._mapping) for r in con.execute(sa.select(db.tarea.c.tipo, db.tarea.c.job_id, db.tarea.c.payload)
+                                                      .where(db.tarea.c.tipo == "tw_sincronizar"))]
+
+
+def test_triple_whale_conectar_guarda_normaliza_y_encola_la_primera_copia(app, monkeypatch):
+    import triple_whale_tiendas
+    _tw_acepta(monkeypatch)
     r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
-                      data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com",
+                      data={"llave_api": "tw_prueba123", "dominio_tienda": "https://Acme.myshopify.com/admin",
                             "moneda": "cop", "modelo_atribucion": "First Touch", "ventana_atribucion": "30"},
                       follow_redirects=False)
     assert r.status_code == 302 and r.headers["Location"].endswith("#config-triple-whale")
     conectado = triple_whale_tiendas.obtener("acme")
     assert conectado["dominio_tienda"] == "acme.myshopify.com" and conectado["moneda"] == "COP"
+    # Los valores viejos del formulario se traducen al vocabulario de Triple Whale.
+    assert conectado["modelo_atribucion"] == "First Click" and conectado["ventana_atribucion"] == "28_days"
     assert triple_whale_tiendas.obtener_llave("acme") == "tw_prueba123"
+    assert _tareas_tw() == [{"tipo": "tw_sincronizar", "job_id": "acme__tw_sync", "payload": {"cliente": "acme"}}]
 
     html = app["c"].get("/cliente/acme").data.decode()
     cfg = _tarjeta_id(_config(html), "config-triple-whale")
     assert "acme.myshopify.com" in cfg and "conectado" in cfg
-    assert "/cliente/acme/cfg_triple_whale/desconectar" in cfg
+    assert "/cliente/acme/cfg_triple_whale/desconectar" in cfg and "/cliente/acme/cfg_triple_whale/ajustes" in cfg
+    assert "tw_prueba123" not in html
 
 
 def test_triple_whale_conectar_sin_llave_valida_no_guarda(app, monkeypatch):
@@ -258,19 +276,67 @@ def test_triple_whale_conectar_sin_llave_valida_no_guarda(app, monkeypatch):
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: False)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
                   data={"llave_api": "tw_mala", "dominio_tienda": "acme.myshopify.com"})
-    assert triple_whale_tiendas.obtener("acme") is None
+    assert triple_whale_tiendas.obtener("acme") is None and _tareas_tw() == []
 
 
-def test_triple_whale_desconectar(app, monkeypatch):
+def test_triple_whale_conectar_con_tienda_que_la_llave_no_ve_no_guarda(app, monkeypatch):
     import triple_whale
     import triple_whale_tiendas
     monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: True)
+
+    def _no_ve(llave, dominio, moneda=None):
+        raise triple_whale.ErrorTienda("Triple Whale no reconoce la tienda")
+    monkeypatch.setattr(triple_whale, "probar", _no_ve)
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                      data={"llave_api": "tw_ok", "dominio_tienda": "otra.myshopify.com"}, follow_redirects=True)
+    assert triple_whale_tiendas.obtener("acme") is None
+    assert "no reconoce la tienda" in r.data.decode()
+
+
+def test_triple_whale_conectar_con_dominio_invalido_no_llama_a_triple_whale(app, monkeypatch):
+    import triple_whale
+    import triple_whale_tiendas
+    monkeypatch.setattr(triple_whale, "validar_llave", lambda llave: pytest.fail("no debía llamar"))
+    app["c"].post("/cliente/acme/cfg_triple_whale/conectar", data={"llave_api": "tw_ok", "dominio_tienda": "no es un dominio"})
+    assert triple_whale_tiendas.obtener("acme") is None
+
+
+def test_triple_whale_ajustes_cambian_la_atribucion_y_vuelven_a_traer(app, monkeypatch):
+    import triple_whale_tiendas
+    from triple_whale import datos as tw_datos
+    _tw_acepta(monkeypatch)
     app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
                   data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
-    assert triple_whale_tiendas.obtener("acme") is not None
+    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
+    import db
+    import sqlalchemy as sa
+    with db.conectar() as con:
+        con.execute(db.tarea.update().values(estado="ok"))   # la primera copia ya terminó
+    app["c"].post("/cliente/acme/cfg_triple_whale/ajustes",
+                  data={"moneda": "USD", "modelo_atribucion": "Linear Paid", "ventana_atribucion": "7_days"})
+    c = triple_whale_tiendas.obtener("acme")
+    assert (c["modelo_atribucion"], c["ventana_atribucion"]) == ("Linear Paid", "7_days")
+    assert not tw_datos.hay_tienda("acme")   # lo copiado con otra atribución se borró
+    assert len(_tareas_tw()) == 2
+
+
+def test_triple_whale_desconectar_borra_lo_copiado(app, monkeypatch):
+    import triple_whale_tiendas
+    from triple_whale import datos as tw_datos
+    _tw_acepta(monkeypatch)
+    app["c"].post("/cliente/acme/cfg_triple_whale/conectar",
+                  data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
+    tw_datos.reemplazar_tienda("acme", "2026-09-01", "2026-09-01", [{"fecha": "2026-09-01", "ingresos": 10}])
     r = app["c"].post("/cliente/acme/cfg_triple_whale/desconectar", follow_redirects=False)
     assert r.status_code == 302
-    assert triple_whale_tiendas.obtener("acme") is None
+    assert triple_whale_tiendas.obtener("acme") is None and not tw_datos.hay_tienda("acme")
+
+
+def test_triple_whale_post_de_otro_sitio_se_rechaza(app, monkeypatch):
+    _tw_acepta(monkeypatch)
+    r = app["c"].post("/cliente/acme/cfg_triple_whale/conectar", headers={"Sec-Fetch-Site": "cross-site"},
+                      data={"llave_api": "tw_prueba123", "dominio_tienda": "acme.myshopify.com"})
+    assert r.status_code == 403
 
 
 # ---- Gasto real (Task 3): Configuración › Gasto, CSV, sidebar, precios, panel ----
