@@ -1,0 +1,94 @@
+{# Tarjetas de Final edition (spec 2026-09-28 «tarjetas ligeras»): la página
+   y /final/tarjetas («Ver más») pintan lo mismo. Sin <template> de detalle
+   (lo traen /creative_flow/<id>/final/detalle y .../final/<final_id>/detalle
+   al abrir) y sin script embebido: las barras llevan data-poll-job y
+   base.html arranca el sondeo. Se importa `with context` (cliente, paises_fe,
+   ediciones_por_cf, url_for, _). #}
+{% macro tarjeta_video_fe(item) %}
+    <div class="generado" data-cf="{{ item.id }}" data-detalle="{{ url_for('fe_detalle_video', cliente=cliente, cf_id=item.id) }}" tabindex="0" role="button">
+      <div class="generado-media">
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
+        <span class="generado-tipo">Video · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or "formato de la imagen" }}</span>
+        {% if item.trabajo_guion %}
+        {# El guion se escribe en el worker: la barra va en la TARJETA (no en el
+           detalle, que llega por fetch al abrirla) para que el sondeo
+           (data-poll-job) arranque al cargar la página y un fallo se vea. #}
+        <div class="generado-velo">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_guion.job_id }}" data-poll-job="{{ item.trabajo_guion.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+          <div class="progreso-texto">Escribiendo el guion…</div>
+        </div>
+        {% if item.trabajo_editor %}
+        {# Fix round 1 (Important): el guion y «Editar este video» son dos
+           formularios independientes sin exclusión mutua — pueden estar los
+           dos en curso a la vez. Solo cabe UNA tapa visible (la de arriba,
+           la del guion), pero el trabajo del editor igual necesita su
+           barra con data-poll-job: sin ella nada sondea su estado y la
+           página nunca se recarga sola cuando termina. Va contra un
+           contenedor oculto (mismo hermano .progreso-texto que espera el
+           sondeo) para no mostrar una segunda tapa encima. #}
+        <div style="display:none;">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}" data-poll-job="{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto"></div>
+        </div>
+        {% endif %}
+        {% elif item.trabajo_editor %}
+        {# Mismo motivo que el guion: la barra de «Editar este video» corre en
+           el worker y necesita arrancar su polling en la tarjeta. #}
+        <div class="generado-velo">
+          <div class="barra-progreso" id="trabajo-{{ item.trabajo_editor.job_id }}" data-poll-job="{{ item.trabajo_editor.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
+          <div class="progreso-texto">Preparando para el editor…</div>
+        </div>
+        {% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>{{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}</strong>
+        <small>{{ item.finales | length }} final{{ "es" if item.finales | length != 1 }}{% if ediciones_por_cf.get(item.id) %} · en el editor{% endif %}</small>
+      </div>
+{% endmacro %}
+
+{% macro tarjeta_final_fe(item, f) %}
+    {% set _bandera = paises_fe[f.pais].bandera if f.pais in paises_fe else "" %}
+    <div class="generado generado-final" data-cf="{{ f.id }}" data-detalle="{{ url_for('fe_detalle_final', cliente=cliente, cf_id=item.id, final_id=f.id) }}" tabindex="0" role="button">
+      <div class="generado-media">
+        {% if f.estado in ("listo", "degradada") and f.video_url %}
+        <video src="{{ f.video_url }}" poster="{{ f.url_miniatura or '' }}" muted playsinline preload="none" data-precarga></video>
+        {% elif f.url_miniatura %}
+        <img src="{{ f.url_miniatura }}" alt="" loading="lazy" class="generado-portada">
+        {% else %}
+        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga class="generado-portada"></video>
+        {% endif %}
+        <span class="generado-badge">{{ _bandera }} {{ f.idioma }}</span>
+        {% if f.estado == "generando" %}
+        <div class="generado-velo">
+          {% if f.trabajo %}
+          <div class="barra-progreso" id="trabajo-{{ f.trabajo.job_id }}" data-poll-job="{{ f.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
+          <div class="progreso-texto">Produciendo… 0% · 0s</div>
+          {% else %}
+          <span class="generado-estado">Interrumpida</span>
+          {% endif %}
+        </div>
+        {% elif f.estado == "error" %}
+        <div class="generado-velo"><span class="generado-estado error">Error</span></div>
+        {% elif f.estado == "degradada" %}
+        <div class="generado-velo"><span class="generado-estado">Sin voz/música</span></div>
+        {% endif %}
+      </div>
+      <div class="generado-pie">
+        <strong>Final {{ f.idioma }}_{{ f.pais }}</strong>
+        <small>Final de {{ item.enfoque_nombre or ("Con persona" if item.con_persona else "Solo producto") }}{% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}</small>
+      </div>
+{% endmacro %}
+
+{% macro lista_videos_fe(items, desde, total) %}
+    {% for item in items %}{{ tarjeta_video_fe(item) }}{% endfor %}
+    {% if desde + (items | length) < total %}
+    <button type="button" class="btn-sm generados-mas" data-siguiente="{{ desde + (items | length) }}">{{ _('Ver más (quedan %(n)s)', n=total - desde - (items | length)) }}</button>
+    {% endif %}
+{% endmacro %}
+
+{% macro lista_finales_fe(pares, desde, total) %}
+    {% for item, f in pares %}{{ tarjeta_final_fe(item, f) }}{% endfor %}
+    {% if desde + (pares | length) < total %}
+    <button type="button" class="btn-sm generados-mas" data-siguiente="{{ desde + (pares | length) }}">{{ _('Ver más (quedan %(n)s)', n=total - desde - (pares | length)) }}</button>
+    {% endif %}
+{% endmacro %}

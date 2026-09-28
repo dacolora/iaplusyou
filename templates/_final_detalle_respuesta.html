@@ -1,0 +1,1 @@
+{% from "_final_detalle.html" import detalle_video_fe, detalle_final_fe with context %}{% if f %}{{ detalle_final_fe(item, f) }}{% else %}{{ detalle_video_fe(item) }}{% endif %}

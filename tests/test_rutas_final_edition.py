@@ -393,38 +393,70 @@ def _item_video_listo(**extra):
     return item
 
 
+# Tarjetas ligeras (spec 2026-09-28): la pestaña pinta las tarjetas (sin el
+# <template> del detalle) y el detalle lo responde su ruta al abrir la
+# tarjeta. Acá se renderizan las dos piezas por separado, con el mismo
+# contexto que reciben en dashboard.
+def _listas(items):
+    """Lo que dashboard._listas_crear_final le da a las pestañas."""
+    videos = [i for i in items if i.get("estado") == "video_listo" and (i.get("tipo") or "video") != "imagen"]
+    finales = [(i, f) for i in items for f in (i.get("finales") or [])]
+    return dict(crear=items, crear_total=len(items), final_videos=videos, final_videos_total=len(videos),
+                finales=finales, finales_total=len(finales))
+
+
+def _tab_final(env, items):
+    """La pestaña Final edition: tarjetas + JS del modal."""
+    return env.get_template("_tab_final.html").render(**_contexto_minimo(items), **_listas(items))
+
+
+def _detalle_video_fe(env, item):
+    """Lo que responde fe_detalle_video para esa pieza (guion, «Producir finales», editor)."""
+    return env.get_template("_final_detalle_respuesta.html").render(**_contexto_minimo([item]), item=item, f=None)
+
+
+def _tab_crear(env, items):
+    """La pestaña Crear: formulario + tarjetas + JS del modal."""
+    return env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo(items), **_listas(items))
+
+
+def _detalle_crear(env, item):
+    """Lo que responde cf_detalle para esa pieza."""
+    return env.get_template("_crear_detalle_respuesta.html").render(**_contexto_minimo([item]), item=item)
+
+
 def test_plantilla_sin_guion_ofrece_preparar():
     env = _entorno_plantilla()
-    tpl = env.get_template("_tab_final.html")
-    html = tpl.render(**_contexto_minimo([_item_video_listo()]))
-    assert "Final edition" in html
+    item = _item_video_listo()
+    html = _detalle_video_fe(env, item)
+    assert "Final edition" in _tab_final(env, [item]) and "Final edition" in html
     assert "Preparar guion con IA" in html and 'name="precio"' in html
     assert "Guardar guion" not in html and "trabajo-acme__cf_1__final_guion" not in html
+    assert "trabajo-acme__cf_1__final_guion" not in _tab_final(env, [item])
 
-    # Con el guion en curso: barra de progreso en la TARJETA (fuera del <template>,
-    # cuyos <script> clonados no corren) con polling real, y sin el botón (no se
-    # puede encolar dos veces).
-    html = tpl.render(**_contexto_minimo([_item_video_listo(trabajo_guion={"job_id": "acme__cf_1__final_guion"})]))
-    assert 'iniciarPolling("acme__cf_1__final_guion"' in html
-    tarjeta = html.split('<template class="generado-detalle">')[0]
+    # Con el guion en curso: barra de progreso en la TARJETA (el detalle llega
+    # por fetch, así que el sondeo arranca desde data-poll-job en la página,
+    # sin <script> embebido), y sin el botón (no se puede encolar dos veces).
+    item = _item_video_listo(trabajo_guion={"job_id": "acme__cf_1__final_guion"})
+    tarjeta = _tab_final(env, [item])
+    assert 'data-poll-job="acme__cf_1__final_guion"' in tarjeta and "<script>iniciarPolling" not in tarjeta
     assert 'id="trabajo-acme__cf_1__final_guion"' in tarjeta and "Escribiendo el guion…" in tarjeta
-    detalle = html.split('<template class="generado-detalle">')[1]
+    detalle = _detalle_video_fe(env, item)
     assert "Se está escribiendo el guion…" in detalle and "barra-progreso" not in detalle
-    assert "Preparar guion con IA" not in html
-    assert "Volver a escribir con IA" not in html
+    assert "Preparar guion con IA" not in detalle
+    assert "Volver a escribir con IA" not in detalle
 
 
 def test_plantilla_con_guion_ofrece_reescribir():
     env = _entorno_plantilla()
-    tpl = env.get_template("_tab_final.html")
-    html = tpl.render(**_contexto_minimo([_item_video_listo(guion_base=GUION_BASE)]))
+    html = _detalle_video_fe(env, _item_video_listo(guion_base=GUION_BASE))
     assert "Volver a escribir con IA" in html and "Volver a escribir el guion con IA" in html  # botón + confirm
     assert 'name="idioma_base" value="es"' in html
     assert "reescribiendo" not in html
-    # Mientras se reescribe no se ofrece el botón (ni la barra dentro del template).
-    html = tpl.render(**_contexto_minimo([_item_video_listo(guion_base=GUION_BASE, trabajo_guion={"job_id": "acme__cf_1__final_guion"})]))
-    assert "Volver a escribir con IA" not in html
-    assert 'iniciarPolling("acme__cf_1__final_guion"' in html
+    # Mientras se reescribe no se ofrece el botón; la barra va en la tarjeta (data-poll-job).
+    item = _item_video_listo(guion_base=GUION_BASE, trabajo_guion={"job_id": "acme__cf_1__final_guion"})
+    assert "Volver a escribir con IA" not in _detalle_video_fe(env, item)
+    assert 'data-poll-job="acme__cf_1__final_guion"' in _tab_final(env, [item])
 
 
 def test_plantilla_con_guion_y_finales_renderiza():
@@ -441,19 +473,20 @@ def test_plantilla_con_guion_y_finales_renderiza():
          "url_miniatura": None, "duracion_s": None, "costo_usd": None, "capas": {}, "guion": None,
          "error": "ffmpeg murió", "trabajo": None},
     ]
-    html = env.get_template("_tab_final.html").render(
-        **_contexto_minimo([_item_video_listo(guion_base=GUION_BASE, finales=finales)]))
+    item = _item_video_listo(guion_base=GUION_BASE, finales=finales)
+    html = _detalle_video_fe(env, item)        # el guion y «Producir finales» llegan por fetch
+    tarjetas = _tab_final(env, [item])         # la clon y sus finales, en las cuadrículas
     assert "Guardar guion" in html and 'name="bloque_4_voz"' in html
     assert "Pide las tuyas" in html
     assert 'name="destinos" value="es_CO"' in html and 'name="destinos" value="en_US"' in html
     assert "Producir" in html
-    assert "🇨🇴" in html and "🇺🇸" in html and "🇧🇷" in html
-    assert "trabajo-acme__cf_1__en_US__final" in html
-    assert "generado-badge" in html
+    assert "🇨🇴" in tarjetas and "🇺🇸" in tarjetas and "🇧🇷" in tarjetas
+    assert "trabajo-acme__cf_1__en_US__final" in tarjetas
+    assert "generado-badge" in tarjetas
     assert "ffmpeg murió" in html
     # la clon + 3 finales en las cuadrículas (el selector del JS no cuenta)
-    assert len(re.findall(r'data-cf="[\w-]+"', html)) == 4
-    assert "Final de Producto" in html
+    assert len(re.findall(r'data-cf="[\w-]+"', tarjetas)) == 4
+    assert "Final de Producto" in tarjetas
     # I4: es_CO ya tiene una final -> hint + checkbox marcado para confirm(); en_US y pt_BR no.
     assert "ya producida — se reemplaza" in html
     assert 'value="es_CO" data-ya-producida="1"' in html
@@ -472,9 +505,8 @@ def test_plantilla_clon_mudo_desmarca_el_sonido():
     """Si Crear anotó que el clon vino sin pista, el check «con sonido» sale
     desmarcado y se avisa; no se ofrece pedir lo que no existe."""
     env = _entorno_plantilla()
-    html = env.get_template("_tab_final.html").render(
-        **_contexto_minimo([_item_video_listo(guion_base=GUION_BASE,
-                                              capas={"sonido": {"proveedor": "wan3", "estado": "ausente"}})]))
+    html = _detalle_video_fe(env, _item_video_listo(guion_base=GUION_BASE,
+                                                    capas={"sonido": {"proveedor": "wan3", "estado": "ausente"}}))
     assert 'name="con_sonido" value="si" checked' not in html and 'name="con_sonido" value="si"' in html
     assert "este clon no trae sonido" in html
 
@@ -483,16 +515,17 @@ def test_plantilla_imagen_no_muestra_final_edition():
     """Una imagen no entra a Final edition: la pestaña no la lista y Crear no
     ofrece «Llevar a final edition» (un video listo sí)."""
     env = _entorno_plantilla()
-    ctx = _contexto_minimo([_item_video_listo(tipo="imagen")])
-    html = env.get_template("_tab_final.html").render(**ctx)
+    imagen = _item_video_listo(tipo="imagen")
+    html = _tab_final(env, [imagen])
     assert 'data-cf="cf_1"' not in html and "Preparar guion con IA" not in html
     assert "Videos listos (0)" in html
-    crear = env.get_template("_tab_creativeflowplus.html").render(**ctx)
+    crear = _tab_crear(env, [imagen]) + _detalle_crear(env, imagen)    # la tarjeta y su detalle (por fetch)
     marcado = re.sub(r"<script>.*?</script>", "", crear, flags=re.S)   # lo que se ve, sin los comentarios del JS
     assert "Llevar a final edition" not in marcado and "Final edition" not in marcado
-    crear = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo()]))
+    video = _item_video_listo()
+    crear = _detalle_crear(env, video)
     assert 'href="#final?cf=cf_1"' in crear and "Llevar a final edition" in crear
-    assert "Preparar guion con IA" not in crear
+    assert "Preparar guion con IA" not in crear and "Preparar guion con IA" not in _tab_crear(env, [video])
 
 
 def test_plantilla_muestra_el_editor_del_angulo_de_la_pieza():
@@ -500,13 +533,15 @@ def test_plantilla_muestra_el_editor_del_angulo_de_la_pieza():
     env = _entorno_plantilla()
     angulo = {"consciencia": "consciente_del_problema", "lead": "problema_solucion", "gancho": "¿Pies fríos en casa?",
               "promesa": "pies calientes", "faltantes": ["error: campo_faltante:audiencia", "falta el precio"]}
-    html = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    html = _detalle_video_fe(env, _item_video_listo(angulo=angulo))
     assert 'class="angulo-editor"' in html and "Consciente del problema · problema-solución · “¿Pies fríos en casa?”" in html
     assert "falta el precio" in html and "campo_faltante" not in html
-    vacio = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo()]))
+    vacio = _detalle_video_fe(env, _item_video_listo())
     assert "Todavía no tiene ángulo: se decide al preparar el guion" in vacio
-    # Se mudó con la sección Final edition: Crear ya no lo muestra (ni lo inicializa).
-    crear = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    # Se mudó con la sección Final edition: Crear ya no lo muestra (ni lo
+    # inicializa), ni en la pestaña ni en el detalle de la pieza.
+    item = _item_video_listo(angulo=angulo)
+    crear = _tab_crear(env, [item]) + _detalle_crear(env, item)
     assert 'class="angulo-editor"' not in crear and "iniciarEditoresAngulo" not in crear
 
 
@@ -517,30 +552,31 @@ def test_plantilla_muestra_la_cifra_no_verificada_antes_de_guardar():
     env = _entorno_plantilla()
     angulo = {"consciencia": "consciente_del_problema", "lead": "problema_solucion", "gancho": "¿Pies fríos en casa?",
               "promesa": "pies calientes", "faltantes": ["error: cifra_no_verificada:47", "falta el precio"]}
-    html = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo(angulo=angulo)]))
+    html = _detalle_video_fe(env, _item_video_listo(angulo=angulo))
     assert "La cifra «47» no está en los datos del producto." in html
     assert "cifra_no_verificada" not in html      # se muestra el mensaje, nunca el código
 
 
 def test_editor_del_angulo_se_inicializa_al_abrir_la_pieza():
-    """Doctrina, bloque 2 (revisión final, bug crítico #1): el editor vive
-    dentro de <template class="generado-detalle"> y `iniciarEditoresAngulo()`
-    solo corre sobre `document` al cargar la página — nunca ve el contenido
-    que `abrir()` clona ahí adentro, así que sin esto no guarda nada."""
+    """Doctrina, bloque 2 (revisión final, bug crítico #1): el editor llega
+    dentro del detalle que el modal pide por fetch, e `iniciarEditoresAngulo()`
+    solo corre sobre `document` al cargar la página — nunca vería ese
+    contenido, así que la pestaña lo llama sobre lo recién insertado
+    (`alInsertar` de abrirDetalleRemoto); sin esto no guarda nada."""
     env = _entorno_plantilla()
     env.globals["url_for"] = lambda ruta, **k: "/static/" + k["filename"] if ruta == "static" else "#"
-    html = env.get_template("_tab_final.html").render(**_contexto_minimo([_item_video_listo()]))
-    assert "iniciarEditoresAngulo(cuerpo)" in html
+    html = _tab_final(env, [_item_video_listo()])
+    assert "window.iniciarEditoresAngulo(c)" in html
+    assert "abrirDetalleRemoto(modal, cuerpo, card.dataset.detalle, alInsertar)" in html
     assert 'src="/static/angulo.js"' in html      # la pestaña carga su propio script
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     with open(os.path.join(raiz, "static", "angulo.js")) as f:
         js = f.read()
-    # Fix B: tras guardar desde el modal, el valor vuelve a escribirse en la
-    # <template> de origen (si no, la próxima apertura re-clona el HTML viejo
-    # del servidor y el guardado anterior se pierde).
-    assert "generado-detalle" in js and ".angulo-editor" in js
-    # cloneNode no copia la opción elegida de un <select> (vuelve a la del
-    # atributo `selected`): la escritura en la <template> fija los atributos.
+    assert ".angulo-editor" in js
+    # Tras guardar, el editor fija en el DOM el valor elegido (atributos
+    # `selected`/`value` y el texto): un segundo guardado parte del valor
+    # real, no del que vino del servidor. (El detalle se vuelve a pedir al
+    # abrir, así que la próxima apertura ya trae lo guardado.)
     assert "setAttribute('selected'" in js and "removeAttribute('selected')" in js
     assert "setAttribute('value'" in js and "textContent = valor" in js
 
@@ -580,38 +616,44 @@ def _item_revisable(**extra):
 def test_plantilla_revision_sin_revisar_muestra_las_reglas_y_el_boton():
     env = _entorno_plantilla()
     reglas = [{"n": 4, "codigo": "cifra_no_verificada", "texto": "La cifra «1200» del caption no está.", "donde": "caption"}]
-    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_revisable(reglas=reglas)]))
+    item = _item_revisable(reglas=reglas)
+    html = _detalle_crear(env, item)          # la revisión va en el detalle (por fetch)
     assert "Revisión de la doctrina" in html and "Revisión rápida (gratis)" in html
     assert "La cifra «1200» del caption no está." in html and "#base" in html
     assert "Revisar con la doctrina (US$ 0,05 aprox.)" in html and "Doctrina:" not in html
-    sin = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([_item_revisable()]))
+    assert "Doctrina:" not in _tab_crear(env, [item])      # sin revisión, la tarjeta no lleva etiqueta
+    sin = _detalle_crear(env, _item_revisable())
     assert "Las reglas no encontraron nada." in sin
 
 
 def test_plantilla_revision_con_claude_agrupa_y_pone_la_etiqueta():
     env = _entorno_plantilla()
     item = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2)
-    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([item]))
+    html = _detalle_crear(env, item)
     assert "Muestra el producto antes." in html
     assert "<strong>Visuales</strong>: El producto aparece hasta el segundo 5." in html and "#video" in html
     assert "Pasa (10)" in html and "No aplica (1)" in html
-    assert "Doctrina: 2 por mejorar" in html and "Revisar de nuevo (US$ 0,05 aprox.)" in html
+    assert "Revisar de nuevo (US$ 0,05 aprox.)" in html
+    assert "Doctrina: 2 por mejorar" in _tab_crear(env, [item])     # la etiqueta va en la tarjeta
     bien = _item_revisable(revision=dict(REV_MEJORAR, reglas=[], puntos=[dict(p, estado="pasa") for p in REV_MEJORAR["puntos"]]),
                            revision_estado="bien")
-    html = env.get_template("_tab_creativeflowplus.html").render(**_contexto_minimo([bien]))
-    assert "Doctrina: bien" in html and "Claude no encontró nada para mejorar." in html
+    assert "Doctrina: bien" in _tab_crear(env, [bien])
+    assert "Claude no encontró nada para mejorar." in _detalle_crear(env, bien)
 
 
 def test_plantilla_revision_vieja_error_y_en_curso():
     env = _entorno_plantilla()
-    tpl = env.get_template("_tab_creativeflowplus.html")
-    vieja = tpl.render(**_contexto_minimo([_item_revisable(revision=REV_MEJORAR, revision_estado="vieja")]))
-    assert "es de una versión anterior" in vieja and "Revisar de nuevo" in vieja and "Doctrina:" not in vieja
-    error = tpl.render(**_contexto_minimo([_item_revisable(revision={"error": "Claude no devolvió JSON."},
-                                                             revision_estado="error")]))
+    item = _item_revisable(revision=REV_MEJORAR, revision_estado="vieja")
+    vieja = _detalle_crear(env, item)
+    assert "es de una versión anterior" in vieja and "Revisar de nuevo" in vieja
+    assert "Doctrina:" not in vieja and "Doctrina:" not in _tab_crear(env, [item])
+    error = _detalle_crear(env, _item_revisable(revision={"error": "Claude no devolvió JSON."}, revision_estado="error"))
     assert "no se pudo terminar: Claude no devolvió JSON." in error
-    curso = tpl.render(**_contexto_minimo([_item_revisable(trabajo_revision={"job_id": "acme__cf_1__revisar"})]))
-    assert 'id="trabajo-acme__cf_1__revisar"' in curso and "Revisando con la doctrina…" in curso
+    item = _item_revisable(trabajo_revision={"job_id": "acme__cf_1__revisar"})
+    tarjeta = _tab_crear(env, [item])          # la barra va en la tarjeta, con data-poll-job
+    assert 'id="trabajo-acme__cf_1__revisar"' in tarjeta and "Revisando con la doctrina…" in tarjeta
+    assert 'data-poll-job="acme__cf_1__revisar"' in tarjeta and "<script>iniciarPolling" not in tarjeta
+    curso = _detalle_crear(env, item)
     assert "Revisando la pieza…" in curso and "Revisar con la doctrina (" not in curso
 
 
@@ -619,16 +661,15 @@ def test_plantilla_muestra_el_error_junto_a_la_revision_buena():
     """Bloque 3, revisión final (I2): un fallo posterior no reemplaza la
     buena revisión guardada — las dos se muestran."""
     env = _entorno_plantilla()
-    tpl = env.get_template("_tab_creativeflowplus.html")
     item = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2,
                            revision_error={"error": "Claude no devolvió JSON.", "video_url": "https://r2/clon.mp4"})
-    html = tpl.render(**_contexto_minimo([item]))
+    html = _detalle_crear(env, item)
     assert "Muestra el producto antes." in html                          # la buena sigue mostrándose
     assert "El último intento de revisión no se pudo terminar: Claude no devolvió JSON." in html
     # el error es de otro video (uno anterior a la última generación): no se muestra
     otro = _item_revisable(revision=REV_MEJORAR, revision_estado="mejorar", revision_n=2,
                            revision_error={"error": "x", "video_url": "https://r2/otro.mp4"})
-    html2 = tpl.render(**_contexto_minimo([otro]))
+    html2 = _detalle_crear(env, otro)
     assert "no se pudo terminar" not in html2
 
 

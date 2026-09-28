@@ -1643,14 +1643,16 @@ def ver_cliente(cliente):
     # Bloque 7: canales orgánicos del proyecto, publicaciones por pieza (UNA
     # consulta) y qué piezas tienen una publicación orgánica corriendo en el
     # worker (UNA consulta a la cola, como _trabajos_productos).
-    canales_org = organico.canales(cliente)
-    publicaciones_por_pieza = organico.por_pieza(cliente)
-    trabajos_org = _trabajos_organico(cliente, publicaciones_por_pieza)
     # Gasto real (Task 3): el tablero se calcula UNA vez (cacheado) y de ahí
     # sale la pauta por moneda; la generación viene de la tabla `gasto`.
     tablero_ctx = _contexto_tablero(cliente)
     gasto_ctx = _contexto_gasto(cliente, tablero_ctx)
 
+    cf_items = _creative_flow_items(cliente)
+    # `precios` ya viene en gasto_ctx (el mismo _precios_pagina()): sin quitarlo
+    # render_template lo recibiría dos veces.
+    fe_ctx = _contexto_final_edition(cliente)
+    fe_ctx.pop("precios", None)
     return render_template(
         "cliente.html",
         cliente=cliente,
@@ -1680,8 +1682,8 @@ def ver_cliente(cliente):
         nombre_proyecto=proyectos.nombre_visible(cliente),
         aspect_ratios=prompts_mod.ASPECT_RATIOS_VALIDOS,
         swaps=_swap_items(cliente),
-        creative_flow_items=_creative_flow_items(cliente),
-        ediciones_por_cf=_ediciones_por_cf(cliente),
+        creative_flow_items=cf_items,
+        **_listas_crear_final(cf_items),
         preferencias_flowplus=proyectos.preferencias_flowplus(cliente),
         preferencias_sonido=proyectos.preferencias_sonido(cliente),
         fp_prefill=session.pop("fp_prefill", None),
@@ -1712,13 +1714,7 @@ def ver_cliente(cliente):
         agencia_activos_error=agencia_activos_error,
         motivo_bloqueo_forma=motivo_bloqueo_forma,
         meta_redirect_uri=os.environ.get("META_REDIRECT_URI", ""),
-        paises_fe=fe_tipos.PAISES,
-        voces_fe=fal_audio.VOCES,
-        estilos_fe=list(fe_tipos.ESTILOS_MUSICA),
-        nombres_estilos_musica=fe_tipos.NOMBRES_ESTILOS_MUSICA,
-        nombres_estilo_musica=fe_tipos.NOMBRES_ESTILO_MUSICA,
-        **_contexto_mi_musica(cliente),
-        presets_mezcla=list(fe_mezcla.PRESETS),
+        **fe_ctx,
         experimentos=experimentos_exp,
         experimentos_armando=[e for e in experimentos_exp if e["estado"] in ("armando", "error") and not e["meta_campaign_id"]],
         elegibles_exp=experimentos.elegibles(cliente),
@@ -1768,11 +1764,7 @@ def ver_cliente(cliente):
             session.get("rol")),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
-        canales_org=canales_org,
         **gasto_ctx,
-        plataformas_org=organico.PLATAFORMAS,
-        publicaciones_por_pieza=publicaciones_por_pieza,
-        trabajos_org=trabajos_org,
         **sprints_rutas.contexto(cliente),
         **nicho_rutas.contexto(cliente),
         **referentes_rutas.contexto(cliente),
@@ -2757,121 +2749,189 @@ def _swap_items(cliente):
     return items
 
 
-def _creative_flow_items(cliente):
-    import final_edition
-    data = creative_flow.cargar(cliente)
-    # Id numérico de la pieza por sesión, UNA consulta para toda la pestaña:
-    # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
-    # (#experimentos?piezas=<pieza_id>). Las finales ya traen su pieza_id.
-    pieza_ids = creative_flow.piezas_ids_por_legado(cliente)
-    # Una consulta por proyecto en vez de una por pieza (incidente 2026-09-28:
-    # la lista de happyflops hacía 1 158 consultas por carga, 598 de ellas
-    # solo para saber si había un trabajo corriendo — eso lo resuelve
-    # trabajos.con_vivos_precargados en ver_cliente).
-    guiones = creative_flow.guiones_base(cliente)
-    finales_por_cf = creative_flow.finales_por_sesion(cliente)
-    captions = doctrina_revisor.ultimos_captions(cliente)
+TARJETAS_POR_PAGINA = 24
+
+
+def _pagina_desde(valor):
+    """`?desde=` de las listas paginadas: entero >= 0; cualquier otra cosa es 0."""
+    try:
+        return max(0, int(valor))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _ctx_items_cf(cliente):
+    """Lecturas por proyecto que necesita cada item de Crear: una consulta cada
+    una (auditoría 2026-09-28), compartidas entre las piezas de una lista."""
     # Doctrina, bloque 3: leer la guía una sola vez (no por pieza).
     try:
         guia_marca = marca_mod.guia_efectiva(cliente) or ""
     except Exception:  # noqa: BLE001 — es informativa, nunca bloquea
         guia_marca = ""
-    # Doctrina, bloque 3, revisión final (I1): `final_edition._producto`
-    # escanea el catálogo (archivo + tabla `producto`); con muchas piezas
-    # del mismo producto eso se notaba (+2,4 s con 500 piezas/100 productos).
-    # Memo por tupla de `productos_ids`, una sola resolución por producto
-    # distinto en toda la lista, no por pieza.
-    productos_por_ids = {}
-    items = []
-    for cf_id, entry in sorted(
-        data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True
-    ):
-        job_id = _job_id_creative_flow(cliente, cf_id)
-        # trabajo_director solo tiene sentido (y solo se consulta la cola) en
-        # prompt_pendiente: es el único estado donde la tarjeta muestra su
-        # barra de progreso — una consulta menos por tarjeta en cualquier otro
-        # estado.
-        jid_director = tareas_director.job_id(cliente, cf_id)
-        trabajo_director = (
-            {"job_id": jid_director} if entry.get("estado") == "prompt_pendiente" and trabajos.en_curso(jid_director) else None)
-        item = {
-            "id": cf_id,
-            **entry,
-            "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
-            "trabajo_director": trabajo_director,
-            "pieza_id": pieza_ids.get(cf_id),
-        }
-        # Si ya existe una hija de versión B (creative_flow.duplicar la crea con
-        # derivado_de=cf_id, variante="B"), no tiene sentido ofrecer generarla de
-        # nuevo desde la tarjeta del padre: la plantilla oculta la casilla.
-        item["tiene_hija_b"] = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
-        # Estimado real vía wan3_client.estimate_video() en vez de un número
-        # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
-        # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
-        # así el botón nunca muestra un costo distinto al que se cobra.
-        if entry.get("estado") in ("prompt_listo", "error"):
-            if entry.get("tipo") == "imagen":
-                item["costo_estimado"] = flowplus_modelos.estimate_imagen(
-                    entry.get("modelo") or flowplus_modelos.IMAGEN_POR_DEFECTO,
-                    n_referencias=len(entry.get("referencias_urls") or []))
+    return {
+        # Id numérico de la pieza por sesión: la tarjeta enlaza «Probar en Meta»
+        # a la galería de Experimentos (#experimentos?piezas=<pieza_id>).
+        "pieza_ids": creative_flow.piezas_ids_por_legado(cliente),
+        "guiones": creative_flow.guiones_base(cliente),
+        "finales_por_cf": creative_flow.finales_por_sesion(cliente),
+        "captions": doctrina_revisor.ultimos_captions(cliente),
+        "guia_marca": guia_marca,
+        # Doctrina, bloque 3, revisión final (I1): `final_edition._producto`
+        # escanea el catálogo; memo por tupla de `productos_ids`, una sola
+        # resolución por producto distinto en toda la lista, no por pieza.
+        "productos_por_ids": {},
+    }
+
+
+def _armar_item_cf(cliente, cf_id, entry, data, ctx):
+    """El dict de UNA sesión de Crear (lo que leen la tarjeta y el detalle).
+    `data` es creative_flow.cargar(cliente) entero (para `tiene_hija_b`);
+    `ctx` viene de _ctx_items_cf."""
+    import final_edition
+    job_id = _job_id_creative_flow(cliente, cf_id)
+    # trabajo_director solo tiene sentido (y solo se consulta la cola) en
+    # prompt_pendiente: es el único estado donde la tarjeta muestra su
+    # barra de progreso — una consulta menos por tarjeta en cualquier otro
+    # estado.
+    jid_director = tareas_director.job_id(cliente, cf_id)
+    trabajo_director = (
+        {"job_id": jid_director} if entry.get("estado") == "prompt_pendiente" and trabajos.en_curso(jid_director) else None)
+    item = {
+        "id": cf_id,
+        **entry,
+        "trabajo": {"job_id": job_id} if trabajos.en_curso(job_id) else None,
+        "trabajo_director": trabajo_director,
+        "pieza_id": ctx["pieza_ids"].get(cf_id),
+    }
+    # Si ya existe una hija de versión B (creative_flow.duplicar la crea con
+    # derivado_de=cf_id, variante="B"), no tiene sentido ofrecer generarla de
+    # nuevo desde la tarjeta del padre: la plantilla oculta la casilla.
+    item["tiene_hija_b"] = any(e.get("derivado_de") == cf_id and e.get("variante") == "B" for e in data.values())
+    # Estimado real vía wan3_client.estimate_video() en vez de un número
+    # calculado a mano en la plantilla (duracion * 0.10) — usa la misma
+    # tabla de precios (COSTO_USD_POR_SEGUNDO) que generar_video() real,
+    # así el botón nunca muestra un costo distinto al que se cobra.
+    if entry.get("estado") in ("prompt_listo", "error"):
+        if entry.get("tipo") == "imagen":
+            item["costo_estimado"] = flowplus_modelos.estimate_imagen(
+                entry.get("modelo") or flowplus_modelos.IMAGEN_POR_DEFECTO,
+                n_referencias=len(entry.get("referencias_urls") or []))
+        else:
+            mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
+            item["costo_estimado"] = flowplus_modelos.estimate_video(
+                mid, entry["duracion_objetivo"], con_sonido=entry.get("con_sonido", True) is not False,
+                calidad=entry.get("calidad") or "final")
+    item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
+    # Final edition: solo tiene sentido sobre un video ya listo. Cada final
+    # y el guion llevan su propio trabajo del worker para la barra de la UI.
+    item["guion_base"] = None
+    item["finales"] = []
+    item["trabajo_guion"] = None
+    item["trabajo_editor"] = None
+    if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
+        item["guion_base"] = ctx["guiones"].get(cf_id)
+        jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
+        item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
+        jid_editor = tareas_edicion.job_id_desde_clon(cliente, cf_id)
+        item["trabajo_editor"] = {"job_id": jid_editor} if trabajos.en_curso(jid_editor) else None
+        for f in ctx["finales_por_cf"].get(cf_id, []):
+            jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
+            f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
+            item["finales"].append(f)
+    # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
+    # Las reglas son gratis y se calculan al renderizar; la revisión de
+    # Claude es la guardada. Sin ninguna de las dos, la sección no pesa.
+    item["revision"], item["revision_estado"], item["reglas"], item["trabajo_revision"] = None, None, [], None
+    item["revision_error"] = None
+    if entry.get("estado") == "video_listo" and entry.get("video_url"):
+        item["revision"] = entry.get("revision_doctrina")
+        item["revision_error"] = entry.get("revision_doctrina_error")
+        item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
+        item["revision_n"] = doctrina_revisor.contar(item["revision"])
+        try:
+            clave = tuple(entry.get("productos_ids") or ())
+            if clave:
+                producto = ctx["productos_por_ids"].get(clave)
+                if producto is None:
+                    try:
+                        producto = final_edition._producto(cliente, entry, None) or {}
+                    except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
+                        producto = {}
+                    # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
+                    # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
+                    if "pruebas" in producto or not producto:
+                        ctx["productos_por_ids"][clave] = producto
+                d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
+                                            guia=ctx["guia_marca"], producto=producto, caption=ctx["captions"].get(cf_id, ""))
             else:
-                mid = entry.get("modelo") if entry.get("modelo") in flowplus_modelos.VIDEO else flowplus_modelos.VIDEO_POR_DEFECTO
-                item["costo_estimado"] = flowplus_modelos.estimate_video(
-                    mid, entry["duracion_objetivo"], con_sonido=entry.get("con_sonido", True) is not False,
-                    calidad=entry.get("calidad") or "final")
-        item["modelo_nombre"] = (flowplus_modelos.IMAGEN.get(entry.get("modelo")) or flowplus_modelos.VIDEO.get(entry.get("modelo")) or {}).get("nombre", "Wan 3.0")
-        # Final edition: solo tiene sentido sobre un video ya listo. Cada final
-        # y el guion llevan su propio trabajo del worker para la barra de la UI.
-        item["guion_base"] = None
-        item["finales"] = []
-        item["trabajo_guion"] = None
-        item["trabajo_editor"] = None
-        if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
-            item["guion_base"] = guiones.get(cf_id)
-            jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
-            item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
-            jid_editor = tareas_edicion.job_id_desde_clon(cliente, cf_id)
-            item["trabajo_editor"] = {"job_id": jid_editor} if trabajos.en_curso(jid_editor) else None
-            for f in finales_por_cf.get(cf_id, []):
-                jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
-                f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
-                item["finales"].append(f)
-        # Doctrina, bloque 3: revisión de la pieza terminada (video o imagen).
-        # Las reglas son gratis y se calculan al renderizar; la revisión de
-        # Claude es la guardada. Sin ninguna de las dos, la sección no pesa.
-        item["revision"], item["revision_estado"], item["reglas"], item["trabajo_revision"] = None, None, [], None
-        item["revision_error"] = None
-        if entry.get("estado") == "video_listo" and entry.get("video_url"):
-            item["revision"] = entry.get("revision_doctrina")
-            item["revision_error"] = entry.get("revision_doctrina_error")
-            item["revision_estado"] = doctrina_revisor.estado_revision(item["revision"], entry.get("video_url"))
-            item["revision_n"] = doctrina_revisor.contar(item["revision"])
-            try:
-                clave = tuple(entry.get("productos_ids") or ())
-                if clave:
-                    producto = productos_por_ids.get(clave)
-                    if producto is None:
-                        try:
-                            producto = final_edition._producto(cliente, entry, None) or {}
-                        except Exception:  # noqa: BLE001 — sin producto la revisión rápida sigue
-                            producto = {}
-                        # Solo se recuerda lo que resolvió el catálogo (trae «pruebas»): el
-                        # producto de respaldo sale de los datos de ESTA pieza y no sirve a otra.
-                        if "pruebas" in producto or not producto:
-                            productos_por_ids[clave] = producto
-                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
-                                                guia=guia_marca, producto=producto, caption=captions.get(cf_id, ""))
-                else:
-                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=guia_marca,
-                                                caption=captions.get(cf_id, ""))
-                item["reglas"] = doctrina_revisor.reglas(d)
-            except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
-                item["reglas"] = []
-            jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
-            item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
-            item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
-        items.append(item)
-    return items
+                d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=ctx["guia_marca"],
+                                            caption=ctx["captions"].get(cf_id, ""))
+            item["reglas"] = doctrina_revisor.reglas(d)
+        except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
+            item["reglas"] = []
+        jid_rev = tareas_doctrina.job_id_revisar(cliente, cf_id)
+        item["trabajo_revision"] = {"job_id": jid_rev} if trabajos.en_curso(jid_rev) else None
+        item["precio_revision"] = gastos.estimar("revision_pieza")["texto"]
+    return item
+
+
+def _creative_flow_items(cliente):
+    data = creative_flow.cargar(cliente)
+    ctx = _ctx_items_cf(cliente)
+    return [_armar_item_cf(cliente, cf_id, entry, data, ctx)
+            for cf_id, entry in sorted(data.items(), key=lambda kv: kv[1].get("creado_en", ""), reverse=True)]
+
+
+def _creative_flow_item(cliente, cf_id):
+    """El mismo dict que _creative_flow_items produce para esa sesión, o None
+    si no existe en ese proyecto (las rutas de detalle responden 404)."""
+    data = creative_flow.cargar(cliente)
+    entry = data.get(cf_id)
+    if not entry:
+        return None
+    return _armar_item_cf(cliente, cf_id, entry, data, _ctx_items_cf(cliente))
+
+
+def _listas_crear_final(items, n=TARJETAS_POR_PAGINA):
+    """Lo que pintan Crear y Final edition (spec 2026-09-28 «tarjetas
+    ligeras»): las primeras `n` de cada lista y los totales para los
+    contadores de cabecera. `n=None` devuelve las listas completas (las rutas
+    de «Ver más» recortan ellas)."""
+    videos = [i for i in items if i.get("estado") == "video_listo" and (i.get("tipo") or "video") != "imagen"]
+    finales = [(i, f) for i in items for f in (i.get("finales") or [])]
+    corte = slice(0, n) if n else slice(None)
+    return {"crear": items[corte], "crear_total": len(items),
+            "final_videos": videos[corte], "final_videos_total": len(videos),
+            "finales": finales[corte], "finales_total": len(finales)}
+
+
+def _contexto_organico(cliente):
+    """Lo que necesita el bloque «Publicar orgánico» (_organico_publicar.html),
+    que va en el detalle de una final y en Experimentos."""
+    publicaciones_por_pieza = organico.por_pieza(cliente)
+    return {
+        "canales_org": organico.canales(cliente),
+        "plataformas_org": organico.PLATAFORMAS,
+        "publicaciones_por_pieza": publicaciones_por_pieza,
+        "trabajos_org": _trabajos_organico(cliente, publicaciones_por_pieza),
+    }
+
+
+def _contexto_final_edition(cliente):
+    """Contexto que leen los detalles de Final edition: la página y las rutas
+    de detalle (fe_detalle_video / fe_detalle_final) lo reciben igual."""
+    return {
+        **_contexto_organico(cliente),
+        "paises_fe": fe_tipos.PAISES,
+        "voces_fe": fal_audio.VOCES,
+        "estilos_fe": list(fe_tipos.ESTILOS_MUSICA),
+        "nombres_estilos_musica": fe_tipos.NOMBRES_ESTILOS_MUSICA,
+        "nombres_estilo_musica": fe_tipos.NOMBRES_ESTILO_MUSICA,
+        "presets_mezcla": list(fe_mezcla.PRESETS),
+        "precios": _precios_pagina(),
+        "ediciones_por_cf": _ediciones_por_cf(cliente),
+        **_contexto_mi_musica(cliente),
+    }
 
 
 @app.route("/cliente/<cliente>/swap")
@@ -6062,6 +6122,63 @@ def rechazar(cliente, brief_id):
     estado_mod.guardar(cliente, estado)
     flash(f"{brief_id} rechazado, no se publica.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente))
+
+
+@app.route("/cliente/<cliente>/crear/tarjetas")
+def crear_tarjetas(cliente):
+    """«Ver más» de Crear: las TARJETAS_POR_PAGINA siguientes (fragmento HTML;
+    spec 2026-09-28 «tarjetas ligeras»)."""
+    desde = _pagina_desde(request.args.get("desde"))
+    items = _creative_flow_items(cliente)
+    return render_template("_crear_tarjetas_respuesta.html", cliente=cliente,
+                           items=items[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(items))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/detalle")
+def cf_detalle(cliente, cf_id):
+    """El detalle de una pieza (lo que antes iba embebido en un <template>
+    por tarjeta); el modal lo pide al abrir. 404 si no es de este proyecto."""
+    item = _creative_flow_item(cliente, cf_id)
+    if item is None:
+        abort(404)
+    return render_template("_crear_detalle_respuesta.html", cliente=cliente, item=item)
+
+
+@app.route("/cliente/<cliente>/final/tarjetas")
+def final_tarjetas(cliente):
+    """«Ver más» de Final edition: `lista=videos` (videos listos) o
+    `lista=finales`; las TARJETAS_POR_PAGINA siguientes desde `desde`."""
+    lista = request.args.get("lista")
+    if lista not in ("videos", "finales"):
+        abort(400)
+    desde = _pagina_desde(request.args.get("desde"))
+    completas = _listas_crear_final(_creative_flow_items(cliente), n=None)
+    todos = completas["final_videos"] if lista == "videos" else completas["finales"]
+    return render_template("_final_tarjetas_respuesta.html", cliente=cliente, lista=lista,
+                           items=todos[desde:desde + TARJETAS_POR_PAGINA], desde=desde, total=len(todos),
+                           **_contexto_final_edition(cliente))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/detalle")
+def fe_detalle_video(cliente, cf_id):
+    """Detalle de un video listo en Final edition (guion, «Producir finales»,
+    editor). 404 si no es un video listo de este proyecto."""
+    item = _creative_flow_item(cliente, cf_id)
+    if item is None or item.get("estado") != "video_listo" or (item.get("tipo") or "video") == "imagen":
+        abort(404)
+    return render_template("_final_detalle_respuesta.html", cliente=cliente, item=item, f=None,
+                           **_contexto_final_edition(cliente))
+
+
+@app.route("/cliente/<cliente>/creative_flow/<cf_id>/final/<final_id>/detalle")
+def fe_detalle_final(cliente, cf_id, final_id):
+    """Detalle de una final (capas, descargar, descartar, publicación orgánica)."""
+    item = _creative_flow_item(cliente, cf_id)
+    f = next((x for x in ((item or {}).get("finales") or []) if x["id"] == final_id), None)
+    if item is None or f is None:
+        abort(404)
+    return render_template("_final_detalle_respuesta.html", cliente=cliente, item=item, f=f,
+                           **_contexto_final_edition(cliente))
 
 
 @app.route("/cliente/<cliente>/creative_flow/<cf_id>/descartar", methods=["POST"])

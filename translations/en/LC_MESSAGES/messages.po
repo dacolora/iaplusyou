@@ -1311,6 +1311,9 @@ msgstr "Loading your scripts…"
 msgid "Cargando tus prompts…"
 msgstr "Loading your prompts…"
 
+msgid "Cargando…"
+msgstr "Loading…"
+
 msgid "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga."
 msgstr "Almost free: 10 GB a month at no cost and no charge for downloads."
 
@@ -2918,6 +2921,9 @@ msgstr "Wait a moment before requesting another verification email."
 
 msgid "Esta pieza ya no está en Crear: genera una nueva y métela en un experimento."
 msgstr "This piece is no longer in Create: generate a new one and add it to an experiment."
+
+msgid "Esta pieza ya no existe o no tiene este detalle."
+msgstr "This piece no longer exists or has no such detail."
 
 msgid "Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."
 msgstr "This session has no reference images — discard it and create a new one."
@@ -4629,6 +4635,9 @@ msgstr "I couldn't calculate the 30-day series."
 
 msgid "No se pudo calcular las alertas."
 msgstr "I couldn't calculate the alerts."
+
+msgid "No se pudo cargar el detalle. Recarga la página."
+msgstr "The detail could not be loaded. Reload the page."
 
 msgid "No se pudo cargar el panel de guiones. Recarga la página."
 msgstr "Couldn't load the scripts panel. Reload the page."
@@ -6675,6 +6684,10 @@ msgstr "View the applied invariant_block / negative_prompt (raw prompt text)"
 
 msgid "Ver la instrucción exacta que recibe el modelo →"
 msgstr "See the exact instruction the model gets →"
+
+#, python-format
+msgid "Ver más (quedan %(n)s)"
+msgstr "Show more (%(n)s left)"
 
 msgid "Ver por qué usamos estos modelos (comparación completa) →"
 msgstr "See why we use these models (full comparison) →"
