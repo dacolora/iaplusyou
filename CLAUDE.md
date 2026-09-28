@@ -208,7 +208,9 @@ pieces from Crear (5) jump ahead of batches. `campana_pieza.cf_id` joins
 `pieza.legado_id`, so progress and states come from the real sessions. The
 worker periodic `sprint_qa_pendientes` (5 min) queues `sprint_qa_pieza`
 (`sprints/qa.py`: Claude vision + ffprobe → `campana_pieza.qa`, never
-generates) and emails when a batch finishes. `sprints/revision.py` approves or
+generates) and emails when a batch finishes. The QA row (score, one ✓/✗ per check, verdict) is
+the macro `_sprint_qa.html`: tapping it opens each check's reason (a `<details>`, so it works
+on a phone; the old `title` tooltip was hover-only). `sprints/revision.py` approves or
 rejects (a rejected piece leaves `estado_videos.json`), closes and reopens the
 sprint; `sprints/entrega.py` lists approved links and builds the zip
 (`sprint_empaquetar`). Retries and regenerations always go through the cost
@@ -253,7 +255,10 @@ comercial); YouTube una llave simple (`search.list` tiene cupo de 100
 llamadas/día, una por recolección); Apify solo actores con precio por resultado
 (`nicho/fuentes/apify_actores.py`) y el token siempre en cabecera. Las llaves
 (`REDDIT_*`, `YOUTUBE_API_KEY`, `APIFY_TOKEN`) viven en el `.env` raíz y se
-muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada.
+muestran en Puesta a punto; sin ellas la tarjeta de esa fuente queda apagada — y solo
+la ve el admin: al cliente no se le muestra una fuente sin llave ni instrucciones del `.env`
+(`nicho/rutas._fuentes_conectadas`; si igual la pide, aviso neutro), porque las llaves son de
+Creatv, no suyas (2026-09-27).
 `nicho/avatares.py` hace dos pasadas con Claude (`generador_prompts.MODEL`):
 núcleos, luego sub-avatares por núcleo; cada cita se verifica literal contra el
 comentario (`verificar_evidencia`) y la que no aparece se descarta — un
@@ -288,6 +293,15 @@ dataset/contarlo, compartido con `nicho/fuentes/apify.py`;
 la URL de la Ad Library con país real (a diferencia de Atria, que es solo
 UE) e idioma, una sola corrida por barrido sin cursor que retomar, reporta
 su costo real por resultado a `gastos` bajo el tipo `recoleccion`).
+Barridos por palabra (2026-09-27, tras «dolor de pies» que trajo ruido pagado): SIEMPRE en inglés
+— `referentes/traducir.preparar_consulta` traduce lo escrito con Claude (≈ US$ 0,0002, gasto tipo
+`otro`, bajo `_creatv` si es global), guarda `consulta.palabra_original`, fuerza `idioma=en` (no hay
+selector de idioma en los formularios; «Mis barridos» muestra «dolor de pies» → «Foot pain») y si
+no se puede traducir el barrido no se lanza. Atria va con `order=best_match` (sin él ordena por
+`newest` y su `query` acepta cualquier palabra); Apify, con varias palabras, pide la frase exacta
+(`keyword_exact_phrase` con comillas). `datos.borrar_de_barrido` quita los referentes de un barrido
+y las familias `claude` que quedan vacías (el barrido queda por el historial del gasto; las
+imágenes R2 las borra el llamador).
 `traer()` ahora entrega `(pagina, cursor_siguiente, meta)`: `meta` es `{}`
 para Atria (solo consume cupo del plan) o `{"costo_real": ...}` para una
 fuente que cobra por resultado real. Bloque 6: panel admin completo
@@ -331,6 +345,13 @@ References and catalog are optional (2026-09-25): with nothing attached the piec
 the person's text as-is (+ the SONIDO line), and each model goes through its `path_texto`
 (WaveSpeed text-to-video / text-to-image, same prices; Seedance then does take a format,
 `formatos_texto`). Sprints and derivations never use `libre` (they rotate `ORDEN_ENFOQUES`).
+The reference tray (`referencias_flowplus`, one file per PROJECT, shared by everyone working on
+it) follows «what you see is what gets used» (2026-09-26 incident: a «solo texto» piece took the 4
+references another person had just loaded): the Crear form sends `bandeja_vista=1` + the `ref_ids`
+it shows (hidden inputs with `form="form-flowplus"` in `_flowplus_bandeja.html`); `cf_crear_video`
+uses only those, removes only those after creating (`_consumir_bandeja` → `quitar_varios`), and if
+one of them is gone it generates and charges nothing. Without `bandeja_vista` (scripts/old tests)
+the whole tray is used and emptied, as before.
 Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
 por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
@@ -766,7 +787,8 @@ and bumps `session_version` so every other session dies — `_verificar_sesion` 
 cookie's `sv` on each request and rejects sessions whose usuario no longer exists);
 Configuración › Cuenta (change correo → re-verify; change password → current required).
 Without a verified correo a cliente cannot connect Meta or a store (`_requiere_correo_verificado`;
-admins exempt); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
+admins exempt); the «sin correo / confirma tu correo» notice (`#cuenta-banner`) shows only at the
+top of Configuración (`_tab_settings.html`), not on every tab (removed from `base.html` 2026-09-26); admins can mark a user verified from the panel. Rate limits (`cuentas.limite_ok`,
 `kv`, 5/h) per correo and per IP on registration, resend and recovery. Links are built from
 `PLATAFORMA_URL` (never from the `Host` header) and the app 404s requests whose host isn't that
 one (or localhost); `DETRAS_DE_PROXY=1` enables ProxyFix; session cookies are HttpOnly, SameSite
