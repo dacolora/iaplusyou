@@ -159,13 +159,25 @@ function espejoDe(doc, clipId, info) {
   return sync.pistas.find((p) => p.id === ID_SONIDO)?.clips.find((c) => c.id === id) ?? null;
 }
 
+// El volumen del sonido de la escena de un clip de la principal. En una
+// edición sin `p_sonido` (la receta no lo pidió: operaciones.sincronizarSonido
+// nunca la crea) el video suena en 0, «Sin sonido», y el deslizador sigue
+// disponible: moverlo (operaciones.volumenSonido) la crea para ese clip.
+function sonidoDeVideo(doc, clip, info) {
+  const espejo = espejoDe(doc, clip.id, info);
+  if (espejo) return { disponible: true, porcentaje: Math.round(Number(espejo.audio?.volumen ?? 1) * 100), motivo: null };
+  const sinPista = !(doc?.pistas ?? []).some((p) => p.id === ID_SONIDO);
+  if (sinPista && motivoRechazo(doc, "volumenSonido", [clip.id, 0], info) === null) {
+    return { disponible: true, porcentaje: 0, motivo: "Sin sonido: súbelo para oír el sonido de este video." };
+  }
+  const velocidad = Number(clip.velocidad ?? 1);
+  return { disponible: false, porcentaje: 0,
+           motivo: velocidad !== 1 ? "A otra velocidad el video va sin su sonido." : "Este video no trae sonido." };
+}
+
 function modeloVideo(doc, { pista, clip, indice }, info) {
   const velocidad = Number(clip.velocidad ?? 1);
-  const espejo = espejoDe(doc, clip.id, info);
-  const sonido = espejo
-    ? { disponible: true, porcentaje: Math.round(Number(espejo.audio?.volumen ?? 1) * 100), motivo: null }
-    : { disponible: false, porcentaje: 0,
-        motivo: velocidad !== 1 ? "A otra velocidad el video va sin su sonido." : "Este video no trae sonido." };
+  const sonido = sonidoDeVideo(doc, clip, info);
   const ultimo = indice === pista.clips.length - 1;
   const tr = clip.transicion;
   const conTransicion = Boolean(tr) && (tr.tipo ?? "corte") !== "corte" && Number(tr.duracion_ms) > 0;

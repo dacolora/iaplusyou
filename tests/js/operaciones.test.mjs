@@ -392,10 +392,11 @@ test("el volumen del sonido de la escena queda por clip al normalizar y un corte
   assert.equal(clipDe(r.doc, "s_v0").audio.volumen, 0.2);
   assert.equal(clipDe(r.doc, `s_${r.seleccion}`).audio.volumen, 0.2);
   assert.equal(clipDe(r.doc, "s_v1").audio.volumen, 0.8);
-  // v0 y v1 a velocidad ≠ 1: nada que espejar, p_sonido desaparece; al volver v0 a 1×, vuelve a aparecer.
+  // v0 y v1 a velocidad ≠ 1: nada que espejar, p_sonido queda vacía (fix final:
+  // ya no se borra, porque normalizar no la vuelve a crear); al volver v0 a 1×, v0 vuelve a tener su espejo.
   const mudo = op.cambiarVelocidad(op.cambiarVelocidad(d, "v0", 2, INFO).doc, "v1", 2, INFO).doc;
-  assert.ok(!mudo.pistas.some((p) => p.id === "p_sonido"));
-  assert.ok(op.cambiarVelocidad(mudo, "v0", 1, INFO).doc.pistas.some((p) => p.id === "p_sonido"));
+  assert.deepEqual(mudo.pistas.find((p) => p.id === "p_sonido").clips, []);
+  assert.ok(clipDe(op.cambiarVelocidad(mudo, "v0", 1, INFO).doc, "s_v0"));
 });
 
 test("el mapa de info rico da exactamente el mismo resultado que el mapa viejo de números", () => {
@@ -428,4 +429,53 @@ test("volumenSonido encuentra el sonido de un documento del borrador (espejos s0
   // sin sonido que espejar (otra velocidad) sigue diciéndolo en llano
   const lento = op.cambiarVelocidad(docBase(), "v1", 0.5, INFO).doc;
   invalida(() => op.volumenSonido(lento, "v1", 0.4, INFO), /sonido/);
+});
+
+// ---- Fixes finales de la capa 4b ----
+
+// Un borrador sin sonido de la escena (la receta no lo pidió): borrador.py no
+// arma `p_sonido` a propósito, y el camino automático reusa ese borrador para
+// otros destinos. Editarlo no puede traer el sonido de vuelta.
+function sinSonido() {
+  const d = docBase();
+  d.pistas = d.pistas.filter((p) => p.id !== "p_sonido");
+  return d;
+}
+const INFO5 = { ...INFO, 5: { duracion_ms: 2000, tiene_audio: true } };
+const tienePista = (d, id) => d.pistas.some((p) => p.id === id);
+
+test("normalizar nunca crea p_sonido: cualquier edición de un documento sin sonido de la escena lo deja sin él", () => {
+  const d = sinSonido();
+  assert.ok(!tienePista(normalizar(structuredClone(d), INFO), "p_sonido"));
+  for (const r of [
+    op.moverA(d, "t1", 2500, INFO), op.cambiar(d, "t1", { transform: { x: 0.3 } }, INFO), op.cortarEn(d, 2000, INFO),
+    op.duplicar(d, "v0", INFO), op.cambiarVelocidad(d, "v1", 1, INFO), op.agregarTexto(d, 0, "titulo", INFO),
+    op.agregarVideo(d, { id: 3 }, {}, INFO),                     // un video sin sonido tampoco la abre
+  ]) assert.ok(!tienePista(r.doc, "p_sonido"), "apareció el sonido de la escena");
+});
+
+test("agregarVideo en un documento sin p_sonido: suena solo el clip nuevo; los de antes quedan en silencio", () => {
+  const r = puro((d) => op.agregarVideo(d, { id: 5 }, { despuesDe: "v0" }, INFO5), sinSonido());
+  const sonido = r.doc.pistas.find((p) => p.id === "p_sonido").clips;
+  assert.deepEqual(sonido.map((c) => [c.id, c.audio.volumen]), [["s_v0", 0], [`s_${r.seleccion}`, 1], ["s_v1", 0]]);
+  // con p_sonido ya puesta, el clip nuevo entra con su sonido y lo de antes no cambia
+  const conSonido = op.agregarVideo(normalizar(docBase(), INFO5), { id: 5 }, {}, INFO5);
+  assert.deepEqual(conSonido.doc.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.audio.volumen), [1, 1, 1]);
+});
+
+test("volumenSonido en un documento sin p_sonido la crea: ese clip al volumen pedido, los demás en silencio", () => {
+  const r = puro((d) => op.volumenSonido(d, "v1", 0.4, INFO), sinSonido());
+  assert.deepEqual(r.doc.pistas.find((p) => p.id === "p_sonido").clips.map((c) => [c.id, c.audio.volumen]),
+    [["s_v0", 0], ["s_v1", 0.4]]);
+  // y a partir de ahí las ediciones la mantienen (sin volver a subir a nadie)
+  const cortado = op.cortarEn(r.doc, 1000, INFO).doc;
+  assert.deepEqual(cortado.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.audio.volumen), [0, 0, 0.4]);
+  invalida(() => op.volumenSonido(op.cambiarVelocidad(sinSonido(), "v1", 2, INFO).doc, "v1", 0.4, INFO), /sonido/);
+});
+
+test("p_sonido sin nada que espejar queda vacía (no se borra) y vuelve a sonar cuando hay qué", () => {
+  const mudo = op.cambiarVelocidad(op.cambiarVelocidad(docBase(), "v0", 2, INFO).doc, "v1", 2, INFO).doc;
+  assert.deepEqual(mudo.pistas.find((p) => p.id === "p_sonido").clips, []);
+  const vuelve = op.cambiarVelocidad(mudo, "v0", 1, INFO).doc;
+  assert.deepEqual(vuelve.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.id), ["s_v0"]);
 });

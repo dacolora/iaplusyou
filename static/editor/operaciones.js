@@ -17,9 +17,15 @@
 // como {duracion_ms: ese número}, así que las operaciones de la capa 4a
 // siguen funcionando igual con el mapa viejo — y `terminar` borra las pistas
 // no principales que quedaron sin clips (nunca `p_video`, la principal, que
-// siempre existe; `p_sonido` no entra en esa limpieza genérica porque tiene
-// la suya propia: `sincronizarSonido` la borra si no hay nada que espejar y
-// la vuelve a crear en cuanto lo hay).
+// siempre existe; `p_sonido` no entra en esa limpieza: sin nada que espejar
+// queda vacía, lista para volver a sonar).
+//
+// `p_sonido` NUNCA se crea sola (fix final de la capa 4b): un borrador cuya
+// receta no pidió el sonido de la escena la deja fuera a propósito, y el
+// camino automático reusa ese borrador para los demás destinos. Solo la crean
+// dos gestos de la persona: agregar un video con sonido (`agregarVideo`: suena
+// ese clip; los de antes entran en silencio) y mover el volumen del sonido de
+// un video (`volumenSonido`: ese clip a lo pedido, los demás en silencio).
 import { pistaPrincipal, CAPA_DEFECTO } from "./tiempo.js";
 import { FORMATOS } from "./formatos.js";
 
@@ -135,30 +141,25 @@ function pistaLibre(doc, tipo, base, tMs, dMs, excluir = []) {
   return pistaNueva(doc, tipo, base);
 }
 
-// Rehace `p_sonido` desde la principal: un clip por cada clip de video a
-// velocidad 1 cuyo material trae sonido (desconocido cuenta como que sí), en
-// el mismo tiempo y el mismo recorte. El `audio` (volumen, fundidos) de cada
-// espejo se conserva POR ID: si el clip de video sigue con el mismo id, su
-// espejo de antes; si es la mitad nueva de un corte (el id nuevo viene de
-// idNuevo, "<raíz>_N"), el de la raíz — así las dos mitades de un clip que ya
-// tenía su volumen ajustado lo conservan. Sin nada que espejar, la pista
-// `p_sonido` desaparece; en cuanto vuelve a haberlo, se crea de nuevo.
-export function sincronizarSonido(doc, info = {}) {
-  const principal = pistaPrincipal(doc);
-  if (!principal || principal.tipo !== "video") return doc;
-  const anterior = doc.pistas.find((p) => p.id === ID_SONIDO);
-  const audioDeAntes = new Map((anterior?.clips ?? []).map((c) => [c.id, c.audio]));
-  const elegibles = principal.clips.filter((c) => vel(c) === 1 && tieneAudioDe(info, c.material_id));
-  if (!elegibles.length) {
-    doc.pistas = doc.pistas.filter((p) => p.id !== ID_SONIDO);
-    return doc;
-  }
-  const sonido = anterior ?? { id: ID_SONIDO, tipo: "audio", bloqueada: false, silenciada: false, oculta: false, clips: [] };
-  if (!anterior) doc.pistas.push(sonido);
+// Los clips de la principal que tienen sonido de la escena: a velocidad 1 y
+// de un material que trae sonido (desconocido cuenta como que sí).
+function espejables(principal, info) {
+  return principal.clips.filter((c) => vel(c) === 1 && tieneAudioDe(info, c.material_id));
+}
+
+// Rehace los clips de `sonido` desde la principal: un espejo por clip
+// espejable, en el mismo tiempo y el mismo recorte. El `audio` (volumen,
+// fundidos) de cada espejo se conserva POR ID: si el clip de video sigue con
+// el mismo id, su espejo de antes; si es la mitad nueva de un corte (el id
+// nuevo viene de idNuevo, "<raíz>_N"), el de la raíz — así las dos mitades de
+// un clip que ya tenía su volumen ajustado lo conservan. Un clip sin espejo
+// de antes toma `audioNuevo(clip)`.
+function espejar(doc, sonido, principal, info, audioNuevo) {
+  const audioDeAntes = new Map(sonido.clips.map((c) => [c.id, c.audio]));
   const usados = new Set(doc.pistas.filter((p) => p !== sonido).flatMap((p) => p.clips.map((c) => c.id)));
-  sonido.clips = elegibles.map((c) => {
+  sonido.clips = espejables(principal, info).map((c) => {
     const baseId = `s_${c.id}`.slice(0, 40);
-    const audio = audioDeAntes.get(baseId) ?? audioDeAntes.get(`s_${raizId(c.id)}`.slice(0, 40)) ?? AUDIO;
+    const audio = audioDeAntes.get(baseId) ?? audioDeAntes.get(`s_${raizId(c.id)}`.slice(0, 40)) ?? audioNuevo(c);
     let id = baseId;
     for (let n = 2; usados.has(id); n++) id = `${baseId.slice(0, 34)}_${n}`;
     usados.add(id);
@@ -166,7 +167,31 @@ export function sincronizarSonido(doc, info = {}) {
     return { id, inicio_ms: c.inicio_ms, duracion_ms: c.duracion_ms, material_id: c.material_id, rol_audio: "sonido",
              recorte: { desde_ms: desde, hasta_ms: desde + c.duracion_ms }, velocidad: 1, audio: { ...audio } };
   });
+}
+
+// Mantiene `p_sonido` pegada a la principal (ver `espejar`). Si el documento
+// no la tiene, NO la crea (ver el comentario de arriba del todo); si ya no hay
+// nada que espejar (todo a otra velocidad o sin sonido), queda vacía y vuelve
+// a llenarse en cuanto lo hay.
+export function sincronizarSonido(doc, info = {}) {
+  const principal = pistaPrincipal(doc);
+  const sonido = doc.pistas.find((p) => p.id === ID_SONIDO);
+  if (!sonido || !principal || principal.tipo !== "video") return doc;
+  espejar(doc, sonido, principal, info, () => AUDIO);
   return doc;
+}
+
+// Crea `p_sonido` en un documento que no la tiene, con cada clip espejable EN
+// SILENCIO (volumen 0) salvo los que `suena(clip)` diga: lo de antes no
+// empieza a sonar solo. false si no cabe otra pista.
+function abrirSonido(doc, info, suena) {
+  if (doc.pistas.some((p) => p.id === ID_SONIDO)) return true;
+  const principal = pistaPrincipal(doc);
+  if (!principal || principal.tipo !== "video" || doc.pistas.length >= MAX_PISTAS) return false;
+  const sonido = { id: ID_SONIDO, tipo: "audio", bloqueada: false, silenciada: false, oculta: false, clips: [] };
+  doc.pistas.push(sonido);
+  espejar(doc, sonido, principal, info, (c) => (suena(c) ? AUDIO : { ...AUDIO, volumen: 0 }));
+  return true;
 }
 
 // Primera mitad de compilador.verificar_recortes: ningún clip de video
@@ -223,8 +248,8 @@ export function normalizar(doc, info = {}) {
 }
 
 // Quita las pistas no principales que quedaron sin clips (una vez borrado su
-// último clip, por ejemplo). La principal nunca se toca; `p_sonido` tampoco,
-// porque sincronizarSonido ya decide sola si existe o no.
+// último clip, por ejemplo). La principal nunca se toca; `p_sonido` tampoco:
+// vacía sigue siendo la pista del sonido de la escena (ver sincronizarSonido).
 function limpiarPistasVacias(doc) {
   const principal = pistaPrincipal(doc);
   doc.pistas = doc.pistas.filter((p) => p === principal || p.id === ID_SONIDO || p.clips.length > 0);
@@ -432,6 +457,9 @@ export function agregarVideo(doc, material, { despuesDe = null, indice = null } 
   };
   p.clips.splice(lugar, 0, clip);
   recolocar(p);
+  // Un video con sonido abre el sonido de la escena si la edición no lo
+  // tenía, pero solo para ESTE clip: los de antes entran en silencio.
+  if (tieneAudioDe(info, material.id)) abrirSonido(res, info, (c) => c === clip);
   return terminar(res, clip.id, info);
 }
 
@@ -728,16 +756,22 @@ export function cambiar(doc, clipId, cambios, info = {}) {
 // lo que suena es siempre el espejo. Primero se rehace el espejo
 // (sincronizarSonido, lo mismo que hace cualquier operación al terminar): un
 // documento recién salido del borrador nombra sus espejos s0, s1… y sin esto
-// el primer cambio de volumen diría que el clip no tiene sonido.
+// el primer cambio de volumen diría que el clip no tiene sonido. En una
+// edición sin `p_sonido` (la receta no pidió el sonido de la escena), mover
+// el volumen la crea: ese clip a lo pedido, los demás en silencio.
 export function volumenSonido(doc, clipPrincipalId, volumen, info = {}) {
   const res = structuredClone(doc);
   const p = principalDe(res);
   if (!p.clips.some((c) => c.id === clipPrincipalId)) throw new OperacionInvalida("Ese clip no está en la pista principal.");
+  const valor = acotar(numeroCambio(volumen, "volumen"), 0, 1);
+  if (!abrirSonido(res, info, (c) => c.id === clipPrincipalId)) {
+    throw new OperacionInvalida("Esta edición ya tiene demasiadas pistas: no cabe el sonido del video.");
+  }
   sincronizarSonido(res, info);
   const sonido = res.pistas.find((x) => x.id === ID_SONIDO);
   const mirror = sonido?.clips.find((c) => c.id === `s_${clipPrincipalId}`.slice(0, 40));
   if (!mirror) throw new OperacionInvalida("Ese clip no tiene sonido de la escena todavía.");
-  mirror.audio.volumen = acotar(numeroCambio(volumen, "volumen"), 0, 1);
+  mirror.audio.volumen = valor;
   return terminar(res, clipPrincipalId, info);
 }
 

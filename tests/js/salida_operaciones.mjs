@@ -85,6 +85,19 @@ anotar("cambiar_desde_propiedades", () => {
   d = op.cambiar(d, "v1", { ken_burns: null }, INFO).doc;
   return op.cambiarMezcla(d, "ambiente_protagonista", INFO);
 });
+// Fixes finales (1): un borrador sin sonido de la escena (sin p_sonido) sigue
+// sin él al editarlo; agregar un video con sonido o mover su volumen lo crea
+// solo para ese clip (los demás espejos entran en silencio).
+const sinSonido = () => {
+  const d = docBase();
+  d.pistas = d.pistas.filter((p) => p.id !== "p_sonido");
+  return d;
+};
+const INFO5 = { ...INFO, 5: { duracion_ms: 2000, tiene_audio: true } };
+anotar("sin_sonido_mover_texto", () => op.moverA(sinSonido(), "t1", 2500, INFO));
+anotar("sin_sonido_cortar", () => op.cortarEn(sinSonido(), 2000, INFO));
+anotar("sin_sonido_agregar_video", () => op.agregarVideo(sinSonido(), { id: 5 }, { despuesDe: "v0" }, INFO5), { ...D, 5: 2000 });
+anotar("sin_sonido_volumen", () => op.volumenSonido(sinSonido(), "v1", 0.4, INFO));
 
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {

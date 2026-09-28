@@ -263,3 +263,22 @@ test("motivoRechazo: el mensaje en llano de una operación que no se puede (para
   assert.match(motivoRechazo(docBase(), "editarTexto", ["t1", "   ", "es"], INFO), /vacío/);
   assert.equal(motivoRechazo(docBase(), "cambiar", ["t1", { transform: { x: 0.5 } }], INFO), null);   // sí se puede
 });
+
+// ---- Fixes finales de la capa 4b ----
+
+test("un video de una edición sin sonido de la escena muestra el volumen en 0 («Sin sonido») y se puede subir", () => {
+  const d = docBase();
+  d.pistas = d.pistas.filter((p) => p.id !== "p_sonido");      // un borrador cuya receta no pidió el sonido
+  const m = modelo(d, "v0", { info: INFO });
+  assert.equal(m.sonido.disponible, true);
+  assert.equal(m.sonido.porcentaje, 0);
+  assert.match(m.sonido.motivo, /Sin sonido/);
+  // mover el deslizador lo crea: ese clip suena, el otro sigue en 0
+  const subido = op.volumenSonido(d, "v0", 0.5, INFO).doc;
+  assert.equal(modelo(subido, "v0", { info: INFO }).sonido.porcentaje, 50);
+  assert.equal(modelo(subido, "v1", { info: INFO }).sonido.porcentaje, 0);
+  // a otra velocidad, o de un material sin sonido, sigue sin poder cambiarse
+  const lento = op.cambiarVelocidad(d, "v0", 0.5, INFO).doc;
+  assert.equal(modelo(lento, "v0", { info: INFO }).sonido.disponible, false);
+  assert.match(modelo(lento, "v0", { info: INFO }).sonido.motivo, /velocidad/);
+});
