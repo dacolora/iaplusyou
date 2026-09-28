@@ -1,0 +1,86 @@
+{# Pestaña Triple Whale (spec 2026-09-28 §8). Al cargar la página solo se pinta
+   este contenedor (contexto: `triple_whale_conectado`); el panel con la
+   evaluación llega por fetch la primera vez que se abre la pestaña
+   (triple_whale.rutas.ver_panel), así la página del proyecto no calcula nada
+   de esto al cargar. Todo el JS vive aquí: los <script> de un fragmento que
+   llega por fetch no corren. #}
+<div class="panel-cabecera">
+  <div>
+    <h2>{{ _('Triple Whale') }}</h2>
+    <p class="panel-cabecera-desc">{{ _('Todas las métricas de tus anuncios y de tu tienda según Triple Whale, una evaluación de cada anuncio (qué gana, qué pierde y por qué) y, con IA, ideas de anuncios nuevos basadas en lo que ya funciona.') }}</p>
+  </div>
+</div>
+
+{% if not triple_whale_conectado %}
+<div class="estado-vacio">
+  <p class="estado-vacio-titulo">{{ _('Conecta Triple Whale para evaluar tu contenido') }}</p>
+  <p class="estado-vacio-texto">{{ _('Apenas lo conectes traemos los últimos 90 días: gasto, impresiones, clics, vistas de 3 segundos, ThruPlays, pedidos e ingresos atribuidos por el Triple Pixel, por anuncio y por día, más las ventas de la tienda. Con eso cada anuncio recibe un veredicto (ganador, prometedor, perdedor) y un diagnóstico: gancho, retención, clic, conversión o fatiga.') }}</p>
+  <p class="estado-vacio-texto">{{ _('Después, un análisis con IA mira tus ganadores y tus perdedores, explica qué patrón se repite y propone anuncios nuevos que puedes llevar a Crear con un clic.') }}</p>
+  <a class="btn-generar btn-sm" href="#settings"
+     onclick="var b = document.querySelector('.sidebar-item[data-tab=settings]'); if (b) { b.click(); if (window.irAConfig) irAConfig('config-triple-whale'); return false; }">{{ _('Conectar en Configuración →') }}</a>
+</div>
+{% else %}
+<div id="tw-panel" data-url="{{ url_for('triple_whale.ver_panel', cliente=cliente) }}">
+  <p class="vacio">{{ _('Cargando las métricas de Triple Whale…') }}</p>
+</div>
+<script>
+  (function () {
+    var cont = document.getElementById('tw-panel');
+    var pestana = document.getElementById('tab-triplewhale');
+    if (!cont || !pestana) return;
+    var cargado = false;
+    var filtros = {};
+
+    function aplicarVeredicto(v) {
+      cont.querySelectorAll('[data-tw-filtro]').forEach(function (b) {
+        b.classList.toggle('activo', (b.dataset.twFiltro || '') === (v || ''));
+      });
+      cont.querySelectorAll('tr[data-veredicto]').forEach(function (fila) {
+        fila.hidden = !!v && fila.dataset.veredicto !== v;
+      });
+    }
+
+    function cargar() {
+      cargado = true;
+      var q = new URLSearchParams();
+      Object.keys(filtros).forEach(function (k) { if (filtros[k]) q.set(k, filtros[k]); });
+      fetch(cont.dataset.url + (q.toString() ? '?' + q.toString() : ''), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          cont.innerHTML = html;
+          cont.querySelectorAll('[data-poll-job]').forEach(function (el) {
+            if (typeof iniciarPolling === 'function') iniciarPolling(el.dataset.pollJob, el.id);
+          });
+          aplicarVeredicto('');
+        })
+        .catch(function () {
+          cont.innerHTML = '<p class="tag-error">' + {{ _('No se pudo cargar el panel de Triple Whale. Recarga la página.')|tojson }} + '</p>';
+        });
+    }
+
+    cont.addEventListener('change', function (ev) {
+      var s = ev.target.closest('select[data-tw-param]');
+      if (!s) return;
+      filtros[s.dataset.twParam] = s.value;
+      cargar();
+    });
+    cont.addEventListener('click', function (ev) {
+      var chip = ev.target.closest('[data-tw-filtro]');
+      if (chip) { aplicarVeredicto(chip.dataset.twFiltro); return; }
+      var ir = ev.target.closest('[data-ir-tab]');
+      if (ir) {
+        var btn = document.querySelector('.sidebar-item[data-tab="' + ir.dataset.irTab + '"]');
+        if (btn) { ev.preventDefault(); btn.click(); if (ir.dataset.irConfig && window.irAConfig) irAConfig(ir.dataset.irConfig); }
+      }
+    });
+    cont.addEventListener('submit', function (ev) {
+      var f = ev.target.closest('form[data-confirmar]');
+      if (f && !window.confirm(f.dataset.confirmar)) ev.preventDefault();
+    });
+
+    function siActiva() { if (!cargado && pestana.classList.contains('activo')) cargar(); }
+    siActiva();
+    new MutationObserver(siActiva).observe(pestana, { attributes: true, attributeFilter: ['class'] });
+  })();
+</script>
+{% endif %}

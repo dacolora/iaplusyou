@@ -144,9 +144,14 @@ def test_publicar_crea_campana_y_deja_pausado(base_temporal, monkeypatch):
         llamadas["adset"] = (campaign_id, objetivo, targeting, centavos, dias)
         return {"id": "s1"}
     monkeypatch.setattr(tm.meta_adset, "crear_adset", _adset)
-    monkeypatch.setattr(tm.meta_creative, "crear_creative_imagen", lambda *a, **k: {"id": "cr1"})
+    def _creative(*a, **k):
+        llamadas["url_tags"] = k.get("url_tags")
+        return {"id": "cr1"}
+    monkeypatch.setattr(tm.meta_creative, "crear_creative_imagen", _creative)
     monkeypatch.setattr(tm.meta_ad, "crear_ad", lambda nombre, adset_id, creative_id: {"id": "a1"})
     monkeypatch.setattr(tm.bitacora, "registrar", lambda *a, **k: None)
+    # Con Triple Whale conectado, el creative lleva sus parámetros de rastreo.
+    monkeypatch.setattr(tm.triple_whale_tiendas, "obtener", lambda cliente: {"dominio_tienda": "acme.myshopify.com"})
 
     msg = tm.publicar({"payload": {"cliente": "acme", "ad_id": aid, "objetivo": "OUTCOME_TRAFFIC", "presupuesto_diario": 20000.0,
                                    "dias": 3, "pais": "CO", "edad_min": 18, "edad_max": 45,
@@ -157,6 +162,7 @@ def test_publicar_crea_campana_y_deja_pausado(base_temporal, monkeypatch):
     assert llamadas["adset"][3] == 2000000 and llamadas["adset"][4] == 3   # 20000 COP -> centavos
     assert llamadas["adset"][2]["age_min"] == 18 and llamadas["adset"][2]["age_max"] == 45
     assert llamadas["limpiar"] is True
+    assert llamadas["url_tags"] == "tw_source={{site_source_name}}&tw_adid={{ad.id}}"
     assert "pausado" in msg.lower()
 
 

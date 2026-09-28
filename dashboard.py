@@ -98,6 +98,7 @@ from tareas import tiendas as tareas_tiendas
 from tareas import doctrina as tareas_doctrina
 from tareas import musica as tareas_musica
 from tareas import edicion as tareas_edicion
+from tareas import triple_whale as tareas_tw
 from final_edition import ETAPAS_FINAL, mezcla as fe_mezcla, tipos as fe_tipos
 from providers import fal_audio
 from tareas.swap import ETAPAS_SWAP_VIDEO, ETAPAS_SWAP_FOTO, ETAPAS_SWAP_FOTO_MEJORADA
@@ -205,6 +206,11 @@ app.register_blueprint(nicho_rutas.bp)
 
 from referentes import rutas as referentes_rutas  # noqa: E402  (Blueprint de la pestaña Referentes)
 app.register_blueprint(referentes_rutas.bp)
+
+from triple_whale import rutas as triple_whale_rutas  # noqa: E402  (Blueprint de la pestaña Triple Whale)
+from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda según Triple Whale, en el Tablero)
+from triple_whale import puente as triple_whale_puente  # noqa: E402  (una pieza de Crear nacida de una idea)
+app.register_blueprint(triple_whale_rutas.bp)
 
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
 app.register_blueprint(guiones_rutas.bp)
@@ -1752,6 +1758,9 @@ def ver_cliente(cliente):
         productos_tienda=productos_tienda,
         tiendas_cliente=tiendas_cliente,
         triple_whale_conectado=triple_whale_conectado,
+        tw_modelos=triple_whale.MODELOS, tw_ventanas=triple_whale.VENTANAS, tw_monedas=triple_whale.MONEDAS,
+        tw_sync_job=(tareas_tw.job_id_sync(cliente)
+                     if triple_whale_conectado and trabajos.en_curso(tareas_tw.job_id_sync(cliente)) else None),
         trabajos_prod=_trabajos_productos(cliente, tiendas_cliente, productos_tienda),
         precio_pedidos=gastos.estimar("pedidos_producto")["texto"],
         estado_pixel=estado_pixel,
@@ -4167,6 +4176,10 @@ def _grafico_tablero(serie):
             "marcas": marcas, "dias": salida, "puntos_linea": puntos}
 
 
+# La pestaña Triple Whale (Blueprint) pinta el mismo gráfico que el Tablero.
+app.extensions["grafico_tablero"] = _grafico_tablero
+
+
 @app.template_filter("dinero")
 def _filtro_dinero(valor, moneda):
     """«1.250.000 COP» / «12,50 USD» (la misma regla que las alertas)."""
@@ -4198,6 +4211,8 @@ def _calcular_tablero(cliente):
     partes = {
         "resumen": lambda: tablero.resumen_mes(cliente, ahora, datos=datos),
         "resumen_triple_whale": lambda: tablero.resumen_mes_triple_whale(cliente, ahora, datos=datos),
+        # La tienda según Triple Whale (copia local, spec 2026-09-28 §13): sin conexión es None.
+        "tienda_tw": lambda: triple_whale_panel.resumen_mes_tienda(cliente),
         "serie": lambda: tablero.serie_diaria(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "serie_triple_whale": lambda: tablero.serie_diaria_triple_whale(cliente, tablero.DIAS_SERIE, ahora, datos=datos),
         "top": lambda: tablero.top_ganadoras(cliente, datos=datos),
@@ -4244,6 +4259,7 @@ def _clave_tablero(cliente):
     el tablero pinte (snapshot del worker, propuesta del motor, estado o
     veredicto tocado por el dueño, publicación orgánica) mueve la clave."""
     ms, ep, pr, ex, pub = db.metrica_snapshot, db.experimento_pieza, db.propuesta, db.experimento, db.publicacion
+    tw = db.triple_whale
     with db.conectar() as con:
         ultimo_snap = con.execute(sa.select(sa.func.max(ms.c.id)).select_from(
             ms.join(ep, ep.c.id == ms.c.experimento_pieza_id)).where(ep.c.cliente == cliente)).scalar()
@@ -4255,7 +4271,10 @@ def _clave_tablero(cliente):
         # Bloque 7: una publicación orgánica nueva o que cambió de estado
         # mueve el tile «Ganadoras publicadas» y la alerta de ganadora sin publicar.
         publicaciones = con.execute(sa.select(sa.func.count(), sa.func.max(pub.c.actualizado_en)).where(pub.c.cliente == cliente)).first()
-    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1])
+        # La tienda según Triple Whale (spec 2026-09-28 §13): conectar,
+        # desconectar o una copia nueva mueven sus tiles.
+        triple = con.execute(sa.select(sa.func.max(tw.c.actualizado_en)).where(tw.c.cliente == cliente)).scalar()
+    return (ultimo_snap, propuestas_n, exps[0], exps[1], piezas, publicaciones[0], publicaciones[1], triple)
 
 
 def invalidar_tablero(cliente=None):
@@ -4317,7 +4336,8 @@ NOMBRES_TIPO_GASTO = {
     "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
     "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
     "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
-    "revision": idiomas.N_("Revisión de la doctrina (IA)"), "otro": idiomas.N_("Otros"),
+    "revision": idiomas.N_("Revisión de la doctrina (IA)"),
+    "evaluacion": idiomas.N_("Evaluación de anuncios (IA)"), "otro": idiomas.N_("Otros"),
 }
 
 
@@ -6819,6 +6839,12 @@ def cf_crear_video(cliente):
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma,
         preset_camara=None, plantilla=None,
     )
+    # Triple Whale: si el texto vino de «Llevar a Crear», la sesión recuerda de
+    # qué idea salió (la pestaña enlaza idea → pieza → anuncio). Un valor raro
+    # se ignora y la pieza se crea igual.
+    origen_tw = triple_whale_puente.origen_desde_formulario(cliente, request.form.get("origen_tw"))
+    if origen_tw:
+        campos["tw_idea"] = origen_tw
     directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else idiomas.N_("Tu texto, tal cual"))
     if tipo == "imagen":
         # La imagen no pasa por el director (spec §2.2): va el texto tal cual.
@@ -7148,72 +7174,111 @@ def _tomar_puerto_o_none(host, puerto):
 
 
 
-# ---- Triple Whale (atribución alternativa de Meta) ----
+# ---- Triple Whale (atribución y rendimiento; spec 2026-09-28) ----
+
+def _volver_tw(cliente):
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+
+
+def _probar_triple_whale(llave, dominio, moneda):
+    """None si la llave ve la tienda y puede consultar; si no, el motivo para
+    la persona (sin la llave)."""
+    if not triple_whale.validar_llave(llave):
+        return gettext("Triple Whale no reconoce esa llave (revocada o mal copiada).")
+    try:
+        triple_whale.probar(llave, dominio, moneda)
+    except triple_whale.ErrorTripleWhale as e:
+        return cola.sin_token(str(e))
+    return None
+
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/conectar", methods=["POST"])
 def cfg_triple_whale_conectar(cliente):
-    """Conecta o reemplaza la configuración Triple Whale del proyecto."""
-    import triple_whale
-    import triple_whale_tiendas
-    from flask import flash, redirect, url_for, request
-
-    llave = request.form.get("llave_api", "").strip()
-    dominio = request.form.get("dominio_tienda", "").strip()
+    """Prueba la llave contra la tienda (una consulta corta), la guarda
+    cifrada y encola la primera copia: los últimos 90 días de métricas."""
+    if not _mismo_origen():
+        abort(403)
+    bloqueo = _requiere_correo_verificado()
+    if bloqueo:
+        return bloqueo
+    if not cifrado.disponible():
+        flash(gettext("Falta FLASK_SECRET_KEY en el .env del servidor: sin ella no se pueden guardar credenciales "
+                      "de Triple Whale."), "error")
+        return _volver_tw(cliente)
+    llave = (request.form.get("llave_api") or "").strip()
+    dominio = triple_whale.normalizar_dominio(request.form.get("dominio_tienda"))
     if not llave or not dominio:
-        flash(gettext("Llave y dominio de tienda son requeridos."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
-
-    # Validar llave
-    if not triple_whale.validar_llave(llave):
-        flash(gettext("Llave inválida, revocada o sin scope 'Data Out'."), "error")
-        return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
-
-    moneda = request.form.get("moneda", "USD").strip().upper()
-    modelo = request.form.get("modelo_atribucion", "Triple Attribution").strip()
-    ventana = request.form.get("ventana_atribucion", "lifetime").strip()
-
-    try:
-        triple_whale_tiendas.conectar(
-            cliente, llave, dominio, moneda=moneda,
-            modelo_atribucion=modelo, ventana_atribucion=ventana
-        )
-        flash(gettext("Triple Whale conectado correctamente."), "ok")
-    except Exception as e:
-        flash(gettext("Error al conectar: %(error)s", error=str(e)), "error")
-
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+        flash(gettext("Faltan la llave o el dominio de la tienda (por ejemplo mitienda.myshopify.com)."), "error")
+        return _volver_tw(cliente)
+    moneda = triple_whale.normalizar_moneda(request.form.get("moneda"))
+    problema = _probar_triple_whale(llave, dominio, moneda)
+    if problema:
+        flash(gettext("No pude conectar Triple Whale: %(error)s", error=problema), "error")
+        return _volver_tw(cliente)
+    triple_whale_tiendas.conectar(cliente, llave, dominio, moneda=moneda,
+                                  modelo_atribucion=request.form.get("modelo_atribucion"),
+                                  ventana_atribucion=request.form.get("ventana_atribucion"))
+    tareas_tw.encolar_sync(cliente)
+    flash(gettext("Triple Whale conectado. Estamos trayendo los últimos 90 días de métricas; mira la pestaña "
+                  "Triple Whale en unos minutos."), "ok")
+    return _volver_tw(cliente)
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/probar", methods=["POST"])
 def cfg_triple_whale_probar(cliente):
-    """Prueba la conexión y lista las tiendas accesibles."""
-    import triple_whale
-    import triple_whale_tiendas
-    from flask import jsonify
-    
+    """Vuelve a probar la llave guardada contra la tienda y deja el resultado
+    en el estado de la conexión."""
+    if not _mismo_origen():
+        abort(403)
     config = triple_whale_tiendas.obtener(cliente)
     if not config:
-        return jsonify({"error": gettext("Triple Whale no configurado")}), 404
+        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
+        return _volver_tw(cliente)
+    try:
+        llave = triple_whale_tiendas.obtener_llave(cliente)
+    except cifrado.ErrorCifrado:
+        llave = None
+    problema = (_probar_triple_whale(llave, config["dominio_tienda"], config["moneda"]) if llave
+                else gettext("No se pudo leer la llave guardada: vuelve a conectar Triple Whale."))
+    if problema:
+        triple_whale_tiendas.actualizar(cliente, estado="error", error=problema)
+        flash(gettext("La conexión con Triple Whale falló: %(error)s", error=problema), "error")
+    else:
+        triple_whale_tiendas.actualizar(cliente, estado="conectada", error=None)
+        flash(gettext("Conexión con Triple Whale correcta."), "ok")
+    return _volver_tw(cliente)
 
-    llave = triple_whale_tiendas.obtener_llave(cliente)
-    if not llave:
-        return jsonify({"error": gettext("No se puede recuperar la llave (descifrado falló)")}), 500
 
-    if not triple_whale.validar_llave(llave):
-        return jsonify({"error": gettext("Llave inválida o revocada")}), 401
-    
-    return jsonify({"ok": True, "dominio": config["dominio_tienda"], "moneda": config["moneda"]})
+@app.route("/cliente/<cliente>/cfg_triple_whale/ajustes", methods=["POST"])
+def cfg_triple_whale_ajustes(cliente):
+    """Cambia moneda, modelo o ventana de atribución sin volver a pegar la
+    llave. Si algo cambió, lo copiado se borra y se vuelve a traer."""
+    if not _mismo_origen():
+        abort(403)
+    if not triple_whale_tiendas.obtener(cliente):
+        flash(gettext("Triple Whale no está conectado en este proyecto."), "error")
+        return _volver_tw(cliente)
+    if triple_whale_tiendas.cambiar_ajustes(cliente, moneda=request.form.get("moneda"),
+                                            modelo_atribucion=request.form.get("modelo_atribucion"),
+                                            ventana_atribucion=request.form.get("ventana_atribucion")):
+        tareas_tw.encolar_sync(cliente)
+        flash(gettext("Ajustes guardados. Volvemos a traer las métricas con la nueva atribución."), "ok")
+    else:
+        flash(gettext("No cambiaste nada."), "ok")
+    return _volver_tw(cliente)
 
 
 @app.route("/cliente/<cliente>/cfg_triple_whale/desconectar", methods=["POST"])
 def cfg_triple_whale_desconectar(cliente):
-    """Desconecta Triple Whale del proyecto."""
-    import triple_whale_tiendas
-    from flask import flash, redirect, url_for
-
+    """Quita la conexión y las métricas copiadas (las evaluaciones con IA ya
+    pagadas se conservan)."""
+    if not _mismo_origen():
+        abort(403)
     triple_whale_tiendas.desconectar(cliente)
-    flash(gettext("Triple Whale desconectado."), "ok")
-    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="config-triple-whale"))
+    flash(gettext("Triple Whale desconectado. Se borraron las métricas copiadas; las evaluaciones con IA se "
+                  "conservan."), "ok")
+    return _volver_tw(cliente)
+
 
 if __name__ == "__main__":
     _candado = _tomar_puerto_o_none(HOST, PUERTO)

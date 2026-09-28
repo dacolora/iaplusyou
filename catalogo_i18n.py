@@ -24,7 +24,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PO = os.path.join(idiomas.DIR_TRADUCCIONES, "en", "LC_MESSAGES", "messages.po")
 MO = os.path.join(idiomas.DIR_TRADUCCIONES, "en", "LC_MESSAGES", "messages.mo")
 PAQUETES = ("auth", "conectores", "doctrina", "final_edition", "guiones", "meta_ads", "nicho",
-            "providers", "referentes", "sprints", "storage", "tareas", "uploaders")
+            "providers", "referentes", "sprints", "storage", "tareas", "triple_whale", "uploaders")
 PALABRAS = {"_": None, "gettext": None, "ngettext": (1, 2), "N_": None}
 
 

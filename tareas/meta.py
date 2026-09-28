@@ -24,6 +24,7 @@ import ads
 import bitacora
 import db
 import meta_conexion
+import triple_whale_tiendas
 from meta_ads import ad as meta_ad, adset as meta_adset, auth as meta_auth, campaign as meta_campaign
 from meta_ads import creative as meta_creative, insights as meta_insights
 from meta_ads.targeting import Targeting
@@ -137,10 +138,12 @@ def publicar(tarea):
             adset_id = adset_resp["id"]
 
             ig_user_id = creds["ig_user_id"]
+            # Parámetros de rastreo de Triple Whale si el proyecto lo conectó.
+            kw_tags = triple_whale_tiendas.kw_url_tags(cliente)
             if entry["contenido_tipo"] == "foto":
                 creative_resp = meta_creative.crear_creative_imagen(
                     f"{entry['nombre']} — creative", entry["contenido_url"], entry["nombre"],
-                    link=destino_url, instagram_user_id=ig_user_id,
+                    link=destino_url, instagram_user_id=ig_user_id, **kw_tags,
                 )
             else:
                 # El video se sube a la cuenta publicitaria (advideos) y se
@@ -149,7 +152,7 @@ def publicar(tarea):
                 miniatura_url = _miniatura_para_ad(cliente, ad_id, entry["contenido_url"])
                 creative_resp = meta_creative.crear_creative_video(
                     f"{entry['nombre']} — creative", meta_video_id, miniatura_url,
-                    entry["nombre"], destino_url, instagram_user_id=ig_user_id,
+                    entry["nombre"], destino_url, instagram_user_id=ig_user_id, **kw_tags,
                 )
                 ads.actualizar(cliente, ad_id, meta_video_id=meta_video_id)
             creative_id = creative_resp["id"]
