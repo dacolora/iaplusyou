@@ -217,6 +217,16 @@ def test_listar_trae_materiales_y_piezas_del_proyecto(entorno):
     assert pieza["material_id"] is None and pieza["preparando"] is False
 
 
+def test_listar_trae_el_logo_del_proyecto(entorno):
+    """Fix final 9: el logo del proyecto se guarda con origen «marca»
+    (insumos.logo), no «logo»: la biblioteca lo tiene que listar."""
+    import materiales
+    logo = materiales.registrar("acme", tipo="imagen", origen="marca", url="https://r2/logo.png", hash="hl", bytes=1,
+                                ancho=200, alto=100, extra={"nombre": "logo.png"})
+    assert [m["id"] for m in entorno.listar("acme")["materiales"]] == [logo["id"]]
+    assert entorno.listar("acme")["materiales"][0]["origen"] == "marca"
+
+
 def test_listar_marca_material_id_y_preparando(entorno, monkeypatch):
     import creative_flow
     import materiales

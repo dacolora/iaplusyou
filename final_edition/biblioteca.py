@@ -33,8 +33,9 @@ EXTENSIONES = {
 }
 # Materiales que la persona puede arrastrar al lienzo: nunca los efímeros
 # (png_texto, proxy, tira, forma_onda — `materiales.EFIMEROS`) ni una voz
-# sintetizada de un guion que no le pertenece a ella todavía.
-ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "logo")
+# sintetizada de un guion que no le pertenece a ella todavía. El logo del
+# proyecto se guarda con origen «marca» (`insumos.logo`).
+ORIGENES_BIBLIOTECA = ("subida", "crear", "musica", "voz", "marca")
 TOPE_MATERIALES = 200
 
 

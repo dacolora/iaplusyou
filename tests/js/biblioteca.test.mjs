@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  aceptarPara, duracionTexto, faltaPreparar, miniatura, mensajeSubida, repartir, revisarArchivo, tipoDeArchivo,
+  aceptarPara, duracionTexto, faltaPreparar, miniatura, mensajeSubida, nombreDe, repartir, revisarArchivo, tipoDeArchivo,
   TEXTOS_BIBLIOTECA, TRANSICIONES_BIBLIOTECA, urlPieza,
 } from "../../static/editor/biblioteca.js";
 import * as op from "../../static/editor/operaciones.js";
@@ -48,7 +48,7 @@ test("repartir: medios sin las piezas de Crear (van en su sección), audios subi
     materiales: [
       video(5, { origen: "crear" }),                                   // ya es la pieza cf1: se muestra en «Videos de Crear»
       video(4),
-      { id: 3, tipo: "imagen", url: "https://r2/f.png", ancho: 600, alto: 400, origen: "logo", nombre: null },
+      { id: 3, tipo: "imagen", url: "https://r2/f.png", ancho: 600, alto: 400, origen: "marca", nombre: null },   // el logo (insumos.logo)
       { id: 2, tipo: "audio", url: "https://r2/a.mp3", duracion_ms: 60000, origen: "musica", nombre: "Canción" },
       { id: 1, tipo: "audio", url: "https://r2/voz.wav", duracion_ms: 3000, origen: "voz", nombre: null },   // una voz de guion: no
       { id: 6, tipo: "audio", url: "https://r2/s.wav", duracion_ms: 3000, origen: "subida", nombre: "Risa" },
@@ -178,4 +178,11 @@ test("_revisarPiezas: la pieza pedida se agrega sola al tener material; la que f
   assert.deepEqual(dichos, [["No se pudo preparar «B». Vuelve a intentar.", true]]);
   assert.deepEqual([...falsa.preparando.keys()], ["cfC"]);
   assert.equal(falsa.datos.piezas.length, 3);
+});
+
+test("nombreDe: el logo del proyecto (origen «marca», el de insumos.logo) se llama «Logo»", () => {
+  assert.equal(nombreDe({ tipo: "imagen", origen: "marca", nombre: null }), "Logo");
+  assert.equal(nombreDe({ tipo: "imagen", origen: "marca", nombre: "logo.png" }), "logo.png");
+  assert.equal(nombreDe({ tipo: "imagen", origen: "subida", nombre: null }), "Imagen");
+  assert.equal(nombreDe({ tipo: "audio", origen: "musica" }), "Canción");
 });

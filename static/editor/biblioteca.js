@@ -196,9 +196,11 @@ function icono(nombre, tam = 16) {
 const cssUrl = (url) => `url("${String(url).replace(/["\\\n]/g, encodeURIComponent)}")`;
 const tieneArchivos = (e) => [...(e.dataTransfer?.types ?? [])].includes("Files");
 
-function nombreDe(m) {
+// El nombre de un material en la biblioteca: el suyo, o uno según qué es (el
+// logo del proyecto tiene origen «marca», el de insumos.logo).
+export function nombreDe(m) {
   if (m?.nombre) return String(m.nombre);
-  if (m?.tipo === "imagen") return m.origen === "logo" ? "Logo" : "Imagen";
+  if (m?.tipo === "imagen") return m.origen === "marca" ? "Logo" : "Imagen";
   if (m?.tipo === "audio") return m.origen === "musica" ? "Canción" : "Audio";
   return m?.origen === "crear" ? "Video de Crear" : "Video";
 }
