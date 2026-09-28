@@ -479,3 +479,36 @@ test("p_sonido sin nada que espejar queda vacía (no se borra) y vuelve a sonar 
   const vuelve = op.cambiarVelocidad(mudo, "v0", 1, INFO).doc;
   assert.deepEqual(vuelve.pistas.find((p) => p.id === "p_sonido").clips.map((c) => c.id), ["s_v0"]);
 });
+
+// Nada de lo que se agrega alarga el video: el fin es el de la principal
+// (docBase: 8 s). Más allá, el render congela el último cuadro.
+const finDoc = (d) => Math.max(...d.pistas.flatMap((p) => p.clips.map((c) => c.inicio_ms + c.duracion_ms)));
+const INFO_LARGO = { ...INFO, 6: { duracion_ms: 60000 } };
+
+test("agregarAudio: la música y los efectos terminan donde termina el video", () => {
+  const cancion = puro((d) => op.agregarAudio(d, { id: 6 }, 7000, { rol: "musica" }, INFO_LARGO));
+  const c = clipDe(cancion.doc, cancion.seleccion);
+  assert.deepEqual([c.inicio_ms, c.duracion_ms, c.recorte.desde_ms, c.recorte.hasta_ms], [7000, 1000, 0, 1000]);
+  assert.equal(finDoc(cancion.doc), 8000);
+  const ef = op.agregarAudio(docBase(), { id: 2 }, 6000, { rol: "efecto" }, INFO);      // un efecto de 3 s a los 6 s
+  const efecto = clipDe(ef.doc, ef.seleccion);
+  assert.deepEqual([efecto.inicio_ms, efecto.duracion_ms, efecto.recorte.hasta_ms], [6000, 2000, 2000]);
+  // con el cabezal al final, la canción entra desde donde quepa entera: todo el video
+  const alFinal = op.agregarAudio(docBase(), { id: 6 }, 8000, { rol: "musica" }, INFO_LARGO);
+  const f = clipDe(alFinal.doc, alFinal.seleccion);
+  assert.deepEqual([f.inicio_ms, f.duracion_ms], [0, 8000]);
+  assert.equal(finDoc(alFinal.doc), 8000);
+});
+
+test("agregarTexto y agregarImagen con el cabezal al final: 3 s que terminan al final; más adentro, se acortan", () => {
+  const titulo = op.agregarTexto(docBase(), 8000, "titulo", INFO);
+  const t = clipDe(titulo.doc, titulo.seleccion);
+  assert.deepEqual([t.inicio_ms, t.duracion_ms], [5000, 3000]);
+  const casi = op.agregarTexto(docBase(), 7950, "subtitulo", INFO);            // a menos de MIN_CLIP_MS del final
+  assert.deepEqual([clipDe(casi.doc, casi.seleccion).inicio_ms, clipDe(casi.doc, casi.seleccion).duracion_ms], [5000, 3000]);
+  const img = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 7000, {}, INFO);
+  assert.deepEqual([clipDe(img.doc, img.seleccion).inicio_ms, clipDe(img.doc, img.seleccion).duracion_ms], [7000, 1000]);
+  const imgFin = op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 9000, { duracionMs: 12000 }, INFO);
+  assert.deepEqual([clipDe(imgFin.doc, imgFin.seleccion).inicio_ms, clipDe(imgFin.doc, imgFin.seleccion).duracion_ms], [0, 8000]);
+  for (const r of [titulo, casi, img, imgFin]) assert.equal(finDoc(r.doc), 8000);
+});

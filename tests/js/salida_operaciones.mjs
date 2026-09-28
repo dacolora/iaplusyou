@@ -98,6 +98,13 @@ anotar("sin_sonido_mover_texto", () => op.moverA(sinSonido(), "t1", 2500, INFO))
 anotar("sin_sonido_cortar", () => op.cortarEn(sinSonido(), 2000, INFO));
 anotar("sin_sonido_agregar_video", () => op.agregarVideo(sinSonido(), { id: 5 }, { despuesDe: "v0" }, INFO5), { ...D, 5: 2000 });
 anotar("sin_sonido_volumen", () => op.volumenSonido(sinSonido(), "v1", 0.4, INFO));
+// Fixes finales (2): lo que se agrega no alarga el video (termina con la principal, 8 s).
+const INFO_LARGO = { ...INFO, 6: { duracion_ms: 60000 } };
+anotar("agregar_musica_larga_cerca_del_final", () => op.agregarAudio(docBase(), { id: 6 }, 7000, { rol: "musica" }, INFO_LARGO), { ...D, 6: 60000 });
+anotar("agregar_musica_larga_al_final", () => op.agregarAudio(docBase(), { id: 6 }, 8000, { rol: "musica" }, INFO_LARGO), { ...D, 6: 60000 });
+anotar("agregar_efecto_cerca_del_final", () => op.agregarAudio(docBase(), { id: 2 }, 6000, { rol: "efecto" }, INFO));
+anotar("agregar_titulo_al_final", () => op.agregarTexto(docBase(), 8000, "titulo", INFO));
+anotar("agregar_imagen_despues_del_final", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 9000, { duracionMs: 12000 }, INFO));
 
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {

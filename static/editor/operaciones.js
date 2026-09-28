@@ -431,6 +431,22 @@ export function cambiarVelocidad(doc, clipId, velocidad, info = {}) {
 
 // ---- Agregar (capa 4b) --------------------------------------------------
 
+// Dónde entra una capa nueva (imagen, texto, música, efecto) sin alargar el
+// video: el fin de la edición es el de la principal (más allá, el render
+// congela el último cuadro). La capa dura como mucho lo que queda desde `t`
+// hasta ese fin; con el cabezal al final (a menos de MIN_CLIP_MS), entra
+// entera terminando ahí (desde `fin − dur`, nunca antes de 0).
+function lugarCapa(doc, tMs, dMs) {
+  let t = Math.max(0, Math.round(Number(tMs) || 0));
+  let dur = Math.max(1, Math.round(Number(dMs) || 0));
+  const p = pistaPrincipal(doc);
+  const fin = p && p.tipo === "video" ? p.clips.reduce((m, c) => Math.max(m, c.inicio_ms + c.duracion_ms), 0) : 0;
+  if (fin <= 0) return { t, dur };
+  if (t >= fin - MIN_CLIP_MS) t = Math.max(0, fin - dur);
+  dur = Math.max(1, Math.min(dur, fin - t));
+  return { t, dur };
+}
+
 // Inserta un clip del material ENTERO (recorte 0..duración, velocidad 1, sin
 // transición, sin Ken Burns) en la principal, después del clip `despuesDe`, o
 // en el lugar `indice` (0 = primero; la biblioteca lo usa al soltar un video
@@ -464,7 +480,8 @@ export function agregarVideo(doc, material, { despuesDe = null, indice = null } 
 }
 
 // Capa de imagen en `tMs` (el material entero, sin recorte propio: una
-// imagen no tiene tiempo de fuente). Centrada; sin `llenar`, a lo ancho del
+// imagen no tiene tiempo de fuente), de `duracionMs` sin pasar del fin del
+// video (`lugarCapa`). Centrada; sin `llenar`, a lo ancho del
 // 60 % del lienzo; con `llenar`, a cubrirlo entero (cover: el mayor de los
 // dos factores). La escala multiplica el tamaño natural del material
 // (`ancho`/`alto`) — sin esas medidas cae al tamaño por defecto de una capa
@@ -472,8 +489,7 @@ export function agregarVideo(doc, material, { despuesDe = null, indice = null } 
 // medidas conocidas.
 export function agregarImagen(doc, material, tMs, { llenar = false, duracionMs = 3000 } = {}, info = {}) {
   const res = structuredClone(doc);
-  const t = Math.max(0, Math.round(Number(tMs) || 0));
-  const dur = Math.max(MIN_CLIP_MS, Math.round(Number(duracionMs) || 3000));
+  const { t, dur } = lugarCapa(res, tMs, Math.max(MIN_CLIP_MS, Math.round(Number(duracionMs) || 3000)));
   const pista = pistaLibre(res, "imagen", "p_imagen", t, dur);
   const [anchoLienzo, altoLienzo] = FORMATOS[res.formato];
   const tieneMedidas = Number(material?.ancho) > 0 && Number(material?.alto) > 0;
@@ -491,17 +507,18 @@ export function agregarImagen(doc, material, tMs, { llenar = false, duracionMs =
   return terminar(res, clip.id, info);
 }
 
-// Clip de audio del material ENTERO en una pista audio libre (nunca
-// p_sonido, que es solo para el espejo automático de la escena). `rol`
+// Clip de audio del material entero (hasta el fin del video: `lugarCapa`)
+// en una pista audio libre (nunca p_sonido, que es solo para el espejo
+// automático de la escena). `rol`
 // musica o efecto — una voz se agrega con su propio flujo (director/guion),
 // no aquí. La música entra con un fundido de salida de 1 s; un efecto no
 // trae fundidos.
 export function agregarAudio(doc, material, tMs, { rol = "musica" } = {}, info = {}) {
   const res = structuredClone(doc);
   if (rol !== "musica" && rol !== "efecto") throw new OperacionInvalida(`Ese rol de audio no se agrega a mano (${rol}).`);
-  const t = Math.max(0, Math.round(Number(tMs) || 0));
-  const dur = duracionDe(info, material.id);
-  if (dur === undefined || dur === null) throw new OperacionInvalida("Ese audio todavía se está preparando.");
+  const entero = duracionDe(info, material.id);
+  if (entero === undefined || entero === null) throw new OperacionInvalida("Ese audio todavía se está preparando.");
+  const { t, dur } = lugarCapa(res, tMs, entero);
   const pista = pistaLibre(res, "audio", "p_audio", t, dur, [ID_SONIDO]);
   const clip = {
     id: idNuevo(res, "audio"), inicio_ms: t, duracion_ms: dur, material_id: material.id, rol_audio: rol,
@@ -525,14 +542,14 @@ const PRESETS_TEXTO = {
 };
 
 // Un texto nuevo, literal («Escribe aquí», o «$ 0» para el preset precio),
-// de 3 s, en una pista de texto libre. `estilo.tamano` es px/altura del
+// de 3 s (sin pasar del fin del video: `lugarCapa`), en una pista de texto
+// libre. `estilo.tamano` es px/altura del
 // lienzo, como pide documento.py (fracción de la altura).
 export function agregarTexto(doc, tMs, preset, info = {}) {
   const res = structuredClone(doc);
   const def = PRESETS_TEXTO[preset];
   if (!def) throw new OperacionInvalida(`Ese estilo de texto no existe (${preset}).`);
-  const t = Math.max(0, Math.round(Number(tMs) || 0));
-  const dur = 3000;
+  const { t, dur } = lugarCapa(res, tMs, 3000);
   const [, altoLienzo] = FORMATOS[res.formato];
   const pista = pistaLibre(res, "texto", "p_texto", t, dur);
   const estilo = {
