@@ -901,8 +901,28 @@ lo vuelven a bajar), `cola_limpiar` purga las `tarea` cerradas (7 días; periód
 `db_respaldar` guarda `data/respaldos/creatv_<fecha>.db` (`Connection.backup`, 7 copias). Sigue
 pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones viejas de finales,
 `materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`),
-`metrica_snapshot` inserta cada 2 h aunque nada cambie, y la carga por fragmentos de las pestañas
-pesadas.
+`metrica_snapshot` inserta cada 2 h aunque nada cambie.
+**Tarjetas ligeras y detalle bajo demanda** (spec
+`docs/superpowers/specs/2026-09-28-tarjetas-ligeras-detalle-bajo-demanda-design.md`): el 61 % de
+la página eran los `<template class="generado-detalle">` de Crear y Final edition (1,86 MB de 3,03).
+Ya no existen: las tarjetas son macros (`_crear_tarjetas.html`: `tarjeta_crear`/`lista_crear`;
+`_final_tarjetas.html`: `tarjeta_video_fe`/`tarjeta_final_fe`/`lista_videos_fe`/`lista_finales_fe`),
+la página pinta las 24 más recientes por lista (`TARJETAS_POR_PAGINA`, `_listas_crear_final`; los
+contadores muestran el total) y «Ver más» pide las siguientes a `crear_tarjetas` /
+`final_tarjetas?lista=videos|finales` (`?desde=N`, `_pagina_desde`). El detalle llega por fetch al
+abrir la tarjeta (`data-detalle` → `cf_detalle`, `fe_detalle_video`, `fe_detalle_final`; macros en
+`_crear_detalle.html` / `_final_detalle.html`, armadas con `_creative_flow_item(cliente, cf_id)` y
+`_contexto_final_edition(cliente)`, que incluye `_contexto_organico`), nunca se cachea, y
+`base.html` lo pinta con `abrirDetalleRemoto(modal, cuerpo, url, alInsertar)` («Cargando…» al
+instante, solo el último pedido gana). `#final?cf=<id>` abre la pieza aunque no esté pintada.
+Reglas: **ninguna barra de progreso lleva `<script>`** — todas `data-poll-job="<job_id>"` sobre el
+`div.barra-progreso#trabajo-<job_id>` y `arrancarSondeos(raiz)` (DOMContentLoaded + el
+MutationObserver de `data-precarga`) arranca el sondeo de lo que aparezca; los clics de tarjetas
+van delegados sobre la cuadrícula (las agregadas por «Ver más» funcionan igual); el sondeo se pausa
+con `document.hidden` y baja de ritmo (`intervaloSondeo`: 1,5 s → 3 s al minuto → 5 s a los 5 min).
+`tests/test_tarjetas_ligeras.py` y `test_perf_pagina_proyecto.py` vigilan todo esto. Fuera de
+alcance (anotado en el spec §7): el JS embebido a estáticos, Catálogo/Experimentos por fragmentos,
+el chequeo de Meta en la carga, los N+1 de Sprints/Experimentos, el flujo viejo «Nueva idea».
 
 ## Agent skills
 
