@@ -1,31 +1,63 @@
-// Página del editor (capa 4a): une la vista previa, la línea de tiempo, las
-// operaciones con deshacer/rehacer, el autoguardado y «Producir». Cada
+// Página del editor (capas 4a y 4b): une la vista previa, la línea de tiempo,
+// las operaciones con deshacer/rehacer, el autoguardado y «Producir». Cada
 // operación sale de operaciones.js (pura); si es inválida se muestra su
 // mensaje y nada cambia. Si otra pestaña guardó antes («conflicto»), el
 // guardado se detiene y la página ya no deja editar: lo que se hiciera aquí
 // no se podría guardar; se ofrece recargar.
+//
+// Capa 4b: la disposición tipo CapCut (editor.html) — biblioteca |
+// reproductor | propiedades, y abajo las herramientas y la línea de tiempo; en
+// el celular la biblioteca y las propiedades son hojas que suben desde abajo
+// (`#ed-abrir-*`, «Listo»). Los módulos que llenan esos paneles (biblioteca,
+// propiedades, tocar sobre el video) se enganchan SOLO por `editor`, el objeto
+// de abajo: así ninguno toca al otro ni a la historia, el guardado o la vista.
+//
+//   editor.operar(nombre, ...args)          una operación de operaciones.js; la
+//                                           página agrega `info()` al final.
+//                                           Devuelve true si se aplicó (aunque
+//                                           no cambiara nada), false si no.
+//   editor.operarCon({clave}, nombre, ...)  igual, fusionando en UN deshacer los
+//                                           pasos seguidos con la misma clave
+//                                           (un deslizador: "<clipId>:<campo>")
+//   editor.seleccionar(id | null)           elige un clip (y lo marca en la línea)
+//   editor.seleccion                        el id elegido, o null
+//   editor.doc()                            el documento actual (no se toca: las
+//                                           operaciones devuelven uno nuevo)
+//   editor.tiempo()                         el cabezal, en ms
+//   editor.destino()                        "<idioma>_<PAIS>" que se está viendo
+//   editor.info()                           {id: {duracion_ms, tiene_audio}}
+//   editor.agregarMateriales(mapa)          suma materiales (forma de
+//                                           material_para) a la vista previa
+//                                           ANTES de operar con ellos
+//   editor.escuchar(fn) -> dejar()          fn(que) después de cada cambio:
+//                                           "documento" | "seleccion" |
+//                                           "materiales" | "destino" | "tiempo"
 import { Guardado } from "./guardado.js";
 import { Historial } from "./historial.js";
 import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
-import { VistaPrevia } from "./vista.js";
+import { infoDe, VistaPrevia } from "./vista.js";
 
 const datos = JSON.parse(document.getElementById("datos-editor").textContent);
 const $ = (id) => document.getElementById(id);
 const historial = new Historial(datos.documento);
 let seleccion = null;
+const oyentes = new Set();
 
 const vista = new VistaPrevia({
   datos,
-  alCambiarTiempo: (t, reproduciendo) => linea.moverCabezal(t, { seguir: reproduciendo }),
-  alCambiarMateriales: () => refrescar(false),
+  alCambiarTiempo: (t, reproduciendo) => {
+    linea.moverCabezal(t, { seguir: reproduciendo });
+    notificar("tiempo");
+  },
+  alCambiarMateriales: () => refrescar(false, "materiales"),
 });
 const linea = new LineaTiempo({
   contenedor: $("linea"),
   zoom: $("linea-zoom"),
   materiales: () => vista.materiales,
   destino: () => vista.destino,
-  alSeleccionar: (id) => { seleccion = id; refrescar(false); },
+  alSeleccionar: (id) => seleccionar(id),
   alOperar: operar,
   alIr: (t) => {
     vista.ir(t);
@@ -42,10 +74,25 @@ const TEXTO_GUARDADO = {
   conflicto: (m) => m,
 };
 
-function duraciones() {
-  const out = {};
-  for (const [k, m] of Object.entries(vista.materiales)) if (m?.duracion_ms) out[k] = m.duracion_ms;
-  return out;
+// El último argumento de cada operación: {id: {duracion_ms, tiene_audio}}.
+function info() {
+  return infoDe(vista.materiales);
+}
+
+// Un módulo que falla al escuchar no rompe la página ni a los demás.
+function notificar(que) {
+  for (const fn of [...oyentes]) {
+    try {
+      fn(que);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+}
+
+function escuchar(fn) {
+  oyentes.add(fn);
+  return () => oyentes.delete(fn);
 }
 
 function aviso(texto) {
@@ -81,11 +128,17 @@ function pintarHerramientas() {
   $("h-velocidad").value = String(esVideo ? Number(sel.clip.velocidad ?? 1) : 1);
 }
 
-function refrescar(docCambio = true) {
+function refrescar(docCambio = true, que = docCambio ? "documento" : "seleccion") {
   if (docCambio) vista.setDocumento(historial.actual);
   if (seleccion && !buscarClip(seleccion)) seleccion = null;
   linea.dibujar(historial.actual, { seleccion, cabezalMs: vista.tiempo() });
   pintarHerramientas();
+  notificar(que);
+}
+
+function seleccionar(id) {
+  seleccion = id ?? null;
+  refrescar(false, "seleccion");
 }
 
 // En conflicto no se edita: nada de lo que se haga se podría guardar.
@@ -96,29 +149,36 @@ function editable() {
 }
 
 function operar(nombre, ...args) {
+  return operarCon({}, nombre, ...args);
+}
+
+// `clave`: pasos seguidos con la misma clave quedan en UN deshacer
+// (Historial.aplicar); sin clave cada operación es su propio paso.
+function operarCon({ clave = null } = {}, nombre, ...args) {
   if (!editable()) {
     refrescar(false);
-    return;
+    return false;
   }
   let res;
   try {
-    res = operaciones[nombre](historial.actual, ...args, duraciones());
+    res = operaciones[nombre](historial.actual, ...args, info());
   } catch (e) {
     const invalida = e.name === "OperacionInvalida";
     if (!invalida) console.error(e);
     aviso(invalida ? e.message : `No se pudo hacer ese cambio (${e.message}). La edición quedó como estaba.`);
     refrescar(false);
-    return;
+    return false;
   }
   aviso("");
   seleccion = res.seleccion;
   if (JSON.stringify(res.doc) === JSON.stringify(historial.actual)) {   // nada cambió: ni historial ni guardado
     refrescar(false);
-    return;
+    return true;
   }
-  historial.aplicar(res.doc);
+  historial.aplicar(res.doc, { clave });
   refrescar();
   guardado.pedir(res.doc);
+  return true;
 }
 
 function deshacer() {
@@ -165,7 +225,13 @@ function montarHerramientas() {
   $("recargar").addEventListener("click", () => location.reload());
   // Espacio y flechas son de la vista previa (vista.js); estas, de la edición.
   document.addEventListener("keydown", (e) => {
-    if ($("producir-dialogo").open || e.target.closest?.("input, select, textarea")) return;
+    if ($("producir-dialogo").open) return;
+    if (e.key === "Escape" && hojaAbierta) {        // celular: Esc baja la hoja abierta
+      e.preventDefault();
+      cerrarHoja();
+      return;
+    }
+    if (e.target.closest?.("input, select, textarea")) return;
     const tecla = (e.key || "").toLowerCase();
     const mod = e.metaKey || e.ctrlKey;
     if (mod && tecla === "z") {
@@ -288,11 +354,107 @@ function montarProducir() {
   }
 }
 
+// ---- Disposición (capa 4b) ----
+// Las pestañas de la biblioteca (Medios · Audio · Texto · Transiciones) solo
+// marcan cuál está elegida; qué muestra cada una es de la biblioteca. En el
+// celular, los botones de abajo abren la hoja (y, los de la biblioteca, tocan
+// su pestaña: quien atienda las pestañas se entera igual que con un clic).
+let hojaAbierta = null;      // "ed-biblioteca" | "ed-propiedades" | null
+let abridor = null;          // el botón que la abrió: el foco vuelve ahí
+
+function pestanas() {
+  return [...$("ed-pestanas-biblioteca").querySelectorAll("[data-panel]")];
+}
+
+function marcarPestana(boton) {
+  for (const b of pestanas()) {
+    const elegida = b === boton;
+    b.setAttribute("aria-selected", String(elegida));
+    b.tabIndex = elegida ? 0 : -1;
+  }
+  $("ed-biblioteca").dataset.panelActivo = boton.dataset.panel;
+  pintarAcciones();
+}
+
+function pintarAcciones() {
+  const panel = $("ed-biblioteca").dataset.panelActivo;
+  for (const b of document.querySelectorAll("[data-abrir-hoja]")) {
+    const abierta = hojaAbierta === b.dataset.abrirHoja;
+    b.setAttribute("aria-expanded", String(abierta));
+    b.classList.toggle("ed-activa", abierta && (!b.dataset.abrirPanel || b.dataset.abrirPanel === panel));
+  }
+}
+
+function abrirHoja(id, desde) {
+  hojaAbierta = id;
+  abridor = desde;
+  for (const h of ["ed-biblioteca", "ed-propiedades"]) $(h).classList.toggle("ed-hoja-abierta", h === id);
+  pintarAcciones();
+  $(id).focus({ preventScroll: true });
+}
+
+function cerrarHoja() {
+  const volver = abridor;
+  hojaAbierta = null;
+  abridor = null;
+  for (const h of ["ed-biblioteca", "ed-propiedades"]) $(h).classList.remove("ed-hoja-abierta");
+  pintarAcciones();
+  volver?.focus({ preventScroll: true });
+}
+
+function montarDisposicion() {
+  const lista = $("ed-pestanas-biblioteca");
+  lista.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-panel]");
+    if (b) marcarPestana(b);
+  });
+  // flechas entre pestañas (el patrón de pestañas: una sola entra con Tab)
+  lista.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const todas = pestanas();
+    const i = todas.indexOf(e.target.closest("[data-panel]"));
+    if (i < 0) return;
+    e.preventDefault();
+    const otra = todas[(i + (e.key === "ArrowRight" ? 1 : -1) + todas.length) % todas.length];
+    otra.focus();
+    otra.click();
+  });
+  for (const b of document.querySelectorAll("[data-abrir-hoja]")) {
+    b.addEventListener("click", () => {
+      const panel = b.dataset.abrirPanel;
+      const yaAbierta = hojaAbierta === b.dataset.abrirHoja
+        && (!panel || $("ed-biblioteca").dataset.panelActivo === panel);
+      if (yaAbierta) return cerrarHoja();        // tocar otra vez el mismo botón la baja
+      if (panel) lista.querySelector(`[data-panel="${panel}"]`)?.click();
+      abrirHoja(b.dataset.abrirHoja, b);
+    });
+  }
+  for (const b of document.querySelectorAll("[data-cerrar-hoja]")) b.addEventListener("click", cerrarHoja);
+}
+
+// La única puerta para los módulos de la capa 4b (ver el comentario de arriba):
+// las tareas 5–8 se lo pasan a sus módulos al crearlos, aquí abajo.
+const editor = Object.freeze({
+  operar,
+  operarCon,
+  seleccionar,
+  get seleccion() {
+    return seleccion;
+  },
+  doc: () => historial.actual,
+  tiempo: () => vista.tiempo(),
+  destino: () => vista.destino,
+  info,
+  agregarMateriales: (mapa) => vista.agregarMateriales(mapa),
+  escuchar,
+});
+
 montarHerramientas();
 montarProducir();
+montarDisposicion();
 refrescar(false);          // la línea se ve ya, aunque las fuentes tarden en cargar
 await vista.iniciar();
 refrescar(false);          // con el reloj listo: el cabezal donde está
 // otro destino: los textos variables de la línea cambian (vista.js ya escucha
 // este select desde iniciar(), así que cuando esto corre el destino ya cambió)
-$("destino").addEventListener("change", () => refrescar(false));
+$("destino").addEventListener("change", () => refrescar(false, "destino"));

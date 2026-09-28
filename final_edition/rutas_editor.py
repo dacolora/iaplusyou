@@ -40,7 +40,13 @@ def ver(cliente, edicion_id):
     urls = {"materiales": url_for("editor.materiales_json", cliente=cliente, edicion_id=edicion_id),
             "guardar": url_for("editor.guardar", cliente=cliente, edicion_id=edicion_id),
             "producir": url_for("editor.producir", cliente=cliente, edicion_id=edicion_id),
-            "final": base + "#final" + (f"?cf={ed['cf_id']}" if ed.get("cf_id") else "")}
+            "final": base + "#final" + (f"?cf={ed['cf_id']}" if ed.get("cf_id") else ""),
+            # capa 4b: la biblioteca del proyecto; `agregar_pieza` lleva `__CF__`
+            # donde el navegador pone el id de la pieza de Crear
+            "biblioteca": url_for("editor.biblioteca", cliente=cliente),
+            "subir": url_for("editor.subir", cliente=cliente),
+            "agregar_pieza": url_for("editor.agregar_pieza", cliente=cliente, cf_id="__CF__"),
+            "materiales_por_id": url_for("editor.materiales_por_id", cliente=cliente)}
     datos = vista_previa.datos_pagina(cliente, ed, urls)
     vista_previa.encolar_proxies(cliente, datos["pendientes"])
     return render_template("editor.html", cliente=cliente, edicion=ed, datos=datos)

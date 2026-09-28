@@ -85,7 +85,12 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     assert datos["urls"] == {"materiales": f"/cliente/acme/ediciones/{ed['id']}/materiales",
                              "guardar": f"/cliente/acme/ediciones/{ed['id']}",
                              "producir": f"/cliente/acme/ediciones/{ed['id']}/producir",
-                             "final": "/cliente/acme#final"}
+                             "final": "/cliente/acme#final",
+                             # capa 4b: la biblioteca del proyecto (Task 1)
+                             "biblioteca": "/cliente/acme/ediciones/biblioteca",
+                             "subir": "/cliente/acme/ediciones/materiales/subir",
+                             "agregar_pieza": "/cliente/acme/ediciones/biblioteca/pieza/__CF__",
+                             "materiales_por_id": "/cliente/acme/ediciones/materiales"}
     assert datos["estimado_s"] >= 20 and datos["cf_id"] is None
     assert [a[1] for a, _k in encolados] == ["edicion_proxy"]
     assert encolados[0][0][2] == {"cliente": "acme", "material_id": clon["id"]}
@@ -452,6 +457,87 @@ def test_el_dialogo_de_producir_no_promete_voz_ni_musica(dashboard, encolados):
     assert "ya están hechos" not in html
     assert "Es gratis" in html and "lo que hay en esta edición" in html
     assert "Reemplazar y producir" in html
+
+
+# --- Disposición tipo CapCut (capa 4b, Task 4) ---
+
+_VACIOS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
+def _ancestros(html):
+    """{id: [ids de sus ancestros, del más cercano al más lejano]}."""
+    from html.parser import HTMLParser
+
+    class _P(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.pila, self.out = [], {}
+
+        def handle_starttag(self, tag, attrs):
+            ident = dict(attrs).get("id")
+            if ident:
+                self.out[ident] = [i for _t, i in reversed(self.pila) if i]
+            if tag not in _VACIOS:
+                self.pila.append((tag, ident))
+
+        def handle_endtag(self, tag):
+            for k in range(len(self.pila) - 1, -1, -1):
+                if self.pila[k][0] == tag:
+                    del self.pila[k:]
+                    break
+
+    p = _P()
+    p.feed(html)
+    return p.out
+
+
+def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    ids = re.findall(r'\sid="([^"]+)"', html)
+    assert len(ids) == len(set(ids)), [i for i in ids if ids.count(i) > 1]
+    arbol = _ancestros(html)
+    # barra de arriba: volver, nombre, destino, guardado y Producir
+    for ident in ("destino", "estado-guardado", "recargar", "producir"):
+        assert "ed-barra" in arbol[ident], ident
+    # fila del medio: biblioteca | reproductor | propiedades
+    for ident in ("ed-biblioteca", "ed-centro", "ed-propiedades"):
+        assert "ed-cuerpo" in arbol[ident], ident
+    assert "ed-biblioteca" in arbol["ed-pestanas-biblioteca"] and "ed-biblioteca" in arbol["ed-panel-biblioteca"]
+    assert "ed-propiedades" in arbol["ed-panel-propiedades"]
+    assert arbol["lienzo"][0] == "ed-escenario" and "ed-centro" in arbol["ed-escenario"]
+    for ident in ("reproducir", "inicio", "tiempo", "barra", "aviso-edicion", "producir-hecho"):
+        assert "ed-centro" in arbol[ident], ident
+    # abajo, a todo el ancho: herramientas y línea de tiempo (fuera de la fila del medio)
+    for ident in ("h-deshacer", "h-rehacer", "h-cortar", "h-borrar", "h-duplicar", "h-velocidad", "linea-zoom"):
+        assert "ed-herramientas" in arbol[ident], ident
+    assert "ed-cuerpo" not in arbol["ed-herramientas"] and "ed-cuerpo" not in arbol["linea"]
+    # la biblioteca: cuatro pestañas con su icono
+    pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
+    for panel in ("medios", "audio", "texto", "transiciones"):
+        boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
+        assert boton and "<svg" in boton.group(1), panel
+    assert pestanas.count('aria-selected="true"') == 1
+    # propiedades: el estado vacío
+    assert "Elige algo en la línea de tiempo o en el video para cambiarlo." in html
+    # celular: hojas que se abren desde abajo y se cierran con «Listo»
+    for ident, hoja in (("ed-abrir-medios", "ed-biblioteca"), ("ed-abrir-propiedades", "ed-propiedades")):
+        boton = re.search(rf'<button[^>]*id="{ident}"[^>]*>', html).group(0)
+        assert f'aria-controls="{hoja}"' in boton and 'aria-expanded="false"' in boton, ident
+    for hoja in ("ed-biblioteca", "ed-propiedades"):
+        cerrar = re.search(rf'<button[^>]*data-cerrar-hoja="{hoja}"[^>]*>\s*Listo\s*</button>', html)
+        assert cerrar, hoja
+    # CSS: la columna del centro puede achicarse (nada empuja la página de lado)
+    # y en el celular el reproductor ocupa como mucho 42vh
+    assert "minmax(0, 1fr)" in html and "42vh" in html
+    assert "@media (max-width: 760px)" in html
+
+
+def test_el_escenario_sabe_la_proporcion_del_formato(dashboard, encolados):
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    escenario = re.search(r'<div[^>]*id="ed-escenario"[^>]*>', html).group(0)
+    assert "--ed-ancho: 1080" in escenario and "--ed-alto: 1920" in escenario
 
 
 # --- Biblioteca del editor (capa 4b, Task 1) ---

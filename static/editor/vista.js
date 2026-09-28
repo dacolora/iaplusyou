@@ -4,7 +4,9 @@
 // pagina_editor.js con `iniciar()`, le pasa cada documento editado
 // (`setDocumento`, que re-resuelve el MISMO destino conservando el tiempo) y
 // escucha el tiempo (`alCambiarTiempo`, para el cabezal de la línea) y los
-// materiales que llegan del servidor (`alCambiarMateriales`).
+// materiales que llegan del servidor (`alCambiarMateriales`). Desde la capa 4b
+// la página también le suma materiales nuevos (`agregarMateriales`: lo que se
+// sube o se trae de la biblioteca), que llegan por el mismo aviso.
 //
 // Mientras el sonido carga («Cargando el sonido…», `cargando`) el botón ya
 // dice ⏸ pero el reloj todavía no corre: pausar, buscar en la barra o cambiar
@@ -53,6 +55,43 @@ function formatoTiempo(ms) {
   return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
 }
 
+// El archivo que la vista previa carga de un material (el video usa su copia
+// liviana en cuanto existe): si cambia, lo cargado antes ya no sirve.
+const archivoDe = (m) => `${m?.url ?? ""}\n${m?.url_proxy ?? ""}`;
+
+// Capa 4b: suma materiales (la forma de vista_previa.material_para) a los que
+// ya hay, en un mapa NUEVO (el de antes no se toca). `recibidos`: los ids que
+// entraron; `cambiados`: los nuevos y los que traen otro archivo (llegó su
+// copia liviana, otra URL) — esos se vuelven a cargar. Lo demás (picos, tira)
+// cambia sin recargar nada.
+export function fusionarMateriales(vigentes, mapa) {
+  const materiales = { ...vigentes };
+  const recibidos = [];
+  const cambiados = [];
+  for (const [k, m] of Object.entries(mapa ?? {})) {
+    const mid = Number(k);
+    if (!m || typeof m !== "object" || !Number.isInteger(mid)) continue;
+    const previo = vigentes?.[mid];
+    materiales[mid] = m;
+    recibidos.push(mid);
+    if (!previo || archivoDe(previo) !== archivoDe(m)) cambiados.push(mid);
+  }
+  const orden = (a, b) => a - b;
+  return { materiales, recibidos: recibidos.sort(orden), cambiados: cambiados.sort(orden) };
+}
+
+// El último argumento de las operaciones (operaciones.js): {id: {duracion_ms,
+// tiene_audio}}. Una duración sin medir (null o 0) va como null —
+// «desconocida», nunca 0, que las operaciones leerían como un archivo vacío.
+export function infoDe(materiales) {
+  const out = {};
+  for (const [k, m] of Object.entries(materiales ?? {})) {
+    if (!m) continue;
+    out[k] = { duracion_ms: m.duracion_ms || null, tiene_audio: m.tiene_audio ?? null };
+  }
+  return out;
+}
+
 export class VistaPrevia {
   constructor({ datos, alCambiarTiempo = () => {}, alCambiarMateriales = () => {} }) {
     this.datos = datos;
@@ -75,6 +114,7 @@ export class VistaPrevia {
     this.pedirCuadro = () => { this.pedido = true; };
     this.cuadro = this.cuadro.bind(this);
     this.fallasCarga = new Set();        // material_id cuyo archivo no cargó (video o imagen)
+    this.porRenovar = new Set();         // material_id con archivo nuevo, a recargar al pausar
     this.videos = new Videos(this.materialesVigentes, this.pedirCuadro, (mid) => this.avisarFalla(mid));
     this.audio = new MotorAudio(this.cfg, this.materialesVigentes);
     this.imagenes = new Map();
@@ -100,6 +140,41 @@ export class VistaPrevia {
     if (this.ocupado()) this.pausar();
     this.reloj?.ir(tMs);
     this.pedirCuadro();
+  }
+
+  // Capa 4b: materiales que llegan sin recargar la página (lo que se sube,
+  // una pieza de Crear que se preparó, la copia liviana que terminó). Entran
+  // enseguida (las operaciones y los clips nuevos ya los ven); los que traen
+  // otro archivo se vuelven a cargar (sus <video>, su imagen, su sonido) y
+  // se olvida un fallo anterior — con la vista quieta: como en usarListos, lo
+  // que se ve y suena mientras reproduce no se corta (se hace al pausar).
+  // Devuelve los ids que entraron.
+  agregarMateriales(mapa) {
+    const { materiales, recibidos, cambiados } = fusionarMateriales(this.materialesVigentes, mapa);
+    if (!recibidos.length) return [];
+    this.materialesVigentes = materiales;
+    this.audio.materiales = materiales;
+    this.videos.materiales = materiales;
+    for (const mid of cambiados) this.porRenovar.add(mid);
+    if (!this.ocupado()) this.renovarPendientes();
+    this.pedirCuadro();
+    this.alCambiarMateriales(materiales);        // la línea usa sus tiras y picos
+    return recibidos;
+  }
+
+  renovarPendientes() {
+    if (!this.porRenovar.size) return;
+    const ids = [...this.porRenovar].sort((a, b) => a - b);
+    this.porRenovar.clear();
+    this.videos.renovar(this.materialesVigentes, ids);
+    for (const mid of ids) {
+      this.audio.buffers?.delete(mid);
+      this.audio.fallidos?.delete(mid);
+      this.imagenes.delete(mid);
+      this.imagenesFallidas.delete(mid);
+      this.fallasCarga.delete(mid);
+    }
+    this.mostrarFallas();
   }
 
   get materiales() {
@@ -238,6 +313,7 @@ export class VistaPrevia {
     this.reloj?.pausar();
     this.audio.detener();
     this.videos.pausarTodo();
+    this.renovarPendientes();                    // lo que llegó mientras reproducía
     $("reproducir").textContent = "▶";
     $("reproducir").setAttribute("aria-label", "Reproducir");
     this.pedirCuadro();
