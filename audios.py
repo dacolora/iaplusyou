@@ -213,8 +213,13 @@ def hash_muestra(voz, idioma):
 
 def muestra(voz, idioma):
     """URL de la muestra de esa voz en ese idioma. Se sintetiza una sola vez
-    para toda la plataforma (cliente `_creatv`, gasto de `_creatv`). ValueError
-    si la voz o el idioma no existen; los errores de fal/R2 se propagan."""
+    para toda la plataforma (cliente `_creatv`, gasto de `_creatv`). El gasto se
+    registra apenas fal cobra, ANTES de bajar/subir el archivo: si algo de eso
+    falla después, el dinero ya pagado queda anotado (la referencia es estable,
+    así que un reintento actualiza esa misma fila en vez de duplicarla) y el
+    hash no queda cacheado, así que el siguiente intento vuelve a sintetizar.
+    ValueError si la voz o el idioma no existen; los errores de fal/R2 se
+    propagan."""
     if voz not in voces() or idioma not in IDIOMAS:
         raise ValueError("voz o idioma desconocidos")
     h = hash_muestra(voz, idioma)
@@ -223,14 +228,15 @@ def muestra(voz, idioma):
     def _producir():
         r = fal_audio.tts(frase, voz, idioma)
         usd = float(r.get("costo_usd") or 0.0)
+        # fal ya cobró: el gasto queda aunque lo que sigue falle.
+        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, f"muestra_voz:{voz}:{idioma}:v{VERSION_MUESTRA}",
+                                detalle=f"muestra de voz · {voz} · {idioma}", proveedor="fal/elevenlabs")
         with tempfile.TemporaryDirectory() as tmp:
             local = descargar_url(r["url"], os.path.join(tmp, "muestra.mp3"))
             key = f"clientes/{CLIENTE_MUESTRAS}/materiales/muestra_{voz}_{idioma}_v{VERSION_MUESTRA}.mp3"
             campos = {"tipo": "audio", "origen": ORIGEN_VOZ, "url": r2_uploader.upload_file(local, key, "audio/mpeg"),
                       "bytes": os.path.getsize(local), "duracion_ms": int(round(cortes.duracion(local) * 1000)),
                       "costo_usd": usd, "extra": {"texto": frase, "voz": voz, "idioma": idioma, "muestra": True}}
-        gastos.registrar_seguro(CLIENTE_MUESTRAS, "locucion", usd, f"muestra_voz:{voz}:{idioma}:v{VERSION_MUESTRA}",
-                                detalle=f"muestra de voz · {voz} · {idioma}", proveedor="fal/elevenlabs")
         return campos
     m, _ = materiales.obtener_o_crear(CLIENTE_MUESTRAS, h, _producir)
     return m["url"]

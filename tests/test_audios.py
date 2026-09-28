@@ -159,3 +159,20 @@ def test_muestra_se_sintetiza_una_sola_vez_y_la_paga_creatv(base_temporal, r2, m
     assert m["origen"] == "voz" and m["duracion_ms"] == 2500 and m["extra"]["muestra"] is True
     with pytest.raises(ValueError):
         audios.muestra("Nadie", "es")
+
+
+def test_muestra_registra_el_gasto_aunque_falle_despues_de_pagar_a_fal(base_temporal, monkeypatch):
+    import sqlalchemy as sa
+    import db
+    monkeypatch.setattr(audios.fal_audio, "tts", lambda texto, voz, idioma="es", on_progreso=None, velocidad=None:
+                        {"url": "https://fal/m.mp3", "costo_usd": 0.0052})
+
+    def _falla(url, destino):
+        raise RuntimeError("red caída")
+    monkeypatch.setattr(audios, "descargar_url", _falla)
+    with pytest.raises(RuntimeError):
+        audios.muestra("Rachel", "es")
+    with db.conectar() as con:
+        gastos_ = [dict(f._mapping) for f in con.execute(sa.select(db.gasto).where(db.gasto.c.cliente == "_creatv"))]
+    assert len(gastos_) == 1 and gastos_[0]["usd"] == 0.0052 and gastos_[0]["referencia"] == "muestra_voz:Rachel:es:v1"
+    assert materiales.buscar_hash("_creatv", audios.hash_muestra("Rachel", "es")) is None
