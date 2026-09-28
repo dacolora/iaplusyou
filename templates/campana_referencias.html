@@ -96,7 +96,7 @@
       <span class="tag-estado sprint-ref-estado">{{ etiqueta_sprint(r.estado) }}</span>
     </div>
     <div class="sprint-ref-cuerpo">
-      <small class="vacio">{{ r.titulo or r.url }} · {{ r.origen }}</small>
+      <small class="vacio">{{ r.titulo or r.url }} · {{ etiqueta_sprint(r.origen) }}</small>
       <div class="sprint-chips">
         {% for clave, nombre in intenciones_sprint.items() %}
         <label class="sprint-chip"><input type="checkbox" name="intencion" value="{{ clave }}" {% if clave in (r.intencion or []) %}checked{% endif %}> {{ nombre|traducir }}</label>
@@ -144,6 +144,10 @@
     recargaAnalisis: {{ _('Recarga para ver el análisis completo.')|tojson }},
     noSePudoAnalizar: {{ _('No se pudo analizar.')|tojson }}
   };
+  var ETIQUETAS_REF = {
+    lista: {{ _('lista')|tojson }},
+    borrador: {{ _('borrador')|tojson }}
+  };
   (function () {
     // 1) Arrastrar y soltar: los archivos entran al input y el formulario se envía.
     var zona = document.getElementById('zona-subida'), input = document.getElementById('input-archivos');
@@ -164,7 +168,7 @@
           .then(function (r) { return r.json(); })
           .then(function (j) {
             if (!j.ok) { alert(j.error); return; }
-            card.querySelector('.sprint-ref-estado').textContent = j.estado;
+            card.querySelector('.sprint-ref-estado').textContent = ETIQUETAS_REF[j.estado] || j.estado;
             document.getElementById('refs-contador').textContent = TEXTO_REFS.referenciasListas.replace('{listas}', j.referencias_listas).replace('{objetivo}', j.referencias_objetivo);
             var pct = Math.min(100, Math.round(100 * j.referencias_listas / Math.max(1, j.referencias_objetivo)));
             var fill = document.querySelector('#refs-barra .sprint-barra-fill'); if (fill) fill.style.width = pct + '%';

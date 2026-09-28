@@ -9,7 +9,7 @@
 <details class="sprint-idea panel-idea panel-idea-{{ i.estado_idea }}" data-cp="{{ i.id }}"
          data-url="{{ url_for('sprints.idea_editar', cliente=cliente, cp_id=i.id) }}">
   <summary>
-    <span class="chip-tipo">{{ i.tipo | upper }}</span>
+    <span class="chip-tipo">{{ etiqueta_sprint(i.tipo)|upper }}</span>
     <strong>{{ i.titulo }}</strong>
     {% if i.duracion_s %}<small class="vacio">{{ i.duracion_s | int }} s</small>{% endif %}
     {% if i.enfoque %}<small class="vacio">{{ enfoques.get(i.enfoque, i.enfoque)|traducir }}</small>{% endif %}
@@ -73,7 +73,7 @@
   {% endfor %}
   {% if ideas_descartadas %}
   <details class="panel-descartadas"><summary>{{ _('%(n)s descartada(s)', n=(ideas_descartadas | length)) }}</summary>
-    {% for i in ideas_descartadas %}<p class="vacio">{{ i.tipo }} · {{ i.titulo }}</p>{% endfor %}
+    {% for i in ideas_descartadas %}<p class="vacio">{{ etiqueta_sprint(i.tipo) }} · {{ i.titulo }}</p>{% endfor %}
   </details>
   {% endif %}
 </section>

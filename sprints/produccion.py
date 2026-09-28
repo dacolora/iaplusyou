@@ -119,8 +119,11 @@ def estimar(cliente, sprint_id, campana_id=None, modelo_video=None, modelo_image
     segundos = videos * SEGUNDOS_VIDEO + imagenes * SEGUNDOS_IMAGEN
     acumulado = float((sp.get("extra") or {}).get("costo_estimado_usd") or 0.0)
     nombre_v, nombre_i = flowplus_modelos.VIDEO[mv]["nombre"], flowplus_modelos.IMAGEN[mi]["nombre"]
-    texto = (f"{videos} video(s) ({nombre_v}) y {imagenes} imagen(es) ({nombre_i}): USD {usd:.2f} estimado · "
-             f"acumulado del sprint USD {acumulado:.2f} · tiempo estimado {_texto_tiempo(segundos)}")
+    texto = gettext(
+        "%(videos)s video(s) (%(modelo_v)s) y %(imagenes)s imagen(es) (%(modelo_i)s): USD %(usd)s estimado · "
+        "acumulado del sprint USD %(acumulado)s · tiempo estimado %(tiempo)s",
+        videos=videos, modelo_v=nombre_v, imagenes=imagenes, modelo_i=nombre_i,
+        usd=f"{usd:.2f}", acumulado=f"{acumulado:.2f}", tiempo=_texto_tiempo(segundos))
     return {"videos": videos, "imagenes": imagenes, "usd": round(usd, 4), "segundos": segundos, "modelo_video": mv,
             "modelo_imagen": mi, "modelo_video_nombre": nombre_v, "modelo_imagen_nombre": nombre_i,
             "acumulado_usd": round(acumulado, 4), "texto": texto}

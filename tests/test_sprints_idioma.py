@@ -181,3 +181,26 @@ def test_texto_guardado_va_en_el_idioma_del_proyecto(monkeypatch):
     assert datos.texto_guardado("acme", "Sprint reabierto a revisión") == "Sprint reopened for review"
     monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "es")
     assert datos.texto_guardado("acme", "Sprint reabierto a revisión") == "Sprint reabierto a revisión"
+
+
+def test_fechas_invertidas_en_ingles_sprint_y_temporada():
+    """Fix round 1 (Task 4): _rango/_fecha armaban el mensaje con una variable
+    a medio traducir ("el sprint", "inicio"...) -- ahora es un msgid completo
+    por caso ("el sprint" / "la temporada"; "inicio" / "fin")."""
+    from sprints import datos
+    with idiomas.en_idioma("en"):
+        try:
+            datos.crear_sprint("acme", "Bad", "2026-10-31", "2026-10-01")
+            assert False, "esperaba ErrorDatos"
+        except datos.ErrorDatos as e:
+            assert str(e) == "In the sprint, the start date must be before the end date."
+        try:
+            datos.crear_temporada("acme", "Bad", "2026-10-31", "2026-10-01")
+            assert False, "esperaba ErrorDatos"
+        except datos.ErrorDatos as e:
+            assert str(e) == "In the season, the start date must be before the end date."
+        try:
+            datos.crear_sprint("acme", "Bad", "not-a-date", "2026-10-01")
+            assert False, "esperaba ErrorDatos"
+        except datos.ErrorDatos as e:
+            assert str(e) == "The start date isn't valid (use YYYY-MM-DD)."

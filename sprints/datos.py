@@ -112,16 +112,25 @@ class ErrorDatos(ValueError):
 # ------------------------------------------------------------ helpers ---
 
 def _fecha(valor, campo):
+    """`campo` siempre es "inicio" o "fin" (los únicos que pasan _rango y
+    _momento): mensaje completo por caso en vez de una variable a medio
+    traducir ("The fin date isn't valid…", fix round 1)."""
     try:
         return date.fromisoformat(str(valor or "")[:10])
     except ValueError:
-        raise ErrorDatos(gettext("La fecha de %(campo)s no es válida (usa AAAA-MM-DD).", campo=campo))
+        if campo == "fin":
+            raise ErrorDatos(gettext("La fecha de fin no es válida (usa AAAA-MM-DD)."))
+        raise ErrorDatos(gettext("La fecha de inicio no es válida (usa AAAA-MM-DD)."))
 
 
 def _rango(inicio, fin, que):
+    """`que` siempre es "el sprint" o "la temporada": mensaje completo por
+    caso, no una variable a medio traducir ("In el sprint…", fix round 1)."""
     i, f = _fecha(inicio, "inicio"), _fecha(fin, "fin")
     if i >= f:
-        raise ErrorDatos(gettext("En %(que)s, la fecha de inicio debe ser anterior a la de fin.", que=que))
+        if que == "la temporada":
+            raise ErrorDatos(gettext("En la temporada, la fecha de inicio debe ser anterior a la de fin."))
+        raise ErrorDatos(gettext("En el sprint, la fecha de inicio debe ser anterior a la de fin."))
     return i.isoformat(), f.isoformat()
 
 
@@ -212,11 +221,16 @@ def _marca_de_texto(x):
     return {"nombre": x}
 
 
-def normalizar_marcas(v):
+def normalizar_marcas(v, cliente=None):
     """Marcas a imitar como lista de {nombre, pagina_id?}. Acepta la lista ya
     armada o el texto del formulario: una por línea (o separadas por coma),
     cada una con el link del Ad Library o el id de su página si se tiene. Sin
-    repetidas (por nombre, sin importar mayúsculas); máximo MAX_MARCAS."""
+    repetidas (por nombre, sin importar mayúsculas); máximo MAX_MARCAS.
+
+    `cliente` (fix round 1, Task 4): el nombre por defecto «Página N» (cuando
+    no se escribió nombre, solo el id) se guarda en el idioma del proyecto.
+    Sin `cliente` (pruebas directas del módulo) queda en español, igual que
+    antes."""
     if v is None:
         return []
     if isinstance(v, str):
@@ -234,7 +248,12 @@ def normalizar_marcas(v):
         pagina = _texto(it.get("pagina_id")) or None
         if pagina and not pagina.isdigit():
             raise ErrorDatos(gettext("El id de página de Meta son solo dígitos."))
-        nombre = _texto(it.get("nombre"), 80) or (f"Página {pagina}" if pagina else "")
+        if pagina:
+            fallback = (texto_guardado(cliente, N_("Página %(pagina)s"), pagina=pagina) if cliente
+                       else f"Página {pagina}")
+        else:
+            fallback = ""
+        nombre = _texto(it.get("nombre"), 80) or fallback
         if not nombre or nombre.lower() in vistas:
             continue
         vistas.add(nombre.lower())
@@ -468,7 +487,7 @@ def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objeti
     if objetivo < 1:
         raise ErrorDatos(gettext("El objetivo de referencias debe ser al menos 1."))
     pais, idioma = _pais(pais), _idioma(idioma) or IDIOMA_BASE
-    marcas, momento = normalizar_marcas(marcas), _momento(momento)
+    marcas, momento = normalizar_marcas(marcas, cliente=cliente), _momento(momento)
     ahora = db.ahora()
     with db.conectar() as con:
         sid = con.execute(db.sprint.insert().values(
@@ -476,7 +495,8 @@ def crear_sprint(cliente, nombre, inicio, fin, destinos=None, referencias_objeti
             estado="planeando", destinos=list(destinos or []), referencias_objetivo_defecto=objetivo,
             notas=_texto(notas), archivado=False, extra={}, pais=pais, idioma=idioma, marcas=marcas,
             momento=momento)).inserted_primary_key[0]
-        _evento(con, cliente, sid, None, "sprint_creado", f"Sprint «{nombre}» creado", {"inicio": inicio, "fin": fin})
+        mensaje = texto_guardado(cliente, N_("Sprint «%(nombre)s» creado"), nombre=nombre)
+        _evento(con, cliente, sid, None, "sprint_creado", mensaje, {"inicio": inicio, "fin": fin})
     return sid
 
 
@@ -490,7 +510,7 @@ def actualizar_sprint(cliente, sprint_id, /, **campos):
     if "idioma" in campos:
         campos["idioma"] = _idioma(campos["idioma"]) or "es"
     if "marcas" in campos:
-        campos["marcas"] = normalizar_marcas(campos["marcas"])
+        campos["marcas"] = normalizar_marcas(campos["marcas"], cliente=cliente)
     if "momento" in campos:
         campos["momento"] = _momento(campos["momento"])
     if "estado" in campos and campos["estado"] not in ESTADOS_SPRINT:
@@ -656,7 +676,7 @@ def agregar_campana(cliente, sprint_id, persona_id, catalogo_id, temporada_id=No
             catalogo_id=catalogo_id, producto_id=None, temporada_id=temporada_id, n_videos=n_videos,
             n_imagenes=n_imagenes, referencias_objetivo=objetivo, estado="planeada", orden=orden,
             funnel=funnel, consciencia=consciencia, dolor=dolor, familias=familias, extra={})).inserted_primary_key[0]
-        _evento(con, cliente, sprint_id, cid, "campana_agregada", "Campaña agregada",
+        _evento(con, cliente, sprint_id, cid, "campana_agregada", texto_guardado(cliente, N_("Campaña agregada")),
                 {"persona_id": persona_id, "catalogo_id": catalogo_id, "temporada_id": temporada_id,
                  "n_videos": n_videos, "n_imagenes": n_imagenes, "funnel": funnel, "consciencia": consciencia})
         con.execute(db.sprint.update().where(db.sprint.c.id == sprint_id).values(actualizado_en=ahora))
@@ -695,7 +715,7 @@ def actualizar_campana(cliente, campana_id, /, **campos):
     if "idioma" in campos:
         campos["idioma"] = _idioma(campos["idioma"])
     if "marcas" in campos:
-        campos["marcas"] = normalizar_marcas(campos["marcas"]) or None      # vacío = hereda del sprint
+        campos["marcas"] = normalizar_marcas(campos["marcas"], cliente=cliente) or None      # vacío = hereda del sprint
     if "catalogo_id" in campos:
         campos["catalogo_id"] = _texto(campos["catalogo_id"], 120)
         if not campos["catalogo_id"]:
@@ -723,7 +743,7 @@ def eliminar_campana(cliente, campana_id):
         con.execute(db.campana_pieza.delete().where(db.campana_pieza.c.campana_id == campana_id))
         con.execute(db.sprint_evento.update().where(db.sprint_evento.c.campana_id == campana_id).values(campana_id=None))
         con.execute(db.campana.delete().where(db.campana.c.id == campana_id))
-        _evento(con, cliente, f.sprint_id, None, "campana_eliminada", "Campaña eliminada",
+        _evento(con, cliente, f.sprint_id, None, "campana_eliminada", texto_guardado(cliente, N_("Campaña eliminada")),
                 {"campana_id": campana_id, "catalogo_id": f.catalogo_id})
     return True
 
@@ -811,7 +831,8 @@ def agregar_referencia(cliente, campana_id, tipo, url, frame_url=None, ruta_loca
             frame_url=frame_url, ruta_local=ruta_local, origen=origen, titulo=_texto(titulo, 200), intencion=intencion,
             intencion_otro=None, descripcion=descripcion, analisis=None, analisis_estado="pendiente",
             estado=_estado_referencia(descripcion), orden=orden, extra={})).inserted_primary_key[0]
-        _evento(con, cliente, c.sprint_id, campana_id, "referencia_agregada", f"Referencia agregada ({tipo}, {origen})",
+        mensaje = texto_guardado(cliente, N_("Referencia agregada (%(tipo)s, %(origen)s)"), tipo=tipo, origen=origen)
+        _evento(con, cliente, c.sprint_id, campana_id, "referencia_agregada", mensaje,
                 {"referencia_id": rid, "titulo": _texto(titulo, 200)})
     return rid
 
@@ -841,7 +862,8 @@ def quitar_referencia(cliente, referencia_id):
         c = con.execute(sa.select(db.campana.c.sprint_id).where(db.campana.c.id == f.campana_id)).first()
         con.execute(db.referencia.delete().where(db.referencia.c.id == referencia_id))
         if c:
-            _evento(con, cliente, c.sprint_id, f.campana_id, "referencia_quitada", "Referencia quitada",
+            _evento(con, cliente, c.sprint_id, f.campana_id, "referencia_quitada",
+                    texto_guardado(cliente, N_("Referencia quitada")),
                     {"referencia_id": referencia_id, "titulo": f.titulo})
     return True
 
@@ -985,8 +1007,9 @@ def crear_idea(cliente, campana_id, tipo, titulo, escena, sonido="", enfoque=Non
             plataformas=campos["plataformas"], estado_idea=campos["estado_idea"], cf_id=None, qa=None,
             revision="pendiente", revision_motivo=None, textos=None, orden=orden,
             extra=dict(extra) if isinstance(extra, dict) else {})).inserted_primary_key[0]
-        _evento(con, cliente, c.sprint_id, campana_id, "idea_creada", f"Idea «{campos['titulo']}» ({campos['tipo']})",
-                {"cp_id": cp_id})
+        mensaje = texto_guardado(cliente, N_("Idea «%(titulo)s» (%(tipo)s)"),
+                                 titulo=campos['titulo'], tipo=campos['tipo'])
+        _evento(con, cliente, c.sprint_id, campana_id, "idea_creada", mensaje, {"cp_id": cp_id})
     return cp_id
 
 
@@ -1018,7 +1041,8 @@ def eliminar_idea(cliente, cp_id):
         c = con.execute(sa.select(db.campana.c.sprint_id).where(db.campana.c.id == f.campana_id)).first()
         con.execute(db.campana_pieza.delete().where(db.campana_pieza.c.id == cp_id))
         if c:
-            _evento(con, cliente, c.sprint_id, f.campana_id, "idea_eliminada", f"Idea «{f.titulo}» eliminada", {"cp_id": cp_id})
+            mensaje = texto_guardado(cliente, N_("Idea «%(titulo)s» eliminada"), titulo=f.titulo)
+            _evento(con, cliente, c.sprint_id, f.campana_id, "idea_eliminada", mensaje, {"cp_id": cp_id})
     return True
 
 

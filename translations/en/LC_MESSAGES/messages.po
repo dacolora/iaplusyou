@@ -794,6 +794,10 @@ msgid "%(valor)s%%"
 msgstr "%(valor)s%%"
 
 #, python-format
+msgid "%(videos)s video(s) (%(modelo_v)s) y %(imagenes)s imagen(es) (%(modelo_i)s): USD %(usd)s estimado · acumulado del sprint USD %(acumulado)s · tiempo estimado %(tiempo)s"
+msgstr "%(videos)s video(s) (%(modelo_v)s) and %(imagenes)s image(s) (%(modelo_i)s): USD %(usd)s estimated · sprint accumulated USD %(acumulado)s · estimated time %(tiempo)s"
+
+#, python-format
 msgid "(%(n)s propia(s))"
 msgstr "(%(n)s custom)"
 
@@ -1740,11 +1744,17 @@ msgstr "Campaign %(i)s: invalid persona or season."
 msgid "Campaña %(n)s"
 msgstr "Campaign %(n)s"
 
+msgid "Campaña agregada"
+msgstr "Campaign added"
+
 msgid "Campaña agregada."
 msgstr "Campaign added."
 
 msgid "Campaña creada en Meta (en pausa)"
 msgstr "Campaign created on Meta (paused)"
+
+msgid "Campaña eliminada"
+msgstr "Campaign deleted"
 
 msgid "Campaña eliminada."
 msgstr "Campaign deleted."
@@ -3338,10 +3348,6 @@ msgstr "Get started today"
 msgid "En %(moneda)s, la moneda de la cuenta de Meta"
 msgstr "In %(moneda)s, the Meta account's currency"
 
-#, python-format
-msgid "En %(que)s, la fecha de inicio debe ser anterior a la de fin."
-msgstr "In %(que)s, the start date must be before the end date."
-
 msgid "En <em>Configuración › Básica</em>: nombre, correo de contacto, URL de términos, URL de política de privacidad, ícono 1024×1024 sin logos de Meta, categoría, propósito y «Eliminación de datos» (URL con instrucciones). Copia el <strong>identificador de la app</strong> y la <strong>clave secreta</strong>."
 msgstr "In <em>Settings › Basic</em>: name, contact email, terms URL, privacy policy URL, a 1024×1024 icon with no Meta logos, category, purpose and “Data deletion” (URL with instructions). Copy the <strong>app id</strong> and the <strong>app secret</strong>."
 
@@ -3404,11 +3410,17 @@ msgstr "In the Shopify admin go to <em>Settings › Apps and sales channels › 
 msgid "En el proyecto de Google Cloud donde ya está habilitada «YouTube Data API v3» (SETUP.md §2), ve a «Credenciales»."
 msgstr "In the Google Cloud project where “YouTube Data API v3” is already enabled (SETUP.md §2), go to “Credentials”."
 
+msgid "En el sprint, la fecha de inicio debe ser anterior a la de fin."
+msgstr "In the sprint, the start date must be before the end date."
+
 msgid "En error"
 msgstr "Failed"
 
 msgid "En la página del guion: ··· › Conexiones › elige tu integración."
 msgstr "On the script's page: ··· › Connections › choose your integration."
+
+msgid "En la temporada, la fecha de inicio debe ser anterior a la de fin."
+msgstr "In the season, the start date must be before the end date."
 
 #, python-format
 msgid "En los clips %(lista)s las líneas declaradas no coinciden con las que se dicen."
@@ -4175,7 +4187,7 @@ msgstr "Launch failed: %(mensaje)s"
 
 #, python-format
 msgid "Falta %(campo)s."
-msgstr "%(campo)s is missing."
+msgstr "Missing: %(campo)s."
 
 #, python-format
 msgid "Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto)."
@@ -4308,6 +4320,10 @@ msgstr "Unsupported format. Use jpg, jpeg, png, webp, mp4, mov or webm."
 
 msgid "Formato no válido."
 msgstr "Invalid format."
+
+#, python-format
+msgid "Foto real del producto %(nombre)s, tal como es."
+msgstr "Real photo of the product %(nombre)s, as it is."
 
 msgid "Fotos"
 msgstr "Photos"
@@ -4749,6 +4765,14 @@ msgstr "Idea saved."
 msgid "Idea reescrita desde su ángulo."
 msgstr "Idea rewritten from its angle."
 
+#, python-format
+msgid "Idea «%(titulo)s» (%(tipo)s)"
+msgstr "Idea “%(titulo)s” (%(tipo)s)"
+
+#, python-format
+msgid "Idea «%(titulo)s» eliminada"
+msgstr "Idea “%(titulo)s” deleted"
+
 msgid "Ideas"
 msgstr "Ideas"
 
@@ -5084,9 +5108,11 @@ msgstr "The stage must be TOF, MOF or BOF."
 msgid "La evidencia no se edita a mano."
 msgstr "Evidence can't be edited by hand."
 
-#, python-format
-msgid "La fecha de %(campo)s no es válida (usa AAAA-MM-DD)."
-msgstr "The %(campo)s date isn't valid (use YYYY-MM-DD)."
+msgid "La fecha de fin no es válida (usa AAAA-MM-DD)."
+msgstr "The end date isn't valid (use YYYY-MM-DD)."
+
+msgid "La fecha de inicio no es válida (usa AAAA-MM-DD)."
+msgstr "The start date isn't valid (use YYYY-MM-DD)."
 
 msgid "La idea todavía no tiene un ángulo con promesa."
 msgstr "The idea doesn't have an angle with a promise yet."
@@ -7085,6 +7111,10 @@ msgstr "Click “Propose the missing ones”: Claude writes them using the perso
 msgid "Página"
 msgstr "Page"
 
+#, python-format
+msgid "Página %(pagina)s"
+msgstr "Page %(pagina)s"
+
 msgid "Pégala como ANTHROPIC_API_KEY en el .env del servidor y reinicia los dos servicios."
 msgstr "Paste it as ANTHROPIC_API_KEY in the server's .env and restart both services."
 
@@ -7386,11 +7416,18 @@ msgstr "Rewriting the idea from its angle…"
 msgid "Reescribir la idea con este ángulo (%(precio)s)"
 msgstr "Rewrite the idea with this angle (%(precio)s)"
 
+#, python-format
+msgid "Referencia agregada (%(tipo)s, %(origen)s)"
+msgstr "Reference added (%(tipo)s, %(origen)s)"
+
 msgid "Referencia agregada desde el link."
 msgstr "Reference added from the link."
 
 msgid "Referencia analizada."
 msgstr "Reference analyzed."
+
+msgid "Referencia quitada"
+msgstr "Reference removed"
 
 msgid "Referencia reutilizada."
 msgstr "Reference reused."
@@ -8133,6 +8170,10 @@ msgstr "Sprint reopened for review"
 
 msgid "Sprint reabierto a revisión."
 msgstr "Sprint reopened for review."
+
+#, python-format
+msgid "Sprint «%(nombre)s» creado"
+msgstr "Sprint “%(nombre)s” created"
 
 #, python-format
 msgid "Sprint · Campaña %(n)s"
@@ -9343,6 +9384,9 @@ msgstr "archived"
 msgid "archivar"
 msgstr "archive"
 
+msgid "archivo"
+msgstr "file"
+
 #, python-format
 msgid "archivo(s)… 0%%"
 msgstr "file(s)… 0%%"
@@ -9385,6 +9429,9 @@ msgstr "avatars in %(idioma)s"
 msgid "baja"
 msgstr "low"
 
+msgid "biblioteca"
+msgstr "library"
+
 msgid "borrador"
 msgstr "draft"
 
@@ -9426,6 +9473,9 @@ msgstr "new channel: no text yet, it's written on approval"
 
 msgid "carrito"
 msgstr "shopping cart"
+
+msgid "catalogo"
+msgstr "catalog"
 
 msgid "cena"
 msgstr "dinner"
@@ -10065,6 +10115,9 @@ msgstr "launching"
 msgid "las familias de formato"
 msgstr "format families"
 
+msgid "link"
+msgstr "link"
+
 msgid "lista"
 msgstr "ready"
 
@@ -10476,6 +10529,9 @@ msgstr "reviews:tiktok_shop"
 
 msgid "reseñas"
 msgstr "reviews"
+
+msgid "reutilizada"
+msgstr "reused"
 
 msgid "revisando"
 msgstr "reviewing"

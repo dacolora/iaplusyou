@@ -101,6 +101,10 @@
   var TEXTO_REVISION = {
     escribePorQue: {{ _('Escribe por qué no sirve.')|tojson }}
   };
+  var ETIQUETAS_REVISION = {
+    aprobada: {{ _('aprobada')|tojson }},
+    rechazada: {{ _('rechazada')|tojson }}
+  };
   (function () {
     var grid = document.getElementById('revision-grid');
     var tarjetas = Array.prototype.slice.call(grid.querySelectorAll('.sprint-pieza'));
@@ -124,7 +128,7 @@
             return;
           }
           card.className = card.className.replace(/sprint-pieza-(pendiente|aprobada|rechazada)/, 'sprint-pieza-' + j.revision);
-          card.querySelector('.sprint-revision-chip').textContent = j.revision;
+          card.querySelector('.sprint-revision-chip').textContent = ETIQUETAS_REVISION[j.revision] || j.revision;
         }).catch(function () {});
     }
     function abrirRechazo(card) {

@@ -518,6 +518,18 @@ def test_pagina_de_la_doctrina_en_ingles(admin_en):
     assert not fugas, fugas[:15]
 
 
+def test_lote_estimar_en_ingles(admin_en, monkeypatch):
+    """Fix round 1 (Task 4): produccion.estimar() armaba su 'texto' con un
+    f-string crudo; la ruta lote_estimar es su único lector (lanzar_lote solo
+    lee las claves numéricas), así que el idioma correcto es el de quien mira
+    la pantalla."""
+    sid, cid, _ = _sprint_sembrado(monkeypatch)
+    r = admin_en.get(f"/cliente/acme/sprints/{sid}/lote/estimar")
+    assert r.status_code == 200
+    texto = r.get_json()["texto"]
+    assert not _con_marca(texto), texto
+
+
 # ------ Task 5 (fase 5): Nicho ------
 
 SUB_EN = {"base": "emocion", "nombre": "Ana / Carries the jugs", "deseo": "Wash without carrying weight", "demografia": "",

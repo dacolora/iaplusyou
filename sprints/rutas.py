@@ -978,9 +978,10 @@ def referencias_catalogo(cliente, sid, cid):
         url = f"{base}/clientes/{cliente}/{carpeta}/{producto['id']}/{nombre}"
         if url in existentes:
             continue
+        descripcion = datos.texto_guardado(cliente, N_("Foto real del producto %(nombre)s, tal como es."),
+                                           nombre=producto['nombre'])
         rid = datos.agregar_referencia(cliente, cid, "imagen", url, origen="catalogo", titulo=nombre,
-                                       intencion=["angulo_producto"],
-                                       descripcion=f"Foto real del producto {producto['nombre']}, tal como es.")
+                                       intencion=["angulo_producto"], descripcion=descripcion)
         tareas_sprints.encolar_analisis(cliente, rid)
         nuevas += 1
     if nuevas:
