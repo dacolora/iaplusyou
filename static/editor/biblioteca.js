@@ -231,6 +231,7 @@ export class Biblioteca {
     this.subiendo = false;
     this.preparando = new Map();        // cf_id -> {desde, pedido: {punto} | null}; pedido = agregarla al tenerla
     this.esperando = new Map();         // material_id -> desde: su copia liviana (video) o sus picos (audio)
+    this.pedidosPreparar = new Set();   // material_id ya pedido al servidor (`preparar=`): se pide una vez
     this.relojPiezas = null;
     this.relojMateriales = null;
     this.arrastre = null;               // {clave, cosa, pointerId, x0, y0, x, y, activo, fantasma, origen, cuadro}
@@ -793,13 +794,20 @@ export class Biblioteca {
   }
 
   // La copia liviana, la tira o los picos que llegaron pasan a la vista
-  // previa (que cambia los archivos al pausar) y a las miniaturas.
+  // previa (que cambia los archivos al pausar) y a las miniaturas. La primera
+  // pregunta por cada material le pide al servidor que lo prepare
+  // (`preparar=`, gratis): una canción de Mi música nunca tuvo picos y nadie
+  // más lo pediría. Una vez por material: si falla, no se reencola cada 3 s.
   async _revisarMateriales() {
     const ahora = Date.now();
     for (const [id, desde] of [...this.esperando]) if (ahora - desde > TOPE_ESPERA_MS) this.esperando.delete(id);
     if (!this.esperando.size) return;
     const ids = [...this.esperando.keys()];
-    const { que, j } = await this._pedirJSON(`${this.urls.materiales_por_id}?ids=${ids.join(",")}`);
+    this.pedidosPreparar ??= new Set();
+    const nuevos = ids.filter((id) => !this.pedidosPreparar.has(id));
+    const url = `${this.urls.materiales_por_id}?ids=${ids.join(",")}${nuevos.length ? `&preparar=${nuevos.join(",")}` : ""}`;
+    const { que, j } = await this._pedirJSON(url);
+    if (que === "json") for (const id of nuevos) this.pedidosPreparar.add(id);
     if (que === "parar") {
       this.esperando.clear();
       return;

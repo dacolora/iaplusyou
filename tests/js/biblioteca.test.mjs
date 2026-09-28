@@ -134,7 +134,8 @@ test("_revisarMateriales: lo que ya está listo pasa a la vista previa; lo venci
     _pintarListas() { this.pintadas += 1; },
   };
   await Biblioteca.prototype._revisarMateriales.call(falsa);
-  assert.deepEqual(pedidos, ["/m?ids=8,9,11"]);                  // el 10 pasó los 5 min: ni se pregunta
+  // el 10 pasó los 5 min: ni se pregunta; la primera pregunta por cada uno pide prepararlo (fix final 11)
+  assert.deepEqual(pedidos, ["/m?ids=8,9,11&preparar=8,9,11"]);
   assert.deepEqual(pasados, [["8"]]);                             // solo lo listo va a la vista previa
   assert.deepEqual([...falsa.esperando.keys()], [9]);             // el 11 ya no existe: se deja
   assert.deepEqual(falsa.datos.materiales.map((m) => m.id).sort(), [8, 9]);
@@ -225,4 +226,27 @@ test("_operar: con la edición cambiada en otra pestaña, la biblioteca lo dice 
     assert.equal(Biblioteca.prototype._operar.call(falsa, { tipo: "texto", preset: "titulo", nombre: "Título" }, null), false);
     assert.deepEqual(dichos, [[esperado, true]]);
   }
+});
+
+test("_revisarMateriales: la primera pregunta por un material pide prepararlo (una vez); las siguientes solo leen", async () => {
+  const { Biblioteca } = await import("../../static/editor/biblioteca.js");
+  const urls = [];
+  const cancion = { id: 7, tipo: "audio", url: "c.mp3", duracion_ms: 60000, picos: null };
+  const falsa = {
+    urls: { materiales_por_id: "/m" },
+    esperando: new Map([[7, Date.now()]]),
+    datos: { materiales: [], piezas: [] },
+    editor: { agregarMateriales: () => {} },
+    _pedirJSON: async (url) => {
+      urls.push(url);
+      return { que: "json", j: { materiales: { 7: cancion } } };
+    },
+    _ponerMaterial: Biblioteca.prototype._ponerMaterial,
+    _pintarListas: () => {},
+  };
+  await Biblioteca.prototype._revisarMateriales.call(falsa);
+  await Biblioteca.prototype._revisarMateriales.call(falsa);
+  falsa.esperando.set(8, Date.now());                            // llega otro: se pide preparar solo ese
+  await Biblioteca.prototype._revisarMateriales.call(falsa);
+  assert.deepEqual(urls, ["/m?ids=7&preparar=7", "/m?ids=7", "/m?ids=7,8&preparar=8"]);
 });

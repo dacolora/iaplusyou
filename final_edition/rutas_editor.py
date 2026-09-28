@@ -267,18 +267,28 @@ def agregar_pieza(cliente, cf_id):
     return jsonify({"preparando": True}), 202
 
 
+def _ids_de(texto):
+    return [int(p.strip()) for p in (texto or "").split(",") if p.strip().isdigit()]
+
+
 @bp.get("/materiales", endpoint="materiales_por_id")
 def materiales_por_id(cliente):
     """`?ids=1,2,3` -> {materiales: {id: material_para(m)}} solo de este
-    proyecto (un id ajeno o inexistente simplemente no aparece)."""
-    ids = []
-    for parte in (request.args.get("ids") or "").split(","):
-        parte = parte.strip()
-        if parte.isdigit():
-            ids.append(int(parte))
+    proyecto (un id ajeno o inexistente simplemente no aparece).
+
+    `&preparar=1,2`: de esos ids (de este proyecto), encola lo que todavía
+    falta — la copia liviana de un video, los picos de un audio (una canción
+    de Mi música nunca los tuvo) — con la misma tarea gratis e idempotente que
+    `ver` (`vista_previa.encolar_proxies`). La biblioteca lo pide UNA vez por
+    material, al empezar a esperarlo; las preguntas siguientes solo leen (un
+    archivo que falla no se vuelve a encolar cada 3 s)."""
     out = {}
-    for mid in ids:
+    for mid in _ids_de(request.args.get("ids")):
         m = materiales.obtener(cliente, mid)
         if m:
             out[str(mid)] = vista_previa.material_para(m)
+    preparar = {str(mid) for mid in _ids_de(request.args.get("preparar"))}
+    if preparar:
+        vista_previa.encolar_proxies(cliente, vista_previa.pendientes(
+            {int(k): v for k, v in out.items() if k in preparar}))
     return jsonify({"materiales": out})

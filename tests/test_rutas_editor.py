@@ -699,6 +699,30 @@ def test_materiales_por_id_solo_los_de_este_proyecto(dashboard, encolados):
     assert j["materiales"][str(propio["id"])]["url"] == "https://r2/a.mp4"
 
 
+def test_materiales_por_id_prepara_lo_pedido_que_falta(dashboard, encolados):
+    """Fix final 11: una canción de Mi música (audio sin picos) agregada desde la
+    biblioteca nunca tenía onda: nadie encolaba su edicion_proxy. Con
+    `preparar=<ids>` la ruta encola (gratis, el mismo job que `ver`) solo lo que
+    de esos ids todavía falta: audios sin picos y videos sin copia liviana."""
+    import materiales
+    from tareas import edicion as te
+    cancion = materiales.registrar("acme", tipo="audio", origen="musica", url="https://r2/c.mp3", hash="h-c", bytes=1,
+                                   duracion_ms=60000)
+    listo = materiales.registrar("acme", tipo="audio", origen="subida", url="https://r2/d.mp3", hash="h-d", bytes=1,
+                                 duracion_ms=3000, extra={"picos": [0.1, 0.2]})
+    ajeno = materiales.registrar("otro", tipo="audio", origen="musica", url="https://r2/e.mp3", hash="h-e", bytes=1)
+    c = _cliente_admin(dashboard)
+    ids = f"{cancion['id']},{listo['id']},{ajeno['id']}"
+    # sin `preparar` solo se lee (lo que la biblioteca pregunta cada 3 s)
+    assert c.get(f"/cliente/acme/ediciones/materiales?ids={ids}").status_code == 200
+    assert encolados == []
+    r = c.get(f"/cliente/acme/ediciones/materiales?ids={ids}&preparar={ids}")
+    assert r.status_code == 200 and set(r.get_json()["materiales"]) == {str(cancion["id"]), str(listo["id"])}
+    assert [(a[0], a[1], a[2]) for a, _k in encolados] == [
+        (te.job_id_proxy("acme", cancion["id"]), "edicion_proxy", {"cliente": "acme", "material_id": cancion["id"]})]
+    assert encolados[0][1]["max_intentos"] == 3
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("subido_antes", [True, False])
 def test_preparar_piezas_con_bytes_compartidos_resuelve_listado_y_post(
