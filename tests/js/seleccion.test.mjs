@@ -179,3 +179,39 @@ test("cursor, porcentajes y tipo de clip para la capa del DOM", () => {
   assert.equal(esTexto(doc, "nada"), false);
   assert.equal(esTexto(null, "t1"), false);
 });
+
+// ---- Task 8, arreglo 1: imán en px de pantalla y asa de una capa chica ----
+import { IMAN_PX } from "../../static/editor/seleccion.js";
+
+test("el imán del centro se mide en px de pantalla: con el dedo en un reproductor chico también pega", () => {
+  const proporcion = 6.5;                                  // px del lienzo por px de pantalla (celular)
+  const g = { tipo: "caja", transform: { x: 0.3, y: 0.3 }, formato: "9:16", iman: IMAN_PX * proporcion };
+  // termina a 5 px de pantalla (32,5 px del lienzo) del centro: pega y muestra las guías
+  assert.deepEqual(cambiosArrastre(g, 540 - 32.5 - 324, 960 - 32.5 - 576),
+    { cambios: { transform: { x: 0.5, y: 0.5 } }, guias: { vertical: true, horizontal: true } });
+  // a 12 px de pantalla (78 del lienzo) no pega
+  assert.deepEqual(cambiosArrastre(g, 540 - 78 - 324, 960 - 78 - 576),
+    { cambios: { transform: { x: 0.4278, y: 0.4594 } }, guias: { vertical: false, horizontal: false } });
+  // sin `iman` queda el de moverCapa (12 px del lienzo): a 5 px de pantalla no pegaría
+  const sinIman = cambiosArrastre({ ...g, iman: undefined }, 540 - 32.5 - 324, 960 - 32.5 - 576);
+  assert.deepEqual(sinIman.guias, { vertical: false, horizontal: false });
+});
+
+test("en una capa chica el asa no se come la caja: tocar adentro mueve", () => {
+  const doc = conFoto();
+  const mats = { 3: { ancho: 100, alto: 40 } };            // caja 490..590 × 940..980, asa en (590, 980)
+  const op = { seleccion: "foto", materiales: mats, medidasTexto: MEDIDAS, radioAsa: 18 * 6.5, margenAsa: 8 * 6.5 };
+  assert.deepEqual(cajaElegida(doc, 1500, "foto", mats, {}), { x: 490, y: 940, ancho: 100, alto: 40, ancla: "centro" });
+  // adentro, a 33 px de la esquina: antes era el asa (radio 117), ahora mueve la foto
+  let g = gestoEn(doc, 1500, 560, 965, op);
+  assert.deepEqual([g.tipo, g.id], ["caja", "foto"]);
+  // adentro y pegado a la esquina (radio tope 0,35 × 40 = 14): el asa
+  g = gestoEn(doc, 1500, 582, 972, op);
+  assert.deepEqual([g.tipo, g.id], ["asa", "foto"]);
+  // afuera de la caja, cerca de la esquina: el asa con su radio entero (aunque haya otra capa debajo)
+  g = gestoEn(doc, 1500, 620, 1000, op);
+  assert.deepEqual([g.tipo, g.id], ["asa", "foto"]);
+  // una capa grande no cambia: el radio entero también adentro
+  g = gestoEn(doc, 1500, 820, 1000, { ...op, seleccion: "t1" });
+  assert.deepEqual([g.tipo, g.id], ["asa", "t1"]);
+});

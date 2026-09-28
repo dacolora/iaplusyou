@@ -50,6 +50,9 @@ export function escalarCapa(transform, cajaInicial, dxPx, dyPx) {
 // pantalla; la capa los pasa a px del lienzo con la proporción mostrada).
 export const RADIO_ASA_PX = 18;
 export const MARGEN_ASA_PX = 8;
+// El imán del centro, también en px de pantalla: moverCapa lo recibe en px
+// del lienzo (con el dedo, en un reproductor chico, 12 px del lienzo son < 2 de pantalla).
+export const IMAN_PX = 8;
 const UMBRAL_PX = { touch: 8 };           // con el dedo cuesta más quedarse quieto
 const UMBRAL_DEFECTO_PX = 4;
 const DOBLE_TOQUE = { ms: 400, distancia: 24 };
@@ -116,27 +119,36 @@ export function escalarDesdeAsa(transform, caja, dxPx, dyPx) {
 // elegido aunque haya otra capa encima; un toque sin arrastrar elige la de
 // arriba: `alTocar`), otra capa (la de más arriba) o nada. `asa`: la de lo
 // elegido cuando lo tocado es su asa o su caja (el cursor la usa), si no null.
+// Dentro de la caja el asa alcanza como mucho TOPE_ASA_CAJA de su lado corto:
+// en un logo chico, el radio entero del asa se comería casi toda la caja y
+// tocarlo para moverlo lo agrandaría. Afuera de la caja, el radio entero.
+const TOPE_ASA_CAJA = 0.35;
+
 export function gestoEn(doc, tMs, px, py, { seleccion = null, materiales = {}, medidasTexto = {}, radioAsa = 0, margenAsa = 0 } = {}) {
   const arriba = capaEnPunto(doc, tMs, px, py, materiales, medidasTexto);
   const elegida = cajaElegida(doc, tMs, seleccion, materiales, medidasTexto);
   const asa = elegida ? asaDe(elegida, elegida.ancla, doc.formato, margenAsa) : null;
-  if (elegida && Math.hypot(px - asa.x, py - asa.y) <= radioAsa) {
+  const adentro = Boolean(elegida) && dentro(elegida, px, py);
+  const radio = adentro ? Math.min(radioAsa, TOPE_ASA_CAJA * Math.min(elegida.ancho, elegida.alto)) : radioAsa;
+  if (elegida && Math.hypot(px - asa.x, py - asa.y) <= radio) {
     return { tipo: "asa", id: seleccion, alTocar: seleccion, caja: elegida, asa };
   }
-  if (elegida && dentro(elegida, px, py)) return { tipo: "caja", id: seleccion, alTocar: arriba ?? seleccion, caja: elegida, asa };
+  if (adentro) return { tipo: "caja", id: seleccion, alTocar: arriba ?? seleccion, caja: elegida, asa };
   if (arriba) return { tipo: "caja", id: arriba, alTocar: arriba, caja: cajaElegida(doc, tMs, arriba, materiales, medidasTexto), asa: null };
   return { tipo: "vacio", id: null, alTocar: null, caja: null, asa: null };
 }
 
 // El cambio para operaciones.cambiar que pide un arrastre de (dx, dy) px del
 // lienzo desde donde empezó. `gesto`: {tipo, transform y caja del comienzo,
-// formato}. Mover pega al centro (y lo dice en `guias`); el asa cambia la
-// escala. Redondeado a 4 decimales, como el borrador.
-export function cambiosArrastre({ tipo, transform, caja, formato }, dxPx, dyPx) {
+// formato, iman}. Mover pega al centro (y lo dice en `guias`) a menos de
+// `iman` px del LIENZO — quien llama pasa IMAN_PX × la proporción mostrada,
+// para que pegue igual con el dedo en un reproductor chico; sin `iman`, el de
+// moverCapa. El asa cambia la escala. Redondeado a 4 decimales, como el borrador.
+export function cambiosArrastre({ tipo, transform, caja, formato, iman }, dxPx, dyPx) {
   if (tipo === "asa") {
     return { cambios: { transform: { escala: r4(escalarDesdeAsa(transform, caja, dxPx, dyPx)) } }, guias: { ...SIN_GUIAS } };
   }
-  const m = moverCapa(transform, dxPx, dyPx, formato);
+  const m = moverCapa(transform, dxPx, dyPx, formato, iman === undefined ? {} : { iman });
   return { cambios: { transform: { x: r4(m.x), y: r4(m.y) } }, guias: m.guias };
 }
 

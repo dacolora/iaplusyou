@@ -20,8 +20,8 @@
 // las medidas de los textos del propio lienzo (vista.medidasTexto). La caja,
 // el asa y las guías son dibujo: no reciben el puntero.
 import {
-  asaDe, cajaElegida, cambiosArrastre, cursorEn, esDobleToque, esTexto, gestoEn, MARGEN_ASA_PX, porcentaje, puntoEnLienzo,
-  RADIO_ASA_PX, superaUmbral,
+  asaDe, cajaElegida, cambiosArrastre, cursorEn, esDobleToque, esTexto, gestoEn, IMAN_PX, MARGEN_ASA_PX, porcentaje,
+  puntoEnLienzo, RADIO_ASA_PX, superaUmbral,
 } from "./seleccion.js";
 
 function el(tag, clase, padre) {
@@ -124,7 +124,7 @@ export class InteraccionLienzo {
       seleccion: this.editor.seleccion, materiales: this.vista.materiales, medidasTexto: this.vista.medidasTexto(t),
       radioAsa: RADIO_ASA_PX * medida.proporcion, margenAsa: MARGEN_ASA_PX * medida.proporcion,
     });
-    return { ...g, doc, punto: p };
+    return { ...g, doc, punto: p, proporcion: medida.proporcion };
   }
 
   _abajo(e) {
@@ -146,7 +146,8 @@ export class InteraccionLienzo {
     if (g.id !== this.editor.seleccion) this.editor.seleccionar(g.id);   // la caja aparece bajo el dedo
     this.gesto = {
       pointerId: e.pointerId, tipo: g.tipo, id: g.id, alTocar: g.alTocar, texto: esTexto(g.doc, g.alTocar),
-      transform, caja: g.caja, formato: g.doc.formato, inicio: g.punto,
+      // el imán del centro: IMAN_PX de pantalla, en px del lienzo
+      transform, caja: g.caja, formato: g.doc.formato, inicio: g.punto, iman: IMAN_PX * g.proporcion,
       x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, activo: false,
     };
     try {
