@@ -194,6 +194,15 @@ def test_grafico_tooltip_en_ingles(app):
     assert g_es["dias"][0]["titulo"] == "01/09 · gasto 1.000 COP · ingresos 0 COP"
 
 
+def test_filtro_roas_redondea_igual_que_main(app):
+    """El filtro `roas` pasa por `idiomas.numero` (revisión final fase 4,
+    M2): confirma que llega hasta acá también, no solo hasta
+    `idiomas.numero`/`tablero.dinero`."""
+    d = app["dashboard"]
+    assert d._filtro_roas(12.345) == "12,3"
+    assert d._filtro_roas(0.015) == "0,0"
+
+
 def test_compacto_eje_en_ingles(app):
     """Fix round 1: `_compacto` (etiquetas del eje) usa el separador decimal
     del idioma activo — coma en español (sin cambios), punto en inglés."""

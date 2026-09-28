@@ -189,9 +189,15 @@ def dia_mes(fecha, idioma=None):
 def numero(valor, decimales=0, idioma=None):
     """Miles y decimales del idioma: «1.250.000» / «1,250,000»; con
     decimales=2, «12,50» / «12.50». El patrón explícito agrupa también los
-    números de 4 cifras («4.000»), como el código de antes."""
+    números de 4 cifras («4.000»), como el código de antes. Redondea con
+    `f"{valor:.{decimales}f}"` ANTES de pasarlo a Babel — el redondeo de
+    Babel es half-even sobre el valor exacto y difiere del de `format()` en
+    el último dígito para casos como 12.345 o 0.015 (revisión final fase 4,
+    hallazgo M2): sin este paso el español dejaba de coincidir con lo que
+    mostraba main antes de esta rama."""
     from babel.numbers import format_decimal
     patron = "#,##0" + ("." + "0" * int(decimales) if decimales else "")
+    valor = float(f"{float(valor):.{int(decimales)}f}")
     return format_decimal(valor, patron, locale=_loc(idioma))
 
 

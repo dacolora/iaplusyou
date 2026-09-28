@@ -130,6 +130,30 @@ def test_exp_avanzar_todos_usa_el_idioma_de_cada_proyecto(base_temporal, tmp_pat
     assert not _con_marca(ev_en["mensaje"])
 
 
+def test_exp_avanzar_todos_sobrevive_un_proyecto_json_roto(base_temporal, tmp_path, monkeypatch):
+    """Revisión final fase 4 (M3): un proyecto.json que no es un objeto no
+    tumba la pasada entera; las derivaciones de los demás proyectos avanzan."""
+    import json
+    import experimentos as ex
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import PAISES
+    monkeypatch.setattr(proyectos, "BASE_DIR", str(tmp_path))
+    roto = tmp_path / "clientes" / "otro"
+    roto.mkdir(parents=True)
+    (roto / "proyecto.json").write_text(json.dumps(["no", "es", "un", "objeto"]), encoding="utf-8")
+    tareas.cargar_todas()
+    e_acme = ex.crear("acme", "A", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    e_otro = ex.crear("otro", "B", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.actualizar("acme", e_acme, extra={"derivaciones": [{"id": "d1", "estado": "produciendo"}]})
+    ex.actualizar("otro", e_otro, extra={"derivaciones": [{"id": "d1", "estado": "produciendo"}]})
+    llamadas = []
+    monkeypatch.setattr(te.derivaciones, "avanzar", lambda c, e: llamadas.append(c))
+    tareas.REGISTRO["exp_avanzar_todos"]({"payload": {}})
+    assert sorted(llamadas) == ["acme", "otro"]
+
+
 def test_marcar_decidido_en_ingles(monkeypatch):
     """Fix round 1: los textos que _aplicar_veredicto/_rechazada_por_meta/
     _marcar_decidido dejaban en español fijo (corren dentro del worker/las

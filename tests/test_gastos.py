@@ -173,6 +173,11 @@ def test_estimar_swap_por_proveedor():
 @pytest.mark.parametrize("usd, esperado", [
     (None, "—"), (0, "US$ 0,00"), (0.005, "US$ <0,01"), (0.07, "US$ 0,07"), (0.1, "US$ 0,10"),
     (1, "US$ 1,00"), (12.4, "US$ 12,40"), (1234.567, "US$ 1.234,57"), ("abc", "—"),
+    # Revisión final fase 4 (M2): Babel redondea half-even sobre el valor
+    # EXACTO y difiere de `f"{v:.2f}"` (lo de main) para estos dos — sin el
+    # pre-redondeo de idiomas.numero, 12.345 salía "US$ 12,34" y 0.015
+    # "US$ 0,02".
+    (12.345, "US$ 12,35"), (0.015, "US$ 0,01"),
 ])
 def test_formatear(usd, esperado):
     import gastos

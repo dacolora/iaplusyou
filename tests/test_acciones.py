@@ -243,7 +243,7 @@ def test_ejecutar_propuesta_mensaje_de_quien_mira_evento_del_proyecto(ent, tmp_p
         mensaje = ac.ejecutar("acme", eid, "pausar", {"ep_id": ep}, propuesta_id=1, ep_id_evento=ep)
     assert mensaje == "Paused Final es_CO (CO)."
     evento = ex.eventos("acme", eid)[0]   # eventos() viene más nuevo primero (id desc)
-    assert evento["mensaje"] == "Pausada Final es_CO (CO). (propuesta #1 aprobada a mano)."
+    assert evento["mensaje"] == "Pausada Final es_CO (CO). (propuesta #1 aprobada a mano)"
 
     # Al revés: proyecto en inglés, alguien mirando en español aprueba.
     idiomas.guardar_de_proyecto("acme", "en")
@@ -251,7 +251,7 @@ def test_ejecutar_propuesta_mensaje_de_quien_mira_evento_del_proyecto(ent, tmp_p
         mensaje2 = ac.ejecutar("acme", eid, "pausar", {"ep_id": ep}, propuesta_id=2, ep_id_evento=ep)
     assert mensaje2 == "Pausada Final es_CO (CO)."
     evento2 = ex.eventos("acme", eid)[0]
-    assert evento2["mensaje"] == "Paused Final es_CO (CO). (proposal #2 approved by hand)."
+    assert evento2["mensaje"] == "Paused Final es_CO (CO). (proposal #2 approved by hand)"
 
 
 def test_pedir_derivar_en_profundidad_maxima_propone_aunque_sea_auto(ent):

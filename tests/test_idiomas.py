@@ -169,6 +169,18 @@ def test_formatos_de_fecha_y_numero():
     assert idiomas.separador_decimal("es") == "," and idiomas.separador_decimal("en") == "."
 
 
+def test_numero_redondea_igual_que_main():
+    """El redondeo half-even de Babel sobre el valor exacto difiere del de
+    `f"{v:.2f}"` (lo que usaba main) en el último dígito para 12.345 (Babel:
+    12,34) y 0.015 (Babel: 0,02) — `numero` pre-redondea con `format()` antes
+    de pasarle el valor a Babel para que el español (y el inglés, con el
+    mismo valor ya redondeado) coincida con main byte a byte (revisión final
+    fase 4, hallazgo M2)."""
+    import idiomas
+    assert idiomas.numero(12.345, 2, idioma="es") == "12,35" and idiomas.numero(12.345, 2, idioma="en") == "12.35"
+    assert idiomas.numero(0.015, 2, idioma="es") == "0,01" and idiomas.numero(0.015, 2, idioma="en") == "0.01"
+
+
 def test_activo_sigue_al_contexto(app_prueba):
     assert idiomas.activo() == "es"                      # sin contexto: DEFECTO (fijo en "es" en tests)
     with idiomas.en_idioma("en"):

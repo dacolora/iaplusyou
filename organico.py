@@ -332,8 +332,9 @@ def contexto_pieza(cliente, pieza_id):
     clon: `concepto.extra.accion_central`), producto (tiendas.por_activo
     por el primer `productos_ids` del concepto — id o nombre visible, ver
     `_activo` — o el catálogo directamente), `url_compra` (del producto, o
-    `destino_url` del último experimento que contiene la pieza), idioma (el
-    del proyecto), hashtags base y el `angulo` decidido para la pieza (dict o
+    `destino_url` del último experimento que contiene la pieza), idioma (el de
+    la pieza o `concepto.idioma_base`; el del proyecto solo si ninguno de los
+    dos existe), hashtags base y el `angulo` decidido para la pieza (dict o
     None)."""
     with db.conectar() as con:
         pz = _fila_pieza(con, cliente, pieza_id)
@@ -376,7 +377,8 @@ def contexto_pieza(cliente, pieza_id):
         nombre = accion or f"Pieza {pieza_id}"
     if not url_compra and ex and ex[0]:
         url_compra = ex[0]
-    idioma = idiomas.de_proyecto(cliente)
+    idioma = (pm[db.pieza.c.idioma] or (cp._mapping[db.concepto.c.idioma_base] if cp else None)
+              or idiomas.de_proyecto(cliente))
     return {"nombre_producto": nombre, "descripcion": descripcion, "url_compra": url_compra, "idioma": idioma,
             "guion_texto": guion_texto, "hashtags_base": _hashtags_de(nombre), "angulo": c_extra.get("angulo"),
             "pruebas": doctrina_producto.pruebas(producto) if producto else []}

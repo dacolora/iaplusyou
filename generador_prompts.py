@@ -407,14 +407,20 @@ def caption_organico(contexto, plataformas):
     cualquiera; uno DESPUÉS (JSON inválido o sin ninguna plataforma pedida)
     sale como `RespuestaInvalida`, porque la llamada ya se cobró."""
     plataformas = list(plataformas)
-    idioma = idiomas.normalizar(contexto.get("idioma")) or "es"
+    # `idioma_pieza` es lo que se le dice a Claude tal cual («Idioma: pt» si la
+    # pieza es portugués, como en main); `idioma_orden` solo existe cuando es
+    # es/en (idiomas.IDIOMAS) — únicos idiomas con orden de idioma (§B4). Para
+    # cualquier otro código no se envuelve el bloque con una orden: nada de
+    # forzar español a una pieza en portugués.
+    idioma_pieza = str(contexto.get("idioma") or "es").strip().lower()
+    idioma_orden = idiomas.normalizar(idioma_pieza)
 
     def _dato(etiqueta, valor, tope):
         # Todo lo que viene de la tienda/catálogo va delimitado (y sin la
         # etiqueta de cierre adentro): es dato, no instrucción.
         return f"<{etiqueta}>{str(valor).strip()[:tope].replace(f'</{etiqueta}>', '')}</{etiqueta}>"
     partes = [f"Plataformas: {', '.join(plataformas)}",
-              f"Idioma: {contexto.get('idioma') or 'es'}",
+              f"Idioma: {idioma_pieza}",
               "Producto: " + _dato("producto", contexto.get("nombre_producto") or "", 200)]
     if (contexto.get("descripcion") or "").strip():
         limpia = contexto["descripcion"].strip()[:1500].replace("</descripcion>", "")
@@ -435,14 +441,14 @@ def caption_organico(contexto, plataformas):
         partes.append("El título y el caption usan el mismo gancho y la misma promesa del ángulo; el cierre, con una "
                       "razón para actuar.")
 
-    extra = CAPTION_ORGANICO_PROMPT.replace("__LINK_BIO__", LINK_EN_BIO.get(idioma, LINK_EN_BIO["es"]))
+    extra = CAPTION_ORGANICO_PROMPT.replace("__LINK_BIO__", LINK_EN_BIO.get(idioma_pieza, LINK_EN_BIO["es"]))
     client = anthropic.Anthropic(api_key=_api_key())
     resp = client.messages.create(
         model=MODEL,
         # Sonnet 5 piensa antes de responder y eso sale del mismo tope: con
         # cuatro plataformas, 2048 podía cortar el JSON (y caer al fallback).
         max_tokens=4000,
-        system=doctrina.bloque_system("caption", extra=extra, idioma=idioma),
+        system=doctrina.bloque_system("caption", extra=extra, idioma=idioma_orden),
         messages=[{"role": "user", "content": "\n".join(partes)}],
     )
     texto = "".join(block.text for block in resp.content if block.type == "text").strip()

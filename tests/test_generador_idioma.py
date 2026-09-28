@@ -61,6 +61,20 @@ def test_caption_organico_con_orden_y_link_in_bio(monkeypatch):
     assert idiomas.orden_idioma("en") in s and '"Link in bio"' in s and '"Link en bio"' not in s
 
 
+def test_caption_organico_pt_sin_orden_de_idioma(monkeypatch):
+    """Un idioma que no es es/en (ej. portugués: pieza de un destino que
+    todavía no tiene su propio catálogo de idiomas de interfaz) no lleva la
+    orden §B4 -- forzaría español o inglés sobre esa pieza -- pero sí dice
+    «Idioma: pt» tal cual, como hacía main antes de la fase 4 (revisión
+    final fase 4, hallazgo I1)."""
+    cap = _cliente_falso(monkeypatch, '{"instagram": {"titulo": "T", "caption": "C"}}')
+    gp.caption_organico({"nombre_producto": "Chinelo", "idioma": "pt"}, ["instagram"])
+    s = _texto(cap["system"])
+    assert idiomas.orden_idioma("es") not in s and idiomas.orden_idioma("en") not in s
+    assert '"Link na bio"' in s
+    assert "Idioma: pt" in cap["messages"][0]["content"]
+
+
 def test_generar_prompts_en_ingles(monkeypatch):
     cap = _cliente_falso(monkeypatch, '["a", "b"]')
     gp.generar_prompts("a dog runs", n=2, idioma="en")

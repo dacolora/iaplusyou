@@ -151,8 +151,8 @@ msgid "%(leidos)s pedido(s) leído(s), %(nuevos)s nuevo(s), %(atribuidos)s atrib
 msgstr "%(leidos)s order(s) read, %(nuevos)s new, %(atribuidos)s attributed to pieces."
 
 #, python-format
-msgid "%(mensaje)s (propuesta #%(id)s aprobada a mano)."
-msgstr "%(mensaje)s (proposal #%(id)s approved by hand)."
+msgid "%(mensaje)s (propuesta #%(id)s aprobada a mano)"
+msgstr "%(mensaje)s (proposal #%(id)s approved by hand)"
 
 #, python-format
 msgid "%(mensaje)s Experimento hijo %(hijo)s."

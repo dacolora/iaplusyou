@@ -419,7 +419,10 @@ def exp_avanzar_todos(tarea):
         if not any(d.get("estado") == "produciendo" for d in ((extra or {}).get("derivaciones") or [])):
             continue
         n += 1
-        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+        # `de_tarea` nunca lanza (a diferencia de `de_proyecto`: un
+        # proyecto.json que no sea un objeto tumbaría toda la pasada, no
+        # solo la derivación de este cliente — revisión final fase 4, M3).
+        with idiomas.en_idioma(idiomas.de_tarea({"payload": {"cliente": cliente}})):
             try:
                 derivaciones.avanzar(cliente, eid)
             except Exception as error:

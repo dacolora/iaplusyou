@@ -126,7 +126,7 @@ def _registrar_evento_aprobada(cliente, experimento_id, accion, payload, propues
         with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
             experimentos.registrar_evento(
                 cliente, experimento_id, "accion",
-                gettext("%(mensaje)s (propuesta #%(id)s aprobada a mano).",
+                gettext("%(mensaje)s (propuesta #%(id)s aprobada a mano)",
                         mensaje=armar_mensaje(), id=propuesta_id),
                 {"accion": accion, "payload": payload, "propuesta_id": propuesta_id}, ep_id=ep_id_evento)
     except Exception:  # noqa: BLE001 — la acción ya pasó; un evento que falla no la deshace
