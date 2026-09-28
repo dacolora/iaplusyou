@@ -538,21 +538,24 @@ def test_experimentos_muestra_barra_si_hay_trabajo(app, base_temporal, monkeypat
 
 def test_final_edition_muestra_bloque_en_final_lista(app, base_temporal):
     """Las finales (y su «Publicar orgánico») salieron de Crear a la pestaña
-    Final edition el 2026-09-27."""
+    Final edition el 2026-09-27; desde las tarjetas ligeras (2026-09-28) el
+    bloque va en el detalle de la final, que llega por fetch."""
     import creative_flow as cf
     from tests.test_rutas_final_edition import _sesion_video_listo
     cf_id = _sesion_video_listo()
     fid = cf.crear_final("acme", cf_id, "es", "CO")
     cf.actualizar_final("acme", fid, estado="listo", url_video="https://r2/f.mp4")
     pid = cf.pieza_id_por_legado("acme", fid)
-    html = _seccion(_html(app), "final")
+    ruta_detalle = f"/cliente/acme/creative_flow/{cf_id}/final/{fid}/detalle"
+    html = app["c"].get(ruta_detalle).get_data(as_text=True)
     assert "Publicación orgánica" in html and f'name="pieza_id" value="{pid}"' in html
     assert 'name="volver" value="final"' in html
     assert "window.orgConfirmar" in html and 'name="ep_id"' not in html
     assert "Publicación orgánica" not in _seccion(_html(app), "creativeflowplus")
+    assert "Publicación orgánica" not in app["c"].get(f"/cliente/acme/creative_flow/{cf_id}/detalle").get_data(as_text=True)
     # Una final en error no lo muestra.
     cf.actualizar_final("acme", fid, estado="error")
-    assert "Publicación orgánica" not in _seccion(_html(app), "final")
+    assert "Publicación orgánica" not in app["c"].get(ruta_detalle).get_data(as_text=True)
 
 
 def test_pagina_trae_los_scripts_una_vez(app):

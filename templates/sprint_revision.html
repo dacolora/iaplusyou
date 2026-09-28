@@ -8,7 +8,7 @@
   <div>
     <h1>Revisión de {{ sprint.nombre }}</h1>
     <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ resumen.terminadas }} terminadas de {{ resumen.planeadas }} · {{ resumen.aprobadas }} aprobadas · {{ resumen.rechazadas }} rechazadas · {{ resumen.sin_revisar }} sin revisar · {{ resumen.error }} con error · USD {{ '%.2f' % resumen.costo_usd }}</p>
-    <p class="vacio">Atajos: <kbd>A</kbd> aprobar · <kbd>R</kbd> rechazar · <kbd>←</kbd> <kbd>→</kbd> moverse. Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; pasa el cursor para leer la nota.</p>
+    <p class="vacio"><span class="solo-teclado">Atajos: <kbd>A</kbd> aprobar · <kbd>R</kbd> rechazar · <kbd>←</kbd> <kbd>→</kbd> moverse. </span>Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.</p>
   </div>
 </div>
 
@@ -54,9 +54,8 @@
       </div>
       {% elif p.qa %}
       <div class="sprint-qa">
-        <span class="sprint-qa-score sprint-qa-{{ p.qa.veredicto }}">{{ p.qa.score }}</span>
-        {% for k in checks %}{% set ch = (p.qa.checks or {}).get(k) %}{% if ch %}<span class="qa-check {{ 'ok' if ch.ok else 'mal' }}" title="{{ k | replace('_', ' ') }}: {{ ch.nota }}">{{ '✓' if ch.ok else '✗' }}</span>{% endif %}{% endfor %}
-        <small class="vacio">{{ p.qa.veredicto }}</small>
+        {% from "_sprint_qa.html" import qa_detalle %}
+        {{ qa_detalle(p.qa, checks) }}
         {% set doc = p.doctrina or {} %}
         {% if doc.estado == 'mejorar' %}<span class="tag-estado" title="Revisión de la doctrina: se ve en Crear">Doctrina: {{ doc.n }} por mejorar</span>{% elif doc.estado == 'bien' %}<span class="tag-estado" title="Revisión de la doctrina">Doctrina: bien</span>{% elif doc.estado %}<span class="tag-estado" title="Se revisa desde la pieza en Crear">Doctrina: sin revisar</span>{% endif %}
       </div>

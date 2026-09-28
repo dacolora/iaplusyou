@@ -172,7 +172,8 @@
       {% if e.resumen.mejor_cpc %}· {{ _('mejor CPC %(cpc)s', cpc=("%.2f"|format(e.resumen.mejor_cpc))) }}{% endif %}
       {% if e.atribucion == "tienda" %}· {{ _('ventas por tienda: %(n)s pedido(s)', n=pedidos_por_exp.get(e.id, 0)) }}{% endif %}</small>
   </summary>
-  {% if e.error %}<p class="tag-error">{{ e.error }}</p>{% endif %}
+  {% if e.error %}{% set error_claro = e.error|error_meta(modo_meta) %}<p class="tag-error">{{ error_claro }}</p>
+  {% if error_claro != e.error %}<details class="detalle-tecnico"><summary>{{ _('Detalle técnico (para soporte)') }}</summary><code>{{ e.error }}</code></details>{% endif %}{% endif %}
   {% set trabajo = trabajos_exp.get(e.id) %}
   {% if trabajo %}
   <div class="barra-progreso" id="trabajo-{{ trabajo.job_id }}"><div class="barra-progreso-fill"></div><span class="progreso-texto"></span></div>
@@ -279,7 +280,10 @@
             {% if pz.metricas.estado_meta_texto %}<small>· {{ pz.metricas.estado_meta_texto }}</small>{% endif %}
             {% if pz.veredicto and pz.veredicto != "pendiente" %}<span class="veredicto veredicto-{{ pz.veredicto }}" title="{{ pz.veredicto_motivo or '' }}">{{ etiquetas_exp.veredicto.get(pz.veredicto, pz.veredicto)|traducir }}</span>{% endif %}
             {% if pz.escalon_rescate %}<span class="tag-estado tag-escalon" title="{{ _('Rescates intentados sobre esta pieza') }}">{{ _('Escalón %(n)s/3', n=pz.escalon_rescate) }}</span>{% endif %}
-            {% if pz.error %}<span class="tag-error">{{ pz.error }}</span>{% endif %}</span>
+            {# Doctrina, bloque 4: por qué perdió y qué sigue (solo informa). #}
+            {% set dg = (pz.extra or {}).get('diagnostico') %}
+            {% if pz.veredicto == 'perdedor' and dg %}<span class="exp-diagnostico">{% if dg.error %}<small class="tag-error">{{ _('El diagnóstico no se pudo hacer: %(error)s', error=dg.error) }}</small>{% else %}{% for c in dg.causas %}<span class="tag-estado" title="{{ c.detalle }}{% if c.evidencia %} ({{ c.evidencia }}){% endif %}">{{ CAUSAS_NOMBRE.get(c.codigo, c.codigo)|traducir }}</span>{% endfor %}<small>{{ _('Siguiente: %(paso)s', paso=SIGUIENTES_NOMBRE.get(dg.siguiente.que, dg.siguiente.que)|traducir) }}{% if dg.siguiente.porque %} — {{ dg.siguiente.porque }}{% endif %}</small> <a href="{{ url_for('doctrina_pagina', cliente=cliente) }}#diagnosticar" target="_blank" rel="noopener">{{ _('¿Por qué?') }}</a>{% endif %}</span>{% endif %}
+            {% if pz.error %}<span class="tag-error" title="{{ pz.error }}">{{ pz.error|error_meta(modo_meta) }}</span>{% endif %}</span>
           {% if pz.metricas %}
           <span class="kpis kpis-mini">
             <span class="kpi"><b>{{ pz.metricas.impresiones }}</b> {{ _('impr.') }}</span>
@@ -334,7 +338,7 @@
         {% if pz_orig %}{{ _('desde %(nombre)s', nombre=pz_orig.nombre) }}{% endif %}{% if d.motivo %} <small>— {{ d.motivo }}</small>{% endif %}
         <ul class="exp-derivacion-items">
           {% for it in d["items"] %}
-          <li><span class="tag-estado">{{ etiquetas_exp.clase.get(it.clase, it.clase)|traducir }}{% if it.variante_tipo %} · {{ etiquetas_exp.variante.get(it.variante_tipo, it.variante_tipo)|traducir }}{% endif %}</span> {{ etiquetas_exp.derivacion.get(it.estado, it.estado)|traducir }}{% if it.paises %} · {{ it.paises|join(", ") }}{% endif %}{% if it.error %} <span class="tag-error">{{ it.error }}</span>{% endif %}</li>
+          <li><span class="tag-estado">{{ etiquetas_exp.clase.get(it.clase, it.clase)|traducir }}{% if it.variante_tipo %} · {{ etiquetas_exp.variante.get(it.variante_tipo, it.variante_tipo)|traducir }}{% endif %}</span> {{ etiquetas_exp.derivacion.get(it.estado, it.estado)|traducir }}{% if it.paises %} · {{ it.paises|join(", ") }}{% endif %}{% if it.error %} <span class="tag-error" title="{{ it.error }}">{{ it.error|error_meta(modo_meta) }}</span>{% endif %}</li>
           {% endfor %}
         </ul>
       </li>
@@ -583,3 +587,5 @@
     }
   })();
 </script>
+{# Doctrina, bloque 4: lo que el proyecto ya aprendió de sus pruebas. #}
+{% include "_aprendizajes.html" %}

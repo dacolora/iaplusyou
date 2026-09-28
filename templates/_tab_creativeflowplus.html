@@ -1,4 +1,4 @@
-{% from "_revision_doctrina.html" import revision_doctrina %}
+{% from "_crear_tarjetas.html" import lista_crear with context %}
 {# Formulario de Crear como compositor (spec 2026-09-27-crear-compositor-design.md).
    Una tarjeta en dos mitades: arriba la bandeja de referencias (FUERA de
    #form-flowplus porque lleva sus propios <form> de quitar/vaciar — los
@@ -220,186 +220,14 @@
 
 <div id="creativeflowplus-resultados" style="margin-top:2rem;">
   <div style="display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap;">
-    <h3 style="margin:0;">{{ _('Generados (%(n)s)', n=(creative_flow_items | length)) }}</h3>
+    <h3 style="margin:0;">{{ _('Generados (%(n)s)', n=crear_total) }}</h3>
     <span class="vacio" style="padding:0;font-size:.78rem;">{{ _('Toca una pieza para ver el detalle, descargarla o crear otra a partir de ella.') }}</span>
   </div>
-  {% if not creative_flow_items %}
+  {% if not crear_total %}
   <p class="vacio">{{ _('Todavía no has generado nada en Crear.') }}</p>
   {% endif %}
-  <div class="generados-grid">
-    {% for item in creative_flow_items %}
-    <div class="generado" data-cf="{{ item.id }}" tabindex="0" role="button">
-      <div class="generado-media">
-        {% if item.estado == "video_listo" and item.tipo == "imagen" %}
-        <img src="{{ item.video_url }}" alt="" loading="lazy">
-        {% elif item.estado == "video_listo" %}
-        <video src="{{ item.video_url }}#t=0.1" muted playsinline preload="none" data-precarga></video>
-        {% else %}
-        {% set _portada = (item.referencias[0].frame_url if item.referencias else (item.referencias_urls[0] if item.referencias_urls else None)) %}
-        {% if _portada %}<img src="{{ _portada }}" alt="" loading="lazy" class="generado-portada">{% endif %}
-        {% endif %}
-        <span class="generado-tipo">{% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}</span>
-        {% if item.estado == "video_generando" %}
-        <div class="generado-velo">
-          {% if item.trabajo %}
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Generando… 0%% · 0s') }}</div>
-          <script>iniciarPolling({{ item.trabajo.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo.job_id) | tojson }});</script>
-          {% else %}
-          <span class="generado-estado">{{ _('Interrumpido') }}</span>
-          {% endif %}
-        </div>
-        {% elif item.estado == "error" %}
-        <div class="generado-velo"><span class="generado-estado error">{{ _('Error') }}</span></div>
-        {% elif item.estado == "prompt_pendiente" %}
-        <div class="generado-velo">
-          {% if item.trabajo_director %}
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_director.job_id }}"><div class="barra-progreso-fill" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Armando el prompt con IA…') }}</div>
-          <script>iniciarPolling({{ item.trabajo_director.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_director.job_id) | tojson }});</script>
-          {% else %}
-          <span class="generado-estado">{{ _('Interrumpido — rearma el prompt') }}</span>
-          {% endif %}
-        </div>
-        {% elif item.estado == "prompt_listo" %}
-        <div class="fe-seccion" style="background:var(--panel-2);padding:0.8rem;border-radius:4px;margin-bottom:0.8rem;">
-          <p class="campo-label" style="margin:0 0 0.4rem 0;">{{ _('✏️ Super prompt (editable)') }}</p>
-          {% if item.director and item.director.estado == "fallback" %}
-          <p class="vacio" style="padding:0;font-size:.75rem;color:var(--error);">{{ _('⚠️ La IA no pudo armar los planos (%(aviso)s). Aquí va el prompt básico que puedes editar.', aviso=item.director.aviso) }}</p>
-          {% else %}
-          <p class="vacio" style="padding:0;font-size:.75rem;">{{ _('Revisa, edita si quieres y haz clic en «Generar video».') }}</p>
-          {% endif %}
-          <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}" style="margin-top:.4rem;">
-            <textarea name="prompt_a" rows="6" style="width:100%;font-size:.8rem;font-family:monospace;padding:.4rem;">{{ item.prompt_relleno }}</textarea>
-            <div style="display:flex;gap:.4rem;margin-top:.3rem;">
-              <button type="submit" class="btn-guardar btn-sm">{{ _('💾 Guardar cambios') }}</button>
-              <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe el prompt. ¿Seguir?')|tojson }});'>
-                <button type="submit" class="btn-sm">{{ _('🔄 Rearmar con IA') }}</button>
-              </form>
-            </div>
-          </form>
-        </div>
-        {% elif item.trabajo_revision %}
-        {# Doctrina, bloque 3: la barra de «Revisar con la doctrina» va en la tarjeta. #}
-        <div class="generado-velo">
-          <div class="barra-progreso" id="trabajo-{{ item.trabajo_revision.job_id }}"><div class="barra-progreso-fill barra-progreso-indeterminada" style="width:0%"></div></div>
-          <div class="progreso-texto">{{ _('Revisando con la doctrina…') }}</div>
-          <script>iniciarPolling({{ item.trabajo_revision.job_id | tojson }}, {{ ("trabajo-" ~ item.trabajo_revision.job_id) | tojson }});</script>
-        </div>
-        {% endif %}
-      </div>
-      <div class="generado-pie">
-        <strong>{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}</strong>
-        {% if item.variante %}<span class="generado-badge">{{ _('Versión %(v)s', v=item.variante) }}</span>{% elif item.director and item.director.prompt_b %}<span class="generado-badge">{{ _('Versión A') }}</span>{% endif %}
-        {% if item.revision_estado in ("bien", "mejorar") %}<span class="generado-badge" title="{{ _('Revisión de la doctrina') }}">{% if item.revision_estado == "bien" %}{{ _('Doctrina: bien') }}{% else %}{{ _('Doctrina: %(n)s por mejorar', n=item.revision_n) }}{% endif %}</span>{% endif %}
-        {% if item.sprint %}<a class="generado-badge generado-sprint" href="{{ url_for('sprints.ver', cliente=cliente, sid=item.sprint.sprint_id, panel=item.sprint.campana_id, paso='piezas') }}" title="{{ item.sprint.sprint_nombre }}">{{ _('Sprint · Campaña %(n)s', n=item.sprint.campana_n) }}</a>{% endif %}
-        <small>{{ item.modelo_nombre|traducir }}{% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}{% if item.capas.sonido and item.capas.sonido.estado == "ok" %} · <span title="{{ _('El video trae el sonido de la escena') }}">🔊</span>{% elif item.capas.sonido and item.capas.sonido.estado == "ausente" %} · <span title="{{ _('El proveedor entregó el video sin pista de audio') }}">{{ _('🔇 sin sonido') }}</span>{% endif %}{% if item.capas.musica and item.capas.musica.estado == "ok" %} · <span title="{{ _('Música al crear: %(estilo)s', estilo=item.capas.musica.estilo) }}">🎵 {{ item.capas.musica.estilo }}</span>{% endif %}</small>
-      </div>
-      <template class="generado-detalle">
-        <div class="detalle-media">
-          {% if item.estado == "video_listo" and item.tipo == "imagen" %}
-          <img src="{{ item.video_url }}" alt="">
-          {% elif item.estado == "video_listo" %}
-          <video src="{{ item.video_url }}" controls autoplay muted loop playsinline></video>
-          {% elif item.referencias %}
-          <img src="{{ item.referencias[0].frame_url }}" alt="" style="opacity:.6;">
-          {% endif %}
-        </div>
-        <div class="detalle-info">
-          <p class="campo-label">{{ _('Qué tenía que pasar') }}</p>
-          <p class="detalle-texto">{{ item.accion_central or _('(sin texto)') }}</p>
-          <p class="vacio" style="padding:0;font-size:.78rem;">
-            {% if item.tipo == "imagen" %}{{ _('Imagen') }}{% if item.aspect_ratio %} · {{ item.aspect_ratio }}{% endif %}{% else %}{{ _('Video') }} · {{ item.duracion_objetivo }}s · {{ item.aspect_ratio or _('formato de la imagen') }}{% endif %}
-            · {{ item.modelo_nombre|traducir }}
-            {% if item.enfoque_nombre %} · {{ item.enfoque_nombre|traducir }}{% endif %}
-            {% if item.usd %} · {{ _('costó %(usd)s', usd=(item.usd | usd)) }}{% endif %}
-            · <span class="tag-estado">{{ item.estado }}</span>
-          </p>
-          {% if item.referencias %}
-          <p class="campo-label" style="margin-top:.8rem;">{{ _('Referencias') }}</p>
-          <div class="catalogo-productos" style="margin-bottom:.6rem;">
-            {% for r in item.referencias %}
-            <figure style="margin:0;text-align:center;">
-              <img src="{{ r.frame_url }}" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:6px;background:var(--panel-2);{% if r.tipo == 'video' %}outline:2px solid var(--accent);{% endif %}">
-              <figcaption class="vacio" style="padding:0;font-size:.66rem;">{{ r.etiqueta }}</figcaption>
-            </figure>
-            {% endfor %}
-          </div>
-          {% endif %}
-          {% if item.estado == "prompt_listo" and item.tipo != "imagen" %}
-          <section class="fe-seccion">
-            <h4 class="fe-titulo">{{ _('Prompt por planos') }}</h4>
-            {% if item.director and item.director.estado == "fallback" %}
-            <p class="tag-error">{{ _('La IA no pudo armar los planos (%(aviso)s); este es el prompt básico. Puedes editarlo o rearmar.', aviso=item.director.aviso) }}</p>
-            {% endif %}
-            <form method="post" action="{{ url_for('cf_guardar_prompt', cliente=cliente, cf_id=item.id) }}">
-              <label class="campo-label">{{ _('Versión A (lo que recibe el modelo)') }}</label>
-              <textarea name="prompt_a" rows="10" style="width:100%;font-size:.8rem;">{{ item.prompt_relleno }}</textarea>
-              {% if item.director and item.director.prompt_b %}
-              <details style="margin-top:.5rem;"><summary class="vacio" style="cursor:pointer;padding:0;font-size:.78rem;">{{ _('Versión B — %(dif)s', dif=item.director.diferencia_b) }}</summary>
-                <textarea name="prompt_b" rows="10" style="width:100%;font-size:.8rem;">{{ item.director.prompt_b }}</textarea>
-              </details>
-              {% endif %}
-              <button type="submit" class="btn-guardar btn-sm" style="margin-top:.4rem;">{{ _('Guardar cambios') }}</button>
-            </form>
-            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;" onsubmit='return confirm({{ _('Rearmar con IA sobrescribe las versiones A y B (se pierden tus ediciones). ¿Seguir?')|tojson }});'>
-              <button type="submit" class="btn-sm">{{ _('Rearmar con IA') }}</button>
-            </form>
-          </section>
-          {% elif item.prompt_relleno and item.prompt_relleno != item.accion_central %}
-          <details><summary class="vacio" style="cursor:pointer;padding:0;font-size:.76rem;">{{ _('Ver el prompt completo que recibió el modelo') }}</summary><pre class="vacio" style="white-space:pre-wrap;font-size:.72rem;">{{ item.prompt_relleno }}</pre></details>
-          {% endif %}
-          {% if item.estado == "error" %}
-          <p class="tag-error">{{ item.error }}</p>
-          {% endif %}
-          {% if item.revision_estado %}{{ revision_doctrina(item, cliente) }}{% endif %}
-
-          <div class="detalle-acciones">
-            {% if item.estado == "video_listo" %}
-            <a class="btn-generar btn-sm" href="{{ item.video_url }}" download target="_blank" rel="noopener">{{ _('Descargar') }}</a>
-            {% endif %}
-            {% if item.estado == "video_listo" and item.tipo != "imagen" %}
-            <a class="btn-generar btn-sm" href="#final?cf={{ item.id }}"
-               onclick="var d = document.getElementById('generado-modal'); if (d) d.close(); location.hash = this.getAttribute('href'); return false;">{{ _('Llevar a final edition') }}</a>
-            {% endif %}
-            {% if item.estado in ("video_listo", "error", "prompt_listo") %}
-            <form method="post" action="{{ url_for('fp_reusar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              {% if item.estado == "video_listo" and item.tipo == "imagen" %}
-              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="incluir_resultado" value="si" checked> {{ _('Usar esta imagen como referencia') }}</label>
-              {% endif %}
-              <button type="submit" class="btn-guardar btn-sm">{{ _('Editar y crear otra a partir de esta') }}</button>
-            </form>
-            {% endif %}
-            {% if item.estado in ("prompt_listo", "error") %}
-            <form method="post" action="{{ url_for('cf_generar_video', cliente=cliente, cf_id=item.id) }}" style="display:inline;" class="fp-generar-form" data-usd="{{ item.costo_estimado.usd if item.costo_estimado else '' }}">
-              {% if item.estado == "prompt_listo" and item.tipo != "imagen" and item.director and item.director.prompt_b and not item.tiene_hija_b %}
-              <label style="display:block;font-size:.78rem;margin-bottom:.4rem;"><input type="checkbox" name="version_b" value="si" class="fp-version-b"> {{ _('Generar también la versión B (dos videos)') }}</label>
-              {% endif %}
-              {% if item.estado == "prompt_listo" %}
-              <p class="vacio" style="padding:0;font-size:.75rem;color:var(--accent-texto);margin-bottom:.4rem;">{{ _('👆 Revisa el prompt arriba antes de generar') }}</p>
-              {% endif %}
-              <button type="submit" class="btn-generar btn-sm fp-generar-btn">{% if item.estado == "error" %}{{ _('Reintentar') }}{% elif item.estado == "prompt_listo" %}{{ _('Generar video') }}{% else %}{{ _('Generar') }}{% endif %}{% if item.costo_estimado %} ≈ {{ item.costo_estimado.usd | usd }}{% endif %}</button>
-            </form>
-            {% endif %}
-            {% if (item.estado == "error" or (item.estado == "prompt_pendiente" and not item.trabajo_director)) and item.tipo != "imagen" %}
-            <form method="post" action="{{ url_for('cf_rearmar', cliente=cliente, cf_id=item.id) }}" style="display:inline;">
-              <button type="submit" class="btn-sm">{{ _('Rearmar el prompt') }}</button>
-            </form>
-            {% endif %}
-            <form method="post" action="{{ url_for('cf_descartar', cliente=cliente, cf_id=item.id) }}" onsubmit='return confirm({{ _('¿Descartar esta pieza?')|tojson }});' style="display:inline;">
-              <button type="submit" class="btn-rechazar btn-sm">{{ _('Descartar') }}</button>
-            </form>
-            {# Galería primero: videos e imágenes listos van a Experimentos ya
-               marcados (#experimentos?piezas=<pieza_id>); el reload hace que la
-               pestaña lea el hash y abra los tres pasos. #}
-            {% if item.estado == "video_listo" and item.pieza_id %}
-            <a class="btn-guardar btn-sm" href="#experimentos?piezas={{ item.pieza_id }}" onclick="location.hash = this.getAttribute('href'); location.reload(); return false;">{{ _('Probar en Meta') }}</a>
-            {% endif %}
-          </div>
-        </div>
-      </template>
-    </div>
-    {% endfor %}
+  <div class="generados-grid" id="crear-generados" data-tarjetas="{{ url_for('crear_tarjetas', cliente=cliente) }}">
+    {{ lista_crear(crear, 0, crear_total) }}
   </div>
 </div>
 
@@ -410,7 +238,7 @@
 <script>
   // formatearUSD: «US$ 1,00» / «US$ <0,01» (espejo de gastos.formatear). Declarada
   // en este script sin envoltorio, así es global: la usan dos scripts, el estimado del formulario y el botón A+B del
-  // modal (el formulario de generar vive en un <template> clonado).
+  // modal (el formulario de generar llega por fetch con el detalle).
   function formatearUSD(usd) {
     if (usd > 0 && usd < 0.01) return 'US$ <0,01';
     var partes = usd.toFixed(2).split('.');
@@ -423,25 +251,49 @@
     var cuerpo = document.getElementById('generado-modal-cuerpo');
     if (!modal) return;
     function abrir(card) {
-      var tpl = card.querySelector('template.generado-detalle');
-      if (!tpl) return;
-      cuerpo.innerHTML = '';
-      cuerpo.appendChild(tpl.content.cloneNode(true));
-      modal.showModal();
+      if (!card.dataset.detalle) return;
+      abrirDetalleRemoto(modal, cuerpo, card.dataset.detalle, null);
     }
-    document.querySelectorAll('#creativeflowplus-resultados .generado').forEach(function (card) {
-      card.addEventListener('click', function (e) { if (!e.target.closest('form, a, button')) abrir(card); });
-      card.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); } });
-      var v = card.querySelector('.generado-media video');
-      if (v) {
-        card.addEventListener('mouseenter', function () { v.play().catch(function () {}); });
-        card.addEventListener('mouseleave', function () { v.pause(); v.currentTime = 0; });
-      }
+    // Delegado sobre la zona: las tarjetas que agrega «Ver más» funcionan igual
+    // (spec 2026-09-28 «tarjetas ligeras»).
+    var zona = document.getElementById('creativeflowplus-resultados');
+    zona.addEventListener('click', function (e) {
+      var mas = e.target.closest('[data-siguiente]');
+      if (mas) { cargarMas(mas); return; }
+      var card = e.target.closest('.generado');
+      if (card && !e.target.closest('form, a, button')) abrir(card);
     });
-    // Costo A+B: el formulario de generar también vive en el <template> clonado,
+    zona.addEventListener('keydown', function (e) {
+      var card = e.target.closest('.generado');
+      if (!card || e.target !== card) return;
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(card); }
+    });
+    // Reproducir al pasar el mouse; relatedTarget evita repetir al moverse
+    // dentro de la misma tarjeta.
+    zona.addEventListener('mouseover', function (e) {
+      var card = e.target.closest('.generado');
+      if (!card || card.contains(e.relatedTarget)) return;
+      var v = card.querySelector('.generado-media video');
+      if (v) v.play().catch(function () {});
+    });
+    zona.addEventListener('mouseout', function (e) {
+      var card = e.target.closest('.generado');
+      if (!card || card.contains(e.relatedTarget)) return;
+      var v = card.querySelector('.generado-media video');
+      if (v) { v.pause(); v.currentTime = 0; }
+    });
+    function cargarMas(boton) {
+      var grid = boton.closest('.generados-grid');
+      boton.disabled = true;
+      fetch(grid.dataset.tarjetas + '?desde=' + encodeURIComponent(boton.dataset.siguiente), { headers: { 'X-Requested-With': 'fetch' } })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+        .then(function (html) { boton.remove(); grid.insertAdjacentHTML('beforeend', html); })
+        .catch(function () { boton.disabled = false; });
+    }
+    // Costo A+B: el formulario de generar llega con el detalle por fetch,
     // así que el checkbox "Generar también la versión B" se delega sobre el
     // cuerpo del modal — un listener en la carga de la página nunca
-    // vería el checkbox (no existe hasta que se clona el detalle).
+    // vería el checkbox (no existe hasta que llega el detalle).
     cuerpo.addEventListener('change', function (e) {
       if (!e.target.matches || !e.target.matches('.fp-version-b')) return;
       var f = e.target.closest('.fp-generar-form');
@@ -916,8 +768,8 @@
       inicioInput.value = Math.floor(audioPrev.currentTime || 0);
     });
     // Los selectores de «Mi música» de toda la página: el de Crear y el de
-    // «Producir finales» dentro de cada <template> de detalle de la pestaña
-    // Final edition (y el del detalle abierto, que ya es parte del documento).
+    // «Producir finales» del detalle abierto en Final edition (el detalle
+    // llega por fetch con la lista al día; este repinta el que ya está abierto).
     function pintarCanciones(canciones) {
       var grupos = Array.prototype.slice.call(document.querySelectorAll('optgroup.mm-opciones'));
       document.querySelectorAll('template.generado-detalle').forEach(function (t) {

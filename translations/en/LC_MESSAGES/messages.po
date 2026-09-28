@@ -78,6 +78,9 @@ msgstr " · cap "
 msgid " × "
 msgstr " × "
 
+msgid " — apunta a algo que no es el creativo: decide tú si rescatar"
+msgstr " — it points to something other than the creative: you decide whether to rescue"
+
 msgid " — cambiar →"
 msgstr " — change →"
 
@@ -349,12 +352,24 @@ msgid "%(nombre)s (%(dur)s s)"
 msgstr "%(nombre)s (%(dur)s s)"
 
 #, python-format
+msgid "%(nombre)s (%(pais)s): %(causas)s — siguiente: %(que)s."
+msgstr "%(nombre)s (%(pais)s): %(causas)s — next: %(que)s."
+
+#, python-format
 msgid "%(nombre)s (%(pais)s): Pieza de imagen: sin rescate/derivación (solo videos)."
 msgstr "%(nombre)s (%(pais)s): Image piece: no rescue/derivation (video only)."
 
 #, python-format
 msgid "%(nombre)s (%(pais)s): anuncio %(estado_meta)s en Meta, el decisor no la evalúa hasta que se corrija o se reemplace."
 msgstr "%(nombre)s (%(pais)s): ad %(estado_meta)s on Meta, the decision engine won't evaluate it until it's fixed or replaced."
+
+#, python-format
+msgid "%(nombre)s (%(pais)s): diagnóstico no disponible."
+msgstr "%(nombre)s (%(pais)s): diagnosis not available."
+
+#, python-format
+msgid "%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s"
+msgstr "%(nombre)s (%(pais)s): diagnosis not available: %(error)s"
 
 #, python-format
 msgid "%(nombre)s (%(pais)s): escalado ya pedido en esta pasada."
@@ -639,6 +654,10 @@ msgstr "- %(plataforma)s: published%(detalle)s"
 msgid "- %(plataforma)s: subida, confirmación pendiente (id %(id)s)"
 msgstr "- %(plataforma)s: uploaded, confirmation pending (id %(id)s)"
 
+#, python-format
+msgid ". Diagnóstico: %(a)s"
+msgstr ". Diagnosis: %(a)s"
+
 msgid ". Estaba conectado a"
 msgstr ". It was connected to"
 
@@ -775,6 +794,9 @@ msgstr ""
 "Proposals waiting for approval, winners and\n"
 "  Meta rejections all land in this email. Empty = no email notifications."
 
+msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Configuración aceptando todos los permisos que pide, y reintenta."
+msgstr "The Meta connection is missing a permission for this: reconnect Meta in Settings, accepting every permission it asks for, and try again."
+
 msgid "Abajo, en <em>Conectar tienda › MercadoLibre</em>, pulsa <em>Conectar con MercadoLibre</em>."
 msgstr "Below, in <em>Connect store › MercadoLibre</em>, press <em>Connect with MercadoLibre</em>."
 
@@ -899,6 +921,9 @@ msgstr "Add proof"
 msgid "Agregar referencias"
 msgstr "Add references"
 
+msgid "Agregar uno a mano"
+msgstr "Add one by hand"
+
 msgid "Ahora esto se hace con un experimento: crea uno (o usa uno en armado) y mete la pieza."
 msgstr "This is now done with an experiment: create one (or use one being drafted) and add the piece to it."
 
@@ -992,6 +1017,12 @@ msgstr "Meta app removed from this project. The existing connection stays until 
 
 msgid "App de Meta registrada para este proyecto. Ahora sí: Conectar con Meta."
 msgstr "Meta app registered for this project. Now: Connect with Meta."
+
+msgid "Aprendizaje guardado."
+msgstr "Learning saved."
+
+msgid "Aprendizajes del proyecto"
+msgstr "Project learnings"
 
 msgid "Aprobado"
 msgstr "Approved"
@@ -1142,6 +1173,10 @@ msgid "CSV/Excel"
 msgstr "CSV/Excel"
 
 #, python-format
+msgid "CTR %(ctr)s %%"
+msgstr "CTR %(ctr)s %%"
+
+#, python-format
 msgid "CTR %(ctr)s%% < %(ctr_min)s%%"
 msgstr "CTR %(ctr)s%% < %(ctr_min)s%%"
 
@@ -1170,6 +1205,10 @@ msgstr ""
 
 msgid "Cada idea, guion y caption sigue la doctrina de venta de Creatv:"
 msgstr "Every idea, script and caption follows Creatv's sales doctrine:"
+
+#, python-format
+msgid "Cada perdedora se diagnostica sola (%(precio)s) y deja su línea aquí."
+msgstr "Every loser is diagnosed on its own (%(precio)s) and leaves its line here."
 
 msgid "Cadera / entrepierna"
 msgstr "Hips / groin"
@@ -1275,6 +1314,9 @@ msgstr "Loading your scripts…"
 msgid "Cargando tus prompts…"
 msgstr "Loading your prompts…"
 
+msgid "Cargando…"
+msgstr "Loading…"
+
 msgid "Casi gratis: 10 GB al mes sin costo y sin cobro por descarga."
 msgstr "Almost free: 10 GB a month at no cost and no charge for downloads."
 
@@ -1364,6 +1406,9 @@ msgstr "Claude hasn't asked for anything for this product yet: requests show up 
 
 msgid "Claude no ha pedido nada para este producto."
 msgstr "Claude hasn't requested anything for this product."
+
+msgid "Claude no nombró ninguna causa conocida."
+msgstr "Claude didn't name any known cause."
 
 msgid "Claude no pudo responder esta vez."
 msgstr "Claude couldn't respond this time."
@@ -1997,8 +2042,15 @@ msgstr "From references"
 msgid "Detalle"
 msgstr "Detail"
 
+msgid "Detalle técnico (para soporte)"
+msgstr "Technical detail (for support)"
+
 msgid "Di cuántas personas salen, y que no hay nadie más."
 msgstr "Say how many people appear, and that there is nobody else."
+
+#, python-format
+msgid "Diagnóstico: %(causas)s — siguiente: %(que)s"
+msgstr "Diagnosis: %(causas)s — next: %(que)s"
 
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
@@ -2119,6 +2171,10 @@ msgid "El bloque global rompe reglas que no se negocian."
 msgstr "The global block breaks non-negotiable rules."
 
 #, python-format
+msgid "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo."
+msgstr "Clicks are expensive with a normal CTR: CPC %(cpc)s (maximum %(max)s); it's the auction, not the creative."
+
+#, python-format
 msgid "El clip %(n)s dura %(segundos)s s; cada clip debe durar entre %(minimo)s y %(maximo)s segundos."
 msgstr "Clip %(n)s lasts %(segundos)s s; every clip has to last between %(minimo)s and %(maximo)s seconds."
 
@@ -2159,6 +2215,10 @@ msgstr ""
 "%(lineas)s\n"
 "\n"
 "Nothing is executed until you approve them in the panel."
+
+#, python-format
+msgid "El diagnóstico no se pudo hacer: %(error)s"
+msgstr "The diagnosis couldn't be made: %(error)s"
 
 msgid "El documento sale cuando la versión está armada."
 msgstr "The document is available once the version is assembled."
@@ -2699,6 +2759,9 @@ msgstr "Scale (% per day)"
 msgid "Escalón %(n)s/3"
 msgstr "Step %(n)s/3"
 
+msgid "Escribe el aprendizaje."
+msgstr "Write the learning."
+
 msgid "Escribe el correo de tu cuenta y te mandamos un enlace para elegir una nueva. Vence en 1 hora."
 msgstr "Enter your account's email and we'll send you a link to choose a new one. It expires in 1 hour."
 
@@ -2755,6 +2818,9 @@ msgstr "That ad isn't in an error state."
 
 msgid "Ese anuncio todavía no está publicado en Meta."
 msgstr "That ad isn't published on Meta yet."
+
+msgid "Ese aprendizaje ya no existe."
+msgstr "That learning no longer exists."
 
 msgid "Ese correo no parece válido."
 msgstr "That email doesn't look valid."
@@ -2861,6 +2927,9 @@ msgstr "Wait a moment before requesting another verification email."
 
 msgid "Esta pieza ya no está en Crear: genera una nueva y métela en un experimento."
 msgstr "This piece is no longer in Create: generate a new one and add it to an experiment."
+
+msgid "Esta pieza ya no existe o no tiene este detalle."
+msgstr "This piece no longer exists or has no such detail."
 
 msgid "Esta sesión no tiene imágenes de referencia — descártala y crea una nueva."
 msgstr "This session has no reference images — discard it and create a new one."
@@ -3092,6 +3161,9 @@ msgstr "Missing:"
 msgid "Fecha"
 msgstr "Date"
 
+msgid "Filtros"
+msgstr "Filters"
+
 #, python-format
 msgid "Final %(idioma)s_%(pais)s"
 msgstr "Final %(idioma)s_%(pais)s"
@@ -3168,6 +3240,10 @@ msgstr "Winners posted"
 
 msgid "Gancho"
 msgstr "Hook"
+
+#, python-format
+msgid "Ganó en %(pais)s: %(quien)s"
+msgstr "Won in %(pais)s: %(quien)s"
 
 msgid "Gasto"
 msgstr "Spend"
@@ -3312,6 +3388,9 @@ msgstr "Save"
 
 msgid "Guardar app de Meta"
 msgstr "Save Meta app"
+
+msgid "Guardar aprendizaje"
+msgstr "Save learning"
 
 msgid "Guardar bloque global"
 msgstr "Save global block"
@@ -3700,6 +3779,9 @@ msgstr "The figure “%(cifra)s” in the caption isn't in the product's data or
 msgid "La conexión con Meta está rota (token vencido o permisos retirados): vuelve a conectar en Configuración."
 msgstr "The connection with Meta is broken (expired token or withdrawn permissions): reconnect in Settings."
 
+msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Configuración y reintenta."
+msgstr "The Meta connection expired or was revoked: reconnect Meta in Settings and try again."
+
 msgid "La conexión de agencia no está activa ahora mismo"
 msgstr "The agency connection isn't active right now"
 
@@ -3747,6 +3829,10 @@ msgstr "The Notion key doesn't work; reconnect it."
 msgid "La línea 1 (el hook) no se puede quitar."
 msgstr "Line 1 (the hook) can't be removed."
 
+#, python-format
+msgid "La misma gente ya lo vio %(n)s veces en promedio."
+msgstr "The same people have already seen it %(n)s times on average."
+
 msgid "La moneda va en código de 3 letras (COP, MXN, USD…)."
 msgstr "Currency goes as a 3-letter code (COP, MXN, USD…)."
 
@@ -3755,6 +3841,9 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
 
 msgid "La pauta se cobra en tu cuenta publicitaria; la API no cuesta."
 msgstr "Ad spend is charged to your ad account; the API itself is free."
+
+msgid "La pieza se descartó antes de generar; no se cobró nada."
+msgstr "The piece was discarded before generating; nothing was charged."
 
 msgid "La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo."
 msgstr "The platform already received the video; it still needs to confirm it finished processing it. It confirms itself."
@@ -3970,6 +4059,9 @@ msgstr "What the AI writes and this project's ads come out in this language."
 msgid "Lo que faltó en los datos cuando Claude escribió anuncios de este producto. Cada respuesta queda como prueba y mejora lo que venga."
 msgstr "What was missing from the data when Claude wrote ads for this product. Each answer is saved as proof and improves what comes next."
 
+msgid "Lo que ganó y lo que perdió en tus pruebas. Las ideas nuevas, el guion y las variantes lo leen antes de escribir."
+msgstr "What won and what lost in your tests. New ideas, the script and the variants read it before writing."
+
 msgid "Lo que le falta a esta matriz"
 msgstr "What this matrix is missing"
 
@@ -4134,6 +4226,9 @@ msgstr "Meta (Pixel/Store)"
 msgid "Meta (anuncios)"
 msgstr "Meta (ads)"
 
+msgid "Meta bloqueó esta acción por un tiempo por sus políticas: revisa los avisos en tu Business Suite antes de reintentar."
+msgstr "Meta temporarily blocked this action under its policies: check the notices in your Business Suite before trying again."
+
 msgid "Meta conectado:"
 msgstr "Meta connected:"
 
@@ -4142,6 +4237,9 @@ msgstr "Meta disconnected from this project and access revoked on Meta."
 
 msgid "Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio."
 msgstr "Meta disconnected from this project. The app stays authorized on your Facebook until you remove it in Settings › Business Integrations."
+
+msgid "Meta está frenando las llamadas por un rato (límite de uso): reintenta en unos minutos."
+msgstr "Meta is throttling calls for a while (usage limit): try again in a few minutes."
 
 msgid "Meta no dio un motivo"
 msgstr "Meta gave no reason"
@@ -4171,11 +4269,25 @@ msgid "Meta rechazó el anuncio porque la app de Meta de este proyecto está en 
 msgstr "Meta rejected the ad because this project's Meta app is in Development mode (subcode 1885183). Switch it to Live mode at developers.facebook.com › My Apps › your app › “App Mode” and retry the launch: the campaign, ad sets and videos already created are reused, nothing is duplicated."
 
 #, python-format
+msgid "Meta rechazó el pedido (código %(codigo)s%(sub)s)%(mensaje)s."
+msgstr "Meta rejected the request (code %(codigo)s%(sub)s)%(mensaje)s."
+
+msgid "Meta rechazó el pedido. Mira el detalle técnico o reintenta en unos minutos."
+msgstr "Meta rejected the request. Check the technical detail or try again in a few minutes."
+
+#, python-format
+msgid "Meta rechazó el pedido: %(motivo)s"
+msgstr "Meta rejected the request: %(motivo)s"
+
+#, python-format
 msgid "Meta rechazó un anuncio de «%(experimento)s»"
 msgstr "Meta rejected an ad in “%(experimento)s”"
 
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
+
+msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
+msgstr "Meta had a temporary failure: try again in a few minutes."
 
 msgid "Meta ya no acepta la conexión de este proyecto"
 msgstr "Meta no longer accepts this project's connection"
@@ -4202,6 +4314,10 @@ msgstr "My music"
 
 msgid "Mi música · gratis"
 msgstr "My music · free"
+
+#, python-format
+msgid "Miran pero no clican: CTR %(ctr)s %% (mínimo %(min)s %%)."
+msgstr "They watch but don't click: CTR %(ctr)s %% (minimum %(min)s %%)."
 
 msgid "Mirando las referencias…"
 msgstr "Looking at the references…"
@@ -4555,6 +4671,9 @@ msgstr "I couldn't calculate the 30-day series."
 msgid "No se pudo calcular las alertas."
 msgstr "I couldn't calculate the alerts."
 
+msgid "No se pudo cargar el detalle. Recarga la página."
+msgstr "The detail could not be loaded. Reload the page."
+
 msgid "No se pudo cargar el panel de guiones. Recarga la página."
 msgstr "Couldn't load the scripts panel. Reload the page."
 
@@ -4610,6 +4729,9 @@ msgstr "Couldn't reach Notion; try again in a moment."
 
 msgid "No se pudo leer el guion. Vuelve a intentarlo."
 msgstr "Couldn't read the script. Try again."
+
+msgid "No se pudo leer el proyecto; no se guardó."
+msgstr "The project couldn't be read; nothing was saved."
 
 #, python-format
 msgid "No se pudo pausar por tope: %(error)s"
@@ -4819,6 +4941,9 @@ msgstr "Passes (%(n)s)"
 msgid "Pasa umbrales pero no está en el tercio superior de su país (posición %(pos)s de %(total)s)."
 msgstr "Passes thresholds but is not in the top third of its country (position %(pos)s of %(total)s)."
 
+msgid "Pasó la puerta de tráfico y no vendió: la página o la oferta no continúan el anuncio."
+msgstr "It passed the traffic gate and didn't sell: the page or the offer doesn't continue the ad."
+
 #, python-format
 msgid "Pasó tráfico pero no ventas: ROAS %(roas)s (mínimo %(roas_min)s), CPA %(cpa)s%(cpa_max_txt)s."
 msgstr "Passed traffic but not sales: ROAS %(roas)s (minimum %(roas_min)s), CPA %(cpa)s%(cpa_max_txt)s."
@@ -4920,6 +5045,10 @@ msgstr "Paste a link"
 msgid "Pensando…"
 msgstr "Thinking…"
 
+#, python-format
+msgid "Perdió en %(pais)s: %(quien)s"
+msgstr "Lost in %(pais)s: %(quien)s"
+
 msgid "Personaje"
 msgstr "Character"
 
@@ -4985,6 +5114,10 @@ msgstr "Unknown platform: %(plataforma)s"
 
 msgid "Plegar / desplegar"
 msgstr "Collapse / expand"
+
+#, python-format
+msgid "Pocos pasan de los primeros segundos: ThruPlay %(t)s %% (mínimo %(min)s %%)."
+msgstr "Few get past the first seconds: ThruPlay %(t)s %% (minimum %(min)s %%)."
 
 msgid "Política de privacidad"
 msgstr "Privacy policy"
@@ -5363,6 +5496,10 @@ msgstr "What has to happen"
 
 msgid "Qwen Image Edit Plus"
 msgstr "Qwen Image Edit Plus"
+
+#, python-format
+msgid "ROAS %(roas)s"
+msgstr "ROAS %(roas)s"
 
 #, python-format
 msgid "ROAS %(roas)s ≥ %(roas_min)s"
@@ -5782,6 +5919,10 @@ msgstr "Follow the steps to register your app and connect."
 msgid "Siguiente →"
 msgstr "Next →"
 
+#, python-format
+msgid "Siguiente: %(paso)s"
+msgstr "Next: %(paso)s"
+
 msgid "Sin Pixel"
 msgstr "No Pixel"
 
@@ -6105,6 +6246,10 @@ msgid "Textos orgánicos (IA)"
 msgstr "Organic captions (AI)"
 
 #, python-format
+msgid "ThruPlay %(t)s %%"
+msgstr "ThruPlay %(t)s %%"
+
+#, python-format
 msgid "ThruPlay %(tp)s%% < %(tp_min)s%%"
 msgstr "ThruPlay %(tp)s%% < %(tp_min)s%%"
 
@@ -6173,6 +6318,9 @@ msgstr "You haven't generated anything in Create yet."
 #, python-format
 msgid "Todavía no hay %(plural)s. Crea el primero arriba"
 msgstr "There are no %(plural)s yet. Create the first one above"
+
+msgid "Todavía no hay aprendizajes: aparecen solos cuando una prueba decide una ganadora o una perdedora."
+msgstr "No learnings yet: they appear on their own when a test decides a winner or a loser."
 
 msgid "Todavía no hay cobros registrados."
 msgstr "No charges recorded yet."
@@ -6572,6 +6720,10 @@ msgstr "View the applied invariant_block / negative_prompt (raw prompt text)"
 msgid "Ver la instrucción exacta que recibe el modelo →"
 msgstr "See the exact instruction the model gets →"
 
+#, python-format
+msgid "Ver más (quedan %(n)s)"
+msgstr "Show more (%(n)s left)"
+
 msgid "Ver por qué usamos estos modelos (comparación completa) →"
 msgstr "See why we use these models (full comparison) →"
 
@@ -6875,6 +7027,10 @@ msgid "arrancando"
 msgstr "starting"
 
 #, python-format
+msgid "arranque %(lead)s"
+msgstr "%(lead)s lead"
+
+#, python-format
 msgid "atribución %(atribucion)s"
 msgstr "attribution %(atribucion)s"
 
@@ -6883,6 +7039,10 @@ msgstr "attributed by Pixel or store"
 
 msgid "atribuidas por TW"
 msgstr "attributed by TW"
+
+#, python-format
+msgid "audiencia %(c)s"
+msgstr "%(c)s audience"
 
 msgid "baja"
 msgstr "low"
@@ -6987,6 +7147,9 @@ msgstr "decided"
 #, python-format
 msgid "del %(desde)s al %(hasta)s · todos los proyectos"
 msgstr "from %(desde)s to %(hasta)s · all projects"
+
+msgid "demasiado educativo"
+msgstr "too educational"
 
 msgid "derivación"
 msgstr "derivation"
@@ -7093,6 +7256,9 @@ msgstr "clip 1 with %(hid)s doesn't end the same way as clip 1"
 msgid "el de mayor calidad: sale directo en 4k y acepta muchas más referencias del producto (13 contra las 2 de los de fal). Su documentación oficial NO dice nada sobre editar a varias personas, así que no se sabe si resuelve ese límite"
 msgstr "the highest quality one: it outputs directly in 4k and accepts many more product references (13 versus the 2 from the fal ones). Its official documentation says NOTHING about editing several people, so it's not known whether it solves that limit"
 
+msgid "el gancho no retiene"
+msgstr "the hook doesn't hold attention"
+
 msgid "el modelo"
 msgstr "the model"
 
@@ -7158,6 +7324,9 @@ msgstr "waiting for an approval"
 msgid "esperando aprobación"
 msgstr "awaiting approval"
 
+msgid "estacionalidad"
+msgstr "seasonality"
+
 msgid "estado"
 msgstr "status"
 
@@ -7205,6 +7374,9 @@ msgstr "front, profile and full body — 3 to 6"
 
 msgid "ganador"
 msgstr "winner"
+
+msgid "ganó"
+msgstr "won"
 
 msgid "gasto"
 msgstr "spend"
@@ -7290,6 +7462,13 @@ msgstr "the clone generation failed"
 msgid "la imagen"
 msgstr "the image"
 
+msgid "la landing no continúa el anuncio"
+msgstr "the landing page doesn't continue the ad"
+
+#, python-format
+msgid "la pieza «%(nombre)s»"
+msgstr "the piece “%(nombre)s”"
+
 #, python-format
 msgid "la sesión %(cf_id)s ya no existe"
 msgstr "session %(cf_id)s no longer exists"
@@ -7308,6 +7487,9 @@ msgstr "done"
 
 msgid "lo de este mes, proyecto por proyecto"
 msgstr "this month's numbers, project by project"
+
+msgid "lo visual no da creencia"
+msgstr "the visuals don't build belief"
 
 msgid "los entornos"
 msgstr "environments"
@@ -7386,6 +7568,9 @@ msgstr "no"
 msgid "no aparece tal cual en el guion"
 msgstr "doesn't appear exactly like this in the script"
 
+msgid "no es un objeto"
+msgstr "not an object"
+
 msgid "no está"
 msgstr "isn't"
 
@@ -7416,6 +7601,9 @@ msgstr "has no clips"
 msgid "nombre, precio, moneda, url_compra, fotos (varias con |), descripcion, categoria, sku"
 msgstr "nombre, precio, moneda, url_compra, fotos (multiple with |), descripcion, categoria, sku"
 
+msgid "nota"
+msgstr "note"
+
 msgid "o"
 msgstr "or"
 
@@ -7428,8 +7616,21 @@ msgstr "offer"
 msgid "orgánicas este mes"
 msgstr "organic this month"
 
+msgid "otra estructura"
+msgstr "another structure"
+
+msgid "otro gancho"
+msgstr "another hook"
+
+msgid "p. ej. En MX el precio en pesos en el gancho baja el CTR"
+msgstr "e.g. In MX, the price in pesos in the hook lowers the CTR"
+
 msgid "pais"
 msgstr "country"
+
+#, python-format
+msgid "para %(producto)s"
+msgstr "for %(producto)s"
 
 msgid "para poder aprobarla."
 msgstr "to be able to approve it."
@@ -7455,6 +7656,9 @@ msgstr "pending"
 msgid "perdedor"
 msgstr "loser"
 
+msgid "perdió"
+msgstr "lost"
+
 msgid "pieza"
 msgstr "piece"
 
@@ -7463,6 +7667,9 @@ msgstr "pixel"
 
 msgid "por revisar"
 msgstr "to review"
+
+msgid "posicionamiento equivocado"
+msgstr "wrong positioning"
 
 msgid "precio no disponible"
 msgstr "price not available"
@@ -7545,6 +7752,9 @@ msgstr "regeneration"
 msgid "regeneración %(cf_id)s"
 msgstr "regeneration %(cf_id)s"
 
+msgid "regenerar el video"
+msgstr "regenerate the video"
+
 msgid "reglas"
 msgstr "rules"
 
@@ -7552,8 +7762,17 @@ msgstr "rules"
 msgid "reintentar rescate: falló %(detalle)s"
 msgstr "retry rescue: failed %(detalle)s"
 
+msgid "repetición: ya lo vieron"
+msgstr "repetition: they've already seen it"
+
 msgid "rescatar"
 msgstr "rescue"
+
+msgid "revisar la landing"
+msgstr "review the landing page"
+
+msgid "revisar la oferta"
+msgstr "review the offer"
 
 msgid "roas"
 msgstr "roas"
@@ -7598,6 +7817,9 @@ msgstr "no Page (ads only)"
 
 msgid "sin URL de compra"
 msgstr "no purchase URL"
+
+msgid "sin causa clara"
+msgstr "no clear cause"
 
 msgid "sin comprobar"
 msgstr "not checked"
@@ -7649,6 +7871,9 @@ msgstr "no threshold"
 
 msgid "sin umbrales de ventas"
 msgstr "no sales thresholds"
+
+msgid "sin urgencia en el deseo"
+msgstr "no urgency in the desire"
 
 msgid "sin ventas medibles"
 msgstr "no measurable sales"
@@ -7817,6 +8042,10 @@ msgstr "“%(nombre)s”: launching to Meta paused. When it's done, activate it 
 
 msgid "«Crear credenciales» › «Clave de API»; en «Restricciones de API» limítala a YouTube Data API v3."
 msgstr "“Create credentials” › “API key”; in “API restrictions” limit it to YouTube Data API v3."
+
+#, python-format
+msgid "«siguiente» trae un paso que no existe: %(que)s."
+msgstr "“siguiente” has a step that doesn't exist: %(que)s."
 
 #, python-format
 msgid "¿Archivar «%(nombre)s»? No se borra: se oculta de la lista y la sincronización de la tienda no lo vuelve a mostrar (lo recuperas desde «Mostrar archivados»)."
