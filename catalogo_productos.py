@@ -149,79 +149,164 @@ def id_desde_nombre(nombre):
     return limpio or "producto"
 
 
-def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
-    categoria = categoria_valida(categoria)
+def producto_base(activo_id):
+    """'horiginal/beige' -> 'horiginal'; un id sin color vuelve igual; None -> ''."""
+    return str(activo_id or "").split("/", 1)[0]
+
+
+def _imagenes_en(carpeta):
+    try:
+        return sorted(f for f in os.listdir(carpeta) if f.lower().endswith(IMAGE_EXTS))
+    except OSError:
+        return []
+
+
+def _variantes_de(propio):
+    """Los colores de la meta de un producto, en el orden guardado ({} si es plano)."""
+    v = propio.get("variantes")
+    return v if isinstance(v, dict) and v else {}
+
+
+def _frase_variante(nombre_color, descripcion, idioma):
+    if idioma == "en":
+        return f'Variant "{nombre_color}": {descripcion}'
+    return f"Variante «{nombre_color}»: {descripcion}"
+
+
+def _regla_de(propio, categoria, idioma, variante=None):
+    """Regla de la categoría + regla propia + (color) su descripción."""
+    partes = [regla_categoria(categoria, idioma), (propio.get("regla") or "").strip()]
+    if variante and (variante.get("descripcion") or "").strip():
+        partes.append(_frase_variante(variante.get("nombre") or "", variante["descripcion"].strip(), idioma))
+    return " ".join(p for p in partes if p).strip()
+
+
+def _mapa(propio, idioma):
+    zonas = propio.get("zonas")
+    return {
+        "zonas": mapa_corporal.normalizar(zonas),
+        "mapa_texto": mapa_corporal.describir(zonas, idioma),
+        "mapa_etiqueta": mapa_corporal.ETIQUETAS_PRESETS.get(mapa_corporal.preset_de(zonas)),
+    }
+
+
+def _recorrer(cliente, categoria):
+    """(pid, propio, ruta, variantes, archivos_raiz) por carpeta de la categoría, en orden de nombre."""
     carpeta = _carpeta(cliente, categoria)
     if not os.path.isdir(carpeta):
-        return []
+        return
     meta = cargar_meta(cliente, categoria)
+    for pid in sorted(os.listdir(carpeta)):
+        ruta = os.path.join(carpeta, pid)
+        if not os.path.isdir(ruta) or pid.startswith("."):
+            continue
+        propio = meta.get(pid, {})
+        yield pid, propio, ruta, _variantes_de(propio), _imagenes_en(ruta)
+
+
+def _nombre_producto(pid, propio):
+    return propio.get("nombre") or NOMBRES.get(pid, pid.replace("_", " ").title())
+
+
+def _url_publica(cliente, info_cat, relativa):
+    public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
+    return f"{public_base}/clientes/{cliente}/{info_cat['carpeta']}/{relativa}" if public_base else None
+
+
+def listar(cliente, categoria=CATEGORIA_POR_DEFECTO):
+    """Una entrada por activo del catálogo: cada color de un producto con
+    colores (id `pid/color`) o el producto plano (id `pid`). Un color o un
+    producto sin fotos no aparece. Las fotos de la raíz de un producto con
+    colores son generales: no son referencia y no salen aquí."""
+    categoria = categoria_valida(categoria)
     info_cat = CATEGORIAS[categoria]
     idioma = idiomas.de_proyecto(cliente)
     productos = []
-    public_base = os.environ.get("R2_PUBLIC_BASE_URL", "").rstrip("/")
-
-    for nombre_carpeta in sorted(os.listdir(carpeta)):
-        ruta_carpeta = os.path.join(carpeta, nombre_carpeta)
-        if not os.path.isdir(ruta_carpeta):
-            continue
-
-        propio_base = meta.get(nombre_carpeta, {})
-        tiene_variantes = isinstance(propio_base.get("variantes"), dict) and propio_base["variantes"]
-
-        if tiene_variantes:
-            # Estructura nueva con variantes: horiginal/ contiene beige/, sky/, rose/
-            for nombre_variante in sorted(propio_base["variantes"].keys()):
-                ruta_variante = os.path.join(ruta_carpeta, nombre_variante)
-                if not os.path.isdir(ruta_variante):
-                    continue
-                archivos = sorted(f for f in os.listdir(ruta_variante) if f.lower().endswith(IMAGE_EXTS))
+    for pid, propio, ruta, variantes, raiz in _recorrer(cliente, categoria):
+        nombre_prod = _nombre_producto(pid, propio)
+        comun = {"categoria": categoria, "etiqueta_base": info_cat["etiqueta"], "producto_id": pid,
+                 "nombre_producto": nombre_prod, "tipo": prompt_swap.tipo_valido(propio.get("tipo")),
+                 "regla_propia": (propio.get("regla") or "").strip(), **_mapa(propio, idioma)}
+        if variantes:
+            for cid, var in variantes.items():
+                ruta_c = os.path.join(ruta, cid)
+                archivos = _imagenes_en(ruta_c)
                 if not archivos:
                     continue
-                propio_var = propio_base["variantes"][nombre_variante]
-                id_producto = f"{nombre_carpeta}/{nombre_variante}"
-                nombre_mostrado = propio_var.get("nombre") or f"{propio_base.get('nombre', nombre_carpeta)} {nombre_variante.title()}"
-                productos.append({
-                    "id": id_producto,
-                    "categoria": categoria,
-                    "etiqueta_base": info_cat["etiqueta"],
-                    "regla": (regla_categoria(categoria, idioma) + (" " + propio_base.get("regla", "").strip() if propio_base.get("regla") else "")).strip(),
-                    "regla_propia": (propio_base.get("regla") or "").strip(),
-                    "nombre": nombre_mostrado,
-                    "descripcion": propio_var.get("descripcion") or "",
-                    "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
-                    "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
-                    "mapa_texto": mapa_corporal.describir(propio_base.get("zonas"), idioma),
-                    "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
-                        mapa_corporal.preset_de(propio_base.get("zonas"))),
-                    "referencias": [os.path.join(ruta_variante, f) for f in archivos],
-                    "imagenes": archivos,
-                    "representativa": os.path.join(ruta_variante, archivos[0]),
-                    "representativa_url": f"{public_base}/clientes/{cliente}/{info_cat['carpeta']}/{id_producto}/{archivos[0]}" if public_base else None,
-                })
+                id_color = f"{pid}/{cid}"
+                nombre = var.get("nombre") or f"{nombre_prod} {cid.title()}"
+                productos.append({**comun, "id": id_color, "nombre": nombre, "variante": cid, "variante_nombre": nombre,
+                                  "descripcion": var.get("descripcion") or "",
+                                  "disponible": var.get("disponible", True) is not False,
+                                  "regla": _regla_de(propio, categoria, idioma, dict(var, nombre=nombre)),
+                                  "referencias": [os.path.join(ruta_c, f) for f in archivos], "imagenes": archivos,
+                                  "representativa": os.path.join(ruta_c, archivos[0]),
+                                  "representativa_url": _url_publica(cliente, info_cat, f"{id_color}/{archivos[0]}")})
         else:
-            # Estructura antigua (sin variantes): cada carpeta es un producto
-            archivos = sorted(f for f in os.listdir(ruta_carpeta) if f.lower().endswith(IMAGE_EXTS))
-            if not archivos:
+            if not raiz:
                 continue
-            productos.append({
-                "id": nombre_carpeta,
-                "categoria": categoria,
-                "etiqueta_base": info_cat["etiqueta"],
-                "regla": (regla_categoria(categoria, idioma) + (" " + propio_base["regla"].strip() if propio_base.get("regla") else "")).strip(),
-                "regla_propia": (propio_base.get("regla") or "").strip(),
-                "nombre": propio_base.get("nombre") or NOMBRES.get(nombre_carpeta, nombre_carpeta.replace("_", " ").title()),
-                "descripcion": propio_base.get("descripcion") or DESCRIPCIONES.get(nombre_carpeta, ""),
-                "tipo": prompt_swap.tipo_valido(propio_base.get("tipo")),
-                "zonas": mapa_corporal.normalizar(propio_base.get("zonas")),
-                "mapa_texto": mapa_corporal.describir(propio_base.get("zonas"), idioma),
-                "mapa_etiqueta": (lambda pid: mapa_corporal.ETIQUETAS_PRESETS.get(pid))(
-                    mapa_corporal.preset_de(propio_base.get("zonas"))),
-                "referencias": [os.path.join(ruta_carpeta, f) for f in archivos],
-                "imagenes": archivos,
-                "representativa": os.path.join(ruta_carpeta, archivos[0]),
-                "representativa_url": f"{public_base}/clientes/{cliente}/{info_cat['carpeta']}/{nombre_carpeta}/{archivos[0]}" if public_base else None,
-            })
+            productos.append({**comun, "id": pid, "nombre": nombre_prod, "variante": None, "variante_nombre": None,
+                              "descripcion": propio.get("descripcion") or DESCRIPCIONES.get(pid, ""), "disponible": True,
+                              "regla": _regla_de(propio, categoria, idioma),
+                              "referencias": [os.path.join(ruta, f) for f in raiz], "imagenes": raiz,
+                              "representativa": os.path.join(ruta, raiz[0]),
+                              "representativa_url": _url_publica(cliente, info_cat, f"{pid}/{raiz[0]}")})
     return productos
+
+
+def listar_productos(cliente, categoria=CATEGORIA_POR_DEFECTO):
+    """Una entrada por PRODUCTO (§5.2 del spec): sus colores (con o sin fotos),
+    sus fotos generales y la representativa. Un producto sin ninguna foto en
+    ningún lado no aparece (misma regla que listar())."""
+    categoria = categoria_valida(categoria)
+    info_cat = CATEGORIAS[categoria]
+    idioma = idiomas.de_proyecto(cliente)
+    salida = []
+    for pid, propio, ruta, variantes, raiz in _recorrer(cliente, categoria):
+        nombre_prod = _nombre_producto(pid, propio)
+        colores = []
+        for cid, var in variantes.items():
+            ruta_c = os.path.join(ruta, cid)
+            archivos = _imagenes_en(ruta_c)
+            colores.append({"id": f"{pid}/{cid}", "color_id": cid, "nombre": var.get("nombre") or f"{nombre_prod} {cid.title()}",
+                            "descripcion": var.get("descripcion") or "", "fuente_id": var.get("fuente_id"),
+                            "url_compra": var.get("url_compra"), "disponible": var.get("disponible", True) is not False,
+                            "imagenes": archivos, "referencias": [os.path.join(ruta_c, f) for f in archivos],
+                            "representativa": os.path.join(ruta_c, archivos[0]) if archivos else None,
+                            "sin_fotos": not archivos})
+        tiene_colores = bool(variantes)
+        n_fotos = sum(len(c["imagenes"]) for c in colores) + len(raiz)
+        if not n_fotos:
+            continue
+        representativa = next((c["representativa"] for c in colores if c["representativa"]), None)
+        if representativa is None:
+            representativa = os.path.join(ruta, raiz[0])
+        salida.append({
+            "id": pid, "categoria": categoria, "etiqueta_base": info_cat["etiqueta"], "nombre": nombre_prod,
+            "descripcion": propio.get("descripcion") or ("" if tiene_colores else DESCRIPCIONES.get(pid, "")),
+            "tipo": prompt_swap.tipo_valido(propio.get("tipo")), **_mapa(propio, idioma),
+            "regla": _regla_de(propio, categoria, idioma), "regla_propia": (propio.get("regla") or "").strip(),
+            "tiene_colores": tiene_colores, "colores": colores,
+            "fotos_generales": raiz if tiene_colores else [],
+            "imagenes": [] if tiene_colores else raiz,
+            "referencias": [] if tiene_colores else [os.path.join(ruta, f) for f in raiz],
+            "representativa": representativa, "n_fotos": n_fotos, "n_colores": len(colores),
+            "fuente": propio.get("fuente") if isinstance(propio.get("fuente"), dict) else {},
+        })
+    return salida
+
+
+def claves_de(entrada):
+    """Ids y nombres (casefold) con los que Crear, Sprints y los experimentos
+    pueden referirse a un producto de listar_productos(): el pid, cada color y
+    sus nombres. Sirve para contar usos y reunir faltantes sin repetir."""
+    ids = {str(entrada["id"]).casefold()}
+    nombres = {str(entrada.get("nombre") or "").casefold()} - {""}
+    for c in entrada.get("colores") or []:
+        ids.add(str(c["id"]).casefold())
+        if c.get("nombre"):
+            nombres.add(str(c["nombre"]).casefold())
+    return {"ids": ids, "nombres": nombres}
 
 
 def listar_todo(cliente):
@@ -264,24 +349,53 @@ def miniatura(ruta, ancho=320):
 
 
 def encontrar(cliente, producto_id, categoria=None):
-    """Busca por id en una categoría, o en todas si categoria es None."""
+    """Busca por id en una categoría, o en todas si categoria es None. Un id
+    de producto con colores (que no es entrada por sí mismo) devuelve su
+    primer color con fotos: así `campana.catalogo_id` o un `productos_ids`
+    viejo siguen dando una referencia con foto."""
+    if not producto_id:
+        return None
     cats = [categoria_valida(categoria)] if categoria else list(CATEGORIAS)
     for cat in cats:
-        for p in listar(cliente, cat):
+        lista = listar(cliente, cat)
+        for p in lista:
             if p["id"] == producto_id:
                 return p
+        if "/" not in str(producto_id):
+            for p in lista:
+                if p["producto_id"] == producto_id and p["variante"]:
+                    return p
     return None
 
 
+def encontrar_producto(cliente, pid, categoria=CATEGORIA_POR_DEFECTO):
+    """La entrada de listar_productos() del producto `pid` (o del producto de
+    un id de color). None si no existe o no tiene fotos."""
+    base = producto_base(pid)
+    return next((p for p in listar_productos(cliente, categoria) if p["id"] == base), None)
+
+
+def claves_de_producto(cliente, pid, categoria=CATEGORIA_POR_DEFECTO):
+    """claves_de() del producto de `pid`; si no está en el catálogo, solo su id."""
+    prod = encontrar_producto(cliente, pid, categoria)
+    if prod is None:
+        return {"ids": {producto_base(pid).casefold()}, "nombres": set()}
+    return claves_de(prod)
+
+
 def encontrar_por_id_o_nombre(cliente, valor, categoria=CATEGORIA_POR_DEFECTO):
-    """Por id y, si no, por nombre visible exacto: `productos_ids` de Crear y
-    Sprints guarda NOMBRES, no ids. None si nada coincide."""
+    """Por id y, si no, por nombre visible exacto (de un color o del
+    producto): `productos_ids` de Crear y Sprints guarda NOMBRES, no ids."""
     if not valor:
         return None
     p = encontrar(cliente, valor, categoria=categoria)
     if p:
         return p
-    return next((c for c in listar(cliente, categoria) if c.get("nombre") == valor), None)
+    lista = listar(cliente, categoria)
+    p = next((c for c in lista if c.get("nombre") == valor), None)
+    if p:
+        return p
+    return next((c for c in lista if c.get("nombre_producto") == valor), None)
 
 
 def carpeta_de(cliente, producto_id, categoria=CATEGORIA_POR_DEFECTO):
