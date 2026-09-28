@@ -47,3 +47,40 @@ def test_avisos_de_la_revision_rapida_en_ingles_y_espanol_intacto():
     assert revisor.reglas(datos)[-1]["texto"] == "El guion no termina con una llamada a la acción."
     with idiomas.en_idioma("en"):
         assert revisor.reglas(datos)[-1]["texto"] == "The script doesn't end with a call to action."
+
+
+# -------------------------------------------------------------- bloque 4 ---
+
+def test_diagnostico_en_ingles(monkeypatch):
+    """Doctrina, bloque 4: la orden de idioma rodea las instrucciones del
+    diagnóstico y las pistas salen por el catálogo."""
+    from doctrina import diagnostico
+    from sprints import analisis
+    vistos = []
+    respuesta = json.dumps({"causas": [{"codigo": "gancho", "detalle": "d", "evidencia": "e"}],
+                            "siguiente": {"que": "gancho", "porque": "p", "hipotesis": "h"}, "aprendizaje": "a"})
+    monkeypatch.setattr(analisis, "_llamar_contando",
+                        lambda content, max_tokens, system: vistos.append(system) or (respuesta, 10, 5))
+    diagnostico.diagnosticar({"pais": "CO", "nombre": "x"}, {"motivo": "m", "numeros": {}}, [], {}, idioma="en")
+    s = vistos[0][1]["text"]
+    assert s.startswith(ORDEN_EN) and s.endswith(ORDEN_EN) and "inglés simple" in s and "spañol simple" not in s
+    diagnostico.diagnosticar({"pais": "CO", "nombre": "x"}, {"motivo": "m", "numeros": {}}, [], {})
+    assert "español simple" in vistos[1][1]["text"]
+    pistas = lambda: diagnostico.pistas([{"thruplay_rate": 0.1}], {"thruplay_min": 0.2}, {})[0]["texto"]
+    assert pistas() == "Pocos pasan de los primeros segundos: ThruPlay 10 % (mínimo 20 %)."
+    with idiomas.en_idioma("en"):
+        assert pistas() == "Few get past the first seconds: ThruPlay 10 % (minimum 20 %)."
+        motivo = diagnostico.decision_rescate({"causas": [{"codigo": "landing"}], "siguiente": {"que": "landing"}})["motivo"]
+        assert motivo.startswith("Diagnosis: the landing page doesn't continue the ad — next: review the landing page")
+
+
+def test_aprendizaje_del_motor_en_ingles():
+    from doctrina import aprendizajes
+    pz = {"pais": "CO", "nombre": "x", "angulo": {"gancho": "Cold feet?", "lead": "secreto", "consciencia": "consciente_del_problema"},
+          "productos_ids": ["Hcozy"]}
+    v = {"veredicto": "ganador", "motivo": "m", "numeros": {"ctr": 2.15, "thruplay_rate": 0.34}}
+    assert aprendizajes.desde_veredicto(pz, v)["texto"] == \
+        "Ganó en CO: «Cold feet?» (arranque secreto, audiencia consciente del problema) para Hcozy — CTR 2,1 %, ThruPlay 34 %."
+    with idiomas.en_idioma("en"):
+        assert aprendizajes.desde_veredicto(pz, v)["texto"] == \
+            "Won in CO: «Cold feet?» (secret lead, problem aware audience) for Hcozy — CTR 2.1 %, ThruPlay 34 %."

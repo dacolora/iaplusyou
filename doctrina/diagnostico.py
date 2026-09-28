@@ -8,7 +8,10 @@ siguiente paso y una frase de aprendizaje. Nunca bloquea el veredicto: informa
 al rescate y a la persona."""
 import json
 
+from flask_babel import gettext
+
 import doctrina
+import idiomas
 
 VERSION = 1
 MAX_TOKENS = 4000
@@ -35,7 +38,7 @@ segundo o la frase que lo muestra"}],
 Reglas: nombra solo causas con evidencia (la más probable primero); "siguiente" es UNA sola cosa: "gancho" (otro
 arranque, mismo mensaje), "estructura" (otra forma de contar la misma promesa), "regenerar" (concepto nuevo), "oferta"
 (cambiar oferta o urgencia), "landing" (la página, no el creativo), "pausar" (estación o posicionamiento: no gastar
-más ahora). Español simple, para el dueño de la marca, sin culpar a la plataforma sin evidencia."""
+más ahora). __IDIOMA__ simple, para el dueño de la marca, sin culpar a la plataforma sin evidencia."""
 
 
 def _f(m, k):
@@ -61,19 +64,22 @@ def pistas(snapshots, reglas, contexto):
     es_imagen = bool(c.get("es_imagen"))
     retiene = es_imagen or thruplay_min is None or thruplay >= float(thruplay_min)
     if not es_imagen and thruplay_min is not None and thruplay < float(thruplay_min):
-        salida.append({"codigo": "gancho", "texto": f"Pocos pasan de los primeros segundos: ThruPlay "
-                                                    f"{thruplay * 100:.0f} % (mínimo {float(thruplay_min) * 100:.0f} %)."})
+        salida.append({"codigo": "gancho", "texto": gettext(
+            "Pocos pasan de los primeros segundos: ThruPlay %(t)s %% (mínimo %(min)s %%).",
+            t=f"{thruplay * 100:.0f}", min=f"{float(thruplay_min) * 100:.0f}")})
     if retiene and ctr_min is not None and ctr < float(ctr_min):
-        salida.append({"codigo": "sin_urgencia", "texto": f"Miran pero no clican: CTR {ctr:.2f} % "
-                                                          f"(mínimo {float(ctr_min):.2f} %)."})
+        salida.append({"codigo": "sin_urgencia", "texto": gettext(
+            "Miran pero no clican: CTR %(ctr)s %% (mínimo %(min)s %%).", ctr=f"{ctr:.2f}", min=f"{float(ctr_min):.2f}")})
     if int(c.get("puerta") or 0) == 2:
-        salida.append({"codigo": "landing", "texto": "Pasó la puerta de tráfico y no vendió: la página o la oferta "
-                                                     "no continúan el anuncio."})
+        salida.append({"codigo": "landing", "texto": gettext(
+            "Pasó la puerta de tráfico y no vendió: la página o la oferta no continúan el anuncio.")})
     if frecuencia >= FRECUENCIA_REPETICION:
-        salida.append({"codigo": "repeticion", "texto": f"La misma gente ya lo vio {frecuencia:.1f} veces en promedio."})
+        salida.append({"codigo": "repeticion", "texto": gettext(
+            "La misma gente ya lo vio %(n)s veces en promedio.", n=f"{frecuencia:.1f}")})
     if cpc_max is not None and cpc > float(cpc_max) and (ctr_min is None or ctr >= float(ctr_min)):
-        salida.append({"codigo": "subasta_cara", "texto": f"El clic sale caro con un CTR normal: CPC {cpc:.2f} "
-                                                          f"(máximo {float(cpc_max):.2f}); es la subasta, no el creativo."})
+        salida.append({"codigo": "subasta_cara", "texto": gettext(
+            "El clic sale caro con un CTR normal: CPC %(cpc)s (máximo %(max)s); es la subasta, no el creativo.",
+            cpc=f"{cpc:.2f}", max=f"{float(cpc_max):.2f}")})
     return salida
 
 
@@ -88,11 +94,11 @@ def parsear(texto):
     t = (texto or "").strip()
     ini, fin = t.find("{"), t.rfind("}")
     if ini < 0 or fin <= ini:
-        raise ErrorDiagnostico("Claude no devolvió JSON.")
+        raise ErrorDiagnostico(gettext("Claude no devolvió JSON."))
     try:
         data = json.loads(t[ini:fin + 1])
     except ValueError as e:
-        raise ErrorDiagnostico(f"JSON inválido: {e}")
+        raise ErrorDiagnostico(gettext("JSON inválido: %(error)s", error=e))
     causas = []
     for c in data.get("causas") or []:
         if isinstance(c, dict) and c.get("codigo") in doctrina.CAUSAS_NOMBRE and not any(
@@ -100,10 +106,10 @@ def parsear(texto):
             causas.append({"codigo": c["codigo"], "detalle": _linea(c.get("detalle")),
                            "evidencia": _linea(c.get("evidencia"), 200)})
     if not causas:
-        raise ErrorDiagnostico("Claude no nombró ninguna causa conocida.")
+        raise ErrorDiagnostico(gettext("Claude no nombró ninguna causa conocida."))
     sig = data.get("siguiente") if isinstance(data.get("siguiente"), dict) else {}
     if sig.get("que") not in doctrina.SIGUIENTES_PASOS:
-        raise ErrorDiagnostico(f"«siguiente» trae un paso que no existe: {sig.get('que')!r}.")
+        raise ErrorDiagnostico(gettext("«siguiente» trae un paso que no existe: %(que)s.", que=repr(sig.get("que"))))
     return {"causas": causas,
             "siguiente": {"que": sig["que"], "porque": _linea(sig.get("porque")), "hipotesis": _linea(sig.get("hipotesis"))},
             "aprendizaje": _linea(data.get("aprendizaje"))}
@@ -143,21 +149,26 @@ def texto_para_diagnostico(pz, veredicto, pistas_, extras):
     return "\n".join(lineas)
 
 
-def _instrucciones():
+def _instrucciones(idioma=None):
+    """Las instrucciones del sitio con el nombre del idioma del proyecto
+    (spec 2026-09-26 §B4); sin idioma, en español como las pruebas."""
+    nombre = idiomas.nombre_para_claude(idioma) if idioma else "español"
     return INSTRUCCIONES.replace("{causas}", ", ".join(c for c, _ in doctrina.CAUSAS_PERDIDA)) \
-        .replace("{siguientes}", ", ".join(doctrina.SIGUIENTES_PASOS))
+        .replace("{siguientes}", ", ".join(doctrina.SIGUIENTES_PASOS)).replace("__IDIOMA__", nombre)
 
 
-def diagnosticar(pz, veredicto, snapshots, reglas, extras=None):
+def diagnosticar(pz, veredicto, snapshots, reglas, extras=None, idioma=None):
     """La llamada a Claude: (diagnostico, tokens_entrada, tokens_salida).
-    `extras` como en `texto_para_diagnostico`. Una corrección si la primera
-    respuesta no sirve; si tampoco, `ErrorDiagnostico` con los tokens de las
-    dos llamadas. Quien llama guarda y registra el gasto (tareas/experimentos)."""
+    `extras` como en `texto_para_diagnostico`; `idioma`, el del proyecto
+    (la orden de idioma rodea las instrucciones del sitio). Una corrección si
+    la primera respuesta no sirve; si tampoco, `ErrorDiagnostico` con los
+    tokens de las dos llamadas. Quien llama guarda y registra el gasto
+    (tareas/experimentos)."""
     from sprints import analisis
     extras = extras or {}
     pistas_ = pistas(snapshots, reglas, {"es_imagen": pz.get("es_imagen"), "puerta": veredicto.get("puerta")})
     content = [{"type": "text", "text": texto_para_diagnostico(pz, veredicto, pistas_, extras)}]
-    system = doctrina.bloque_system("diagnosticar", extra=_instrucciones())
+    system = doctrina.bloque_system("diagnosticar", extra=_instrucciones(idioma), idioma=idioma)
     texto, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
     try:
         d = parsear(texto)
@@ -167,7 +178,7 @@ def diagnosticar(pz, veredicto, snapshots, reglas, extras=None):
         try:
             texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system)
         except Exception as falla:  # noqa: BLE001 — lo pagado en la primera llamada viaja con el error
-            raise ErrorDiagnostico(str(falla)[:200] or "La corrección falló.", ent, sal) from falla
+            raise ErrorDiagnostico(str(falla)[:200] or gettext("La corrección falló."), ent, sal) from falla
         ent, sal = ent + e2, sal + s2
         try:
             d = parsear(texto)
@@ -190,12 +201,15 @@ def decision_rescate(diagnostico):
         return {"salto": None, "solo_proponer": False, "motivo": ""}
     sig = diagnostico["siguiente"]
     que = sig.get("que")
-    causas = ", ".join(doctrina.CAUSAS_NOMBRE.get(c.get("codigo"), c.get("codigo"))
+    causas = ", ".join(idiomas.traducir(doctrina.CAUSAS_NOMBRE.get(c.get("codigo"), c.get("codigo")))
                        for c in diagnostico.get("causas") or [] if isinstance(c, dict))
-    motivo = f"Diagnóstico: {causas or 'sin causa clara'} — siguiente: {que}" + (f" ({sig.get('porque')})" if sig.get("porque") else "")
+    motivo = gettext("Diagnóstico: %(causas)s — siguiente: %(que)s", causas=causas or gettext("sin causa clara"),
+                     que=idiomas.traducir(doctrina.SIGUIENTES_NOMBRE.get(que, que)))
+    if sig.get("porque"):
+        motivo += f" ({sig['porque']})"
     salto = {"estructura": 2, "regenerar": 3}.get(que)
     principal = causa_principal(diagnostico)
     solo = que in ("oferta", "landing", "pausar") or principal in doctrina.CAUSAS_NO_CREATIVAS
     if solo:
-        motivo += " — apunta a algo que no es el creativo: decide tú si rescatar"
+        motivo += gettext(" — apunta a algo que no es el creativo: decide tú si rescatar")
     return {"salto": salto, "solo_proponer": solo, "motivo": motivo}

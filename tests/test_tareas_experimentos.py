@@ -222,7 +222,7 @@ def _pedidas_con_payload(monkeypatch, te):
 
 
 def _diagnostico_fijo(monkeypatch, te, que="gancho", causa="gancho"):
-    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", lambda pz, v, snaps, reglas, extras=None: ({
+    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", lambda pz, v, snaps, reglas, extras=None, idioma=None: ({
         "causas": [{"codigo": causa, "detalle": "d", "evidencia": "e"}],
         "siguiente": {"que": que, "porque": "p", "hipotesis": "h"}, "aprendizaje": "En CO no.", "pistas": []}, 900, 300))
 
@@ -248,7 +248,7 @@ def test_perdedora_se_diagnostica_registra_el_gasto_y_deja_aprendizaje(base_temp
     g = gastos.historial("acme", limite=1)[0]
     assert g["tipo"] == "revision" and g["referencia"] == f"diagnostico:{ep}:t77"
     assert [(a, p.get("salto"), p.get("solo_proponer")) for a, p, _ in pedidas] == [("pausar", None, None), ("rescatar", None, None)]
-    assert "Diagnóstico: el gancho no retiene — siguiente: gancho (p)" in pedidas[1][2]
+    assert "Diagnóstico: el gancho no retiene — siguiente: otro gancho (p)" in pedidas[1][2]
     lista = proyectos.aprendizajes("acme")
     assert len(lista) == 1 and lista[0]["tipo"] == "perdedor" and "Diagnóstico: En CO no." in lista[0]["texto"]
     assert any(e["tipo"] == "diagnostico" for e in ex.eventos("acme", eid))
@@ -288,7 +288,7 @@ def test_si_el_diagnostico_falla_el_rescate_sigue_y_lo_pagado_se_registra(base_t
     monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
     pedidas = _pedidas_con_payload(monkeypatch, te)
 
-    def falla(pz, v, snaps, reglas, extras=None):
+    def falla(pz, v, snaps, reglas, extras=None, idioma=None):
         raise dg.ErrorDiagnostico("Claude no devolvió JSON.", 800, 100)
     monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", falla)
     eid, ep = _experimento_activo(ex, _pieza(base_temporal))

@@ -28,6 +28,8 @@ PLANTILLAS_TRADUCIDAS = [
     # Merge de main (2026-09-27): parciales nuevos dentro de pantallas ya traducidas
     # (Crear › detalle de la pieza; Catálogo › ficha del producto).
     "_revision_doctrina.html", "_producto_doctrina.html",
+    # Doctrina bloque 4: la sección de aprendizajes dentro de Experimentos.
+    "_aprendizajes.html",
 ]
 
 

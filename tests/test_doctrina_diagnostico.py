@@ -117,7 +117,7 @@ def test_decision_de_rescate_segun_el_diagnostico():
     base = dg.parsear(_respuesta())
     assert dg.decision_rescate(base) == {"salto": None, "solo_proponer": False,
                                          "motivo": "Diagnóstico: el gancho no retiene, sin urgencia en el deseo — "
-                                                   "siguiente: gancho (el mensaje no se alcanzó a ver)"}
+                                                   "siguiente: otro gancho (el mensaje no se alcanzó a ver)"}
     assert dg.decision_rescate(dg.parsear(_respuesta(siguiente={"que": "estructura", "porque": "p"})))["salto"] == 2
     assert dg.decision_rescate(dg.parsear(_respuesta(siguiente={"que": "regenerar"})))["salto"] == 3
     d = dg.decision_rescate(dg.parsear(_respuesta(siguiente={"que": "landing", "porque": "clican y no compran"})))

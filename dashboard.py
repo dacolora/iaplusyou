@@ -6140,7 +6140,7 @@ def apr_agregar(cliente):
     """Doctrina, bloque 4 (§5): un aprendizaje escrito a mano."""
     try:
         proyectos.agregar_aprendizaje(cliente, doctrina_aprendizajes.manual(request.form.get("texto")))
-        flash("Aprendizaje guardado.", "ok")
+        flash(gettext("Aprendizaje guardado."), "ok")
     except ValueError as e:
         flash(str(e), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
@@ -6149,7 +6149,7 @@ def apr_agregar(cliente):
 @app.route("/cliente/<cliente>/aprendizajes/<aid>/quitar", methods=["POST"])
 def apr_quitar(cliente, aid):
     if not proyectos.quitar_aprendizaje(cliente, aid):
-        flash("Ese aprendizaje ya no existe.", "error")
+        flash(gettext("Ese aprendizaje ya no existe."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 

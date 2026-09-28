@@ -22,6 +22,7 @@ import creative_flow
 import db
 import decisor
 import derivaciones
+import doctrina
 import experimentos
 import gastos
 import idiomas
@@ -176,6 +177,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     siempre. Devuelve el diagnóstico (dict) o None."""
     ep_id = pz["id"]
     referencia = f"diagnostico:{ep_id}{ref_sufijo(tarea or {})}"
+    idioma = idiomas.de_proyecto(cliente)
     extras = {"revision": pz.get("revision_doctrina"), "dias_transcurridos": (ctx or {}).get("dias_transcurridos")}
     try:
         cf_id = _cf_id(pz)
@@ -188,7 +190,7 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     except Exception:  # noqa: BLE001 — sin guion/producto el diagnóstico sigue con menos datos
         pass
     try:
-        d, ent, sal = doctrina_diagnostico.diagnosticar(pz, v, snaps or [], reglas or {}, extras)
+        d, ent, sal = doctrina_diagnostico.diagnosticar(pz, v, snaps or [], reglas or {}, extras, idioma=idioma)
     except doctrina_diagnostico.ErrorDiagnostico as e:
         if e.tokens_entrada or e.tokens_salida:
             gastos.registrar_seguro(cliente, "revision", costo_real(e.tokens_entrada, e.tokens_salida), referencia,
@@ -199,13 +201,14 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
             snaps or [], reglas or {}, {"es_imagen": pz.get("es_imagen"), "puerta": v.get("puerta")}), "en": db.ahora()}
         experimentos.marcar_pieza(cliente, ep_id, diagnostico=error)
         experimentos.registrar_evento(cliente, ex["id"], "diagnostico",
-                                      f"{pz['nombre']} ({pz['pais']}): diagnóstico no disponible: {error['error']}",
-                                      ep_id=ep_id)
+                                      gettext("%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s",
+                                              nombre=pz["nombre"], pais=pz["pais"], error=error["error"]), ep_id=ep_id)
         return None
     except Exception as e:  # noqa: BLE001 — informativo: nunca frena el veredicto
         experimentos.marcar_pieza(cliente, ep_id, diagnostico={"error": cola.sin_token(str(e))[:200], "en": db.ahora()})
         experimentos.registrar_evento(cliente, ex["id"], "diagnostico",
-                                      f"{pz['nombre']} ({pz['pais']}): diagnóstico no disponible.", ep_id=ep_id)
+                                      gettext("%(nombre)s (%(pais)s): diagnóstico no disponible.",
+                                              nombre=pz["nombre"], pais=pz["pais"]), ep_id=ep_id)
         return None
     usd = costo_real(ent, sal)
     gastos.registrar_seguro(cliente, "revision", usd, referencia, proveedor="anthropic",
@@ -213,11 +216,13 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     d = dict(d, version=doctrina_diagnostico.VERSION, modelo=modelo_actual(), usd=usd, en=db.ahora())
     experimentos.marcar_pieza(cliente, ep_id, diagnostico=d)
-    causas = ", ".join(doctrina_aprendizajes.doctrina.CAUSAS_NOMBRE.get(c["codigo"], c["codigo"]) for c in d["causas"])
+    causas = ", ".join(idiomas.traducir(doctrina.CAUSAS_NOMBRE.get(c["codigo"], c["codigo"])) for c in d["causas"])
+    que = d["siguiente"]["que"]
     experimentos.registrar_evento(cliente, ex["id"], "diagnostico",
-                                  f"{pz['nombre']} ({pz['pais']}): {causas} — siguiente: {d['siguiente']['que']}.",
-                                  {"causas": [c["codigo"] for c in d["causas"]], "siguiente": d["siguiente"]["que"]},
-                                  ep_id=ep_id)
+                                  gettext("%(nombre)s (%(pais)s): %(causas)s — siguiente: %(que)s.", nombre=pz["nombre"],
+                                          pais=pz["pais"], causas=causas,
+                                          que=idiomas.traducir(doctrina.SIGUIENTES_NOMBRE.get(que, que))),
+                                  {"causas": [c["codigo"] for c in d["causas"]], "siguiente": que}, ep_id=ep_id)
     return d
 
 

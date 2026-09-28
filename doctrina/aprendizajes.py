@@ -8,7 +8,10 @@ La persona también puede escribir las suyas y quitar cualquiera. Nunca
 bloquean: son información."""
 import uuid
 
+from flask_babel import gettext
+
 import doctrina
+import idiomas
 
 MAX_TEXTO = 300
 LIMITE_PROMPT = 10
@@ -22,7 +25,7 @@ def _limpio(texto, tope=MAX_TEXTO):
 
 def _pct(valor):
     try:
-        return f"{float(valor):.1f}".replace(".", ",")
+        return idiomas.numero(float(valor), 1)
     except (TypeError, ValueError):
         return None
 
@@ -35,17 +38,17 @@ def _describir_pieza(pz):
         partes.append(f"«{_limpio(a['gancho'], 120)}»")
     detalles = []
     if a.get("lead") in doctrina.LEADS:
-        detalles.append(f"arranque {doctrina.LEADS_NOMBRE[a['lead']]}")
+        detalles.append(gettext("arranque %(lead)s", lead=idiomas.traducir(doctrina.LEADS_NOMBRE[a["lead"]])))
     cons = doctrina.normalizar_consciencia(a.get("consciencia"))
     if cons:
-        detalles.append(f"audiencia {doctrina.CONSCIENCIAS_NOMBRE[cons]}")
+        detalles.append(gettext("audiencia %(c)s", c=idiomas.traducir(doctrina.CONSCIENCIAS_NOMBRE[cons])))
     if detalles:
         partes.append("(" + ", ".join(detalles) + ")")
     if not partes:
-        partes.append(f"la pieza «{_limpio(pz.get('nombre'), 60)}»")
+        partes.append(gettext("la pieza «%(nombre)s»", nombre=_limpio(pz.get("nombre"), 60)))
     producto = (pz.get("productos_ids") or [None])[0]
     if producto:
-        partes.append(f"para {_limpio(producto, 60)}")
+        partes.append(gettext("para %(producto)s", producto=_limpio(producto, 60)))
     return " ".join(partes)
 
 
@@ -54,14 +57,14 @@ def _numeros(v):
     partes = []
     ctr, thru, roas = _pct(n.get("ctr")), n.get("thruplay_rate"), n.get("roas")
     if ctr is not None and n.get("ctr") is not None:
-        partes.append(f"CTR {ctr} %")
+        partes.append(gettext("CTR %(ctr)s %%", ctr=ctr))
     if thru is not None and n.get("thruplay_rate") not in (None, ""):
         try:
-            partes.append(f"ThruPlay {float(thru) * 100:.0f} %")
+            partes.append(gettext("ThruPlay %(t)s %%", t=f"{float(thru) * 100:.0f}"))
         except (TypeError, ValueError):
             pass
     if roas:
-        partes.append(f"ROAS {_pct(roas)}")
+        partes.append(gettext("ROAS %(roas)s", roas=_pct(roas)))
     return ", ".join(partes)
 
 
@@ -73,13 +76,14 @@ def desde_veredicto(pz, v, diagnostico=None, ahora=None):
         return None
     quien = _describir_pieza(pz)
     numeros = _numeros(v)
+    pais = pz.get("pais") or "?"
     if tipo == "ganador":
-        texto = f"Ganó en {pz.get('pais') or '?'}: {quien}" + (f" — {numeros}." if numeros else ".")
+        texto = gettext("Ganó en %(pais)s: %(quien)s", pais=pais, quien=quien) + (f" — {numeros}." if numeros else ".")
     else:
         motivo = _limpio((v or {}).get("motivo"), 140).rstrip(".")
-        texto = f"Perdió en {pz.get('pais') or '?'}: {quien} — {motivo}" if motivo else f"Perdió en {pz.get('pais') or '?'}: {quien}"
+        texto = gettext("Perdió en %(pais)s: %(quien)s", pais=pais, quien=quien) + (f" — {motivo}" if motivo else "")
         aprendizaje = _limpio((diagnostico or {}).get("aprendizaje")) if isinstance(diagnostico, dict) else ""
-        texto += f". Diagnóstico: {aprendizaje}" if aprendizaje else "."
+        texto += gettext(". Diagnóstico: %(a)s", a=aprendizaje) if aprendizaje else "."
     a = pz.get("angulo") if isinstance(pz.get("angulo"), dict) else {}
     return {"id": uuid.uuid4().hex[:8], "en": ahora, "tipo": tipo, "pais": pz.get("pais"),
             "producto": (pz.get("productos_ids") or [None])[0], "gancho": _limpio(a.get("gancho"), 120) or None,
@@ -92,7 +96,7 @@ def manual(texto, ahora=None):
     """Un aprendizaje escrito por la persona. ValueError si viene vacío."""
     t = _limpio(texto)
     if not t:
-        raise ValueError("Escribe el aprendizaje.")
+        raise ValueError(gettext("Escribe el aprendizaje."))
     return {"id": uuid.uuid4().hex[:8], "en": ahora, "tipo": "manual", "pais": None, "producto": None,
             "gancho": None, "lead": None, "consciencia": None, "texto": t, "origen": "manual"}
 

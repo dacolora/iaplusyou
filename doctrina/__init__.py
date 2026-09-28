@@ -55,14 +55,18 @@ REBANADAS = ("base", "investigar", "angulo", "gancho", "guion", "video", "captio
              "diagnosticar")
 # Por qué pierde una pieza (Theriot, cap. 14 + gancho y creativo): códigos del
 # diagnóstico (bloque 4) con su nombre para el cliente.
-CAUSAS_PERDIDA = (("gancho", "el gancho no retiene"), ("sin_urgencia", "sin urgencia en el deseo"),
-                  ("muy_educativo", "demasiado educativo"), ("estacionalidad", "estacionalidad"),
-                  ("repeticion", "repetición: ya lo vieron"), ("landing", "la landing no continúa el anuncio"),
-                  ("posicionamiento", "posicionamiento equivocado"), ("creativo", "lo visual no da creencia"))
+# N_: los nombres se traducen donde se muestran (|traducir / idiomas.traducir).
+CAUSAS_PERDIDA = (("gancho", N_("el gancho no retiene")), ("sin_urgencia", N_("sin urgencia en el deseo")),
+                  ("muy_educativo", N_("demasiado educativo")), ("estacionalidad", N_("estacionalidad")),
+                  ("repeticion", N_("repetición: ya lo vieron")), ("landing", N_("la landing no continúa el anuncio")),
+                  ("posicionamiento", N_("posicionamiento equivocado")), ("creativo", N_("lo visual no da creencia")))
 CAUSAS_NOMBRE = dict(CAUSAS_PERDIDA)
 # Un rescate del creativo no las arregla: el motor propone y una persona decide.
 CAUSAS_NO_CREATIVAS = ("landing", "estacionalidad", "posicionamiento")
 SIGUIENTES_PASOS = ("gancho", "estructura", "regenerar", "oferta", "landing", "pausar")
+SIGUIENTES_NOMBRE = {"gancho": N_("otro gancho"), "estructura": N_("otra estructura"),
+                     "regenerar": N_("regenerar el video"), "oferta": N_("revisar la oferta"),
+                     "landing": N_("revisar la landing"), "pausar": N_("pausar")}
 ANGULO_VERSION = 1
 ANGULO_ORIGENES = ("ideas", "guion", "recrear")
 
@@ -468,7 +472,7 @@ def globales_plantilla():
             "FUENTES_PRUEBA_CLIENTE": FUENTES_PRUEBA_CLIENTE, "LEADS_NOMBRE": LEADS_NOMBRE,
             "PREFIJO_ERROR": PREFIJO_ERROR, "lead_por_consciencia": lead_por_consciencia,
             "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error, "PUNTOS_REVISION": revisor.PUNTO,
-            "CAUSAS_NOMBRE": CAUSAS_NOMBRE}
+            "CAUSAS_NOMBRE": CAUSAS_NOMBRE, "SIGUIENTES_NOMBRE": SIGUIENTES_NOMBRE}
 
 
 def datos_fijos_texto(consciencia=None, sofisticacion=None):
