@@ -56,6 +56,10 @@ def test_parsear_limpia_y_exige_causa_y_siguiente():
     assert [c["codigo"] for c in d["causas"]] == ["gancho"] and d["siguiente"]["que"] == "gancho"
     assert d["aprendizaje"].startswith("En CO")
     for texto, parte in (("nada", "JSON"), ('{"a": }', "inválido"), (_respuesta(causas=[]), "ninguna causa"),
+                        ('{"causas": 5, "siguiente": {"que": "gancho"}}', "ninguna causa"),
+                        ('{"causas": [{"codigo": ["gancho"]}], "siguiente": {"que": "gancho"}}', "ninguna causa"),
+                        ('{"causas": [{"codigo": {"a": 1}}], "siguiente": {"que": "gancho"}}', "ninguna causa"),
+                        ('{"causas": [{"codigo": "gancho"}], "siguiente": {"que": ["gancho"]}}', "no existe"),
                          (_respuesta(siguiente={"que": "rezar"}), "no existe")):
         with pytest.raises(dg.ErrorDiagnostico) as e:
             dg.parsear(texto)
@@ -66,7 +70,7 @@ def _preparar(monkeypatch, respuestas):
     from sprints import analisis
     llamadas = []
 
-    def falso(content, max_tokens=700, system=None):
+    def falso(content, max_tokens=700, system=None, **kw):
         llamadas.append({"content": content, "max_tokens": max_tokens, "system": system})
         r = respuestas.pop(0)
         if isinstance(r, Exception):
@@ -127,3 +131,24 @@ def test_decision_de_rescate_segun_el_diagnostico():
     assert d["solo_proponer"] is True                         # la causa principal no es del creativo
     assert dg.decision_rescate(None) == {"salto": None, "solo_proponer": False, "motivo": ""}
     assert dg.decision_rescate({"error": "x"})["solo_proponer"] is False
+
+
+def test_una_forma_rara_se_corrige_y_suma_los_tokens_de_las_dos_llamadas(monkeypatch):
+    """H1 (revisión B): un JSON válido con forma rara nunca es un TypeError
+    que pierda lo pagado — se pide corrección y, si tampoco, viajan los tokens."""
+    from doctrina import diagnostico as dg
+    from sprints import analisis
+    respuestas = ['{"causas": 5, "siguiente": {"que": "gancho"}}', _respuesta()]
+    vistos = []
+
+    def falso(content, max_tokens, system, **kw):
+        vistos.append((content, kw))
+        return respuestas.pop(0), 100, 20
+    monkeypatch.setattr(analisis, "_llamar_contando", falso)
+    d, ent, sal = dg.diagnosticar({"pais": "CO", "nombre": "x"}, VEREDICTO, [], {}, {})
+    assert d["causas"] and (ent, sal) == (200, 40) and len(vistos) == 2
+    assert "no sirvió" in vistos[1][0][-1]["text"] and vistos[0][1] == {"timeout": dg.TIMEOUT_S, "max_retries": 1}
+    respuestas[:] = ['{"causas": [{"codigo": {"a": 1}}]}', '{"siguiente": 3}']
+    with pytest.raises(dg.ErrorDiagnostico) as e:
+        dg.diagnosticar({"pais": "CO", "nombre": "x"}, VEREDICTO, [], {}, {})
+    assert (e.value.tokens_entrada, e.value.tokens_salida) == (200, 40)

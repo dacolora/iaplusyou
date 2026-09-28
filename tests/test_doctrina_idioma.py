@@ -60,7 +60,7 @@ def test_diagnostico_en_ingles(monkeypatch):
     respuesta = json.dumps({"causas": [{"codigo": "gancho", "detalle": "d", "evidencia": "e"}],
                             "siguiente": {"que": "gancho", "porque": "p", "hipotesis": "h"}, "aprendizaje": "a"})
     monkeypatch.setattr(analisis, "_llamar_contando",
-                        lambda content, max_tokens, system: vistos.append(system) or (respuesta, 10, 5))
+                        lambda content, max_tokens, system, **kw: vistos.append(system) or (respuesta, 10, 5))
     diagnostico.diagnosticar({"pais": "CO", "nombre": "x"}, {"motivo": "m", "numeros": {}}, [], {}, idioma="en")
     s = vistos[0][1]["text"]
     assert s.startswith(ORDEN_EN) and s.endswith(ORDEN_EN) and "inglés simple" in s and "spañol simple" not in s

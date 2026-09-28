@@ -61,6 +61,7 @@ def entorno(base_temporal, tmp_path, monkeypatch):
         ll["variar"] += 1
         g = copy.deepcopy(guion_base)
         g["bloques"][0]["texto_pantalla"], g["bloques"][0]["texto_voz"] = "HOOK2", "Hook dos"
+        g["angulo_variante"] = {"lead": "secreto", "gancho": "Hook dos"}
         return g, 0.02
     monkeypatch.setattr(guion_mod, "variar_guion", fake_variar)
 
@@ -445,14 +446,22 @@ def test_variante_escribe_el_guion_variado_una_vez_para_todos_sus_destinos(entor
     from providers import fal_audio
     cf_id = entorno["cf_id"]
     cf.guardar_guion_base("acme", cf_id, copy.deepcopy(GUION_BASE))
-    fid, r = produccion.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"}, ref_sufijo=":t1")
+    contexto = {"lead_objetivo": "secreto", "ganchos_usados": ["Hola"], "hermana": {"k": 1, "n": 2}}
+    opciones = {"variante": 1, "variante_tipo": "hook", "contexto_variante": contexto}
+    fid, r = produccion.producir("acme", cf_id, "es", "CO", dict(opciones), ref_sufijo=":t1")
     assert fid == f"{cf_id}__es_CO__v1" and entorno["variar"] == 1
+    # Doctrina, bloque 4 (H2/H8 de la revisión): la variante recibe el ángulo de
+    # la sesión y el contexto, y lo que eligió queda en capas.guion.parametros.angulo.
+    assert entorno["variar_kw"] == {"angulo": cf.cargar("acme")[cf_id].get("angulo"), "contexto": contexto}
     assert r["capas"]["guion"]["parametros"]["variante_tipo"] == "hook" and r["capas"]["guion"]["costo_usd"] == 0.02
-    assert r["guion"]["bloques"][0]["texto_pantalla"] == "HOOK2"
+    assert r["capas"]["guion"]["parametros"]["angulo"] == {"lead": "secreto", "gancho": "Hook dos"}
+    assert r["guion"]["bloques"][0]["texto_pantalla"] == "HOOK2" and "angulo_variante" not in r["guion"]
     assert cf.guion_base("acme", cf_id)["bloques"][0]["texto_pantalla"] == "Hola"     # el base no se toca
     assert r["capas"]["voz"]["parametros"]["voz"] == fal_audio.VOCES["es"][1]         # "otra" voz que la de defecto
-    produccion.producir("acme", cf_id, "en", "US", {"variante": 1, "variante_tipo": "hook"}, ref_sufijo=":t2")
+    fid2, r2 = produccion.producir("acme", cf_id, "en", "US", dict(opciones), ref_sufijo=":t2")
     assert entorno["variar"] == 1 and len(ediciones.listar("acme", cf_id=cf_id)) == 1
+    # El segundo destino reutiliza el borrador (no vuelve a variar) y aun así guarda el ángulo de la variante.
+    assert r2["capas"]["guion"]["parametros"]["angulo"] == {"lead": "secreto", "gancho": "Hook dos"}
     ed = ediciones.cargar("acme", ediciones.listar("acme", cf_id=cf_id)[0]["id"])
     assert ed["nombre"].startswith("Variante 1 (hook)") and ed["documento"]["origen"]["variante"] == 1
     assert ed["documento"]["guion"]["bloques"][0]["texto_pantalla"] == "HOOK2"

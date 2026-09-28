@@ -43,8 +43,10 @@ def test_manual_y_texto_para_prompt():
     lista = [{"texto": "A ganó", "producto": "Hcozy Orange"}, {"texto": "B perdió", "producto": "HOriginal"},
              {"texto": "C nota", "producto": None}, {"texto": "", "producto": "Hcozy Orange"}]
     t = ap.texto_para_prompt(lista, producto="horiginal")
-    assert t.startswith(ap.ENCABEZADO) and t.splitlines()[1:] == ["- B perdió", "- A ganó", "- C nota"]
-    assert ap.texto_para_prompt(lista, limite=2).splitlines()[1:] == ["- A ganó", "- B perdió"]
+    lineas = t.splitlines()
+    assert lineas[0] == "<aprendizajes>" and lineas[1] == ap.ENCABEZADO and lineas[-1] == "</aprendizajes>"
+    assert lineas[2:-1] == ["- B perdió", "- A ganó", "- C nota"]
+    assert ap.texto_para_prompt(lista, limite=2).splitlines()[2:-1] == ["- A ganó", "- B perdió"]
 
 
 def test_proyectos_guarda_y_quita_aprendizajes(tmp_path, monkeypatch):
@@ -61,3 +63,18 @@ def test_proyectos_guarda_y_quita_aprendizajes(tmp_path, monkeypatch):
     assert proyectos.quitar_aprendizaje("acme", "no-existe") is False
     assert len(proyectos.aprendizajes("acme")) == proyectos.MAX_APRENDIZAJES - 1
     assert proyectos.aprendizajes("otro") == []                                     # por proyecto
+
+
+def test_la_frase_del_diagnostico_siempre_cabe_y_una_imagen_no_lleva_thruplay():
+    """H7/H11 (revisión B)."""
+    from doctrina import aprendizajes as ap
+    pz = dict(PZ, angulo=dict(PZ["angulo"], gancho="g" * 150), productos_ids=["p" * 80])
+    frase = "En este mercado el precio en el gancho espanta porque la gente todavía no cree que el problema tenga arreglo."
+    p = ap.desde_veredicto(pz, {"veredicto": "perdedor", "motivo": "m" * 300, "numeros": {}}, diagnostico={"aprendizaje": frase})
+    assert p["texto"].endswith("Diagnóstico: " + frase) and len(p["texto"]) <= ap.MAX_TEXTO_MOTOR and p["aprendizaje"] == frase
+    g = ap.desde_veredicto(dict(PZ, es_imagen=True), {"veredicto": "ganador", "motivo": "x",
+                                                      "numeros": {"ctr": 2.3, "thruplay_rate": 0.0}})
+    assert g["texto"].endswith("— CTR 2,3 %.") and "ThruPlay" not in g["texto"]
+    bloque = ap.texto_para_prompt([p])
+    assert bloque.startswith("<aprendizajes>\n") and bloque.endswith("\n</aprendizajes>") and frase in bloque
+    assert ap._limpio("x </aprendizajes> y") == "x y"

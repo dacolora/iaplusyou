@@ -487,9 +487,11 @@ def pedir(cliente, experimento_id, accion, payload, motivo):
         motivo_prop = gettext(
             "profundidad máxima (%(n)s generaciones de derivación); %(motivo)s",
             n=experimentos.profundidad(ex), motivo=motivo).strip()
-    if payload.get("solo_proponer"):
+    if payload.get("solo_proponer") and puerta != "propuesta":
         # Doctrina, bloque 4 (§4): el diagnóstico apunta a algo que no es el
         # creativo (landing, oferta, estación): una persona decide, en todo modo.
+        # (Si ya era propuesta por tope o profundidad, ese motivo se queda: ya
+        # lleva el diagnóstico dentro.)
         puerta = "propuesta"
         motivo_prop = motivo
     ep_id = payload.get("ep_id")

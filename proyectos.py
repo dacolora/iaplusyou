@@ -212,7 +212,19 @@ MAX_APRENDIZAJES = 40
 
 def aprendizajes(cliente):
     lista = cargar(cliente).get("aprendizajes") or []
-    return [x for x in lista if isinstance(x, dict) and x.get("texto")]
+    return [x for x in lista if isinstance(x, dict) and x.get("texto") and x.get("id")]
+
+
+def _cargar_para_escribir(cliente):
+    """`cargar` devuelve {} también cuando el archivo existe y no se pudo leer;
+    escribir encima dejaría el proyecto solo con aprendizajes (reglas, idioma,
+    correo… perdidos). Con un archivo no vacío que se lee como {}, se
+    prefiere no escribir."""
+    ruta = _path(cliente)
+    data = cargar(cliente)
+    if not data and os.path.exists(ruta) and os.path.getsize(ruta) > 2:
+        raise OSError(f"{ruta} no se pudo leer: no se sobrescribe")
+    return data
 
 
 def agregar_aprendizaje(cliente, item):
@@ -222,7 +234,7 @@ def agregar_aprendizaje(cliente, item):
     item = dict(item)
     if not item.get("en"):
         item["en"] = datetime.now().isoformat(timespec="seconds")
-    data = cargar(cliente)
+    data = _cargar_para_escribir(cliente)
     data["aprendizajes"] = [item] + [x for x in aprendizajes(cliente) if x.get("id") != item.get("id")][:MAX_APRENDIZAJES - 1]
     _json_store.guardar(_path(cliente), data)
     return item
@@ -230,7 +242,7 @@ def agregar_aprendizaje(cliente, item):
 
 def quitar_aprendizaje(cliente, aid):
     """True si existía y se quitó."""
-    data = cargar(cliente)
+    data = _cargar_para_escribir(cliente)
     lista = aprendizajes(cliente)
     nueva = [x for x in lista if x.get("id") != aid]
     if len(nueva) == len(lista):

@@ -157,39 +157,55 @@ def _item_reedicion(cf_id, variante, variante_tipo, idiomas, contexto=None):
             "finales": {}, "ep_ids": [], "error": None, "contexto_variante": contexto}
 
 
-def _ganchos_usados(cliente, cf_id, sesion):
-    """El gancho del ángulo de la sesión y los de sus variantes ya producidas
-    (`capas.guion.parametros.angulo.gancho`), sin repetir."""
+def _angulos_finales(cliente, cf_id):
+    """El `lead`/`gancho` que cada final ya producida de la sesión probó
+    (`capas.guion.parametros.angulo`, lo escriben los dos `producir`)."""
+    out = []
+    for f in creative_flow.finales(cliente, cf_id):
+        av = (((f.get("capas") or {}).get("guion") or {}).get("parametros") or {}).get("angulo") or {}
+        if isinstance(av, dict):
+            out.append(av)
+    return out
+
+
+def _ganchos_usados(sesion, angulos_finales):
+    """El gancho del ángulo de la sesión y los de sus finales, sin repetir."""
     a = sesion.get("angulo") if isinstance(sesion.get("angulo"), dict) else {}
     vistos = []
-    for g in [a.get("gancho")] + [(((f.get("capas") or {}).get("guion") or {}).get("parametros") or {}).get("angulo", {}).get("gancho")
-                                  for f in creative_flow.finales(cliente, cf_id)]:
+    for g in [a.get("gancho")] + [x.get("gancho") for x in angulos_finales]:
         g = " ".join(str(g or "").split())
         if g and g.lower() not in [x.lower() for x in vistos]:
             vistos.append(g)
     return vistos
 
 
-def _lead_objetivo(angulo, k):
-    """El k-ésimo arranque recomendado para la consciencia del ángulo, distinto
-    del actual (cíclico); None sin consciencia conocida."""
+def _lead_objetivo(angulo, k, excluir=()):
+    """El k-ésimo arranque recomendado para la consciencia del ángulo que no
+    sea el actual ni uno de `excluir` (los que la sesión ya probó). No es
+    cíclico: dos hermanas nunca reciben el mismo, y cuando no queda ninguno
+    (o sin consciencia conocida) devuelve None — la variante cambia el patrón
+    del gancho, no repite un arranque."""
     a = angulo if isinstance(angulo, dict) else {}
     recomendados = list(doctrina.lead_por_consciencia(a.get("consciencia")))
-    if not recomendados:
-        return None
-    otros = [l for l in recomendados if l != a.get("lead")] or recomendados
-    return otros[k % len(otros)]
+    fuera = {a.get("lead")} | {x for x in excluir if x}
+    otros = [l for l in recomendados if l not in fuera]
+    return otros[k] if 0 <= int(k) < len(otros) else None
 
 
-def _contexto_variante(cliente, cf_id, sesion, k=None, diagnostico=None):
+def _contexto_variante(cliente, cf_id, sesion, k=None, n=1, diagnostico=None, excluir=()):
     """Lo que la variante recibe además del ángulo (doctrina, bloque 4, §4):
-    el arranque objetivo (derivar: uno distinto por re-edición), los ganchos
-    ya usados y los aprendizajes del proyecto; el rescate suma su diagnóstico."""
-    ctx = {"ganchos_usados": _ganchos_usados(cliente, cf_id, sesion),
-           "aprendizajes": doctrina_aprendizajes.texto_para_prompt(
-               proyectos.aprendizajes(cliente), producto=(sesion.get("productos_ids") or [None])[0])}
+    el arranque objetivo (derivar: uno distinto por hermana, sin repetir los
+    ya probados en la sesión), `hermana` {k, n} cuando se producen varias a la
+    vez, los ganchos ya usados; el rescate suma su diagnóstico. Los
+    aprendizajes NO van aquí (esto se guarda en `experimento.extra`): los pone
+    `_opciones_de(item, cliente)` al encolar."""
+    angulos = _angulos_finales(cliente, cf_id)
+    ctx = {"ganchos_usados": _ganchos_usados(sesion, angulos)}
     if k is not None:
-        ctx["lead_objetivo"] = _lead_objetivo(sesion.get("angulo"), k)
+        ctx["lead_objetivo"] = _lead_objetivo(sesion.get("angulo"), k,
+                                              excluir=tuple(excluir) + tuple(x.get("lead") for x in angulos))
+        if int(n or 1) > 1:
+            ctx["hermana"] = {"k": int(k) + 1, "n": int(n)}
     if isinstance(diagnostico, dict) and diagnostico.get("causas"):
         ctx["diagnostico"] = {"causas": diagnostico.get("causas"), "siguiente": diagnostico.get("siguiente")}
     return ctx
@@ -315,7 +331,7 @@ def _planificar_derivar(cliente, ex, pz, motivo):
     # Doctrina, bloque 4 (§4): nuevos ganchos alrededor del mismo mensaje —
     # todas las re-ediciones son de gancho, cada una con otro arranque.
     for k in range(n_re):
-        items.append(_item_reedicion(cf_id, base + k, "hook", idiomas, _contexto_variante(cliente, cf_id, sesion, k=k)))
+        items.append(_item_reedicion(cf_id, base + k, "hook", idiomas, _contexto_variante(cliente, cf_id, sesion, k=k, n=n_re)))
     for k in range(n_rg):
         items.append(_item_regeneracion(cliente, cf_id, k, idiomas))
     nombre_hijo = gettext("%(nombre)s · derivado de %(pieza)s", nombre=ex["nombre"], pieza=pz["nombre"])[:200]
@@ -351,8 +367,11 @@ def _planificar_rescatar(cliente, ex, pz, motivo, payload=None):
     clase, variante_tipo = _ESCALONES[escalon]
     if clase == "reedicion":
         sesion = _sesion(cliente, cf_id) or {}
+        # El arranque de la pieza que perdió (el de su variante, si la tiene)
+        # queda fuera: el rescate nunca repite lo que acaba de perder.
         contexto = _contexto_variante(cliente, cf_id, sesion, k=0 if variante_tipo == "hook" else None,
-                                      diagnostico=(pz.get("extra") or {}).get("diagnostico"))
+                                      diagnostico=(pz.get("extra") or {}).get("diagnostico"),
+                                      excluir=((pz.get("angulo") or {}).get("lead"),))
         item = _item_reedicion(cf_id, _siguiente_variante(cliente, cf_id, idiomas), variante_tipo, idiomas, contexto)
     else:
         item = _item_regeneracion(cliente, cf_id, 0, idiomas)
@@ -424,11 +443,19 @@ def _estado_final(cliente, legado):
     return f["estado"], f.get("error")
 
 
-def _opciones_de(item):
+def _opciones_de(item, cliente=None):
+    """Las opciones de `final_producir` para un item. Con `cliente`, el
+    contexto de la variante suma los aprendizajes del proyecto de ESE momento
+    (no se guardan en el experimento: pesan y envejecen)."""
     if item["clase"] == "reedicion":
         o = {"variante": item["variante"], "variante_tipo": item["variante_tipo"]}
         if item.get("contexto_variante"):
-            o["contexto_variante"] = item["contexto_variante"]
+            ctx = dict(item["contexto_variante"])
+            if cliente:
+                sesion = _sesion(cliente, item["cf_id"]) or {}
+                ctx["aprendizajes"] = doctrina_aprendizajes.texto_para_prompt(
+                    proyectos.aprendizajes(cliente), producto=(sesion.get("productos_ids") or [None])[0])
+            o["contexto_variante"] = ctx
         return o
     return {"variante": None}
 
@@ -472,7 +499,7 @@ def _heredar(cliente, d, ep_id):
 def _avanzar_finales(cliente, experimento_id, d, item):
     """Encola las finales que falten, agrega al experimento las que terminaron
     y deja el item `listo` cuando todas están dentro."""
-    opciones = _opciones_de(item)
+    opciones = _opciones_de(item, cliente)
     listas = set()
     for pais in item["paises"]:
         idioma = item["idiomas"][pais]

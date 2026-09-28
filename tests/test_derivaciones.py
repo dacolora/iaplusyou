@@ -691,15 +691,21 @@ def test_derivar_da_a_cada_reedicion_otro_arranque_y_los_ganchos_usados(ent, mon
     hijo = dv.planificar("acme", eid, "derivar", {"ep_id": ep, "motivo": "x"})
     items = _derivacion(ex, hijo)["items"]
     ctxs = [i["contexto_variante"] for i in items]
-    # consciente del problema recomienda problema_solucion, secreto, historia…: el actual (problema_solucion) sale.
     import doctrina
     otros = [l for l in doctrina.lead_por_consciencia("consciente_del_problema") if l != "problema_solucion"]
-    assert [c["lead_objetivo"] for c in ctxs] == [otros[k % len(otros)] for k in range(3)]
+    # La sesión ya probó problema_solucion (su ángulo) y secreto (la final v2): a
+    # ninguna hermana le queda un arranque recomendado — cambian el patrón.
+    assert otros == ["secreto"] and [c["lead_objetivo"] for c in ctxs] == [None, None, None]
+    assert [c["hermana"] for c in ctxs] == [{"k": 1, "n": 3}, {"k": 2, "n": 3}, {"k": 3, "n": 3}]
     assert all(c["ganchos_usados"] == ["¿Pies fríos?", "Lo que nadie dice"] for c in ctxs)
-    assert all("Perdió en MX" in c["aprendizajes"] for c in ctxs) and all("diagnostico" not in c for c in ctxs)
+    assert all("aprendizajes" not in c and "diagnostico" not in c for c in ctxs)   # no se guardan en el experimento
     finales = [e for e in ent["encolados"] if e["tipo"] == "final_producir"]
     assert all(e["payload"]["opciones"]["contexto_variante"]["ganchos_usados"] == ["¿Pies fríos?", "Lo que nadie dice"] for e in finales)
-    assert dv._lead_objetivo({}, 0) is None and dv._lead_objetivo({"consciencia": "muy_consciente", "lead": "oferta"}, 0) == "oferta"
+    assert all("Perdió en MX" in e["payload"]["opciones"]["contexto_variante"]["aprendizajes"] for e in finales)
+    # Sin finales previas: una hermana por arranque libre, nunca el mismo dos veces, nunca el actual.
+    assert dv._lead_objetivo(ANGULO_D, 0) == "secreto" and dv._lead_objetivo(ANGULO_D, 1) is None
+    assert dv._lead_objetivo(ANGULO_D, 0, excluir=("secreto",)) is None
+    assert dv._lead_objetivo({}, 0) is None and dv._lead_objetivo({"consciencia": "muy_consciente", "lead": "oferta"}, 0) is None
 
 
 @pytest.mark.parametrize("escalon,salto,esperado", [

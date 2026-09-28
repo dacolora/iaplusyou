@@ -1737,6 +1737,7 @@ def ver_cliente(cliente):
         reglas_efectivas_exp={e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
         correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
         aprendizajes_exp=proyectos.aprendizajes(cliente),
+        precio_diagnostico=gastos.estimar("diagnostico_pieza")["texto"],
         modos_exp=modos.MODOS,
         nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
         etiquetas_exp={

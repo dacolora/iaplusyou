@@ -203,8 +203,12 @@ def test_producir_variante_guarda_el_angulo_variante(entorno_fe, monkeypatch):
     base = {"idioma": "es", "pais": "CO",
             "bloques": [{"rol": "hook", "inicio_s": 0, "fin_s": 3, "texto_pantalla": "A", "texto_voz": "B"}]}
     cf.guardar_guion_base("acme", cf_id, base)
-    monkeypatch.setattr(g, "variar_guion", lambda gb, tipo, marca, angulo=None, **kw: (
-        dict(gb, angulo_variante={"lead": "secreto", "gancho": "Lo que nadie te dijo"}), 0.02))
-    final_id, resumen = final_edition.producir("acme", cf_id, "es", "CO", {"variante": 1, "variante_tipo": "hook"})
+    vistos = []
+    monkeypatch.setattr(g, "variar_guion", lambda gb, tipo, marca, angulo=None, **kw: (vistos.append(kw), (
+        dict(gb, angulo_variante={"lead": "secreto", "gancho": "Lo que nadie te dijo"}), 0.02))[1])
+    contexto = {"lead_objetivo": "secreto", "ganchos_usados": ["A"]}
+    final_id, resumen = final_edition.producir("acme", cf_id, "es", "CO",
+                                               {"variante": 1, "variante_tipo": "hook", "contexto_variante": contexto})
+    assert vistos == [{"contexto": contexto}]                                  # H8: el legado también pasa el contexto
     assert resumen["capas"]["guion"]["parametros"]["angulo"] == {"lead": "secreto", "gancho": "Lo que nadie te dijo"}
     assert "angulo_variante" not in (resumen["guion"] or {})

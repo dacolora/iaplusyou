@@ -170,19 +170,41 @@ def _pedir(cliente, eid, accion, payload, motivo, resultado):
     return estado
 
 
+def _anotar_diagnostico(cliente, ex, pz, diagnostico, evento, datos=None):
+    """Guarda `extra.diagnostico` y su evento. Si la base falla justo ahí
+    (bloqueada, pieza quitada durante la llamada), solo avisa en el log: el
+    rescate usa el diagnóstico igual y el veredicto nunca se frena (regla 5)."""
+    try:
+        experimentos.marcar_pieza(cliente, pz["id"], diagnostico=diagnostico)
+        experimentos.registrar_evento(cliente, ex["id"], "diagnostico", evento, datos, ep_id=pz["id"])
+    except Exception as e:  # noqa: BLE001
+        log.warning("diagnóstico no guardado (%s, ep %s): %s", cliente, pz["id"], type(e).__name__)
+
+
 def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
     """Doctrina, bloque 4 (§3): el diagnóstico de una perdedora, una vez por
-    veredicto, con su gasto real (tipo «revision»). Nunca lanza: si Claude
-    falla, queda `extra.diagnostico = {"error": …}` y el rescate sigue como
+    veredicto, con su gasto real (tipo «revision»). Corre DESPUÉS de pedir la
+    pausa y ANTES del rescate. Nunca lanza: si Claude falla, queda
+    `extra.diagnostico = {"error", "pistas", "en"}` y el rescate sigue como
     siempre. Devuelve el diagnóstico (dict) o None."""
     ep_id = pz["id"]
     referencia = f"diagnostico:{ep_id}{ref_sufijo(tarea or {})}"
-    idioma = idiomas.de_proyecto(cliente)
+    contexto_pistas = {"es_imagen": pz.get("es_imagen"), "puerta": v.get("puerta")}
     extras = {"revision": pz.get("revision_doctrina"), "dias_transcurridos": (ctx or {}).get("dias_transcurridos")}
+    try:
+        idioma = idiomas.de_proyecto(cliente)
+    except Exception:  # noqa: BLE001 — un proyecto.json raro no frena nada
+        idioma = None
     try:
         cf_id = _cf_id(pz)
         if cf_id:
             extras["guion"] = creative_flow.guion_base(cliente, cf_id)
+            if pz.get("tipo") == "final" and pz.get("legado_id"):
+                # Una final variada se diagnostica con SU guion: el de la sesión
+                # es el de otra pieza (otro gancho).
+                propio = (creative_flow.final_por_legado(cliente, pz["legado_id"]) or {}).get("guion")
+                if isinstance(propio, dict) and propio.get("bloques"):
+                    extras["guion"] = propio
             entry = creative_flow.cargar(cliente).get(cf_id)
             if entry:
                 import final_edition
@@ -197,32 +219,31 @@ def _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea):
                                     proveedor="anthropic", detalle="diagnóstico de perdedora · respuesta inválida",
                                     extra={"tokens_entrada": e.tokens_entrada, "tokens_salida": e.tokens_salida,
                                            "modelo": modelo_actual()})
-        error = {"error": str(e)[:200], "pistas": doctrina_diagnostico.pistas(
-            snaps or [], reglas or {}, {"es_imagen": pz.get("es_imagen"), "puerta": v.get("puerta")}), "en": db.ahora()}
-        experimentos.marcar_pieza(cliente, ep_id, diagnostico=error)
-        experimentos.registrar_evento(cliente, ex["id"], "diagnostico",
-                                      gettext("%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s",
-                                              nombre=pz["nombre"], pais=pz["pais"], error=error["error"]), ep_id=ep_id)
+        error = {"error": cola.sin_token(str(e))[:200], "pistas": doctrina_diagnostico.pistas(
+            snaps or [], reglas or {}, contexto_pistas), "en": db.ahora()}
+        _anotar_diagnostico(cliente, ex, pz, error,
+                            gettext("%(nombre)s (%(pais)s): diagnóstico no disponible: %(error)s",
+                                    nombre=pz["nombre"], pais=pz["pais"], error=error["error"]))
         return None
     except Exception as e:  # noqa: BLE001 — informativo: nunca frena el veredicto
-        experimentos.marcar_pieza(cliente, ep_id, diagnostico={"error": cola.sin_token(str(e))[:200], "en": db.ahora()})
-        experimentos.registrar_evento(cliente, ex["id"], "diagnostico",
-                                      gettext("%(nombre)s (%(pais)s): diagnóstico no disponible.",
-                                              nombre=pz["nombre"], pais=pz["pais"]), ep_id=ep_id)
+        error = {"error": cola.sin_token(str(e))[:200], "pistas": doctrina_diagnostico.pistas(
+            snaps or [], reglas or {}, contexto_pistas), "en": db.ahora()}
+        _anotar_diagnostico(cliente, ex, pz, error,
+                            gettext("%(nombre)s (%(pais)s): diagnóstico no disponible.",
+                                    nombre=pz["nombre"], pais=pz["pais"]))
         return None
     usd = costo_real(ent, sal)
     gastos.registrar_seguro(cliente, "revision", usd, referencia, proveedor="anthropic",
                             detalle="diagnóstico de perdedora",
                             extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
     d = dict(d, version=doctrina_diagnostico.VERSION, modelo=modelo_actual(), usd=usd, en=db.ahora())
-    experimentos.marcar_pieza(cliente, ep_id, diagnostico=d)
     causas = ", ".join(idiomas.traducir(doctrina.CAUSAS_NOMBRE.get(c["codigo"], c["codigo"])) for c in d["causas"])
     que = d["siguiente"]["que"]
-    experimentos.registrar_evento(cliente, ex["id"], "diagnostico",
-                                  gettext("%(nombre)s (%(pais)s): %(causas)s — siguiente: %(que)s.", nombre=pz["nombre"],
-                                          pais=pz["pais"], causas=causas,
-                                          que=idiomas.traducir(doctrina.SIGUIENTES_NOMBRE.get(que, que))),
-                                  {"causas": [c["codigo"] for c in d["causas"]], "siguiente": que}, ep_id=ep_id)
+    _anotar_diagnostico(cliente, ex, pz, d,
+                        gettext("%(nombre)s (%(pais)s): %(causas)s — siguiente: %(que)s.", nombre=pz["nombre"],
+                                pais=pz["pais"], causas=causas,
+                                que=idiomas.traducir(doctrina.SIGUIENTES_NOMBRE.get(que, que))),
+                        {"causas": [c["codigo"] for c in d["causas"]], "siguiente": que})
     return d
 
 
@@ -239,8 +260,8 @@ def _aprender(cliente, ex, pz, v, diagnostico):
 def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, ctx=None, tarea=None):
     """Escribe el veredicto en la pieza + evento `veredicto`, y pide la acción
     que el decisor recomendó (todo gasto pasa por acciones.pedir). Una
-    perdedora se diagnostica primero (bloque 4) y el diagnóstico guía el
-    rescate: salta de escalón o lo deja en propuesta."""
+    perdedora se pausa primero, después se diagnostica (bloque 4) y el
+    diagnóstico guía el rescate: salta de escalón o lo deja en propuesta."""
     ep_id = pz["id"]
     experimentos.actualizar_pieza(cliente, ep_id, veredicto=v["veredicto"], veredicto_motivo=v["motivo"],
                                   veredicto_en=db.ahora())
@@ -249,10 +270,8 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
                                   {"veredicto": v["veredicto"], "accion": v["accion"], "puerta": v["puerta"],
                                    "numeros": v["numeros"]}, ep_id=ep_id)
     resultado["veredictos"].append((pz, v))
-    diagnostico = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea) if v["veredicto"] == "perdedor" else None
-    if v["veredicto"] in ("ganador", "perdedor"):
-        _aprender(cliente, ex, pz, v, diagnostico)
     accion = v["accion"]
+    diagnostico, diagnosticado = None, False
     # Una pieza de imagen no se deriva ni se rescata (derivaciones rechaza
     # las sesiones de imagen: sería un evento `error`, o una propuesta que
     # falla al aprobarla). Ganadora: solo escala. Perdedora: solo se pausa.
@@ -283,6 +302,10 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
         # gasto — en semi/auto se ejecuta ya, en manual se propone. Así el
         # anuncio deja de gastar aunque el rescate espere aprobación.
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
+        # Doctrina, bloque 4: el diagnóstico va DESPUÉS de la pausa (el anuncio
+        # deja de gastar aunque Claude tarde o el worker muera en el medio) y
+        # ANTES del rescate, al que informa.
+        diagnostico, diagnosticado = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea), True
         if not es_imagen:
             decision = doctrina_diagnostico.decision_rescate(diagnostico)
             payload = {"ep_id": ep_id}
@@ -294,10 +317,16 @@ def _aplicar_veredicto(cliente, ex, pz, v, resultado, snaps=None, reglas=None, c
             _pedir(cliente, ex["id"], "rescatar", payload, motivo, resultado)
     elif accion == "archivar":
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
+        diagnostico, diagnosticado = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea), True
         _pedir(cliente, ex["id"], "archivar", {"ep_id": ep_id, "cf_id": _cf_id(pz), "motivo": v["motivo"]},
                v["motivo"], resultado)
     elif accion == "pausar":
         _pedir(cliente, ex["id"], "pausar", {"ep_id": ep_id}, v["motivo"], resultado)
+        diagnostico, diagnosticado = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea), True
+    if v["veredicto"] == "perdedor" and not diagnosticado:
+        diagnostico = _diagnosticar(cliente, ex, pz, v, snaps, reglas, ctx, tarea)
+    if v["veredicto"] in ("ganador", "perdedor"):
+        _aprender(cliente, ex, pz, v, diagnostico)
 
 
 def _canales_organicos(cliente):

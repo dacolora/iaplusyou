@@ -333,3 +333,61 @@ def test_ganadora_deja_aprendizaje_sin_diagnostico(base_temporal, monkeypatch, t
     _decisor_fijo(monkeypatch, te, "ganador", "escalar_y_derivar")
     te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
     assert llamadas == [] and proyectos.aprendizajes("acme")[0]["texto"].startswith("Ganó en CO")
+
+
+def test_la_pausa_va_antes_del_diagnostico_y_un_fallo_al_guardar_no_frena_el_rescate(base_temporal, monkeypatch, tmp_path):
+    """H5/H6 (revisión B): pausar → diagnosticar → rescatar; si guardar el
+    diagnóstico revienta, el rescate y el aprendizaje lo usan igual."""
+    import experimentos as ex
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    from tests.test_experimentos_db import _pieza
+    tareas.cargar_todas()
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    orden = []
+    monkeypatch.setattr(te.acciones, "pedir", lambda c, e, accion, payload, motivo: (
+        orden.append((accion, payload.get("salto"))), ("ejecutada", "ok"))[1])
+    d = {"causas": [{"codigo": "gancho", "detalle": "d", "evidencia": "e"}],
+         "siguiente": {"que": "estructura", "porque": "p", "hipotesis": "h"}, "aprendizaje": "A.", "pistas": []}
+    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar", lambda *a, **k: (orden.append(("diagnostico", None)), (d, 10, 5))[1])
+
+    def revienta(*a, **k):
+        raise RuntimeError("base bloqueada")
+    monkeypatch.setattr(te.experimentos, "marcar_pieza", revienta)
+    eid, ep = _experimento_activo(ex, _pieza(base_temporal))
+    _decisor_fijo(monkeypatch, te, "perdedor", "rescatar")
+    te.exp_decidir({"id": 79, "payload": {"cliente": "acme", "experimento_id": eid}})
+    assert orden == [("pausar", None), ("diagnostico", None), ("rescatar", 2)]
+    assert "Diagnóstico: A." in proyectos.aprendizajes("acme")[0]["texto"]
+
+
+def test_una_final_se_diagnostica_con_su_propio_guion(base_temporal, monkeypatch, tmp_path):
+    """H2 (revisión B): el guion de la sesión es el de otra pieza."""
+    import creative_flow as cf
+    import experimentos as ex
+    import proyectos
+    import tareas
+    from tareas import experimentos as te
+    tareas.cargar_todas()
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    _pedidas(monkeypatch, te)
+    vistos = []
+    d = {"causas": [{"codigo": "gancho", "detalle": "d", "evidencia": "e"}],
+         "siguiente": {"que": "gancho", "porque": "p", "hipotesis": "h"}, "aprendizaje": "A.", "pistas": []}
+    monkeypatch.setattr(te.doctrina_diagnostico, "diagnosticar",
+                        lambda pz, v, snaps, reglas, extras=None, idioma=None: (vistos.append(extras), (d, 1, 1))[1])
+    db = base_temporal
+    with db.conectar() as con:
+        ahora = db.ahora()
+        cid = con.execute(db.concepto.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, origen="manual", legado_id="cf_f", extra={})).inserted_primary_key[0]
+        pid = con.execute(db.pieza.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo="final", estado="listo",
+            pais="CO", idioma="es", url_video="https://r2/f.mp4", legado_id="cf_f__es_CO__v2",
+            guion={"bloques": [{"rol": "hook", "texto_voz": "propio"}]}, capas={}, extra={})).inserted_primary_key[0]
+    cf.guardar_guion_base("acme", "cf_f", {"idioma": "es", "pais": "CO", "bloques": [{"rol": "hook", "texto_voz": "de la sesión"}]})
+    eid, ep = _experimento_activo(ex, pid)
+    _decisor_fijo(monkeypatch, te, "perdedor", "rescatar")
+    te.exp_decidir({"payload": {"cliente": "acme", "experimento_id": eid}})
+    assert vistos and vistos[0]["guion"]["bloques"][0]["texto_voz"] == "propio"

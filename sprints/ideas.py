@@ -428,6 +428,10 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
     orden = orden_ideas(idioma, (ctx.get("mercado") or {}).get("idioma"))
     validos = {r["id"] for r in ctx["referencias"]}
     datos_msg = armar_prompt(ctx, n_videos, n_imagenes)
+    # Doctrina, bloque 4: los aprendizajes son DATOS para escribir, pero NO
+    # para verificar cifras — «CTR 2,1 %» de una prueba pasada no vuelve
+    # verificable un «2,1 % de la gente…» inventado.
+    datos_verif = armar_prompt(dict(ctx, aprendizajes=""), n_videos, n_imagenes)
     system = doctrina.bloque_system("angulo", "gancho", "video",
                                     extra=f"{orden}\n\n{instrucciones(ctx, idioma)}\n\n{orden}")
     content = [{"type": "text", "text": datos_msg}]
@@ -438,7 +442,7 @@ def proponer(cliente, campana_id, n_videos=None, n_imagenes=None, reemplaza=None
         if uso is not None:
             uso["entrada"] = uso.get("entrada", 0) + entrada
             uso["salida"] = uso.get("salida", 0) + salida
-        return crudo, parsear(crudo, validos, ctx["duraciones"], datos_msg, fijos=ctx.get("fijos"))
+        return crudo, parsear(crudo, validos, ctx["duraciones"], datos_verif, fijos=ctx.get("fijos"))
 
     try:
         crudo, lista = pedir(content)

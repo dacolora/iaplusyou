@@ -4,7 +4,7 @@
 <section class="fe-seccion aprendizajes" id="aprendizajes">
   <div class="panel-cabecera">
     <div><h3 class="fe-titulo">{{ _('Aprendizajes del proyecto') }}</h3>
-      <p class="panel-cabecera-desc">{{ _('Lo que ganó y lo que perdió en tus pruebas. Las ideas nuevas, el guion y las variantes lo leen antes de escribir.') }} <a href="{{ url_for('doctrina_pagina', cliente=cliente) }}#diagnosticar" target="_blank" rel="noopener">{{ _('¿Por qué?') }}</a></p>
+      <p class="panel-cabecera-desc">{{ _('Lo que ganó y lo que perdió en tus pruebas. Las ideas nuevas, el guion y las variantes lo leen antes de escribir.') }} {{ _('Cada perdedora se diagnostica sola (%(precio)s) y deja su línea aquí.', precio=precio_diagnostico) }} <a href="{{ url_for('doctrina_pagina', cliente=cliente) }}#diagnosticar" target="_blank" rel="noopener">{{ _('¿Por qué?') }}</a></p>
     </div>
   </div>
   {% if aprendizajes_exp %}
@@ -14,7 +14,7 @@
       <span class="tag-estado">{% if a.tipo == 'ganador' %}{{ _('ganó') }}{% elif a.tipo == 'perdedor' %}{{ _('perdió') }}{% else %}{{ _('nota') }}{% endif %}</span>
       <span class="aprendizaje-texto">{{ a.texto }}</span>
       {% if a.en %}<small class="vacio">{{ a.en[:10] }}</small>{% endif %}
-      <form method="post" action="{{ url_for('apr_quitar', cliente=cliente, aid=a.id) }}" class="inline"><button class="btn-xs">{{ _('Quitar') }}</button></form>
+      {% if a.id %}<form method="post" action="{{ url_for('apr_quitar', cliente=cliente, aid=a.id) }}" class="inline"><button class="btn-xs">{{ _('Quitar') }}</button></form>{% endif %}
     </li>
     {% endfor %}
   </ul>

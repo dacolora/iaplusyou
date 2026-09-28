@@ -1203,6 +1203,10 @@ msgstr ""
 msgid "Cada idea, guion y caption sigue la doctrina de venta de Creatv:"
 msgstr "Every idea, script and caption follows Creatv's sales doctrine:"
 
+#, python-format
+msgid "Cada perdedora se diagnostica sola (%(precio)s) y deja su línea aquí."
+msgstr "Every loser is diagnosed on its own (%(precio)s) and leaves its line here."
+
 msgid "Cadera / entrepierna"
 msgstr "Hips / groin"
 
@@ -7512,6 +7516,9 @@ msgstr "no"
 
 msgid "no aparece tal cual en el guion"
 msgstr "doesn't appear exactly like this in the script"
+
+msgid "no es un objeto"
+msgstr "not an object"
 
 msgid "no está"
 msgstr "isn't"

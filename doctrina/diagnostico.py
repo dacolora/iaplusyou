@@ -15,6 +15,9 @@ import idiomas
 
 VERSION = 1
 MAX_TOKENS = 4000
+# La llamada corre dentro del worker, entre la pausa y el rescate: no puede
+# quedarse minutos colgada (el cliente por defecto espera 600 s y reintenta 2 veces).
+TIMEOUT_S = 120
 MAX_DETALLE = 300
 FRECUENCIA_REPETICION = 3.0
 
@@ -99,17 +102,24 @@ def parsear(texto):
         data = json.loads(t[ini:fin + 1])
     except ValueError as e:
         raise ErrorDiagnostico(gettext("JSON inválido: %(error)s", error=e))
+    if not isinstance(data, dict):
+        raise ErrorDiagnostico(gettext("JSON inválido: %(error)s", error=gettext("no es un objeto")))
+    # Toda forma rara (una lista donde va un texto, un número donde va la
+    # lista) cuenta como «no sirvió», nunca como TypeError: lo pagado se
+    # registra igual (regla 1).
     causas = []
-    for c in data.get("causas") or []:
-        if isinstance(c, dict) and c.get("codigo") in doctrina.CAUSAS_NOMBRE and not any(
-                x["codigo"] == c["codigo"] for x in causas):
-            causas.append({"codigo": c["codigo"], "detalle": _linea(c.get("detalle")),
+    crudas = data.get("causas")
+    for c in (crudas if isinstance(crudas, list) else []):
+        codigo = c.get("codigo") if isinstance(c, dict) else None
+        if isinstance(codigo, str) and codigo in doctrina.CAUSAS_NOMBRE and not any(x["codigo"] == codigo for x in causas):
+            causas.append({"codigo": codigo, "detalle": _linea(c.get("detalle")),
                            "evidencia": _linea(c.get("evidencia"), 200)})
     if not causas:
         raise ErrorDiagnostico(gettext("Claude no nombró ninguna causa conocida."))
     sig = data.get("siguiente") if isinstance(data.get("siguiente"), dict) else {}
-    if sig.get("que") not in doctrina.SIGUIENTES_PASOS:
-        raise ErrorDiagnostico(gettext("«siguiente» trae un paso que no existe: %(que)s.", que=repr(sig.get("que"))))
+    que = sig.get("que")
+    if not isinstance(que, str) or que not in doctrina.SIGUIENTES_PASOS:
+        raise ErrorDiagnostico(gettext("«siguiente» trae un paso que no existe: %(que)s.", que=repr(que)))
     return {"causas": causas,
             "siguiente": {"que": sig["que"], "porque": _linea(sig.get("porque")), "hipotesis": _linea(sig.get("hipotesis"))},
             "aprendizaje": _linea(data.get("aprendizaje"))}
@@ -170,21 +180,23 @@ def diagnosticar(pz, veredicto, snapshots, reglas, extras=None, idioma=None):
     pistas_ = pistas(snapshots, reglas, {"es_imagen": pz.get("es_imagen"), "puerta": veredicto.get("puerta")})
     content = [{"type": "text", "text": texto_para_diagnostico(pz, veredicto, pistas_, extras)}]
     system = doctrina.bloque_system("diagnosticar", extra=_instrucciones(idioma), idioma=idioma)
-    texto, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
+    texto, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system,
+                                                timeout=TIMEOUT_S, max_retries=1)
     try:
         d = parsear(texto)
-    except ErrorDiagnostico as primero:
+    except Exception as primero:  # noqa: BLE001 — una forma rara también es «no sirvió»
         pedido = content + [{"type": "text", "text": f"Tu respuesta anterior no sirvió ({primero}). Responde de nuevo "
                                                     "SOLO el JSON pedido."}]
         try:
-            texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system)
+            texto, e2, s2 = analisis._llamar_contando(pedido, max_tokens=MAX_TOKENS, system=system,
+                                                      timeout=TIMEOUT_S, max_retries=1)
         except Exception as falla:  # noqa: BLE001 — lo pagado en la primera llamada viaja con el error
             raise ErrorDiagnostico(str(falla)[:200] or gettext("La corrección falló."), ent, sal) from falla
         ent, sal = ent + e2, sal + s2
         try:
             d = parsear(texto)
-        except ErrorDiagnostico as segundo:
-            raise ErrorDiagnostico(str(segundo), ent, sal)
+        except Exception as segundo:  # noqa: BLE001 — con los tokens de las dos llamadas
+            raise ErrorDiagnostico(str(segundo)[:200], ent, sal)
     d["pistas"] = pistas_
     return d, ent, sal
 

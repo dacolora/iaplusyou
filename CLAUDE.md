@@ -884,8 +884,9 @@ leyendo solo `concepto.extra`. Nada de esto bloquea ni reescribe.
 `docs/superpowers/specs/2026-09-28-doctrina-bloque-4-cerrar-el-ciclo-design.md`): lo que el motor aprende de cada prueba
 vuelve a la siguiente pieza. (1) **Diagnóstico de una perdedora** (`doctrina/diagnostico.py`; rebanada `diagnosticar` =
 la lista de Theriot: `CAUSAS_PERDIDA` (ocho causas, `CAUSAS_NOMBRE` con `N_`), `CAUSAS_NO_CREATIVAS` = landing,
-estacionalidad, posicionamiento, `SIGUIENTES_PASOS`/`SIGUIENTES_NOMBRE`): `exp_decidir` diagnostica cada `perdedor` nuevo
-en `_diagnosticar` — `pistas()` (puras y gratis: ThruPlay bajo el mínimo → gancho; CTR bajo con retención → sin_urgencia;
+estacionalidad, posicionamiento, `SIGUIENTES_PASOS`/`SIGUIENTES_NOMBRE`): `exp_decidir` pide la pausa primero (el anuncio deja de gastar
+aunque Claude tarde) y después diagnostica cada `perdedor` nuevo en `_diagnosticar` (timeout 120 s, un reintento;
+una final variada se diagnostica con SU guion) — `pistas()` (puras y gratis: ThruPlay bajo el mínimo → gancho; CTR bajo con retención → sin_urgencia;
 puerta 2 → landing; frecuencia ≥ 3 → repetición; CPC alto con CTR normal → subasta_cara) y una llamada a Claude con los
 DATOS (veredicto y números, ángulo, revisión de la doctrina, guion base, producto; una corrección; `ErrorDiagnostico`
 lleva los tokens pagados; `idioma=` del proyecto). Se guarda en `experimento_pieza.extra.diagnostico`
@@ -896,18 +897,22 @@ estructura/regenerar → `payload.salto` 2/3 (`derivaciones._planificar_rescatar
 nunca vuelve atrás; `acciones._precio_estimado` cobra el escalón real) y oferta/landing/pausar, o causa principal no
 creativa, → `payload.solo_proponer` (`acciones.pedir` deja `propuesta` en todo modo, con el diagnóstico en el motivo).
 `derivar` hace todas las re-ediciones de gancho (ya no alterna hook/estructura) con `contexto_variante =
-{lead_objetivo (el k-ésimo arranque recomendado distinto del actual, cíclico; None sin consciencia), ganchos_usados
-(el del ángulo de la sesión + `capas.guion.parametros.angulo.gancho` de cada final), aprendizajes}`; el rescate suma
-`diagnostico` (causas + siguiente). `_opciones_de` lo lleva en `opciones.contexto_variante` y `variar_guion(...,
-angulo=, contexto=)` lo escribe en el mensaje (`_contexto_variante_texto`) — también en `final_edition/produccion.py`,
-que antes variaba sin ángulo. (3) **Aprendizajes por proyecto** (`doctrina/aprendizajes.py`;
+{lead_objetivo (el k-ésimo arranque recomendado que no sea el actual ni uno ya probado por una final de la sesión;
+None cuando no queda ninguno: la variante cambia el patrón del gancho), hermana {k, n} cuando se producen varias a
+la vez, ganchos_usados (el del ángulo de la sesión + `capas.guion.parametros.angulo.gancho` de cada final)}`; el
+rescate suma `diagnostico` (causas + siguiente) y excluye el arranque de la pieza que perdió. Los aprendizajes NO se
+guardan en el experimento: `_opciones_de(item, cliente)` los agrega al encolar. `variar_guion(..., angulo=,
+contexto=)` lo escribe en el mensaje (`_contexto_variante_texto`, ganchos y aprendizajes entre etiquetas) — también
+en `final_edition/produccion.py`, que antes variaba sin ángulo y que ahora guarda el `angulo_variante` en
+`capas.guion.parametros.angulo` como el legado (también para los destinos que reutilizan el borrador). (3) **Aprendizajes por proyecto** (`doctrina/aprendizajes.py`;
 `proyecto.json["aprendizajes"]` vía `proyectos.aprendizajes/agregar_aprendizaje/quitar_aprendizaje`, tope 40, los más
 nuevos primero): una línea por ganador o perdedor (`desde_veredicto`: «Ganó en CO: «gancho» (arranque X, audiencia Y)
 para P — CTR 2,1 %, ThruPlay 34 %.» / «Perdió en …: … — motivo. Diagnóstico: …»; gettext, así que sale en el idioma
 del proyecto) o escrita a mano (sección «Aprendizajes del proyecto» al final de Experimentos, `_aprendizajes.html`,
-rutas `apr_agregar`/`apr_quitar`). `texto_para_prompt(lista, producto=)` (los del mismo producto primero, 10) entra
-como DATOS en las ideas de sprint (`contexto_campana["aprendizajes"]`), en el guion base
-(`generar_guion_base(aprendizajes=)`) y en las variantes. (4) UI: bajo un veredicto `perdedor` la fila de la pieza
+rutas `apr_agregar`/`apr_quitar`). `texto_para_prompt(lista, producto=)` (los del mismo producto primero, 10, entre `<aprendizajes>`) entra
+como DATOS en las ideas de sprint (`contexto_campana["aprendizajes"]`; las cifras del ángulo se verifican contra
+los DATOS SIN aprendizajes), en el guion base (`generar_guion_base(aprendizajes=)`) y en las variantes. La línea
+del motor cabe en 600 caracteres con la frase del diagnóstico entera (`MAX_TEXTO_MOTOR`); a mano, 300. (4) UI: bajo un veredicto `perdedor` la fila de la pieza
 muestra las causas (`CAUSAS_NOMBRE|traducir`, `title` = detalle y evidencia), «Siguiente: …» y «¿Por qué?» →
 `#diagnosticar` de la página de la doctrina; con error, el motivo. (5) Flow Plus: `guiones/clips.py`, `recorte.py`,
 `imagenes.py` y `refinador.py` arman su system con `doctrina.bloque_system(*COMBINACIONES["flowplus_*"], extra=,
