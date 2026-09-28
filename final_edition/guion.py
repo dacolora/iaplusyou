@@ -7,6 +7,9 @@ duración objetivo) y `localizar_guion` lo traduce/adapta a otro idioma y país
 `tipos.validar_guion` y, si hay errores, piden UNA corrección a Claude antes de
 rendirse con `GuionInvalido`.
 
+Decisión B (2026-09-28): el guion base y las variantes van en el idioma del
+proyecto con la orden de idioma; la localización, en el del país destino.
+
 Forma del guion:
 {"bloques": [{"rol", "texto_pantalla", "texto_voz", "inicio_s", "fin_s"}],
  "idioma", "pais", "moneda", "precio_texto"}
@@ -19,6 +22,7 @@ import os
 import anthropic
 
 import doctrina
+import idiomas
 from final_edition import tipos
 
 # Mismo patrón que generador_prompts (replicado para no acoplar este módulo al
@@ -166,12 +170,20 @@ NUNCA su texto literal ni su marca.
 {formato}"""
 
 
+def _orden(idioma):
+    """El idioma para `doctrina.bloque_system(idioma=)`: la orden va solo si
+    es un idioma de la app (es/en). Un guion base viejo en portugués sigue
+    sin orden — `idiomas.orden_idioma("pt")` caería al inglés."""
+    return idioma if idiomas.normalizar(idioma) else None
+
+
 def _system_generar(duracion_s, idioma_base, canal_optimo=None, con_angulo=False):
     """System del guion base: doctrina (con caché) + reglas. Sin ángulo en la
     sesión, la doctrina incluye la rebanada de ángulo y se le pide decidirlo."""
     rebanadas = ("guion", "gancho") if con_angulo else ("angulo", "guion", "gancho")
     return doctrina.bloque_system(*rebanadas, extra=_reglas_generar(duracion_s, idioma_base, canal_optimo,
-                                                                     pedir_angulo=not con_angulo))
+                                                                     pedir_angulo=not con_angulo),
+                                  idioma=_orden(idioma_base))
 
 
 def _formato_json_localizado(idioma, pais, moneda, precio_texto):
@@ -603,7 +615,8 @@ def variar_guion(guion_base, variante_tipo, marca, angulo=None, contexto=None):
         return g
 
     return _generar_con_correccion(
-        doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE),
+        doctrina.bloque_system("gancho", extra=_reglas_generar(duracion_s, idioma) + REGLA_VARIANTE,
+                               idioma=_orden(idioma)),
         _mensaje_variar(base, variante_tipo, marca, angulo=angulo, contexto=contexto),
         duracion_s, ajustar, _datos_verificables(base, doctrina.texto_verificable(angulo),
                                                  _precio_verificable(base.get("precio_base"), pais)),

@@ -38,6 +38,7 @@ import doctrina
 from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import producto as doctrina_producto
 import gastos
+import idiomas
 import marca
 import proyectos
 import tiendas
@@ -61,7 +62,7 @@ COLOR_ACENTO_DEFECTO = texto.COLOR_ACENTO_DEFECTO
 IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp")
 _TAMANOS = {"9:16": (1080, 1920), "16:9": (1920, 1080), "1:1": (1080, 1080), "4:5": (1080, 1350)}
 _OPCIONES_DEFECTO = {"voz": None, "estilo_musica": None, "precio": None, "precios": None, "con_voz": True,
-                     "con_musica": True, "idioma_base": "es", "duracion_s": None,
+                     "con_musica": True, "idioma_base": None, "duracion_s": None,
                      "variante": None, "variante_tipo": None,
                      # Capa "sonido" (spec estudio S2): el audio nativo del clon.
                      "con_sonido": True, "sonido": "nativo", "mezcla": mezcla.PRESET_DEFECTO, "volumenes": None}
@@ -378,7 +379,8 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     (tests/CLI) siguen siendo idempotentes entre sí, como antes."""
     o = _opciones(opciones)
     entry = _sesion(cliente, cf_id)
-    idioma_base = o.get("idioma_base") or "es"
+    # Decisión B (2026-09-28): sin idioma elegido, el del proyecto.
+    idioma_base = o.get("idioma_base") or idiomas.de_proyecto(cliente)
     producto = _producto(cliente, entry, o.get("precio"))
     # Precio base del guion (D, regla de CLAUDE.md): el escrito por la persona
     # manda tal cual. Sin uno escrito, el de la tienda solo cuenta como precio

@@ -20,6 +20,7 @@ ARCHIVOS_FASE5 = ["sprints/analisis.py", "sprints/ideas.py", "sprints/qa.py", "s
                   "doctrina/revisor.py", "doctrina/pedidos.py", "doctrina/diagnostico.py",
                   "referentes/sugerir.py", "referentes/recrear.py", "nicho/avatares.py",
                   "referentes/clasificar.py", "referentes/copycoders.py"]
+ARCHIVOS_FASE6 = ["final_edition/guion.py"]
 
 
 def _offsets_de_linea(texto):
@@ -79,7 +80,7 @@ def _sin_comentarios_ni_docstrings(texto):
     return "".join(chars)
 
 
-@pytest.mark.parametrize("ruta", ARCHIVOS_FASE3 + ARCHIVOS_FASE4 + ARCHIVOS_FASE5)
+@pytest.mark.parametrize("ruta", ARCHIVOS_FASE3 + ARCHIVOS_FASE4 + ARCHIVOS_FASE5 + ARCHIVOS_FASE6)
 def test_sin_espanol_fijo_en_prompts(ruta):
     with open(os.path.join(RAIZ, ruta), encoding="utf-8") as f:
         texto = f.read()

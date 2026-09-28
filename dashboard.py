@@ -6266,9 +6266,12 @@ def fe_preparar(cliente, cf_id):
     """Encola la escritura del guion base (capa 0, Anthropic). No produce nada."""
     if _sesion_con_video(cliente, cf_id) is None:
         return _volver_final(cliente)
-    idioma_base = request.form.get("idioma_base") or "es"
+    # Decisión B (2026-09-28): el guion base no es por destino. La elección
+    # explícita del selector gana; sin ella (o con una que no vale), el idioma
+    # del proyecto.
+    idioma_base = request.form.get("idioma_base") or idiomas.de_proyecto(cliente)
     if idioma_base not in IDIOMAS_FE:
-        idioma_base = "es"
+        idioma_base = idiomas.de_proyecto(cliente)
     opciones = {"precio": _precio_form(request.form.get("precio")), "idioma_base": idioma_base}
     encolado = trabajos.encolar(
         tareas_fe.job_id_guion(cliente, cf_id), "final_guion",
