@@ -171,13 +171,20 @@ test("_revisarPiezas: la pieza pedida se agrega sola al tener material; la que f
     _ponerMaterial: Biblioteca.prototype._ponerMaterial,
     _operar: (cosa, p) => operadas.push([cosa.tipo, cosa.material.id, cosa.nombre, p]),
     _decir: (t, error) => dichos.push([t, error]),
-    _pintarListas: () => {},
+    _firma: Biblioteca.prototype._firma,
+    pintadas: 0,
+    _pintarListas() { this.pintadas += 1; },
   };
   await Biblioteca.prototype._revisarPiezas.call(falsa);
   assert.deepEqual(operadas, [["video", 5, "A", punto]]);
   assert.deepEqual(dichos, [["No se pudo preparar «B». Vuelve a intentar.", true]]);
   assert.deepEqual([...falsa.preparando.keys()], ["cfC"]);
   assert.equal(falsa.datos.piezas.length, 3);
+  assert.equal(falsa.pintadas, 1);                        // cambió: se repinta una vez
+  // fix final 4: la pregunta siguiente trae lo mismo (cfC sigue preparándose): nada se repinta
+  await Biblioteca.prototype._revisarPiezas.call(falsa);
+  assert.equal(falsa.pintadas, 1);
+  assert.deepEqual([...falsa.preparando.keys()], ["cfC"]);
 });
 
 test("nombreDe: el logo del proyecto (origen «marca», el de insumos.logo) se llama «Logo»", () => {
@@ -185,4 +192,21 @@ test("nombreDe: el logo del proyecto (origen «marca», el de insumos.logo) se l
   assert.equal(nombreDe({ tipo: "imagen", origen: "marca", nombre: "logo.png" }), "logo.png");
   assert.equal(nombreDe({ tipo: "imagen", origen: "subida", nombre: null }), "Imagen");
   assert.equal(nombreDe({ tipo: "audio", origen: "musica" }), "Canción");
+});
+
+test("firmaListado: igual si nada cambió (aunque lleguen objetos nuevos), distinta si cambió algo que se ve", async () => {
+  const { firmaListado } = await import("../../static/editor/biblioteca.js");
+  const datos = () => ({ materiales: [video(4)], piezas: [{ cf_id: "cf1", nombre: "Pieza", material_id: null, preparando: true }] });
+  const base = firmaListado({ carga: "lista", datos: datos(), preparando: ["cf1", "cf2"] });
+  assert.equal(firmaListado({ carga: "lista", datos: datos(), preparando: ["cf2", "cf1"] }), base);
+  const conProxy = datos();
+  conProxy.materiales[0].url_proxy = "https://r2/v4_p.mp4";
+  const lista = datos();
+  lista.piezas[0] = { ...lista.piezas[0], material_id: 9, preparando: false };
+  for (const otro of [
+    { carga: "lista", datos: conProxy, preparando: ["cf1", "cf2"] },
+    { carga: "lista", datos: lista, preparando: ["cf1", "cf2"] },
+    { carga: "lista", datos: datos(), preparando: ["cf1"] },
+    { carga: "error", datos: datos(), preparando: ["cf1", "cf2"] },
+  ]) assert.notEqual(firmaListado(otro), base);
 });

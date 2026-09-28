@@ -125,6 +125,14 @@ export function faltaPreparar(m) {
   return false;
 }
 
+// Lo que se ve en las listas (cómo va la carga, los materiales, las piezas y
+// cuáles se están preparando), escrito para comparar: si al preguntar por las
+// piezas (cada 3 s mientras una se prepara) sale igual, no se repinta nada —
+// repintar recarga las miniaturas, se lleva el foco y se traga un clic a medias.
+export function firmaListado({ carga = null, datos = null, preparando = [] } = {}) {
+  return JSON.stringify([carga, datos?.materiales ?? [], datos?.piezas ?? [], [...preparando].map(String).sort()]);
+}
+
 export function urlPieza(plantilla, cfId) {
   return String(plantilla).replace("__CF__", encodeURIComponent(cfId));
 }
@@ -733,7 +741,12 @@ export class Biblioteca {
     }, INTERVALO_BIBLIOTECA_MS);
   }
 
+  _firma() {
+    return firmaListado({ carga: this.carga, datos: this.datos, preparando: [...this.preparando.keys()] });
+  }
+
   async _revisarPiezas() {
+    const antes = this._firma();
     const { que, j } = await this._pedirJSON(this.urls.biblioteca);
     const ahora = Date.now();
     if (que === "json" && j) {
@@ -757,7 +770,7 @@ export class Biblioteca {
         if (prep.pedido) this._decir(`«${nombre}» tarda demasiado en prepararse. Vuelve a intentar en un rato.`, true);
       }
     }
-    this._pintarListas();
+    if (this._firma() !== antes) this._pintarListas();      // sin cambios, nada se repinta
   }
 
   _esperar(id) {
