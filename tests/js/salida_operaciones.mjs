@@ -105,6 +105,18 @@ anotar("agregar_musica_larga_al_final", () => op.agregarAudio(docBase(), { id: 6
 anotar("agregar_efecto_cerca_del_final", () => op.agregarAudio(docBase(), { id: 2 }, 6000, { rol: "efecto" }, INFO));
 anotar("agregar_titulo_al_final", () => op.agregarTexto(docBase(), 8000, "titulo", INFO));
 anotar("agregar_imagen_despues_del_final", () => op.agregarImagen(docBase(), { id: 4, ancho: 600, alto: 400 }, 9000, { duracionMs: 12000 }, INFO));
+// Fixes finales (8, 10, 12): fondo.ancho automático, escala inicial acotada, la música no cae en la voz.
+anotar("cambiar_fondo_ancho_automatico", () => {
+  const d = docBase();
+  d.pistas[1].clips[0].estilo = { ...d.pistas[1].clips[0].estilo,
+    fondo: { color: "#445566", opacidad: 0.5, radio: 0.1, relleno_x: 0.02, relleno_y: 0.02, ancho: 0.4 } };
+  return op.cambiar(d, "t1", { estilo: { fondo: { ancho: null } } }, INFO);
+});
+anotar("agregar_imagen_diminuta", () => op.agregarImagen(docBase(), { id: 4, ancho: 10, alto: 10 }, 1000, {}, INFO));
+anotar("agregar_musica_y_efecto_en_sus_pistas", () => {
+  const conMusica = op.agregarAudio(docBase(), { id: 2 }, 4000, { rol: "musica" }, INFO).doc;
+  return op.agregarAudio(conMusica, { id: 2 }, 0, { rol: "efecto" }, INFO);
+});
 
 const D9 = { ...D, 1: 9000 };
 for (const v of op.VELOCIDADES) {

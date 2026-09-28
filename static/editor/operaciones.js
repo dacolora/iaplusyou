@@ -35,6 +35,8 @@ export const ID_SONIDO = "p_sonido";
 export const TRANSICIONES = ["corte", "fundido", "deslizar", "zoom", "desenfoque"];
 export const FUENTES = ["Inter-Bold", "Inter-SemiBold", "SpaceGrotesk-Bold"];
 const MAX_PISTAS = 8;   // documento.MAX_PISTAS
+const ESCALA_MIN = 0.05;  // transform.escala: lo que acepta cambiar
+const ESCALA_MAX = 5;
 
 export class OperacionInvalida extends Error {
   constructor(mensaje) {
@@ -131,10 +133,12 @@ function pistaNueva(doc, tipo, base) {
 // La primera pista de `tipo` sin un clip que se solape con [tMs, tMs+dMs); si
 // ninguna sirve, una pista nueva (`pistaNueva`). `excluir` saca pistas del
 // reparto (p_sonido: nunca se comparte con audio agregado a mano, la rehace
-// sincronizarSonido en cada normalizar).
-function pistaLibre(doc, tipo, base, tMs, dMs, excluir = []) {
+// sincronizarSonido en cada normalizar); `acepta(pista)` pone otra condición
+// (el audio: solo una pista con clips de su mismo rol — una música nunca cae
+// en el hueco de la voz, que en la línea de tiempo dice «Voz»).
+function pistaLibre(doc, tipo, base, tMs, dMs, excluir = [], acepta = () => true) {
   for (const p of doc.pistas) {
-    if (p.tipo !== tipo || excluir.includes(p.id)) continue;
+    if (p.tipo !== tipo || excluir.includes(p.id) || !acepta(p)) continue;
     const ocupado = p.clips.some((c) => tMs < c.inicio_ms + c.duracion_ms && c.inicio_ms < tMs + dMs);
     if (!ocupado) return p;
   }
@@ -495,9 +499,10 @@ export function agregarImagen(doc, material, tMs, { llenar = false, duracionMs =
   const tieneMedidas = Number(material?.ancho) > 0 && Number(material?.alto) > 0;
   const anchoNatural = tieneMedidas ? Number(material.ancho) : CAPA_DEFECTO[0];
   const altoNatural = tieneMedidas ? Number(material.alto) : CAPA_DEFECTO[1];
-  const escala = llenar
+  // el mismo rango que acepta cambiar (0,05–5): una imagen diminuta entraba a 64×
+  const escala = acotar(llenar
     ? Math.max(anchoLienzo / anchoNatural, altoLienzo / altoNatural)
-    : (anchoLienzo * 0.6) / anchoNatural;
+    : (anchoLienzo * 0.6) / anchoNatural, ESCALA_MIN, ESCALA_MAX);
   const clip = {
     id: idNuevo(res, "img"), inicio_ms: t, duracion_ms: dur, material_id: material.id,
     transform: { ...TRANSFORM, escala }, keyframes: [], animacion: null,
@@ -519,7 +524,8 @@ export function agregarAudio(doc, material, tMs, { rol = "musica" } = {}, info =
   const entero = duracionDe(info, material.id);
   if (entero === undefined || entero === null) throw new OperacionInvalida("Ese audio todavía se está preparando.");
   const { t, dur } = lugarCapa(res, tMs, entero);
-  const pista = pistaLibre(res, "audio", "p_audio", t, dur, [ID_SONIDO]);
+  const mismoRol = (p) => p.clips.every((c) => (c.rol_audio ?? "subida") === rol);
+  const pista = pistaLibre(res, "audio", "p_audio", t, dur, [ID_SONIDO], mismoRol);
   const clip = {
     id: idNuevo(res, "audio"), inicio_ms: t, duracion_ms: dur, material_id: material.id, rol_audio: rol,
     recorte: { desde_ms: 0, hasta_ms: dur }, velocidad: 1,
@@ -643,7 +649,9 @@ function colorCambio(v, nombre) {
 // que no se toca. Solo los campos de `campos` ({campo: [min, max] | null si
 // es color}), acotados; una clave que no está en la lista se rechaza en vez
 // de ignorarse en silencio. `null` sigue siendo "sin contorno/sombra/fondo".
-function subCambio(actual, valor, campos, nombre) {
+// Un campo de `automaticos` en null vuelve a «automático»: se quita la clave
+// (fondo.ancho: el ancho del texto, no 0 — Number(null) daba 0).
+function subCambio(actual, valor, campos, nombre, automaticos = []) {
   if (valor === null) return null;
   if (typeof valor !== "object" || Array.isArray(valor)) throw new OperacionInvalida(`${nombre} debe ser un objeto o null.`);
   for (const clave of Object.keys(valor)) {
@@ -652,6 +660,10 @@ function subCambio(actual, valor, campos, nombre) {
   const out = { ...(actual && typeof actual === "object" ? actual : {}) };
   for (const [campo, rango] of Object.entries(campos)) {
     if (!(campo in valor)) continue;
+    if (valor[campo] === null && automaticos.includes(campo)) {
+      delete out[campo];
+      continue;
+    }
     out[campo] = rango === null ? colorCambio(valor[campo], `${nombre}.${campo}`)
                                  : acotar(numeroCambio(valor[campo], `${nombre}.${campo}`), rango[0], rango[1]);
   }
@@ -709,7 +721,7 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     }
     if (e.contorno !== undefined) clip.estilo.contorno = subCambio(clip.estilo.contorno, e.contorno, CAMPOS_CONTORNO, "estilo.contorno");
     if (e.sombra !== undefined) clip.estilo.sombra = subCambio(clip.estilo.sombra, e.sombra, CAMPOS_SOMBRA, "estilo.sombra");
-    if (e.fondo !== undefined) clip.estilo.fondo = subCambio(clip.estilo.fondo, e.fondo, CAMPOS_FONDO, "estilo.fondo");
+    if (e.fondo !== undefined) clip.estilo.fondo = subCambio(clip.estilo.fondo, e.fondo, CAMPOS_FONDO, "estilo.fondo", ["ancho"]);
     if (e.ancho_max !== undefined) {
       clip.estilo.ancho_max = e.ancho_max === null ? null : acotar(numeroCambio(e.ancho_max, "estilo.ancho_max"), 0, 1);
     }
@@ -726,7 +738,7 @@ export function cambiar(doc, clipId, cambios, info = {}) {
     }
     if (t.x !== undefined) clip.transform.x = acotar(numeroCambio(t.x, "transform.x"), 0, 1);
     if (t.y !== undefined) clip.transform.y = acotar(numeroCambio(t.y, "transform.y"), 0, 1);
-    if (t.escala !== undefined) clip.transform.escala = acotar(numeroCambio(t.escala, "transform.escala"), 0.05, 5);
+    if (t.escala !== undefined) clip.transform.escala = acotar(numeroCambio(t.escala, "transform.escala"), ESCALA_MIN, ESCALA_MAX);
     if (t.opacidad !== undefined) clip.transform.opacidad = acotar(numeroCambio(t.opacidad, "transform.opacidad"), 0, 1);
   }
   if (cambios.audio !== undefined) {

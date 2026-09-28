@@ -512,3 +512,37 @@ test("agregarTexto y agregarImagen con el cabezal al final: 3 s que terminan al 
   assert.deepEqual([clipDe(imgFin.doc, imgFin.seleccion).inicio_ms, clipDe(imgFin.doc, imgFin.seleccion).duracion_ms], [0, 8000]);
   for (const r of [titulo, casi, img, imgFin]) assert.equal(finDoc(r.doc), 8000);
 });
+
+test("cambiar: fondo.ancho null es «automático» (se quita la clave), no 0", () => {
+  const base = docBase();
+  base.pistas[1].clips[0].estilo = { ...base.pistas[1].clips[0].estilo,
+    fondo: { color: "#445566", opacidad: 0.5, radio: 0.1, relleno_x: 0.02, relleno_y: 0.02, ancho: 0.4 } };
+  const r = puro((d) => op.cambiar(d, "t1", { estilo: { fondo: { ancho: null } } }, INFO), base);
+  const fondo = clipDe(r.doc, "t1").estilo.fondo;
+  assert.ok(!("ancho" in fondo), `quedó ancho=${fondo.ancho}`);
+  assert.equal(fondo.color, "#445566");
+  assert.equal(clipDe(op.cambiar(base, "t1", { estilo: { fondo: { ancho: 0.3 } } }, INFO).doc, "t1").estilo.fondo.ancho, 0.3);
+});
+
+test("agregarImagen: la escala inicial queda entre 0,05 y 5 (una imagen diminuta no entra a 64×)", () => {
+  for (const [material, llenar, escala] of [
+    [{ id: 4, ancho: 10, alto: 10 }, false, 5], [{ id: 4, ancho: 10, alto: 10 }, true, 5],
+    [{ id: 4, ancho: 100000, alto: 100000 }, false, 0.05],
+  ]) {
+    const r = op.agregarImagen(docBase(), material, 1000, { llenar }, INFO);
+    assert.equal(clipDe(r.doc, r.seleccion).transform.escala, escala);
+  }
+});
+
+test("agregarAudio: la música no cae en la pista de la voz; va con otra música o a una pista nueva", () => {
+  const r = puro((d) => op.agregarAudio(d, { id: 2 }, 4000, { rol: "musica" }, INFO));   // p_voz está libre a los 4 s
+  const pista = r.doc.pistas.find((p) => p.clips.some((c) => c.id === r.seleccion));
+  assert.notEqual(pista.id, "p_voz");
+  assert.ok(pista.clips.every((c) => c.rol_audio === "musica"));
+  // otra música en un hueco de esa pista se queda con ella; un efecto no
+  const otra = op.agregarAudio(r.doc, { id: 2 }, 0, { rol: "musica" }, INFO);
+  assert.equal(otra.doc.pistas.find((p) => p.clips.some((c) => c.id === otra.seleccion)).id, pista.id);
+  const efecto = op.agregarAudio(r.doc, { id: 2 }, 0, { rol: "efecto" }, INFO);
+  const pe = efecto.doc.pistas.find((p) => p.clips.some((c) => c.id === efecto.seleccion));
+  assert.ok(![pista.id, "p_voz", "p_sonido"].includes(pe.id), pe.id);
+});
