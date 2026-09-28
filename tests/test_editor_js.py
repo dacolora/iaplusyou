@@ -49,6 +49,20 @@ def test_ventana_de_picos_igual_a_python():
     assert inspect.signature(edicion._picos).parameters["ventana_ms"].default == vista_previa.VENTANA_PICOS_MS
 
 
+def test_biblioteca_js_acepta_lo_mismo_que_el_servidor():
+    # biblioteca.js revisa tipo y peso ANTES de subir (un video de 500 MB no
+    # viaja para que el servidor lo rechace): sus copias tienen que ser las de Python.
+    import materiales
+    from final_edition import biblioteca
+    assert _constante_js("biblioteca.js", "EXTENSIONES_SUBIDA") == {ext: t for ext, (t, _ct) in biblioteca.EXTENSIONES.items()}
+    assert _constante_js("biblioteca.js", "LIMITES_SUBIDA") == {t: b for t, (b, _ms) in materiales.LIMITES.items()}
+
+
+def test_transiciones_js_iguales_a_python():
+    # la biblioteca ofrece solo las transiciones que el render hace
+    assert _constante_js("operaciones.js", "TRANSICIONES") == list(documento.TRANSICIONES)
+
+
 def _generador():
     import importlib.util
     ruta = os.path.join(RAIZ, "tests", "fixtures", "generar_casos_editor.py")

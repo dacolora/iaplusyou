@@ -538,9 +538,10 @@ export class Biblioteca {
     item.dataset.clave = clave;
     item.dataset.arrastrable = "";
     item.title = nombre;
-    item.append(this._mini(miniatura(m), m.tipo === "video" ? duracionTexto(m.duracion_ms) : ""));
+    const mini = this._mini(miniatura(m), m.tipo === "video" ? duracionTexto(m.duracion_ms) : "");
+    mini.append(this._botonMas(clave, `Agregar «${nombre}» a la edición`));
+    item.append(mini);
     el("span", "ed-bib-nombre", item, nombre);
-    item.append(this._botonMas(clave, `Agregar «${nombre}» a la edición`));
     return item;
   }
 
@@ -557,9 +558,9 @@ export class Biblioteca {
     const mini = this._mini(material ? miniatura(material) : miniatura({ tipo: "video", url: p.video_url }, { formato: p.formato }),
       material ? duracionTexto(material.duracion_ms) : "");
     if (preparando) el("span", "ed-bib-estado", mini, "Preparando…");
+    mini.append(this._botonMas(clave, preparando ? `«${nombre}» se está preparando` : `Agregar «${nombre}» a la edición`, preparando));
     item.append(mini);
     el("span", "ed-bib-nombre", item, nombre);
-    item.append(this._botonMas(clave, preparando ? `«${nombre}» se está preparando` : `Agregar «${nombre}» a la edición`, preparando));
     return item;
   }
 

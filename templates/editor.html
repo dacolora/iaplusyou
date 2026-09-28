@@ -56,10 +56,20 @@
   .ed-titulo { display: block; flex: 1 1 auto; min-width: 0; margin: 0; padding: .3rem .2rem; font-size: .95rem; color: var(--text);
     text-transform: none; letter-spacing: 0; }
   .ed-titulo::before { display: none; }
-  .ed-pestanas { display: flex; flex: 1 1 auto; gap: .2rem; min-width: 0; }
-  .ed-pestana { display: flex; flex: 1 1 auto; flex-direction: column; align-items: center; gap: .2rem; min-width: 0;
-    padding: .4rem .3rem; background: transparent; color: var(--muted); border: 1px solid transparent;
-    border-radius: var(--radius-sm); font-size: .72rem; }
+  /* Pestañas de la biblioteca: la elegida con su nombre al lado del icono; las
+     demás solo con el icono (el nombre sigue ahí para el lector de pantalla y
+     en el cartelito): «Transiciones» no cabe en cuatro pestañas iguales de una
+     columna de 220–300 px. Con lugar (la hoja ancha del celular) van todos. */
+  .ed-pestanas { display: flex; flex: 1 1 auto; gap: .2rem; min-width: 0; container: ed-pestanas / inline-size; }
+  .ed-pestana { position: relative; display: flex; flex: 0 0 auto; flex-direction: row; align-items: center; justify-content: center;
+    gap: .35rem; min-width: 0; padding: .45rem .55rem; background: transparent; color: var(--muted); border: 1px solid transparent;
+    border-radius: var(--radius-sm); font-size: .76rem; }
+  .ed-pestana[aria-selected="true"] { flex: 1 1 auto; }
+  .ed-pestana[aria-selected="false"] span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @container ed-pestanas (min-width: 400px) {
+    .ed-pestana { flex: 1 1 0; }
+    .ed-pestana[aria-selected="false"] span { position: static; width: auto; height: auto; clip-path: none; }
+  }
   .ed-pestana:hover { color: var(--text); background: var(--panel-hover); }
   .ed-pestana[aria-selected="true"] { color: var(--accent-texto); background: var(--panel-2); border-color: var(--border); }
   .ed-pestana span, .ed-accion span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -115,6 +125,114 @@
   .linea-fila.ed-fila-destino { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px; }
   .ed-cabecera.ed-fila-destino { color: var(--accent-texto); background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .ed-marca-soltar { position: absolute; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--accent-texto); pointer-events: none; z-index: 5; }
+  /* Una unión con transición (escala.unionesConTransicion): tocarla elige el clip que la tiene */
+  .ed-union { position: absolute; top: 50%; z-index: 2; display: grid; place-items: center; width: 18px; height: 18px;
+    margin: -9px 0 0 -9px; border-radius: 5px; background: var(--panel); color: var(--accent-texto); border: 1px solid var(--accent-texto); cursor: pointer; }
+  .ed-union-elegida { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  /* Biblioteca (capa 4b): biblioteca.js arma lo de adentro de #ed-panel-biblioteca. */
+  #ed-panel-biblioteca [hidden] { display: none !important; }
+  .ed-bib { padding: .6rem .7rem 1rem; }
+  .ed-bib.ed-bib-soltando { outline: 2px dashed var(--accent-texto); outline-offset: -4px; background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+  .ed-bib-mensaje { margin: 0 0 .5rem; text-align: left; }
+  .ed-bib-panel { display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+  .ed-bib-barra { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .6rem; }
+  .ed-bib-subir { display: inline-flex; align-items: center; gap: .35rem; }
+  .ed-bib-ayuda { margin: 0; font-size: .78rem; line-height: 1.45; color: var(--muted); }
+  .ed-bib-titulo { margin: .45rem 0 0; font-family: var(--font-display); font-size: .8rem; font-weight: 600; color: var(--muted);
+    text-transform: none; letter-spacing: 0; }
+  .ed-bib-vacio { grid-column: 1 / -1; margin: 0; padding: .7rem; font-size: .8rem; line-height: 1.45; color: var(--muted);
+    border: 1px dashed var(--border); border-radius: var(--radius-sm); }
+  .ed-bib-vacio p { margin: 0 0 .45rem; }
+  .ed-bib-nombre { min-width: 0; font-size: .74rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* una fila por archivo que se sube: nombre, estado, barra y, si falla, el error debajo */
+  .ed-bib-subidas { display: grid; gap: .35rem; margin: 0; padding: 0; list-style: none; }
+  .ed-bib-subidas:empty { display: none; }
+  .ed-bib-subida { min-width: 0; padding: .45rem .55rem; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel-2); }
+  .ed-bib-subida-cabeza { display: flex; align-items: center; gap: .4rem; min-width: 0; font-size: .78rem; }
+  .ed-bib-subida-cabeza .ed-bib-nombre { flex: 1 1 auto; }
+  .ed-bib-subida-estado { flex: none; color: var(--muted); font-size: .74rem; font-variant-numeric: tabular-nums; }
+  .ed-bib-subida[data-estado="error"] .ed-bib-subida-estado { color: var(--error); }
+  .ed-bib-subida[data-estado="lista"] .ed-bib-subida-estado { color: var(--ok); }
+  .ed-bib-subida progress { display: block; width: 100%; height: 6px; margin-top: .35rem; accent-color: var(--accent); }
+  .ed-bib-subida-error { margin: .3rem 0 0; font-size: .8rem; text-align: left; }
+  .ed-bib-quitar { flex: none; display: inline-grid; place-items: center; width: 24px; height: 24px; padding: 0; background: transparent;
+    color: var(--muted); border: 1px solid transparent; border-radius: 6px; }
+  .ed-bib-quitar:hover { color: var(--text); border-color: var(--border); }
+  /* videos e imágenes: cuadrícula de miniaturas cuadradas (sin deformar), «+» en la esquina */
+  .ed-bib-grilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: .55rem .5rem; }
+  .ed-bib-item { display: flex; flex-direction: column; gap: .25rem; min-width: 0; cursor: grab; user-select: none; -webkit-user-select: none; }
+  .ed-bib-mini { position: relative; display: grid; place-items: center; aspect-ratio: 1; overflow: hidden; background: #000;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); }
+  .ed-bib-item:hover .ed-bib-mini { border-color: var(--muted-2); }
+  .ed-bib-mini-medio { display: block; max-width: 100%; max-height: 100%; object-fit: contain; background-repeat: no-repeat;
+    background-position: 0 0; pointer-events: none; -webkit-user-drag: none; }
+  .ed-bib-horizontal { width: 100%; height: auto; }
+  .ed-bib-vertical { width: auto; height: 100%; }
+  .ed-bib-duracion { position: absolute; left: 4px; bottom: 4px; padding: 0 .3rem; border-radius: 4px; font-size: .68rem; line-height: 1.5;
+    color: #fff; background: rgba(0, 0, 0, .65); font-variant-numeric: tabular-nums; pointer-events: none; }
+  .ed-bib-estado { position: absolute; inset: 0; display: grid; place-items: center; padding: .3rem; font-size: .74rem; text-align: center;
+    color: #fff; background: rgba(0, 0, 0, .6); }
+  .ed-bib-mas { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
+    color: #fff; background: var(--accent); border: 1px solid transparent; border-radius: 50%; box-shadow: var(--shadow-soft); }
+  .ed-bib-mas:hover:not(:disabled) { filter: brightness(1.15); }
+  .ed-bib-mas:focus-visible, .ed-bib-texto:focus-visible, .ed-bib-transicion:focus-visible { outline: 2px solid var(--accent-texto); outline-offset: 2px; }
+  .ed-bib-preparando { cursor: default; }
+  .ed-bib-origen { opacity: .45; }
+  /* audios: una fila con icono, nombre y duración, «Escuchar» y «+» */
+  .ed-bib-audios { display: grid; gap: .35rem; }
+  .ed-bib-audio { display: flex; align-items: center; gap: .5rem; min-width: 0; padding: .4rem .45rem; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; user-select: none; -webkit-user-select: none; }
+  .ed-bib-audio:hover { border-color: var(--muted-2); }
+  .ed-bib-audio-icono { flex: none; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 6px; color: var(--ok);
+    background: color-mix(in srgb, var(--ok) 16%, transparent); }
+  .ed-bib-audio-texto { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; }
+  .ed-bib-audio-detalle { font-size: .7rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .ed-bib-escuchar { flex: none; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; }
+  .ed-bib-escuchar[aria-pressed="true"] { color: var(--accent-texto); border-color: var(--accent-texto); }
+  .ed-bib-audio .ed-bib-mas { position: static; flex: none; }
+  /* textos de muestra: cada uno escrito con el estilo con que entra */
+  .ed-bib-textos { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: .5rem; }
+  .ed-bib-texto { display: grid; place-items: center; min-width: 0; min-height: 64px; padding: .5rem; color: #fff; font-weight: 400;
+    background: linear-gradient(160deg, var(--panel-hover), var(--bg)); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
+  .ed-bib-texto:hover { border-color: var(--muted-2); }
+  .ed-bib-texto-muestra { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
+  .ed-bib-texto-titulo .ed-bib-texto-muestra { font-family: "Inter-Bold", var(--font-body); font-size: 1.15rem; -webkit-text-stroke: 3px #000; paint-order: stroke fill; }
+  .ed-bib-texto-subtitulo .ed-bib-texto-muestra { font-family: "Inter-SemiBold", var(--font-body); font-size: .98rem; text-shadow: 2px 2px 0 #000; }
+  .ed-bib-texto-precio .ed-bib-texto-muestra { padding: .2rem .75rem; font-family: "SpaceGrotesk-Bold", var(--font-display); font-size: 1rem;
+    background: var(--ed-marca, var(--accent)); border-radius: 999px; }
+  .ed-bib-texto-llamado .ed-bib-texto-muestra { padding: .25rem .6rem; font-family: "Inter-Bold", var(--font-body); font-size: .95rem; color: #000;
+    background: rgba(255, 255, 255, .9); border-radius: 4px; }
+  /* transiciones: una muestra quieta de cada una (A violeta, B verde) con su nombre y qué hace */
+  .ed-bib-transiciones { display: grid; gap: .4rem; }
+  .ed-bib-transicion { display: flex; align-items: center; gap: .6rem; min-width: 0; padding: .45rem .55rem; text-align: left; color: var(--text);
+    font-family: var(--font-body); font-weight: 400; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: grab; }
+  .ed-bib-transicion:hover { border-color: var(--muted-2); }
+  .ed-bib-tr-texto { display: flex; flex-direction: column; min-width: 0; }
+  .ed-bib-tr-nombre { font-family: var(--font-display); font-size: .82rem; font-weight: 600; }
+  .ed-bib-tr-desc { font-size: .72rem; line-height: 1.35; color: var(--muted); }
+  .ed-bib-tr-muestra { position: relative; flex: none; width: 52px; height: 34px; overflow: hidden; background: #000; border-radius: 5px; }
+  .ed-bib-tr-a, .ed-bib-tr-b { position: absolute; inset: 0; }
+  .ed-bib-tr-a { background: var(--accent-grad); }
+  .ed-bib-tr-b { background: linear-gradient(135deg, var(--ok), color-mix(in srgb, var(--ok) 50%, #000)); }
+  .ed-bib-tr-corte .ed-bib-tr-b { left: 50%; }
+  .ed-bib-tr-fundido .ed-bib-tr-b { -webkit-mask-image: linear-gradient(90deg, transparent 15%, #000 85%); mask-image: linear-gradient(90deg, transparent 15%, #000 85%); }
+  .ed-bib-tr-deslizar .ed-bib-tr-b { left: 42%; box-shadow: -3px 0 6px rgba(0, 0, 0, .55); }
+  .ed-bib-tr-zoom .ed-bib-tr-b { inset: 26% 30%; border-radius: 3px; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35); }
+  .ed-bib-tr-desenfoque .ed-bib-tr-a { -webkit-mask-image: linear-gradient(90deg, #000 15%, transparent 45%); mask-image: linear-gradient(90deg, #000 15%, transparent 45%); }
+  .ed-bib-tr-desenfoque .ed-bib-tr-b { -webkit-mask-image: linear-gradient(90deg, transparent 55%, #000 85%); mask-image: linear-gradient(90deg, transparent 55%, #000 85%); }
+  /* lo que sigue al mouse mientras se arrastra algo de la biblioteca */
+  .ed-bib-fantasma { position: fixed; left: 0; top: 0; z-index: 60; display: flex; align-items: center; gap: .35rem; max-width: 220px;
+    padding: .3rem .55rem; font-size: .78rem; color: var(--text); white-space: nowrap; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); box-shadow: var(--shadow); opacity: .75; pointer-events: none; }
+  .ed-bib-fantasma span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .ed-bib-fantasma-dentro { opacity: 1; border-color: var(--accent-texto); }
+  body.ed-bib-arrastrando, body.ed-bib-arrastrando * { cursor: grabbing !important; }
+  @media (pointer: coarse) {
+    /* con el dedo no se arrastra desde la biblioteca: se toca «+» */
+    .ed-bib-ayuda-arrastre { display: none; }
+    .ed-bib-item, .ed-bib-audio, .ed-bib-texto, .ed-bib-transicion { cursor: default; }
+  }
 
   /* «Producir» */
   .editor-dialogo { max-width: min(92vw, 420px); padding: 1.2rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -216,7 +334,7 @@
     <div class="ed-lateral-cabecera">
       <div id="ed-pestanas-biblioteca" class="ed-pestanas" role="tablist" aria-label="Qué agregar">
         {% for panel, nombre in PANELES %}
-        <button type="button" role="tab" class="ed-pestana" data-panel="{{ panel }}" aria-controls="ed-panel-biblioteca"
+        <button type="button" role="tab" class="ed-pestana" data-panel="{{ panel }}" aria-controls="ed-panel-biblioteca" title="{{ nombre }}"
                 aria-selected="{{ 'true' if loop.first else 'false' }}" tabindex="{{ '0' if loop.first else '-1' }}">{{ icono(panel) }}<span>{{ nombre }}</span></button>
         {% endfor %}
       </div>
