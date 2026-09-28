@@ -11,6 +11,9 @@
 // (`#ed-abrir-*`, «Listo»). Los módulos que llenan esos paneles (biblioteca,
 // propiedades, tocar sobre el video) se enganchan SOLO por `editor`, el objeto
 // de abajo: así ninguno toca al otro ni a la historia, el guardado o la vista.
+// (Tocar sobre el video además LEE la vista: el documento que se dibuja, las
+// medidas de los textos y el tiempo; la pausa al arrastrar es lo único que le
+// pide.)
 //
 //   editor.operar(nombre, ...args)          una operación de operaciones.js; la
 //                                           página agrega `info()` al final.
@@ -54,6 +57,7 @@ import { Biblioteca } from "./biblioteca.js";
 import { pedidoCortar } from "./escala.js";
 import { Guardado } from "./guardado.js";
 import { Historial } from "./historial.js";
+import { InteraccionLienzo } from "./lienzo_interaccion.js";
 import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
 import { Propiedades } from "./propiedades.js";
@@ -484,6 +488,9 @@ new Biblioteca({ contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-
 // las propiedades de lo elegido («Editar»: un formulario por clase de clip, o
 // la mezcla de la edición si no hay nada elegido)
 new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales });
+// tocar, mover y agrandar los textos y las imágenes sobre el video (necesita
+// la vista previa: el documento que se dibuja y las medidas de los textos)
+new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 await vista.iniciar();
 refrescar(null);           // con el reloj listo: el cabezal donde está

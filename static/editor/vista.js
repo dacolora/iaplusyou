@@ -22,7 +22,8 @@ import { MotorAudio } from "./motor_audio.js";
 import { evaluarRespuesta, INTERVALO_SONDEO_MS, listos, TOPE_SONDEO_MS } from "./pendientes.js";
 import { Reloj } from "./reloj.js";
 import { resolver } from "./resolver.js";
-import { cuadroVecino, duracionMs } from "./tiempo.js";
+import { rasterizarTexto } from "./texto_canvas.js";
+import { capasEn, cuadroVecino, duracionMs } from "./tiempo.js";
 import { Videos } from "./videos.js";
 
 const $ = (id) => document.getElementById(id);
@@ -183,6 +184,29 @@ export class VistaPrevia {
 
   get destino() {
     return this.destinoActual;
+  }
+
+  // Capa 4b (tocar sobre el video): el documento que se DIBUJA — el del
+  // destino, con sus variables resueltas (null si ese destino no se pudo
+  // preparar) —, para que la caja de lo elegido caiga sobre lo que se ve. Los
+  // ids de los clips son los mismos que en el documento de la página.
+  get resuelto() {
+    return this.doc;
+  }
+
+  // {clipId: [ancho, alto]} de los textos que se ven en `tMs` (el cabezal si
+  // no se da): el tamaño del PNG que lienzo.js dibuja, del mismo rasterizarTexto
+  // (con su caché). Un texto sin `literal` no se dibuja: no se mide.
+  // `rasterizar` es para las pruebas de Node (no hay <canvas>).
+  medidasTexto(tMs = this.tiempo(), rasterizar = rasterizarTexto) {
+    const out = {};
+    if (!this.doc) return out;
+    for (const { pista, clip } of capasEn(this.doc, tMs)) {
+      if (pista.tipo !== "texto" || clip.texto?.literal === undefined) continue;
+      const r = rasterizar(clip.texto.literal, clip.estilo ?? {}, this.doc.formato);
+      out[clip.id] = [r.ancho, r.alto];
+    }
+    return out;
   }
 
   // ---- Vista previa (capa 3) ----

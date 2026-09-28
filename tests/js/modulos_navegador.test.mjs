@@ -44,6 +44,14 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   for (const m of ["pintar", "enfocarTexto"]) {
     assert.equal(typeof prop.Propiedades.prototype[m], "function", `Propiedades.${m}`);
   }
+  // capa 4b (Task 8): tocar, mover y agrandar sobre el video; lo que le pide a la vista previa
+  const li = await import("../../static/editor/lienzo_interaccion.js");
+  assert.equal(typeof li.InteraccionLienzo, "function");
+  for (const m of ["pintar", "destruir"]) {
+    assert.equal(typeof li.InteraccionLienzo.prototype[m], "function", `InteraccionLienzo.${m}`);
+  }
+  assert.equal(typeof vp.VistaPrevia.prototype.medidasTexto, "function");
+  assert.equal(typeof Object.getOwnPropertyDescriptor(vp.VistaPrevia.prototype, "resuelto")?.get, "function", "VistaPrevia.resuelto");
   const pps = Object.getOwnPropertyDescriptor(lt.LineaTiempo.prototype, "pps");
   assert.equal(typeof pps?.get, "function");
   assert.equal(typeof pps?.set, "function");
@@ -182,4 +190,29 @@ test("agregarMateriales no corta lo que reproduce: recarga los archivos nuevos a
   llamadas.length = 0;
   falsa.renovarPendientes();                                                          // una sola vez
   assert.deepEqual(llamadas, []);
+});
+
+// ---- Capa 4b (Task 8): las medidas de los textos para tocar sobre el video ----
+
+test("medidasTexto mide solo los textos que se ven en ese instante, como los dibuja el lienzo", async () => {
+  const { VistaPrevia } = await import("../../static/editor/vista.js");
+  const { docBase } = await import("./doc_base.mjs");
+  const doc = docBase();
+  doc.pistas[1].clips.push({ ...structuredClone(doc.pistas[1].clips[0]), id: "t2", inicio_ms: 5000, texto: { literal: "Chao" } });
+  doc.pistas.push({ id: "p_texto2", tipo: "texto", oculta: true, clips: [{ ...structuredClone(doc.pistas[1].clips[0]), id: "t3" }] });
+  const pedidos = [];
+  const rasterizar = (literal, estilo, formato) => {
+    pedidos.push([literal, estilo, formato]);
+    return { ancho: 10 * literal.length, alto: 7 };
+  };
+  const falsa = { doc, tiempo: () => 1500 };
+  assert.deepEqual(VistaPrevia.prototype.medidasTexto.call(falsa, 1500, rasterizar), { t1: [40, 7] });
+  assert.deepEqual(pedidos, [["Hola", { fuente: "Inter-Bold" }, "9:16"]]);       // lo mismo que pide lienzo.js
+  assert.deepEqual(VistaPrevia.prototype.medidasTexto.call(falsa, 5500, rasterizar), { t2: [40, 7] });
+  assert.deepEqual(VistaPrevia.prototype.medidasTexto.call(falsa, undefined, rasterizar), { t1: [40, 7] });   // el cabezal
+  delete doc.pistas[1].clips[0].texto.literal;                                    // sin texto no se dibuja
+  assert.deepEqual(VistaPrevia.prototype.medidasTexto.call(falsa, 1500, rasterizar), {});
+  assert.deepEqual(VistaPrevia.prototype.medidasTexto.call({ doc: null, tiempo: () => 0 }, 0, rasterizar), {});
+  const resuelto = Object.getOwnPropertyDescriptor(VistaPrevia.prototype, "resuelto").get;
+  assert.equal(resuelto.call({ doc }), doc);
 });

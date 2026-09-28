@@ -771,3 +771,27 @@ def test_el_panel_de_propiedades_cabe_y_lo_arma_su_modulo(dashboard, encolados):
     js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
     assert 'import { Propiedades } from "./propiedades.js";' in js
     assert 'new Propiedades({ contenedor: $("ed-panel-propiedades"), editor' in js
+
+
+def test_la_capa_para_tocar_el_video_cubre_el_lienzo(dashboard, encolados):
+    """Task 8 (capa 4b): #ed-interaccion va dentro del escenario, encima del
+    lienzo y del mismo tamaño; el dedo no mueve la página ahí, nada se sale de
+    lado (la caja de una foto más grande que el video se corta) y la arma
+    static/editor/lienzo_interaccion.js, que recibe la vista previa."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    arbol = _ancestros(html)
+    assert arbol["ed-interaccion"][0] == "ed-escenario"
+    assert html.index('id="lienzo"') < html.index('id="ed-interaccion"')        # encima del lienzo
+    capa = re.search(r'<div[^>]*id="ed-interaccion"[^>]*>', html).group(0)
+    assert 'aria-hidden="true"' in capa
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    regla = re.search(r"\.ed-interaccion \{([^}]*)\}", css).group(1)
+    for decl in ("position: absolute", "inset: 0", "touch-action: none", "overflow: hidden"):
+        assert decl in regla, decl
+    for sel in (".ed-caja {", ".ed-asa {", ".ed-guia {"):
+        assert sel in css, sel
+    assert re.search(r"\.ed-caja \{[^}]*pointer-events: none", css)
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    assert 'import { InteraccionLienzo } from "./lienzo_interaccion.js";' in js
+    assert 'new InteraccionLienzo({ escenario: $("ed-escenario"), lienzo: $("lienzo"), editor, vista });' in js
