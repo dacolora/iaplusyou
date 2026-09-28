@@ -8,13 +8,13 @@
      data-url-piezas="{{ url_for('sprints.campana_piezas', cliente=cliente, sid=sprint.id, cid=c.id) }}">
   <header class="panel-campana-cab">
     <div>
-      <h2>Campaña {{ c.orden + 1 }} · {{ (c.funnel or 'tof') | upper }}</h2>
-      <small class="vacio">{{ c.persona_nombre }} · {{ c.producto.nombre if c.producto else c.catalogo_id }} · Todo se guarda solo</small>
+      <h2>{{ _('Campaña %(n)s', n=c.orden + 1) }} · {{ (c.funnel or 'tof') | upper }}</h2>
+      <small class="vacio">{{ c.persona_nombre }} · {{ c.producto.nombre if c.producto else c.catalogo_id }} · {{ _('Todo se guarda solo') }}</small>
     </div>
-    <button type="button" class="btn-xs" data-panel-cerrar aria-label="Cerrar">✕</button>
+    <button type="button" class="btn-xs" data-panel-cerrar aria-label="{{ _('Cerrar') }}">✕</button>
   </header>
-  <nav class="panel-pestanas" role="tablist" aria-label="Pasos de la campaña">
-    {% for clave, nombre in (("armar", "Armar"), ("ideas", "Ideas"), ("piezas", "Piezas")) %}
+  <nav class="panel-pestanas" role="tablist" aria-label="{{ _('Pasos de la campaña') }}">
+    {% for clave, nombre in (("armar", _("Armar")), ("ideas", _("Ideas")), ("piezas", _("Piezas"))) %}
     <button type="button" role="tab" class="panel-pestana" data-ir-paso="{{ clave }}"
             aria-selected="{{ 'true' if paso == clave else 'false' }}">{{ nombre }} <span>{{ pestanas[clave] }}</span></button>
     {% endfor %}
@@ -25,8 +25,8 @@
   <div data-pestana="piezas" role="tabpanel" {% if paso != 'piezas' %}hidden{% endif %}>{% include "_sprint_panel_piezas.html" %}</div>
   <footer class="panel-campana-pie">
     <form method="post" action="{{ url_for('sprints.campana_eliminar', cliente=cliente, sid=sprint.id, cid=c.id) }}"
-          onsubmit="return confirm('¿Eliminar esta campaña y sus referentes?');">
-      <button type="submit" class="btn-xs btn-rechazar">Eliminar campaña</button>
+          onsubmit='return confirm({{ _("¿Eliminar esta campaña y sus referentes?")|tojson }});'>
+      <button type="submit" class="btn-xs btn-rechazar">{{ _('Eliminar campaña') }}</button>
     </form>
   </footer>
 </div>

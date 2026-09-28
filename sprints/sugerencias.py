@@ -6,6 +6,8 @@ estilo y el catálogo del proyecto (spec §1.6). Nacen con origen
 """
 import json
 
+from flask_babel import gettext
+
 import catalogo_productos
 import doctrina
 import idiomas
@@ -30,14 +32,14 @@ def _parsear(texto):
     t = (texto or "").strip()
     ini, fin = t.find("{"), t.rfind("}")
     if ini < 0 or fin <= ini:
-        raise analisis.AnalisisInvalido("Claude no devolvió JSON.")
+        raise analisis.AnalisisInvalido(gettext("Claude no devolvió JSON."))
     try:
         data = json.loads(t[ini:fin + 1])
     except ValueError as e:
-        raise analisis.AnalisisInvalido(f"JSON inválido: {e}")
+        raise analisis.AnalisisInvalido(gettext("JSON inválido: %(error)s", error=e))
     personas = data.get("personas") if isinstance(data, dict) else None
     if not isinstance(personas, list):
-        raise analisis.AnalisisInvalido("El JSON no trae la lista «personas».")
+        raise analisis.AnalisisInvalido(gettext("El JSON no trae la lista «personas»."))
     limpias = []
     for p in personas:
         if not isinstance(p, dict) or any(k not in p for k in _CLAVES):
@@ -57,7 +59,7 @@ def _parsear(texto):
             persona_limpia["conciencia"] = {"nivel": nivel, "detalle": " ".join(str(conc.get("detalle") or "").split())[:300]}
         limpias.append(persona_limpia)
     if not limpias:
-        raise analisis.AnalisisInvalido("Ninguna persona venía completa.")
+        raise analisis.AnalisisInvalido(gettext("Ninguna persona venía completa."))
     return limpias
 
 

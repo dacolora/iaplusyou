@@ -466,3 +466,168 @@ def test_experimentos_doctrina_en_ingles(admin_en):
     html = html_de(admin_en, "/cliente/acme")
     assert "Doctrine: {n} to improve" in html
     assert "chosen pieces have points to improve according to the doctrine" in html
+
+
+PRODUCTO_EN = {"id": "mirror", "nombre": "LED mirror", "descripcion": "round", "representativa_url": "https://r2/m.jpg",
+               "regla": "Identical.", "referencias": []}
+ANGULO_EN = {"audiencia": "people renovating their bathroom", "consciencia": "consciente_de_la_solucion",
+             "sofisticacion": 2, "deseo": "a bathroom that looks new", "promesa": "your bathroom looks new with a new mirror",
+             "mecanismo": None, "pruebas": [{"texto": "light built into the frame", "fuente": "ficha"}], "lead": "promesa",
+             "gancho": "Light that wakes you up", "faltantes": ["error: cifra_no_verificada:47", "real buyer reviews"]}
+
+
+def _sprint_sembrado(monkeypatch):
+    import catalogo_productos
+    from sprints import datos
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [PRODUCTO_EN])
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None: PRODUCTO_EN)
+    idiomas.guardar_de_proyecto("acme", "en")
+    pid = datos.crear_persona("acme", "Premium buyer", resumen="Wants quality")
+    sid = datos.crear_sprint("acme", "October", "2026-10-01", "2026-10-31")
+    cid = datos.agregar_campana("acme", sid, pid, "mirror", None, 2, 1)
+    rid = datos.agregar_referencia("acme", cid, "imagen", "https://r2/a.jpg", descripcion="side light")
+    datos.crear_idea("acme", cid, "video", "Sunrise mirror", "The camera circles the mirror.",
+                     gancho=ANGULO_EN["gancho"], extra={"angulo": ANGULO_EN})
+    return sid, cid, rid
+
+
+def test_pestana_sprints_en_ingles(admin_en, monkeypatch):
+    _sprint_sembrado(monkeypatch)
+    html = html_de(admin_en, "/cliente/acme")
+    fugas = espanol_visible(html, ("tab-sprints",))
+    assert not fugas, fugas[:15]
+    tab = html[html.index('id="tab-sprints"'):html.index('id="tab-catalogo"')]
+    for clave in ("planeando", "referencias", "listo para generar"):   # claves crudas que MARCAS no detecta
+        assert f">{clave}<" not in tab
+
+
+@pytest.mark.parametrize("ruta", ["", "/campanas/{cid}", "/campanas/{cid}/panel", "/campanas/{cid}/piezas",
+                                  "/campanas/{cid}/sugeridos", "/campanas/{cid}/tarjeta", "/revision", "/entrega"])
+def test_paginas_de_sprint_en_ingles(admin_en, monkeypatch, ruta):
+    sid, cid, _ = _sprint_sembrado(monkeypatch)
+    html = html_de(admin_en, f"/cliente/acme/sprints/{sid}" + ruta.format(cid=cid))
+    fugas = espanol_visible(html)
+    assert not fugas, (ruta, fugas[:15])
+
+
+def test_pagina_de_la_doctrina_en_ingles(admin_en):
+    """Los textos de la doctrina quedan en español (spec §B4: instrucciones
+    internas); se traduce todo lo demás de la página."""
+    html = html_de(admin_en, "/cliente/acme/doctrina")
+    fugas = espanol_visible(html, ("doctrina-cabecera", "doctrina-indice", "doctrina-pie"))
+    assert not fugas, fugas[:15]
+
+
+def test_lote_estimar_en_ingles(admin_en, monkeypatch):
+    """Fix round 1 (Task 4): produccion.estimar() armaba su 'texto' con un
+    f-string crudo; la ruta lote_estimar es su único lector (lanzar_lote solo
+    lee las claves numéricas), así que el idioma correcto es el de quien mira
+    la pantalla."""
+    sid, cid, _ = _sprint_sembrado(monkeypatch)
+    r = admin_en.get(f"/cliente/acme/sprints/{sid}/lote/estimar")
+    assert r.status_code == 200
+    texto = r.get_json()["texto"]
+    assert not _con_marca(texto), texto
+
+
+# ------ Task 5 (fase 5): Nicho ------
+
+SUB_EN = {"base": "emocion", "nombre": "Ana / Carries the jugs", "deseo": "Wash without carrying weight", "demografia": "",
+          "edad_rango": "30-45", "emocion": "Tiredness",
+          "identidad": {"quiere_que_vean": "organized", "cree_de_si": "practical", "quiere_lograr": "free time"},
+          "soluciones_previas": [{"que": "Liquid detergent", "por_que_fallo": ["heavy"]}],
+          "situaciones": ["Carrying jugs upstairs"], "comportamiento": "Keeps buying jugs",
+          "conciencia": {"nivel": "consciente_del_problema", "detalle": "knows the jug is the issue"},
+          "encaje_producto": "Pods weigh nothing", "tono": "Direct", "palabras_clave": ["jug"],
+          "evidencia": [{"comentario_id": 1, "cita": "the jug is too heavy"}], "sin_evidencia": False}
+
+
+def _estudio_sembrado():
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "Detergent", producto="Pods", tema="laundry", idioma="en")
+    datos.agregar_comentarios("acme", eid, "texto", [{"fuente_id": f"c{i}", "texto": f"Comment {i}: the jug is too heavy."}
+                                                     for i in range(25)])
+    datos.guardar_generacion("acme", eid, [{"nombre": "No weight", "deseo": "Wash without carrying weight",
+                                            "resumen": "Tired of jugs", "sub_avatares": [SUB_EN]}])
+    return eid
+
+
+def test_pestana_nicho_en_ingles(admin_en):
+    _estudio_sembrado()
+    html = html_de(admin_en, "/cliente/acme")
+    fugas = espanol_visible(html, ("tab-nicho",))
+    assert not fugas, fugas[:15]
+    tab = html[html.index('id="tab-nicho"'):html.index('id="tab-referentes"')]
+    for clave in ("armando", "generando", "revisando"):              # claves crudas que MARCAS no detecta
+        assert f">{clave}<" not in tab
+
+
+def test_pagina_del_estudio_en_ingles(admin_en):
+    eid = _estudio_sembrado()
+    html = html_de(admin_en, f"/cliente/acme/nicho/{eid}")
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]
+    assert ">propuesto<" not in html
+
+
+def test_exportacion_md_en_ingles(admin_en):
+    eid = _estudio_sembrado()
+    texto = admin_en.get(f"/cliente/acme/nicho/{eid}/exportar.md").get_data(as_text=True)
+    encabezados = [l for l in texto.splitlines() if l.startswith("#")]
+    assert encabezados and not any(_con_marca(l) for l in encabezados), encabezados
+
+
+# ------ Task 6 (fase 5): Referentes ------
+
+def _referente_sembrado():
+    import proyectos
+    from referentes import datos
+    proyectos.guardar_referentes_copycoders("acme", True)   # la biblioteca de copycoders visible en el grid
+    datos.familia_asegurar("Price Slash Hero", "Big struck-through price.")
+    rid, _ = datos.guardar_referente({
+        "anuncio_id": "900", "pagina_id": "1", "fuente": "copycoders", "marca": "Glow Tea",
+        "url_anuncio": "https://www.facebook.com/ads/library/?id=900", "titular": "Save big today", "idioma": "en",
+        "tipo": "imagen", "imagen_origen": "https://cdn/x.jpg", "dias": 10, "variantes": 2, "activo": True,
+        "etapa": "BOF", "consciencia": "most-aware", "familia": "Price Slash Hero", "dolor": "ninguno-oferta",
+        "firma": "Shows the saving first.", "clasificacion": "fuente",
+        "extra": {"i18n": {"en": {"firma": "Shows the saving first."}}}})
+    datos.marcar_imagen(rid, "ok", "https://r2/referentes/900.jpg")
+    return rid
+
+
+def test_pestana_referentes_en_ingles(admin_en):
+    _referente_sembrado()
+    fugas = espanol_visible(html_de(admin_en, "/cliente/acme"), ("tab-referentes",))
+    assert not fugas, fugas[:15]
+
+
+@pytest.mark.parametrize("ruta", ["grid", "{rid}/ficha", "traer", "{rid}/recrear", "{rid}/usar_en_sprint"])
+def test_fragmentos_de_referentes_en_ingles(admin_en, monkeypatch, ruta):
+    import catalogo_productos
+    # Un producto con fotos: sin él, Recrear solo muestra el aviso de catálogo vacío
+    # y ni el formulario ni el prompt entrarían en la revisión.
+    monkeypatch.setattr(catalogo_productos, "listar", lambda c, cat="producto": [PRODUCTO_EN])
+    monkeypatch.setattr(catalogo_productos, "encontrar", lambda c, pid, categoria=None: PRODUCTO_EN)
+    rid = _referente_sembrado()
+    idiomas.guardar_de_proyecto("acme", "en")        # el prompt de Recrear sale en el idioma del proyecto
+    r = admin_en.get(f"/cliente/acme/referentes/{ruta.format(rid=rid)}", headers={"X-Requested-With": "fetch"})
+    assert r.status_code == 200, (ruta, r.status_code)
+    html = r.get_data(as_text=True)
+    if ruta == "grid":
+        assert "Save big today" in html, "el referente sembrado no está en el grid"
+    if ruta == "{rid}/recrear":
+        assert "LED mirror" in html and "Static social media ad" in html, "sin el formulario ni el prompt en inglés"
+    fugas = espanol_visible(html)
+    assert not fugas, (ruta, fugas[:15])
+
+
+def test_mis_barridos_en_ingles(admin_en, monkeypatch):
+    import db
+    from referentes import datos
+    monkeypatch.setattr(db, "ahora", lambda: "2026-09-25T15:04:09")
+    datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "foot pain", "palabra_original": "sore feet",
+                                          "idioma": "en", "formato": "imagen", "pais": "US"}, 50)
+    html = admin_en.get("/cliente/acme/referentes/barridos", headers={"X-Requested-With": "fetch"}).get_data(as_text=True)
+    assert "25 Sep · 15:04" in html
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]

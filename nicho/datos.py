@@ -8,9 +8,12 @@ el único escritor de `persona`.
 import re
 
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import cola
 import db
+import idiomas
+from idiomas import N_
 from sprints import datos as sprints_datos
 from sprints.sugerencias import COLORES
 
@@ -19,6 +22,9 @@ FUENTES = ("texto", "csv", "reddit", "youtube", "apify")
 TIPOS_AVATAR = ("nucleo", "sub")
 BASES = ("emocion", "experiencia_producto")
 ESTADOS_AVATAR = ("propuesto", "aprobado", "descartado")
+# La clave guardada no cambia; la etiqueta se traduce al mostrarla (|traducir / gettext).
+ETIQUETAS_ESTADO_ESTUDIO = {"armando": N_("armando"), "generando": N_("generando"), "revisando": N_("revisando")}
+ETIQUETAS_ESTADO_AVATAR = {"propuesto": N_("propuesto"), "aprobado": N_("aprobado"), "descartado": N_("descartado")}
 NIVELES_CONCIENCIA = ("inconsciente", "consciente_del_problema", "consciente_de_la_solucion",
                       "consciente_del_producto", "muy_consciente")
 CLAVES_IDENTIDAD = ("quiere_que_vean", "cree_de_si", "quiere_lograr")
@@ -63,7 +69,7 @@ def _fila(con, tabla, fila_id, cliente):
 def _actualizar(con, tabla, fila_id, cliente, permitidas, campos):
     malos = set(campos) - set(permitidas)
     if malos:
-        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+        raise ErrorDatos(gettext("Campos no editables: %(malos)s", malos=", ".join(sorted(malos))))
     r = con.execute(tabla.update().where(tabla.c.id == fila_id, tabla.c.cliente == cliente)
                     .values(actualizado_en=db.ahora(), **campos))
     return r.rowcount == 1
@@ -95,7 +101,7 @@ def _idioma(v):
 def crear_estudio(cliente, nombre, producto="", tema="", idioma="es", catalogo_id=None):
     nombre = _texto(nombre, 120)
     if not nombre:
-        raise ErrorDatos("El estudio necesita un nombre.")
+        raise ErrorDatos(gettext("El estudio necesita un nombre."))
     ahora = db.ahora()
     with db.conectar() as con:
         return con.execute(db.estudio.insert().values(
@@ -108,11 +114,11 @@ def actualizar_estudio(cliente, estudio_id, /, **campos):
     if "nombre" in campos:
         campos["nombre"] = _texto(campos["nombre"], 120)
         if not campos["nombre"]:
-            raise ErrorDatos("El estudio necesita un nombre.")
+            raise ErrorDatos(gettext("El estudio necesita un nombre."))
     if "idioma" in campos:
         campos["idioma"] = _idioma(campos["idioma"])
     if "estado" in campos and campos["estado"] not in ESTADOS_ESTUDIO:
-        raise ErrorDatos(f"Estado de estudio inválido: {campos['estado']}")
+        raise ErrorDatos(gettext("Estado de estudio inválido: %(estado)s", estado=campos["estado"]))
     for k in ("producto", "tema"):
         if k in campos:
             campos[k] = _texto(campos[k])
@@ -234,12 +240,12 @@ def agregar_comentarios(cliente, estudio_id, fuente, lista):
     en UNA transacción con `INSERT OR IGNORE` sobre `uq_comentario_fuente`:
     los repetidos no duplican. Un dict sin texto o sin fuente_id se salta."""
     if fuente not in FUENTES:
-        raise ErrorDatos(f"Fuente desconocida: {fuente}")
+        raise ErrorDatos(gettext("Fuente desconocida: %(fuente)s", fuente=fuente))
     ahora = db.ahora()
     nuevos = repetidos = 0
     with db.conectar() as con:
         if not _fila(con, db.estudio, estudio_id, cliente):
-            raise ErrorDatos("Ese estudio no existe.")
+            raise ErrorDatos(gettext("Ese estudio no existe."))
         for c in lista or []:
             texto = _texto((c or {}).get("texto"))
             fuente_id = _texto((c or {}).get("fuente_id"), 120)
@@ -336,12 +342,12 @@ def validar_campos_avatar(campos):
     permitidas = set(AVATAR_EDITABLES) | {"evidencia", "sin_evidencia"}
     malos = set(campos) - permitidas
     if malos:
-        raise ErrorDatos(f"Campos no editables: {', '.join(sorted(malos))}")
+        raise ErrorDatos(gettext("Campos no editables: %(malos)s", malos=", ".join(sorted(malos))))
     c = dict(campos)
     if "nombre" in c:
         c["nombre"] = _texto(c["nombre"], 120)
         if not c["nombre"]:
-            raise ErrorDatos("El avatar necesita un nombre.")
+            raise ErrorDatos(gettext("El avatar necesita un nombre."))
     if "deseo" in c:
         c["deseo"] = _texto(c["deseo"], 300)
     for k in ("demografia", "emocion", "comportamiento", "encaje_producto", "tono"):
@@ -396,7 +402,7 @@ def guardar_generacion(cliente, estudio_id, nucleos, resumen=None):
     a = db.avatar
     with db.conectar() as con:
         if not _bloquear(con, db.estudio, estudio_id, cliente):
-            raise ErrorDatos("Ese estudio no existe.")
+            raise ErrorDatos(gettext("Ese estudio no existe."))
         f = _fila(con, db.estudio, estudio_id, cliente)
         g = int(f.generacion or 0) + 1
         con.execute(a.delete().where(a.c.estudio_id == estudio_id, a.c.cliente == cliente, a.c.tipo == "sub",
@@ -408,7 +414,7 @@ def guardar_generacion(cliente, estudio_id, nucleos, resumen=None):
         for i, n in enumerate(nucleos or []):
             nid = con.execute(a.insert().values(
                 cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id, padre_id=None,
-                tipo="nucleo", base=None, orden=i, generacion=g, nombre=_texto(n.get("nombre"), 120) or "Sin nombre",
+                tipo="nucleo", base=None, orden=i, generacion=g, nombre=_texto(n.get("nombre"), 120) or gettext("Sin nombre"),
                 deseo=_texto(n.get("deseo"), 300), resumen=_texto(n.get("resumen")), estado="propuesto", persona_id=None,
                 extra={"error": _texto(n.get("error"), 500)} if n.get("error") else {}, **_SUB_VACIO)).inserted_primary_key[0]
             for j, s in enumerate(n.get("sub_avatares") or []):
@@ -450,7 +456,7 @@ def avatar(cliente, avatar_id):
 def actualizar_avatar(cliente, avatar_id, /, **campos):
     campos = validar_campos_avatar({k: v for k, v in campos.items()})
     if "evidencia" in campos or "sin_evidencia" in campos:
-        raise ErrorDatos("La evidencia no se edita a mano.")
+        raise ErrorDatos(gettext("La evidencia no se edita a mano."))
     with db.conectar() as con:
         return _actualizar(con, db.avatar, avatar_id, cliente, _AVATAR_COLS, campos)
 
@@ -465,7 +471,8 @@ def persona_desde_avatar(a):
         if not que:
             continue
         fallas = ", ".join(x for x in (s.get("por_que_fallo") or []) if x)
-        soluciones.append(f"Usó {que}" + (f": {fallas}" if fallas else ""))
+        uso = gettext("Usó %(que)s", que=que)          # quien llama fija el idioma (el del proyecto)
+        soluciones.append(uso + (f": {fallas}" if fallas else ""))
     partes = [a.get("demografia"), a.get("emocion"), a.get("comportamiento"), ". ".join(soluciones)]
     descripcion = ". ".join(p.strip().rstrip(".") for p in partes if p and p.strip())
     return {"nombre": a["nombre"], "resumen": (a.get("deseo") or "")[:200], "descripcion": descripcion,
@@ -478,10 +485,11 @@ def aprobar_avatar(cliente, avatar_id):
     la actualiza y la desarchiva. Solo sub-avatares. Devuelve persona_id."""
     a = avatar(cliente, avatar_id)
     if not a:
-        raise ErrorDatos("Ese avatar no existe.")
+        raise ErrorDatos(gettext("Ese avatar no existe."))
     if a["tipo"] != "sub":
-        raise ErrorDatos("Solo se aprueban los sub-avatares; el núcleo es una agrupación.")
-    campos = persona_desde_avatar(a)
+        raise ErrorDatos(gettext("Solo se aprueban los sub-avatares; el núcleo es una agrupación."))
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):    # la persona se guarda: idioma del proyecto
+        campos = persona_desde_avatar(a)
     extra = {"avatar_id": a["id"], "estudio_id": a["estudio_id"], "identidad": dict(a.get("identidad") or {}),
              "conciencia": dict(a.get("conciencia") or {}), "encaje_producto": a.get("encaje_producto") or "",
              "evidencia": list(a.get("evidencia") or [])}

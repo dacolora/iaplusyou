@@ -67,7 +67,7 @@ def test_cada_pestana_abre_con_su_encabezado(app):
         assert p.index('class="panel-cabecera') < p.index("<h2"), tab
         assert f"<h2>{titulo}" in p, tab
         assert 'class="panel-cabecera-desc"' in p, tab
-    assert 'data-abrir-detalle="nuevo-sprint"' in _pestana(html, "sprints")
+    assert 'data-abrir-detalle="alta-sprint"' in _pestana(html, "sprints")
     assert 'data-abrir-detalle="nuevo-estudio"' in _pestana(html, "nicho")
     rf = _pestana(html, "referentes")
     cabecera = rf[rf.index('class="panel-cabecera'):rf.index("<dialog")]
@@ -79,7 +79,7 @@ def test_estados_vacios_con_accion(app):
     sp, ni, rf, ex = (_pestana(html, t) for t in ("sprints", "nicho", "referentes", "experimentos"))
     # Sprints y Nicho: el botón del encabezado y el formulario de abajo bastan
     # (tres «+ Nuevo …» en la misma pantalla sobraban).
-    assert 'class="estado-vacio"' in sp and sp.count('data-abrir-detalle="nuevo-sprint"') == 1
+    assert 'class="estado-vacio"' in sp and sp.count('data-abrir-detalle="alta-sprint"') == 1
     assert 'class="estado-vacio"' in ni and ni.count('data-abrir-detalle="nuevo-estudio"') == 1
     assert 'class="estado-vacio"' in rf and "Todavía no hay referentes" in rf
     assert 'class="estado-vacio"' in ex and 'href="#creativeflowplus"' in ex

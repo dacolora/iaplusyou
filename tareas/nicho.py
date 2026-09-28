@@ -22,17 +22,21 @@ Nada corre solo: no hay periódicas.
 import logging
 import math
 
+from flask_babel import gettext
+
 import cola
 import gastos
+import idiomas
 import trabajos
 from nicho import avatares, datos
 from nicho import fuentes as fuentes_registro
 from nicho.fuentes import apify_actores
+from idiomas import N_
 from tareas import al_interrumpir, ref_sufijo, registrar
 
-ETAPA_GUARDAR = "Guardando"
+ETAPA_GUARDAR = N_("Guardando")
 ETAPAS_GENERAR = [(avatares.ETAPA_NUCLEOS, 45), (avatares.ETAPA_SUBS, 150), (ETAPA_GUARDAR, 5)]
-ETAPA_BUSCAR, ETAPA_LEER = "Buscando", "Leyendo comentarios"
+ETAPA_BUSCAR, ETAPA_LEER = N_("Buscando"), N_("Leyendo comentarios")
 ETAPAS_RECOLECTAR = [(ETAPA_BUSCAR, 20), (ETAPA_LEER, 90), (ETAPA_GUARDAR, 10)]
 LOTE = 100
 log = logging.getLogger(__name__)
@@ -58,7 +62,7 @@ def ejecutar_generar(tarea):
     p = tarea["payload"]
     cliente, eid = p["cliente"], int(p["estudio_id"])
     if not datos.estudio(cliente, eid):
-        return "El estudio ya no existe."
+        return gettext("El estudio ya no existe.")
     job = tarea.get("job_id") or datos.job_id_generar(cliente, eid)
 
     def avanzar(etapa, detalle=None):
@@ -90,7 +94,8 @@ def ejecutar_generar(tarea):
                                     detalle=f"intento fallido: {cola.recortar(cola.sin_token(e), 200)}",
                                     proveedor="anthropic",
                                     extra={"tokens_entrada": entrada, "tokens_salida": salida, "modelo": avatares.modelo_actual()})
-        _anotar_error(cliente, eid, f"{cola.sin_token(e)} (si Claude alcanzó a responder, este intento sí se cobró)")
+        _anotar_error(cliente, eid, gettext("%(error)s (si Claude alcanzó a responder, este intento sí se cobró)",
+                                            error=cola.sin_token(e)))
         raise
     resumen = r["resumen"]
     gastos.registrar_seguro(cliente, "avatares", resumen.get("usd"), f"avatares:{eid}:{res['generacion']}",
@@ -99,8 +104,9 @@ def ejecutar_generar(tarea):
                             extra={"tokens_entrada": resumen.get("tokens_entrada"), "tokens_salida": resumen.get("tokens_salida"),
                                    "modelo": resumen.get("modelo")})
     datos.recalcular(cliente, eid, tarea_viva=False)
-    aviso = f" · {resumen['errores']} núcleo(s) sin sub-avatares" if resumen.get("errores") else ""
-    return (f"{res['nucleos']} núcleo(s) y {res['subs']} sub-avatar(es) propuestos — revísalos y aprueba los que sirvan{aviso}.")
+    aviso = (" · " + gettext("%(n)s núcleo(s) sin sub-avatares", n=resumen["errores"])) if resumen.get("errores") else ""
+    return gettext("%(nucleos)s núcleo(s) y %(subs)s sub-avatar(es) propuestos — revísalos y aprueba los que sirvan%(aviso)s.",
+                   nucleos=res["nucleos"], subs=res["subs"], aviso=aviso)
 
 
 @al_interrumpir("nicho_generar_avatares")
@@ -114,7 +120,7 @@ def interrumpida_generar(tarea, mensaje):
 def encolar_recolectar(cliente, estudio_id, fuente, params):
     """False si ya hay una recolección viva de esa fuente para ese estudio."""
     if fuente not in fuentes_registro.CONECTADAS:
-        raise datos.ErrorDatos(f"Fuente desconocida: {fuente}")
+        raise datos.ErrorDatos(gettext("Fuente desconocida: %(fuente)s", fuente=fuente))
     de_pago = fuente == "apify"
     return trabajos.encolar(datos.job_id_recolectar(cliente, estudio_id, fuente), "nicho_recolectar",
                             {"cliente": cliente, "estudio_id": int(estudio_id), "fuente": fuente, "params": dict(params or {})},
@@ -151,9 +157,9 @@ def ejecutar_recolectar(tarea):
     p = tarea["payload"]
     cliente, eid, tipo = p["cliente"], int(p["estudio_id"]), p["fuente"]
     if not datos.estudio(cliente, eid):
-        return "El estudio ya no existe."
+        return gettext("El estudio ya no existe.")
     if tipo not in fuentes_registro.CONECTADAS:
-        raise datos.ErrorDatos(f"Fuente desconocida: {tipo}")
+        raise datos.ErrorDatos(gettext("Fuente desconocida: %(fuente)s", fuente=tipo))
     job = tarea.get("job_id") or datos.job_id_recolectar(cliente, eid, tipo)
     params = p.get("params") or {}
 
@@ -184,7 +190,8 @@ def ejecutar_recolectar(tarea):
         except Exception:  # noqa: BLE001 — si la base también falla, manda el error original
             log.exception("No se pudo guardar el lote pendiente de %s", tipo)
         mensaje = cola.recortar(cola.sin_token(e), 300)
-        datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": f"falló: {mensaje}", **_corrida(fuente)})
+        datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": gettext("falló: %(mensaje)s", mensaje=mensaje),
+                                            **_corrida(fuente)})
         _gasto_recoleccion(cliente, eid, tarea, fuente, params, nota="intento fallido")
         datos.recalcular(cliente, eid)
         raise
@@ -192,13 +199,17 @@ def ejecutar_recolectar(tarea):
     datos.registrar_recoleccion(cliente, eid, {**totales, "fuente": tipo, "aviso": aviso, **_corrida(fuente)})
     _gasto_recoleccion(cliente, eid, tarea, fuente, params)
     datos.recalcular(cliente, eid)
-    texto = f"{totales['nuevos']} comentario(s) nuevo(s) de {fuentes_registro.NOMBRES.get(tipo, tipo)}; {totales['repetidos']} repetido(s)."
-    return texto + (f" Aviso: {aviso}" if aviso else "")
+    nombre_fuente = idiomas.traducir(fuentes_registro.NOMBRES.get(tipo, tipo))
+    texto = gettext("%(nuevos)s comentario(s) nuevo(s) de %(fuente)s; %(repetidos)s repetido(s).",
+                    nuevos=totales["nuevos"], fuente=nombre_fuente, repetidos=totales["repetidos"])
+    return texto + ((" " + gettext("Aviso: %(aviso)s", aviso=aviso)) if aviso else "")
 
 
 @al_interrumpir("nicho_recolectar")
 def interrumpida_recolectar(tarea, mensaje):
     p = tarea["payload"]
     cliente, eid = p["cliente"], int(p["estudio_id"])
-    datos.registrar_recoleccion(cliente, eid, {"fuente": p.get("fuente"), "nuevos": 0, "repetidos": 0, "aviso": f"interrumpida: {mensaje}"})
+    with idiomas.en_idioma(idiomas.de_proyecto(cliente)):      # el hook no pasa por worker.ejecutar
+        aviso = gettext("interrumpida: %(mensaje)s", mensaje=mensaje)
+    datos.registrar_recoleccion(cliente, eid, {"fuente": p.get("fuente"), "nuevos": 0, "repetidos": 0, "aviso": aviso})
     datos.recalcular(cliente, eid)

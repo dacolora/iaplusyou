@@ -337,10 +337,10 @@ triple_whale = Table("triple_whale", metadata,
     Column("ultima_sincronizacion", String(19)),             # ISO 8601
     Column("estado", String(20), default="conectada"),       # conectada / error
     Column("error", Text),
-    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d (0022)
+    Column("extra", JSON, default=dict),                     # backfill_desde, ultimo_resumen, gasto_7d (0023)
 )
 
-# --- Triple Whale: métricas copiadas y evaluación (spec 2026-09-28, migración 0022) ---
+# --- Triple Whale: métricas copiadas y evaluación (spec 2026-09-28, migraciones 0023 y 0024) ---
 # Una fila por (proyecto, canal, anuncio, día): lo que reporta la plataforma
 # (ads_table) más lo que atribuye el Triple Pixel con el modelo y la ventana
 # del proyecto (pixel_joined_tvf). Es una copia: Triple Whale reatribuye días
@@ -485,6 +485,7 @@ referente_familia = Table("referente_familia", metadata,
     Column("id", Integer, primary_key=True),
     Column("nombre", String(120), nullable=False, unique=True),
     Column("descripcion", Text),
+    Column("descripcion_en", Text),                                   # §B7 (migración 0022)
     Column("origen", String(12), nullable=False, default="copycoders"),     # copycoders|claude|admin
     Column("creado_en", String(19), nullable=False),
 )

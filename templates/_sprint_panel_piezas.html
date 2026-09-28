@@ -1,3 +1,4 @@
+{% from "_sprint_macros.html" import etiqueta_sprint %}
 {# Pestaña «Piezas» del panel (spec 2026-09-27 §Pestaña «Piezas»). También se
    pide sola (sprints.campana_piezas) para actualizarse mientras algo se genera o
    espera QA. Contexto de rutas._contexto_piezas: piezas, resumen_piezas,
@@ -6,10 +7,10 @@
 <div class="panel-piezas" data-piezas-vivas="{{ '1' if piezas_vivas else '0' }}">
   <section class="panel-seccion">
     <div class="panel-piezas-cab">
-      <p>{{ rp.listas or 0 }} {{ 'lista' if (rp.listas or 0) == 1 else 'listas' }} · {{ rp.generando or 0 }} generando · {{ rp.encoladas or 0 }} en cola · {{ rp.error or 0 }} con error · <strong>{{ rp.aprobadas or 0 }} {{ 'aprobada' if (rp.aprobadas or 0) == 1 else 'aprobadas' }}</strong> · US$ {{ '%.2f' % (rp.costo_usd or 0) }} gastado</p>
+      <p>{{ ngettext('%(num)s lista', '%(num)s listas', rp.listas or 0) }} · {{ _('%(generando)s generando · %(encoladas)s en cola · %(error)s con error', generando=(rp.generando or 0), encoladas=(rp.encoladas or 0), error=(rp.error or 0)) }} · <strong>{{ ngettext('%(num)s aprobada', '%(num)s aprobadas', rp.aprobadas or 0) }}</strong> · {{ _('US$ %(usd)s gastado', usd='%.2f' % (rp.costo_usd or 0)) }}</p>
       {% if pasaron_qa %}
       <button type="button" class="btn-generar btn-sm" data-aprobar-qa data-campana="{{ c.id }}"
-              data-url="{{ url_for('sprints.revision_aprobar_qa', cliente=cliente, sid=sprint.id) }}">Aprobar las que pasaron QA ({{ pasaron_qa }})</button>
+              data-url="{{ url_for('sprints.revision_aprobar_qa', cliente=cliente, sid=sprint.id) }}">{{ _('Aprobar las que pasaron QA (%(n)s)', n=pasaron_qa) }}</button>
       {% endif %}
     </div>
   </section>
@@ -22,41 +23,41 @@
         {% if p.estado in ("listo", "degradada") and p.url_video %}
           {% if p.tipo == "video" %}<video src="{{ p.url_video }}" {% if p.url_miniatura %}poster="{{ p.url_miniatura }}"{% endif %} controls muted playsinline preload="none"></video>
           {% else %}<img src="{{ p.url_video }}" alt="{{ p.titulo or '' }}" loading="lazy">{% endif %}
-        {% elif p.estado == "error" %}<p class="campo-error">Error: {{ p.pieza_error or 'sin detalle' }}</p>
-        {% else %}<p class="vacio">{{ 'Generando…' if p.estado == 'generando' else 'En cola…' }}</p>{% endif %}
+        {% elif p.estado == "error" %}<p class="campo-error">{{ _('Error: %(detalle)s', detalle=(p.pieza_error or _('sin detalle'))) }}</p>
+        {% else %}<p class="vacio">{{ _('Generando…') if p.estado == 'generando' else _('En cola…') }}</p>{% endif %}
       </div>
       <strong>{{ p.titulo }}</strong>
-      <small class="vacio">{{ p.tipo }}{% if p.costo_usd %} · US$ {{ '%.2f' % p.costo_usd }}{% endif %} · {{ p.revision }}</small>
+      <small class="vacio">{{ etiqueta_sprint(p.tipo) }}{% if p.costo_usd %} · US$ {{ '%.2f' % p.costo_usd }}{% endif %} · {{ etiqueta_sprint(p.revision) }}</small>
       {% if p.qa and p.qa.veredicto == "error" %}
-      <p class="panel-pieza-qa"><span class="campo-error">QA falló: {{ p.qa.nota or 'sin detalle' }}</span>
-        <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}">Repetir QA</button></p>
+      <p class="panel-pieza-qa"><span class="campo-error">{{ _('QA falló: %(nota)s', nota=(p.qa.nota or _('sin detalle'))) }}</span>
+        <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}">{{ _('Repetir QA') }}</button></p>
       {% elif p.qa %}
       {% from "_sprint_qa.html" import qa_detalle %}
       <div class="panel-pieza-qa">{{ qa_detalle(p.qa, checks) }}</div>
-      {% elif p.estado in ("listo", "degradada") %}<p class="vacio">QA pendiente…</p>{% endif %}
-      {% if p.revision == "rechazada" and p.revision_motivo %}<p class="campo-error">Motivo: {{ p.revision_motivo }}</p>{% endif %}
+      {% elif p.estado in ("listo", "degradada") %}<p class="vacio">{{ _('QA pendiente…') }}</p>{% endif %}
+      {% if p.revision == "rechazada" and p.revision_motivo %}<p class="campo-error">{{ _('Motivo: %(motivo)s', motivo=p.revision_motivo) }}</p>{% endif %}
       <div class="panel-acciones">
         {% if p.estado in ("listo", "degradada") %}
-          {% if p.revision != "aprobada" %}<button type="button" class="btn-generar btn-xs" data-pieza-accion="aprobar">Aprobar</button>{% endif %}
-          {% if p.revision != "rechazada" %}<button type="button" class="btn-xs btn-rechazar" data-pieza-accion="rechazar">Rechazar</button>{% endif %}
-          <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}">Abrir en Crear</a>
+          {% if p.revision != "aprobada" %}<button type="button" class="btn-generar btn-xs" data-pieza-accion="aprobar">{{ _('Aprobar') }}</button>{% endif %}
+          {% if p.revision != "rechazada" %}<button type="button" class="btn-xs btn-rechazar" data-pieza-accion="rechazar">{{ _('Rechazar') }}</button>{% endif %}
+          <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente, _anchor='creativeflowplus') }}">{{ _('Abrir en Crear') }}</a>
         {% endif %}
-        {% set precio = ('US$ %.2f' % p.costo_regenerar) if p.costo_regenerar is not none else 'precio no disponible' %}
+        {% set precio = ('US$ %.2f' % p.costo_regenerar) if p.costo_regenerar is not none else _('precio no disponible') %}
         {% if p.estado == "error" %}
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}"
-                data-confirmar="Reintentar gasta de nuevo ({{ precio }}). ¿Seguir?">Reintentar ({{ precio }})</button>
+                data-confirmar="{{ _('Reintentar gasta de nuevo (%(precio)s). ¿Seguir?', precio=precio) }}">{{ _('Reintentar (%(precio)s)', precio=precio) }}</button>
         {% endif %}
         {% if p.estado in ("listo", "degradada", "error") %}
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_regenerar', cliente=cliente, cp_id=p.id) }}"
-                data-confirmar="Regenerar crea una pieza nueva con la misma idea ({{ precio }}). ¿Seguir?">Regenerar ({{ precio }})</button>
+                data-confirmar="{{ _('Regenerar crea una pieza nueva con la misma idea (%(precio)s). ¿Seguir?', precio=precio) }}">{{ _('Regenerar (%(precio)s)', precio=precio) }}</button>
         {% endif %}
       </div>
       <div class="panel-rechazo" data-rechazo hidden>
-        <label>¿Por qué no sirve? <small class="vacio">(lo usa la próxima versión)</small>
+        <label>{{ _('¿Por qué no sirve?') }} <small class="vacio">({{ _('lo usa la próxima versión') }})</small>
           <textarea rows="2" maxlength="300" data-motivo></textarea></label>
         <div class="panel-acciones">
-          <button type="button" class="btn-xs btn-rechazar" data-pieza-accion="confirmar-rechazo">Rechazar</button>
-          <button type="button" class="btn-xs" data-pieza-accion="cancelar-rechazo">Cancelar</button>
+          <button type="button" class="btn-xs btn-rechazar" data-pieza-accion="confirmar-rechazo">{{ _('Rechazar') }}</button>
+          <button type="button" class="btn-xs" data-pieza-accion="cancelar-rechazo">{{ _('Cancelar') }}</button>
         </div>
       </div>
       <small class="campo-error" data-error-pieza hidden></small>
@@ -65,9 +66,9 @@
   </div>
   {% else %}
   <div class="estado-vacio">
-    <p class="estado-vacio-titulo">Todavía no hay piezas</p>
-    <p class="estado-vacio-texto">Aprueba ideas y genéralas desde la pestaña Ideas.</p>
-    <button type="button" class="btn-sm" data-ir-paso="ideas">Ir a Ideas</button>
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay piezas') }}</p>
+    <p class="estado-vacio-texto">{{ _('Aprueba ideas y genéralas desde la pestaña Ideas.') }}</p>
+    <button type="button" class="btn-sm" data-ir-paso="ideas">{{ _('Ir a Ideas') }}</button>
   </div>
   {% endif %}
 </div>

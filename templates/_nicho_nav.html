@@ -2,7 +2,7 @@
    _sprint_nav.html): los botones de pestaña no tienen paneles en esta página,
    así que llevan de vuelta al proyecto con el hash de la pestaña. #}
 <p class="sprint-migas">
-  <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='nicho') }}">← Nicho</a>
+  <a href="{{ url_for('ver_cliente', cliente=cliente, _anchor='nicho') }}">← {{ _('Nicho') }}</a>
   {% if estudio %} · {{ estudio.nombre }}{% endif %}
 </p>
 <script>

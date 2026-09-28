@@ -745,7 +745,7 @@ When the suggested attribution is `pixel`, `experimentos.objetivo_sugerido` is
 without it). The objective is fixed at creation — Meta doesn't allow changing it.
 
 **Triple Whale** (package `triple_whale/`, `triple_whale_tiendas.py`, `tareas/triple_whale.py`; spec
-`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migration 0022): connected from
+`docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md`, migrations 0023 and 0024): connected from
 Configuración › Conexiones (Fernet-encrypted API key; `cfg_triple_whale_conectar` requires a verified correo,
 same origin, and tests the key AND a short SQL query before saving; `cfg_triple_whale_ajustes` changes
 currency/model/window). The client (`triple_whale/__init__.py`) follows the documented SQL endpoint:
@@ -781,7 +781,7 @@ creative Creatv creates (`lanzador._crear_anuncios`, and the legacy `tareas/meta
 `meta_ads.creative` functions take an optional `url_tags` for the AdCreative's «URL parameters»), via
 `triple_whale_tiendas.url_tags(cliente)` — None without Triple Whale; ads created before connecting keep
 none (changing them sends the ad back to review). Second round (spec §11–§13): `tw_producto_dia` (migration
-0023) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal,
+0024) copies `orders_table` opened by `products_info` in the same sync (`consultas_productos`, full/minimal,
 never verified: §9.5) → «Lo que más se vende» in the tab (`panel.productos_periodo`, matched to the Catálogo
 by `fuente_id`/name) and the top 5 in the AI prompt (each idea carries `producto`); a Creatv-made ad
 (`datos.piezas_creatv`, now with the pieza's video/thumbnail/state) sends Claude the real frames
@@ -860,8 +860,21 @@ Luego `venv/bin/python3 catalogo_i18n.py actualizar`, traducir con `docs/i18n/gl
 `proyecto.json`, cookie `idioma` antes del login; `idiomas.en_idioma(x)` para correos y worker.
 Desde 2026-09-28 (decisión de Daniel) `idiomas.DEFECTO` es `"en"` y `ACTIVO_PARA_TODOS` es `True` para
 todos: quien no eligió idioma ve la app en inglés y el selector queda visible para cualquier cliente; los
-tests siguen fijos en español (`conftest`). Sprints, Nicho, Referentes, Final edition/editor, las páginas de
-admin y el mapa del código siguen solo en español hasta que cierren las fases 5-6.
+tests siguen fijos en español (`conftest`). Fase 5 (2026-09-28): Sprints, Nicho y Referentes
+ya están en el catálogo. Sprints guarda lo que escribe (eventos, temporadas adoptadas, el momento del mes) en
+el idioma del proyecto con `sprints.datos.texto_guardado(cliente, N_("…"), …)` y muestra estados con la macro
+`etiqueta_sprint` de `_sprint_macros.html` (los diccionarios traducidos van DENTRO de macros: un `{% set %}` de
+módulo en una plantilla importada se cachea en un solo idioma). Un estudio de Nicho toma el idioma del proyecto
+(sin selector); el idioma de búsqueda de YouTube sale del país del proyecto (`nicho.fuentes.plataformas.idioma`),
+no del idioma del estudio. La biblioteca global de referentes es bilingüe (§B7): `referente.extra.i18n[idioma]`
+(firma/dolor; `referentes.datos.localizado`), `referente_familia.descripcion_en` (migración 0022;
+`descripcion_familia`; botón admin «Escribir en inglés…» → tarea `referentes_familias_en` por tandas de 40, precio
+a la vista, gasto `otro` bajo `_creatv`), `referentes.datos.rellenar_i18n_copycoders()` (idempotente, sin Claude:
+correr una vez al desplegar), y los barridos globales clasifican en español e inglés en UNA llamada
+(`clasificar.salida_para`, tarifa `clasificacion_bilingue`); la ficha sale en el idioma de quien mira y
+Recrear/Adaptar/las referencias de un sprint en el del proyecto. Final edition/editor, las páginas de admin y el
+mapa del código siguen solo en español hasta la fase 6 (plan `docs/superpowers/plans/2026-09-28-fase6-*.md`;
+las finales van en el idioma de cada país — decisión B de Daniel, 2026-09-28).
 Fase 3 (Crear en el idioma del proyecto): las llamadas a Claude reciben el idioma con
 `idiomas.de_proyecto(cliente)`, pasado a `doctrina.bloque_system(..., idioma=)` o envuelto a mano con
 `idiomas.orden_idioma` (va al inicio Y al final de las instrucciones del sitio; el prompt para el modelo de

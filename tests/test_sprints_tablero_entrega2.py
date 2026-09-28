@@ -267,7 +267,10 @@ def test_precio_de_reintentar_y_regenerar_es_el_del_modelo_de_la_pieza(con_ideas
     assert "Regenerar (US$ 2.10)" in piezas and "(US$ 2.10). ¿Seguir?" in piezas
     assert "Regenerar (US$ 0.09)" in piezas              # la imagen: dos decimales, no «0.093»
     revision = c.get(f"/cliente/acme/sprints/{sid}/revision").data.decode()
-    assert "Regenerar (USD 2.10)" in revision and "(USD 2.10). ¿Seguir?" in revision
+    # Idioma (Task 4): el onsubmit de revisión va con `_(...)|tojson` (comillas simples
+    # en el atributo, como toda la app); tojson escapa el «¿» a ¿, JSON válido que
+    # el navegador decodifica igual — el botón en sí (fuera del tojson) no cambia.
+    assert "Regenerar (USD 2.10)" in revision and "(USD 2.10). \\u00bfSeguir?" in revision
     creative_flow.actualizar("acme", cfs[iv], modelo="modelo_que_ya_no_existe")      # cae al del proyecto
     assert "Regenerar (US$ 2.00)" in c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
     monkeypatch.setattr(flowplus_modelos, "estimate_imagen", lambda *a, **k: {})
@@ -293,7 +296,9 @@ def test_describir_un_referente_no_recarga_el_panel(app):
     js = _js_panel(_tablero(app["c"], sid))
     fn = js[js.index("function pintarConteoReferentes"):js.index("// ---- Pestaña Ideas")]
     assert "T.abrir(" not in fn and "T.refrescarTarjeta(cid)" in fn
-    assert "j.referencias_listas" in fn and "j.referencias_objetivo" in fn and "Falta describir" in fn
+    # Idioma (Task 4): «Falta describir ✎» / «Descrito ✓» ahora viven en TEXTO_PANEL
+    # (traducibles con _()|tojson), no como literal suelto en el JS.
+    assert "j.referencias_listas" in fn and "j.referencias_objetivo" in fn and "TEXTO_PANEL.faltaDescribir" in fn
     assert "sigue(cid)" in fn
 
 

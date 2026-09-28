@@ -16,6 +16,7 @@ import tempfile
 from datetime import datetime
 
 import requests
+from flask_babel import gettext
 
 import doctrina
 import idiomas
@@ -81,16 +82,16 @@ def _aspecto(ancho, alto):
 def formato(ruta_local, tipo, duracion_objetivo, aspect_ratio):
     """(ok, nota) con ffprobe sobre el archivo local. Sin archivo, no se verifica."""
     if not ruta_local or not os.path.exists(ruta_local):
-        return True, "sin archivo local; formato no verificado"
+        return True, gettext("sin archivo local; formato no verificado")
     try:
         info = cortes.ffprobe_json(ruta_local)
     except Exception as e:
-        return True, f"ffprobe falló ({e}); formato no verificado"
+        return True, gettext("ffprobe falló (%(error)s); formato no verificado", error=e)
     video = next((s for s in info.get("streams") or [] if s.get("codec_type") == "video"), {})
     aspecto = _aspecto(video.get("width"), video.get("height"))
     problemas = []
     if aspect_ratio and aspecto and aspecto != aspect_ratio:
-        problemas.append(f"aspecto {aspecto}, se pedía {aspect_ratio}")
+        problemas.append(gettext("aspecto %(aspecto)s, se pedía %(pedido)s", aspecto=aspecto, pedido=aspect_ratio))
     dur = None
     if tipo == "video":
         try:
@@ -100,7 +101,7 @@ def formato(ruta_local, tipo, duracion_objetivo, aspect_ratio):
         if dur and duracion_objetivo:
             obj = float(duracion_objetivo)
             if abs(dur - obj) > obj * TOLERANCIA_DURACION:
-                problemas.append(f"duración {dur:.1f} s, se pedían {obj:.0f} s")
+                problemas.append(gettext("duración %(dur)s s, se pedían %(obj)s s", dur=f"{dur:.1f}", obj=f"{obj:.0f}"))
     if problemas:
         return False, "; ".join(problemas)
     return True, (aspecto or "?") + (f", {dur:.1f} s" if dur else "")
@@ -110,22 +111,22 @@ def parsear(texto):
     t = (texto or "").strip()
     ini, fin = t.find("{"), t.rfind("}")
     if ini < 0 or fin <= ini:
-        raise AnalisisInvalido("Claude no devolvió JSON.")
+        raise AnalisisInvalido(gettext("Claude no devolvió JSON."))
     try:
         data = json.loads(t[ini:fin + 1])
     except ValueError as e:
-        raise AnalisisInvalido(f"JSON inválido: {e}")
+        raise AnalisisInvalido(gettext("JSON inválido: %(error)s", error=e))
     if not isinstance(data, dict) or not isinstance(data.get("checks"), dict):
-        raise AnalisisInvalido("El JSON no trae score y checks.")
+        raise AnalisisInvalido(gettext("El JSON no trae score y checks."))
     try:
         score = max(0, min(100, int(round(float(data.get("score"))))))
     except (TypeError, ValueError):
-        raise AnalisisInvalido("score inválido.")
+        raise AnalisisInvalido(gettext("score inválido."))
     checks = {}
     for k in CHECKS_IA:
         c = data["checks"].get(k)
         if not isinstance(c, dict) or "ok" not in c:
-            raise AnalisisInvalido(f"Falta el check {k}.")
+            raise AnalisisInvalido(gettext("Falta el check %(k)s.", k=k))
         ok = c["ok"] if isinstance(c["ok"], bool) else str(c["ok"]).strip().lower() in ("true", "sí", "si", "ok", "1")
         checks[k] = {"ok": ok, "nota": str(c.get("nota") or "").strip()[:200]}
     return {"score": score, "checks": checks}
@@ -209,7 +210,7 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
     try:
         imagenes = _bloques_imagen(entry, ruta)
         if not imagenes:
-            raise AnalisisInvalido("La pieza no tiene imagen ni fotograma que evaluar.")
+            raise AnalisisInvalido(gettext("La pieza no tiene imagen ni fotograma que evaluar."))
         content = [{"type": "text", "text": texto}] + imagenes
         system = doctrina.bloque_system("revisar", idioma=idioma)
         crudo, ent, sal = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
@@ -220,7 +221,7 @@ def evaluar(cliente, idea, entry, campana, umbral=None):
             try:
                 crudo, e2, s2 = analisis._llamar_contando(content, max_tokens=MAX_TOKENS, system=system)
             except Exception as falla:
-                perdida = AnalisisInvalido(str(falla)[:300] or "La corrección falló.")
+                perdida = AnalisisInvalido(str(falla)[:300] or gettext("La corrección falló."))
                 perdida.tokens_entrada, perdida.tokens_salida = ent, sal
                 raise perdida from falla
             ent, sal = ent + e2, sal + s2

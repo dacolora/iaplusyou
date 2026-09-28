@@ -8,33 +8,33 @@
 <div class="panel-cabecera">
   <div>
     <h2>Sprints</h2>
-    <p class="panel-cabecera-desc">Un sprint es el plan de contenido de un mes para todos tus países: pones el mes y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Se trabaja en inglés; cada país e idioma se adapta después en la edición final. Nada se genera sin tu aprobación y sin ver el costo antes.</p>
+    <p class="panel-cabecera-desc">{{ _('Un sprint es el plan de contenido de un mes para todos tus países: pones el mes y en su tablero armas una campaña por persona y producto con los anuncios que va a seguir. Se trabaja en inglés; cada país e idioma se adapta después en la edición final. Nada se genera sin tu aprobación y sin ver el costo antes.') }}</p>
   </div>
   <div class="panel-cabecera-acciones">
-    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="nuevo-sprint">+ Nuevo sprint</button>
+    <button type="button" class="btn-generar btn-sm" data-abrir-detalle="alta-sprint">+ {{ _('Nuevo sprint') }}</button>
   </div>
 </div>
 
-<details class="swap-card sprint-nuevo" id="nuevo-sprint">
-  <summary class="swap-card-resumen">Nuevo sprint</summary>
+<details class="swap-card sprint-nuevo" id="alta-sprint">
+  <summary class="swap-card-resumen">{{ _('Nuevo sprint') }}</summary>
   <form method="post" action="{{ url_for('sprints.crear', cliente=cliente) }}" class="sprint-nuevo-form">
-    <label>Nombre
+    <label>{{ _('Nombre') }}
       <input name="nombre" required maxlength="200" placeholder="Octubre"></label>
-    <label>Inicio
+    <label>{{ _('Inicio') }}
       <input type="date" name="inicio" required value="{{ inicio_defecto }}"></label>
-    <label>Fin
+    <label>{{ _('Fin') }}
       <input type="date" name="fin" required value="{{ fin_defecto }}"></label>
-    <label><span class="campo-titulo">Momento del mes <small class="vacio">(opcional)</small></span>
+    <label><span class="campo-titulo">{{ _('Momento del mes') }} <small class="vacio">({{ _('opcional') }})</small></span>
       <select name="momento" data-momento>
-        <option value="">Ninguno</option>
-        {% for p in presets_temporadas %}<option value="{{ p.clave }}">{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
-        <option value="propio">Otro (escríbelo)…</option>
+        <option value="">{{ _('Ninguno') }}</option>
+        {% for p in presets_temporadas %}<option value="{{ p.clave }}">{{ p.nombre|traducir }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
+        <option value="propio">{{ _('Otro (escríbelo)…') }}</option>
       </select></label>
-    <label data-momento-propio hidden>Tu momento
-      <input name="momento_texto" maxlength="120" placeholder="Lanzamiento de la colección"></label>
-    <label class="sprint-nuevo-ancho"><span class="campo-titulo">Marcas a imitar <small class="vacio">(opcional: una por línea; si tienes el link de su Ad Library, pégalo al lado)</small></span>
+    <label data-momento-propio hidden>{{ _('Tu momento') }}
+      <input name="momento_texto" maxlength="120" placeholder="{{ _('Lanzamiento de la colección') }}"></label>
+    <label class="sprint-nuevo-ancho"><span class="campo-titulo">{{ _('Marcas a imitar') }} <small class="vacio">({{ _('opcional: una por línea; si tienes el link de su Ad Library, pégalo al lado') }})</small></span>
       <textarea name="marcas" rows="2" placeholder="Crocs&#10;Skechers https://www.facebook.com/ads/library/?view_all_page_id=…"></textarea></label>
-    <div class="sprint-nuevo-ancho"><button type="submit" class="btn-generar">Crear y armar campañas →</button></div>
+    <div class="sprint-nuevo-ancho"><button type="submit" class="btn-generar">{{ _('Crear y armar campañas →') }}</button></div>
   </form>
 </details>
 
@@ -44,13 +44,13 @@
     {{ anillo(sp.progreso.porcentaje) }}
     <div>
       <strong>{{ sp.nombre }}</strong> {{ chip_estado(sp.estado) }}
-      <br><small class="vacio">{{ sp.inicio }} → {{ sp.fin }} · {{ sp.campanas_total }} campaña(s) · {{ sp.piezas_planeadas }} piezas · {{ sp.progreso.texto }}</small>
+      <br><small class="vacio">{{ sp.inicio }} → {{ sp.fin }} · {{ _('%(n)s campaña(s)', n=sp.campanas_total) }} · {{ ngettext('%(num)s pieza', '%(num)s piezas', sp.piezas_planeadas) }} · {{ sp.progreso.texto }}</small>
     </div>
   </a>
   {% else %}
   <div class="estado-vacio">
-    <p class="estado-vacio-titulo">Todavía no hay sprints</p>
-    <p class="estado-vacio-texto">Crea el primero con «+ Nuevo sprint»: pones el mes y agregas sus campañas en el tablero.</p>
+    <p class="estado-vacio-titulo">{{ _('Todavía no hay sprints') }}</p>
+    <p class="estado-vacio-texto">{{ _('Crea el primero con «+ Nuevo sprint»: pones el mes y agregas sus campañas en el tablero.') }}</p>
   </div>
   {% endfor %}
 </div>
@@ -58,8 +58,8 @@
 <script>
   (function () {
     // «Otro (escríbelo)…» muestra el campo del momento propio.
-    var sel = document.querySelector('#nuevo-sprint [data-momento]');
-    var propio = document.querySelector('#nuevo-sprint [data-momento-propio]');
+    var sel = document.querySelector('#alta-sprint [data-momento]');
+    var propio = document.querySelector('#alta-sprint [data-momento-propio]');
     if (!sel || !propio) return;
     function mostrar() { propio.hidden = sel.value !== 'propio'; }
     sel.addEventListener('change', mostrar);

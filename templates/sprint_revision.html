@@ -1,35 +1,35 @@
 {% extends "base.html" %}
-{% from "_sprint_macros.html" import chip_estado %}
-{% block title %}Revisión · {{ sprint.nombre }}{% endblock %}
+{% from "_sprint_macros.html" import chip_estado, etiqueta_sprint %}
+{% block title %}{{ _('Revisión') }} · {{ sprint.nombre }}{% endblock %}
 {% block content %}
 {% include "_sprint_nav.html" %}
 
 <div class="pagina-cabecera sprint-cabecera">
   <div>
-    <h1>Revisión de {{ sprint.nombre }}</h1>
-    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ resumen.terminadas }} {{ 'terminada' if (resumen.terminadas) == 1 else 'terminadas' }} de {{ resumen.planeadas }} · {{ resumen.aprobadas }} {{ 'aprobada' if (resumen.aprobadas) == 1 else 'aprobadas' }} · {{ resumen.rechazadas }} {{ 'rechazada' if (resumen.rechazadas) == 1 else 'rechazadas' }} · {{ resumen.sin_revisar }} sin revisar · {{ resumen.error }} con error · USD {{ '%.2f' % resumen.costo_usd }}</p>
-    <p class="vacio"><span class="solo-teclado">Atajos: <kbd>A</kbd> aprobar · <kbd>R</kbd> rechazar · <kbd>←</kbd> <kbd>→</kbd> moverse. </span>Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.</p>
+    <h1>{{ _('Revisión de %(nombre)s', nombre=sprint.nombre) }}</h1>
+    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ ngettext('%(num)s terminada', '%(num)s terminadas', resumen.terminadas) }} {{ _('de %(planeadas)s', planeadas=resumen.planeadas) }} · {{ ngettext('%(num)s aprobada', '%(num)s aprobadas', resumen.aprobadas) }} · {{ ngettext('%(num)s rechazada', '%(num)s rechazadas', resumen.rechazadas) }} · {{ _('%(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s', sin_revisar=resumen.sin_revisar, error=resumen.error, usd='%.2f' % resumen.costo_usd) }}</p>
+    <p class="vacio"><span class="solo-teclado">{{ _('Atajos:') }} <kbd>A</kbd> {{ _('aprobar') }} · <kbd>R</kbd> {{ _('rechazar') }} · <kbd>←</kbd> <kbd>→</kbd> {{ _('moverse.') }} </span>{{ _('Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.') }}</p>
   </div>
 </div>
 
 <div class="acciones sprint-acciones">
   <form method="post" action="{{ url_for('sprints.revision_aprobar_qa', cliente=cliente, sid=sprint.id) }}" class="inline">
-    <button type="submit" class="btn-generar btn-sm">Aprobar todas las que pasaron QA</button>
+    <button type="submit" class="btn-generar btn-sm">{{ _('Aprobar todas las que pasaron QA') }}</button>
   </form>
   {% if sprint.estado == "revision" %}
   <form method="post" action="{{ url_for('sprints.cerrar', cliente=cliente, sid=sprint.id) }}" class="inline"
-        onsubmit="return confirm('¿Cerrar el sprint? {{ resumen.aprobadas }} {{ 'aprobada' if (resumen.aprobadas) == 1 else 'aprobadas' }}, {{ resumen.rechazadas }} {{ 'rechazada' if (resumen.rechazadas) == 1 else 'rechazadas' }}, {{ resumen.sin_revisar }} sin revisar.');">
-    <button type="submit" class="btn-sm">Cerrar sprint</button>
+        onsubmit='return confirm({{ _("¿Cerrar el sprint? %(aprobadas)s, %(rechazadas)s, %(sin_revisar)s sin revisar.", aprobadas=ngettext("%(num)s aprobada", "%(num)s aprobadas", resumen.aprobadas), rechazadas=ngettext("%(num)s rechazada", "%(num)s rechazadas", resumen.rechazadas), sin_revisar=resumen.sin_revisar)|tojson }});'>
+    <button type="submit" class="btn-sm">{{ _('Cerrar sprint') }}</button>
   </form>
   {% endif %}
   {% if sprint.estado == "completado" %}
-  <a class="btn-generar btn-sm" href="{{ url_for('sprints.entrega', cliente=cliente, sid=sprint.id) }}">Entrega</a>
+  <a class="btn-generar btn-sm" href="{{ url_for('sprints.entrega', cliente=cliente, sid=sprint.id) }}">{{ _('Entrega') }}</a>
   {% endif %}
-  <label class="fe-check">Campaña
-    <select id="filtro-campana"><option value="">todas</option>{% for c in sprint.campanas %}<option value="{{ c.id }}">{{ c.orden + 1 }} · {{ (c.funnel or 'tof') | upper }} · {{ c.persona_nombre }} · {{ (productos_por_id.get(c.catalogo_id) or {}).get('nombre') or c.catalogo_id }}</option>{% endfor %}</select>
+  <label class="fe-check">{{ _('Campaña') }}
+    <select id="filtro-campana"><option value="">{{ _('todas') }}</option>{% for c in sprint.campanas %}<option value="{{ c.id }}">{{ c.orden + 1 }} · {{ (c.funnel or 'tof') | upper }} · {{ c.persona_nombre }} · {{ (productos_por_id.get(c.catalogo_id) or {}).get('nombre') or c.catalogo_id }}</option>{% endfor %}</select>
   </label>
-  <label class="fe-check">Tipo <select id="filtro-tipo"><option value="">todos</option><option value="video">video</option><option value="imagen">imagen</option></select></label>
-  <label class="fe-check">QA <select id="filtro-qa"><option value="">todos</option><option value="pasa">pasa</option><option value="revisar">revisar</option><option value="falla">falla</option><option value="error">QA falló</option><option value="sin">sin evaluar</option></select></label>
+  <label class="fe-check">{{ _('Tipo') }} <select id="filtro-tipo"><option value="">{{ _('todos') }}</option><option value="video">{{ _('video') }}</option><option value="imagen">{{ _('imagen') }}</option></select></label>
+  <label class="fe-check">QA <select id="filtro-qa"><option value="">{{ _('todos') }}</option><option value="pasa">{{ _('pasa') }}</option><option value="revisar">{{ _('revisar') }}</option><option value="falla">{{ _('falla') }}</option><option value="error">{{ _('QA falló') }}</option><option value="sin">{{ _('sin evaluar') }}</option></select></label>
 </div>
 
 <div class="sprint-revision-grid" id="revision-grid">
@@ -40,65 +40,71 @@
       {% if p.estado in ("listo", "degradada") and p.url_video %}
         {% if p.tipo == "video" %}<video src="{{ p.url_video }}" {% if p.url_miniatura %}poster="{{ p.url_miniatura }}"{% endif %} controls muted preload="none"></video>
         {% else %}<img src="{{ p.url_video }}" alt="{{ p.titulo or '' }}">{% endif %}
-      {% elif p.estado == "error" %}<p class="tag-error sprint-pieza-error">Error: {{ p.pieza_error or 'sin detalle' }}</p>
-      {% else %}<p class="vacio sprint-analizando">{{ p.estado or 'en cola' }}…</p>{% endif %}
-      <span class="tag-estado sprint-ref-estado sprint-revision-chip">{{ p.revision }}</span>
+      {% elif p.estado == "error" %}<p class="tag-error sprint-pieza-error">{{ _('Error: %(detalle)s', detalle=(p.pieza_error or _('sin detalle'))) }}</p>
+      {% else %}<p class="vacio sprint-analizando">{{ etiqueta_sprint(p.estado) if p.estado else _('en cola') }}…</p>{% endif %}
+      <span class="tag-estado sprint-ref-estado sprint-revision-chip">{{ etiqueta_sprint(p.revision) }}</span>
     </div>
     <div class="sprint-ref-cuerpo">
       <strong>{{ p.titulo }}</strong>
-      <small class="vacio">Campaña {{ p.campana_n }} · {{ p.funnel | upper }} · {{ p.persona_nombre }} · {{ p.tipo }}{% if p.costo_usd %} · USD {{ '%.2f' % p.costo_usd }}{% endif %}</small>
+      <small class="vacio">{{ _('Campaña %(n)s', n=p.campana_n) }} · {{ p.funnel | upper }} · {{ p.persona_nombre }} · {{ etiqueta_sprint(p.tipo) }}{% if p.costo_usd %} · USD {{ '%.2f' % p.costo_usd }}{% endif %}</small>
       {% if p.qa and p.qa.veredicto == "error" %}
       <div class="sprint-qa">
-        <span class="tag-error" title="{{ p.qa.nota or '' }}">QA falló: {{ p.qa.nota or 'sin detalle' }}</span>
-        <form method="post" action="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}" class="inline"><button type="submit" class="btn-xs">Repetir QA</button></form>
+        <span class="tag-error" title="{{ p.qa.nota or '' }}">{{ _('QA falló: %(nota)s', nota=(p.qa.nota or _('sin detalle'))) }}</span>
+        <form method="post" action="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}" class="inline"><button type="submit" class="btn-xs">{{ _('Repetir QA') }}</button></form>
       </div>
       {% elif p.qa %}
       <div class="sprint-qa">
         {% from "_sprint_qa.html" import qa_detalle %}
         {{ qa_detalle(p.qa, checks) }}
         {% set doc = p.doctrina or {} %}
-        {% if doc.estado == 'mejorar' %}<span class="tag-estado" title="Revisión de la doctrina: se ve en Crear">Doctrina: {{ doc.n }} por mejorar</span>{% elif doc.estado == 'bien' %}<span class="tag-estado" title="Revisión de la doctrina">Doctrina: bien</span>{% elif doc.estado %}<span class="tag-estado" title="Se revisa desde la pieza en Crear">Doctrina: sin revisar</span>{% endif %}
+        {% if doc.estado == 'mejorar' %}<span class="tag-estado" title="{{ _('Revisión de la doctrina: se ve en Crear') }}">{{ _('Doctrina: %(n)s por mejorar', n=doc.n) }}</span>{% elif doc.estado == 'bien' %}<span class="tag-estado" title="{{ _('Revisión de la doctrina') }}">{{ _('Doctrina: bien') }}</span>{% elif doc.estado %}<span class="tag-estado" title="{{ _('Se revisa desde la pieza en Crear') }}">{{ _('Doctrina: sin revisar') }}</span>{% endif %}
       </div>
-      {% elif p.estado in ("listo", "degradada") %}<small class="vacio sprint-analizando">QA pendiente…</small>{% endif %}
-      {% if p.revision == "rechazada" and p.revision_motivo %}<small class="tag-error">Motivo: {{ p.revision_motivo }}</small>{% endif %}
+      {% elif p.estado in ("listo", "degradada") %}<small class="vacio sprint-analizando">{{ _('QA pendiente…') }}</small>{% endif %}
+      {% if p.revision == "rechazada" and p.revision_motivo %}<small class="tag-error">{{ _('Motivo: %(motivo)s', motivo=p.revision_motivo) }}</small>{% endif %}
       <div class="sprint-ref-acciones">
         {% if p.estado in ("listo", "degradada") %}
-        <button type="button" class="btn-generar btn-xs js-aprobar">Aprobar</button>
-        <button type="button" class="btn-xs btn-peligro js-rechazar">Rechazar</button>
+        <button type="button" class="btn-generar btn-xs js-aprobar">{{ _('Aprobar') }}</button>
+        <button type="button" class="btn-xs btn-peligro js-rechazar">{{ _('Rechazar') }}</button>
         {# Final edition tiene su pestaña (2026-09-27): se abre ahí, con el
            detalle de esta pieza (#final?cf=<id>). Una imagen no tiene final. #}
         {% if p.tipo != "imagen" %}
-        <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente) }}#final{% if p.cf_id %}?cf={{ p.cf_id | urlencode }}{% endif %}" title="Abrir esta pieza en la pestaña Final edition: guion, voz, música y finales por país">Final edition</a>
+        <a class="btn-xs" href="{{ url_for('ver_cliente', cliente=cliente) }}#final{% if p.cf_id %}?cf={{ p.cf_id | urlencode }}{% endif %}" title="{{ _('Abrir esta pieza en la pestaña Final edition: guion, voz, música y finales por país') }}">{{ _('Final edition') }}</a>
         {% endif %}
         {% endif %}
-        {% set precio = ('USD %.2f' % p.costo_regenerar) if p.costo_regenerar is not none else 'precio no disponible' %}
+        {% set precio = ('USD %.2f' % p.costo_regenerar) if p.costo_regenerar is not none else _('precio no disponible') %}
         {% if p.estado == "error" %}
-        <form method="post" action="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit="return confirm('Reintentar gasta de nuevo ({{ precio }}). ¿Seguir?');"><input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">Reintentar ({{ precio }})</button></form>
+        <form method="post" action="{{ url_for('sprints.pieza_reintentar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit='return confirm({{ _("Reintentar gasta de nuevo (%(precio)s). ¿Seguir?", precio=precio)|tojson }});'><input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">{{ _('Reintentar (%(precio)s)', precio=precio) }}</button></form>
         {% endif %}
         {% if p.estado in ("listo", "degradada", "error") %}
-        <form method="post" action="{{ url_for('sprints.pieza_regenerar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit="return confirm('Regenerar crea una pieza nueva con la misma idea ({{ precio }}). ¿Seguir?');">
-          <input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">Regenerar ({{ precio }})</button>
-        </form>
+        <form method="post" action="{{ url_for('sprints.pieza_regenerar', cliente=cliente, cp_id=p.id) }}" class="inline" onsubmit='return confirm({{ _("Regenerar crea una pieza nueva con la misma idea (%(precio)s). ¿Seguir?", precio=precio)|tojson }});'>
+          <input type="hidden" name="volver" value="revision"><button type="submit" class="btn-xs">{{ _('Regenerar (%(precio)s)', precio=precio) }}</button></form>
         {% endif %}
-        <a class="btn-xs" href="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id, panel=p.campana_id, paso='piezas') }}">Abrir en el panel</a>
+        <a class="btn-xs" href="{{ url_for('sprints.ver', cliente=cliente, sid=sprint.id, panel=p.campana_id, paso='piezas') }}">{{ _('Abrir en el panel') }}</a>
       </div>
       <div class="panel-rechazo" data-rechazo hidden>
-        <label>¿Por qué no sirve? <small class="vacio">(lo usa la próxima versión)</small>
+        <label>{{ _('¿Por qué no sirve?') }} <small class="vacio">({{ _('lo usa la próxima versión') }})</small>
           <textarea rows="2" maxlength="300" data-motivo></textarea></label>
         <div class="acciones">
-          <button type="button" class="btn-xs btn-rechazar js-confirmar-rechazo">Rechazar</button>
-          <button type="button" class="btn-xs js-cancelar-rechazo">Cancelar</button>
+          <button type="button" class="btn-xs btn-rechazar js-confirmar-rechazo">{{ _('Rechazar') }}</button>
+          <button type="button" class="btn-xs js-cancelar-rechazo">{{ _('Cancelar') }}</button>
         </div>
         <small class="campo-error" hidden></small>
       </div>
     </div>
   </article>
   {% else %}
-  <p class="vacio">Todavía no hay piezas generadas en este sprint.</p>
+  <p class="vacio">{{ _('Todavía no hay piezas generadas en este sprint.') }}</p>
   {% endfor %}
 </div>
 
 <script>
+  var TEXTO_REVISION = {
+    escribePorQue: {{ _('Escribe por qué no sirve.')|tojson }}
+  };
+  var ETIQUETAS_REVISION = {
+    aprobada: {{ _('aprobada')|tojson }},
+    rechazada: {{ _('rechazada')|tojson }}
+  };
   (function () {
     var grid = document.getElementById('revision-grid');
     var tarjetas = Array.prototype.slice.call(grid.querySelectorAll('.sprint-pieza'));
@@ -122,7 +128,7 @@
             return;
           }
           card.className = card.className.replace(/sprint-pieza-(pendiente|aprobada|rechazada)/, 'sprint-pieza-' + j.revision);
-          card.querySelector('.sprint-revision-chip').textContent = j.revision;
+          card.querySelector('.sprint-revision-chip').textContent = ETIQUETAS_REVISION[j.revision] || j.revision;
         }).catch(function () {});
     }
     function abrirRechazo(card) {
@@ -147,7 +153,7 @@
       });
       caja.querySelector('.js-confirmar-rechazo').addEventListener('click', function () {
         var m = caja.querySelector('[data-motivo]'), err = caja.querySelector('.campo-error');
-        if (!m.value.trim()) { err.textContent = 'Escribe por qué no sirve.'; err.hidden = false; return; }
+        if (!m.value.trim()) { err.textContent = TEXTO_REVISION.escribePorQue; err.hidden = false; return; }
         err.hidden = true;
         enviar(card, 'rechazar', m.value.trim());
         m.value = ''; delete m.dataset.sucio; caja.hidden = true;

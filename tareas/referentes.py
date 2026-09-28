@@ -19,10 +19,12 @@ import os
 from datetime import datetime, timedelta
 
 import anthropic
+from flask_babel import gettext
 
 import cola
 import gastos
 import trabajos
+from idiomas import N_
 from nicho.avatares import costo_real, modelo_actual
 from referentes import clasificar, copycoders, datos, fuentes, imagenes
 from referentes.fuentes.base import AVISO_CUOTA_AGOTADA, ErrorFuente
@@ -35,11 +37,18 @@ TRAMO = 100
 LOTES_TRADUCCION = 3
 FAMILIAS_POR_LLAMADA = 40
 ESPERA_CONT = 5
-ETAPAS_IMPORTAR = [("Leyendo la página", 1), ("Guardando anuncios", 2), ("Guardando imágenes", 12), ("Traduciendo", 3)]
+# Etapas de progreso: se guardan en español y `estado_trabajo` las traduce al mostrarlas.
+ETAPA_LEER_PAGINA = N_("Leyendo la página")
+ETAPA_GUARDAR_ANUNCIOS = N_("Guardando anuncios")
+ETAPA_GUARDAR_IMAGENES = N_("Guardando imágenes")
+ETAPA_TRADUCIR = N_("Traduciendo")
+ETAPA_TRAER = N_("Trayendo anuncios")
+ETAPA_CLASIFICAR = N_("Clasificando")
+ETAPAS_IMPORTAR = [(ETAPA_LEER_PAGINA, 1), (ETAPA_GUARDAR_ANUNCIOS, 2), (ETAPA_GUARDAR_IMAGENES, 12), (ETAPA_TRADUCIR, 3)]
 
 TIPO_BARRER = "referentes_barrer"
 TIPO_CLASIFICAR = "referentes_clasificar"
-ETAPAS_BARRER = [("Trayendo anuncios", 1), ("Guardando imágenes", 12), ("Clasificando", 3)]
+ETAPAS_BARRER = [(ETAPA_TRAER, 1), (ETAPA_GUARDAR_IMAGENES, 12), (ETAPA_CLASIFICAR, 3)]
 CARPETA = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "salidas", "referentes")
 
 
@@ -69,10 +78,10 @@ def _continuar(tarea, payload):
 
 
 def _fase_anuncios(tarea, p, bid, avanzar):
-    avanzar("Leyendo la página")
+    avanzar(ETAPA_LEER_PAGINA)
     html = copycoders.descargar_html(p["url"])
     filas = copycoders.extraer_datos(html)
-    avanzar("Guardando anuncios")
+    avanzar(ETAPA_GUARDAR_ANUNCIOS)
     traidos = nuevos = 0
     for i, fila in enumerate(filas, 1):
         a = copycoders.normalizar(fila, p["url"])
@@ -87,11 +96,11 @@ def _fase_anuncios(tarea, p, bid, avanzar):
             cola.reportar(tarea.get("job_id") or JOB_IMPORTAR, progreso=100.0 * i / len(filas), detalle=f"{i}/{len(filas)}")
     datos.actualizar_barrido(bid, estado="guardando", traidos=traidos, nuevos=nuevos, tarea_id=tarea.get("id"))
     _continuar(tarea, {**p, "fase": "imagenes"})
-    return f"{traidos} anuncios leídos ({nuevos} nuevos); siguen las imágenes."
+    return gettext("%(traidos)s anuncios leídos (%(nuevos)s nuevos); siguen las imágenes.", traidos=traidos, nuevos=nuevos)
 
 
 def _fase_imagenes(tarea, p, bid, avanzar):
-    avanzar("Guardando imágenes")
+    avanzar(ETAPA_GUARDAR_IMAGENES)
     for r in datos.pendientes_imagen(fuente="copycoders", limite=TRAMO):
         try:
             url = imagenes.guardar_en_r2(r["anuncio_id"], r["imagen_origen"], CARPETA)
@@ -109,9 +118,10 @@ def _fase_imagenes(tarea, p, bid, avanzar):
     datos.actualizar_barrido(bid, con_imagen=c["ok"])
     if c["pendiente"]:
         _continuar(tarea, {**p, "fase": "imagenes"})
-        return f"Imágenes: {c['ok']} listas, {c['pendiente']} por bajar."
+        return gettext("Imágenes: %(listas)s listas, %(pendientes)s por bajar.", listas=c["ok"], pendientes=c["pendiente"])
     _continuar(tarea, {**p, "fase": "traducir"})
-    return f"Imágenes listas: {c['ok']} ({c['error']} fallaron). Sigue la traducción."
+    return gettext("Imágenes listas: %(listas)s (%(fallaron)s fallaron). Sigue la traducción.", listas=c["ok"],
+                   fallaron=c["error"])
 
 
 def _registrar_traduccion(tarea, bid, lote, ent, sal, detalle):
@@ -137,7 +147,7 @@ def _pagada_aunque_falle(tarea, bid, lote, detalle, llamada, *args):
 
 
 def _fase_traducir(tarea, p, bid, avanzar):
-    avanzar("Traduciendo")
+    avanzar(ETAPA_TRADUCIR)
     progreso = False
     for lote in range(LOTES_TRADUCCION):
         pendientes = datos.sin_traducir(limite=TRAMO)
@@ -169,17 +179,18 @@ def _fase_traducir(tarea, p, bid, avanzar):
     # re-encolado (y una llamada pagada) cada ESPERA_CONT segundos sin fin.
     if (quedan and progreso) or len(familias) > FAMILIAS_POR_LLAMADA:
         _continuar(tarea, {**p, "fase": "traducir"})
-        return "Traduciendo firmas…"
+        return gettext("Traduciendo firmas…")
     c = datos.contar_imagenes("copycoders")
     avisos = []
     if quedan:
-        avisos.append(f"{len(datos.sin_traducir(limite=9999))} firmas no se pudieron traducir; "
-                      "reintenta la importación más tarde.")
+        avisos.append(gettext("%(n)s firmas no se pudieron traducir; reintenta la importación más tarde.",
+                              n=len(datos.sin_traducir(limite=9999))))
     if c["error"]:
-        avisos.append(f"{c['error']} imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.")
+        avisos.append(gettext("%(n)s imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.",
+                              n=c["error"]))
     estado = "parcial" if (quedan or c["error"]) else "listo"
     datos.actualizar_barrido(bid, estado=estado, con_imagen=c["ok"], aviso=" ".join(avisos) or None)
-    return f"Importación terminada: {c['ok']} referentes con imagen."
+    return gettext("Importación terminada: %(n)s referentes con imagen.", n=c["ok"])
 
 
 @registrar(TIPO_IMPORTAR)
@@ -209,6 +220,53 @@ def interrumpida_importar(tarea, mensaje):
     p = tarea.get("payload") or {}
     if p.get("barrido_id"):
         datos.actualizar_barrido(int(p["barrido_id"]), estado="parcial", aviso=cola.recortar(mensaje, 300))
+
+
+TIPO_FAMILIAS_EN = "referentes_familias_en"
+JOB_FAMILIAS_EN = "referentes:familias:en"
+
+
+def encolar_familias_en(pedido_por=None):
+    if trabajos.en_curso(JOB_FAMILIAS_EN):
+        return False
+    return trabajos.encolar(JOB_FAMILIAS_EN, TIPO_FAMILIAS_EN, {"pedido_por": pedido_por},
+                            duracion_estimada=120, max_intentos=1)
+
+
+def _registrar_familias_en(tarea, tanda, ent, sal, detalle):
+    gastos.registrar_seguro(datos.CLIENTE_CREATV, "otro", costo_real(ent, sal),
+                            f"referentes:familias_en{ref_sufijo(tarea)}:{tanda}", detalle=detalle,
+                            proveedor="anthropic",
+                            extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
+
+
+@registrar(TIPO_FAMILIAS_EN)
+def ejecutar_familias_en(tarea):
+    """Descripciones en inglés de las familias (spec §B7): una llamada a
+    Claude por tanda de FAMILIAS_POR_LLAMADA (las ~190 en una sola pasan el
+    tope de 16 000 tokens de salida), con la descripción en español como
+    ejemplo. Gasto tipo `otro` bajo `_creatv` por tanda, también si la
+    respuesta no sirvió; lo ya escrito queda aunque una tanda falle y el
+    próximo clic sigue con lo que falte."""
+    pendientes = datos.familias_sin_descripcion_en()
+    if not pendientes:
+        return gettext("No hay familias sin descripción en inglés.")
+    escritas = 0
+    for n, i in enumerate(range(0, len(pendientes), FAMILIAS_POR_LLAMADA)):
+        tanda = pendientes[i:i + FAMILIAS_POR_LLAMADA]
+        try:
+            desc, ent, sal = copycoders.describir_familias([(f["nombre"], [f["descripcion"]]) for f in tanda], idioma="en")
+        except copycoders.FormatoInvalido as e:
+            if e.tokens_entrada or e.tokens_salida:
+                _registrar_familias_en(tarea, n, e.tokens_entrada, e.tokens_salida,
+                                       f"familias en inglés (respuesta inutilizable: {e})")
+            raise
+        for f in tanda:
+            if f["nombre"] in desc:
+                datos.familia_actualizar(f["id"], descripcion_en=desc[f["nombre"]])
+                escritas += 1
+        _registrar_familias_en(tarea, n, ent, sal, "familias en inglés")
+    return gettext("Descripciones en inglés: %(n)s de %(total)s.", n=escritas, total=len(pendientes))
 
 
 # ---------------------------------------------------------------- bloque 4 ---
@@ -275,7 +333,7 @@ def encolar_clasificar_pendientes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_CLASIFICAR,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=[("Clasificando", 1)], max_intentos=1, prioridad=2)
+                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2)
     return True
 
 
@@ -309,7 +367,7 @@ def _fase_trayendo(tarea, p, bid, avanzar):
     seguía a imágenes/clasificación como si la búsqueda se hubiera agotado
     sola. Se guarda en `extra.aviso_trayendo` para que `_fase_clasificando`
     (la fase final) lo sume a su propio aviso en vez de pisarlo (spec §12)."""
-    avanzar("Trayendo anuncios")
+    avanzar(ETAPA_TRAER)
     b = datos.barrido(bid) or {}
     consulta = p["consulta"]
     tope = int(p["tope"])
@@ -379,9 +437,9 @@ def _fase_trayendo(tarea, p, bid, avanzar):
             datos.actualizar_barrido(bid, estado="error", aviso=cola.recortar(str(e), 300))
             raise
         cursor_final = None
-        aviso_parcial = f"Se detuvo de traer más anuncios: {e}."
+        aviso_parcial = gettext("Se detuvo de traer más anuncios: %(motivo)s.", motivo=e)
     if not aviso_parcial and cuota_agotada:
-        aviso_parcial = "Se detuvo de traer más anuncios: se acabó el cupo mensual de Atria."
+        aviso_parcial = gettext("Se detuvo de traer más anuncios: se acabó el cupo mensual de Atria.")
     extra = dict(b.get("extra") or {})
     extra["cursor_atria"] = cursor_final
     if aviso_parcial:
@@ -390,9 +448,10 @@ def _fase_trayendo(tarea, p, bid, avanzar):
     if traidos_total >= tope or not cursor_final:
         datos.actualizar_barrido(bid, estado="guardando")
         _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)
-        return f"{traidos_total} anuncios traídos ({nuevos_total} nuevos); siguen las imágenes."
+        return gettext("%(traidos)s anuncios traídos (%(nuevos)s nuevos); siguen las imágenes.",
+                       traidos=traidos_total, nuevos=nuevos_total)
     _continuar_barrer(tarea, {**p, "fase": "trayendo"}, bid)
-    return f"Trayendo… {traidos_total}/{tope}."
+    return gettext("Trayendo… %(traidos)s/%(tope)s.", traidos=traidos_total, tope=tope)
 
 
 def _fase_imagenes_barrer(tarea, p, bid, avanzar):
@@ -400,7 +459,7 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
     (`barrido_id=bid`, nunca todas las pendientes globales) — nombre propio
     a propósito: un solo `_fase_imagenes` para los dos bloques pisaría la
     función de copycoders (mismo nombre de módulo) y rompería su import."""
-    avanzar("Guardando imágenes")
+    avanzar(ETAPA_GUARDAR_IMAGENES)
     for r in datos.pendientes_imagen(barrido_id=bid, limite=TRAMO):
         try:
             url = imagenes.guardar_en_r2(r["anuncio_id"], r["imagen_origen"], CARPETA)
@@ -413,9 +472,10 @@ def _fase_imagenes_barrer(tarea, p, bid, avanzar):
     datos.actualizar_barrido(bid, con_imagen=con_imagen)
     if pendientes_img:
         _continuar_barrer(tarea, {**p, "fase": "imagenes"}, bid)
-        return f"Imágenes: {con_imagen} listas, {pendientes_img} por bajar."
+        return gettext("Imágenes: %(listas)s listas, %(pendientes)s por bajar.", listas=con_imagen,
+                       pendientes=pendientes_img)
     _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid)
-    return f"Imágenes listas: {con_imagen}. Sigue la clasificación."
+    return gettext("Imágenes listas: %(listas)s. Sigue la clasificación.", listas=con_imagen)
 
 
 def _clasificar_uno(cliente, r):
@@ -455,12 +515,23 @@ def _clasificar_uno(cliente, r):
     if resultado.get("familia_nueva"):
         fn = resultado["familia_nueva"]
         nombre_nuevo = f"EMERGING: {fn['nombre']}"
-        datos.familia_asegurar(nombre_nuevo, fn.get("descripcion") or "", origen="claude")
+        descripcion_nueva = fn.get("descripcion") or ""
+        # La descripción de una familia nueva va a la columna del idioma en
+        # que Claude escribió (spec §B7, fix round 1): un proyecto clasificado
+        # en inglés no debe dejar texto en inglés en la columna española que
+        # leen los proyectos en español; un referente global (es+en) sigue
+        # escribiendo español como siempre.
+        if clasificar.salida_para(r)[0] == "en":
+            datos.familia_asegurar(nombre_nuevo, "", origen="claude", descripcion_en=descripcion_nueva)
+        else:
+            datos.familia_asegurar(nombre_nuevo, descripcion_nueva, origen="claude")
         familia = nombre_nuevo
     # `actualizar_referente` reemplaza `extra` entero: se copia y se agrega el arranque.
     extra = dict(r.get("extra") or {})
     if resultado.get("lead"):
         extra["lead"] = resultado["lead"]
+    if resultado.get("i18n"):
+        extra["i18n"] = resultado["i18n"]
     datos.actualizar_referente(r["id"], etapa=resultado["etapa"], consciencia=resultado["consciencia"],
                                familia=familia, dolor=resultado["dolor"], firma=resultado["firma"],
                                clasificacion="claude", extra=extra)
@@ -488,7 +559,7 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     nunca cumple) reencolaría —y pagaría una llamada, en el caso standalone—
     cada ESPERA_CONT segundos para siempre, sin que el barrido llegue nunca a
     un estado final."""
-    avanzar("Clasificando")
+    avanzar(ETAPA_CLASIFICAR)
     # «Mis barridos» lee `barrido.estado`: sin esto seguía en «Guardando
     # imágenes» durante toda la clasificación (2026-09-27). Al terminar, el
     # final de esta fase lo deja en listo/parcial como siempre.
@@ -523,7 +594,7 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     datos.actualizar_barrido(bid, clasificados=clasificados, pendientes=pendientes_total)
     if pendientes_total and avanzo:
         _continuar_barrer(tarea, {**p, "fase": "clasificando"}, bid, tipo=tipo_actual)
-        return f"Clasificando… {clasificados} listos."
+        return gettext("Clasificando… %(n)s listos.", n=clasificados)
     # `error` (no `pendiente`, que a esta altura la fase de imágenes ya dejó
     # siempre en 0 — Important 1) es lo que de verdad hay que avisar y lo que
     # gatilla «Reintentar imágenes» en la plantilla.
@@ -538,20 +609,23 @@ def _fase_clasificando(tarea, p, bid, avanzar):
     if aviso_trayendo:
         avisos.append(aviso_trayendo)
     if pendientes_total:
-        aviso_clasificar = (f"{pendientes_total} referentes no se pudieron clasificar; "
-                            "«Clasificar pendientes» los vuelve a pedir.")
+        aviso_clasificar = gettext("%(n)s referentes no se pudieron clasificar; "
+                                   "«Clasificar pendientes» los vuelve a pedir.", n=pendientes_total)
         # El motivo va a la vista: sin él, un reintento que falla igual parece
         # un botón que «no hace nada».
         motivos = [m for m in dict.fromkeys(str((r.get("extra") or {}).get("error_clasificacion") or "").strip()
                                             for r in filas_pendientes) if m]
         if motivos:
-            aviso_clasificar += f" Motivo: {cola.recortar(motivos[0], 160)}" + (" (y otros)" if len(motivos) > 1 else "")
+            motivo = cola.recortar(motivos[0], 160)
+            aviso_clasificar += " " + (gettext("Motivo: %(motivo)s (y otros)", motivo=motivo) if len(motivos) > 1
+                                       else gettext("Motivo: %(motivo)s", motivo=motivo))
         avisos.append(aviso_clasificar)
     if sin_imagen:
-        avisos.append(f"{sin_imagen} imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.")
+        avisos.append(gettext("%(n)s imágenes no se pudieron bajar; «Reintentar imágenes» las vuelve a pedir.",
+                              n=sin_imagen))
     aviso = " ".join(avisos) or None
     datos.actualizar_barrido(bid, estado="parcial" if aviso else "listo", aviso=aviso)
-    return f"Barrido terminado: {clasificados} referentes clasificados."
+    return gettext("Barrido terminado: %(n)s referentes clasificados.", n=clasificados)
 
 
 @registrar(TIPO_BARRER)

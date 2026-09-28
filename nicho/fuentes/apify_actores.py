@@ -26,6 +26,10 @@ import math
 import re
 from datetime import datetime
 
+from flask_babel import gettext
+
+import idiomas
+from idiomas import N_
 from nicho.fuentes.base import ErrorFuente
 
 MAX_RESULTADOS = 1000
@@ -84,13 +88,13 @@ def _item_tiktok(item):
 
 ACTORES = {
     "amazon_resenas": {
-        "actor": "junglee~amazon-reviews-scraper", "nombre": "Reseñas de Amazon", "usd_por_resultado": 0.003,
-        "ayuda": "Links de producto de Amazon (con /dp/ o /gp/product/), uno por línea.",
+        "actor": "junglee~amazon-reviews-scraper", "nombre": N_("Reseñas de Amazon"), "usd_por_resultado": 0.003,
+        "ayuda": N_("Links de producto de Amazon (con /dp/ o /gp/product/), uno por línea."),
         "patron_link": _RE_AMAZON, "armar_entrada": _entrada_amazon, "leer_item": _item_amazon,
     },
     "tiktok_comentarios": {
-        "actor": "clockworks~tiktok-comments-scraper", "nombre": "Comentarios de TikTok", "usd_por_resultado": 0.0005,
-        "ayuda": "Links de videos de TikTok, uno por línea.",
+        "actor": "clockworks~tiktok-comments-scraper", "nombre": N_("Comentarios de TikTok"), "usd_por_resultado": 0.0005,
+        "ayuda": N_("Links de videos de TikTok, uno por línea."),
         "patron_link": _RE_TIKTOK, "armar_entrada": _entrada_tiktok, "leer_item": _item_tiktok,
     },
 }
@@ -98,7 +102,7 @@ ACTORES = {
 
 def _actor(clave):
     if clave not in ACTORES:
-        raise ErrorFuente(f"Actor de Apify desconocido: {clave}")
+        raise ErrorFuente(gettext("Actor de Apify desconocido: %(clave)s", clave=clave))
     return ACTORES[clave]
 
 
@@ -121,10 +125,11 @@ def validar_links(clave, links):
     a = _actor(clave)
     limpios = [(l or "").strip() for l in (links or []) if (l or "").strip()]
     if not limpios:
-        raise ErrorFuente(f"{a['nombre']}: pega al menos un link.")
+        raise ErrorFuente(gettext("%(actor)s: pega al menos un link.", actor=idiomas.traducir(a["nombre"])))
     malos = [l for l in limpios if not a["patron_link"].match(l)]
     if malos:
-        raise ErrorFuente(f"{a['nombre']}: este link no sirve: {malos[0][:80]} — {a['ayuda']}")
+        raise ErrorFuente(gettext("%(actor)s: este link no sirve: %(link)s — %(ayuda)s", actor=idiomas.traducir(a["nombre"]),
+                                  link=malos[0][:80], ayuda=idiomas.traducir(a["ayuda"])))
     return limpios
 
 

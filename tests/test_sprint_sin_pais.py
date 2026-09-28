@@ -16,7 +16,7 @@ def _campana(datos, sid):
 def test_formulario_nuevo_sprint_sin_pais_ni_idioma(app):
     html = app["c"].get("/cliente/acme").data.decode()
     tab = html[html.index('id="tab-sprints"'):]
-    form = tab[tab.index('id="nuevo-sprint"'):tab.index("</form>", tab.index('id="nuevo-sprint"'))]
+    form = tab[tab.index('id="alta-sprint"'):tab.index("</form>", tab.index('id="alta-sprint"'))]
     assert 'name="pais"' not in form and 'name="idioma"' not in form
     assert 'data-pais="' not in form                  # el momento sale del calendario del proyecto
     assert 'name="momento"' in form and 'name="marcas"' in form

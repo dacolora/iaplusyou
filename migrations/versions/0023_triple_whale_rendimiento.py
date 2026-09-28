@@ -1,7 +1,7 @@
 """triple whale: métricas por anuncio y día, tienda por día y evaluaciones con IA
 
-Revision ID: 0022
-Revises: 0021
+Revision ID: 0023
+Revises: 0022
 Create Date: 2026-09-28 00:00:00.000000
 
 Spec docs/superpowers/specs/2026-09-28-triple-whale-rendimiento-design.md. Al
@@ -17,8 +17,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision: str = '0022'
-down_revision: Union[str, Sequence[str], None] = '0021'
+revision: str = '0023'
+down_revision: Union[str, Sequence[str], None] = '0022'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

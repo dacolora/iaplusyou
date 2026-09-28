@@ -8,8 +8,24 @@
 </svg>
 {%- endmacro %}
 
+{% macro etiqueta_sprint(valor) -%}
+{%- set etiquetas = {
+  "planeando": _("planeando"), "referencias": _("referencias"), "listo_para_generar": _("listo para generar"),
+  "generando": _("generando"), "revision": _("revisión"), "completado": _("completado"), "planeada": _("planeada"),
+  "ideas_propuestas": _("ideas propuestas"), "ideas_aprobadas": _("ideas aprobadas"), "completada": _("completada"),
+  "propuesta": _("propuesta"), "aprobada": _("aprobada"), "descartada": _("descartada"), "pendiente": _("pendiente"),
+  "rechazada": _("rechazada"), "pasa": _("pasa"), "revisar": _("revisar"), "falla": _("falla"), "error": _("error"),
+  "video": _("video"), "imagen": _("imagen"), "listo": _("listo"), "degradada": _("degradada"),
+  "borrador": _("borrador"), "lista": _("lista"), "consistencia_visual": _("consistencia visual"),
+  "presencia_marca": _("presencia marca"), "compatibilidad_campana": _("compatibilidad campana"),
+  "calidad_minima": _("calidad minima"), "formato": _("formato"),
+  "archivo": _("archivo"), "link": _("link"), "catalogo": _("catalogo"), "reutilizada": _("reutilizada"),
+  "biblioteca": _("biblioteca")} -%}
+{{ etiquetas.get(valor, (valor or "") | replace("_", " ")) }}
+{%- endmacro %}
+
 {% macro chip_estado(estado) -%}
-<span class="tag-estado estado-sprint estado-sprint-{{ estado }}">{{ {"revision": "revisión"}.get(estado, estado | replace("_", " ")) }}</span>
+<span class="tag-estado estado-sprint estado-sprint-{{ estado }}">{{ etiqueta_sprint(estado) }}</span>
 {%- endmacro %}
 
 {% macro barra(pct, texto) -%}
@@ -24,25 +40,25 @@
     <label class="ref-tarjeta ref-tarjeta-candidato">
       <input type="checkbox" name="referente_ids" value="{{ c.id }}" checked>
       <img src="{{ c.imagen_url }}" alt="" loading="lazy">
-      <strong>{{ c.titular or '(sin titular)' }}</strong>
+      <strong>{{ c.titular or _('(sin titular)') }}</strong>
       {% if c.familia %}<small>{{ c.familia }}</small>{% endif %}
       {% if con_razon and c.razon %}<small class="vacio">{{ c.razon }}</small>{% endif %}
     </label>
     {% endfor %}
   </div>
-  <button type="submit" class="btn-generar btn-sm">Agregar las marcadas</button>
+  <button type="submit" class="btn-generar btn-sm">{{ _('Agregar las marcadas') }}</button>
 </form>
 {% else %}
-<p class="vacio">No hay candidatos nuevos en la biblioteca para esta etapa por ahora.</p>
+<p class="vacio">{{ _('No hay candidatos nuevos en la biblioteca para esta etapa por ahora.') }}</p>
 {% endif %}
 {%- endmacro %}
 
 {% macro sugerido(s, cliente, campana_id, razon=None) -%}
 <figure class="panel-sugerido">
   <img src="{{ s.imagen_url }}" alt="" loading="lazy">
-  <figcaption>{{ s.familia or 'sin familia' }}{% if s.marca %} · {{ s.marca }}{% endif %}{% if razon %}<br><small class="vacio">{{ razon }}</small>{% endif %}</figcaption>
+  <figcaption>{{ s.familia or _('sin familia') }}{% if s.marca %} · {{ s.marca }}{% endif %}{% if razon %}<br><small class="vacio">{{ razon }}</small>{% endif %}</figcaption>
   <button type="button" class="panel-sumar" data-sumar-ref="{{ s.id }}"
           data-url="{{ url_for('sprints.campana_referencias_biblioteca', cliente=cliente, cid=campana_id) }}"
-          aria-label="Agregar este referente a la campaña" title="Agregar a la campaña">+</button>
+          aria-label="{{ _('Agregar este referente a la campaña') }}" title="{{ _('Agregar a la campaña') }}">+</button>
 </figure>
 {%- endmacro %}

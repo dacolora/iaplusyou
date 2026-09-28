@@ -1970,7 +1970,7 @@ summary { cursor: pointer; }
   transform: rotate(-45deg); transition: transform .15s;
 }
 .swap-card[open] > .swap-card-resumen:not(:has(.idea-chevron))::after { transform: rotate(45deg); }
-#nuevo-sprint > summary, #nuevo-estudio > summary { color: var(--accent-texto); }
+#alta-sprint > summary, #nuevo-estudio > summary { color: var(--accent-texto); }
 
 /* Encabezado de pestaña: título grande, una línea, acciones a la derecha. */
 .panel-cabecera {

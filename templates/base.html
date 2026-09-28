@@ -85,6 +85,9 @@
       if (!el) return;
       if (el.tagName !== 'TEXTAREA' && el.tagName !== 'INPUT' && el.tagName !== 'SELECT') return;
       if (el.type === 'file' || el.type === 'radio' || el.type === 'checkbox') return;
+      // Un buscador (type="search" o data-busqueda) filtra, no guarda: perder lo
+      // escrito ahí no cuesta nada y no debe frenar una recarga.
+      if (el.type === 'search' || el.hasAttribute('data-busqueda')) return;
       el.dataset.sucio = '1';
     }
     document.addEventListener('input', marcarSucio);

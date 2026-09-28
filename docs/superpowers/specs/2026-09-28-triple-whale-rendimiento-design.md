@@ -52,7 +52,7 @@ que sigue se probó contra una tienda real: no hay ninguna conectada todavía (�
 columnas de los ejemplos oficiales). `consultar_con_respaldo` baja a la mínima solo ante un
 `ErrorConsulta`. Modelo y ventana entran a la consulta como literales de una lista blanca.
 
-## 3. Datos (migración 0022, `triple_whale/datos.py` es el único escritor)
+## 3. Datos (migración 0023, `triple_whale/datos.py` es el único escritor)
 
 - `tw_anuncio_dia` — `(cliente, canal, ad_id, fecha)` único; medidas de canal + del Pixel +
   `con_pixel` (si el Pixel respondió para esa fila) + dimensiones (campaña, conjunto, nombre, creativo,
@@ -175,7 +175,7 @@ otra moneda que la cuenta → ROAS 0 y un aviso (se decide por CPA), como la tie
 
 ## 11. Ventas por producto (hecho)
 
-`tw_producto_dia` (migración 0023; `(cliente, producto_id, fecha)` único) copia `orders_table`
+`tw_producto_dia` (migración 0024; `(cliente, producto_id, fecha)` único) copia `orders_table`
 abierta por `products_info` (ARRAY JOIN) en la misma sincronización, con su versión completa y
 mínima (`triple_whale.consultas_productos`, ver §9.5); dos variantes del mismo producto y día se
 suman. La pestaña muestra «Lo que más se vende» (`panel.productos_periodo`: ingresos, % de la tienda,

@@ -878,7 +878,7 @@ def test_barridos_muestran_fecha_legible(app, monkeypatch):
     monkeypatch.setattr(db, "ahora", lambda: "2026-09-25T15:04:09")
     datos.crear_barrido("acme", "atria", {"modo": "palabra", "palabra": "protein", "idioma": "en"}, 50)
     html = _barridos_html(app)
-    assert "25 sep · 15:04" in html
+    assert "25 sept · 15:04" in html
     assert "2026-09-25T15:04" not in html
 
 
@@ -1120,7 +1120,7 @@ def test_recrear_adaptar_descarta_una_sofisticacion_invalida_del_catalogo(app, m
     tiendas.anotar_extra("acme", fila, sofisticacion=9)
     visto = {}
 
-    def falso_adaptar(referente, familia, producto, titular_actual, guia=""):
+    def falso_adaptar(referente, familia, producto, titular_actual, guia="", idioma="es"):
         visto["sofisticacion"] = producto.get("sofisticacion")
         return {"titular": "T", "prompt": "P", "angulo": {}}, 10, 5
     monkeypatch.setattr(recrear, "adaptar", falso_adaptar)

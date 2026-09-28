@@ -1,4 +1,5 @@
-"""Migración 0022 (spec 2026-09-28): tablas de Triple Whale y `triple_whale.extra`."""
+"""Migraciones 0023 y 0024 (spec 2026-09-28): tablas de Triple Whale, `triple_whale.extra` y ventas por producto.
+(Eran 0022/0023 hasta que main tomó el 0022 para `familia.descripcion_en`.)"""
 import os
 
 import sqlalchemy as sa
@@ -10,7 +11,7 @@ def _config():
     return Config(os.path.join(raiz, "alembic.ini"))
 
 
-def test_migracion_0022_sube_conserva_la_conexion_y_baja(tmp_path, monkeypatch):
+def test_migracion_0023_sube_conserva_la_conexion_y_baja(tmp_path, monkeypatch):
     from alembic import command
     import db
     monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{tmp_path / 'mig.db'}")
@@ -38,7 +39,7 @@ def test_migracion_0022_sube_conserva_la_conexion_y_baja(tmp_path, monkeypatch):
     db._reset_para_tests()
 
 
-def test_migracion_0023_crea_ventas_por_producto_y_baja(tmp_path, monkeypatch):
+def test_migracion_0024_crea_ventas_por_producto_y_baja(tmp_path, monkeypatch):
     from alembic import command
     import db
     monkeypatch.setenv("CREATV_DB_URL", f"sqlite:///{tmp_path / 'mig23.db'}")
@@ -48,6 +49,6 @@ def test_migracion_0023_crea_ventas_por_producto_y_baja(tmp_path, monkeypatch):
     assert "tw_producto_dia" in insp.get_table_names()
     assert {c["name"] for c in insp.get_columns("tw_producto_dia")} == {c.name for c in db.metadata.tables["tw_producto_dia"].columns}
     assert "uq_tw_producto_dia" in {u["name"] for u in insp.get_unique_constraints("tw_producto_dia")}
-    command.downgrade(_config(), "0022")
+    command.downgrade(_config(), "0023")
     assert "tw_producto_dia" not in sa.inspect(db.engine()).get_table_names()
     db._reset_para_tests()

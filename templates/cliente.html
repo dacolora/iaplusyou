@@ -122,7 +122,7 @@
     // Un enlace a «#settings» (alertas del Tablero, «Ir a Configuración →»,
     // Crear → «#experimentos?piezas=…») cambia solo el hash: sin esto la
     // pestaña no cambiaba estando ya en la página. Un hash que no es
-    // pestaña (#nuevo-sprint…) se ignora.
+    // pestaña (#alta-sprint…) se ignora.
     window.addEventListener('hashchange', function () {
       var t = resolver(location.hash.replace('#', '').split('?')[0]);
       if (paneles[t]) activar(t, true);
