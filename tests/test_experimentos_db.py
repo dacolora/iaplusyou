@@ -322,3 +322,43 @@ def test_elegibles_traen_el_estado_de_la_doctrina(base_temporal):
     assert lista[vieja] == {"estado": "vieja", "n": 0}
     assert lista[final] == {"estado": "mejorar", "n": 2}
     assert lista[sin] == {"estado": "sin_revisar", "n": 0}
+
+
+def test_piezas_traen_el_angulo_la_revision_y_los_productos_de_la_sesion(base_temporal):
+    """Doctrina, bloque 4: el diagnóstico y los aprendizajes leen el ángulo de
+    la sesión (y el gancho/arranque de la variante si la pieza es una final
+    variada), la revisión de la doctrina y los productos, sin consulta nueva."""
+    import experimentos as ex
+    db = base_temporal
+    angulo = {"promesa": "pies calientes", "gancho": "¿Frío?", "lead": "problema_solucion",
+              "consciencia": "consciente_del_problema"}
+    with db.conectar() as con:
+        ahora = db.ahora()
+        cid = con.execute(db.concepto.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, origen="manual", legado_id="cf_a",
+            extra={"angulo": angulo, "productos_ids": ["Hcozy"], "revision_doctrina": {"puntos": []}})).inserted_primary_key[0]
+        clon = con.execute(db.pieza.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo="video", estado="listo",
+            url_video="https://r2/c.mp4", legado_id="cf_a", extra={})).inserted_primary_key[0]
+        final = con.execute(db.pieza.insert().values(
+            cliente="acme", creado_en=ahora, actualizado_en=ahora, concepto_id=cid, tipo="final", estado="listo",
+            pais="CO", idioma="es", url_video="https://r2/f.mp4", legado_id="cf_a__es_CO__v2", padre_pieza_id=clon,
+            capas={"guion": {"parametros": {"angulo": {"lead": "secreto", "gancho": "Lo que nadie dice"}}}},
+            extra={})).inserted_primary_key[0]
+    eid = ex.crear("acme", "X", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ep_clon = ex.agregar_pieza("acme", eid, clon, "CO")
+    ep_final = ex.agregar_pieza("acme", eid, final, "CO")
+    por_id = {p["id"]: p for p in ex.piezas("acme", eid)}
+    assert por_id[ep_clon]["angulo"] == angulo and por_id[ep_clon]["productos_ids"] == ["Hcozy"]
+    assert por_id[ep_clon]["revision_doctrina"] == {"puntos": []}
+    assert por_id[ep_final]["angulo"] == dict(angulo, lead="secreto", gancho="Lo que nadie dice")
+    sin = ex.piezas("acme", _experimento_sin_angulo(db, ex))
+    assert sin[0]["angulo"] is None and sin[0]["productos_ids"] == []
+
+
+def _experimento_sin_angulo(db, ex):
+    pid = _pieza(db, tipo="video", estado="listo", pais=None, idioma=None, legado="cf_sin")
+    eid = ex.crear("acme", "Y", PAISES, "OUTCOME_TRAFFIC", 7, 100.0, "https://t", "COP")
+    ex.agregar_pieza("acme", eid, pid, "CO")
+    return eid
+

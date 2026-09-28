@@ -85,6 +85,9 @@ TARIFAS = {
     # «revisar». Medido en la prueba real (2026-09-27, caché fría, 4 fotogramas):
     # ≈ US$ 0,060 (casi todo es la salida con pensamiento); redondeado hacia arriba.
     "revision_pieza": 0.07,
+    # Doctrina, bloque 4: el diagnóstico de una perdedora (una llamada sin visión).
+    # Inicial; se ajusta con lo medido en la prueba real.
+    "diagnostico_pieza": 0.03,
 }
 
 # «Proponer ideas» de Sprints (entrega 2 del tablero): una llamada a Claude con
@@ -218,6 +221,7 @@ _ESTIMADORES = {
     "reescribir_idea": lambda **_: (TARIFAS["reescribir_idea"], "una llamada a Claude"),
     "pedidos_producto": lambda **_: (TARIFAS["pedidos_producto"], "una llamada a Claude"),
     "revision_pieza": lambda **_: (TARIFAS["revision_pieza"], "una llamada a Claude con visión"),
+    "diagnostico_pieza": lambda **_: (TARIFAS["diagnostico_pieza"], "una llamada a Claude"),
     "proponer_ideas": lambda n=1, **_: (IDEAS_BASE_USD + IDEAS_POR_IDEA_USD * max(1, int(n or 0)),
                                         f"{max(1, int(n or 0))} idea(s) con Claude"),
 }
