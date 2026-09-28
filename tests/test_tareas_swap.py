@@ -19,15 +19,17 @@ def test_registro_contiene_swap_generar(base_temporal):
     import tareas.swap as sw
     assert tareas.REGISTRO["swap_generar"] is sw.ejecutar
     assert sorted(tareas.REGISTRO) == [
-        "catalogo_importar",
-        "edicion_desde_clon", "edicion_producir", "edicion_proxy",
-        "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar", "exp_refrescar_todos",
-        "final_guion", "final_producir",
-        "flowplus_director", "flowplus_imagen", "flowplus_video", "materiales_limpiar", "meta_publicar", "meta_refrescar", "musica_generar", "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas", "nicho_inv_seleccionar", "nicho_recolectar", "organico_publicar", "pieza_revisar", "producto_pedidos", "producto_vincular",
+        "catalogo_importar", "cola_limpiar", "db_respaldar", "edicion_desde_clon", "edicion_producir",
+        "edicion_proxy", "exp_avanzar_todos", "exp_decidir", "exp_decidir_todos", "exp_lanzar", "exp_refrescar",
+        "exp_refrescar_todos", "final_guion", "final_producir", "flowplus_director", "flowplus_imagen",
+        "flowplus_video", "materiales_limpiar", "meta_publicar", "meta_refrescar", "musica_generar",
+        "nicho_generar_avatares", "nicho_inv_buscar", "nicho_inv_consultas", "nicho_inv_seleccionar",
+        "nicho_recolectar", "organico_publicar", "pieza_revisar", "producto_pedidos", "producto_vincular",
         "referentes_barrer", "referentes_clasificar", "referentes_importar_copycoders", "referentes_sugerir_ia",
-        "sprint_analizar_referencia", "sprint_empaquetar", "sprint_proponer_ideas", "sprint_qa_pendientes", "sprint_qa_pieza", "sprint_reescribir_idea",
-        "sprint_referencia_link", "sprint_sugerir_personas", "swap_generar",
-        "tienda_sync_pedidos", "tienda_sync_pedidos_todas", "tienda_sync_productos", "tienda_sync_productos_todas",
+        "salidas_limpiar", "sprint_analizar_referencia", "sprint_empaquetar", "sprint_proponer_ideas",
+        "sprint_qa_pendientes", "sprint_qa_pieza", "sprint_reescribir_idea", "sprint_referencia_link",
+        "sprint_sugerir_personas", "swap_generar", "tienda_sync_pedidos", "tienda_sync_pedidos_todas",
+        "tienda_sync_productos", "tienda_sync_productos_todas",
         "tw_evaluar", "tw_sincronizar", "tw_sincronizar_todas",
     ]
 

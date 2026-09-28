@@ -34,6 +34,7 @@ ETIQUETAS_CONSCIENCIA = {"unaware": "inconsciente", "problem-aware": "consciente
                          "solution-aware": "consciente de la solución", "product-aware": "consciente del producto",
                          "most-aware": "muy consciente"}
 POR_PAGINA = 60
+DOLORES_MAX = 60      # las opciones del filtro «dolor» que salen de la base (rutas recorta a 50)
 CLIENTE_CREATV = "_creatv"
 
 _CAMPOS_ANUNCIO = ("pagina_id", "fuente", "marca", "url_anuncio", "url_marca", "titular", "cuerpo", "idioma", "pais",
@@ -280,15 +281,19 @@ def opciones(cliente):
     t = db.referente
     base = [_visible_listado(t, cliente), t.c.estado_imagen == "ok"]
 
-    def _grupo(con, col):
+    def _grupo(con, col, limite=None):
         q = (sa.select(col, sa.func.count().label("n")).where(*base, col.isnot(None), col != "")
              .group_by(col).order_by(sa.desc("n"), col))
+        if limite:
+            q = q.limit(limite)
         return [(r[0], int(r[1])) for r in con.execute(q)]
 
     with db.conectar() as con:
         total = con.execute(sa.select(sa.func.count()).select_from(t).where(*base)).scalar() or 0
+        # «dolor» son miles de valores distintos con copycoders: el filtro solo
+        # muestra los más frecuentes (referentes.rutas.MAX_DOLORES_FILTRO).
         return {"total": int(total), "familias": _grupo(con, t.c.familia), "marcas": _grupo(con, t.c.marca),
-                "dolores": _grupo(con, t.c.dolor), "fuentes": _grupo(con, t.c.fuente)}
+                "dolores": _grupo(con, t.c.dolor, limite=DOLORES_MAX), "fuentes": _grupo(con, t.c.fuente)}
 
 
 # ---------------------------------------------------------------- imágenes ---

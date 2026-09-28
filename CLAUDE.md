@@ -892,6 +892,30 @@ en el system, mismos fotogramas, tope 6 000), por fin registra su gasto real (ti
 (`elegibles()["doctrina"]`, aviso en el paso 3) y la revisión del lote muestran la etiqueta con `resumen_galeria`,
 leyendo solo `concepto.extra`. Nada de esto bloquea ni reescribe.
 
+**Rendimiento y almacenamiento (auditoría 2026-09-28, tras el incidente de la página que se
+quedaba cargando):** `/cliente/<c>` trae todas las pestañas en un solo HTML (3 MB en happyflops:
+Crear, Final edition y Experimentos repiten las mismas piezas con sus `<template>` de detalle), así
+que lo que se agrega ahí le cuesta a TODAS las cargas. Reglas que salieron de la auditoría: los
+`<video>` de listas nacen `preload="none" data-precarga` (base.html los pide al entrar en pantalla;
+`tests/test_referentes_copycoders_proyecto.py` rechaza `preload="metadata"`) y las `<img>` van
+`loading="lazy"`; las fotos del catálogo se piden con `?w=320` (`catalogo_productos.miniatura`,
+Pillow, caché en `data/miniaturas/`); nada de una consulta por tarjeta: `ver_cliente` corre bajo
+`trabajos.con_vivos_precargados` (UNA lectura de los job_ids vivos para todos los `en_curso`) y la
+lista de Crear usa `creative_flow.guiones_base`/`finales_por_sesion` y
+`doctrina.revisor.ultimos_captions` (`tests/test_perf_pagina_proyecto.py` falla si el número de
+consultas vuelve a crecer con las piezas); `informe.completo` solo se arma para el admin; los
+estáticos con `?v=` salen `immutable` un año (`/static/editor/` sigue `no-cache`); la biblioteca de
+copycoders está apagada por proyecto hasta que la persona la trae (`proyectos.referentes_copycoders`).
+Mantenimiento diario en el worker (`tareas/mantenimiento.py`): `salidas_limpiar` borra de `salidas/`
+lo que tenga más de 14 días (todo lo de ahí es copia de trabajo: el video vive en R2 y
+`publicador.archivo_local`, `final_edition._clon_local`, `materiales.descargar` y `sprints.qa`
+lo vuelven a bajar), `cola_limpiar` purga las `tarea` cerradas (7 días; periódicas, 1 día) y
+`db_respaldar` guarda `data/respaldos/creatv_<fecha>.db` (`Connection.backup`, 7 copias). Sigue
+pendiente (no se hizo): borrar en R2 lo rechazado/descartado y las versiones viejas de finales,
+`materiales_limpiar` no borra nada porque los proxies viven en la fila del video (no son `EFIMEROS`),
+`metrica_snapshot` inserta cada 2 h aunque nada cambie, y la carga por fragmentos de las pestañas
+pesadas.
+
 ## Agent skills
 
 ### Issue tracker

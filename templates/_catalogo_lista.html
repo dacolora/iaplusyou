@@ -9,7 +9,7 @@
   <summary class="swap-card-resumen">
     <span class="idea-chevron">▸</span>
     <span class="swap-thumb">
-      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=categoria_actual) }}" alt="{{ p.nombre }}" loading="lazy">
+      <img src="{{ url_for('imagen_producto', cliente=cliente, producto_id=p.id, categoria=categoria_actual, w=320) }}" alt="{{ p.nombre }}" loading="lazy">
     </span>
     <span class="swap-resumen-texto">
       <strong>{{ p.nombre }}</strong>
@@ -37,7 +37,7 @@
   <div class="producto-gestion-fotos">
     {% for img in p.imagenes %}
     <div class="producto-gestion-foto">
-      <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=categoria_actual) }}" alt="{{ img }}" loading="lazy">
+      <img src="{{ url_for('imagen_producto_archivo', cliente=cliente, producto_id=p.id, nombre=img, categoria=categoria_actual, w=320) }}" alt="{{ img }}" loading="lazy">
       <form method="post" action="{{ url_for('eliminar_imagen_producto', cliente=cliente, producto_id=p.id, nombre=img) }}"><input type="hidden" name="categoria" value="{{ categoria_actual }}">
         <button type="submit" title="{{ _('Quitar esta foto') }}">✕</button>
       </form>

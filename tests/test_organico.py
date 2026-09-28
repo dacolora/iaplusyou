@@ -808,16 +808,18 @@ def test_url_publica():
     assert org.url_publica("facebook", None) == (None, None)
 
 
-def test_publicar_una_devuelve_el_id_del_uploader(monkeypatch):
+def test_publicar_una_devuelve_el_id_del_uploader(monkeypatch, tmp_path):
     """Cambio aditivo en publicador: _publicar_una devuelve lo que devuelve
-    cada uploader (organico lo guarda como id_externo)."""
+    cada uploader (organico lo guarda como id_externo). El archivo local
+    existe: sin él, publicador.archivo_local lo bajaría de video_url."""
     import publicador
     from uploaders import meta_uploader, youtube_uploader, tiktok_uploader
     monkeypatch.setattr(meta_uploader, "upload_to_facebook_page", lambda *a, **k: "fb1")
     monkeypatch.setattr(meta_uploader, "upload_to_instagram_reel", lambda *a, **k: "ig1")
     monkeypatch.setattr(youtube_uploader, "upload_video", lambda *a, **k: "yt1")
     monkeypatch.setattr(tiktok_uploader, "upload_video", lambda *a, **k: "tk1")
-    entry = {"video_local": "/x.mp4", "video_url": "https://r2/x.mp4", "title": "t", "caption": "c"}
+    (tmp_path / "x.mp4").write_bytes(b"v")
+    entry = {"video_local": str(tmp_path / "x.mp4"), "video_url": "https://r2/x.mp4", "title": "t", "caption": "c"}
     assert publicador._publicar_una("facebook", entry, "acme", {}) == "fb1"
     assert publicador._publicar_una("instagram", entry, "acme", {}) == "ig1"
     assert publicador._publicar_una("youtube", entry, "acme", {}) == "yt1"
