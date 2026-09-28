@@ -456,6 +456,12 @@ def _sin_cache(resp):
     # viejos mezclados con nuevos. `no-cache` = siempre pregunta (304 barato).
     if request.path.startswith("/static/editor/"):
         resp.headers["Cache-Control"] = "no-cache"
+    elif request.path.startswith("/static/") and request.args.get("v") and resp.status_code in (200, 304):
+        # Con ?v=<mtime> (_version_estaticos) la URL cambia en cada despliegue,
+        # así que el navegador puede guardar el archivo un año sin volver a
+        # preguntar (antes revalidaba style.css, 150 KB, en cada página;
+        # auditoría de rendimiento 2026-09-28).
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return resp
 
 
@@ -1532,6 +1538,7 @@ def _aplicar_edicion(item, form):
 
 
 @app.route("/cliente/<cliente>")
+@trabajos.con_vivos_precargados
 def ver_cliente(cliente):
     videos_dict = estado_mod.cargar(cliente)
     videos = []
@@ -1654,7 +1661,9 @@ def ver_cliente(cliente):
         ideas_visuales=_conceptos_pendientes(cliente),
         videos=videos,
         log=log,
-        informe=informe.completo(cliente),
+        # Solo el admin ve el informe (Configuración › Puesta a punto) y armarlo
+        # corre git y lee todo el repo (~100 ms): a un cliente no se le cobra.
+        informe=informe.completo(cliente) if session.get("rol") == "admin" else None,
         productos=activos_producto,
         categorias=catalogo_productos.CATEGORIAS,
         activos_por_categoria={cid: (activos_producto if cid == "producto" else catalogo_productos.listar(cliente, cid)) for cid in catalogo_productos.CATEGORIAS},
@@ -2379,7 +2388,16 @@ def imagen_producto(cliente, producto_id):
     if not producto:
         flash(gettext("No encontré el producto %(id)s", id=producto_id), "error")
         return redirect(url_for("ver_cliente", cliente=cliente))
-    return send_file(producto["representativa"])
+    return _foto_o_miniatura(producto["representativa"])
+
+
+def _foto_o_miniatura(ruta):
+    """`?w=320` sirve la miniatura (catalogo_productos.miniatura); sin `w`, el
+    original. Ambas con ETag: el navegador revalida y recibe 304 si no cambió."""
+    w = request.args.get("w")
+    if w and w.isdigit() and int(w) in catalogo_productos.ANCHOS_MINIATURA:
+        return send_file(catalogo_productos.miniatura(ruta, int(w)))
+    return send_file(ruta)
 
 
 @app.route("/cliente/<cliente>/productos/<producto_id>/imagen/<nombre>")
@@ -2393,7 +2411,7 @@ def imagen_producto_archivo(cliente, producto_id, nombre):
     ruta = os.path.join(carpeta, secure_filename(nombre))
     if not os.path.isfile(ruta):
         abort(404)
-    return send_file(ruta)
+    return _foto_o_miniatura(ruta)
 
 
 def _productos_con_uso(cliente):
@@ -2743,6 +2761,13 @@ def _creative_flow_items(cliente):
     # la tarjeta enlaza «Probar en Meta» a la galería de Experimentos
     # (#experimentos?piezas=<pieza_id>). Las finales ya traen su pieza_id.
     pieza_ids = creative_flow.piezas_ids_por_legado(cliente)
+    # Una consulta por proyecto en vez de una por pieza (incidente 2026-09-28:
+    # la lista de happyflops hacía 1 158 consultas por carga, 598 de ellas
+    # solo para saber si había un trabajo corriendo — eso lo resuelve
+    # trabajos.con_vivos_precargados en ver_cliente).
+    guiones = creative_flow.guiones_base(cliente)
+    finales_por_cf = creative_flow.finales_por_sesion(cliente)
+    captions = doctrina_revisor.ultimos_captions(cliente)
     # Doctrina, bloque 3: leer la guía una sola vez (no por pieza).
     try:
         guia_marca = marca_mod.guia_efectiva(cliente) or ""
@@ -2799,12 +2824,12 @@ def _creative_flow_items(cliente):
         item["trabajo_guion"] = None
         item["trabajo_editor"] = None
         if entry.get("estado") == "video_listo" and (entry.get("tipo") or "video") != "imagen":
-            item["guion_base"] = creative_flow.guion_base(cliente, cf_id)
+            item["guion_base"] = guiones.get(cf_id)
             jid_guion = tareas_fe.job_id_guion(cliente, cf_id)
             item["trabajo_guion"] = {"job_id": jid_guion} if trabajos.en_curso(jid_guion) else None
             jid_editor = tareas_edicion.job_id_desde_clon(cliente, cf_id)
             item["trabajo_editor"] = {"job_id": jid_editor} if trabajos.en_curso(jid_editor) else None
-            for f in creative_flow.finales(cliente, cf_id):
+            for f in finales_por_cf.get(cf_id, []):
                 jid = tareas_fe.job_id_final(cliente, cf_id, f["idioma"], f["pais"], variante=f.get("variante"))
                 f["trabajo"] = {"job_id": jid} if f.get("estado") == "generando" and trabajos.en_curso(jid) else None
                 item["finales"].append(f)
@@ -2832,9 +2857,10 @@ def _creative_flow_items(cliente):
                         if "pruebas" in producto or not producto:
                             productos_por_ids[clave] = producto
                     d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"],
-                                                guia=guia_marca, producto=producto)
+                                                guia=guia_marca, producto=producto, caption=captions.get(cf_id, ""))
                 else:
-                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=guia_marca)
+                    d = doctrina_revisor.reunir(cliente, cf_id, entry=entry, guion=item["guion_base"], guia=guia_marca,
+                                                caption=captions.get(cf_id, ""))
                 item["reglas"] = doctrina_revisor.reglas(d)
             except Exception:  # noqa: BLE001 — la revisión rápida es informativa: nunca tumba la lista de Crear
                 item["reglas"] = []

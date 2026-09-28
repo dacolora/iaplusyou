@@ -175,6 +175,37 @@ def job_ids_vivos(cliente, tipo):
     return {f[0] for f in filas}
 
 
+def limpiar_terminadas(dias=7, dias_periodicas=1):
+    """Borra las filas ya cerradas (hecha/error) más viejas que `dias` y las
+    de las periódicas (job_id periodica__*) más viejas que `dias_periodicas`:
+    cada vuelta del worker deja una fila aunque no hubiera nada que hacer
+    (5 551 filas en producción el 2026-09-28, 4 600 de ellas periódicas).
+    Nunca toca pendientes ni en_curso. Lo que apunta a una tarea vieja
+    (barrido.tarea_id, la referencia de un gasto) es historial informativo:
+    sigue valiendo sin la fila. Devuelve cuántas borró."""
+    ahora = datetime.now()
+    cerradas = db.tarea.c.estado.in_(("hecha", "error"))
+    fecha = sa.func.coalesce(db.tarea.c.terminada_en, db.tarea.c.creada_en)
+    with db.conectar() as con:
+        n = con.execute(db.tarea.delete().where(
+            cerradas, db.tarea.c.job_id.like("periodica__%"),
+            fecha < (ahora - timedelta(days=dias_periodicas)).isoformat(timespec="seconds"))).rowcount
+        n += con.execute(db.tarea.delete().where(
+            cerradas, fecha < (ahora - timedelta(days=dias)).isoformat(timespec="seconds"))).rowcount
+    return int(n or 0)
+
+
+def job_ids_vivos_todos():
+    """job_ids de TODAS las tareas pendientes o en_curso, de cualquier cliente y
+    tipo: una sola consulta chica (rara vez pasan de diez filas) para que la
+    página de un proyecto no pregunte por cada tarjeta
+    (trabajos.con_vivos_precargados)."""
+    with db.conectar() as con:
+        filas = con.execute(sa.select(db.tarea.c.job_id).where(
+            db.tarea.c.estado.in_(("pendiente", "en_curso")), db.tarea.c.job_id.isnot(None))).all()
+    return {f[0] for f in filas}
+
+
 def consultar_por_id(tarea_id):
     with db.conectar() as con:
         return _fila(con.execute(sa.select(db.tarea).where(db.tarea.c.id == tarea_id)).first())
