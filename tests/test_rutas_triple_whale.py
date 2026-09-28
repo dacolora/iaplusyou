@@ -155,6 +155,7 @@ def test_idea_a_crear_deja_el_formulario_precargado(app):  # noqa: F811
     assert r.status_code == 302 and r.headers["Location"].endswith("#creativeflowplus")
     with app["c"].session_transaction() as s:
         assert s["fp_prefill"]["texto"].startswith("Top-down shot") and s["fp_prefill"]["tipo"] == "video"
+        assert s["fp_prefill"]["origen_tw"] == f"{eid}:0"
     assert app["c"].post(f"/cliente/acme/triple-whale/evaluacion/{eid}/idea/9/crear").status_code == 404
     otra = datos.crear_evaluacion("acme", _hace(1), _hace(0), "USD", [])
     assert app["c"].post(f"/cliente/acme/triple-whale/evaluacion/{otra}/idea/0/crear").status_code == 404

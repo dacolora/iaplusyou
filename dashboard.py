@@ -205,6 +205,7 @@ app.register_blueprint(referentes_rutas.bp)
 
 from triple_whale import rutas as triple_whale_rutas  # noqa: E402  (Blueprint de la pestaña Triple Whale)
 from triple_whale import panel as triple_whale_panel  # noqa: E402  (la tienda según Triple Whale, en el Tablero)
+from triple_whale import puente as triple_whale_puente  # noqa: E402  (una pieza de Crear nacida de una idea)
 app.register_blueprint(triple_whale_rutas.bp)
 
 from guiones import rutas as guiones_rutas  # noqa: E402  (Blueprint JSON del chat de Flow Plus en Crear)
@@ -6856,6 +6857,12 @@ def cf_crear_video(cliente):
         prompt_fuente=accion_central, calidad=calidad, idioma_prompt=idioma,
         preset_camara=None, plantilla=None,
     )
+    # Triple Whale: si el texto vino de «Llevar a Crear», la sesión recuerda de
+    # qué idea salió (la pestaña enlaza idea → pieza → anuncio). Un valor raro
+    # se ignora y la pieza se crea igual.
+    origen_tw = triple_whale_puente.origen_desde_formulario(cliente, request.form.get("origen_tw"))
+    if origen_tw:
+        campos["tw_idea"] = origen_tw
     directo = dict(campos, enfoque_nombre=info["nombre"] if solo_texto else idiomas.N_("Tu texto, tal cual"))
     if tipo == "imagen":
         # La imagen no pasa por el director (spec §2.2): va el texto tal cual.

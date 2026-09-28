@@ -4738,6 +4738,10 @@ msgstr "Music when creating"
 msgid "Música al crear: %(estilo)s"
 msgstr "Music when created: %(estilo)s"
 
+#, python-format
+msgid "Nació de la idea «%(idea)s» de la evaluación con IA"
+msgstr "Born from the idea “%(idea)s” of the AI evaluation"
+
 msgid "Nada elegido todavía."
 msgstr "Nothing chosen yet."
 
@@ -7522,6 +7526,12 @@ msgstr "Already updating."
 msgid "Ya se están trayendo las métricas de Triple Whale."
 msgstr "The Triple Whale metrics are already being pulled."
 
+#, python-format
+msgid "Ya se hizo %(n)s pieza con esta idea:"
+msgid_plural "Ya se hicieron %(n)s piezas con esta idea:"
+msgstr[0] "%(n)s piece was already made from this idea:"
+msgstr[1] "%(n)s pieces were already made from this idea:"
+
 msgid "Ya se lo prometieron: hay que prometer más grande"
 msgstr "They've already been promised it: you have to promise bigger"
 
@@ -7571,6 +7581,9 @@ msgstr "file(s)… 0%%"
 
 msgid "armando"
 msgstr "drafting"
+
+msgid "armando el prompt"
+msgstr "building the prompt"
 
 msgid "arrancando"
 msgstr "starting"
@@ -7845,6 +7858,10 @@ msgstr "in %(n)s experiment(s)"
 msgid "en 720p"
 msgstr "at 720p"
 
+#, python-format
+msgid "en Meta: %(v)s"
+msgstr "on Meta: %(v)s"
+
 msgid "en cola"
 msgstr "queued"
 
@@ -7956,6 +7973,9 @@ msgstr "generates from scratch, doesn't edit"
 msgid "generación este mes"
 msgstr "generation this month"
 
+msgid "generando"
+msgstr "generating"
+
 #, python-format
 msgid "hasta %(n)s referencias · 2k"
 msgstr "up to %(n)s references · 2k"
@@ -8053,6 +8073,9 @@ msgstr "launch"
 
 msgid "lanzando"
 msgstr "launching"
+
+msgid "lista"
+msgstr "ready"
 
 msgid "listo"
 msgstr "done"
@@ -8284,6 +8307,9 @@ msgstr "maximum depth (%(n)s derivation generations); %(motivo)s"
 
 msgid "promesa"
 msgstr "promise"
+
+msgid "prompt listo, falta generar"
+msgstr "prompt ready, not generated yet"
 
 msgid "propuesta"
 msgstr "proposal"

@@ -269,6 +269,15 @@
         <form method="post" action="{{ url_for('triple_whale.idea_crear', cliente=cliente, eid=e.id, indice=loop.index0) }}">
           <button type="submit" class="btn-sm">{{ _('Llevar a Crear →') }}</button>
         </form>
+        {% set hechas = (e.piezas_por_idea or {}).get(loop.index0) or [] %}
+        {% if hechas %}
+        <p class="tw-idea-hechas"><small>{{ ngettext('Ya se hizo %(n)s pieza con esta idea:', 'Ya se hicieron %(n)s piezas con esta idea:', hechas | length, n=hechas | length) }}</small></p>
+        <ul class="tw-idea-piezas">
+          {% for p in hechas %}
+          <li><a href="#creativeflowplus">{{ p.titulo }}</a> · {{ tw.etiquetas_pieza.get(p.estado, p.estado) | traducir }}{% if p.anuncio %} · <span class="tag-estado {{ clases_veredicto.get(p.anuncio.veredicto, '') }}">{{ _('en Meta: %(v)s', v=tw.etiquetas_veredicto.get(p.anuncio.veredicto, p.anuncio.veredicto) | traducir) }}</span>{% endif %}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
       </article>
       {% endfor %}
     </div>
@@ -321,6 +330,7 @@
             <strong>{{ a.nombre }}</strong>
             <small>{{ a.canal | tw_canal }}{% if a.campana %} · {{ a.campana }}{% endif %}</small>
             {% if a.creatv %}<small><a href="?exp={{ a.creatv.experimento_id }}#experimentos">{{ _('Hecho en Creatv · %(exp)s', exp=a.creatv.experimento) }}</a></small>{% endif %}
+            {% if a.idea_origen %}<small class="tw-origen-idea">{{ _('Nació de la idea «%(idea)s» de la evaluación con IA', idea=a.idea_origen.titulo or a.idea_origen.idea + 1) }}</small>{% endif %}
             {% if a.creatv and a.creatv.estado == 'activo' %}
             <form method="post" class="tw-accion" action="{{ url_for('triple_whale.pieza_estado', cliente=cliente, ep_id=a.creatv.ep_id, accion='pausar') }}"
                   data-confirmar="{{ _('¿Pausar «%(nombre)s» en Meta? Deja de gastar hasta que lo actives.', nombre=a.nombre) }}">

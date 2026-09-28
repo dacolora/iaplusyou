@@ -2549,6 +2549,10 @@ body.panel-abierto { overflow: hidden; }
 .tw-idea > strong { display: block; font-size: .95rem; margin-bottom: .2rem; }
 .tw-idea p { margin: .4rem 0; line-height: 1.45; }
 .tw-idea form { margin-top: .5rem; }
+.tw-idea-hechas { margin: .5rem 0 0; }
+.tw-idea-piezas { margin: .15rem 0 0; padding-left: 1.1rem; font-size: .8rem; line-height: 1.5; }
+.tw-idea-piezas .tag-estado { display: inline-block; }
+.tw-origen-idea { color: var(--accent-texto, var(--muted)); }
 .tw-angulo { display: grid; grid-template-columns: auto 1fr; gap: .15rem .6rem; margin: .4rem 0; font-size: .8rem; }
 .tw-angulo dt { color: var(--muted); font-weight: 600; }
 .tw-angulo dd { margin: 0; }

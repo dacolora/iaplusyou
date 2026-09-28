@@ -253,19 +253,59 @@ def canales(cliente, desde, hasta):
 
 def piezas_creatv(cliente, ad_ids):
     """{meta_ad_id: {"ep_id", "experimento_id", "experimento", "estado",
-    "pieza_id", "tipo", "url_video", "url_miniatura"}} de los anuncios que
-    lanzó Creatv (experimento_pieza + su pieza): para marcarlos en la
-    evaluación, pausarlos/activarlos desde la pestaña y mandar a Claude los
-    fotogramas del video real (que vive en R2) en vez de la miniatura."""
+    "pieza_id", "tipo", "url_video", "url_miniatura", "tw_idea"}} de los
+    anuncios que lanzó Creatv (experimento_pieza + su pieza): para marcarlos
+    en la evaluación, pausarlos/activarlos desde la pestaña y mandar a Claude
+    los fotogramas del video real (que vive en R2) en vez de la miniatura.
+    `tw_idea` es `{"evaluacion_id", "idea", "titulo"}` cuando la pieza nació
+    de una idea de la evaluación con IA («Llevar a Crear»), si no None."""
     ids = [str(a) for a in ad_ids if a]
     if not ids:
         return {}
-    ep, ex, pz = db.experimento_pieza, db.experimento, db.pieza
+    ep, ex, pz, cp = db.experimento_pieza, db.experimento, db.pieza, db.concepto
     q = (sa.select(ep.c.meta_ad_id, ep.c.id, ep.c.experimento_id, ex.c.nombre, ep.c.estado, ep.c.pieza_id,
-                   pz.c.tipo, pz.c.url_video, pz.c.url_miniatura)
-         .select_from(ep.join(ex, ex.c.id == ep.c.experimento_id).outerjoin(pz, pz.c.id == ep.c.pieza_id))
+                   pz.c.tipo, pz.c.url_video, pz.c.url_miniatura, cp.c.extra)
+         .select_from(ep.join(ex, ex.c.id == ep.c.experimento_id).outerjoin(pz, pz.c.id == ep.c.pieza_id)
+                      .outerjoin(cp, cp.c.id == pz.c.concepto_id))
          .where(ex.c.cliente == cliente, ep.c.meta_ad_id.in_(ids)))
     with db.conectar() as con:
         return {r[0]: {"ep_id": r[1], "experimento_id": r[2], "experimento": r[3], "estado": r[4],
                        "pieza_id": r[5], "tipo": "imagen" if r[6] == "imagen" else "video",
-                       "url_video": r[7], "url_miniatura": r[8]} for r in con.execute(q)}
+                       "url_video": r[7], "url_miniatura": r[8], "tw_idea": _tw_idea(r[9])} for r in con.execute(q)}
+
+
+def _tw_idea(extra_concepto):
+    v = (extra_concepto or {}).get("tw_idea") if isinstance(extra_concepto, dict) else None
+    return dict(v) if isinstance(v, dict) and v.get("evaluacion_id") is not None else None
+
+
+def piezas_de_evaluacion(cliente, evaluacion_id):
+    """{índice de la idea: [{"cf_id", "pieza_id", "titulo", "estado", "tipo",
+    "url_video", "creado_en"}, …]} — las piezas de Crear que nacieron de cada
+    idea de esa evaluación (`concepto.extra.tw_idea`), de la más vieja a la
+    más nueva. `estado` es el de Crear (`prompt_pendiente | prompt_listo |
+    video_generando | video_listo | error`)."""
+    import creative_flow  # el mismo mapa pieza.estado → estado de Crear que usa `creative_flow.cargar`
+    cp, pz = db.concepto, db.pieza
+    q = (sa.select(cp.c.legado_id, pz.c.id, cp.c.extra, pz.c.estado, pz.c.tipo, pz.c.url_video, pz.c.creado_en)
+         .select_from(cp.join(pz, pz.c.concepto_id == cp.c.id))
+         .where(cp.c.cliente == cliente, cp.c.legado_id.isnot(None), pz.c.tipo != "final",
+                sa.func.json_extract(cp.c.extra, "$.tw_idea.evaluacion_id") == int(evaluacion_id))
+         .order_by(pz.c.id))
+    salida = {}
+    with db.conectar() as con:
+        for cf_id, pid, extra, estado, tipo, url_video, creado_en in con.execute(q):
+            extra = extra or {}
+            origen = extra.get("tw_idea") or {}
+            try:
+                indice = int(origen.get("idea"))
+            except (TypeError, ValueError):
+                continue
+            estado_crear = extra.get("estado_legado") or creative_flow._PIEZA_A_ESTADO.get(estado, estado)
+            titulo = " ".join(str(extra.get("accion_central") or "").split())[:80] or cf_id
+            salida.setdefault(indice, []).append({
+                "cf_id": cf_id, "pieza_id": pid, "titulo": titulo, "estado": estado_crear,
+                "tipo": "imagen" if (extra.get("tipo") or tipo) == "imagen" else "video",
+                "url_video": url_video, "creado_en": creado_en})
+    return salida
+

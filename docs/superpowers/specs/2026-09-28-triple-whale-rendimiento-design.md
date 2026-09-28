@@ -212,7 +212,24 @@ del mes anterior (`panel.resumen_mes_tienda`, parte `tienda_tw` de `_calcular_ta
 caché del Tablero incluye `triple_whale.actualizado_en`, así una copia nueva lo refresca). El detalle
 sigue en la pestaña.
 
+## 14. Idea → pieza → anuncio (hecho)
+
+«Llevar a Crear» sigue sin generar nada, pero ahora deja rastro. El prefill lleva `origen_tw`
+(«<evaluación>:<índice>», `puente.prefill_crear`), el formulario de Crear lo devuelve en un campo
+oculto y `cf_crear_video` lo guarda en la sesión como `concepto.extra.tw_idea` =
+`{evaluacion_id, idea, titulo}` (`puente.origen_desde_formulario` lo valida: forma, evaluación del
+proyecto y `lista`, idea existente; un valor raro se ignora y la pieza se crea igual). Con eso:
+
+- la tarjeta de cada idea de la última evaluación lista dice «Ya se hicieron N piezas con esta idea»
+  y las lista con su estado de Crear (`datos.piezas_de_evaluacion`, `panel.ETIQUETAS_PIEZA`) y, si la
+  pieza ya corre en Meta y aparece en el periodo, su veredicto («en Meta: Ganador»);
+- cada anuncio de «Cada anuncio» hecho en Creatv que nació de una idea dice «Nació de la idea «…» de la
+  evaluación con IA» (`datos.piezas_creatv` trae `tw_idea`; `panel.enlazar_ideas` cruza ambos sin
+  consultas por fila).
+
+Así se ve si lo que Claude propuso a partir de los ganadores también gana. Nada de esto se copia con
+`duplicar` ni entra al análisis siguiente como dato.
+
 Siguientes pasos (fuera de este cambio):
 
 - Verificar §9 con la primera tienda real.
-- Enlazar cada idea con la pieza que salió de ella en Crear (hoy «Llevar a Crear» solo precarga).

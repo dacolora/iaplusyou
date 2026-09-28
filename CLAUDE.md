@@ -763,7 +763,12 @@ in a `finally`; `anuncio.visual`), every Meta thumbnail is copied to R2 first (`
 `triple_whale.extra.avisados` / `aviso_sin_ventas`; first sync only seeds the baseline); «Pausar»/«Activar» on a
 Creatv piece in the tab (`triple_whale.pieza_estado` → `lanzador.pausar_pieza`/`activar_pieza`); and the
 Tablero shows «Tu tienda según Triple Whale» (`panel.resumen_mes_tienda`, part `tienda_tw`; the cache key
-includes `triple_whale.actualizado_en`). None of the SQL has run against a real store yet (spec §9).
+includes `triple_whale.actualizado_en`). Idea → pieza → anuncio (spec §14): the prefill of «Llevar a Crear»
+carries `origen_tw` («<evaluación>:<índice>»), the Crear form returns it in a hidden field and `cf_crear_video`
+stores `concepto.extra.tw_idea` (`puente.origen_desde_formulario` validates it, a bad value is ignored); the
+idea card lists the pieces born from it with their Crear state and Meta verdict (`datos.piezas_de_evaluacion`,
+`panel.enlazar_ideas`) and a Creatv ad says which idea it came from (`piezas_creatv(...)["tw_idea"]`). None of
+the SQL has run against a real store yet (spec §9).
 
 **Gasto real por proyecto** (`gastos.py`, table `gasto`, migration 0010): there are no
 credits or balances — the product shows the real provider price. Every paying task registers

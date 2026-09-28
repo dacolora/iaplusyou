@@ -15,10 +15,15 @@ import triple_whale_tiendas
 from tareas import triple_whale as tareas_tw
 from triple_whale import analisis, datos, evaluacion
 
+from idiomas import N_
+
 PERIODOS = (7, 14, 30, 90)
 PERIODO_DEFECTO = 30
 MAX_FILAS = 200
 MAX_PRODUCTOS_PANEL = 8
+# Estados de Crear tal como los dice la tarjeta de una idea (idea → pieza).
+ETIQUETAS_PIEZA = {"prompt_pendiente": N_("armando el prompt"), "prompt_listo": N_("prompt listo, falta generar"),
+                   "video_generando": N_("generando"), "video_listo": N_("lista"), "error": N_("con error")}
 
 
 def _iso(d):
@@ -112,6 +117,27 @@ def resumen_mes_tienda(cliente, hoy=None):
     return r
 
 
+def enlazar_ideas(cliente, anuncios, evaluacion_lista):
+    """Cierra el círculo idea → pieza → anuncio (spec §14), sin consultas por
+    fila. En cada anuncio hecho en Creatv que nació de una idea deja
+    `idea_origen` = {"evaluacion_id", "idea", "titulo"}; en la última
+    evaluación lista deja `piezas_por_idea` ({índice: [piezas]}, cada pieza
+    con `anuncio` = {"nombre", "veredicto"} si ya corre en Meta y aparece en
+    el periodo)."""
+    for a in anuncios:
+        origen = (a.get("creatv") or {}).get("tw_idea")
+        a["idea_origen"] = origen or None
+    if not evaluacion_lista:
+        return
+    piezas = datos.piezas_de_evaluacion(cliente, evaluacion_lista["id"])
+    por_pieza = {a["creatv"]["pieza_id"]: a for a in anuncios if a.get("creatv") and a["creatv"].get("pieza_id")}
+    for lista in piezas.values():
+        for p in lista:
+            en_meta = por_pieza.get(p["pieza_id"])
+            p["anuncio"] = {"nombre": en_meta["nombre"], "veredicto": en_meta["veredicto"]} if en_meta else None
+    evaluacion_lista["piezas_por_idea"] = piezas
+
+
 def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
     config = triple_whale_tiendas.obtener(cliente)
     if not config:
@@ -138,9 +164,11 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
 
     muestra = analisis.muestra(ev)
     evaluaciones = datos.evaluaciones(cliente, limite=5)
+    ultima_lista = next((e for e in evaluaciones if e["estado"] == "lista"), None)
+    enlazar_ideas(cliente, ev["anuncios"], ultima_lista)
     productos = productos_periodo(cliente, desde, hasta, desde_prev, hasta_prev) if not canal else []
     return {
-        "productos": productos,
+        "productos": productos, "etiquetas_pieza": ETIQUETAS_PIEZA,
         "conectado": True, "config": config, "moneda": config["moneda"], "dias": dias, "periodos": PERIODOS,
         "desde": desde, "hasta": hasta, "canal": canal, "canales": canales,
         "rango": datos.rango(cliente), "ev": ev, "anuncios": ev["anuncios"][:MAX_FILAS],
@@ -148,8 +176,7 @@ def contexto(cliente, dias=PERIODO_DEFECTO, canal=None, hoy=None):
         "tienda": tienda, "serie": serie, "rastreo": rastreo,
         "alertas": evaluacion.alertas(ev, tienda, rastreo),
         "muestra_ia": muestra, "estimado_ia": gastos.estimar("evaluacion_tw", n=len(muestra)) if muestra else None,
-        "evaluaciones": evaluaciones,
-        "ultima_lista": next((e for e in evaluaciones if e["estado"] == "lista"), None),
+        "evaluaciones": evaluaciones, "ultima_lista": ultima_lista,
         "job_sync": tareas_tw.job_id_sync(cliente) if trabajos.en_curso(tareas_tw.job_id_sync(cliente)) else None,
         "job_evaluar": (tareas_tw.job_id_evaluar(cliente)
                         if trabajos.en_curso(tareas_tw.job_id_evaluar(cliente)) else None),

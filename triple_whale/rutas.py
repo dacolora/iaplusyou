@@ -138,7 +138,7 @@ def idea_crear(cliente, eid, indice):
     if not 0 <= indice < len(ideas):
         abort(404)
     try:
-        session["fp_prefill"] = puente.prefill_crear(cliente, ideas[indice])
+        session["fp_prefill"] = puente.prefill_crear(cliente, ideas[indice], evaluacion_id=eid, indice=indice)
     except puente.PuenteError as e:
         flash(str(e), "error")
         return _volver(cliente)

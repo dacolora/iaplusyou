@@ -26,6 +26,8 @@
     {# Con esto el servidor usa solo los `ref_ids` de la bandeja que ves (ver _flowplus_bandeja.html). #}
     <input type="hidden" name="bandeja_vista" value="1">
     <input type="hidden" name="modelo" id="fp-modelo">
+    {# Triple Whale: «<evaluación>:<idea>» cuando el texto vino de «Llevar a Crear» (solo lo llena el prefill). #}
+    <input type="hidden" name="origen_tw" id="fp-origen-tw" value="">
     <div class="crear-comp-abajo">
       <div class="banco-prompts crear-etiquetas" id="fp-etiquetas"></div>
       <label class="crear-oculto-lector" for="fp-texto">{{ _('Qué tiene que pasar') }}</label>
@@ -348,6 +350,7 @@
     var prefill = {{ fp_prefill | tojson }};
     if (prefill) {
       if (ta && prefill.texto) ta.value = prefill.texto;
+      var origenTw = document.getElementById('fp-origen-tw'); if (origenTw && prefill.origen_tw) origenTw.value = prefill.origen_tw;
       var rTipo = form.querySelector('input[name=tipo][value="' + prefill.tipo + '"]');
       if (rTipo) rTipo.checked = true;
       var rModelo = form.querySelector('input[name=modelo_video][value="' + prefill.modelo + '"], input[name=modelo_imagen][value="' + prefill.modelo + '"]');
