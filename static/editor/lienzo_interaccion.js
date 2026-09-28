@@ -124,7 +124,7 @@ export class InteraccionLienzo {
       seleccion: this.editor.seleccion, materiales: this.vista.materiales, medidasTexto: this.vista.medidasTexto(t),
       radioAsa: RADIO_ASA_PX * medida.proporcion, margenAsa: MARGEN_ASA_PX * medida.proporcion,
     });
-    return { ...g, doc, proporcion: medida.proporcion };
+    return { ...g, doc, punto: p };
   }
 
   _abajo(e) {
@@ -146,8 +146,8 @@ export class InteraccionLienzo {
     if (g.id !== this.editor.seleccion) this.editor.seleccionar(g.id);   // la caja aparece bajo el dedo
     this.gesto = {
       pointerId: e.pointerId, tipo: g.tipo, id: g.id, alTocar: g.alTocar, texto: esTexto(g.doc, g.alTocar),
-      transform, caja: g.caja, formato: g.doc.formato, proporcion: g.proporcion,
-      x0: e.clientX, y0: e.clientY, dx: 0, dy: 0, activo: false,
+      transform, caja: g.caja, formato: g.doc.formato, inicio: g.punto,
+      x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, activo: false,
     };
     try {
       this.capa.setPointerCapture(e.pointerId);
@@ -169,8 +169,8 @@ export class InteraccionLienzo {
       this.toque = null;
       if (this.vista.ocupado()) this.vista.pausar();
     }
-    g.dx = dx;
-    g.dy = dy;
+    g.x = e.clientX;
+    g.y = e.clientY;
     // un cambio por cuadro, no uno por evento del puntero
     if (!this.cuadro) {
       this.cuadro = requestAnimationFrame(() => {
@@ -181,11 +181,17 @@ export class InteraccionLienzo {
   }
 
   // El cambio desde donde empezó el arrastre (no acumulado: cada paso
-  // reemplaza al anterior dentro del mismo deshacer).
+  // reemplaza al anterior dentro del mismo deshacer). Se mide en píxeles del
+  // lienzo contra DÓNDE ESTÁ AHORA el lienzo: si la página se corre durante el
+  // arrastre (en el celular la barra de arriba cambia de alto cuando «Guardado»
+  // pasa a «Cambios sin guardar…»), la capa sigue bajo el dedo.
   _aplicar() {
     const g = this.gesto;
     if (!g?.activo) return;
-    const { cambios, guias } = cambiosArrastre(g, g.dx * g.proporcion, g.dy * g.proporcion);
+    const medida = this._medida();
+    if (!medida) return;
+    const p = puntoEnLienzo(g.x, g.y, medida.rect, this.lienzo.width, this.lienzo.height);
+    const { cambios, guias } = cambiosArrastre(g, p.x - g.inicio.x, p.y - g.inicio.y);
     this._guias(g.tipo === "caja" ? guias : null);
     if (!this.editor.operarCon({ clave: `${g.id}:transform` }, "cambiar", g.id, cambios)) this._terminar();
   }
