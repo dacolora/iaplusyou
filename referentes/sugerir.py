@@ -7,6 +7,7 @@ usar el resultado. `sugerir_ia` es la única función que llama a Claude.
 import json
 
 import anthropic
+from flask_babel import gettext
 
 import doctrina
 import idiomas
@@ -270,8 +271,8 @@ def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, obje
                                            messages=[{"role": "user", "content": texto}])
     ent = getattr(respuesta.usage, "input_tokens", 0) or 0
     sal = getattr(respuesta.usage, "output_tokens", 0) or 0
-    motivo = {"refusal": "Claude rechazó la solicitud.",
-              "max_tokens": "La respuesta de Claude se cortó por largo (max_tokens)."}.get(getattr(respuesta, "stop_reason", None))
+    motivo = {"refusal": gettext("Claude rechazó la solicitud."),
+              "max_tokens": gettext("La respuesta de Claude se cortó por largo (max_tokens).")}.get(getattr(respuesta, "stop_reason", None))
     if motivo:
         e = SugerenciaInvalida(motivo)
         e.tokens_entrada, e.tokens_salida = ent, sal
@@ -281,7 +282,7 @@ def sugerir_ia(candidatos_, persona_texto, producto_texto, temporada_texto, obje
         inicio, fin = crudo.index("{"), crudo.rindex("}") + 1
         data = json.loads(crudo[inicio:fin])
     except (ValueError, json.JSONDecodeError):
-        e = SugerenciaInvalida("Claude no devolvió una respuesta válida.")
+        e = SugerenciaInvalida(gettext("Claude no devolvió una respuesta válida."))
         e.tokens_entrada, e.tokens_salida = ent, sal
         raise e
     validos = {c["id"] for c in recortados}

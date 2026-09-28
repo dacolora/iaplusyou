@@ -9,6 +9,7 @@ de Crear que ya existe (`creative_flow` + `flowplus_lanzar`), no se reimplementa
 """
 import json
 import re
+from datetime import datetime
 from uuid import uuid4
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
@@ -53,6 +54,7 @@ def contexto(cliente):
     opciones["dolores"] = opciones["dolores"][:MAX_DOLORES_FILTRO]
     return {"ref_opciones": opciones, "ref_etapas": datos.ETAPAS, "ref_consciencias": datos.CONSCIENCIAS,
             "ref_etiquetas_etapa": datos.ETIQUETAS_ETAPA, "ref_etiquetas_consciencia": datos.ETIQUETAS_CONSCIENCIA,
+            "ref_etiquetas_dolor": datos.ETIQUETAS_DOLOR,
             "ref_fuentes": datos.FUENTES, "ref_copycoders_activa": proyectos.referentes_copycoders(cliente),
             "ref_copycoders_total": datos.total_copycoders()}
 
@@ -90,7 +92,7 @@ def grid(cliente):
     campana = (request.args.get("campana") or "").strip() or None
     return render_template("_referentes_grid.html", cliente=cliente, pagina=pagina, filtros=filtros, por_pagina=por_pagina,
                            etiquetas_etapa=datos.ETIQUETAS_ETAPA, etiquetas_consciencia=datos.ETIQUETAS_CONSCIENCIA,
-                           campana=campana)
+                           etiquetas_dolor=datos.ETIQUETAS_DOLOR, campana=campana)
 
 
 def _producto_para(cliente, request_args_o_form):
@@ -153,17 +155,17 @@ def traer_form(cliente):
 def traer_post(cliente):
     fuente = request.form.get("fuente")
     if fuente not in fuentes.tipos():
-        flash("Elige una fuente.", "error")
+        flash(gettext("Elige una fuente."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     if fuentes.llaves_faltantes(fuente):
-        flash("Esa fuente no está configurada.", "error")
+        flash(gettext("Esa fuente no está configurada."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     consulta = _consulta_desde(request.form)
     if consulta["modo"] == "marca" and not consulta["pagina_id"]:
-        flash("Pega un link del Ad Library o el id de la página.", "error")
+        flash(gettext("Pega un link del Ad Library o el id de la página."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     if consulta["modo"] == "palabra" and not consulta["palabra"]:
-        flash("Escribe una palabra clave.", "error")
+        flash(gettext("Escribe una palabra clave."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     try:
         consulta = traducir.preparar_consulta(consulta, cliente)     # palabra → inglés, idioma en
@@ -180,7 +182,7 @@ def traer_post(cliente):
     est_clasificacion = gastos.estimar("clasificacion", n=tope)
     usd_estimado = est_fuente["usd_fuente"] + (est_clasificacion["usd"] or 0.0)
     tareas_referentes.encolar_barrer(cliente, fuente, consulta, tope, usd_estimado, pedido_por=session.get("usuario"))
-    flash("Trayendo referentes; aparecerán en «Mis barridos» a medida que avanza.", "ok")
+    flash(gettext("Trayendo referentes; aparecerán en «Mis barridos» a medida que avanza."), "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
 
 
@@ -223,13 +225,13 @@ def recrear_form(cliente, rid):
 def recrear_adaptar(cliente, rid):
     r = datos.referente(cliente, rid)
     if not r or r.get("estado_imagen") != "ok":
-        return jsonify({"error": "Ese referente no existe."}), 404
+        return jsonify({"error": gettext("Ese referente no existe.")}), 404
     cuerpo = request.get_json(silent=True)
     if not isinstance(cuerpo, dict):
-        return jsonify({"error": "Cuerpo inválido."}), 400
+        return jsonify({"error": gettext("Cuerpo inválido.")}), 400
     producto = catalogo_productos.encontrar(cliente, cuerpo.get("producto_id"), categoria="producto") if cuerpo.get("producto_id") else None
     if not producto:
-        return jsonify({"error": "Elige un producto primero."}), 400
+        return jsonify({"error": gettext("Elige un producto primero.")}), 400
     # Doctrina, bloque 2: la sofisticación elegida en Catálogo manda en el ángulo.
     # Revisión final #6: descartada si no es 1-5 (dato corrupto), como ideas y el guion.
     fila = tiendas.por_activo(cliente).get(producto.get("id")) or {}
@@ -254,7 +256,7 @@ def recrear_adaptar(cliente, rid):
                                     extra={"tokens_entrada": ent, "tokens_salida": sal, "modelo": modelo_actual()})
         return jsonify({"error": str(e)}), 502
     except Exception as e:
-        return jsonify({"error": f"No se pudo adaptar ({type(e).__name__})."}), 502
+        return jsonify({"error": gettext("No se pudo adaptar (%(tipo)s).", tipo=type(e).__name__)}), 502
     usd = costo_real(ent, sal)
     gastos.registrar_seguro(cliente, "adaptar_referente", usd, f"referentes:adaptar:{rid}:{uuid4().hex[:12]}",
                             detalle=f"{producto['nombre']} · {r.get('familia') or ''}", proveedor="anthropic",
@@ -266,24 +268,24 @@ def recrear_adaptar(cliente, rid):
 def recrear_generar(cliente, rid):
     r = datos.referente(cliente, rid)
     if not r or r.get("estado_imagen") != "ok":
-        flash("Ese referente no existe.", "error")
+        flash(gettext("Ese referente no existe."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     tipo = request.form.get("tipo") if request.form.get("tipo") in ("imagen", "video") else "imagen"
     producto = catalogo_productos.encontrar(cliente, request.form.get("producto_id"), categoria="producto") \
         if request.form.get("producto_id") else None
     if not producto:
-        flash("Elige un producto con fotos.", "error")
+        flash(gettext("Elige un producto con fotos."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     titular = (request.form.get("titular") or "").strip()[:200]
     prompt = (request.form.get("prompt") or "").strip()
     if not prompt:
-        flash("El prompt no puede quedar vacío.", "error")
+        flash(gettext("El prompt no puede quedar vacío."), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     formato_pedido = request.form.get("formato") or flowplus_modelos.FORMATO_DEFECTO
     try:
         referencias_urls = recrear.referencias_para(cliente, r, producto)
     except Exception as e:
-        flash(f"No se pudieron preparar las referencias ({type(e).__name__}).", "error")
+        flash(gettext("No se pudieron preparar las referencias (%(tipo)s).", tipo=type(e).__name__), "error")
         return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
     prefs_sonido = proyectos.preferencias_sonido(cliente)
     if tipo == "imagen":
@@ -303,8 +305,10 @@ def recrear_generar(cliente, rid):
     if isinstance(crudo, dict):
         angulo, _errores = doctrina.validar_angulo(crudo)
         angulo["origen"] = "recrear"
-    cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [],
-                                titular or f"Recrear: {r.get('titular') or r['id']}",
+    if not titular:
+        with idiomas.en_idioma(idiomas.de_proyecto(cliente)):
+            titular = gettext("Recrear: %(titular)s", titular=r.get("titular") or r["id"])
+    cf_id = creative_flow.crear(cliente, [], [producto["nombre"]], [], titular,
                                 duracion_objetivo, "", "A", referencias_urls=referencias_urls, platforms=[])
     campos = dict(prompt_relleno=prompt, aspect_ratio=formato, tipo=tipo, modelo=modelo,
                   con_sonido=prefs_sonido["con_sonido"], sonido_texto="", musica_estilo="",
@@ -314,9 +318,9 @@ def recrear_generar(cliente, rid):
     creative_flow.actualizar(cliente, cf_id, **campos)
     entry = creative_flow.cargar(cliente)[cf_id]
     if flowplus_lanzar.lanzar(cliente, cf_id, entry):
-        flash("Generando desde el referente…", "ok")
+        flash(gettext("Generando desde el referente…"), "ok")
     else:
-        flash("Ya había algo generándose para esta sesión.", "error")
+        flash(gettext("Ya había algo generándose para esta sesión."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
 
 
@@ -332,10 +336,7 @@ def ficha(cliente, rid):
         familia = dict(familia, descripcion=datos.descripcion_familia(familia, idioma))
     return render_template("_referente_ficha.html", cliente=cliente, r=r, familia=familia,
                            etiquetas_etapa=datos.ETIQUETAS_ETAPA, etiquetas_consciencia=datos.ETIQUETAS_CONSCIENCIA,
-                           usos=recrear.usos(cliente, rid))
-
-
-_MESES_CORTOS = ("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+                           etiquetas_dolor=datos.ETIQUETAS_DOLOR, usos=recrear.usos(cliente, rid))
 
 
 def _vista_barrido(b):
@@ -344,23 +345,27 @@ def _vista_barrido(b):
     (`db.ahora`, TZ=America/Bogota en el VPS)."""
     creado = b.get("creado_en") or ""
     try:
-        fecha = f"{int(creado[8:10])} {_MESES_CORTOS[int(creado[5:7]) - 1]} · {creado[11:16]}"
+        fecha = idiomas.fecha_corta(datetime.fromisoformat(creado[:16]), con_hora=True)
     except (ValueError, IndexError):
         fecha = creado
     estado, tono = datos.ETIQUETAS_ESTADO_BARRIDO.get(b.get("estado"), (b.get("estado") or "", "en-curso"))
+    estado = idiomas.traducir(estado)
     consulta = b.get("consulta") or {}
-    detalle = [fuentes.NOMBRES.get(b.get("fuente"), b.get("fuente") or "").split(" (")[0].capitalize(),
-               "Video" if consulta.get("formato") == "video" else "Imagen"]
+    nombre_fuente = idiomas.traducir(fuentes.NOMBRES.get(b.get("fuente"), b.get("fuente") or ""))
+    detalle = [nombre_fuente.split(" (")[0].capitalize(),
+               gettext("Video") if consulta.get("formato") == "video" else gettext("Imagen")]
     if consulta.get("pais") and consulta.get("pais") != "ALL":
         detalle.append(consulta["pais"])
     if consulta.get("modo") == "marca":
-        busqueda, enlace = "Una marca", ("https://www.facebook.com/ads/library/?active_status=all&ad_type=all"
-                                        f"&view_all_page_id={consulta.get('pagina_id') or ''}")
+        busqueda, enlace = gettext("Una marca"), ("https://www.facebook.com/ads/library/?active_status=all&ad_type=all"
+                                                 f"&view_all_page_id={consulta.get('pagina_id') or ''}")
     else:
-        busqueda, enlace = f"«{consulta.get('palabra') or ''}»", None
+        palabra = consulta.get("palabra") or ""
+        busqueda, enlace = gettext("«%(palabra)s»", palabra=palabra), None
         original = consulta.get("palabra_original")
-        if original and original.strip().lower() != (consulta.get("palabra") or "").strip().lower():
-            busqueda = f"«{original}» → «{consulta.get('palabra') or ''}»"     # lo escrito → lo buscado en inglés
+        if original and original.strip().lower() != palabra.strip().lower():
+            # lo escrito → lo buscado en inglés
+            busqueda = gettext("«%(original)s» → «%(buscado)s»", original=original, buscado=palabra)
     return {"fecha": fecha, "estado": estado, "tono": tono, "busqueda": busqueda, "enlace": enlace,
             "detalle": " · ".join(d for d in detalle if d)}
 
@@ -395,9 +400,9 @@ def _barrido_del_cliente_o_404(cliente, bid):
 def clasificar_pendientes(cliente, bid):
     _barrido_del_cliente_o_404(cliente, bid)
     if tareas_referentes.encolar_clasificar_pendientes(cliente, bid):
-        flash("Clasificando lo pendiente; la lista se actualiza sola.", "ok")
+        flash(gettext("Clasificando lo pendiente; la lista se actualiza sola."), "ok")
     else:
-        flash("Ya hay algo en curso para este barrido.", "error")
+        flash(gettext("Ya hay algo en curso para este barrido."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
 
 
@@ -405,9 +410,9 @@ def clasificar_pendientes(cliente, bid):
 def reintentar_imagenes(cliente, bid):
     _barrido_del_cliente_o_404(cliente, bid)
     if tareas_referentes.encolar_reintentar_imagenes(cliente, bid):
-        flash("Reintentando las imágenes que fallaron.", "ok")
+        flash(gettext("Reintentando las imágenes que fallaron."), "ok")
     else:
-        flash("Ya hay algo en curso para este barrido.", "error")
+        flash(gettext("Ya hay algo en curso para este barrido."), "error")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="referentes"))
 
 

@@ -10,6 +10,7 @@ import json
 import re
 
 import anthropic
+from flask_babel import gettext
 
 import doctrina
 import idiomas
@@ -71,8 +72,8 @@ def _llamar(content, max_tokens=MAX_TOKENS, system=None):
     resp = client.messages.create(model=MODEL, max_tokens=max_tokens,
                                   messages=[{"role": "user", "content": content}], **extra)
     entrada, salida = resp.usage.input_tokens, resp.usage.output_tokens
-    motivo = {"refusal": "Claude rechazó la solicitud.",
-              "max_tokens": "La respuesta de Claude se cortó por largo (max_tokens)."}.get(getattr(resp, "stop_reason", None))
+    motivo = {"refusal": gettext("Claude rechazó la solicitud."),
+              "max_tokens": gettext("La respuesta de Claude se cortó por largo (max_tokens).")}.get(getattr(resp, "stop_reason", None))
     if motivo:
         e = ClasificacionInvalida(motivo)
         e.tokens_entrada, e.tokens_salida = entrada, salida
@@ -92,13 +93,13 @@ def _parsear(texto):
     except ValueError:
         ini, fin = t.find("{"), t.rfind("}")
         if ini < 0 or fin <= ini:
-            raise ClasificacionInvalida("Claude no devolvió JSON.")
+            raise ClasificacionInvalida(gettext("Claude no devolvió JSON."))
         try:
             data = json.loads(t[ini:fin + 1])
         except ValueError as e:
-            raise ClasificacionInvalida(f"JSON inválido: {e}")
+            raise ClasificacionInvalida(gettext("JSON inválido: %(error)s", error=e))
     if not isinstance(data, dict):
-        raise ClasificacionInvalida("El JSON no es un objeto.")
+        raise ClasificacionInvalida(gettext("El JSON no es un objeto."))
     return data
 
 
@@ -170,22 +171,22 @@ def validar(data, vocabulario, salida=("es",)):
     aplica, cree la familia nueva. `salida`: idiomas pedidos (spec §B7); el
     primero es el que llena `dolor`/`firma`, los siguientes van en `i18n`."""
     if not isinstance(data, dict):
-        raise ClasificacionInvalida("El JSON no es un objeto.")
+        raise ClasificacionInvalida(gettext("El JSON no es un objeto."))
     if data.get("etapa") not in datos.ETAPAS:
-        raise ClasificacionInvalida(f"Etapa inválida: {data.get('etapa')}")
+        raise ClasificacionInvalida(gettext("Etapa inválida: %(etapa)s", etapa=data.get("etapa")))
     if data.get("consciencia") not in datos.CONSCIENCIAS:
-        raise ClasificacionInvalida(f"Consciencia inválida: {data.get('consciencia')}")
+        raise ClasificacionInvalida(gettext("Consciencia inválida: %(consciencia)s", consciencia=data.get("consciencia")))
     familia, familia_nueva = _resolver_familia(data.get("familia"), data.get("familia_nueva"), vocabulario)
     if familia is None and not familia_nueva:
-        raise ClasificacionInvalida("Sin familia del vocabulario ni familia_nueva válida.")
+        raise ClasificacionInvalida(gettext("Sin familia del vocabulario ni familia_nueva válida."))
     dolor = data.get("dolor")
     if not isinstance(dolor, str) or not dolor.strip():
-        raise ClasificacionInvalida(f"Dolor inválido: {dolor}")
+        raise ClasificacionInvalida(gettext("Dolor inválido: %(dolor)s", dolor=dolor))
     dolor = _normalizar_dolor(dolor)
     palabras = " ".join(str(data.get("firma") or "").split()).split(" ")
     firma = " ".join(palabras[:40]).strip()
     if not firma:
-        raise ClasificacionInvalida("Firma vacía.")
+        raise ClasificacionInvalida(gettext("Firma vacía."))
     lead = data.get("lead") if data.get("lead") in doctrina.LEADS else None
     principal = salida[0] if salida else "es"
     i18n = {principal: {"firma": firma, "dolor": dolor}}

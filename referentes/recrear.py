@@ -7,6 +7,7 @@ Crear que ya existe. `armar_prompt` es determinista (nunca llama a Claude) —
 import json
 import os
 import sqlalchemy as sa
+from flask_babel import gettext
 
 import catalogo_productos
 import db
@@ -166,8 +167,8 @@ def _llamar(texto, max_tokens=MAX_TOKENS_ADAPTAR):
     uso = getattr(resp, "usage", None)
     entrada = int(getattr(uso, "input_tokens", 0) or 0)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
-    motivo = {"refusal": "Claude rechazó la solicitud.",
-              "max_tokens": "La respuesta de Claude se cortó por largo (max_tokens)."}.get(resp.stop_reason)
+    motivo = {"refusal": gettext("Claude rechazó la solicitud."),
+              "max_tokens": gettext("La respuesta de Claude se cortó por largo (max_tokens).")}.get(resp.stop_reason)
     if motivo:
         e = AdaptacionInvalida(motivo)
         e.tokens_entrada, e.tokens_salida = entrada, salida
@@ -186,13 +187,13 @@ def _parsear_json(texto):
     except ValueError:
         ini, fin = t.find("{"), t.rfind("}")
         if ini < 0 or fin <= ini:
-            raise AdaptacionInvalida("Claude no devolvió JSON.")
+            raise AdaptacionInvalida(gettext("Claude no devolvió JSON."))
         try:
             data = json.loads(t[ini:fin + 1])
         except ValueError:
-            raise AdaptacionInvalida("Claude no devolvió JSON válido.")
+            raise AdaptacionInvalida(gettext("Claude no devolvió JSON válido."))
     if not isinstance(data, dict):
-        raise AdaptacionInvalida("Claude no devolvió un objeto JSON.")
+        raise AdaptacionInvalida(gettext("Claude no devolvió un objeto JSON."))
     return data
 
 
@@ -202,7 +203,7 @@ def _leer(respuesta, datos_texto, fijos=None):
     titular = str(data.get("titular") or "").strip()[:80]
     prompt = str(data.get("prompt") or "").strip()
     if not titular or not prompt:
-        raise AdaptacionInvalida("Claude no devolvió titular y prompt.")
+        raise AdaptacionInvalida(gettext("Claude no devolvió titular y prompt."))
     angulo, errores = doctrina.validar_angulo(data.get("angulo") if isinstance(data.get("angulo"), dict) else {},
                                               datos_texto, fijos=fijos)
     return titular, prompt, angulo, errores

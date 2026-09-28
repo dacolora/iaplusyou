@@ -12,6 +12,8 @@ import logging
 import math
 import re
 
+from flask_babel import gettext
+
 import doctrina
 import marca
 import proyectos
@@ -228,13 +230,13 @@ def _json_objeto(texto):
     except ValueError:
         ini, fin = t.find("{"), t.rfind("}")
         if ini < 0 or fin <= ini:
-            raise AnalisisInvalido("Claude no devolvió JSON.")
+            raise AnalisisInvalido(gettext("Claude no devolvió JSON."))
         try:
             data = json.loads(t[ini:fin + 1])
         except ValueError as e:
-            raise AnalisisInvalido(f"JSON inválido: {e}")
+            raise AnalisisInvalido(gettext("JSON inválido: %(error)s", error=e))
     if not isinstance(data, dict):
-        raise AnalisisInvalido("El JSON no es un objeto.")
+        raise AnalisisInvalido(gettext("El JSON no es un objeto."))
     return data
 
 
@@ -250,7 +252,7 @@ def parsear_nucleos(texto, ids_validos):
     data = _json_objeto(texto)
     crudos = data.get("nucleos")
     if not isinstance(crudos, list):
-        raise AnalisisInvalido("El JSON no trae la lista «nucleos».")
+        raise AnalisisInvalido(gettext("El JSON no trae la lista «nucleos»."))
     ids_validos = set(ids_validos)
     usados, limpios = set(), []
     for c in crudos:
@@ -274,7 +276,7 @@ def parsear_nucleos(texto, ids_validos):
             continue
         limpios.append({"nombre": nombre, "deseo": deseo, "resumen": _str(c.get("resumen"), 1500), "comentarios": ids})
     if not limpios:
-        raise AnalisisInvalido("Ningún núcleo venía completo.")
+        raise AnalisisInvalido(gettext("Ningún núcleo venía completo."))
     return limpios
 
 
@@ -288,7 +290,7 @@ def parsear_subs(texto):
     data = _json_objeto(texto)
     crudos = data.get("sub_avatares")
     if not isinstance(crudos, list):
-        raise AnalisisInvalido("El JSON no trae la lista «sub_avatares».")
+        raise AnalisisInvalido(gettext("El JSON no trae la lista «sub_avatares»."))
     limpios = []
     for c in crudos:
         if not isinstance(c, dict):
@@ -299,7 +301,7 @@ def parsear_subs(texto):
         campos["evidencia"] = c.get("evidencia")
         limpios.append(datos.validar_campos_avatar(campos))
     if not limpios:
-        raise AnalisisInvalido("Ningún sub-avatar venía completo.")
+        raise AnalisisInvalido(gettext("Ningún sub-avatar venía completo."))
     return limpios[:MAX_SUBS_POR_NUCLEO]
 
 
@@ -347,12 +349,12 @@ def _llamar(texto, max_tokens):
     entrada = int(getattr(uso, "input_tokens", 0) or 0)
     tok_salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason == "refusal":
-        e = AnalisisInvalido("Claude rechazó la solicitud.")
+        e = AnalisisInvalido(gettext("Claude rechazó la solicitud."))
         e.tokens_entrada, e.tokens_salida = entrada, tok_salida
         raise e
     salida = "".join(b.text for b in resp.content if b.type == "text").strip()
     if resp.stop_reason == "max_tokens":
-        e = AnalisisInvalido("La respuesta de Claude se cortó por largo (max_tokens).")
+        e = AnalisisInvalido(gettext("La respuesta de Claude se cortó por largo (max_tokens)."))
         e.tokens_entrada, e.tokens_salida = entrada, tok_salida
         raise e
     return salida, entrada, tok_salida
@@ -387,10 +389,11 @@ def generar(cliente, estudio_id, avanzar=None):
     avanzar = avanzar or (lambda etapa, detalle=None: None)
     est = datos.estudio(cliente, estudio_id)
     if not est:
-        raise datos.ErrorDatos("Ese estudio no existe.")
+        raise datos.ErrorDatos(gettext("Ese estudio no existe."))
     todos = datos.comentarios_para_generar(cliente, estudio_id)
     if len(todos) < MIN_COMENTARIOS:
-        raise datos.ErrorDatos(f"Hacen falta al menos {MIN_COMENTARIOS} comentarios no excluidos (hay {len(todos)}).")
+        raise datos.ErrorDatos(gettext("Hacen falta al menos %(minimo)s comentarios no excluidos (hay %(hay)s).",
+                                       minimo=MIN_COMENTARIOS, hay=len(todos)))
     seleccion = seleccionar(todos)
     por_id = {c["id"]: c for c in seleccion}
     marca_nombre = proyectos.nombre_visible(cliente)
@@ -413,7 +416,8 @@ def generar(cliente, estudio_id, avanzar=None):
                 errores.append(f"{n['nombre']}: {e}")
                 resultado.append({**n, "sub_avatares": [], "error": str(e)[:300]})
         if errores and len(errores) == len(nucleos):
-            raise AnalisisInvalido("Ningún núcleo produjo sub-avatares: " + " | ".join(errores)[:400])
+            raise AnalisisInvalido(gettext("Ningún núcleo produjo sub-avatares: %(errores)s",
+                                       errores=" | ".join(errores)[:400]))
     except AnalisisInvalido as e:
         e.tokens_entrada, e.tokens_salida = tokens[0], tokens[1]
         raise

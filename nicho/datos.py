@@ -414,7 +414,7 @@ def guardar_generacion(cliente, estudio_id, nucleos, resumen=None):
         for i, n in enumerate(nucleos or []):
             nid = con.execute(a.insert().values(
                 cliente=cliente, creado_en=ahora, actualizado_en=ahora, estudio_id=estudio_id, padre_id=None,
-                tipo="nucleo", base=None, orden=i, generacion=g, nombre=_texto(n.get("nombre"), 120) or "Sin nombre",
+                tipo="nucleo", base=None, orden=i, generacion=g, nombre=_texto(n.get("nombre"), 120) or gettext("Sin nombre"),
                 deseo=_texto(n.get("deseo"), 300), resumen=_texto(n.get("resumen")), estado="propuesto", persona_id=None,
                 extra={"error": _texto(n.get("error"), 500)} if n.get("error") else {}, **_SUB_VACIO)).inserted_primary_key[0]
             for j, s in enumerate(n.get("sub_avatares") or []):

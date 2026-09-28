@@ -2,7 +2,8 @@
 Exportación de un estudio (spec §6): `.md` como el doc "Desire-Based Core
 Avatar" y `.xlsx` con la plantilla de la hoja "Personas" del cliente
 (columna A los rótulos tal cual la hoja, una columna por sub-avatar; los
-descartados no salen). Solo openpyxl; nada de Flask ni de base de datos.
+descartados no salen). Solo openpyxl (y `gettext` de flask_babel para los
+rótulos, en el idioma de quien exporta); nada de base de datos.
 """
 import io
 import re

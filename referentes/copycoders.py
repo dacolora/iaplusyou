@@ -10,6 +10,7 @@ import re
 from urllib.parse import urljoin
 
 import requests
+from flask_babel import gettext
 
 import idiomas
 from referentes import datos
@@ -54,7 +55,7 @@ def descargar_html(url):
     for parte in r.iter_content(65536):
         total += len(parte)
         if total > MAX_HTML:
-            raise FormatoInvalido("La página pesa más de 20 MB; no parece el swipe file.")
+            raise FormatoInvalido(gettext("La página pesa más de 20 MB; no parece el swipe file."))
         trozos.append(parte)
     return b"".join(trozos).decode("utf-8", errors="replace")
 
@@ -63,20 +64,20 @@ def extraer_datos(html):
     marca = "const DATA="
     i = html.find(marca)
     if i < 0:
-        raise FormatoInvalido("No encontré `const DATA=` en la página.")
+        raise FormatoInvalido(gettext("No encontré `const DATA=` en la página."))
     inicio = html.find("[", i)
     if inicio < 0:
-        raise FormatoInvalido("El dataset no empieza con un arreglo.")
+        raise FormatoInvalido(gettext("El dataset no empieza con un arreglo."))
     decoder = json.JSONDecoder()
     try:
         filas, _ = decoder.raw_decode(html, inicio)
     except ValueError as e:
-        raise FormatoInvalido(f"El dataset no es JSON válido: {e}") from e
+        raise FormatoInvalido(gettext("El dataset no es JSON válido: %(error)s", error=e)) from e
     if not isinstance(filas, list) or not filas or not isinstance(filas[0], dict):
-        raise FormatoInvalido("El dataset está vacío o no es una lista de anuncios.")
+        raise FormatoInvalido(gettext("El dataset está vacío o no es una lista de anuncios."))
     faltan = [k for k in CLAVES if k not in filas[0]]
     if faltan:
-        raise FormatoInvalido(f"Al dataset le faltan claves: {', '.join(faltan)}")
+        raise FormatoInvalido(gettext("Al dataset le faltan claves: %(claves)s", claves=", ".join(faltan)))
     return filas
 
 
@@ -151,9 +152,9 @@ def _llamar(texto, max_tokens=4000):
     entrada = int(getattr(uso, "input_tokens", 0) or 0)
     salida = int(getattr(uso, "output_tokens", 0) or 0)
     if resp.stop_reason == "refusal":
-        raise _con_tokens(FormatoInvalido("Claude rechazó la solicitud."), entrada, salida)
+        raise _con_tokens(FormatoInvalido(gettext("Claude rechazó la solicitud.")), entrada, salida)
     if resp.stop_reason == "max_tokens":
-        raise _con_tokens(FormatoInvalido("La respuesta de Claude se cortó por largo (max_tokens)."), entrada, salida)
+        raise _con_tokens(FormatoInvalido(gettext("La respuesta de Claude se cortó por largo (max_tokens).")), entrada, salida)
     return "".join(b.text for b in resp.content if b.type == "text").strip(), entrada, salida
 
 
@@ -168,13 +169,13 @@ def _parsear_json(texto):
     except ValueError:
         ini, fin = t.find("{"), t.rfind("}")
         if ini < 0 or fin <= ini:
-            raise FormatoInvalido("Claude no devolvió JSON.")
+            raise FormatoInvalido(gettext("Claude no devolvió JSON."))
         try:
             data = json.loads(t[ini:fin + 1])
         except ValueError:
-            raise FormatoInvalido("Claude no devolvió JSON válido.")
+            raise FormatoInvalido(gettext("Claude no devolvió JSON válido."))
     if not isinstance(data, dict):
-        raise FormatoInvalido("Claude no devolvió un objeto JSON.")
+        raise FormatoInvalido(gettext("Claude no devolvió un objeto JSON."))
     return data
 
 
