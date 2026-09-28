@@ -4,18 +4,23 @@ cuesta nada: un clip con el clon entero en la pista principal y, si el clon
 trae sonido, la pista `p_sonido` espejo (el editor la mantiene pegada a la
 imagen). Bajar el clon, medirlo y buscar sus cortes corre en el worker
 (`edicion_desde_clon`), con el mismo `insumos.clon` del borrador de
-producción, así el material se comparte (misma huella, nada se repite)."""
+producción, así el material se comparte (misma huella, nada se repite).
+
+El destino de la edición es el del proyecto: idioma "es" (el proyecto no
+guarda un idioma propio) y el país de `proyectos.pais`, anotado en
+`origen.pais` para que `vista_previa.destinos` lo ofrezca — no un es_CO fijo."""
 import os
 
 import creative_flow
 import ediciones
+import proyectos
 from final_edition import borrador, documento as documento_mod, insumos
 
 _AUDIO = {"volumen": 1.0, "fundido_entrada_ms": 0, "fundido_salida_ms": 0, "ducking": True}
 _TRANSFORM = {"x": 0.5, "y": 0.5, "escala": 1.0, "rotacion": 0, "opacidad": 1.0, "ancla": "centro"}
 
 
-def documento(clon, formato, idioma="es"):
+def documento(clon, formato, idioma="es", pais=None):
     dur = int(clon["duracion_ms"])
     doc = documento_mod.nuevo_video(formato, idioma_base=idioma)
     doc["pistas"][0]["clips"] = [{
@@ -28,7 +33,7 @@ def documento(clon, formato, idioma="es"):
                                          "rol_audio": "sonido", "recorte": {"desde_ms": 0, "hasta_ms": dur},
                                          "velocidad": 1.0, "audio": dict(_AUDIO)}]})
     doc["miniatura_ms"] = min(1000, dur // 2)
-    doc["origen"] = {"tipo": "clon"}
+    doc["origen"] = {"tipo": "clon", **({"pais": pais} if pais else {})}
     return documento_mod.validar(doc)
 
 
@@ -41,6 +46,6 @@ def crear(cliente, cf_id, carpeta):
         os.makedirs(carpeta, exist_ok=True)
         local = insumos._descargar(entry.get("video_url_crudo") or entry.get("video_url"), os.path.join(carpeta, "clon.mp4"))
     clon, _creado = insumos.clon(cliente, cf_id, entry, local)
-    doc = documento(clon, borrador.formato_de(entry.get("aspect_ratio")))
+    doc = documento(clon, borrador.formato_de(entry.get("aspect_ratio")), pais=proyectos.pais(cliente))
     nombre = f"Edición de {entry.get('accion_central') or cf_id}"[:120]
     return ediciones.crear(cliente, "video", nombre, doc, cf_id=cf_id, creada_por="editor")["id"]

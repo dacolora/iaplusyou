@@ -91,7 +91,9 @@ def encolar_proxies(cliente, ids):
 def destinos(doc):
     """Destinos (`<idioma>_<PAIS>`) que el documento menciona en textos,
     voces, precios, subtítulos o voces por destino; el del guion base
-    primero. Sin ninguno: el idioma base con el país del guion (o CO)."""
+    primero. Sin ninguno: el idioma base con el país del guion, o el de
+    `origen.pais` (la edición armada desde el clon lleva el del proyecto),
+    o CO."""
     claves = set()
     var = doc.get("variables") or {}
     for grupo in ("textos", "voz"):
@@ -102,7 +104,8 @@ def destinos(doc):
     for p in doc.get("pistas") or []:
         for c in p.get("clips") or []:
             claves.update(k for k in (c.get("por_destino") or {}) if "_" in k)
-    base = f"{doc.get('idioma_base') or 'es'}_{(doc.get('guion') or {}).get('pais') or 'CO'}"
+    pais = (doc.get("guion") or {}).get("pais") or (doc.get("origen") or {}).get("pais") or "CO"
+    base = f"{doc.get('idioma_base') or 'es'}_{pais}"
     if not claves:
         claves.add(base)
     return sorted(claves, key=lambda k: (k != base, k))

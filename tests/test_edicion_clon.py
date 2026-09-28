@@ -43,6 +43,28 @@ def test_crear_arma_la_edicion_de_la_pieza(base_temporal, tmp_path, monkeypatch)
     assert ed["creada_por"] == "editor"
 
 
+def test_el_destino_del_clon_es_el_pais_del_proyecto():
+    from final_edition import vista_previa
+    doc = edicion_clon.documento(_clon(), "9:16", pais="MX")
+    assert doc["origen"] == {"tipo": "clon", "pais": "MX"} and doc["idioma_base"] == "es"
+    assert vista_previa.destinos(doc) == ["es_MX"]
+    assert vista_previa.destinos(edicion_clon.documento(_clon(), "9:16")) == ["es_CO"]   # sin país: como antes
+
+
+def test_crear_usa_el_pais_del_proyecto(base_temporal, tmp_path, monkeypatch):
+    import creative_flow
+    import ediciones
+    import proyectos
+    from final_edition import insumos, vista_previa
+    monkeypatch.setattr(proyectos, "pais", lambda cliente: {"acme": "MX"}[cliente])
+    cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira sobre la mesa", 8, "", "A")
+    creative_flow.actualizar("acme", cf, estado="video_listo", video_url="https://r2.test/v.mp4")
+    monkeypatch.setattr(insumos, "_descargar", lambda url, destino: destino)
+    monkeypatch.setattr(insumos, "clon", lambda cliente, cf_id, entry, ruta: (_clon(), True))
+    ed = ediciones.cargar("acme", edicion_clon.crear("acme", cf, str(tmp_path)))
+    assert vista_previa.destinos(ed["documento"]) == ["es_MX"]
+
+
 def test_crear_rechaza_una_pieza_sin_video(base_temporal, tmp_path):
     import creative_flow
     cf = creative_flow.crear("acme", [], ["Espejo LED"], [], "gira", 8, "", "A")
