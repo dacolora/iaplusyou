@@ -237,6 +237,66 @@ def test_traducir_voz_incompleta_degrada_el_destino_y_la_retraduccion_no_paga_cl
     assert "voz" in capas3 and capas3["voz"]["estado"] == "ok"
 
 
+def _editor_guarda_en_el_medio(monkeypatch, veces=1):
+    """`ediciones.guardar` falso: las primeras `veces` llamadas, justo antes
+    de guardar, «el editor» autoguarda la edición (le cambia la miniatura),
+    así el guardado de `traducir` choca con el CAS. Devuelve las versiones
+    con que `traducir` intentó guardar."""
+    import ediciones
+    original = ediciones.guardar
+    intentos = []
+
+    def guardar(cliente, edicion_id, documento, version_n):
+        intentos.append(version_n)
+        if len(intentos) <= veces:
+            actual = ediciones.cargar(cliente, edicion_id)
+            doc = copy.deepcopy(actual["documento"])
+            doc["miniatura_ms"] = 1234 + len(intentos)
+            original(cliente, edicion_id, doc, actual["version_n"])
+        return original(cliente, edicion_id, documento, version_n)
+    monkeypatch.setattr(ediciones, "guardar", guardar)
+    return intentos
+
+
+def test_traducir_con_un_autoguardado_del_editor_en_el_medio_no_vuelve_a_pagar(entorno, monkeypatch):
+    # Desde la capa 4a el editor también guarda el borrador: si lo hace entre
+    # que `traducir` leyó la edición y la guarda, se recarga y se vuelve a
+    # aplicar el paso puro — Claude y las voces ya se pagaron una vez.
+    from final_edition import produccion
+    ed, *_ = produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    voces_antes = len(entorno["voz"])
+    intentos = _editor_guarda_en_el_medio(monkeypatch, veces=2)
+    ed2, capas, costo = produccion.traducir("acme", ed, "en", "US", 24.99, "Rachel", True)
+    assert entorno["localizar"] == [("en", "US", 24.99)]                  # Claude una sola vez
+    assert len(entorno["voz"]) - voces_antes == 5                          # una voz por bloque, una sola vez
+    assert costo == pytest.approx(0.02 + 5 * 0.05) and capas["guion"]["costo_usd"] == 0.02
+    assert len(intentos) == 3                                              # 1 + 2 reintentos
+    doc = ed2["documento"]
+    assert borrador.tiene_destino(doc, "en", "US") and doc["variables"]["precios"] == {"en_US": 24.99}
+    assert doc["miniatura_ms"] == 1236                                     # lo que guardó el editor se queda
+    assert ed2["version_n"] == ed["version_n"] + 3
+
+
+def test_traducir_solo_precio_con_autoguardado_en_el_medio_reaplica_el_precio(entorno, monkeypatch):
+    from final_edition import produccion
+    ed, *_ = produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    _editor_guarda_en_el_medio(monkeypatch)
+    ed2, _capas, costo = produccion.traducir("acme", ed, "es", "CO", 89900, "Rachel", True)   # destino base: solo el precio
+    assert costo == 0.0 and entorno["localizar"] == []
+    assert ed2["documento"]["variables"]["precios"] == {"es_CO": 89900.0} and ed2["documento"]["miniatura_ms"] == 1235
+
+
+def test_traducir_se_rinde_tras_dos_reintentos_y_lleva_lo_pagado(entorno, monkeypatch):
+    import ediciones
+    from final_edition import produccion
+    ed, *_ = produccion.asegurar_borrador("acme", entorno["cf_id"], _entry(entorno), GUION_BASE, GUION_BASE, _opciones(), lambda n: None)
+    intentos = _editor_guarda_en_el_medio(monkeypatch, veces=99)
+    with pytest.raises(ediciones.Conflicto) as exc:
+        produccion.traducir("acme", ed, "en", "US", 24.99, "Rachel", True)
+    assert len(intentos) == 3 and len(entorno["localizar"]) == 1
+    assert exc.value.costo_pagado == pytest.approx(0.27) and exc.value.capas_pagadas["voz"]["costo_usd"] == 0.25
+
+
 def test_producir_destino_traducido_con_voz_incompleta_queda_degradada(entorno):
     # Fin a fin (I1, capa 2): un destino TRADUCIDO cuya voz degrada también
     # debe rendirse — el render (fake) sí corre, sobre el documento con la
