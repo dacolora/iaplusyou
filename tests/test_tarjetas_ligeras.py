@@ -89,3 +89,16 @@ def test_contexto_final_edition_tiene_lo_que_usan_los_detalles(app):
     for clave in ("paises_fe", "voces_fe", "estilos_fe", "presets_mezcla", "precios", "ediciones_por_cf", "mi_musica"):
         assert clave in ctx
     assert "guion" in ctx["precios"] and "final_por_pais" in ctx["precios"]
+
+
+# ------------------------------------------------------------ Task 2: base.html
+
+def test_base_trae_sondeos_por_atributo_ritmo_y_modal_remoto():
+    base = _plantilla("base.html")
+    assert "function arrancarSondeos(raiz)" in base
+    assert "function intervaloSondeo(" in base and "document.hidden" in base and "visibilitychange" in base
+    assert "function abrirDetalleRemoto(modal, cuerpo, url, alInsertar)" in base
+    assert "'X-Requested-With': 'fetch'" in base
+    # El observador de nodos insertados arranca sondeos además de videos.
+    assert "arrancarSondeos(n)" in base
+    assert "setTimeout(tick, intervaloSondeo(inicio))" in base and "setTimeout(tick, 1500)" not in base

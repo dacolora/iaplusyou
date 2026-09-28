@@ -23,7 +23,9 @@
       trabajoNoCompletado: {{ _('No se pudo completar el trabajo.')|tojson }},
       terminoConError: {{ _('Terminó con error.')|tojson }},
       listoCambiosSinGuardar: {{ _('¡Listo! Tienes cambios sin guardar en esta página.')|tojson }},
-      conexionPerdida: {{ _('Se perdió la conexión con el servidor.')|tojson }}
+      conexionPerdida: {{ _('Se perdió la conexión con el servidor.')|tojson }},
+      cargando: {{ _('Cargando…')|tojson }},
+      detalleNoCargo: {{ _('No se pudo cargar el detalle. Recarga la página.')|tojson }}
     };
 
     // Foto que no carga (archivo borrado, R2 que no responde): en vez del ícono
@@ -135,6 +137,16 @@
       banner.appendChild(boton);
     }
 
+    // Ritmo del sondeo (auditoría 2026-09-28): 1,5 s el primer minuto, 3 s
+    // hasta los cinco minutos, 5 s después. Un render de 10 min ya no cuesta
+    // 400 consultas.
+    function intervaloSondeo(inicioMs) {
+      var t = Date.now() - inicioMs;
+      if (t < 60000) return 1500;
+      if (t < 300000) return 3000;
+      return 5000;
+    }
+
     function iniciarPolling(jobId, contenedorId) {
       // El elemento se busca ANTES de marcar la clave: si se marcara primero y
       // el contenedor no existiera, la clave quedaría envenenada para toda la
@@ -186,8 +198,16 @@
         if (previo) etiquetaBase = previo;
       }
       var reintentos = 0;
+      var inicio = Date.now();
+      var pausado = false;
+      // Con la pestaña del navegador oculta no se consulta nada; al volver,
+      // un tick inmediato pone la barra al día.
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden && pausado) { pausado = false; tick(); }
+      });
 
       function tick() {
+        if (document.hidden) { pausado = true; return; }
         // cache: 'no-store' para que ningún intermediario devuelva un estado viejo.
         fetch('/trabajo/' + encodeURIComponent(jobId) + '/estado', { cache: 'no-store' })
           .then(function (r) { return r.json(); })
@@ -236,7 +256,7 @@
             }
 
             if (data.estado === 'en_progreso') {
-              setTimeout(tick, 1500);
+              setTimeout(tick, intervaloSondeo(inicio));
             } else if (data.estado === 'error') {
               alert(T_BASE.error + ' ' + (data.mensaje || T_BASE.trabajoNoCompletado));
               recargarOAvisar(texto, T_BASE.terminoConError);
@@ -256,6 +276,55 @@
 
       tick();
     }
+
+    // Toda barra de progreso lleva data-poll-job (spec 2026-09-28 «tarjetas
+    // ligeras»): una sola función arranca el sondeo de las que haya bajo
+    // `raiz`, al cargar la página, al agregar tarjetas («Ver más») y al llenar
+    // un modal por fetch. Las tarjetas ya no traen un script embebido con
+    // iniciarPolling(...): en un fragmento insertado con innerHTML nunca corre.
+    function arrancarSondeos(raiz) {
+      if (!raiz || !raiz.querySelectorAll) return;
+      var lista = (raiz.matches && raiz.matches('[data-poll-job]')) ? [raiz] : [];
+      raiz.querySelectorAll('[data-poll-job]').forEach(function (el) { lista.push(el); });
+      lista.forEach(function (el) {
+        if (el.dataset.sondeando || !el.id) return;
+        el.dataset.sondeando = '1';
+        iniciarPolling(el.dataset.pollJob, el.id);
+      });
+    }
+    window.arrancarSondeos = arrancarSondeos;
+    document.addEventListener('DOMContentLoaded', function () { arrancarSondeos(document); });
+
+    // Modal de detalle por fetch (Crear y Final edition): abre al instante con
+    // «Cargando…», pide el HTML y solo lo pinta si sigue siendo el último
+    // pedido (dos clics rápidos no se pisan). Nada se cachea: el detalle trae
+    // formularios con estado vivo (guion, ángulo, finales en curso).
+    function avisoVacio(texto) {
+      var p = document.createElement('p');
+      p.className = 'vacio';
+      p.textContent = texto;
+      return p;
+    }
+    function abrirDetalleRemoto(modal, cuerpo, url, alInsertar) {
+      var n = (modal._pedidoDetalle = (modal._pedidoDetalle || 0) + 1);
+      cuerpo.innerHTML = '';
+      cuerpo.appendChild(avisoVacio(T_BASE.cargando));
+      if (!modal.open) modal.showModal();
+      fetch(url, { headers: { 'X-Requested-With': 'fetch' }, cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(new Error(String(r.status))); })
+        .then(function (html) {
+          if (n !== modal._pedidoDetalle || !modal.open) return;
+          cuerpo.innerHTML = html;
+          arrancarSondeos(cuerpo);
+          if (alInsertar) alInsertar(cuerpo);
+        })
+        .catch(function () {
+          if (n !== modal._pedidoDetalle || !modal.open) return;
+          cuerpo.innerHTML = '';
+          cuerpo.appendChild(avisoVacio(T_BASE.detalleNoCargo));
+        });
+    }
+    window.abrirDetalleRemoto = abrirDetalleRemoto;
 
     // Al terminar un trabajo se hace location.reload(), y eso devolvía todas las
     // tarjetas <details> colapsadas: el refresco SÍ ocurría, pero el usuario veía
@@ -326,7 +395,11 @@
         // Los fragmentos que llegan por fetch (paneles, fichas) también.
         new MutationObserver(function (cambios) {
           cambios.forEach(function (c) {
-            c.addedNodes.forEach(function (n) { if (n.nodeType === 1) observar(n); });
+            c.addedNodes.forEach(function (n) {
+              if (n.nodeType !== 1) return;
+              observar(n);
+              if (window.arrancarSondeos) arrancarSondeos(n);
+            });
           });
         }).observe(document.body, { childList: true, subtree: true });
       });
