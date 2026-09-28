@@ -15,6 +15,7 @@ import re
 import doctrina
 import marca
 import proyectos
+from idiomas import N_
 from nicho import datos
 from nicho.fuentes.base import MIN_CITA
 
@@ -41,8 +42,10 @@ PRECIOS_USD_POR_MILLON = {
     "claude-opus-5": {"entrada": 5.0, "salida": 25.0},
     "claude-haiku-4-5": {"entrada": 1.0, "salida": 5.0},
 }
-IDIOMAS = {"es": "español", "en": "inglés", "pt": "portugués", "sv": "sueco", "fr": "francés", "de": "alemán",
-           "it": "italiano"}
+# N_ solo marca para el catálogo: el valor sigue en español, que es lo que
+# nombre_idioma mete en el prompt de Claude; la pantalla lo traduce con |traducir.
+IDIOMAS = {"es": N_("español"), "en": N_("inglés"), "pt": N_("portugués"), "sv": N_("sueco"), "fr": N_("francés"),
+           "de": N_("alemán"), "it": N_("italiano")}
 
 
 class AnalisisInvalido(RuntimeError):
@@ -324,8 +327,8 @@ def verificar_evidencia(sub, comentarios_por_id):
 
 # ------------------------------------------------------------ generar ---
 
-ETAPA_NUCLEOS = "Agrupando deseos"
-ETAPA_SUBS = "Armando sub-avatares"
+ETAPA_NUCLEOS = N_("Agrupando deseos")
+ETAPA_SUBS = N_("Armando sub-avatares")
 
 
 def _llamar(texto, max_tokens):

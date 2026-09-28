@@ -6,10 +6,11 @@ sin worker. `fuente_id` = hash del texto (lo pone normalizar_comentario).
 """
 import re
 
+from idiomas import N_
 from nicho.fuentes.base import Fuente, normalizar_comentario
 
 MODOS = ("lineas", "parrafos")
-NOMBRES_MODO = {"lineas": "Una línea por comentario", "parrafos": "Separados por una línea en blanco"}
+NOMBRES_MODO = {"lineas": N_("Una línea por comentario"), "parrafos": N_("Separados por una línea en blanco")}
 _RE_PARRAFO = re.compile(r"\n\s*\n")
 
 

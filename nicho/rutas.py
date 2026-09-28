@@ -11,8 +11,10 @@ cliente.html para la pestaña; el estudio abre en su propia página
 import io
 
 from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask_babel import gettext
 
 import catalogo_productos
+import doctrina
 import gastos
 import idiomas
 import proyectos
@@ -26,6 +28,7 @@ from nicho.fuentes import reddit as fuente_reddit
 from nicho.fuentes import texto as fuente_texto
 from nicho.fuentes import youtube as fuente_youtube
 from nicho.fuentes.base import ErrorFuente
+from idiomas import N_
 from tareas import investigacion as tareas_investigacion
 from tareas import nicho as tareas_nicho
 
@@ -77,7 +80,7 @@ def _entero(campo, defecto):
     try:
         return int(request.form.get(campo) or defecto)
     except ValueError:
-        raise datos.ErrorDatos(f"«{campo}» debe ser un número entero.")
+        raise datos.ErrorDatos(gettext("«%(campo)s» debe ser un número entero.", campo=campo))
 
 
 def _es_admin():
@@ -116,7 +119,8 @@ def _params_desde_form(fuente, est, cliente):
 def contexto(cliente):
     """Lo que necesita _tab_nicho.html. Se llama desde dashboard.ver_cliente."""
     return {"estudios_nicho": datos.estudios(cliente), "productos_nicho": _productos(cliente),
-            "min_comentarios_nicho": avatares.MIN_COMENTARIOS}
+            "min_comentarios_nicho": avatares.MIN_COMENTARIOS,
+            "etiquetas_estudio": datos.ETIQUETAS_ESTADO_ESTUDIO, "etiquetas_inv": investigacion.ETIQUETAS_ESTADO}
 
 
 # ----------------------------------------------------------- estudios ---
@@ -130,7 +134,7 @@ def crear(cliente):
     except datos.ErrorDatos as e:
         flash(str(e), "error")
         return _volver(cliente)
-    flash("Estudio creado. Ahora agrégale comentarios.", "ok")
+    flash(gettext("Estudio creado. Ahora agrégale comentarios."), "ok")
     return _volver(cliente, eid)
 
 
@@ -160,7 +164,10 @@ def ver(cliente, eid):
                        for k, a in apify_actores.ACTORES.items()],
         recolecciones=list(reversed((est["extra"].get("recolecciones") or [])[-5:])),
         periodos_reddit=fuente_reddit.PERIODOS, max_apify=apify_actores.MAX_RESULTADOS, region_defecto=proyectos.pais(cliente) or "",
-        investigacion=investigacion.resumen(datos.investigacion(cliente, eid)), price_estimate="")
+        investigacion=investigacion.resumen(datos.investigacion(cliente, eid)), price_estimate="",
+        etiquetas_estudio=datos.ETIQUETAS_ESTADO_ESTUDIO, etiquetas_avatar=datos.ETIQUETAS_ESTADO_AVATAR,
+        etiquetas_inv=investigacion.ETIQUETAS_ESTADO, etiquetas_paso_estado=investigacion.ETIQUETAS_ESTADO_PASO,
+        etiquetas_paso=investigacion.ETIQUETAS_PASO, consciencias_nombre=doctrina.CONSCIENCIAS_NOMBRE)
 
 
 @bp.post("/<int:eid>/editar")
@@ -171,7 +178,7 @@ def editar(cliente, eid):
         if request.form.get("catalogo_id") is not None:
             campos["catalogo_id"] = request.form.get("catalogo_id") or None
         datos.actualizar_estudio(cliente, eid, **campos)
-        flash("Estudio guardado.", "ok")
+        flash(gettext("Estudio guardado."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente, eid)
@@ -188,7 +195,7 @@ def archivar(cliente, eid):
 def eliminar(cliente, eid):
     _estudio_o_404(cliente, eid)
     if datos.eliminar_estudio(cliente, eid):
-        flash("Estudio eliminado permanentemente.", "ok")
+        flash(gettext("Estudio eliminado permanentemente."), "ok")
     return _volver(cliente)
 
 
@@ -198,20 +205,21 @@ def _agregar(cliente, eid, fuente, lista):
     r = datos.agregar_comentarios(cliente, eid, fuente, lista)
     datos.registrar_recoleccion(cliente, eid, {"fuente": fuente, "nuevos": r["nuevos"], "repetidos": r["repetidos"], "aviso": ""})
     datos.recalcular(cliente, eid)
-    flash(f"Entraron {r['nuevos']} comentario(s); {r['repetidos']} repetido(s).", "ok")
+    flash(gettext("Entraron %(nuevos)s comentario(s); %(repetidos)s repetido(s).", nuevos=r["nuevos"],
+                  repetidos=r["repetidos"]), "ok")
 
 
 @bp.post("/<int:eid>/comentarios/texto")
 def comentarios_texto(cliente, eid):
     est = _estudio_o_404(cliente, eid)
     if est["archivado"]:
-        flash("El estudio está archivado.", "error")
+        flash(gettext("El estudio está archivado."), "error")
         return _volver(cliente, eid)
     try:
         lista = list(fuentes_registro.por_tipo("texto")().recolectar(
             {"texto": request.form.get("texto"), "modo": request.form.get("modo") or "lineas"}))
         if not lista:
-            flash("No encontré comentarios en el texto (mínimo 3 caracteres cada uno).", "error")
+            flash(gettext("No encontré comentarios en el texto (mínimo 3 caracteres cada uno)."), "error")
         else:
             _agregar(cliente, eid, "texto", lista)
     except (ErrorFuente, datos.ErrorDatos) as e:
@@ -223,17 +231,17 @@ def comentarios_texto(cliente, eid):
 def comentarios_archivo(cliente, eid):
     est = _estudio_o_404(cliente, eid)
     if est["archivado"]:
-        flash("El estudio está archivado.", "error")
+        flash(gettext("El estudio está archivado."), "error")
         return _volver(cliente, eid)
     f = request.files.get("archivo")
     if not f or not f.filename:
-        flash("Elige un archivo .csv o .xlsx.", "error")
+        flash(gettext("Elige un archivo .csv o .xlsx."), "error")
         return _volver(cliente, eid)
     try:
         lista = list(fuentes_registro.por_tipo("csv")().recolectar(
             {"nombre": f.filename, "contenido": f.read(fuente_archivo.MAX_BYTES + 1)}))
         if not lista:
-            flash("El archivo no trajo comentarios.", "error")
+            flash(gettext("El archivo no trajo comentarios."), "error")
         else:
             _agregar(cliente, eid, "csv", lista)
     except (ErrorFuente, datos.ErrorDatos) as e:
@@ -257,7 +265,8 @@ def comentarios_borrar(cliente, eid, fuente):
         abort(404)
     n = datos.borrar_fuente(cliente, eid, fuente)
     datos.recalcular(cliente, eid)
-    flash(f"Se quitaron {n} comentario(s) de {fuentes_registro.NOMBRES.get(fuente, fuente)}.", "ok")
+    nombre_fuente = idiomas.traducir(fuentes_registro.NOMBRES.get(fuente, fuente))
+    flash(gettext("Se quitaron %(n)s comentario(s) de %(fuente)s.", n=n, fuente=nombre_fuente), "ok")
     return _volver(cliente, eid)
 
 
@@ -267,12 +276,12 @@ def recolectar(cliente, eid, fuente):
     if fuente not in fuentes_registro.CONECTADAS:
         abort(404)
     if est["archivado"]:
-        flash("El estudio está archivado.", "error")
+        flash(gettext("El estudio está archivado."), "error")
         return _volver(cliente, eid)
     faltan = fuentes_registro.llaves_faltantes(fuente)
     if faltan:
-        flash(f"Falta {', '.join(faltan)} en el .env del servidor (Configuración › Puesta a punto)." if _es_admin()
-              else "Esa fuente no está disponible todavía.", "error")
+        flash(gettext("Falta %(llaves)s en el .env del servidor (Configuración › Puesta a punto).", llaves=", ".join(faltan))
+              if _es_admin() else gettext("Esa fuente no está disponible todavía."), "error")
         return _volver(cliente, eid)
     try:
         params = _params_desde_form(fuente, est, cliente)
@@ -280,10 +289,11 @@ def recolectar(cliente, eid, fuente):
     except (ErrorFuente, datos.ErrorDatos) as e:
         flash(str(e), "error")
         return _volver(cliente, eid)
+    nombre_fuente = idiomas.traducir(fuentes_registro.NOMBRES[fuente])
     if tareas_nicho.encolar_recolectar(cliente, eid, fuente, params):
-        flash(f"Recolectando de {fuentes_registro.NOMBRES[fuente]}; la página se recarga sola al terminar.", "ok")
+        flash(gettext("Recolectando de %(fuente)s; la página se recarga sola al terminar.", fuente=nombre_fuente), "ok")
     else:
-        flash(f"Ya hay una recolección de {fuentes_registro.NOMBRES[fuente]} en curso.", "error")
+        flash(gettext("Ya hay una recolección de %(fuente)s en curso.", fuente=nombre_fuente), "error")
     return _volver(cliente, eid)
 
 
@@ -303,16 +313,17 @@ def apify_estimar(cliente, eid):
 def generar(cliente, eid):
     est = _estudio_o_404(cliente, eid)
     if est["archivado"]:
-        flash("El estudio está archivado.", "error")
+        flash(gettext("El estudio está archivado."), "error")
         return _volver(cliente, eid)
     lista = datos.comentarios_para_generar(cliente, eid)
     if len(lista) < avatares.MIN_COMENTARIOS:
-        flash(f"Hacen falta al menos {avatares.MIN_COMENTARIOS} comentarios no excluidos (hay {len(lista)}).", "error")
+        flash(gettext("Hacen falta al menos %(minimo)s comentarios no excluidos (hay %(hay)s).",
+                      minimo=avatares.MIN_COMENTARIOS, hay=len(lista)), "error")
         return _volver(cliente, eid)
     if tareas_nicho.encolar_generar(cliente, eid):
-        flash("Claude está armando los avatares; la página se recarga sola al terminar.", "ok")
+        flash(gettext("Claude está armando los avatares; la página se recarga sola al terminar."), "ok")
     else:
-        flash("Ya hay una generación en curso para este estudio.", "error")
+        flash(gettext("Ya hay una generación en curso para este estudio."), "error")
     return _volver(cliente, eid)
 
 
@@ -355,7 +366,7 @@ def avatar_editar(cliente, aid):
     a = _avatar_o_404(cliente, aid)
     try:
         datos.actualizar_avatar(cliente, aid, **_campos_avatar_desde_form())
-        flash("Avatar guardado. Si ya estaba aprobado, vuelve a aprobarlo para actualizar la persona.", "ok")
+        flash(gettext("Avatar guardado. Si ya estaba aprobado, vuelve a aprobarlo para actualizar la persona."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente, a["estudio_id"])
@@ -366,7 +377,7 @@ def avatar_aprobar(cliente, aid):
     a = _avatar_o_404(cliente, aid)
     try:
         datos.aprobar_avatar(cliente, aid)
-        flash("Avatar aprobado: ya es una persona de Sprints.", "ok")
+        flash(gettext("Avatar aprobado: ya es una persona de Sprints."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     return _volver(cliente, a["estudio_id"])
@@ -376,9 +387,9 @@ def avatar_aprobar(cliente, aid):
 def avatar_descartar(cliente, aid):
     a = _avatar_o_404(cliente, aid)
     if datos.descartar_avatar(cliente, aid):
-        flash("Avatar descartado.", "ok")
+        flash(gettext("Avatar descartado."), "ok")
     else:
-        flash("Solo se descartan los sub-avatares; el núcleo es una agrupación.", "error")
+        flash(gettext("Solo se descartan los sub-avatares; el núcleo es una agrupación."), "error")
     return _volver(cliente, a["estudio_id"])
 
 
@@ -426,12 +437,12 @@ def investigacion_iniciar(cliente, eid):
     """Iniciar una investigación nueva (aprobando el presupuesto)."""
     est = _estudio_o_404(cliente, eid)
     if est["archivado"]:
-        flash("El estudio está archivado.", "error")
+        flash(gettext("El estudio está archivado."), "error")
         return _volver(cliente, eid)
     
     inv_actual = datos.investigacion(cliente, eid)
     if inv_actual.get("estado") and inv_actual["estado"] not in ("lista", "detenida", "interrumpida"):
-        flash("Ya hay una investigación en curso.", "error")
+        flash(gettext("Ya hay una investigación en curso."), "error")
         return _volver(cliente, eid)
     
     try:
@@ -441,12 +452,12 @@ def investigacion_iniciar(cliente, eid):
         presupuesto_usd = float(request.form.get("presupuesto_usd") or 0)
         
         if presupuesto_usd <= 0:
-            flash("El presupuesto debe ser mayor a 0.", "error")
+            flash(gettext("El presupuesto debe ser mayor a 0."), "error")
             return _volver(cliente, eid)
         
         # Validar país
         if pais not in investigacion.IDIOMAS:
-            flash(f"País {pais} no soportado.", "error")
+            flash(gettext("País %(pais)s no soportado.", pais=pais), "error")
             return _volver(cliente, eid)
         
         # Actualizar estudio con país si no lo tiene
@@ -467,9 +478,9 @@ def investigacion_iniciar(cliente, eid):
                         {"cliente": cliente, "estudio_id": int(eid)},
                         cliente=cliente, duracion_estimada=60, max_intentos=2)
         
-        flash("Investigación iniciada; Claude está generando consultas.", "ok")
+        flash(gettext("Investigación iniciada; Claude está generando consultas."), "ok")
     except (ValueError, datos.ErrorDatos) as e:
-        flash(f"Error: {str(e)}", "error")
+        flash(gettext("Error: %(error)s", error=str(e)), "error")
     
     return _volver(cliente, eid)
 
@@ -482,7 +493,8 @@ def investigacion_reanudar(cliente, eid):
     
     estado = inv_actual.get("estado", "")
     if not investigacion.puede_reanudar(estado):
-        flash(f"No se puede reanudar un estudio con estado '{estado}'.", "error")
+        etiqueta = idiomas.traducir(investigacion.ETIQUETAS_ESTADO.get(estado, estado))
+        flash(gettext("No se puede reanudar un estudio con estado '%(estado)s'.", estado=etiqueta), "error")
         return _volver(cliente, eid)
     
     try:
@@ -492,7 +504,7 @@ def investigacion_reanudar(cliente, eid):
         # "Reanudar" nunca pasaba de "la investigación ya está completa".
         paso = investigacion.siguiente_paso({**inv_actual, "estado": "consultas"})
         if paso is None:
-            flash("La investigación ya está completa.", "ok")
+            flash(gettext("La investigación ya está completa."), "ok")
             return _volver(cliente, eid)
 
         # Cambiar estado a activo y encolar el paso pendiente -- antes solo
@@ -503,7 +515,7 @@ def investigacion_reanudar(cliente, eid):
         })
         tareas_investigacion.avanzar(cliente, eid)
 
-        flash("Investigación reanudada.", "ok")
+        flash(gettext("Investigación reanudada."), "ok")
     except datos.ErrorDatos as e:
         flash(str(e), "error")
     
@@ -518,13 +530,13 @@ def investigacion_cancelar(cliente, eid):
     
     estado = inv_actual.get("estado", "")
     if not estado or estado in ("lista", "interrumpida"):
-        flash("No hay investigación en curso para cancelar.", "error")
+        flash(gettext("No hay investigación en curso para cancelar."), "error")
         return _volver(cliente, eid)
     
     # Marcar como interrumpida
     datos.actualizar_investigacion(cliente, eid, lambda inv: {
-        **inv, "estado": "interrumpida", "detenida_por": "usuario"
+        **inv, "estado": "interrumpida", "detenida_por": N_("usuario")
     })
     
-    flash("Investigación cancelada.", "ok")
+    flash(gettext("Investigación cancelada."), "ok")
     return _volver(cliente, eid)

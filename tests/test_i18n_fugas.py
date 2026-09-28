@@ -516,3 +516,50 @@ def test_pagina_de_la_doctrina_en_ingles(admin_en):
     html = html_de(admin_en, "/cliente/acme/doctrina")
     fugas = espanol_visible(html, ("doctrina-cabecera", "doctrina-indice", "doctrina-pie"))
     assert not fugas, fugas[:15]
+
+
+# ------ Task 5 (fase 5): Nicho ------
+
+SUB_EN = {"base": "emocion", "nombre": "Ana / Carries the jugs", "deseo": "Wash without carrying weight", "demografia": "",
+          "edad_rango": "30-45", "emocion": "Tiredness",
+          "identidad": {"quiere_que_vean": "organized", "cree_de_si": "practical", "quiere_lograr": "free time"},
+          "soluciones_previas": [{"que": "Liquid detergent", "por_que_fallo": ["heavy"]}],
+          "situaciones": ["Carrying jugs upstairs"], "comportamiento": "Keeps buying jugs",
+          "conciencia": {"nivel": "consciente_del_problema", "detalle": "knows the jug is the issue"},
+          "encaje_producto": "Pods weigh nothing", "tono": "Direct", "palabras_clave": ["jug"],
+          "evidencia": [{"comentario_id": 1, "cita": "the jug is too heavy"}], "sin_evidencia": False}
+
+
+def _estudio_sembrado():
+    from nicho import datos
+    eid = datos.crear_estudio("acme", "Detergent", producto="Pods", tema="laundry", idioma="en")
+    datos.agregar_comentarios("acme", eid, "texto", [{"fuente_id": f"c{i}", "texto": f"Comment {i}: the jug is too heavy."}
+                                                     for i in range(25)])
+    datos.guardar_generacion("acme", eid, [{"nombre": "No weight", "deseo": "Wash without carrying weight",
+                                            "resumen": "Tired of jugs", "sub_avatares": [SUB_EN]}])
+    return eid
+
+
+def test_pestana_nicho_en_ingles(admin_en):
+    _estudio_sembrado()
+    html = html_de(admin_en, "/cliente/acme")
+    fugas = espanol_visible(html, ("tab-nicho",))
+    assert not fugas, fugas[:15]
+    tab = html[html.index('id="tab-nicho"'):html.index('id="tab-referentes"')]
+    for clave in ("armando", "generando", "revisando"):              # claves crudas que MARCAS no detecta
+        assert f">{clave}<" not in tab
+
+
+def test_pagina_del_estudio_en_ingles(admin_en):
+    eid = _estudio_sembrado()
+    html = html_de(admin_en, f"/cliente/acme/nicho/{eid}")
+    fugas = espanol_visible(html)
+    assert not fugas, fugas[:15]
+    assert ">propuesto<" not in html
+
+
+def test_exportacion_md_en_ingles(admin_en):
+    eid = _estudio_sembrado()
+    texto = admin_en.get(f"/cliente/acme/nicho/{eid}/exportar.md").get_data(as_text=True)
+    encabezados = [l for l in texto.splitlines() if l.startswith("#")]
+    assert encabezados and not any(_con_marca(l) for l in encabezados), encabezados

@@ -35,6 +35,10 @@ PLANTILLAS_TRADUCIDAS = [
     "_sprint_panel_piezas.html", "_sprint_sugeridos.html", "_sprint_lote_modal.html",
     "sprint_detalle.html", "sprint_revision.html", "sprint_entrega.html", "campana_referencias.html",
     "_angulo_editor.html", "doctrina.html",
+    # Task 5 (fase 5): Nicho — pestaña, página del estudio, avatares,
+    # comentarios e investigación.
+    "_tab_nicho.html", "_nicho_avatares.html", "_nicho_comentarios.html",
+    "_nicho_investigacion.html", "_nicho_nav.html", "nicho_estudio.html",
 ]
 
 

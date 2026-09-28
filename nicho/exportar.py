@@ -8,30 +8,39 @@ import io
 import re
 import unicodedata
 
+from flask_babel import gettext
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
+import doctrina
+import idiomas
+from idiomas import N_
+from nicho.datos import ETIQUETAS_ESTADO_AVATAR
+
 # (clave, rótulo). Las primeras filas son la hoja "Personas" con sus rótulos
 # exactos; después van los campos del doc del detergente que la hoja no tiene.
+# Cada rótulo (incluidos los que ya están en inglés) está marcado con N_ y se
+# traduce al escribir (idiomas.traducir); msgstr igual para los que ya estaban
+# en inglés.
 FILAS_HOJA = [
-    ("nombre", "Personas"),
-    ("deseo", "Deseo (frase de cabecera)"),
-    ("demografia", "Demographics (ASL)"),
-    ("identidad.quiere_que_vean", "What are some of the characteristics your prospect wants others to see in them?"),
-    ("identidad.cree_de_si", "Beliefs about self"),
-    ("identidad.quiere_lograr", "What does the prospect want to achieve in society?"),
-    ("encaje_producto", "How does your product help them achieve that status/characteristics?"),
-    ("soluciones_previas.que", "What are other solutions they have tried and failed at?"),
-    ("soluciones_previas.por_que_fallo", "Reason for failure with those solutions"),
-    ("situaciones", "Su día a día (situaciones)"),
-    ("conciencia", "Nivel de conciencia"),
-    ("emocion", "Emoción"),
-    ("comportamiento", "Comportamiento"),
-    ("tono", "Tono de voz"),
-    ("palabras_clave", "Palabras clave"),
-    ("evidencia", "Citas textuales"),
+    ("nombre", N_("Personas")),
+    ("deseo", N_("Deseo (frase de cabecera)")),
+    ("demografia", N_("Demographics (ASL)")),
+    ("identidad.quiere_que_vean", N_("What are some of the characteristics your prospect wants others to see in them?")),
+    ("identidad.cree_de_si", N_("Beliefs about self")),
+    ("identidad.quiere_lograr", N_("What does the prospect want to achieve in society?")),
+    ("encaje_producto", N_("How does your product help them achieve that status/characteristics?")),
+    ("soluciones_previas.que", N_("What are other solutions they have tried and failed at?")),
+    ("soluciones_previas.por_que_fallo", N_("Reason for failure with those solutions")),
+    ("situaciones", N_("Su día a día (situaciones)")),
+    ("conciencia", N_("Nivel de conciencia")),
+    ("emocion", N_("Emoción")),
+    ("comportamiento", N_("Comportamiento")),
+    ("tono", N_("Tono de voz")),
+    ("palabras_clave", N_("Palabras clave")),
+    ("evidencia", N_("Citas textuales")),
 ]
-BASES_NOMBRE = {"emocion": "emoción", "experiencia_producto": "experiencia con el producto"}
+BASES_NOMBRE = {"emocion": N_("emoción"), "experiencia_producto": N_("experiencia con el producto")}
 
 # Igual que tablero._celda: un texto que empieza por =, +, -, @, tab o CR lo
 # ejecutaría Excel/Sheets como fórmula al abrir el archivo. Los campos vienen de
@@ -58,7 +67,8 @@ def valor(sub, clave, urls=None):
     sub = sub or {}
     if clave == "conciencia":
         c = sub.get("conciencia") or {}
-        nivel = (c.get("nivel") or "").replace("_", " ")
+        clave_nivel = c.get("nivel") or ""
+        nivel = idiomas.traducir(doctrina.CONSCIENCIAS_NOMBRE.get(clave_nivel, clave_nivel.replace("_", " ")))
         return " — ".join(x for x in (nivel, c.get("detalle") or "") if x)
     if clave == "evidencia":
         return "\n".join(_cita(e, urls) for e in sub.get("evidencia") or [])
@@ -84,23 +94,39 @@ def nombre_archivo(estudio, ext):
     return f"avatares_{_slug(estudio.get('nombre'))}_{estudio.get('id')}.{ext}"
 
 
+def _estado_avatar(s):
+    """Etiqueta traducida del estado de un sub-avatar (spec: la clave guardada
+    no cambia, la etiqueta sí)."""
+    estado = s.get("estado") or "propuesto"
+    return idiomas.traducir(ETIQUETAS_ESTADO_AVATAR.get(estado, estado))
+
+
 def markdown(estudio, nucleos, urls=None):
+    """Corre en la petición: rótulos en el idioma de quien exporta. Los textos
+    de los avatares y las citas salen tal cual."""
     fecha = ((estudio.get("extra") or {}).get("ultima_generacion") or {}).get("fecha") or ""
-    lineas = [f"# Avatares: {estudio.get('nombre') or ''}", "",
-              f"Producto: {estudio.get('producto') or '—'} · Tema: {estudio.get('tema') or '—'} · Idioma: {estudio.get('idioma') or 'es'}"
-              f" · Generación {estudio.get('generacion') or 0}" + (f" · {fecha}" if fecha else ""), ""]
+    titulo = gettext("Avatares: %(nombre)s", nombre=estudio.get("nombre") or "")
+    datos_linea = gettext("Producto: %(producto)s · Tema: %(tema)s · Idioma: %(idioma)s · Generación %(n)s",
+                          producto=estudio.get("producto") or "—", tema=estudio.get("tema") or "—",
+                          idioma=estudio.get("idioma") or "es", n=estudio.get("generacion") or 0)
+    lineas = [f"# {titulo}", "", datos_linea + (f" · {fecha}" if fecha else ""), ""]
+    rotulo_deseo = gettext("Deseo:")
     for i, n in enumerate(nucleos or [], start=1):
-        lineas += [f"## Núcleo {i}: {n.get('nombre') or ''}", "", f"**Deseo:** {n.get('deseo') or ''}", ""]
+        titulo_nucleo = gettext("Núcleo %(i)s: %(nombre)s", i=i, nombre=n.get("nombre") or "")
+        lineas += [f"## {titulo_nucleo}", "", f"**{rotulo_deseo}** {n.get('deseo') or ''}", ""]
         if n.get("resumen"):
             lineas += [n["resumen"], ""]
         subs = [s for s in (n.get("subs") or []) if s.get("estado") != "descartado"]
         for j, s in enumerate(subs, start=1):
-            lineas += [f"### Sub-avatar {i}.{j}: {s.get('nombre') or ''} "
-                       f"({BASES_NOMBRE.get(s.get('base'), s.get('base') or '')} · {s.get('estado') or 'propuesto'})", ""]
-            for clave, rotulo in FILAS_HOJA[1:]:
+            base = BASES_NOMBRE.get(s.get("base"), s.get("base") or "")
+            titulo_sub = gettext("Sub-avatar %(n)s: %(nombre)s (%(base)s · %(estado)s)", n=f"{i}.{j}",
+                                 nombre=s.get("nombre") or "", base=idiomas.traducir(base), estado=_estado_avatar(s))
+            lineas += [f"### {titulo_sub}", ""]
+            for clave, fila in FILAS_HOJA[1:]:
                 v = valor(s, clave, urls)
                 if not v:
                     continue
+                rotulo = idiomas.traducir(fila)
                 if "\n" in v:
                     lineas.append(f"- **{rotulo}:**")
                     lineas += [f"  - {x}" for x in v.split("\n")]
@@ -118,7 +144,7 @@ def excel(estudio, nucleos, urls=None):
     relleno = PatternFill("solid", fgColor="3B6FD9")
     ajuste = Alignment(wrap_text=True, vertical="top")
     for fila, (_, rotulo) in enumerate(FILAS_HOJA, start=1):
-        celda = ws.cell(row=fila, column=1, value=rotulo)
+        celda = ws.cell(row=fila, column=1, value=idiomas.traducir(rotulo))
         celda.font, celda.fill, celda.alignment = negrita, relleno, ajuste
     for col, (_, s) in enumerate(subs_exportables(nucleos), start=2):
         for fila, (clave, _) in enumerate(FILAS_HOJA, start=1):
