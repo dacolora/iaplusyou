@@ -157,10 +157,17 @@ def _avisar_fase_de(job_id, cliente):
     return avisar_fase
 
 
+class SesionDescartada(Exception):
+    """La sesión ya no existe: la persona descartó la pieza (cf_descartar borra
+    concepto y pieza) mientras la tarea esperaba en la cola."""
+
+
 def _preparar(cliente, cf_id):
     """Relee la sesión de la base y recalcula lo que la closure vieja tomaba del
     scope de _lanzar_video_cf (mismo bloque, sin cambios de lógica)."""
-    entry = creative_flow.cargar(cliente)[cf_id]
+    entry = creative_flow.cargar(cliente).get(cf_id)
+    if entry is None:
+        raise SesionDescartada(cf_id)
     referencias = entry.get("referencias_urls") or []
     # Videos de referencia tal cual (solo los usa Wan 3.0). Para los demás modelos
     # el video ya está representado por su fotograma dentro de referencias_urls.
@@ -196,7 +203,11 @@ def ejecutar_imagen(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
     ref = f"imagen:{cf_id}{ref_sufijo(tarea)}"
-    entry, referencias, _, _, prompt_texto, _, aspect_ratio, modelo, _ = _preparar(cliente, cf_id)
+    try:
+        entry, referencias, _, _, prompt_texto, _, aspect_ratio, modelo, _ = _preparar(cliente, cf_id)
+    except SesionDescartada:
+        # No hay nada que generar ni que cobrar: la tarea termina sin traceback.
+        return gettext("La pieza se descartó antes de generar; no se cobró nada.")
 
     out_dir = os.path.join(BASE_DIR, "salidas", cliente, "flowplus")
     os.makedirs(out_dir, exist_ok=True)
@@ -243,7 +254,13 @@ def ejecutar_video(tarea):
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
     job_id = tarea.get("job_id") or _job_id(cliente, cf_id)
     ref = f"video:{cf_id}{ref_sufijo(tarea)}"
-    entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo, calidad = _preparar(cliente, cf_id)
+    try:
+        entry, referencias, videos_ref, duracion, prompt_texto, platforms, aspect_ratio, modelo, calidad = _preparar(cliente, cf_id)
+    except SesionDescartada:
+        # La persona descartó la pieza mientras el video esperaba en la cola (en
+        # producción el 2026-09-28 esto era un KeyError críptico): no hay nada
+        # que generar ni que cobrar; la tarea termina sin traceback.
+        return gettext("La pieza se descartó antes de generar; no se cobró nada.")
     # Sonido de la escena (spec estudio S1): lo decide la sesión; las sesiones
     # anteriores a este campo (y las de sprints viejos) lo piden.
     con_sonido = entry.get("con_sonido", True) is not False

@@ -583,7 +583,7 @@ appends a `metrica_snapshot` per ad (thruplay, purchases, ROAS when Meta reports
 the worker periodic `exp_refrescar_todos` (every 2 h, `worker.PERIODICAS`) does it for
 every `corriendo` experiment. Every verdict/action writes an `evento`. Experiment
 states: `armando -> lanzando -> pausado <-> corriendo -> cerrado`, `error` on a failed
-launch (resumable). UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
+launch (resumable). Meta's raw errors («Meta Ads (<edge>) respondió 400: {JSON cut at 500 chars}») are stored as-is but shown through `meta_errores.explicar` (filter `error_meta`, also used by `tablero.alertas` and `lanzador.traducir_error_meta`): known codes become what to do (1885183 app in Development mode — also recognized in the already-explained text, so it re-renders in the viewer's language —, 190 reconnect, 10/200/294 permissions, 4/17/32/613/80004 rate limit, 368 policy block, 1/2 temporary), otherwise Meta's own `error_user_title/msg`, otherwise the code; the experiment card keeps the raw text in a folded «Detalle técnico». UI (since 2026-09-20, "la galería primero"): the Experimentos tab opens with a gallery of
 every piece with a public URL (`experimentos.elegibles`: Crear videos AND images, sprint
 pieces, finals; `origen`, `formato`, `en_experimentos`), the user ticks pieces and a 3-step
 form appears (where: countries + daily budget; how much: cap + days with a live count;
@@ -684,8 +684,10 @@ precio/moneda/url_compra/en_prueba/prioridad; importing (CSV/URL) is the "Traer 
 details, imported products without photos sit in "Importados sin fotos" until `prod_fotos_subir`
 or `prod_vincular` creates their activo. Configuración (`_tab_settings.html`) shows one
 apartado at a time (pills, last one remembered, `window.irAConfig(id)` opens the apartado
-holding `id`): Puesta a punto (admin only), Conexiones (Meta full width, store, Pixel, organic
-channels), Marca, Generación, Cuenta y avisos, Gasto. The key cards (`_llave_tarjeta.html`,
+holding `id`): Puesta a punto (admin only), Conexiones (store, Pixel, organic channels — since
+2026-09-28 the Meta connection card is NOT here: it lives only in Experimentos,
+`_meta_conectar.html`; the Triple Whale form still is), Marca, Generación, Cuenta y avisos,
+Gasto. The key cards (`_llave_tarjeta.html`,
 `dashboard._estado_llaves`) list every
 paid key (Anthropic, fal, Higgsfield, R2, Meta, SMTP, MELI) with configured/missing badges —
 computed from `bool(os.environ.get(...))` only, values are never rendered. Since 2026-09-20 that
@@ -779,7 +781,7 @@ fields, labels, buttons (`.btn-generar` = primary with white text; `.btn-sm`/`.b
 those instead of new one-off styles. `cliente.html` switches tabs on `hashchange` and scrolls to
 top; `data-abrir-detalle="<details id>"` opens a `<details>`. Up to 760 px the sidebar leaves the
 screen and opens with «☰ Menú» (`body.menu-abierto`); nothing may scroll the page sideways
-(`tests/test_base_visual.py`, `tests/test_movil.py`). Crear's «Desde referencias» form is a **composer**
+(`tests/test_base_visual.py`, `tests/test_movil.py`). Phone review of every screen (2026-09-28, CSS block «Celular: revisión de pantallas» at the end of `style.css`): auto-fill grids use `minmax(min(100%, X), 1fr)` (never a bare fixed minimum — a test rejects it), card galleries (Crear, Final edition, Experimentos, Referentes) are 2 columns ≤ 760 px, button/filter rows (`.acciones`, summaries) wrap, long ids/JSON/URLs break instead of pushing the page, and data tables (`tabla-admin`, `tabla-tiendas`, `tabla-productos`, `gasto-tabla`, `sprint-entrega`, `gpg-tabla`, or opt-in `tabla-apilada`) become one card per row ≤ 640 px with each value labelled from its column header (`static/tablas.js` copies the `<th>` text to `data-etiqueta`, also for tables inserted later by fetch); `.solo-teclado` hides keyboard-only hints on touch screens. Crear's «Desde referencias» form is a **composer**
 (spec `2026-09-27-crear-compositor`, CSS block «Crear: compositor»): a card whose top half is the bandeja
 (OUTSIDE `#form-flowplus`, it carries its own `<form>`s) and whose bottom half is the form, with a bar of pills
 whose menus hold the real radios/selects — the selects stay the hidden source of truth and the menus draw chips

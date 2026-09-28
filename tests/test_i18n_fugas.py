@@ -348,7 +348,7 @@ def test_etiquetas_de_estado_en_ingles(admin_en):
 
 def test_flash_de_experimentos_en_ingles(admin_en):
     admin_en.post("/cliente/acme/experimentos/probar", data={}, headers=MISMO_ORIGEN)
-    assert "Connect Meta in Settings before testing pieces." in html_de(admin_en, "/cliente/acme")
+    assert "Connect Meta in Experiments before testing pieces." in html_de(admin_en, "/cliente/acme")
 
 
 def test_experimentos_sin_valores_crudos_en_ingles(admin_en, app_i18n, monkeypatch):

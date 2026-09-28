@@ -23,7 +23,7 @@
 <section class="admin-bloque">
   <div class="admin-cabecera"><h2>Swipe file de copycoders</h2></div>
   <form method="post" action="{{ url_for('admin_referentes_importar') }}" class="agencia-form">
-    <label>URL <input type="url" name="url" value="{{ url_swipe }}" style="min-width:32rem"></label>
+    <label>URL <input type="url" name="url" value="{{ url_swipe }}" style="width:100%"></label>
     <button type="submit" class="btn-generar btn-sm" {% if trabajo %}disabled{% endif %}>Importar</button>
   </form>
   <p class="vacio">Última importación:

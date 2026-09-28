@@ -477,3 +477,16 @@ def test_csv_mes_sin_piezas(base_temporal, sin_red):
     import tablero
     assert tablero.csv_mes("acme", ahora_iso=AHORA).lstrip("﻿").splitlines() == [
         ";".join(tablero.ENCABEZADO_CSV)]
+
+
+def test_alerta_de_experimento_en_error_explica_el_json_de_meta(base_temporal, sin_red):
+    """El texto crudo de la Graph API ({"error":{...}}) no llega a la alerta: se
+    cuenta qué pasó y qué hacer (meta_errores.explicar)."""
+    import tablero
+    from tests.test_meta_errores import REAL_1885183
+    _experimento(base_temporal, "Prueba 1", estado="error", error=REAL_1885183)
+    a = tablero.alertas("acme", ahora_iso=AHORA)
+    texto = a[0]["texto"]
+    assert a[0]["tipo"] == "experimento_error"
+    assert "modo Desarrollo" in texto and "Live" in texto and "{" not in texto and "OAuthException" not in texto
+    assert ".." not in texto

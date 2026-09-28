@@ -1121,3 +1121,22 @@ def test_recrear_adaptar_descarta_una_sofisticacion_invalida_del_catalogo(app, m
     r = app["c"].post(f"/cliente/acme/referentes/{ids[0]}/recrear/adaptar", json={"producto_id": "espejo_led"})
     assert r.status_code == 200
     assert visto["sofisticacion"] is None
+
+
+def test_filtros_plegables_en_el_celular(app):
+    """Revisión de celular 2026-09-28: las pastillas de etapa y consciencia más los
+    cuatro selectores y la búsqueda ocupaban toda la primera pantalla antes del
+    primer anuncio. En el celular van detrás de «Filtros» (con cuántos hay puestos);
+    en escritorio el envoltorio es `display: contents` y todo queda como antes."""
+    _sembrar()
+    html = app["c"].get("/cliente/acme").data.decode()
+    assert 'id="ref-filtros-boton"' in html and 'aria-controls="ref-filtros"' in html
+    assert 'aria-expanded="false"' in html
+    i, j = html.index('id="ref-filtros"'), html.index('id="ref-grid"')
+    bloque = html[i:j]
+    assert 'data-filtro="etapa"' in bloque and 'data-filtro="consciencia"' in bloque
+    assert 'data-filtro="marca"' in bloque and 'data-filtro="q"' in bloque
+    assert "function contarFiltros()" in html
+    css = open("static/style.css", encoding="utf-8").read()
+    assert ".ref-filtros { display: contents; }" in css
+    assert ".ref-filtros:not(.abierto) { display: none; }" in css

@@ -1129,6 +1129,9 @@ msgstr ""
 "Proposals waiting for approval, winners and\n"
 "  Meta rejections all land in this email. Empty = no email notifications."
 
+msgid "A la conexión con Meta le falta un permiso para esto: vuelve a conectar Meta en Experimentos aceptando todos los permisos que pide, y reintenta."
+msgstr "The Meta connection is missing a permission for this: reconnect Meta in Experiments, accepting every permission it asks for, and try again."
+
 msgid "A quién le habla"
 msgstr "Who it speaks to"
 
@@ -1819,6 +1822,9 @@ msgstr "Each brand needs a name."
 msgid "Cada perdedora se diagnostica sola (%(precio)s) y deja su línea aquí."
 msgstr "Every loser is diagnosed on its own (%(precio)s) and leaves its line here."
 
+msgid "Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué."
+msgstr "Each card shows the QA: ✓ passes, ✗ fails; tap the QA row to read why."
+
 msgid "Cadera / entrepierna"
 msgstr "Hips / groin"
 
@@ -2309,23 +2315,23 @@ msgstr "With a reference image this model doesn't choose a format: it follows th
 msgid "Con videos de referencia (Wan 3.0), sus segundos más los del resultado no pueden pasar de 30."
 msgstr "With reference videos (Wan 3.0), their seconds plus the result's can't add up to more than 30."
 
-msgid "Conecta Meta arriba, en la tarjeta <a href=\"#llave-meta\">Meta (anuncios)</a> de Puesta a punto (o en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a>), para comprobar el Pixel."
-msgstr "Connect Meta above, in the <a href=\"#llave-meta\">Meta (ads)</a> card in Setup (or in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a>), to check the Pixel."
+msgid "Conecta Meta arriba para probar"
+msgstr "Connect Meta above to test"
 
 msgid "Conecta Meta con una Página"
 msgstr "Connect Meta with a Page"
 
-msgid "Conecta Meta en <a href=\"#llave-meta\">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica."
-msgstr "Connect Meta in <a href=\"#llave-meta\">Setup › Meta (ads)</a> with an account that administers the <strong>Page</strong> where it publishes."
+msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> con una cuenta que administre la <strong>Página</strong> donde se publica."
+msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> with an account that administers the <strong>Page</strong> where it publishes."
 
-msgid "Conecta Meta en Configuración antes de crear un experimento."
-msgstr "Connect Meta in Settings before creating an experiment."
+msgid "Conecta Meta en <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experimentos</a> para comprobar el Pixel."
+msgstr "Connect Meta in <a href=\"#experimentos\" onclick=\"document.querySelector('.sidebar-item[data-tab=experimentos]').click(); return false;\">Experiments</a> to check the Pixel."
 
-msgid "Conecta Meta en Configuración antes de probar piezas."
-msgstr "Connect Meta in Settings before testing pieces."
+msgid "Conecta Meta en Experimentos antes de crear un experimento."
+msgstr "Connect Meta in Experiments before creating an experiment."
 
-msgid "Conecta Meta en Configuración para probar"
-msgstr "Connect Meta in Settings to test"
+msgid "Conecta Meta en Experimentos antes de probar piezas."
+msgstr "Connect Meta in Experiments before testing pieces."
 
 msgid "Conecta Notion primero."
 msgstr "Connect Notion first."
@@ -2977,6 +2983,9 @@ msgstr "Breakdown"
 
 msgid "Detalle"
 msgstr "Detail"
+
+msgid "Detalle técnico (para soporte)"
+msgstr "Technical detail (for support)"
 
 msgid "Detalles de pasos"
 msgstr "Step details"
@@ -4354,8 +4363,8 @@ msgstr "This prompt is already approved. Reopen it to keep correcting it."
 msgid "Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el panel; pídele a él cualquier cambio."
 msgstr "Creatv manages this project on Meta (agency mode): it doesn't register an app or connect anything here. The admin assigns the ad account and the Page from the panel; ask them for any change."
 
-msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Configuración › Meta (con nada en marcha)."
-msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Settings › Meta (with nothing running)."
+msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Experimentos › Meta (con nada en marcha)."
+msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Experiments › Meta (with nothing running)."
 
 msgid "Este proyecto no está en modo agencia."
 msgstr "This project isn't in agency mode."
@@ -5419,6 +5428,9 @@ msgstr "The figure “%(cifra)s” isn't in the product's data."
 msgid "La conexión con Meta está rota (token vencido o permisos retirados): vuelve a conectar en Configuración."
 msgstr "The connection with Meta is broken (expired token or withdrawn permissions): reconnect in Settings."
 
+msgid "La conexión con Meta venció o se retiró: vuelve a conectar Meta en Experimentos y reintenta."
+msgstr "The Meta connection expired or was revoked: reconnect Meta in Experiments and try again."
+
 msgid "La conexión de agencia no está activa ahora mismo"
 msgstr "The agency connection isn't active right now"
 
@@ -5515,6 +5527,9 @@ msgstr "The persona needs a name."
 
 msgid "La pieza no tiene imagen ni fotograma que evaluar."
 msgstr "The piece has no image or frame to evaluate."
+
+msgid "La pieza se descartó antes de generar; no se cobró nada."
+msgstr "The piece was discarded before generating; nothing was charged."
 
 msgid "La pieza ya no existe."
 msgstr "The piece no longer exists."
@@ -6013,6 +6028,9 @@ msgstr "Meta (Pixel/Store)"
 msgid "Meta (anuncios)"
 msgstr "Meta (ads)"
 
+msgid "Meta bloqueó esta acción por un tiempo por sus políticas: revisa los avisos en tu Business Suite antes de reintentar."
+msgstr "Meta temporarily blocked this action under its policies: check the notices in your Business Suite before trying again."
+
 msgid "Meta conectado:"
 msgstr "Meta connected:"
 
@@ -6021,6 +6039,9 @@ msgstr "Meta disconnected from this project and access revoked on Meta."
 
 msgid "Meta desconectado de este proyecto. La app sigue autorizada en tu Facebook hasta que la quites en Configuración › Integraciones de negocio."
 msgstr "Meta disconnected from this project. The app stays authorized on your Facebook until you remove it in Settings › Business Integrations."
+
+msgid "Meta está frenando las llamadas por un rato (límite de uso): reintenta en unos minutos."
+msgstr "Meta is throttling calls for a while (usage limit): try again in a few minutes."
 
 msgid "Meta no dio un motivo"
 msgstr "Meta gave no reason"
@@ -6050,11 +6071,25 @@ msgid "Meta rechazó el anuncio porque la app de Meta de este proyecto está en 
 msgstr "Meta rejected the ad because this project's Meta app is in Development mode (subcode 1885183). Switch it to Live mode at developers.facebook.com › My Apps › your app › “App Mode” and retry the launch: the campaign, ad sets and videos already created are reused, nothing is duplicated."
 
 #, python-format
+msgid "Meta rechazó el pedido (código %(codigo)s%(sub)s)%(mensaje)s."
+msgstr "Meta rejected the request (code %(codigo)s%(sub)s)%(mensaje)s."
+
+msgid "Meta rechazó el pedido. Mira el detalle técnico o reintenta en unos minutos."
+msgstr "Meta rejected the request. Check the technical detail or try again in a few minutes."
+
+#, python-format
+msgid "Meta rechazó el pedido: %(motivo)s"
+msgstr "Meta rejected the request: %(motivo)s"
+
+#, python-format
 msgid "Meta rechazó un anuncio de «%(experimento)s»"
 msgstr "Meta rejected an ad in “%(experimento)s”"
 
 msgid "Meta revisa cada anuncio nuevo antes de mostrarlo (normalmente menos de 24 h). Cuando empiece a circular, «Actualizar métricas» trae las cifras."
 msgstr "Meta reviews every new ad before showing it (usually under 24 h). Once it starts running, “Update metrics” brings in the numbers."
+
+msgid "Meta tuvo una falla temporal: reintenta en unos minutos."
+msgstr "Meta had a temporary failure: try again in a few minutes."
 
 msgid "Meta ya no acepta la conexión de este proyecto"
 msgstr "Meta no longer accepts this project's connection"
@@ -6945,15 +6980,6 @@ msgstr "To connect MercadoLibre, <code>FLASK_SECRET_KEY</code> is missing in the
 #, python-format
 msgid "Para conectar MercadoLibre faltan <code>MELI_APP_ID</code> y <code>MELI_SECRET</code> en el <code>.env</code> del servidor (app en developers.mercadolibre.com con permiso <code>offline_access</code> y redirect <code>%(redirect)s</code>)."
 msgstr "To connect MercadoLibre, <code>MELI_APP_ID</code> and <code>MELI_SECRET</code> are missing in the server's <code>.env</code> (app at developers.mercadolibre.com with <code>offline_access</code> permission and redirect <code>%(redirect)s</code>)."
-
-msgid ""
-"Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de\n"
-"  generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la\n"
-"  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada."
-msgstr ""
-"To launch ads and publish on your Facebook Page and Instagram. The generation\n"
-"  services (scripts, image and video, voice and music, storage) and the platform's\n"
-"  email are set by Creatv on the server: there's nothing you need to do there."
 
 msgid "Para publicar anuncios y contenido en tu Página de Facebook y tu Instagram. Elige una forma; puedes cambiarla después."
 msgstr "To publish ads and content on your Facebook Page and your Instagram. Choose a form; you can change it later."
@@ -10839,8 +10865,8 @@ msgstr "currency"
 msgid "motor"
 msgstr "engine"
 
-msgid "moverse. Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué."
-msgstr "move. Each card shows the QA: ✓ passes, ✗ fails; tap the QA row to read why."
+msgid "moverse."
+msgstr "move."
 
 msgid "muy consciente"
 msgstr "most aware"

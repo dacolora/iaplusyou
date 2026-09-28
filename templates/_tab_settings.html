@@ -68,16 +68,6 @@
 {% endif %}
 
 <section class="config-apartado" id="config-ap-conexiones" data-apartado="conexiones">
-<h2 id="config-meta">Meta</h2>
-<p class="vacio" style="padding-top:0;">
-  {{ _('Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de
-  generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la
-  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada.') }}
-</p>
-<div class="llaves-tarjetas llaves-tarjetas-ancha">
-  {% for l in llaves if l.id == "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
-</div>
-
 {# ---- Bloque 5: Conectar tu tienda ---- #}
 <h2 id="config-tienda">{{ _('Conectar tu tienda') }}</h2>
 <p class="vacio" style="padding-top:0;">
@@ -261,7 +251,7 @@
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Comprobar Pixel') }}</button></form>
 </div>
 {% else %}
-<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta arriba, en la tarjeta <a href="#llave-meta">Meta (anuncios)</a> de Puesta a punto (o en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a>), para comprobar el Pixel.') }}</p>
+<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> para comprobar el Pixel.') }}</p>
 {% endif %}
 <details class="pixel-ayuda">
   <summary>{{ _('Cómo instalar el Pixel según tu plataforma') }}</summary>
@@ -355,7 +345,7 @@
       <summary>{{ _('Cómo activarlo') }}</summary>
       <ol>
         {% if c.plataforma == "facebook" %}
-        <li>{{ _('Conecta Meta en <a href="#llave-meta">Puesta a punto › Meta (anuncios)</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
+        <li>{{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> con una cuenta que administre la <strong>Página</strong> donde se publica.') }}</li>
         <li>{{ _('Al conectar, elige esa Página: se guarda su token de página (<code>page_id</code>) para publicar videos en el muro.') }}</li>
         {% elif c.plataforma == "instagram" %}
         <li>{{ _('Primero Facebook (arriba): Instagram publica a través de la Página.') }}</li>
@@ -715,7 +705,7 @@
 
 <h4 style="margin-top:1.5rem;">{{ _('Gasto por modelo') }}</h4>
 <div style="overflow-x:auto;">
-<table>
+<table class="tabla-apilada">
   <thead><tr><th>{{ _('Modelo') }}</th><th>{{ _('Generaciones') }}</th><th>{{ _('Costo') }}</th></tr></thead>
   <tbody>
     {% for modelo, d in informe.operacion.por_modelo.items() %}
@@ -785,7 +775,7 @@
   // Configuración en apartados (spec 2026-09-26): uno a la vez; se recuerda
   // el último por navegador. window.irAConfig(id) abre el apartado que
   // contiene `id` y lo trae a la vista («Este mes» de la barra lateral,
-  // enlaces #llave-meta, #config-tienda…).
+  // enlaces #config-tienda, #config-pixel…).
   (function () {
     var raiz = document.getElementById('tab-settings');
     if (!raiz) return;

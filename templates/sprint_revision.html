@@ -8,7 +8,7 @@
   <div>
     <h1>{{ _('Revisión de %(nombre)s', nombre=sprint.nombre) }}</h1>
     <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ _('%(terminadas)s terminadas de %(planeadas)s · %(aprobadas)s aprobadas · %(rechazadas)s rechazadas · %(sin_revisar)s sin revisar · %(error)s con error · USD %(usd)s', terminadas=resumen.terminadas, planeadas=resumen.planeadas, aprobadas=resumen.aprobadas, rechazadas=resumen.rechazadas, sin_revisar=resumen.sin_revisar, error=resumen.error, usd='%.2f' % resumen.costo_usd) }}</p>
-    <p class="vacio">{{ _('Atajos:') }} <kbd>A</kbd> {{ _('aprobar') }} · <kbd>R</kbd> {{ _('rechazar') }} · <kbd>←</kbd> <kbd>→</kbd> {{ _('moverse. Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.') }}</p>
+    <p class="vacio"><span class="solo-teclado">{{ _('Atajos:') }} <kbd>A</kbd> {{ _('aprobar') }} · <kbd>R</kbd> {{ _('rechazar') }} · <kbd>←</kbd> <kbd>→</kbd> {{ _('moverse.') }} </span>{{ _('Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.') }}</p>
   </div>
 </div>
 
