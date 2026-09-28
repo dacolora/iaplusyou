@@ -34,6 +34,12 @@ def _app_con_catalogo_real():
     return app
 
 
+def _sitio(system):
+    """Doctrina, bloque 4 (§7): el system es una lista de bloques — la doctrina
+    con caché primero, las instrucciones del sitio al final."""
+    return system[-1]["text"] if isinstance(system, list) else system
+
+
 def _sin_frases_permitidas(system):
     """`system` del refinador sin las frases que SIEMPRE mencionan «inglés»: las
     dos del cuerpo (el prompt del modelo nunca cambia de idioma) y, desde la
@@ -54,7 +60,7 @@ def test_refinador_responder_pide_la_explicacion_en_ingles(base_temporal, monkey
     mid = refinador.pedir_cambio("acme", p["id"], "Cambia el baño por una habitación cálida")
     registro = []
     refinador.responder(mid, llamar=_llamar_fijo(_json("Changed the room.", CLIP), registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("en")
     assert orden in system and "inglés" in system
     # El prompt de salida (lo que va al modelo) se sigue pidiendo en inglés,
@@ -73,7 +79,7 @@ def test_refinador_responder_en_espanol_mantiene_el_texto_de_hoy(base_temporal, 
     mid = refinador.pedir_cambio("acme", p["id"], "Cambia el baño")
     registro = []
     refinador.responder(mid, llamar=_llamar_fijo(_json("Listo.", CLIP), registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("es")
     assert system.startswith(orden) and system.endswith(orden)
     assert "español" in system
@@ -93,7 +99,7 @@ def test_recorte_proponer_pide_los_motivos_en_ingles(base_temporal, monkeypatch,
     registro = []
     recorte.proponer(vid, llamar=fake({"orden": [4, 3, 2, 5, 6, 1], "motivos": {"4": "minor detail"}},
                                       registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("en")
     assert system.startswith(orden) and system.endswith(orden)
     assert "por qué se puede quitar, en inglés, máximo 12 palabras" in system
@@ -109,7 +115,7 @@ def test_recorte_proponer_en_espanol_mantiene_el_texto_de_hoy(base_temporal, mon
     registro = []
     recorte.proponer(vid, llamar=fake({"orden": [4, 3, 2, 5, 6, 1], "motivos": {"4": "detalle"}},
                                       registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("es")
     assert system.startswith(orden) and system.endswith(orden)
     assert "por qué se puede quitar, en español, máximo 12 palabras" in system
@@ -165,7 +171,7 @@ def test_clips_armar_pide_el_titulo_en_ingles(base_temporal, monkeypatch, tmp_pa
     datos.empezar("acme", vid, "armando", ("configurando",))
     registro = []
     clips.armar(vid, llamar=fake(PLAN, registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("en")
     assert system.startswith(orden) and system.endswith(orden)
     assert '"titulo": "título corto en inglés"' in system
@@ -181,7 +187,7 @@ def test_clips_armar_en_espanol_mantiene_el_texto_de_hoy(base_temporal, monkeypa
     datos.empezar("acme", vid, "armando", ("configurando",))
     registro = []
     clips.armar(vid, llamar=fake(PLAN, registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("es")
     assert system.startswith(orden) and system.endswith(orden)
     assert '"titulo": "título corto en español"' in system
@@ -265,7 +271,7 @@ def test_imagenes_escribir_pide_el_titulo_en_ingles(base_temporal, monkeypatch, 
     vid = _armado(monkeypatch, tmp_path, "en")
     registro = []
     imagenes.escribir(vid, llamar=fake(RESPUESTA_IMAGENES, registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("en")
     assert system.startswith(orden) and system.endswith(orden)
     assert '"titulo": "título corto en inglés"' in system
@@ -279,7 +285,7 @@ def test_imagenes_escribir_en_espanol_mantiene_el_texto_de_hoy(base_temporal, mo
     vid = _armado(monkeypatch, tmp_path, "es")
     registro = []
     imagenes.escribir(vid, llamar=fake(RESPUESTA_IMAGENES, registro=registro))
-    system = registro[0]["system"]
+    system = _sitio(registro[0]["system"])
     orden = idiomas.orden_idioma("es")
     assert system.startswith(orden) and system.endswith(orden)
     assert '"titulo": "título corto en español"' in system

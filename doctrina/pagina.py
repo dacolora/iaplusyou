@@ -13,7 +13,7 @@ import doctrina
 
 TITULOS = {"base": "Lo esencial", "investigar": "Investigar", "angulo": "El ángulo", "gancho": "El gancho",
            "guion": "El guion", "video": "El video", "caption": "El caption", "clasificar": "Leer anuncios ajenos",
-           "revisar": "Revisar antes de lanzar"}
+           "revisar": "Revisar antes de lanzar", "diagnosticar": "Cuando pierde"}
 
 _TITULO = re.compile(r"^(#{1,3})\s+(.*)$")
 _VINETA = re.compile(r"^\s*-\s+(.*)$")

@@ -31,9 +31,8 @@
       <p class="panel-pieza-qa"><span class="campo-error">QA falló: {{ p.qa.nota or 'sin detalle' }}</span>
         <button type="button" class="btn-xs" data-pieza-post data-url="{{ url_for('sprints.pieza_qa', cliente=cliente, cp_id=p.id) }}">Repetir QA</button></p>
       {% elif p.qa %}
-      <p class="panel-pieza-qa"><span class="sprint-qa-score sprint-qa-{{ p.qa.veredicto }}">{{ p.qa.score }}</span>
-        {% for k in checks %}{% set ch = (p.qa.checks or {}).get(k) %}{% if ch %}<span class="qa-check {{ 'ok' if ch.ok else 'mal' }}" title="{{ k | replace('_', ' ') }}: {{ ch.nota }}">{{ '✓' if ch.ok else '✗' }}</span>{% endif %}{% endfor %}
-        <small class="vacio">{{ p.qa.veredicto }}</small></p>
+      {% from "_sprint_qa.html" import qa_detalle %}
+      <div class="panel-pieza-qa">{{ qa_detalle(p.qa, checks) }}</div>
       {% elif p.estado in ("listo", "degradada") %}<p class="vacio">QA pendiente…</p>{% endif %}
       {% if p.revision == "rechazada" and p.revision_motivo %}<p class="campo-error">Motivo: {{ p.revision_motivo }}</p>{% endif %}
       <div class="panel-acciones">

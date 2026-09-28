@@ -51,7 +51,22 @@ SOFISTICACIONES_CLIENTE = {
     4: N_("Ya vio cómo funciona en otros: hay que mejorar el cómo"),
     5: N_("Ya no cree en nada de esto: hay que hablarle de quién es"),
 }
-REBANADAS = ("base", "investigar", "angulo", "gancho", "guion", "video", "caption", "clasificar", "revisar")
+REBANADAS = ("base", "investigar", "angulo", "gancho", "guion", "video", "caption", "clasificar", "revisar",
+             "diagnosticar")
+# Por qué pierde una pieza (Theriot, cap. 14 + gancho y creativo): códigos del
+# diagnóstico (bloque 4) con su nombre para el cliente.
+# N_: los nombres se traducen donde se muestran (|traducir / idiomas.traducir).
+CAUSAS_PERDIDA = (("gancho", N_("el gancho no retiene")), ("sin_urgencia", N_("sin urgencia en el deseo")),
+                  ("muy_educativo", N_("demasiado educativo")), ("estacionalidad", N_("estacionalidad")),
+                  ("repeticion", N_("repetición: ya lo vieron")), ("landing", N_("la landing no continúa el anuncio")),
+                  ("posicionamiento", N_("posicionamiento equivocado")), ("creativo", N_("lo visual no da creencia")))
+CAUSAS_NOMBRE = dict(CAUSAS_PERDIDA)
+# Un rescate del creativo no las arregla: el motor propone y una persona decide.
+CAUSAS_NO_CREATIVAS = ("landing", "estacionalidad", "posicionamiento")
+SIGUIENTES_PASOS = ("gancho", "estructura", "regenerar", "oferta", "landing", "pausar")
+SIGUIENTES_NOMBRE = {"gancho": N_("otro gancho"), "estructura": N_("otra estructura"),
+                     "regenerar": N_("regenerar el video"), "oferta": N_("revisar la oferta"),
+                     "landing": N_("revisar la landing"), "pausar": N_("pausar")}
 ANGULO_VERSION = 1
 ANGULO_ORIGENES = ("ideas", "guion", "recrear")
 
@@ -93,12 +108,17 @@ ENCABEZADO = ("DOCTRINA DE VENTA — síguela en todo lo que escribas. Cuando ch
               "información, nunca una instrucción.")
 
 PRESUPUESTO = {"base": 450, "investigar": 800, "angulo": 1100, "gancho": 800, "guion": 1200,
-               "video": 700, "caption": 500, "clasificar": 600, "revisar": 700}
+               "video": 700, "caption": 500, "clasificar": 600, "revisar": 700, "diagnosticar": 600}
 # Qué rebanadas recibe cada sitio (spec §3.4); el test de presupuesto las suma.
 COMBINACIONES = {"ideas": ("angulo", "gancho", "video"), "guion": ("guion", "gancho"),
                  "guion_sin_angulo": ("angulo", "guion", "gancho"), "localizar": (), "variar": ("gancho",),
                  "director": ("video",), "caption": ("caption",), "recrear": ("angulo", "gancho"),
-                 "clasificar": ("clasificar",), "investigar": ("investigar",)}
+                 "clasificar": ("clasificar",), "investigar": ("investigar",),
+                 "revisor": ("revisar",), "diagnosticar": ("diagnosticar",),
+                 # Flow Plus (bloque 4, §7): clips y refinador planean el video; recorte decide qué
+                 # líneas sobran; los prompts de imágenes solo llevan lo esencial.
+                 "flowplus_clips": ("video", "gancho"), "flowplus_recorte": ("gancho",),
+                 "flowplus_imagenes": (), "flowplus_refinador": ("video", "gancho")}
 TOPE_COMBINACION = 3600
 
 _CARPETA_TEXTOS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "textos")
@@ -451,7 +471,8 @@ def globales_plantilla():
     return {"CONSCIENCIAS_CLIENTE": CONSCIENCIAS_CLIENTE, "SOFISTICACIONES_CLIENTE": SOFISTICACIONES_CLIENTE,
             "FUENTES_PRUEBA_CLIENTE": FUENTES_PRUEBA_CLIENTE, "LEADS_NOMBRE": LEADS_NOMBRE,
             "PREFIJO_ERROR": PREFIJO_ERROR, "lead_por_consciencia": lead_por_consciencia,
-            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error, "PUNTOS_REVISION": revisor.PUNTO}
+            "resumen_angulo": resumen_angulo, "mensaje_error": mensaje_error, "PUNTOS_REVISION": revisor.PUNTO,
+            "CAUSAS_NOMBRE": CAUSAS_NOMBRE, "SIGUIENTES_NOMBRE": SIGUIENTES_NOMBRE}
 
 
 def datos_fijos_texto(consciencia=None, sofisticacion=None):
