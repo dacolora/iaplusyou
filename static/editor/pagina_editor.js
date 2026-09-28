@@ -18,7 +18,8 @@
 //                                           no cambiara nada), false si no.
 //   editor.operarCon({clave}, nombre, ...)  igual, fusionando en UN deshacer los
 //                                           pasos seguidos con la misma clave
-//                                           (un deslizador: "<clipId>:<campo>")
+//                                           (un deslizador: "<clipId>:<campo>");
+//                                           `null` o `{}` = sin clave
 //   editor.seleccionar(id | null)           elige un clip (y lo marca en la línea)
 //   editor.seleccion                        el id elegido, o null
 //   editor.doc()                            el documento actual (no se toca: las
@@ -32,6 +33,16 @@
 //   editor.escuchar(fn) -> dejar()          fn(que) después de cada cambio:
 //                                           "documento" | "seleccion" |
 //                                           "materiales" | "destino" | "tiempo"
+//
+// Reglas de los avisos (avisos_editor.js, probadas en Node):
+// - «seleccion» sale solo si la selección cambió de verdad, también cuando la
+//   cambió una operación (duplicar elige la copia: "documento" y después
+//   "seleccion"); una operación inválida, rechazada o sin cambio no avisa.
+// - Un oyente puede operar o elegir algo al enterarse: lo que eso avisa espera
+//   a que la vuelta en curso termine, en orden y una vez cada aviso; quien lo
+//   recibe ya ve el estado último. Si un oyente provoca un aviso cada vez que
+//   se entera, se corta (y se anota en la consola) en vez de colgar la página.
+import { Avisos } from "./avisos_editor.js";
 import { Guardado } from "./guardado.js";
 import { Historial } from "./historial.js";
 import { LineaTiempo } from "./linea_tiempo.js";
@@ -42,15 +53,15 @@ const datos = JSON.parse(document.getElementById("datos-editor").textContent);
 const $ = (id) => document.getElementById(id);
 const historial = new Historial(datos.documento);
 let seleccion = null;
-const oyentes = new Set();
+const avisos = new Avisos();
 
 const vista = new VistaPrevia({
   datos,
   alCambiarTiempo: (t, reproduciendo) => {
     linea.moverCabezal(t, { seguir: reproduciendo });
-    notificar("tiempo");
+    avisos.notificar("tiempo");
   },
-  alCambiarMateriales: () => refrescar(false, "materiales"),
+  alCambiarMateriales: () => refrescar("materiales"),
 });
 const linea = new LineaTiempo({
   contenedor: $("linea"),
@@ -77,22 +88,6 @@ const TEXTO_GUARDADO = {
 // El último argumento de cada operación: {id: {duracion_ms, tiene_audio}}.
 function info() {
   return infoDe(vista.materiales);
-}
-
-// Un módulo que falla al escuchar no rompe la página ni a los demás.
-function notificar(que) {
-  for (const fn of [...oyentes]) {
-    try {
-      fn(que);
-    } catch (e) {
-      console.error(e);
-    }
-  }
-}
-
-function escuchar(fn) {
-  oyentes.add(fn);
-  return () => oyentes.delete(fn);
 }
 
 function aviso(texto) {
@@ -128,17 +123,20 @@ function pintarHerramientas() {
   $("h-velocidad").value = String(esVideo ? Number(sel.clip.velocidad ?? 1) : 1);
 }
 
-function refrescar(docCambio = true, que = docCambio ? "documento" : "seleccion") {
-  if (docCambio) vista.setDocumento(historial.actual);
+// `que`: "documento" (el documento cambió: la vista lo re-resuelve),
+// "materiales", "destino", o null (solo se redibuja; si la selección cambió,
+// eso se avisa igual).
+function refrescar(que = "documento") {
+  if (que === "documento") vista.setDocumento(historial.actual);
   if (seleccion && !buscarClip(seleccion)) seleccion = null;
   linea.dibujar(historial.actual, { seleccion, cabezalMs: vista.tiempo() });
   pintarHerramientas();
-  notificar(que);
+  avisos.cambio(que, seleccion);
 }
 
 function seleccionar(id) {
   seleccion = id ?? null;
-  refrescar(false, "seleccion");
+  refrescar(null);
 }
 
 // En conflicto no se edita: nada de lo que se haga se podría guardar.
@@ -153,10 +151,12 @@ function operar(nombre, ...args) {
 }
 
 // `clave`: pasos seguidos con la misma clave quedan en UN deshacer
-// (Historial.aplicar); sin clave cada operación es su propio paso.
-function operarCon({ clave = null } = {}, nombre, ...args) {
+// (Historial.aplicar); sin clave (o con `opciones` null) cada operación es su
+// propio paso.
+function operarCon(opciones, nombre, ...args) {
+  const clave = opciones?.clave ?? null;
   if (!editable()) {
-    refrescar(false);
+    refrescar(null);
     return false;
   }
   let res;
@@ -166,13 +166,13 @@ function operarCon({ clave = null } = {}, nombre, ...args) {
     const invalida = e.name === "OperacionInvalida";
     if (!invalida) console.error(e);
     aviso(invalida ? e.message : `No se pudo hacer ese cambio (${e.message}). La edición quedó como estaba.`);
-    refrescar(false);
+    refrescar(null);
     return false;
   }
   aviso("");
   seleccion = res.seleccion;
   if (JSON.stringify(res.doc) === JSON.stringify(historial.actual)) {   // nada cambió: ni historial ni guardado
-    refrescar(false);
+    refrescar(null);
     return true;
   }
   historial.aplicar(res.doc, { clave });
@@ -446,15 +446,15 @@ const editor = Object.freeze({
   destino: () => vista.destino,
   info,
   agregarMateriales: (mapa) => vista.agregarMateriales(mapa),
-  escuchar,
+  escuchar: (fn) => avisos.escuchar(fn),
 });
 
 montarHerramientas();
 montarProducir();
 montarDisposicion();
-refrescar(false);          // la línea se ve ya, aunque las fuentes tarden en cargar
+refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 await vista.iniciar();
-refrescar(false);          // con el reloj listo: el cabezal donde está
+refrescar(null);           // con el reloj listo: el cabezal donde está
 // otro destino: los textos variables de la línea cambian (vista.js ya escucha
 // este select desde iniciar(), así que cuando esto corre el destino ya cambió)
-$("destino").addEventListener("change", () => refrescar(false, "destino"));
+$("destino").addEventListener("change", () => refrescar("destino"));

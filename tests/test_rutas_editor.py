@@ -533,6 +533,22 @@ def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
     assert "@media (max-width: 760px)" in html
 
 
+def test_ningun_ancho_queda_sin_disposicion(dashboard, encolados):
+    """Fix 1 de la Task 4: `(min-width: 761px)` + `(max-width: 760px)` dejaban
+    sin regla los 760,x px (zoom del navegador) y el reproductor medía 0×0. El
+    escritorio es el complemento EXACTO del celular y el escenario tiene ancho
+    fuera de toda media query."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    consultas = re.findall(r"@media\s*([^{]+?)\s*\{", css)
+    anchos = [c for c in consultas if "width" in c]
+    assert sorted(anchos) == ["(max-width: 760px)", "not all and (max-width: 760px)"], anchos
+    base = css[:css.index("@media")]
+    regla = re.search(r"\.ed-escenario\s*\{([^}]*)\}", base)
+    assert regla and re.search(r"(?<![-\w])width\s*:", regla.group(1)), "el escenario necesita ancho sin media query"
+
+
 def test_el_escenario_sabe_la_proporcion_del_formato(dashboard, encolados):
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)

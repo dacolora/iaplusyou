@@ -35,8 +35,11 @@
   .ed-escena { display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 0; padding: .75rem; }
   /* #ed-escenario mide exactamente lo que se ve del lienzo (la proporción del
      formato): la capa para tocar y arrastrar sobre el video va encima, del
-     mismo tamaño. */
-  .ed-escenario { position: relative; flex: none; max-width: 100%; aspect-ratio: var(--ed-ancho) / var(--ed-alto); }
+     mismo tamaño. Su ancho de base (el del celular: como mucho 42vh de alto)
+     vale en cualquier ancho; el escritorio lo agranda. Sin él, un ancho que
+     ninguna media query cubriera dejaría el reproductor en 0×0. */
+  .ed-escenario { position: relative; flex: none; max-width: 100%; aspect-ratio: var(--ed-ancho) / var(--ed-alto);
+    width: min(100%, calc(42vh * var(--ed-ancho) / var(--ed-alto))); }
   #lienzo { position: absolute; inset: 0; display: block; width: 100%; height: 100%; background: #000; border-radius: var(--radius-sm); }
   .editor-avisos { display: grid; gap: .3rem; justify-items: center; padding: 0 1rem; }
   .editor-aviso { margin: 0; font-size: .88rem; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
@@ -116,8 +119,10 @@
   }
 
   /* Escritorio y tableta: todo cabe en la pantalla sin bajar; la columna del
-     centro es la única flexible y puede achicarse (minmax(0, 1fr)). */
-  @media (min-width: 761px) {
+     centro es la única flexible y puede achicarse (minmax(0, 1fr)). Es el
+     complemento EXACTO del celular (con el zoom del navegador el ancho puede
+     ser 760,5 px: «min-width: 761px» lo dejaba sin disposición). */
+  @media not all and (max-width: 760px) {
     body.editor { height: 100vh; height: 100dvh; min-height: 540px; }
     .ed-cuerpo { flex: 1 1 0; min-height: 260px; display: grid;
       grid-template-columns: clamp(220px, 22vw, 300px) minmax(0, 1fr) clamp(220px, 22vw, 300px);
@@ -133,10 +138,10 @@
     #linea { flex: 0 0 auto; max-height: 38vh; overflow-y: auto; }
   }
 
-  /* Celular: el reproductor ocupa como mucho 42vh; la biblioteca y las
-     propiedades suben desde abajo (y se cierran con «Listo»). */
+  /* Celular: el reproductor ocupa como mucho 42vh (el ancho de base del
+     escenario); la biblioteca y las propiedades suben desde abajo (y se
+     cierran con «Listo»). */
   @media (max-width: 760px) {
-    .ed-escenario { width: min(100%, calc(42vh * var(--ed-ancho) / var(--ed-alto))); }
     .ed-escena { padding: .5rem; }
     .ed-herramientas { gap: .35rem; }
     .ed-hoja { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: 62vh;
