@@ -32,11 +32,16 @@
 
 - Sprints (regla de la fase 5): el idioma del sprint («base en inglés») decide ganchos y contenido del sprint; no se revisa. Anuncios y experimentos (fase 4) van en el idioma del proyecto; no se tocan.
 
-**Estado de partida (verificado el 2026-09-28 sobre `72e9d1a` con la fusión de `origin/main` en curso en el worktree):**
+**Rulings del controlador (2026-09-28; no son decisiones de Daniel — se apartan de la lista de la fase 6 del spec):**
+- **Contenido del mapa del código** (`mapa_codigo.html`): es documentación interna de ~630 frases que solo lee el admin, como los textos de la doctrina; se traduce solo su barra de arriba (Task 5). Su `<html lang="es">` se queda porque su contenido está en español (el §B3 pide `lang` = idioma de la interfaz en las páginas sueltas; aquí la página es un documento en español con una barra traducida).
+- **Las 9 plantillas del flujo viejo «Nueva idea»** se quedan en disco, sin traducir y en `EXCLUIDAS` (Task 6), porque Daniel no ha decidido qué pasa con ese flujo; sus rutas sí pasan los mensajes por el catálogo.
+- `etiqueta_estado` (main, `_etiquetas_estado.html`: «Lista», «Lista, con avisos», «Generando»…) sigue siendo la etiqueta del ESTADO de una pieza o una final; `etiqueta_fe` (Task 1) es solo para capas (nombre y estado), roles del guion y presets de mezcla. El español que se ve no cambia.
+
+**Estado de partida (verificado el 2026-09-28 sobre `72e9d1a`; revisado con el pre-flight contra `334a247`, con todas las fusiones hechas):**
 - Hecho y fuera de este plan: el flip a inglés por defecto (Task 5 del plan viejo); `_meta_conectar.html` y sus tres parciales, `_seccion_marca.html`, `_comparacion_modelos.html`, `_organico_publicar.html`, `_anuncios_sueltos.html`, `_aprendizajes.html`, `_revision_doctrina.html` (en `PLANTILLAS_TRADUCIDAS`); las rutas `fe_preparar`/`fe_guardar_guion`/`fe_producir`/`fe_descartar` ya pasan sus `flash` por `gettext` (fase 3); `final_edition/sonido.py` ya escribe en el idioma del proyecto; `meta_errores.py` (nuevo de main) ya usa gettext.
-- Plantillas fuera de `PLANTILLAS_TRADUCIDAS` (25): `_final_detalle.html` (24 hallazgos), `_final_tarjetas.html` (5), `_tab_final.html` (5), `editor.html` (9), `_tab_cambiar_calzado.html` (14), `admin_meta.html` (60), `admin_referentes.html` (25, fuera del bloque «Familias»), `meta_elegir.html` (10), `mapa_codigo.html` (645), `cliente.html` (0), `_crear_detalle.html` (0), `_crear_tarjetas.html` (0), los cuatro `*_respuesta.html` (0) y las 9 del flujo viejo «Nueva idea» (`_seccion_ideas.html`, `_idea_card.html`, `_idea_visual_card.html`, `_prompt_row.html`, `_imagen_row.html`, `_progreso_row.html`, `_seccion_videos.html`, `_video_card.html`, `_seccion_bitacora.html`), que ninguna plantilla viva incluye ni ninguna ruta renderiza. Los números son del detector (`tests/i18n_util.espanol_en_plantilla`): es un piso, no un techo — no ve «Descargar», «Producir», «Guardado»… (sin tildes ni palabras de `MARCAS`); se envuelve TODO texto visible, no solo lo que marca.
+- Plantillas fuera de `PLANTILLAS_TRADUCIDAS` (26): `_etiquetas_estado.html` (0 — nueva de main: `etiqueta_estado`, las etiquetas de estado de piezas y finales, ya con `_()`), `_final_detalle.html` (24 hallazgos), `_final_tarjetas.html` (5), `_tab_final.html` (5), `editor.html` (9), `_tab_cambiar_calzado.html` (14), `admin_meta.html` (60), `admin_referentes.html` (25, fuera del bloque «Familias»), `meta_elegir.html` (10), `mapa_codigo.html` (645), `cliente.html` (0), `_crear_detalle.html` (0), `_crear_tarjetas.html` (0), los cuatro `*_respuesta.html` (0) y las 9 del flujo viejo «Nueva idea» (`_seccion_ideas.html`, `_idea_card.html`, `_idea_visual_card.html`, `_prompt_row.html`, `_imagen_row.html`, `_progreso_row.html`, `_seccion_videos.html`, `_video_card.html`, `_seccion_bitacora.html`), que ninguna plantilla viva incluye ni ninguna ruta renderiza. Los números son del detector (`tests/i18n_util.espanol_en_plantilla`): es un piso, no un techo — no ve «Descargar», «Producir», «Guardado»… (sin tildes ni palabras de `MARCAS`); se envuelve TODO texto visible, no solo lo que marca.
 - `static/editor/*.js` (20 módulos) tienen ~60 textos en español: `pagina_editor.js`, `vista.js`, `guardado.js`, `operaciones.js` (12 `OperacionInvalida`), `escala.js` (nombres de fila y de clip), `resolver.js`/`precio.js` (avisos de destino). `editor.html` trae `<html lang="es">` fijo.
-- Mensajes de ruta sin gettext (medidos con la guardia de la Task 2, ya escrita y probada contra este código): 107 en `dashboard.py` (admin/Meta ~30, flujo viejo ~30, Cambiar producto ~11, Marca/Catálogo/correo 6, orgánico/lanzador guardados 4, constantes `ETAPA_*`/`_FASES_PROVEEDOR` ~17), 18 en `final_edition/rutas_editor.py`, 1 en `referentes/rutas.py` (un `detalle` de gasto); 0 en `sprints/`, `nicho/`, `guiones/`. Worker (misma guardia): `tareas/edicion.py` 18 (con `ETAPAS_EDICION`), `tareas/swap.py` 20 (constantes `ETAPA_*` y `_FASES_PROVEEDOR`), `final_edition/__init__.py` 15 (con `ETAPAS_FINAL` sin `N_`), `produccion.py` 10, `tareas/final_edition.py` 3, `meta_conexion.py` 16, `meta_agencia.py` 13, `referencias_link.py` 10, el resto de `tareas/*` + `worker.py`/`cola.py`/`organico.py`/`experimentos.py`/`lanzador.py`/`derivaciones.py` ~45 (incluido `worker.MENSAJE_INTERRUMPIDA` y los `detalle` de gastos).
+- Mensajes de ruta sin gettext (medidos con la guardia de la Task 2, ya escrita y probada contra este código): 107 en `dashboard.py` (admin/Meta ~30, flujo viejo ~30, Cambiar producto ~11, Marca/Catálogo/correo 6, orgánico/lanzador guardados 4, constantes `ETAPA_*`/`_FASES_PROVEEDOR` ~17), 18 en `final_edition/rutas_editor.py`, 1 en `referentes/rutas.py` (un `detalle` de gasto), 1 en `sprints/rutas.py` (el error JSON de `_solo_mismo_origen`, nuevo de main; su msgid ya existe); 0 en `nicho/`, `guiones/`. Uno de los 107 de `dashboard.py` era una CLAVE (`fila.get("etapa")` en `_estado_plataformas`): la guardia exime las claves (Task 2). Worker (misma guardia): `tareas/edicion.py` 18 (con `ETAPAS_EDICION`), `tareas/swap.py` 20 (constantes `ETAPA_*` y `_FASES_PROVEEDOR`), `final_edition/__init__.py` 15 (con `ETAPAS_FINAL` sin `N_`), `produccion.py` 10, `tareas/final_edition.py` 3, `meta_conexion.py` 16, `meta_agencia.py` 13, `referencias_link.py` 10, el resto de `tareas/*` + `worker.py`/`cola.py`/`organico.py`/`experimentos.py`/`lanzador.py`/`derivaciones.py` ~45 (incluido `worker.MENSAJE_INTERRUMPIDA` y los `detalle` de gastos).
 - `final_edition/edicion_clon.py` arma la edición «Editar este video» con destino `es_<país>` fijo: con la decisión B un proyecto en EE. UU. debe producir `en_US` (la misma clave que usa `fe_producir`).
 - Si la fusión de `origin/main` que está en curso cambia alguna de estas plantillas o funciones, todo se ubica por NOMBRE (`grep -n "def <nombre>"`), nunca por número de línea.
 
@@ -78,13 +83,13 @@
 
 **Files:**
 - Create: `templates/_final_macros.html`
-- Modify: `templates/_tab_final.html`, `templates/_final_tarjetas.html`, `templates/_final_detalle.html`; `dashboard.py` (`fe_preparar`); `final_edition/__init__.py` (`_OPCIONES_DEFECTO`, `preparar_guion`); `final_edition/guion.py` (helper nuevo `_orden`, `_system_generar`, `variar_guion`); `docs/i18n/glosario.md`; `translations/en/LC_MESSAGES/messages.po` + `.mo`
+- Modify: `templates/_tab_final.html`, `templates/_final_tarjetas.html`, `templates/_final_detalle.html`, `templates/_etiquetas_estado.html` (solo verificar: ya pasa sus etiquetas por `_()`); `dashboard.py` (`fe_preparar`); `final_edition/__init__.py` (`_OPCIONES_DEFECTO`, `preparar_guion`); `final_edition/guion.py` (helper nuevo `_orden`, `_system_generar`, `variar_guion`); `docs/i18n/glosario.md`; `translations/en/LC_MESSAGES/messages.po` + `.mo`
 - Modify tests: `tests/test_i18n_plantillas.py`, `tests/test_i18n_fugas.py`, `tests/test_rutas_final_edition.py` (`test_plantilla_con_guion_ofrece_reescribir` + tests nuevos), `tests/test_fe_guion.py`, `tests/test_fe_producir.py`, `tests/test_i18n_claude.py`
 
 **Interfaces:**
 - Consumes: `idiomas.de_proyecto`, `idiomas.normalizar`, `idiomas.orden_idioma`, `doctrina.bloque_system(idioma=)`, filtros `traducir` y `usd`, `final_edition.tipos.PAISES` (nombres ya con `N_`).
 - Produces:
-  - Macro `etiqueta_fe(valor)` en `templates/_final_macros.html`: etiqueta traducida de un estado de final/capa, un nombre de capa, un rol del guion o un preset de mezcla; la etiqueta en español es la clave con `_` → espacio (lo que se ve hoy).
+  - Macro `etiqueta_fe(valor)` en `templates/_final_macros.html`: etiqueta traducida de una capa (su nombre o su estado), un rol del guion o un preset de mezcla; la etiqueta en español es la clave con `_` → espacio (lo que se ve hoy). El estado de una pieza o de una final sigue con `etiqueta_estado` de `_etiquetas_estado.html` (main), que no cambia.
   - `final_edition.guion._orden(idioma) -> str | None` (el idioma para `bloque_system`, `None` si no es `es`/`en`); el guion base y las variantes llevan `idiomas.orden_idioma` al principio y al final de su bloque sin caché; `localizar_guion` no cambia (por destino, decisión B).
   - `fe_preparar` encola con `opciones["idioma_base"]` = el `idioma_base` del formulario si es uno de `IDIOMAS_FE`, si no `idiomas.de_proyecto(cliente)` (la elección explícita gana; el defecto deja de ser «es» fijo); `final_edition.preparar_guion` sin `idioma_base` usa `idiomas.de_proyecto(cliente)` (`_OPCIONES_DEFECTO["idioma_base"] = None`).
   - El selector «Idioma base» del detalle marca de entrada el idioma del proyecto (`idioma_proyecto`, del context processor; `"es"` si falta); «Volver a escribir con IA» sigue mandando en su `idioma_base` oculto el idioma del guion base actual.
@@ -102,7 +107,7 @@
     "_tab_final.html", "_final_tarjetas.html", "_final_detalle.html", "_final_macros.html",
     "_final_tarjetas_respuesta.html", "_final_detalle_respuesta.html",
     "_crear_tarjetas.html", "_crear_detalle.html", "_crear_tarjetas_respuesta.html", "_crear_detalle_respuesta.html",
-    "cliente.html",
+    "cliente.html", "_etiquetas_estado.html",
 ```
 
 `tests/test_i18n_claude.py`, debajo de `ARCHIVOS_FASE5`:
@@ -165,7 +170,7 @@ def test_detalles_de_final_edition_en_ingles(admin_en, ruta):
     html = html_de(admin_en, f"/cliente/acme/creative_flow/{cf_id}/" + ruta.format(fid=fid))
     fugas = espanol_visible(html)
     assert not fugas, (ruta, fugas[:15])
-    for crudo in (">omitida<", ">musica<", ">listo<", "2. problema<", ">equilibrada<"):   # claves que MARCAS no ve
+    for crudo in (">omitida<", ">musica<", ">Lista<", "2. problema<", ">equilibrada<"):   # lo que MARCAS no ve
         assert crudo not in html, crudo
 
 
@@ -276,14 +281,15 @@ Expected: FAIL.
 - [ ] **Step 2: `templates/_final_macros.html` (nuevo)**
 
 ```jinja
-{# Etiquetas de Final edition (spec idioma, fase 6). La clave guardada no
+{# Etiquetas de Final edition (spec idioma, fase 6): capas (nombre y estado),
+   roles del guion y presets de mezcla — el estado de una pieza o de una
+   final es de `etiqueta_estado` (_etiquetas_estado.html). La clave guardada no
    cambia; la etiqueta en español es la clave con «_» → espacio, lo que se
    veía antes. El diccionario va DENTRO de la macro: un {% set %} de módulo
    en una plantilla importada se cachea en el primer idioma que la carga. #}
 {% macro etiqueta_fe(valor) -%}
 {%- set etiquetas = {
-  "generando": _("generando"), "listo": _("listo"), "degradada": _("degradada"), "error": _("error"),
-  "ok": _("ok"), "omitida": _("omitida"), "ausente": _("ausente"), "desconocido": _("desconocido"),
+  "error": _("error"), "ok": _("ok"), "omitida": _("omitida"), "ausente": _("ausente"), "desconocido": _("desconocido"),
   "guion": _("guion"), "cortes": _("cortes"), "voz": _("voz"), "musica": _("musica"), "texto": _("texto"),
   "render": _("render"), "sonido": _("sonido"), "mezcla": _("mezcla"),
   "hook": _("hook"), "problema": _("problema"), "producto": _("producto"), "prueba": _("prueba"), "cta": _("cta"),
@@ -304,7 +310,8 @@ Patrón de la fase 2 con las lecciones de Global Constraints. Referencia de cóm
   - el `<strong>` de la tarjeta de video: `{{ (item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')) }}` (igual que `_crear_tarjetas.html`);
   - el `<small>`: `{{ ngettext('%(num)d final', '%(num)d finales', item.finales | length) }}{% if ediciones_por_cf.get(item.id) %} · {{ _('en el editor') }}{% endif %}` (español idéntico: «0 finales», «1 final», «2 finales»);
   - la tarjeta de una final: `<strong>{{ _('Final %(id)s', id=(f.idioma ~ '_' ~ f.pais)) }}</strong>` y `<small>{{ _('Final de %(enfoque)s', enfoque=((item.enfoque_nombre|traducir) if item.enfoque_nombre else (_('Con persona') if item.con_persona else _('Solo producto')))) }}{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}</small>`.
-- `_final_detalle.html`: arriba, `{% from "_final_macros.html" import etiqueta_fe %}`.
+- `_etiquetas_estado.html`: ya envuelve cada etiqueta con `_()` y sus msgid están traducidos («Lista» → «Ready», «Lista, con avisos» → «Ready, with warnings», «Generando» → «Generating»…); si alguna quedara suelta, se envuelve. Solo entra a `PLANTILLAS_TRADUCIDAS`.
+- `_final_detalle.html`: debajo del import de `etiqueta_estado` que ya tiene, `{% from "_final_macros.html" import etiqueta_fe %}`.
   - `{{ _('Qué tenía que pasar') }}`, `{{ item.accion_central or _('(sin texto)') }}`, `{{ _('Final edition') }}` (dos veces), `{{ _('Guion con IA, voz, música y texto en pantalla sobre este video, en el idioma y la moneda de cada país.') }}`;
   - `editor_angulo(…, resumen_vacio=_('Todavía no tiene ángulo: se decide al preparar el guion'))`;
   - el selector «Idioma base» **se queda** y marca de entrada el idioma del proyecto (hoy queda marcado «Español» por ser el primero). En el formulario de preparar:
@@ -334,9 +341,9 @@ Patrón de la fase 2 con las lecciones de Global Constraints. Referencia de cóm
 ```
 
   (español idéntico: « ≈ US$ 0,15 c/u»);
-  - lista de finales: `{{ _('Finales de esta pieza') }}`, `<span class="tag-estado">{{ etiqueta_fe(f.estado) }}</span>`, `{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}`, `{{ _('Descargar') }}`, `onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});'` (dos veces) y `{{ _('Descartar') }}`;
+  - lista de finales: `{{ _('Finales de esta pieza') }}`, el `<span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>` de main **se queda** (no pasa a `etiqueta_fe`), `{% if f.trabajo %}{{ _('produciendo…') }}{% else %}{{ _('interrumpida') }}{% endif %}`, `{{ _('Descargar') }}`, `onsubmit='return confirm({{ _("¿Descartar esta final?")|tojson }});'` (dos veces) y `{{ _('Descartar') }}`;
   - editor: `{{ _('Editor') }}`, `{{ _('Preparando el video para el editor… la página se recarga sola.') }}`, `{{ _('Empezar otra edición desde el video') if _eds else _('Editar este video') }}`, `{{ _('Gratis: una edición con el video tal cual, para cortarlo, recortarlo y reordenarlo.') }}`, `{{ _('En el editor') }}`, `{{ _('Abrir en el editor') }}`;
-  - detalle de una final: `{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · {{ f.idioma }}`; `{{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}`, `{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}`, `<span class="tag-estado">{{ etiqueta_fe(f.estado) }}</span>`; `{{ _('Capas') }}` y cada capa `<strong>{{ etiqueta_fe(nombre) }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ etiqueta_fe(capa.estado) }}</span>…`; `{{ _('Probar en Meta') }}`, `{{ _('Publicación orgánica') }}`.
+  - detalle de una final: `{{ _bandera }} {{ (paises_fe[f.pais].nombre|traducir) if f.pais in paises_fe else f.pais }} · {{ f.idioma }}`; `{{ _('Final de: %(texto)s', texto=(item.accion_central or item.id)) }}`, `{% if f.costo_usd %} · {{ _('costó %(usd)s', usd=(f.costo_usd | usd)) }}{% endif %}`, y el `etiqueta_estado(f.estado)` de main se queda; `{{ _('Capas') }}` y cada capa `<strong>{{ etiqueta_fe(nombre) }}</strong> · {{ capa.proveedor or "" }} · <span class="tag-estado">{{ etiqueta_fe(capa.estado) }}</span>…`; `{{ _('Probar en Meta') }}`, `{{ _('Publicación orgánica') }}`.
   - `f.error` y `capa.error` son textos guardados (en el idioma del proyecto desde la Task 3): no se envuelven.
 
 - [ ] **Step 4: Python — el guion base en el idioma del proyecto**
@@ -427,7 +434,7 @@ produciendo… → producing…
 ¿Volver a escribir el guion con IA? Se reemplaza el guion actual (incluidas tus ediciones). → Rewrite the script with AI? This replaces the current script (including your edits).
 ```
 
-`msgstr` fijados por los tests: «Videos listos (%(n)s)» → «Ready videos (%(n)s)»; «Finales (%(n)s)» → «Final cuts (%(n)s)». Las etiquetas de `etiqueta_fe`: generando → generating (ya existe), listo → done (ya existe), degradada → degraded (ya existe), omitida → skipped, ausente → missing, desconocido → unknown, guion → script, cortes → cuts, voz → voice, musica → music, texto → text, render → render, sonido → sound, mezcla → mix, problema → problem, producto → product, prueba → proof, cta → CTA, equilibrada → balanced, voz protagonista → voice first, ambiente protagonista → ambience first, ok → ok. Corregir dos `msgstr` de la fase 3 al glosario: «Guion guardado. Ahora elige los destinos y produce las finales.» → «Script saved. Now pick the markets and produce the final cuts.» y «Marca al menos un destino (idioma y país) válido para producir.» → «Check at least one valid market (language and country) to produce.». Luego `venv/bin/python3 catalogo_i18n.py compilar`.
+`msgstr` fijados por los tests: «Videos listos (%(n)s)» → «Ready videos (%(n)s)»; «Finales (%(n)s)» → «Final cuts (%(n)s)». Las etiquetas de `etiqueta_fe`: omitida → skipped, ausente → missing, desconocido → unknown, guion → script, cortes → cuts, voz → voice, musica → music, texto → text, render → render, sonido → sound, mezcla → mix, problema → problem, producto → product, prueba → proof, cta → CTA, equilibrada → balanced, voz protagonista → voice first, ambiente protagonista → ambience first, ok → ok. Corregir dos `msgstr` de la fase 3 al glosario: «Guion guardado. Ahora elige los destinos y produce las finales.» → «Script saved. Now pick the markets and produce the final cuts.» y «Marca al menos un destino (idioma y país) válido para producir.» → «Check at least one valid market (language and country) to produce.». Luego `venv/bin/python3 catalogo_i18n.py compilar`.
 
 - [ ] **Step 6: Verde y commit**
 
@@ -564,6 +571,17 @@ def sueltos(ruta, modo):
     traducidos = {id(sub) for n in ast.walk(arbol) if isinstance(n, ast.Call) and _nombre(n) in TRADUCTORES
                   for sub in ast.walk(n)}
     estricto = modo == "rutas"
+    # Las CLAVES no son mensajes (§B6): el primer argumento de `.get(...)`, el
+    # índice de un subíndice (`d["error"]`) y las claves de un dict.
+    claves = set()
+    for n in ast.walk(arbol):
+        if isinstance(n, ast.Call) and _nombre(n) == "get" and n.args:
+            claves.add(id(n.args[0]))
+        elif isinstance(n, ast.Subscript):
+            indice = n.slice.value if isinstance(n.slice, getattr(ast, "Index", ())) else n.slice   # Python 3.8/3.9
+            claves.add(id(indice))
+        elif isinstance(n, ast.Dict):
+            claves.update(id(k) for k in n.keys if k is not None)
     candidatos = []                                 # (nodo, estricto)
     for n in ast.walk(arbol):
         if isinstance(n, ast.Call):
@@ -589,7 +607,7 @@ def sueltos(ruta, modo):
                 candidatos += [(c, True) for c in _cadenas(n.value)]
     hallazgos = []
     for nodo, exigente in candidatos:
-        if id(nodo) in traducidos:
+        if id(nodo) in traducidos or id(nodo) in claves:
             continue
         texto = _texto(nodo)
         if texto and (LETRAS.search(texto) if exigente else espanol_en_codigo(texto)):
@@ -609,6 +627,24 @@ def test_la_guardia_detecta():
     try:
         assert [h.split(": ", 1)[1] for h in sueltos(f.name, "worker")] == [
             "'Renderizando'", "'Se guardó  pieza'", "'Proxy listo.'", "'Guardando imágenes'"]
+    finally:
+        os.unlink(f.name)
+
+
+def test_la_guardia_de_rutas_no_marca_claves():
+    """`dashboard._estado_plataformas` hace `etapa = fila.get("etapa")`: esa
+    «etapa» es una clave, no un mensaje (§B6); el valor por defecto de un
+    `.get` sí puede serlo."""
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as f:
+        f.write("from flask import flash, jsonify\n"
+                "def r(fila, d):\n"
+                "    etapa = fila.get('etapa')\n"
+                "    mensaje = d['mensaje']\n"
+                "    detalle = fila.get('detalle', 'sin detalle')\n"
+                "    flash('Guardado', 'ok')\n"
+                "    return jsonify({'error': 'No existe.'})\n")
+    try:
+        assert [h.split(": ", 1)[1] for h in sueltos(f.name, "rutas")] == ["'sin detalle'", "'Guardado'", "'No existe.'"]
     finally:
         os.unlink(f.name)
 
@@ -939,7 +975,7 @@ Cada módulo importa `import { t } from "./textos.js";` (y `listaY` donde une li
 - `final_edition/rutas_editor.py`: `from flask_babel import gettext`, `import idiomas`, `from final_edition import textos_editor`; en `ver`, después de `datos_pagina`: `datos["textos"] = textos_editor.textos()` y `datos["idioma_ui"] = idiomas.activo()`. Cada `jsonify({"error": "…"})` y cada `flash` por `gettext` con el mismo español; `problemas.append(f"{d}: {e}")` queda (el `e` ya viene traducido de `documento`/`compilador`); el `error = (… if len(reemplazos) == 1 else …)` pasa a `gettext(…) if … else gettext(…)`; `desde_clon`: `etapas=[(idiomas.N_("Preparando el video"), 100)]`. `msgstr` fijado por el test: «Esta edición no está unida a un video de Crear: todavía no se puede producir desde aquí.» → «This edit isn't linked to a Create video: it can't be produced from here yet.» (el mismo msgid que `producir.sin_clon` de los textos del JS: una sola traducción).
 - `final_edition/documento.py`: `from flask_babel import gettext`; en `resolver`, `raise DocumentoInvalido(gettext("No sé formatear precios de %(pais)s.", pais=pais))` y `raise VariableSinValor(gettext("El texto '%(rol)s' no tiene valor en %(idioma)s.", rol=rol, idioma=idioma))`. Los 55 `_fallar` de `validar` no cambian (Global Constraints).
 - `final_edition/motor/compilador.py`: `from flask_babel import gettext`; en `verificar_recortes`, `raise ValueError(gettext("El clip '%(clip)s' pide %(pide)s ms de un material de %(hay)s ms; acorta el clip o el recorte.", clip=cl["id"], pide=fin_fuente, hay=material))` (español idéntico: `tests/test_rutas_editor.py` lo compara). Los demás `raise` de `compilar` (PIP, carrusel, rutas faltantes) son internos y no cambian.
-- `ediciones.py`: `from flask_babel import gettext`; los cuatro mensajes de `Conflicto` por `gettext`.
+- `ediciones.py`: `from flask_babel import gettext`; los cinco mensajes con texto por `gettext` (los cuatro de `Conflicto` y el `ValueError("tipo debe ser video o imagen")` de `crear`).
 
 - [ ] **Step 5: El worker del editor**
 
@@ -1167,19 +1203,34 @@ def test_cambiar_producto_en_ingles(admin_en):
     assert not fugas, fugas[:15]
 
 
+def _apartado_gasto(html):
+    """Solo Configuración › Gasto: el Tablero de la misma página ya dice
+    «1 charge to providers →» (otro msgid) y taparía lo que se prueba."""
+    ini = html.index('id="config-ap-gasto"')
+    fin = html.find('<section class="config-apartado"', ini + 1)
+    return html[ini:fin if fin != -1 else None]
+
+
 def test_un_cobro_en_singular_en_ingles(admin_en):
     import gastos
     gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
-    assert "1 charge to providers" in html_de(admin_en, "/cliente/acme")
+    gasto = _apartado_gasto(html_de(admin_en, "/cliente/acme"))
+    assert "1 charge to providers" in gasto and "charge(s)" not in gasto
 
 
 def test_un_cobro_en_espanol_no_cambia(app_i18n):
+    """El plural inglés sale de ngettext con el MISMO msgid en las dos formas:
+    el español se ve igual. Falla antes del cambio por la primera línea."""
+    import os
     import gastos
+    raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(raiz, "templates", "_tab_settings.html"), encoding="utf-8") as f:
+        assert "ngettext('%(num)s cobro(s) a proveedores', '%(num)s cobro(s) a proveedores'" in f.read()
     gastos.registrar("acme", "video", 0.5, "video:x", detalle="wan3 · 5 s", proveedor="wavespeed")
     c = app_i18n.app.test_client()
     with c.session_transaction() as s:
         s["usuario"], s["rol"], s["cliente"] = "admin", "admin", None
-    assert "1 cobro(s) a proveedores" in html_de(c, "/cliente/acme")      # admin sin idioma = es en los tests
+    assert "1 cobro(s) a proveedores" in _apartado_gasto(html_de(c, "/cliente/acme"))   # admin sin idioma = es
 
 
 def test_csv_del_gasto_con_encabezados_en_ingles(admin_en):
@@ -1226,7 +1277,7 @@ Expected: FAIL.
 
 - `_tab_cambiar_calzado.html`: patrón de la fase 2 para todo el texto visible (instrucciones, «Modelo para fotos», «Modelo para videos», estados de cada swap, avisos de la marca, el vacío «Todavía no has generado ningún swap.», botones); `{{ nombres_proveedor_swap.get(id, id)|traducir }}` (los valores ya son `N_`); `{{ _('Generando… 0%% · 0s') }}`; el `onsubmit="return confirm('¿Eliminar este resultado?');"` pasa a `onsubmit='return confirm({{ _("¿Eliminar este resultado?")|tojson }});'`. El comentario Jinja que nombra `_idea_visual_card.html` se queda (esa plantilla sigue en disco).
 - `dashboard.py`: cada `flash` de `generar_swap`, `imagen_swap_original`, `eliminar_swap`, `enviar_swap_a_publicidad`, `enviar_video_a_publicidad` por `gettext`/`ngettext` con el mismo español (`f"Generando {lanzados} swaps…"` → `gettext("Generando %(n)s swaps…", n=lanzados)`).
-- `tareas/swap.py`: `from idiomas import N_`, `import idiomas`; cada `ETAPA_* = "…"` → `N_("…")`; los valores de `_FASES_PROVEEDOR` → `N_("…")`; en `_texto_fase`, `texto = idiomas.traducir(_FASES_PROVEEDOR.get(fase, fase))` y el sufijo `gettext("%(fase)s (puesto %(n)s)", fase=texto, n=posicion)`; el `detalle` del gasto → `gettext("foto %(n)s de %(total)s", n=i + 1, total=len(referencias))`. (`tests/test_tareas_swap.py` compara etapas en español: `N_` no las cambia.)
+- `tareas/swap.py`: `from idiomas import N_`, `import idiomas`; cada `ETAPA_* = "…"` → `N_("…")`; los valores de `_FASES_PROVEEDOR` → `N_("…")`; en `_texto_fase`, `texto = idiomas.traducir(_FASES_PROVEEDOR.get(fase, fase))` y el sufijo `gettext("%(fase)s (puesto %(n)s)", fase=texto, n=posicion)`; el `detalle` del gasto → `gettext("foto %(n)s de %(total)s", n=i + 1, total=len(referencias))`. Además, lo que la guardia ve y no son constantes: el `mensaje = "El producto ya no está en el catálogo; no se generó el swap."` que se guarda como error del swap → `gettext(…)`; `return "Swap listo."` → `return gettext("Swap listo.")`; y en `_registrar_gasto`, el `detalle` («foto»/«video», «con mejora», «sin tarifa») y el `sufijo` que le pasan («· falló después de generar; el proveedor ya cobró») → `gettext` con el mismo español (el worker ya corre en el idioma del proyecto). (`tests/test_tareas_swap.py` compara etapas en español: `N_` no las cambia.)
 
 - [ ] **Step 3: Link, «Describir con IA», Mi música, materiales, Marca y Catálogo**
 
@@ -1369,6 +1420,8 @@ def test_avisar_admin_en_el_idioma_de_cada_admin(admins_falsos, monkeypatch):
 
 («Idioma guardado.» → «Language saved.» ya está en el catálogo desde la fase 2.)
 
+Con Meta «conectado», el apartado de Conexiones de Configuración puede pedir más costuras que las que ya pone `app_i18n` (`meta_conexion.cargar`, `estado`, `estado_pixel`): si `test_detalle_del_pixel_se_traduce_al_mostrarlo` no llega a 200 o se cae en la plantilla, se reemplazan también `dashboard.meta_conexion.app_publica` (`lambda c: None`) y `dashboard._bloqueo_cambio_forma` (`lambda c: None`) — el mismo estilo que `test_bloqueo_cambio_forma_en_ingles_y_espanol_intacto` —, sin cambiar lo que el test afirma.
+
 Run: `venv/bin/python3 -m pytest tests/test_i18n_plantillas.py tests/test_i18n_fugas.py tests/test_notificaciones.py tests/test_i18n_mensajes.py -q -k "admin or meta or mapa or pixel or familias or panel or notificaciones or agencia"`
 Expected: FAIL.
 
@@ -1449,7 +1502,7 @@ EOF
 
 **Files:**
 - Create: `tests/test_i18n_guardado.py`
-- Modify: `dashboard.py` (las rutas del flujo viejo: `nueva_idea`, `nueva_idea_visual`, `aprobar_concepto_imagen`, `descartar_concepto_imagen`, `generar_video_animacion`, `eliminar_idea_visual`, `guardar_prompt`, `aprobar_prompt`, `regenerar_imagen`, `aprobar_imagen`, `rechazar_prompt`, `eliminar_idea`, `aprobar`, `rechazar` y la de publicar un brief; las constantes de módulo `ETAPA_*` y `_FASES_PROVEEDOR`; `_encolar_organico`, `org_publicar`, `_reconciliar_huerfanos`; y lo que la guardia marque que no haya cubierto una tarea anterior), `referentes/rutas.py` (el `detalle` del gasto de «Adaptar con IA» cuando la respuesta no sirvió), `CLAUDE.md` (una frase en el párrafo **State machine modules**), `translations/`
+- Modify: `dashboard.py` (las rutas del flujo viejo: `nueva_idea`, `nueva_idea_visual`, `aprobar_concepto_imagen`, `descartar_concepto_imagen`, `generar_video_animacion`, `eliminar_idea_visual`, `guardar_prompt`, `aprobar_prompt`, `regenerar_imagen`, `aprobar_imagen`, `rechazar_prompt`, `eliminar_idea`, `aprobar`, `rechazar` y la de publicar un brief; las constantes de módulo `ETAPA_*` y `_FASES_PROVEEDOR`; `_encolar_organico`, `org_publicar`, `_reconciliar_huerfanos`; y lo que la guardia marque que no haya cubierto una tarea anterior), `referentes/rutas.py` (el `detalle` del gasto de «Adaptar con IA» cuando la respuesta no sirvió), `sprints/rutas.py` (el error JSON de `_solo_mismo_origen`), `CLAUDE.md` (una frase en el párrafo **State machine modules**), `translations/`
 - Modify tests: `tests/test_i18n_plantillas.py`, `tests/test_i18n_mensajes.py` (`RUTAS`)
 - No se tocan: las 9 plantillas del flujo viejo (`_seccion_ideas.html`, `_idea_card.html`, `_idea_visual_card.html`, `_prompt_row.html`, `_imagen_row.html`, `_progreso_row.html`, `_seccion_videos.html`, `_video_card.html`, `_seccion_bitacora.html`): se quedan en disco y en `EXCLUIDAS` — el destino de ese flujo lo decide Daniel.
 
@@ -1541,7 +1594,9 @@ Expected: FAIL — `EXCLUIDAS` todavía no existe; la guardia de rutas lista lo 
 - Lo que se GUARDA → armado dentro de `with idiomas.en_idioma(idiomas.de_proyecto(cliente)):`:
   - `_encolar_organico`: `error = gettext("Ya había una publicación de esta pieza en curso; reintenta cuando termine.")` dentro del `with`, antes del bucle;
   - `org_publicar`: el `error=f"No se creó la publicación en {_nombres_org([p])}: {e}"` → `gettext("No se creó la publicación en %(plataformas)s: %(error)s", plataformas=_nombres_org([p]), error=e)` dentro del `with`;
-  - `_reconciliar_huerfanos` (corre al arrancar `python dashboard.py`, sin petición): por cada `(eid, cliente)`, `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): experimentos.actualizar(cliente, eid, estado="error", error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))`;
+  - `_MENSAJE_INTERRUMPIDO` (constante de `dashboard.py` que `_reconciliar_huerfanos` guarda como `error` de swaps, sesiones de Crear y conceptos de imagen) → `idiomas.N_("La generación se interrumpió porque el servidor se reinició — vuelve a intentarlo.")`; en el bucle `for cliente in …` de `_reconciliar_huerfanos`, al principio de cada vuelta, `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): interrumpido = gettext(_MENSAJE_INTERRUMPIDO)`, y cada `entry["error"] = _MENSAJE_INTERRUMPIDO` / `img["error"] = _MENSAJE_INTERRUMPIDO` pasa a `= interrumpido`;
+  - `sprints/rutas.py::_solo_mismo_origen`: `jsonify({"ok": False, "error": gettext("Pedido rechazado: no viene de esta página.")})` (el msgid ya existe; es una respuesta: idioma de quien mira);
+  - `_reconciliar_huerfanos` (corre al arrancar `python dashboard.py`, sin petición), la parte de experimentos: por cada `(eid, cliente)`, `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): experimentos.actualizar(cliente, eid, estado="error", error=gettext("Se interrumpió el lanzamiento; revisa Ads Manager y vuelve a intentar."))`;
   - `referentes/rutas.py`, el `detalle` del gasto cuando la adaptación no sirvió: `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): detalle = gettext("%(producto)s · %(familia)s · respuesta inválida", producto=producto["nombre"], familia=r.get("familia") or "")` y ese `detalle` al `registrar_seguro`.
 - Los `trabajo()` de `trabajos.iniciar` del flujo viejo: un `return "…"` fijo → `return idiomas.N_("…")` (lo traduce `estado_trabajo` para quien mira).
 
@@ -1552,7 +1607,7 @@ Expected: FAIL — `EXCLUIDAS` todavía no existe; la guardia de rutas lista lo 
 Run: `venv/bin/python3 -m pytest tests/test_i18n_plantillas.py tests/test_i18n_mensajes.py tests/test_i18n_guardado.py tests/test_i18n_catalogo.py tests/test_configuracion_apartados.py tests/test_rutas_organico.py tests/test_rutas_referentes.py tests/test_rutas_mapa.py -q` → PASS. Suite completa → PASS.
 
 ```bash
-git add dashboard.py referentes/rutas.py CLAUDE.md translations/ tests/
+git add dashboard.py referentes/rutas.py sprints/rutas.py CLAUDE.md translations/ tests/
 git commit -m "$(cat <<'EOF'
 Idioma (6/8 de la fase 6): el flujo viejo excluido y guardias de rutas y plantillas
 
@@ -1574,7 +1629,7 @@ EOF
 ### Task 7: El worker y lo que se guarda — interrumpidas, etapas, `detalle`, eventos e I2
 
 **Files:**
-- Modify: `worker.py` (`MENSAJE_INTERRUMPIDA`, `recuperar_interrumpidas`, `ejecutar`), `cola.py` (`recuperar_colgadas`), `tareas/*.py` (lo que marque la guardia: al escribir este plan `tareas/experimentos.py`, `mantenimiento.py`, `meta.py`, `musica.py`, `nicho.py`, `organico.py`, `referentes.py`, `sprints.py`, `tiendas.py`), `organico.py` (`redactar` — el `detalle` del gasto —, `publicar`, `interrumpir`), `experimentos.py` (`crear_con_piezas` y los `raise` con texto), `derivaciones.py` (un `raise`), `lanzador.py` (`ETAPAS_LANZAR`), `acciones.py` (`ejecutar`), `importador.py` (el `detalle` de la regla de fidelidad), `nicho/fuentes/reddit.py`, `nicho/fuentes/youtube.py` (los `detalle` «post N de M» / «video N de M»), `translations/`
+- Modify: `worker.py` (`MENSAJE_INTERRUMPIDA`, `recuperar_interrumpidas`, `ejecutar`), `cola.py` (`recuperar_colgadas`), `tareas/*.py` (lo que marque la guardia: al escribir este plan `tareas/experimentos.py`, `mantenimiento.py`, `meta.py`, `musica.py`, `nicho.py`, `organico.py`, `referentes.py`, `sprints.py`, `tiendas.py`), `organico.py` (`redactar` — el `detalle` del gasto —, `publicar`, `interrumpir`), `experimentos.py` (`crear_con_piezas` y los `raise` con texto), `derivaciones.py` (un `raise`), `lanzador.py` (`ETAPAS_LANZAR`; `_promoted_object_para`: el `detalle` del Pixel dentro de su `ValueError`), `acciones.py` (`ejecutar`), `importador.py` (el `detalle` de la regla de fidelidad), `nicho/fuentes/reddit.py`, `nicho/fuentes/youtube.py` (los `detalle` «post N de M» / «video N de M»), `translations/`
 - Modify tests: `tests/test_i18n_mensajes.py` (`WORKER`), `tests/test_i18n_guardado.py`, `tests/test_acciones.py`
 
 **Interfaces:**
@@ -1641,6 +1696,19 @@ def test_evento_de_creacion_desde_la_galeria_en_el_idioma_del_proyecto(base_temp
     eid = ex.crear_con_piezas("acme", datos, [(f_co, "CO")])
     creado = next(e for e in ex.obtener("acme", eid)["eventos"] if e["tipo"] == "creado")
     assert creado["mensaje"].startswith("Experiment created from the gallery with 1 ad(s) in ")
+
+
+def test_detalle_del_pixel_en_el_error_de_lanzamiento_va_traducido(monkeypatch):
+    """Desde la Task 5 el `detalle` del Pixel es un msgid (N_); el error de
+    lanzamiento que lo incluye (worker → idioma del proyecto) lo traduce."""
+    import pytest
+
+    import lanzador
+    monkeypatch.setattr(lanzador.meta_conexion, "estado_pixel", lambda c, solo_cache=False: {
+        "estado": "sin_pixel", "pixel_id": None, "detalle": "La cuenta publicitaria no tiene ningún Pixel."})
+    with idiomas.en_idioma("en"), pytest.raises(ValueError) as e:
+        lanzador._promoted_object_para("acme", {"objetivo_meta": "OUTCOME_SALES"})
+    assert "(The ad account has no Pixel)" in str(e.value)
 ```
 
 En `tests/test_acciones.py`, al final:
@@ -1686,6 +1754,7 @@ Expected: FAIL (la guardia lista ~45 textos en los archivos nuevos de `WORKER`; 
 - `nicho/fuentes/reddit.py` y `youtube.py`: `avanzar(N_("Leyendo comentarios"), gettext("post %(n)s de %(total)s", n=n, total=len(pendientes)))` y `gettext("video %(n)s de %(total)s", …)`.
 - `experimentos.crear_con_piezas`: el `mensaje=` del evento «creado» se arma antes de la transacción: `with idiomas.en_idioma(idiomas.de_proyecto(cliente)): mensaje_creado = gettext("Experimento creado desde la galería con %(anuncios)s anuncio(s) en %(paises)s país(es)", anuncios=len(finales), paises=len(paises_exp))` (`import idiomas`, `from flask_babel import gettext` si faltan); los `raise ValueError("…")` de `experimentos.py` y `derivaciones.py` → `gettext`.
 - `organico.publicar` / `interrumpir`: sus textos guardados por `gettext` (corren en el worker o en un hook ya envuelto por el worker).
+- `lanzador._promoted_object_para`: `import idiomas` y `detalle = idiomas.traducir((px or {}).get("detalle") or "")` antes de armar el `ValueError` con `gettext` (desde la Task 5 el `detalle` es el msgid en español; en el worker sale en el idioma del proyecto).
 
 - [ ] **Step 4: I2 — `acciones.ejecutar`**
 
@@ -1733,11 +1802,12 @@ EOF
 
 **Files:**
 - Create: `tests/test_i18n_app_entera.py`
-- Modify: `idiomas.py` (docstring), `CLAUDE.md` (párrafos **Idioma** y **Final edition**), `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md` (nota en §B5)
+- Modify: `idiomas.py` (docstring), `CLAUDE.md` (párrafos **Idioma** y **Final edition**), `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md` (notas en §B5, en el punto «Final edition» de §Pruebas y en la fase 6 de «Fases»)
+- Modify tests: `tests/test_rutas_final_edition.py`, `tests/test_fe_producir.py` (la decisión B fijada en un test)
 
 **Interfaces:**
 - Consumes: todo lo anterior; `tests/test_i18n_fugas.py::app_i18n`, `html_de`; `tests/i18n_util.espanol_visible`.
-- Produces: la prueba de que, con los valores de producción, una persona SIN idioma guardado ve toda la app en inglés; la documentación del cierre.
+- Produces: la prueba de que, con los valores de producción, una persona SIN idioma guardado ve toda la app en inglés; un test que fija la decisión B; la documentación del cierre con TODAS las excepciones en español a propósito.
 
 - [ ] **Step 1: La barrida (debe pasar; lo que liste es una fuga de una tarea anterior y se arregla aquí, en su plantilla o su Python)**
 
@@ -1796,17 +1866,62 @@ def test_paginas_publicas_en_ingles_sin_cookie(produccion, url):
     assert not fugas, (url, fugas[:15])
 ```
 
-Run: `venv/bin/python3 -m pytest tests/test_i18n_app_entera.py -q` → PASS. Si algo falla, la fuga se arregla en su origen (y se nombra en el commit).
+Al final de `tests/test_rutas_final_edition.py`, el test que reemplaza el punto «Final edition» de §Pruebas del spec:
+
+```python
+def test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol(base_temporal, monkeypatch):
+    """Decisión B (Daniel, 2026-09-28; reemplaza §B5 y el «Final edition» de
+    §Pruebas del spec): en un proyecto en inglés el destino CO sigue siendo
+    `es_CO` — la final se localiza en español con precio en COP — y la clave
+    queda `<cf_id>__es_CO`."""
+    import creative_flow as cf
+    import dashboard
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    base_en = dict(GUION_BASE, idioma="en", pais="US")
+    item = _item_video_listo(guion_base=base_en)
+    html = _entorno_plantilla().get_template("_final_detalle_respuesta.html").render(
+        **_contexto_minimo([item]), item=item, f=None, idioma_proyecto="en")
+    assert 'name="destinos" value="es_CO"' in html
+    cf_id = _sesion_video_listo()
+    cf.guardar_guion_base("acme", cf_id, base_en)
+    llamadas = _capturar_encolar(monkeypatch, dashboard)
+    _cliente_admin(dashboard).post(f"/cliente/acme/creative_flow/{cf_id}/final/producir", data={
+        "destinos": ["es_CO"], "voz": "Rachel", "estilo_musica": "energetico", "precio_es_CO": "89900"})
+    (t,) = llamadas
+    assert t["job_id"] == f"acme__{cf_id}__es_CO__final"
+    assert (t["payload"]["idioma"], t["payload"]["pais"]) == ("es", "CO")
+    assert t["payload"]["opciones"]["precios"] == {"es_CO": 89900.0}
+    assert cf.final_por_legado("acme", f"{cf_id}__es_CO")["estado"] == "generando"
+```
+
+y al final de `tests/test_fe_producir.py`, la mitad del worker (con el `entorno` de siempre, que reemplaza `localizar_guion`):
+
+```python
+def test_decision_b_la_final_co_de_un_proyecto_en_ingles_se_localiza_en_espanol(entorno, monkeypatch):
+    import creative_flow as cf
+    import idiomas
+    monkeypatch.setattr(idiomas, "de_proyecto", lambda c: "en")
+    cf.guardar_guion_base("acme", entorno["cf_id"], dict(GUION_BASE, idioma="en", pais="US"))
+    final_id, _ = final_edition.producir("acme", entorno["cf_id"], "es", "CO", {"precios": {"es_CO": 89900}})
+    assert final_id.endswith("__es_CO")
+    assert entorno["localizar"][:2] == ("es", "CO")
+```
+
+(Los dos pasan desde el principio: fijan lo que ya hace el código para que nadie lo cambie siguiendo el §B5 viejo. `GUION_BASE` es el de cada archivo de tests.)
+
+Run: `venv/bin/python3 -m pytest tests/test_i18n_app_entera.py tests/test_rutas_final_edition.py tests/test_fe_producir.py -q -k "entero or admin or publicas or decision_b"` → PASS. Si algo falla, la fuga se arregla en su origen (y se nombra en el commit).
 
 - [ ] **Step 2: Documentación del cierre**
 
-- `idiomas.py`, docstring: la frase «aunque varias pantallas (Sprints, Nicho, Referentes, Final edition/editor, admin, el mapa del código) sigan solo en español hasta que cierren las fases 5-6» pasa a «Desde el cierre de la fase 6 (2026-09) toda la app pasa por el catálogo; solo el contenido del mapa del código, los textos de la doctrina y los mensajes de contrato de `final_edition/documento.validar` quedan en español a propósito».
+- `idiomas.py`, docstring: la frase «aunque varias pantallas (Sprints, Nicho, Referentes, Final edition/editor, admin, el mapa del código) sigan solo en español hasta que cierren las fases 5-6» pasa a «Desde el cierre de la fase 6 (2026-09) toda la app pasa por el catálogo. Quedan en español a propósito: el contenido del mapa del código y los textos de la doctrina (documentación interna), los mensajes de contrato de `final_edition/documento.validar`, los prompts para los modelos de video e imagen, y las 9 plantillas del flujo viejo «Nueva idea» (excluidas hasta que Daniel decida qué pasa con ese flujo)».
 - `CLAUDE.md`, párrafo **Idioma**: la oración «Sprints, Nicho, Referentes, Final edition/editor, las páginas de admin y el mapa del código siguen solo en español hasta que cierren las fases 5-6.» se reemplaza por:
 
 ```markdown
 Desde la fase 6 (2026-09) toda la app pasa por el catálogo (excepciones a propósito: el contenido de
-`mapa_codigo.html` y de la doctrina, documentación interna en español, y los mensajes de contrato de
-`final_edition/documento.validar`). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
+`mapa_codigo.html` y de la doctrina, documentación interna en español; los mensajes de contrato de
+`final_edition/documento.validar`; los prompts para los modelos de video e imagen; y las 9 plantillas del flujo
+viejo «Nueva idea», en `EXCLUIDAS` hasta que Daniel decida qué pasa con ese flujo). Final edition sigue la **decisión B** (Daniel, 2026-09-28; reemplaza el §B5
 del spec): cada final sale en el idioma de su país destino (`<idioma>_<PAIS>`); el guion base, que no es por destino,
 en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. El editor no es Jinja: sus textos viven en `static/editor/textos.js` (`ES`,
 la fuente) y la ruta `editor.ver` manda los traducidos (`final_edition/textos_editor.py`, mismas claves); todo
@@ -1817,20 +1932,21 @@ los valores de producción).
 ```
 
 - `CLAUDE.md`, párrafo **Final edition**: después de «…per idioma/país (`fe_preparar` writes one guion base with Anthropic; …)», agregar «— the base guion is written in the language picked in «Idioma base», which defaults to the project's language (`idiomas.de_proyecto`), and each destino localizes it to its country's language (decisión B, 2026-09-28)».
-- Spec `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md`, al principio de «### B5. Los anuncios: siempre en el idioma del proyecto», una nota: «> **Reemplazado para Final edition (decisión B de Daniel, 2026-09-28):** las finales salen en el idioma de cada país destino, como antes; el guion base, en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. Nicho, Crear, Sprints y orgánico siguen como dice esta sección (fases 3-5).».
+- Spec `docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md`, al principio de «### B5. Los anuncios: siempre en el idioma del proyecto», una nota: «> **Reemplazado para Final edition (decisión B de Daniel, 2026-09-28):** las finales salen en el idioma de cada país destino, como antes; el guion base, en el idioma elegido en «Idioma base» (por defecto el del proyecto), y sus variantes en el del guion base. Nicho, Crear, Sprints y orgánico siguen como dice esta sección (fases 3-5).». Y la misma nota, en una línea, en dos sitios más que repiten la regla vieja: en §Pruebas, al final del punto «**Final edition**» («> Reemplazado por la decisión B: un proyecto en `en` que produce para CO crea `<cf_id>__es_CO` y localiza en español con precio en COP — lo fija `tests/test_rutas_final_edition.py::test_decision_b_un_proyecto_en_ingles_produce_co_en_espanol`.»), y en «Fases», punto 6, después de «final edition por país (§B5)» («— por país y en el idioma de cada país: decisión B, 2026-09-28»).
 
 - [ ] **Step 3: Suite completa y commit**
 
 Run: `venv/bin/python3 -m pytest -q` → PASS; `venv/bin/python3 catalogo_i18n.py pendientes` → sin salida.
 
 ```bash
-git add tests/test_i18n_app_entera.py idiomas.py CLAUDE.md docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md
+git add tests/test_i18n_app_entera.py tests/test_rutas_final_edition.py tests/test_fe_producir.py idiomas.py CLAUDE.md docs/superpowers/specs/2026-09-26-idioma-y-modo-oscuro-design.md
 git commit -m "$(cat <<'EOF'
 Idioma (8/8 de la fase 6): barrida de toda la app en inglés y cierre de la fase
 
 Con los valores de producción, una persona sin idioma guardado ve las
-pestañas, las páginas públicas y las de admin en inglés. CLAUDE.md y el
-spec anotan la decisión B (finales por país) y las guardias nuevas.
+pestañas, las páginas públicas y las de admin en inglés; un test fija la
+decisión B (finales por país). CLAUDE.md y el spec anotan la decisión B,
+las guardias nuevas y todas las excepciones en español a propósito.
 
 Co-Authored-By: <model>
 EOF
@@ -1865,6 +1981,7 @@ Sin migración nueva (la última es la 0022 de la fase 5: `ls migrations/version
 | §B10 glosario | Task 1 (términos de Final edition y del editor; «Destino» = Market) |
 | Fase 6: final edition, editor, admin, mapa, Cambiar producto, «Nueva idea», `_meta_*`/`meta_elegir`, barrido del worker | Tasks 1-3, 2, 5, 5, 4, 6, (fase 2)/5, 7 |
 | §Pruebas: guardias, fugas, visual, prueba real con gasto | Tasks 1-7 (tests por tarea), 8 (barrida con valores de producción, visual, gasto real) |
+| §Pruebas «Final edition» (regla vieja) | Task 8: `test_decision_b_…` en `tests/test_rutas_final_edition.py` y `tests/test_fe_producir.py`, y la nota en el spec |
 | Restos de las fases 2-5 | I2 y `MENSAJE_INTERRUMPIDA` (Task 7), `detalle` de gastos y de progreso (Tasks 3, 4, 6, 7), «cobro(s)» y «anuncios» (Task 4), detalle del Pixel y aviso de fallo de familias (Task 5), `_requiere_correo_verificado`/Marca/Catálogo (Task 4), encabezados de CSV (Tasks 4, 5) |
 
 Nombres que cruzan tareas (verificados): `etiqueta_fe` (Task 1, `_final_macros.html`) y `tipos.ETIQUETAS_CAPA` (Task 3) comparten msgid; `tests/test_i18n_mensajes.py::RUTAS/WORKER` (Task 2) crecen en las Tasks 3, 4, 5, 6, 7; `tests/test_i18n_guardado.py` nace en la Task 6 y crece en la 7; `ARCHIVOS_FASE6` nace en la Task 1 y crece en la 4; `tests/i18n_util.MARCAS_CODIGO`/`espanol_en_codigo` (Task 2) los usan las dos guardias de código.
