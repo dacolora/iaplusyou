@@ -298,6 +298,14 @@ def test_materiales_se_deriva_tambien_del_logo_de_marca():
     assert d.validar(doc)["materiales"] == [1, 2, 3, 9]
 
 
+def test_marca_null_toma_la_marca_por_defecto():
+    # como `variables`: un "marca": null explícito no tumba validar (antes
+    # AttributeError → 500 en el autoguardado).
+    doc = cargar("video_basico.json")
+    doc["marca"] = None
+    assert d.validar(doc)["marca"] == {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None}
+
+
 def test_logo_material_id_no_positivo_es_documento_invalido():
     doc = cargar("video_basico.json")
     doc["marca"]["logo_material_id"] = 0

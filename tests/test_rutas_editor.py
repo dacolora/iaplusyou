@@ -157,6 +157,26 @@ def test_guardar_rechaza_documentos_invalidos_y_materiales_ajenos(dashboard, enc
     assert r.status_code == 400
 
 
+def test_guardar_con_una_forma_rara_responde_400_y_no_500(dashboard, encolados):
+    import ediciones
+    ed, clon, _v = _edicion()
+    c = _cliente_admin(dashboard)
+    url = f"/cliente/acme/ediciones/{ed['id']}"
+    for romper in (lambda doc: doc.__setitem__("pistas", [1]),
+                   lambda doc: doc["pistas"][0].__setitem__("clips", "abc"),
+                   lambda doc: doc.__setitem__("subtitulos", "x"),
+                   lambda doc: doc.__setitem__("marca", "x")):
+        doc = _doc_valido(clon["id"])
+        romper(doc)
+        r = c.put(url, json={"documento": doc, "version_n": ed["version_n"]})
+        assert r.status_code == 400 and r.get_json() == {"error": "El documento no tiene la forma esperada."}
+    doc = _doc_valido(clon["id"])
+    doc["marca"] = None                                          # null explícito: la marca por defecto
+    r = c.put(url, json={"documento": doc, "version_n": ed["version_n"]})
+    assert r.status_code == 200
+    assert ediciones.cargar("acme", ed["id"])["documento"]["marca"]["color"] == "#7c3aed"
+
+
 def test_guardar_exige_mismo_origen_y_acceso(dashboard, encolados):
     ed, clon, _v = _edicion()
     cuerpo = {"documento": _doc_valido(clon["id"]), "version_n": ed["version_n"]}

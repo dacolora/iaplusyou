@@ -383,7 +383,8 @@ def validar(doc):
         if doc.get(clave_top) is not None and not isinstance(doc[clave_top], dict):
             _fallar(f"{clave_top} debe ser un objeto o null.")
         doc[clave_top] = doc.get(clave_top)
-    doc.setdefault("marca", {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None})
+    # como `variables`: un "marca": null explícito toma la marca por defecto
+    doc["marca"] = doc.get("marca") or {"color": "#7c3aed", "logo_material_id": None, "marca_de_agua": None}
     doc.setdefault("mezcla", {"preset": "equilibrada", "volumenes": None})
     # `materiales` se deriva: lo que mandó el navegador ∪ material_id de los
     # clips de todas las pistas ∪ voces por destino ∪ valores de pngs ∪ el

@@ -75,7 +75,12 @@ def guardar(cliente, edicion_id):
             or not isinstance(cuerpo.get("version_n"), int) or isinstance(cuerpo.get("version_n"), bool):
         return jsonify({"error": "Pedido inválido: se esperaba {documento, version_n}."}), 400
     try:
-        doc = documento_mod.validar(cuerpo["documento"])
+        try:
+            doc = documento_mod.validar(cuerpo["documento"])
+        except (TypeError, AttributeError):
+            # un tipo que validar no espera (p. ej. "pistas": [1]) revienta al
+            # recorrerlo: es un documento mal armado, no un error del servidor
+            return jsonify({"error": "El documento no tiene la forma esperada."}), 400
         ajenos = _materiales_ajenos(cliente, doc)
         if ajenos:
             return jsonify({"error": "La edición usa archivos que no son de este proyecto."}), 400
