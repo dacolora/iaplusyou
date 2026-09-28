@@ -552,13 +552,20 @@ Capa 4a (2026-09-27): the page edits — `static/editor/operaciones.js` (pure: c
 with ripple on the principal, duplicate, trim from either edge, reorder the principal, move other
 layers with snapping, speed 0.5–2×; every result passes `documento.validar`, checked by
 `tests/test_operaciones_editor.py` on the real JS output; `p_sonido` is rebuilt as a mirror of the
-principal, without the clips at speed ≠ 1; `normalizar` mirrors `verificar_recortes` for transitions),
+principal, without the clips at speed ≠ 1; `normalizar` mirrors `verificar_recortes`: it shortens any clip
+that asks for more material than exists — counting with `Math.round`, which is never below Python's
+round-half-to-even, so what fits in the browser fits in the render — and then the transitions; a voice clip with
+`por_destino` can be moved or deleted but not trimmed, since `resolver` replaces it whole per destino),
 `historial.js` (undo/redo in memory), `guardado.js` (debounced PUT `editor.guardar` with CAS
 `version_n`, 409 → «Recargar»; the route refuses materials from another project), a DOM timeline
 (`escala.js` pure + `linea_tiempo.js`) and `pagina_editor.js`; «Editar este video» in the Final edition
 tab (`editor.desde_clon` → free worker task `edicion_desde_clon`, `final_edition/edicion_clon.py`: the
-raw clon as one clip + mirrored scene sound) and «Producir» from the editor (`editor.producir`:
-`versionar` → `crear_final` → `edicion_producir` per destino, free, each destino resolved first).
+raw clon as one clip + mirrored scene sound, destino `es_<proyectos.pais>` via `origen.pais`) and «Producir»
+from the editor (`editor.producir`: `versionar` → `crear_final` → `edicion_producir` per destino, free; each
+destino is first resolved and checked with `verificar_recortes`, a destino whose paid `final_producir` is running
+is refused, and a final with video NOT made from this edición — `ediciones.edicion_de_final` — needs
+`reemplazar: true`, which the dialog asks for). The editor and the automatic path now share the borrador:
+`produccion.traducir` re-applies its pure steps on a CAS conflict (up to 2 retries) instead of paying again.
 
 **Experimentos** (`experimentos.py` + `lanzador.py`): the ecommerce test loop's unit
 of work. An experiment (table `experimento`, `legado=False` — `ads.py`'s "Anuncios

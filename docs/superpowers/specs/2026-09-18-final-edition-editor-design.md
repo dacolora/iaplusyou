@@ -460,6 +460,12 @@ Deshacer/rehacer solo en memoria. Producir: `POST .../producir` → versión →
 PNG de textos como `material` → `pieza tipo=final` por destino (como hoy) →
 `edicion_producir` por destino.
 
+> Nota (capa 4a, 2026-09-27): el borrador ya no es solo del worker: el editor
+> lo abre y lo autoguarda con el mismo CAS por `version_n`. La vía automática
+> (`produccion.traducir`), si choca con un autoguardado después de pagar la
+> localización y la voz, recarga la edición y vuelve a aplicar solo sus pasos
+> puros (`agregar_destino` / `fijar_precio`), hasta 2 veces, sin volver a pagar.
+
 Borrador: `final_edition.borrador(cliente, cf_id) -> edicion_id` (guion con
 Claude, cortes, voz por bloque cacheada, música, textos hook/badge/CTA en las
 posiciones actuales, subtítulos, variables prellenadas). "Preparar guion" pasa a
@@ -504,6 +510,13 @@ Producción: Producir → destinos, precios, traducciones pendientes, costo y
 tiempo → confirmar → PNG por idioma subidos → versión → una tarea por destino
 → barra de progreso por etapas (`iniciarPolling`) → final como hoy (aprobar,
 publicar, experimento, entrega) → "Ajustar este destino".
+
+> Nota (capa 4a, 2026-09-27): «Producir» desde el editor revisa los recortes de
+> cada destino con `compilador.verificar_recortes` antes de congelar (400 con los
+> problemas, en vez de fallar en el worker), no produce un destino cuya final con
+> voz (`final_producir`) está en curso, y pregunta antes de reemplazar una final
+> con video que no salió de esta edición (409 con `reemplazos`; se reenvía con
+> `reemplazar: true` desde «Reemplazar y producir»).
 
 Se conserva sin tocar: `mezcla.py`, `voz.py` (+ caché por bloque), `musica.py`,
 `guion.py`, `cortes.py` (detección), `tipos.py`, `providers/fal_audio.py`, la
