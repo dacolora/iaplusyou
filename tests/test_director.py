@@ -96,7 +96,11 @@ def test_compilar_devuelve_prompts_a_y_b_compuestos_con_armar(monkeypatch):
     assert "Hard cut." in _sys(reg.kwargs[0]) and "Shot 2 (4-8s): Hard cut. " in r["prompt_a"]
     assert "IDEA: Image 1 gira sobre la piedra" in reg.kwargs[0]["messages"][0]["content"]
     assert r["prompt_a"].count("Shot ") == 2 and "Shot 1 (0-4s)" in r["prompt_a"] and "Shot 2 (4-8s)" in r["prompt_a"]
-    assert r["prompt_a"].endswith("Recordatorio final: el producto permanece solo y sin nadie durante todo el video.")
+    # 2026-09-28: sin personaje el prompt ya no remata con «solo y sin nadie» ni
+    # prohíbe personas/manos; el enfoque llega explicado en el mensaje a Claude.
+    assert "Recordatorio final" not in r["prompt_a"] and "personas, pies, manos" not in r["prompt_a"]
+    assert r["prompt_a"].splitlines()[-1].startswith("EVITAR: ")
+    assert "ENFOQUE: producto — el producto es el protagonista" in reg.kwargs[0]["messages"][0]["content"]
     assert "No dialogue. No background music." in r["prompt_a"] and "ESTILO DE MARCA: Luz natural." in r["prompt_a"]
     assert "macro" in r["prompt_b"] and r["prompt_b"] != r["prompt_a"] and r["diferencia_b"].startswith("Arranca")
     assert r["planos"][0]["camara"] == "dolly_in" and r["usd"] == 0.01 and r["version"] == 1

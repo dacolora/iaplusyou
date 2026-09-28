@@ -9,15 +9,22 @@ que se vieron en los primeros videos de Happy Flops:
      aparece; nunca se inventan letras. Si el proyecto tiene logos subidos en
      FlowSettings, van como referencias extra "@Logo N".
   2. Salieron pies/personas cuando solo se quería el producto. -> Regla de
-     personas: sin persona por defecto (solo producto); si hay persona, se aplica
-     la guía de marca de personas/pies.
+     personas: con un personaje del catálogo o el enfoque «persona» va el bloque
+     CON PERSONA. Sin ellos el prompt NO prohíbe personas ni manos ni remata con
+     «solo y sin nadie» (2026-09-28, pedido de la persona): el producto es el
+     protagonista y la escena la deciden su texto o los planos del director.
 
 Ningún modelo de FlowPlus acepta negative_prompt (verificado en WaveSpeed para
 Wan 3.0), así que las prohibiciones van dentro del prompt como frases negativas
 explícitas. Las referencias se nombran con los tokens que documentan los
 fabricantes (`Image N` / `Video N`, por orden de subida; spec director §5):
 `asignar_tokens` los calcula por modelo y `sustituir_tokens` cambia las
-menciones `@Imagen N` / `@Video N` / `@Logo N` del texto de la persona.
+menciones `@Imagen N` / `@Video N` / `@Logo N` del texto de la persona. Desde el
+incidente 2026-09-28 también entiende lo que la gente pega de otras
+herramientas (`@Image1`, `@Image 1`, `@[Image 1](image_1)`, `@image_4`, en
+cualquier mayúscula): todas se leen como la mención canónica `@Imagen N`; y
+`menciones_sin_referencia` lista las que no tienen referencia en la bandeja,
+para que la ruta avise antes de cobrar en vez de dejar que el modelo invente.
 
 Idioma del proyecto (spec 2026-09-26 §B4-§B5): todas las frases fijas que van
 al modelo viven en `TEXTOS`, un diccionario por idioma ("es"/"en"); cada
@@ -35,7 +42,26 @@ def _lista(refs, tipo):
     return [r for r in refs if r.get("tipo") == tipo]
 
 
-_MENCION = re.compile(r"@(Imagen|Video|Logo) (\d+)")
+# Menciones que escribe (o pega) la persona. El chip inserta `@Imagen 1`; los
+# textos pegados de otras herramientas traen `@Image1`, `@Image 1`,
+# `@[Image 1](image_1)` o `@image_4` (incidente 2026-09-28: llegaban crudos al
+# modelo y este inventaba o duplicaba personajes). Todas se leen igual; la
+# forma canónica es `@Imagen N` / `@Video N` / `@Logo N` (la etiqueta del chip).
+# `(?<![\w.])` deja en paz los correos (ana@imagen1.com) y `(?![\w@])` exige que
+# el número termine ahí.
+_MENCION = re.compile(
+    r"(?<![\w.])@(?:\[\s*(?P<tipo_b>imagen|image|video|logo)[ _]?(?P<n_b>\d+)\s*\]\([^)\n]*\)"
+    r"|(?P<tipo>imagen|image|video|logo)[ _]?(?P<n>\d+))(?![\w@])",
+    re.IGNORECASE,
+)
+_TIPO_CANONICO = {"imagen": "Imagen", "image": "Imagen", "video": "Video", "logo": "Logo"}
+
+
+def _etiqueta_canonica(m):
+    """`@Imagen N` / `@Video N` / `@Logo N` para cualquier forma de mención."""
+    tipo = (m.group("tipo_b") or m.group("tipo")).lower()
+    n = int(m.group("n_b") or m.group("n"))
+    return f"@{_TIPO_CANONICO[tipo]} {n}"
 
 
 def asignar_tokens(referencias, modelo_id):
@@ -72,26 +98,33 @@ def sustituir_tokens(texto, referencias):
     por_etiqueta = {r.get("etiqueta"): r.get("token") for r in referencias if r.get("token")}
 
     def _cambiar(m):
-        return por_etiqueta.get(m.group(0), m.group(0))
+        return por_etiqueta.get(_etiqueta_canonica(m)) or m.group(0)
 
     return _MENCION.sub(_cambiar, texto or "")
+
+
+def menciones_sin_referencia(texto, referencias):
+    """Menciones del texto (tal como las escribió la persona, sin repetir, en
+    orden) que no tienen referencia: la ruta de Crear avisa y no genera —
+    con ellas el modelo inventaba o duplicaba personajes (incidente
+    2026-09-28: un mapa de cuatro imágenes con dos en la bandeja). Mira
+    etiquetas, no tokens, así que sirve también para la imagen, que no los
+    asigna."""
+    etiquetas = {r.get("etiqueta") for r in referencias}
+    vistas, faltan = set(), []
+    for m in _MENCION.finditer(texto or ""):
+        literal = m.group(0)
+        if _etiqueta_canonica(m) in etiquetas or literal in vistas:
+            continue
+        vistas.add(literal)
+        faltan.append(literal)
+    return faltan
 
 
 def _nombre(r):
     """Token si la referencia lo tiene; si no (sesiones anteriores), su etiqueta."""
     return r.get("token") or r["etiqueta"].replace(" (vista 1)", "")
 
-
-_PALABRAS_PERSONA = ("people", "person", "feet", "foot", "toes", "hands", "skin", "nails",
-                     "persona", "gente", "pies", "pie ", "dedos", "manos", "piel", "uñas")
-
-
-def _guia_sin_personas(guia):
-    """Quita de la guía de marca las frases que hablan de personas, pies o manos:
-    en un video de solo producto esas frases empujan al modelo a meter un pie."""
-    frases = [f.strip() for f in guia.replace("\n", " ").split(".") if f.strip()]
-    utiles = [f for f in frases if not any(p in f.lower() for p in _PALABRAS_PERSONA)]
-    return (". ".join(utiles) + ".") if utiles else ""
 
 # Bloque del enfoque unboxing en español (spec 2026-09-26 §B5: extraído para
 # que TEXTOS["es"]["enfoques"]["unboxing"] y ENFOQUES["unboxing"]["bloque"]
@@ -108,7 +141,7 @@ ENFOQUES_UNBOXING_ES = (
 ENFOQUES = {
     "producto": {
         "nombre": N_("Solo producto"),
-        "descripcion": N_("El producto solo, sin nadie: vacío, sin usar, sobre la superficie o flotando."),
+        "descripcion": N_("El producto como protagonista, sin personaje del catálogo: en uso y con el resultado a la vista; manos o personas solo si la escena lo pide."),
         "con_persona": False,
         "bloque": None,
     },
@@ -309,8 +342,6 @@ TEXTOS = {
                         "El producto es el protagonista; la persona lo acompaña."),
         "estilo": "ESTILO DE MARCA", "evitar": "EVITAR",
         "prohibido": ["texto inventado", "logos inventados", "marcas de agua", "subtítulos"],
-        "prohibido_sin_persona": ["personas", "pies", "manos"],
-        "recordatorio": "Recordatorio final: el producto permanece solo y sin nadie durante todo el video.",
         # Bloques por enfoque (ENFOQUES[...]["bloque"]), en su propio
         # subdiccionario para no compartir espacio de nombres con las
         # etiquetas de arriba (una id de enfoque nunca debe poder pisar, p.
@@ -337,8 +368,6 @@ TEXTOS = {
                         "the person accompanies it."),
         "estilo": "BRAND STYLE", "evitar": "AVOID",
         "prohibido": ["invented text", "invented logos", "watermarks", "subtitles"],
-        "prohibido_sin_persona": ["people", "feet", "hands"],
-        "recordatorio": "Final reminder: the product stays alone, with nobody, for the whole video.",
         "enfoques": {"unboxing": (
             "UNBOXING FOCUS: the scene is a person receiving their purchase. It starts with the closed box "
             "or bag on the table or in their hands; they open it with curiosity and take the product out; "
@@ -433,9 +462,9 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
         # Con un personaje del catálogo la escena lleva persona sí o sí: ese personaje.
         con_persona = True
 
-    # Nota: ya no hardcodeamos "VIDEO DE PRODUCTO SOLO" — el usuario edita libremente
-    # el prompt con el esquema de frames/tomas que prefiera. El prompt es completamente
-    # editable en la UI.
+    # Sin personaje del catálogo ni enfoque «persona» el prompt NO prohíbe personas
+    # ni manos ni remata con «solo y sin nadie» (2026-09-28, pedido de la persona):
+    # el producto es el protagonista y la escena la decide su texto o el director.
 
     # --- Contexto de campaña (Sprints): audiencia y temporada ---
     partes.extend(_lineas_contexto(contexto, idioma))
@@ -481,7 +510,7 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
 
     # --- Guía de marca (invariantes) ---
     if guia_marca:
-        partes.append(f"{t['estilo']}: {_guia_sin_personas(guia_marca) if not con_persona else guia_marca.strip()}")
+        partes.append(f"{t['estilo']}: {guia_marca.strip()}")
 
     # --- Enfoque (unboxing, etc.) ---
     if info_enfoque and info_enfoque["bloque"]:
@@ -500,12 +529,8 @@ def armar(texto, referencias, con_persona=False, guia_marca="", negative_marca=N
 
     # --- Prohibiciones (los modelos no aceptan negative_prompt) ---
     prohibido = list(t["prohibido"])
-    if not con_persona:
-        prohibido = list(t["prohibido_sin_persona"]) + prohibido
     if negative_marca:
         prohibido.append(negative_marca.strip().rstrip(".")[:400])
     partes.append(f"{t['evitar']}: " + ", ".join(prohibido) + ".")
-    if not con_persona:
-        partes.append(t["recordatorio"])
 
     return "\n".join(partes)

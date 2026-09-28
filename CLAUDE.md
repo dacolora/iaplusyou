@@ -361,12 +361,32 @@ the whole tray is used and emptied, as before.
 Las referencias se nombran `Image N` / `Video N` (`flowplus_prompt.asignar_tokens`,
 por modelo: Wan recibe los videos aparte). Spec:
 `docs/superpowers/specs/2026-09-18-director-prompts-crear-design.md` (Etapa 1 hecha;
-presets de cámara y plantillas de anuncio son las Etapas 2 y 3). Los lotes de
+presets de cámara y plantillas de anuncio son las Etapas 2 y 3).
+**Menciones y recuperación (incidente 2026-09-28,** 6 de 12 videos del día fallaron y los buenos traían
+personajes dobles y el dibujo de otro clip**):** `flowplus_prompt.sustituir_tokens` entiende todo lo que la
+gente pega de otras herramientas (`@Image1`, `@Image 1`, `@[Image 1](image_1)`, `@image_4`, cualquier
+mayúscula) como la mención canónica `@Imagen N`/`@Video N`/`@Logo N`; una mención sin referencia en la
+bandeja hace que `cf_crear_video` avise y NO cree la sesión (`menciones_sin_referencia`: nada se cobra).
+WaveSpeed sigue trabajando cuando el worker deja de esperar (Wan 3.0 pasó de los 20 min cuatro veces ese
+día) y cobra igual: `wavespeed_common.poll_hasta_listo` avisa el `prediction_id` por `on_progreso`
+(`avisar_lanzada` apenas hay id), `tareas/flowplus._avisar_fase_de(..., cf_id=)` lo guarda en la sesión
+(`extra.prediccion`), un tiempo agotado es `EsperaAgotada` (conserva el id) y un rechazo del proveedor es
+`ErrorProveedor` (mensaje, código e id; `_mensaje_error` lo cuenta en palabras en el idioma del proyecto,
+p. ej. Kling 1200 «contenido sensible»). El detalle de la pieza ofrece «Recuperar el video (sin pagar de
+nuevo)» → `cf_recuperar` → tarea `flowplus_recuperar` (`max_intentos=1`, `TIEMPO_RECUPERAR` 10 min):
+vuelve a preguntar por ese id y cierra la pieza con `_terminar_video` (el mismo cierre que la generación
+normal; el gasto se anota ahí, con «recuperado»). Nunca genera de nuevo.
+Los lotes de
 Sprints encolan el director con `auto_lanzar` (el costo ya se aprobó). `calidad`
 `borrador` = Wan a 480p. Duración por defecto 8 s (`preferencias_flowplus`). `VIDEO` /
 `IMAGEN` there are the only model registry (path, price, limits, `audio_nativo`,
 `familia`, `min_duracion`/`max_duracion`, `formatos`). Crear makes ONE piece per click (the enfoque is
-automatic: `producto`, or `persona` when a catalog personaje is among the references),
+automatic: `producto`, or `persona` when a catalog personaje is among the references; since
+2026-09-28 `armar` never forbids people or hands for `producto` — no «EVITAR: personas, pies,
+manos», no «Recordatorio final … solo y sin nadie», no pruning of the brand guide —: the product
+is the protagonist and the scenes show what it does or changes; the CON PERSONA block still comes
+only with a catalog personaje or the `persona` enfoque, and `director._mensaje` spells out each
+enfoque to Claude with `_ENFOQUES_DIRECTOR`),
 offers 5–30 s (default 8 s) and the formats each model admits (verified on WaveSpeed 2026-09-18: Wan 3.0
 2–30 s and 9:16/16:9/1:1/4:3/3:4; Kling O3 Pro 3–15 s and 9:16/16:9/1:1; Seedance 2.5 4–30 s
 and follows the reference image, `aspect_ratio` None; Seedream V5 Pro takes `aspect_ratio`
@@ -374,7 +394,7 @@ for images). `ajustar_duracion`/`ajustar_formato` run in the route AND again in 
 `_preparar` (last barrier before spending), so nothing outside a model's range is ever
 requested. Videos
 ALWAYS ask for the model's native scene sound (`generar_video(..., con_sonido=True)`: Wan 3.0
-`enable_audio`, Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
+`generate_audio` (the published schema's name since 2026-09-28; `enable_audio` was silently ignored), Kling O3 Pro `sound` — +0.028 $/s, already inside `estimate_video` and the
 `usd_por_segundo_efectivo` the templates show —, Seedance 2.5 `generate_audio`), and the
 `armar` prompt (director, Sprints, derivations) carries a `SONIDO:` line ("Sin diálogo
 hablado ni música de fondo" keeps Kling's Chinese/English voices out; the Spanish voice
