@@ -535,9 +535,10 @@ def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
 
 def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
     """Task 6: en una columna de 220–300 px «Transiciones» no cabía y se cortaba
-    («Me…», «Au…»): la elegida muestra su nombre y las demás solo el icono, con el
-    nombre para el lector de pantalla (visualmente oculto, no borrado) y en el
-    cartelito (`title`)."""
+    («Me…», «Au…»; ni siquiera la elegida sola cabía a 800 px): las pestañas van
+    solo con el icono, el nombre para el lector de pantalla (visualmente oculto,
+    no borrado) y en el cartelito (`title`); el panel abierto lo dice en su título
+    (biblioteca.js), y con lugar (la hoja ancha del celular) se ven los nombres."""
     ed, _c, _v = _edicion()
     html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
@@ -545,8 +546,9 @@ def test_las_pestanas_de_la_biblioteca_dicen_su_nombre(dashboard, encolados):
         boton = re.search(rf'<button[^>]*data-panel="{panel}"[^>]*>(.*?)</button>', pestanas, re.S)
         assert boton and f'title="{nombre}"' in boton.group(0) and f"<span>{nombre}</span>" in boton.group(1), panel
     css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
-    oculta = re.search(r'\.ed-pestana\[aria-selected="false"\] span \{([^}]*)\}', css)
+    oculta = re.search(r'\.ed-pestanas \.ed-pestana span \{([^}]*)\}', css)
     assert oculta and "clip-path: inset(50%)" in oculta.group(1) and "display: none" not in oculta.group(1)
+    assert re.search(r"@container ed-pestanas \(min-width: \d+px\)", css), "con lugar, los nombres se ven"
     # la biblioteca la arma biblioteca.js dentro de su panel; la marca de una unión con transición, la línea
     assert "#ed-panel-biblioteca [hidden]" in css and ".ed-union {" in css
 

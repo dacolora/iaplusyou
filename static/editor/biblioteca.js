@@ -28,6 +28,7 @@
 import {
   avisoTransicion, DURACION_TRANSICION_MS, NOMBRES_TRANSICION, pedidoAgregar,
 } from "./escala.js";
+import * as operaciones from "./operaciones.js";
 import { TRANSICIONES } from "./operaciones.js";
 import { evaluarRespuesta } from "./pendientes.js";
 
@@ -116,10 +117,10 @@ export function duracionTexto(ms) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
-// Lo que el servidor todavía prepara (tarea edicion_proxy): la copia liviana
-// y la tira de un video, los picos de un audio.
+// Lo que la vista previa espera del servidor (tarea edicion_proxy): la copia
+// liviana de un video (su tira sale de la misma tarea) y los picos de un audio.
 export function faltaPreparar(m) {
-  if (m?.tipo === "video") return !m.url_proxy || !m.tira_url;
+  if (m?.tipo === "video") return !m.url_proxy;
   if (m?.tipo === "audio") return m.picos === null || m.picos === undefined;
   return false;
 }
@@ -218,7 +219,7 @@ export class Biblioteca {
     this.subidas = [];                  // en espera de subir, una por archivo
     this.subiendo = false;
     this.preparando = new Map();        // cf_id -> {desde, pedido: {punto} | null}; pedido = agregarla al tenerla
-    this.esperando = new Map();         // material_id -> desde: su copia liviana, tira o picos
+    this.esperando = new Map();         // material_id -> desde: su copia liviana (video) o sus picos (audio)
     this.relojPiezas = null;
     this.relojMateriales = null;
     this.arrastre = null;               // {clave, cosa, pointerId, x0, y0, x, y, activo, fantasma, origen, cuadro}
@@ -265,6 +266,8 @@ export class Biblioteca {
       const s = el("section", "ed-bib-panel", c);
       s.dataset.panel = panel;
       s.hidden = true;
+      // en la columna las pestañas van solo con el icono: el panel dice cuál es
+      el("h2", "ed-titulo ed-bib-cabeza", s, this.pestanas.querySelector(`[data-panel="${panel}"]`)?.textContent.trim() ?? "");
       this.paneles[panel] = s;
     }
     this.listaSubidas = {};
@@ -502,12 +505,14 @@ export class Biblioteca {
       dentro.dataset.src = mini.url;        // se carga al verse (muchas piezas = muchos videos)
       this._observar(dentro);
     } else {
-      dentro = el("div", "", caja);
+      // la tira: una caja con la forma del video, a lo ancho o a lo alto del cuadro
+      dentro = el("div", `ed-bib-mini-tira ${mini.vertical ? "ed-bib-vertical" : "ed-bib-horizontal"}`, caja);
       dentro.style.backgroundImage = cssUrl(mini.url);
       dentro.style.backgroundSize = mini.tamano;
+      dentro.style.aspectRatio = mini.proporcion;
     }
-    dentro.classList.add("ed-bib-mini-medio", mini.vertical ? "ed-bib-vertical" : "ed-bib-horizontal");
-    dentro.style.aspectRatio = mini.proporcion;
+    // una imagen o un video llenan el cuadro sin deformarse (object-fit: contain): su forma real la sabe el navegador
+    dentro.classList.add("ed-bib-mini-medio");
     if (duracion) el("span", "ed-bib-duracion", caja, duracion);
     return caja;
   }
@@ -624,7 +629,7 @@ export class Biblioteca {
       return false;
     }
     if (!ed.operar(...pedido)) {
-      this._decir("No se pudo agregar: el aviso está debajo del video.", true);
+      this._decir(this._motivo(pedido) ?? "No se pudo agregar: el aviso está debajo del video.", true);
       return false;
     }
     if (cosa.tipo === "transicion") {
@@ -639,6 +644,18 @@ export class Biblioteca {
     }
     if (cosa.material && faltaPreparar(cosa.material)) this._esperar(cosa.material.id);
     return true;
+  }
+
+  // Por qué la página rechazó una operación (el mismo mensaje que muestra
+  // debajo del video), para decirlo también aquí: en el celular la hoja tapa
+  // ese aviso. Se vuelve a probar la operación (pura) solo cuando falló.
+  _motivo(pedido) {
+    try {
+      operaciones[pedido[0]](this.editor.doc(), ...pedido.slice(1), this.editor.info());
+      return null;                         // no es la operación: la edición está bloqueada (otra pestaña)
+    } catch (e) {
+      return e?.name === "OperacionInvalida" ? e.message : null;
+    }
   }
 
   async _agregarPieza(cosa, punto) {
@@ -904,8 +921,8 @@ export class Biblioteca {
     this._pintarSubida(s);
     this._ponerMaterial(m);
     this.editor.agregarMateriales({ [m.id]: m });
-    if (this.carga !== "lista") this.carga = "lista";
-    this._pintarListas();
+    if (this.carga === "lista") this._pintarListas();
+    else void this.cargar();                     // la lista no había cargado: se trae entera (ya con este)
     if (faltaPreparar(m)) this._esperar(m.id);
     setTimeout(() => s.nodo?.remove(), 2500);
   }

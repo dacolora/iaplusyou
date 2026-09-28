@@ -84,9 +84,12 @@ test("duracionTexto: m:ss, nunca 0:00 si dura algo; sin duración, nada", () => 
   assert.equal(duracionTexto(0), "");
 });
 
-test("faltaPreparar: un video sin copia liviana o sin tira, un audio sin picos", () => {
+test("faltaPreparar: un video sin copia liviana, un audio sin picos (lo que la vista previa necesita)", () => {
   assert.equal(faltaPreparar(video(1)), true);
   assert.equal(faltaPreparar(video(1, { url_proxy: "p.mp4", tira_url: "t.jpg" })), false);
+  // la tira sale de la misma tarea que la copia liviana: con copia y sin tira no hay nada más que esperar
+  assert.equal(faltaPreparar(video(1, { url_proxy: "p.mp4" })), false);
+  assert.equal(faltaPreparar(video(1, { tira_url: "t.jpg" })), true);
   assert.equal(faltaPreparar({ tipo: "audio", picos: null }), true);
   assert.equal(faltaPreparar({ tipo: "audio", picos: [0.2] }), false);
   assert.equal(faltaPreparar({ tipo: "imagen" }), false);
@@ -108,4 +111,71 @@ test("las transiciones de la biblioteca son las del render, en su orden, con nom
   assert.deepEqual(TRANSICIONES_BIBLIOTECA.map((t) => t.tipo), op.TRANSICIONES);
   assert.deepEqual(TRANSICIONES_BIBLIOTECA.map((t) => t.nombre), ["Corte", "Fundido", "Deslizar", "Zoom", "Fundido a negro"]);
   for (const t of TRANSICIONES_BIBLIOTECA) assert.ok(t.descripcion.length > 5, t.tipo);
+});
+
+// ---- El sondeo, con un `this` falso (la clase es DOM; estos dos métodos no lo tocan) ----
+
+test("_revisarMateriales: lo que ya está listo pasa a la vista previa; lo vencido o borrado deja de esperarse", async () => {
+  const { Biblioteca } = await import("../../static/editor/biblioteca.js");
+  const ahora = Date.now();
+  const pasados = [];
+  const pedidos = [];
+  const falsa = {
+    urls: { materiales_por_id: "/m" },
+    datos: { materiales: [{ id: 8, tipo: "audio", picos: null }], piezas: [] },
+    esperando: new Map([[8, ahora - 1000], [9, ahora - 1000], [10, ahora - 6 * 60 * 1000], [11, ahora - 1000]]),
+    editor: { agregarMateriales: (m) => pasados.push(Object.keys(m)) },
+    _pedirJSON: async (url) => {
+      pedidos.push(url);
+      return { que: "json", j: { materiales: { 8: { id: 8, tipo: "audio", picos: [0.3] }, 9: { id: 9, tipo: "video", url_proxy: null } } } };
+    },
+    _ponerMaterial: Biblioteca.prototype._ponerMaterial,
+    pintadas: 0,
+    _pintarListas() { this.pintadas += 1; },
+  };
+  await Biblioteca.prototype._revisarMateriales.call(falsa);
+  assert.deepEqual(pedidos, ["/m?ids=8,9,11"]);                  // el 10 pasó los 5 min: ni se pregunta
+  assert.deepEqual(pasados, [["8"]]);                             // solo lo listo va a la vista previa
+  assert.deepEqual([...falsa.esperando.keys()], [9]);             // el 11 ya no existe: se deja
+  assert.deepEqual(falsa.datos.materiales.map((m) => m.id).sort(), [8, 9]);
+  assert.deepEqual(falsa.datos.materiales.find((m) => m.id === 8).picos, [0.3]);
+  assert.equal(falsa.pintadas, 1);
+  // una respuesta que no sirve (sesión vencida): se deja de preguntar
+  falsa._pedirJSON = async () => ({ que: "parar" });
+  await Biblioteca.prototype._revisarMateriales.call(falsa);
+  assert.equal(falsa.esperando.size, 0);
+});
+
+test("_revisarPiezas: la pieza pedida se agrega sola al tener material; la que falló lo dice", async () => {
+  const { Biblioteca } = await import("../../static/editor/biblioteca.js");
+  const ahora = Date.now();
+  const punto = { pistaId: "p_video", tipo: "video", tMs: 0, indicePrincipal: 0 };
+  const operadas = [];
+  const dichos = [];
+  const m5 = { id: 5, tipo: "video", url: "v.mp4", url_proxy: "p.mp4", duracion_ms: 4000 };
+  const falsa = {
+    urls: { biblioteca: "/b", materiales_por_id: "/m" },
+    datos: { materiales: [], piezas: [] },
+    carga: "lista",
+    preparando: new Map([
+      ["cfA", { desde: ahora - 10000, pedido: { punto } }],       // pedida al soltarla: se agrega donde se soltó
+      ["cfB", { desde: ahora - 10000, pedido: { punto: null } }], // terminó sin material: falló
+      ["cfC", { desde: ahora - 1000, pedido: null }],             // de otra pestaña, sigue preparándose
+    ]),
+    _pedirJSON: async () => ({ que: "json", j: { materiales: [m5], piezas: [
+      { cf_id: "cfA", nombre: "A", material_id: 5, preparando: false },
+      { cf_id: "cfB", nombre: "B", material_id: null, preparando: false },
+      { cf_id: "cfC", nombre: "C", material_id: null, preparando: true },
+    ] } }),
+    _material: Biblioteca.prototype._material,
+    _ponerMaterial: Biblioteca.prototype._ponerMaterial,
+    _operar: (cosa, p) => operadas.push([cosa.tipo, cosa.material.id, cosa.nombre, p]),
+    _decir: (t, error) => dichos.push([t, error]),
+    _pintarListas: () => {},
+  };
+  await Biblioteca.prototype._revisarPiezas.call(falsa);
+  assert.deepEqual(operadas, [["video", 5, "A", punto]]);
+  assert.deepEqual(dichos, [["No se pudo preparar «B». Vuelve a intentar.", true]]);
+  assert.deepEqual([...falsa.preparando.keys()], ["cfC"]);
+  assert.equal(falsa.datos.piezas.length, 3);
 });
