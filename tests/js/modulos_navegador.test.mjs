@@ -17,6 +17,7 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   const vp = await import("../../static/editor/vista.js");
   const lt = await import("../../static/editor/linea_tiempo.js");
   const bib = await import("../../static/editor/biblioteca.js");
+  const prop = await import("../../static/editor/propiedades.js");
   assert.equal(typeof t.rasterizarTexto, "function");
   assert.equal(typeof v.Videos, "function");
   assert.equal(typeof l.dibujarCuadro, "function");
@@ -37,6 +38,11 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   assert.equal(typeof bib.Biblioteca, "function");
   for (const m of ["cargar", "agregar", "subir"]) {
     assert.equal(typeof bib.Biblioteca.prototype[m], "function", `Biblioteca.${m}`);
+  }
+  // capa 4b (Task 7): el panel de propiedades que construye pagina_editor.js
+  assert.equal(typeof prop.Propiedades, "function");
+  for (const m of ["pintar", "enfocarTexto"]) {
+    assert.equal(typeof prop.Propiedades.prototype[m], "function", `Propiedades.${m}`);
   }
   const pps = Object.getOwnPropertyDescriptor(lt.LineaTiempo.prototype, "pps");
   assert.equal(typeof pps?.get, "function");

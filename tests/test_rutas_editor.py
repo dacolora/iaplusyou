@@ -3,11 +3,14 @@ proyecto; la página trae el documento, los materiales y la configuración, y
 encola los proxies que faltan (gratis)."""
 import io
 import json
+import os
 import re
 
 import pytest
 
 from tests.test_rutas_productos import _cliente_admin
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 @pytest.fixture()
@@ -64,7 +67,7 @@ def test_la_vista_previa_trae_sus_datos_y_encola_el_proxy(dashboard, encolados):
     html = r.get_data(as_text=True)
     for id_ in ("lienzo", "destino", "reproducir", "inicio", "tiempo", "barra", "aviso-destino", "aviso-faltan",
                 "aviso-recortes", "aviso-preparando", "aviso-audio", "aproximada",
-                "producir", "linea", "linea-zoom", "h-cortar", "h-borrar", "h-duplicar", "h-velocidad", "h-deshacer",
+                "producir", "linea", "linea-zoom", "h-cortar", "h-borrar", "h-duplicar", "h-deshacer",
                 "h-rehacer", "estado-guardado", "recargar", "aviso-edicion", "producir-dialogo", "producir-destinos",
                 "producir-confirmar", "producir-cancelar", "producir-aviso", "producir-tiempo", "producir-hecho",
                 "producir-hecho-texto", "producir-hecho-enlace", "producir-reemplazo", "producir-reemplazo-texto",
@@ -509,8 +512,11 @@ def test_la_pagina_tiene_la_disposicion_de_capcut(dashboard, encolados):
     for ident in ("reproducir", "inicio", "tiempo", "barra", "aviso-edicion", "producir-hecho"):
         assert "ed-centro" in arbol[ident], ident
     # abajo, a todo el ancho: herramientas y línea de tiempo (fuera de la fila del medio)
-    for ident in ("h-deshacer", "h-rehacer", "h-cortar", "h-borrar", "h-duplicar", "h-velocidad", "linea-zoom"):
+    for ident in ("h-deshacer", "h-rehacer", "h-cortar", "h-borrar", "h-duplicar", "linea-zoom"):
         assert "ed-herramientas" in arbol[ident], ident
+    # la velocidad ya no está en la barra: es del formulario del video, en «Editar»
+    # (propiedades.js lo arma y conserva el id h-velocidad)
+    assert 'id="h-velocidad"' not in html
     assert "ed-cuerpo" not in arbol["ed-herramientas"] and "ed-cuerpo" not in arbol["linea"]
     # la biblioteca: cuatro pestañas con su icono
     pestanas = re.search(r'id="ed-pestanas-biblioteca".*?</div>', html, re.S).group(0)
@@ -745,3 +751,23 @@ def test_subida_rechaza_stream_equivocado_antes_de_subir_o_encolar(
     assert not subidas and not encolados
     assert materiales.bytes_usados("acme") == 0
     assert list((tmp_path / "clientes/acme/tmp_editor").iterdir()) == []
+
+
+def test_el_panel_de_propiedades_cabe_y_lo_arma_su_modulo(dashboard, encolados):
+    """Task 7 (capa 4b): el panel de la derecha lo arma static/editor/propiedades.js
+    dentro de #ed-panel-propiedades (un formulario por clase de clip; sin nada
+    elegido, la mezcla de la edición). La página trae sus estilos: todo se
+    envuelve o se achica (nada empuja la columna ni la hoja de lado)."""
+    ed, _c, _v = _edicion()
+    html = _cliente_admin(dashboard).get(f"/cliente/acme/ediciones/{ed['id']}").get_data(as_text=True)
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    assert "#ed-panel-propiedades [hidden]" in css
+    for regla in (".ed-prop {", ".ed-prop-campo {", ".ed-prop-fila {", ".ed-prop-colores {", ".ed-prop-acciones {"):
+        assert regla in css, regla
+    campo = re.search(r"\.ed-prop-campo \{([^}]*)\}", css).group(1)
+    assert "min-width: 0" in campo
+    assert re.search(r"\.ed-prop input\[type=\"range\"\] \{[^}]*width: 100%", css)
+    assert re.search(r"\.ed-prop-colores \{[^}]*flex-wrap: wrap", css)
+    js = open(os.path.join(RAIZ, "static", "editor", "pagina_editor.js"), encoding="utf-8").read()
+    assert 'import { Propiedades } from "./propiedades.js";' in js
+    assert 'new Propiedades({ contenedor: $("ed-panel-propiedades"), editor' in js

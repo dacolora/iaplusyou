@@ -32,10 +32,10 @@
 //                                           ANTES de operar con ellos
 //   editor.enfocarTexto()                   pide el foco para escribir el texto
 //                                           elegido (la biblioteca, al agregar
-//                                           un texto): en el celular cambia a
-//                                           la hoja «Editar» y avisa
-//                                           "foco-texto" — quien muestra ese
-//                                           campo (propiedades) lo enfoca
+//                                           un texto): en el celular sube la
+//                                           hoja «Editar» y avisa "foco-texto"
+//                                           — quien muestra ese campo
+//                                           (propiedades.js) lo enfoca
 //   editor.escuchar(fn) -> dejar()          fn(que) después de cada cambio:
 //                                           "documento" | "seleccion" |
 //                                           "materiales" | "destino" | "tiempo"
@@ -56,6 +56,7 @@ import { Guardado } from "./guardado.js";
 import { Historial } from "./historial.js";
 import { LineaTiempo } from "./linea_tiempo.js";
 import * as operaciones from "./operaciones.js";
+import { Propiedades } from "./propiedades.js";
 import { infoDe, VistaPrevia } from "./vista.js";
 
 const datos = JSON.parse(document.getElementById("datos-editor").textContent);
@@ -128,9 +129,6 @@ function pintarHerramientas() {
   $("h-cortar").disabled = bloqueada;
   $("h-borrar").disabled = !editableSel;
   $("h-duplicar").disabled = !editableSel;
-  const esVideo = editableSel && (sel.pista.tipo === "video" || sel.pista.tipo === "superpuesto");
-  $("h-velocidad").disabled = !esVideo;
-  $("h-velocidad").value = String(esVideo ? Number(sel.clip.velocidad ?? 1) : 1);
 }
 
 // `que`: "documento" (el documento cambió: la vista lo re-resuelve),
@@ -229,18 +227,12 @@ function herramienta(id, fn) {
 }
 
 function montarHerramientas() {
-  for (const v of operaciones.VELOCIDADES) $("h-velocidad").append(new Option(`${v}×`, String(v)));
   herramienta("h-cortar", cortar);
   herramienta("h-borrar", () => seleccion && operar("borrar", seleccion));
   herramienta("h-duplicar", () => seleccion && operar("duplicar", seleccion));
   herramienta("h-deshacer", deshacer);
   herramienta("h-rehacer", rehacer);
-  // Como los botones: el select no se queda con el foco (si no, S, Supr y
-  // Ctrl+Z irían a él y las flechas cambiarían la velocidad sin querer).
-  $("h-velocidad").addEventListener("change", (e) => {
-    e.target.blur();
-    if (seleccion) operar("cambiarVelocidad", seleccion, Number(e.target.value));
-  });
+  // La velocidad está en el formulario del video, en «Editar» (propiedades.js).
   $("recargar").addEventListener("click", () => location.reload());
   // Espacio y flechas son de la vista previa (vista.js); estas, de la edición.
   document.addEventListener("keydown", (e) => {
@@ -451,11 +443,17 @@ function montarDisposicion() {
   for (const b of document.querySelectorAll("[data-cerrar-hoja]")) b.addEventListener("click", cerrarHoja);
 }
 
-// Agregar un texto lo deja elegido; el campo para escribirlo está en
-// «Editar»: en el celular esa es otra hoja, así que se cambia a ella antes de
-// avisar (el foco va a la hoja y después al campo, si propiedades lo pone).
+// Agregar un texto (o, en el video, tocarlo dos veces) lo deja elegido; el
+// campo para escribirlo está en «Editar»: en el celular esa es una hoja, así
+// que se sube antes de avisar (el foco va a la hoja y después al campo, que
+// pone propiedades.js). En el escritorio la columna ya se ve.
+const CELULAR = "(max-width: 760px)";
+
 function enfocarTexto() {
-  if (hojaAbierta === "ed-biblioteca") abrirHoja("ed-propiedades", $("ed-abrir-propiedades"));
+  const celular = window.matchMedia?.(CELULAR).matches;
+  if (hojaAbierta === "ed-biblioteca" || (celular && hojaAbierta !== "ed-propiedades")) {
+    abrirHoja("ed-propiedades", $("ed-abrir-propiedades"));
+  }
   avisos.notificar("foco-texto");
 }
 
@@ -483,6 +481,9 @@ montarDisposicion();
 // la biblioteca (Medios · Audio · Texto · Transiciones): carga lo del proyecto
 // mientras la vista previa arranca
 new Biblioteca({ contenedor: $("ed-panel-biblioteca"), pestanas: $("ed-pestanas-biblioteca"), urls: datos.urls, editor, linea });
+// las propiedades de lo elegido («Editar»: un formulario por clase de clip, o
+// la mezcla de la edición si no hay nada elegido)
+new Propiedades({ contenedor: $("ed-panel-propiedades"), editor, materiales: () => vista.materiales });
 refrescar(null);           // la línea se ve ya, aunque las fuentes tarden en cargar
 await vista.iniciar();
 refrescar(null);           // con el reloj listo: el cabezal donde está
