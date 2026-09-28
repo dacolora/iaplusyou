@@ -4343,6 +4343,7 @@ NOMBRES_TIPO_GASTO = {
     "video": idiomas.N_("Videos"), "imagen": idiomas.N_("Imágenes"), "swap": idiomas.N_("Cambios de producto"),
     "guion": idiomas.N_("Guiones"), "final": idiomas.N_("Finales"), "regla_producto": idiomas.N_("Reglas de producto (IA)"),
     "caption_organico": idiomas.N_("Textos orgánicos (IA)"), "musica": idiomas.N_("Música"),
+    "locucion": idiomas.N_("Locuciones (audios)"),
     "refinar_prompt": idiomas.N_("Correcciones de prompt (Flow Plus)"), "guion_clips": idiomas.N_("Guiones a clips (Flow Plus)"),
     "ideas": idiomas.N_("Ideas de sprint (IA)"), "pedidos": idiomas.N_("Pedidos al cliente (IA)"),
     "revision": idiomas.N_("Revisión de la doctrina (IA)"), "otro": idiomas.N_("Otros"),
