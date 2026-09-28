@@ -35,6 +35,7 @@ import catalogo_productos
 import creative_flow
 import db
 import doctrina
+from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import producto as doctrina_producto
 import gastos
 import marca
@@ -402,7 +403,9 @@ def preparar_guion(cliente, cf_id, opciones=None, ref_sufijo=""):
     angulo_sesion = entry.get("angulo") if _angulo_con_contenido(entry.get("angulo")) else None
     guion_base, costo_guion = guion_mod.generar_guion_base(
         producto, referencia, enfoque, float(duracion_s), idioma_base,
-        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion)
+        _guia_marca(cliente), entry.get("tono") or "", canal_optimo=canal_optimo, angulo=angulo_sesion,
+        aprendizajes=doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
+                                                             producto=(producto or {}).get("nombre")))
     costo += float(costo_guion or 0.0)
     # Sin ángulo en la sesión, Claude ya lo decidió, corrigió y limpió junto
     # con el guion (B: `guion_mod.generar_guion_base` reusa su propia vuelta

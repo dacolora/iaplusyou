@@ -9,6 +9,7 @@ import json
 import banco_prompts
 import catalogo_productos
 import doctrina
+from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import producto as doctrina_producto
 import flowplus_prompt
 import marca
@@ -56,7 +57,8 @@ REFERENCIAS QUE INSPIRAN ESTA CAMPAÑA (id: qué se ve y qué reutilizar):
 EJEMPLOS DEL TIPO DE ESCENA QUE FUNCIONA (inspiración de estilo, no los copies):
 {banco}
 IDEAS QUE YA EXISTEN EN ESTA CAMPAÑA (no las repitas): {existentes}
-IDEAS DESCARTADAS (evita ese camino): {descartadas}"""
+IDEAS DESCARTADAS (evita ese camino): {descartadas}
+{aprendizajes}"""
 PEDIDO_IDEAS = """
 
 Propón {n_videos} ideas de VIDEO y {n_imagenes} ideas de IMAGEN, distintas entre sí, pensadas para esta audiencia y esta temporada, con el producto como protagonista."""
@@ -260,6 +262,9 @@ def contexto_campana(cliente, campana):
         "ideas_existentes": [i["titulo"] for i in vivas],
         "descartadas": [i["titulo"] for i in (campana.get("ideas") or []) if i.get("estado_idea") == "descartada"],
         "funnel": campana.get("funnel"),
+        # Doctrina, bloque 4: lo que ya ganó y perdió en este proyecto (primero lo del mismo producto).
+        "aprendizajes": doctrina_aprendizajes.texto_para_prompt(proyectos.aprendizajes(cliente),
+                                                                producto=(producto or {}).get("nombre")),
         "producto_fila": producto_fila,
         "fijos": fijos_de(persona, producto_fila, campana.get("consciencia")),
         "consciencia": campana.get("consciencia"),
@@ -295,7 +300,8 @@ def armar_datos(ctx):
         temporada=_temporada_texto(ctx.get("momento") or ctx.get("temporada")), guia=ctx.get("guia") or "",
         referencias=_referencias_texto(ctx.get("referencias") or []), banco=banco,
         existentes=", ".join(ctx.get("ideas_existentes") or []) or "ninguna",
-        descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna")
+        descartadas=", ".join(ctx.get("descartadas") or []) or "ninguna",
+        aprendizajes=ctx.get("aprendizajes") or "APRENDIZAJES DEL PROYECTO: ninguno todavía")
 
 
 def instrucciones(ctx):

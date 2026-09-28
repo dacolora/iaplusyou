@@ -1,0 +1,29 @@
+{# Aprendizajes del proyecto (doctrina, bloque 4, §5): lo que dejó cada
+   veredicto del motor y lo que la persona anota a mano. Entran como DATOS en
+   las ideas, el guion base y las variantes. Solo informan. #}
+<section class="fe-seccion aprendizajes" id="aprendizajes">
+  <div class="panel-cabecera">
+    <div><h3 class="fe-titulo">Aprendizajes del proyecto</h3>
+      <p class="panel-cabecera-desc">Lo que ganó y lo que perdió en tus pruebas. Las ideas nuevas, el guion y las variantes lo leen antes de escribir. <a href="{{ url_for('doctrina_pagina', cliente=cliente) }}#diagnosticar" target="_blank" rel="noopener">¿Por qué?</a></p>
+    </div>
+  </div>
+  {% if aprendizajes_exp %}
+  <ul class="aprendizajes-lista">
+    {% for a in aprendizajes_exp %}
+    <li class="aprendizaje aprendizaje-{{ a.tipo }}">
+      <span class="tag-estado">{% if a.tipo == 'ganador' %}ganó{% elif a.tipo == 'perdedor' %}perdió{% else %}nota{% endif %}</span>
+      <span class="aprendizaje-texto">{{ a.texto }}</span>
+      {% if a.en %}<small class="vacio">{{ a.en[:10] }}</small>{% endif %}
+      <form method="post" action="{{ url_for('apr_quitar', cliente=cliente, aid=a.id) }}" class="inline"><button class="btn-xs">Quitar</button></form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="estado-vacio">Todavía no hay aprendizajes: aparecen solos cuando una prueba decide una ganadora o una perdedora.</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('apr_agregar', cliente=cliente) }}" class="aprendizaje-nuevo">
+    <label class="campo-label">Agregar uno a mano
+      <input name="texto" maxlength="300" placeholder="p. ej. En MX el precio en pesos en el gancho baja el CTR" required></label>
+    <button class="btn-sm">Guardar aprendizaje</button>
+  </form>
+</section>

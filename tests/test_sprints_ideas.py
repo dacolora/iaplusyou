@@ -591,3 +591,19 @@ def test_proponer_cuenta_los_tokens_aunque_falle(base_temporal, monkeypatch):
     with pytest.raises(ideas.AnalisisInvalido):
         ideas.proponer("acme", cid, 1, 1, uso=uso)
     assert uso == {"entrada": 1600, "salida": 400}
+
+
+def test_los_aprendizajes_del_proyecto_entran_en_los_datos_de_las_ideas(base_temporal, monkeypatch):
+    """Doctrina, bloque 4 (§5): primero los del mismo producto; sin ninguno, la línea lo dice."""
+    import proyectos
+    from sprints import datos, ideas
+    sid, cid, rid = _ctx(monkeypatch, datos)
+    monkeypatch.setattr(proyectos, "aprendizajes", lambda cliente: [])
+    p = ideas.armar_prompt(ideas.contexto_campana("acme", datos.campana("acme", cid)), 1, 0)
+    assert "APRENDIZAJES DEL PROYECTO: ninguno todavía" in p
+    monkeypatch.setattr(proyectos, "aprendizajes", lambda cliente: [
+        {"texto": "Ganó en CO: «Otra cosa» para Otro producto", "producto": "Otro producto"},
+        {"texto": "Perdió en MX: «¿Frío?» para Espejo LED", "producto": "Espejo LED"}])
+    p = ideas.armar_prompt(ideas.contexto_campana("acme", datos.campana("acme", cid)), 1, 0)
+    assert "LO QUE YA SE PROBÓ EN ESTE PROYECTO" in p
+    assert p.index("Perdió en MX") < p.index("Ganó en CO")          # el del producto de la campaña primero

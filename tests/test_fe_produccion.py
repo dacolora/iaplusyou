@@ -39,7 +39,7 @@ def entorno(base_temporal, tmp_path, monkeypatch):
           "fallar_voz_en": None}
 
     def fake_generar(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint,
-                     canal_optimo=None, angulo=None):
+                     canal_optimo=None, angulo=None, **kw):
         ll["generar"] += 1
         return copy.deepcopy(GUION_BASE), 0.01
     monkeypatch.setattr(guion_mod, "generar_guion_base", fake_generar)

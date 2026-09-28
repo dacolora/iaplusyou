@@ -61,6 +61,7 @@ from meta_ads import auth as meta_auth
 from meta_ads import campaign as meta_campaign
 import creative_flow
 import doctrina
+from doctrina import aprendizajes as doctrina_aprendizajes
 from doctrina import revisor as doctrina_revisor
 import flowplus_lanzar
 import cola
@@ -1527,6 +1528,7 @@ def ver_cliente(cliente):
         reglas_cliente=reglas_cliente,
         reglas_efectivas_exp={e["id"]: decisor.reglas_efectivas(reglas_cliente, e["reglas"]) for e in experimentos_exp},
         correo_notificaciones=proyectos.correo_notificaciones(cliente) or "",
+        aprendizajes_exp=proyectos.aprendizajes(cliente),
         modos_exp=modos.MODOS,
         nombres_exp={e["id"]: e["nombre"] for e in experimentos_exp},
         productos_tienda=productos_tienda,
@@ -5834,6 +5836,24 @@ def cf_revisar(cliente, cf_id):
     tareas_doctrina.encolar_revisar(cliente, cf_id)
     flash("Revisando la pieza con la doctrina: la página se recarga sola cuando esté lista.", "ok")
     return redirect(url_for("ver_cliente", cliente=cliente, _anchor="creativeflowplus"))
+
+
+@app.route("/cliente/<cliente>/aprendizajes", methods=["POST"])
+def apr_agregar(cliente):
+    """Doctrina, bloque 4 (§5): un aprendizaje escrito a mano."""
+    try:
+        proyectos.agregar_aprendizaje(cliente, doctrina_aprendizajes.manual(request.form.get("texto")))
+        flash("Aprendizaje guardado.", "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
+
+
+@app.route("/cliente/<cliente>/aprendizajes/<aid>/quitar", methods=["POST"])
+def apr_quitar(cliente, aid):
+    if not proyectos.quitar_aprendizaje(cliente, aid):
+        flash("Ese aprendizaje ya no existe.", "error")
+    return redirect(url_for("ver_cliente", cliente=cliente, _anchor="experimentos"))
 
 
 def _sesion_con_video(cliente, cf_id):

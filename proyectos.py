@@ -186,3 +186,38 @@ def guardar_bloque_global_flowplus(cliente, texto):
     datos = cargar(cliente)
     datos["flowplus_bloque_global"] = (texto or "").strip()
     _json_store.guardar(_path(cliente), datos)
+
+
+# Doctrina, bloque 4 (§5): aprendizajes por proyecto — una línea por veredicto
+# del motor («Ganó en CO: …») o escrita a mano. Los más nuevos primero.
+MAX_APRENDIZAJES = 40
+
+
+def aprendizajes(cliente):
+    lista = cargar(cliente).get("aprendizajes") or []
+    return [x for x in lista if isinstance(x, dict) and x.get("texto")]
+
+
+def agregar_aprendizaje(cliente, item):
+    """Guarda `item` (dict de doctrina.aprendizajes) al frente; corta a
+    MAX_APRENDIZAJES. Le pone `en` si no lo trae."""
+    from datetime import datetime
+    item = dict(item)
+    if not item.get("en"):
+        item["en"] = datetime.now().isoformat(timespec="seconds")
+    data = cargar(cliente)
+    data["aprendizajes"] = [item] + [x for x in aprendizajes(cliente) if x.get("id") != item.get("id")][:MAX_APRENDIZAJES - 1]
+    _json_store.guardar(_path(cliente), data)
+    return item
+
+
+def quitar_aprendizaje(cliente, aid):
+    """True si existía y se quitó."""
+    data = cargar(cliente)
+    lista = aprendizajes(cliente)
+    nueva = [x for x in lista if x.get("id") != aid]
+    if len(nueva) == len(lista):
+        return False
+    data["aprendizajes"] = nueva
+    _json_store.guardar(_path(cliente), data)
+    return True

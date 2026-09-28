@@ -219,7 +219,8 @@ _ENFOQUE_GUION = {
 }
 
 
-def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=None, angulo=None):
+def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=None, angulo=None,
+                     aprendizajes=None):
     """Devuelve el contenido del mensaje de usuario: un string si no hay
     referencia con frames, o una lista de bloques (texto + imágenes) para que
     Claude vea los fotogramas del referente, no solo su conteo."""
@@ -242,6 +243,10 @@ def _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_h
         fijos_txt = doctrina.datos_fijos_texto(sofisticacion=(producto or {}).get("sofisticacion"))
         partes.append("Primero decide el ángulo (clave \"angulo\" del JSON) aplicando la doctrina y después escribe "
                       "el guion desde él." + (f"\nDatos del mercado elegidos por el cliente:\n{fijos_txt}" if fijos_txt else ""))
+
+    if aprendizajes and str(aprendizajes).strip():
+        # Doctrina, bloque 4: DATOS de lo que ya se probó en el proyecto.
+        partes.append(str(aprendizajes).strip())
 
     frames = []
     if referencia:
@@ -410,7 +415,7 @@ def _generar_con_correccion(system, mensaje_usuario, duracion_s, ajustar, datos_
 # ---------------------------------------------------------------- API ---
 
 def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, marca, cliente_hint, canal_optimo=None,
-                       angulo=None):
+                       angulo=None, aprendizajes=None):
     """Guion en el idioma base. `producto`: {"nombre", "descripcion", "regla", "precio", "moneda", "url_compra",
     "tipo"}; `referencia`: {"frames": [urls], "transcripcion"} o None; `canal_optimo`: {"canal", "roas",
     "duracion_sugerida_s"} o None; `angulo`: el de la sesión (se escribe DESDE él) o None (se le pide a
@@ -449,6 +454,7 @@ def generar_guion_base(producto, referencia, enfoque, duracion_s, idioma_base, m
     guion, costo = _generar_con_correccion(
         _system_generar(duracion_s, idioma_base, canal_optimo=canal_optimo, con_angulo=bool(angulo)),
         _mensaje_generar(producto, referencia, enfoque, duracion_s, marca, cliente_hint, canal_optimo=canal_optimo,
+                         aprendizajes=aprendizajes,
                          angulo=angulo),
         duracion_s, ajustar, datos, errores_extra=errores_extra,
     )

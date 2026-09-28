@@ -472,3 +472,23 @@ def test_nombre_experimento_automatico():
     import dashboard
     assert dashboard.nombre_experimento_automatico(3, ["MX", "CO"], datetime.date(2026, 9, 20)) == "Prueba 20 sep · 3 piezas · CO, MX"
     assert dashboard.nombre_experimento_automatico(1, ["CO"], datetime.date(2026, 1, 5)) == "Prueba 5 ene · 1 pieza · CO"
+
+
+def test_aprendizajes_se_agregan_se_ven_y_se_quitan(app, tmp_path, monkeypatch):
+    """Doctrina, bloque 4 (§5): la sección de aprendizajes en Experimentos."""
+    import proyectos
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    c = app["c"]
+    html = c.get("/cliente/acme").get_data(as_text=True)
+    assert "Aprendizajes del proyecto" in html and "Todavía no hay aprendizajes" in html
+    r = c.post("/cliente/acme/aprendizajes", data={"texto": "En MX el precio en el gancho baja el CTR"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("#experimentos")
+    lista = proyectos.aprendizajes("acme")
+    assert len(lista) == 1 and lista[0]["origen"] == "manual"
+    html = c.get("/cliente/acme").get_data(as_text=True)
+    assert "En MX el precio en el gancho baja el CTR" in html and f"/aprendizajes/{lista[0]['id']}/quitar" in html
+    assert c.post("/cliente/acme/aprendizajes", data={"texto": "   "}).status_code == 302
+    assert len(proyectos.aprendizajes("acme")) == 1
+    assert c.post(f"/cliente/acme/aprendizajes/{lista[0]['id']}/quitar").status_code == 302
+    assert proyectos.aprendizajes("acme") == []
+    assert c.post("/cliente/acme/aprendizajes/nada/quitar").status_code == 302

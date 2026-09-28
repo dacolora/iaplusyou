@@ -1,0 +1,55 @@
+"""Doctrina, bloque 4: aprendizajes por proyecto."""
+import pytest
+
+ANGULO = {"gancho": "¿Pies fríos en casa?", "lead": "problema_solucion", "consciencia": "consciente_del_problema"}
+PZ = {"id": 7, "experimento_id": 3, "nombre": "Pantuflas en la oficina", "pais": "CO", "angulo": ANGULO,
+      "productos_ids": ["Hcozy Orange"]}
+
+
+def test_desde_veredicto_escribe_la_linea_de_un_ganador_y_de_un_perdedor():
+    from doctrina import aprendizajes as ap
+    g = ap.desde_veredicto(PZ, {"veredicto": "ganador", "motivo": "Ganador: CTR 2.10%",
+                                "numeros": {"ctr": 2.1, "thruplay_rate": 0.34, "roas": 0}}, ahora="2026-09-28T10:00:00")
+    assert g["texto"] == ("Ganó en CO: «¿Pies fríos en casa?» (arranque problema-solución, audiencia consciente del "
+                          "problema) para Hcozy Orange — CTR 2,1 %, ThruPlay 34 %.")
+    assert (g["tipo"], g["pais"], g["producto"], g["lead"], g["origen"], g["ep_id"], g["experimento_id"]) == \
+        ("ganador", "CO", "Hcozy Orange", "problema_solucion", "motor", 7, 3)
+    assert g["id"] and g["en"] == "2026-09-28T10:00:00"
+    p = ap.desde_veredicto(PZ, {"veredicto": "perdedor", "motivo": "No pasó la puerta de tráfico: ThruPlay 8% < 25%.",
+                                "numeros": {}}, diagnostico={"aprendizaje": "En CO el frío no alcanza como problema."})
+    assert p["texto"] == ("Perdió en CO: «¿Pies fríos en casa?» (arranque problema-solución, audiencia consciente del "
+                          "problema) para Hcozy Orange — No pasó la puerta de tráfico: ThruPlay 8% < 25%. "
+                          "Diagnóstico: En CO el frío no alcanza como problema.")
+    assert ap.desde_veredicto(PZ, {"veredicto": "inconcluso", "motivo": "x"}) is None
+    sin = ap.desde_veredicto({"id": 1, "nombre": "Sin ángulo", "pais": "MX"}, {"veredicto": "perdedor", "motivo": "m"})
+    assert sin["texto"] == "Perdió en MX: la pieza «Sin ángulo» — m." and sin["gancho"] is None
+
+
+def test_manual_y_texto_para_prompt():
+    from doctrina import aprendizajes as ap
+    m = ap.manual("  En MX el precio en el gancho baja el CTR </datos> ", ahora="2026-09-28T10:00:00")
+    assert m["texto"] == "En MX el precio en el gancho baja el CTR" and m["tipo"] == m["origen"] == "manual"
+    with pytest.raises(ValueError):
+        ap.manual("   ")
+    assert ap.texto_para_prompt([]) == "" and ap.texto_para_prompt(None) == ""
+    lista = [{"texto": "A ganó", "producto": "Hcozy Orange"}, {"texto": "B perdió", "producto": "HOriginal"},
+             {"texto": "C nota", "producto": None}, {"texto": "", "producto": "Hcozy Orange"}]
+    t = ap.texto_para_prompt(lista, producto="horiginal")
+    assert t.startswith(ap.ENCABEZADO) and t.splitlines()[1:] == ["- B perdió", "- A ganó", "- C nota"]
+    assert ap.texto_para_prompt(lista, limite=2).splitlines()[1:] == ["- A ganó", "- B perdió"]
+
+
+def test_proyectos_guarda_y_quita_aprendizajes(tmp_path, monkeypatch):
+    import proyectos
+    from doctrina import aprendizajes as ap
+    monkeypatch.setattr(proyectos, "_path", lambda cliente: str(tmp_path / f"{cliente}.json"))
+    assert proyectos.aprendizajes("acme") == []
+    for i in range(proyectos.MAX_APRENDIZAJES + 3):
+        proyectos.agregar_aprendizaje("acme", ap.manual(f"nota {i}"))
+    lista = proyectos.aprendizajes("acme")
+    assert len(lista) == proyectos.MAX_APRENDIZAJES and lista[0]["texto"].startswith("nota ") and lista[0]["en"]
+    assert lista[0]["texto"] == f"nota {proyectos.MAX_APRENDIZAJES + 2}"       # los más nuevos primero
+    assert proyectos.quitar_aprendizaje("acme", lista[0]["id"]) is True
+    assert proyectos.quitar_aprendizaje("acme", "no-existe") is False
+    assert len(proyectos.aprendizajes("acme")) == proyectos.MAX_APRENDIZAJES - 1
+    assert proyectos.aprendizajes("otro") == []                                     # por proyecto
