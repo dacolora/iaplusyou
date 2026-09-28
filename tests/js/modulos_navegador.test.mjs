@@ -28,7 +28,8 @@ test("los módulos de navegador cargan y exportan lo que la página usa", async 
   for (const g of ["materiales", "destino"]) {
     assert.equal(typeof Object.getOwnPropertyDescriptor(vp.VistaPrevia.prototype, g)?.get, "function", `VistaPrevia.${g}`);
   }
-  for (const m of ["dibujar", "moverCabezal"]) {
+  // capa 4b (Task 5): la biblioteca pregunta qué hay bajo el dedo y resalta esa fila
+  for (const m of ["dibujar", "moverCabezal", "puntoEn", "resaltar"]) {
     assert.equal(typeof lt.LineaTiempo.prototype[m], "function", `LineaTiempo.${m}`);
   }
   const pps = Object.getOwnPropertyDescriptor(lt.LineaTiempo.prototype, "pps");

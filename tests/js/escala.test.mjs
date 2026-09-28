@@ -1,8 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  candidatosIman, estiloArrastre, etiquetaClip, filasVisuales, fondoTira, iman, imanBordes, indiceDestino, ladosRecortables,
-  marcasRegla, msAPx, nombreFila, pasoRegla, pxAMs, soltar,
+  barrasOnda, cabeceraFila, candidatosIman, estiloArrastre, etiquetaClip, filaEnY, filasVisuales, fondoTira, iman, imanBordes,
+  indiceDestino, ladosRecortables, marcasRegla, msAPx, msInsercion, nombreFila, PASO_ONDA_PX, pasoRegla, pedidoCortar, puntoSoltar,
+  pxAMs, soltar, VENTANA_PICOS_MS,
 } from "../../static/editor/escala.js";
 import { docBase } from "./doc_base.mjs";
 
@@ -161,4 +162,147 @@ test("soltar nunca pide recortar una voz que cambia por país (moverla sí)", ()
   assert.equal(soltar(doc, "a1", { modo: "recorte", lado: "fin", deltaMs: -700, toleranciaMs: TOL }), null);
   assert.equal(soltar(doc, "a1", { modo: "recorte", lado: "inicio", deltaMs: 700, toleranciaMs: TOL }), null);
   assert.deepEqual(soltar(doc, "a1", { modo: "mover", deltaMs: 1500, toleranciaMs: TOL, cabezalMs: 8000 }), ["moverA", "a1", 1500]);
+});
+
+// ---- Capa 4b (Task 5): cabeceras, onda, soltar desde afuera, cortar ----
+
+test("cabecera de cada fila: icono y nombre corto", () => {
+  const doc = docBase();
+  const [video, texto, voz, sonido] = doc.pistas;
+  assert.deepEqual(cabeceraFila(video, doc), { icono: "video", nombre: "Video" });
+  assert.deepEqual(cabeceraFila(texto, doc), { icono: "texto", nombre: "Texto" });
+  assert.deepEqual(cabeceraFila(voz, doc), { icono: "voz", nombre: "Voz" });
+  assert.deepEqual(cabeceraFila(sonido, doc), { icono: "sonido", nombre: "Sonido" });
+  assert.deepEqual(cabeceraFila({ id: "p_imagen", tipo: "imagen", clips: [] }, doc), { icono: "imagen", nombre: "Imagen" });
+  const musica = { id: "p_audio", tipo: "audio", clips: [{ rol_audio: "musica" }] };
+  assert.deepEqual(cabeceraFila(musica, doc), { icono: "musica", nombre: "Música" });
+  assert.deepEqual(cabeceraFila({ id: "p_fx", tipo: "audio", clips: [{ rol_audio: "efecto" }] }, doc), { icono: "musica", nombre: "Efecto" });
+  assert.deepEqual(cabeceraFila({ id: "p_a", tipo: "audio", clips: [] }, doc), { icono: "musica", nombre: "Audio" });
+  // una pista de audio que dice «sonido» sin ser el espejo también es «Sonido»
+  assert.deepEqual(cabeceraFila({ id: "p_s2", tipo: "audio", clips: [{ rol_audio: "sonido" }] }, doc), { icono: "sonido", nombre: "Sonido" });
+  assert.deepEqual(cabeceraFila({ id: "p_pip", tipo: "superpuesto", clips: [] }, doc), { icono: "video", nombre: "Video encima" });
+  const soloImagen = { pistas: [{ id: "p_fotos", tipo: "imagen", clips: [] }] };
+  assert.deepEqual(cabeceraFila(soloImagen.pistas[0], soloImagen), { icono: "imagen", nombre: "Imagen" });
+});
+
+// picos: uno cada 50 ms de FUENTE (tareas.edicion._picos), de 0 a 1.
+const PICOS = [0, 0.5, 1, 0.2, 0.8, 0.4];     // 300 ms de audio
+const clipAudio = (extra = {}) => ({ id: "a", inicio_ms: 0, duracion_ms: 200, material_id: 2, rol_audio: "voz",
+  recorte: { desde_ms: 0, hasta_ms: 200 }, velocidad: 1, audio: { volumen: 1 }, ...extra });
+
+test("onda: una barra por paso, con el pico de la ventana que cae ahí", () => {
+  assert.equal(VENTANA_PICOS_MS, 50);
+  assert.ok(PASO_ONDA_PX >= 2);
+  // 1000 px por segundo: 50 ms = 50 px; paso 50 → una ventana por barra
+  assert.deepEqual(barrasOnda(PICOS, clipAudio(), 1000, 10, { paso: 50 }),
+    [{ x: 0, alto: 1 }, { x: 50, alto: 5 }, { x: 100, alto: 10 }, { x: 150, alto: 2 }]);
+  // el silencio es una raya de 1 px, no un hueco
+  assert.equal(barrasOnda([0, 0], clipAudio({ duracion_ms: 100 }), 1000, 10, { paso: 50 }).every((b) => b.alto === 1), true);
+});
+
+test("onda: respeta el recorte del clip", () => {
+  // arranca 100 ms adentro del audio: ventanas 2, 3, 4, 5
+  const c = clipAudio({ recorte: { desde_ms: 100, hasta_ms: 300 } });
+  assert.deepEqual(barrasOnda(PICOS, c, 1000, 10, { paso: 50 }).map((b) => b.alto), [10, 2, 8, 4]);
+  // pasado el final del audio no hay barras (no hay nada que mostrar)
+  const largo = clipAudio({ duracion_ms: 300, recorte: { desde_ms: 150, hasta_ms: 450 } });
+  assert.deepEqual(barrasOnda(PICOS, largo, 1000, 10, { paso: 50 }).map((b) => b.x), [0, 50, 100]);
+});
+
+test("onda: la música entra en bucle, así que su onda también", () => {
+  const c = clipAudio({ rol_audio: "musica", duracion_ms: 300, recorte: { desde_ms: 150, hasta_ms: 450 } });
+  assert.deepEqual(barrasOnda(PICOS, c, 1000, 10, { paso: 50 }).map((b) => b.alto), [2, 8, 4, 1, 5, 10]);
+});
+
+test("onda: sigue la escala (el zoom) y la ventana de los picos", () => {
+  // 500 px por segundo: 200 ms = 100 px; cada barra de 50 px junta dos ventanas y toma la mayor
+  assert.deepEqual(barrasOnda(PICOS, clipAudio(), 500, 10, { paso: 50 }), [{ x: 0, alto: 5 }, { x: 50, alto: 10 }]);
+  // con otra ventana (100 ms por pico) cambia qué pico cae en cada barra
+  assert.deepEqual(barrasOnda(PICOS, clipAudio(), 1000, 10, { paso: 50, ventanaMs: 100 }).map((b) => b.alto), [1, 1, 5, 5]);
+  // el paso por defecto cubre todo el ancho del clip
+  const barras = barrasOnda(PICOS, clipAudio(), 80, 20);
+  assert.equal(barras.length, Math.ceil(msAPx(200, 80) / PASO_ONDA_PX));
+  assert.ok(barras.every((b) => b.x < msAPx(200, 80) && b.alto >= 1 && b.alto <= 20));
+});
+
+test("onda: el volumen del clip la agranda o la achica (nunca pasa del alto)", () => {
+  assert.deepEqual(barrasOnda(PICOS, clipAudio({ audio: { volumen: 0.5 } }), 1000, 10, { paso: 50 }).map((b) => b.alto), [1, 3, 5, 1]);
+  assert.deepEqual(barrasOnda(PICOS, clipAudio({ audio: { volumen: 2 } }), 1000, 10, { paso: 50 }).map((b) => b.alto), [1, 10, 10, 4]);
+});
+
+test("onda: sin picos, sin duración o sin escala no hay barras", () => {
+  assert.deepEqual(barrasOnda(null, clipAudio(), 80, 20), []);
+  assert.deepEqual(barrasOnda([], clipAudio(), 80, 20), []);
+  assert.deepEqual(barrasOnda(PICOS, clipAudio({ duracion_ms: 0 }), 80, 20), []);
+  assert.deepEqual(barrasOnda(PICOS, clipAudio(), 0, 20), []);
+  assert.deepEqual(barrasOnda(PICOS, clipAudio(), 80, 0), []);
+});
+
+// Filas como las mide la línea de tiempo (px desde arriba del lienzo): texto,
+// video, voz y sonido, con 4 px entre fila y fila.
+const FILAS = [
+  { pistaId: "p_texto", tipo: "texto", top: 27, alto: 30 },
+  { pistaId: "p_video", tipo: "video", top: 61, alto: 56 },
+  { pistaId: "p_voz", tipo: "audio", top: 121, alto: 34 },
+  { pistaId: "p_sonido", tipo: "audio", top: 159, alto: 26 },
+];
+
+test("filaEnY: la fila bajo el dedo; entre dos filas, la más cercana; fuera de las filas, ninguna", () => {
+  assert.equal(filaEnY(FILAS, 27).pistaId, "p_texto");
+  assert.equal(filaEnY(FILAS, 100).pistaId, "p_video");
+  assert.equal(filaEnY(FILAS, 58).pistaId, "p_texto");        // hueco 57..61: más cerca del texto
+  assert.equal(filaEnY(FILAS, 60).pistaId, "p_video");
+  assert.equal(filaEnY(FILAS, 184).pistaId, "p_sonido");
+  assert.equal(filaEnY(FILAS, 10), null);                      // la regla
+  assert.equal(filaEnY(FILAS, 185), null);                     // debajo de la última
+  assert.equal(filaEnY([], 30), null);
+});
+
+test("puntoSoltar: en la fila del video da el índice de inserción; en otra fila, el tiempo", () => {
+  const doc = docBase();                                       // v0 0..4000, v1 4000..8000
+  const pps = 80;
+  const x = (ms) => msAPx(ms, pps);
+  assert.deepEqual(puntoSoltar(doc, FILAS, x(1000), 80, pps), { pistaId: "p_video", tipo: "video", tMs: 1000, indicePrincipal: 0 });
+  assert.deepEqual(puntoSoltar(doc, FILAS, x(3000), 80, pps), { pistaId: "p_video", tipo: "video", tMs: 3000, indicePrincipal: 1 });
+  assert.deepEqual(puntoSoltar(doc, FILAS, x(7000), 80, pps), { pistaId: "p_video", tipo: "video", tMs: 7000, indicePrincipal: 2 });
+  assert.equal(puntoSoltar(doc, FILAS, x(9000), 80, pps).indicePrincipal, 2);          // pasado el final: al final
+  assert.deepEqual(puntoSoltar(doc, FILAS, x(2500), 30, pps), { pistaId: "p_texto", tipo: "texto", tMs: 2500, indicePrincipal: null });
+  assert.deepEqual(puntoSoltar(doc, FILAS, x(500), 130, pps), { pistaId: "p_voz", tipo: "audio", tMs: 500, indicePrincipal: null });
+  // dentro de la línea pero fuera de las filas: sin fila (una pista nueva), con el tiempo
+  assert.deepEqual(puntoSoltar(doc, FILAS, x(1500), 200, pps), { pistaId: null, tipo: null, tMs: 1500, indicePrincipal: null });
+  assert.equal(puntoSoltar(doc, FILAS, -30, 30, pps).tMs, 0);                           // antes del 0: en 0
+});
+
+test("puntoSoltar: el tiempo pega a bordes, al 0 y al cabezal con el imán", () => {
+  const doc = docBase();
+  const pps = 80;
+  const tol = pxAMs(8, pps);                                   // 100 ms
+  assert.equal(puntoSoltar(doc, FILAS, msAPx(3950, pps), 30, pps, { toleranciaMs: tol }).tMs, 4000);
+  assert.equal(puntoSoltar(doc, FILAS, msAPx(5480, pps), 30, pps, { toleranciaMs: tol, cabezalMs: 5500 }).tMs, 5500);
+  assert.equal(puntoSoltar(doc, FILAS, msAPx(5300, pps), 30, pps, { toleranciaMs: tol, cabezalMs: 5500 }).tMs, 5300);
+  // el índice de la principal sale de donde está el dedo, no del instante que pegó: con el
+  // cabezal en 2000 (el centro de v0), 2050 pega en 2000 pero el dedo ya pasó el centro
+  assert.deepEqual(puntoSoltar(doc, FILAS, msAPx(2050, pps), 80, pps, { toleranciaMs: tol, cabezalMs: 2000 }),
+    { pistaId: "p_video", tipo: "video", tMs: 2000, indicePrincipal: 1 });
+  assert.equal(puntoSoltar(doc, FILAS, msAPx(1950, pps), 80, pps, { toleranciaMs: tol, cabezalMs: 2000 }).indicePrincipal, 0);
+});
+
+test("msInsercion: dónde queda la marca de un video soltado en la principal", () => {
+  const doc = docBase();
+  assert.equal(msInsercion(doc, 0), 0);
+  assert.equal(msInsercion(doc, 1), 4000);
+  assert.equal(msInsercion(doc, 2), 8000);
+  assert.equal(msInsercion(doc, 9), 8000);
+});
+
+test("pedidoCortar: el clip elegido si el cabezal está sobre él; sin elegir, el video", () => {
+  const doc = docBase();                                       // t1 1000..3000
+  assert.deepEqual(pedidoCortar(doc, null, 2500), ["cortarEn", 2500]);
+  assert.deepEqual(pedidoCortar(doc, "t1", 2500), ["cortarClip", "t1", 2500]);
+  assert.deepEqual(pedidoCortar(doc, "a1", 1200), ["cortarClip", "a1", 1200]);
+  assert.deepEqual(pedidoCortar(doc, "v1", 6000), ["cortarClip", "v1", 6000]);
+  assert.equal(pedidoCortar(doc, "t1", 5000), null);           // el cabezal no está sobre el texto elegido
+  assert.equal(pedidoCortar(doc, "t1", 3000), null);           // justo en el borde tampoco
+  assert.deepEqual(pedidoCortar(doc, "s0", 2000), ["cortarEn", 2000]);   // el sonido de la escena sigue al video
+  assert.deepEqual(pedidoCortar(doc, "ya-no-existe", 2000), ["cortarEn", 2000]);
 });

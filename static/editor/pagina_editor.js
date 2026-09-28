@@ -43,6 +43,7 @@
 //   recibe ya ve el estado último. Si un oyente provoca un aviso cada vez que
 //   se entera, se corta (y se anota en la consola) en vez de colgar la página.
 import { Avisos } from "./avisos_editor.js";
+import { pedidoCortar } from "./escala.js";
 import { Guardado } from "./guardado.js";
 import { Historial } from "./historial.js";
 import { LineaTiempo } from "./linea_tiempo.js";
@@ -68,6 +69,7 @@ const linea = new LineaTiempo({
   zoom: $("linea-zoom"),
   materiales: () => vista.materiales,
   destino: () => vista.destino,
+  ventanaPicosMs: datos.config?.ventana_picos_ms,
   alSeleccionar: (id) => seleccionar(id),
   alOperar: operar,
   alIr: (t) => {
@@ -181,6 +183,15 @@ function operarCon(opciones, nombre, ...args) {
   return true;
 }
 
+// «Cortar» y la tecla S: el clip elegido en el cabezal (cualquier pista), o
+// sin nada elegido el video bajo el cabezal (escala.pedidoCortar). Con un clip
+// elegido y el cabezal fuera de él no se corta otra cosa: se dice.
+function cortar() {
+  const pedido = pedidoCortar(historial.actual, seleccion, vista.tiempo());
+  if (pedido) operar(...pedido);
+  else if (editable()) aviso("Pon el cabezal sobre el clip elegido para cortarlo.");
+}
+
 function deshacer() {
   if (!editable()) return;
   const doc = historial.deshacer();
@@ -211,7 +222,7 @@ function herramienta(id, fn) {
 
 function montarHerramientas() {
   for (const v of operaciones.VELOCIDADES) $("h-velocidad").append(new Option(`${v}×`, String(v)));
-  herramienta("h-cortar", () => operar("cortarEn", vista.tiempo()));
+  herramienta("h-cortar", cortar);
   herramienta("h-borrar", () => seleccion && operar("borrar", seleccion));
   herramienta("h-duplicar", () => seleccion && operar("duplicar", seleccion));
   herramienta("h-deshacer", deshacer);
@@ -245,7 +256,7 @@ function montarHerramientas() {
       // otros atajos del navegador (Cmd+S, Ctrl+R…) siguen siendo suyos
     } else if (tecla === "s") {
       e.preventDefault();
-      if (!e.repeat) operar("cortarEn", vista.tiempo());
+      if (!e.repeat) cortar();
     } else if ((e.key === "Delete" || e.key === "Backspace") && seleccion) {
       e.preventDefault();
       if (!e.repeat) operar("borrar", seleccion);

@@ -38,6 +38,17 @@ def test_formatos_js_iguales_a_python():
     assert _constante_js("formatos.js", "FORMATOS") == {k: list(v) for k, v in documento.FORMATOS.items()}
 
 
+def test_ventana_de_picos_igual_a_python():
+    # La onda de la línea de tiempo (escala.barrasOnda) lee un pico cada
+    # VENTANA_PICOS_MS de fuente: los que guarda tareas.edicion._picos.
+    import inspect
+
+    from final_edition import vista_previa
+    from tareas import edicion
+    assert _constante_js("escala.js", "VENTANA_PICOS_MS") == vista_previa.VENTANA_PICOS_MS
+    assert inspect.signature(edicion._picos).parameters["ventana_ms"].default == vista_previa.VENTANA_PICOS_MS
+
+
 def _generador():
     import importlib.util
     ruta = os.path.join(RAIZ, "tests", "fixtures", "generar_casos_editor.py")

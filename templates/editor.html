@@ -75,11 +75,21 @@
   .ed-zoom { margin-left: auto; }
   .ed-zoom input[type="range"] { width: 9rem; max-width: 36vw; min-width: 0; }
 
-  /* Línea de tiempo (capa 4a): corre de lado DENTRO de su caja; la página nunca. */
+  /* Línea de tiempo (capas 4a y 4b): corre DENTRO de su caja, de lado y hacia
+     abajo; la página nunca de lado. La columna de cabeceras queda fija a la
+     izquierda y la regla arriba mientras la línea corre (sticky en la caja). */
   .linea { padding: 0 1rem .5rem; min-width: 0; }
-  .linea-scroll { overflow-x: auto; overflow-y: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); touch-action: pan-x pan-y; }
-  .linea-lienzo { position: relative; min-height: 120px; user-select: none; -webkit-user-select: none; }
-  .linea-regla { position: relative; height: 20px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .linea-scroll { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel); touch-action: pan-x pan-y; }
+  .ed-linea-marco { display: flex; align-items: stretch; width: max-content; min-width: 100%; }
+  .ed-cabeceras { position: sticky; left: 0; z-index: 6; flex: none; width: 92px; background: var(--panel); border-right: 1px solid var(--border); }
+  .ed-cabeceras-esquina { position: sticky; top: 0; z-index: 1; height: 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
+  .ed-cabeceras-filas { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
+  .ed-cabecera { display: flex; align-items: center; gap: .35rem; min-width: 0; padding: 0 .45rem; color: var(--muted); font-size: .72rem; }
+  .ed-cabecera-icono { flex: none; }
+  .ed-cabecera-nombre { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ed-cabecera-elegida { color: var(--text); }
+  .linea-lienzo { position: relative; flex: none; min-height: 120px; user-select: none; -webkit-user-select: none; }
+  .linea-regla { position: sticky; top: 0; z-index: 4; height: 20px; background: var(--panel); border-bottom: 1px solid var(--border); cursor: pointer; }
   .linea-marca { position: absolute; top: 3px; font-size: .68rem; color: var(--muted); transform: translateX(2px); white-space: nowrap; }
   .linea-filas { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
   .linea-fila { position: relative; }
@@ -91,13 +101,20 @@
   .linea-espejo { opacity: .55; cursor: default; }
   .linea-seleccion { outline: 2px solid var(--accent-texto); outline-offset: 0; z-index: 2; touch-action: none; }
   .linea-arrastrando { opacity: .8; z-index: 3; cursor: grabbing; }
-  .linea-etiqueta { display: block; padding: 0 .45rem; font-size: .72rem; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .linea-etiqueta { position: relative; display: block; padding: 0 .45rem; font-size: .72rem; line-height: 26px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* Audio con onda: el nombre arriba, chico; la onda debajo (canvas, escala.barrasOnda) */
+  .ed-con-onda .linea-etiqueta { font-size: .66rem; line-height: 13px; }
+  .ed-onda { position: absolute; left: 0; bottom: 0; width: 100%; pointer-events: none; color: var(--ok); opacity: .85; }
   .linea-insignia { position: absolute; right: 12px; top: 4px; font-size: .7rem; color: var(--text); background: color-mix(in srgb, var(--bg) 75%, transparent); padding: 0 .3rem; border-radius: 4px; }
   .linea-asa { position: absolute; top: 0; bottom: 0; width: 10px; cursor: ew-resize; background: var(--border-soft); }
   .linea-asa[data-lado="inicio"] { left: 0; }
   .linea-asa[data-lado="fin"] { right: 0; }
   .linea-seleccion .linea-asa { background: var(--accent-texto); }
-  .linea-cabezal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--error); pointer-events: none; z-index: 4; }
+  .linea-cabezal { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--error); pointer-events: none; z-index: 5; }
+  /* Soltar desde la biblioteca: la fila bajo el dedo y la raya donde entraría */
+  .linea-fila.ed-fila-destino { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 6px; }
+  .ed-cabecera.ed-fila-destino { color: var(--accent-texto); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .ed-marca-soltar { position: absolute; width: 3px; margin-left: -1px; border-radius: 2px; background: var(--accent-texto); pointer-events: none; z-index: 5; }
 
   /* «Producir» */
   .editor-dialogo { max-width: min(92vw, 420px); padding: 1.2rem; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: var(--radius); }
@@ -135,7 +152,9 @@
        navegador sin cq. */
     .ed-escenario { width: min(100%, calc((100vh - 420px) * var(--ed-ancho) / var(--ed-alto)));
       width: min(100cqw, calc(100cqh * var(--ed-ancho) / var(--ed-alto))); }
-    #linea { flex: 0 0 auto; max-height: 38vh; overflow-y: auto; }
+    /* la caja de la línea corre sola hacia abajo: la regla y la barra de lado siempre a la vista */
+    #linea { flex: 0 0 auto; display: flex; flex-direction: column; max-height: 38vh; min-height: 0; }
+    #linea .linea-scroll { min-height: 0; }
   }
 
   /* Celular: el reproductor ocupa como mucho 42vh (el ancho de base del
@@ -144,6 +163,10 @@
   @media (max-width: 760px) {
     .ed-escena { padding: .5rem; }
     .ed-herramientas { gap: .35rem; }
+    /* cabeceras angostas: solo el icono (el nombre sigue ahí para quien lee con lector de pantalla) */
+    .ed-cabeceras { width: 36px; }
+    .ed-cabecera { justify-content: center; padding: 0; }
+    .ed-cabecera-nombre { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .ed-hoja { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; max-height: 62vh;
       border-top: 1px solid var(--border); border-radius: var(--radius) var(--radius) 0 0; box-shadow: var(--shadow);
       padding-bottom: env(safe-area-inset-bottom, 0px); transform: translateY(100%); visibility: hidden;
@@ -246,7 +269,7 @@
     <button id="h-rehacer" type="button" class="btn-sm" aria-label="Rehacer" title="Rehacer (Ctrl/Cmd+Shift+Z)">↷</button>
   </div>
   <div class="ed-grupo">
-    <button id="h-cortar" type="button" class="btn-sm" title="Cortar el video donde está el cabezal (S)">✂ Cortar</button>
+    <button id="h-cortar" type="button" class="btn-sm" title="Cortar donde está el cabezal: el clip elegido o, si no eliges ninguno, el video (S)">✂ Cortar</button>
     <button id="h-duplicar" type="button" class="btn-sm" title="Duplicar el clip elegido">Duplicar</button>
     <button id="h-borrar" type="button" class="btn-sm" title="Borrar el clip elegido (Supr)">Borrar</button>
   </div>
