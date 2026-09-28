@@ -33,6 +33,17 @@ from tareas import sprints as tareas_sprints
 bp = Blueprint("sprints", __name__, url_prefix="/cliente/<cliente>/sprints")
 
 
+@bp.before_request
+def _solo_mismo_origen():
+    """Barrera CSRF (como la de Flow Plus y el editor): un POST que el navegador
+    declara de otro sitio (Sec-Fetch-Site) no toca nada."""
+    sitio = (request.headers.get("Sec-Fetch-Site") or "").strip().lower()
+    if request.method == "POST" and sitio and sitio not in ("same-origin", "none"):
+        if _quiere_json() or request.is_json:
+            return jsonify({"ok": False, "error": "Pedido rechazado: no viene de esta página."}), 403
+        abort(403)
+
+
 # ------------------------------------------------------------ helpers ---
 
 def _volver(cliente, sid=None, cid=None):
@@ -432,7 +443,9 @@ def _costo_regenerar(cliente, c, p, modelo_video, modelo_imagen):
     modelo = p.get("modelo") if p.get("modelo") in registro else (modelo_video if es_video else modelo_imagen)
     try:
         if es_video:
-            est = flowplus_modelos.estimate_video(modelo, produccion._duracion(p, modelo))
+            # Con el sonido que eligió la sesión (Kling cobra aparte el audio nativo).
+            con_sonido = True if p.get("con_sonido") is None else bool(p["con_sonido"])
+            est = flowplus_modelos.estimate_video(modelo, produccion._duracion(p, modelo), con_sonido=con_sonido)
         else:
             est = flowplus_modelos.estimate_imagen(modelo, n_referencias=produccion._n_referencias(cliente, c))
         usd = float((est or {}).get("usd") or 0.0)

@@ -1,3 +1,4 @@
+{% from "_etiquetas_estado.html" import etiqueta_estado with context %}
 {# Detalle de un video listo y de una final en Final edition: lo que antes
    iba en el <template> de cada tarjeta. Lo pide el modal por fetch. Se
    importa `with context` (paises_fe, voces_fe, estilos_fe, presets_mezcla,
@@ -119,7 +120,7 @@
               <li class="fe-final">
                 <span class="fe-final-mini">{% if f.url_miniatura %}<img src="{{ f.url_miniatura }}" alt="">{% endif %}</span>
                 <span class="fe-final-nombre">{{ paises_fe[f.pais].bandera if f.pais in paises_fe else "" }} {{ f.idioma }}_{{ f.pais }}</span>
-                <span class="tag-estado">{{ f.estado }}</span>
+                <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
                 {% if f.estado == "generando" %}
                 <span class="vacio" style="padding:0;font-size:.72rem;">{% if f.trabajo %}produciendo…{% else %}interrumpida{% endif %}</span>
                 {% elif f.estado == "error" and f.error %}
@@ -176,7 +177,7 @@
             Final de: {{ item.accion_central or item.id }}
             {% if f.duracion_s %} · {{ "%.1f"|format(f.duracion_s) }}s{% endif %}
             {% if f.costo_usd %} · costó {{ f.costo_usd | usd }}{% endif %}
-            · <span class="tag-estado">{{ f.estado }}</span>
+            · <span class="tag-estado">{{ etiqueta_estado(f.estado) }}</span>
           </p>
           {% if f.capas %}
           <p class="campo-label" style="margin-top:.8rem;">Capas</p>

@@ -74,6 +74,15 @@ def test_filas_que_se_salian_bajan_de_linea():
         assert regla in bloque, regla
 
 
+def test_botones_de_quitar_y_segmentado_se_tocan_con_el_dedo():
+    """Los «×» de 22 px eran poco para un dedo, y la píldora de «Fuente» partida
+    en dos líneas parecía una mancha."""
+    bloque = _bloque_revision()
+    assert ".crear-ref-quitar, .producto-gestion-foto button, .personaje-eliminar button {" in bloque
+    assert "width: 32px; height: 32px; min-width: 32px; min-height: 32px;" in bloque
+    assert ".segmentado { border-radius: 14px; }" in bloque
+
+
 def test_tablas_apiladas_en_el_celular(app):
     """Las tablas anchas escondían a la derecha el monto, el costo o las acciones.
     Hasta 640 px cada fila es una tarjeta; tablas.js copia el título de la columna."""

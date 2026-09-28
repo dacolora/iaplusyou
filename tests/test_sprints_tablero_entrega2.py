@@ -362,3 +362,82 @@ def test_ideas_en_singular(con_ideas):
     assert "Proponer las que faltan (1 video, 0 imágenes)" in html
     assert "1 aprobada(s) sin generar (1 video, 0 imágenes)" in html
     assert "1 videos" not in html and "1 imágenes" not in html
+
+
+def test_precio_de_regenerar_respeta_el_sonido_de_la_sesion(con_ideas, monkeypatch, tmp_path):
+    """Kling cobra aparte el sonido nativo: una pieza hecha SIN «Sonido de la escena»
+    se regenera sin él, así que su precio no lleva ese recargo."""
+    import creative_flow
+    from providers import flowplus_modelos
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    creative_flow.actualizar("acme", cfs[iv], modelo="kling_o3_pro", con_sonido=False)
+    datos.actualizar_idea("acme", iv, duracion_s=15)
+    sin = flowplus_modelos.estimate_video("kling_o3_pro", 15, con_sonido=False)["usd"]
+    con = flowplus_modelos.estimate_video("kling_o3_pro", 15, con_sonido=True)["usd"]
+    assert sin < con
+    piezas = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
+    assert "Regenerar (US$ %.2f)" % sin in piezas and "Regenerar (US$ %.2f)" % con not in piezas
+
+
+def test_contadores_de_piezas_en_singular_y_plural(con_ideas, monkeypatch, tmp_path):
+    """«1 aprobadas» / «1 listas»: con uno va en singular (panel, revisión y entrega)."""
+    from sprints import datos
+    sid, cid, iv, ii, cfs = _con_piezas(con_ideas, monkeypatch, tmp_path)
+    c = con_ideas["c"]
+    datos.actualizar_idea("acme", iv, revision="aprobada")
+    piezas = c.get(f"/cliente/acme/sprints/{sid}/campanas/{cid}/piezas").data.decode()
+    assert "2 listas" in piezas and "1 aprobada</strong>" in piezas and "1 aprobadas" not in piezas
+    for url in (f"/cliente/acme/sprints/{sid}/revision", f"/cliente/acme/sprints/{sid}/entrega"):
+        html = c.get(url).data.decode()
+        assert "1 aprobada ·" in html and "1 aprobadas" not in html, url
+
+
+def test_marcas_repetidas_con_tildes_distintas_cuentan_una_vez():
+    from sprints import datos
+    assert datos.normalizar_marcas("Élite\nelite\nCröcs, CROCS") == [{"nombre": "Élite"}, {"nombre": "Cröcs"}]
+
+
+@pytest.mark.parametrize("sitio, pasa", [(None, True), ("same-origin", True), ("none", True),
+                                         ("cross-site", False), ("same-site", False)])
+def test_los_post_de_sprints_rechazan_pedidos_de_otro_sitio(app, sitio, pasa):
+    """Barrera CSRF como la de Flow Plus y el editor: un POST que el navegador
+    declara de otro sitio no toca nada (y la lectura sigue abierta)."""
+    from sprints import datos
+    sid = _sprint(datos)
+    cid = _campana(datos, sid)
+    headers = {"X-Requested-With": "fetch"} | ({} if sitio is None else {"Sec-Fetch-Site": sitio})
+    r = app["c"].post(f"/cliente/acme/sprints/{sid}/campanas/{cid}/campo", json={"campo": "dolor", "valor": "pies"},
+                      headers=headers)
+    assert (r.status_code == 403) is (not pasa)
+    assert (datos.campana("acme", cid)["dolor"] == "pies") is pasa
+    if not pasa:
+        assert r.get_json()["ok"] is False
+        r = app["c"].post(f"/cliente/acme/sprints/{sid}/campo", data={"campo": "nombre", "valor": "X"},
+                          headers={"Sec-Fetch-Site": sitio})
+        assert r.status_code == 403
+        assert app["c"].get(f"/cliente/acme/sprints/{sid}", headers={"Sec-Fetch-Site": sitio}).status_code == 200
+
+
+def test_estado_del_sprint_con_tilde(app):
+    d = app["dashboard"]
+    with d.app.test_request_context():
+        html = d.app.jinja_env.from_string('{% from "_sprint_macros.html" import chip_estado %}'
+                                           '{{ chip_estado("revision") }} {{ chip_estado("listo_para_generar") }}').render()
+    assert 'estado-sprint-revision">revisión</span>' in html
+    assert 'estado-sprint-listo_para_generar">listo para generar</span>' in html
+
+
+def test_js_del_panel_espera_el_angulo_y_conserva_lo_escrito():
+    """Verificado en Chrome sin ventana (2026-09-28): lo escrito, la tarjeta abierta y el
+    cursor sobreviven a una recarga del panel; «Reescribir» sale después del guardado del
+    ángulo; un formulario con confirm() pregunta una sola vez. Aquí se vigilan los ganchos."""
+    js = open("static/angulo.js", encoding="utf-8").read()
+    assert "window.guardarAngulosPendientes = function" in js
+    assert "ev.stopImmediatePropagation();" in js and "form.requestSubmit" in js
+    panel = open("templates/sprint_detalle.html", encoding="utf-8").read()
+    assert "window.guardarAngulosPendientes(cuerpo)" in panel
+    assert "var escrito = mismo ? tomarEscrito() : null;" in panel and "devolverEscrito(escrito);" in panel
+    assert "d.open = guardado.abiertos[k];" in panel
+    assert "if (!sigue(cid)) return;" in panel

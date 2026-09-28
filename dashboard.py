@@ -1771,10 +1771,7 @@ def ver_cliente(cliente):
         cifrado_ok=cifrado.disponible(),
         meli_configurado=bool((os.environ.get("MELI_APP_ID") or "").strip()),
         tipos_tienda=conectores.TIPOS_API,
-        llaves=_llaves_visibles(
-            _estado_llaves(url_for("meli_callback", _external=True), meta_app_registrada=bool(meta_app),
-                           modo_meta=modo_meta, agencia_conectada=agencia_conectada, meta_forma=meta_forma),
-            session.get("rol")),
+        llaves=_llaves_visibles(_estado_llaves(url_for("meli_callback", _external=True)), session.get("rol")),
         columnas_csv=conector_csv.COLUMNAS_AYUDA,
         tablero=tablero_ctx,
         **gasto_ctx,
@@ -1854,27 +1851,6 @@ SERVICIOS_LLAVES = (
             idiomas.N_("Vuelve a R2 › «Manage R2 API tokens» › «Create API token» con permiso «Object Read & Write»."),
             idiomas.N_("Copia el Access Key ID y el Secret Access Key; el Account ID está en la barra lateral de R2."),
             idiomas.N_("Pega las cinco variables en el .env del servidor y reinicia."),
-        ],
-    },
-    {
-        "id": "meta",
-        "nombre": idiomas.N_("Meta (anuncios)"),
-        "para_que": idiomas.N_("Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas."),
-        "costo": idiomas.N_("La pauta se cobra en tu cuenta publicitaria; la API no cuesta."),
-        "url": "https://business.facebook.com/settings/payment-methods",
-        "url_texto": idiomas.N_("business.facebook.com › Facturación"),
-        "variables": [],
-        "por_proyecto": True,
-        # Lo único de esta tarjeta que le toca al cliente (el resto es del admin).
-        "cliente_hace": idiomas.N_("Agrega un método de pago a tu cuenta publicitaria (enlace de abajo): sin él Meta no "
-                        "activa ningún anuncio. La conexión se hace en el bloque «¿Cómo quieres conectar Meta?»."),
-        "nota": idiomas.N_("No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta»."),
-        "pasos": [
-            idiomas.N_("En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login."),
-            idiomas.N_("Pégalos en «Conecta tu cuenta de Meta» (abajo, o en Experimentos): el secret se guarda en el servidor y nunca vuelve a pantalla."),
-            idiomas.N_("En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio."),
-            idiomas.N_("Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página."),
-            idiomas.N_("Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app."),
         ],
     },
     {
@@ -1988,49 +1964,22 @@ SERVICIOS_LLAVES = (
 )
 
 
-# Tarjeta Meta cuando el proyecto está en modo agencia: no hay app ni llave
-# que conseguir; lo único que cuenta es que la agencia esté conectada.
-NOTA_META_AGENCIA = idiomas.N_("Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta "
-                     "nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el "
-                     "panel; pídele a él cualquier cambio.")
-PASOS_META_AGENCIA = [
-    idiomas.N_("No tienes que conseguir ninguna llave: Creatv conecta su Business Manager una sola vez y te asigna la cuenta y la Página."),
-    idiomas.N_("Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador."),
-    idiomas.N_("Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio."),
-]
-
-
-def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="propia", agencia_conectada=False, meta_forma=None):
-    """Tarjetas de Configuración › Puesta a punto. Devuelve una lista de dicts
-    {id, nombre, para_que, costo, estado, url, url_texto, variables, faltan,
-    nota, pasos, opcional} donde `estado` es «configurada» (todas las
-    variables presentes), «falta» (ninguna) o «parcial» (algunas). Solo mira
-    bool(os.environ.get(var)): ningún valor sale de aquí. `callback_meli` es
-    la URL real del callback de MercadoLibre para el paso de la app (fuera de
-    un request se deja el texto genérico). La tarjeta Meta depende del modo
-    del proyecto: en «propia» cuenta la app registrada; en «agencia» cuenta
-    que la agencia esté conectada (`agencia_conectada`), y nota/pasos cambian."""
+def _estado_llaves(callback_meli=None):
+    """Tarjetas de Configuración › Puesta a punto (solo admin). Devuelve una
+    lista de dicts {id, nombre, para_que, costo, estado, url, url_texto,
+    variables, faltan, nota, pasos, opcional} donde `estado` es «configurada»
+    (todas las variables presentes), «falta» (ninguna) o «parcial» (algunas).
+    Solo mira bool(os.environ.get(var)): ningún valor sale de aquí.
+    `callback_meli` es la URL real del callback de MercadoLibre para el paso
+    de la app (fuera de un request se deja el texto genérico). La conexión
+    con Meta no es una llave del servidor: vive en Experimentos
+    (_meta_conectar.html)."""
     callback = callback_meli or "<url del sitio>/meli/callback"
     tarjetas = []
     for s in SERVICIOS_LLAVES:
         nota, pasos = s["nota"], s["pasos"]
-        if s.get("por_proyecto") and modo_meta == meta_conexion.MODO_AGENCIA:
-            # Meta en modo agencia: la conexión es de Creatv, no del proyecto.
-            presentes = ["conexión de agencia de Creatv"] if agencia_conectada else []
-            faltan = [] if agencia_conectada else ["conexión de agencia de Creatv (la conecta el administrador)"]
-            nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
-        elif s.get("por_proyecto") and meta_forma == "agencia":
-            # Eligió que Creatv lo gestione pero aún no compartió/conectó.
-            presentes = []
-            faltan = ["conexión de agencia: pendiente de que compartas tus activos con Creatv (Experimentos › Meta)"]
-            nota, pasos = NOTA_META_AGENCIA, PASOS_META_AGENCIA
-        elif s.get("por_proyecto"):
-            # Meta: la app es del proyecto (clientes/<c>/meta_app.json), no del .env.
-            presentes = ["app de Meta del proyecto"] if meta_app_registrada else []
-            faltan = [] if meta_app_registrada else ["app de Meta del proyecto"]
-        else:
-            presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
-            faltan = [v for v in s["variables"] if v not in presentes]
+        presentes = [v for v in s["variables"] if bool((os.environ.get(v) or "").strip())]
+        faltan = [v for v in s["variables"] if v not in presentes]
         if not faltan:
             estado = "configurada"
         elif not presentes:
@@ -2041,7 +1990,7 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
         # literal "nombre" del subíndice como si fuera el mensaje) — por eso
         # cada valor pasa primero por una variable antes de traducirse.
         nombre_valor, para_que_valor, costo_valor = s["nombre"], s["para_que"], s["costo"]
-        url_texto_valor, cliente_hace_valor = s["url_texto"], s.get("cliente_hace", "")
+        url_texto_valor = s["url_texto"]
         tarjetas.append({
             "id": s["id"],
             "nombre": gettext(nombre_valor),
@@ -2054,21 +2003,16 @@ def _estado_llaves(callback_meli=None, meta_app_registrada=False, modo_meta="pro
             "faltan": faltan,
             "nota": gettext(nota),
             "opcional": bool(s.get("opcional")),
-            "por_proyecto": bool(s.get("por_proyecto")),
-            "cliente_hace": gettext(cliente_hace_valor) if cliente_hace_valor else "",
             "pasos": [gettext(p).replace("{callback_meli}", callback) for p in pasos],
         })
     return tarjetas
 
 
 def _llaves_visibles(tarjetas, rol):
-    """Un cliente no administra el servidor: en Puesta a punto ve solo las
-    tarjetas que se configuran por proyecto (Meta), y de ellas solo su parte
-    (la plantilla esconde variables, nota y pasos si no es admin). El admin
-    las ve todas."""
-    if rol == "admin":
-        return tarjetas
-    return [t for t in tarjetas if t["por_proyecto"]]
+    """Las llaves son del servidor: solo el admin ve las tarjetas. Un cliente
+    no ve ninguna (la conexión con Meta, que era la única por proyecto, vive
+    en Experimentos)."""
+    return tarjetas if rol == "admin" else []
 
 
 PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}

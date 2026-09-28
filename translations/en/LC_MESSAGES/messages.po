@@ -960,12 +960,6 @@ msgstr "Add at least one reference (character, environment or product)."
 msgid "Agrega primero una imagen, un video o un link."
 msgstr "Add an image, a video, or a link first."
 
-msgid "Agrega un método de pago a la cuenta publicitaria en business.facebook.com › Configuración › Facturación: sin él Meta no activa ningún anuncio."
-msgstr "Add a payment method to the ad account in business.facebook.com › Settings › Billing: without it Meta won't activate any ad."
-
-msgid "Agrega un método de pago a tu cuenta publicitaria (enlace de abajo): sin él Meta no activa ningún anuncio. La conexión se hace en el bloque «¿Cómo quieres conectar Meta?»."
-msgstr "Add a payment method to your ad account (link below): without it Meta won't activate any ad. The connection happens in the “How do you want to connect Meta?” block."
-
 msgid "Agregar"
 msgstr "Add"
 
@@ -1150,6 +1144,9 @@ msgstr "Assembled"
 
 msgid "Armando clips…"
 msgstr "Assembling clips…"
+
+msgid "Armando el prompt"
+msgstr "Building the prompt"
 
 msgid "Armando el prompt con IA…"
 msgstr "Building the prompt with AI…"
@@ -1912,9 +1909,6 @@ msgstr "Create the account at apify.com (it comes with free monthly credit) and 
 
 msgid "Crea la cuenta en tryatria.com y elige un plan."
 msgstr "Create the account at tryatria.com and choose a plan."
-
-msgid "Crea las campañas, conjuntos y anuncios de cada experimento y lee sus métricas."
-msgstr "Creates the campaigns, ad sets and ads for each experiment and reads their metrics."
 
 msgid "Crea tu primer experimento"
 msgstr "Create your first experiment"
@@ -2697,8 +2691,8 @@ msgstr ""
 "In WordPress: <em>WooCommerce › Settings › Advanced › REST API › Add key</em>, with\n"
 "        <em>read</em> permissions. The store has to be over <code>https://</code>."
 
-msgid "En business.facebook.com › Configuración › Facturación agrega un método de pago a la cuenta publicitaria: sin él Meta no activa ningún anuncio."
-msgstr "In business.facebook.com › Settings › Billing add a payment method to the ad account: without it Meta won't activate any ad."
+msgid "En cola"
+msgstr "Queued"
 
 msgid "En corrección"
 msgstr "Being fixed"
@@ -2708,9 +2702,6 @@ msgstr "In progress"
 
 msgid "En dash.cloudflare.com entra a «R2» y crea un bucket (ese nombre es R2_BUCKET_NAME)."
 msgstr "In dash.cloudflare.com go to “R2” and create a bucket (that name is R2_BUCKET_NAME)."
-
-msgid "En developers.facebook.com crea una app tipo Business con «Facebook Login for Business» y «Marketing API»; anota el App ID, el App Secret y el id de la configuración de Login."
-msgstr "In developers.facebook.com create a Business-type app with “Facebook Login for Business” and “Marketing API”; note the App ID, the App Secret and the Login configuration id."
 
 msgid "En developers.mercadolibre.com entra con la cuenta de la tienda y ve a «Mis aplicaciones» › «Crear nueva aplicación»."
 msgstr "In developers.mercadolibre.com log in with the store's account and go to “My apps” › “Create new application”."
@@ -3184,9 +3175,6 @@ msgstr "This prompt has issues; fix them before approving it:"
 msgid "Este prompt ya está aprobado. Reábrelo para seguir corrigiendo."
 msgstr "This prompt is already approved. Reopen it to keep correcting it."
 
-msgid "Este proyecto lo gestiona Creatv en Meta (modo agencia): no registra una app ni conecta nada aquí. La cuenta publicitaria y la Página se las asigna el administrador desde el panel; pídele a él cualquier cambio."
-msgstr "Creatv manages this project on Meta (agency mode): it doesn't register an app or connect anything here. The admin assigns the ad account and the Page from the panel; ask them for any change."
-
 msgid "Este proyecto lo gestiona Creatv en Meta. Para volver a tu propia app usa «Cambiar de forma» en Experimentos › Meta (con nada en marcha)."
 msgstr "Creatv manages this project on Meta. To go back to your own app use “Change form” in Experiments › Meta (with nothing running)."
 
@@ -3556,6 +3544,9 @@ msgstr "Generation by month (US$)"
 #, python-format
 msgid "Generados (%(n)s)"
 msgstr "Generated (%(n)s)"
+
+msgid "Generando"
+msgstr "Generating"
 
 #, python-format
 msgid "Generando %(que)s con %(modelo)s…"
@@ -4094,6 +4085,9 @@ msgstr "The Instagram account isn't linked to the Page"
 msgid "La cuenta publicitaria cambió: los experimentos anteriores dejan de refrescarse."
 msgstr "The ad account changed: previous experiments stop refreshing."
 
+msgid "La cuenta publicitaria necesita un método de pago en <a href=\"https://business.facebook.com/settings/payment-methods\" target=\"_blank\" rel=\"noopener\">business.facebook.com › Facturación ↗</a>: sin él Meta no activa ningún anuncio."
+msgstr "The ad account needs a payment method at <a href=\"https://business.facebook.com/settings/payment-methods\" target=\"_blank\" rel=\"noopener\">business.facebook.com › Billing ↗</a>: without one, Meta won't activate any ad."
+
 msgid "La cuenta publicitaria no tiene ningún Pixel."
 msgstr "The ad account doesn't have any Pixel."
 
@@ -4133,9 +4127,6 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…)."
 
 msgid "La moneda va en código de 3 letras (COP, MXN, USD…); no la guardé."
 msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
-
-msgid "La pauta se cobra en tu cuenta publicitaria; la API no cuesta."
-msgstr "Ad spend is charged to your ad account; the API itself is free."
 
 msgid "La pieza se descartó antes de generar; no se cobró nada."
 msgstr "The piece was discarded before generating; nothing was charged."
@@ -4280,6 +4271,12 @@ msgstr "Free-form"
 
 msgid "Link de Notion"
 msgstr "Notion link"
+
+msgid "Lista"
+msgstr "Ready"
+
+msgid "Lista, con avisos"
+msgstr "Ready, with warnings"
 
 msgid "Listo"
 msgstr "Done"
@@ -4551,9 +4548,6 @@ msgstr "Month"
 
 msgid "Meta (Pixel/Tienda)"
 msgstr "Meta (Pixel/Store)"
-
-msgid "Meta (anuncios)"
-msgstr "Meta (ads)"
 
 msgid "Meta bloqueó esta acción por un tiempo por sus políticas: revisa los avisos en tu Business Suite antes de reintentar."
 msgstr "Meta temporarily blocked this action under its policies: check the notices in your Business Suite before trying again."
@@ -5155,12 +5149,6 @@ msgstr "You don't have access to that project."
 msgid "No tienes permiso para esto. Recarga la página e inicia sesión de nuevo."
 msgstr "You don't have permission for this. Reload the page and sign in again."
 
-msgid "No tienes que conseguir ninguna llave: Creatv conecta su Business Manager una sola vez y te asigna la cuenta y la Página."
-msgstr "You don't have to get any key: Creatv connects its Business Manager once and assigns you the account and the Page."
-
-msgid "No va en el .env: cada proyecto registra su propia app de Meta (id, secret y configuración de Facebook Login) en el bloque «Conecta tu cuenta de Meta» de abajo, y ahí mismo pulsa «Conectar con Meta»."
-msgstr "It doesn't go in the .env: each project registers its own Meta app (id, secret and Facebook Login configuration) in the “Connect your Meta account” block below, and presses “Connect with Meta” right there."
-
 msgid "No verificado"
 msgstr "Not verified"
 
@@ -5684,6 +5672,9 @@ msgstr "Chosen prompt"
 msgid "Prompt guardado. Ahora sí: genera cuando quieras."
 msgstr "Prompt saved. Now you're set: generate whenever you want."
 
+msgid "Prompt listo"
+msgstr "Prompt ready"
+
 msgid "Prompt listo — revísalo y genera."
 msgstr "Prompt ready — review it and generate."
 
@@ -5818,9 +5809,6 @@ msgstr "Setup"
 msgid "Pulsa <em>Instalar app</em> y confirma."
 msgstr "Press <em>Install app</em> and confirm."
 
-msgid "Pulsa «Conectar con Meta» aquí abajo, inicia sesión con tu Facebook y elige la cuenta publicitaria y la Página."
-msgstr "Press “Connect with Meta” below, log in with your Facebook and choose the ad account and the Page."
-
 msgid "Pulsa «Sincronizar ahora» para traer los últimos 90 días de Triple Whale."
 msgstr "Press “Sync now” to pull the last 90 days from Triple Whale."
 
@@ -5844,9 +5832,6 @@ msgstr "Paste it as APIFY_TOKEN in the server's .env and restart both services."
 
 msgid "Pégalos como HF_API_KEY_ID y HF_API_KEY_SECRET en el .env del servidor y reinicia."
 msgstr "Paste them as HF_API_KEY_ID and HF_API_KEY_SECRET in the server's .env and restart."
-
-msgid "Pégalos en «Conecta tu cuenta de Meta» (abajo, o en Experimentos): el secret se guarda en el servidor y nunca vuelve a pantalla."
-msgstr "Paste them in “Connect your Meta account” (below, or in Experiments): the secret is stored on the server and never comes back to the screen."
 
 msgid "Pídele a Claude que la corrija antes de usarla."
 msgstr "Ask Claude to fix it before using it."
@@ -6324,9 +6309,6 @@ msgstr "Shopify, step by step"
 msgid "Si %(correo)s es correcto, te llega el enlace en unos minutos (revisa también el spam)."
 msgstr "If %(correo)s is correct, the link will arrive in a few minutes (check spam too)."
 
-msgid "Si Meta muestra un error de permisos, pide que agreguen tu Facebook como probador de la app."
-msgstr "If Meta shows a permissions error, ask them to add your Facebook as a tester of the app."
-
 msgid "Si el botón no funciona, copia este enlace en tu navegador:"
 msgstr "If the button doesn't work, copy this link into your browser:"
 
@@ -6338,9 +6320,6 @@ msgstr "If that email is registered, a link to reset the password will arrive (e
 
 msgid "Si lo eliges, Claude escribe con ese nivel en ideas, guiones y adaptaciones de este producto."
 msgstr "If you choose it, Claude writes at that level in this product's ideas, scripts and adaptations."
-
-msgid "Si quieres cambiar de cuenta publicitaria o de Página, o volver a usar tu propia app de Meta, pídeselo al administrador."
-msgstr "If you want to change ad account or Page, or go back to using your own Meta app, ask the admin."
 
 msgid ""
 "Si un prompt salió mal, aquí lo corriges con Claude antes de mandarlo a generar:\n"
@@ -7637,9 +7616,6 @@ msgstr "low"
 
 msgid "bien"
 msgstr "good"
-
-msgid "business.facebook.com › Facturación"
-msgstr "business.facebook.com › Billing"
 
 msgid "calmado"
 msgstr "Calm"

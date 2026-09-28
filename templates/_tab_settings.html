@@ -4,10 +4,9 @@
    Logos → Marca → informe (admin). Las reglas del decisor ya no están aquí:
    viven en Experimentos › «Reglas del motor» (ruta cfg_reglas). #}
 
-{# ---- Puesta a punto: una tarjeta por servicio externo. El admin ve todas
-   (llaves del .env del servidor); un cliente recibe solo las tarjetas por
-   proyecto (dashboard._llaves_visibles) y de cada una solo su parte:
-   sin variables, sin nota del .env y sin pasos para conseguir llaves. ---- #}
+{# ---- Puesta a punto: una tarjeta por servicio externo, solo para el admin
+   (llaves del .env del servidor; dashboard._llaves_visibles le da [] a un
+   cliente). La conexión con Meta no es una llave: vive en Experimentos. ---- #}
 {% set es_admin = session.get('rol') == 'admin' %}
 <div class="panel-cabecera">
   <div>
@@ -62,7 +61,7 @@
   nunca su valor.') }}
 </p>
 <div class="llaves-tarjetas">
-  {% for l in llaves if l.id != "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
+  {% for l in llaves %}{% include "_llave_tarjeta.html" %}{% endfor %}
 </div>
 </section>
 {% endif %}

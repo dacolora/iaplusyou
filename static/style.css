@@ -1867,6 +1867,10 @@ kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 .3rem; fon
 .tag-en-curso { color: var(--accent-texto); background: rgba(124, 58, 237, .1); }
 .barrido-fecha { white-space: nowrap; }
 .barrido-sub { display: block; margin-top: .2rem; font-size: .72rem; color: var(--muted); line-height: 1.4; }
+/* La barra del barrido en curso: su celda no tiene otro contenido, así que sin ancho mínimo se encogía a un punto. */
+.barrido-progreso { min-width: 9rem; }
+.barrido-progreso .barra-progreso { margin-top: .2rem; }
+.barrido-progreso .progreso-texto { display: block; margin-top: .3rem; font-size: .72rem; }
 
 /* Opciones excluyentes: control segmentado (pastillas) y tarjetas. El radio
    queda encima, invisible, para que el clic y el teclado sigan siendo suyos. */
@@ -2607,6 +2611,15 @@ body.panel-abierto { overflow: hidden; }
   .ref-filtros-boton { display: inline-flex; align-self: flex-start; gap: .3rem; }
   .ref-filtros:not(.abierto) { display: none; }
   .ref-filtros.abierto { display: flex; flex-direction: column; gap: .6rem; }
+  /* Botones «×» de quitar (referencia en Crear, foto del catálogo, personaje): 22 px eran
+     poco para un dedo; 32 px en el celular. */
+  .crear-ref-quitar, .producto-gestion-foto button, .personaje-eliminar button {
+    width: 32px; height: 32px; min-width: 32px; min-height: 32px; font-size: .9rem;
+  }
+  /* Selector de opciones en píldora (p. ej. «Fuente» en Traer referentes): con opciones largas se
+     parte en dos líneas y la píldora redonda parecía una mancha; esquinas redondeadas normales. */
+  .segmentado { border-radius: 14px; }
+  .segmentado span { border-radius: 11px; }
   /* Rutas y nombres técnicos largos en un párrafo (Configuración › Marca) se partían fuera de la caja. */
   p code, li code, small code { overflow-wrap: anywhere; }
   /* Tablero › alertas: el error crudo de Meta (JSON sin espacios) empujaba la página a 792 px. */

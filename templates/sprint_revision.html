@@ -7,7 +7,7 @@
 <div class="pagina-cabecera sprint-cabecera">
   <div>
     <h1>Revisión de {{ sprint.nombre }}</h1>
-    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ resumen.terminadas }} terminadas de {{ resumen.planeadas }} · {{ resumen.aprobadas }} aprobadas · {{ resumen.rechazadas }} rechazadas · {{ resumen.sin_revisar }} sin revisar · {{ resumen.error }} con error · USD {{ '%.2f' % resumen.costo_usd }}</p>
+    <p class="vacio">{{ chip_estado(sprint.estado) }} · {{ resumen.terminadas }} {{ 'terminada' if (resumen.terminadas) == 1 else 'terminadas' }} de {{ resumen.planeadas }} · {{ resumen.aprobadas }} {{ 'aprobada' if (resumen.aprobadas) == 1 else 'aprobadas' }} · {{ resumen.rechazadas }} {{ 'rechazada' if (resumen.rechazadas) == 1 else 'rechazadas' }} · {{ resumen.sin_revisar }} sin revisar · {{ resumen.error }} con error · USD {{ '%.2f' % resumen.costo_usd }}</p>
     <p class="vacio"><span class="solo-teclado">Atajos: <kbd>A</kbd> aprobar · <kbd>R</kbd> rechazar · <kbd>←</kbd> <kbd>→</kbd> moverse. </span>Cada tarjeta muestra el QA: ✓ pasa, ✗ falla; toca la fila del QA para leer por qué.</p>
   </div>
 </div>
@@ -18,7 +18,7 @@
   </form>
   {% if sprint.estado == "revision" %}
   <form method="post" action="{{ url_for('sprints.cerrar', cliente=cliente, sid=sprint.id) }}" class="inline"
-        onsubmit="return confirm('¿Cerrar el sprint? {{ resumen.aprobadas }} aprobadas, {{ resumen.rechazadas }} rechazadas, {{ resumen.sin_revisar }} sin revisar.');">
+        onsubmit="return confirm('¿Cerrar el sprint? {{ resumen.aprobadas }} {{ 'aprobada' if (resumen.aprobadas) == 1 else 'aprobadas' }}, {{ resumen.rechazadas }} {{ 'rechazada' if (resumen.rechazadas) == 1 else 'rechazadas' }}, {{ resumen.sin_revisar }} sin revisar.');">
     <button type="submit" class="btn-sm">Cerrar sprint</button>
   </form>
   {% endif %}

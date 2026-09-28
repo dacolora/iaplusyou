@@ -24,7 +24,7 @@
       <input type="date" name="inicio" required value="{{ inicio_defecto }}"></label>
     <label>Fin
       <input type="date" name="fin" required value="{{ fin_defecto }}"></label>
-    <label>Momento del mes <small class="vacio">(opcional)</small>
+    <label><span class="campo-titulo">Momento del mes <small class="vacio">(opcional)</small></span>
       <select name="momento" data-momento>
         <option value="">Ninguno</option>
         {% for p in presets_temporadas %}<option value="{{ p.clave }}">{{ p.nombre }} ({{ p.inicio[5:] }} → {{ p.fin[5:] }})</option>{% endfor %}
@@ -32,7 +32,7 @@
       </select></label>
     <label data-momento-propio hidden>Tu momento
       <input name="momento_texto" maxlength="120" placeholder="Lanzamiento de la colección"></label>
-    <label class="sprint-nuevo-ancho">Marcas a imitar <small class="vacio">(opcional: una por línea; si tienes el link de su Ad Library, pégalo al lado)</small>
+    <label class="sprint-nuevo-ancho"><span class="campo-titulo">Marcas a imitar <small class="vacio">(opcional: una por línea; si tienes el link de su Ad Library, pégalo al lado)</small></span>
       <textarea name="marcas" rows="2" placeholder="Crocs&#10;Skechers https://www.facebook.com/ads/library/?view_all_page_id=…"></textarea></label>
     <div class="sprint-nuevo-ancho"><button type="submit" class="btn-generar">Crear y armar campañas →</button></div>
   </form>
