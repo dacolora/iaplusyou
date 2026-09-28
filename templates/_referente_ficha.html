@@ -10,7 +10,7 @@
       <span class="tag-estado ref-marca">{{ r.marca }}</span>
       {% if r.consciencia %}<span class="tag-estado">{{ etiquetas_consciencia.get(r.consciencia, r.consciencia) | traducir }}</span>{% endif %}
       {% if r.etapa %}<span class="tag-estado">{{ etiquetas_etapa.get(r.etapa, r.etapa) | traducir }}</span>{% endif %}
-      {% if r.dolor %}<span class="tag-estado">{{ _('dolor: %(dolor)s', dolor=etiquetas_dolor.get(r.dolor, r.dolor) | traducir) }}</span>{% endif %}
+      {% if r.dolor %}<span class="tag-estado">{{ _('dolor: %(dolor)s', dolor=(etiquetas_dolor[r.dolor] | traducir) if r.dolor in etiquetas_dolor else r.dolor) }}</span>{% endif %}
     </p>
     {% if r.familia %}
     <p><strong>{{ _('Formato:') }}</strong> {{ r.familia }}{% if familia and familia.descripcion %} — {{ familia.descripcion }}{% endif %}</p>

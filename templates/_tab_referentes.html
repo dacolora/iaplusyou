@@ -195,7 +195,7 @@
   <div class="ref-selects">
     <select data-filtro="marca"><option value="">{{ _('Todas las marcas') }}</option>{% for m, n in ref_opciones.marcas %}<option value="{{ m }}">{{ m }} ({{ n }})</option>{% endfor %}</select>
     <select data-filtro="familia"><option value="">{{ _('Todas las familias') }}</option>{% for f, n in ref_opciones.familias %}<option value="{{ f }}">{{ f }} ({{ n }})</option>{% endfor %}</select>
-    <select data-filtro="dolor"><option value="">{{ _('Cualquier dolor') }}</option>{% for d, n in ref_opciones.dolores %}<option value="{{ d }}">{{ ref_etiquetas_dolor.get(d, d) | traducir }} ({{ n }})</option>{% endfor %}</select>
+    <select data-filtro="dolor"><option value="">{{ _('Cualquier dolor') }}</option>{% for d, n in ref_opciones.dolores %}<option value="{{ d }}">{{ (ref_etiquetas_dolor[d] | traducir) if d in ref_etiquetas_dolor else d }} ({{ n }})</option>{% endfor %}</select>
     <select data-filtro="fuente"><option value="">{{ _('Todas las fuentes') }}</option>{% for f, n in ref_opciones.fuentes %}<option value="{{ f }}">{{ f }} ({{ n }})</option>{% endfor %}<option value="mios">{{ _('Solo míos') }}</option></select>
     <input type="search" data-filtro="q" placeholder="{{ _('Buscar en titular, firma, marca o dolor') }}" maxlength="80">
   </div>

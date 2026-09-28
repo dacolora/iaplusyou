@@ -333,7 +333,7 @@ def encolar_clasificar_pendientes(cliente, barrido_id):
     trabajos.encolar(job_id_barrer(barrido_id), TIPO_CLASIFICAR,
                      {"cliente": cliente, "barrido_id": barrido_id, "fase": "clasificando",
                       "consulta": {**(b.get("consulta") or {}), "fuente": b["fuente"]}, "tope": b.get("tope") or 0},
-                     duracion_estimada=600, etapas=[("Clasificando", 1)], max_intentos=1, prioridad=2)
+                     duracion_estimada=600, etapas=[(ETAPA_CLASIFICAR, 1)], max_intentos=1, prioridad=2)
     return True
 
 
