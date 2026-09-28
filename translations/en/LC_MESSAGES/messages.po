@@ -3373,6 +3373,9 @@ msgstr "Date"
 msgid "Filtrar por veredicto"
 msgstr "Filter by verdict"
 
+msgid "Filtros"
+msgstr "Filters"
+
 #, python-format
 msgid "Final %(idioma)s_%(pais)s"
 msgstr "Final %(idioma)s_%(pais)s"
@@ -4124,6 +4127,9 @@ msgstr "Currency goes as a 3-letter code (COP, MXN, USD…); I didn't save it."
 
 msgid "La pauta se cobra en tu cuenta publicitaria; la API no cuesta."
 msgstr "Ad spend is charged to your ad account; the API itself is free."
+
+msgid "La pieza se descartó antes de generar; no se cobró nada."
+msgstr "The piece was discarded before generating; nothing was charged."
 
 msgid "La plataforma ya recibió el video; falta confirmar que terminó de procesarlo. Se confirma solo."
 msgstr "The platform already received the video; it still needs to confirm it finished processing it. It confirms itself."
