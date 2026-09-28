@@ -10374,6 +10374,9 @@ msgstr "WaveSpeed was still working on %(modelo)s after %(min)s min (prediction 
 msgid "WaveSpeed sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos."
 msgstr "WaveSpeed is still working on prediction %(id)s; try again in a few minutes."
 
+msgid "WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."
+msgstr "WaveSpeed is still working: we keep waiting for the same video, without paying again."
+
 msgid "What are other solutions they have tried and failed at?"
 msgstr "What are other solutions they have tried and failed at?"
 

@@ -25,7 +25,7 @@ from final_edition import cortes, mezcla, musica
 from idiomas import N_
 from providers import flowplus_modelos, wavespeed_common
 from storage import r2_uploader
-from tareas import al_interrumpir, ref_sufijo, registrar
+from tareas import Continuar, al_interrumpir, ref_sufijo, registrar
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -52,6 +52,11 @@ PLATAFORMAS_VERTICALES = {"instagram", "tiktok"}
 # sigue trabajando, la tarjeta lo dice y la persona vuelve a tocar más tarde;
 # el worker es de un solo hilo y no puede quedarse otra media hora colgado.
 TIEMPO_RECUPERAR = 600
+# Recuperación automática (spec 2026-09-28-crear-sin-cola): mientras la
+# predicción tenga menos de esto, un video que sigue en WaveSpeed se sigue
+# esperando solo (tramos de TIEMPO_RECUPERAR, cada uno una tarea nueva con el
+# mismo job_id). Después, queda el botón manual.
+ESPERA_MAXIMA = 2 * 3600
 
 # Los proveedores hablan en sus propios códigos de estado; esto es lo único
 # honesto que se puede mostrar de ellos (ninguno da un porcentaje numérico).
@@ -104,10 +109,41 @@ def _registrar_gasto(cliente, tipo, costo, referencia, modelo, detalle, usd_musi
 @al_interrumpir("flowplus_recuperar")
 def interrumpida(tarea, mensaje):
     """El worker murió a mitad de la generación: la sesión quedaría en
-    `video_generando` para siempre (la tarjeta no ofrece reintentar). Se marca
-    en error con el motivo para que la persona pueda volver a generar."""
+    `video_generando` para siempre (la tarjeta no ofrece reintentar). Un video
+    que ya tiene su predicción en WaveSpeed (y no es vieja) se sigue esperando
+    solo con `flowplus_recuperar` — no se paga de nuevo; lo demás se marca en
+    error con el motivo para que la persona pueda volver a generar."""
     cliente, cf_id = tarea["payload"]["cliente"], tarea["payload"]["cf_id"]
+    entry = creative_flow.cargar(cliente).get(cf_id) or {}
+    pred = entry.get("prediccion") or {}
+    if (tarea.get("tipo") in ("flowplus_video", "flowplus_recuperar") and (entry.get("tipo") or "video") != "imagen"
+            and pred.get("id") and _edad_s(pred) < ESPERA_MAXIMA):
+        creative_flow.actualizar(cliente, cf_id, estado="video_generando", error=None)
+        if trabajos.encolar(tarea.get("job_id") or _job_id(cliente, cf_id), "flowplus_recuperar",
+                            {"cliente": cliente, "cf_id": cf_id}, cliente=cliente, duracion_estimada=120,
+                            etapas=ETAPAS_CREATIVE_FLOW, max_intentos=1, prioridad=tarea.get("prioridad") or 5):
+            return
     creative_flow.actualizar(cliente, cf_id, estado="error", error=mensaje)
+
+
+def _edad_s(pred):
+    """Segundos desde que se lanzó la predicción (`prediccion.en`); sin fecha
+    legible cuenta como vieja."""
+    try:
+        return (datetime.now() - datetime.fromisoformat(pred["en"])).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        return float("inf")
+
+
+def _seguir_esperando(cliente, cf_id, pred_id, modelo, entry):
+    """El video sigue en WaveSpeed: la sesión se queda «generando» (con su
+    predicción) y sigue `flowplus_recuperar`, que la retoma sin pagar de nuevo."""
+    campos = {"estado": "video_generando", "error": None}
+    if pred_id and (entry.get("prediccion") or {}).get("id") != pred_id:
+        campos["prediccion"] = {"id": pred_id, "modelo": modelo, "en": datetime.now().isoformat(timespec="seconds")}
+    creative_flow.actualizar(cliente, cf_id, **campos)
+    return Continuar("flowplus_recuperar", {"cliente": cliente, "cf_id": cf_id},
+                     mensaje=N_("WaveSpeed sigue trabajando: se sigue esperando el mismo video, sin pagar de nuevo."))
 
 
 def _aspect_ratio_para_plataformas(platforms):
@@ -308,12 +344,20 @@ def ejecutar_video(tarea):
     avisar_fase = _avisar_fase_de(job_id, cliente, cf_id=cf_id, modelo=modelo)
     try:
         trabajos.reportar(job_id, etapa=ETAPA_MODELO)
-        video_url_wan = flowplus_modelos.generar_video(
-            modelo, prompt_texto, referencias, duracion,
-            aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
-            videos=videos_ref if modelo == "wan3" else None,
-            con_sonido=con_sonido, calidad=calidad,
-        )
+        # cortable(): si el worker se reinicia, la espera se corta y la retoma
+        # flowplus_recuperar por el id de la predicción (nada se pierde).
+        with wavespeed_common.cortable():
+            video_url_wan = flowplus_modelos.generar_video(
+                modelo, prompt_texto, referencias, duracion,
+                aspect_ratio=aspect_ratio, on_progreso=avisar_fase,
+                videos=videos_ref if modelo == "wan3" else None,
+                con_sonido=con_sonido, calidad=calidad,
+            )
+    except wavespeed_common.EsperaAgotada as e:
+        # Se acabó la espera (o se cortó por un reinicio) pero WaveSpeed sigue:
+        # se sigue esperando solo, en otra tarea del carril de Crear.
+        bitacora.registrar(cliente, cf_id, "generacion", "espera", str(e))
+        return _seguir_esperando(cliente, cf_id, e.prediction_id, modelo, creative_flow.cargar(cliente).get(cf_id) or {})
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
         campos = {"estado": "error", "error": _mensaje_error(e, cliente)}
@@ -353,16 +397,21 @@ def recuperar_video(tarea):
     avisar_fase = _avisar_fase_de(job_id, cliente)
     trabajos.reportar(job_id, etapa=ETAPA_MODELO)
     try:
-        resultado = wavespeed_common.poll_hasta_listo(pred["id"], nombre, timeout_seconds=TIEMPO_RECUPERAR,
-                                                      on_progreso=avisar_fase)
+        with wavespeed_common.cortable():
+            resultado = wavespeed_common.poll_hasta_listo(pred["id"], nombre, timeout_seconds=TIEMPO_RECUPERAR,
+                                                          on_progreso=avisar_fase)
         outputs = resultado.get("outputs") or []
         if not outputs:
             raise wavespeed_common.ErrorProveedor(nombre, resultado.get("status") or "completed",
                                                   detalle="terminó sin ninguna salida", prediction_id=pred["id"],
                                                   datos=resultado)
-    except wavespeed_common.EsperaAgotada as e:
-        # Sigue viva: la tarjeta conserva el botón y el id.
-        creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(e, cliente))
+    except wavespeed_common.EsperaAgotada:
+        edad = _edad_s(pred)
+        if edad < ESPERA_MAXIMA:
+            return _seguir_esperando(cliente, cf_id, pred["id"], modelo, entry)
+        # Más de 2 h: se deja de esperar solo; la tarjeta conserva el botón y el id.
+        agotada = wavespeed_common.EsperaAgotada(nombre, pred["id"], edad)
+        creative_flow.actualizar(cliente, cf_id, estado="error", error=_mensaje_error(agotada, cliente))
         return gettext("WaveSpeed sigue trabajando en la predicción %(id)s; vuelve a intentar en unos minutos.", id=pred["id"])
     except Exception as e:
         bitacora.registrar(cliente, cf_id, "generacion", "error", str(e))
@@ -483,8 +532,7 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
                                                           if estado_musica == "error" else "")
     _registrar_gasto(cliente, "video", costo, ref, modelo, detalle_gasto, usd_musica=usd_musica)
 
-    estado = estado_mod.cargar(cliente)
-    estado[cf_id] = {
+    registro = {
         "prompt": prompt_texto,
         "image_url": (referencias or (entry.get("referencias_urls") or [None]))[0],
         "title": cf_id,
@@ -496,5 +544,6 @@ def _terminar_video(cliente, cf_id, job_id, ref, entry, referencias, duracion, p
         "generado_en": datetime.now().isoformat(),
         "publicado_en": None,
     }
-    estado_mod.guardar(cliente, estado)
+    # Con candado: otro video del mismo proyecto puede estar terminando a la vez.
+    estado_mod.modificar(cliente, lambda estado: {**estado, cf_id: registro})
     return N_("Video de FlowPlus listo, pendiente de revisión.")

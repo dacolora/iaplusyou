@@ -28,7 +28,9 @@ def _client():
             "Faltan R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY en tu .env. "
             "Ver SETUP.md, sección Cloudflare R2."
         )
-    return boto3.client(
+    # Una sesión por llamada: boto3.client() usa la sesión por defecto, que no es
+    # segura entre hilos (gunicorn con 8 hilos; el worker con varias generaciones).
+    return boto3.session.Session().client(
         "s3",
         endpoint_url=f"https://{account_id}.r2.cloudflarestorage.com",
         aws_access_key_id=access_key,
