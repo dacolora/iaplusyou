@@ -2475,6 +2475,9 @@ body.panel-abierto { overflow: hidden; }
   margin: .6rem .2rem 0; font-size: .78rem; color: var(--muted); }
 .crear-pie .crear-enlace { color: var(--muted); font-weight: 500; }
 .crear-pie .crear-enlace strong { color: var(--accent-texto); font-weight: 600; }
+.crear-consejos { max-width: 920px; margin: .5rem .2rem 0; font-size: .78rem; color: var(--muted); }
+.crear-consejos summary { font-weight: 500; }
+.crear-consejos ul { margin: .35rem 0 0; padding-left: 1.2rem; line-height: 1.5; }
 .selector-en-dialogo .comparacion-contenido { padding: 0; border: 0; background: none; }
 .selector-resumen { margin: 0 0 .8rem; font-size: .82rem; color: var(--muted); }
 

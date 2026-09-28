@@ -861,6 +861,9 @@ msgstr ""
 "  generations that were deleted from the interface: they ran and were paid for, but their individual\n"
 "  cost can no longer be recovered."
 
+msgid "Adjunta solo las fotos de quien aparece: cada foto adjunta invita al modelo a meter a esa persona."
+msgstr "Attach only the photos of who appears: every attached photo invites the model to put that person in."
+
 msgid "Adonde llega el anuncio: tu tienda, WhatsApp (wa.me/57…) o tu landing."
 msgstr "Where the ad lands: your store, WhatsApp (wa.me/57…) or your landing page."
 
@@ -1818,6 +1821,9 @@ msgstr "How to get it"
 msgid "Cómo escribe Creatv →"
 msgstr "How Creatv writes →"
 
+msgid "Cómo escribir para que el video salga como lo imaginas"
+msgstr "How to write so the video comes out the way you picture it"
+
 msgid "Cómo instalar el Pixel según tu plataforma"
 msgstr "How to install the Pixel depending on your platform"
 
@@ -1963,6 +1969,9 @@ msgstr "From references"
 
 msgid "Detalle"
 msgstr "Detail"
+
+msgid "Di cuántas personas salen, y que no hay nadie más."
+msgstr "Say how many people appear, and that there is nobody else."
 
 msgid "Dile a Claude qué está mal, por ejemplo: &quot;el clip 3 dura 16 segundos&quot;"
 msgstr "Tell Claude what’s wrong, for example: &quot;clip 3 is 16 seconds long&quot;"
@@ -2647,6 +2656,9 @@ msgstr "Write what has to happen in the video first."
 
 msgid "Escribe qué está mal antes de enviar."
 msgstr "Write what's wrong before sending."
+
+msgid "Escribe qué pasa segundo a segundo hasta cubrir toda la duración: el tiempo sin acción, el modelo lo rellena inventando."
+msgstr "Write what happens second by second until you cover the whole length: the model fills any time without action by making things up."
 
 msgid "Escribe qué quieres cambiar."
 msgstr "Write what you want to change."
@@ -6296,11 +6308,17 @@ msgstr "Store URL"
 msgid "USD 0,02 solo la primera vez por estilo y duración (después sale de la caché)"
 msgstr "USD 0.02 only the first time per style and duration (after that it comes from the cache)"
 
+msgid "Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales."
+msgstr "A drawing, photo or screen that shows up in the scene: describe it in words, without @Imagen. With @Imagen the model turns it into real characters."
+
 msgid "Un experimento cerrado no cambia de modo."
 msgstr "A closed experiment can't change mode."
 
 msgid "Un experimento con una pieza y un país es un anuncio; con varias piezas y países, el motor decide cuál gana."
 msgstr "An experiment with one piece and one country is an ad; with several pieces and countries, the engine decides which one wins."
+
+msgid "Un solo lugar por video: si nombras varios cuartos, el modelo los recorre."
+msgstr "One single place per video: if you name several rooms, the model walks through them."
 
 msgid "Un usuario con rol 'cliente' necesita un proyecto asignado."
 msgstr "A user with the 'cliente' role needs an assigned project."

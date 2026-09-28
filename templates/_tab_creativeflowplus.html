@@ -198,6 +198,19 @@
       </div>
     </dialog>
   </form>
+
+  {# Solo para leer (2026-09-27): el texto va tal cual al modelo, así que lo que
+     cambia el resultado es cómo se escribe. Fuera del formulario: no agrega nada. #}
+  <details class="crear-consejos" id="fp-consejos">
+    <summary>{{ _('Cómo escribir para que el video salga como lo imaginas') }}</summary>
+    <ul>
+      <li>{{ _('Di cuántas personas salen, y que no hay nadie más.') }}</li>
+      <li>{{ _('Escribe qué pasa segundo a segundo hasta cubrir toda la duración: el tiempo sin acción, el modelo lo rellena inventando.') }}</li>
+      <li>{{ _('Un solo lugar por video: si nombras varios cuartos, el modelo los recorre.') }}</li>
+      <li>{{ _('Adjunta solo las fotos de quien aparece: cada foto adjunta invita al modelo a meter a esa persona.') }}</li>
+      <li>{{ _('Un dibujo, una foto o una pantalla que sale en la escena, descríbelo con palabras y sin @Imagen: con @Imagen el modelo lo convierte en personajes reales.') }}</li>
+    </ul>
+  </details>
   <div class="crear-velo" id="crear-velo"></div>
 </div>
 
