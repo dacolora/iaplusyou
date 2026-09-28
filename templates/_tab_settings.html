@@ -68,16 +68,6 @@
 {% endif %}
 
 <section class="config-apartado" id="config-ap-conexiones" data-apartado="conexiones">
-<h2 id="config-meta">Meta</h2>
-<p class="vacio" style="padding-top:0;">
-  {{ _('Para lanzar anuncios y publicar en tu Página de Facebook e Instagram. Los servicios de
-  generación (guiones, imagen y video, voz y música, almacenamiento) y el correo de la
-  plataforma los pone Creatv en el servidor: ahí no tienes que hacer nada.') }}
-</p>
-<div class="llaves-tarjetas llaves-tarjetas-ancha">
-  {% for l in llaves if l.id == "meta" %}{% include "_llave_tarjeta.html" %}{% endfor %}
-</div>
-
 {# ---- Bloque 5: Conectar tu tienda ---- #}
 <h2 id="config-tienda">{{ _('Conectar tu tienda') }}</h2>
 <p class="vacio" style="padding-top:0;">
@@ -261,7 +251,7 @@
   <form method="post" action="{{ url_for('cfg_pixel_refrescar', cliente=cliente) }}" class="inline" style="margin-top:.4rem;"><button class="btn-guardar btn-xs">{{ _('Comprobar Pixel') }}</button></form>
 </div>
 {% else %}
-<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta arriba, en la tarjeta <a href="#llave-meta">Meta (anuncios)</a> de Puesta a punto (o en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a>), para comprobar el Pixel.') }}</p>
+<p class="vacio"><span class="tag-estado">{{ _('sin conexión') }}</span> {{ _('Conecta Meta en <a href="#experimentos" onclick="document.querySelector(\'.sidebar-item[data-tab=experimentos]\').click(); return false;">Experimentos</a> para comprobar el Pixel.') }}</p>
 {% endif %}
 <details class="pixel-ayuda">
   <summary>{{ _('Cómo instalar el Pixel según tu plataforma') }}</summary>

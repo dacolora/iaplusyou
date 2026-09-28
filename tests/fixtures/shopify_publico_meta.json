@@ -1,0 +1,15 @@
+{
+ "id": 92318400889,
+ "name": "HappyFlops WW",
+ "city": "Kista",
+ "province": "",
+ "country": "SE",
+ "currency": "EUR",
+ "domain": "www.happyflops.com",
+ "url": "https://www.happyflops.com",
+ "myshopify_domain": "njd4pz-ab.myshopify.com",
+ "description": "",
+ "money_format": "€{{amount_with_comma_separator}}",
+ "published_collections_count": 33,
+ "published_products_count": 19
+}
