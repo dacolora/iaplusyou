@@ -417,7 +417,7 @@ def test_ejecutar_sugerir_biblioteca_guarda_sugerencias(base_temporal, monkeypat
     monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: (
         enfoques.append(enfoque) or [{"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}], []))
     textos = []
-    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo, enfoque_texto="": (
+    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo, enfoque_texto="", idioma="es": (
         textos.append((p, t, enfoque_texto)) or ([{"referente_id": 5, "razon": "encaja"}], 100, 20)))
     tareas.cargar_todas()
     tarea = {"id": 1, "payload": {"cliente": "acme", "campana_id": cid}}
@@ -457,7 +457,7 @@ def test_ejecutar_sugerir_biblioteca_respuesta_invalida_registra_gasto_y_relanza
     sid, cid, rid = _referencia(datos)
     monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: (
         [{"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}], []))
-    def rompe(cands, p, pr, t, objetivo, enfoque_texto=""):
+    def rompe(cands, p, pr, t, objetivo, enfoque_texto="", idioma="es"):
         e = referentes_sugerir.SugerenciaInvalida("no parsea")
         e.tokens_entrada, e.tokens_salida = 90, 15
         raise e
@@ -483,7 +483,7 @@ def test_sugerir_biblioteca_le_pasa_la_consciencia_de_la_persona(base_temporal, 
         [{"id": 5, "familia": "ugc", "dolor": "d", "firma": "f", "dias": 3, "variantes": 2}], []))
     visto = {}
 
-    def falso(cands, persona_texto, producto_texto, temporada_texto, objetivo, enfoque_texto=""):
+    def falso(cands, persona_texto, producto_texto, temporada_texto, objetivo, enfoque_texto="", idioma="es"):
         visto["persona"] = persona_texto
         return [], 10, 5
     monkeypatch.setattr(referentes_sugerir, "sugerir_ia", falso)
@@ -547,7 +547,7 @@ def test_sugerir_biblioteca_usa_el_enfoque_de_la_campana(base_temporal, monkeypa
     vistos = {}
     monkeypatch.setattr(referentes_sugerir, "candidatos_aflojando", lambda cliente_, enfoque, excluir, minimo=20: (
         vistos.update(enfoque=enfoque) or [{"id": 5, "familia": "UGC"}], []))
-    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo, enfoque_texto="": (
+    monkeypatch.setattr(referentes_sugerir, "sugerir_ia", lambda cands, p, pr, t, objetivo, enfoque_texto="", idioma="es": (
         vistos.update(persona=p, temporada=t, enfoque_texto=enfoque_texto) or ([], 10, 5)))
     tareas.cargar_todas()
     tareas.REGISTRO["referentes_sugerir_ia"]({"id": 1, "payload": {"cliente": "acme", "campana_id": cid}})

@@ -257,7 +257,8 @@ def ejecutar_sugerir_biblioteca(tarea):
         f"idioma de la audiencia: {datos.IDIOMAS_NOMBRE.get(enfoque['idioma'], enfoque['idioma'])}") if x)
     try:
         elegidos, ent, sal = referentes_sugerir.sugerir_ia(candidatos[:60], persona_texto, producto_texto,
-                                                            temporada_texto, objetivo, enfoque_texto=enfoque_texto)
+                                                            temporada_texto, objetivo, enfoque_texto=enfoque_texto,
+                                                            idioma=idiomas.de_proyecto(cliente))
     except referentes_sugerir.SugerenciaInvalida as e:
         ent = getattr(e, "tokens_entrada", 0) or 0
         sal = getattr(e, "tokens_salida", 0) or 0

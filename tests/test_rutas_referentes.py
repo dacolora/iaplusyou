@@ -1105,7 +1105,7 @@ def test_recrear_adaptar_descarta_una_sofisticacion_invalida_del_catalogo(app, m
     tiendas.anotar_extra("acme", fila, sofisticacion=9)
     visto = {}
 
-    def falso_adaptar(referente, familia, producto, titular_actual, guia=""):
+    def falso_adaptar(referente, familia, producto, titular_actual, guia="", idioma="es"):
         visto["sofisticacion"] = producto.get("sofisticacion")
         return {"titular": "T", "prompt": "P", "angulo": {}}, 10, 5
     monkeypatch.setattr(recrear, "adaptar", falso_adaptar)

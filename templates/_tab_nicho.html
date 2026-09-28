@@ -1,5 +1,5 @@
 {# Pestaña Nicho. Contexto de nicho.rutas.contexto(cliente): estudios_nicho,
-   productos_nicho, idiomas_nicho, min_comentarios_nicho. #}
+   productos_nicho, min_comentarios_nicho. #}
 <div class="panel-cabecera">
   <div>
     <h2>Nicho</h2>
@@ -38,9 +38,6 @@
           <option value="">(escribir a mano)</option>
           {% for p in productos_nicho %}<option value="{{ p.id }}" data-descripcion="{{ p.nombre }}{% if p.descripcion %}: {{ p.descripcion }}{% endif %}">{{ p.nombre }}</option>{% endfor %}
         </select>
-      </label>
-      <label>Idioma de los avatares
-        <select name="idioma">{% for codigo, nombre in idiomas_nicho.items() %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}</select>
       </label>
     </div>
     <label>Qué vendemos <textarea name="producto" id="estudio-producto" rows="2" placeholder="Cápsulas de detergente sin plástico, dosis exacta, olor suave"></textarea></label>

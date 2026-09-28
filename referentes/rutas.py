@@ -19,6 +19,7 @@ import doctrina
 from doctrina import producto as doctrina_producto
 import flowplus_lanzar
 import gastos
+import idiomas
 import marca as marca_mod
 import proyectos
 import tiendas
@@ -176,7 +177,7 @@ def recrear_form(cliente, rid):
     if producto:
         guia = marca_mod.guia_efectiva(cliente)
         prompt = recrear.armar_prompt(r, familia, producto, guia, titular, formato, tipo=tipo,
-                                      con_sonido=prefs_sonido["con_sonido"])
+                                      con_sonido=prefs_sonido["con_sonido"], idioma=idiomas.de_proyecto(cliente))
         n_refs = 1 + max(1, min(2, len(producto.get("referencias") or [1])))
         if tipo == "imagen":
             precio = gastos.estimar("imagen", modelo=flowplus_modelos.IMAGEN_POR_DEFECTO, n_referencias=n_refs)
@@ -211,7 +212,7 @@ def recrear_adaptar(cliente, rid):
     familia = next((f for f in datos.familias(cliente) if f["nombre"] == r.get("familia")), None)
     try:
         resultado, ent, sal = recrear.adaptar(r, familia, producto, str(cuerpo.get("titular") or ""),
-                                              marca_mod.guia_efectiva(cliente))
+                                              marca_mod.guia_efectiva(cliente), idioma=idiomas.de_proyecto(cliente))
     except recrear.AdaptacionInvalida as e:
         ent = getattr(e, "tokens_entrada", 0) or 0
         sal = getattr(e, "tokens_salida", 0) or 0

@@ -14,6 +14,7 @@ from flask import Blueprint, Response, abort, flash, jsonify, redirect, render_t
 
 import catalogo_productos
 import gastos
+import idiomas
 import proyectos
 import trabajos
 from nicho import avatares, datos, exportar, investigacion
@@ -115,7 +116,7 @@ def _params_desde_form(fuente, est, cliente):
 def contexto(cliente):
     """Lo que necesita _tab_nicho.html. Se llama desde dashboard.ver_cliente."""
     return {"estudios_nicho": datos.estudios(cliente), "productos_nicho": _productos(cliente),
-            "idiomas_nicho": avatares.IDIOMAS, "min_comentarios_nicho": avatares.MIN_COMENTARIOS}
+            "min_comentarios_nicho": avatares.MIN_COMENTARIOS}
 
 
 # ----------------------------------------------------------- estudios ---
@@ -124,7 +125,7 @@ def contexto(cliente):
 def crear(cliente):
     try:
         eid = datos.crear_estudio(cliente, request.form.get("nombre"), producto=request.form.get("producto"),
-                                  tema=request.form.get("tema"), idioma=request.form.get("idioma") or "es",
+                                  tema=request.form.get("tema"), idioma=idiomas.de_proyecto(cliente),
                                   catalogo_id=request.form.get("catalogo_id") or None)
     except datos.ErrorDatos as e:
         flash(str(e), "error")
@@ -166,7 +167,7 @@ def ver(cliente, eid):
 def editar(cliente, eid):
     _estudio_o_404(cliente, eid)
     try:
-        campos = {k: request.form.get(k) for k in ("nombre", "producto", "tema", "idioma") if request.form.get(k) is not None}
+        campos = {k: request.form.get(k) for k in ("nombre", "producto", "tema") if request.form.get(k) is not None}
         if request.form.get("catalogo_id") is not None:
             campos["catalogo_id"] = request.form.get("catalogo_id") or None
         datos.actualizar_estudio(cliente, eid, **campos)
